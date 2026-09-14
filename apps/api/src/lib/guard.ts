@@ -17,6 +17,8 @@ export interface RouteInfo {
   method: string;
   url: string;
   scope: RouteScope;
+  /** False when the route said nothing and fell to the owner-only default. */
+  declared: boolean;
 }
 
 declare module 'fastify' {
@@ -44,11 +46,13 @@ export function installGuard(app: FastifyInstance): void {
   app.decorateRequest('actor', null);
 
   app.addHook('onRoute', (route) => {
-    const scope = scopeOf(route.config as { scope?: RouteScope } | undefined);
+    const config = route.config as { scope?: RouteScope } | undefined;
+    const scope = scopeOf(config);
+    const declared = config?.scope !== undefined;
     const methods = Array.isArray(route.method) ? route.method : [route.method];
     for (const method of methods) {
       if (method === 'HEAD' || method === 'OPTIONS') continue;
-      app.routeTable.push({ method, url: route.url, scope });
+      app.routeTable.push({ method, url: route.url, scope, declared });
     }
   });
 

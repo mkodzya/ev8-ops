@@ -1,3 +1,4 @@
+import { tokens } from '@ev8/shared';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -142,7 +143,7 @@ export function write(doc: Doc, text: string, opts: TextOpts = {}): void {
   const x0 = opts.x ?? doc.left;
   if (opts.y != null) doc.pdf.y = opts.y;
   const lh = lineHeight(doc, size, lineGap);
-  doc.pdf.fillColor(opts.color ?? '#0b0b0b');
+  doc.pdf.fillColor(opts.color ?? tokens.ink);
   for (const line of layout(doc, text, size, bold, width)) {
     if (doc.pdf.y + lh > doc.bottom) doc.pdf.addPage();
     // pdfkit advances y on every text() call, once per run. The baseline is
