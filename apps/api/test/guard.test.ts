@@ -13,12 +13,18 @@ describe('route table', () => {
     // Owner-only routes are listed here on purpose: a new one that lands at
     // the default scope by accident shows up in this list and is questioned.
     expect(ownerOnly.map((r) => `${r.method} ${r.url}`).sort()).toEqual([
+      'DELETE /api/purchases/:id/lines/:lineId',
       'GET /api/users',
       'PATCH /api/fleet/:id',
       'PATCH /api/models/:id',
+      'PATCH /api/purchases/:id',
       'PATCH /api/users/:id',
       'POST /api/fleet',
       'POST /api/models',
+      'POST /api/purchases',
+      'POST /api/purchases/:id/cancel',
+      'POST /api/purchases/:id/lines',
+      'POST /api/purchases/:id/receive',
       'POST /api/users',
       'POST /api/users/:id/password',
     ]);

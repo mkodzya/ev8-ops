@@ -10,7 +10,7 @@
 // session secret — which is every server stand.
 //
 // OWNER_EMAIL / OWNER_NAME / OWNER_PASSWORD come from the environment.
-import { DEFAULT_DEPOSIT_TETRI, addDays, instalmentSchedule, periodsThrough, todayISO } from '@ev8/shared';
+import { DEFAULT_DEPOSIT_TETRI, addDays, instalmentSchedule, landedCosts, periodsThrough, todayISO } from '@ev8/shared';
 import { recordPayment } from './lib/payments.js';
 import { hashPassword } from './lib/auth.js';
 import { dateFromISO } from './lib/dates.js';
@@ -284,7 +284,72 @@ async function seedDemo(ownerId: string): Promise<void> {
     await prisma.vehicle.update({ where: { id: v.id }, data: { state: 'sold' } });
   }
 
-  console.log('seed: DEMO dataset added — 3 models, 10 mopeds, 6 customers, 6 rentals, 2 repairs, 2 sales. Every row is marked DEMO.');
+  // A shipment, so the purchase screen has the real shape to show: an
+  // invoice in CNY, two payments in GEL, logistics split over the units,
+  // and every VIN carrying what it cost to land.
+  const factory = await prisma.customer.create({
+    data: { name: 'DEMO Zhejiang Factory', kind: 'company', isSupplier: true, notes: DEMO_NOTE },
+  });
+  const order = await prisma.purchase.create({
+    data: {
+      supplierId: factory.id,
+      invoiceNo: 'DEMO-0012024',
+      invoiceDate: d('2024-07-10'),
+      currency: 'CNY',
+      orderedOn: d('2024-07-10'),
+      extrasTetri: 10 * 23834,
+      extrasNote: 'DEMO: логистика и растаможка, импортный НДС вычтен как возвращённый',
+      notes: DEMO_NOTE,
+      createdById: ownerId,
+    },
+  });
+  const orderLines = [
+    { model: modelA, qty: 5, unitPriceMinor: 342550 },
+    { model: modelB, qty: 4, unitPriceMinor: 448140 },
+    { model: modelS, qty: 1, unitPriceMinor: 508360 },
+  ];
+  const createdLines: { id: string; qty: number; unitPriceMinor: number; modelId: string }[] = [];
+  for (const l of orderLines) {
+    const created = await prisma.purchaseLine.create({
+      data: { purchaseId: order.id, modelId: l.model.id, qty: l.qty, unitPriceMinor: l.unitPriceMinor },
+    });
+    createdLines.push({ id: created.id, qty: l.qty, unitPriceMinor: l.unitPriceMinor, modelId: l.model.id });
+  }
+  const paidTetri = 1_500_000;
+  for (const [when, amount] of [
+    ['2024-10-07', 450000],
+    ['2024-12-10', 1_050_000],
+  ] as const) {
+    await prisma.payment.create({
+      data: {
+        occurredOn: d(when),
+        direction: 'out',
+        channel: 'transfer',
+        grossTetri: amount,
+        feeTetri: 0,
+        netTetri: amount,
+        customerId: factory.id,
+        purchaseId: order.id,
+        note: DEMO_NOTE,
+        createdById: ownerId,
+      },
+    });
+  }
+  // The ten mopeds above came from this shipment; give them their cost.
+  const costs = new Map(
+    landedCosts({ lines: createdLines.map((l) => ({ id: l.id, qty: l.qty, unitPriceMinor: l.unitPriceMinor })), paidTetri, extrasTetri: 10 * 23834 }).map((c) => [c.lineId, c]),
+  );
+  for (const l of createdLines) {
+    const unit = costs.get(l.id)!.unitCostTetri;
+    await prisma.vehicle.updateMany({
+      where: { modelId: l.modelId, purchaseId: null },
+      data: { costTetri: unit, purchaseId: order.id },
+    });
+    await prisma.vehicleModel.update({ where: { id: l.modelId }, data: { costTetri: unit } });
+  }
+  await prisma.purchase.update({ where: { id: order.id }, data: { status: 'received', receivedOn: d('2025-03-14') } });
+
+  console.log('seed: DEMO dataset added — 3 models, 10 mopeds, 6 customers, 6 rentals, 2 repairs, 2 sales, 1 shipment. Every row is marked DEMO.');
 }
 
 async function main(): Promise<void> {

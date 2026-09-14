@@ -95,6 +95,7 @@ export function fleetRoutes(app: FastifyInstance): void {
         state: v.state,
         odometerKm: v.odometerKm,
         notes: v.notes,
+        costTetri: v.costTetri,
         currentRentalId: v.currentRentalId,
       },
       events: v.events.map((e) => ({

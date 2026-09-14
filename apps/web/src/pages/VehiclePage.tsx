@@ -21,6 +21,7 @@ interface Card {
     arrivedOn: string | null;
     state: VehicleState;
     odometerKm: number | null;
+    costTetri: number | null;
     notes: string | null;
     currentRentalId: string | null;
   };
@@ -119,6 +120,7 @@ export function VehiclePage() {
           <Row k={t.fleet.year} v={<span className="mono">{v.year ?? t.common.dash}</span>} />
           <Row k={t.fleet.arrived} v={<span className="mono">{fmtDate(v.arrivedOn)}</span>} />
           <Row k={t.vehicle.odometer} v={<span className="mono">{v.odometerKm ?? t.common.dash}</span>} />
+          {v.costTetri != null && <Row k={t.purchases.cost} v={<span className="mono">{formatGel(v.costTetri)}</span>} />}
           <Row
             k={t.fleet.renter}
             v={current ? <Link to={`/customers/${current.customer.id}`}>{current.customer.name}</Link> : t.common.dash}

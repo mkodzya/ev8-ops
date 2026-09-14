@@ -12,6 +12,7 @@ import { jobRoutes } from './routes/jobs.js';
 import { opsRoutes } from './routes/ops.js';
 import { paymentRoutes } from './routes/payments.js';
 import { rentalRoutes } from './routes/rentals.js';
+import { purchaseRoutes } from './routes/purchases.js';
 import { saleRoutes } from './routes/sales.js';
 import { serviceRoutes } from './routes/service.js';
 import { statementRoutes } from './routes/statements.js';
@@ -59,6 +60,7 @@ export function buildApp(): FastifyInstance {
   jobRoutes(app);
   serviceRoutes(app);
   saleRoutes(app);
+  purchaseRoutes(app);
 
   return app;
 }

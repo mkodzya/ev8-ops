@@ -48,6 +48,7 @@ export function opsRoutes(app: FastifyInstance): void {
           email: str(b, 'email', { max: 200 }),
           address: str(b, 'address', { max: 300 }),
           kind: oneOf(b, 'kind', CUSTOMER_KINDS) ?? 'person',
+          isSupplier: Boolean(b.isSupplier),
           tags: strList(b, 'tags'),
           notes: str(b, 'notes', { max: 4000 }),
         },
@@ -72,6 +73,7 @@ export function opsRoutes(app: FastifyInstance): void {
     if ('kind' in b) data.kind = oneOf(b, 'kind', CUSTOMER_KINDS, { required: true });
     if ('tags' in b) data.tags = strList(b, 'tags');
     if ('archived' in b) data.archived = Boolean(b.archived);
+    if ('isSupplier' in b) data.isSupplier = Boolean(b.isSupplier);
     try {
       await prisma.customer.update({ where: { id: before.id }, data: { ...data, updatedAt: new Date() } });
     } catch (e) {
@@ -271,6 +273,7 @@ export function opsRoutes(app: FastifyInstance): void {
     if ('forRent' in b) data.forRent = Boolean(b.forRent);
     if ('notes' in b) data.notes = str(b, 'notes', { max: 4000 });
     if ('archived' in b) data.archived = Boolean(b.archived);
+    if ('isSupplier' in b) data.isSupplier = Boolean(b.isSupplier);
     try {
       await prisma.vehicleModel.update({ where: { id: before.id }, data: { ...data, updatedAt: new Date() } });
     } catch (e) {

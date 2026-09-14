@@ -121,6 +121,14 @@ enum AllocationTarget {
   @@map("allocation_target")
 }
 
+enum PurchaseStatus {
+  ordered
+  received
+  cancelled
+
+  @@map("purchase_status")
+}
+
 enum SaleStatus {
   active
   cancelled
@@ -193,6 +201,7 @@ model User {
   statements        Statement[]
   serviceJobs       ServiceJob[]
   sales             Sale[]
+  purchases         Purchase[]
 
   @@map("users")
 }
@@ -227,7 +236,8 @@ model VehicleModel {
   createdAt           DateTime @default(now()) @map("created_at")
   updatedAt           DateTime @default(now()) @map("updated_at")
 
-  vehicles Vehicle[]
+  vehicles      Vehicle[]
+  purchaseLines PurchaseLine[]
 
   @@unique([brand, name])
   @@map("vehicle_models")
@@ -244,6 +254,8 @@ model Vehicle {
   currentRentalId String?      @map("current_rental_id") @db.Uuid
   odometerKm      Int?         @map("odometer_km")
   notes           String?
+  costTetri       Int?         @map("cost_tetri")
+  purchaseId      String?      @map("purchase_id") @db.Uuid
   odooFleetId     Int?         @unique @map("odoo_fleet_id")
   odooLotId       Int?         @unique @map("odoo_lot_id")
   archived        Boolean      @default(false)
@@ -252,6 +264,7 @@ model Vehicle {
 
   serviceJobs   ServiceJob[]
   sales         Sale[]
+  purchase      Purchase?      @relation(fields: [purchaseId], references: [id])
   model         VehicleModel   @relation(fields: [modelId], references: [id])
   currentRental Rental?        @relation("vehicle_current_rental", fields: [currentRentalId], references: [id])
   rentals       Rental[]       @relation("rental_vehicle")
@@ -269,6 +282,7 @@ model Customer {
   phone         String?
   email         String?
   kind          CustomerKind @default(person)
+  isSupplier    Boolean      @default(false) @map("is_supplier")
   tags          String[]     @default([])
   address       String?
   notes         String?
@@ -282,6 +296,7 @@ model Customer {
   payments    Payment[]
   serviceJobs ServiceJob[]
   sales       Sale[]
+  supplied    Purchase[]
 
   @@map("customers")
 }
@@ -452,6 +467,7 @@ model Payment {
   customerId    String?          @map("customer_id") @db.Uuid
   rentalId      String?          @map("rental_id") @db.Uuid
   saleId        String?          @map("sale_id") @db.Uuid
+  purchaseId    String?          @map("purchase_id") @db.Uuid
   bankText      String?          @map("bank_text")
   source        PaymentSource    @default(manual)
   note          String?
@@ -467,6 +483,7 @@ model Payment {
   customer    Customer?           @relation(fields: [customerId], references: [id])
   rental      Rental?             @relation(fields: [rentalId], references: [id])
   sale        Sale?               @relation(fields: [saleId], references: [id])
+  purchase    Purchase?           @relation(fields: [purchaseId], references: [id])
   createdBy   User?               @relation("payment_created_by", fields: [createdById], references: [id])
   voidedBy    User?               @relation("payment_voided_by", fields: [voidedById], references: [id])
   allocations PaymentAllocation[]
@@ -634,6 +651,50 @@ model SaleInstalment {
 
   @@unique([saleId, seq])
   @@map("sale_instalments")
+}
+
+/// An invoice from a factory or a marketplace (PUR-01). Lines are in the
+/// seller's currency; what a unit cost is derived from the payments.
+model Purchase {
+  id           String         @id @default(uuid()) @db.Uuid
+  number       String         @unique @default(dbgenerated("('PO-' || lpad(nextval('purchase_number_seq')::text, 5, '0'))"))
+  supplierId   String         @map("supplier_id") @db.Uuid
+  invoiceNo    String?        @map("invoice_no")
+  invoiceDate  DateTime?      @map("invoice_date") @db.Date
+  currency     String         @default("CNY")
+  orderedOn    DateTime       @map("ordered_on") @db.Date
+  receivedOn   DateTime?      @map("received_on") @db.Date
+  status       PurchaseStatus @default(ordered)
+  extrasTetri  Int            @default(0) @map("extras_tetri")
+  extrasNote   String?        @map("extras_note")
+  notes        String?
+  odooOrderId  Int?           @unique @map("odoo_order_id")
+  createdById  String?        @map("created_by") @db.Uuid
+  createdAt    DateTime       @default(now()) @map("created_at")
+  updatedAt    DateTime       @default(now()) @map("updated_at")
+
+  supplier  Customer       @relation(fields: [supplierId], references: [id])
+  createdBy User?          @relation(fields: [createdById], references: [id])
+  lines     PurchaseLine[]
+  payments  Payment[]
+  vehicles  Vehicle[]
+
+  @@map("purchases")
+}
+
+model PurchaseLine {
+  id             String   @id @default(uuid()) @db.Uuid
+  purchaseId     String   @map("purchase_id") @db.Uuid
+  modelId        String?  @map("model_id") @db.Uuid
+  partName       String?  @map("part_name")
+  qty            Int
+  unitPriceMinor Int      @map("unit_price_minor")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  purchase Purchase      @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  model    VehicleModel? @relation(fields: [modelId], references: [id])
+
+  @@map("purchase_lines")
 }
 
 model AuditLog {
