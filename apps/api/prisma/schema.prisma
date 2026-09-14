@@ -120,6 +120,22 @@ enum AllocationTarget {
   @@map("allocation_target")
 }
 
+enum BankName {
+  bog
+  tbc
+  credo
+
+  @@map("bank_name")
+}
+
+enum StatementLineStatus {
+  unmatched
+  matched
+  ignored
+
+  @@map("statement_line_status")
+}
+
 enum FileKind {
   act_photo
   customer_document
@@ -149,6 +165,7 @@ model User {
   filesUploaded     StoredFile[]
   paymentsCreated   Payment[]     @relation("payment_created_by")
   paymentsVoided    Payment[]     @relation("payment_voided_by")
+  statements        Statement[]
 
   @@map("users")
 }
@@ -409,7 +426,9 @@ model Payment {
   voidReason    String?          @map("void_reason")
   voidedById    String?          @map("voided_by") @db.Uuid
   odooPaymentId Int?             @unique @map("odoo_payment_id")
+  statementLineId String?        @map("statement_line_id") @db.Uuid
 
+  statementLine StatementLine?    @relation("payment_of_line", fields: [statementLineId], references: [id])
   customer    Customer?           @relation(fields: [customerId], references: [id])
   rental      Rental?             @relation(fields: [rentalId], references: [id])
   createdBy   User?               @relation("payment_created_by", fields: [createdById], references: [id])
@@ -434,6 +453,54 @@ model PaymentAllocation {
   deposit Deposit?      @relation(fields: [depositId], references: [id], onDelete: Cascade)
 
   @@map("payment_allocations")
+}
+
+/// A file the bank gave us, kept so a line can be traced back to it.
+model Statement {
+  id          String    @id @default(uuid()) @db.Uuid
+  bank        BankName
+  fileName    String    @map("file_name")
+  fileSha256  String    @map("file_sha256")
+  account     String?
+  periodFrom  DateTime? @map("period_from") @db.Date
+  periodTo    DateTime? @map("period_to") @db.Date
+  lineCount   Int       @default(0) @map("line_count")
+  newLines    Int       @default(0) @map("new_lines")
+  matched     Int       @default(0)
+  uploadedById String?  @map("uploaded_by") @db.Uuid
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  uploadedBy User?           @relation(fields: [uploadedById], references: [id])
+  lines      StatementLine[]
+
+  @@map("statements")
+}
+
+/// One row of a statement, as it arrived. `naturalKey` is what makes a
+/// second upload of the same file a no-op.
+model StatementLine {
+  id          String              @id @default(uuid()) @db.Uuid
+  statementId String              @map("statement_id") @db.Uuid
+  bank        BankName
+  naturalKey  String              @map("natural_key")
+  occurredOn  DateTime            @map("occurred_on") @db.Date
+  direction   PaymentDirection
+  amountTetri Int                 @map("amount_tetri")
+  grossTetri  Int?                @map("gross_tetri")
+  feeTetri    Int?                @map("fee_tetri")
+  payer       String?
+  purpose     String?
+  raw         String
+  status      StatementLineStatus @default(unmatched)
+  matchedRule String?             @map("matched_rule")
+  paymentId   String?             @map("payment_id") @db.Uuid
+  createdAt   DateTime            @default(now()) @map("created_at")
+
+  statement Statement @relation(fields: [statementId], references: [id], onDelete: Cascade)
+  payments  Payment[] @relation("payment_of_line")
+
+  @@unique([bank, naturalKey])
+  @@map("statement_lines")
 }
 
 model AuditLog {

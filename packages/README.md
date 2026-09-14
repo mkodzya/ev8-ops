@@ -8,5 +8,7 @@ Pure, DB-free domain rules imported by api, worker and web:
 - `time.ts`, `periods.ts` — calendar-day arithmetic, 7-day periods from pickup, "paid through", overdue days.
 - `states.ts` — which event leads to which vehicle state; effective rental status.
 - `payments.ts` — how a payment closes a deposit and then periods oldest-first, and what a customer's balance is.
+- `georgian.ts` — the transliteration Georgian banks use, and matching a payer to a customer across spellings.
+- `matching.ts` — which rental a statement line belongs to, and only when exactly one can own it.
 
 Tests in `test/` (vitest) carry the acceptance figures from the spec.

@@ -38,6 +38,7 @@ export function Shell() {
     { to: '/fleet', label: t.nav.fleet },
     { to: '/rentals', label: t.nav.rentals },
     { to: '/payments', label: t.nav.payments },
+    ...(can('payments.reconcile') ? [{ to: '/statements', label: t.nav.statements }] : []),
     { to: '/customers', label: t.nav.customers },
     ...(can('users.manage') ? [{ to: '/settings', label: t.settings.title }] : []),
   ];

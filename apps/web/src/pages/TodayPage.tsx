@@ -5,12 +5,14 @@ import { api } from '../api.js';
 import { StateBadge, Loading, Empty } from '../components/ui.js';
 import { formatGel } from '../format.js';
 import { useT } from '../i18n/index.js';
+import { useSession } from '../session.js';
 
 interface Summary {
   today: string;
   fleet: Record<VehicleState, number>;
   rentals: { active: number; overdue: number; withoutVin: number };
   customers: number;
+  unmatchedLines: number;
   deposits: { held: number; heldTetri: number };
   pickedUpToday: { id: string; number: string; customer: string }[];
   dueBackToday: { id: string; number: string; customer: string }[];
@@ -18,6 +20,7 @@ interface Summary {
 
 export function TodayPage() {
   const t = useT();
+  const { can } = useSession();
   const [s, setS] = useState<Summary | null>(null);
   useEffect(() => {
     void api.get<Summary>('/api/summary').then(setS);
@@ -47,6 +50,12 @@ export function TodayPage() {
           <span className="tile-num">{s.rentals.withoutVin}</span>
           <span className="tile-lbl">{t.today.withoutVin}</span>
         </Link>
+        {can('payments.reconcile') && (
+          <Link to="/statements" className={`tile ${s.unmatchedLines > 0 ? 'tile-warn' : ''}`}>
+            <span className="tile-num">{s.unmatchedLines}</span>
+            <span className="tile-lbl">{t.today.unmatched}</span>
+          </Link>
+        )}
         <Link to="/customers" className="tile">
           <span className="tile-num">{s.customers}</span>
           <span className="tile-lbl">{t.today.customers}</span>

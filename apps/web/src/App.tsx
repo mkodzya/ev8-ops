@@ -10,6 +10,7 @@ import { ProfilePage } from './pages/ProfilePage.js';
 import { SettingsPage } from './pages/SettingsPage.js';
 import { RentalPage } from './pages/RentalPage.js';
 import { ReturnWizard } from './pages/ReturnWizard.js';
+import { StatementsPage } from './pages/StatementsPage.js';
 import { VehiclePage } from './pages/VehiclePage.js';
 import { FleetPage } from './pages/FleetPage.js';
 import { RentalsPage } from './pages/RentalsPage.js';
@@ -26,6 +27,16 @@ function RequireAuth({ children }: { children: React.ReactElement }) {
 // A hidden tab is not a closed door: the URL still exists and somebody will
 // arrive from a bookmark. Sent home rather than shown an error; the API
 // closes the same door for real.
+// Statements belong to whoever reconciles the bank. A hidden tab is not a
+// closed door, so a bookmark lands home; the API closes it for real.
+function RequireReconcile({ children }: { children: React.ReactElement }) {
+  const { me, loading, can } = useSession();
+  if (loading) return null;
+  if (!me) return <Navigate to="/login" replace />;
+  if (!can('payments.reconcile')) return <Navigate to="/" replace />;
+  return children;
+}
+
 function RequireOwner({ children }: { children: React.ReactElement }) {
   const { me, loading, can } = useSession();
   if (loading) return null;
@@ -54,6 +65,7 @@ export function App() {
         <Route path="rentals/:id" element={<RentalPage />} />
         <Route path="rentals/:id/return" element={<ReturnWizard />} />
         <Route path="payments" element={<PaymentsPage />} />
+        <Route path="statements" element={<RequireReconcile><StatementsPage /></RequireReconcile>} />
         <Route path="customers" element={<CustomersPage />} />
         <Route path="customers/new" element={<CustomerForm />} />
         <Route path="customers/:id" element={<CustomerPage />} />

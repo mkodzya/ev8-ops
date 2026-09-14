@@ -11,7 +11,7 @@ export function summaryRoutes(app: FastifyInstance): void {
   app.get('/api/summary', { config: { scope: 'session' } }, async () => {
     const today = todayISO(new Date(), env.TZ);
     const day = dateFromISO(today)!;
-    const [vehicles, rentals, customers, depositsHeld, pickedUpToday, dueBackToday] = await Promise.all([
+    const [vehicles, rentals, customers, depositsHeld, pickedUpToday, unmatchedLines, dueBackToday] = await Promise.all([
       prisma.vehicle.groupBy({ by: ['state'], where: { archived: false }, _count: { _all: true } }),
       prisma.rental.findMany({
         where: { status: { in: ['active', 'overdue'] } },
@@ -24,6 +24,7 @@ export function summaryRoutes(app: FastifyInstance): void {
         select: { id: true, number: true, customer: { select: { name: true } } },
         orderBy: { createdAt: 'asc' },
       }),
+      prisma.statementLine.count({ where: { status: 'unmatched' } }),
       prisma.rental.findMany({
         where: { expectedReturnOn: day, returnedOn: null },
         select: { id: true, number: true, customer: { select: { name: true } } },
@@ -48,6 +49,7 @@ export function summaryRoutes(app: FastifyInstance): void {
       customers,
       deposits: { held: depositsHeld._count._all, heldTetri: depositsHeld._sum.amountTetri ?? 0 },
       // What today asks a person to do, not only what it counts (DSH-01).
+      unmatchedLines,
       pickedUpToday: pickedUpToday.map((r) => ({ id: r.id, number: r.number, customer: r.customer.name })),
       dueBackToday: dueBackToday.map((r) => ({ id: r.id, number: r.number, customer: r.customer.name })),
     };
