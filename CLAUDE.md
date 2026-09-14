@@ -10,6 +10,11 @@ Spec: `docs/spec/ev8-ops-tz-v1.1.html`. State and next step: `docs/handoff.md`.
    uploads, or the live site ev8.ge. Missing data is reported as missing, never
    filled with something plausible. Seed/demo data is allowed only when marked as
    such and never on the prod stand.
+   **The Odoo import runs at the very end of the product, not before** (Mika,
+   14.09.2026). Until then every screen is built and tried on the DEMO dataset
+   (`SEED_MODE=demo`), which is marked row by row and refused on a stand. Real
+   figures from Odoo and Drive still belong in the spec and the handoff — the
+   decision is about the database, not about what we may know.
 2. **Never delete anything in Google Drive.** Suspected junk is moved to
    `_Мусор` inside `EV8 main`.
 3. **Never handle bank credentials.** Bank logins, client secrets, Meta tokens:

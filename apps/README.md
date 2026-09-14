@@ -5,7 +5,8 @@
   return, deposit confirmation, manual vehicle state, models and mopeds;
   `files.ts` — act photos and customer documents, bytes in Postgres;
   `documents.ts` — the contract and the return act as PDFs; `users.ts` —
-  the team's logins), `src/lib/pdf`
+  the team's logins; `payments.ts` — money in, allocation and voiding),
+  `src/lib/pdf`
   (a bilingual document set in Noto Sans and Noto Sans Georgian; the text is
   laid out run by run because neither face covers both alphabets),
   `src/lib` (env, db, auth, guard, audit, validate, `vehicles.ts` — the one

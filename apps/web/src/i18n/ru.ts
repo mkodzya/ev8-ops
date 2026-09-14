@@ -35,6 +35,7 @@ export const ru: Dict = {
     today: 'Сегодня',
     fleet: 'Парк',
     rentals: 'Аренды',
+    payments: 'Платежи',
     customers: 'Клиенты',
   },
 
@@ -341,6 +342,40 @@ export const ru: Dict = {
     buyoutPerPayment: 'С каждого платежа в счёт',
     buyoutClear: 'Без выкупа',
     notes: 'Заметки',
+  },
+
+  payments: {
+    title: 'Платежи',
+    add: 'Провести платёж',
+    date: 'Дата',
+    channel: 'Канал',
+    channels: { transfer: 'Перевод', acquiring: 'Карта', cash: 'Наличные' },
+    gross: 'Клиент заплатил',
+    net: 'Банк зачислил',
+    fee: 'Комиссия эквайринга',
+    feeHint: 'Комиссия — расход компании. Клиент, заплативший 320 картой, ничего не должен.',
+    amount: 'Сумма',
+    allocated: 'Закрыто',
+    leftover: 'Осталось авансом',
+    bankText: 'Строка банка',
+    note: 'Заметка',
+    forRental: 'Аренда',
+    customer: 'Клиент',
+    voided: 'Аннулирован',
+    void: 'Аннулировать',
+    voidReason: 'Почему аннулируем',
+    recorded: (closed: string, left: string) => `Проведён. Закрыто ${closed}, авансом осталось ${left}.`,
+    none: 'Платежей пока нет.',
+    cashOnly: 'Менеджер проводит наличные. Перевод и карту заводит директор.',
+  },
+
+  balance: {
+    title: 'Баланс',
+    invoiced: 'Начислено',
+    paid: 'Оплачено',
+    outstanding: 'Долг',
+    credit: 'Переплата',
+    depositHeld: 'Залог на руках',
   },
 
   customers: {

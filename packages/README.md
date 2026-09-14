@@ -7,5 +7,6 @@ Pure, DB-free domain rules imported by api, worker and web:
 - `money.ts` — GEL in tetri as integers, `formatGel`, VAT 18 % on top, acquiring 1.5 % (315.20 = 320).
 - `time.ts`, `periods.ts` — calendar-day arithmetic, 7-day periods from pickup, "paid through", overdue days.
 - `states.ts` — which event leads to which vehicle state; effective rental status.
+- `payments.ts` — how a payment closes a deposit and then periods oldest-first, and what a customer's balance is.
 
 Tests in `test/` (vitest) carry the acceptance figures from the spec.

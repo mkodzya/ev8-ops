@@ -58,6 +58,7 @@ export function rentalRoutes(app: FastifyInstance): void {
         vehicle: { include: { model: true } },
         deposit: true,
         periods: { orderBy: { seq: 'asc' } },
+        payments: { where: { voidedAt: null }, orderBy: { occurredOn: 'asc' }, select: { id: true, occurredOn: true, channel: true, grossTetri: true, feeTetri: true } },
         acts: { orderBy: { occurredOn: 'asc' }, include: { photos: { where: { archived: false }, select: { id: true, label: true, sizeBytes: true }, orderBy: { createdAt: 'asc' } } } },
       },
     });
@@ -92,6 +93,7 @@ export function rentalRoutes(app: FastifyInstance): void {
       deposit: r.deposit
         ? {
             amountTetri: r.deposit.amountTetri,
+            paidTetri: r.deposit.paidTetri,
             status: r.deposit.status,
             returnedTetri: r.deposit.returnedTetri,
             withheldTetri: r.deposit.withheldTetri,
@@ -109,6 +111,13 @@ export function rentalRoutes(app: FastifyInstance): void {
         amountTetri: p.amountTetri,
         paidTetri: p.paidTetri,
         payStatus: p.payStatus,
+      })),
+      payments: r.payments.map((p) => ({
+        id: p.id,
+        occurredOn: isoDate(p.occurredOn),
+        channel: p.channel,
+        grossTetri: p.grossTetri,
+        feeTetri: p.feeTetri,
       })),
       acts: r.acts.map((a) => ({
         id: a.id,

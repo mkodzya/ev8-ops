@@ -37,6 +37,7 @@ export function Shell() {
     { to: '/', label: t.nav.today, end: true },
     { to: '/fleet', label: t.nav.fleet },
     { to: '/rentals', label: t.nav.rentals },
+    { to: '/payments', label: t.nav.payments },
     { to: '/customers', label: t.nav.customers },
     ...(can('users.manage') ? [{ to: '/settings', label: t.settings.title }] : []),
   ];

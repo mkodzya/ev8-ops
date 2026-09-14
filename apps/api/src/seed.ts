@@ -11,6 +11,7 @@
 //
 // OWNER_EMAIL / OWNER_NAME / OWNER_PASSWORD come from the environment.
 import { DEFAULT_DEPOSIT_TETRI, addDays, periodsThrough, todayISO } from '@ev8/shared';
+import { recordPayment } from './lib/payments.js';
 import { hashPassword } from './lib/auth.js';
 import { dateFromISO } from './lib/dates.js';
 import { closeDb, prisma } from './lib/db.js';
@@ -99,10 +100,13 @@ async function seedDemo(ownerId: string): Promise<void> {
     customers.push(c.id);
   }
 
-  // A rental with periods up to today, the first `paidWeeks` of them paid.
+  // A rental with periods up to today, the first `paidWeeks` of them paid —
+  // paid by real payment rows, not by writing the answer into the periods.
+  // The demo is here to try the machinery, so the machinery does the work:
+  // the first payment is 320 by card (180 deposit + 140 week), the shape a
+  // new renter's first payment really has.
   async function rental(opts: { customer: string; vehicle: { id: string; vin: string } | null; rate: number; pickedUpOn: string; paidWeeks: number; returnedOn?: string; status?: 'active' | 'paused' | 'disputed'; vinNote?: string }) {
     const periods = periodsThrough(opts.pickedUpOn, today, opts.returnedOn);
-    const paidThrough = opts.paidWeeks > 0 ? periods[Math.min(opts.paidWeeks, periods.length) - 1].endsOn : null;
     const r = await prisma.rental.create({
       data: {
         customerId: opts.customer,
@@ -114,7 +118,6 @@ async function seedDemo(ownerId: string): Promise<void> {
         pickedUpOn: d(opts.pickedUpOn),
         returnedOn: opts.returnedOn ? d(opts.returnedOn) : null,
         status: opts.returnedOn ? 'returned' : opts.status ?? 'active',
-        paidThrough: paidThrough ? d(paidThrough) : null,
         nightParkingAddress: 'DEMO: Тбилиси, Ваке, Демо улица 1, двор',
         batteries: 2,
         chargers: 2,
@@ -123,9 +126,8 @@ async function seedDemo(ownerId: string): Promise<void> {
       },
     });
     for (const p of periods) {
-      const paid = p.seq <= opts.paidWeeks;
       await prisma.rentalPeriod.create({
-        data: { rentalId: r.id, seq: p.seq, startsOn: d(p.startsOn), endsOn: d(p.endsOn), amountTetri: opts.rate, paidTetri: paid ? opts.rate : 0, payStatus: paid ? 'paid' : 'unpaid' },
+        data: { rentalId: r.id, seq: p.seq, startsOn: d(p.startsOn), endsOn: d(p.endsOn), amountTetri: opts.rate },
       });
     }
     await prisma.deposit.create({
@@ -133,6 +135,23 @@ async function seedDemo(ownerId: string): Promise<void> {
         ? { rentalId: r.id, amountTetri: DEFAULT_DEPOSIT_TETRI, status: 'returned', returnedTetri: DEFAULT_DEPOSIT_TETRI, returnedOn: d(opts.returnedOn), decidedById: ownerId, confirmedById: ownerId }
         : { rentalId: r.id, amountTetri: DEFAULT_DEPOSIT_TETRI, status: 'held' },
     });
+    // The first payment covers the deposit and week one, by card; the rest
+    // arrive weekly by transfer.
+    for (let week = 1; week <= Math.min(opts.paidWeeks, periods.length); week++) {
+      const first = week === 1;
+      await recordPayment({
+        actorId: ownerId,
+        occurredOn: periods[week - 1].startsOn,
+        channel: first ? 'acquiring' : 'transfer',
+        grossTetri: first ? DEFAULT_DEPOSIT_TETRI + opts.rate : opts.rate,
+        feeTetri: first ? Math.round((DEFAULT_DEPOSIT_TETRI + opts.rate) * 0.015) : 0,
+        customerId: opts.customer,
+        rentalId: r.id,
+        bankText: first ? 'DEMO Wallet/domestic MC cards' : 'DEMO transfer',
+        note: DEMO_NOTE,
+        source: 'manual',
+      });
+    }
     await prisma.act.create({ data: { rentalId: r.id, kind: 'pickup', occurredOn: d(opts.pickedUpOn), odometerKm: 120, condition: DEMO_NOTE, createdById: ownerId } });
     if (opts.vehicle) {
       await prisma.vehicleEvent.create({ data: { vehicleId: opts.vehicle.id, kind: 'pickup', occurredOn: d(opts.pickedUpOn), fromState: 'available', toState: 'rented', rentalId: r.id, actorId: ownerId } });

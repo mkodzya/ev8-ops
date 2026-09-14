@@ -33,6 +33,7 @@ export async function teardown(): Promise<void> {
   try {
     await prisma.auditLog.deleteMany({ where: { createdAt: since } });
     await prisma.storedFile.deleteMany({ where: { createdAt: since } });
+    await prisma.payment.deleteMany({ where: { createdAt: since } }); // allocations cascade
     await prisma.vehicleEvent.deleteMany({ where: { createdAt: since } });
     // A moped points at its current rental; unpin before the rental goes.
     await prisma.vehicle.updateMany({ where: { createdAt: since }, data: { currentRentalId: null } });

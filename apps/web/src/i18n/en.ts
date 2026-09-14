@@ -33,6 +33,7 @@ export const en = {
     today: 'Today',
     fleet: 'Fleet',
     rentals: 'Rentals',
+    payments: 'Payments',
     customers: 'Customers',
   },
 
@@ -335,6 +336,40 @@ export const en = {
     buyoutPerPayment: 'Of each payment towards it',
     buyoutClear: 'No buy-out',
     notes: 'Notes',
+  },
+
+  payments: {
+    title: 'Payments',
+    add: 'Record a payment',
+    date: 'Date',
+    channel: 'Channel',
+    channels: { transfer: 'Transfer', acquiring: 'Card', cash: 'Cash' },
+    gross: 'Paid by the customer',
+    net: 'Credited by the bank',
+    fee: 'Acquirer fee',
+    feeHint: 'The fee is the company’s expense. A customer who paid 320 by card owes nothing.',
+    amount: 'Amount',
+    allocated: 'Closed',
+    leftover: 'Left as credit',
+    bankText: 'Bank line',
+    note: 'Note',
+    forRental: 'Rental',
+    customer: 'Customer',
+    voided: 'Voided',
+    void: 'Void',
+    voidReason: 'Why it is being voided',
+    recorded: (closed: string, left: string) => `Recorded. Closed ${closed}, ${left} left as credit.`,
+    none: 'No payments yet.',
+    cashOnly: 'A manager records cash. A transfer or a card payment is entered by the director.',
+  },
+
+  balance: {
+    title: 'Balance',
+    invoiced: 'Charged',
+    paid: 'Paid',
+    outstanding: 'Owed',
+    credit: 'Paid ahead',
+    depositHeld: 'Deposit held',
   },
 
   customers: {

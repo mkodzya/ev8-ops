@@ -18,11 +18,20 @@ interface Card {
   rentals: { id: string; number: string; status: RentalStatus; vehicle: { id: string; vin: string } | null; vinUnconfirmed: boolean; pickedUpOn: string | null; returnedOn: string | null; paidThrough: string | null; weeklyRateTetri: number; deposit: { amountTetri: number; status: DepositStatus } | null }[];
 }
 
+interface Balance {
+  invoicedTetri: number;
+  paidTetri: number;
+  outstandingTetri: number;
+  creditTetri: number;
+  depositHeldTetri: number;
+}
+
 export function CustomerPage() {
   const { id } = useParams();
   const t = useT();
   const { can } = useSession();
   const { data, error, reload } = useLoad<Card>(id ? `/api/customers/${id}` : null);
+  const balance = useLoad<Balance>(id ? `/api/customers/${id}/balance` : null);
   const [docKind, setDocKind] = useState<'id_card' | 'driver_licence' | 'other'>('id_card');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -59,6 +68,26 @@ export function CustomerPage() {
           </Link>
         )}
       </header>
+      {balance.data && (
+        <section className="tiles">
+          <div className={`tile ${balance.data.outstandingTetri > 0 ? 'tile-crit' : ''}`}>
+            <span className="tile-num mono">{formatGel(balance.data.outstandingTetri, { decimals: false })}</span>
+            <span className="tile-lbl">{t.balance.outstanding}</span>
+          </div>
+          <div className="tile">
+            <span className="tile-num mono">{formatGel(balance.data.creditTetri, { decimals: false })}</span>
+            <span className="tile-lbl">{t.balance.credit}</span>
+          </div>
+          <div className="tile">
+            <span className="tile-num mono">{formatGel(balance.data.depositHeldTetri, { decimals: false })}</span>
+            <span className="tile-lbl">{t.balance.depositHeld}</span>
+          </div>
+          <div className="tile">
+            <span className="tile-num mono">{formatGel(balance.data.paidTetri, { decimals: false })}</span>
+            <span className="tile-lbl">{t.balance.paid}</span>
+          </div>
+        </section>
+      )}
       <div className="two-col">
         <section className="card">
           {c.nameKa && <Row k={t.customer.nameKa} v={c.nameKa} />}

@@ -27,6 +27,7 @@ export const ka: Dict = {
     today: 'დღეს',
     fleet: 'პარკი',
     rentals: 'ქირაობა',
+    payments: 'გადახდები',
     customers: 'კლიენტები',
   },
 
@@ -328,6 +329,40 @@ export const ka: Dict = {
     buyoutPerPayment: 'თითო გადახდიდან',
     buyoutClear: 'გამოსყიდვის გარეშე',
     notes: 'შენიშვნები',
+  },
+
+  payments: {
+    title: 'გადახდები',
+    add: 'გადახდის გატარება',
+    date: 'თარიღი',
+    channel: 'არხი',
+    channels: { transfer: 'გადარიცხვა', acquiring: 'ბარათი', cash: 'ნაღდი' },
+    gross: 'კლიენტმა გადაიხადა',
+    net: 'ბანკმა ჩარიცხა',
+    fee: 'ექვაირინგის საკომისიო',
+    feeHint: 'საკომისიო კომპანიის ხარჯია. კლიენტს, რომელმაც ბარათით 320 გადაიხადა, დავალიანება არ აქვს.',
+    amount: 'თანხა',
+    allocated: 'დაიფარა',
+    leftover: 'დარჩა ავანსად',
+    bankText: 'ბანკის ჩანაწერი',
+    note: 'შენიშვნა',
+    forRental: 'ქირაობა',
+    customer: 'კლიენტი',
+    voided: 'გაუქმებული',
+    void: 'გაუქმება',
+    voidReason: 'გაუქმების მიზეზი',
+    recorded: (closed: string, left: string) => `გატარდა. დაიფარა ${closed}, ავანსად დარჩა ${left}.`,
+    none: 'გადახდები ჯერ არ არის.',
+    cashOnly: 'მენეჯერი ატარებს ნაღდს. გადარიცხვას და ბარათს დირექტორი ატარებს.',
+  },
+
+  balance: {
+    title: 'ბალანსი',
+    invoiced: 'დარიცხული',
+    paid: 'გადახდილი',
+    outstanding: 'დავალიანება',
+    credit: 'ავანსი',
+    depositHeld: 'დეპოზიტი ხელზე',
   },
 
   customers: {

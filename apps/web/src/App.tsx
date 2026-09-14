@@ -4,6 +4,7 @@ import { Shell } from './Shell.js';
 import { CustomerForm } from './pages/CustomerForm.js';
 import { CustomerPage } from './pages/CustomerPage.js';
 import { CustomersPage } from './pages/CustomersPage.js';
+import { PaymentsPage } from './pages/PaymentsPage.js';
 import { PickupWizard } from './pages/PickupWizard.js';
 import { ProfilePage } from './pages/ProfilePage.js';
 import { SettingsPage } from './pages/SettingsPage.js';
@@ -52,6 +53,7 @@ export function App() {
         <Route path="rentals/new" element={<PickupWizard />} />
         <Route path="rentals/:id" element={<RentalPage />} />
         <Route path="rentals/:id/return" element={<ReturnWizard />} />
+        <Route path="payments" element={<PaymentsPage />} />
         <Route path="customers" element={<CustomersPage />} />
         <Route path="customers/new" element={<CustomerForm />} />
         <Route path="customers/:id" element={<CustomerPage />} />

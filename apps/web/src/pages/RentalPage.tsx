@@ -5,6 +5,8 @@ import { Field } from '../components/Wizard.js';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { Empty, Loading, RentalBadge, Vin } from '../components/ui.js';
+import { PaymentForm } from '../components/PaymentForm.js';
+import { VoidPayment } from './PaymentsPage.js';
 import { Row } from '../components/Wizard.js';
 import { fmtDate, formatGel } from '../format.js';
 import { useT } from '../i18n/index.js';
@@ -35,7 +37,8 @@ export interface RentalCard {
     buyoutPerPaymentTetri: number | null;
     notes: string | null;
   };
-  deposit: { amountTetri: number; status: DepositStatus; returnedTetri: number; withheldTetri: number; withheldReason: string | null; withheldGrounds: string[]; returnedTo: string | null; returnedOn: string | null; confirmed?: boolean | null } | null;
+  payments: { id: string; occurredOn: string; channel: 'transfer' | 'acquiring' | 'cash'; grossTetri: number; feeTetri: number }[];
+  deposit: { amountTetri: number; paidTetri: number; status: DepositStatus; returnedTetri: number; withheldTetri: number; withheldReason: string | null; withheldGrounds: string[]; returnedTo: string | null; returnedOn: string | null; confirmed?: boolean | null } | null;
   periods: { seq: number; startsOn: string; endsOn: string; amountTetri: number; paidTetri: number; payStatus: PeriodPayStatus }[];
   acts: { id: string; kind: ActKind; occurredOn: string; odometerKm: number | null; condition: string | null; photos: { id: string; label: string }[]; pdfUrl: string | null }[];
 }
@@ -152,6 +155,7 @@ export function RentalPage() {
           {d ? (
             <>
               <Row k={t.rental.amount} v={<span className="mono">{formatGel(d.amountTetri, { decimals: false })}</span>} />
+              <Row k={t.rental.paid} v={<span className="mono">{formatGel(d.paidTetri, { decimals: false })}</span>} />
               <Row k={t.fleet.state} v={t.rental.depositStatus[d.status]} />
               {decided && (
                 <>
@@ -209,6 +213,32 @@ export function RentalPage() {
             </table>
           </div>
         )}
+      </section>
+
+      <section className="card">
+        <h2>{t.payments.title}</h2>
+        {data.payments.length === 0 ? (
+          <Empty text={t.payments.none} />
+        ) : (
+          <ul className="timeline">
+            {data.payments.map((p) => (
+              <li key={p.id}>
+                <span className="mono muted">{fmtDate(p.occurredOn)}</span>
+                <span>
+                  <span className="mono">{formatGel(p.grossTetri)}</span> <span className="muted">{t.payments.channels[p.channel]}</span>
+                  {p.feeTetri > 0 && (
+                    <span className="muted">
+                      {' '}
+                      · {t.payments.fee} <span className="mono">{formatGel(p.feeTetri)}</span>
+                    </span>
+                  )}{' '}
+                  {can('payments.reconcile') && <VoidPayment id={p.id} onDone={reload} onError={setErr} />}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+        {can('cash.record') && open && <PaymentForm rentalId={r.id} onDone={reload} />}
       </section>
 
       <section className="card">
