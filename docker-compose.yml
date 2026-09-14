@@ -1,0 +1,23 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-ev8ops}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ev8ops}
+      POSTGRES_DB: ${POSTGRES_DB:-ev8ops}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ev8ops} -d ${POSTGRES_DB:-ev8ops}"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  # api, worker and web services are added in stage 1 once apps/* exist;
+  # they follow the selfstudio-OPS compose layout (Dockerfile per app,
+  # api healthcheck on /api/health, web proxying to api).
+
+volumes:
+  pgdata:

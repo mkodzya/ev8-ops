@@ -1,0 +1,22 @@
+node_modules/
+dist/
+# Every environment file except the examples: they hold DB passwords, session
+# secrets, bank and Meta keys in plain text.
+.env
+.env.*
+!.env.example
+*.log
+apps/api/src/generated/
+.pgdata/
+backups/
+playwright-report/
+screenshots/*.png
+# Real business data never enters the repository: Odoo snapshots, demo data
+# built from them, bank statements, contracts. They live in ~/Desktop/EV8-ops.
+data/
+*.snapshot.json
+demo_data.json
+odoo_snapshot.json
+*.xlsx
+*.csv
+*.pdf

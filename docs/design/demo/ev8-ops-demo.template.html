@@ -1,0 +1,550 @@
+<title>EV8 Ops Demo</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=Inter:wght@400;500;600&family=Noto+Sans+Georgian:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --bg:#fbfbfb;--surface:#FFFFFF;--surface-2:#f3f6f3;--ink:#0b0b0b;--muted:#5d6b5d;--line:#dbe4de;--line-soft:#e9efea;
+  --accent:#557553;--accent-ink:#557553;--accent-soft:#e3ebe3;--on-accent:#FFFFFF;--brand:#819481;--lime:#e0ffa2;
+  --warn:#e45e22;--warn-soft:#fdeadf;--crit:#c8402f;--crit-soft:#f9e3df;--info:#3f74d6;--info-soft:#e4ecfb;
+  --rail:#0b0b0b;--rail-ink:#c9d3c9;--rail-active:#1b211b;--rail-accent:#e0ffa2;
+  --shadow:0 12px 40px rgba(11,11,11,.16);
+  --display:"Be Vietnam Pro","Noto Sans Georgian",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --body:"Inter","Noto Sans Georgian",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0b0b0b;--surface:#151915;--surface-2:#1b211b;--ink:#eef1ee;--muted:#9fae9f;--line:#2a332b;--line-soft:#222a23;
+  --accent:#a2b9a2;--accent-ink:#bfd3bf;--accent-soft:#1f2d20;--on-accent:#0b0b0b;--brand:#a2b9a2;--lime:#e0ffa2;
+  --warn:#ff7a3d;--warn-soft:#3a2214;--crit:#ef6b5a;--crit-soft:#3d1e1a;--info:#7fa6ee;--info-soft:#1b2a45;
+  --rail:#050605;--rail-ink:#aeb9ae;--rail-active:#161a16;--rail-accent:#e0ffa2;
+  --shadow:0 12px 40px rgba(0,0,0,.5);}}
+:root[data-theme="dark"]{
+  --bg:#0b0b0b;--surface:#151915;--surface-2:#1b211b;--ink:#eef1ee;--muted:#9fae9f;--line:#2a332b;--line-soft:#222a23;
+  --accent:#a2b9a2;--accent-ink:#bfd3bf;--accent-soft:#1f2d20;--on-accent:#0b0b0b;--brand:#a2b9a2;--lime:#e0ffa2;
+  --warn:#ff7a3d;--warn-soft:#3a2214;--crit:#ef6b5a;--crit-soft:#3d1e1a;--info:#7fa6ee;--info-soft:#1b2a45;
+  --rail:#050605;--rail-ink:#aeb9ae;--rail-active:#161a16;--rail-accent:#e0ffa2;
+  --shadow:0 12px 40px rgba(0,0,0,.5);}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--body);font-size:14.5px;line-height:1.45;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.app{display:grid;grid-template-columns:224px minmax(0,1fr);min-height:100vh}
+.rail{background:var(--rail);color:var(--rail-ink);padding:18px 12px;display:flex;flex-direction:column;gap:4px;position:sticky;top:0;height:100vh}
+.brand{display:flex;align-items:center;gap:10px;padding:6px 10px 18px}
+.brand .mark{display:flex;align-items:center}.brand .mark svg{width:96px;height:24px}
+.brand b{font-family:var(--display);font-weight:800;color:#fff;font-size:15px;letter-spacing:-.01em}
+.brand small{display:block;font-size:11px;color:var(--rail-ink);opacity:.8}
+.nav{display:flex;flex-direction:column;gap:2px}
+.nav button{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:8px;text-align:left;width:100%;font-family:var(--display);font-weight:600;font-size:13.5px;color:var(--rail-ink)}
+.nav button svg{width:18px;height:18px;flex:none;opacity:.8}
+.nav button:hover{background:var(--rail-active);color:#fff}
+.nav button.on{background:var(--rail-active);color:var(--rail-accent);box-shadow:inset 3px 0 0 var(--rail-accent)}
+.nav .cnt{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--rail-ink);opacity:.8}
+.nav .cnt.hot{color:#FFB4A8;opacity:1}
+.rail .who{margin-top:auto;padding:10px;border-top:1px solid #1F2A24;font-size:12px;line-height:1.35}
+.rail .who b{color:#fff;display:block;font-family:var(--display)}
+.main{min-width:0;display:flex;flex-direction:column}
+.top{display:flex;align-items:center;gap:14px;padding:14px 26px;border-bottom:1px solid var(--line);background:var(--surface);position:sticky;top:0;z-index:5}
+.top h1{font-family:var(--display);font-weight:800;font-size:20px;margin:0;letter-spacing:-.01em}
+.top .sub{color:var(--muted);font-size:13px}
+.search{margin-left:auto;display:flex;align-items:center;gap:8px;background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:6px 10px;min-width:260px}
+.search input{border:0;background:none;font:inherit;color:inherit;width:100%;outline:none}
+.search svg{width:16px;height:16px;color:var(--muted)}
+.demo-tag{font-family:var(--display);font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--warn);background:var(--warn-soft);padding:4px 8px;border-radius:6px;white-space:nowrap}
+.content{padding:22px 26px 60px;display:flex;flex-direction:column;gap:18px}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.tile{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px;text-align:left;display:flex;flex-direction:column;gap:2px;transition:border-color .12s}
+.tile:hover{border-color:var(--accent)}
+.tile .k{font-family:var(--display);font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.tile .v{font-family:var(--display);font-weight:800;font-size:24px;letter-spacing:-.02em;font-variant-numeric:tabular-nums;line-height:1.15}
+.tile .v small{font-size:13px;font-weight:600;color:var(--muted);margin-left:3px}
+.tile .d{font-size:12px;color:var(--muted)}
+.tile.crit .v{color:var(--crit)}
+.tile.warn .v{color:var(--warn)}
+.tile.ok .v{color:var(--accent-ink)}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:16px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.card>h3{margin:0;padding:12px 16px;font-family:var(--display);font-size:13px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--line-soft);display:flex;justify-content:space-between;align-items:center}
+.card>h3 span{font-family:var(--mono);font-weight:400;text-transform:none;letter-spacing:0;font-size:12px}
+.card .empty{padding:18px 16px;color:var(--muted);font-size:13.5px}
+.rows{display:flex;flex-direction:column}
+.row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 14px;padding:10px 16px;border-bottom:1px solid var(--line-soft);text-align:left;width:100%;align-items:center}
+.row:last-child{border-bottom:0}
+.row:hover{background:var(--surface-2)}
+.row .t{font-weight:600;grid-column:1}
+.row .s{font-size:12.5px;color:var(--muted);grid-column:1}
+.row .r{font-family:var(--mono);font-size:13px;font-variant-numeric:tabular-nums;text-align:right;grid-column:2;grid-row:1/3;align-self:center;white-space:nowrap}
+.row .r.crit{color:var(--crit)}
+.row .r.warn{color:var(--warn)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:5px 11px;font-family:var(--display);font-size:12.5px;font-weight:600;display:flex;gap:6px;align-items:center}
+.chip .n{font-family:var(--mono);font-size:11px;color:var(--muted)}
+.chip.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.chip.on .n{color:inherit;opacity:.7}
+.toolbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.toolbar .sp{flex:1}
+.btn{font-family:var(--display);font-weight:600;font-size:13px;padding:8px 16px;border-radius:999px;border:1px solid var(--line);background:var(--surface);display:inline-flex;gap:8px;align-items:center}
+.btn:hover{border-color:var(--ink)}
+.btn.pri{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
+.btn.pri:hover{filter:brightness(.95)}
+.btn svg{width:15px;height:15px}
+.tblw{background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th,td{padding:10px 14px;text-align:left;border-bottom:1px solid var(--line-soft);white-space:nowrap}
+th{font-family:var(--display);font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:700;background:var(--surface-2);position:sticky;top:0}
+tbody tr{cursor:pointer}
+tbody tr:hover{background:var(--surface-2)}
+tbody tr:last-child td{border-bottom:0}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;font-family:var(--mono);font-size:13px}
+td.mono{font-family:var(--mono);font-size:12.5px}
+td.wrap{white-space:normal;min-width:180px}
+.vin{font-family:var(--mono);font-size:12.5px;letter-spacing:.02em}
+.vin b{color:var(--accent-ink);font-weight:500}
+.st{display:inline-flex;align-items:center;gap:6px;font-family:var(--display);font-size:11.5px;font-weight:700;letter-spacing:.03em;padding:3px 9px;border-radius:999px;white-space:nowrap}
+.st::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}
+.st.available{background:var(--accent-soft);color:var(--accent-ink)}
+.st.rented{background:var(--info-soft);color:var(--info)}
+.st.service{background:var(--warn-soft);color:var(--warn)}
+.st.out,.st.crit,.st.churn{background:var(--crit-soft);color:var(--crit)}
+.st.sold,.st.returned,.st.paused{background:var(--line-soft);color:var(--muted)}
+.st.active{background:var(--accent-soft);color:var(--accent-ink)}
+.st.overdue{background:var(--crit-soft);color:var(--crit)}
+.tag{display:inline-block;font-size:11.5px;padding:2px 7px;border-radius:5px;background:var(--line-soft);color:var(--muted);margin-right:4px}
+.muted{color:var(--muted)}
+.money{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.bar{height:8px;border-radius:4px;background:var(--line-soft);overflow:hidden;display:flex}
+.bar i{display:block;height:100%}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px;color:var(--muted);padding:10px 16px 14px}
+.legend i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:6px;vertical-align:middle}
+.fleetgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px}
+.vcard{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px;text-align:left;display:flex;flex-direction:column;gap:6px;transition:border-color .12s}
+.vcard:hover{border-color:var(--accent)}
+.vcard .m{font-family:var(--display);font-weight:800;font-size:16px;display:flex;justify-content:space-between;align-items:center;gap:8px}
+.vcard .m small{font-family:var(--body);font-weight:500;font-size:12px;color:var(--muted)}
+.vcard .who{font-size:12.5px;color:var(--muted);min-height:17px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* drawer */
+.scrim{position:fixed;inset:0;background:rgba(10,14,12,.35);opacity:0;pointer-events:none;transition:opacity .15s;z-index:20}
+.scrim.on{opacity:1;pointer-events:auto}
+.drawer{position:fixed;top:0;right:0;height:100vh;width:min(520px,100vw);background:var(--surface);border-left:1px solid var(--line);box-shadow:var(--shadow);transform:translateX(102%);transition:transform .18s ease-out;z-index:21;display:flex;flex-direction:column}
+.drawer.on{transform:none}
+@media (prefers-reduced-motion:reduce){.drawer,.scrim{transition:none}}
+.dh{padding:16px 20px 12px;border-bottom:1px solid var(--line);display:flex;gap:12px;align-items:flex-start}
+.dh .eyebrow{font-family:var(--display);font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.dh h2{margin:2px 0 4px;font-family:var(--display);font-weight:800;font-size:20px;letter-spacing:-.01em;line-height:1.2}
+.dh .x{margin-left:auto;width:32px;height:32px;border-radius:8px;display:grid;place-items:center;color:var(--muted)}
+.dh .x:hover{background:var(--surface-2);color:var(--ink)}
+.db{padding:16px 20px 40px;overflow-y:auto;display:flex;flex-direction:column;gap:18px}
+.kv{display:grid;grid-template-columns:max-content 1fr;gap:6px 16px;font-size:13.5px}
+.kv b{color:var(--muted);font-weight:500}
+.kv span{font-variant-numeric:tabular-nums}
+.sec h4{margin:0 0 8px;font-family:var(--display);font-size:11.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.tl{display:flex;flex-direction:column;border-left:2px solid var(--line);margin-left:6px;padding-left:14px;gap:10px}
+.tl>div{position:relative;font-size:13.5px}
+.tl>div::before{content:"";position:absolute;left:-20px;top:6px;width:8px;height:8px;border-radius:50%;background:var(--muted)}
+.tl>div.ok::before{background:var(--accent)}
+.tl>div.bad::before{background:var(--crit)}
+.tl .d{font-family:var(--mono);font-size:12px;color:var(--muted)}
+.periods{display:flex;flex-direction:column;gap:4px}
+.period{display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:center;padding:7px 10px;border-radius:7px;background:var(--surface-2);font-size:13px}
+.period .n{font-family:var(--mono);font-size:12px}
+.period.bad{background:var(--crit-soft)}
+.period.bad .n,.period.bad .money{color:var(--crit)}
+.actions{display:flex;gap:8px;flex-wrap:wrap}
+.note{border-left:3px solid var(--warn);background:var(--warn-soft);padding:8px 12px;border-radius:0 8px 8px 0;font-size:13px}
+.note.ok{border-color:var(--accent);background:var(--accent-soft)}
+.toast{position:fixed;left:50%;bottom:26px;transform:translate(-50%,20px);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;font-family:var(--display);font-weight:600;font-size:13.5px;opacity:0;transition:all .18s;z-index:30;pointer-events:none;max-width:90vw;text-align:center}
+.toast.on{opacity:1;transform:translate(-50%,0)}
+.msgtpl{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:8px}
+.msgtpl h4{margin:0;font-family:var(--display);font-size:14px;font-weight:700;display:flex;justify-content:space-between;gap:8px}
+.bubble{background:var(--accent-soft);border-radius:12px 12px 12px 3px;padding:10px 12px;font-size:13.5px;max-width:420px;white-space:pre-line}
+.bubble.ge{font-size:13px}
+.modal{position:fixed;inset:0;display:grid;place-items:center;z-index:25;pointer-events:none}
+.modal .box{background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);width:min(560px,92vw);padding:22px 24px;opacity:0;transform:translateY(8px);transition:all .15s}
+.modal.on{pointer-events:auto}.modal.on .box{opacity:1;transform:none}
+.modal h2{margin:0 0 6px;font-family:var(--display);font-size:19px}
+.drop{border:2px dashed var(--line);border-radius:10px;padding:26px;text-align:center;color:var(--muted);margin:14px 0;font-size:13.5px}
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;font-size:12.5px}
+.steps div{background:var(--surface-2);border-radius:8px;padding:10px}
+.steps b{display:block;font-family:var(--display);font-size:12px;margin-bottom:3px}
+@media (max-width:820px){
+  .app{grid-template-columns:1fr}
+  .rail{position:fixed;bottom:0;left:0;right:0;top:auto;height:auto;flex-direction:row;padding:6px 6px calc(6px + env(safe-area-inset-bottom));z-index:10;overflow-x:auto}
+  .brand,.rail .who{display:none}
+  .nav{flex-direction:row;gap:2px;width:100%}
+  .nav button{flex-direction:column;gap:3px;padding:6px 4px;font-size:10.5px;flex:1;min-width:58px;justify-content:center;text-align:center}
+  .nav button.on{box-shadow:inset 0 -3px 0 var(--rail-accent)}
+  .nav .cnt{display:none}
+  .top{padding:12px 16px;flex-wrap:wrap}
+  .search{min-width:0;width:100%;order:3}
+  .content{padding:14px 14px 90px}
+  .steps{grid-template-columns:1fr}
+}
+
+.bake{display:flex;flex-direction:column;gap:18px;padding:8px 0 28px;border-bottom:1px solid var(--line)}
+.bake-h{font-family:var(--display);font-weight:800;font-size:22px;margin:22px 0 0;letter-spacing:-.01em;display:flex;gap:12px;align-items:baseline}
+.bake-h small{font-family:var(--body);font-weight:400;font-size:13px;color:var(--muted)}
+.drawer.static{position:static;transform:none;height:auto;width:100%;box-shadow:none;border:1px solid var(--line);border-radius:12px}
+.drawer.static .db{padding-bottom:20px}
+.bake-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:16px;align-items:start}
+</style>
+
+<div class="app">
+  <aside class="rail">
+    <div class="brand"><div class="mark"><svg width="283" height="73" viewBox="0 0 283 73" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <mask id="mask0_2004_1213" style="mask-type:luminance" maskUnits="userSpaceOnUse" x="0" y="0" width="138" height="73">
+        <mask id="mask1_2004_1213" style="mask-type:luminance" maskUnits="userSpaceOnUse" x="0" y="0" width="138" height="73">
+            <path fill-rule="evenodd" clip-rule="evenodd" d="M137.737 36.5495V70.4737C137.737 71.494 136.972 72.2592 135.952 72.2592H2.04056C0.765215 72.2592 0 71.494 0 70.4737V2.88039C0 1.60505 0.765215 0.839844 2.04056 0.839844H135.952C136.972 0.839844 137.737 1.60505 137.737 2.88039V36.5495Z" fill="white"/>
+        </mask>
+        <g mask="url(#mask1_2004_1213)">
+            <path d="M0 72.2592H137.737V0.839844H0V72.2592Z" fill="white"/>
+        </g>
+    </mask>
+    <g mask="url(#mask0_2004_1213)">
+        <path fill-rule="evenodd" clip-rule="evenodd" d="M7.62272 52.9887C8.13051 53.9095 9.32974 54.1365 10.1799 53.5192L37.357 33.785C38.7085 32.8055 40.5566 34.0146 40.1981 35.6445L39.0094 41.0547C38.6618 42.6387 40.4021 43.8476 41.765 42.9727L100.084 5.51319C101.48 4.6179 101.025 2.5639 99.3665 2.51289C99.0132 2.50269 98.6584 2.49795 98.3023 2.49795C85.9683 2.49795 75.1657 9.05557 69.1903 18.8732C68.6089 19.8271 67.1498 19.8271 66.5687 18.8732C60.5931 9.05557 49.7906 2.49795 37.4568 2.49795C18.6485 2.49795 3.40137 17.7462 3.40137 36.5524C3.40137 42.5134 4.93245 48.1143 7.62272 52.9887ZM14.8563 58.8809C13.803 59.4472 13.5779 60.8634 14.4604 61.672C20.5193 67.2223 28.5924 70.6094 37.4568 70.6094C49.7906 70.6094 60.5931 64.0517 66.5687 54.2341C66.5728 54.2265 66.5768 54.2206 66.5809 54.213C66.7135 54.0038 66.872 53.8048 66.9713 53.5778L73.4055 38.7768C73.4164 38.7513 73.4209 38.7226 73.4185 38.6971C73.4085 38.5772 73.2798 38.5065 73.1738 38.5626L27.1977 62.8328C25.7382 63.6031 24.0907 62.1843 24.6353 60.6258L26.1143 56.3938C26.6615 54.8276 24.9968 53.4099 23.5373 54.198L14.8563 58.8809ZM73.2395 48.3419C74.113 47.2808 75.8218 47.5303 76.4931 48.7317C80.7657 56.3659 88.9311 61.5263 98.3018 61.5263C112.094 61.5263 123.276 50.3466 123.276 36.5524C123.276 25.4671 116.051 16.0651 106.051 12.8053C104.743 12.3794 104.164 10.7491 105.038 9.68546L108.622 5.32887C109.104 4.74476 109.902 4.51541 110.609 4.78834C123.335 9.72392 132.358 22.0849 132.358 36.5524C132.358 55.3612 117.111 70.6094 98.3023 70.6094C85.9683 70.6094 75.1657 64.0517 69.1903 54.2341C69.0158 53.9459 68.9467 53.5602 69.16 53.3L73.2395 48.3419Z" fill="white"/>
+    </g>
+    <path d="M142.252 62.0488V10.1075H177.251V19.1617H153.233V31.5384H175.451V40.5926H153.233V52.9946H177.353V62.0488H142.252ZM195.366 10.1075L207.92 49.5707H208.402L220.982 10.1075H233.155L215.25 62.0488H201.098L183.167 10.1075H195.366ZM258.479 62.759C254.574 62.759 251.099 62.1249 248.056 60.8568C245.029 59.5718 242.653 57.8218 240.929 55.6069C239.204 53.3919 238.342 50.8811 238.342 48.0744C238.342 45.9102 238.832 43.9235 239.813 42.1143C240.811 40.2882 242.163 38.775 243.871 37.5745C245.579 36.3571 247.489 35.5794 249.603 35.2412V34.8861C246.83 34.3282 244.581 32.984 242.856 30.8536C241.132 28.7063 240.269 26.2123 240.269 23.3718C240.269 20.6834 241.056 18.2909 242.628 16.1944C244.201 14.0809 246.356 12.4239 249.095 11.2234C251.851 10.006 254.979 9.39735 258.479 9.39735C261.979 9.39735 265.099 10.006 267.838 11.2234C270.594 12.4408 272.758 14.1062 274.331 16.2197C275.903 18.3163 276.698 20.7003 276.715 23.3718C276.698 26.2293 275.819 28.7232 274.077 30.8536C272.335 32.984 270.104 34.3282 267.381 34.8861V35.2412C269.461 35.5794 271.346 36.3571 273.037 37.5745C274.745 38.775 276.098 40.2882 277.095 42.1143C278.11 43.9235 278.625 45.9102 278.642 48.0744C278.625 50.8811 277.754 53.3919 276.03 55.6069C274.305 57.8218 271.921 59.5718 268.878 60.8568C265.851 62.1249 262.385 62.759 258.479 62.759ZM258.479 54.6939C260.221 54.6939 261.743 54.3811 263.045 53.7555C264.346 53.113 265.361 52.2337 266.088 51.1178C266.832 49.985 267.204 48.6831 267.204 47.2121C267.204 45.7073 266.823 44.38 266.063 43.2302C265.302 42.0636 264.27 41.1506 262.968 40.4911C261.667 39.8148 260.17 39.4767 258.479 39.4767C256.805 39.4767 255.309 39.8148 253.99 40.4911C252.671 41.1506 251.632 42.0636 250.871 43.2302C250.127 44.38 249.755 45.7073 249.755 47.2121C249.755 48.6831 250.118 49.985 250.845 51.1178C251.572 52.2337 252.595 53.113 253.914 53.7555C255.233 54.3811 256.755 54.6939 258.479 54.6939ZM258.479 31.4876C259.933 31.4876 261.227 31.1917 262.36 30.6C263.493 30.0082 264.38 29.1881 265.023 28.1399C265.665 27.0916 265.987 25.8826 265.987 24.5131C265.987 23.1604 265.665 21.9769 265.023 20.9624C264.38 19.931 263.501 19.1279 262.385 18.553C261.269 17.9612 259.967 17.6654 258.479 17.6654C257.008 17.6654 255.706 17.9612 254.574 18.553C253.441 19.1279 252.553 19.931 251.911 20.9624C251.285 21.9769 250.972 23.1604 250.972 24.5131C250.972 25.8826 251.293 27.0916 251.936 28.1399C252.578 29.1881 253.466 30.0082 254.599 30.6C255.732 31.1917 257.025 31.4876 258.479 31.4876Z" fill="white"/>
+</svg></div></div><div style="padding:0 10px 14px;font-family:var(--display);font-weight:600;color:#fff;font-size:13px">Ops <span style="color:var(--rail-ink);font-weight:400">· E‑Motion Motors</span></div>
+    <nav class="nav" id="nav"></nav>
+    <div class="who"><b>Kardu Kukhianidze</b>директор · 13.09.2026</div>
+  </aside>
+  <div class="main">
+    <header class="top">
+      <div><h1 id="title">Сегодня</h1><div class="sub" id="subtitle"></div></div>
+      <span class="demo-tag">Демо · данные Odoo 13.09.2026</span>
+      <label class="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="q" placeholder="VIN, клиент, номер аренды…" aria-label="Поиск"></label>
+    </header>
+    <div class="content" id="view"></div>
+  </div>
+</div>
+<div class="scrim" id="scrim"></div>
+<aside class="drawer" id="drawer" aria-hidden="true"></aside>
+<div class="modal" id="modal"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+const DATA = __DATA__;
+const TODAY = new Date(DATA.summary.today + "T12:00:00");
+const fmt = n => (Math.round(n*100)/100).toLocaleString("ru-RU",{minimumFractionDigits:2,maximumFractionDigits:2}) + " ₾";
+const fmt0 = n => Math.round(n).toLocaleString("ru-RU") + " ₾";
+const dd = s => { if(!s) return "—"; const [y,m,d]=s.slice(0,10).split("-"); return `${d}.${m}.${y}`; };
+const days = (a,b) => Math.round((new Date(b+"T12:00:00") - new Date(a+"T12:00:00"))/86400000);
+const short = n => (n||"").split("/").pop().trim();
+const vinHtml = v => v ? `<span class="vin">${v.slice(0,13)}<b>${v.slice(13)}</b></span>` : `<span class="muted">VIN не подтверждён</span>`;
+const ST = {available:"Свободен",rented:"В аренде",service:"В сервисе",out:"Списан",sold:"Продан",active:"Активна",returned:"Завершена",paused:"На паузе",churn:"Спорная",overdue:"Просрочка"};
+const st = (s,label) => `<span class="st ${s}">${label||ST[s]||s}</span>`;
+const byId = {}; DATA.rentals.forEach(r=>byId[r.id]=r);
+const vByVin = {}; DATA.vehicles.forEach(v=>vByVin[v.vin]=v);
+const cById = {}; DATA.customers.forEach(c=>cById[c.id]=c);
+const active = DATA.rentals.filter(r=>r.status==="active");
+const overdue = active.filter(r=>r.residual>0.05).sort((a,b)=>b.residual-a.residual);
+const noVin = active.filter(r=>!r.vin);
+const inService = DATA.vehicles.filter(v=>v.status==="service");
+const custPays = DATA.payments.filter(p=>p.type==="inbound");
+const unmatchedNote = 48; // из журнала: поступления эквайринга без имени плательщика (checklist 14.08.2026)
+
+const NAV = [
+  ["today","Сегодня",'<path d="M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>', null],
+  ["fleet","Парк",'<circle cx="7" cy="17" r="3"/><circle cx="17" cy="17" r="3"/><path d="M7 14l3-7h5l2 4h-4"/>', DATA.vehicles.length],
+  ["rentals","Аренды",'<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/>', active.length],
+  ["payments","Платежи",'<rect x="2" y="6" width="20" height="13" rx="2"/><path d="M2 10h20M6 15h4"/>', unmatchedNote, true],
+  ["customers","Клиенты",'<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/>', DATA.customers.filter(c=>!c.supplier).length],
+  ["sales","Продажи",'<path d="M3 3h2l2 12h11l2-8H6"/><circle cx="9" cy="20" r="1.5"/><circle cx="17" cy="20" r="1.5"/>', DATA.sales.length],
+  ["service","Сервис",'<path d="M14 6a4 4 0 0 0-5.5 5.5L3 17l4 4 5.5-5.5A4 4 0 0 0 18 10l-3 3-2-2 3-3z"/>', inService.length],
+  ["messages","Сообщения",'<path d="M21 12a8 8 0 0 1-11.5 7.2L4 21l1.8-5.5A8 8 0 1 1 21 12z"/>', null],
+];
+let view = "today", filters = {fleet:{status:null,model:null}, rentals:"active", payments:"all"};
+const $ = s => document.querySelector(s);
+const toast = t => { const e=$("#toast"); e.textContent=t; e.classList.add("on"); clearTimeout(e._t); e._t=setTimeout(()=>e.classList.remove("on"),2600); };
+const demoAct = t => toast(`${t} — в демо действие не выполняется`);
+
+function renderNav(){
+  $("#nav").innerHTML = NAV.map(([k,l,ic,c,hot])=>`<button class="${view===k?"on":""}" data-v="${k}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ic}</svg><span>${l}</span>${c!=null?`<span class="cnt ${hot?"hot":""}">${c}</span>`:""}</button>`).join("");
+}
+function go(v){ view=v; renderNav(); render(); window.scrollTo({top:0}); }
+document.addEventListener("click", e=>{
+  const nb = e.target.closest("[data-v]"); if(nb){ go(nb.dataset.v); return; }
+  const op = e.target.closest("[data-open]"); if(op){ openDrawer(op.dataset.open, op.dataset.id); return; }
+  const f = e.target.closest("[data-f]"); if(f){ const [k,v]=f.dataset.f.split(":"); if(k==="status"||k==="model"){ filters.fleet[k] = filters.fleet[k]===v?null:v; } else filters[k]=v; render(); return; }
+  const a = e.target.closest("[data-act]"); if(a){ if(a.dataset.act==="import") openImport(); else demoAct(a.dataset.act); return; }
+  if(e.target.closest("[data-close]")||e.target.id==="scrim"){ closeDrawer(); closeModal(); }
+});
+document.addEventListener("keydown", e=>{ if(e.key==="Escape"){ closeDrawer(); closeModal(); } });
+$("#q").addEventListener("input", e=>{ const q=e.target.value.trim().toLowerCase(); if(q.length<2) return; const v=DATA.vehicles.find(x=>x.vin.toLowerCase().endsWith(q)||x.vin.toLowerCase()===q); if(v){openDrawer("vehicle",v.id);return;} const r=DATA.rentals.find(x=>x.id.toLowerCase()===q); if(r){openDrawer("rental",r.id);return;} if(q.length>=3){ const c=DATA.customers.find(x=>x.name.toLowerCase().includes(q)); if(c) openDrawer("customer",c.id); } });
+
+function setTitle(t,s){ $("#title").textContent=t; $("#subtitle").textContent=s||""; }
+
+function render(){
+  const el = $("#view");
+  if(view==="today") el.innerHTML = renderToday();
+  if(view==="fleet") el.innerHTML = renderFleet();
+  if(view==="rentals") el.innerHTML = renderRentals();
+  if(view==="payments") el.innerHTML = renderPayments();
+  if(view==="customers") el.innerHTML = renderCustomers();
+  if(view==="sales") el.innerHTML = renderSales();
+  if(view==="service") el.innerHTML = renderService();
+  if(view==="messages") el.innerHTML = renderMessages();
+}
+
+/* ---------- Сегодня ---------- */
+function renderToday(){
+  setTitle("Сегодня", "суббота, 13 сентября 2026");
+  const s = DATA.summary, vc = s.vehicles;
+  const dueSoon = active.filter(r=>r.next_invoice && days(s.today, r.next_invoice)<=3).sort((a,b)=>a.next_invoice.localeCompare(b.next_invoice));
+  const overdueSum = overdue.reduce((a,r)=>a+r.residual,0);
+  return `
+  <div class="tiles">
+    <button class="tile" data-v="fleet"><span class="k">Парк</span><span class="v">${DATA.vehicles.length}</span><span class="d">${vc.available} свободны · ${vc.rented} в аренде · ${vc.service} в сервисе</span></button>
+    <button class="tile ok" data-v="rentals"><span class="k">Активных аренд</span><span class="v">${active.length}</span><span class="d">${noVin.length} без подтверждённого VIN</span></button>
+    <button class="tile crit" data-v="rentals" data-f="rentals:overdue"><span class="k">Просрочки</span><span class="v">${overdue.length}</span><span class="d">${fmt(overdueSum)} по активным арендам</span></button>
+    <button class="tile warn" data-v="payments"><span class="k">Платежи без имени</span><span class="v">${unmatchedNote}</span><span class="d">эквайринг, требуют разбора</span></button>
+    <button class="tile" data-v="customers"><span class="k">Залоги на руках</span><span class="v">${fmt0(s.deposits)}</span><span class="d">обязательство, не выручка</span></button>
+    <button class="tile" data-v="payments"><span class="k">Дебиторка</span><span class="v">${fmt0(s.receivable)}</span><span class="d">по ${s.invoices} счетам</span></button>
+  </div>
+  <div class="grid2">
+    <div class="card"><h3>Просрочки по аренде <span>${overdue.length}</span></h3><div class="rows">
+      ${overdue.map(r=>`<button class="row" data-open="rental" data-id="${r.id}"><span class="t">${short(r.customer)}</span><span class="s">${r.id} · ${r.vin?vbrief(r.vin):"VIN не подтверждён"} · тариф ${r.rate} ₾/нед</span><span class="r crit">${fmt(r.residual)}</span></button>`).join("")}
+    </div></div>
+    <div class="card"><h3>Счета на ближайшие 3 дня <span>${dueSoon.length}</span></h3><div class="rows">
+      ${dueSoon.length?dueSoon.map(r=>`<button class="row" data-open="rental" data-id="${r.id}"><span class="t">${short(r.customer)}</span><span class="s">${dd(r.next_invoice)} · ${r.id} · напоминание в WhatsApp за день</span><span class="r">${fmt0(r.rate)}</span></button>`).join(""):`<div class="empty">Нет счетов в ближайшие 3 дня</div>`}
+    </div></div>
+    <div class="card"><h3>Парк по состояниям</h3>
+      <div style="padding:14px 16px 0"><div class="bar"><i style="width:${vc.available/DATA.vehicles.length*100}%;background:var(--accent)"></i><i style="width:${vc.rented/DATA.vehicles.length*100}%;background:var(--info)"></i><i style="width:${vc.service/DATA.vehicles.length*100}%;background:var(--warn)"></i></div></div>
+      <div class="legend"><span><i style="background:var(--accent)"></i>Свободны ${vc.available}</span><span><i style="background:var(--info)"></i>В аренде ${vc.rented}</span><span><i style="background:var(--warn)"></i>В сервисе ${vc.service}</span></div>
+      <div class="rows">${modelRows()}</div>
+    </div>
+    <div class="card"><h3>Требует решения <span>${noVin.length+2}</span></h3><div class="rows">
+      ${noVin.map(r=>`<button class="row" data-open="rental" data-id="${r.id}"><span class="t">${short(r.customer)}</span><span class="s">${r.id} · аренда активна, мопед не привязан</span><span class="r warn">VIN?</span></button>`).join("")}
+      <button class="row" data-open="rental" data-id="S00028"><span class="t">Реваз Кулдонашвили</span><span class="s">S00028 · спорная: нет ни одного платежа, дата возврата не подтверждена</span><span class="r crit">спор</span></button>
+      <button class="row" data-open="rental" data-id="S00040"><span class="t">Бачана Заалишвили</span><span class="s">S00040 · спорная: реальный долг 240 ₾, счёт завышен</span><span class="r crit">спор</span></button>
+    </div></div>
+  </div>`;
+}
+function vbrief(vin){ const v=vByVin[vin]; return v?`${v.model} …${vin.slice(-4)}`:vin; }
+function modelRows(){
+  const m = {}; DATA.vehicles.forEach(v=>{ m[v.model]=m[v.model]||{available:0,rented:0,service:0}; m[v.model][v.status]++; });
+  return Object.entries(m).sort((a,b)=>(b[1].available+b[1].rented+b[1].service)-(a[1].available+a[1].rented+a[1].service)).map(([k,c])=>`<button class="row" data-v="fleet" data-f="model:${k}"><span class="t">${k}</span><span class="s">${c.available} свободны · ${c.rented} в аренде · ${c.service} в сервисе</span><span class="r">${c.available+c.rented+c.service}</span></button>`).join("");
+}
+
+/* ---------- Парк ---------- */
+function renderFleet(){
+  const f = filters.fleet;
+  let list = DATA.vehicles.filter(v=>(!f.status||v.status===f.status)&&(!f.model||v.model===f.model));
+  const models = [...new Set(DATA.vehicles.map(v=>v.model))];
+  setTitle("Парк", `${list.length} из ${DATA.vehicles.length} мопедов`);
+  return `
+  <div class="toolbar">
+    <div class="chips">${["available","rented","service"].map(s=>`<button class="chip ${f.status===s?"on":""}" data-f="status:${s}">${ST[s]}<span class="n">${DATA.vehicles.filter(v=>v.status===s).length}</span></button>`).join("")}</div>
+    <div class="chips">${models.map(m=>`<button class="chip ${f.model===m?"on":""}" data-f="model:${m}">${m}<span class="n">${DATA.vehicles.filter(v=>v.model===m).length}</span></button>`).join("")}</div>
+    <span class="sp"></span>
+    <button class="btn" data-act="Сканировать VIN"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7V4h3M17 4h3v3M20 17v3h-3M7 20H4v-3M7 9v6M11 9v6M15 9v6"/></svg>Сканировать VIN</button>
+  </div>
+  <div class="fleetgrid">${list.map(v=>{
+    const r = v.rental?byId[v.rental]:null;
+    return `<button class="vcard" data-open="vehicle" data-id="${v.id}"><span class="m">${v.model}<small>${v.year} · ${v.color||""}</small></span>${vinHtml(v.vin)}<span>${st(v.status)}</span><span class="who">${r?`${short(r.customer)} · до ${dd(r.next_invoice)}`:(v.driver?short(v.driver):(v.status==="service"?"в ремонте, заявка не заведена":"на складе"))}</span></button>`;}).join("")}</div>`;
+}
+
+/* ---------- Аренды ---------- */
+function renderRentals(){
+  const t = filters.rentals;
+  let list = DATA.rentals.slice();
+  if(t==="active") list = active; else if(t==="overdue") list = overdue; else if(t==="returned") list = DATA.rentals.filter(r=>r.status!=="active");
+  list = list.slice().sort((a,b)=>(b.start||"").localeCompare(a.start||""));
+  setTitle("Аренды", `${list.length} ${t==="all"?"всего":t==="active"?"активных":t==="overdue"?"с просрочкой":"завершённых и спорных"}`);
+  return `
+  <div class="toolbar">
+    <div class="chips">${[["active","Активные",active.length],["overdue","Просрочка",overdue.length],["returned","Завершённые",DATA.rentals.length-active.length],["all","Все",DATA.rentals.length]].map(([k,l,n])=>`<button class="chip ${t===k?"on":""}" data-f="rentals:${k}">${l}<span class="n">${n}</span></button>`).join("")}</div>
+    <span class="sp"></span>
+    <button class="btn pri" data-act="Новая аренда"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg>Новая аренда</button>
+  </div>
+  <div class="tblw"><table><thead><tr><th>№</th><th>Клиент</th><th>Мопед</th><th class="num">Тариф</th><th>Выдача</th><th>${t==="active"||t==="overdue"?"Следующий счёт":"Возврат"}</th><th class="num">Долг</th><th>Статус</th></tr></thead><tbody>
+  ${list.map(r=>`<tr data-open="rental" data-id="${r.id}"><td class="mono">${r.id}</td><td>${short(r.customer)}</td><td>${r.vin?`${vByVin[r.vin]?vByVin[r.vin].model+" ":""}${vinHtml(r.vin)}`:'<span class="muted">не привязан</span>'}</td><td class="num">${r.rate?r.rate+" ₾/нед":"—"}</td><td>${dd(r.start)}</td><td>${dd(r.status==="active"?r.next_invoice:r.end)}</td><td class="num" style="${r.residual>0.05?"color:var(--crit)":""}">${r.residual>0.05?fmt(r.residual):"—"}</td><td>${r.status==="active"&&r.residual>0.05?st("overdue"):st(r.status)}</td></tr>`).join("")}
+  </tbody></table></div>`;
+}
+
+/* ---------- Платежи ---------- */
+function renderPayments(){
+  const m = filters.payments;
+  const months = [...new Set(custPays.map(p=>p.date.slice(0,7)))].sort().reverse();
+  let list = custPays.filter(p=>m==="all"||p.date.startsWith(m)).slice().sort((a,b)=>b.date.localeCompare(a.date));
+  const sum = list.reduce((a,p)=>a+p.amount,0);
+  setTitle("Платежи", `${list.length} входящих · ${fmt(sum)}`);
+  return `
+  <div class="tiles">
+    <div class="tile"><span class="k">Поступило всего</span><span class="v">${fmt0(DATA.summary.payments_in)}</span><span class="d">${custPays.length} платежей по выпискам BOG и TBC</span></div>
+    <div class="tile warn"><span class="k">Без имени плательщика</span><span class="v">${unmatchedNote}</span><span class="d">≈ 17 511 ₾ эквайринга, разбор по правилам сумм</span></div>
+    <div class="tile"><span class="k">Комиссия эквайринга</span><span class="v">1,5<small>%</small></span><span class="d">320 → 315,20 · 330 → 325,05</span></div>
+    <div class="tile crit"><span class="k">Дебиторка</span><span class="v">${fmt0(DATA.summary.receivable)}</span><span class="d">из них продажи 11 100 ₾</span></div>
+  </div>
+  <div class="toolbar">
+    <div class="chips"><button class="chip ${m==="all"?"on":""}" data-f="payments:all">Все</button>${months.map(x=>`<button class="chip ${m===x?"on":""}" data-f="payments:${x}">${x.slice(5)}.${x.slice(0,4)}<span class="n">${custPays.filter(p=>p.date.startsWith(x)).length}</span></button>`).join("")}</div>
+    <span class="sp"></span>
+    <button class="btn" data-act="Наличные"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="7" width="18" height="11" rx="2"/><circle cx="12" cy="12.5" r="2.5"/></svg>Наличные</button>
+    <button class="btn pri" data-act="import"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 4v11M7 10l5 5 5-5M4 19h16"/></svg>Импорт выписки</button>
+  </div>
+  <div class="tblw"><table><thead><tr><th>Дата</th><th>Клиент</th><th class="wrap">Назначение</th><th class="num">Сумма</th><th>Источник</th></tr></thead><tbody>
+  ${list.map(p=>`<tr data-open="customer" data-id="${p.partner_id}"><td class="mono">${dd(p.date)}</td><td>${short(p.partner)||'<span class="muted">не определён</span>'}</td><td class="wrap muted">${p.memo}</td><td class="num">${fmt(p.amount)}</td><td>${/лог/i.test(p.memo)?'<span class="tag">лог</span>':/выписк|BOG|TBC/i.test(p.memo)?'<span class="tag">выписка</span>':'<span class="tag">рука</span>'}</td></tr>`).join("")}
+  </tbody></table></div>`;
+}
+
+/* ---------- Клиенты ---------- */
+function renderCustomers(){
+  const list = DATA.customers.filter(c=>!c.supplier||c.rentals.length||c.sales.length).sort((a,b)=>short(a.name).localeCompare(short(b.name)));
+  setTitle("Клиенты", `${list.length} клиентов`);
+  return `<div class="tblw"><table><thead><tr><th>Клиент</th><th>Теги</th><th class="num">Аренд</th><th class="num">Покупок</th><th class="num">Оплачено</th><th>Телефон</th></tr></thead><tbody>
+  ${list.map(c=>`<tr data-open="customer" data-id="${c.id}"><td>${short(c.name)}${c.name.includes("/")?`<div class="muted" style="font-size:12px">${c.name.split("/")[0].trim()}</div>`:""}</td><td>${c.tags.map(t=>`<span class="tag">${t}</span>`).join("")}</td><td class="num">${c.rentals.length||"—"}</td><td class="num">${c.sales.length||"—"}</td><td class="num">${c.paid?fmt(c.paid):"—"}</td><td class="mono">${c.phone||'<span class="muted">нет</span>'}</td></tr>`).join("")}
+  </tbody></table></div>`;
+}
+
+/* ---------- Продажи ---------- */
+function renderSales(){
+  const list = DATA.sales.slice().sort((a,b)=>b.date.localeCompare(a.date));
+  const total = list.reduce((a,s)=>a+s.total,0), open = list.reduce((a,s)=>a+s.residual,0);
+  setTitle("Продажи", `${list.length} мопедов · ${fmt(total)}`);
+  return `
+  <div class="tiles">
+    <div class="tile"><span class="k">Продано</span><span class="v">${list.length}</span><span class="d">с 27.05.2025</span></div>
+    <div class="tile"><span class="k">Выручка с НДС</span><span class="v">${fmt0(total)}</span><span class="d">по подтверждённым счетам</span></div>
+    <div class="tile crit"><span class="k">Не оплачено</span><span class="v">${fmt0(open)}</span><span class="d">Серхат 4 000 · Какабадзе 4 400 · Джафаридзе 2 700</span></div>
+  </div>
+  <div class="toolbar"><span class="sp"></span><button class="btn pri" data-act="Новая продажа"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg>Новая продажа</button></div>
+  <div class="tblw"><table><thead><tr><th>№</th><th>Дата</th><th>Покупатель</th><th>Модель</th><th>VIN</th><th class="num">Сумма</th><th class="num">Остаток</th></tr></thead><tbody>
+  ${list.map(s=>`<tr data-open="customer" data-id="${s.customer_id}"><td class="mono">${s.id}</td><td>${dd(s.date)}</td><td>${short(s.customer)}</td><td>${s.items.map(i=>i.replace(" - Sale","")).join(", ")}</td><td>${vinHtml(s.vin)}</td><td class="num">${fmt(s.total)}</td><td class="num" style="${s.residual>0.05?"color:var(--crit)":""}">${s.residual>0.05?fmt(s.residual):"—"}</td></tr>`).join("")}
+  </tbody></table></div>`;
+}
+
+/* ---------- Сервис ---------- */
+function renderService(){
+  setTitle("Сервис", `${inService.length} мопедов в ремонте`);
+  return `
+  <div class="note">В Odoo ремонт учитывался только состоянием во Fleet. Заявки с причиной, запчастями и стоимостью появятся в EV8 Ops (SRV‑01); при переносе для этих шести мопедов заводится открытая заявка «перенос из Fleet».</div>
+  <div class="toolbar"><span class="sp"></span><button class="btn pri" data-act="Новая заявка"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg>Новая заявка</button></div>
+  <div class="fleetgrid">${inService.map(v=>`<button class="vcard" data-open="vehicle" data-id="${v.id}"><span class="m">${v.model}<small>${v.year} · ${v.color||""}</small></span>${vinHtml(v.vin)}<span>${st("service")}</span><span class="who">причина не записана · за счёт компании</span></button>`).join("")}</div>`;
+}
+
+/* ---------- Сообщения ---------- */
+function renderMessages(){
+  const soon = active.filter(r=>r.next_invoice && days(DATA.summary.today,r.next_invoice)<=3 && r.residual<=0.05);
+  const late = overdue;
+  setTitle("Сообщения", "WhatsApp · шаблоны и очередь");
+  const tpl = (title, tag, ge, en) => `<div class="msgtpl"><h4>${title}<span class="st ${tag==="ok"?"active":"overdue"}" style="font-size:10.5px">${tag==="ok"?"одобрен Meta":"на утверждении"}</span></h4><div class="bubble ge">${ge}</div><div class="bubble">${en}</div></div>`;
+  return `
+  <div class="note ok">Тексты ниже — предложение для утверждения в Meta. Очередь рассчитана из реальных дат счетов, отправка в демо не выполняется.</div>
+  <div class="grid2">
+    <div class="card"><h3>Напоминания на завтра <span>${soon.length}</span></h3><div class="rows">${soon.length?soon.map(r=>`<button class="row" data-open="rental" data-id="${r.id}"><span class="t">${short(r.customer)}</span><span class="s">счёт ${dd(r.next_invoice)} · ${r.rate} ₾ · шаблон «Напоминание»</span><span class="r">${dd(r.next_invoice)}</span></button>`).join(""):`<div class="empty">Нет счетов в ближайшие 3 дня</div>`}</div></div>
+    <div class="card"><h3>Уведомления о просрочке <span>${late.length}</span></h3><div class="rows">${late.map(r=>`<button class="row" data-open="rental" data-id="${r.id}"><span class="t">${short(r.customer)}</span><span class="s">долг ${fmt(r.residual)} · шаблон «Просрочка»</span><span class="r crit">${r.overdue} сч.</span></button>`).join("")}</div></div>
+  </div>
+  <div class="grid2">
+    ${tpl("Напоминание об оплате","ok","გამარჯობა, {name}! ხვალ, {date}, სრულდება თქვენი მოპედის ({model}, VIN …{vin4}) გადახდილი კვირა. შემდეგი გადახდა: {amount} ₾. გმადლობთ, EV8","Hi {name}! Tomorrow, {date}, the paid week for your moped ({model}, VIN …{vin4}) ends. Next payment: {amount} ₾. Thank you, EV8")}
+    ${tpl("Просрочка","late","{name}, თქვენი ქირავნობის გადახდა {days} დღით დაგვიანებულია. დავალიანება: {amount} ₾. გთხოვთ, დაფაროთ დღეს. კითხვებისთვის: +995 595 16 55 88","{name}, your rental payment is {days} day(s) overdue. Balance due: {amount} ₾. Please pay today. Questions: +995 595 16 55 88")}
+    ${tpl("Подтверждение выдачи","late","თქვენ მიიღეთ მოპედი {model}, VIN {vin}. ქირა: {rate} ₾/კვირა, დეპოზიტი: {deposit} ₾. გადახდილია {paid_to}-მდე. კარგი გზა! EV8","You picked up moped {model}, VIN {vin}. Rate: {rate} ₾/week, deposit: {deposit} ₾. Paid through {paid_to}. Ride safe! EV8")}
+    ${tpl("Подтверждение возврата","late","მოპედი {model} დაბრუნებულია {date}. დეპოზიტი {deposit} ₾: {decision}. გმადლობთ, რომ EV8 აირჩიეთ!","Moped {model} returned on {date}. Deposit {deposit} ₾: {decision}. Thank you for choosing EV8!")}
+  </div>`;
+}
+
+/* ---------- Drawer ---------- */
+function openDrawer(kind, id){
+  const d = $("#drawer");
+  let html = "";
+  if(kind==="vehicle") html = drawerVehicle(DATA.vehicles.find(v=>String(v.id)===String(id)));
+  if(kind==="rental") html = drawerRental(byId[id]);
+  if(kind==="customer") html = drawerCustomer(cById[id]);
+  if(!html) return;
+  d.innerHTML = html; d.classList.add("on"); d.setAttribute("aria-hidden","false"); $("#scrim").classList.add("on");
+}
+function closeDrawer(){ $("#drawer").classList.remove("on"); $("#drawer").setAttribute("aria-hidden","true"); $("#scrim").classList.remove("on"); }
+const dhead = (eyebrow, title, sub) => `<div class="dh"><div><div class="eyebrow">${eyebrow}</div><h2>${title}</h2><div class="muted" style="font-size:13px">${sub||""}</div></div><button class="x" data-close aria-label="Закрыть"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>`;
+
+function drawerVehicle(v){
+  if(!v) return "";
+  const cur = v.rental?byId[v.rental]:null;
+  const hist = v.history.map(id=>byId[id]).filter(Boolean).sort((a,b)=>(b.start||"").localeCompare(a.start||""));
+  const sale = DATA.sales.find(s=>s.vin===v.vin);
+  return dhead("Мопед · "+v.model, vinHtml(v.vin), `${v.color||""} · ${v.year} · в парке с ${dd(v.acquired)}`) + `<div class="db">
+    <div class="kv"><b>Состояние</b><span>${st(v.status)}</span><b>Сейчас</b><span>${cur?`${short(cur.customer)} · ${cur.rate} ₾/нед · следующий счёт ${dd(cur.next_invoice)}`:(v.driver?short(v.driver)+" (по Fleet)":"—")}</span><b>Аренд за всё время</b><span>${hist.length}</span></div>
+    ${v.status==="rented"&&!cur?`<div class="note">Водитель проставлен во Fleet, но активная аренда не привязана к этому VIN. Требование RNT‑06: привязать или снять.</div>`:""}
+    <div class="actions">${v.status==="available"?`<button class="btn pri" data-act="Выдать в аренду">Выдать в аренду</button><button class="btn" data-act="Продать">Продать</button>`:""}${v.status==="rented"?`<button class="btn pri" data-act="Оформить возврат">Оформить возврат</button>`:""}${v.status!=="service"?`<button class="btn" data-act="В сервис">В сервис</button>`:`<button class="btn pri" data-act="Вернуть из сервиса">Вернуть в парк</button>`}</div>
+    <div class="sec"><h4>История</h4><div class="tl">
+      ${hist.map(r=>`<div class="${r.status==="active"?"ok":""}"><div class="d">${dd(r.start)} → ${r.status==="active"?"сейчас":dd(r.end)}</div>${short(r.customer)} · ${r.rate} ₾/нед · залог ${fmt0(r.deposit)} · <button class="muted" style="text-decoration:underline" data-open="rental" data-id="${r.id}">${r.id}</button></div>`).join("")}
+      ${sale?`<div class="bad"><div class="d">${dd(sale.date)}</div>Продан: ${short(sale.customer)} · ${fmt(sale.total)} · ${sale.id}${v.status!=="sold"?" · затем выкуплен обратно":""}</div>`:""}
+      <div><div class="d">${dd(v.acquired)}</div>Приход по CMR, контракт Flybrother ZJQXGLJY0012024</div>
+    </div></div>
+  </div>`;
+}
+
+function drawerRental(r){
+  if(!r) return "";
+  const v = r.vin?vByVin[r.vin]:null;
+  const periods = r.invoices.slice().sort((a,b)=>a.date.localeCompare(b.date));
+  const paidThrough = r.status==="active" ? (r.residual<=0.05 ? r.next_invoice : null) : r.end;
+  return dhead(`Аренда · ${r.id}`, short(r.customer), `${v?v.model+" · ":""}${r.vin?vinHtml(r.vin):"VIN не подтверждён"}`) + `<div class="db">
+    <div class="kv"><b>Статус</b><span>${r.status==="active"&&r.residual>0.05?st("overdue"):st(r.status)}</span><b>Выдача</b><span>${dd(r.start)}</span><b>${r.status==="active"?"Оплачено по":"Возврат"}</b><span>${paidThrough?dd(paidThrough):`<span style="color:var(--crit)">долг ${fmt(r.residual)}</span>`}</span><b>Тариф</b><span>${r.rate?r.rate+" ₾ в неделю":"—"}</span><b>Залог</b><span>${fmt0(r.deposit)} · ${r.status==="active"?"на руках":"решение по акту"}</span><b>Выставлено</b><span>${fmt(r.invoiced)}</span></div>
+    ${r.id==="S00017"?`<div class="note ok">Условие выкупа: 130 ₾ из каждого платежа идут в счёт 4 700 ₾ (RNT‑07).</div>`:""}
+    ${!r.vin&&r.status==="active"?`<div class="note">Мопед не привязан: VIN в договоре нечитаем или договора нет. Аренда в списке «Требует решения».</div>`:""}
+    <div class="actions">${r.status==="active"?`<button class="btn pri" data-act="Оформить возврат">Оформить возврат</button><button class="btn" data-act="Напомнить в WhatsApp">Напомнить в WhatsApp</button><button class="btn" data-act="Принять наличные">Наличные</button>`:`<button class="btn" data-act="Открыть договор">Договор PDF</button>`}</div>
+    <div class="sec"><h4>Периоды и счета <span class="muted" style="text-transform:none;letter-spacing:0">(${periods.length})</span></h4><div class="periods">
+      ${periods.map(p=>`<div class="period ${p.residual>0.05?"bad":""}"><span><span class="n">${dd(p.date)}</span> · ${p.name}${p.due?` · срок ${dd(p.due)}`:""}</span><span class="money">${fmt(p.total)}</span><span class="money">${p.residual>0.05?"−"+fmt(p.residual):"✓"}</span></div>`).join("")||`<div class="muted">Счетов нет</div>`}
+    </div></div>
+    <div class="sec"><h4>Клиент</h4><button class="btn" data-open="customer" data-id="${r.customer_id}">Открыть карточку клиента</button></div>
+  </div>`;
+}
+
+function drawerCustomer(c){
+  if(!c) return "";
+  const rs = c.rentals.map(id=>byId[id]).filter(Boolean).sort((a,b)=>(b.start||"").localeCompare(a.start||""));
+  const ss = DATA.sales.filter(s=>c.sales.includes(s.id));
+  const pays = custPays.filter(p=>p.partner_id===c.id).sort((a,b)=>b.date.localeCompare(a.date));
+  const owed = rs.reduce((a,r)=>a+r.residual,0)+ss.reduce((a,s)=>a+s.residual,0);
+  const dep = rs.filter(r=>r.status==="active").reduce((a,r)=>a+r.deposit,0);
+  return dhead("Клиент", short(c.name), c.name.includes("/")?c.name.split("/")[0].trim():"") + `<div class="db">
+    <div class="kv"><b>WhatsApp</b><span class="mono">${c.phone||'<span class="muted">номера нет</span>'}</span><b>Теги</b><span>${c.tags.map(t=>`<span class="tag">${t}</span>`).join("")||"—"}</span><b>Оплачено</b><span>${fmt(c.paid)} · ${c.payments} платежей</span><b>Долг</b><span style="${owed>0.05?"color:var(--crit)":""}">${owed>0.05?fmt(owed):"нет"}</span><b>Залог на руках</b><span>${dep?fmt0(dep):"—"}</span></div>
+    <div class="actions"><button class="btn" data-act="Написать в WhatsApp">Написать в WhatsApp</button><button class="btn" data-act="Документы">Документы</button></div>
+    ${rs.length?`<div class="sec"><h4>Аренды</h4><div class="rows">${rs.map(r=>`<button class="row" data-open="rental" data-id="${r.id}"><span class="t">${r.id} · ${r.vin?vbrief(r.vin):"VIN?"}</span><span class="s">${dd(r.start)} → ${r.status==="active"?"сейчас":dd(r.end)} · ${r.rate} ₾/нед</span><span class="r ${r.residual>0.05?"crit":""}">${r.residual>0.05?fmt(r.residual):st(r.status)}</span></button>`).join("")}</div></div>`:""}
+    ${ss.length?`<div class="sec"><h4>Покупки</h4><div class="rows">${ss.map(s=>`<div class="row"><span class="t">${s.items.map(i=>i.replace(" - Sale","")).join(", ")} ${s.vin?vinHtml(s.vin):""}</span><span class="s">${dd(s.date)} · ${s.id} · гарантия до ${dd(addYear(s.date))}</span><span class="r ${s.residual>0.05?"crit":""}">${s.residual>0.05?"−"+fmt(s.residual):fmt(s.total)}</span></div>`).join("")}</div></div>`:""}
+    <div class="sec"><h4>Платежи <span class="muted" style="text-transform:none;letter-spacing:0">(${pays.length})</span></h4><div class="periods">${pays.slice(0,14).map(p=>`<div class="period"><span><span class="n">${dd(p.date)}</span> · <span class="muted">${p.memo.slice(0,60)}</span></span><span></span><span class="money">${fmt(p.amount)}</span></div>`).join("")||`<div class="muted">Платежей по выпискам нет</div>`}${pays.length>14?`<div class="muted" style="font-size:12.5px">ещё ${pays.length-14}</div>`:""}</div></div>
+  </div>`;
+}
+function addYear(s){ const d=new Date(s+"T12:00:00"); d.setFullYear(d.getFullYear()+1); return d.toISOString().slice(0,10); }
+
+/* ---------- Импорт выписки ---------- */
+function openImport(){
+  const m=$("#modal"); m.innerHTML=`<div class="box"><h2>Импорт выписки</h2><div class="muted">Bank of Georgia или TBC, файл xlsx / csv. Строки сохраняются как есть; повторная загрузка того же периода дублей не создаёт (PAY‑01).</div>
+  <div class="drop">Перетащите файл выписки сюда<br><span style="font-size:12px">в демо загрузка отключена</span></div>
+  <div class="steps"><div><b>1 · Разбор</b>Дата, сумма, текст банка, канал: перевод или эквайринг</div><div><b>2 · Сопоставление</b>Имя → клиент; сумма → открытый период или залог; 315,20 и 325,05 → первый платёж новой аренды в этот день</div><div><b>3 · Очередь</b>Что не разобралось, попадает в очередь с подсказками, разбор в два касания</div></div>
+  <div class="actions" style="margin-top:16px;justify-content:flex-end"><button class="btn" data-close>Закрыть</button></div></div>`;
+  m.classList.add("on"); $("#scrim").classList.add("on");
+}
+function closeModal(){ $("#modal").classList.remove("on"); }
+
+renderNav(); render();
+
+function bakeAll(){
+  const screens=[]; const keys=[];
+  for(const [k,l,ic] of NAV){ view=k; render(); keys.push([k,l,ic,$("#title").textContent,$("#subtitle").textContent]); screens.push([k,$("#view").innerHTML]); }
+  const vv = DATA.vehicles.find(v=>v.vin==="HH8LWFCA1N0001978")||DATA.vehicles.find(v=>v.status==="rented");
+  const rr = byId["S00019"]||overdue[0]; const cc = cById[rr.customer_id];
+  const cards = [drawerVehicle(vv), drawerRental(rr), drawerCustomer(cc)].map(h=>`<aside class="drawer static on">${h}</aside>`).join("");
+  keys.push(["cards","Карточки",'<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 10v10"/>',"Карточки","мопед, аренда и клиент · в живом демо открываются по клику на строку"]);
+  screens.push(["cards",`<div class="bake-cards">${cards}</div>`]);
+  const radios = keys.map(([k],i)=>`<input type="radio" name="scr" id="scr-${k}" class="scr-radio" ${i===0?"checked":""}>`).join("");
+  const nav = keys.map(([k,l,ic])=>`<label class="navl" for="scr-${k}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ic}</svg><span>${l}</span></label>`).join("");
+  const secs = screens.map(([k,h],i)=>`<section class="scr" id="s-${k}"><header class="top"><div><h1>${keys[i][3]}</h1><div class="sub">${keys[i][4]}</div></div><span class="demo-tag">Демо · данные Odoo 13.09.2026</span></header><div class="content">${h}</div></section>`).join("");
+  const css = keys.map(([k])=>`#scr-${k}:checked~.main #s-${k}{display:block}#scr-${k}:checked~.rail label[for=scr-${k}]{background:var(--rail-active);color:var(--rail-accent);box-shadow:inset 3px 0 0 var(--rail-accent)}`).join("");
+  document.body.innerHTML = `<style>.scr-radio{position:absolute;opacity:0;pointer-events:none;width:0;height:0}.scr{display:none}.navl{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:8px;font-family:var(--display);font-weight:600;font-size:13.5px;color:var(--rail-ink);cursor:pointer}.navl svg{width:18px;height:18px;flex:none;opacity:.8}.navl:hover{background:var(--rail-active);color:#fff}@media (max-width:820px){.navl{flex-direction:column;gap:3px;padding:6px 4px;font-size:10.5px;flex:1;min-width:58px;justify-content:center;text-align:center}#scr-x:checked~.rail label{box-shadow:none}}${css}</style>
+  <div class="app">${radios}<aside class="rail"><div class="brand"><div class="mark"><svg width="283" height="73" viewBox="0 0 283 73" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <mask id="mask0_2004_1213" style="mask-type:luminance" maskUnits="userSpaceOnUse" x="0" y="0" width="138" height="73">
+        <mask id="mask1_2004_1213" style="mask-type:luminance" maskUnits="userSpaceOnUse" x="0" y="0" width="138" height="73">
+            <path fill-rule="evenodd" clip-rule="evenodd" d="M137.737 36.5495V70.4737C137.737 71.494 136.972 72.2592 135.952 72.2592H2.04056C0.765215 72.2592 0 71.494 0 70.4737V2.88039C0 1.60505 0.765215 0.839844 2.04056 0.839844H135.952C136.972 0.839844 137.737 1.60505 137.737 2.88039V36.5495Z" fill="white"/>
+        </mask>
+        <g mask="url(#mask1_2004_1213)">
+            <path d="M0 72.2592H137.737V0.839844H0V72.2592Z" fill="white"/>
+        </g>
+    </mask>
+    <g mask="url(#mask0_2004_1213)">
+        <path fill-rule="evenodd" clip-rule="evenodd" d="M7.62272 52.9887C8.13051 53.9095 9.32974 54.1365 10.1799 53.5192L37.357 33.785C38.7085 32.8055 40.5566 34.0146 40.1981 35.6445L39.0094 41.0547C38.6618 42.6387 40.4021 43.8476 41.765 42.9727L100.084 5.51319C101.48 4.6179 101.025 2.5639 99.3665 2.51289C99.0132 2.50269 98.6584 2.49795 98.3023 2.49795C85.9683 2.49795 75.1657 9.05557 69.1903 18.8732C68.6089 19.8271 67.1498 19.8271 66.5687 18.8732C60.5931 9.05557 49.7906 2.49795 37.4568 2.49795C18.6485 2.49795 3.40137 17.7462 3.40137 36.5524C3.40137 42.5134 4.93245 48.1143 7.62272 52.9887ZM14.8563 58.8809C13.803 59.4472 13.5779 60.8634 14.4604 61.672C20.5193 67.2223 28.5924 70.6094 37.4568 70.6094C49.7906 70.6094 60.5931 64.0517 66.5687 54.2341C66.5728 54.2265 66.5768 54.2206 66.5809 54.213C66.7135 54.0038 66.872 53.8048 66.9713 53.5778L73.4055 38.7768C73.4164 38.7513 73.4209 38.7226 73.4185 38.6971C73.4085 38.5772 73.2798 38.5065 73.1738 38.5626L27.1977 62.8328C25.7382 63.6031 24.0907 62.1843 24.6353 60.6258L26.1143 56.3938C26.6615 54.8276 24.9968 53.4099 23.5373 54.198L14.8563 58.8809ZM73.2395 48.3419C74.113 47.2808 75.8218 47.5303 76.4931 48.7317C80.7657 56.3659 88.9311 61.5263 98.3018 61.5263C112.094 61.5263 123.276 50.3466 123.276 36.5524C123.276 25.4671 116.051 16.0651 106.051 12.8053C104.743 12.3794 104.164 10.7491 105.038 9.68546L108.622 5.32887C109.104 4.74476 109.902 4.51541 110.609 4.78834C123.335 9.72392 132.358 22.0849 132.358 36.5524C132.358 55.3612 117.111 70.6094 98.3023 70.6094C85.9683 70.6094 75.1657 64.0517 69.1903 54.2341C69.0158 53.9459 68.9467 53.5602 69.16 53.3L73.2395 48.3419Z" fill="white"/>
+    </g>
+    <path d="M142.252 62.0488V10.1075H177.251V19.1617H153.233V31.5384H175.451V40.5926H153.233V52.9946H177.353V62.0488H142.252ZM195.366 10.1075L207.92 49.5707H208.402L220.982 10.1075H233.155L215.25 62.0488H201.098L183.167 10.1075H195.366ZM258.479 62.759C254.574 62.759 251.099 62.1249 248.056 60.8568C245.029 59.5718 242.653 57.8218 240.929 55.6069C239.204 53.3919 238.342 50.8811 238.342 48.0744C238.342 45.9102 238.832 43.9235 239.813 42.1143C240.811 40.2882 242.163 38.775 243.871 37.5745C245.579 36.3571 247.489 35.5794 249.603 35.2412V34.8861C246.83 34.3282 244.581 32.984 242.856 30.8536C241.132 28.7063 240.269 26.2123 240.269 23.3718C240.269 20.6834 241.056 18.2909 242.628 16.1944C244.201 14.0809 246.356 12.4239 249.095 11.2234C251.851 10.006 254.979 9.39735 258.479 9.39735C261.979 9.39735 265.099 10.006 267.838 11.2234C270.594 12.4408 272.758 14.1062 274.331 16.2197C275.903 18.3163 276.698 20.7003 276.715 23.3718C276.698 26.2293 275.819 28.7232 274.077 30.8536C272.335 32.984 270.104 34.3282 267.381 34.8861V35.2412C269.461 35.5794 271.346 36.3571 273.037 37.5745C274.745 38.775 276.098 40.2882 277.095 42.1143C278.11 43.9235 278.625 45.9102 278.642 48.0744C278.625 50.8811 277.754 53.3919 276.03 55.6069C274.305 57.8218 271.921 59.5718 268.878 60.8568C265.851 62.1249 262.385 62.759 258.479 62.759ZM258.479 54.6939C260.221 54.6939 261.743 54.3811 263.045 53.7555C264.346 53.113 265.361 52.2337 266.088 51.1178C266.832 49.985 267.204 48.6831 267.204 47.2121C267.204 45.7073 266.823 44.38 266.063 43.2302C265.302 42.0636 264.27 41.1506 262.968 40.4911C261.667 39.8148 260.17 39.4767 258.479 39.4767C256.805 39.4767 255.309 39.8148 253.99 40.4911C252.671 41.1506 251.632 42.0636 250.871 43.2302C250.127 44.38 249.755 45.7073 249.755 47.2121C249.755 48.6831 250.118 49.985 250.845 51.1178C251.572 52.2337 252.595 53.113 253.914 53.7555C255.233 54.3811 256.755 54.6939 258.479 54.6939ZM258.479 31.4876C259.933 31.4876 261.227 31.1917 262.36 30.6C263.493 30.0082 264.38 29.1881 265.023 28.1399C265.665 27.0916 265.987 25.8826 265.987 24.5131C265.987 23.1604 265.665 21.9769 265.023 20.9624C264.38 19.931 263.501 19.1279 262.385 18.553C261.269 17.9612 259.967 17.6654 258.479 17.6654C257.008 17.6654 255.706 17.9612 254.574 18.553C253.441 19.1279 252.553 19.931 251.911 20.9624C251.285 21.9769 250.972 23.1604 250.972 24.5131C250.972 25.8826 251.293 27.0916 251.936 28.1399C252.578 29.1881 253.466 30.0082 254.599 30.6C255.732 31.1917 257.025 31.4876 258.479 31.4876Z" fill="white"/>
+</svg></div></div><div style="padding:0 10px 14px;font-family:var(--display);font-weight:600;color:#fff;font-size:13px">Ops <span style="color:var(--rail-ink);font-weight:400">· E‑Motion Motors</span></div><nav class="nav">${nav}</nav><div class="who"><b>Kardu Kukhianidze</b>директор · 13.09.2026</div></aside><div class="main">${secs}</div></div>`;
+  document.querySelectorAll(".drawer.static .x").forEach(x=>x.remove());
+}
+if(location.hash==="#bake") bakeAll();
+</script>

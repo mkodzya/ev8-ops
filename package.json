@@ -1,0 +1,19 @@
+{
+  "name": "ev8-ops",
+  "version": "0.1.0",
+  "private": true,
+  "description": "EV8 Ops — operational system of E-Motion Motors LLC: fleet, rentals, payments, sales, service, WhatsApp",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev:api": "npm -w @ev8/api run dev",
+    "dev:worker": "npm -w @ev8/worker run dev",
+    "dev:web": "npm -w @ev8/web run dev",
+    "migrate": "npm -w @ev8/api run migrate",
+    "generate": "npm -w @ev8/api run generate",
+    "test": "npm -w @ev8/shared run test && npm -w @ev8/api run test",
+    "dev": "docker compose up"
+  }
+}

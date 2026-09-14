@@ -1,0 +1,381 @@
+<title>ТЗ EV8 Ops v1</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --bg:#F6F7F4;--surface:#FFFFFF;--ink:#171D19;--muted:#5E6862;--line:#D9DFD9;--line-soft:#E9EDE9;
+  --accent:#0B8F5C;--accent-ink:#06603D;--accent-soft:#DDF3E8;
+  --warn:#B7791F;--warn-soft:#FBEFD9;--crit:#B93A2C;--crit-soft:#F9E3DF;--info:#2F6BB0;--info-soft:#E1EBF7;
+  --code-bg:#EEF2EE;
+  --display:"Manrope",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#101512;--surface:#171E1A;--ink:#E8ECE8;--muted:#97A29B;--line:#2A332D;--line-soft:#222A25;
+  --accent:#3DD68C;--accent-ink:#8FEBBF;--accent-soft:#163B2B;
+  --warn:#E3A63B;--warn-soft:#3A2C12;--crit:#E86A5A;--crit-soft:#3D1E1A;--info:#7FB0EA;--info-soft:#1B2E45;
+  --code-bg:#1E2621;}}
+:root[data-theme="dark"]{
+  --bg:#101512;--surface:#171E1A;--ink:#E8ECE8;--muted:#97A29B;--line:#2A332D;--line-soft:#222A25;
+  --accent:#3DD68C;--accent-ink:#8FEBBF;--accent-soft:#163B2B;
+  --warn:#E3A63B;--warn-soft:#3A2C12;--crit:#E86A5A;--crit-soft:#3D1E1A;--info:#7FB0EA;--info-soft:#1B2E45;
+  --code-bg:#1E2621;}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.55;-webkit-font-smoothing:antialiased}
+a{color:var(--accent-ink)}
+.page{display:grid;grid-template-columns:240px minmax(0,1fr);gap:48px;max-width:1180px;margin:0 auto;padding:40px 32px 96px}
+@media (max-width:900px){.page{grid-template-columns:1fr;gap:24px;padding:24px 18px 64px}}
+nav.toc{position:sticky;top:24px;align-self:start;font-size:13.5px}
+@media (max-width:900px){nav.toc{position:static;border:1px solid var(--line);border-radius:10px;padding:14px 16px;background:var(--surface)}}
+nav.toc .k{font-family:var(--display);font-weight:700;letter-spacing:.08em;text-transform:uppercase;font-size:11px;color:var(--muted);margin-bottom:10px}
+nav.toc ol{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+nav.toc a{color:var(--muted);text-decoration:none;display:flex;gap:8px}
+nav.toc a:hover{color:var(--ink)}
+nav.toc a .n{font-family:var(--mono);font-size:12px;color:var(--accent);min-width:20px}
+main{max-width:760px}
+.eyebrow{font-family:var(--display);font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--accent)}
+h1{font-family:var(--display);font-weight:800;font-size:40px;line-height:1.1;letter-spacing:-.02em;margin:8px 0 12px;text-wrap:balance}
+.lead{font-size:18px;color:var(--muted);margin:0 0 20px;max-width:62ch}
+.meta{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px 24px;border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:14px 0;margin:0 0 40px;font-size:14px}
+.meta b{display:block;font-family:var(--display);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:2px}
+h2{font-family:var(--display);font-weight:800;font-size:26px;letter-spacing:-.015em;margin:56px 0 14px;display:flex;gap:14px;align-items:baseline;scroll-margin-top:24px;text-wrap:balance}
+h2 .n{font-family:var(--mono);font-size:15px;color:var(--accent);font-weight:500}
+h3{font-family:var(--display);font-weight:700;font-size:18px;margin:30px 0 8px;text-wrap:balance}
+p{margin:0 0 12px;max-width:68ch}
+ul,ol{margin:0 0 14px;padding-left:22px;max-width:68ch}
+li{margin:0 0 5px}
+li::marker{color:var(--muted)}
+code{font-family:var(--mono);font-size:.86em;background:var(--code-bg);padding:1px 5px;border-radius:4px}
+.callout{border-left:3px solid var(--accent);background:var(--accent-soft);padding:12px 16px;border-radius:0 8px 8px 0;margin:16px 0;max-width:68ch}
+.callout.warn{border-color:var(--warn);background:var(--warn-soft)}
+.callout.crit{border-color:var(--crit);background:var(--crit-soft)}
+.callout.info{border-color:var(--info);background:var(--info-soft)}
+.callout p:last-child{margin:0}
+.tbl{overflow-x:auto;margin:14px 0 22px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{padding:9px 12px;text-align:left;vertical-align:top;border-bottom:1px solid var(--line-soft)}
+th{font-family:var(--display);font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:700;background:var(--bg)}
+tr:last-child td{border-bottom:none}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+td .id{font-family:var(--mono);font-size:12.5px;color:var(--accent-ink);white-space:nowrap}
+.req{display:grid;grid-template-columns:110px minmax(0,1fr);gap:6px 16px;padding:12px 0;border-top:1px solid var(--line-soft)}
+.req:last-of-type{border-bottom:1px solid var(--line-soft)}
+.req .id{font-family:var(--mono);font-size:13px;color:var(--accent-ink);padding-top:2px}
+.req .t{font-weight:600}
+.req .a{color:var(--muted);font-size:14.5px;margin-top:4px}
+.req .a b{color:var(--ink);font-weight:600}
+@media (max-width:600px){.req{grid-template-columns:1fr}}
+.pill{display:inline-block;font-family:var(--display);font-size:11.5px;font-weight:700;letter-spacing:.04em;padding:2px 8px;border-radius:999px;background:var(--accent-soft);color:var(--accent-ink);vertical-align:middle}
+.pill.out{background:var(--crit-soft);color:var(--crit)}
+.pill.later{background:var(--warn-soft);color:var(--warn)}
+.scope{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:14px 0 20px}
+@media (max-width:640px){.scope{grid-template-columns:1fr}}
+.scope>div{border:1px solid var(--line);border-radius:10px;padding:14px 16px;background:var(--surface)}
+.scope h4{margin:0 0 8px;font-family:var(--display);font-size:13px;letter-spacing:.06em;text-transform:uppercase;font-weight:700}
+.scope ul{margin:0;padding-left:18px;font-size:14.5px}
+.phase{border:1px solid var(--line);border-radius:10px;background:var(--surface);padding:14px 16px;margin:0 0 12px}
+.phase h4{margin:0 0 6px;font-family:var(--display);font-size:16px;font-weight:700;display:flex;justify-content:space-between;gap:12px;align-items:baseline}
+.phase h4 span{font-family:var(--mono);font-size:12.5px;color:var(--muted);font-weight:400;white-space:nowrap}
+.phase p{margin:0 0 6px;font-size:14.5px}
+.phase ul{margin:0;font-size:14.5px}
+.kv{display:grid;grid-template-columns:max-content 1fr;gap:4px 16px;font-size:14.5px;margin:8px 0 14px}
+.kv b{font-weight:600}
+.foot{margin-top:64px;padding-top:16px;border-top:1px solid var(--line);color:var(--muted);font-size:13px}
+</style>
+
+<div class="page">
+<nav class="toc" aria-label="Содержание">
+  <div class="k">Содержание</div>
+  <ol>
+    <li><a href="#s1"><span class="n">1</span>Зачем свой продукт</a></li>
+    <li><a href="#s2"><span class="n">2</span>Границы первой версии</a></li>
+    <li><a href="#s3"><span class="n">3</span>Пользователи и роли</a></li>
+    <li><a href="#s4"><span class="n">4</span>Модель данных</a></li>
+    <li><a href="#s5"><span class="n">5</span>Функциональные требования</a></li>
+    <li><a href="#s6"><span class="n">6</span>Интеграции</a></li>
+    <li><a href="#s7"><span class="n">7</span>Перенос данных из Odoo</a></li>
+    <li><a href="#s8"><span class="n">8</span>Нефункциональные требования</a></li>
+    <li><a href="#s9"><span class="n">9</span>Дизайн</a></li>
+    <li><a href="#s10"><span class="n">10</span>Технологии</a></li>
+    <li><a href="#s11"><span class="n">11</span>Этапы и приёмка</a></li>
+    <li><a href="#s12"><span class="n">12</span>Открытые вопросы</a></li>
+  </ol>
+</nav>
+
+<main>
+<div class="eyebrow">Техническое задание · черновик для обсуждения</div>
+<h1>EV8 Ops, первая версия</h1>
+<p class="lead">Собственная операционная система E‑Motion Motors LLC: парк мопедов, аренда с недельным биллингом, платежи и сверка с банком, продажи, сервис и WhatsApp‑уведомления. Рабочее название «EV8 Ops» условное, до решения владельца.</p>
+<div class="meta">
+  <div><b>Версия</b>1.1 черновик, 13.09.2026</div>
+  <div><b>Заказчик</b>Mika, владелец EV8</div>
+  <div><b>Операционный заказчик</b>Kardu Kukhianidze, директор</div>
+  <div><b>Основание</b>15 месяцев работы в Odoo 19, журнал odoo‑data‑checklist, сайт ev8.ge</div>
+</div>
+
+<h2 id="s1"><span class="n">1</span>Зачем свой продукт</h2>
+<p>Odoo закрыл бухгалтерскую сторону: 31 единица техники, 72 контакта, 15 продаж, 44 заказа аренды, 58 счетов и 159 платежей сверены с банком. Но операционная работа в нём держится на обходных приёмах, и каждый из них стоит времени команды и создаёт риск ошибки.</p>
+<ul>
+  <li><b>Аренда собрана из трёх модулей.</b> Мопед резервируется строкой с ценой 0, деньги идут через подписку, состояние техники живёт в Fleet. Один арендованный мопед существует в трёх местах, и любая правка дат сбрасывает факт выдачи (документированная ловушка с <code>qty_delivered</code>).</li>
+  <li><b>Сверка с банком ручная.</b> 48 поступлений на 17 511 GEL прошли эквайрингом без имени плательщика. Правило «315,20 = 320 минус 1,5 %» известно, но Odoo его не применяет.</li>
+  <li><b>Команда работает с телефона и по‑грузински.</b> Стандартный интерфейс Odoo для этого не сделан, поэтому статусы двигаются с задержкой, а доска «расходится с реальностью».</li>
+  <li><b>Фронт‑офис живёт отдельно.</b> Лиды и чаты в Kommo, деньги и техника в Odoo, договоры и акты в Google Drive. Ни в одной системе нет ответа «кто сейчас на этом VIN и оплачено ли».</li>
+</ul>
+<div class="callout"><p><b>Цель v1.</b> Одна система, где у каждого VIN есть текущее состояние, текущий арендатор, дата «оплачено по» и история. Kardu оформляет выдачу и возврат с телефона за две минуты, платёж из выписки находит свою аренду сам, клиент получает напоминание в WhatsApp без участия человека.</p></div>
+
+<div class="callout info"><p><b>Решение владельца 13.09.2026.</b> Переход полный: Odoo не остаётся ни для одного блока и после переключения становится архивом только для чтения. Kommo остаётся фронт‑офисом для лидов и чатов и связывается с системой в обе стороны.</p></div>
+
+<h2 id="s2"><span class="n">2</span>Границы первой версии</h2>
+<div class="scope">
+  <div><h4><span class="pill">В v1</span></h4><ul>
+    <li>Парк: карточка и состояние каждого VIN</li>
+    <li>Аренда: выдача, недельные периоды, возврат, залог</li>
+    <li>Платежи: импорт выписок BOG/TBC, автосопоставление, очередь неразобранных</li>
+    <li>Клиенты: единая карточка с историей и балансом</li>
+    <li>Продажи мопедов: сделка по VIN, счёт, график рассрочки</li>
+    <li>Закупки: заказы поставщикам в Китае и на Alibaba, себестоимость партии по факту оплаты</li>
+    <li>Сервис: заявка на ремонт и её стоимость</li>
+    <li>WhatsApp: напоминания и подтверждения по шаблонам</li>
+    <li>Дашборд дня и обязательный месячный экспорт для Polaris</li>
+    <li>Банк: выписки BOG по API, TBC и Credo файлами</li>
+    <li>Kommo: лиды и сделки в обе стороны</li>
+    <li>Разовый перенос данных из Odoo</li>
+  </ul></div>
+  <div><h4><span class="pill out">Не в v1</span></h4><ul>
+    <li>Бухгалтерский и налоговый учёт: остаётся у Polaris Finance по нашему экспорту</li>
+        <li>Складской учёт запчастей и зарядных по остаткам (сами закупки в v1)</li>
+    <li>CRM‑воронки и чат‑инбокс Instagram/TikTok/Telegram: остаются в Kommo, см. п. 6.4</li>
+    <li>Клиентский кабинет и онлайн‑бронирование</li>
+    <li>Станции подмены батарей как отдельный учёт</li>
+    <li>Зарплаты и HR</li>
+    <li>TBC Integration Service, Marketing API и Conversions API Meta: v2</li>
+  </ul></div>
+</div>
+<p>Правило границ: если функция не нужна Kardu или менеджеру в течение рабочего дня и не нужна для того, чтобы деньги сошлись с банком и у Polaris был полный источник, она не в v1.</p>
+
+<h2 id="s3"><span class="n">3</span>Пользователи и роли</h2>
+<div class="tbl"><table>
+<tr><th>Роль</th><th>Кто</th><th>Что делает в системе</th><th>Устройство</th></tr>
+<tr><td>Владелец</td><td>Mika</td><td>Видит всё, настраивает тарифы и шаблоны, подтверждает списания залога, смотрит дашборд и экспорт</td><td>Ноутбук, удалённо</td></tr>
+<tr><td>Директор</td><td>Kardu</td><td>Всё, что менеджер, плюс сверка платежей, ремонт, продажи, возврат залога</td><td>Телефон, в точке</td></tr>
+<tr><td>Менеджер</td><td>Vaja, Rati, Giorgi, Davit</td><td>Выдача и возврат мопеда, новый клиент, приём наличных, статус техники</td><td>Телефон</td></tr>
+<tr><td>Механик</td><td>по назначению</td><td>Заявки на ремонт, перевод VIN в сервис и обратно, запчасти и стоимость</td><td>Телефон</td></tr>
+<tr><td>Бухгалтер</td><td>Polaris Finance</td><td>Только чтение и экспорт счетов, платежей, залогов за период</td><td>Ноутбук</td></tr>
+<tr><td>Клиент</td><td>арендатор, покупатель</td><td>Получает сообщения в WhatsApp; своего входа в v1 нет</td><td>WhatsApp</td></tr>
+</table></div>
+<p>Права задаются ролью, а не пользователем. Каждое изменение записывается в журнал с автором и временем (п. 8).</p>
+
+<h2 id="s4"><span class="n">4</span>Модель данных</h2>
+<p>Сущности названы так, как их называет команда. Поля перечислены только те, без которых сущность не работает; служебные (id, created, updated, author) подразумеваются везде.</p>
+<div class="tbl"><table>
+<tr><th>Сущность</th><th>Ключевые поля</th><th>Замечание</th></tr>
+<tr><td><b>Модель</b></td><td>бренд, название, цена продажи с НДС, недельный тариф по умолчанию, себестоимость, фото, продаётся / сдаётся</td><td>11 моделей сегодня: 6 Flybrother в парке аренды, 5 Luyuan только на продажу</td></tr>
+<tr><td><b>Мопед</b></td><td>VIN (уникальный), модель, цвет, год, дата прихода, состояние, текущая аренда, пробег, заметки</td><td>Состояния: <code>available</code>, <code>rented</code>, <code>service</code>, <code>out</code>, <code>sold</code>. Состояние вычисляется из событий, а не выставляется рукой</td></tr>
+<tr><td><b>Клиент</b></td><td>имя (груз./лат.), личный номер, телефон WhatsApp, email, тип (физлицо / ИП / компания), теги, документы</td><td>Один клиент может быть и арендатором, и покупателем, и продавцом (выкуп мопеда)</td></tr>
+<tr><td><b>Аренда</b></td><td>клиент, мопед, дата выдачи, ожидаемый и фактический возврат, недельный тариф, залог, статус, «оплачено по», условие выкупа (опц.)</td><td>Статусы: <code>booked</code>, <code>active</code>, <code>overdue</code>, <code>paused</code>, <code>returned</code>, <code>disputed</code></td></tr>
+<tr><td><b>Период аренды</b></td><td>аренда, начало, конец (7 дней), сумма, статус оплаты, покрывающие платежи</td><td>Заменяет подписку Odoo. Создаётся автоматически каждые 7 дней, пока аренда активна</td></tr>
+<tr><td><b>Акт</b></td><td>аренда, тип (выдача / возврат), дата, пробег, фото, состояние, подпись, PDF</td><td>Возврат закрывает аренду и запускает решение по залогу</td></tr>
+<tr><td><b>Залог</b></td><td>аренда, сумма, статус (<code>held</code>, <code>returned</code>, <code>withheld</code>, <code>partial</code>), кому возвращён, удержано за что</td><td>Обязательство, не выручка. Возврат третьему лицу требует подтверждения владельца</td></tr>
+<tr><td><b>Продажа</b></td><td>клиент, мопед (VIN), цена, дата, счёт, график платежей, гарантия до</td><td>Рассрочка: 0 % на 4 месяца, до 24 месяцев через Credo</td></tr>
+<tr><td><b>Счёт</b></td><td>клиент, основание (период / продажа / залог / удержание), сумма, НДС, срок, остаток</td><td>Нумерация своя, экспорт в формате Polaris</td></tr>
+<tr><td><b>Платёж</b></td><td>дата, сумма, канал (перевод / эквайринг / наличные), текст банка, клиент, комиссия, чем закрыт, источник (выписка / рука)</td><td>Комиссия эквайринга записывается как расход, а не как долг клиента</td></tr>
+<tr><td><b>Выписка</b></td><td>банк, файл, период, строки, статус разбора</td><td>Строка выписки хранится как есть, чтобы разбор можно было повторить</td></tr>
+<tr><td><b>Заявка на ремонт</b></td><td>мопед, причина, дата приёма и выдачи, запчасти, стоимость, кто делал, за чей счёт</td><td>Переводит VIN в <code>service</code> и обратно</td></tr>
+<tr><td><b>Закупка</b></td><td>поставщик, номер и дата инвойса, валюта, строки (модель / запчасть, кол‑во, цена), депозит и доплата с датами, логистика и растаможка партии, себестоимость единицы</td><td>Себестоимость считается по фактически оплаченным суммам, как в расчёте 13.08.2026; импортный НДС не входит</td></tr>
+<tr><td><b>Сообщение</b></td><td>клиент, канал, шаблон, текст, статус доставки, привязка к аренде или счёту</td><td>Только WhatsApp в v1</td></tr>
+</table></div>
+
+<h2 id="s5"><span class="n">5</span>Функциональные требования</h2>
+<p>Каждое требование записано как действие пользователя и критерий приёмки. Идентификаторы нужны, чтобы ссылаться на них в задачах и тестах.</p>
+
+<h3>5.1 Парк</h3>
+<div class="req"><div class="id">FLT‑01</div><div><div class="t">Список парка по состояниям</div><div class="a">Экран показывает все мопеды, сгруппированные по состоянию, с фильтром по модели и поиском по последним четырём символам VIN. <b>Приёмка:</b> 31 мопед из Odoo виден, счёт по группам совпадает с суммой.</div></div></div>
+<div class="req"><div class="id">FLT‑02</div><div><div class="t">Карточка мопеда</div><div class="a">VIN, модель, цвет, год, дата прихода, текущее состояние, текущий арендатор и «оплачено по», история аренд, продаж и ремонтов в одной ленте. <b>Приёмка:</b> для VIN HH8LWFCA3N0002016 лента показывает продажу 19.05.2026, выкуп и аренду от 28.07.2026 в правильном порядке.</div></div></div>
+<div class="req"><div class="id">FLT‑03</div><div><div class="t">Состояние меняется событием</div><div class="a">Выдача переводит в <code>rented</code>, возврат в <code>available</code>, заявка на ремонт в <code>service</code>, продажа в <code>sold</code>. Ручной перевод возможен только с указанием причины. <b>Приёмка:</b> нельзя выдать мопед в состоянии <code>service</code> или <code>sold</code>.</div></div></div>
+<div class="req"><div class="id">FLT‑04</div><div><div class="t">Сканирование VIN</div><div class="a">С телефона VIN вводится камерой по штрих‑коду или фото таблички с распознаванием, с ручной правкой. <b>Приёмка:</b> опечатки вида «9N0206104 вместо 1N0206104», найденные в договорах, не проходят, потому что VIN выбирается из парка, а не вводится текстом.</div></div></div>
+
+<h3>5.2 Аренда</h3>
+<div class="req"><div class="id">RNT‑01</div><div><div class="t">Новая аренда за две минуты</div><div class="a">Менеджер выбирает клиента (или создаёт нового), свободный мопед, тариф (140 / 150 / 170 GEL в неделю, редактируемо), залог (по умолчанию 180), дату выдачи. Система создаёт аренду, первый период, счёт на залог и акт выдачи. <b>Приёмка:</b> вся операция с телефона без ноутбука.</div></div></div>
+<div class="req"><div class="id">RNT‑02</div><div><div class="t">Недельные периоды</div><div class="a">Пока аренда активна, каждые 7 дней от даты выдачи создаётся новый период и счёт. «Оплачено по» равно концу последнего полностью оплаченного периода. <b>Приёмка:</b> для аренды с 18.07.2026 на 13.09.2026 существует 9 периодов, ни одного лишнего.</div></div></div>
+<div class="req"><div class="id">RNT‑03</div><div><div class="t">Просрочка как сигнал</div><div class="a">Аренда становится <code>overdue</code>, когда «оплачено по» меньше сегодняшней даты. На списке видно, на сколько дней и сколько GEL. <b>Приёмка:</b> список просрочек совпадает с ручным расчётом по периодам и платежам.</div></div></div>
+<div class="req"><div class="id">RNT‑04</div><div><div class="t">Возврат</div><div class="a">Менеджер оформляет акт возврата с фото и пробегом, система закрывает последний период по фактической дате (пропорционально или полной неделей, по настройке), предлагает решение по залогу. <b>Приёмка:</b> после возврата мопед в <code>available</code>, новые периоды не создаются.</div></div></div>
+<div class="req"><div class="id">RNT‑05</div><div><div class="t">Залог</div><div class="a">Полный возврат, частичное или полное удержание с указанием причины и суммы. Удержание превращается в счёт с НДС на дату удержания. Возврат не плательщику требует подтверждения владельца. <b>Приёмка:</b> сумма залогов на балансе равна сумме залогов по активным арендам.</div></div></div>
+<div class="req"><div class="id">RNT‑06</div><div><div class="t">Аренда без VIN и спорные аренды</div><div class="a">Аренду можно завести без мопеда с пометкой «VIN не подтверждён», она попадает в отдельный список на дозаполнение. Статус <code>disputed</code> останавливает периоды без потери истории. <b>Приёмка:</b> восемь действующих аренд без VIN из Odoo переносятся и видны в этом списке.</div></div></div>
+<div class="req"><div class="id">RNT‑07</div><div><div class="t">Выкуп из аренды</div><div class="a">У аренды может быть условие «часть платежа идёт в счёт выкупа» с целевой суммой. Карточка показывает накопленное. <b>Приёмка:</b> аренда S00017 (130 GEL из каждого платежа в счёт 4 700) считается верно.</div></div></div>
+<div class="req"><div class="id">RNT‑08</div><div><div class="t">Договор и акт как PDF</div><div class="a">Из аренды формируются договор и акты по шаблону компании на грузинском с данными клиента и VIN; файлы хранятся в системе и копируются в Google Drive в папку клиента. <b>Приёмка:</b> PDF открывается на телефоне, поля заполнены, ничего не вписано рукой.</div></div></div>
+
+<h3>5.3 Платежи и сверка</h3>
+<div class="req"><div class="id">PAY‑01</div><div><div class="t">Импорт выписки</div><div class="a">Загрузка xlsx / csv из Bank of Georgia и TBC. Каждая строка сохраняется как есть; повторная загрузка того же периода не создаёт дублей. <b>Приёмка:</b> одна и та же выписка, загруженная дважды, даёт одинаковое число платежей.</div></div></div>
+<div class="req"><div class="id">PAY‑02</div><div><div class="t">Автосопоставление</div><div class="a">Правила по порядку: имя плательщика в тексте банка совпадает с клиентом; сумма равна открытому периоду или залогу; типовые суммы эквайринга (315,20 = 320 минус 1,5 %; 325,05 = 330 минус 1,5 %) и дата выдачи в тот же день. Сопоставленный платёж закрывает периоды от старого к новому. <b>Приёмка:</b> на выписках за июль‑август 2026 автоматически разбирается не меньше, чем было разобрано вручную в Odoo, и ни одно сопоставление не противоречит ручному.</div></div></div>
+<div class="req"><div class="id">PAY‑03</div><div><div class="t">Очередь неразобранных</div><div class="a">Платежи без клиента лежат в очереди с подсказками (похожие суммы, аренды, начавшиеся в этот день). Разбор в два касания с телефона. <b>Приёмка:</b> очередь пуста или у каждой строки есть причина, почему нет.</div></div></div>
+<div class="req"><div class="id">PAY‑04</div><div><div class="t">Комиссия эквайринга</div><div class="a">Если платёж пришёл эквайрингом, разница между брутто и зачислением записывается как расход компании, а не как долг клиента. <b>Приёмка:</b> клиент, заплативший 320 картой, не имеет долга 4,80.</div></div></div>
+<div class="req"><div class="id">PAY‑05</div><div><div class="t">Наличные</div><div class="a">Менеджер вносит наличный платёж с телефона, он сразу закрывает период; владелец видит все наличные отдельным отчётом. <b>Приёмка:</b> выкуп мопеда за наличные (2 440 GEL, 03.06.2026) можно провести как исходящий наличный платёж.</div></div></div>
+<div class="req"><div class="id">PAY‑06</div><div><div class="t">Баланс клиента</div><div class="a">В карточке клиента: выставлено, оплачено, остаток, залог на руках, переплата. Переплата зачитывается в следующий период автоматически. <b>Приёмка:</b> сумма остатков по клиентам равна дебиторке.</div></div></div>
+
+<h3>5.4 Клиенты</h3>
+<div class="req"><div class="id">CST‑01</div><div><div class="t">Одна карточка на человека</div><div class="a">Имя в двух написаниях, личный номер, WhatsApp, теги, документы, все аренды, продажи, платежи, сообщения и заметки в одной ленте. <b>Приёмка:</b> у Сабы Качарава в одной карточке и покупка, и обратная продажа мопеда.</div></div></div>
+<div class="req"><div class="id">CST‑02</div><div><div class="t">Дубли</div><div class="a">При создании клиента система ищет совпадение по телефону и личному номеру и предлагает существующую карточку. <b>Приёмка:</b> нельзя создать второго клиента с тем же личным номером.</div></div></div>
+<div class="req"><div class="id">CST‑03</div><div><div class="t">Документы</div><div class="a">Фото удостоверения и водительских прав прикладываются с телефона и видны только ролям директор и владелец. <b>Приёмка:</b> менеджер видит факт наличия документа, но не сам файл.</div></div></div>
+
+<h3>5.5 Продажи</h3>
+<div class="req"><div class="id">SAL‑01</div><div><div class="t">Продажа по VIN</div><div class="a">Выбор клиента и мопеда, цена из модели с ручной правкой, комплектация (вторая батарея и т. п.), счёт, гарантия 12 месяцев от даты. Мопед переходит в <code>sold</code>. <b>Приёмка:</b> 15 продаж из Odoo переносятся с реальными датами и VIN.</div></div></div>
+<div class="req"><div class="id">SAL‑02</div><div><div class="t">График рассрочки</div><div class="a">Продажа может иметь график платежей (предоплата и N ежемесячных), просрочка по графику видна на дашборде. <b>Приёмка:</b> продажа Важи Джафаридзе (900 предоплата плюс 9 по 300) показывает 2 700 просроченных.</div></div></div>
+<div class="req"><div class="id">SAL‑03</div><div><div class="t">Выкуп обратно</div><div class="a">Компания может купить мопед у клиента: исходящий платёж, VIN возвращается в парк в состояние <code>available</code> или <code>service</code>. <b>Приёмка:</b> история VIN хранит оба события.</div></div></div>
+
+<h3>5.6 Сервис</h3>
+<div class="req"><div class="id">SRV‑01</div><div><div class="t">Заявка на ремонт</div><div class="a">Механик открывает заявку на VIN: причина, фото, дата, запчасти и стоимость, за чей счёт (компания / клиент). Закрытие возвращает мопед в парк. <b>Приёмка:</b> шесть мопедов, которые сейчас в сервисе, имеют открытые заявки после переноса.</div></div></div>
+<div class="req"><div class="id">SRV‑02</div><div><div class="t">Ремонт за счёт арендатора</div><div class="a">Стоимость можно выставить арендатору счётом или удержать из залога. <b>Приёмка:</b> удержание из залога отражается и в залоге, и в заявке.</div></div></div>
+
+<h3>5.7 WhatsApp</h3>
+<div class="req"><div class="id">MSG‑01</div><div><div class="t">Шаблоны</div><div class="a">Напоминание за день до конца оплаченного периода; уведомление о просрочке на 1‑й и 3‑й день; подтверждение выдачи с VIN и датой; подтверждение возврата и решения по залогу. Тексты на грузинском и английском, утверждаются в Meta. <b>Приёмка:</b> четыре шаблона одобрены, отправка логируется.</div></div></div>
+<div class="req"><div class="id">MSG‑02</div><div><div class="t">Отправка без человека</div><div class="a">Напоминания уходят по расписанию воркера; менеджер видит статус доставки в карточке клиента и может отключить напоминания для конкретной аренды с причиной. <b>Приёмка:</b> при недоступном номере система показывает ошибку, а не молчит.</div></div></div>
+<div class="req"><div class="id">MSG‑03</div><div><div class="t">Входящие ответы</div><div class="a">Ответ клиента на шаблон попадает в ленту клиента и в очередь «ответить» для менеджера. Полноценный чат не требуется в v1. <b>Приёмка:</b> ответ виден в течение минуты после отправки клиентом.</div></div></div>
+
+<h3>5.8 Дашборд и отчёты</h3>
+<div class="req"><div class="id">DSH‑01</div><div><div class="t">Экран «Сегодня»</div><div class="a">Выдачи и возвраты на сегодня, просрочки по убыванию дней, мопеды по состояниям, неразобранные платежи, залоги на руках, выручка недели. <b>Приёмка:</b> все цифры кликабельны и ведут в соответствующий список.</div></div></div>
+<div class="req"><div class="id">DSH‑02</div><div><div class="t">Экспорт для бухгалтера</div><div class="a">За период: счета, платежи, залоги, удержания, комиссии, в xlsx по согласованной с Polaris структуре. <b>Приёмка:</b> Polaris принимает файл без ручной доработки.</div></div></div>
+<div class="req"><div class="id">DSH‑03</div><div><div class="t">Экономика мопеда</div><div class="a">По VIN: себестоимость, выручка от аренды и продажи, ремонт, простой в днях. <b>Приёмка:</b> отчёт по XL1200 совпадает с ручным расчётом из Odoo с точностью до тетри.</div></div></div>
+
+<h3>5.9 Закупки</h3>
+<div class="req"><div class="id">PUR‑01</div><div><div class="t">Заказ поставщику</div><div class="a">Поставщик, инвойс, валюта, строки по моделям и запчастям, условия оплаты (депозит / доплата). Курс фиксируется по фактическому платежу, а не по справочнику. <b>Приёмка:</b> два контракта 2024 года (Luyuan XEB20240927 и Flybrother ZJQXGLJY0012024) и восемь заказов Alibaba переносятся и сходятся с Odoo до тетри.</div></div></div>
+<div class="req"><div class="id">PUR‑02</div><div><div class="t">Приход партии</div><div class="a">Приход по CMR создаёт мопеды с VIN в состоянии <code>available</code> (или <code>stock</code> для моделей только на продажу) и распределяет логистику и растаможку партии на единицы. <b>Приёмка:</b> себестоимость XL1200 после прихода равна 1 689,29 GEL по методике 13.08.2026.</div></div></div>
+<div class="req"><div class="id">PUR‑03</div><div><div class="t">Оплаты поставщикам</div><div class="a">Исходящие платежи из выписки привязываются к закупке; остаток по закупке виден в карточке поставщика. <b>Приёмка:</b> платежи 02.10.2024, 07.10.2024 и два от 10.12.2024 закрывают оба контракта.</div></div></div>
+
+<h2 id="s6"><span class="n">6</span>Интеграции</h2>
+<h3>6.1 Банки</h3>
+<p><b>Bank of Georgia.</b> Business Online API (<code>api.businessonline.ge</code>, OAuth 2.0, JSON): выписки по счёту, остатки, курсы; лимит 1 000 записей на запрос и 5 запросов в секунду. Система забирает новые операции каждый час; загрузка xlsx остаётся запасным путём. В v1 только чтение: права на создание переводов приложению не выдаются.</p>
+<p><b>TBC.</b> В v1 выписки файлом. TBC Integration Service (выгрузка операций и загрузка платёжных поручений через персонального банкира, цифровой сертификат, песочница; регистрация 20 GEL, Digipass 85 GEL, 100 GEL в квартал) переносится в v2, когда сверка по TBC станет ежедневной. Open Banking API TBC рассчитан на лицензированных провайдеров НБГ и нам не подходит.</p>
+<p><b>Credo.</b> Только файлы выписок.</p>
+<div class="callout warn"><p>Регистрацию приложения в Business Online и хранение client id / client secret выполняет владелец. Система читает ключи из секретов сервера; в интерфейсе и в логах они не появляются. Строки эквайринга из API приходят без имени плательщика так же, как в файле, поэтому правила сумм (PAY‑02) остаются; наличие у BOG отдельной выгрузки терминала уточняется у менеджера банка.</p></div>
+<h3>6.2 Meta Business</h3>
+<p><b>WhatsApp Cloud API</b> (v1): собственное приложение в портфолио EV8, системный пользователь с постоянным токеном, вебхук на воркер. Номер +995 595 16 55 88 сегодня подключён к Cloud API через Kommo; порядок переноса описан в отдельном плане. Метка Click‑to‑WhatsApp из вебхука сохраняется в источнике клиента.</p>
+<p><b>Lead Ads</b> (v1): формы лидов Facebook и Instagram приходят вебхуком в реальном времени и создают лид в Kommo и запись источника у нас, чтобы стоимость лида считалась в системе.</p>
+<p><b>Marketing API и Conversions API</b> (v2): расход по кампаниям для дашборда и отправка события «аренда оформлена» обратно в Meta. <b>Instagram и Messenger DM</b> не планируются: это чат‑инбокс, он остаётся в Kommo и требует App Review.</p>
+<h3>6.3 Google Drive</h3>
+<p>Договоры и акты, сформированные системой, копируются в существующую структуру папок <code>EV8 main/0Invoices…/0Rentals 2026/&lt;клиент&gt;</code>. Система только добавляет файлы, никогда не удаляет.</p>
+<h3>6.4 Kommo, в обе стороны</h3>
+<p>Kommo остаётся фронт‑офисом: лиды, воронки, чаты WhatsApp, Instagram, TikTok, Telegram, форма сайта. Связь через приватную интеграцию Kommo (долгосрочный токен) и вебхуки Kommo на наш бэкенд, который принимает их напрямую без посредника.</p>
+<ul>
+  <li><b>Kommo → система.</b> Сделка в Gaqiraveba на стадии «Გაქირავებული» или Closed‑won создаёт клиента (поиск по телефону, без дублей) и черновик аренды; в Gayidvebi — черновик продажи. Поля «Модель», «Способ оплаты», «Дата тест‑драйва» переносятся.</li>
+  <li><b>Система → Kommo.</b> В сделку записываются VIN, «оплачено по», долг и статус аренды; просрочка ставит задачу ответственному. Менеджер видит деньги, не выходя из Kommo.</li>
+  <li><b>Начальная выгрузка.</b> 1 116 сделок, 1 177 контактов, заметки и задачи забираются один раз через API как история клиентов.</li>
+</ul>
+<p>Условие: тариф Kommo с вебхуками (проверить на текущем плане).</p>
+<h3>6.5 Сайт ev8.ge</h3>
+<p>В v1 связи нет. Цены на сайте и в системе сверяются вручную; автоматическая выгрузка каталога отложена.</p>
+<h3>6.6 Odoo</h3>
+<p>Источник для разового переноса (п. 7). После двух недель параллельной работы Odoo переводится в режим только чтения, подписка не продлевается после сохранения полной выгрузки базы в Drive.</p>
+
+<h2 id="s7"><span class="n">7</span>Перенос данных из Odoo</h2>
+<p>Перенос разовый, скриптом через XML‑RPC, только подтверждённые данные. Ничего не восстанавливается «по памяти»: где в Odoo стоит пометка «не подтверждено», она переносится как пометка.</p>
+<div class="tbl"><table>
+<tr><th>Что</th><th class="num">Сколько</th><th>Куда</th><th>Правило</th></tr>
+<tr><td>Модели и цены</td><td class="num">11</td><td>Модель</td><td>Цена сайта с НДС, себестоимость по инвойсам 13.08.2026</td></tr>
+<tr><td>Мопеды</td><td class="num">31</td><td>Мопед</td><td>VIN, цвет, год, дата прихода 14.03.2025, состояние по Fleet</td></tr>
+<tr><td>Серийники продаж</td><td class="num">17</td><td>Мопед (sold / stock)</td><td>VIN из строк продаж и остатков Luyuan</td></tr>
+<tr><td>Клиенты</td><td class="num">72</td><td>Клиент</td><td>Теги переносятся, заметки Odoo идут в ленту как первая запись</td></tr>
+<tr><td>Аренды</td><td class="num">43</td><td>Аренда, периоды, залог</td><td>Периоды пересобираются из дат и счетов; тестовый S00060 не переносится</td></tr>
+<tr><td>Продажи</td><td class="num">15</td><td>Продажа, счёт</td><td>Реальные даты, VIN из описания строки</td></tr>
+<tr><td>Закупки</td><td class="num">11</td><td>Закупка</td><td>Два контракта 2024, восемь Alibaba, черновик выкупа у Качарава со статусом «сумма не подтверждена»; 9 запчастей как позиции</td></tr>
+<tr><td>Счета</td><td class="num">58</td><td>Счёт</td><td>Остатки сверяются с Odoo до тетри</td></tr>
+<tr><td>Платежи</td><td class="num">159</td><td>Платёж</td><td>С датой и текстом банка; восстановленные из лога помечаются источником «лог»</td></tr>
+<tr><td>Залоги</td><td class="num">7 510 GEL</td><td>Залог</td><td>Итог по счёту 310620 должен совпасть</td></tr>
+</table></div>
+<p>Переключение: две недели параллельной работы, затем Odoo только для чтения и полная выгрузка базы в Drive. Ни один блок в Odoo не остаётся.</p>
+
+<h2 id="s8"><span class="n">8</span>Нефункциональные требования</h2>
+<ul>
+  <li><b>Телефон прежде всего.</b> Все операции менеджера выполняются на экране 375 px одной рукой. Ноутбучный вид для владельца и бухгалтера.</li>
+  <li><b>Три языка интерфейса:</b> грузинский, русский, английский. Документы клиенту на грузинском и английском. Механизм i18n с защитой от пропущенных ключей, как в Self Platform.</li>
+  <li><b>Журнал изменений</b> на каждой сущности: кто, когда, что было и что стало. Удаления нет, только архив.</li>
+  <li><b>Деньги:</b> GEL, две цифры после запятой, НДС 18 % сверху; суммы хранятся в тетри целым числом.</li>
+  <li><b>Время:</b> Asia/Tbilisi; периоды считаются по календарным дням.</li>
+  <li><b>Персональные данные:</b> личные номера и документы доступны только ролям директор и владелец; доступ логируется.</li>
+  <li><b>Резервные копии</b> базы ежедневно с хранением 30 дней и проверенным восстановлением.</li>
+  <li><b>Объём</b> небольшой (сотни записей в год), приоритет надёжность и простота, а не производительность.</li>
+  <li><b>Работа при плохой связи:</b> формы не теряют введённое при обрыве, повторная отправка не создаёт дублей.</li>
+</ul>
+
+<h2 id="s9"><span class="n">9</span>Дизайн</h2>
+<p>Система носит бренд EV8: тот же логотип, палитра и шрифты, что на ev8.ge, чтобы для команды и клиента (договор, акт, сообщение в WhatsApp) это была одна компания. Ниже — что берём из бренда как есть, что добавляем для операционного интерфейса, и какие практики похожих систем применяем.</p>
+
+<h3>9.1 Бренд EV8: что берём с сайта</h3>
+<div class="tbl"><table>
+<tr><th>Элемент</th><th>Значение</th><th>Где на сайте</th><th>Как применяем</th></tr>
+<tr><td>Логотип</td><td>знак «крыло» + словесный знак EV8, шалфейно‑зелёный <code>#819481</code>; светлая версия для тёмного фона</td><td><code>assets/images/logo.svg</code>, <code>logo-light.svg</code></td><td>Шапка приложения, PDF договоров и актов, экран входа. Не перерисовывать и не перекрашивать</td></tr>
+<tr><td>Зелёный основной</td><td><code>#819481</code></td><td><code>--green</code></td><td>Знак, крупные элементы, заливки плашек. Для текста не подходит: контраст с белым 3,2:1</td></tr>
+<tr><td>Зелёный текстовый</td><td><code>#557553</code>, промежуточный <code>#628767</code></td><td>кнопки и ховеры темы</td><td>Ссылки, текст статусов, основная кнопка: контраст 5,2:1, проходит AA</td></tr>
+<tr><td>Светло‑зелёный</td><td><code>#a2b9a2</code>, <code>#dbe4de</code></td><td><code>--green-light</code>, фоны блоков</td><td>Фоны плашек, разделители, акцент в тёмной теме</td></tr>
+<tr><td>Лайм</td><td><code>#e0ffa2</code></td><td><code>--avocado</code>, выделения</td><td>Один акцент на экран: активный пункт меню, выбранная карточка</td></tr>
+<tr><td>Оранжевый</td><td><code>#fe5d02</code>, тёмный <code>#e45e22</code></td><td><code>--orange</code>, призывы к действию</td><td>Состояние «в сервисе» и предупреждения; не для ошибок</td></tr>
+<tr><td>Синий</td><td><code>#598eeb</code></td><td><code>--blue-tag</code></td><td>Состояние «в аренде»</td></tr>
+<tr><td>Чёрный и фон</td><td><code>#0b0b0b</code>, <code>#fbfbfb</code></td><td><code>--black</code>, <code>--white-background</code></td><td>Текст и фон светлой темы; чёрный — фон тёмной темы и боковой панели</td></tr>
+<tr><td>Шрифты</td><td>Be Vietnam Pro 300–700, Inter</td><td><code>--main-font</code>, <code>--second-family</code></td><td>Be Vietnam Pro: заголовки, кнопки, меню. Inter: текст и таблицы</td></tr>
+<tr><td>Форма</td><td>пилюльные кнопки и чипы (радиусы 24–60 px), карточки со скруглением</td><td>кнопки и фильтры каталога</td><td>Кнопки и фильтры пилюлями, карточки 16 px, таблицы без скруглений внутри</td></tr>
+</table></div>
+<div class="callout warn"><p><b>Грузинский текст.</b> Ни Be Vietnam Pro, ни Inter не содержат грузинских букв. Для грузинского интерфейса и документов добавляется Noto Sans Georgian с теми же начертаниями; проверка на реальных именах клиентов (ვაჟა ჯაფარიძე, გიორგი სუთიძე) входит в приёмку каждого экрана.</p></div>
+<p>Чего в бренде нет и что добавляем как предложение: красный для просрочки и списаний (<code>#c8402f</code>, не спорит с оранжевым), серый для завершённого и проданного, моноширинный шрифт для VIN и сумм (IBM Plex Mono). Тёмная тема строится на <code>#0b0b0b</code> с зелёным <code>#a2b9a2</code> и светлым логотипом.</p>
+
+<h3>9.2 Практики похожих систем</h3>
+<p>Ближайшие по задаче продукты: учёт парка (Fleetio, Samsara), инструменты хостов проката (Turo, Getaround), операционные консоли шеринга самокатов, kanban Fleet в Odoo. Из них берём то, что подтверждено нашей собственной практикой в Odoo.</p>
+<ul>
+  <li><b>Сначала исключения, потом списки.</b> Экран «Сегодня» показывает только то, что требует действия: просрочки, выдачи и возвраты дня, неразобранные платежи, аренды без VIN. Полные списки на один клик глубже.</li>
+  <li><b>Состояние читается тремя способами:</b> цвет, форма и слово. Пять состояний мопеда имеют закреплённую пару цвет‑ярлык во всей системе; только цветом ничего не кодируется.</li>
+  <li><b>VIN как главный идентификатор.</b> Моноширинный, последние четыре знака выделены, кнопка сканирования рядом с каждым полем ввода, поиск по последним четырём знакам. Опечатки из сканов договоров исключаются выбором из парка.</li>
+  <li><b>Фото как доказательство.</b> Акт выдачи и возврата: четыре ракурса, пробег, повреждения на схеме, как у Turo и Getaround. Это защищает залог и снимает споры о возврате.</li>
+  <li><b>Одна лента истории</b> у мопеда и у клиента: аренды, продажи, ремонты, платежи, сообщения в хронологии. Ответ на «что было с этим VIN» без переходов между модулями.</li>
+  <li><b>Телефон: один шаг на экран.</b> Выдача и возврат идут мастером по шагам с одной кнопкой внизу, цели касания не меньше 44 px, нижняя навигация, всё достижимо большим пальцем. Ноутбук: плотные таблицы и боковая панель карточки вместо модальных окон.</li>
+  <li><b>Деньги.</b> Суммы выровнены по правому краю табличными цифрами, знак ₾, долг красным, переплата зелёным, комиссия эквайринга отдельной строкой, а не скрытой разницей.</li>
+  <li><b>Работа при плохой связи.</b> Формы сохраняют черновик локально, отправка повторяется без дублей, статус синхронизации виден в шапке.</li>
+  <li><b>Пустые состояния говорят, что делать</b> («Аренд с просрочкой нет», «Загрузите выписку за сентябрь»), а не показывают пустую таблицу.</li>
+  <li><b>Документы в бренде.</b> Договор, акты и экспорт для Polaris формируются из тех же данных и в той же типографике; клиент получает PDF, который выглядит как ev8.ge.</li>
+</ul>
+
+<h3>9.3 Состав дизайн‑работы</h3>
+<div class="tbl"><table>
+<tr><th>Артефакт</th><th>Содержание</th><th>Когда</th></tr>
+<tr><td>Токены</td><td>цвета обеих тем, типографика трёх языков, отступы, радиусы, тени — в коде, один файл</td><td>до первого экрана этапа 1</td></tr>
+<tr><td>Компоненты</td><td>оболочка приложения, плитка показателя, таблица, боковая панель, мастер шагов, сканер VIN, лента, ярлык состояния, сумма, чип фильтра, уведомление</td><td>этап 1</td></tr>
+<tr><td>Экраны</td><td>Сегодня, Парк, Аренды, Платежи, Клиенты, Продажи, Закупки, Сервис, Сообщения, карточки мопеда / аренды / клиента; телефон и ноутбук</td><td>по этапам, кликабельное демо служит отправной точкой</td></tr>
+<tr><td>Документы</td><td>договор аренды, акт выдачи, акт возврата, счёт, экспорт Polaris — шаблоны PDF</td><td>этап 1 (договор и акты), этап 3 (экспорт)</td></tr>
+<tr><td>Проверка</td><td>контраст AA, грузинские глифы, экран 375 px одной рукой, печать PDF, тёмная тема</td><td>приёмка каждого этапа</td></tr>
+</table></div>
+<p>Отдельный макет в Figma не обязателен: демо и токены в коде дают достаточную основу, а правки проходят на тестовом стенде. Если понадобится согласование с командой до разработки, макеты собираются из тех же токенов.</p>
+
+<h2 id="s10"><span class="n">10</span>Технологии</h2>
+<p>Рекомендация: тот же стек, что в Self Platform, чтобы не поддерживать два набора инструментов.</p>
+<div class="kv">
+  <b>Фронт</b><span>TypeScript, React, Vite; PWA с установкой на домашний экран</span>
+  <b>API</b><span>Fastify, Prisma, PostgreSQL</span>
+  <b>Воркер</b><span>периоды аренды, напоминания WhatsApp, импорт выписок, синхронизация Kommo</span>
+  <b>Развёртывание</b><span>docker‑compose, два стенда (test и prod), деплой через git, как в Self Platform</span>
+  <b>Файлы</b><span>объектное хранилище для фото и PDF, копия договоров в Google Drive</span>
+  <b>Секреты</b><span>переменные окружения сервера; в репозитории только <code>.env.example</code></span>
+</div>
+<p>Отдельный репозиторий. Общие с Self Platform куски (i18n‑guard, скрипты скриншотов, конвенции коммитов) переносятся копированием, без общего пакета, пока их не станет три.</p>
+
+<h2 id="s11"><span class="n">11</span>Этапы и приёмка</h2>
+<p>Оценки ориентировочные для одного разработчика с Claude Code, при еженедельных проверках Mika и Kardu на тестовом стенде. Итого около 11–12 недель до полного отключения Odoo.</p>
+<div class="phase"><h4>Этап 1. Парк, клиенты, аренда, периоды <span>≈ 3 недели</span></h4><p>FLT‑01…04, RNT‑01…08, CST‑01…03, импорт из Odoo моделей, мопедов, клиентов и аренд.</p><ul><li>Приёмка: Kardu оформляет выдачу и возврат с телефона на тестовом стенде на реальных данных.</li></ul></div>
+<div class="phase"><h4>Этап 2. Платежи, BOG API, залоги, продажи, закупки, сервис <span>≈ 4 недели</span></h4><p>PAY‑01…06, SAL‑01…03, PUR‑01…03, SRV‑01…02, BOG Business Online API на чтение, импорт счетов, платежей и закупок.</p><ul><li>Приёмка: выписки за июль‑август 2026 разбираются не хуже ручного разбора; дебиторка и залоги сходятся с Odoo до тетри.</li></ul></div>
+<div class="phase"><h4>Этап 3. WhatsApp, Lead Ads, Kommo в обе стороны, дашборд, экспорт, переключение <span>≈ 4 недели</span></h4><p>MSG‑01…03, DSH‑01…03, вебхуки Kommo и запись обратно, Lead Ads, экспорт Polaris, две недели параллельной работы, выгрузка базы Odoo в Drive.</p><ul><li>Приёмка: неделя работы без обращения к Odoo; Polaris принял месячный экспорт.</li></ul></div>
+<div class="callout info"><p><b>Критерий готовности v1 целиком.</b> Команда месяц работает только в новой системе, все платежи месяца разобраны, залоги и дебиторка сходятся с банком, напоминания ушли автоматически, и ни одно число не было введено «по памяти».</p></div>
+
+<h2 id="s12"><span class="n">12</span>Открытые вопросы</h2>
+<p>Решения, которые нужны от владельца до старта или в первые дни этапа 1.</p>
+<ol>
+  <li><b>Название продукта.</b> «EV8 Ops» условное.</li>
+  <li><b>Тариф Kommo.</b> Поддерживает ли текущий план вебхуки; если нет, стоимость перехода.</li>
+  <li><b>Номер WhatsApp.</b> Перенос +995 595 16 55 88 из Kommo в своё приложение Meta или второй номер для системных сообщений.</li>
+  <li><b>Доступ к BOG API.</b> Регистрация приложения в Business Online и получение ключей: делает владелец, нужна дата.</li>
+  <li><b>Правило закрытия последней недели</b> при досрочном возврате: полная неделя или пропорционально дням.</li>
+  <li><b>Отчёт эквайера.</b> Даёт ли BOG выгрузку транзакций терминала с временем и суммой; без неё платежи без имени разбираются только по правилам сумм.</li>
+  <li><b>НДС‑фактуры на rs.ge.</b> Формирует их Polaris по нашему экспорту, или система должна готовить данные в их формате.</li>
+  <li><b>Язык по умолчанию</b> для команды (грузинский) и для документов клиенту.</li>
+  <li><b>Хостинг и бюджет:</b> тот же сервер, что у Self Platform, или отдельный.</li>
+  <li><b>Кто механик</b> и нужна ли ему отдельная роль в v1 или хватит роли менеджера.</li>
+</ol>
+
+<div class="foot">Все количественные данные в документе взяты из Odoo emotion‑motors.odoo.com на 13.09.2026 и журнала odoo‑data‑checklist от 18.08.2026. Бренд: тема сайта ev8.ge (style.min.css, logo.svg) на 13.09.2026; банковские API: api.bog.ge и developers.tbcbank.ge. Демо интерфейса на тех же данных опубликовано отдельной страницей.</div>
+</main>
+</div>
