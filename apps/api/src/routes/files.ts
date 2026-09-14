@@ -54,6 +54,25 @@ export function fileRoutes(app: FastifyInstance): void {
     },
   );
 
+  // Photos of the damage on a repair job (SRV-01).
+  app.post<{ Params: { id: string }; Body: Body }>(
+    '/api/service/:id/photos',
+    { config: { scope: 'service.manage' }, bodyLimit: BODY_LIMIT },
+    async (req, reply) => {
+      const actor = actorOf(req);
+      const job = await prisma.serviceJob.findUnique({ where: { id: req.params.id }, select: { id: true } });
+      if (!job) throw notFound('job_not_found', 'No such repair job.');
+      const { bytes, mime, label } = readUpload(req.body ?? {});
+      if (!mime.startsWith('image/')) throw badRequest('bad_mime', 'Repair photos are images.');
+      const f = await prisma.storedFile.create({
+        data: { kind: 'service_photo', serviceJobId: job.id, label, mimeType: mime, sizeBytes: bytes.length, sha256: sha(bytes), bytes: new Uint8Array(bytes), uploadedById: actor.id },
+        select: { id: true },
+      });
+      await audit({ actorId: actor.id, action: 'service.photo.add', entityType: 'service_job', entityId: job.id, after: { fileId: f.id, sizeBytes: bytes.length } });
+      return reply.code(201).send({ id: f.id });
+    },
+  );
+
   // Customer documents (CST-03): a manager may attach an ID photo at the
   // counter; opening it later is for director and owner only.
   app.post<{ Params: { id: string }; Body: Body }>(

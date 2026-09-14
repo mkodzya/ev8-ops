@@ -34,4 +34,5 @@ export const api = {
   get: <T>(url: string) => request<T>('GET', url),
   post: <T>(url: string, body?: unknown) => request<T>('POST', url, body ?? {}),
   patch: <T>(url: string, body?: unknown) => request<T>('PATCH', url, body ?? {}),
+  del: <T>(url: string) => request<T>('DELETE', url),
 };

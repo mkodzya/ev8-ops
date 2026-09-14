@@ -10,6 +10,8 @@ import { ProfilePage } from './pages/ProfilePage.js';
 import { SettingsPage } from './pages/SettingsPage.js';
 import { RentalPage } from './pages/RentalPage.js';
 import { ReturnWizard } from './pages/ReturnWizard.js';
+import { ServiceJobPage } from './pages/ServiceJobPage.js';
+import { ServicePage } from './pages/ServicePage.js';
 import { StatementsPage } from './pages/StatementsPage.js';
 import { VehiclePage } from './pages/VehiclePage.js';
 import { FleetPage } from './pages/FleetPage.js';
@@ -64,6 +66,8 @@ export function App() {
         <Route path="rentals/new" element={<PickupWizard />} />
         <Route path="rentals/:id" element={<RentalPage />} />
         <Route path="rentals/:id/return" element={<ReturnWizard />} />
+        <Route path="service" element={<ServicePage />} />
+        <Route path="service/:id" element={<ServiceJobPage />} />
         <Route path="payments" element={<PaymentsPage />} />
         <Route path="statements" element={<RequireReconcile><StatementsPage /></RequireReconcile>} />
         <Route path="customers" element={<CustomersPage />} />

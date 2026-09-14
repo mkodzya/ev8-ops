@@ -15,9 +15,10 @@
   `prisma/schema.prisma` mirrors the SQL for the generated client, vitest in `test/`.
   Every route declares a scope: `public`, `session`, or a permission from
   `@ev8/shared`; an undeclared scope is owner-only.
-- `worker/` — cron jobs. Stage 1: weekly rental periods rolled nightly at 00:10
-  Asia/Tbilisi (`PERIODS_CRON`), idempotent. Later: WhatsApp reminders, BOG
-  statement pull, Kommo webhook fan-out.
+- `worker/` — the clock. It asks the API to roll rental weeks forward and to
+  settle any credit against them (`POST /api/jobs/roll-periods`, guarded by
+  `WORKER_TOKEN`); the money rules stay in the API, in one copy. Later:
+  WhatsApp reminders, the BOG statement pull, Kommo webhook fan-out.
 - `web/` — React 18 + Vite 6, PWA (manifest + minimal service worker), three
   locales in `src/i18n` (`en.ts` fixes the `Dict` shape; `ka.ts`, `ru.ts` are
   typed against it), mobile-first: rail on a laptop, bottom bar on a phone.

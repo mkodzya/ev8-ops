@@ -8,9 +8,11 @@ import { customerRoutes } from './routes/customers.js';
 import { documentRoutes } from './routes/documents.js';
 import { fileRoutes } from './routes/files.js';
 import { fleetRoutes } from './routes/fleet.js';
+import { jobRoutes } from './routes/jobs.js';
 import { opsRoutes } from './routes/ops.js';
 import { paymentRoutes } from './routes/payments.js';
 import { rentalRoutes } from './routes/rentals.js';
+import { serviceRoutes } from './routes/service.js';
 import { statementRoutes } from './routes/statements.js';
 import { summaryRoutes } from './routes/summary.js';
 import { userRoutes } from './routes/users.js';
@@ -53,6 +55,8 @@ export function buildApp(): FastifyInstance {
   userRoutes(app);
   paymentRoutes(app);
   statementRoutes(app);
+  jobRoutes(app);
+  serviceRoutes(app);
 
   return app;
 }

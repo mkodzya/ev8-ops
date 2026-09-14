@@ -13,6 +13,7 @@ interface Summary {
   rentals: { active: number; overdue: number; withoutVin: number };
   customers: number;
   unmatchedLines: number;
+  openServiceJobs: number;
   deposits: { held: number; heldTetri: number };
   pickedUpToday: { id: string; number: string; customer: string }[];
   dueBackToday: { id: string; number: string; customer: string }[];
@@ -56,6 +57,10 @@ export function TodayPage() {
             <span className="tile-lbl">{t.today.unmatched}</span>
           </Link>
         )}
+        <Link to="/service" className={`tile ${s.openServiceJobs > 0 ? 'tile-warn' : ''}`}>
+          <span className="tile-num">{s.openServiceJobs}</span>
+          <span className="tile-lbl">{t.today.openService}</span>
+        </Link>
         <Link to="/customers" className="tile">
           <span className="tile-num">{s.customers}</span>
           <span className="tile-lbl">{t.today.customers}</span>

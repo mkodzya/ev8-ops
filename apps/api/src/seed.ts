@@ -183,15 +183,37 @@ async function seedDemo(ownerId: string): Promise<void> {
   await rental({ customer: customers[4], vehicle: vehicles[2], rate: 15000, pickedUpOn: addDays(today, -40), paidWeeks: 3, returnedOn: addDays(today, -19) });
   await rental({ customer: customers[5], vehicle: vehicles[6], rate: 14000, pickedUpOn: addDays(today, -30), paidWeeks: 1, status: 'disputed' });
 
-  // Two in service, one sold, by events.
-  for (const v of [vehicles[3], vehicles[7]]) {
-    await prisma.vehicleEvent.create({ data: { vehicleId: v.id, kind: 'service_in', occurredOn: addDays(today, -2) === '' ? d(today) : d(addDays(today, -2)), fromState: 'available', toState: 'service', reason: 'DEMO: brake pads', actorId: ownerId } });
-    await prisma.vehicle.update({ where: { id: v.id }, data: { state: 'service' } });
+  // Two in service, through repair jobs rather than a bare event — the
+  // screen and the moped's history then say the same thing.
+  const repairs: { vehicle: { id: string }; reason: string; labour: number; parts: [string, number, number][] }[] = [
+    { vehicle: vehicles[3], reason: 'DEMO: тормозные колодки', labour: 3000, parts: [['DEMO Колодки', 2, 1750]] },
+    { vehicle: vehicles[7], reason: 'DEMO: не держит зарядку', labour: 5000, parts: [['DEMO Зарядное 60V 5A', 1, 4154]] },
+  ];
+  for (const r of repairs) {
+    const job = await prisma.serviceJob.create({
+      data: {
+        vehicleId: r.vehicle.id,
+        reason: r.reason,
+        openedOn: d(addDays(today, -2)),
+        labourTetri: r.labour,
+        doneBy: 'DEMO Nika workshop',
+        notes: DEMO_NOTE,
+        movedVehicle: true,
+        createdById: ownerId,
+      },
+    });
+    for (const [name, qty, price] of r.parts) {
+      await prisma.servicePart.create({ data: { jobId: job.id, name, qty, unitPriceTetri: price } });
+    }
+    await prisma.vehicleEvent.create({
+      data: { vehicleId: r.vehicle.id, kind: 'service_in', occurredOn: d(addDays(today, -2)), fromState: 'available', toState: 'service', reason: r.reason, actorId: ownerId },
+    });
+    await prisma.vehicle.update({ where: { id: r.vehicle.id }, data: { state: 'service' } });
   }
   await prisma.vehicleEvent.create({ data: { vehicleId: vehicles[9].id, kind: 'sold', occurredOn: d(addDays(today, -60)), fromState: 'available', toState: 'sold', actorId: ownerId } });
   await prisma.vehicle.update({ where: { id: vehicles[9].id }, data: { state: 'sold' } });
 
-  console.log('seed: DEMO dataset added — 3 models, 10 mopeds, 6 customers, 6 rentals. Every row is marked DEMO.');
+  console.log('seed: DEMO dataset added — 3 models, 10 mopeds, 6 customers, 6 rentals, 2 repairs. Every row is marked DEMO.');
 }
 
 async function main(): Promise<void> {

@@ -4,10 +4,12 @@ import { Link, useParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { Empty, Loading, RentalBadge, StateBadge, Vin } from '../components/ui.js';
 import { Field, Row } from '../components/Wizard.js';
-import { fmtDate, formatGel } from '../format.js';
+import { fmtDate } from '../format.js';
 import { useT } from '../i18n/index.js';
 import { errorText, useLoad } from '../lib/use.js';
 import { useSession } from '../session.js';
+import { NewJob } from './ServicePage.js';
+import { formatGel } from '../format.js';
 
 interface Card {
   vehicle: {
@@ -23,6 +25,7 @@ interface Card {
     currentRentalId: string | null;
   };
   events: { id: string; kind: VehicleEventKind; occurredOn: string; fromState: VehicleState | null; toState: VehicleState; rentalId: string | null; reason: string | null; actor: string | null }[];
+  serviceJobs: { id: string; number: string; status: 'open' | 'done' | 'cancelled'; payer: 'company' | 'customer'; reason: string; openedOn: string; closedOn: string | null; totalTetri: number; withheldTetri: number }[];
   rentals: { id: string; number: string; status: RentalStatus; customer: { id: string; name: string }; pickedUpOn: string | null; returnedOn: string | null; paidThrough: string | null; weeklyRateTetri: number }[];
 }
 
@@ -73,6 +76,9 @@ export function VehiclePage() {
           <button type="button" className="pill pill-sm" onClick={() => setOpen((o) => !o)} disabled={locked} title={locked ? t.vehicle.rentedLock : undefined}>
             {t.actions.changeState}
           </button>
+        )}
+        {can('service.manage') && v.state !== 'sold' && v.state !== 'out' && !data.serviceJobs.some((j) => j.status === 'open') && (
+          <NewJob vehicleId={v.id} onDone={reload} onError={setErr} />
         )}
         {v.state === 'available' && can('rental.create') && (
           <Link className="pill pill-sm pill-accent" to={`/rentals/new?vehicle=${v.id}`}>
@@ -149,6 +155,29 @@ export function VehiclePage() {
           )}
         </section>
       </div>
+
+      <section className="card">
+        <h2>{t.service.history}</h2>
+        {data.serviceJobs.length === 0 ? (
+          <Empty text={t.service.none} />
+        ) : (
+          <ul className="timeline">
+            {data.serviceJobs.map((j) => (
+              <li key={j.id}>
+                <span className="mono muted">{fmtDate(j.openedOn)}</span>
+                <span>
+                  <Link to={`/service/${j.id}`} className="mono">
+                    {j.number}
+                  </Link>{' '}
+                  {j.reason} <span className="muted">· {t.service.payers[j.payer]}</span>
+                  <span className="muted"> · {formatGel(j.totalTetri)}</span>
+                  <span className={j.status === 'open' ? 'warn-text' : 'muted'}> · {t.service.statuses[j.status]}</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
 
       <section className="card">
         <h2>{t.vehicle.rentalsOf}</h2>

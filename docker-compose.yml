@@ -28,6 +28,7 @@ services:
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-ev8ops}:${POSTGRES_PASSWORD:-ev8ops}@db:5432/${POSTGRES_DB:-ev8ops}
       SESSION_SECRET: ${SESSION_SECRET:-dev-secret-change-me}
+      WORKER_TOKEN: ${WORKER_TOKEN:-dev-worker-token}
       # The laptop stack says so out loud, so the API accepts the development
       # secret. The server compose does not set this; a weak secret there
       # stops the boot.
@@ -60,7 +61,8 @@ services:
       context: .
       dockerfile: apps/worker/Dockerfile
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-ev8ops}:${POSTGRES_PASSWORD:-ev8ops}@db:5432/${POSTGRES_DB:-ev8ops}
+      API_URL: http://api:8080
+      WORKER_TOKEN: ${WORKER_TOKEN:-dev-worker-token}
       PERIODS_CRON: ${PERIODS_CRON:-10 0 * * *}
       TZ: ${TZ:-Asia/Tbilisi}
     depends_on:

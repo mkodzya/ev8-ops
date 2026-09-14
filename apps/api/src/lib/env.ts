@@ -40,4 +40,9 @@ export const env = {
   OWNER_EMAIL: (process.env.OWNER_EMAIL ?? 'mika@selfstudio.se').trim().toLowerCase(),
   OWNER_NAME: process.env.OWNER_NAME ?? 'Mika',
   OWNER_PASSWORD: process.env.OWNER_PASSWORD ?? '',
+
+  // What the worker shows at the door. It is not a user credential: it
+  // authorises one job route and nothing else. Compose sets it for both
+  // containers; a stand sets its own.
+  WORKER_TOKEN: process.env.WORKER_TOKEN ?? 'dev-worker-token',
 };

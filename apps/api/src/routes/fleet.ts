@@ -77,6 +77,10 @@ export function fleetRoutes(app: FastifyInstance): void {
           orderBy: { pickedUpOn: 'desc' },
           include: { customer: { select: { id: true, name: true } } },
         },
+        serviceJobs: {
+          orderBy: { openedOn: 'desc' },
+          include: { parts: { select: { qty: true, unitPriceTetri: true } } },
+        },
       },
     });
     if (!v) throw notFound('vehicle_not_found', 'No such vehicle.');
@@ -102,6 +106,17 @@ export function fleetRoutes(app: FastifyInstance): void {
         rentalId: e.rentalId,
         reason: e.reason,
         actor: e.actor?.name ?? null,
+      })),
+      serviceJobs: v.serviceJobs.map((j) => ({
+        id: j.id,
+        number: j.number,
+        status: j.status,
+        payer: j.payer,
+        reason: j.reason,
+        openedOn: isoDate(j.openedOn),
+        closedOn: isoDate(j.closedOn),
+        totalTetri: j.labourTetri + j.parts.reduce((n, p) => n + p.qty * p.unitPriceTetri, 0),
+        withheldTetri: j.withheldTetri,
       })),
       rentals: v.rentals.map((r) => ({
         id: r.id,

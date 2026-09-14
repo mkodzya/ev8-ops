@@ -1,85 +1,65 @@
-// Background worker. Stage 1 job: roll weekly rental periods forward every
-// night in Asia/Tbilisi (RNT-02) — while a rental is active, each period
-// that should exist by today is created once; nothing is ever duplicated,
-// so the job can run as often as it likes. Later stages add WhatsApp
-// reminders, the BOG statement pull and Kommo fan-out here.
-import { ORG_TZ, PERIOD_DAYS, periodsThrough, todayISO } from '@ev8/shared';
+// The clock.
+//
+// Every night in Asia/Tbilisi the worker asks the API to roll rental weeks
+// forward (RNT-02) and to put any credit a customer is holding onto the new
+// week (PAY-06). It does not do that work itself: those are money rules and
+// there is one copy of them, in the API. Later jobs that talk to the outside
+// world — WhatsApp reminders, the BOG statement pull — will live here with
+// their own logic.
+import { ORG_TZ, todayISO } from '@ev8/shared';
 import cron from 'node-cron';
-import pg from 'pg';
 
-const DATABASE_URL = process.env.DATABASE_URL ?? 'postgresql://ev8ops:ev8ops@localhost:5433/ev8ops';
+const API = (process.env.API_URL ?? 'http://api:8080').replace(/\/+$/, '');
+const TOKEN = process.env.WORKER_TOKEN ?? 'dev-worker-token';
 const PERIODS_CRON = process.env.PERIODS_CRON ?? '10 0 * * *';
 const TZ = process.env.TZ ?? ORG_TZ;
 
-const pool = new pg.Pool({ connectionString: DATABASE_URL, max: 3 });
+interface RollResult {
+  rentals: number;
+  created: number;
+  settledTetri: number;
+}
 
-async function waitForDb(): Promise<void> {
-  for (let i = 0; i < 30; i++) {
+async function rollPeriods(): Promise<RollResult> {
+  const res = await fetch(`${API}/api/jobs/roll-periods`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-worker-token': TOKEN },
+    body: JSON.stringify({ asOf: todayISO(new Date(), TZ) }),
+  });
+  if (!res.ok) throw new Error(`roll-periods: ${res.status} ${await res.text()}`);
+  return (await res.json()) as RollResult;
+}
+
+async function waitForApi(): Promise<void> {
+  for (let i = 0; i < 60; i++) {
     try {
-      await pool.query('SELECT 1');
-      return;
+      const res = await fetch(`${API}/api/health`);
+      if (res.ok) return;
     } catch {
-      console.log('worker: waiting for database…');
-      await new Promise((r) => setTimeout(r, 2000));
+      /* not up yet */
     }
+    console.log('worker: waiting for the API…');
+    await new Promise((r) => setTimeout(r, 2000));
   }
-  throw new Error('database never became ready');
+  throw new Error('the API never became ready');
 }
 
-interface OpenRental {
-  id: string;
-  number: string;
-  picked_up_on: string;
-  weekly_rate_tetri: number;
-  max_seq: number | null;
-}
-
-/** Create the periods that should exist by `asOf` for every active rental. Idempotent. */
-export async function rollPeriods(asOf = todayISO(new Date(), TZ)): Promise<{ rentals: number; created: number }> {
-  const { rows } = await pool.query<OpenRental>(
-    `SELECT r.id, r.number, to_char(r.picked_up_on, 'YYYY-MM-DD') AS picked_up_on, r.weekly_rate_tetri,
-            (SELECT max(seq) FROM rental_periods p WHERE p.rental_id = r.id) AS max_seq
-       FROM rentals r
-      WHERE r.status IN ('active', 'overdue')
-        AND r.picked_up_on IS NOT NULL
-        AND r.returned_on IS NULL`,
-  );
-  let created = 0;
-  for (const r of rows) {
-    const wanted = periodsThrough(r.picked_up_on, asOf);
-    const have = r.max_seq ?? 0;
-    for (const p of wanted) {
-      if (p.seq <= have) continue;
-      await pool.query(
-        `INSERT INTO rental_periods (rental_id, seq, starts_on, ends_on, amount_tetri)
-         VALUES ($1, $2, $3, $4, $5)
-         ON CONFLICT (rental_id, seq) DO NOTHING`,
-        [r.id, p.seq, p.startsOn, p.endsOn, r.weekly_rate_tetri],
-      );
-      created++;
-    }
+async function run(label: string): Promise<void> {
+  try {
+    const r = await rollPeriods();
+    console.log(
+      `worker: ${label} — ${r.rentals} open rental(s), ${r.created} week(s) opened, ${(r.settledTetri / 100).toFixed(2)} GEL of credit placed`,
+    );
+  } catch (err) {
+    console.error('worker: roll failed', err);
   }
-  return { rentals: rows.length, created };
 }
 
 async function main(): Promise<void> {
-  await waitForDb();
-  const first = await rollPeriods();
-  console.log(`worker: periods rolled on boot — ${first.rentals} open rental(s), ${first.created} period(s) created`);
-
-  cron.schedule(
-    PERIODS_CRON,
-    async () => {
-      try {
-        const r = await rollPeriods();
-        console.log(`worker: ${todayISO(new Date(), TZ)} periods — ${r.rentals} open rental(s), ${r.created} created`);
-      } catch (err) {
-        console.error('worker: periods failed', err);
-      }
-    },
-    { timezone: TZ },
-  );
-  console.log(`worker: up — periods of ${PERIOD_DAYS} days roll at "${PERIODS_CRON}" ${TZ}`);
+  await waitForApi();
+  await run('on boot');
+  cron.schedule(PERIODS_CRON, () => void run(todayISO(new Date(), TZ)), { timezone: TZ });
+  console.log(`worker: up — weeks roll at "${PERIODS_CRON}" ${TZ}`);
 }
 
 main().catch((err) => {
