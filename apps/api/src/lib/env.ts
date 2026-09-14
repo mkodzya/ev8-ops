@@ -1,35 +1,44 @@
 /**
- * The one value this API cannot be trusted with a default for.
+ * The two values this API cannot be trusted with a default for.
  *
- * Sessions are signed with SESSION_SECRET, so whoever knows it can mint a
- * session for anybody, the owner included. A weak secret stops the boot
- * unless the stack says out loud that it is a development one
+ * SESSION_SECRET signs sessions, so whoever knows it can mint a session for
+ * anybody, the owner included. WORKER_TOKEN opens the nightly job route, and
+ * that route writes money: it opens a rental week and lets a customer's credit
+ * pay for it. Both are weak by default on the laptop, and a weak one stops the
+ * boot unless the stack says out loud that it is a development one
  * (ALLOW_DEV_SECRET=true in the laptop compose). Same rule as Self Platform.
  */
 export const DEV_SECRET = 'dev-secret-change-me';
+export const DEV_WORKER_TOKEN = 'dev-worker-token';
 export const MIN_SECRET_LENGTH = 32;
 
 /** Pure, so the rule can be tested without booting a server around it. */
-export function checkSessionSecret(given: string, allowDev: boolean): string {
-  const weak = given === '' || given === DEV_SECRET || given.length < MIN_SECRET_LENGTH;
+function checkSecret(name: string, what: string, devValue: string, given: string, allowDev: boolean): string {
+  const weak = given === '' || given === devValue || given.length < MIN_SECRET_LENGTH;
   if (!weak) return given;
-  if (allowDev) return given || DEV_SECRET;
+  if (allowDev) return given || devValue;
   throw new Error(
-    'SESSION_SECRET is missing, is the development default, or is shorter than ' +
-      `${MIN_SECRET_LENGTH} characters. Sessions are signed with it, so this one cannot ` +
-      'have a default: anybody who knows it can mint a session for anybody.\n' +
+    `${name} is missing, is the development default, or is shorter than ` +
+      `${MIN_SECRET_LENGTH} characters. ${what}, so this one cannot ` +
+      'have a default: anybody who knows it can use it.\n' +
       '  Generate one:  openssl rand -base64 48\n' +
       '  Local stack:   set ALLOW_DEV_SECRET=true to accept the development secret on purpose.',
   );
 }
 
-function sessionSecret(): string {
-  return checkSessionSecret(process.env.SESSION_SECRET ?? '', process.env.ALLOW_DEV_SECRET === 'true');
+export function checkSessionSecret(given: string, allowDev: boolean): string {
+  return checkSecret('SESSION_SECRET', 'Sessions are signed with it', DEV_SECRET, given, allowDev);
 }
+
+export function checkWorkerToken(given: string, allowDev: boolean): string {
+  return checkSecret('WORKER_TOKEN', 'The nightly job it opens writes rental weeks', DEV_WORKER_TOKEN, given, allowDev);
+}
+
+const allowDev = (): boolean => process.env.ALLOW_DEV_SECRET === 'true';
 
 export const env = {
   DATABASE_URL: process.env.DATABASE_URL ?? 'postgresql://ev8ops:ev8ops@localhost:5433/ev8ops',
-  SESSION_SECRET: sessionSecret(),
+  SESSION_SECRET: checkSessionSecret(process.env.SESSION_SECRET ?? '', allowDev()),
   API_PORT: parseInt(process.env.API_PORT ?? '8080', 10),
   TZ: process.env.TZ ?? 'Asia/Tbilisi',
   DEFAULT_LOCALE: process.env.DEFAULT_LOCALE ?? 'ka',
@@ -42,7 +51,7 @@ export const env = {
   OWNER_PASSWORD: process.env.OWNER_PASSWORD ?? '',
 
   // What the worker shows at the door. It is not a user credential: it
-  // authorises one job route and nothing else. Compose sets it for both
-  // containers; a stand sets its own.
-  WORKER_TOKEN: process.env.WORKER_TOKEN ?? 'dev-worker-token',
+  // authorises one job route and nothing else — but that route rolls weeks,
+  // so it is held to the same rule as the session secret.
+  WORKER_TOKEN: checkWorkerToken(process.env.WORKER_TOKEN ?? '', allowDev()),
 };
