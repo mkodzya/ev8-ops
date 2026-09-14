@@ -1,0 +1,74 @@
+/* EV8 Ops design tokens — the ev8.ge brand as read from the site
+   (docs/design/brand.md), plus the few additions the operations UI needs.
+   Two themes: light on #fbfbfb, dark on #0b0b0b with the light logo. */
+
+:root {
+  --bg: #fbfbfb;
+  --surface: #ffffff;
+  --surface-2: #f3f6f3;
+  --ink: #0b0b0b;
+  --muted: #5d6b5d;
+  --line: #dbe4de;
+  --line-soft: #e9efea;
+
+  --brand: #819481;        /* logo and large marks; never text */
+  --accent: #557553;       /* text green, links, primary button — 5.2:1 */
+  --accent-hover: #628767;
+  --accent-soft: #e3ebe3;
+  --on-accent: #ffffff;
+  --lime: #e0ffa2;         /* the one highlight per screen */
+
+  --rented: #598eeb;
+  --service: #fe5d02;
+  --service-ink: #e45e22;
+  --crit: #c8402f;
+  --crit-soft: #f9e3df;
+  --warn-soft: #fdeadf;
+  --info-soft: #e4ecfb;
+  --grey: #7a827a;
+
+  --rail: #0b0b0b;
+  --rail-ink: #c9d3c9;
+  --rail-active: #1b211b;
+  --rail-accent: #e0ffa2;
+
+  --shadow: 0 12px 40px rgba(11, 11, 11, 0.16);
+
+  --display: 'Be Vietnam Pro', 'Noto Sans Georgian', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --body: 'Inter', 'Noto Sans Georgian', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --radius-card: 16px;
+  --radius-pill: 999px;
+  --control: 44px; /* touch targets no smaller than 44 px (spec §9.2) */
+  --rail-w: 220px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0b0b0b;
+    --surface: #151915;
+    --surface-2: #1b211b;
+    --ink: #eef1ee;
+    --muted: #9fae9f;
+    --line: #2a332b;
+    --line-soft: #222a23;
+    --brand: #a2b9a2;
+    --accent: #a2b9a2;
+    --accent-hover: #bfd3bf;
+    --accent-soft: #1f2d20;
+    --on-accent: #0b0b0b;
+    --rented: #7fa6ee;
+    --service: #ff7a3d;
+    --service-ink: #ff7a3d;
+    --crit: #ef6b5a;
+    --crit-soft: #3d1e1a;
+    --warn-soft: #3a2214;
+    --info-soft: #1b2a45;
+    --grey: #8f998f;
+    --rail: #050605;
+    --rail-ink: #aeb9ae;
+    --rail-active: #161a16;
+    --shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  }
+}

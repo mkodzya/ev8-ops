@@ -1,0 +1,39 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: ev8ops
+          POSTGRES_PASSWORD: ev8ops
+          POSTGRES_DB: ev8ops_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U ev8ops -d ev8ops_test"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+    env:
+      DATABASE_URL: postgresql://ev8ops:ev8ops@localhost:5432/ev8ops_test
+      ALLOW_DEV_SECRET: 'true'
+      TZ: Asia/Tbilisi
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm run generate
+      - run: npm run migrate
+      - run: npm run typecheck
+      - run: npm run guard:i18n
+      - run: npm run test:shared
+      - run: npm run test:api
+      - run: npm -w @ev8/web run build

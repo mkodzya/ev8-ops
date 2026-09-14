@@ -1,3 +1,6 @@
+# EV8 Ops — laptop stack, started by double-clicking a .command file.
+# Host ports are offset from Self Platform's (5432/8080/5173 and its test
+# stand 5174/8081), which run on the same Mac.
 services:
   db:
     image: postgres:16-alpine
@@ -8,16 +11,67 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     ports:
-      - "5432:5432"
+      - "${DB_PORT:-5433}:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ev8ops} -d ${POSTGRES_DB:-ev8ops}"]
       interval: 5s
       timeout: 3s
       retries: 30
 
-  # api, worker and web services are added in stage 1 once apps/* exist;
-  # they follow the selfstudio-OPS compose layout (Dockerfile per app,
-  # api healthcheck on /api/health, web proxying to api).
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-ev8ops}:${POSTGRES_PASSWORD:-ev8ops}@db:5432/${POSTGRES_DB:-ev8ops}
+      SESSION_SECRET: ${SESSION_SECRET:-dev-secret-change-me}
+      # The laptop stack says so out loud, so the API accepts the development
+      # secret. The server compose does not set this; a weak secret there
+      # stops the boot.
+      ALLOW_DEV_SECRET: "true"
+      API_PORT: "8080"
+      TZ: ${TZ:-Asia/Tbilisi}
+      DEFAULT_LOCALE: ${DEFAULT_LOCALE:-ka}
+      # First owner login; applies only to an empty database.
+      OWNER_EMAIL: ${OWNER_EMAIL:-mika@selfstudio.se}
+      OWNER_NAME: ${OWNER_NAME:-Mika}
+      OWNER_PASSWORD: ${OWNER_PASSWORD:-ev8-dev-password}
+    ports:
+      - "${API_PORT:-8082}:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/api/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  worker:
+    build:
+      context: .
+      dockerfile: apps/worker/Dockerfile
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-ev8ops}:${POSTGRES_PASSWORD:-ev8ops}@db:5432/${POSTGRES_DB:-ev8ops}
+      PERIODS_CRON: ${PERIODS_CRON:-10 0 * * *}
+      TZ: ${TZ:-Asia/Tbilisi}
+    depends_on:
+      api:
+        condition: service_healthy
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    environment:
+      API_PROXY_TARGET: http://api:8080
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-}
+    ports:
+      - "${WEB_PORT:-5175}:5173"
+    depends_on:
+      api:
+        condition: service_healthy
 
 volumes:
   pgdata:

@@ -1,0 +1,20 @@
+{
+  "name": "@ev8/shared",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Pure, DB-free domain rules shared by api, worker and web: money in tetri, VAT, acquiring, weekly periods, roles and permissions, vehicle and rental states.",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0",
+    "vitest": "^3.0.0"
+  }
+}

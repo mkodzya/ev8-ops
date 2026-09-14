@@ -1,0 +1,33 @@
+# Dev overlay — source comes from this folder, servers reload on save.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+#
+# or double-click "Start EV8 Ops (DEV).command". Same database volume as the
+# normal stack, on purpose: dev mode is for seeing your own data react to a
+# change, not a separate sandbox.
+services:
+  api:
+    volumes:
+      - ./packages:/app/packages
+      - ./apps/api:/app/apps/api
+    # The mount hides the image's generated Prisma client, so it is
+    # regenerated against the mounted source first. --include is not
+    # optional: tsx does not follow the workspace symlink to @ev8/shared.
+    command: >
+      sh -c "npm run generate &&
+             node scripts/migrate.mjs &&
+             npx tsx src/seed.ts --if-empty &&
+             npx tsx watch --clear-screen=false --include '/app/packages/shared/src/**/*.ts' src/index.ts"
+
+  web:
+    volumes:
+      - ./packages:/app/packages
+      - ./apps/web:/app/apps/web
+    command: sh -c "npm run dev -- --host 0.0.0.0 --port 5173"
+
+  worker:
+    volumes:
+      - ./packages:/app/packages
+      - ./apps/worker:/app/apps/worker
+    command: >
+      sh -c "npx tsx watch --clear-screen=false --include '/app/packages/shared/src/**/*.ts' src/index.ts"

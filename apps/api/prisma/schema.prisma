@@ -1,0 +1,325 @@
+// EV8 Ops — Prisma schema. Migrations are hand-written SQL in
+// apps/api/migrations/, applied by scripts/migrate.mjs (hermetic, no Prisma
+// engines). This file exists to generate the type-safe client only; keep it
+// in sync with the SQL by hand.
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "esm"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  owner
+  director
+  manager
+  mechanic
+  accountant
+
+  @@map("user_role")
+}
+
+enum VehicleState {
+  available
+  rented
+  service
+  out
+  sold
+
+  @@map("vehicle_state")
+}
+
+enum VehicleEventKind {
+  arrived
+  pickup
+  return
+  service_in
+  service_out
+  sold
+  bought_back
+  written_off
+  manual
+
+  @@map("vehicle_event_kind")
+}
+
+enum RentalStatus {
+  booked
+  active
+  overdue
+  paused
+  returned
+  disputed
+
+  @@map("rental_status")
+}
+
+enum PeriodPayStatus {
+  unpaid
+  partial
+  paid
+
+  @@map("period_pay_status")
+}
+
+enum DepositStatus {
+  held
+  returned
+  withheld
+  partial
+
+  @@map("deposit_status")
+}
+
+enum ActKind {
+  pickup
+  return
+
+  @@map("act_kind")
+}
+
+enum CustomerKind {
+  person
+  sole_trader
+  company
+
+  @@map("customer_kind")
+}
+
+model User {
+  id           String   @id @default(uuid()) @db.Uuid
+  email        String   @unique
+  name         String
+  passwordHash String   @map("password_hash")
+  role         UserRole
+  locale       String   @default("ka")
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @default(now()) @map("updated_at")
+
+  sessions          Session[]
+  rentalsCreated    Rental[]       @relation("rental_created_by")
+  depositsDecided   Deposit[]      @relation("deposit_decided_by")
+  depositsConfirmed Deposit[]      @relation("deposit_confirmed_by")
+  actsCreated       Act[]
+  vehicleEvents     VehicleEvent[]
+  auditEntries      AuditLog[]
+
+  @@map("users")
+}
+
+model Session {
+  token      String   @id
+  userId     String   @map("user_id") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at")
+  lastSeenAt DateTime @default(now()) @map("last_seen_at")
+  expiresAt  DateTime @map("expires_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VehicleModel {
+  id                  String   @id @default(uuid()) @db.Uuid
+  brand               String
+  name                String
+  salePriceTetri      Int?     @map("sale_price_tetri")
+  weeklyRateTetri     Int?     @map("weekly_rate_tetri")
+  costTetri           Int?     @map("cost_tetri")
+  forSale             Boolean  @default(true) @map("for_sale")
+  forRent             Boolean  @default(false) @map("for_rent")
+  photoUrl            String?  @map("photo_url")
+  notes               String?
+  odooSaleProductId   Int?     @unique @map("odoo_sale_product_id")
+  odooRentalProductId Int?     @unique @map("odoo_rental_product_id")
+  odooFleetModelId    Int?     @unique @map("odoo_fleet_model_id")
+  archived            Boolean  @default(false)
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @default(now()) @map("updated_at")
+
+  vehicles Vehicle[]
+
+  @@unique([brand, name])
+  @@map("vehicle_models")
+}
+
+model Vehicle {
+  id              String       @id @default(uuid()) @db.Uuid
+  vin             String       @unique
+  modelId         String       @map("model_id") @db.Uuid
+  color           String?
+  year            Int?
+  arrivedOn       DateTime?    @map("arrived_on") @db.Date
+  state           VehicleState @default(available)
+  currentRentalId String?      @map("current_rental_id") @db.Uuid
+  odometerKm      Int?         @map("odometer_km")
+  notes           String?
+  odooFleetId     Int?         @unique @map("odoo_fleet_id")
+  odooLotId       Int?         @unique @map("odoo_lot_id")
+  archived        Boolean      @default(false)
+  createdAt       DateTime     @default(now()) @map("created_at")
+  updatedAt       DateTime     @default(now()) @map("updated_at")
+
+  model         VehicleModel   @relation(fields: [modelId], references: [id])
+  currentRental Rental?        @relation("vehicle_current_rental", fields: [currentRentalId], references: [id])
+  rentals       Rental[]       @relation("rental_vehicle")
+  events        VehicleEvent[]
+
+  @@map("vehicles")
+}
+
+model Customer {
+  id            String       @id @default(uuid()) @db.Uuid
+  name          String
+  nameKa        String?      @map("name_ka")
+  nameLat       String?      @map("name_lat")
+  personalId    String?      @unique @map("personal_id")
+  phone         String?
+  email         String?
+  kind          CustomerKind @default(person)
+  tags          String[]     @default([])
+  notes         String?
+  odooPartnerId Int?         @unique @map("odoo_partner_id")
+  archived      Boolean      @default(false)
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @default(now()) @map("updated_at")
+
+  rentals Rental[]
+
+  @@map("customers")
+}
+
+model Rental {
+  id                    String       @id @default(uuid()) @db.Uuid
+  number                String       @unique @default(dbgenerated("('R-' || lpad(nextval('rental_number_seq')::text, 5, '0'))"))
+  customerId            String       @map("customer_id") @db.Uuid
+  vehicleId             String?      @map("vehicle_id") @db.Uuid
+  vinUnconfirmed        Boolean      @default(false) @map("vin_unconfirmed")
+  vinNote               String?      @map("vin_note")
+  weeklyRateTetri       Int          @map("weekly_rate_tetri")
+  depositTetri          Int          @default(18000) @map("deposit_tetri")
+  pickedUpOn            DateTime?    @map("picked_up_on") @db.Date
+  expectedReturnOn      DateTime?    @map("expected_return_on") @db.Date
+  returnedOn            DateTime?    @map("returned_on") @db.Date
+  status                RentalStatus @default(booked)
+  paidThrough           DateTime?    @map("paid_through") @db.Date
+  buyoutTargetTetri     Int?         @map("buyout_target_tetri")
+  buyoutPerPaymentTetri Int?         @map("buyout_per_payment_tetri")
+  notes                 String?
+  odooOrderId           Int?         @unique @map("odoo_order_id")
+  odooName              String?      @map("odoo_name")
+  createdById           String?      @map("created_by") @db.Uuid
+  createdAt             DateTime     @default(now()) @map("created_at")
+  updatedAt             DateTime     @default(now()) @map("updated_at")
+
+  customer  Customer       @relation(fields: [customerId], references: [id])
+  vehicle   Vehicle?       @relation("rental_vehicle", fields: [vehicleId], references: [id])
+  createdBy User?          @relation("rental_created_by", fields: [createdById], references: [id])
+  periods   RentalPeriod[]
+  deposit   Deposit?
+  acts      Act[]
+  events    VehicleEvent[]
+  currentOf Vehicle[]      @relation("vehicle_current_rental")
+
+  @@map("rentals")
+}
+
+model RentalPeriod {
+  id          String          @id @default(uuid()) @db.Uuid
+  rentalId    String          @map("rental_id") @db.Uuid
+  seq         Int
+  startsOn    DateTime        @map("starts_on") @db.Date
+  endsOn      DateTime        @map("ends_on") @db.Date
+  amountTetri Int             @map("amount_tetri")
+  paidTetri   Int             @default(0) @map("paid_tetri")
+  payStatus   PeriodPayStatus @default(unpaid) @map("pay_status")
+  createdAt   DateTime        @default(now()) @map("created_at")
+  updatedAt   DateTime        @default(now()) @map("updated_at")
+
+  rental Rental @relation(fields: [rentalId], references: [id], onDelete: Cascade)
+
+  @@unique([rentalId, seq])
+  @@map("rental_periods")
+}
+
+model Deposit {
+  id             String        @id @default(uuid()) @db.Uuid
+  rentalId       String        @unique @map("rental_id") @db.Uuid
+  amountTetri    Int           @map("amount_tetri")
+  status         DepositStatus @default(held)
+  returnedTetri  Int           @default(0) @map("returned_tetri")
+  withheldTetri  Int           @default(0) @map("withheld_tetri")
+  withheldReason String?       @map("withheld_reason")
+  returnedTo     String?       @map("returned_to")
+  returnedOn     DateTime?     @map("returned_on") @db.Date
+  decidedById    String?       @map("decided_by") @db.Uuid
+  confirmedById  String?       @map("confirmed_by") @db.Uuid
+  notes          String?
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @default(now()) @map("updated_at")
+
+  rental      Rental @relation(fields: [rentalId], references: [id], onDelete: Cascade)
+  decidedBy   User?  @relation("deposit_decided_by", fields: [decidedById], references: [id])
+  confirmedBy User?  @relation("deposit_confirmed_by", fields: [confirmedById], references: [id])
+
+  @@map("deposits")
+}
+
+model Act {
+  id           String   @id @default(uuid()) @db.Uuid
+  rentalId     String   @map("rental_id") @db.Uuid
+  kind         ActKind
+  occurredOn   DateTime @map("occurred_on") @db.Date
+  odometerKm   Int?     @map("odometer_km")
+  condition    String?
+  photos       Json     @default("[]")
+  signatureUrl String?  @map("signature_url")
+  pdfUrl       String?  @map("pdf_url")
+  createdById  String?  @map("created_by") @db.Uuid
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  rental    Rental @relation(fields: [rentalId], references: [id], onDelete: Cascade)
+  createdBy User?  @relation(fields: [createdById], references: [id])
+
+  @@map("acts")
+}
+
+model VehicleEvent {
+  id         String           @id @default(uuid()) @db.Uuid
+  vehicleId  String           @map("vehicle_id") @db.Uuid
+  kind       VehicleEventKind
+  occurredOn DateTime         @map("occurred_on") @db.Date
+  fromState  VehicleState?    @map("from_state")
+  toState    VehicleState     @map("to_state")
+  rentalId   String?          @map("rental_id") @db.Uuid
+  reason     String?
+  actorId    String?          @map("actor_id") @db.Uuid
+  createdAt  DateTime         @default(now()) @map("created_at")
+
+  vehicle Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  rental  Rental? @relation(fields: [rentalId], references: [id])
+  actor   User?   @relation(fields: [actorId], references: [id])
+
+  @@map("vehicle_events")
+}
+
+model AuditLog {
+  id         String   @id @default(uuid()) @db.Uuid
+  actorId    String?  @map("actor_id") @db.Uuid
+  action     String
+  entityType String   @map("entity_type")
+  entityId   String?  @map("entity_id")
+  before     Json?
+  after      Json?
+  note       String?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  actor User? @relation(fields: [actorId], references: [id])
+
+  @@map("audit_log")
+}

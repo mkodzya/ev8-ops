@@ -1,0 +1,13 @@
+{
+  "name": "EV8 Ops",
+  "short_name": "EV8 Ops",
+  "description": "E-Motion Motors: fleet, weekly rentals, customers, payments.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#fbfbfb",
+  "theme_color": "#0b0b0b",
+  "lang": "ka",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

@@ -13,7 +13,12 @@
     "dev:web": "npm -w @ev8/web run dev",
     "migrate": "npm -w @ev8/api run migrate",
     "generate": "npm -w @ev8/api run generate",
-    "test": "npm -w @ev8/shared run test && npm -w @ev8/api run test",
-    "dev": "docker compose up"
+    "seed": "npm -w @ev8/api run seed",
+    "typecheck": "npm -w @ev8/shared run typecheck && npm -w @ev8/api run typecheck && npm -w @ev8/worker run typecheck && npm -w @ev8/web run typecheck",
+    "guard:i18n": "node scripts/i18n-guard.mjs",
+    "test": "node scripts/i18n-guard.mjs && npm -w @ev8/shared run test && npm -w @ev8/api run test",
+    "test:shared": "npm -w @ev8/shared run test",
+    "test:api": "npm -w @ev8/api run test",
+    "dev": "docker compose -f docker-compose.yml -f docker-compose.dev.yml up"
   }
 }
