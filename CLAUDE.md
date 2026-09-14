@@ -48,6 +48,22 @@ Georgian in every font stack (Be Vietnam Pro and Inter have no Georgian glyphs).
   (315.20 = 320, 325.05 = 330). Fee is a company expense, not customer debt.
 - Deposits (default 180 GEL) are a liability, not revenue.
 
+## Сессии и параллельная работа (протокол студии Self, ADR-0006…0010)
+- Ветки — GitFlow: `develop` — работа и default, `main` — релизы с тегом голого semver `X.Y.Z`;
+  `feature/<topic>` от develop, `hotfix/<topic>` от main. В develop/main напрямую не коммитить.
+- Старт: `git status`, `git log -3`. Чужие незакоммиченные правки не трогать, не откатывать.
+- Одна рабочая копия — один писатель: код — в worktree
+  `git -C <repo> worktree add ../_worktrees/ev8-ops-<topic> -b feature/<topic> develop`;
+  готово — merge в develop, `git worktree remove`, ветка удалена.
+- Правки адресные (Edit), никаких tar/rsync поверх рабочей копии; `push --force`, `reset --hard` — никогда.
+- Коммит и push по ходу: каждая законченная правка — коммит сразу и push тем же шагом; сессия не
+  заканчивается с незапушенным. Заголовок коммита — фраза-вердикт в стиле NYT.
+- Тяжёлые задачи под бюджет памяти (Mac 8 ГБ): одна тяжёлая задача на машину; `NODE_OPTIONS=--max-old-space-size=…`,
+  `--maxWorkers=2`/`--runInBand`, `nice -n 10`, явный таймаут; второй запуск, пока первый не завершился, запрещён.
+  Тяжёлое: `docker compose up`, Vite build, `tsc -p`, Prisma generate, Playwright, `npm ci`.
+- В репозитории только рабочее: ни личных данных клиентов, ни снимков Odoo, ни выписок, ни секретов.
+- Решения — в `docs/adr/`, формат Нюгарда, append-only. Практики — `docs/practices.md`, UX — `docs/design/ux.md`.
+
 ## Commit attribution
 End commit messages with `Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>`.
 
