@@ -1,6 +1,7 @@
 import { effectiveRate, landedCosts, todayISO } from '@ev8/shared';
 import type { FastifyInstance } from 'fastify';
 import { audit } from '../lib/audit.js';
+import { receivePartLine } from '../lib/stock.js';
 import { dateFromISO, isoDate } from '../lib/dates.js';
 import { prisma } from '../lib/db.js';
 import { env } from '../lib/env.js';
@@ -38,7 +39,14 @@ type Row = {
   extrasNote: string | null;
   notes: string | null;
   supplier: { id: string; name: string };
-  lines: { id: string; qty: number; unitPriceMinor: number; partName: string | null; model: { id: string; brand: string; name: string } | null }[];
+  lines: {
+    id: string;
+    qty: number;
+    unitPriceMinor: number;
+    partName: string | null;
+    partId: string | null;
+    model: { id: string; brand: string; name: string } | null;
+  }[];
   payments: { id: string; occurredOn: Date; grossTetri: number; channel: string; direction: string }[];
 };
 
@@ -76,6 +84,7 @@ function serialize(p: Row) {
         id: l.id,
         model: l.model ? { id: l.model.id, name: `${l.model.brand} ${l.model.name}` } : null,
         partName: l.partName,
+        partId: l.partId,
         qty: l.qty,
         unitPriceMinor: l.unitPriceMinor,
         lineMinor: l.qty * l.unitPriceMinor,
@@ -188,13 +197,21 @@ export function purchaseRoutes(app: FastifyInstance): void {
     if (!p) throw notFound('purchase_not_found', 'No such order.');
     if (p.status !== 'ordered') throw conflict('purchase_closed', 'An order that has arrived is a record; it is not edited.');
     const modelId = str(b, 'modelId');
-    const partName = str(b, 'partName', { max: 200 });
+    const partId = str(b, 'partId');
+    // A part line may point at the catalogue, and then it lands on the shelf
+    // when the shipment arrives. Its name is copied down all the same, so the
+    // order still reads as the order even if the catalogue is edited later.
+    const catalogue = partId ? await prisma.part.findUnique({ where: { id: partId }, select: { id: true, name: true } }) : null;
+    if (partId && !catalogue) throw notFound('part_not_found', 'No such part.');
+    const partName = catalogue?.name ?? str(b, 'partName', { max: 200 });
     if (!modelId === !partName) throw conflict('line_shape', 'A line is either a model or a part, not both and not neither.');
+    if (modelId && partId) throw conflict('line_shape', 'A line is either a model or a part, not both and not neither.');
     const line = await prisma.purchaseLine.create({
       data: {
         purchaseId: p.id,
         modelId,
         partName,
+        partId: catalogue?.id ?? null,
         qty: int(b, 'qty', { required: true, min: 1 })!,
         // The seller's own price, in their currency's minor unit.
         unitPriceMinor: tetri(b, 'unitPrice', { required: true, min: 0 })!,
@@ -296,6 +313,7 @@ export function purchaseRoutes(app: FastifyInstance): void {
     );
 
     let created = 0;
+    let receivedParts = 0;
     try {
       await prisma.$transaction(async (tx) => {
         for (const line of modelLines) {
@@ -319,6 +337,22 @@ export function purchaseRoutes(app: FastifyInstance): void {
           // The model's own cost is kept as the reference for the next batch.
           await tx.vehicleModel.update({ where: { id: line.model!.id }, data: { costTetri: cost.unitCostTetri, updatedAt: new Date() } });
         }
+        // Parts from the catalogue land on the shelf at what they cost to
+        // land, the same share of the shipment a moped gets.
+        for (const line of p.lines) {
+          if (!line.partId) continue;
+          const cost = costs.get(line.id)!;
+          await receivePartLine(tx, {
+            purchaseLineId: line.id,
+            partId: line.partId,
+            qty: line.qty,
+            unitCostTetri: cost.unitCostTetri,
+            occurredOn: receivedOn,
+            actorId: actor.id,
+            reason: p.number,
+          });
+          receivedParts += line.qty;
+        }
         await tx.purchase.update({ where: { id: p.id }, data: { status: 'received', receivedOn: dateFromISO(receivedOn)!, updatedAt: new Date() } });
         await tx.auditLog.create({
           data: {
@@ -326,7 +360,7 @@ export function purchaseRoutes(app: FastifyInstance): void {
             action: 'purchase.receive',
             entityType: 'purchase',
             entityId: p.id,
-            after: { receivedOn, vehicles: created, paidTetri, extrasTetri: p.extrasTetri },
+            after: { receivedOn, vehicles: created, parts: receivedParts, paidTetri, extrasTetri: p.extrasTetri },
           },
         });
       });
@@ -334,7 +368,7 @@ export function purchaseRoutes(app: FastifyInstance): void {
       if (isUniqueViolation(e)) throw conflict('duplicate_vin', 'One of those VINs is already in the fleet.');
       throw e;
     }
-    return { ok: true, vehicles: created };
+    return { ok: true, vehicles: created, parts: receivedParts };
   });
 
   app.post<{ Params: { id: string }; Body: Body }>('/api/purchases/:id/cancel', { config: { scope: 'settings.manage' } }, async (req) => {

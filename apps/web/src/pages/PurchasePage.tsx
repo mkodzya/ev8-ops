@@ -9,6 +9,7 @@ import { useT } from '../i18n/index.js';
 import { errorText, useLoad } from '../lib/use.js';
 import { useSession } from '../session.js';
 import { fmtForeign, type Purchase } from './PurchasesPage.js';
+import type { PartRow } from './StockPage.js';
 import type { VehicleState } from '@ev8/shared';
 
 interface Card {
@@ -23,8 +24,9 @@ export function PurchasePage() {
   const { can } = useSession();
   const { data, error, reload } = useLoad<Card>(id ? `/api/purchases/${id}` : null);
   const models = useLoad<{ models: { id: string; brand: string; name: string }[] }>(can('settings.manage') ? '/api/models' : null);
+  const parts = useLoad<{ parts: PartRow[] }>(can('settings.manage') ? '/api/parts' : null);
   const [err, setErr] = useState<string | null>(null);
-  const [line, setLine] = useState({ modelId: '', partName: '', qty: '1', price: '', asPart: false });
+  const [line, setLine] = useState({ modelId: '', partId: '', partName: '', qty: '1', price: '', asPart: false });
   const [pay, setPay] = useState({ open: false, amount: '', on: todayISO() });
   const [receiving, setReceiving] = useState(false);
   const [vins, setVins] = useState<Record<string, string>>({});
@@ -182,7 +184,15 @@ export function PurchasePage() {
               <tbody>
                 {p.lines.map((l) => (
                   <tr key={l.id}>
-                    <td>{l.model ? l.model.name : <span className="muted">{l.partName}</span>}</td>
+                    <td>
+                      {l.model ? (
+                        l.model.name
+                      ) : l.partId ? (
+                        <Link to={`/stock/parts/${l.partId}`}>{l.partName}</Link>
+                      ) : (
+                        <span className="muted">{l.partName}</span>
+                      )}
+                    </td>
                     <td className="num mono">{l.qty}</td>
                     <td className="num mono">{fmtForeign(l.unitPriceMinor, p.currency)}</td>
                     <td className="num mono">{fmtForeign(l.lineMinor, p.currency)}</td>
@@ -205,7 +215,25 @@ export function PurchasePage() {
         {mayEdit && (
           <div className="row-actions">
             {line.asPart ? (
-              <input className="input input-inline" placeholder={t.purchases.part} value={line.partName} onChange={(e) => setLine({ ...line, partName: e.target.value })} />
+              <>
+                {/* A line that names a part from the catalogue lands on the
+                    shelf when the shipment arrives; a typed one does not. */}
+                <select
+                  className="input input-inline"
+                  value={line.partId}
+                  onChange={(e) => setLine({ ...line, partId: e.target.value, partName: '' })}
+                >
+                  <option value="">{t.stock.freeText}</option>
+                  {(parts.data?.parts ?? []).map((pt) => (
+                    <option key={pt.id} value={pt.id}>
+                      {pt.name}
+                    </option>
+                  ))}
+                </select>
+                {!line.partId && (
+                  <input className="input input-inline" placeholder={t.purchases.part} value={line.partName} onChange={(e) => setLine({ ...line, partName: e.target.value })} />
+                )}
+              </>
             ) : (
               <select className="input input-inline" value={line.modelId} onChange={(e) => setLine({ ...line, modelId: e.target.value })}>
                 <option value="">{t.common.dash}</option>
@@ -225,15 +253,16 @@ export function PurchasePage() {
             <button
               type="button"
               className="pill pill-sm pill-accent"
-              disabled={busy || parseGel(line.price) == null || (line.asPart ? !line.partName.trim() : !line.modelId)}
+              disabled={busy || parseGel(line.price) == null || (line.asPart ? !line.partName.trim() && !line.partId : !line.modelId)}
               onClick={() => void act(async () => {
                 await api.post(`/api/purchases/${p.id}/lines`, {
                   modelId: line.asPart ? null : line.modelId,
-                  partName: line.asPart ? line.partName : null,
+                  partId: line.asPart && line.partId ? line.partId : null,
+                  partName: line.asPart && !line.partId ? line.partName : null,
                   qty: Number(line.qty) || 1,
                   unitPrice: parseGel(line.price),
                 });
-                setLine({ ...line, partName: '', qty: '1', price: '' });
+                setLine({ ...line, partName: '', partId: '', qty: '1', price: '' });
               })}
             >
               + {t.purchases.addLine}

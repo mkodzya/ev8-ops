@@ -14,7 +14,8 @@ export const PERMISSIONS = [
   'customer.documents.view', // ID and licence photos: director and owner only (CST-03)
   'cash.record', // take cash from a customer (PAY-05)
   'payments.reconcile', // statements, unmatched queue (PAY-01..03)
-  'service.manage', // repair jobs (SRV-01)
+  'service.manage', // repair jobs (SRV-01), and the parts catalogue
+  'stock.count', // correct a count by hand — a stock-take
   'sales.manage', // sales and buy-backs (SAL-01..03)
   'deposit.decide', // return / withhold on return (RNT-05)
   'deposit.confirm', // owner confirms withholding and third-party returns (RNT-05)
@@ -39,6 +40,7 @@ const DIRECTOR: Permission[] = [
   'customer.documents.view',
   'payments.reconcile',
   'service.manage',
+  'stock.count',
   'sales.manage',
   'deposit.decide',
   'reports.view',

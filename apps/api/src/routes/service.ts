@@ -5,7 +5,8 @@ import { hasPerm } from '../lib/auth.js';
 import { dateFromISO, isoDate } from '../lib/dates.js';
 import { prisma } from '../lib/db.js';
 import { env } from '../lib/env.js';
-import { conflict, notFound } from '../lib/errors.js';
+import { badRequest, conflict, notFound } from '../lib/errors.js';
+import { issueForServicePart, unissueForServicePart } from '../lib/stock.js';
 import { actorOf } from '../lib/guard.js';
 import { date, int, oneOf, str, tetri } from '../lib/validate.js';
 import { moveVehicle } from '../lib/vehicles.js';
@@ -185,19 +186,37 @@ export function serviceRoutes(app: FastifyInstance): void {
   app.post<{ Params: { id: string }; Body: Body }>('/api/service/:id/parts', { config: { scope: 'service.manage' } }, async (req, reply) => {
     const b = req.body ?? {};
     const actor = actorOf(req);
-    const job = await prisma.serviceJob.findUnique({ where: { id: req.params.id }, select: { id: true, status: true } });
+    const job = await prisma.serviceJob.findUnique({ where: { id: req.params.id }, select: { id: true, status: true, openedOn: true } });
     if (!job) throw notFound('job_not_found', 'No such repair job.');
     if (job.status !== 'open') throw conflict('job_closed', 'A closed job is a record; it is not edited.');
-    const part = await prisma.servicePart.create({
-      data: {
-        jobId: job.id,
-        name: str(b, 'name', { required: true, max: 200 })!,
-        qty: int(b, 'qty', { min: 1 }) ?? 1,
-        unitPriceTetri: tetri(b, 'unitPriceTetri', { required: true, min: 0 })!,
-      },
-      select: { id: true },
+
+    // A line may take the part off the shelf, or just name it. A repair on a
+    // part nobody keeps in stock is still a repair.
+    const catalogueId = str(b, 'partId');
+    const catalogue = catalogueId ? await prisma.part.findUnique({ where: { id: catalogueId } }) : null;
+    if (catalogueId && !catalogue) throw notFound('part_not_found', 'No such part.');
+    const name = catalogue?.name ?? str(b, 'name', { required: true, max: 200 })!;
+    const qty = int(b, 'qty', { min: 1 }) ?? 1;
+    const price = tetri(b, 'unitPriceTetri', { min: 0 }) ?? catalogue?.salePriceTetri ?? null;
+    if (price == null) throw badRequest('missing_field', 'unitPriceTetri is required', { field: 'unitPriceTetri' });
+
+    const part = await prisma.$transaction(async (tx) => {
+      const created = await tx.servicePart.create({
+        data: { jobId: job.id, name, qty, unitPriceTetri: price, partId: catalogue?.id ?? null },
+        select: { id: true },
+      });
+      if (catalogue) {
+        await issueForServicePart(tx, {
+          servicePartId: created.id,
+          partId: catalogue.id,
+          qty,
+          occurredOn: isoDate(job.openedOn)!,
+          actorId: actor.id,
+        });
+      }
+      return created;
     });
-    await audit({ actorId: actor.id, action: 'service.part.add', entityType: 'service_job', entityId: job.id, after: { partId: part.id, name: b.name } });
+    await audit({ actorId: actor.id, action: 'service.part.add', entityType: 'service_job', entityId: job.id, after: { partId: part.id, name, qty } });
     return reply.code(201).send(part);
   });
 
@@ -209,7 +228,11 @@ export function serviceRoutes(app: FastifyInstance): void {
       const part = await prisma.servicePart.findUnique({ where: { id: req.params.partId }, include: { job: { select: { id: true, status: true } } } });
       if (!part || part.job.id !== req.params.id) throw notFound('part_not_found', 'No such part on this job.');
       if (part.job.status !== 'open') throw conflict('job_closed', 'A closed job is a record; it is not edited.');
-      await prisma.servicePart.delete({ where: { id: part.id } });
+      // Taking the line off the job puts the parts back on the shelf.
+      await prisma.$transaction(async (tx) => {
+        await unissueForServicePart(tx, part.id);
+        await tx.servicePart.delete({ where: { id: part.id } });
+      });
       await audit({ actorId: actor.id, action: 'service.part.remove', entityType: 'service_job', entityId: part.job.id, before: { name: part.name, qty: part.qty } });
       return { ok: true };
     },

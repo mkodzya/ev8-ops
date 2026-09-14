@@ -202,6 +202,8 @@ model User {
   serviceJobs       ServiceJob[]
   sales             Sale[]
   purchases         Purchase[]
+  parts             Part[]
+  stockMoves        StockMove[]
 
   @@map("users")
 }
@@ -597,9 +599,12 @@ model ServicePart {
   name           String
   qty            Int      @default(1)
   unitPriceTetri Int      @map("unit_price_tetri")
+  partId         String?  @map("part_id") @db.Uuid
   createdAt      DateTime @default(now()) @map("created_at")
 
-  job ServiceJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  job   ServiceJob  @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  part  Part?       @relation(fields: [partId], references: [id])
+  moves StockMove[]
 
   @@map("service_parts")
 }
@@ -689,12 +694,69 @@ model PurchaseLine {
   partName       String?  @map("part_name")
   qty            Int
   unitPriceMinor Int      @map("unit_price_minor")
+  partId         String?  @map("part_id") @db.Uuid
   createdAt      DateTime @default(now()) @map("created_at")
 
   purchase Purchase      @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
   model    VehicleModel? @relation(fields: [modelId], references: [id])
+  part     Part?         @relation(fields: [partId], references: [id])
+  moves    StockMove[]
 
   @@map("purchase_lines")
+}
+
+/// A part the company keeps on the shelf. How many are there is never
+/// stored — it is the sum of `StockMove`.
+model Part {
+  id             String   @id @default(uuid()) @db.Uuid
+  sku            String?  @unique
+  name           String
+  nameKa         String?  @map("name_ka")
+  unit           String   @default("pcs")
+  minQty         Int      @default(0) @map("min_qty")
+  salePriceTetri Int?     @map("sale_price_tetri")
+  notes          String?
+  archived       Boolean  @default(false)
+  createdById    String?  @map("created_by") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @default(now()) @map("updated_at")
+
+  createdBy     User?          @relation(fields: [createdById], references: [id])
+  moves         StockMove[]
+  purchaseLines PurchaseLine[]
+  serviceParts  ServicePart[]
+
+  @@map("parts")
+}
+
+/// One movement on or off the shelf, signed. Nothing else changes a count.
+model StockMove {
+  id             String        @id @default(uuid()) @db.Uuid
+  partId         String        @map("part_id") @db.Uuid
+  kind           StockMoveKind
+  qty            Int
+  unitCostTetri  Int?          @map("unit_cost_tetri")
+  occurredOn     DateTime      @map("occurred_on") @db.Date
+  purchaseLineId String?       @map("purchase_line_id") @db.Uuid
+  servicePartId  String?       @map("service_part_id") @db.Uuid
+  reason         String?
+  createdById    String?       @map("created_by") @db.Uuid
+  createdAt      DateTime      @default(now()) @map("created_at")
+
+  part         Part          @relation(fields: [partId], references: [id])
+  purchaseLine PurchaseLine? @relation(fields: [purchaseLineId], references: [id])
+  servicePart  ServicePart?  @relation(fields: [servicePartId], references: [id])
+  createdBy    User?         @relation(fields: [createdById], references: [id])
+
+  @@map("stock_moves")
+}
+
+enum StockMoveKind {
+  receipt
+  issue
+  adjust
+
+  @@map("stock_move_kind")
 }
 
 model AuditLog {

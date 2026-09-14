@@ -349,7 +349,52 @@ async function seedDemo(ownerId: string): Promise<void> {
   }
   await prisma.purchase.update({ where: { id: order.id }, data: { status: 'received', receivedOn: d('2025-03-14') } });
 
-  console.log('seed: DEMO dataset added — 3 models, 10 mopeds, 6 customers, 6 rentals, 2 repairs, 2 sales, 1 shipment. Every row is marked DEMO.');
+  // A shelf with a few parts on it, so the warehouse screen has the shape:
+  // something received, something used on a repair, and one part below the
+  // level somebody set.
+  const shelf = [
+    { name: 'DEMO Тормозные колодки', nameKa: 'DEMO სამუხრუჭე ხუნდები', sku: 'DEMO-BRK-01', minQty: 10, salePriceTetri: 4500, received: 24, unitCostTetri: 1850 },
+    { name: 'DEMO Камера 10"', nameKa: 'DEMO კამერა 10"', sku: 'DEMO-TUB-10', minQty: 8, salePriceTetri: 3500, received: 30, unitCostTetri: 1200 },
+    { name: 'DEMO Зарядное устройство 60V', nameKa: 'DEMO დამტენი 60V', sku: 'DEMO-CHG-60', minQty: 4, salePriceTetri: 28000, received: 6, unitCostTetri: 19500 },
+    { name: 'DEMO Зеркало левое', nameKa: 'DEMO მარცხენა სარკე', sku: 'DEMO-MIR-L', minQty: 6, salePriceTetri: 2500, received: 3, unitCostTetri: 900 },
+  ];
+  for (const item of shelf) {
+    const created = await prisma.part.create({
+      data: {
+        name: item.name,
+        nameKa: item.nameKa,
+        sku: item.sku,
+        minQty: item.minQty,
+        salePriceTetri: item.salePriceTetri,
+        notes: DEMO_NOTE,
+        createdById: ownerId,
+      },
+    });
+    await prisma.stockMove.create({
+      data: {
+        partId: created.id,
+        kind: 'receipt',
+        qty: item.received,
+        unitCostTetri: item.unitCostTetri,
+        occurredOn: d('2025-03-14'),
+        reason: DEMO_NOTE,
+        createdById: ownerId,
+      },
+    });
+  }
+  // The two demo repairs took pads and a tube off the shelf.
+  const pads = await prisma.part.findFirstOrThrow({ where: { sku: 'DEMO-BRK-01' } });
+  const tube = await prisma.part.findFirstOrThrow({ where: { sku: 'DEMO-TUB-10' } });
+  for (const [part, qty, on] of [
+    [pads, 2, '2026-08-20'],
+    [tube, 1, '2026-09-02'],
+  ] as const) {
+    await prisma.stockMove.create({
+      data: { partId: part.id, kind: 'issue', qty: -qty, occurredOn: d(on), reason: DEMO_NOTE, createdById: ownerId },
+    });
+  }
+
+  console.log('seed: DEMO dataset added — 3 models, 10 mopeds, 6 customers, 6 rentals, 2 repairs, 2 sales, 1 shipment, 4 parts on the shelf. Every row is marked DEMO.');
 }
 
 async function main(): Promise<void> {

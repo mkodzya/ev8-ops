@@ -2,6 +2,8 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { LoginPage } from './LoginPage.js';
 import { Shell } from './Shell.js';
 import { EconomicsPage } from './pages/EconomicsPage.js';
+import { PartPage } from './pages/PartPage.js';
+import { StockPage } from './pages/StockPage.js';
 import { CustomerForm } from './pages/CustomerForm.js';
 import { CustomerPage } from './pages/CustomerPage.js';
 import { CustomersPage } from './pages/CustomersPage.js';
@@ -87,6 +89,8 @@ export function App() {
         <Route path="service/:id" element={<ServiceJobPage />} />
         <Route path="payments" element={<PaymentsPage />} />
         <Route path="statements" element={<RequireReconcile><StatementsPage /></RequireReconcile>} />
+        <Route path="stock" element={<StockPage />} />
+        <Route path="stock/parts/:id" element={<PartPage />} />
         <Route path="economics" element={<RequireReports><EconomicsPage /></RequireReports>} />
         <Route path="customers" element={<CustomersPage />} />
         <Route path="customers/new" element={<CustomerForm />} />

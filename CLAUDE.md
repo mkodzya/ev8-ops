@@ -50,3 +50,9 @@ Georgian in every font stack (Be Vietnam Pro and Inter have no Georgian glyphs).
 
 ## Commit attribution
 End commit messages with `Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>`.
+
+## Расширения сверх ТЗ
+
+- **Склад запчастей** (14.09.2026). В ТЗ §2 «Складской учёт запчастей и
+  зарядных по остаткам» вынесен за границы v1. Сделан по прямой просьбе
+  Мики. Если ТЗ будет обновляться — это место расходится с ним осознанно.

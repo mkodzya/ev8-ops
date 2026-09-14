@@ -40,6 +40,7 @@ export function Shell() {
     { to: '/sales', label: t.nav.sales },
     ...(can('settings.manage') ? [{ to: '/purchases', label: t.nav.purchases }] : []),
     { to: '/service', label: t.nav.service },
+    { to: '/stock', label: t.stock.nav },
     { to: '/payments', label: t.nav.payments },
     ...(can('payments.reconcile') ? [{ to: '/statements', label: t.nav.statements }] : []),
     ...(can('reports.view') ? [{ to: '/economics', label: t.economics.nav }] : []),

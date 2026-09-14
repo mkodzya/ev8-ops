@@ -372,3 +372,7 @@ h2.sub { font-size: 14px; margin: 18px 0 8px; }
   .queue-amount { min-width: 0; text-align: left; }
   .queue-text { white-space: normal; flex: 1 1 100%; }
 }
+
+/* The summing line of a table: the same row, read as a total. */
+.row-total td { border-top: 2px solid var(--line); font-weight: 600; color: var(--ink); }
+.row-total td:first-child { color: var(--muted); font-weight: 500; }

@@ -10,6 +10,7 @@ import { useT } from '../i18n/index.js';
 import { uploadAll, type PreparedPhoto } from '../lib/photos.js';
 import { errorText, useLoad } from '../lib/use.js';
 import { useSession } from '../session.js';
+import type { PartRow } from './StockPage.js';
 import type { ServiceJob } from './ServicePage.js';
 
 /** One repair: what it cost, what was photographed, and how it was settled. */
@@ -20,7 +21,8 @@ export function ServiceJobPage() {
   const { can } = useSession();
   const { data, error, reload } = useLoad<{ job: ServiceJob }>(id ? `/api/service/${id}` : null);
   const [err, setErr] = useState<string | null>(null);
-  const [part, setPart] = useState({ name: '', qty: '1', price: '' });
+  const [part, setPart] = useState({ partId: '', name: '', qty: '1', price: '' });
+  const parts = useLoad<{ parts: PartRow[] }>(can('service.manage') ? '/api/parts' : null);
   const [photos, setPhotos] = useState<PreparedPhoto[]>([]);
   const [closing, setClosing] = useState(false);
   const [closedOn, setClosedOn] = useState(todayISO());
@@ -205,16 +207,46 @@ export function ServiceJobPage() {
         )}
         {mayEdit && (
           <div className="row-actions">
-            <input className="input input-inline" placeholder={t.service.part} value={part.name} onChange={(e) => setPart({ ...part, name: e.target.value })} />
+            {/* Picked off the shelf, or just named: a repair on a part
+                nobody stocks is still a repair. */}
+            <select
+              className="input input-inline"
+              value={part.partId}
+              onChange={(e) => {
+                const picked = (parts.data?.parts ?? []).find((x) => x.id === e.target.value);
+                setPart({
+                  ...part,
+                  partId: e.target.value,
+                  name: '',
+                  // The catalogue's usual charge, ready to be overtyped.
+                  price: picked?.salePriceTetri != null ? (picked.salePriceTetri / 100).toFixed(2) : part.price,
+                });
+              }}
+            >
+              <option value="">{t.stock.freeText}</option>
+              {(parts.data?.parts ?? []).map((pt) => (
+                <option key={pt.id} value={pt.id}>
+                  {pt.name} · {pt.onHand} {t.stock.units[pt.unit]}
+                </option>
+              ))}
+            </select>
+            {!part.partId && (
+              <input className="input input-inline" placeholder={t.service.part} value={part.name} onChange={(e) => setPart({ ...part, name: e.target.value })} />
+            )}
             <input className="input input-amount mono" placeholder={t.service.qty} value={part.qty} onChange={(e) => setPart({ ...part, qty: e.target.value })} inputMode="numeric" />
             <input className="input input-amount mono" placeholder={t.service.unitPrice} value={part.price} onChange={(e) => setPart({ ...part, price: e.target.value })} inputMode="decimal" />
             <button
               type="button"
               className="pill pill-sm pill-accent"
-              disabled={busy || !part.name.trim() || parseGel(part.price) == null}
+              disabled={busy || (!part.name.trim() && !part.partId) || parseGel(part.price) == null}
               onClick={() => void act(async () => {
-                await api.post(`/api/service/${j.id}/parts`, { name: part.name, qty: Number(part.qty) || 1, unitPriceTetri: parseGel(part.price) });
-                setPart({ name: '', qty: '1', price: '' });
+                await api.post(`/api/service/${j.id}/parts`, {
+                  partId: part.partId || null,
+                  name: part.partId ? null : part.name,
+                  qty: Number(part.qty) || 1,
+                  unitPriceTetri: parseGel(part.price),
+                });
+                setPart({ partId: '', name: '', qty: '1', price: '' });
               })}
             >
               + {t.service.addPart}

@@ -32,6 +32,7 @@ export interface Purchase {
     id: string;
     model: { id: string; name: string } | null;
     partName: string | null;
+    partId: string | null;
     qty: number;
     unitPriceMinor: number;
     lineMinor: number;
