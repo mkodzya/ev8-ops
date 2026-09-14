@@ -444,3 +444,61 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
   .d-tokens li .d-value, .d-tokens li .d-note { grid-column: 2; }
   .d-type { grid-template-columns: 1fr; }
 }
+
+/* ---- Today: the work first, the counts after (U1, U2) ---------------- */
+.tasks-wrap { margin-bottom: 18px; }
+.tasks { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.task {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 14px;
+  min-height: var(--control);
+  padding: 12px 16px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--accent);
+  border-radius: var(--radius-card);
+}
+.task-crit { border-left-color: var(--crit); background: var(--crit-soft); }
+.task-warn { border-left-color: var(--service); background: var(--warn-soft); }
+.task-num { font: var(--text-display); font-variant-numeric: tabular-nums; min-width: 1.2em; text-align: right; }
+.task-crit .task-num { color: var(--crit); }
+.task-warn .task-num { color: var(--service-ink); }
+.task-lbl { font: var(--text-h3); }
+.task-go { white-space: nowrap; }
+.task-clear { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin-bottom: 0; }
+.task-clear p { margin: 0; }
+
+/* The counts, once the work above has had its say. */
+.tiles-quiet { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+.tiles-quiet .tile { padding: 12px 14px; }
+.tiles-quiet .tile-num { font: var(--text-h1); font-variant-numeric: tabular-nums; }
+
+/* Overdue: days before money, because days are what a call is about. */
+.od-list { list-style: none; margin: 0; padding: 0; }
+.od-list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-top: 1px solid var(--line-soft);
+}
+.od-list li:first-child { border-top: 0; }
+.od-who { display: flex; flex-direction: column; min-width: 0; }
+.od-name { font: var(--text-body); color: var(--ink); overflow-wrap: anywhere; }
+.od-num { font-size: inherit; }
+.od-days { font: var(--text-h3); white-space: nowrap; }
+.od-debt { white-space: nowrap; }
+.od-acts { display: flex; gap: 8px; }
+
+@media (max-width: 719px) {
+  /* One thumb: the number and the label on one line, the action under them
+     at full width, so the target is the whole row rather than a corner. */
+  .task { grid-template-columns: auto 1fr; row-gap: 10px; }
+  .task-go { grid-column: 1 / -1; justify-content: center; min-height: var(--control); }
+  .od-list li { grid-template-columns: 1fr auto; }
+  .od-acts { grid-column: 1 / -1; }
+  .od-acts .pill { flex: 1; justify-content: center; }
+}
