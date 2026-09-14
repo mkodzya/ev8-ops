@@ -10,7 +10,7 @@
 // session secret — which is every server stand.
 //
 // OWNER_EMAIL / OWNER_NAME / OWNER_PASSWORD come from the environment.
-import { DEFAULT_DEPOSIT_TETRI, addDays, periodsThrough, todayISO } from '@ev8/shared';
+import { DEFAULT_DEPOSIT_TETRI, addDays, instalmentSchedule, periodsThrough, todayISO } from '@ev8/shared';
 import { recordPayment } from './lib/payments.js';
 import { hashPassword } from './lib/auth.js';
 import { dateFromISO } from './lib/dates.js';
@@ -210,10 +210,81 @@ async function seedDemo(ownerId: string): Promise<void> {
     });
     await prisma.vehicle.update({ where: { id: r.vehicle.id }, data: { state: 'service' } });
   }
-  await prisma.vehicleEvent.create({ data: { vehicleId: vehicles[9].id, kind: 'sold', occurredOn: d(addDays(today, -60)), fromState: 'available', toState: 'sold', actorId: ownerId } });
-  await prisma.vehicle.update({ where: { id: vehicles[9].id }, data: { state: 'sold' } });
+  for (const [v, when] of [
+    [vehicles[9], addDays(today, -60)],
+    [vehicles[8], addDays(today, -200)],
+  ] as const) {
+    await prisma.vehicleEvent.create({
+      data: { vehicleId: v.id, kind: 'sold', occurredOn: d(when), fromState: 'available', toState: 'sold', actorId: ownerId },
+    });
+  }
 
-  console.log('seed: DEMO dataset added — 3 models, 10 mopeds, 6 customers, 6 rentals, 2 repairs. Every row is marked DEMO.');
+  // Two sales: one settled on the day, one on a schedule that has fallen
+  // behind — the shape the company actually has on its books.
+  const outright = await prisma.sale.create({
+    data: {
+      customerId: customers[4],
+      vehicleId: vehicles[9].id,
+      soldOn: d(addDays(today, -60)),
+      priceTetri: 320600,
+      extras: 'DEMO: вторая батарея',
+      warrantyUntil: d(addDays(today, 305)),
+      notes: DEMO_NOTE,
+      createdById: ownerId,
+    },
+  });
+  await prisma.saleInstalment.create({
+    data: { saleId: outright.id, seq: 1, dueOn: d(addDays(today, -60)), amountTetri: 320600 },
+  });
+  await recordPayment({
+    actorId: ownerId,
+    occurredOn: addDays(today, -60),
+    channel: 'transfer',
+    grossTetri: 320600,
+    feeTetri: 0,
+    customerId: customers[4],
+    rentalId: null,
+    saleId: outright.id,
+    bankText: 'DEMO transfer',
+    note: DEMO_NOTE,
+    source: 'manual',
+  });
+
+  const onPlan = await prisma.sale.create({
+    data: {
+      customerId: customers[5],
+      vehicleId: vehicles[8].id,
+      soldOn: d(addDays(today, -200)),
+      priceTetri: 360000,
+      warrantyUntil: d(addDays(today, 165)),
+      notes: DEMO_NOTE,
+      createdById: ownerId,
+    },
+  });
+  for (const line of instalmentSchedule({ soldOn: addDays(today, -200), priceTetri: 360000, downPaymentTetri: 90000, months: 9 })) {
+    await prisma.saleInstalment.create({
+      data: { saleId: onPlan.id, seq: line.seq, dueOn: d(line.dueOn), amountTetri: line.amountTetri },
+    });
+  }
+  // Only the down payment ever arrived, so the rest shows as behind.
+  await recordPayment({
+    actorId: ownerId,
+    occurredOn: addDays(today, -200),
+    channel: 'transfer',
+    grossTetri: 90000,
+    feeTetri: 0,
+    customerId: customers[5],
+    rentalId: null,
+    saleId: onPlan.id,
+    bankText: 'DEMO transfer',
+    note: DEMO_NOTE,
+    source: 'manual',
+  });
+  for (const v of [vehicles[8], vehicles[9]]) {
+    await prisma.vehicle.update({ where: { id: v.id }, data: { state: 'sold' } });
+  }
+
+  console.log('seed: DEMO dataset added — 3 models, 10 mopeds, 6 customers, 6 rentals, 2 repairs, 2 sales. Every row is marked DEMO.');
 }
 
 async function main(): Promise<void> {

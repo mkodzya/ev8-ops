@@ -14,6 +14,7 @@ interface Summary {
   customers: number;
   unmatchedLines: number;
   openServiceJobs: number;
+  salesOverdueTetri: number;
   deposits: { held: number; heldTetri: number };
   pickedUpToday: { id: string; number: string; customer: string }[];
   dueBackToday: { id: string; number: string; customer: string }[];
@@ -55,6 +56,12 @@ export function TodayPage() {
           <Link to="/statements" className={`tile ${s.unmatchedLines > 0 ? 'tile-warn' : ''}`}>
             <span className="tile-num">{s.unmatchedLines}</span>
             <span className="tile-lbl">{t.today.unmatched}</span>
+          </Link>
+        )}
+        {s.salesOverdueTetri > 0 && (
+          <Link to="/sales" className="tile tile-crit">
+            <span className="tile-num mono">{formatGel(s.salesOverdueTetri, { decimals: false })}</span>
+            <span className="tile-lbl">{t.today.salesOverdue}</span>
           </Link>
         )}
         <Link to="/service" className={`tile ${s.openServiceJobs > 0 ? 'tile-warn' : ''}`}>

@@ -11,7 +11,7 @@ export function summaryRoutes(app: FastifyInstance): void {
   app.get('/api/summary', { config: { scope: 'session' } }, async () => {
     const today = todayISO(new Date(), env.TZ);
     const day = dateFromISO(today)!;
-    const [vehicles, rentals, customers, depositsHeld, pickedUpToday, unmatchedLines, openServiceJobs, dueBackToday] = await Promise.all([
+    const [vehicles, rentals, customers, depositsHeld, pickedUpToday, unmatchedLines, openServiceJobs, overdueInstalments, dueBackToday] = await Promise.all([
       prisma.vehicle.groupBy({ by: ['state'], where: { archived: false }, _count: { _all: true } }),
       prisma.rental.findMany({
         where: { status: { in: ['active', 'overdue'] } },
@@ -26,6 +26,10 @@ export function summaryRoutes(app: FastifyInstance): void {
       }),
       prisma.statementLine.count({ where: { status: 'unmatched' } }),
       prisma.serviceJob.count({ where: { status: 'open' } }),
+      prisma.saleInstalment.findMany({
+        where: { dueOn: { lt: day }, payStatus: { not: 'paid' }, sale: { status: { not: 'cancelled' } } },
+        select: { amountTetri: true, paidTetri: true },
+      }),
       prisma.rental.findMany({
         where: { expectedReturnOn: day, returnedOn: null },
         select: { id: true, number: true, customer: { select: { name: true } } },
@@ -52,6 +56,8 @@ export function summaryRoutes(app: FastifyInstance): void {
       // What today asks a person to do, not only what it counts (DSH-01).
       unmatchedLines,
       openServiceJobs,
+      // Sales behind their schedule (SAL-02), in money rather than in rows.
+      salesOverdueTetri: overdueInstalments.reduce((n, i) => n + (i.amountTetri - i.paidTetri), 0),
       pickedUpToday: pickedUpToday.map((r) => ({ id: r.id, number: r.number, customer: r.customer.name })),
       dueBackToday: dueBackToday.map((r) => ({ id: r.id, number: r.number, customer: r.customer.name })),
     };

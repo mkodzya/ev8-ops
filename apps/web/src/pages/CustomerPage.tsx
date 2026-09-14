@@ -141,6 +141,10 @@ export function CustomerPage() {
           {err && <div className="hint hint-bad">{err}</div>}
         </section>
         <section className="card">
+          <h2>{t.sales.title}</h2>
+          <CustomerSales customerId={c.id} />
+        </section>
+        <section className="card">
           <h2>{t.customer.rentals}</h2>
           {data.rentals.length === 0 ? (
             <Empty text={t.customer.noRentals} />
@@ -162,5 +166,39 @@ export function CustomerPage() {
         </section>
       </div>
     </>
+  );
+}
+
+
+/** The sales this customer has, with what is still owed on each. */
+function CustomerSales({ customerId }: { customerId: string }) {
+  const t = useT();
+  const { data } = useLoad<{ sales: { id: string; number: string; soldOn: string; customer: { id: string }; priceTetri: number; outstandingTetri: number; overdueTetri: number; status: 'active' | 'cancelled' | 'bought_back' }[] }>(
+    '/api/sales',
+  );
+  if (!data) return <Loading />;
+  const mine = data.sales.filter((s) => s.customer.id === customerId);
+  if (mine.length === 0) return <Empty text={t.sales.none} />;
+  return (
+    <ul className="timeline">
+      {mine.map((s) => (
+        <li key={s.id}>
+          <span className="mono muted">{fmtDate(s.soldOn)}</span>
+          <span>
+            <Link to={`/sales/${s.id}`} className="mono">
+              {s.number}
+            </Link>{' '}
+            <span className="muted">{t.sales.statuses[s.status]}</span>
+            <span className="muted"> · {formatGel(s.priceTetri, { decimals: false })}</span>
+            {s.outstandingTetri > 0 && (
+              <span className={s.overdueTetri > 0 ? 'crit-text' : 'muted'}>
+                {' '}
+                · {t.sales.outstanding} {formatGel(s.outstandingTetri, { decimals: false })}
+              </span>
+            )}
+          </span>
+        </li>
+      ))}
+    </ul>
   );
 }

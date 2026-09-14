@@ -122,12 +122,17 @@ export function paymentRoutes(app: FastifyInstance): void {
         deposit: { select: { amountTetri: true, paidTetri: true, status: true } },
       },
     });
+    const sales = await prisma.sale.findMany({
+      where: { customerId: req.params.id, status: { not: 'cancelled' } },
+      select: { instalments: { select: { amountTetri: true, paidTetri: true } } },
+    });
     const paid = await prisma.payment.aggregate({
       where: { customerId: req.params.id, voidedAt: null, direction: 'in' },
       _sum: { grossTetri: true },
     });
     const balance = customerBalance({
       periods: rentals.flatMap((r) => r.periods),
+      instalments: sales.flatMap((s) => s.instalments),
       deposits: rentals.flatMap((r) => (r.deposit ? [{ ...r.deposit, held: r.deposit.status === 'held' }] : [])),
       paidTetri: paid._sum.grossTetri ?? 0,
     });

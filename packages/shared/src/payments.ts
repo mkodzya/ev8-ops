@@ -21,9 +21,36 @@ export interface OpenDeposit {
 }
 
 export interface Allocation {
-  target: 'period' | 'deposit';
+  target: 'period' | 'deposit' | 'instalment';
   id: string;
   amountTetri: Tetri;
+}
+
+/** Anything owed in a sequence: a weekly period, a monthly instalment. */
+export interface Owed {
+  id: string;
+  seq: number;
+  amountTetri: Tetri;
+  paidTetri: Tetri;
+}
+
+/**
+ * Put `amountTetri` on what is owed, oldest first, and say what is left.
+ * The order is the rule: a debt is paid off in the order it was incurred.
+ */
+export function spreadOverOwed(amountTetri: Tetri, owed: Owed[], target: 'period' | 'instalment'): Spread {
+  const allocations: Allocation[] = [];
+  let left = amountTetri;
+  for (const o of [...owed].sort((a, b) => a.seq - b.seq)) {
+    if (left <= 0) break;
+    const due = Math.max(0, o.amountTetri - o.paidTetri);
+    const take = Math.min(due, left);
+    if (take > 0) {
+      allocations.push({ target, id: o.id, amountTetri: take });
+      left -= take;
+    }
+  }
+  return { allocations, leftoverTetri: left };
 }
 
 export interface Spread {
@@ -56,22 +83,15 @@ export function spreadPayment(
     }
   }
 
-  for (const p of [...periods].sort((a, b) => a.seq - b.seq)) {
-    if (left <= 0) break;
-    const owed = Math.max(0, p.amountTetri - p.paidTetri);
-    const take = Math.min(owed, left);
-    if (take > 0) {
-      allocations.push({ target: 'period', id: p.id, amountTetri: take });
-      left -= take;
-    }
-  }
-
-  return { allocations, leftoverTetri: left };
+  const rest = spreadOverOwed(left, periods, 'period');
+  return { allocations: [...allocations, ...rest.allocations], leftoverTetri: rest.leftoverTetri };
 }
 
 export interface BalanceInput {
   /** Every period of every rental of this customer. */
   periods: { amountTetri: Tetri; paidTetri: Tetri }[];
+  /** Every instalment of every sale to this customer. */
+  instalments?: { amountTetri: Tetri; paidTetri: Tetri }[];
   /** Deposits of rentals that are still open. */
   deposits: { amountTetri: Tetri; paidTetri: Tetri; held: boolean }[];
   /** Gross of every payment that is not voided. */
@@ -92,8 +112,9 @@ export interface Balance {
 
 export function customerBalance(input: BalanceInput): Balance {
   const periodsTotal = input.periods.reduce((n, p) => n + p.amountTetri, 0);
+  const instalmentsTotal = (input.instalments ?? []).reduce((n, i) => n + i.amountTetri, 0);
   const depositsTotal = input.deposits.reduce((n, d) => n + d.amountTetri, 0);
-  const invoiced = periodsTotal + depositsTotal;
+  const invoiced = periodsTotal + instalmentsTotal + depositsTotal;
   const diff = invoiced - input.paidTetri;
   return {
     invoicedTetri: invoiced,
@@ -102,4 +123,41 @@ export function customerBalance(input: BalanceInput): Balance {
     creditTetri: Math.max(0, -diff),
     depositHeldTetri: input.deposits.filter((d) => d.held).reduce((n, d) => n + d.paidTetri, 0),
   };
+}
+
+/**
+ * A schedule for a sale (SAL-02): a deposit today, then `months` equal
+ * instalments on the same day of each following month.
+ *
+ * The rounding goes on the first instalment rather than the last, so the
+ * figure a customer is told at the counter is the one they pay every month
+ * after the first. A month that is too short takes its last day: a sale on
+ * the 31st instals on the 30th, and on the 28th in February.
+ */
+export function instalmentSchedule(input: {
+  soldOn: string;
+  priceTetri: Tetri;
+  downPaymentTetri: Tetri;
+  months: number;
+}): { seq: number; dueOn: string; amountTetri: Tetri }[] {
+  const { soldOn, priceTetri, downPaymentTetri, months } = input;
+  if (downPaymentTetri > priceTetri) throw new Error('the down payment is more than the price');
+  const out: { seq: number; dueOn: string; amountTetri: Tetri }[] = [];
+  let seq = 1;
+  if (downPaymentTetri > 0 || months === 0) {
+    out.push({ seq: seq++, dueOn: soldOn, amountTetri: downPaymentTetri > 0 ? downPaymentTetri : priceTetri });
+  }
+  const rest = priceTetri - (downPaymentTetri > 0 ? downPaymentTetri : months === 0 ? priceTetri : 0);
+  if (months > 0 && rest > 0) {
+    const each = Math.floor(rest / months);
+    const first = rest - each * (months - 1);
+    const [y, m, d] = soldOn.split('-').map(Number);
+    for (let i = 1; i <= months; i++) {
+      const target = new Date(Date.UTC(y, m - 1 + i, 1));
+      const lastDay = new Date(Date.UTC(target.getUTCFullYear(), target.getUTCMonth() + 1, 0)).getUTCDate();
+      target.setUTCDate(Math.min(d, lastDay));
+      out.push({ seq: seq++, dueOn: target.toISOString().slice(0, 10), amountTetri: i === 1 ? first : each });
+    }
+  }
+  return out;
 }

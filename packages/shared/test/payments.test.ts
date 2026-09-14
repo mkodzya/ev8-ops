@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { acquiringNet, customerBalance, spreadPayment } from '../src/index.js';
+import { acquiringNet, customerBalance, instalmentSchedule, spreadOverOwed, spreadPayment } from '../src/index.js';
 
 const period = (seq: number, amountTetri: number, paidTetri = 0) => ({ id: `p${seq}`, seq, amountTetri, paidTetri });
 
@@ -85,5 +85,56 @@ describe('customer balance (PAY-06)', () => {
       paidTetri: 18000,
     });
     expect(b.depositHeldTetri).toBe(0);
+  });
+});
+
+describe('a sale’s schedule (SAL-02)', () => {
+  it('builds the real one: 900 down and nine of 300', () => {
+    // Vaja Jafaridze's sale, as the company wrote it: 3 600 in all.
+    const plan = instalmentSchedule({ soldOn: '2025-05-27', priceTetri: 360000, downPaymentTetri: 90000, months: 9 });
+    expect(plan).toHaveLength(10);
+    expect(plan[0]).toEqual({ seq: 1, dueOn: '2025-05-27', amountTetri: 90000 });
+    expect(plan.slice(1).every((p) => p.amountTetri === 30000)).toBe(true);
+    expect(plan[1].dueOn).toBe('2025-06-27');
+    expect(plan[9].dueOn).toBe('2026-02-27');
+    expect(plan.reduce((n, p) => n + p.amountTetri, 0)).toBe(360000);
+  });
+
+  it('paid in one go is one instalment, due the day of the sale', () => {
+    const plan = instalmentSchedule({ soldOn: '2026-05-19', priceTetri: 285650, downPaymentTetri: 0, months: 0 });
+    expect(plan).toEqual([{ seq: 1, dueOn: '2026-05-19', amountTetri: 285650 }]);
+  });
+
+  it('puts the rounding on the first instalment, so every later one is the round figure', () => {
+    const plan = instalmentSchedule({ soldOn: '2026-01-10', priceTetri: 100000, downPaymentTetri: 0, months: 3 });
+    expect(plan.map((p) => p.amountTetri)).toEqual([33334, 33333, 33333]);
+    expect(plan.reduce((n, p) => n + p.amountTetri, 0)).toBe(100000);
+  });
+
+  it('a month too short takes its last day', () => {
+    const plan = instalmentSchedule({ soldOn: '2026-01-31', priceTetri: 60000, downPaymentTetri: 0, months: 2 });
+    expect(plan.map((p) => p.dueOn)).toEqual(['2026-02-28', '2026-03-31']);
+  });
+
+  it('refuses a down payment larger than the price', () => {
+    expect(() => instalmentSchedule({ soldOn: '2026-01-01', priceTetri: 1000, downPaymentTetri: 2000, months: 3 })).toThrow();
+  });
+});
+
+describe('spreading over instalments', () => {
+  const inst = (seq: number, amountTetri: number, paidTetri = 0) => ({ id: `i${seq}`, seq, amountTetri, paidTetri });
+
+  it('pays the oldest first and leaves the rest', () => {
+    const { allocations, leftoverTetri } = spreadOverOwed(50000, [inst(1, 30000), inst(2, 30000)], 'instalment');
+    expect(allocations).toEqual([
+      { target: 'instalment', id: 'i1', amountTetri: 30000 },
+      { target: 'instalment', id: 'i2', amountTetri: 20000 },
+    ]);
+    expect(leftoverTetri).toBe(0);
+  });
+
+  it('skips what is settled', () => {
+    const { allocations } = spreadOverOwed(10000, [inst(1, 30000, 30000), inst(2, 30000)], 'instalment');
+    expect(allocations).toEqual([{ target: 'instalment', id: 'i2', amountTetri: 10000 }]);
   });
 });

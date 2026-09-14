@@ -37,6 +37,7 @@ export function Shell() {
     { to: '/', label: t.nav.today, end: true },
     { to: '/fleet', label: t.nav.fleet },
     { to: '/rentals', label: t.nav.rentals },
+    { to: '/sales', label: t.nav.sales },
     { to: '/service', label: t.nav.service },
     { to: '/payments', label: t.nav.payments },
     ...(can('payments.reconcile') ? [{ to: '/statements', label: t.nav.statements }] : []),

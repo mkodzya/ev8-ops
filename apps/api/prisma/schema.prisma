@@ -116,8 +116,17 @@ enum PaymentSource {
 enum AllocationTarget {
   period
   deposit
+  instalment
 
   @@map("allocation_target")
+}
+
+enum SaleStatus {
+  active
+  cancelled
+  bought_back
+
+  @@map("sale_status")
 }
 
 enum BankName {
@@ -183,6 +192,7 @@ model User {
   paymentsVoided    Payment[]     @relation("payment_voided_by")
   statements        Statement[]
   serviceJobs       ServiceJob[]
+  sales             Sale[]
 
   @@map("users")
 }
@@ -241,6 +251,7 @@ model Vehicle {
   updatedAt       DateTime     @default(now()) @map("updated_at")
 
   serviceJobs   ServiceJob[]
+  sales         Sale[]
   model         VehicleModel   @relation(fields: [modelId], references: [id])
   currentRental Rental?        @relation("vehicle_current_rental", fields: [currentRentalId], references: [id])
   rentals       Rental[]       @relation("rental_vehicle")
@@ -270,6 +281,7 @@ model Customer {
   documents   StoredFile[]
   payments    Payment[]
   serviceJobs ServiceJob[]
+  sales       Sale[]
 
   @@map("customers")
 }
@@ -439,6 +451,7 @@ model Payment {
   netTetri      Int              @map("net_tetri")
   customerId    String?          @map("customer_id") @db.Uuid
   rentalId      String?          @map("rental_id") @db.Uuid
+  saleId        String?          @map("sale_id") @db.Uuid
   bankText      String?          @map("bank_text")
   source        PaymentSource    @default(manual)
   note          String?
@@ -453,6 +466,7 @@ model Payment {
   statementLine StatementLine?    @relation("payment_of_line", fields: [statementLineId], references: [id], onDelete: SetNull)
   customer    Customer?           @relation(fields: [customerId], references: [id])
   rental      Rental?             @relation(fields: [rentalId], references: [id])
+  sale        Sale?               @relation(fields: [saleId], references: [id])
   createdBy   User?               @relation("payment_created_by", fields: [createdById], references: [id])
   voidedBy    User?               @relation("payment_voided_by", fields: [voidedById], references: [id])
   allocations PaymentAllocation[]
@@ -465,14 +479,16 @@ model PaymentAllocation {
   id          String           @id @default(uuid()) @db.Uuid
   paymentId   String           @map("payment_id") @db.Uuid
   target      AllocationTarget
-  periodId    String?          @map("period_id") @db.Uuid
-  depositId   String?          @map("deposit_id") @db.Uuid
+  periodId      String?        @map("period_id") @db.Uuid
+  depositId     String?        @map("deposit_id") @db.Uuid
+  instalmentId  String?        @map("instalment_id") @db.Uuid
   amountTetri Int              @map("amount_tetri")
   createdAt   DateTime         @default(now()) @map("created_at")
 
-  payment Payment       @relation(fields: [paymentId], references: [id], onDelete: Cascade)
-  period  RentalPeriod? @relation(fields: [periodId], references: [id], onDelete: Cascade)
-  deposit Deposit?      @relation(fields: [depositId], references: [id], onDelete: Cascade)
+  payment    Payment         @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  period     RentalPeriod?   @relation(fields: [periodId], references: [id], onDelete: Cascade)
+  deposit    Deposit?        @relation(fields: [depositId], references: [id], onDelete: Cascade)
+  instalment SaleInstalment? @relation(fields: [instalmentId], references: [id], onDelete: Cascade)
 
   @@map("payment_allocations")
 }
@@ -569,6 +585,55 @@ model ServicePart {
   job ServiceJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
 
   @@map("service_parts")
+}
+
+/// One VIN leaving the fleet for one customer (SAL-01). Ending it the other
+/// way round — the company buying it back — is the same row, so the VIN's
+/// history holds both events (SAL-03).
+model Sale {
+  id            String     @id @default(uuid()) @db.Uuid
+  number        String     @unique @default(dbgenerated("('SL-' || lpad(nextval('sale_number_seq')::text, 5, '0'))"))
+  customerId    String     @map("customer_id") @db.Uuid
+  vehicleId     String?    @map("vehicle_id") @db.Uuid
+  vinNote       String?    @map("vin_note")
+  soldOn        DateTime   @map("sold_on") @db.Date
+  priceTetri    Int        @map("price_tetri")
+  extras        String?
+  warrantyUntil DateTime?  @map("warranty_until") @db.Date
+  status        SaleStatus @default(active)
+  boughtBackOn  DateTime?  @map("bought_back_on") @db.Date
+  notes         String?
+  odooOrderId   Int?       @unique @map("odoo_order_id")
+  createdById   String?    @map("created_by") @db.Uuid
+  createdAt     DateTime   @default(now()) @map("created_at")
+  updatedAt     DateTime   @default(now()) @map("updated_at")
+
+  customer    Customer         @relation(fields: [customerId], references: [id])
+  vehicle     Vehicle?         @relation(fields: [vehicleId], references: [id])
+  createdBy   User?            @relation(fields: [createdById], references: [id])
+  instalments SaleInstalment[]
+  payments    Payment[]
+
+  @@map("sales")
+}
+
+/// A line of the schedule (SAL-02). A sale paid in one go has exactly one.
+model SaleInstalment {
+  id          String          @id @default(uuid()) @db.Uuid
+  saleId      String          @map("sale_id") @db.Uuid
+  seq         Int
+  dueOn       DateTime        @map("due_on") @db.Date
+  amountTetri Int             @map("amount_tetri")
+  paidTetri   Int             @default(0) @map("paid_tetri")
+  payStatus   PeriodPayStatus @default(unpaid) @map("pay_status")
+  createdAt   DateTime        @default(now()) @map("created_at")
+  updatedAt   DateTime        @default(now()) @map("updated_at")
+
+  sale        Sale                @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  allocations PaymentAllocation[]
+
+  @@unique([saleId, seq])
+  @@map("sale_instalments")
 }
 
 model AuditLog {

@@ -1,10 +1,25 @@
-import { paidThrough, spreadPayment, type PeriodPayStatus } from '@ev8/shared';
+import { paidThrough, spreadOverOwed, spreadPayment, type PeriodPayStatus } from '@ev8/shared';
 import type { Prisma } from '../generated/prisma/client.js';
 import { dateFromISO, isoDate } from './dates.js';
 import { prisma } from './db.js';
 import { conflict, notFound } from './errors.js';
 
 type Tx = Prisma.TransactionClient;
+
+/** The same, for a sale: each instalment's paid amount and status. */
+export async function recomputeSale(tx: Tx, saleId: string): Promise<void> {
+  const instalments = await tx.saleInstalment.findMany({
+    where: { saleId },
+    include: { allocations: { where: { payment: { voidedAt: null } }, select: { amountTetri: true } } },
+  });
+  for (const i of instalments) {
+    const paid = i.allocations.reduce((n, a) => n + a.amountTetri, 0);
+    const payStatus: PeriodPayStatus = paid <= 0 ? 'unpaid' : paid >= i.amountTetri ? 'paid' : 'partial';
+    if (paid !== i.paidTetri || payStatus !== i.payStatus) {
+      await tx.saleInstalment.update({ where: { id: i.id }, data: { paidTetri: paid, payStatus, updatedAt: new Date() } });
+    }
+  }
+}
 
 /**
  * Re-derive everything a rental's money says about it: each period's paid
@@ -52,6 +67,7 @@ export interface RecordPaymentInput {
   feeTetri: number;
   customerId: string | null;
   rentalId: string | null;
+  saleId?: string | null;
   bankText: string | null;
   note: string | null;
   source: 'manual' | 'statement' | 'log';
@@ -75,6 +91,11 @@ export async function recordPayment(input: RecordPaymentInput): Promise<{ id: st
       }
       input.customerId = r.customerId;
     }
+    if (input.saleId) {
+      const sale = await tx.sale.findUnique({ where: { id: input.saleId }, select: { customerId: true } });
+      if (!sale) throw notFound('sale_not_found', 'No such sale.');
+      input.customerId = sale.customerId;
+    }
     const payment = await tx.payment.create({
       data: {
         occurredOn: dateFromISO(input.occurredOn)!,
@@ -85,12 +106,40 @@ export async function recordPayment(input: RecordPaymentInput): Promise<{ id: st
         netTetri: input.grossTetri - input.feeTetri,
         customerId: input.customerId,
         rentalId: input.rentalId,
+        saleId: input.saleId ?? null,
         bankText: input.bankText,
         note: input.note,
         source: input.source,
         createdById: input.actorId,
       },
     });
+
+    // A payment made for a sale settles that sale's schedule and nothing
+    // else: rent and a purchase are different debts.
+    if (input.saleId) {
+      const instalments = await tx.saleInstalment.findMany({ where: { saleId: input.saleId }, orderBy: { seq: 'asc' } });
+      const spread = spreadOverOwed(
+        input.grossTetri,
+        instalments.map((i) => ({ id: i.id, seq: i.seq, amountTetri: i.amountTetri, paidTetri: i.paidTetri })),
+        'instalment',
+      );
+      for (const a of spread.allocations) {
+        await tx.paymentAllocation.create({
+          data: { paymentId: payment.id, target: 'instalment', instalmentId: a.id, amountTetri: a.amountTetri },
+        });
+      }
+      await recomputeSale(tx, input.saleId);
+      await tx.auditLog.create({
+        data: {
+          actorId: input.actorId,
+          action: 'payment.record',
+          entityType: 'payment',
+          entityId: payment.id,
+          after: { occurredOn: input.occurredOn, channel: input.channel, grossTetri: input.grossTetri, saleId: input.saleId, allocated: input.grossTetri - spread.leftoverTetri },
+        },
+      });
+      return { id: payment.id, allocated: input.grossTetri - spread.leftoverTetri, leftover: spread.leftoverTetri };
+    }
 
     const rentalIds = input.rentalId
       ? [input.rentalId]
@@ -155,7 +204,7 @@ export async function voidPayment(input: { actorId: string; paymentId: string; r
   await prisma.$transaction(async (tx) => {
     const p = await tx.payment.findUnique({
       where: { id: input.paymentId },
-      include: { allocations: { select: { periodId: true, deposit: { select: { rentalId: true } } } } },
+      include: { allocations: { select: { periodId: true, instalmentId: true, deposit: { select: { rentalId: true } } } } },
     });
     if (!p) throw notFound('payment_not_found', 'No such payment.');
     if (p.voidedAt) throw conflict('already_voided', 'This payment is already void.');
@@ -163,6 +212,14 @@ export async function voidPayment(input: { actorId: string; paymentId: string; r
     const touched = new Set<string>();
     for (const a of p.allocations) {
       if (a.deposit?.rentalId) touched.add(a.deposit.rentalId);
+    }
+    const saleIds = new Set<string>();
+    if (p.saleId) saleIds.add(p.saleId);
+    const instalmentIds = p.allocations.map((a) => a.instalmentId).filter((id): id is string => !!id);
+    if (instalmentIds.length > 0) {
+      for (const i of await tx.saleInstalment.findMany({ where: { id: { in: instalmentIds } }, select: { saleId: true } })) {
+        saleIds.add(i.saleId);
+      }
     }
     const periodIds = p.allocations.map((a) => a.periodId).filter((id): id is string => !!id);
     if (periodIds.length > 0) {
@@ -178,6 +235,7 @@ export async function voidPayment(input: { actorId: string; paymentId: string; r
       data: { voidedAt: new Date(), voidReason: input.reason, voidedById: input.actorId },
     });
     for (const rentalId of touched) await recomputeRental(tx, rentalId);
+    for (const saleId of saleIds) await recomputeSale(tx, saleId);
 
     await tx.auditLog.create({
       data: {
