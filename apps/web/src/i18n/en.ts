@@ -31,6 +31,7 @@ export const en = {
 
   nav: {
     today: 'Today',
+    more: 'More',
     fleet: 'Fleet',
     rentals: 'Rentals',
     payments: 'Payments',
