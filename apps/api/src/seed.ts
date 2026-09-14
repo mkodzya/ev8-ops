@@ -58,7 +58,11 @@ async function seedDemo(ownerId: string): Promise<void> {
   const modelB = await prisma.vehicleModel.create({ data: { brand: 'Demo', name: 'Model B', weeklyRateTetri: 14000, salePriceTetri: 349500, forRent: true, notes: DEMO_NOTE } });
   const modelS = await prisma.vehicleModel.create({ data: { brand: 'Demo', name: 'Sale only', salePriceTetri: 518800, forRent: false, notes: DEMO_NOTE } });
 
-  const colors = ['თეთრი', 'წითელი', 'შავი', 'მწვანე'];
+  // Russian for the display values so a demo stand is quick to read (Mika,
+  // 14.09.2026). Georgian still gets exercised: the interface itself is
+  // Georgian in `ka`, and every demo customer keeps a Georgian spelling in
+  // nameKa, which is the real shape of a customer card here.
+  const colors = ['белый', 'красный', 'чёрный', 'зелёный'];
   const vehicles: { id: string; vin: string }[] = [];
   for (let i = 1; i <= 10; i++) {
     const model = i <= 5 ? modelA : i <= 9 ? modelB : modelS;
@@ -71,16 +75,23 @@ async function seedDemo(ownerId: string): Promise<void> {
   }
 
   const customers: string[] = [];
-  const names = ['ვაჟა დემო', 'გიორგი დემო', 'ნინო დემო', 'დავით დემო', 'თამარ დემო', 'ლუკა დემო'];
+  const names = [
+    { ru: 'Вахтанг Демо', ka: 'ვახტანგ დემო', lat: 'Vakhtang Demo' },
+    { ru: 'Георгий Демо', ka: 'გიორგი დემო', lat: 'Giorgi Demo' },
+    { ru: 'Нино Демо', ka: 'ნინო დემო', lat: 'Nino Demo' },
+    { ru: 'Давид Демо', ka: 'დავით დემო', lat: 'Davit Demo' },
+    { ru: 'Тамара Демо', ka: 'თამარ დემო', lat: 'Tamar Demo' },
+    { ru: 'Лука Демо', ka: 'ლუკა დემო', lat: 'Luka Demo' },
+  ];
   for (let i = 0; i < names.length; i++) {
     const c = await prisma.customer.create({
       data: {
-        name: names[i],
-        nameKa: names[i],
-        nameLat: `Demo Customer ${i + 1}`,
+        name: names[i].ru,
+        nameKa: names[i].ka,
+        nameLat: names[i].lat,
         personalId: `DEMO-${String(i + 1).padStart(8, '0')}`,
         phone: `+995500000${String(i + 1).padStart(3, '0')}`,
-        address: `DEMO: ვაკე, დემო ქუჩა ${i + 1}`,
+        address: `DEMO: Тбилиси, Ваке, Демо улица ${i + 1}`,
         tags: ['demo', i < 4 ? 'rental' : 'buyer'],
         notes: DEMO_NOTE,
       },
@@ -104,7 +115,7 @@ async function seedDemo(ownerId: string): Promise<void> {
         returnedOn: opts.returnedOn ? d(opts.returnedOn) : null,
         status: opts.returnedOn ? 'returned' : opts.status ?? 'active',
         paidThrough: paidThrough ? d(paidThrough) : null,
-        nightParkingAddress: 'DEMO: ვაკე, დემო ქუჩა 1, ეზო',
+        nightParkingAddress: 'DEMO: Тбилиси, Ваке, Демо улица 1, двор',
         batteries: 2,
         chargers: 2,
         notes: DEMO_NOTE,
