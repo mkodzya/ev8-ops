@@ -417,6 +417,9 @@ export const ka: Dict = {
   },
 
   statements: {
+    importCta: 'ამონაწერის ატვირთვა',
+    looksLike: 'ჰგავს',
+    otherHints: (n: number) => `კიდევ ${n}`,
     title: 'ამონაწერები',
     upload: 'ამონაწერის ატვირთვა',
     uploadHint: 'CSV ისე, როგორც ბანკი გასცემს: StatementExport.csv — საქართველოს ბანკი, transactions_history.csv — თიბისი. ერთი ფაილის ორჯერ ატვირთვა არაფერს ცვლის.',

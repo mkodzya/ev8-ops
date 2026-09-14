@@ -430,6 +430,9 @@ export const ru: Dict = {
   },
 
   statements: {
+    importCta: 'Загрузить выписку',
+    looksLike: 'Похоже на',
+    otherHints: (n: number) => `ещё ${n}`,
     title: 'Выписки',
     upload: 'Загрузить выписку',
     uploadHint: 'CSV в том виде, в каком его отдаёт банк: StatementExport.csv у Bank of Georgia, transactions_history.csv у TBC. Повторная загрузка того же файла ничего не меняет.',

@@ -5,7 +5,7 @@ import { prisma } from '../lib/db.js';
 import { badRequest, conflict, notFound } from '../lib/errors.js';
 import { actorOf } from '../lib/guard.js';
 import { recordPayment } from '../lib/payments.js';
-import { hintsFor, importStatement } from '../lib/statements/import.js';
+import { hintsFor, hintsForLines, importStatement } from '../lib/statements/import.js';
 import { ParseError } from '../lib/statements/parse.js';
 import { str } from '../lib/validate.js';
 
@@ -74,6 +74,9 @@ export function statementRoutes(app: FastifyInstance): void {
       take: 200,
       include: { statement: { select: { bank: true, fileName: true } } },
     });
+    // The hints come with the queue rather than after a tap: "looks like
+    // Vakhtang Demo, R-00001" is what turns a row into a decision (U7).
+    const hints = await hintsForLines(lines);
     return {
       lines: lines.map((l) => ({
         id: l.id,
@@ -86,6 +89,7 @@ export function statementRoutes(app: FastifyInstance): void {
         purpose: l.purpose,
         raw: l.raw,
         fileName: l.statement.fileName,
+        hints: hints.get(l.id) ?? [],
       })),
     };
   });

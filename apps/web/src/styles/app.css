@@ -745,3 +745,6 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
 .strip-current { background: var(--lime); color: var(--ink); border: 1px solid var(--accent); }
 .strip-ahead { background: var(--surface-2); }
 .strip-ends { display: flex; justify-content: space-between; margin: 6px 0 0; }
+
+/* The best guess, in the queue row itself (U7). */
+.queue-guess { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0; padding: 0 12px 12px; }

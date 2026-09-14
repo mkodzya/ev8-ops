@@ -119,3 +119,31 @@ describe.skipIf(!HAS_DB)('the job the worker calls', () => {
     expect(json<{ rentals: number }>(right)).toHaveProperty('rentals');
   });
 });
+
+// A rental keeps two derived facts in columns: `paidThrough` and a week's
+// `payStatus`. Everything else is recomputed on read, so this pair is the
+// only place a stored number can quietly stop agreeing with the rows that
+// made it — after a hand repair, a restore, a deleted allocation. The
+// nightly roll recomputes them for every rental, open or not.
+describe.skipIf(!HAS_DB)('the nightly roll repairs derived figures', () => {
+  it('puts paidThrough back where the weeks say it belongs, disputed rentals included', async () => {
+    const { prisma, director, rentalId } = await rentalPickedUp('2026-08-01');
+    const { rollPeriods } = await import('../src/lib/periods.js');
+    await rollPeriods('2026-08-22');
+    await call(director, 'POST', '/api/payments', { rentalId, occurredOn: '2026-08-02', channel: 'cash', grossTetri: 14000 + 18000 });
+
+    const before = await prisma.rental.findUniqueOrThrow({ where: { id: rentalId }, select: { paidThrough: true } });
+    expect(before.paidThrough).not.toBeNull();
+
+    // Drift, of the kind a hand repair leaves behind: the column says a
+    // later date than any paid week can justify, and the rental is disputed,
+    // so no new week will ever be opened to correct it in passing.
+    await prisma.rental.update({ where: { id: rentalId }, data: { paidThrough: new Date('2026-12-31'), status: 'disputed' } });
+
+    const result = await rollPeriods('2026-08-22');
+    expect(result.repaired).toBeGreaterThan(0);
+
+    const after = await prisma.rental.findUniqueOrThrow({ where: { id: rentalId }, select: { paidThrough: true } });
+    expect(after.paidThrough?.toISOString().slice(0, 10)).toBe(before.paidThrough?.toISOString().slice(0, 10));
+  });
+});
