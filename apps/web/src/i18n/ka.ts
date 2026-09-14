@@ -125,6 +125,7 @@ export const ka: Dict = {
   },
 
   vehicle: {
+    backToFleet: 'პარკში დაბრუნება',
     title: 'მოპედი',
     history: 'ისტორია',
     rentalsOf: 'ქირაობა',

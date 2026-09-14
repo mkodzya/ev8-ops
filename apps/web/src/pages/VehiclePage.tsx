@@ -47,6 +47,27 @@ export function VehiclePage() {
   const v = data.vehicle;
   const current = data.rentals.find((r) => r.id === v.currentRentalId) ?? null;
   const locked = v.state === 'rented' && !!v.currentRentalId;
+  const openJob = data.serviceJobs.find((j) => j.status === 'open') ?? null;
+
+  // One action, and which one depends on where the moped is (U4). A card
+  // that offers every verb makes the reader pick; a card that offers the
+  // next one makes the state readable from the button alone.
+  const primary: { label: string; to?: string; onClick?: () => void } | null =
+    v.state === 'available' && can('rental.create')
+      ? { label: t.actions.newRental, to: `/rentals/new?vehicle=${v.id}` }
+      : v.state === 'rented' && current && can('rental.return')
+        ? { label: t.actions.returnRental, to: `/rentals/${current.id}/return` }
+        : v.state === 'service' && openJob && can('service.manage')
+          ? { label: t.vehicle.backToFleet, to: `/service/${openJob.id}` }
+          : v.state === 'service' && can('fleet.state.manual')
+            ? {
+                label: t.vehicle.backToFleet,
+                onClick: () => {
+                  setToState('available');
+                  setOpen(true);
+                },
+              }
+            : null;
 
   const move = async () => {
     setBusy(true);
@@ -82,11 +103,16 @@ export function VehiclePage() {
         {can('service.manage') && v.state !== 'sold' && v.state !== 'out' && !data.serviceJobs.some((j) => j.status === 'open') && (
           <NewJob vehicleId={v.id} onDone={reload} onError={setErr} />
         )}
-        {v.state === 'available' && can('rental.create') && (
-          <Link className="pill pill-sm pill-accent" to={`/rentals/new?vehicle=${v.id}`}>
-            {t.actions.newRental}
-          </Link>
-        )}
+        {primary &&
+          (primary.to ? (
+            <Link className="pill pill-sm pill-accent head-primary" to={primary.to}>
+              {primary.label}
+            </Link>
+          ) : (
+            <button type="button" className="pill pill-sm pill-accent head-primary" onClick={primary.onClick}>
+              {primary.label}
+            </button>
+          ))}
       </header>
 
       {open && (
@@ -113,6 +139,22 @@ export function VehiclePage() {
             </button>
           </div>
         </section>
+      )}
+
+      {/* On a phone the one action lives at the bottom, over the tab bar,
+          where a thumb already is (ux.md, principle 2). */}
+      {primary && (
+        <div className="page-actions">
+          {primary.to ? (
+            <Link className="pill pill-accent pill-wide" to={primary.to}>
+              {primary.label}
+            </Link>
+          ) : (
+            <button type="button" className="pill pill-accent pill-wide" onClick={primary.onClick}>
+              {primary.label}
+            </button>
+          )}
+        </div>
       )}
 
       <div className="two-col">
