@@ -687,3 +687,61 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
   /* Room for the bar plus the tab bar under it. */
   .page { padding-bottom: calc(150px + env(safe-area-inset-bottom)); }
 }
+
+/* ---- Rentals: who, on what, paid through, owed (U5) ------------------ */
+.rlist .vrow {
+  grid-template-areas: 'who status' 'veh status' 'paid status' 'num num';
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 12px;
+}
+.r-who { grid-area: who; font: var(--text-h3); color: var(--ink); }
+.r-veh { grid-area: veh; font: var(--text-label); }
+.r-paid { grid-area: paid; display: flex; gap: 6px; align-items: baseline; font: var(--text-label); }
+.r-paid-lbl { color: var(--muted); }
+.r-status { grid-area: status; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; text-align: right; }
+.r-days { font: var(--text-label); }
+.r-num { grid-area: num; font: var(--text-mono-sm); color: var(--muted); }
+.r-rate, .r-dep, .r-picked { display: none; }
+
+@media (min-width: 900px) {
+  .rlist .vlist-head, .rlist .vrow {
+    grid-template-areas: none;
+    grid-template-columns: 110px minmax(120px, 1fr) minmax(180px, 1.2fr) 110px 90px 110px 120px minmax(160px, 1fr);
+  }
+  .rlist .vlist-head, .rlist .vrow { min-width: 1020px; }
+  .r-num, .r-who, .r-veh, .r-rate, .r-dep, .r-picked, .r-paid, .r-status {
+    grid-area: auto;
+    display: block;
+    font: var(--text-body-sm);
+    text-align: left;
+    color: inherit;
+  }
+  .r-status { display: flex; flex-direction: row; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+  .r-paid-lbl { display: none; }
+}
+
+/* ---- the rental card: paid through, and the weeks as a strip (U6) ---- */
+.paid-hero { margin-bottom: 18px; }
+.paid-head { display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-start; margin-bottom: 14px; }
+.paid-head p { margin: 0; }
+.paid-date { font: var(--text-display); font-variant-numeric: tabular-nums; font-family: var(--mono); }
+.paid-debt { margin-left: auto; text-align: right; }
+.paid-sum { font: var(--text-display); font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.strip { list-style: none; display: flex; gap: 3px; margin: 0; padding: 0; }
+.strip-seg {
+  flex: 1;
+  min-width: 10px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border-radius: 5px;
+  background: var(--surface-2);
+  color: var(--muted);
+  font: var(--text-mono-sm);
+}
+.strip-paid { background: var(--accent); color: var(--on-accent); }
+.strip-partial { background: var(--warn-soft); color: var(--service-ink); border: 1px solid var(--service); }
+.strip-late { background: var(--crit); color: var(--on-accent); }
+.strip-current { background: var(--lime); color: var(--ink); border: 1px solid var(--accent); }
+.strip-ahead { background: var(--surface-2); }
+.strip-ends { display: flex; justify-content: space-between; margin: 6px 0 0; }

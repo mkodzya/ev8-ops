@@ -156,6 +156,7 @@ export const en = {
   },
 
   rental: {
+    owed: 'Owed',
     title: 'Rental',
     periods: 'Weekly periods',
     week: 'Week',

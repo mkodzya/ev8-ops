@@ -16,6 +16,9 @@ export function rentalRoutes(app: FastifyInstance): void {
         customer: { select: { id: true, name: true } },
         vehicle: { select: { id: true, vin: true, model: { select: { brand: true, name: true } } } },
         deposit: { select: { amountTetri: true, status: true } },
+        // What is owed, from the periods that were not paid — the list shows
+        // the debt beside the status (U5) and must not invent a second rule.
+        periods: { where: { payStatus: { not: 'paid' } }, select: { amountTetri: true, paidTetri: true } },
         _count: { select: { periods: true } },
       },
     });
@@ -42,6 +45,7 @@ export function rentalRoutes(app: FastifyInstance): void {
           returnedOn: isoDate(r.returnedOn),
           paidThrough,
           overdueDays: status === 'overdue' && pickedUpOn ? overdueDays(paidThrough, pickedUpOn, today) : 0,
+          debtTetri: r.periods.reduce((n, p) => n + (p.amountTetri - p.paidTetri), 0),
           periods: r._count.periods,
           buyoutTargetTetri: r.buyoutTargetTetri,
           buyoutPerPaymentTetri: r.buyoutPerPaymentTetri,

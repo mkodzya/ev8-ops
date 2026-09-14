@@ -149,6 +149,7 @@ export const ka: Dict = {
   },
 
   rental: {
+    owed: 'დავალიანება',
     title: 'ქირაობა',
     periods: 'კვირის პერიოდები',
     week: 'კვირა',
