@@ -25,10 +25,10 @@ describe('tetri', () => {
   });
 
   it('formats one way for every language', () => {
-    expect(formatGel(123456)).toBe('1\u202f234.56 ₾'); // narrow no-break space: a sum never wraps
+    expect(formatGel(123456)).toBe('1\u00a0234.56 ₾'); // no-break space: a sum never wraps
     expect(formatGel(-4200)).toBe('-42.00 ₾');
-    expect(formatGel(1751100, { decimals: false })).toBe('17\u202f511 ₾');
-    expect(formatGel(1751150, { decimals: false })).toBe('17\u202f511.50 ₾');
+    expect(formatGel(1751100, { decimals: false })).toBe('17\u00a0511 ₾');
+    expect(formatGel(1751150, { decimals: false })).toBe('17\u00a0511.50 ₾');
     expect(formatGel(null)).toBe('—');
   });
 });

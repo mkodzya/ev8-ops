@@ -1,5 +1,7 @@
 import type { RentalStatus } from '@ev8/shared';
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { useSession } from '../session.js';
 import { api } from '../api.js';
 import { Empty, Loading, RentalBadge, Vin } from '../components/ui.js';
 import { fmtDate, formatGel } from '../format.js';
@@ -24,6 +26,7 @@ interface Rental {
 
 export function RentalsPage() {
   const t = useT();
+  const { can } = useSession();
   const [rows, setRows] = useState<Rental[] | null>(null);
   useEffect(() => {
     void api.get<{ rentals: Rental[] }>('/api/rentals').then((r) => setRows(r.rentals));
@@ -35,6 +38,12 @@ export function RentalsPage() {
       <header className="page-head">
         <h1>{t.rentals.title}</h1>
         <span className="mono muted">{rows.length}</span>
+        <span className="spacer" />
+        {can('rental.create') && (
+          <Link className="pill pill-sm pill-accent" to="/rentals/new">
+            {t.actions.newRental}
+          </Link>
+        )}
       </header>
       {rows.length === 0 ? (
         <Empty text={t.rentals.empty} />
@@ -56,12 +65,21 @@ export function RentalsPage() {
             <tbody>
               {rows.map((r) => (
                 <tr key={r.id}>
-                  <td className="mono">{r.number}</td>
-                  <td>{r.customer.name}</td>
+                  <td>
+                    <Link to={`/rentals/${r.id}`} className="mono">
+                      {r.number}
+                    </Link>
+                  </td>
+                  <td>
+                    <Link to={`/customers/${r.customer.id}`}>{r.customer.name}</Link>
+                  </td>
                   <td>
                     {r.vehicle ? (
                       <>
-                        <Vin vin={r.vehicle.vin} /> <span className="muted">{r.vehicle.model}</span>
+                        <Link to={`/fleet/${r.vehicle.id}`}>
+                          <Vin vin={r.vehicle.vin} />
+                        </Link>{' '}
+                        <span className="muted">{r.vehicle.model}</span>
                       </>
                     ) : (
                       <span className="warn-text">{t.rentals.vinUnconfirmed}</span>

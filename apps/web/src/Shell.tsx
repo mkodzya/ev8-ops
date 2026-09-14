@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { api } from './api.js';
 import { LanguageToggle, LOCALES, useLocale, useT, type Locale } from './i18n/index.js';
 import { useSession } from './session.js';
@@ -12,7 +12,7 @@ const STORAGE_KEY = 'ev8-lang';
 
 export function Shell() {
   const t = useT();
-  const { me, logout } = useSession();
+  const { me, logout, can } = useSession();
   const { setLocale } = useLocale();
   const navigate = useNavigate();
 
@@ -46,6 +46,14 @@ export function Shell() {
         <div className="rail-logo">
           <img src="/logo-light.svg" alt="EV8" height={24} width={96} />
         </div>
+        {can('rental.create') && (
+          <Link to="/rentals/new" className="rail-cta" aria-label={t.actions.newRental} title={t.actions.newRental}>
+            <span className="cta-plus" aria-hidden="true">
+              +
+            </span>
+            <span className="cta-text">{t.actions.newRental}</span>
+          </Link>
+        )}
         <ul className="rail-nav">
           {items.map((it) => (
             <li key={it.to}>
@@ -67,6 +75,9 @@ export function Shell() {
                 navigate('/login');
               }}
             >
+              <span className="rail-user-initial" aria-hidden="true">
+                {me.name.trim().charAt(0).toUpperCase()}
+              </span>
               <span className="rail-user-name">{me.name}</span>
               <span className="rail-user-role">{me.role}</span>
             </button>

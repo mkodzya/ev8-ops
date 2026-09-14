@@ -9,9 +9,10 @@ describe('route table', () => {
     process.env.ALLOW_DEV_SECRET = 'true';
     const app = await getApp();
     expect(app.routeTable.length).toBeGreaterThan(5);
-    const undeclared = app.routeTable.filter((r) => r.scope === 'users.manage');
-    // Nothing in this step is owner-only; the moment something is, list it here.
-    expect(undeclared.map((r) => `${r.method} ${r.url}`)).toEqual([]);
+    const ownerOnly = app.routeTable.filter((r) => r.scope === 'users.manage' || r.scope === 'settings.manage');
+    // Owner-only routes are listed here on purpose: a new one that lands at
+    // the default scope by accident shows up in this list and is questioned.
+    expect(ownerOnly.map((r) => `${r.method} ${r.url}`).sort()).toEqual(['POST /api/fleet', 'POST /api/models']);
     const publicOnes = app.routeTable.filter((r) => r.scope === 'public').map((r) => r.url).sort();
     expect(publicOnes).toEqual(['/api/auth/login', '/api/health']);
   });

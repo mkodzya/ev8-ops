@@ -95,6 +95,7 @@ export function rentalRoutes(app: FastifyInstance): void {
             withheldReason: r.deposit.withheldReason,
             returnedTo: r.deposit.returnedTo,
             returnedOn: isoDate(r.deposit.returnedOn),
+            confirmed: r.deposit.status === 'held' ? null : r.deposit.confirmedById != null,
           }
         : null,
       periods: r.periods.map((p) => ({

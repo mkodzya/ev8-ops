@@ -35,7 +35,7 @@ export function parseGel(text: string): Tetri | null {
 /**
  * `1 234.56 ₾` — one format in every language, by decision (as in Self
  * Platform): a report that reads differently for two people is an argument
- * about reconciliation waiting to happen. Thousands are separated by a narrow
+ * about reconciliation waiting to happen. Thousands are separated by a
  * no-break space, the sign sits in front, the lari sign after.
  */
 export function formatGel(tetri: Tetri | null | undefined, opts: { decimals?: boolean } = {}): string {
@@ -44,7 +44,7 @@ export function formatGel(tetri: Tetri | null | undefined, opts: { decimals?: bo
   const abs = Math.abs(tetri);
   const whole = Math.floor(abs / 100);
   const frac = abs % 100;
-  const grouped = whole.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+  const grouped = whole.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
   const body = decimals || frac !== 0 ? `${grouped}.${frac.toString().padStart(2, '0')}` : grouped;
   return `${tetri < 0 ? '-' : ''}${body} ₾`;
 }

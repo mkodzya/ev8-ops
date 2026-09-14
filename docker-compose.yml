@@ -36,6 +36,10 @@ services:
       OWNER_EMAIL: ${OWNER_EMAIL:-mika@selfstudio.se}
       OWNER_NAME: ${OWNER_NAME:-Mika}
       OWNER_PASSWORD: ${OWNER_PASSWORD:-ev8-dev-password}
+      # blank (default) = empty stack with one owner login. demo = a small
+      # dataset where every row is marked DEMO; refused unless
+      # ALLOW_DEV_SECRET is true, i.e. never on a stand.
+      SEED_MODE: ${SEED_MODE:-}
     ports:
       - "${API_PORT:-8082}:8080"
     depends_on:

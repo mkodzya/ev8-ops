@@ -58,6 +58,7 @@ a { color: var(--accent); text-decoration: none; }
   min-height: var(--control);
 }
 .rail-user-name { display: block; font-weight: 600; }
+.rail-user-initial { display: none; }
 .rail-user-role { display: block; font-size: 12px; opacity: 0.7; text-transform: capitalize; }
 .page { padding: 28px 32px 40px; max-width: 1280px; width: 100%; }
 .page-head { display: flex; align-items: baseline; gap: 14px; margin-bottom: 18px; }
@@ -78,8 +79,10 @@ a { color: var(--accent); text-decoration: none; }
   .rail-nav a { padding: 0 10px; font-size: 13px; }
   .rail-foot { margin: 0 0 0 6px; flex-direction: row; align-items: center; gap: 6px; }
   .rail-foot .lang { display: none; }
-  .rail-user { padding: 6px 10px; border-radius: var(--radius-pill); }
-  .rail-user-name { font-size: 12px; }
+  /* One letter in a circle; the full name is in the title. */
+  .rail-user { width: var(--control); height: var(--control); min-height: 0; padding: 0; border-radius: 50%; flex: none; display: grid; place-items: center; }
+  .rail-user-name { display: none; }
+  .rail-user-initial { display: block; font-weight: 600; }
   .page { padding: 18px 16px calc(84px + env(safe-area-inset-bottom)); }
   h1 { font-size: 22px; }
 }
@@ -240,3 +243,71 @@ a { color: var(--accent); text-decoration: none; }
 }
 .login-lang { margin-bottom: 14px; }
 .login-note { color: var(--muted); font-size: 14px; margin: 0 0 18px; }
+
+/* ---- cards, key-value rows, timelines ------------------------------- */
+.page-head-wrap { flex-wrap: wrap; align-items: center; row-gap: 8px; }
+.spacer { flex: 1; }
+.two-col { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px; margin-bottom: 18px; }
+.two-col > .card { margin-bottom: 0; }
+.kv { display: grid; grid-template-columns: minmax(120px, 38%) 1fr; gap: 12px; padding: 8px 0; border-top: 1px solid var(--line-soft); font-size: 14px; }
+.kv:first-child { border-top: 0; }
+.kv-k { color: var(--muted); }
+.pre { white-space: pre-wrap; }
+.timeline { list-style: none; margin: 0; padding: 0; }
+.timeline li { display: grid; grid-template-columns: 96px 1fr; gap: 12px; padding: 8px 0; border-top: 1px solid var(--line-soft); font-size: 14px; }
+.timeline li:first-child { border-top: 0; }
+.table-flat { border: 0; border-radius: 0; }
+.card-drawer { border-color: var(--accent-hover); }
+.row-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
+.rail-cta {
+  display: flex; align-items: center; justify-content: center;
+  min-height: var(--control); margin: 0 0 14px; padding: 0 14px;
+  border-radius: var(--radius-pill); background: var(--accent); color: var(--on-accent); font-weight: 600;
+}
+.rail-cta:hover { background: var(--accent-hover); }
+.cta-plus { font-size: 20px; line-height: 1; margin-right: 8px; }
+@media (max-width: 719px) {
+  /* A round plus in the thumb zone; the words are in the title and aria-label. */
+  .rail-cta { width: var(--control); height: var(--control); min-height: 0; margin: 0 4px 0 0; padding: 0; border-radius: 50%; flex: none; }
+  .cta-plus { margin: 0; font-size: 24px; }
+  .cta-text { display: none; }
+}
+
+/* ---- forms and wizard ----------------------------------------------- */
+.form-page { max-width: 640px; }
+.textarea { min-height: 80px; padding: 10px 14px; resize: vertical; }
+select.input { appearance: auto; }
+.input-amount { max-width: 140px; }
+.check { display: flex; gap: 10px; align-items: center; min-height: var(--control); margin: 10px 0; }
+.check input { width: 22px; height: 22px; accent-color: var(--accent); }
+.wizard { max-width: 640px; display: flex; flex-direction: column; min-height: calc(100vh - 80px); }
+.wizard-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 8px; }
+.wizard-steps { list-style: none; display: flex; gap: 6px; margin: 0 0 18px; padding: 0; flex-wrap: wrap; }
+.wizard-steps li { font-size: 12px; padding: 2px 10px; border-radius: var(--radius-pill); background: var(--surface-2); color: var(--muted); }
+.wizard-steps li.on { background: var(--lime); color: #0b0b0b; font-weight: 600; }
+.wizard-steps li.done { color: var(--accent); }
+.wizard-body { flex: 1; }
+.wizard-foot { display: flex; gap: 10px; padding-top: 16px; position: sticky; bottom: 0; background: var(--bg); }
+.pill-grow { flex: 1; justify-content: center; }
+.pick-list { list-style: none; margin: 12px 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.pick-list button {
+  width: 100%; display: flex; justify-content: space-between; gap: 12px; align-items: center;
+  min-height: var(--control); padding: 8px 14px; border-radius: 12px; border: 1px solid var(--line);
+  background: var(--surface); color: var(--ink); font: inherit; text-align: left; cursor: pointer;
+}
+.pick-list button.on { border-color: var(--accent); background: var(--accent-soft); }
+.pick-list button:disabled { opacity: 0.5; cursor: default; }
+.pick-list.dim { opacity: 0.6; }
+@media (max-width: 719px) {
+  .wizard { min-height: auto; }
+  .wizard-foot { bottom: calc(60px + env(safe-area-inset-bottom)); padding-bottom: 8px; }
+  .kv { grid-template-columns: 1fr; gap: 2px; }
+  .timeline li { grid-template-columns: 1fr; gap: 2px; }
+}
+
+/* Numbers, dates and codes never wrap inside a cell; the row grows instead. */
+.table td.mono, .table td.num, .table td .mono { white-space: nowrap; }
+
+/* Grid items default to min-width:auto, so one wide table could push the
+   whole page past the viewport on a phone. Let them shrink and scroll inside. */
+.page, .two-col > .card, .card, .wizard { min-width: 0; }

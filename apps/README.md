@@ -1,8 +1,11 @@
 # apps/
 
 - `api/` — Fastify 5 + Prisma 7 + PostgreSQL 16. `src/routes` (auth, summary,
-  fleet, customers, rentals — read side in stage 1 step 1), `src/lib` (env,
-  db, auth, guard, audit), `migrations/*.sql` applied by `scripts/migrate.mjs`,
+  fleet, customers, rentals — reads; `ops.ts` — writes: customers, hand-over,
+  return, deposit confirmation, manual vehicle state, models and mopeds),
+  `src/lib` (env, db, auth, guard, audit, validate, `vehicles.ts` — the one
+  way a moped changes state, `rentals.ts` — hand-over and return as single
+  transactions), `migrations/*.sql` applied by `scripts/migrate.mjs`,
   `prisma/schema.prisma` mirrors the SQL for the generated client, vitest in `test/`.
   Every route declares a scope: `public`, `session`, or a permission from
   `@ev8/shared`; an undeclared scope is owner-only.
@@ -13,5 +16,8 @@
   locales in `src/i18n` (`en.ts` fixes the `Dict` shape; `ka.ts`, `ru.ts` are
   typed against it), mobile-first: rail on a laptop, bottom bar on a phone.
   `scripts/i18n-guard.mjs` fails the build on English typed straight into JSX.
+  Screens: Today, Fleet, Rentals, Customers, cards for a moped / rental /
+  customer, the hand-over wizard (`pages/PickupWizard.tsx`, five steps) and the
+  return wizard (`pages/ReturnWizard.tsx`), a customer form.
 
 Package names: `@ev8/api`, `@ev8/worker`, `@ev8/web`, `@ev8/shared`.

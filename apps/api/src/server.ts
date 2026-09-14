@@ -6,6 +6,7 @@ import { installGuard } from './lib/guard.js';
 import { authRoutes } from './routes/auth.js';
 import { customerRoutes } from './routes/customers.js';
 import { fleetRoutes } from './routes/fleet.js';
+import { opsRoutes } from './routes/ops.js';
 import { rentalRoutes } from './routes/rentals.js';
 import { summaryRoutes } from './routes/summary.js';
 
@@ -41,6 +42,7 @@ export function buildApp(): FastifyInstance {
   fleetRoutes(app);
   customerRoutes(app);
   rentalRoutes(app);
+  opsRoutes(app);
 
   return app;
 }

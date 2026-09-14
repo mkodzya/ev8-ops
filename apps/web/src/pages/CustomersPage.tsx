@@ -1,5 +1,7 @@
 import type { RentalStatus } from '@ev8/shared';
 import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { useSession } from '../session.js';
 import { api } from '../api.js';
 import { Empty, Loading, RentalBadge } from '../components/ui.js';
 import { useT } from '../i18n/index.js';
@@ -17,6 +19,7 @@ interface Customer {
 
 export function CustomersPage() {
   const t = useT();
+  const { can } = useSession();
   const [rows, setRows] = useState<Customer[] | null>(null);
   const [q, setQ] = useState('');
   useEffect(() => {
@@ -37,6 +40,12 @@ export function CustomersPage() {
       <header className="page-head">
         <h1>{t.customers.title}</h1>
         <span className="mono muted">{rows.length}</span>
+        <span className="spacer" />
+        {can('customer.create') && (
+          <Link className="pill pill-sm pill-accent" to="/customers/new">
+            {t.actions.newCustomer}
+          </Link>
+        )}
       </header>
       <div className="toolbar">
         <input className="input input-search" placeholder={t.common.search} value={q} onChange={(e) => setQ(e.target.value)} />
@@ -59,7 +68,7 @@ export function CustomersPage() {
               {shown.map((c) => (
                 <tr key={c.id}>
                   <td>
-                    {c.name}
+                    <Link to={`/customers/${c.id}`}>{c.name}</Link>
                     {c.nameLat && c.nameLat !== c.name && <span className="muted"> · {c.nameLat}</span>}
                   </td>
                   <td className="mono">{c.phone ?? t.common.dash}</td>
@@ -74,7 +83,7 @@ export function CustomersPage() {
                   <td>
                     {c.openRentals.map((r) => (
                       <span key={r.id} className="inline-rental">
-                        <span className="mono">{r.number}</span> <RentalBadge status={r.status} />
+                        <Link to={`/rentals/${r.id}`} className="mono">{r.number}</Link> <RentalBadge status={r.status} />
                       </span>
                     ))}
                   </td>

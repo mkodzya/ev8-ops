@@ -1,6 +1,6 @@
 import { VEHICLE_STATES, type VehicleState } from '@ev8/shared';
 import { useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { Empty, Loading, StateBadge, Vin } from '../components/ui.js';
 import { fmtDate } from '../format.js';
@@ -86,7 +86,9 @@ export function FleetPage() {
               {rows.map((v) => (
                 <tr key={v.id}>
                   <td>
-                    <Vin vin={v.vin} />
+                    <Link to={`/fleet/${v.id}`}>
+                      <Vin vin={v.vin} />
+                    </Link>
                   </td>
                   <td>{v.model}</td>
                   <td>{v.color ?? t.common.dash}</td>
@@ -95,7 +97,7 @@ export function FleetPage() {
                   <td>
                     <StateBadge state={v.state} />
                   </td>
-                  <td>{v.currentRental?.customer.name ?? t.common.dash}</td>
+                  <td>{v.currentRental ? <Link to={`/customers/${v.currentRental.customer.id}`}>{v.currentRental.customer.name}</Link> : t.common.dash}</td>
                   <td className="mono">{v.currentRental ? fmtDate(v.currentRental.paidThrough) : t.common.dash}</td>
                 </tr>
               ))}

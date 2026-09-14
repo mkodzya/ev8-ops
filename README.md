@@ -35,8 +35,13 @@ drops the local database.
 Ports are offset from Self Platform, which runs on the same Mac:
 db **5433**, api **8082**, web **5175**. `cp .env.example .env` to change them.
 
-There is no demo dataset by rule (never invent data). An empty stack holds one
-owner login; real data arrives through `tools/migrate_stage1.py` from Odoo.
+By rule there is no demo data on any stand (never invent data): an empty stack
+holds one owner login and real data arrives through `tools/migrate_stage1.py`
+from Odoo. For building screens on a laptop, `Reset EV8 Ops (DEMO data).command`
+(or `SEED_MODE=demo`) adds a small dataset where every row is marked DEMO; the
+seed refuses it unless `ALLOW_DEV_SECRET=true`, which no server stack sets.
+Demo logins: the owner, `demo.director@ev8.test`, `demo.manager@ev8.test`
+(same password).
 
 ## Checks
 Node is not required on the host — everything runs in `node:22-alpine`:

@@ -54,6 +54,7 @@ export function fleetRoutes(app: FastifyInstance): void {
         arrivedOn: isoDate(v.arrivedOn),
         state: v.state,
         odometerKm: v.odometerKm,
+        notes: v.notes,
         currentRental: v.currentRental
           ? {
               id: v.currentRental.id,
