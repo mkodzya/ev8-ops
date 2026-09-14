@@ -1,6 +1,6 @@
 import type { ActKind, DepositStatus, PeriodPayStatus, RentalStatus } from '@ev8/shared';
 import { useState } from 'react';
-import { parseGel, type VehicleState } from '@ev8/shared';
+import { parseGel, todayISO, type VehicleState } from '@ev8/shared';
 import { Field } from '../components/Wizard.js';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../api.js';
@@ -12,6 +12,15 @@ import { fmtDate, formatGel } from '../format.js';
 import { useT } from '../i18n/index.js';
 import { errorText, useLoad } from '../lib/use.js';
 import { useSession } from '../session.js';
+
+/** Paid, part-paid, the week we are in, late, or not yet started. */
+function periodTone(p: { startsOn: string; endsOn: string; payStatus: PeriodPayStatus }, today: string): string {
+  if (p.payStatus === 'paid') return 'paid';
+  if (p.payStatus === 'partial') return 'partial';
+  if (p.endsOn < today) return 'late';
+  if (p.startsOn <= today) return 'current';
+  return 'ahead';
+}
 
 export interface RentalCard {
   rental: {
@@ -53,6 +62,10 @@ export function RentalPage() {
   if (error) return <Empty text={error} />;
   if (!data) return <Loading />;
   const r = data.rental;
+  const today = todayISO();
+  // Owed is the unpaid part of the weeks, the same arithmetic the list and
+  // "Today" use. Nothing here is stored.
+  const debtTetri = data.periods.reduce((n, p) => n + (p.payStatus === 'paid' ? 0 : p.amountTetri - p.paidTetri), 0);
   const d = data.deposit;
   const open = r.status !== 'returned';
   const decided = d && d.status !== 'held';
@@ -112,6 +125,47 @@ export function RentalPage() {
           </a>{' '}
           — {t.docs.regenerateHint}
         </p>
+      )}
+
+      {/* The answer first: paid through, what is owed, and the weeks as a
+          strip you can read without counting rows (U6). The table with the
+          amounts is one level down, where a list belongs (ux.md, 5). */}
+      <section className="card paid-hero">
+        <div className="paid-head">
+          <div>
+            <p className="t-label">{t.rentals.paidThrough}</p>
+            <p className="paid-date">{fmtDate(r.paidThrough)}</p>
+          </div>
+          {debtTetri > 0 && (
+            <div className="paid-debt">
+              <p className="t-label">{t.rental.owed}</p>
+              <p className="t-money crit-text paid-sum">{formatGel(debtTetri)}</p>
+            </div>
+          )}
+        </div>
+        {data.periods.length > 0 && (
+          <>
+            <ol className="strip">
+              {data.periods.map((p) => (
+                <li key={p.seq} className={`strip-seg strip-${periodTone(p, today)}`} title={`${fmtDate(p.startsOn)} — ${fmtDate(p.endsOn)}`}>
+                  <span className="strip-seq">{p.seq}</span>
+                </li>
+              ))}
+            </ol>
+            <p className="t-label strip-ends">
+              <span className="mono">{fmtDate(data.periods[0].startsOn)}</span>
+              <span className="mono">{fmtDate(data.periods[data.periods.length - 1].endsOn)}</span>
+            </p>
+          </>
+        )}
+      </section>
+
+      {!r.returnedOn && can('rental.return') && (
+        <div className="page-actions">
+          <Link className="pill pill-accent pill-wide" to={`/rentals/${r.id}/return`}>
+            {t.actions.returnRental}
+          </Link>
+        </div>
       )}
 
       <div className="two-col">

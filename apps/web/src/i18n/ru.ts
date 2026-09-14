@@ -162,6 +162,7 @@ export const ru: Dict = {
   },
 
   rental: {
+    owed: 'Долг',
     title: 'Аренда',
     periods: 'Недельные периоды',
     week: 'Неделя',
