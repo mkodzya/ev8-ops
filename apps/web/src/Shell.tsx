@@ -42,6 +42,7 @@ export function Shell() {
     { to: '/service', label: t.nav.service },
     { to: '/payments', label: t.nav.payments },
     ...(can('payments.reconcile') ? [{ to: '/statements', label: t.nav.statements }] : []),
+    ...(can('reports.view') ? [{ to: '/economics', label: t.economics.nav }] : []),
     { to: '/customers', label: t.nav.customers },
     ...(can('users.manage') ? [{ to: '/settings', label: t.settings.title }] : []),
   ];

@@ -8,6 +8,7 @@ import { fmtDate } from '../format.js';
 import { useT } from '../i18n/index.js';
 import { errorText, useLoad } from '../lib/use.js';
 import { useSession } from '../session.js';
+import { VehicleEconomics } from './EconomicsPage.js';
 import { NewJob } from './ServicePage.js';
 import { formatGel } from '../format.js';
 
@@ -157,6 +158,8 @@ export function VehiclePage() {
           )}
         </section>
       </div>
+
+      {can('reports.view') && <VehicleEconomics vehicleId={data.vehicle.id} />}
 
       <section className="card">
         <h2>{t.service.history}</h2>

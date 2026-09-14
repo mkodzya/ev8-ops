@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { LoginPage } from './LoginPage.js';
 import { Shell } from './Shell.js';
+import { EconomicsPage } from './pages/EconomicsPage.js';
 import { CustomerForm } from './pages/CustomerForm.js';
 import { CustomerPage } from './pages/CustomerPage.js';
 import { CustomersPage } from './pages/CustomersPage.js';
@@ -43,6 +44,14 @@ function RequireReconcile({ children }: { children: React.ReactElement }) {
   return children;
 }
 
+function RequireReports({ children }: { children: React.ReactElement }) {
+  const { me, loading, can } = useSession();
+  if (loading) return null;
+  if (!me) return <Navigate to="/login" replace />;
+  if (!can('reports.view')) return <Navigate to="/" replace />;
+  return children;
+}
+
 function RequireOwner({ children }: { children: React.ReactElement }) {
   const { me, loading, can } = useSession();
   if (loading) return null;
@@ -78,6 +87,7 @@ export function App() {
         <Route path="service/:id" element={<ServiceJobPage />} />
         <Route path="payments" element={<PaymentsPage />} />
         <Route path="statements" element={<RequireReconcile><StatementsPage /></RequireReconcile>} />
+        <Route path="economics" element={<RequireReports><EconomicsPage /></RequireReports>} />
         <Route path="customers" element={<CustomersPage />} />
         <Route path="customers/new" element={<CustomerForm />} />
         <Route path="customers/:id" element={<CustomerPage />} />

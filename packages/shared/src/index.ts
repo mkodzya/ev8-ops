@@ -8,3 +8,4 @@ export * from './payments.js';
 export * from './georgian.js';
 export * from './matching.js';
 export * from './purchases.js';
+export * from './economics.js';
