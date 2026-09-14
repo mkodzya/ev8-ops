@@ -7,16 +7,34 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--ink);
-  font-family: var(--body);
-  font-size: 15px;
-  line-height: 1.45;
+  font: var(--text-body);
   -webkit-font-smoothing: antialiased;
 }
-h1, h2, h3, button, .rail, .pill { font-family: var(--display); }
-h1 { font-size: 24px; font-weight: 600; margin: 0; }
-h2 { font-size: 16px; font-weight: 600; margin: 0 0 12px; }
+h3, button, .rail { font-family: var(--display); }
+h1 { font: var(--text-h1); margin: 0; }
+h2 { font: var(--text-h2); margin: 0 0 12px; }
 a { color: var(--accent); text-decoration: none; }
+/* A modifier, not a text style: .mono changes the face of whatever it sits
+   inside and keeps that text's size. The full styles are .t-mono and
+   .t-money, which a component uses when it owns the line. */
 .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+/* The named text styles as classes, for markup that owns its own line —
+   and for /design, which shows them side by side. A component rule says
+   `font: var(--text-…)`; these are the same thing with a handle on it. */
+.t-display { font: var(--text-display); font-variant-numeric: tabular-nums; }
+.t-h1 { font: var(--text-h1); }
+.t-h2 { font: var(--text-h2); }
+.t-h3 { font: var(--text-h3); }
+.t-body { font: var(--text-body); }
+.t-body-sm { font: var(--text-body-sm); }
+.t-label { font: var(--text-label); color: var(--muted); }
+.t-overline { font: var(--text-overline); letter-spacing: 0.04em; text-transform: uppercase; }
+.t-button { font: var(--text-button); }
+.t-button-sm { font: var(--text-button-sm); }
+.t-mono { font: var(--text-mono); font-variant-numeric: tabular-nums; }
+.t-mono-sm { font: var(--text-mono-sm); font-variant-numeric: tabular-nums; }
+.t-money { font: var(--text-money); font-variant-numeric: tabular-nums; text-align: right; }
+
 .muted { color: var(--muted); }
 .num { text-align: right; }
 .warn-text { color: var(--service-ink); font-weight: 500; }
@@ -60,7 +78,7 @@ a { color: var(--accent); text-decoration: none; }
 }
 .rail-user-name { display: block; font-weight: 600; }
 .rail-user-initial { display: none; }
-.rail-user-role { display: block; font-size: 12px; opacity: 0.7; text-transform: capitalize; }
+.rail-user-role { display: block; font: var(--text-overline); font-weight: 400; opacity: 0.7; text-transform: capitalize; }
 .page { padding: 28px 32px 40px; max-width: 1280px; width: 100%; }
 .page-head { display: flex; align-items: baseline; gap: 14px; margin-bottom: 18px; }
 
@@ -77,7 +95,7 @@ a { color: var(--accent); text-decoration: none; }
   }
   .rail-logo, .rail-foot .rail-user-role { display: none; }
   .rail-nav { flex-direction: row; flex: 1; justify-content: space-around; }
-  .rail-nav a { padding: 0 10px; font-size: 13px; }
+  .rail-nav a { padding: 0 10px; font: var(--text-button-sm); }
   .rail-foot { margin: 0 0 0 6px; flex-direction: row; align-items: center; gap: 6px; }
   .rail-foot .lang { display: none; }
   /* One letter in a circle; the full name is in the title. */
@@ -85,7 +103,7 @@ a { color: var(--accent); text-decoration: none; }
   .rail-user-name { display: none; }
   .rail-user-initial { display: block; font-weight: 600; }
   .page { padding: 18px 16px calc(84px + env(safe-area-inset-bottom)); }
-  h1 { font-size: 22px; }
+  h1 { font: var(--text-h1-phone); }
 }
 
 /* ---- controls ------------------------------------------------------- */
@@ -99,16 +117,22 @@ a { color: var(--accent); text-decoration: none; }
   border: 1px solid var(--line);
   background: var(--surface);
   color: var(--ink);
-  font-weight: 500;
-  font-size: 14px;
+  font: var(--text-button);
   cursor: pointer;
 }
-.pill:hover { border-color: var(--accent-hover); }
+/* Five states, and each one is written once. The `.is-…` twin exists so
+   /design can stand all five next to each other — a state you can only
+   reach with a mouse is a state nobody reviews. */
+.pill:hover, .pill.is-hover { border-color: var(--accent-hover); }
+.pill:active, .pill.is-pressed { background: var(--surface-2); }
+.pill:focus-visible, .pill.is-focus { outline: 2px solid var(--accent); outline-offset: 2px; }
+.pill:disabled, .pill.is-disabled { opacity: 0.5; cursor: default; }
 .pill.on { background: var(--lime); border-color: var(--lime); color: var(--ink); }
-.pill-sm { min-height: 34px; padding: 0 12px; font-size: 13px; }
+.pill-sm { min-height: 34px; padding: 0 12px; font: var(--text-button-sm); }
 .pill-accent { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
-.pill-accent:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
-.pill-accent:disabled { opacity: 0.5; cursor: default; }
+.pill-accent:hover, .pill-accent.is-hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+.pill-accent:active, .pill-accent.is-pressed { background: var(--accent-hover); border-color: var(--accent-hover); filter: brightness(0.92); }
+.pill-accent:disabled, .pill-accent.is-disabled { opacity: 0.5; cursor: default; }
 .pill-wide { width: 100%; justify-content: center; }
 .lang { display: inline-flex; gap: 4px; }
 .rail .pill { background: transparent; border-color: var(--rail-line); color: var(--rail-ink); }
@@ -126,8 +150,8 @@ a { color: var(--accent); text-decoration: none; }
 .input:focus { outline: 2px solid var(--accent-hover); outline-offset: 1px; }
 .input-search { max-width: 260px; }
 .field { display: block; margin-bottom: 14px; }
-.lbl { display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
-.hint { font-size: 13px; margin-bottom: 12px; }
+.lbl { display: block; font: var(--text-label); color: var(--muted); margin-bottom: 6px; }
+.hint { font: var(--text-label); margin-bottom: 12px; }
 .hint-bad { color: var(--crit); }
 .toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 16px; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -136,7 +160,8 @@ a { color: var(--accent); text-decoration: none; }
   padding: 2px 10px;
   border-radius: var(--radius-pill);
   background: var(--surface-2);
-  font-size: 12px;
+  font: var(--text-overline);
+  font-weight: 400;
   margin: 0 4px 4px 0;
 }
 
@@ -160,8 +185,8 @@ a { color: var(--accent); text-decoration: none; }
   color: var(--ink);
   min-height: 92px;
 }
-.tile-num { font-family: var(--display); font-size: 28px; font-weight: 600; line-height: 1.1; font-variant-numeric: tabular-nums; }
-.tile-lbl { font-size: 13px; color: var(--muted); }
+.tile-num { font: var(--text-display); font-variant-numeric: tabular-nums; }
+.tile-lbl { font: var(--text-label); color: var(--muted); }
 .tile-crit { border-color: var(--crit); background: var(--crit-soft); }
 .tile-crit .tile-num { color: var(--crit); }
 .tile-warn { border-color: var(--service); background: var(--warn-soft); }
@@ -176,12 +201,10 @@ a { color: var(--accent); text-decoration: none; }
 }
 .state-list li:first-child a { border-top: 0; }
 .table-wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-card); }
-.table { border-collapse: collapse; width: 100%; font-size: 14px; }
+.table { border-collapse: collapse; width: 100%; font: var(--text-body-sm); }
 .table th {
   text-align: left;
-  font-family: var(--display);
-  font-weight: 600;
-  font-size: 12px;
+  font: var(--text-overline);
   color: var(--muted);
   background: var(--surface-2);
   padding: 10px 14px;
@@ -233,9 +256,7 @@ a { color: var(--accent); text-decoration: none; }
 }
 .login-head { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
 .pill-mark {
-  font-family: var(--display);
-  font-size: 12px;
-  font-weight: 600;
+  font: var(--text-overline);
   letter-spacing: 0.04em;
   padding: 2px 10px;
   border-radius: var(--radius-pill);
@@ -243,19 +264,19 @@ a { color: var(--accent); text-decoration: none; }
   color: var(--ink);
 }
 .login-lang { margin-bottom: 14px; }
-.login-note { color: var(--muted); font-size: 14px; margin: 0 0 18px; }
+.login-note { color: var(--muted); font: var(--text-body-sm); margin: 0 0 18px; }
 
 /* ---- cards, key-value rows, timelines ------------------------------- */
 .page-head-wrap { flex-wrap: wrap; align-items: center; row-gap: 8px; }
 .spacer { flex: 1; }
 .two-col { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px; margin-bottom: 18px; }
 .two-col > .card { margin-bottom: 0; }
-.kv { display: grid; grid-template-columns: minmax(120px, 38%) 1fr; gap: 12px; padding: 8px 0; border-top: 1px solid var(--line-soft); font-size: 14px; }
+.kv { display: grid; grid-template-columns: minmax(120px, 38%) 1fr; gap: 12px; padding: 8px 0; border-top: 1px solid var(--line-soft); font: var(--text-body-sm); }
 .kv:first-child { border-top: 0; }
 .kv-k { color: var(--muted); }
 .pre { white-space: pre-wrap; }
 .timeline { list-style: none; margin: 0; padding: 0; }
-.timeline li { display: grid; grid-template-columns: 96px 1fr; gap: 12px; padding: 8px 0; border-top: 1px solid var(--line-soft); font-size: 14px; }
+.timeline li { display: grid; grid-template-columns: 96px 1fr; gap: 12px; padding: 8px 0; border-top: 1px solid var(--line-soft); font: var(--text-body-sm); }
 .timeline li:first-child { border-top: 0; }
 .table-flat { border: 0; border-radius: 0; }
 .card-drawer { border-color: var(--accent-hover); }
@@ -266,6 +287,8 @@ a { color: var(--accent); text-decoration: none; }
   border-radius: var(--radius-pill); background: var(--accent); color: var(--on-accent); font-weight: 600;
 }
 .rail-cta:hover { background: var(--accent-hover); }
+/* A drawn glyph, not a text style: the plus is sized to the button it sits
+   in, the way an icon would be. Same for the × on a photo thumbnail. */
 .cta-plus { font-size: 20px; line-height: 1; margin-right: 8px; }
 @media (max-width: 719px) {
   /* A round plus in the thumb zone; the words are in the title and aria-label. */
@@ -284,7 +307,7 @@ select.input { appearance: auto; }
 .wizard { max-width: 640px; display: flex; flex-direction: column; min-height: calc(100vh - 80px); }
 .wizard-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 8px; }
 .wizard-steps { list-style: none; display: flex; gap: 6px; margin: 0 0 18px; padding: 0; flex-wrap: wrap; }
-.wizard-steps li { font-size: 12px; padding: 2px 10px; border-radius: var(--radius-pill); background: var(--surface-2); color: var(--muted); }
+.wizard-steps li { font: var(--text-overline); font-weight: 400; padding: 2px 10px; border-radius: var(--radius-pill); background: var(--surface-2); color: var(--muted); }
 .wizard-steps li.on { background: var(--lime); color: var(--ink); font-weight: 600; }
 .wizard-steps li.done { color: var(--accent); }
 .wizard-body { flex: 1; }
@@ -320,7 +343,7 @@ select.input { appearance: auto; }
   border: 1px solid var(--line); background: var(--surface-2); display: grid; place-items: center;
 }
 .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.thumb-add { cursor: pointer; font-size: 13px; font-weight: 500; color: var(--accent); border-style: dashed; }
+.thumb-add { cursor: pointer; font: var(--text-button-sm); color: var(--accent); border-style: dashed; }
 .thumb-x {
   position: absolute; top: 4px; right: 4px; width: 24px; height: 24px; border-radius: 50%;
   border: 0; background: var(--scrim); color: var(--on-scrim); font-size: 16px; line-height: 1; cursor: pointer;
@@ -330,7 +353,7 @@ select.input { appearance: auto; }
 label.pill input[type='file'] { display: none; }
 
 /* ---- return checklist ------------------------------------------------ */
-h2.sub { font-size: 14px; margin: 18px 0 8px; }
+h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
 .item-list { list-style: none; margin: 0 0 16px; padding: 0; }
 .item-list li { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 8px 0; border-top: 1px solid var(--line-soft); }
 .item-list li:first-child { border-top: 0; }
@@ -340,14 +363,14 @@ h2.sub { font-size: 14px; margin: 18px 0 8px; }
 /* ---- settings, inline forms ----------------------------------------- */
 .sub-form { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line-soft); }
 .sub-form.card { border: 1px solid var(--accent-hover); padding: 16px 18px; margin: 12px 0 0; }
-.input-inline { min-height: 34px; min-width: 132px; max-width: 200px; padding: 0 10px; font-size: 13px; }
+.input-inline { min-height: 34px; min-width: 132px; max-width: 200px; padding: 0 10px; font: var(--text-button-sm); }
 .inline-form { display: inline-flex; gap: 6px; align-items: center; }
 .row-off { opacity: 0.55; }
 .table td .pill { white-space: nowrap; }
 .rail-user-link { display: block; text-decoration: none; }
 .rail-signout {
   background: none; border: 0; color: var(--rail-ink); opacity: 0.7;
-  font: inherit; font-size: 12px; text-align: left; padding: 4px 12px; cursor: pointer;
+  font: var(--text-overline); font-weight: 400; text-align: left; padding: 4px 12px; cursor: pointer;
 }
 .rail-signout:hover { opacity: 1; }
 @media (max-width: 719px) {
@@ -376,3 +399,48 @@ h2.sub { font-size: 14px; margin: 18px 0 8px; }
 /* The summing line of a table: the same row, read as a total. */
 .row-total td { border-top: 2px solid var(--line); font-weight: 600; color: var(--ink); }
 .row-total td:first-child { color: var(--muted); font-weight: 500; }
+
+/* ---- /design: foundations ------------------------------------------- */
+.d-page > h2 { margin-top: 26px; }
+.d-group + .d-group { margin-top: 12px; }
+.d-note { margin: 0 0 10px; }
+.d-tokens { list-style: none; margin: 0; padding: 0; }
+.d-tokens li {
+  display: grid;
+  grid-template-columns: 28px minmax(120px, 160px) minmax(90px, 1fr) 2fr;
+  gap: 10px;
+  align-items: center;
+  padding: 7px 0;
+  border-top: 1px solid var(--line-soft);
+}
+.d-tokens li:first-child { border-top: 0; }
+.d-var, .d-value { font: var(--text-mono-sm); overflow-wrap: anywhere; }
+.d-var { color: var(--accent); }
+.d-value { color: var(--muted); }
+.d-swatch {
+  width: 24px; height: 24px; border-radius: 7px;
+  border: 1px solid var(--line); display: inline-block;
+}
+.d-swatch-shadow { background: var(--surface); box-shadow: var(--shadow); }
+.d-swatch-none { display: inline-block; width: 24px; }
+.d-type {
+  display: grid;
+  grid-template-columns: minmax(120px, 160px) 1fr;
+  gap: 10px;
+  padding: 10px 0;
+  border-top: 1px solid var(--line-soft);
+  align-items: baseline;
+}
+.d-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 12px; }
+.d-shapes { align-items: flex-end; }
+.d-shape { display: inline-block; background: var(--accent-soft); border: 1px solid var(--accent); }
+.d-shape-pill { width: 96px; height: var(--control); border-radius: var(--radius-pill); }
+.d-shape-card { width: 96px; height: 64px; border-radius: var(--radius-card); }
+.d-shape-touch { width: var(--control); height: var(--control); border-radius: 8px; }
+
+@media (max-width: 719px) {
+  /* Four columns do not fit a phone; the note drops under its token. */
+  .d-tokens li { grid-template-columns: 28px 1fr; }
+  .d-tokens li .d-value, .d-tokens li .d-note { grid-column: 2; }
+  .d-type { grid-template-columns: 1fr; }
+}

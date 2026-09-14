@@ -26,13 +26,17 @@ const TS_OUT = 'packages/shared/src/tokens.ts';
 
 const CHECK = process.argv.includes('--check');
 
-/** camelCase -> kebab-case, digits counting as their own word: surface2 -> surface-2. */
+/**
+ * camelCase -> the custom-property name: textH1Phone -> --text-h1-phone.
+ * A digit belongs to the word it ends (h1, h2), so the break goes before the
+ * next capital, not before the digit. Where that rule gives the wrong name a
+ * token may carry an explicit `css`; today one does, and it says so there.
+ */
 function kebab(name) {
-  return name
-    .replace(/([a-z])([A-Z])/g, '$1-$2')
-    .replace(/([a-zA-Z])(\d)/g, '$1-$2')
-    .toLowerCase();
+  return name.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase();
 }
+
+const cssName = (token) => token.css ?? `--${kebab(token.name)}`;
 
 const spec = JSON.parse(readFileSync(SOURCE, 'utf8'));
 const groups = spec.groups;
@@ -62,7 +66,7 @@ function css() {
   const body = groups
     .map((g) => {
       const head = `  /* ${g.name} — ${g.note} */`;
-      const lines = g.tokens.map((t) => `  --${kebab(t.name)}: ${t.value};${t.note ? ` /* ${t.note} */` : ''}`);
+      const lines = g.tokens.map((t) => `  ${cssName(t)}: ${t.value};${t.note ? ` /* ${t.note} */` : ''}`);
       return [head, ...lines].join('\n');
     })
     .join('\n\n');
@@ -86,7 +90,33 @@ function ts() {
     ` * would put the value back in two places.\n` +
     ` */\n` +
     `export const tokens = {\n${body}\n} as const;\n\n` +
-    `export type TokenName = keyof typeof tokens;\n`
+    `export type TokenName = keyof typeof tokens;\n\n` +
+    `/**\n` +
+    ` * The same tokens with their grouping, their custom-property names and the\n` +
+    ` * note that says what each is for. This is what the /design page renders:\n` +
+    ` * the page shows the source rather than a second description of it, so a\n` +
+    ` * token added to the JSON appears there without anyone writing it twice.\n` +
+    ` */\n` +
+    `export interface TokenEntry {\n` +
+    `  name: TokenName;\n` +
+    `  cssVar: string;\n` +
+    `  value: string;\n` +
+    `  note: string;\n` +
+    `}\n\n` +
+    `export interface TokenGroup {\n` +
+    `  name: string;\n` +
+    `  note: string;\n` +
+    `  tokens: TokenEntry[];\n` +
+    `}\n\n` +
+    `export const tokenGroups: TokenGroup[] = ${JSON.stringify(
+      groups.map((g) => ({
+        name: g.name,
+        note: g.note,
+        tokens: g.tokens.map((t) => ({ name: t.name, cssVar: cssName(t), value: t.value, note: t.note ?? '' })),
+      })),
+      null,
+      2,
+    )};\n`
   );
 }
 
