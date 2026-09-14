@@ -8,7 +8,13 @@
  *    packages/shared/tokens.json; the interface reads `var(--accent)`, the PDF
  *    writer reads `tokens.accent`.
  *
- * 2. No user input interpolated into SQL.
+ * 2. No var(--…) pointing at a token that does not exist.
+ *    An unknown custom property is not an error anywhere: the declaration is
+ *    dropped and the element quietly inherits. That is how `--text-h1` — a
+ *    name the generator never produced — left every heading at body size on a
+ *    page that otherwise looked finished.
+ *
+ * 3. No user input interpolated into SQL.
  *    Prisma's tagged `$queryRaw` is parameterised and fine; the `...Unsafe`
  *    variants take a built string and are not. There is no raw SQL in this
  *    codebase today, and this is what keeps it that way (APECS SEC-001).
@@ -39,15 +45,28 @@ function files(dir) {
   return out;
 }
 
+const DECLARED = /(--[a-z0-9-]+)\s*:/g;
+const USED = /var\(\s*(--[a-z0-9-]+)/g;
+
 const HEX = /#[0-9a-fA-F]{3,8}\b/g;
 const RGB = /\brgba?\(/g;
 const UNSAFE_SQL = /\$(?:query|execute)RawUnsafe\b/g;
 
 const problems = [];
 
+// Every custom property this codebase declares, wherever it declares it: the
+// generated token file, and the handful a stylesheet defines for itself.
+const declared = new Set();
+const uses = [];
+
 for (const root of ROOTS) {
   for (const path of files(root)) {
-    const text = readFileSync(path, 'utf8');
+    // Comments are blanked, not removed, so line numbers stay true. A rule
+    // written out in prose — `var(--text-…)`, `#557553` as an example — is
+    // documentation, and reporting it would teach people to stop explaining.
+    const text = readFileSync(path, 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' '))
+      .replace(/(^|[^:])\/\/[^\n]*/g, (m, p1) => p1 + ' '.repeat(m.length - p1.length));
     const lines = text.split('\n');
     lines.forEach((line, i) => {
       const where = `${path}:${i + 1}`;
@@ -59,10 +78,18 @@ for (const root of ROOTS) {
           problems.push(`${where}  colour literal ${m[0]}…) — add it to packages/shared/tokens.json and use the token`);
         }
       }
+      for (const m of line.matchAll(DECLARED)) declared.add(m[1]);
+      for (const m of line.matchAll(USED)) uses.push({ name: m[1], where });
       for (const m of line.matchAll(UNSAFE_SQL)) {
         problems.push(`${where}  ${m[0]} builds SQL from a string — use the tagged $queryRaw\`…\` or the Prisma client`);
       }
     });
+  }
+}
+
+for (const use of uses) {
+  if (!declared.has(use.name)) {
+    problems.push(`${use.where}  var(${use.name}) — no token declares it, so the declaration is dropped silently`);
   }
 }
 
@@ -71,4 +98,7 @@ if (problems.length) {
   for (const p of problems) console.error(`  ${p}`);
   process.exit(1);
 }
-console.log(`guard-code: clean — no colour literals outside the token files, no unsafe raw SQL`);
+console.log(
+  `guard-code: clean — no colour literals outside the token files, ` +
+    `${uses.length} var() uses all resolve, no unsafe raw SQL`,
+);

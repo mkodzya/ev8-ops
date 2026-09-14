@@ -46,6 +46,9 @@ const NON_LATIN = /[Ͱ-῿℀-￿]/;
 const CODEY = /[;=(){}[\]|`$*&\\]|\/\/|=>/;
 const PROPERTY_ACCESS = /^[A-Za-z_$][\w$]*\s*\.\s*[A-Za-z_$][\w$]*$/;
 const LONE_TYPE_NAME = /^[A-Z][A-Za-z]+$/;
+// A CSS custom property quoted in the interface — /design shows the token
+// names as themselves. `--control` is not English, it is the name of a thing.
+const CSS_VAR = /^--[a-z0-9-]*$/;
 const OPENS_A_BLOCK =
   /^(catch|finally|else|try|do|while|switch|default|case|return|interface|type|enum|class|function|const|let|var|export|import|extends|implements)\b/;
 
@@ -54,7 +57,7 @@ function isProse(raw) {
   if (!text) return false;
   if (NON_LATIN.test(text)) return false;
   if (CODEY.test(text)) return false;
-  if (PROPERTY_ACCESS.test(text) || LONE_TYPE_NAME.test(text)) return false;
+  if (PROPERTY_ACCESS.test(text) || LONE_TYPE_NAME.test(text) || CSS_VAR.test(text)) return false;
   if (OPENS_A_BLOCK.test(text)) return false;
   const words = (text.match(/[A-Za-z][A-Za-z'’-]*/g) ?? []).filter((w) => !ALLOW.has(w));
   if (words.length === 0) return false;

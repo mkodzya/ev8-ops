@@ -46,6 +46,7 @@ export function Shell() {
     ...(can('reports.view') ? [{ to: '/economics', label: t.economics.nav }] : []),
     { to: '/customers', label: t.nav.customers },
     ...(can('users.manage') ? [{ to: '/settings', label: t.settings.title }] : []),
+    ...(can('users.manage') ? [{ to: '/design', label: t.design.title }] : []),
   ];
 
   return (

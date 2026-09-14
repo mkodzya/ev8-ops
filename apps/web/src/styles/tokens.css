@@ -47,6 +47,22 @@
   --body: 'Inter', 'Noto Sans Georgian', system-ui, -apple-system, 'Segoe UI', sans-serif; /* body text and tables */
   --mono: 'IBM Plex Mono', 'Noto Sans Georgian', ui-monospace, SFMono-Regular, Menlo, monospace; /* VIN and money */
 
+  /* text — Named text styles. Fourteen of them, because the interface uses fourteen — the point is that they are named and counted, not that a component reaches for a size of its own. Each is a CSS `font` shorthand, so a rule says `font: var(--text-body)` and nothing else. The shorthand resets font-variant, so tabular figures are set by the .t-* class next to it, never by the token. */
+  --text-display: 600 28px/1.1 var(--display); /* the number on a tile, the one figure a screen is about */
+  --text-h1: 600 24px/1.25 var(--display); /* the page title */
+  --text-h1-phone: 600 22px/1.25 var(--display); /* the same title under 900 px */
+  --text-h2: 600 16px/1.35 var(--display); /* a section inside a page */
+  --text-h3: 600 14px/1.4 var(--display); /* a subsection, and the head of a card */
+  --text-body: 400 15px/1.45 var(--body); /* running text; the page default */
+  --text-body-sm: 400 14px/1.45 var(--body); /* tables, key-value rows, the history feed */
+  --text-label: 400 13px/1.4 var(--body); /* field labels, hints, tile captions */
+  --text-overline: 600 12px/1.3 var(--display); /* table headers and small caps marks; the class adds the letter-spacing */
+  --text-button: 500 14px/1 var(--display); /* pills and buttons */
+  --text-button-sm: 500 13px/1 var(--display); /* the small pill and the inline field */
+  --text-mono: 400 14px/1.45 var(--mono); /* VIN and anything read character by character */
+  --text-money: 600 14px/1.45 var(--mono); /* sums; the class adds tabular figures and right alignment */
+  --text-mono-sm: 400 12px/1.4 var(--mono); /* code quoted inside the interface — token names on /design */
+
   /* shape — One radius language: pills for buttons and chips, 16 px cards, nothing else. */
   --radius-card: 16px; /* cards and panels */
   --radius-pill: 999px; /* buttons and filter chips */
