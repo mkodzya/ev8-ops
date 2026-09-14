@@ -12,7 +12,7 @@ import { fmtDate as fmtDay } from '../format.js';
 import { useSession } from '../session.js';
 
 interface Card {
-  customer: { id: string; name: string; nameKa: string | null; nameLat: string | null; personalId: string | null; phone: string | null; email: string | null; kind: CustomerKind; tags: string[]; notes: string | null };
+  customer: { id: string; name: string; nameKa: string | null; nameLat: string | null; personalId: string | null; phone: string | null; email: string | null; address: string | null; kind: CustomerKind; tags: string[]; notes: string | null };
   documents: { id: string; docKind: 'id_card' | 'driver_licence' | 'other'; label: string; sizeBytes: number; mimeType: string; createdAt: string }[];
   canOpenDocuments: boolean;
   rentals: { id: string; number: string; status: RentalStatus; vehicle: { id: string; vin: string } | null; vinUnconfirmed: boolean; pickedUpOn: string | null; returnedOn: string | null; paidThrough: string | null; weeklyRateTetri: number; deposit: { amountTetri: number; status: DepositStatus } | null }[];
@@ -65,6 +65,7 @@ export function CustomerPage() {
           <Row k={t.customer.phone} v={<span className="mono">{c.phone ?? t.common.dash}</span>} />
           <Row k={t.customer.personalId} v={<span className="mono">{c.personalId ?? t.common.dash}</span>} />
           <Row k={t.customer.email} v={c.email ?? t.common.dash} />
+          <Row k={t.customer.address} v={c.address ?? t.common.dash} />
           <Row k={t.customer.kind} v={t.customer.kinds[c.kind]} />
           <Row k={t.customers.tags} v={c.tags.length ? c.tags.map((x) => <span key={x} className="chip">{x}</span>) : t.common.dash} />
           {c.notes && <Row k={t.customer.notes} v={<span className="pre">{c.notes}</span>} />}

@@ -5,6 +5,7 @@ import { ApiError } from './lib/errors.js';
 import { installGuard } from './lib/guard.js';
 import { authRoutes } from './routes/auth.js';
 import { customerRoutes } from './routes/customers.js';
+import { documentRoutes } from './routes/documents.js';
 import { fileRoutes } from './routes/files.js';
 import { fleetRoutes } from './routes/fleet.js';
 import { opsRoutes } from './routes/ops.js';
@@ -45,6 +46,7 @@ export function buildApp(): FastifyInstance {
   rentalRoutes(app);
   opsRoutes(app);
   fileRoutes(app);
+  documentRoutes(app);
 
   return app;
 }

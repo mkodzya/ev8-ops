@@ -198,6 +198,7 @@ export const en = {
     nameKa: 'Name in Georgian',
     nameLat: 'Name in Latin',
     personalId: 'Personal number',
+    address: 'Address',
     phone: 'WhatsApp number',
     email: 'Email',
     kind: 'Type',
@@ -225,6 +226,47 @@ export const en = {
     restricted: 'Documents are opened by the director and the owner only. You see that they exist.',
     none: 'No documents.',
     pick: 'Take a photo or choose a file',
+  },
+
+  docs: {
+    contract: 'Contract PDF',
+    returnAct: 'Return act PDF',
+    regenerate: 'Rebuild the document',
+    regenerateHint: 'The copy that was handed over is archived and a new one is made from the current data. Director and owner only.',
+    note: 'The Georgian text is authentic; the English is an unofficial translation.',
+  },
+
+  handover: {
+    nightParking: 'Night parking address',
+    nightParkingHint: 'The contract allows the moped to spend the night at this address only.',
+    batteries: 'Batteries handed over',
+    chargers: 'Chargers handed over',
+  },
+
+  returnItems: {
+    title: 'Returned property',
+    items: {
+      moped: 'Moped',
+      key: 'Key',
+      battery_1: 'Battery 1',
+      battery_2: 'Battery 2',
+      charger_1: 'Charger 1',
+      charger_2: 'Charger 2',
+    },
+    states: { ok: 'In order', damaged: 'Damaged', missing: 'Not returned' },
+    note: 'Note',
+  },
+
+  grounds: {
+    title: 'Grounds for withholding',
+    rent_arrears: 'Rent arrears',
+    fines: 'Fines',
+    moped_damage: 'Damage to the moped',
+    incomplete_return: 'Incomplete return',
+    key_loss: 'Loss of the key',
+    charger_loss: 'Loss of the charger',
+    cleaning: 'Washing, cleaning',
+    other: 'Other',
   },
 
   customers: {

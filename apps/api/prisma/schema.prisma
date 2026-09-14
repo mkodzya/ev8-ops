@@ -192,6 +192,7 @@ model Customer {
   email         String?
   kind          CustomerKind @default(person)
   tags          String[]     @default([])
+  address       String?
   notes         String?
   odooPartnerId Int?         @unique @map("odoo_partner_id")
   archived      Boolean      @default(false)
@@ -220,6 +221,9 @@ model Rental {
   paidThrough           DateTime?    @map("paid_through") @db.Date
   buyoutTargetTetri     Int?         @map("buyout_target_tetri")
   buyoutPerPaymentTetri Int?         @map("buyout_per_payment_tetri")
+  nightParkingAddress   String?      @map("night_parking_address")
+  batteries             Int?
+  chargers              Int?
   notes                 String?
   odooOrderId           Int?         @unique @map("odoo_order_id")
   odooName              String?      @map("odoo_name")
@@ -234,6 +238,7 @@ model Rental {
   deposit   Deposit?
   acts      Act[]
   events    VehicleEvent[]
+  documents StoredFile[]
   currentOf Vehicle[]      @relation("vehicle_current_rental")
 
   @@map("rentals")
@@ -265,6 +270,7 @@ model Deposit {
   returnedTetri  Int           @default(0) @map("returned_tetri")
   withheldTetri  Int           @default(0) @map("withheld_tetri")
   withheldReason String?       @map("withheld_reason")
+  withheldGrounds String[]     @default([]) @map("withheld_grounds")
   returnedTo     String?       @map("returned_to")
   returnedOn     DateTime?     @map("returned_on") @db.Date
   decidedById    String?       @map("decided_by") @db.Uuid
@@ -287,6 +293,7 @@ model Act {
   occurredOn   DateTime @map("occurred_on") @db.Date
   odometerKm   Int?     @map("odometer_km")
   condition    String?
+  items        Json?
   signatureUrl String?  @map("signature_url")
   pdfUrl       String?  @map("pdf_url")
   createdById  String?  @map("created_by") @db.Uuid
@@ -306,6 +313,7 @@ model StoredFile {
   kind         FileKind
   actId        String?  @map("act_id") @db.Uuid
   customerId   String?  @map("customer_id") @db.Uuid
+  rentalId     String?  @map("rental_id") @db.Uuid
   label        String   @default("")
   docKind      String?  @map("doc_kind")
   mimeType     String   @map("mime_type")
@@ -318,6 +326,7 @@ model StoredFile {
 
   act        Act?      @relation(fields: [actId], references: [id], onDelete: Cascade)
   customer   Customer? @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  rental     Rental?   @relation(fields: [rentalId], references: [id], onDelete: Cascade)
   uploadedBy User?     @relation(fields: [uploadedById], references: [id])
 
   @@map("files")

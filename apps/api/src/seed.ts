@@ -80,6 +80,7 @@ async function seedDemo(ownerId: string): Promise<void> {
         nameLat: `Demo Customer ${i + 1}`,
         personalId: `DEMO-${String(i + 1).padStart(8, '0')}`,
         phone: `+995500000${String(i + 1).padStart(3, '0')}`,
+        address: `DEMO: ვაკე, დემო ქუჩა ${i + 1}`,
         tags: ['demo', i < 4 ? 'rental' : 'buyer'],
         notes: DEMO_NOTE,
       },
@@ -103,6 +104,9 @@ async function seedDemo(ownerId: string): Promise<void> {
         returnedOn: opts.returnedOn ? d(opts.returnedOn) : null,
         status: opts.returnedOn ? 'returned' : opts.status ?? 'active',
         paidThrough: paidThrough ? d(paidThrough) : null,
+        nightParkingAddress: 'DEMO: ვაკე, დემო ქუჩა 1, ეზო',
+        batteries: 2,
+        chargers: 2,
         notes: DEMO_NOTE,
         createdById: ownerId,
       },
@@ -122,7 +126,17 @@ async function seedDemo(ownerId: string): Promise<void> {
     if (opts.vehicle) {
       await prisma.vehicleEvent.create({ data: { vehicleId: opts.vehicle.id, kind: 'pickup', occurredOn: d(opts.pickedUpOn), fromState: 'available', toState: 'rented', rentalId: r.id, actorId: ownerId } });
       if (opts.returnedOn) {
-        await prisma.act.create({ data: { rentalId: r.id, kind: 'return', occurredOn: d(opts.returnedOn), odometerKm: 640, condition: DEMO_NOTE, createdById: ownerId } });
+        await prisma.act.create({
+          data: {
+            rentalId: r.id,
+            kind: 'return',
+            occurredOn: d(opts.returnedOn),
+            odometerKm: 640,
+            condition: DEMO_NOTE,
+            items: { moped: { state: 'ok' }, key: { state: 'ok' }, battery_1: { state: 'ok' }, battery_2: { state: 'ok' }, charger_1: { state: 'ok' }, charger_2: { state: 'ok' } },
+            createdById: ownerId,
+          },
+        });
         await prisma.vehicleEvent.create({ data: { vehicleId: opts.vehicle.id, kind: 'return', occurredOn: d(opts.returnedOn), fromState: 'rented', toState: 'available', rentalId: r.id, actorId: ownerId } });
       } else {
         await prisma.vehicle.update({ where: { id: opts.vehicle.id }, data: { state: 'rented', currentRentalId: r.id } });

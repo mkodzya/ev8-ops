@@ -23,6 +23,9 @@ export interface PickupInput {
   notes: string | null;
   buyoutTargetTetri: number | null;
   buyoutPerPaymentTetri: number | null;
+  nightParkingAddress: string | null;
+  batteries: number | null;
+  chargers: number | null;
   today: string;
 }
 
@@ -54,6 +57,9 @@ export async function pickUp(input: PickupInput): Promise<{ id: string; number: 
         notes: input.notes,
         buyoutTargetTetri: input.buyoutTargetTetri,
         buyoutPerPaymentTetri: input.buyoutPerPaymentTetri,
+        nightParkingAddress: input.nightParkingAddress,
+        batteries: input.batteries,
+        chargers: input.chargers,
         createdById: input.actorId,
       },
     });
@@ -110,12 +116,15 @@ export interface ReturnInput {
   returnedOn: string;
   odometerKm: number | null;
   condition: string | null;
+  /** The return act's per-item checklist, as the paper form has it. */
+  items: Record<string, { state: string; note: string | null }>;
   /** Present only when the actor may decide on the deposit (director, owner). */
   deposit: null | {
     returnedTetri: number;
     withheldTetri: number;
     withheldReason: string | null;
     returnedTo: string | null;
+    grounds: string[];
   };
   canConfirm: boolean; // owner: withholdings and third-party returns are final at once
 }
@@ -143,6 +152,7 @@ export async function returnRental(input: ReturnInput): Promise<{ actId: string 
         occurredOn: dateFromISO(input.returnedOn)!,
         odometerKm: input.odometerKm,
         condition: input.condition,
+        items: input.items,
         createdById: input.actorId,
       },
     });
@@ -164,6 +174,7 @@ export async function returnRental(input: ReturnInput): Promise<{ actId: string 
           returnedTetri: d.returnedTetri,
           withheldTetri: d.withheldTetri,
           withheldReason: d.withheldReason,
+          withheldGrounds: d.grounds,
           returnedTo: d.returnedTo,
           returnedOn: dateFromISO(input.returnedOn),
           decidedById: input.actorId,

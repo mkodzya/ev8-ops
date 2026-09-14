@@ -8,6 +8,7 @@ import { env } from '../lib/env.js';
 import { conflict, isUniqueViolation, notFound } from '../lib/errors.js';
 import { actorOf } from '../lib/guard.js';
 import { pickUp, returnRental } from '../lib/rentals.js';
+import { ITEM_STATES, RETURN_ITEMS, WITHHOLD_GROUNDS, type ItemState, type ReturnItem, type WithholdGround } from '../lib/pdf/returnAct.js';
 import { date, int, oneOf, str, strList, tetri } from '../lib/validate.js';
 import { moveVehicle } from '../lib/vehicles.js';
 
@@ -45,6 +46,7 @@ export function opsRoutes(app: FastifyInstance): void {
           personalId,
           phone,
           email: str(b, 'email', { max: 200 }),
+          address: str(b, 'address', { max: 300 }),
           kind: oneOf(b, 'kind', CUSTOMER_KINDS) ?? 'person',
           tags: strList(b, 'tags'),
           notes: str(b, 'notes', { max: 4000 }),
@@ -64,8 +66,8 @@ export function opsRoutes(app: FastifyInstance): void {
     const before = await prisma.customer.findUnique({ where: { id: req.params.id } });
     if (!before) throw notFound('customer_not_found', 'No such customer.');
     const data: Record<string, unknown> = {};
-    for (const k of ['name', 'nameKa', 'nameLat', 'personalId', 'phone', 'email', 'notes'] as const) {
-      if (k in b) data[k] = str(b, k, { max: k === 'notes' ? 4000 : 200, required: k === 'name' });
+    for (const k of ['name', 'nameKa', 'nameLat', 'personalId', 'phone', 'email', 'address', 'notes'] as const) {
+      if (k in b) data[k] = str(b, k, { max: k === 'notes' ? 4000 : 300, required: k === 'name' });
     }
     if ('kind' in b) data.kind = oneOf(b, 'kind', CUSTOMER_KINDS, { required: true });
     if ('tags' in b) data.tags = strList(b, 'tags');
@@ -102,6 +104,9 @@ export function opsRoutes(app: FastifyInstance): void {
       notes: str(b, 'notes', { max: 4000 }),
       buyoutTargetTetri: tetri(b, 'buyoutTargetTetri', { min: 1 }),
       buyoutPerPaymentTetri: tetri(b, 'buyoutPerPaymentTetri', { min: 1 }),
+      nightParkingAddress: str(b, 'nightParkingAddress', { max: 300 }),
+      batteries: int(b, 'batteries', { min: 0 }),
+      chargers: int(b, 'chargers', { min: 0 }),
       today,
     });
     return reply.code(201).send(result);
@@ -112,7 +117,13 @@ export function opsRoutes(app: FastifyInstance): void {
     const b = req.body ?? {};
     const actor = actorOf(req);
     const today = todayISO(new Date(), env.TZ);
-    let deposit: { returnedTetri: number; withheldTetri: number; withheldReason: string | null; returnedTo: string | null } | null = null;
+    let deposit: {
+      returnedTetri: number;
+      withheldTetri: number;
+      withheldReason: string | null;
+      returnedTo: string | null;
+      grounds: WithholdGround[];
+    } | null = null;
     if (b.deposit && typeof b.deposit === 'object') {
       if (!hasPerm(actor, 'deposit.decide')) throw conflict('deposit_decision_forbidden', 'Only the director or the owner decides on a deposit.');
       const d = b.deposit as Body;
@@ -121,6 +132,7 @@ export function opsRoutes(app: FastifyInstance): void {
         withheldTetri: tetri(d, 'withheldTetri', { min: 0 }) ?? 0,
         withheldReason: str(d, 'withheldReason', { max: 1000 }),
         returnedTo: str(d, 'returnedTo', { max: 200 }),
+        grounds: strList(d, 'grounds').filter((g): g is WithholdGround => (WITHHOLD_GROUNDS as readonly string[]).includes(g)),
       };
     }
     const { actId } = await returnRental({
@@ -129,6 +141,7 @@ export function opsRoutes(app: FastifyInstance): void {
       returnedOn: date(b, 'returnedOn') ?? today,
       odometerKm: int(b, 'odometerKm', { min: 0 }),
       condition: str(b, 'condition', { max: 4000 }),
+      items: readItems(b.items),
       deposit,
       canConfirm: hasPerm(actor, 'deposit.confirm'),
     });
@@ -249,6 +262,21 @@ export function opsRoutes(app: FastifyInstance): void {
       throw e;
     }
   });
+}
+
+/** The return act's per-item checklist, kept to the codes the form has. */
+function readItems(raw: unknown): Partial<Record<ReturnItem, { state: ItemState; note: string | null }>> {
+  if (!raw || typeof raw !== 'object') return {};
+  const out: Partial<Record<ReturnItem, { state: ItemState; note: string | null }>> = {};
+  for (const item of RETURN_ITEMS) {
+    const rec = (raw as Record<string, unknown>)[item];
+    if (!rec || typeof rec !== 'object') continue;
+    const state = (rec as { state?: unknown }).state;
+    if (typeof state !== 'string' || !(ITEM_STATES as readonly string[]).includes(state)) continue;
+    const note = (rec as { note?: unknown }).note;
+    out[item] = { state: state as ItemState, note: typeof note === 'string' && note.trim() ? note.trim().slice(0, 500) : null };
+  }
+  return out;
 }
 
 function pickKeys(obj: object, keys: Record<string, unknown>): Record<string, unknown> {

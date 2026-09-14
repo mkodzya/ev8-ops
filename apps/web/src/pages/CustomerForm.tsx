@@ -11,7 +11,7 @@ import { errorText } from '../lib/use.js';
 export function CustomerForm({ onCreated, embedded }: { onCreated?: (id: string) => void; embedded?: boolean } = {}) {
   const t = useT();
   const navigate = useNavigate();
-  const [f, setF] = useState({ name: '', nameKa: '', nameLat: '', personalId: '', phone: '', email: '', kind: 'person' as CustomerKind, tags: '', notes: '' });
+  const [f, setF] = useState({ name: '', nameKa: '', nameLat: '', personalId: '', phone: '', email: '', address: '', kind: 'person' as CustomerKind, tags: '', notes: '' });
   const [twin, setTwin] = useState<{ id: string; name: string } | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -73,6 +73,9 @@ export function CustomerForm({ onCreated, embedded }: { onCreated?: (id: string)
           </select>
         </Field>
       </div>
+      <Field label={t.customer.address}>
+        <input className="input" value={f.address} onChange={set('address')} />
+      </Field>
       <Field label={t.customer.tags}>
         <input className="input" value={f.tags} onChange={set('tags')} />
       </Field>

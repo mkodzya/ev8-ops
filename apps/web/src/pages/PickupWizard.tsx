@@ -40,6 +40,9 @@ export function PickupWizard() {
   const [deposit, setDeposit] = useState<string>(gelFromTetri(DEFAULT_DEPOSIT_TETRI).toString());
   const [pickedUpOn, setPickedUpOn] = useState(todayISO());
   const [expectedReturnOn, setExpectedReturnOn] = useState('');
+  const [nightParking, setNightParking] = useState('');
+  const [batteries, setBatteries] = useState('2');
+  const [chargers, setChargers] = useState('2');
   const [odometer, setOdometer] = useState('');
   const [condition, setCondition] = useState('');
   const [photos, setPhotos] = useState<PreparedPhoto[]>([]);
@@ -70,7 +73,12 @@ export function PickupWizard() {
   const canNext = [
     !!customerId,
     !!vehicleId || (noVin && vinNote.trim().length > 0),
-    rateTetri != null && rateTetri >= 0 && depositTetri != null && depositTetri >= 0 && /^\d{4}-\d{2}-\d{2}$/.test(pickedUpOn),
+    rateTetri != null &&
+      rateTetri >= 0 &&
+      depositTetri != null &&
+      depositTetri >= 0 &&
+      /^\d{4}-\d{2}-\d{2}$/.test(pickedUpOn) &&
+      nightParking.trim().length > 0,
     true,
     true,
   ][step];
@@ -97,6 +105,9 @@ export function PickupWizard() {
         depositTetri,
         pickedUpOn,
         expectedReturnOn: expectedReturnOn || null,
+        nightParkingAddress: nightParking || null,
+        batteries: batteries === '' ? null : Number(batteries),
+        chargers: chargers === '' ? null : Number(chargers),
         odometerKm: odometer ? Number(odometer) : null,
         condition: condition || null,
       });
@@ -206,6 +217,17 @@ export function PickupWizard() {
           <Field label={t.pickup.expectedReturnOn}>
             <input className="input mono" type="date" value={expectedReturnOn} onChange={(e) => setExpectedReturnOn(e.target.value)} />
           </Field>
+          <Field label={t.handover.nightParking} hint={t.handover.nightParkingHint}>
+            <input className="input" value={nightParking} onChange={(e) => setNightParking(e.target.value)} />
+          </Field>
+          <div className="two-col">
+            <Field label={t.handover.batteries}>
+              <input className="input input-amount mono" value={batteries} onChange={(e) => setBatteries(e.target.value)} inputMode="numeric" />
+            </Field>
+            <Field label={t.handover.chargers}>
+              <input className="input input-amount mono" value={chargers} onChange={(e) => setChargers(e.target.value)} inputMode="numeric" />
+            </Field>
+          </div>
         </>
       )}
 
@@ -226,6 +248,7 @@ export function PickupWizard() {
             <Row k={t.pickup.rate} v={<span className="mono">{formatGel(rateTetri, { decimals: false })}{t.rentals.perWeek}</span>} />
             <Row k={t.pickup.deposit} v={<span className="mono">{formatGel(depositTetri, { decimals: false })}</span>} />
             <Row k={t.pickup.pickedUpOn} v={<span className="mono">{fmtDate(pickedUpOn)}</span>} />
+            <Row k={t.handover.nightParking} v={nightParking} />
           </section>
         </>
       )}

@@ -13,6 +13,9 @@ export interface RentalCard {
   rental: {
     id: string;
     number: string;
+    nightParkingAddress?: string | null;
+    batteries?: number | null;
+    chargers?: number | null;
     odooName: string | null;
     status: RentalStatus;
     storedStatus: RentalStatus;
@@ -30,7 +33,7 @@ export interface RentalCard {
     buyoutPerPaymentTetri: number | null;
     notes: string | null;
   };
-  deposit: { amountTetri: number; status: DepositStatus; returnedTetri: number; withheldTetri: number; withheldReason: string | null; returnedTo: string | null; returnedOn: string | null; confirmed?: boolean } | null;
+  deposit: { amountTetri: number; status: DepositStatus; returnedTetri: number; withheldTetri: number; withheldReason: string | null; withheldGrounds: string[]; returnedTo: string | null; returnedOn: string | null; confirmed?: boolean | null } | null;
   periods: { seq: number; startsOn: string; endsOn: string; amountTetri: number; paidTetri: number; payStatus: PeriodPayStatus }[];
   acts: { id: string; kind: ActKind; occurredOn: string; odometerKm: number | null; condition: string | null; photos: { id: string; label: string }[]; pdfUrl: string | null }[];
 }
@@ -64,6 +67,14 @@ export function RentalPage() {
         <RentalBadge status={r.status} />
         {r.odooName && <span className="muted mono">{r.odooName}</span>}
         <span className="spacer" />
+        <a className="pill pill-sm" href={`/api/rentals/${r.id}/contract.pdf`} target="_blank" rel="noreferrer">
+          {t.docs.contract}
+        </a>
+        {!open && can('rental.return') && (
+          <a className="pill pill-sm" href={`/api/rentals/${r.id}/return-act.pdf`} target="_blank" rel="noreferrer">
+            {t.docs.returnAct}
+          </a>
+        )}
         {open && can('rental.return') && (
           <Link className="pill pill-sm pill-accent" to={`/rentals/${r.id}/return`}>
             {t.actions.returnRental}
@@ -71,6 +82,15 @@ export function RentalPage() {
         )}
       </header>
       {err && <div className="hint hint-bad">{err}</div>}
+      {can('deposit.decide') && (
+        <p className="hint muted">
+          {t.docs.note}{' '}
+          <a href={`/api/rentals/${r.id}/contract.pdf?fresh=1`} target="_blank" rel="noreferrer">
+            {t.docs.regenerate}
+          </a>{' '}
+          — {t.docs.regenerateHint}
+        </p>
+      )}
 
       <div className="two-col">
         <section className="card">
@@ -97,6 +117,13 @@ export function RentalPage() {
           <Row k={t.rentals.paidThrough} v={<span className="mono">{fmtDate(r.paidThrough)}</span>} />
           {r.buyoutTargetTetri && (
             <Row k={t.rental.buyout} v={t.rental.buyoutProgress(formatGel(r.buyoutTargetTetri, { decimals: false }), formatGel(r.buyoutPerPaymentTetri ?? 0, { decimals: false }))} />
+          )}
+          {r.nightParkingAddress && <Row k={t.handover.nightParking} v={r.nightParkingAddress} />}
+          {(r.batteries != null || r.chargers != null) && (
+            <Row
+              k={`${t.handover.batteries} / ${t.handover.chargers}`}
+              v={<span className="mono">{r.batteries ?? 0} / {r.chargers ?? 0}</span>}
+            />
           )}
           {r.notes && <Row k={t.rental.notes} v={<span className="pre">{r.notes}</span>} />}
         </section>

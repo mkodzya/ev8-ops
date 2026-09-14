@@ -63,6 +63,7 @@ export function customerRoutes(app: FastifyInstance): void {
         email: c.email,
         kind: c.kind,
         tags: c.tags,
+        address: c.address,
         notes: c.notes,
       },
       documents: c.documents.map((d) => ({ id: d.id, docKind: d.docKind, label: d.label, sizeBytes: d.sizeBytes, mimeType: d.mimeType, createdAt: d.createdAt.toISOString() })),

@@ -1,4 +1,11 @@
 import { gelFromTetri, parseGel, todayISO } from '@ev8/shared';
+
+const RETURN_ITEMS = ['moped', 'key', 'battery_1', 'battery_2', 'charger_1', 'charger_2'] as const;
+type Item = (typeof RETURN_ITEMS)[number];
+const ITEM_STATES = ['ok', 'damaged', 'missing'] as const;
+type ItemState = (typeof ITEM_STATES)[number];
+const GROUNDS = ['rent_arrears', 'fines', 'moped_damage', 'incomplete_return', 'key_loss', 'charger_loss', 'cleaning', 'other'] as const;
+type Ground = (typeof GROUNDS)[number];
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api.js';
@@ -30,6 +37,10 @@ export function ReturnWizard() {
   const [odometer, setOdometer] = useState('');
   const [condition, setCondition] = useState('');
   const [photos, setPhotos] = useState<PreparedPhoto[]>([]);
+  const [items, setItems] = useState<Record<Item, { state: ItemState; note: string }>>(
+    () => Object.fromEntries(RETURN_ITEMS.map((i) => [i, { state: 'ok' as ItemState, note: '' }])) as Record<Item, { state: ItemState; note: string }>,
+  );
+  const [grounds, setGrounds] = useState<Ground[]>([]);
   const [progress, setProgress] = useState<string | null>(null);
   const [decision, setDecision] = useState<Decision>('full');
   const [withheld, setWithheld] = useState('');
@@ -54,7 +65,10 @@ export function ReturnWizard() {
         returnedOn,
         odometerKm: odometer ? Number(odometer) : null,
         condition: condition || null,
-        deposit: decides ? { returnedTetri: amount - withheldTetri, withheldTetri, withheldReason: reason || null, returnedTo: returnedTo || null } : undefined,
+        items,
+        deposit: decides
+          ? { returnedTetri: amount - withheldTetri, withheldTetri, withheldReason: reason || null, returnedTo: returnedTo || null, grounds }
+          : undefined,
       });
       await uploadAll(`/api/acts/${actId}/photos`, photos, (n) => setProgress(t.photos.uploading(n, photos.length)));
       setProgress(null);
@@ -96,6 +110,34 @@ export function ReturnWizard() {
           <Field label={t.ret.condition}>
             <textarea className="input textarea" rows={3} value={condition} onChange={(e) => setCondition(e.target.value)} />
           </Field>
+          <h2 className="sub">{t.returnItems.title}</h2>
+          <ul className="item-list">
+            {RETURN_ITEMS.map((item) => (
+              <li key={item}>
+                <span className="item-name">{t.returnItems.items[item]}</span>
+                <span className="chips">
+                  {ITEM_STATES.map((st) => (
+                    <button
+                      key={st}
+                      type="button"
+                      className={`pill pill-sm ${items[item].state === st ? 'on' : ''}`}
+                      onClick={() => setItems({ ...items, [item]: { ...items[item], state: st } })}
+                    >
+                      {t.returnItems.states[st]}
+                    </button>
+                  ))}
+                </span>
+                {items[item].state === 'damaged' && (
+                  <input
+                    className="input"
+                    placeholder={t.returnItems.note}
+                    value={items[item].note}
+                    onChange={(e) => setItems({ ...items, [item]: { ...items[item], note: e.target.value } })}
+                  />
+                )}
+              </li>
+            ))}
+          </ul>
           <PhotoPicker photos={photos} onChange={setPhotos} label={t.pickup.photos} />
           {progress && <p className="hint muted">{progress}</p>}
           {!decides && <p className="hint muted">{t.ret.leaveToDirector}</p>}
@@ -118,9 +160,24 @@ export function ReturnWizard() {
             </Field>
           )}
           {decision !== 'full' && (
-            <Field label={t.ret.withheldReason}>
-              <input className="input" value={reason} onChange={(e) => setReason(e.target.value)} />
-            </Field>
+            <>
+              <span className="lbl">{t.grounds.title}</span>
+              <div className="chips">
+                {GROUNDS.map((g) => (
+                  <button
+                    key={g}
+                    type="button"
+                    className={`pill pill-sm ${grounds.includes(g) ? 'on' : ''}`}
+                    onClick={() => setGrounds(grounds.includes(g) ? grounds.filter((x) => x !== g) : [...grounds, g])}
+                  >
+                    {t.grounds[g]}
+                  </button>
+                ))}
+              </div>
+              <Field label={t.ret.withheldReason}>
+                <input className="input" value={reason} onChange={(e) => setReason(e.target.value)} />
+              </Field>
+            </>
           )}
           {decision !== 'all' && (
             <Field label={t.ret.returnedTo}>
