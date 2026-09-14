@@ -71,7 +71,7 @@ function serialize(job: {
 const INCLUDE = {
   vehicle: { include: { model: { select: { brand: true, name: true } } } },
   rental: { select: { id: true, number: true } },
-  customer: { select: { id: true, name: true } },
+  customer: { select: { id: true, name: true, nameKa: true, nameLat: true } },
   parts: { orderBy: { createdAt: 'asc' } },
 } as const;
 

@@ -30,7 +30,7 @@ export function paymentRoutes(app: FastifyInstance): void {
         orderBy: [{ occurredOn: 'desc' }, { createdAt: 'desc' }],
         take: 300,
         include: {
-          customer: { select: { id: true, name: true } },
+          customer: { select: { id: true, name: true, nameKa: true, nameLat: true } },
           rental: { select: { id: true, number: true } },
           createdBy: { select: { name: true } },
           allocations: { select: { amountTetri: true } },

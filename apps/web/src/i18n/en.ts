@@ -252,6 +252,7 @@ export const en = {
   },
 
   docs: {
+    openTab: 'Open in a tab',
     contract: 'Contract PDF',
     returnAct: 'Return act PDF',
     regenerate: 'Rebuild the document',

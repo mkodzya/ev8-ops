@@ -1,6 +1,7 @@
 import type { RentalStatus, VehicleState } from '@ev8/shared';
-import { useT } from '../i18n/index.js';
+import { useLocale, useT } from '../i18n/index.js';
 import { vinParts } from '../format.js';
+import { primaryName, secondName, type Named } from '../lib/names.js';
 
 /** Colour + shape + word, the same everywhere (brand.md). */
 export function StateBadge({ state }: { state: VehicleState }) {
@@ -40,4 +41,20 @@ export function Empty({ text }: { text: string }) {
 export function Loading() {
   const t = useT();
   return <p className="empty">{t.common.loading}</p>;
+}
+
+/**
+ * A person's name in the language of the interface, with the other spelling
+ * behind it in grey when it differs (U14). One component, so a list and a
+ * card never disagree about which of a customer's three spellings leads.
+ */
+export function CustomerName({ of, second = true }: { of: Named; second?: boolean }) {
+  const { locale } = useLocale();
+  const other = second ? secondName(of, locale) : null;
+  return (
+    <>
+      {primaryName(of, locale)}
+      {other && <span className="muted name-alt">{other}</span>}
+    </>
+  );
 }

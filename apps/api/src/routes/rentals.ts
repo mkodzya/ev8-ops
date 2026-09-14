@@ -13,7 +13,7 @@ export function rentalRoutes(app: FastifyInstance): void {
     const rentals = await prisma.rental.findMany({
       orderBy: [{ status: 'asc' }, { pickedUpOn: 'desc' }],
       include: {
-        customer: { select: { id: true, name: true } },
+        customer: { select: { id: true, name: true, nameKa: true, nameLat: true } },
         vehicle: { select: { id: true, vin: true, model: { select: { brand: true, name: true } } } },
         deposit: { select: { amountTetri: true, status: true } },
         // What is owed, from the periods that were not paid — the list shows

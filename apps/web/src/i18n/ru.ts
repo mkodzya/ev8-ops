@@ -258,6 +258,7 @@ export const ru: Dict = {
   },
 
   docs: {
+    openTab: 'Открыть вкладкой',
     contract: 'Договор PDF',
     returnAct: 'Акт возврата PDF',
     regenerate: 'Пересобрать документ',

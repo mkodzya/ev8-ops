@@ -757,3 +757,15 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
 
 /* The customer's balance as a sentence, before the figures behind it (U9). */
 .bal-line { font: var(--text-h1); margin: 0 0 14px; }
+
+/* The second spelling of a name, behind the first (U14). */
+.name-alt { margin-left: 8px; font: var(--text-label); }
+
+/* A document previewed where it is issued (U15). */
+.doc-card { margin-bottom: 18px; }
+.doc-head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.doc-head h2 { margin: 0; }
+.doc-frame { width: 100%; height: 70vh; min-height: 420px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-2); }
+@media (max-width: 719px) {
+  .doc-frame { height: 60vh; min-height: 320px; }
+}

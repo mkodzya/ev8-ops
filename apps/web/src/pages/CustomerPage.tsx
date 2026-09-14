@@ -6,7 +6,8 @@ import { errorText } from '../lib/use.js';
 import { Empty, Loading, RentalBadge, Vin } from '../components/ui.js';
 import { Row } from '../components/Wizard.js';
 import { fmtDate, formatGel } from '../format.js';
-import { useT } from '../i18n/index.js';
+import { useLocale, useT } from '../i18n/index.js';
+import { primaryName, secondName } from '../lib/names.js';
 import { useLoad } from '../lib/use.js';
 import { fmtDate as fmtDay } from '../format.js';
 import { useSession } from '../session.js';
@@ -29,6 +30,7 @@ interface Balance {
 export function CustomerPage() {
   const { id } = useParams();
   const t = useT();
+  const { locale } = useLocale();
   const { can } = useSession();
   const { data, error, reload } = useLoad<Card>(id ? `/api/customers/${id}` : null);
   const balance = useLoad<Balance>(id ? `/api/customers/${id}/balance` : null);
@@ -59,8 +61,8 @@ export function CustomerPage() {
   return (
     <>
       <header className="page-head page-head-wrap">
-        <h1>{c.name}</h1>
-        {c.nameLat && c.nameLat !== c.name && <span className="muted">{c.nameLat}</span>}
+        <h1>{primaryName(c, locale)}</h1>
+        {secondName(c, locale) && <span className="muted">{secondName(c, locale)}</span>}
         <span className="spacer" />
         {c.phone && (
           // The number the company actually reaches people on. A link, not an
