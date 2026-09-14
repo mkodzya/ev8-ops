@@ -2,7 +2,7 @@ import { VEHICLE_STATES, type VehicleState } from '@ev8/shared';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api.js';
-import { StateBadge, Loading } from '../components/ui.js';
+import { CustomerName, StateBadge, Loading } from '../components/ui.js';
 import { formatGel } from '../format.js';
 import { dayTasks, type DayTask } from '../lib/tasks.js';
 import { useT } from '../i18n/index.js';
@@ -15,7 +15,7 @@ import { useSession } from '../session.js';
 interface OverdueRow {
   id: string;
   number: string;
-  customer: { id: string; name: string; phone: string | null };
+  customer: { id: string; name: string; nameKa: string | null; nameLat: string | null; phone: string | null };
   days: number;
   debtTetri: number;
 }
@@ -92,7 +92,7 @@ export function TodayPage() {
             {s.overdueList.map((r) => (
               <li key={r.id}>
                 <Link to={`/rentals/${r.id}`} className="od-who">
-                  <span className="od-name">{r.customer.name}</span>
+                  <span className="od-name"><CustomerName of={r.customer} second={false} /></span>
                   <span className="mono muted od-num">{r.number}</span>
                 </Link>
                 <span className="od-days crit-text">{t.today.daysOverdue(r.days)}</span>

@@ -6,7 +6,7 @@ import { useSession } from '../session.js';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { todayISO } from '@ev8/shared';
-import { Empty, Loading, StateBadge, Vin } from '../components/ui.js';
+import { CustomerName, Empty, Loading, StateBadge, Vin } from '../components/ui.js';
 import { fmtDate } from '../format.js';
 import { useT } from '../i18n/index.js';
 
@@ -18,7 +18,7 @@ interface Vehicle {
   year: number | null;
   arrivedOn: string | null;
   state: VehicleState;
-  currentRental: { id: string; number: string; paidThrough: string | null; customer: { id: string; name: string } } | null;
+  currentRental: { id: string; number: string; paidThrough: string | null; customer: { id: string; name: string; nameKa: string | null; nameLat: string | null } } | null;
 }
 
 interface Fleet {
@@ -110,7 +110,7 @@ export function FleetPage() {
                 <StateBadge state={v.state} />
               </span>
               <span className={`v-renter ${v.currentRental ? '' : 'v-none'}`}>
-                {v.currentRental ? <Link to={`/customers/${v.currentRental.customer.id}`}>{v.currentRental.customer.name}</Link> : t.common.dash}
+                {v.currentRental ? <Link to={`/customers/${v.currentRental.customer.id}`}><CustomerName of={v.currentRental.customer} second={false} /></Link> : t.common.dash}
               </span>
               <span className={`v-paid mono ${v.currentRental ? '' : 'v-none'}`}>
                 {v.currentRental ? fmtDate(v.currentRental.paidThrough) : t.common.dash}

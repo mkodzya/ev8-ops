@@ -59,6 +59,12 @@ export function RentalPage() {
   const { data, error, reload } = useLoad<RentalCard>(id ? `/api/rentals/${id}` : null);
   const [err, setErr] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
+  // Which document is showing in the card, if any (U15). Printing is the last
+  // step of every hand-over and every return, and a link that opens a new tab
+  // is a step where people find out the PDF was wrong after they printed it.
+  // Declared with the other hooks: below the early returns it would be called
+  // on some renders and not others, which React counts and then throws on.
+  const [preview, setPreview] = useState<'contract' | 'return-act' | null>(null);
   if (error) return <Empty text={error} />;
   if (!data) return <Loading />;
   const r = data.rental;
@@ -86,13 +92,13 @@ export function RentalPage() {
         <RentalBadge status={r.status} />
         {r.odooName && <span className="muted mono">{r.odooName}</span>}
         <span className="spacer" />
-        <a className="pill pill-sm" href={`/api/rentals/${r.id}/contract.pdf`} target="_blank" rel="noreferrer">
+        <button type="button" className={`pill pill-sm ${preview === 'contract' ? 'on' : ''}`} onClick={() => setPreview((p) => (p === 'contract' ? null : 'contract'))}>
           {t.docs.contract}
-        </a>
+        </button>
         {!open && can('rental.return') && (
-          <a className="pill pill-sm" href={`/api/rentals/${r.id}/return-act.pdf`} target="_blank" rel="noreferrer">
+          <button type="button" className={`pill pill-sm ${preview === 'return-act' ? 'on' : ''}`} onClick={() => setPreview((p) => (p === 'return-act' ? null : 'return-act'))}>
             {t.docs.returnAct}
-          </a>
+          </button>
         )}
         {open && can('rental.create') && (
           <button type="button" className="pill pill-sm" onClick={() => setEditing((v) => !v)}>
@@ -125,6 +131,24 @@ export function RentalPage() {
           </a>{' '}
           — {t.docs.regenerateHint}
         </p>
+      )}
+
+      {preview && (
+        <section className="card doc-card">
+          <div className="doc-head">
+            <h2>{preview === 'contract' ? t.docs.contract : t.docs.returnAct}</h2>
+            <span className="spacer" />
+            <a className="pill pill-sm" href={`/api/rentals/${r.id}/${preview}.pdf`} target="_blank" rel="noreferrer">
+              {t.docs.openTab}
+            </a>
+            <button type="button" className="pill pill-sm" onClick={() => setPreview(null)}>
+              {t.actions.cancel}
+            </button>
+          </div>
+          {/* The browser's own PDF viewer. It prints, and what it prints is
+              the file the customer gets — not a picture of it. */}
+          <iframe className="doc-frame" title={preview} src={`/api/rentals/${r.id}/${preview}.pdf`} />
+        </section>
       )}
 
       {/* The answer first: paid through, what is owed, and the weeks as a

@@ -22,7 +22,7 @@ export function summaryRoutes(app: FastifyInstance): void {
           pickedUpOn: true,
           paidThrough: true,
           vinUnconfirmed: true,
-          customer: { select: { id: true, name: true, phone: true } },
+          customer: { select: { id: true, name: true, nameKa: true, nameLat: true, phone: true } },
           // What is owed comes from the periods that were not paid, like
           // everywhere else — there is no stored debt to disagree with them.
           periods: { where: { payStatus: { not: 'paid' } }, select: { amountTetri: true, paidTetri: true } },

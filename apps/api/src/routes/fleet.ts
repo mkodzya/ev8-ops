@@ -37,7 +37,7 @@ export function fleetRoutes(app: FastifyInstance): void {
       include: {
         model: { select: { brand: true, name: true } },
         currentRental: {
-          select: { id: true, number: true, paidThrough: true, customer: { select: { id: true, name: true } } },
+          select: { id: true, number: true, paidThrough: true, customer: { select: { id: true, name: true, nameKa: true, nameLat: true } } },
         },
       },
     });
@@ -75,7 +75,7 @@ export function fleetRoutes(app: FastifyInstance): void {
         events: { orderBy: [{ occurredOn: 'asc' }, { createdAt: 'asc' }], include: { actor: { select: { name: true } } } },
         rentals: {
           orderBy: { pickedUpOn: 'desc' },
-          include: { customer: { select: { id: true, name: true } } },
+          include: { customer: { select: { id: true, name: true, nameKa: true, nameLat: true } } },
         },
         serviceJobs: {
           orderBy: { openedOn: 'desc' },

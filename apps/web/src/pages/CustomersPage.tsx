@@ -3,8 +3,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useSession } from '../session.js';
 import { api } from '../api.js';
-import { Empty, Loading, RentalBadge } from '../components/ui.js';
-import { useT } from '../i18n/index.js';
+import { CustomerName, Empty, Loading, RentalBadge } from '../components/ui.js';
+import { useLocale, useT } from '../i18n/index.js';
+import { byName } from '../lib/names.js';
 
 interface Customer {
   id: string;
@@ -19,6 +20,7 @@ interface Customer {
 
 export function CustomersPage() {
   const t = useT();
+  const { locale } = useLocale();
   const { can } = useSession();
   const [rows, setRows] = useState<Customer[] | null>(null);
   const [q, setQ] = useState('');
@@ -29,9 +31,11 @@ export function CustomersPage() {
   const shown = useMemo(() => {
     if (!rows) return [];
     const needle = q.trim().toLowerCase();
-    if (!needle) return rows;
-    return rows.filter((c) => [c.name, c.nameKa, c.nameLat, c.phone].some((s) => s?.toLowerCase().includes(needle)));
-  }, [rows, q]);
+    // Search every spelling — a name typed in Latin should find the card
+    // whose Georgian spelling leads — but order by the one on screen (U14).
+    const found = needle ? rows.filter((c) => [c.name, c.nameKa, c.nameLat, c.phone].some((s) => s?.toLowerCase().includes(needle))) : rows;
+    return [...found].sort(byName(locale));
+  }, [rows, q, locale]);
 
   if (!rows) return <Loading />;
 
@@ -68,8 +72,9 @@ export function CustomersPage() {
               {shown.map((c) => (
                 <tr key={c.id}>
                   <td>
-                    <Link to={`/customers/${c.id}`}>{c.name}</Link>
-                    {c.nameLat && c.nameLat !== c.name && <span className="muted"> · {c.nameLat}</span>}
+                    <Link to={`/customers/${c.id}`}>
+                      <CustomerName of={c} />
+                    </Link>
                   </td>
                   <td className="mono">{c.phone ?? t.common.dash}</td>
                   <td className="mono">{c.personalId ?? t.common.dash}</td>

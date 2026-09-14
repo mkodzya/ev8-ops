@@ -245,6 +245,7 @@ export const ka: Dict = {
   },
 
   docs: {
+    openTab: 'ახალ ჩანართში',
     contract: 'ხელშეკრულება PDF',
     returnAct: 'დაბრუნების აქტი PDF',
     regenerate: 'დოკუმენტის ხელახლა აწყობა',

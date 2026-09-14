@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useSession } from '../session.js';
 import { api } from '../api.js';
-import { Empty, Loading, RentalBadge, Vin } from '../components/ui.js';
+import { CustomerName, Empty, Loading, RentalBadge, Vin } from '../components/ui.js';
 import { fmtDate, formatGel } from '../format.js';
 import { useT } from '../i18n/index.js';
 
@@ -12,7 +12,7 @@ interface Rental {
   number: string;
   odooName: string | null;
   status: RentalStatus;
-  customer: { id: string; name: string };
+  customer: { id: string; name: string; nameKa: string | null; nameLat: string | null };
   vehicle: { id: string; vin: string; model: string } | null;
   vinUnconfirmed: boolean;
   vinNote: string | null;
@@ -69,7 +69,7 @@ export function RentalsPage() {
                 {r.number}
               </Link>
               <Link to={`/customers/${r.customer.id}`} className="r-who">
-                {r.customer.name}
+                <CustomerName of={r.customer} />
               </Link>
               <span className="r-veh">
                 {r.vehicle ? (
