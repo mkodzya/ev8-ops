@@ -48,6 +48,57 @@ export async function matchCandidates(): Promise<MatchCandidate[]> {
   });
 }
 
+export interface PreviewResult {
+  bank: 'bog' | 'tbc';
+  account: string | null;
+  periodFrom: string | null;
+  periodTo: string | null;
+  lineCount: number;
+  newLines: number;
+  alreadyIn: number;
+  incoming: number;
+  outgoing: number;
+  sample: { occurredOn: string; amountTetri: number; direction: 'in' | 'out'; payer: string | null; purpose: string | null }[];
+}
+
+/**
+ * What this file would do, without doing it (U8). Reading a statement is the
+ * one action here that cannot be undone by hand — a wrong file leaves rows
+ * somebody has to unpick — so the wizard shows the count first and asks.
+ *
+ * It writes nothing: the same parse, the same natural keys, no inserts.
+ */
+export async function previewStatement(input: { fileName: string; text: string }): Promise<PreviewResult> {
+  const parsed = parseStatement(input.text, { fileName: input.fileName });
+  const known = new Set(
+    (
+      await prisma.statementLine.findMany({
+        where: { bank: parsed.bank, naturalKey: { in: parsed.lines.map((l) => l.naturalKey) } },
+        select: { naturalKey: true },
+      })
+    ).map((l) => l.naturalKey),
+  );
+  const fresh = parsed.lines.filter((l) => !known.has(l.naturalKey));
+  return {
+    bank: parsed.bank,
+    account: parsed.account,
+    periodFrom: parsed.periodFrom,
+    periodTo: parsed.periodTo,
+    lineCount: parsed.lines.length,
+    newLines: fresh.length,
+    alreadyIn: parsed.lines.length - fresh.length,
+    incoming: fresh.filter((l) => l.direction === 'in').length,
+    outgoing: fresh.filter((l) => l.direction === 'out').length,
+    sample: fresh.slice(0, 5).map((l) => ({
+      occurredOn: l.occurredOn,
+      amountTetri: l.amountTetri,
+      direction: l.direction,
+      payer: l.payer,
+      purpose: l.purpose,
+    })),
+  };
+}
+
 export async function importStatement(input: {
   actorId: string;
   fileName: string;
