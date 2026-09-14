@@ -33,6 +33,9 @@ export async function teardown(): Promise<void> {
   try {
     await prisma.auditLog.deleteMany({ where: { createdAt: since } });
     await prisma.storedFile.deleteMany({ where: { createdAt: since } });
+    // A payment and its statement line cross-reference each other; both
+    // sides drop to NULL on delete (migration 0006), so the order here is
+    // free. Payments first, then the statements that carried them.
     await prisma.payment.deleteMany({ where: { createdAt: since } }); // allocations cascade
     await prisma.statement.deleteMany({ where: { createdAt: since } }); // lines cascade
     await prisma.vehicleEvent.deleteMany({ where: { createdAt: since } });
@@ -43,6 +46,12 @@ export async function teardown(): Promise<void> {
     await prisma.vehicleModel.deleteMany({ where: { createdAt: since } });
     await prisma.customer.deleteMany({ where: { createdAt: since } });
     await prisma.user.deleteMany({ where: { createdAt: since } }); // sessions cascade
+  } catch (err) {
+    // Loudly. A cleanup that fails quietly leaves the next run matching
+    // against rows nobody meant to keep — which is exactly how three
+    // statement suites started failing on data from an earlier run.
+    console.error('test teardown failed — the test database is now dirty:', err);
+    throw err;
   } finally {
     await closeDb();
   }

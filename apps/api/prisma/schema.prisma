@@ -428,7 +428,7 @@ model Payment {
   odooPaymentId Int?             @unique @map("odoo_payment_id")
   statementLineId String?        @map("statement_line_id") @db.Uuid
 
-  statementLine StatementLine?    @relation("payment_of_line", fields: [statementLineId], references: [id])
+  statementLine StatementLine?    @relation("payment_of_line", fields: [statementLineId], references: [id], onDelete: SetNull)
   customer    Customer?           @relation(fields: [customerId], references: [id])
   rental      Rental?             @relation(fields: [rentalId], references: [id])
   createdBy   User?               @relation("payment_created_by", fields: [createdById], references: [id])

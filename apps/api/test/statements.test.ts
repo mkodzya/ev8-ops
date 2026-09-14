@@ -30,6 +30,19 @@ const TBC_HEADER = [
 const tbcRow = (date: string, amount: string, partner: string, txn: string, desc = 'Rent') =>
   `"${date}","${desc}","Income","${amount}","GEL","GE40TB7370836020100011","ე-მოუშენ მოთორს","","${date}","589041","GE32BG0000000207005800","${partner}","","BAGAGE22","სს ბანკი","","","","","","","BULK","","${txn}"`;
 
+/**
+ * A Georgian surname nobody else in the database has.
+ *
+ * The payer rule matches a name against every open rental, so two customers
+ * with the same name make the rule refuse — correctly. A suite must not
+ * depend on being the only one who ever used a name, so each one gets a tag
+ * that goes into both the customer and the bank line.
+ */
+function tagged(base: { ru: string; ka: string }): { ru: string; ka: string; tag: string } {
+  const tag = `t${uniq().replace(/\D/g, '').slice(-9)}`;
+  return { ru: `${base.ru} ${tag}`, ka: `${base.ka} ${tag}`, tag };
+}
+
 async function rentalFor(name: { ru: string; ka: string }, opts: { rate?: number; pickedUpOn?: string } = {}) {
   const { prisma } = await import('../src/lib/db.js');
   const model = await prisma.vehicleModel.create({ data: { brand: 'Test', name: `Model ${uniq()}`, forRent: true } });
@@ -49,14 +62,14 @@ async function rentalFor(name: { ru: string; ka: string }, opts: { rate?: number
 
 describe.skipIf(!HAS_DB)('reading a Bank of Georgia export', () => {
   it('skips the preamble and the balance rows, and finds the payer inside the text', async () => {
-    const who = { ru: 'Важа Тестовый', ka: 'ვაჟა ტესტიძე' };
+    const who = tagged({ ru: 'Важа Тестовый', ka: 'ვაჟა ტესტიძე' });
     const { director, rentalId } = await rentalFor(who);
     const text = [
       BOG_HEADER,
       bogRow(
         '05.09.2026',
         '320.0',
-        `Private Transfer: Caricxva - Tanxa: GEL320.00; gadmomricxavi: testiZe vaJa; angariSi: GE32BG0000000207005800GEL; daniSnuleba: qira ${uniq()}`,
+        `Private Transfer: Caricxva - Tanxa: GEL320.00; gadmomricxavi: testiZe vaJa ${who.tag}; angariSi: GE32BG0000000207005800GEL; daniSnuleba: qira`,
       ),
       BOG_SUMMARY,
     ].join('\n');
@@ -76,13 +89,14 @@ describe.skipIf(!HAS_DB)('reading a Bank of Georgia export', () => {
   });
 
   it('reads a card line for what the customer paid, not what the bank credited (PAY-04)', async () => {
-    const { director, rentalId } = await rentalFor({ ru: 'Нино Картовна', ka: 'ნინო ბარათიძე' }, { rate: 14000, pickedUpOn: '2026-09-03' });
+    const who = tagged({ ru: 'Нино Картовна', ka: 'ნინო ბარათიძე' });
+    const { director, rentalId } = await rentalFor(who, { rate: 14000, pickedUpOn: '2026-09-03' });
     const text = [
       BOG_HEADER,
       bogRow(
         '03.09.2026',
         '315.20',
-        `Caricxva - Tanxa GEL315.20; gadaxda - TariRi: 03/09/2026 18:21:14; Tanxa:GEL 320; sakomisio: GEL 4.80; baraTi: MC, 5167***6145; terminalis ID: POS30LTG ${uniq()}`,
+        `Caricxva - Tanxa GEL315.20; gadmomricxavi: baraTiZe nino ${who.tag}; gadaxda - TariRi: 03/09/2026 18:21:14; Tanxa:GEL 320; sakomisio: GEL 4.80; terminalis ID: POS30LTG`,
       ),
     ].join('\n');
     const res = await call(director, 'POST', '/api/statements', { fileName: 'StatementExport.csv', text });
@@ -99,8 +113,9 @@ describe.skipIf(!HAS_DB)('reading a Bank of Georgia export', () => {
 
   it('loading the same file twice adds nothing the second time (PAY-01)', async () => {
     const tag = uniq();
-    const { director, prisma } = await rentalFor({ ru: 'Давид Двойной', ka: 'დავით ორმაგიძე' });
-    const text = [BOG_HEADER, bogRow('06.09.2026', '140.0', `Caricxva: gadmomricxavi: ormagiZe daviT; daniSnuleba: qira ${tag}`)].join('\n');
+    const who = tagged({ ru: 'Давид Двойной', ka: 'დავით ორმაგიძე' });
+    const { director, prisma } = await rentalFor(who);
+    const text = [BOG_HEADER, bogRow('06.09.2026', '140.0', `Caricxva: gadmomricxavi: ormagiZe daviT ${who.tag}; daniSnuleba: qira ${tag}`)].join('\n');
 
     const first = json<{ newLines: number; matched: number }>(await call(director, 'POST', '/api/statements', { fileName: 'a.csv', text }));
     expect(first.newLines).toBe(1);
@@ -127,9 +142,10 @@ describe.skipIf(!HAS_DB)('reading a Bank of Georgia export', () => {
 
 describe.skipIf(!HAS_DB)('reading a TBC export', () => {
   it('matches a payer written in Georgian and keeps the bank’s own transaction id', async () => {
-    const { director, rentalId } = await rentalFor({ ru: 'Георгий Тбисиев', ka: 'გიორგი თბისიძე' });
+    const who = tagged({ ru: 'Георгий Тбисиев', ka: 'გიორგი თბისიძე' });
+    const { director, rentalId } = await rentalFor(who);
     const txn = `1532697${uniq().replace(/\D/g, '').slice(-8)}.20`;
-    const text = [TBC_HEADER, tbcRow('04/09/2026', '320.0', 'თბისიძე გიორგი', txn)].join('\n');
+    const text = [TBC_HEADER, tbcRow('04/09/2026', '320.0', `თბისიძე გიორგი ${who.tag}`, txn)].join('\n');
 
     const res = json<{ bank: string; matched: number }>(await call(director, 'POST', '/api/statements', { fileName: 'transactions_history.csv', text }));
     expect(res.bank).toBe('tbc');
