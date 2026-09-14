@@ -430,6 +430,12 @@ export const ru: Dict = {
   },
 
   statements: {
+    previewTitle: 'Что добавит этот файл',
+    previewNew: 'новых строк',
+    previewKnown: 'уже загружено',
+    previewIn: 'поступления',
+    previewOut: 'списания',
+    previewConfirm: 'Загрузить',
     importCta: 'Загрузить выписку',
     looksLike: 'Похоже на',
     otherHints: (n: number) => `ещё ${n}`,

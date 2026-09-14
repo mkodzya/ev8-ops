@@ -748,3 +748,9 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
 
 /* The best guess, in the queue row itself (U7). */
 .queue-guess { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0; padding: 0 12px 12px; }
+
+/* The import preview: numbers first, then a few lines, then the button (U8). */
+.prev-card { border-color: var(--accent); }
+.prev-nums { list-style: none; display: flex; flex-wrap: wrap; gap: 24px; margin: 0 0 14px; padding: 0; }
+.prev-nums li { display: flex; flex-direction: column; }
+.prev-sample { margin-bottom: 14px; }

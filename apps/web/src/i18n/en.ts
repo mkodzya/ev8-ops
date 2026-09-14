@@ -424,6 +424,12 @@ export const en = {
   },
 
   statements: {
+    previewTitle: 'What this file would add',
+    previewNew: 'new lines',
+    previewKnown: 'already in',
+    previewIn: 'incoming',
+    previewOut: 'outgoing',
+    previewConfirm: 'Load it',
     importCta: 'Load a statement',
     looksLike: 'Looks like',
     otherHints: (n: number) => `${n} more`,

@@ -417,6 +417,12 @@ export const ka: Dict = {
   },
 
   statements: {
+    previewTitle: 'რას დაამატებს ეს ფაილი',
+    previewNew: 'ახალი სტრიქონი',
+    previewKnown: 'უკვე ჩატვირთული',
+    previewIn: 'შემოსავალი',
+    previewOut: 'გასავალი',
+    previewConfirm: 'ჩატვირთვა',
     importCta: 'ამონაწერის ატვირთვა',
     looksLike: 'ჰგავს',
     otherHints: (n: number) => `კიდევ ${n}`,
