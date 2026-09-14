@@ -220,6 +220,7 @@ export const ru: Dict = {
   },
 
   customer: {
+    whatsapp: 'WhatsApp',
     title: 'Клиент',
     newTitle: 'Новый клиент',
     name: 'Имя (как пишет команда)',
@@ -421,6 +422,9 @@ export const ru: Dict = {
   },
 
   balance: {
+    owes: (sum: string) => `Должен ${sum}`,
+    overpaid: (sum: string) => `Переплата ${sum}`,
+    clear: 'Долга нет',
     title: 'Баланс',
     invoiced: 'Начислено',
     paid: 'Оплачено',

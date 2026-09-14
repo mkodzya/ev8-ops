@@ -1,5 +1,5 @@
 import { CUSTOMER_KINDS, type CustomerKind } from '@ev8/shared';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api, ApiError } from '../api.js';
 import { Field } from '../components/Wizard.js';
@@ -16,6 +16,28 @@ export function CustomerForm({ onCreated, embedded }: { onCreated?: (id: string)
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => setF({ ...f, [k]: e.target.value });
+
+  // Ask while they type, not after they submit (U12). A duplicate refused at
+  // the end of a nine-field form is a duplicate somebody creates anyway with
+  // one digit changed.
+  useEffect(() => {
+    const phone = f.phone.trim();
+    const personalId = f.personalId.trim();
+    if (phone.length < 6 && personalId.length < 6) {
+      setTwin(null);
+      return;
+    }
+    const timer = setTimeout(() => {
+      const q = new URLSearchParams();
+      if (phone) q.set('phone', phone);
+      if (personalId) q.set('personalId', personalId);
+      void api
+        .get<{ existing: { id: string; name: string } | null }>(`/api/customers/lookup?${q.toString()}`)
+        .then((r) => setTwin(r.existing))
+        .catch(() => setTwin(null));
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [f.phone, f.personalId]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -73,6 +95,14 @@ export function CustomerForm({ onCreated, embedded }: { onCreated?: (id: string)
           </select>
         </Field>
       </div>
+      {twin && (
+        <div className="hint hint-bad">
+          {t.customer.duplicate(twin.name)}{' '}
+          <Link to={`/customers/${twin.id}`} className="pill pill-sm">
+            {t.actions.open}
+          </Link>
+        </div>
+      )}
       <Field label={t.customer.address}>
         <input className="input" value={f.address} onChange={set('address')} />
       </Field>
@@ -82,14 +112,6 @@ export function CustomerForm({ onCreated, embedded }: { onCreated?: (id: string)
       <Field label={t.customer.notes}>
         <textarea className="input textarea" value={f.notes} onChange={set('notes')} rows={3} />
       </Field>
-      {twin && (
-        <div className="hint hint-bad">
-          {t.customer.duplicate(twin.name)}{' '}
-          <Link to={`/customers/${twin.id}`} className="pill pill-sm">
-            {t.actions.open}
-          </Link>
-        </div>
-      )}
       {err && <div className="hint hint-bad">{err}</div>}
       <div className="row-actions">
         <button className="pill pill-accent" disabled={busy || !f.name.trim()}>

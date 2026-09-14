@@ -214,6 +214,7 @@ export const en = {
   },
 
   customer: {
+    whatsapp: 'WhatsApp',
     title: 'Customer',
     newTitle: 'New customer',
     name: 'Name (as the team writes it)',
@@ -415,6 +416,9 @@ export const en = {
   },
 
   balance: {
+    owes: (sum: string) => `Owes ${sum}`,
+    overpaid: (sum: string) => `Paid ${sum} ahead`,
+    clear: 'Nothing owed',
     title: 'Balance',
     invoiced: 'Charged',
     paid: 'Paid',

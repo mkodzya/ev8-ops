@@ -207,6 +207,7 @@ export const ka: Dict = {
   },
 
   customer: {
+    whatsapp: 'WhatsApp',
     title: 'კლიენტი',
     newTitle: 'ახალი კლიენტი',
     name: 'სახელი (როგორც გუნდი წერს)',
@@ -408,6 +409,9 @@ export const ka: Dict = {
   },
 
   balance: {
+    owes: (sum: string) => `ვალი ${sum}`,
+    overpaid: (sum: string) => `ზედმეტად გადახდილი ${sum}`,
+    clear: 'ვალი არ არის',
     title: 'ბალანსი',
     invoiced: 'დარიცხული',
     paid: 'გადახდილი',
