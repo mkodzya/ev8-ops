@@ -1,0 +1,12 @@
+-- Runs once, when Postgres initialises an empty data directory.
+--
+-- The integration suites refuse any database whose name does not contain
+-- "test" (apps/api/test/globalSetup.ts), so there has to be one. Creating it
+-- here means it comes back by itself after `docker compose down -v`, instead
+-- of the suites failing with "database ev8ops_test does not exist" and the
+-- failure looking like a broken test.
+--
+-- Laptop stack only: this file is mounted by docker-compose.yml, which is the
+-- one started by double-clicking a .command file. A server stack has its own
+-- compose file and does not mount it.
+CREATE DATABASE ev8ops_test;

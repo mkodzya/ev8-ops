@@ -10,6 +10,9 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-ev8ops}
     volumes:
       - pgdata:/var/lib/postgresql/data
+      # Creates ev8ops_test on a fresh volume, so the integration suites have
+      # the disposable database they insist on. Laptop stack only.
+      - ./deploy/db-init:/docker-entrypoint-initdb.d:ro
     ports:
       - "${DB_PORT:-5433}:5432"
     healthcheck:

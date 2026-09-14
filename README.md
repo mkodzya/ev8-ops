@@ -52,10 +52,11 @@ docker run --rm -v "$PWD":/app -w /app node:22-alpine sh -c "npm ci && npm run g
 
 `npm test` = i18n guard + shared unit tests + api tests. The api integration
 suites run only when `DATABASE_URL` points at a database whose name contains
-`test` (they write and clean up after themselves):
+`test` (they write and clean up after themselves). `ev8ops_test` is created
+automatically the first time the `db` volume is made, so this works after a
+`docker compose up` and again after every `down -v`:
 
 ```bash
-docker compose exec -T db psql -U ev8ops -d ev8ops -c "CREATE DATABASE ev8ops_test"
 docker run --rm --network ev8-ops-platform_default -v "$PWD":/app -w /app \
   -e DATABASE_URL=postgresql://ev8ops:ev8ops@db:5432/ev8ops_test -e ALLOW_DEV_SECRET=true \
   node:22-alpine sh -c "node apps/api/scripts/migrate.mjs && npm run test:api"
