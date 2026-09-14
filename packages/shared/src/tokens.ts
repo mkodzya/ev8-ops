@@ -1,0 +1,63 @@
+// EV8 Ops design tokens — generated from packages/shared/tokens.json.
+// Do not edit by hand: run `node scripts/tokens.mjs` after changing the JSON.
+// Source of the values: docs/design/brand.md (the ev8.ge theme).
+
+/**
+ * The tokens as values, for code that draws outside the browser — today the
+ * contract and act PDFs. In the interface use the custom properties in
+ * apps/web/src/styles/tokens.css instead; importing colours into a component
+ * would put the value back in two places.
+ */
+export const tokens = {
+  /** surfaces — The page, the cards on it, and the ink on both. */
+  bg: '#fbfbfb', // light-theme page background (--white-background on the site)
+  surface: '#ffffff', // cards, panels, table bodies
+  surface2: '#f3f6f3', // table headers, soft fills, inactive chips
+  ink: '#0b0b0b', // text (--black on the site)
+  muted: '#5d6b5d', // secondary text, PDF translations
+  line: '#dbe4de', // borders and rules (site light grey-green)
+  lineSoft: '#e9efea', // the quieter rule inside a card
+
+  /** brand — The greens. The site green is a fill, never text: #819481 is 3.2:1 on white and fails AA. */
+  brand: '#819481', // logo and large marks; never text
+  accent: '#557553', // text green: links, status text, primary button — 5.2:1
+  accentHover: '#628767', // hover and the border of an active element
+  accentSoft: '#e3ebe3', // the tint behind an accent pill
+  onAccent: '#ffffff', // text on the accent fill
+  lime: '#e0ffa2', // the one highlight per screen (--avocado)
+
+  /** states — Vehicle and rental states. Colour is never the only carrier: every state also has a shape and a word (brand.md). */
+  rented: '#598eeb', // state rented (--blue-tag)
+  service: '#fe5d02', // state in service (--orange)
+  serviceInk: '#e45e22', // the darker orange, for text on light
+  crit: '#c8402f', // overdue, written off — added for the ops UI, does not fight the orange
+  critSoft: '#f9e3df', // the tint behind a critical pill
+  warnSoft: '#fdeadf', // the tint behind a service pill
+  infoSoft: '#e4ecfb', // the tint behind a rented pill
+  grey: '#7a827a', // finished and sold; PDF footers
+
+  /** rail — The navigation rail is the one dark surface in a light app: brand black with the light logo. */
+  rail: '#0b0b0b', // rail background
+  railInk: '#c9d3c9', // rail text
+  railActive: '#1b211b', // hover inside the rail
+  railAccent: '#e0ffa2', // the active rail item
+  railLine: '#2a332b', // borders of controls sitting on the rail
+
+  /** effects — Shadow and scrim. Written out here so no component carries a colour literal of its own. */
+  shadow: '0 12px 40px rgba(11, 11, 11, 0.16)', // the sheet and the sidebar
+  scrim: 'rgba(11, 11, 11, 0.7)', // the dark disc over a photo thumbnail
+  onScrim: '#ffffff', // the glyph on that disc
+
+  /** type — Neither Be Vietnam Pro nor Inter has Georgian glyphs, so Noto Sans Georgian is in every text stack. A face without the glyphs falls back to the system font silently — that is why it is checked on real names in acceptance. */
+  display: "'Be Vietnam Pro', 'Noto Sans Georgian', system-ui, -apple-system, 'Segoe UI', sans-serif", // headings, buttons, navigation
+  body: "'Inter', 'Noto Sans Georgian', system-ui, -apple-system, 'Segoe UI', sans-serif", // body text and tables
+  mono: "'IBM Plex Mono', 'Noto Sans Georgian', ui-monospace, SFMono-Regular, Menlo, monospace", // VIN and money
+
+  /** shape — One radius language: pills for buttons and chips, 16 px cards, nothing else. */
+  radiusCard: '16px', // cards and panels
+  radiusPill: '999px', // buttons and filter chips
+  control: '44px', // touch targets no smaller than 44 px (spec §9.2)
+  railW: '220px', // the rail on a laptop
+} as const;
+
+export type TokenName = keyof typeof tokens;
