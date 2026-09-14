@@ -33,6 +33,7 @@ export const ru: Dict = {
 
   nav: {
     today: 'Сегодня',
+    more: 'Ещё',
     fleet: 'Парк',
     rentals: 'Аренды',
     payments: 'Платежи',

@@ -1,12 +1,21 @@
-import { useEffect } from 'react';
-import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { api } from './api.js';
 import { LanguageToggle, LOCALES, useLocale, useT, type Locale } from './i18n/index.js';
+import { dayTaskCount, dayTasks, type DayTaskSource } from './lib/tasks.js';
 import { useSession } from './session.js';
 
 // The application frame: a dark rail on a laptop (brand black, light logo,
 // one lime accent on the active item), a bottom bar on a phone — every item
 // reachable with a thumb (spec §9.2).
+//
+// The phone bar carries five things and no more (U11): Today, Fleet, Rentals,
+// Payments, More. Twelve items sharing 375 px is a list nobody can hit; the
+// rest live behind More, which opens a sheet above the bar. The badge on
+// Today counts what the first row of that screen actually lists — one rule,
+// in lib/tasks.ts, so the two can never disagree.
+
+const PHONE_TABS = ['/', '/fleet', '/rentals', '/payments'];
 
 const STORAGE_KEY = 'ev8-lang';
 
@@ -15,6 +24,19 @@ export function Shell() {
   const { me, logout, can } = useSession();
   const { setLocale } = useLocale();
   const navigate = useNavigate();
+  const location = useLocation();
+  const [more, setMore] = useState(false);
+  const [badge, setBadge] = useState(0);
+
+  // Re-read on every navigation: the number is stale the moment somebody
+  // records a payment, and this screen is where they come back to.
+  useEffect(() => {
+    setMore(false);
+    void api
+      .get<DayTaskSource>('/api/summary')
+      .then((s) => setBadge(dayTaskCount(dayTasks(s, t, can))))
+      .catch(() => setBadge(0));
+  }, [location.pathname, t, can]);
 
   // A person's stored language follows them to a new device; a choice made
   // on this device (localStorage) still wins.
@@ -49,6 +71,9 @@ export function Shell() {
     ...(can('users.manage') ? [{ to: '/design', label: t.design.title }] : []),
   ];
 
+  const phone = items.filter((it) => PHONE_TABS.includes(it.to));
+  const rest = items.filter((it) => !PHONE_TABS.includes(it.to));
+
   return (
     <div className="shell">
       <nav className="rail" aria-label="EV8 Ops">
@@ -68,6 +93,7 @@ export function Shell() {
             <li key={it.to}>
               <NavLink to={it.to} end={it.end} className={({ isActive }) => (isActive ? 'on' : '')}>
                 {it.label}
+                {it.to === '/' && badge > 0 && <span className="badge">{badge}</span>}
               </NavLink>
             </li>
           ))}
@@ -97,6 +123,41 @@ export function Shell() {
           )}
         </div>
       </nav>
+
+      {/* The phone bar. Hidden on a laptop, where the rail does this job. */}
+      {more && (
+        <div className="sheet-scrim" onClick={() => setMore(false)} aria-hidden="true">
+          <nav className="more-sheet" aria-label={t.nav.more}>
+            <ul>
+              {rest.map((it) => (
+                <li key={it.to}>
+                  <NavLink to={it.to} end={it.end} className={({ isActive }) => (isActive ? 'on' : '')}>
+                    {it.label}
+                  </NavLink>
+                </li>
+              ))}
+              {me && (
+                <li>
+                  <Link to="/profile">{t.profile.title}</Link>
+                </li>
+              )}
+            </ul>
+            <LanguageToggle onChange={remember} />
+          </nav>
+        </div>
+      )}
+      <nav className="tabbar" aria-label={t.nav.today}>
+        {phone.map((it) => (
+          <NavLink key={it.to} to={it.to} end={it.end} className={({ isActive }) => (isActive ? 'tab on' : 'tab')}>
+            {it.label}
+            {it.to === '/' && badge > 0 && <span className="badge">{badge}</span>}
+          </NavLink>
+        ))}
+        <button type="button" className={more ? 'tab on' : 'tab'} onClick={() => setMore((v) => !v)}>
+          {t.nav.more}
+        </button>
+      </nav>
+
       <main className="page">
         <Outlet />
       </main>

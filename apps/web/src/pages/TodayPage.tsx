@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { api } from '../api.js';
 import { StateBadge, Loading } from '../components/ui.js';
 import { formatGel } from '../format.js';
+import { dayTasks, type DayTask } from '../lib/tasks.js';
 import { useT } from '../i18n/index.js';
 import { useSession } from '../session.js';
 
@@ -33,16 +34,7 @@ interface Summary {
   dueBackToday: { id: string; number: string; customer: string }[];
 }
 
-interface Task {
-  key: string;
-  count: number;
-  label: string;
-  action: string;
-  to: string;
-  tone?: 'crit' | 'warn';
-}
-
-function TaskRow({ task }: { task: Task }) {
+function TaskRow({ task }: { task: DayTask }) {
   return (
     <li className={`task ${task.tone ? `task-${task.tone}` : ''}`}>
       <span className="task-num">{task.count}</span>
@@ -63,18 +55,7 @@ export function TodayPage() {
   }, []);
   if (!s) return <Loading />;
 
-  // Only what is actually waiting. A task with nothing in it is not a task,
-  // and a first row of zeroes teaches people to stop reading the first row.
-  const tasks: Task[] = [
-    { key: 'dueBack', count: s.dueBackToday.length, label: t.today.dueBack, action: t.today.goReturn, to: '/rentals' },
-    { key: 'pickedUp', count: s.pickedUpToday.length, label: t.today.pickedUp, action: t.today.goOpen, to: '/rentals' },
-    { key: 'overdue', count: s.rentals.overdue, label: t.today.overdue, action: t.today.goOpen, to: '/rentals', tone: 'crit' as const },
-    ...(can('payments.reconcile')
-      ? [{ key: 'unmatched', count: s.unmatchedLines, label: t.today.unmatched, action: t.today.goSort, to: '/statements', tone: 'warn' as const }]
-      : []),
-    { key: 'withoutVin', count: s.rentals.withoutVin, label: t.today.withoutVin, action: t.today.goOpen, to: '/rentals', tone: 'warn' as const },
-    { key: 'service', count: s.openServiceJobs, label: t.today.openService, action: t.today.goOpen, to: '/service', tone: 'warn' as const },
-  ].filter((task) => task.count > 0);
+  const tasks = dayTasks(s, t, can);
 
   return (
     <>

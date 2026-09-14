@@ -25,6 +25,7 @@ export const ka: Dict = {
 
   nav: {
     today: 'დღეს',
+    more: 'მეტი',
     fleet: 'პარკი',
     rentals: 'ქირაობა',
     payments: 'გადახდები',
