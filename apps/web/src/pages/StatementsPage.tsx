@@ -25,7 +25,14 @@ interface Statements {
   }[];
 }
 
-interface QueueLine {
+export interface Hint {
+  rentalId: string;
+  number: string;
+  customer: string;
+  why: 'amount' | 'pickup_day' | 'open';
+}
+
+export interface QueueLine {
   id: string;
   bank: Bank;
   occurredOn: string;
@@ -35,6 +42,7 @@ interface QueueLine {
   purpose: string | null;
   raw: string;
   fileName: string;
+  hints: Hint[];
 }
 
 /** Loading statements, and the queue of lines the rules could not place. */
@@ -154,14 +162,11 @@ export function StatementsPage() {
  * One unplaced line. Opening it asks the API what it might belong to, so
  * answering is a choice between named rentals rather than a search (PAY-03).
  */
-function QueueItem({ line, onDone, onError }: { line: QueueLine; onDone: () => void; onError: (e: string) => void }) {
+export function QueueItem({ line, onDone, onError }: { line: QueueLine; onDone: () => void; onError: (e: string) => void }) {
   const t = useT();
   const [open, setOpen] = useState(false);
   const [ignoring, setIgnoring] = useState(false);
   const [reason, setReason] = useState('');
-  const detail = useLoad<{ hints: { rentalId: string; number: string; customer: string; why: 'amount' | 'pickup_day' | 'open' }[] }>(
-    open ? `/api/statement-lines/${line.id}` : null,
-  );
 
   const act = async (fn: () => Promise<unknown>) => {
     try {
@@ -179,18 +184,36 @@ function QueueItem({ line, onDone, onError }: { line: QueueLine; onDone: () => v
         <span className="mono queue-amount">{formatGel(line.grossTetri ?? line.amountTetri)}</span>
         <span className="queue-text">{line.payer ?? line.purpose ?? line.raw}</span>
       </button>
+      {/* The best guess, in the row: a queue you have to open twice to learn
+          anything is a queue nobody works through (U7). */}
+      {line.hints.length > 0 && (
+        <p className="queue-guess">
+          <span className="t-label">{t.statements.looksLike}</span>
+          <button
+            type="button"
+            className="pill pill-sm pill-accent"
+            onClick={() => void act(() => api.post(`/api/statement-lines/${line.id}/assign`, { rentalId: line.hints[0].rentalId }))}
+          >
+            {line.hints[0].customer} · {line.hints[0].number}
+          </button>
+          <span className="t-label">{t.statements.why[line.hints[0].why]}</span>
+          {line.hints.length > 1 && (
+            <button type="button" className="pill pill-sm" onClick={() => setOpen((v) => !v)}>
+              {t.statements.otherHints(line.hints.length - 1)}
+            </button>
+          )}
+        </p>
+      )}
       {open && (
         <div className="queue-body">
           <p className="hint muted">
             {t.statements.line}: {line.raw}
           </p>
-          {!detail.data ? (
-            <Loading />
-          ) : (
+          {(
             <>
               <span className="lbl">{t.statements.hints}</span>
               <ul className="pick-list">
-                {detail.data.hints.map((h) => (
+                {line.hints.map((h) => (
                   <li key={h.rentalId}>
                     <button type="button" onClick={() => void act(() => api.post(`/api/statement-lines/${line.id}/assign`, { rentalId: h.rentalId }))}>
                       <span>

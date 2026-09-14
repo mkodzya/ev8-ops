@@ -71,6 +71,28 @@ export interface RollResult {
   rentals: number;
   created: number;
   settledTetri: number;
+  repaired: number;
+}
+
+/**
+ * `paidThrough` on a rental and `payStatus` on a week are the two derived
+ * facts this system does store, and stored derived facts drift — an
+ * allocation removed by hand, a repair, a restore from a dump. Recomputing
+ * them from the allocations is idempotent and costs one pass over a rental's
+ * own weeks, so the nightly job is where the drift dies rather than becoming
+ * a number nobody can explain. Every rental, not only the open ones: a
+ * disputed or returned rental's figure is read on its card just the same.
+ */
+async function repairDerived(): Promise<number> {
+  const all = await prisma.rental.findMany({ where: { pickedUpOn: { not: null } }, select: { id: true } });
+  let repaired = 0;
+  for (const r of all) {
+    await prisma.$transaction(async (tx) => {
+      await recomputeRental(tx, r.id);
+    });
+    repaired++;
+  }
+  return repaired;
 }
 
 /**
@@ -107,6 +129,7 @@ export async function rollPeriods(asOf: string = todayISO(new Date(), env.TZ)): 
     // Even with no new week, a correction elsewhere may have freed credit.
     settledTetri += await settleCredit(r.id);
   }
+  const repaired = await repairDerived();
   if (created > 0 || settledTetri > 0) {
     await audit({
       actorId: null,
@@ -116,5 +139,5 @@ export async function rollPeriods(asOf: string = todayISO(new Date(), env.TZ)): 
       after: { asOf, rentals: open.length, created, settledTetri },
     });
   }
-  return { rentals: open.length, created, settledTetri };
+  return { rentals: open.length, created, settledTetri, repaired };
 }

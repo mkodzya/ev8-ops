@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api.js';
 import { Empty, Loading } from '../components/ui.js';
+import { QueueItem, type QueueLine } from './StatementsPage.js';
 import { fmtDate, formatGel } from '../format.js';
 import { useT } from '../i18n/index.js';
 import { errorText, useLoad } from '../lib/use.js';
@@ -28,9 +29,18 @@ export function PaymentsPage() {
   const t = useT();
   const { can } = useSession();
   const { data, error, reload } = useLoad<{ payments: PaymentRow[] }>('/api/payments');
+  // The queue belongs on this screen, not two clicks away under Statements:
+  // an unsorted bank line is a payment that has not found its rental yet.
+  const queue = useLoad<{ lines: QueueLine[] }>(can('payments.reconcile') ? '/api/statement-lines' : null);
+  const [tab, setTab] = useState<'queue' | 'all' | null>(null);
   const [err, setErr] = useState<string | null>(null);
   if (error) return <Empty text={error} />;
   if (!data) return <Loading />;
+
+  const waiting = queue.data?.lines.length ?? 0;
+  // Unsorted first while anything is unsorted — that is the work. Once the
+  // queue is empty the screen opens on the payments themselves.
+  const view = tab ?? (waiting > 0 ? 'queue' : 'all');
 
   return (
     <>
@@ -38,7 +48,49 @@ export function PaymentsPage() {
         <h1>{t.payments.title}</h1>
         <span className="mono muted">{data.payments.length}</span>
       </header>
+      {can('payments.reconcile') && (
+        <div className="seg-row tabs">
+          <button type="button" className={`seg ${view === 'queue' ? 'on' : ''}`} onClick={() => setTab('queue')}>
+            <span className="seg-lbl">{t.statements.queue}</span>
+            <span className="seg-num">{waiting}</span>
+          </button>
+          <button type="button" className={`seg ${view === 'all' ? 'on' : ''}`} onClick={() => setTab('all')}>
+            <span className="seg-lbl">{t.common.all}</span>
+            <span className="seg-num">{data.payments.length}</span>
+          </button>
+        </div>
+      )}
       {err && <div className="hint hint-bad">{err}</div>}
+      {view === 'queue' && (
+        <section className="card">
+          {!queue.data ? (
+            <Loading />
+          ) : queue.data.lines.length === 0 ? (
+            <div className="task-clear">
+              <p className="t-h3">{t.statements.queueNone}</p>
+              <Link className="pill pill-accent" to="/statements">
+                {t.statements.importCta}
+              </Link>
+            </div>
+          ) : (
+            <ul className="queue">
+              {queue.data.lines.map((l) => (
+                <QueueItem
+                  key={l.id}
+                  line={l}
+                  onDone={() => {
+                    queue.reload();
+                    reload();
+                  }}
+                  onError={setErr}
+                />
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
+      {view === 'all' && (
+        <>
       {data.payments.length === 0 ? (
         <Empty text={t.payments.none} />
       ) : (
@@ -83,6 +135,8 @@ export function PaymentsPage() {
             </tbody>
           </table>
         </div>
+      )}
+        </>
       )}
     </>
   );

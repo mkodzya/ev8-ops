@@ -424,6 +424,9 @@ export const en = {
   },
 
   statements: {
+    importCta: 'Load a statement',
+    looksLike: 'Looks like',
+    otherHints: (n: number) => `${n} more`,
     title: 'Statements',
     upload: 'Load a statement',
     uploadHint: 'CSV as the bank exports it: StatementExport.csv from Bank of Georgia, transactions_history.csv from TBC. Loading the same file twice changes nothing.',
