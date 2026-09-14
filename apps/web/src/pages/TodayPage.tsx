@@ -12,6 +12,8 @@ interface Summary {
   rentals: { active: number; overdue: number; withoutVin: number };
   customers: number;
   deposits: { held: number; heldTetri: number };
+  pickedUpToday: { id: string; number: string; customer: string }[];
+  dueBackToday: { id: string; number: string; customer: string }[];
 }
 
 export function TodayPage() {
@@ -54,6 +56,40 @@ export function TodayPage() {
           <span className="tile-lbl">{t.today.depositsHeld}</span>
         </div>
       </section>
+      {(s.pickedUpToday.length > 0 || s.dueBackToday.length > 0) && (
+        <div className="two-col">
+          {s.pickedUpToday.length > 0 && (
+            <section className="card">
+              <h2>{t.today.pickedUp}</h2>
+              <ul className="timeline">
+                {s.pickedUpToday.map((r) => (
+                  <li key={r.id}>
+                    <Link to={`/rentals/${r.id}`} className="mono">
+                      {r.number}
+                    </Link>
+                    <span>{r.customer}</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+          {s.dueBackToday.length > 0 && (
+            <section className="card">
+              <h2>{t.today.dueBack}</h2>
+              <ul className="timeline">
+                {s.dueBackToday.map((r) => (
+                  <li key={r.id}>
+                    <Link to={`/rentals/${r.id}`} className="mono">
+                      {r.number}
+                    </Link>
+                    <span>{r.customer}</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+        </div>
+      )}
       <section className="card">
         <h2>{t.today.fleet}</h2>
         <ul className="state-list">

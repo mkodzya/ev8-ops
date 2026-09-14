@@ -1,6 +1,6 @@
 import { VEHICLE_STATES, effectiveRentalStatus, todayISO, type VehicleState } from '@ev8/shared';
 import type { FastifyInstance } from 'fastify';
-import { isoDate } from '../lib/dates.js';
+import { dateFromISO, isoDate } from '../lib/dates.js';
 import { prisma } from '../lib/db.js';
 import { env } from '../lib/env.js';
 
@@ -10,7 +10,8 @@ import { env } from '../lib/env.js';
 export function summaryRoutes(app: FastifyInstance): void {
   app.get('/api/summary', { config: { scope: 'session' } }, async () => {
     const today = todayISO(new Date(), env.TZ);
-    const [vehicles, rentals, customers, depositsHeld] = await Promise.all([
+    const day = dateFromISO(today)!;
+    const [vehicles, rentals, customers, depositsHeld, pickedUpToday, dueBackToday] = await Promise.all([
       prisma.vehicle.groupBy({ by: ['state'], where: { archived: false }, _count: { _all: true } }),
       prisma.rental.findMany({
         where: { status: { in: ['active', 'overdue'] } },
@@ -18,6 +19,16 @@ export function summaryRoutes(app: FastifyInstance): void {
       }),
       prisma.customer.count({ where: { archived: false } }),
       prisma.deposit.aggregate({ where: { status: 'held' }, _sum: { amountTetri: true }, _count: { _all: true } }),
+      prisma.rental.findMany({
+        where: { pickedUpOn: day },
+        select: { id: true, number: true, customer: { select: { name: true } } },
+        orderBy: { createdAt: 'asc' },
+      }),
+      prisma.rental.findMany({
+        where: { expectedReturnOn: day, returnedOn: null },
+        select: { id: true, number: true, customer: { select: { name: true } } },
+        orderBy: { createdAt: 'asc' },
+      }),
     ]);
     const fleet = Object.fromEntries(VEHICLE_STATES.map((s) => [s, 0])) as Record<VehicleState, number>;
     for (const g of vehicles) fleet[g.state as VehicleState] = g._count._all;
@@ -36,6 +47,9 @@ export function summaryRoutes(app: FastifyInstance): void {
       rentals: { active, overdue, withoutVin },
       customers,
       deposits: { held: depositsHeld._count._all, heldTetri: depositsHeld._sum.amountTetri ?? 0 },
+      // What today asks a person to do, not only what it counts (DSH-01).
+      pickedUpToday: pickedUpToday.map((r) => ({ id: r.id, number: r.number, customer: r.customer.name })),
+      dueBackToday: dueBackToday.map((r) => ({ id: r.id, number: r.number, customer: r.customer.name })),
     };
   });
 }

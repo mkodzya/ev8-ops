@@ -1,5 +1,7 @@
 import type { ActKind, DepositStatus, PeriodPayStatus, RentalStatus } from '@ev8/shared';
 import { useState } from 'react';
+import { parseGel, type VehicleState } from '@ev8/shared';
+import { Field } from '../components/Wizard.js';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { Empty, Loading, RentalBadge, Vin } from '../components/ui.js';
@@ -44,6 +46,7 @@ export function RentalPage() {
   const { can } = useSession();
   const { data, error, reload } = useLoad<RentalCard>(id ? `/api/rentals/${id}` : null);
   const [err, setErr] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
   if (error) return <Empty text={error} />;
   if (!data) return <Loading />;
   const r = data.rental;
@@ -75,12 +78,28 @@ export function RentalPage() {
             {t.docs.returnAct}
           </a>
         )}
+        {open && can('rental.create') && (
+          <button type="button" className="pill pill-sm" onClick={() => setEditing((v) => !v)}>
+            {t.rentalEdit.title}
+          </button>
+        )}
         {open && can('rental.return') && (
           <Link className="pill pill-sm pill-accent" to={`/rentals/${r.id}/return`}>
             {t.actions.returnRental}
           </Link>
         )}
       </header>
+      {editing && (
+        <RentalEdit
+          rental={r}
+          onClose={() => setEditing(false)}
+          onSaved={() => {
+            setEditing(false);
+            reload();
+          }}
+          onError={setErr}
+        />
+      )}
       {err && <div className="hint hint-bad">{err}</div>}
       {can('deposit.decide') && (
         <p className="hint muted">
@@ -221,5 +240,111 @@ export function RentalPage() {
         )}
       </section>
     </>
+  );
+}
+
+
+interface FreeVehicles {
+  vehicles: { id: string; vin: string; model: string; state: VehicleState }[];
+}
+
+/**
+ * The edits the rental requirements ask for after a hand-over: giving a
+ * rental its moped once the VIN is confirmed (RNT-06), pausing or disputing
+ * it with a reason (RNT-06), and the buy-out terms (RNT-07).
+ */
+function RentalEdit({
+  rental,
+  onClose,
+  onSaved,
+  onError,
+}: {
+  rental: RentalCard['rental'];
+  onClose: () => void;
+  onSaved: () => void;
+  onError: (e: string) => void;
+}) {
+  const t = useT();
+  const fleet = useLoad<FreeVehicles>(rental.vinUnconfirmed ? '/api/fleet' : null);
+  const [vehicleId, setVehicleId] = useState('');
+  const [status, setStatus] = useState(rental.storedStatus === 'returned' ? 'active' : rental.storedStatus);
+  const [reason, setReason] = useState('');
+  const [target, setTarget] = useState(rental.buyoutTargetTetri ? String(rental.buyoutTargetTetri / 100) : '');
+  const [per, setPer] = useState(rental.buyoutPerPaymentTetri ? String(rental.buyoutPerPaymentTetri / 100) : '');
+  const [notes, setNotes] = useState(rental.notes ?? '');
+  const [busy, setBusy] = useState(false);
+
+  const free = (fleet.data?.vehicles ?? []).filter((v) => v.state === 'available');
+  const statusChanged = status !== rental.storedStatus;
+  const needsReason = statusChanged && status !== 'active';
+
+  const save = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    try {
+      const body: Record<string, unknown> = { notes: notes || null };
+      if (vehicleId) body.vehicleId = vehicleId;
+      if (statusChanged) body.status = status;
+      if (reason) body.reason = reason;
+      body.buyoutTargetTetri = target ? parseGel(target) : null;
+      body.buyoutPerPaymentTetri = per ? parseGel(per) : null;
+      await api.patch(`/api/rentals/${rental.id}`, body);
+      onSaved();
+    } catch (e) {
+      onError(errorText(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <form className="card card-drawer form" onSubmit={save}>
+      {rental.vinUnconfirmed && (
+        <Field label={t.rentalEdit.assignVehicle} hint={t.rentalEdit.assignHint}>
+          <select className="input" value={vehicleId} onChange={(e) => setVehicleId(e.target.value)}>
+            <option value="">{t.common.dash}</option>
+            {free.map((v) => (
+              <option key={v.id} value={v.id}>
+                {v.vin} · {v.model}
+              </option>
+            ))}
+          </select>
+        </Field>
+      )}
+      <Field label={t.rentalEdit.status}>
+        <div className="chips">
+          {(['active', 'paused', 'disputed'] as const).map((st) => (
+            <button key={st} type="button" className={`pill pill-sm ${status === st ? 'on' : ''}`} onClick={() => setStatus(st)}>
+              {t.rentalStatus[st]}
+            </button>
+          ))}
+        </div>
+      </Field>
+      {needsReason && (
+        <Field label={t.rentalEdit.reason} hint={t.rentalEdit.reasonHint}>
+          <input className="input" value={reason} onChange={(e) => setReason(e.target.value)} />
+        </Field>
+      )}
+      <span className="lbl">{t.rentalEdit.buyout}</span>
+      <div className="two-col">
+        <Field label={t.rentalEdit.buyoutTarget}>
+          <input className="input input-amount mono" value={target} onChange={(e) => setTarget(e.target.value)} inputMode="decimal" />
+        </Field>
+        <Field label={t.rentalEdit.buyoutPerPayment}>
+          <input className="input input-amount mono" value={per} onChange={(e) => setPer(e.target.value)} inputMode="decimal" />
+        </Field>
+      </div>
+      <Field label={t.rentalEdit.notes}>
+        <textarea className="input textarea" rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} />
+      </Field>
+      <div className="row-actions">
+        <button type="button" className="pill" onClick={onClose}>
+          {t.actions.cancel}
+        </button>
+        <button className="pill pill-accent" disabled={busy || (needsReason && !reason.trim())}>
+          {busy ? t.common.checking : t.actions.save}
+        </button>
+      </div>
+    </form>
   );
 }

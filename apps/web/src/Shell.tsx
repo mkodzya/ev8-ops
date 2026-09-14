@@ -38,6 +38,7 @@ export function Shell() {
     { to: '/fleet', label: t.nav.fleet },
     { to: '/rentals', label: t.nav.rentals },
     { to: '/customers', label: t.nav.customers },
+    ...(can('users.manage') ? [{ to: '/settings', label: t.settings.title }] : []),
   ];
 
   return (
@@ -66,20 +67,24 @@ export function Shell() {
         <div className="rail-foot">
           <LanguageToggle onChange={remember} />
           {me && (
+            <Link className="rail-user rail-user-link" to="/profile" title={t.profile.title}>
+              <span className="rail-user-initial" aria-hidden="true">
+                {me.name.trim().charAt(0).toUpperCase()}
+              </span>
+              <span className="rail-user-name">{me.name}</span>
+              <span className="rail-user-role">{t.users.roles[me.role]}</span>
+            </Link>
+          )}
+          {me && (
             <button
               type="button"
-              className="rail-user"
-              title={t.common.signOut}
+              className="rail-signout"
               onClick={async () => {
                 await logout();
                 navigate('/login');
               }}
             >
-              <span className="rail-user-initial" aria-hidden="true">
-                {me.name.trim().charAt(0).toUpperCase()}
-              </span>
-              <span className="rail-user-name">{me.name}</span>
-              <span className="rail-user-role">{me.role}</span>
+              {t.common.signOut}
             </button>
           )}
         </div>

@@ -5,6 +5,8 @@ import { CustomerForm } from './pages/CustomerForm.js';
 import { CustomerPage } from './pages/CustomerPage.js';
 import { CustomersPage } from './pages/CustomersPage.js';
 import { PickupWizard } from './pages/PickupWizard.js';
+import { ProfilePage } from './pages/ProfilePage.js';
+import { SettingsPage } from './pages/SettingsPage.js';
 import { RentalPage } from './pages/RentalPage.js';
 import { ReturnWizard } from './pages/ReturnWizard.js';
 import { VehiclePage } from './pages/VehiclePage.js';
@@ -17,6 +19,17 @@ function RequireAuth({ children }: { children: React.ReactElement }) {
   const { me, loading } = useSession();
   if (loading) return null;
   if (!me) return <Navigate to="/login" replace />;
+  return children;
+}
+
+// A hidden tab is not a closed door: the URL still exists and somebody will
+// arrive from a bookmark. Sent home rather than shown an error; the API
+// closes the same door for real.
+function RequireOwner({ children }: { children: React.ReactElement }) {
+  const { me, loading, can } = useSession();
+  if (loading) return null;
+  if (!me) return <Navigate to="/login" replace />;
+  if (!can('users.manage')) return <Navigate to="/" replace />;
   return children;
 }
 
@@ -42,6 +55,8 @@ export function App() {
         <Route path="customers" element={<CustomersPage />} />
         <Route path="customers/new" element={<CustomerForm />} />
         <Route path="customers/:id" element={<CustomerPage />} />
+        <Route path="profile" element={<ProfilePage />} />
+        <Route path="settings" element={<RequireOwner><SettingsPage /></RequireOwner>} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

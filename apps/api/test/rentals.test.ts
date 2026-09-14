@@ -63,6 +63,49 @@ describe.skipIf(!HAS_DB)('hand-over', () => {
   });
 });
 
+describe.skipIf(!HAS_DB)('confirming a VIN later (RNT-06)', () => {
+  it('hands the moped over as of today, so it never appears in two places at once', async () => {
+    const { prisma, vehicle, customer } = await fixtures();
+    const director = await loginAs('director');
+    // This moped has a past: out with somebody else, and back.
+    const earlier = await prisma.customer.create({ data: { name: `Earlier ${uniq()}` } });
+    const first = json<{ id: string }>(
+      await call(director, 'POST', '/api/rentals', { customerId: earlier.id, vehicleId: vehicle.id, weeklyRateTetri: 15000, pickedUpOn: '2026-08-05' }),
+    );
+    await call(director, 'POST', `/api/rentals/${first.id}/return`, { returnedOn: '2026-08-26' });
+
+    // A rental opened without a VIN, started BEFORE that return.
+    const bare = json<{ id: string }>(
+      await call(director, 'POST', '/api/rentals', { customerId: customer.id, weeklyRateTetri: 14000, pickedUpOn: '2026-08-25', vinNote: 'contract scan unreadable' }),
+    );
+    expect((await call(director, 'PATCH', `/api/rentals/${bare.id}`, { vehicleId: vehicle.id })).statusCode).toBe(200);
+
+    const card = json<{ events: { kind: string; occurredOn: string }[] }>(await call(director, 'GET', `/api/fleet/${vehicle.id}`));
+    // The fixture makes the moped directly, so there is no `arrived` event.
+    const kinds = card.events.map((e) => e.kind);
+    expect(kinds).toEqual(['pickup', 'return', 'pickup']);
+    // The second hand-over is dated today, not back inside the first rental.
+    expect(card.events[2].occurredOn > card.events[1].occurredOn).toBe(true);
+
+    const v = await prisma.vehicle.findUniqueOrThrow({ where: { id: vehicle.id } });
+    expect(v.state).toBe('rented');
+    expect(v.currentRentalId).toBe(bare.id);
+  });
+
+  it('refuses a moped that is already out with somebody else', async () => {
+    const { vehicle, customer } = await fixtures();
+    const director = await loginAs('director');
+    const other = await (await import('../src/lib/db.js')).prisma.customer.create({ data: { name: `Other ${uniq()}` } });
+    await call(director, 'POST', '/api/rentals', { customerId: other.id, vehicleId: vehicle.id, weeklyRateTetri: 15000 });
+    const bare = json<{ id: string }>(
+      await call(director, 'POST', '/api/rentals', { customerId: customer.id, weeklyRateTetri: 14000, vinNote: 'unreadable' }),
+    );
+    const res = await call(director, 'PATCH', `/api/rentals/${bare.id}`, { vehicleId: vehicle.id });
+    expect(res.statusCode).toBe(409);
+    expect(json<{ error: string }>(res).error).toBe('vehicle_not_available');
+  });
+});
+
 describe.skipIf(!HAS_DB)('return', () => {
   it('closes the rental, frees the moped, and a manager cannot decide on the deposit', async () => {
     const { prisma, vehicle, customer } = await fixtures();

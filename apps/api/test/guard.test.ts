@@ -12,7 +12,16 @@ describe('route table', () => {
     const ownerOnly = app.routeTable.filter((r) => r.scope === 'users.manage' || r.scope === 'settings.manage');
     // Owner-only routes are listed here on purpose: a new one that lands at
     // the default scope by accident shows up in this list and is questioned.
-    expect(ownerOnly.map((r) => `${r.method} ${r.url}`).sort()).toEqual(['POST /api/fleet', 'POST /api/models']);
+    expect(ownerOnly.map((r) => `${r.method} ${r.url}`).sort()).toEqual([
+      'GET /api/users',
+      'PATCH /api/fleet/:id',
+      'PATCH /api/models/:id',
+      'PATCH /api/users/:id',
+      'POST /api/fleet',
+      'POST /api/models',
+      'POST /api/users',
+      'POST /api/users/:id/password',
+    ]);
     const publicOnes = app.routeTable.filter((r) => r.scope === 'public').map((r) => r.url).sort();
     expect(publicOnes).toEqual(['/api/auth/login', '/api/health']);
   });

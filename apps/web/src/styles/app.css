@@ -336,3 +336,21 @@ h2.sub { font-size: 14px; margin: 18px 0 8px; }
 .item-list li:first-child { border-top: 0; }
 .item-name { min-width: 120px; font-weight: 500; }
 .item-list .input { flex: 1 1 100%; }
+
+/* ---- settings, inline forms ----------------------------------------- */
+.sub-form { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line-soft); }
+.sub-form.card { border: 1px solid var(--accent-hover); padding: 16px 18px; margin: 12px 0 0; }
+.input-inline { min-height: 34px; min-width: 132px; max-width: 200px; padding: 0 10px; font-size: 13px; }
+.inline-form { display: inline-flex; gap: 6px; align-items: center; }
+.row-off { opacity: 0.55; }
+.table td .pill { white-space: nowrap; }
+.rail-user-link { display: block; text-decoration: none; }
+.rail-signout {
+  background: none; border: 0; color: var(--rail-ink); opacity: 0.7;
+  font: inherit; font-size: 12px; text-align: left; padding: 4px 12px; cursor: pointer;
+}
+.rail-signout:hover { opacity: 1; }
+@media (max-width: 719px) {
+  .rail-signout { display: none; }
+  .input-inline { max-width: 140px; }
+}

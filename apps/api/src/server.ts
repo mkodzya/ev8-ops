@@ -11,6 +11,7 @@ import { fleetRoutes } from './routes/fleet.js';
 import { opsRoutes } from './routes/ops.js';
 import { rentalRoutes } from './routes/rentals.js';
 import { summaryRoutes } from './routes/summary.js';
+import { userRoutes } from './routes/users.js';
 
 export function buildApp(): FastifyInstance {
   const app = Fastify({
@@ -47,6 +48,7 @@ export function buildApp(): FastifyInstance {
   opsRoutes(app);
   fileRoutes(app);
   documentRoutes(app);
+  userRoutes(app);
 
   return app;
 }
