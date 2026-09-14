@@ -138,6 +138,7 @@ export const ru: Dict = {
   },
 
   vehicle: {
+    backToFleet: 'Вернуть в парк',
     title: 'Мопед',
     history: 'История',
     rentalsOf: 'Аренды',

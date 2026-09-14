@@ -62,19 +62,16 @@ export function FleetPage() {
           <NewVehicle models={models.data.models} onDone={() => setTick((n) => n + 1)} />
         )}
       </header>
-      <div className="toolbar">
-        <div className="chips">
-          <button type="button" className={`pill pill-sm ${!state ? 'on' : ''}`} onClick={() => setParams({})}>
-            {t.common.all}
+      <div className="segments">
+        <div className="seg-row">
+          <button type="button" className={`seg ${!state ? 'on' : ''}`} onClick={() => setParams({})}>
+            <span className="seg-lbl">{t.common.all}</span>
+            <span className="seg-num">{data.vehicles.length}</span>
           </button>
           {VEHICLE_STATES.map((st) => (
-            <button
-              key={st}
-              type="button"
-              className={`pill pill-sm ${state === st ? 'on' : ''}`}
-              onClick={() => setParams({ state: st })}
-            >
-              {t.states[st]} <span className="mono">{data.byState[st]}</span>
+            <button key={st} type="button" className={`seg seg-${st} ${state === st ? 'on' : ''}`} onClick={() => setParams({ state: st })}>
+              <span className="seg-lbl">{t.states[st]}</span>
+              <span className="seg-num">{data.byState[st]}</span>
             </button>
           ))}
         </div>
@@ -83,42 +80,44 @@ export function FleetPage() {
       {rows.length === 0 ? (
         <Empty text={t.fleet.empty} />
       ) : (
-        <div className="table-wrap">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>{t.fleet.vin}</th>
-                <th>{t.fleet.model}</th>
-                <th>{t.fleet.color}</th>
-                <th>{t.fleet.year}</th>
-                <th>{t.fleet.arrived}</th>
-                <th>{t.fleet.state}</th>
-                <th>{t.fleet.renter}</th>
-                <th>{t.fleet.paidThrough}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((v) => (
-                <tr key={v.id}>
-                  <td>
-                    <Link to={`/fleet/${v.id}`}>
-                      <Vin vin={v.vin} />
-                    </Link>
-                  </td>
-                  <td>{v.model}</td>
-                  <td>{v.color ?? t.common.dash}</td>
-                  <td className="mono">{v.year ?? t.common.dash}</td>
-                  <td className="mono">{fmtDate(v.arrivedOn)}</td>
-                  <td>
-                    <StateBadge state={v.state} />
-                  </td>
-                  <td>{v.currentRental ? <Link to={`/customers/${v.currentRental.customer.id}`}>{v.currentRental.customer.name}</Link> : t.common.dash}</td>
-                  <td className="mono">{v.currentRental ? fmtDate(v.currentRental.paidThrough) : t.common.dash}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        /* One markup, two shapes: a list a thumb can read on a phone, and the
+           same rows as a table from 900 px up, where a laptop wants columns
+           (U3). Rendering it twice would be two things to keep in step. */
+        <ul className="vlist">
+          <li className="vlist-head" aria-hidden="true">
+            <span>{t.fleet.vin}</span>
+            <span>{t.fleet.model}</span>
+            <span>{t.fleet.color}</span>
+            <span>{t.fleet.year}</span>
+            <span>{t.fleet.arrived}</span>
+            <span>{t.fleet.state}</span>
+            <span>{t.fleet.renter}</span>
+            <span>{t.fleet.paidThrough}</span>
+          </li>
+          {rows.map((v) => (
+            /* Source order is the laptop's column order; the phone re-lays
+               them out by name with grid-template-areas, so neither shape
+               depends on the other. */
+            <li key={v.id} className="vrow">
+              <Link to={`/fleet/${v.id}`} className="v-vin">
+                <Vin vin={v.vin} />
+              </Link>
+              <span className="v-model">{v.model}</span>
+              <span className="v-color">{v.color ?? t.common.dash}</span>
+              <span className="v-year mono">{v.year ?? t.common.dash}</span>
+              <span className="v-arrived mono">{fmtDate(v.arrivedOn)}</span>
+              <span className="v-state">
+                <StateBadge state={v.state} />
+              </span>
+              <span className={`v-renter ${v.currentRental ? '' : 'v-none'}`}>
+                {v.currentRental ? <Link to={`/customers/${v.currentRental.customer.id}`}>{v.currentRental.customer.name}</Link> : t.common.dash}
+              </span>
+              <span className={`v-paid mono ${v.currentRental ? '' : 'v-none'}`}>
+                {v.currentRental ? fmtDate(v.currentRental.paidThrough) : t.common.dash}
+              </span>
+            </li>
+          ))}
+        </ul>
       )}
     </>
   );

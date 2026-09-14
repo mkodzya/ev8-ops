@@ -132,6 +132,7 @@ export const en = {
   },
 
   vehicle: {
+    backToFleet: 'Back to the fleet',
     title: 'Moped',
     history: 'History',
     rentalsOf: 'Rentals',

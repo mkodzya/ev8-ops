@@ -546,16 +546,11 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
   .tab.on { color: var(--rail-accent); font-weight: 700; }
   .badge { margin-left: 4px; }
 
-  /* The rail keeps one thing above the bar: the action this company does
-     all day. Everything else it used to hold is in the bar or behind More,
-     and the profile link moved into the sheet with them. */
-  .rail {
-    inset: auto auto calc(var(--control) + env(safe-area-inset-bottom)) 0;
-    width: auto;
-    background: none;
-    padding: 0 0 10px 12px;
-  }
-  .rail-foot { display: none; }
+  /* The rail is a laptop object. On a phone the tab bar navigates, the More
+     sheet holds the rest, and the bottom of the screen belongs to the one
+     action of the screen you are on — a floating button competing with it
+     is two primary actions, which is none. */
+  .rail { display: none; }
 
   .sheet-scrim { position: fixed; inset: 0; z-index: 12; background: var(--scrim); }
   .more-sheet {
@@ -576,4 +571,119 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
   }
   .more-sheet li:first-child a { border-top: 0; }
   .more-sheet a.on { color: var(--accent); font-weight: 600; }
+}
+
+/* ---- Fleet: segments that stay, rows that change shape (U3) ---------- */
+.segments {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--bg);
+  padding: 8px 0 12px;
+  margin-bottom: 4px;
+}
+.seg-row { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 6px; scrollbar-width: none; }
+.seg-row::-webkit-scrollbar { display: none; }
+.seg {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  min-height: 38px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  color: var(--ink);
+  font: var(--text-button-sm);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.seg:hover { border-color: var(--accent-hover); }
+.seg.on { background: var(--lime); border-color: var(--lime); }
+.seg-num { font: var(--text-mono-sm); font-variant-numeric: tabular-nums; color: var(--muted); }
+.seg.on .seg-num { color: var(--ink); }
+.seg-available.on { background: var(--accent-soft); border-color: var(--accent); }
+.seg-rented.on { background: var(--info-soft); border-color: var(--rented); }
+.seg-service.on { background: var(--warn-soft); border-color: var(--service); }
+.seg-out.on { background: var(--crit-soft); border-color: var(--crit); }
+.segments .input-search { width: 100%; }
+
+.vlist { list-style: none; margin: 0; padding: 0; }
+.vlist-head { display: none; }
+.vrow {
+  display: grid;
+  grid-template-areas: 'state paid' 'vin renter' 'model renter';
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px 12px;
+  padding: 12px 14px;
+  margin-bottom: 8px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+}
+.v-state { grid-area: state; font: var(--text-h3); }
+.v-vin { grid-area: vin; }
+.v-model { grid-area: model; font: var(--text-label); color: var(--muted); }
+.v-renter { grid-area: renter; text-align: right; }
+.v-paid { grid-area: paid; text-align: right; color: var(--muted); }
+/* Colour, year and arrival are card facts, not list facts. */
+.v-color, .v-arrived, .v-year { display: none; }
+/* On a phone the whole VIN is noise: the last four are what anyone reads,
+   and a column of em dashes where a free moped has no renter is worse than
+   the silence it stands for. */
+@media (max-width: 899px) {
+  .v-none { display: none; }
+  .vrow .vin-head { color: var(--muted); }
+  .v-vin .vin { font: var(--text-mono); }
+  .v-vin .vin-tail { font: var(--text-money); }
+}
+
+@media (min-width: 900px) {
+  /* The same rows, now columns. */
+  .vlist-head, .vrow {
+    display: grid;
+    grid-template-areas: none;
+    grid-template-columns: 200px minmax(120px, 1fr) 100px 60px 110px 150px minmax(120px, 1fr) 110px;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    margin: 0;
+    border: 0;
+    border-top: 1px solid var(--line-soft);
+    border-radius: 0;
+    background: none;
+  }
+  .vlist-head {
+    font: var(--text-overline);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--muted);
+    border-top: 0;
+    padding-bottom: 6px;
+  }
+  /* Eight columns do not always fit; the list scrolls sideways rather than
+     the page doing it. */
+  .vlist { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-card); padding: 8px 4px; overflow-x: auto; }
+  .vlist-head, .vrow { min-width: 940px; }
+  .v-state, .v-vin, .v-model, .v-color, .v-year, .v-arrived, .v-renter, .v-paid { grid-area: auto; text-align: left; font: var(--text-body-sm); color: inherit; display: block; }
+}
+
+/* ---- one action per screen, where the thumb is (U4) ------------------ */
+.page-actions { display: none; }
+@media (max-width: 719px) {
+  /* The header keeps the secondary verbs; the one that matters sits above
+     the tab bar and spans the screen. */
+  .head-primary { display: none; }
+  .page-actions {
+    display: block;
+    position: fixed;
+    inset: auto 0 calc(var(--control) + env(safe-area-inset-bottom)) 0;
+    z-index: 9;
+    padding: 10px 16px;
+    background: var(--bg);
+    border-top: 1px solid var(--line-soft);
+  }
+  /* Room for the bar plus the tab bar under it. */
+  .page { padding-bottom: calc(150px + env(safe-area-inset-bottom)); }
 }
