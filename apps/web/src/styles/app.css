@@ -754,3 +754,6 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
 .prev-nums { list-style: none; display: flex; flex-wrap: wrap; gap: 24px; margin: 0 0 14px; padding: 0; }
 .prev-nums li { display: flex; flex-direction: column; }
 .prev-sample { margin-bottom: 14px; }
+
+/* The customer's balance as a sentence, before the figures behind it (U9). */
+.bal-line { font: var(--text-h1); margin: 0 0 14px; }

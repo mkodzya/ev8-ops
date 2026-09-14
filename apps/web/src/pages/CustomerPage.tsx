@@ -62,14 +62,34 @@ export function CustomerPage() {
         <h1>{c.name}</h1>
         {c.nameLat && c.nameLat !== c.name && <span className="muted">{c.nameLat}</span>}
         <span className="spacer" />
+        {c.phone && (
+          // The number the company actually reaches people on. A link, not an
+          // integration: WhatsApp templates are MSG-01 and wait on a Meta token.
+          <a className="pill pill-sm" href={`https://wa.me/${c.phone.replace(/\D/g, '')}`} target="_blank" rel="noreferrer">
+            {t.customer.whatsapp}
+          </a>
+        )}
         {can('rental.create') && (
           <Link className="pill pill-sm pill-accent" to={`/rentals/new?customer=${c.id}`}>
             {t.actions.newRental}
           </Link>
         )}
       </header>
+
+      {/* The first line answers the question the card is opened with (U9).
+          The four figures it is made of are underneath, smaller. */}
       {balance.data && (
-        <section className="tiles">
+        <p className={`bal-line ${balance.data.outstandingTetri > 0 ? 'crit-text' : balance.data.creditTetri > 0 ? 'state-available' : 'muted'}`}>
+          {balance.data.outstandingTetri > 0
+            ? t.balance.owes(formatGel(balance.data.outstandingTetri))
+            : balance.data.creditTetri > 0
+              ? t.balance.overpaid(formatGel(balance.data.creditTetri))
+              : t.balance.clear}
+        </p>
+      )}
+
+      {balance.data && (
+        <section className="tiles tiles-quiet">
           <div className={`tile ${balance.data.outstandingTetri > 0 ? 'tile-crit' : ''}`}>
             <span className="tile-num mono">{formatGel(balance.data.outstandingTetri, { decimals: false })}</span>
             <span className="tile-lbl">{t.balance.outstanding}</span>
