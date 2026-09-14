@@ -90,6 +90,14 @@ enum CustomerKind {
   @@map("customer_kind")
 }
 
+enum FileKind {
+  act_photo
+  customer_document
+  pdf
+
+  @@map("file_kind")
+}
+
 model User {
   id           String   @id @default(uuid()) @db.Uuid
   email        String   @unique
@@ -108,6 +116,7 @@ model User {
   actsCreated       Act[]
   vehicleEvents     VehicleEvent[]
   auditEntries      AuditLog[]
+  filesUploaded     StoredFile[]
 
   @@map("users")
 }
@@ -189,7 +198,8 @@ model Customer {
   createdAt     DateTime     @default(now()) @map("created_at")
   updatedAt     DateTime     @default(now()) @map("updated_at")
 
-  rentals Rental[]
+  rentals   Rental[]
+  documents StoredFile[]
 
   @@map("customers")
 }
@@ -277,16 +287,40 @@ model Act {
   occurredOn   DateTime @map("occurred_on") @db.Date
   odometerKm   Int?     @map("odometer_km")
   condition    String?
-  photos       Json     @default("[]")
   signatureUrl String?  @map("signature_url")
   pdfUrl       String?  @map("pdf_url")
   createdById  String?  @map("created_by") @db.Uuid
   createdAt    DateTime @default(now()) @map("created_at")
 
-  rental    Rental @relation(fields: [rentalId], references: [id], onDelete: Cascade)
-  createdBy User?  @relation(fields: [createdById], references: [id])
+  rental    Rental       @relation(fields: [rentalId], references: [id], onDelete: Cascade)
+  createdBy User?        @relation(fields: [createdById], references: [id])
+  photos    StoredFile[]
 
   @@map("acts")
+}
+
+/// Bytes in the database (see migration 0002). `bytes` is never selected by
+/// a list query — only by the one route that streams a file.
+model StoredFile {
+  id           String   @id @default(uuid()) @db.Uuid
+  kind         FileKind
+  actId        String?  @map("act_id") @db.Uuid
+  customerId   String?  @map("customer_id") @db.Uuid
+  label        String   @default("")
+  docKind      String?  @map("doc_kind")
+  mimeType     String   @map("mime_type")
+  sizeBytes    Int      @map("size_bytes")
+  sha256       String
+  bytes        Bytes
+  uploadedById String?  @map("uploaded_by") @db.Uuid
+  archived     Boolean  @default(false)
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  act        Act?      @relation(fields: [actId], references: [id], onDelete: Cascade)
+  customer   Customer? @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  uploadedBy User?     @relation(fields: [uploadedById], references: [id])
+
+  @@map("files")
 }
 
 model VehicleEvent {

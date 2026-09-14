@@ -23,8 +23,9 @@ describe.skipIf(!HAS_DB)('hand-over', () => {
       odometerKm: 120,
     });
     expect(res.statusCode, res.body).toBe(201);
-    const { id, number } = json<{ id: string; number: string }>(res);
+    const { id, number, actId } = json<{ id: string; number: string; actId: string }>(res);
     expect(number).toMatch(/^R-\d{5}$/);
+    expect(actId).toBeTruthy();
 
     const card = json<{ rental: { status: string; weeklyRateTetri: number; depositTetri: number }; periods: { seq: number; startsOn: string; endsOn: string }[]; deposit: { status: string; amountTetri: number }; acts: { kind: string }[] }>(
       await call(manager, 'GET', `/api/rentals/${id}`),

@@ -7,6 +7,8 @@ import { Field, Row, Wizard } from '../components/Wizard.js';
 import { fmtDate, formatGel } from '../format.js';
 import { useT } from '../i18n/index.js';
 import { errorText, useLoad } from '../lib/use.js';
+import { uploadAll, type PreparedPhoto } from '../lib/photos.js';
+import { PhotoPicker } from '../components/PhotoPicker.js';
 import { CustomerForm } from './CustomerForm.js';
 
 interface Customers {
@@ -40,6 +42,8 @@ export function PickupWizard() {
   const [expectedReturnOn, setExpectedReturnOn] = useState('');
   const [odometer, setOdometer] = useState('');
   const [condition, setCondition] = useState('');
+  const [photos, setPhotos] = useState<PreparedPhoto[]>([]);
+  const [progress, setProgress] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [result, setResult] = useState<{ id: string; number: string } | null>(null);
@@ -85,7 +89,7 @@ export function PickupWizard() {
     setBusy(true);
     setErr(null);
     try {
-      const r = await api.post<{ id: string; number: string }>('/api/rentals', {
+      const r = await api.post<{ id: string; number: string; actId: string }>('/api/rentals', {
         customerId,
         vehicleId: noVin ? null : vehicleId,
         vinNote: noVin ? vinNote : null,
@@ -97,9 +101,13 @@ export function PickupWizard() {
         condition: condition || null,
       });
       setResult(r);
+      // The rental exists now; a photo that fails to upload is reported, not lost.
+      await uploadAll(`/api/acts/${r.actId}/photos`, photos, (n) => setProgress(t.photos.uploading(n, photos.length)));
+      setProgress(null);
       setStep(4);
     } catch (e) {
       setErr(errorText(e));
+      if (result) setStep(4);
     } finally {
       setBusy(false);
     }
@@ -209,7 +217,8 @@ export function PickupWizard() {
           <Field label={t.pickup.condition}>
             <textarea className="input textarea" rows={3} value={condition} onChange={(e) => setCondition(e.target.value)} />
           </Field>
-          <p className="hint muted">{t.pickup.photosLater}</p>
+          <PhotoPicker photos={photos} onChange={setPhotos} label={t.pickup.photos} />
+          {progress && <p className="hint muted">{progress}</p>}
           <section className="card">
             <h2>{t.pickup.summary}</h2>
             <Row k={t.rentals.customer} v={customer?.name ?? ''} />

@@ -33,10 +33,7 @@ export function LoginPage() {
     <div className="login-wrap">
       <form className="login-card" onSubmit={submit}>
         <div className="login-head">
-          <picture>
-            <source srcSet="/logo-light.svg" media="(prefers-color-scheme: dark)" />
-            <img src="/logo.svg" alt="EV8" height={28} width={112} />
-          </picture>
+          <img src="/logo.svg" alt="EV8" height={28} width={112} />
           <span className="pill-mark">ops</span>
         </div>
         <div className="login-lang">

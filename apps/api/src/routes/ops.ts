@@ -99,7 +99,6 @@ export function opsRoutes(app: FastifyInstance): void {
       expectedReturnOn: date(b, 'expectedReturnOn'),
       odometerKm: int(b, 'odometerKm', { min: 0 }),
       condition: str(b, 'condition', { max: 4000 }),
-      photos: strList(b, 'photos'),
       notes: str(b, 'notes', { max: 4000 }),
       buyoutTargetTetri: tetri(b, 'buyoutTargetTetri', { min: 1 }),
       buyoutPerPaymentTetri: tetri(b, 'buyoutPerPaymentTetri', { min: 1 }),
@@ -124,17 +123,16 @@ export function opsRoutes(app: FastifyInstance): void {
         returnedTo: str(d, 'returnedTo', { max: 200 }),
       };
     }
-    await returnRental({
+    const { actId } = await returnRental({
       actorId: actor.id,
       rentalId: req.params.id,
       returnedOn: date(b, 'returnedOn') ?? today,
       odometerKm: int(b, 'odometerKm', { min: 0 }),
       condition: str(b, 'condition', { max: 4000 }),
-      photos: strList(b, 'photos'),
       deposit,
       canConfirm: hasPerm(actor, 'deposit.confirm'),
     });
-    return { ok: true };
+    return { ok: true, actId };
   });
 
   // Owner confirms a withholding or a third-party return (RNT-05).

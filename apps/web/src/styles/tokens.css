@@ -1,6 +1,7 @@
 /* EV8 Ops design tokens — the ev8.ge brand as read from the site
    (docs/design/brand.md), plus the few additions the operations UI needs.
-   Two themes: light on #fbfbfb, dark on #0b0b0b with the light logo. */
+   One theme, light, by the owner's decision (14 Sep 2026): the page is
+   #fbfbfb and only the rail is the brand black with the light logo. */
 
 :root {
   --bg: #fbfbfb;
@@ -42,33 +43,4 @@
   --radius-pill: 999px;
   --control: 44px; /* touch targets no smaller than 44 px (spec §9.2) */
   --rail-w: 220px;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #0b0b0b;
-    --surface: #151915;
-    --surface-2: #1b211b;
-    --ink: #eef1ee;
-    --muted: #9fae9f;
-    --line: #2a332b;
-    --line-soft: #222a23;
-    --brand: #a2b9a2;
-    --accent: #a2b9a2;
-    --accent-hover: #bfd3bf;
-    --accent-soft: #1f2d20;
-    --on-accent: #0b0b0b;
-    --rented: #7fa6ee;
-    --service: #ff7a3d;
-    --service-ink: #ff7a3d;
-    --crit: #ef6b5a;
-    --crit-soft: #3d1e1a;
-    --warn-soft: #3a2214;
-    --info-soft: #1b2a45;
-    --grey: #8f998f;
-    --rail: #050605;
-    --rail-ink: #aeb9ae;
-    --rail-active: #161a16;
-    --shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
-  }
 }

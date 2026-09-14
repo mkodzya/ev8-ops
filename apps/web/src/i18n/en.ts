@@ -209,6 +209,24 @@ export const en = {
     noRentals: 'No rentals yet.',
   },
 
+  photos: {
+    add: 'Photo',
+    remove: 'Remove',
+    hint: 'Four angles and the odometer. Photos are downsized on the phone before upload.',
+    cannotRead: (name: string) => `Cannot read ${name}.`,
+    uploading: (n: number, total: number) => `Uploading photo ${n} of ${total}…`,
+    none: 'No photos.',
+  },
+
+  documents: {
+    title: 'Documents',
+    kinds: { id_card: 'ID card', driver_licence: 'Driver licence', other: 'Other' },
+    add: 'Add document',
+    restricted: 'Documents are opened by the director and the owner only. You see that they exist.',
+    none: 'No documents.',
+    pick: 'Take a photo or choose a file',
+  },
+
   customers: {
     title: 'Customers',
     name: 'Name',

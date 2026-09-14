@@ -58,7 +58,7 @@ export function rentalRoutes(app: FastifyInstance): void {
         vehicle: { include: { model: true } },
         deposit: true,
         periods: { orderBy: { seq: 'asc' } },
-        acts: { orderBy: { occurredOn: 'asc' } },
+        acts: { orderBy: { occurredOn: 'asc' }, include: { photos: { where: { archived: false }, select: { id: true, label: true, sizeBytes: true }, orderBy: { createdAt: 'asc' } } } },
       },
     });
     if (!r) throw notFound('rental_not_found', 'No such rental.');
@@ -112,7 +112,7 @@ export function rentalRoutes(app: FastifyInstance): void {
         occurredOn: isoDate(a.occurredOn),
         odometerKm: a.odometerKm,
         condition: a.condition,
-        photos: a.photos,
+        photos: a.photos.map((p) => ({ id: p.id, label: p.label, sizeBytes: p.sizeBytes })),
         pdfUrl: a.pdfUrl,
       })),
     };

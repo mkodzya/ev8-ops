@@ -20,14 +20,13 @@ export interface PickupInput {
   expectedReturnOn: string | null;
   odometerKm: number | null;
   condition: string | null;
-  photos: string[];
   notes: string | null;
   buyoutTargetTetri: number | null;
   buyoutPerPaymentTetri: number | null;
   today: string;
 }
 
-export async function pickUp(input: PickupInput): Promise<{ id: string; number: string }> {
+export async function pickUp(input: PickupInput): Promise<{ id: string; number: string; actId: string }> {
   const customer = await prisma.customer.findUnique({ where: { id: input.customerId } });
   if (!customer || customer.archived) throw notFound('customer_not_found', 'No such customer.');
 
@@ -72,14 +71,13 @@ export async function pickUp(input: PickupInput): Promise<{ id: string; number: 
       });
     }
     await tx.deposit.create({ data: { rentalId: rental.id, amountTetri: input.depositTetri, status: 'held' } });
-    await tx.act.create({
+    const act = await tx.act.create({
       data: {
         rentalId: rental.id,
         kind: 'pickup',
         occurredOn: dateFromISO(input.pickedUpOn)!,
         odometerKm: input.odometerKm,
         condition: input.condition,
-        photos: input.photos,
         createdById: input.actorId,
       },
     });
@@ -102,7 +100,7 @@ export async function pickUp(input: PickupInput): Promise<{ id: string; number: 
         after: { number: rental.number, customerId: input.customerId, vehicleId: input.vehicleId, weeklyRateTetri: input.weeklyRateTetri, depositTetri: input.depositTetri, pickedUpOn: input.pickedUpOn },
       },
     });
-    return { id: rental.id, number: rental.number };
+    return { id: rental.id, number: rental.number, actId: act.id };
   });
 }
 
@@ -112,7 +110,6 @@ export interface ReturnInput {
   returnedOn: string;
   odometerKm: number | null;
   condition: string | null;
-  photos: string[];
   /** Present only when the actor may decide on the deposit (director, owner). */
   deposit: null | {
     returnedTetri: number;
@@ -123,8 +120,8 @@ export interface ReturnInput {
   canConfirm: boolean; // owner: withholdings and third-party returns are final at once
 }
 
-export async function returnRental(input: ReturnInput): Promise<void> {
-  await prisma.$transaction(async (tx) => {
+export async function returnRental(input: ReturnInput): Promise<{ actId: string }> {
+  return prisma.$transaction(async (tx) => {
     const r = await tx.rental.findUnique({ where: { id: input.rentalId }, include: { deposit: true } });
     if (!r) throw notFound('rental_not_found', 'No such rental.');
     if (r.status === 'returned') throw conflict('already_returned', 'This rental is already closed.');
@@ -139,14 +136,13 @@ export async function returnRental(input: ReturnInput): Promise<void> {
     // the last one is charged in full or pro rata is an open question for the
     // owner; until decided the full week stays.
     await tx.rentalPeriod.deleteMany({ where: { rentalId: r.id, startsOn: { gt: dateFromISO(input.returnedOn)! }, paidTetri: 0 } });
-    await tx.act.create({
+    const act = await tx.act.create({
       data: {
         rentalId: r.id,
         kind: 'return',
         occurredOn: dateFromISO(input.returnedOn)!,
         odometerKm: input.odometerKm,
         condition: input.condition,
-        photos: input.photos,
         createdById: input.actorId,
       },
     });
@@ -186,6 +182,7 @@ export async function returnRental(input: ReturnInput): Promise<void> {
         after: { status: 'returned', returnedOn: input.returnedOn, deposit: input.deposit },
       },
     });
+    return { actId: act.id };
   });
 }
 

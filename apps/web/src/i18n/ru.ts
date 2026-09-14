@@ -215,6 +215,24 @@ export const ru: Dict = {
     noRentals: 'Аренд пока нет.',
   },
 
+  photos: {
+    add: 'Фото',
+    remove: 'Убрать',
+    hint: 'Четыре ракурса и одометр. Фото уменьшаются на телефоне до отправки.',
+    cannotRead: (name: string) => `Не удалось прочитать ${name}.`,
+    uploading: (n: number, total: number) => `Загружаем фото ${n} из ${total}…`,
+    none: 'Фото нет.',
+  },
+
+  documents: {
+    title: 'Документы',
+    kinds: { id_card: 'Удостоверение', driver_licence: 'Водительские права', other: 'Другое' },
+    add: 'Добавить документ',
+    restricted: 'Документы открывают только директор и владелец. Вы видите, что они есть.',
+    none: 'Документов нет.',
+    pick: 'Снять или выбрать файл',
+  },
+
   customers: {
     title: 'Клиенты',
     name: 'Имя',

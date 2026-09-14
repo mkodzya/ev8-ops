@@ -32,7 +32,7 @@ export interface RentalCard {
   };
   deposit: { amountTetri: number; status: DepositStatus; returnedTetri: number; withheldTetri: number; withheldReason: string | null; returnedTo: string | null; returnedOn: string | null; confirmed?: boolean } | null;
   periods: { seq: number; startsOn: string; endsOn: string; amountTetri: number; paidTetri: number; payStatus: PeriodPayStatus }[];
-  acts: { id: string; kind: ActKind; occurredOn: string; odometerKm: number | null; condition: string | null; photos: unknown; pdfUrl: string | null }[];
+  acts: { id: string; kind: ActKind; occurredOn: string; odometerKm: number | null; condition: string | null; photos: { id: string; label: string }[]; pdfUrl: string | null }[];
 }
 
 export function RentalPage() {
@@ -178,6 +178,15 @@ export function RentalPage() {
                   {t.rental.actKind[a.kind]}
                   {a.odometerKm != null && <span className="muted"> · {a.odometerKm} km</span>}
                   {a.condition && <span className="muted"> · {a.condition}</span>}
+                  {a.photos.length > 0 && (
+                    <span className="thumbs">
+                      {a.photos.map((p) => (
+                        <a key={p.id} className="thumb" href={`/api/files/${p.id}`} target="_blank" rel="noreferrer">
+                          <img src={`/api/files/${p.id}`} alt="" loading="lazy" />
+                        </a>
+                      ))}
+                    </span>
+                  )}
                 </span>
               </li>
             ))}

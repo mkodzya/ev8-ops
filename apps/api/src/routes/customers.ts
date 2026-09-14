@@ -45,6 +45,10 @@ export function customerRoutes(app: FastifyInstance): void {
           orderBy: { createdAt: 'desc' },
           include: { vehicle: { select: { id: true, vin: true } }, deposit: true },
         },
+        // Documents: the fact of a document is visible to everyone who sees
+        // the card; the file itself only to director and owner (CST-03) —
+        // the files route enforces that, so ids are safe to list here.
+        documents: { where: { archived: false }, orderBy: { createdAt: 'asc' }, select: { id: true, docKind: true, label: true, sizeBytes: true, mimeType: true, createdAt: true } },
       },
     });
     if (!c) throw notFound('customer_not_found', 'No such customer.');
@@ -61,6 +65,8 @@ export function customerRoutes(app: FastifyInstance): void {
         tags: c.tags,
         notes: c.notes,
       },
+      documents: c.documents.map((d) => ({ id: d.id, docKind: d.docKind, label: d.label, sizeBytes: d.sizeBytes, mimeType: d.mimeType, createdAt: d.createdAt.toISOString() })),
+      canOpenDocuments: identity,
       rentals: c.rentals.map((r) => ({
         id: r.id,
         number: r.number,

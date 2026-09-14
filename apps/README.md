@@ -2,7 +2,8 @@
 
 - `api/` — Fastify 5 + Prisma 7 + PostgreSQL 16. `src/routes` (auth, summary,
   fleet, customers, rentals — reads; `ops.ts` — writes: customers, hand-over,
-  return, deposit confirmation, manual vehicle state, models and mopeds),
+  return, deposit confirmation, manual vehicle state, models and mopeds;
+  `files.ts` — act photos and customer documents, bytes in Postgres),
   `src/lib` (env, db, auth, guard, audit, validate, `vehicles.ts` — the one
   way a moped changes state, `rentals.ts` — hand-over and return as single
   transactions), `migrations/*.sql` applied by `scripts/migrate.mjs`,

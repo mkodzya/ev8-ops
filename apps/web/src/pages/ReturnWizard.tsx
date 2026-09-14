@@ -7,6 +7,8 @@ import { Field, Row, Wizard } from '../components/Wizard.js';
 import { fmtDate, formatGel } from '../format.js';
 import { useT } from '../i18n/index.js';
 import { errorText, useLoad } from '../lib/use.js';
+import { uploadAll, type PreparedPhoto } from '../lib/photos.js';
+import { PhotoPicker } from '../components/PhotoPicker.js';
 import { useSession } from '../session.js';
 import type { RentalCard } from './RentalPage.js';
 
@@ -27,6 +29,8 @@ export function ReturnWizard() {
   const [returnedOn, setReturnedOn] = useState(todayISO());
   const [odometer, setOdometer] = useState('');
   const [condition, setCondition] = useState('');
+  const [photos, setPhotos] = useState<PreparedPhoto[]>([]);
+  const [progress, setProgress] = useState<string | null>(null);
   const [decision, setDecision] = useState<Decision>('full');
   const [withheld, setWithheld] = useState('');
   const [reason, setReason] = useState('');
@@ -46,12 +50,14 @@ export function ReturnWizard() {
     setBusy(true);
     setErr(null);
     try {
-      await api.post(`/api/rentals/${r.id}/return`, {
+      const { actId } = await api.post<{ ok: boolean; actId: string }>(`/api/rentals/${r.id}/return`, {
         returnedOn,
         odometerKm: odometer ? Number(odometer) : null,
         condition: condition || null,
         deposit: decides ? { returnedTetri: amount - withheldTetri, withheldTetri, withheldReason: reason || null, returnedTo: returnedTo || null } : undefined,
       });
+      await uploadAll(`/api/acts/${actId}/photos`, photos, (n) => setProgress(t.photos.uploading(n, photos.length)));
+      setProgress(null);
       setStep(lastStep);
     } catch (e) {
       setErr(errorText(e));
@@ -90,6 +96,8 @@ export function ReturnWizard() {
           <Field label={t.ret.condition}>
             <textarea className="input textarea" rows={3} value={condition} onChange={(e) => setCondition(e.target.value)} />
           </Field>
+          <PhotoPicker photos={photos} onChange={setPhotos} label={t.pickup.photos} />
+          {progress && <p className="hint muted">{progress}</p>}
           {!decides && <p className="hint muted">{t.ret.leaveToDirector}</p>}
         </>
       )}
