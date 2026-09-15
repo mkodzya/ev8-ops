@@ -862,7 +862,23 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
   /* Stacked and right-aligned: a moped in neither park offers two moves, and
      side by side they wrap into the column next door. Always visible — an
      action that appears only under a pointer is an action nobody finds. */
-  .v-move { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+  /* The row can be wider than the window, and the one thing it must never be
+     possible to scroll away from is the action. The last cell rides the right
+     edge instead, with the row's own colour behind it so nothing shows
+     through, and a hairline to say the columns pass underneath. */
+  .v-move {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
+    position: sticky;
+    right: 0;
+    background: var(--surface);
+    box-shadow: -8px 0 8px -8px var(--scrim-soft);
+    padding-left: 8px;
+  }
+  .vrow-changed .v-move { background: var(--accent-soft); }
+  .vlist-head .v-move { background: var(--surface); }
 
   .vlist-head .num { text-align: right; }
 }

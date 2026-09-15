@@ -204,7 +204,9 @@ export function FleetPage() {
             <span>{t.fleet.state}</span>
             <span>{t.fleet.where}</span>
             <span className="num">{t.fleet.quiet}</span>
-            <span />
+            {/* The header's last cell rides the right edge with the row's, or
+                the columns would slide out from under a floating heading. */}
+            <span className="v-move" />
           </li>
           {rows.map((v) => (
             /* Source order is the laptop's column order; the phone re-lays
