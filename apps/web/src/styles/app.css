@@ -1040,21 +1040,22 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
     /* It carries the row's colour, so it has to change at the row's speed. */
     transition: background-color var(--ease);
   }
-  /* What passes under it fades out rather than being cut off — and when the
-     row fits the window there is nothing underneath, so the fade is the row's
-     own colour over the row's own colour and nobody sees a thing. A shadow
-     here was visible either way, which is how it turned into a smudge down
-     the column. */
+  /* What passes under it fades out rather than being cut off. The fade is
+     narrower than the gap between the columns, and the silence column keeps a
+     little air on its right, so at a width where nothing is scrolling the
+     fade lies over empty space and not over the end of a word. I had it at
+     22px, which reached back into "0 дней" and dissolved the "дней". */
   .v-move::before {
     content: '';
     position: absolute;
     top: 0;
     bottom: 0;
-    left: -22px;
-    width: 22px;
+    left: -12px;
+    width: 12px;
     background: linear-gradient(to right, transparent, var(--row-bg));
     pointer-events: none;
   }
+  .v-quiet { padding-right: 6px; }
 
   .vlist-head .num { text-align: right; }
 }
