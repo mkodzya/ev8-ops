@@ -99,6 +99,8 @@ export const en = {
     pool: 'Park',
     quiet: 'Silence',
     noPoint: 'No point',
+    addTip: 'A moped from a purchase needs nothing typed here: the receipt creates it with the date, the landed cost and an arrival of its own.',
+    addTipLink: 'Open purchases',
     quietDays: (n: number) => `${n} day${n === 1 ? '' : 's'}`,
     searchHint: 'Last 4 of VIN',
     empty: 'The fleet is empty.',

@@ -894,3 +894,68 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
 @media (max-width: 719px) {
   .doc-frame { height: 60vh; min-height: 320px; }
 }
+
+/* ---- a panel that comes in from the right (Drawer.tsx) ---------------- */
+.no-scroll { overflow: hidden; }
+.drawer-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  justify-content: flex-end;
+  background: var(--scrim-soft);
+}
+.drawer {
+  display: flex;
+  flex-direction: column;
+  width: min(420px, 100%);
+  height: 100%;
+  background: var(--surface);
+  border-left: 1px solid var(--line);
+  box-shadow: var(--shadow);
+}
+.drawer-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.drawer-head h2 { margin: 0; font: var(--text-h3); }
+.drawer-x {
+  margin-left: auto;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font-size: 18px;
+  line-height: 1;
+  padding: 6px 8px;
+  cursor: pointer;
+  border-radius: var(--radius-pill);
+  transition: var(--ease);
+}
+.drawer-x:hover { color: var(--service-ink); background: var(--surface-2); }
+.drawer-body { flex: 1; overflow-y: auto; padding: 20px; }
+.drawer-body .form { margin: 0; }
+.drawer-body .two-col { grid-template-columns: 1fr; gap: 0; margin-bottom: 0; }
+.drawer-tip {
+  margin: 18px 0 0;
+  padding-top: 14px;
+  border-top: 1px solid var(--line-soft);
+  font: var(--text-label);
+  color: var(--muted);
+}
+/* On a phone a 420px panel is a page with wallpaper down one side, so it
+   becomes a sheet from the bottom, where the thumb already is. */
+@media (max-width: 719px) {
+  .drawer-scrim { align-items: flex-end; }
+  .drawer {
+    width: 100%;
+    height: auto;
+    max-height: 90%;
+    border-left: 0;
+    border-top: 1px solid var(--line);
+    border-radius: var(--radius-card) var(--radius-card) 0 0;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
