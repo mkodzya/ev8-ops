@@ -783,6 +783,7 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
   background: var(--row-bg);
   border: 1px solid var(--line);
   border-radius: var(--radius-card);
+  transition: background-color var(--ease);
 }
 .v-state { grid-area: state; font: var(--text-h3); }
 .v-vin { grid-area: vin; }
@@ -796,13 +797,19 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
 /* A row that has just moved says so in its own skin — a tint and an edge —
    rather than growing a line and pushing everything below it down. */
 .vrow-changed { box-shadow: inset 3px 0 0 var(--accent); }
-/* A row that opens something says so by lighting up under the pointer — the
-   site's own hover colour, the one a model card takes there. Touch screens
-   have no pointer to hover with and would keep the colour stuck on the last
-   row tapped, so the rule asks first. */
+/* A row that opens something says so by lighting up under the pointer — but
+   quieter than any colour that carries a meaning. The site's --surface-hover
+   is the darkest tint we have (0.76 against white's 1.0) and a row wearing it
+   shouted louder than the row that had just been moved (0.81). A pointer
+   passing over is the least important thing on the screen, so it gets the
+   lightest tint there is, and fades in at the site's own hover speed instead
+   of snapping on.
+
+   Touch screens have no pointer to hover with and would keep the colour stuck
+   on the last row tapped, so the rule asks first. */
 .vrow-go { cursor: pointer; }
 @media (hover: hover) {
-  .vrow-go:hover { --row-bg: var(--surface-hover); }
+  .vrow-go:hover { --row-bg: var(--surface-2); }
   /* A row still holding its undo keeps its own colour: that one is saying
      something, and the pointer passing over is not news. */
   .vrow-go.vrow-changed:hover { --row-bg: var(--accent-soft); }
@@ -987,6 +994,8 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
     right: 0;
     background: var(--row-bg);
     padding-left: 8px;
+    /* It carries the row's colour, so it has to change at the row's speed. */
+    transition: background-color var(--ease);
   }
   /* What passes under it fades out rather than being cut off — and when the
      row fits the window there is nothing underneath, so the fade is the row's
