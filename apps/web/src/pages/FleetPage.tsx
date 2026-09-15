@@ -1,4 +1,4 @@
-import { VEHICLE_POOLS, VEHICLE_STATES, daysBetween, tokens, type VehiclePool, type VehicleState } from '@ev8/shared';
+import { VEHICLE_COLORS, VEHICLE_POOLS, VEHICLE_STATES, colorOf, daysBetween, tokens, type VehiclePool, type VehicleState } from '@ev8/shared';
 import { useEffect, useMemo, useState } from 'react';
 import { errorText, useLoad } from '../lib/use.js';
 import { Field } from '../components/Wizard.js';
@@ -49,9 +49,9 @@ const UNDO_WINDOW_MS = Number.parseFloat(tokens.undoWindow) * 1000;
  * decisions: the moped nobody has touched since March is the one to answer
  * for. The others read upwards, the way a person expects a list of words to.
  */
-const SORTS = ['model', 'state', 'where', 'quiet'] as const;
+const SORTS = ['model', 'color', 'state', 'where', 'quiet'] as const;
 type SortKey = (typeof SORTS)[number];
-const FIRST_DIR: Record<SortKey, 'asc' | 'desc'> = { model: 'asc', state: 'asc', where: 'asc', quiet: 'desc' };
+const FIRST_DIR: Record<SortKey, 'asc' | 'desc'> = { model: 'asc', color: 'asc', state: 'asc', where: 'asc', quiet: 'desc' };
 
 type PoolKey = VehiclePool | 'none' | 'gone';
 const POOL_KEYS: PoolKey[] = ['rent', 'sale', 'none', 'gone'];
@@ -162,6 +162,14 @@ export function FleetPage() {
     const sign = dir === 'asc' ? 1 : -1;
     const by = (a: Vehicle, b: Vehicle): number => {
       if (sort === 'model') return sign * a.model.localeCompare(b.model);
+      if (sort === 'color') {
+        // The six we know, in their own order; a word we do not know, and then
+        // no word at all, after them — whichever way the column points.
+        const ka = colorOf(a.color);
+        const kb = colorOf(b.color);
+        if (!ka || !kb) return ka ? -1 : kb ? 1 : (a.color ? -1 : b.color ? 1 : 0);
+        return sign * (VEHICLE_COLORS.indexOf(ka) - VEHICLE_COLORS.indexOf(kb));
+      }
       if (sort === 'state') return sign * (VEHICLE_STATES.indexOf(a.state) - VEHICLE_STATES.indexOf(b.state));
       if (sort === 'where') {
         const ka = whereKey(a);
@@ -305,6 +313,9 @@ export function FleetPage() {
               <ColHead k="model" label={t.fleet.model} sort={sort} dir={dir} pick={pick} />
             </span>
             <span>
+              <ColHead k="color" label={t.fleet.color} sort={sort} dir={dir} pick={pick} />
+            </span>
+            <span>
               <ColHead k="state" label={t.fleet.state} sort={sort} dir={dir} pick={pick} />
             </span>
             <span>
@@ -348,11 +359,9 @@ export function FleetPage() {
                   belongs to: the colour under the model, the park under the
                   state, "paid through" under the name. Each column gets one
                   word and one quiet tail, and none of them elbows the next. */}
-              <span className="v-model">
-                {v.model}
-                <span className="v-sub v-color">
-                  <ColorText of={v.color} />
-                </span>
+              <span className="v-model">{v.model}</span>
+              <span className="v-color">
+                <ColorText of={v.color} />
               </span>
               <span className="v-state">
                 <StateBadge state={v.state} />
