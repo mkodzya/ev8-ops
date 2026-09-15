@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useT } from '../i18n/index.js';
 
 export interface RowAction {
@@ -14,6 +15,11 @@ export interface RowAction {
  * anything positioned inside it is cut off at the edge. Anchored to the
  * button's own rectangle when it opens, and closed by anything that moves that
  * rectangle — a scroll, a resize, Escape, or a click anywhere else.
+ *
+ * And drawn through a portal, not where it is written. The cell it lives in
+ * sticks to the right edge of the list, and a sticky element is its own
+ * stacking context: no z-index inside one row can lift a menu above the cell
+ * of the row beneath it. Only leaving the rows entirely does that.
  */
 export function RowMenu({ actions }: { actions: RowAction[] }) {
   const t = useT();
@@ -58,23 +64,25 @@ export function RowMenu({ actions }: { actions: RowAction[] }) {
       <button type="button" className={`row-dots ${at ? 'on' : ''}`} aria-label={t.fleet.rowActions} onClick={open}>
         …
       </button>
-      {at && (
-        <div className="row-menu" style={{ top: at.top, right: at.right }} onClick={(e) => e.stopPropagation()} role="menu">
-          {actions.map((a) => (
-            <button
-              key={a.key}
-              type="button"
-              role="menuitem"
-              onClick={() => {
-                setAt(null);
-                a.onPick();
-              }}
-            >
-              {a.label}
-            </button>
-          ))}
-        </div>
-      )}
+      {at &&
+        createPortal(
+          <div className="row-menu" style={{ top: at.top, right: at.right }} onClick={(e) => e.stopPropagation()} role="menu">
+            {actions.map((a) => (
+              <button
+                key={a.key}
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setAt(null);
+                  a.onPick();
+                }}
+              >
+                {a.label}
+              </button>
+            ))}
+          </div>,
+          document.body,
+        )}
     </>
   );
 }
