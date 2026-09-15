@@ -679,7 +679,7 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
   .vlist-head, .vrow {
     display: grid;
     grid-template-areas: none;
-    grid-template-columns: 200px minmax(120px, 1fr) 100px 60px 110px 150px 140px minmax(120px, 1fr) 110px;
+    grid-template-columns: 200px minmax(120px, 1fr) 100px 60px 110px 150px 170px minmax(120px, 1fr) 110px;
     align-items: center;
     gap: 12px;
     padding: 10px 12px;
@@ -700,7 +700,7 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
   /* Nine columns do not always fit; the list scrolls sideways rather than
      the page doing it. */
   .vlist { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-card); padding: 8px 4px; overflow-x: auto; }
-  .vlist-head, .vrow { min-width: 1080px; }
+  .vlist-head, .vrow { min-width: 1110px; }
   .v-state, .v-vin, .v-model, .v-color, .v-year, .v-arrived, .v-where, .v-renter, .v-paid { grid-area: auto; text-align: left; font: var(--text-body-sm); color: inherit; display: block; }
   .v-where { margin-top: 0; }
 }

@@ -407,7 +407,9 @@ function NewPoint({ onDone, onError }: { onDone: () => void; onError: (e: string
   return (
     <form className="form sub-form" onSubmit={submit}>
       <div className="two-col">
-        <Field label={t.points.name} hint={t.points.hint}>
+        {/* The section already says what a point is; saying it twice under
+            the field is noise. */}
+        <Field label={t.points.name}>
           <input className="input" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} required maxLength={120} autoFocus />
         </Field>
         <Field label={t.points.note} hint={t.points.noteHint}>
