@@ -776,12 +776,11 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
   .v-state, .v-vin, .v-model, .v-color, .v-where, .v-quiet, .v-move { grid-area: auto; text-align: left; font: var(--text-body-sm); color: inherit; display: block; }
   .v-where { margin-top: 0; }
   .v-quiet { text-align: right; color: var(--muted); }
-  .v-move { display: flex; justify-content: flex-end; }
+  /* Stacked and right-aligned: a moped in neither park offers two moves, and
+     side by side they wrap into the column next door. Always visible — an
+     action that appears only under a pointer is an action nobody finds. */
+  .v-move { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
   .vlist-head .num { text-align: right; }
-  /* The move shows itself when the row is under the pointer; on a phone it is
-     always there, because there is no pointer to hover with. */
-  .v-move .mv { opacity: 0; transition: var(--ease); }
-  .vrow:hover .v-move .mv, .v-move .mv:focus-visible { opacity: 1; }
 }
 
 /* ---- one action per screen, where the thumb is (U4) ------------------ */
