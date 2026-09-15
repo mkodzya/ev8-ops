@@ -238,7 +238,12 @@ export function FleetPage() {
           filter as well: a number, the filter it stands for, and what it costs
           or brings underneath. A second row of pills would say this twice. */}
       <PoolCards pool={pool} rows={inPool} state={state} noPoint={noPoint} unplaced={unplaced} byState={byState} pick={pick} />
-      {rows.length === 0 ? (
+      {/* An empty fleet and a search that found nothing are two different
+          things, and only one of them is about the fleet. A search that found
+          nothing keeps its heading — and with it the field the words were
+          typed into, which used to vanish along with the rows and leave
+          nowhere to take them back. */}
+      {data.vehicles.length === 0 ? (
         <Empty text={t.fleet.empty} />
       ) : (
         /* One markup, two shapes: a list a thumb can read on a phone, and the
@@ -278,6 +283,21 @@ export function FleetPage() {
                 the columns would slide out from under a floating heading. */}
             <span className="v-move" />
           </li>
+          {rows.length === 0 && (
+            <li className="vlist-empty">
+              <span>{t.fleet.nothingFound}</span>
+              <button
+                type="button"
+                className="pill pill-sm"
+                onClick={() => {
+                  setQ('');
+                  setParams({});
+                }}
+              >
+                {t.fleet.showAll(data.vehicles.length)}
+              </button>
+            </li>
+          )}
           {rows.map((v) => (
             /* Source order is the laptop's column order; the phone re-lays
                them out by name with grid-template-areas, so neither shape
