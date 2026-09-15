@@ -43,6 +43,15 @@ export const en = {
   },
 
   // Vehicle states — colour + shape + word, the same everywhere (brand.md).
+  colors: {
+    black: 'Black',
+    white: 'White',
+    red: 'Red',
+    green: 'Green',
+    grey: 'Grey',
+    purple: 'Purple',
+  },
+
   states: {
     available: 'Available',
     rented: 'Rented',

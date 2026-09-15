@@ -1,4 +1,4 @@
-import type { RentalStatus, VehicleState } from '@ev8/shared';
+import { colorOf, type RentalStatus, type VehicleState } from '@ev8/shared';
 import { useLocale, useT } from '../i18n/index.js';
 import { vinParts } from '../format.js';
 import { primaryName, secondName, type Named } from '../lib/names.js';
@@ -72,4 +72,17 @@ export function PlaceText({ of }: { of: { state: VehicleState; location: { name:
   if (place.kind === 'customer') return <span className="muted">{t.points.atCustomer}</span>;
   if (place.kind === 'gone') return <span className="muted">{t.common.dash}</span>;
   return <span className="place-unset">{t.points.unset}</span>;
+}
+
+/**
+ * A moped's colour, in the language of whoever is reading. Odoo holds the word
+ * as it was typed — `შავი` on one card and `Black` on the next, the same
+ * paint — so the screen says it once, its own way. A word nobody taught us is
+ * shown exactly as it was typed: better an unfamiliar word than a wrong one.
+ */
+export function ColorText({ of }: { of: string | null }) {
+  const t = useT();
+  const code = colorOf(of);
+  if (code) return <span>{t.colors[code]}</span>;
+  return <span>{of ?? t.common.dash}</span>;
 }

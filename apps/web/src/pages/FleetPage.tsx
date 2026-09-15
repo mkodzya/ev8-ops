@@ -8,7 +8,7 @@ import { useSession } from '../session.js';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { todayISO } from '@ev8/shared';
-import { CustomerName, Empty, Loading, PlaceText, StateBadge, Vin } from '../components/ui.js';
+import { ColorText, CustomerName, Empty, Loading, PlaceText, StateBadge, Vin } from '../components/ui.js';
 import { placeOf } from '../lib/place.js';
 import { fmtDate, formatGel } from '../format.js';
 import { useT } from '../i18n/index.js';
@@ -235,16 +235,18 @@ export function FleetPage() {
                 <Vin vin={v.vin} />
               </Link>
               <span className="v-model">{v.model}</span>
-              <span className="v-color">{v.color ?? t.common.dash}</span>
+              <span className="v-color">
+                <ColorText of={v.color} />
+              </span>
               <span className="v-state">
                 <StateBadge state={v.state} />
-                {/* Inside a park every row would repeat its name; only the
-                    mixed list needs to say which is which — and the row that
-                    has just moved, which says where it went instead. */}
+                {/* A label on every row is a label nobody reads. The park is
+                    said only when it is still a question — and on the row that
+                    has just moved, which says where it went. */}
                 {moved?.id === v.id ? (
                   <span className="v-pool v-pool-new">→ {t.pools[moved.to]}</span>
                 ) : (
-                  !pool && <span className="v-pool">{t.pools[poolOf(v)]}</span>
+                  !pool && poolOf(v) === 'none' && <span className="v-pool">{t.pools.none}</span>
                 )}
               </span>
               <span className="v-where">

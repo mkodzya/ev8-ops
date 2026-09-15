@@ -36,6 +36,15 @@ export const ka: Dict = {
     customers: 'კლიენტები',
   },
 
+  colors: {
+    black: 'შავი',
+    white: 'თეთრი',
+    red: 'წითელი',
+    green: 'მწვანე',
+    grey: 'ნაცრისფერი',
+    purple: 'იისფერი',
+  },
+
   states: {
     available: 'თავისუფალი',
     rented: 'ქირაშია',
