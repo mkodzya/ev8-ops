@@ -843,7 +843,9 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
     grid-column: 1 / -1;
     flex-direction: row;
     align-items: center;
-    justify-content: flex-end;
+    /* Left, not right: the row can be wider than the window, and the way back
+       must never be the part that sits past the edge. */
+    justify-content: flex-start;
     padding-top: 6px;
   }
   .vlist-head .num { text-align: right; }
