@@ -2,6 +2,7 @@ import { VEHICLE_POOLS, VEHICLE_STATES, daysBetween, type VehiclePool, type Vehi
 import { useEffect, useMemo, useState } from 'react';
 import { errorText, useLoad } from '../lib/use.js';
 import { Field } from '../components/Wizard.js';
+import { Drawer } from '../components/Drawer.js';
 import { useSession } from '../session.js';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
@@ -351,13 +352,6 @@ function NewVehicle({ models, onDone }: { models: Models['models']; onDone: () =
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  if (!open) {
-    return (
-      <button type="button" className="pill pill-sm pill-accent" onClick={() => setOpen(true)} disabled={models.length === 0}>
-        + {t.settings.addVehicle}
-      </button>
-    );
-  }
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setBusy(true);
@@ -380,39 +374,54 @@ function NewVehicle({ models, onDone }: { models: Models['models']; onDone: () =
     }
   };
   return (
-    <form className="form sub-form card" onSubmit={submit}>
-      <div className="two-col">
-        <Field label={t.models.vin}>
-          <input className="input mono" value={f.vin} onChange={(e) => setF({ ...f, vin: e.target.value })} required maxLength={17} autoFocus />
-        </Field>
-        <Field label={t.models.name}>
-          <select className="input" value={f.modelId} onChange={(e) => setF({ ...f, modelId: e.target.value })}>
-            {models.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.brand} {m.name}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <Field label={t.models.color}>
-          <input className="input" value={f.color} onChange={(e) => setF({ ...f, color: e.target.value })} />
-        </Field>
-        <Field label={t.models.year}>
-          <input className="input input-amount mono" value={f.year} onChange={(e) => setF({ ...f, year: e.target.value })} inputMode="numeric" />
-        </Field>
-        <Field label={t.models.arrivedOn}>
-          <input className="input mono" type="date" value={f.arrivedOn} onChange={(e) => setF({ ...f, arrivedOn: e.target.value })} />
-        </Field>
-      </div>
-      {err && <div className="hint hint-bad">{err}</div>}
-      <div className="row-actions">
-        <button type="button" className="pill" onClick={() => setOpen(false)}>
-          {t.actions.cancel}
-        </button>
-        <button className="pill pill-accent" disabled={busy || f.vin.trim().length === 0}>
-          {busy ? t.common.checking : t.actions.save}
-        </button>
-      </div>
-    </form>
+    <>
+      <button type="button" className="pill pill-sm pill-accent" onClick={() => setOpen(true)} disabled={models.length === 0}>
+        + {t.settings.addVehicle}
+      </button>
+      {open && (
+        <Drawer title={t.settings.addVehicle} onClose={() => setOpen(false)}>
+          <form className="form" onSubmit={submit}>
+            <div className="two-col">
+              <Field label={t.models.vin}>
+                <input className="input mono" value={f.vin} onChange={(e) => setF({ ...f, vin: e.target.value })} required maxLength={17} autoFocus />
+              </Field>
+              <Field label={t.models.name}>
+                <select className="input" value={f.modelId} onChange={(e) => setF({ ...f, modelId: e.target.value })}>
+                  {models.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.brand} {m.name}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label={t.models.color}>
+                <input className="input" value={f.color} onChange={(e) => setF({ ...f, color: e.target.value })} />
+              </Field>
+              <Field label={t.models.year}>
+                <input className="input input-amount mono" value={f.year} onChange={(e) => setF({ ...f, year: e.target.value })} inputMode="numeric" />
+              </Field>
+              <Field label={t.models.arrivedOn}>
+                <input className="input mono" type="date" value={f.arrivedOn} onChange={(e) => setF({ ...f, arrivedOn: e.target.value })} />
+              </Field>
+            </div>
+            {err && <div className="hint hint-bad">{err}</div>}
+            <div className="row-actions">
+              <button type="button" className="pill" onClick={() => setOpen(false)}>
+                {t.actions.cancel}
+              </button>
+              <button className="pill pill-accent" disabled={busy || f.vin.trim().length === 0}>
+                {busy ? t.common.checking : t.actions.save}
+              </button>
+            </div>
+            {/* Nobody should type in by hand what a receipt already writes:
+                a purchase creates its mopeds with the date, the landed cost
+                and an "arrived" event of their own. */}
+            <p className="drawer-tip">
+              {t.fleet.addTip} <Link to="/purchases">{t.fleet.addTipLink}</Link>
+            </p>
+          </form>
+        </Drawer>
+      )}
+    </>
   );
 }
