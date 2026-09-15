@@ -665,7 +665,14 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
 .pool-bad { color: var(--service-ink); }
 /* Which park a row is in, said only where both are on screen at once. */
 .pool-mark { font: var(--text-label); color: var(--accent); }
-.v-pool { font: var(--text-overline); letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); margin-left: 8px; }
+.v-pool {
+  display: block;
+  font: var(--text-overline);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-top: 3px;
+}
 
 .segments .input-search { width: 100%; }
 
@@ -707,7 +714,7 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
   .vlist-head, .vrow {
     display: grid;
     grid-template-areas: none;
-    grid-template-columns: 200px minmax(120px, 1fr) 100px 60px 110px 150px 170px minmax(120px, 1fr) 110px;
+    grid-template-columns: 200px minmax(120px, 1fr) 100px 60px 110px 160px 170px minmax(120px, 1fr) 110px;
     align-items: center;
     gap: 12px;
     padding: 10px 12px;
@@ -728,7 +735,7 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
   /* Nine columns do not always fit; the list scrolls sideways rather than
      the page doing it. */
   .vlist { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-card); padding: 8px 4px; overflow-x: auto; }
-  .vlist-head, .vrow { min-width: 1110px; }
+  .vlist-head, .vrow { min-width: 1120px; }
   .v-state, .v-vin, .v-model, .v-color, .v-year, .v-arrived, .v-where, .v-renter, .v-paid { grid-area: auto; text-align: left; font: var(--text-body-sm); color: inherit; display: block; }
   .v-where { margin-top: 0; }
 }
