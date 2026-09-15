@@ -648,21 +648,38 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
 .seg-pool-none.on { background: var(--service); border-color: var(--service); }
 .seg-pool-gone.on { background: var(--grey); border-color: var(--grey); }
 
-/* What the park is worth this week, in one line under its own tab. */
-.pool-strip {
+/* Where the whole fleet stands, above the parks and before any filter. */
+.where-strip {
   display: flex;
   flex-wrap: wrap;
+  align-items: baseline;
   gap: 4px 18px;
-  padding: 10px 14px;
-  margin-bottom: 8px;
+  padding: 12px 16px;
+  margin-bottom: 14px;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius-card);
   font: var(--text-body-sm);
 }
-.pool-strip b { font-weight: 500; }
-.pool-good { color: var(--accent); }
-.pool-bad { color: var(--service-ink); }
+.where-strip b { font-weight: 500; }
+
+/* What the park is worth this week: three numbers, each with its consequence. */
+.kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 10px; }
+.kpi {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  padding: 14px 16px;
+}
+.k-n { font: var(--text-h2); }
+.k-l { margin-top: 2px; }
+.k-s { font: var(--text-label); color: var(--muted); margin-top: 6px; }
+@media (max-width: 719px) {
+  .kpis { grid-template-columns: 1fr; gap: 8px; }
+  .kpi { padding: 10px 14px; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+  .k-n { font: var(--text-h3); }
+  .k-s { margin-top: 0; width: 100%; }
+}
 /* Which park a row is in, said only where both are on screen at once. */
 .pool-mark { font: var(--text-label); color: var(--accent); }
 .v-pool {
@@ -680,7 +697,7 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
 .vlist-head { display: none; }
 .vrow {
   display: grid;
-  grid-template-areas: 'state paid' 'vin renter' 'model renter' 'where where';
+  grid-template-areas: 'state quiet' 'vin vin' 'model model' 'where where' 'move move';
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 2px 12px;
   padding: 12px 14px;
@@ -692,18 +709,36 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
 .v-state { grid-area: state; font: var(--text-h3); }
 .v-vin { grid-area: vin; }
 .v-model { grid-area: model; font: var(--text-label); color: var(--muted); }
-.v-renter { grid-area: renter; text-align: right; }
-.v-paid { grid-area: paid; text-align: right; color: var(--muted); }
+.v-quiet { grid-area: quiet; text-align: right; color: var(--muted); }
+.v-loud { color: var(--crit); }
+.v-move { grid-area: move; display: flex; gap: 6px; flex-wrap: wrap; }
+.v-move:empty { display: none; }
+.mv {
+  border: var(--hairline) solid var(--line-soft);
+  border-radius: var(--radius-pill);
+  background: none;
+  padding: 5px 11px;
+  font: var(--text-label);
+  color: var(--muted);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: var(--ease);
+}
+.mv:hover { border-color: var(--service); color: var(--service-ink); }
+.mv:disabled { opacity: 0.5; cursor: default; }
+/* "Paid through" belongs under the name it is about, not in a column of its own. */
+.v-paid { display: block; font: var(--text-label); color: var(--muted); }
 .v-where { grid-area: where; font: var(--text-label); color: var(--muted); margin-top: 2px; }
 /* A point nobody has named is a question, not an empty cell. */
 .place-unset { color: var(--service); }
-/* Colour, year and arrival are card facts, not list facts. */
-.v-color, .v-arrived, .v-year { display: none; }
+/* Colour is a card fact on a phone; year and arrival left the list entirely. */
+.v-color { display: none; }
 /* On a phone the whole VIN is noise: the last four are what anyone reads,
    and a column of em dashes where a free moped has no renter is worse than
    the silence it stands for. */
 @media (max-width: 899px) {
   .v-none { display: none; }
+  .v-color { display: none; }
   .vrow .vin-head { color: var(--muted); }
   .v-vin .vin { font: var(--text-mono); }
   .v-vin .vin-tail { font: var(--text-money); }
@@ -714,7 +749,7 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
   .vlist-head, .vrow {
     display: grid;
     grid-template-areas: none;
-    grid-template-columns: 200px minmax(120px, 1fr) 100px 60px 110px 160px 170px minmax(120px, 1fr) 110px;
+    grid-template-columns: 200px minmax(110px, 1fr) 90px 150px minmax(150px, 1.2fr) 90px 190px;
     align-items: center;
     gap: 12px;
     padding: 10px 12px;
@@ -735,9 +770,16 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
   /* Nine columns do not always fit; the list scrolls sideways rather than
      the page doing it. */
   .vlist { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-card); padding: 8px 4px; overflow-x: auto; }
-  .vlist-head, .vrow { min-width: 1120px; }
-  .v-state, .v-vin, .v-model, .v-color, .v-year, .v-arrived, .v-where, .v-renter, .v-paid { grid-area: auto; text-align: left; font: var(--text-body-sm); color: inherit; display: block; }
+  .vlist-head, .vrow { min-width: 1000px; }
+  .v-state, .v-vin, .v-model, .v-color, .v-where, .v-quiet, .v-move { grid-area: auto; text-align: left; font: var(--text-body-sm); color: inherit; display: block; }
   .v-where { margin-top: 0; }
+  .v-quiet { text-align: right; color: var(--muted); }
+  .v-move { display: flex; justify-content: flex-end; }
+  .vlist-head .num { text-align: right; }
+  /* The move shows itself when the row is under the pointer; on a phone it is
+     always there, because there is no pointer to hover with. */
+  .v-move .mv { opacity: 0; transition: var(--ease); }
+  .vrow:hover .v-move .mv, .v-move .mv:focus-visible { opacity: 1; }
 }
 
 /* ---- one action per screen, where the thumb is (U4) ------------------ */
