@@ -37,6 +37,10 @@ export function fleetRoutes(app: FastifyInstance): void {
       include: {
         model: { select: { brand: true, name: true, weeklyRateTetri: true, salePriceTetri: true } },
         location: { select: { id: true, name: true } },
+        // The last thing that happened to this moped. Nothing yet? Then the
+        // day it arrived — and for the mopeds Odoo never dated, nothing at
+        // all, which the screen shows as a dash and not as a zero.
+        events: { select: { occurredOn: true }, orderBy: [{ occurredOn: 'desc' }, { createdAt: 'desc' }], take: 1 },
         currentRental: {
           select: { id: true, number: true, paidThrough: true, customer: { select: { id: true, name: true, nameKa: true, nameLat: true } } },
         },
@@ -67,6 +71,7 @@ export function fleetRoutes(app: FastifyInstance): void {
         state: v.state,
         pool: v.pool,
         location: v.location,
+        lastSeenOn: isoDate(v.events[0]?.occurredOn ?? v.arrivedOn),
         odometerKm: v.odometerKm,
         notes: v.notes,
         currentRental: v.currentRental

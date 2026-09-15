@@ -1,4 +1,4 @@
-import { VEHICLE_STATES, type VehiclePool, type VehicleState } from '@ev8/shared';
+import { VEHICLE_POOLS, VEHICLE_STATES, daysBetween, type VehiclePool, type VehicleState } from '@ev8/shared';
 import { useEffect, useMemo, useState } from 'react';
 import { errorText, useLoad } from '../lib/use.js';
 import { Field } from '../components/Wizard.js';
@@ -7,6 +7,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { todayISO } from '@ev8/shared';
 import { CustomerName, Empty, Loading, PlaceText, StateBadge, Vin } from '../components/ui.js';
+import { placeOf } from '../lib/place.js';
 import { fmtDate, formatGel } from '../format.js';
 import { useT } from '../i18n/index.js';
 
@@ -22,6 +23,7 @@ interface Vehicle {
   weeklyRateTetri: number | null;
   salePriceTetri: number | null;
   location: { id: string; name: string } | null;
+  lastSeenOn: string | null;
   currentRental: { id: string; number: string; paidThrough: string | null; customer: { id: string; name: string; nameKa: string | null; nameLat: string | null } } | null;
 }
 
@@ -38,6 +40,18 @@ interface Fleet {
 type PoolKey = VehiclePool | 'none' | 'gone';
 const POOL_KEYS: PoolKey[] = ['rent', 'sale', 'none', 'gone'];
 const poolOf = (v: Vehicle): PoolKey => (v.state === 'sold' || v.state === 'out' ? 'gone' : (v.pool ?? 'none'));
+
+/**
+ * How long this moped has been quiet: days since the last thing that happened
+ * to it, or since it arrived when nothing has. A moped at a customer is not
+ * quiet, it is working. Odoo dated neither the arrival nor a single event for
+ * seventeen of ours, and those get null — a dash on the screen, never a zero.
+ */
+function quietDays(v: Vehicle, today: string): number | null {
+  if (v.state === 'rented') return null;
+  if (!v.lastSeenOn) return null;
+  return Math.max(0, daysBetween(v.lastSeenOn, today));
+}
 
 interface Models {
   models: { id: string; brand: string; name: string; forRent: boolean }[];
@@ -73,10 +87,17 @@ export function FleetPage() {
     return n;
   }, [inPool]);
 
+  // Longest silence on top: the list is a queue of decisions, not a register.
+  // A moped with no date to count from sinks to the bottom rather than posing
+  // as the freshest thing in the yard.
+  const today = todayISO();
   const rows = useMemo(() => {
     const needle = q.trim().toUpperCase();
-    return inPool.filter((v) => (!state || v.state === state) && (!needle || v.vin.endsWith(needle) || v.vin.includes(needle)));
-  }, [inPool, state, q]);
+    return inPool
+      .filter((v) => (!state || v.state === state) && (!needle || v.vin.endsWith(needle) || v.vin.includes(needle)))
+      .slice()
+      .sort((a, b) => (quietDays(b, today) ?? -1) - (quietDays(a, today) ?? -1));
+  }, [inPool, state, q, today]);
 
   const pick = (next: { pool?: PoolKey | null; state?: VehicleState | null }) => {
     const p = 'pool' in next ? next.pool : pool;
@@ -96,6 +117,7 @@ export function FleetPage() {
           <NewVehicle models={models.data.models} onDone={() => setTick((n) => n + 1)} />
         )}
       </header>
+      <WhereStrip rows={data.vehicles} />
       <div className="segments">
         {/* What a moped is for comes first: it splits the fleet into two
             businesses, and the state only means something inside one of
@@ -112,7 +134,7 @@ export function FleetPage() {
             </button>
           ))}
         </div>
-        <PoolStrip pool={pool} rows={inPool} />
+        <PoolCards pool={pool} rows={inPool} today={today} />
         <div className="seg-row">
           <button type="button" className={`seg ${!state ? 'on' : ''}`} onClick={() => pick({ state: null })}>
             <span className="seg-lbl">{t.common.all}</span>
@@ -134,16 +156,17 @@ export function FleetPage() {
            same rows as a table from 900 px up, where a laptop wants columns
            (U3). Rendering it twice would be two things to keep in step. */
         <ul className="vlist">
+          {/* Seven columns, not eleven. Year and arrival are card facts; the
+              renter is the answer to "where", not a column beside it; and
+              "paid through" belongs under the name it is about. */}
           <li className="vlist-head" aria-hidden="true">
             <span>{t.fleet.vin}</span>
             <span>{t.fleet.model}</span>
             <span>{t.fleet.color}</span>
-            <span>{t.fleet.year}</span>
-            <span>{t.fleet.arrived}</span>
             <span>{t.fleet.state}</span>
             <span>{t.fleet.where}</span>
-            <span>{t.fleet.renter}</span>
-            <span>{t.fleet.paidThrough}</span>
+            <span className="num">{t.fleet.quiet}</span>
+            <span />
           </li>
           {rows.map((v) => (
             /* Source order is the laptop's column order; the phone re-lays
@@ -155,25 +178,28 @@ export function FleetPage() {
               </Link>
               <span className="v-model">{v.model}</span>
               <span className="v-color">{v.color ?? t.common.dash}</span>
-              <span className="v-year mono">{v.year ?? t.common.dash}</span>
-              <span className="v-arrived mono">{fmtDate(v.arrivedOn)}</span>
               <span className="v-state">
                 <StateBadge state={v.state} />
                 {/* Inside a park every row would repeat its name; only the
                     mixed list needs to say which is which. */}
                 {!pool && <span className="v-pool">{t.pools[poolOf(v)]}</span>}
               </span>
-              {/* On a phone a rented moped already names its customer one line
-                  up, so repeating "at the customer" underneath is noise. */}
-              <span className={`v-where ${v.currentRental ? 'v-none' : ''}`}>
-                <PlaceText of={v} />
+              <span className="v-where">
+                {v.currentRental ? (
+                  <Link to={`/customers/${v.currentRental.customer.id}`}>
+                    <CustomerName of={v.currentRental.customer} second={false} />
+                  </Link>
+                ) : (
+                  <PlaceText of={v} />
+                )}
+                {v.currentRental && (
+                  <span className="v-paid mono">
+                    {t.fleet.paidThrough}: {fmtDate(v.currentRental.paidThrough)}
+                  </span>
+                )}
               </span>
-              <span className={`v-renter ${v.currentRental ? '' : 'v-none'}`}>
-                {v.currentRental ? <Link to={`/customers/${v.currentRental.customer.id}`}><CustomerName of={v.currentRental.customer} second={false} /></Link> : t.common.dash}
-              </span>
-              <span className={`v-paid mono ${v.currentRental ? '' : 'v-none'}`}>
-                {v.currentRental ? fmtDate(v.currentRental.paidThrough) : t.common.dash}
-              </span>
+              <Quiet v={v} today={today} />
+              <MoveChips v={v} can={can('fleet.pool.set')} onDone={() => setTick((n) => n + 1)} />
             </li>
           ))}
         </ul>
@@ -183,43 +209,123 @@ export function FleetPage() {
 }
 
 
+/** Days of silence, loud once they run past half a year. */
+function Quiet({ v, today }: { v: Vehicle; today: string }) {
+  const t = useT();
+  const n = quietDays(v, today);
+  if (n == null) return <span className="v-quiet mono muted">{t.common.dash}</span>;
+  return <span className={`v-quiet mono ${n > 180 ? 'v-loud' : ''}`}>{t.fleet.quietDays(n)}</span>;
+}
+
 /**
- * What the chosen park is worth this week. The rental park earns while its
- * mopeds are out and loses while they stand; the sale park holds money still.
- * Both numbers come from the rows on screen, so a filter changes them too.
+ * The one move this row is waiting for. A moped in a park offers the other
+ * park; one in neither offers both; one that has left the fleet offers
+ * nothing, because its park is no longer our question.
  */
-function PoolStrip({ pool, rows }: { pool: PoolKey | null; rows: Vehicle[] }) {
+function MoveChips({ v, can, onDone }: { v: Vehicle; can: boolean; onDone: () => void }) {
+  const t = useT();
+  const [busy, setBusy] = useState(false);
+  const where = poolOf(v);
+  if (!can || where === 'gone') return <span className="v-move" />;
+  const offer = where === 'none' ? VEHICLE_POOLS : VEHICLE_POOLS.filter((p) => p !== v.pool);
+  const move = async (pool: VehiclePool) => {
+    setBusy(true);
+    try {
+      await api.post(`/api/fleet/${v.id}/pool`, { pool });
+      onDone();
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <span className="v-move">
+      {offer.map((p) => (
+        <button key={p} type="button" className="mv" disabled={busy} onClick={() => void move(p)}>
+          {p === 'rent' ? t.pools.toRent : t.pools.toSale}
+        </button>
+      ))}
+    </span>
+  );
+}
+
+/**
+ * Where the whole fleet stands, before any filter — and the point of the line
+ * is the third number: how many mopeds nobody has placed yet.
+ */
+function WhereStrip({ rows }: { rows: Vehicle[] }) {
+  const t = useT();
+  const n = { customer: 0, service: 0, point: 0, unset: 0, gone: 0 };
+  for (const v of rows) {
+    const place = placeOf(v);
+    if (place.kind === 'gone') n.gone++;
+    else if (place.kind === 'customer') n.customer++;
+    else if (v.state === 'service') n.service++;
+    else if (place.kind === 'point') n.point++;
+    else n.unset++;
+  }
+  return (
+    <div className="where-strip">
+      <span className="muted">{t.points.whereToday}:</span>
+      <span><b>{n.customer}</b> {t.points.atCustomersShort}</span>
+      <span><b>{n.service}</b> {t.points.inServiceShort}</span>
+      <span><b>{n.point}</b> {t.points.atPointsShort}</span>
+      <span className={n.unset > 0 ? 'place-unset' : ''}><b>{n.unset}</b> {t.points.unsetShort}</span>
+      <span className="muted"><b>{n.gone}</b> {t.points.goneShort}</span>
+    </div>
+  );
+}
+
+/**
+ * What the chosen park is worth this week — three numbers, each with what it
+ * costs or brings under it. The rental park earns while its mopeds are out and
+ * loses while they stand; the sale park holds money still. Everything is read
+ * off the rows on screen, so a filter moves these too.
+ */
+function PoolCards({ pool, rows, today }: { pool: PoolKey | null; rows: Vehicle[]; today: string }) {
   const t = useT();
   if (!pool) return null;
-  if (pool === 'none') {
-    return (
-      <div className="pool-strip">
-        <span><b>{rows.length}</b> {t.pools.waiting}</span>
-        <span className="muted">{t.pools.noneHint}</span>
-      </div>
-    );
-  }
-  if (pool === 'gone') return <div className="pool-strip"><span className="muted">{t.pools.goneHint}</span></div>;
   const sum = (of: Vehicle[], f: (v: Vehicle) => number | null) => of.reduce((n, v) => n + (f(v) ?? 0), 0);
+  const money = (n: number) => formatGel(n, { decimals: false });
   const out = rows.filter((v) => v.state === 'rented');
   const free = rows.filter((v) => v.state === 'available');
   const inService = rows.filter((v) => v.state === 'service');
+  const quiets = rows.map((v) => quietDays(v, today)).filter((n): n is number => n != null);
+
+  let cards: { n: string | number; label: string; sub: string }[];
   if (pool === 'rent') {
-    return (
-      <div className="pool-strip">
-        <span>{t.pools.outWith}: <b>{out.length}</b></span>
-        <span>{t.pools.free}: <b>{free.length}</b></span>
-        <span>{t.pools.inService}: <b>{inService.length}</b></span>
-        <span className="pool-good">{t.pools.incoming}: <b className="mono">{formatGel(sum(out, (v) => v.weeklyRateTetri), { decimals: false })}</b> {t.pools.perWeek}</span>
-        <span className="pool-bad">{t.pools.idleMoney}: <b className="mono">{formatGel(sum(free, (v) => v.weeklyRateTetri), { decimals: false })}</b> {t.pools.perWeek}</span>
-      </div>
-    );
+    cards = [
+      { n: out.length, label: t.pools.outWith, sub: t.pools.incomingSub(money(sum(out, (v) => v.weeklyRateTetri))) },
+      { n: free.length, label: t.pools.free, sub: t.pools.idleSub(money(sum(free, (v) => v.weeklyRateTetri))) },
+      { n: inService.length, label: t.pools.inService, sub: t.pools.notHandedOut },
+    ];
+  } else if (pool === 'sale') {
+    cards = [
+      { n: free.length, label: t.pools.onShelf, sub: t.pools.listSub(money(sum(rows, (v) => v.salePriceTetri))) },
+      { n: inService.length, label: t.pools.inPrep, sub: t.pools.notShown },
+      { n: quiets.length ? Math.max(...quiets) : t.common.dash, label: t.pools.oldest, sub: t.pools.shelfSince },
+    ];
+  } else if (pool === 'none') {
+    cards = [
+      { n: rows.length, label: t.pools.waiting, sub: t.pools.neverChosen },
+      { n: free.length, label: t.pools.free, sub: t.pools.bothWays },
+      { n: inService.length, label: t.pools.inService, sub: t.pools.decidedOnExit },
+    ];
+  } else {
+    cards = [
+      { n: rows.filter((v) => v.state === 'sold').length, label: t.states.sold, sub: t.pools.goneMoney },
+      { n: rows.filter((v) => v.state === 'out').length, label: t.states.out, sub: t.common.dash },
+      { n: rows.length, label: t.pools.canReturn, sub: t.pools.buyBackNote },
+    ];
   }
   return (
-    <div className="pool-strip">
-      <span>{t.pools.onShelf}: <b>{free.length}</b></span>
-      <span>{t.pools.inService}: <b>{inService.length}</b></span>
-      <span>{t.pools.listValue}: <b className="mono">{formatGel(sum(rows, (v) => v.salePriceTetri), { decimals: false })}</b></span>
+    <div className="kpis">
+      {cards.map((c) => (
+        <div className="kpi" key={c.label}>
+          <div className="k-n mono">{c.n}</div>
+          <div className="k-l">{c.label}</div>
+          <div className="k-s">{c.sub}</div>
+        </div>
+      ))}
     </div>
   );
 }
