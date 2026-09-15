@@ -97,6 +97,7 @@ export const ka: Dict = {
     rowActions: 'მოქმედებები',
     quietDays: (n: number) => `${n} დღე`,
     searchHint: 'VIN-ის ბოლო 4 სიმბოლო',
+    searchShort: '· · · ბოლო 4',
     empty: 'პარკი ცარიელია.',
     count: (n: number) => `${n} მოპედი`,
   },

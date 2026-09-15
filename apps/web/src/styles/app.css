@@ -703,14 +703,28 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
   margin-top: 1px;
 }
 
-/* Search sits beside the title on a laptop and takes the next line on a
-   phone, where 210px next to a heading leaves room for four characters. */
+/* The search for a VIN belongs over the column of VINs. On a laptop it sits
+   in the heading row, which was already there and costs the screen nothing;
+   the heading word steps aside for it. On a phone that row does not exist —
+   the list is cards — so the field takes a line of its own under the title,
+   and the one in the heading is not rendered at all. */
 .page-head { flex-wrap: wrap; row-gap: 10px; }
-.page-head .input-search { width: 210px; }
 .page-head .pill { white-space: nowrap; }
-@media (max-width: 599px) {
-  .page-head .input-search { flex: 1 0 100%; width: auto; order: 3; }
-  .page-head .pill { order: 2; }
+.head-search { flex: 1 0 100%; width: auto; order: 3; }
+.list-search { display: none; }
+@media (min-width: 900px) {
+  .head-search { display: none; }
+  .list-head-vin { display: none; }
+  .list-search {
+    display: block;
+    min-height: 26px;
+    width: 100%;
+    padding: 0 9px;
+    border-radius: 8px;
+    font: var(--text-mono-sm);
+    text-transform: none;
+    letter-spacing: 0;
+  }
 }
 
 .vlist { list-style: none; margin: 0; padding: 0; }

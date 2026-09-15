@@ -159,9 +159,15 @@ export function FleetPage() {
         <h1>{t.fleet.title}</h1>
         <span className="muted">{t.fleet.count(data.vehicles.length)}</span>
         <span className="spacer" />
-        {/* Search is a field, not a band: it belongs beside the title, where
-            it costs no row of its own. */}
-        <input className="input input-search mono" placeholder={t.fleet.searchHint} value={q} onChange={(e) => setQ(e.target.value)} />
+        {/* On a phone the search is a field of its own, because the list has
+            no column headings to hide in. On a laptop it lives in the VIN
+            column, and this one is not rendered. */}
+        <input
+          className="input input-search head-search mono"
+          placeholder={t.fleet.searchHint}
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+        />
         {can('settings.manage') && models.data && (
           <NewVehicle models={models.data.models} onDone={() => setTick((n) => n + 1)} />
         )}
@@ -197,8 +203,20 @@ export function FleetPage() {
           {/* Seven columns, not eleven. Year and arrival are card facts; the
               renter is the answer to "where", not a column beside it; and
               "paid through" belongs under the name it is about. */}
-          <li className="vlist-head" aria-hidden="true">
-            <span>{t.fleet.vin}</span>
+          {/* The heading row carries the search, because a search for a VIN
+              belongs over the column of VINs and nowhere else. It costs the
+              screen nothing: the row was already there. */}
+          <li className="vlist-head">
+            <span>
+              <input
+                className="input list-search mono"
+                placeholder={t.fleet.searchShort}
+                aria-label={t.fleet.searchHint}
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+              />
+              <span className="list-head-vin">{t.fleet.vin}</span>
+            </span>
             <span>{t.fleet.model}</span>
             <span>{t.fleet.color}</span>
             <span>{t.fleet.state}</span>

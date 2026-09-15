@@ -105,6 +105,7 @@ export const ru: Dict = {
     rowActions: 'Действия',
     quietDays: (n: number) => `${n} ${days(n)}`,
     searchHint: 'Последние 4 знака VIN',
+    searchShort: '· · · 4 знака',
     empty: 'Парк пуст.',
     count: (n: number) => {
       const m10 = n % 10;
