@@ -965,7 +965,7 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
   .vlist-head, .vrow {
     display: grid;
     grid-template-areas: none;
-    grid-template-columns: 150px minmax(110px, 1fr) 44px 136px minmax(120px, 1.2fr) 70px 104px;
+    grid-template-columns: 150px minmax(110px, 1fr) 44px 136px minmax(120px, 1.2fr) 86px 104px;
     align-items: center;
     gap: var(--row-x);
     padding: var(--row-y) var(--row-x);
@@ -1018,7 +1018,7 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
   /* The sum of the columns and their gaps, and not a pixel more: the dots at
      the end are the row's one action and must never be the part that falls
      off a laptop's right edge. */
-  .vlist-head, .vrow { min-width: 790px; }
+  .vlist-head, .vrow { min-width: 806px; }
   .v-state, .v-vin, .v-model, .v-color, .v-where, .v-quiet, .v-move { grid-area: auto; text-align: left; font: var(--text-body-sm); color: inherit; display: block; }
   .v-where { margin-top: 0; }
   .v-quiet { text-align: right; color: var(--muted); }
@@ -1055,7 +1055,8 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
     background: linear-gradient(to right, transparent, var(--row-bg));
     pointer-events: none;
   }
-  .v-quiet { padding-right: 6px; }
+  /* "550 дней" is one thing and breaks into two lines rather than admit it. */
+  .v-quiet { padding-right: 6px; white-space: nowrap; }
 
   .vlist-head .num { text-align: right; }
 }
