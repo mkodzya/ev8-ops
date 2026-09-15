@@ -10,11 +10,11 @@ Spec: `docs/spec/ev8-ops-tz-v1.1.html`. State and next step: `docs/handoff.md`.
    uploads, or the live site ev8.ge. Missing data is reported as missing, never
    filled with something plausible. Seed/demo data is allowed only when marked as
    such and never on the prod stand.
-   **The Odoo import runs at the very end of the product, not before** (Mika,
-   14.09.2026). Until then every screen is built and tried on the DEMO dataset
-   (`SEED_MODE=demo`), which is marked row by row and refused on a stand. Real
-   figures from Odoo and Drive still belong in the spec and the handoff — the
-   decision is about the database, not about what we may know.
+   ~~The Odoo import runs at the very end of the product~~ — **reversed by Mika
+   on 15.09.2026**: the import ran, and the product is refined against live
+   data from here on. `tools/migrate_stage1.py` is idempotent and can be re-run
+   after every schema change; the cost of that was named and accepted. The DEMO
+   dataset stays for an empty database and is still refused on a stand.
 2. **Never delete anything in Google Drive.** Suspected junk is moved to
    `_Мусор` inside `EV8 main`.
 3. **Never handle bank credentials.** Bank logins, client secrets, Meta tokens:
