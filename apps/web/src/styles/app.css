@@ -710,7 +710,9 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
 .v-vin { grid-area: vin; }
 .v-model { grid-area: model; font: var(--text-label); color: var(--muted); }
 .v-quiet { grid-area: quiet; text-align: right; color: var(--muted); }
-.v-loud { color: var(--crit); }
+/* Two classes on purpose: the column's muted grey is restated at 900 px and
+   would otherwise win on source order alone. */
+.v-quiet.v-loud { color: var(--crit); }
 .v-move { grid-area: move; display: flex; gap: 6px; flex-wrap: wrap; }
 .v-move:empty { display: none; }
 .mv {
