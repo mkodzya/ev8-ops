@@ -80,8 +80,8 @@ a { color: var(--accent); text-decoration: none; }
 .rail-user-name { display: block; font-weight: 600; }
 .rail-user-initial { display: none; }
 .rail-user-role { display: block; font: var(--text-overline); font-weight: 400; opacity: 0.7; text-transform: capitalize; }
-.page { padding: 28px 32px 40px; max-width: 1280px; width: 100%; }
-.page-head { display: flex; align-items: baseline; gap: 14px; margin-bottom: 18px; }
+.page { padding: 22px 26px 36px; max-width: 1280px; width: 100%; }
+.page-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 14px; }
 
 @media (max-width: 719px) {
   .shell { grid-template-columns: 1fr; }
@@ -108,6 +108,12 @@ a { color: var(--accent); text-decoration: none; }
 }
 
 /* ---- controls ------------------------------------------------------- */
+/* 44px is the thumb's measure. From 900px up nobody's finger is on the glass,
+   so the same controls answer to a pointer and give the screen its room back. */
+@media (min-width: 900px) {
+  .pill, .input { min-height: var(--control-dense); }
+  .pill { padding: 0 14px; }
+}
 .pill {
   display: inline-flex;
   align-items: center;
@@ -192,14 +198,17 @@ a { color: var(--accent); text-decoration: none; }
 }
 
 /* ---- cards, tiles, tables ------------------------------------------- */
+/* Density lives in tokens, not in the taste of whoever wrote the screen.
+   --card-pad, --row-y and --row-x are read by every card, list and table
+   here, so tightening the fleet tightened the rest of the system with it. */
 .card {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius-card);
-  padding: 18px 20px;
-  margin-bottom: 18px;
+  padding: var(--card-pad) calc(var(--card-pad) + 2px);
+  margin-bottom: 14px;
 }
-.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; margin-bottom: 18px; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; margin-bottom: 14px; }
 .tile {
   display: flex;
   flex-direction: column;
@@ -207,9 +216,9 @@ a { color: var(--accent); text-decoration: none; }
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius-card);
-  padding: 16px 18px;
+  padding: var(--card-pad);
   color: var(--ink);
-  min-height: 92px;
+  min-height: 78px;
 }
 .tile-num { font: var(--text-display); font-variant-numeric: tabular-nums; }
 .tile-lbl { font: var(--text-label); color: var(--muted); }
@@ -233,13 +242,13 @@ a { color: var(--accent); text-decoration: none; }
   font: var(--text-overline);
   color: var(--muted);
   background: var(--surface-2);
-  padding: 10px 14px;
+  padding: var(--row-y) 12px;
   white-space: nowrap;
 }
 .table th.num { text-align: right; }
-.table td { padding: 10px 14px; border-top: 1px solid var(--line-soft); vertical-align: top; }
+.table td { padding: var(--row-y) 12px; border-top: 1px solid var(--line-soft); vertical-align: top; }
 .table tbody tr:hover { background: var(--surface-2); }
-.empty { color: var(--muted); padding: 24px 0; }
+.empty { color: var(--muted); padding: 18px 0; }
 .inline-rental { display: inline-flex; gap: 6px; align-items: center; margin-right: 10px; }
 
 /* ---- VIN ------------------------------------------------------------ */
@@ -297,7 +306,7 @@ a { color: var(--accent); text-decoration: none; }
 .spacer { flex: 1; }
 .two-col { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px; margin-bottom: 18px; }
 .two-col > .card { margin-bottom: 0; }
-.kv { display: grid; grid-template-columns: minmax(120px, 38%) 1fr; gap: 12px; padding: 8px 0; border-top: 1px solid var(--line-soft); font: var(--text-body-sm); }
+.kv { display: grid; grid-template-columns: minmax(120px, 38%) 1fr; gap: 12px; padding: 6px 0; border-top: 1px solid var(--line-soft); font: var(--text-body-sm); }
 .kv:first-child { border-top: 0; }
 .kv-k { color: var(--muted); }
 .pre { white-space: pre-wrap; }
@@ -613,18 +622,18 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
   top: 0;
   z-index: 5;
   background: var(--bg);
-  padding: 8px 0 10px;
+  padding: 4px 0 8px;
   margin-bottom: 0;
 }
-.seg-row { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 6px; scrollbar-width: none; }
+.seg-row { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: none; }
 .seg-row::-webkit-scrollbar { display: none; }
 .seg {
   display: inline-flex;
   align-items: center;
   gap: 8px;
   flex: none;
-  min-height: 38px;
-  padding: 0 14px;
+  min-height: var(--control-dense);
+  padding: 0 12px;
   border: 1px solid var(--line);
   border-radius: var(--radius-pill);
   background: var(--surface);
@@ -644,7 +653,7 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
 /* The park row reads as the heading of the two below it: bigger type, and a
    filled pill when chosen, so the state row underneath is plainly inside it. */
 .seg-pools { margin-bottom: 2px; }
-.seg-pool { font: var(--text-button); min-height: 42px; }
+.seg-pool { font: var(--text-button); min-height: calc(var(--control-dense) + 2px); }
 .seg-pool.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 .seg-pool.on .seg-num { color: var(--on-accent); opacity: 0.72; }
 .seg-pool-none.on { background: var(--service); border-color: var(--service); }
@@ -652,7 +661,7 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
 
 /* The park's numbers, which are also its filter: a number, the state it
    stands for, and what that state costs or brings. */
-.kpis { display: grid; gap: 10px; margin-bottom: 14px; }
+.kpis { display: grid; gap: 8px; margin-bottom: 10px; }
 .kpis-2 { grid-template-columns: repeat(2, 1fr); }
 .kpis-3 { grid-template-columns: repeat(3, 1fr); }
 .kpis-4 { grid-template-columns: repeat(4, 1fr); }
@@ -663,7 +672,7 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius-card);
-  padding: 14px 16px;
+  padding: 10px var(--card-pad);
   color: inherit;
   font: inherit;
   cursor: pointer;
@@ -675,8 +684,8 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
 .kpi-warn .k-n { color: var(--service-ink); }
 .kpi-warn.on { background: var(--warn-soft); }
 .k-n { display: block; font: var(--text-h2); }
-.k-l { display: block; margin-top: 2px; }
-.k-s { display: block; font: var(--text-label); color: var(--muted); margin-top: 6px; }
+.k-l { display: block; margin-top: 1px; }
+.k-s { display: block; font: var(--text-label); color: var(--muted); margin-top: 4px; }
 @media (max-width: 719px) {
   .kpis { grid-template-columns: 1fr 1fr; gap: 8px; }
   .kpi { padding: 10px 12px; }
@@ -691,7 +700,7 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--muted);
-  margin-top: 3px;
+  margin-top: 1px;
 }
 
 /* Search sits beside the title on a laptop and takes the next line on a
@@ -838,8 +847,8 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
     grid-template-areas: none;
     grid-template-columns: 150px minmax(100px, 1fr) 72px 128px minmax(130px, 1.2fr) 72px 104px;
     align-items: center;
-    gap: 12px;
-    padding: 10px 12px;
+    gap: var(--row-x);
+    padding: var(--row-y) var(--row-x);
     margin: 0;
     border: 0;
     border-top: 1px solid var(--line-soft);
@@ -852,11 +861,11 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
     text-transform: uppercase;
     color: var(--muted);
     border-top: 0;
-    padding-bottom: 6px;
+    padding-bottom: 4px;
   }
   /* Nine columns do not always fit; the list scrolls sideways rather than
      the page doing it. */
-  .vlist { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-card); padding: 8px 4px; overflow-x: auto; }
+  .vlist { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-card); padding: 4px 2px; overflow-x: auto; }
   /* The sum of the columns and their gaps, and not a pixel more: the dots at
      the end are the row's one action and must never be the part that falls
      off a laptop's right edge. */
