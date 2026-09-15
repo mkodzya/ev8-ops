@@ -725,34 +725,58 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
 .list-search { display: none; }
 @media (min-width: 900px) {
   .head-search { display: none; }
-  .list-head-vin { display: none; }
-  /* A field in a row of headings should be a heading that happens to accept
-     typing, not a box parked among words. No border, no fill, the height of
-     the line it sits on — and a hairline underneath so it still reads as
-     something you can type into. It becomes a proper field when it is used. */
-  .list-search {
-    display: block;
-    width: 100%;
-    min-height: 0;
-    padding: 1px 0 3px;
+  /* Until somebody looks for a moped, this column is a heading like the
+     others — the word and a magnifier that only says the word can be typed
+     over. The field arrives in its place, the width of the column, and takes
+     the focus with it. */
+  .col-find {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
     border: 0;
-    border-bottom: 1px solid var(--line);
-    border-radius: 0;
     background: none;
+    padding: 0;
+    font: inherit;
+    letter-spacing: inherit;
+    text-transform: inherit;
+    color: inherit;
+    cursor: pointer;
+    transition: var(--ease);
+  }
+  .col-find:hover { color: var(--ink); }
+  .col-mag { font-style: normal; font-size: 14px; line-height: 1; }
+  .col-search {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    width: 100%;
+    animation: field-open var(--enter);
+  }
+  @keyframes field-open { from { opacity: 0; transform: translateX(-6px); } }
+  .list-search {
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+    padding: 3px 8px;
+    border: 1px solid var(--accent);
+    border-radius: 8px;
+    background: var(--surface-2);
     font: var(--text-mono-sm);
     text-transform: none;
     letter-spacing: 0;
+  }
+  .list-search:focus { outline: 0; }
+  .col-x {
+    border: 0;
+    background: none;
+    padding: 2px 4px;
+    font-size: 11px;
+    line-height: 1;
+    color: var(--muted);
+    cursor: pointer;
     transition: var(--ease);
   }
-  .list-search:hover { border-bottom-color: var(--muted); }
-  .list-search:focus {
-    border-bottom-color: var(--accent);
-    outline: 0;
-    background: var(--surface-2);
-    border-radius: 6px 6px 0 0;
-    padding-left: 6px;
-    padding-right: 6px;
-  }
+  .col-x:hover { color: var(--service-ink); }
 }
 
 /* Not a row: a sentence where the rows would have been, with the way back

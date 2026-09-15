@@ -113,7 +113,7 @@ export const en = {
     rowActions: 'Actions',
     quietDays: (n: number) => `${n} day${n === 1 ? '' : 's'}`,
     searchHint: 'Last 4 of VIN',
-    searchShort: '· · · last 4',
+    searchShort: 'Last 4 of VIN',
     empty: 'The fleet is empty.',
     nothingFound: 'Nothing matches.',
     showAll: (n: number) => `Show all ${n}`,
