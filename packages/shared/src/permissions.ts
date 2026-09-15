@@ -8,6 +8,7 @@ import type { Role } from './types.js';
 export const PERMISSIONS = [
   'fleet.view',
   'fleet.state.manual', // move a VIN by hand, reason required (FLT-03)
+  'fleet.location.set', // say which point a moped stands at; the list itself is settings
   'rental.create', // hand-over wizard (RNT-01)
   'rental.return', // return wizard (RNT-04)
   'customer.create',
@@ -29,6 +30,7 @@ export type Permission = (typeof PERMISSIONS)[number];
 const MANAGER: Permission[] = [
   'fleet.view',
   'fleet.state.manual',
+  'fleet.location.set',
   'rental.create',
   'rental.return',
   'customer.create',
@@ -51,7 +53,7 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
   owner: PERMISSIONS,
   director: DIRECTOR,
   manager: MANAGER,
-  mechanic: ['fleet.view', 'fleet.state.manual', 'service.manage'],
+  mechanic: ['fleet.view', 'fleet.state.manual', 'fleet.location.set', 'service.manage'],
   accountant: ['fleet.view', 'reports.view', 'export.accounting'],
 };
 

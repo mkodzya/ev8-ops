@@ -6,7 +6,7 @@ import { useSession } from '../session.js';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { todayISO } from '@ev8/shared';
-import { CustomerName, Empty, Loading, StateBadge, Vin } from '../components/ui.js';
+import { CustomerName, Empty, Loading, PlaceText, StateBadge, Vin } from '../components/ui.js';
 import { fmtDate } from '../format.js';
 import { useT } from '../i18n/index.js';
 
@@ -18,6 +18,7 @@ interface Vehicle {
   year: number | null;
   arrivedOn: string | null;
   state: VehicleState;
+  location: { id: string; name: string } | null;
   currentRental: { id: string; number: string; paidThrough: string | null; customer: { id: string; name: string; nameKa: string | null; nameLat: string | null } } | null;
 }
 
@@ -91,6 +92,7 @@ export function FleetPage() {
             <span>{t.fleet.year}</span>
             <span>{t.fleet.arrived}</span>
             <span>{t.fleet.state}</span>
+            <span>{t.fleet.where}</span>
             <span>{t.fleet.renter}</span>
             <span>{t.fleet.paidThrough}</span>
           </li>
@@ -108,6 +110,11 @@ export function FleetPage() {
               <span className="v-arrived mono">{fmtDate(v.arrivedOn)}</span>
               <span className="v-state">
                 <StateBadge state={v.state} />
+              </span>
+              {/* On a phone a rented moped already names its customer one line
+                  up, so repeating "at the customer" underneath is noise. */}
+              <span className={`v-where ${v.currentRental ? 'v-none' : ''}`}>
+                <PlaceText of={v} />
               </span>
               <span className={`v-renter ${v.currentRental ? '' : 'v-none'}`}>
                 {v.currentRental ? <Link to={`/customers/${v.currentRental.customer.id}`}><CustomerName of={v.currentRental.customer} second={false} /></Link> : t.common.dash}

@@ -204,6 +204,7 @@ model User {
   purchases         Purchase[]
   parts             Part[]
   stockMoves        StockMove[]
+  locations         Location[]    @relation("location_author")
 
   @@map("users")
 }
@@ -245,6 +246,24 @@ model VehicleModel {
   @@map("vehicle_models")
 }
 
+/// Where a moped physically stands. The list is the company's own words for
+/// its places; a moped out on rent carries none, because it is at a customer.
+model Location {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  note      String?
+  sortOrder Int      @default(0) @map("sort_order")
+  archived  Boolean  @default(false)
+  createdById String? @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @map("updated_at")
+
+  createdBy User?     @relation("location_author", fields: [createdById], references: [id])
+  vehicles  Vehicle[]
+
+  @@map("locations")
+}
+
 model Vehicle {
   id              String       @id @default(uuid()) @db.Uuid
   vin             String       @unique
@@ -254,6 +273,7 @@ model Vehicle {
   arrivedOn       DateTime?    @map("arrived_on") @db.Date
   state           VehicleState @default(available)
   currentRentalId String?      @map("current_rental_id") @db.Uuid
+  locationId      String?      @map("location_id") @db.Uuid
   odometerKm      Int?         @map("odometer_km")
   notes           String?
   costTetri       Int?         @map("cost_tetri")
@@ -268,6 +288,7 @@ model Vehicle {
   sales         Sale[]
   purchase      Purchase?      @relation(fields: [purchaseId], references: [id])
   model         VehicleModel   @relation(fields: [modelId], references: [id])
+  location      Location?      @relation(fields: [locationId], references: [id])
   currentRental Rental?        @relation("vehicle_current_rental", fields: [currentRentalId], references: [id])
   rentals       Rental[]       @relation("rental_vehicle")
   events        VehicleEvent[]
