@@ -5,11 +5,12 @@ import { Field } from '../components/Wizard.js';
 import { Drawer } from '../components/Drawer.js';
 import { RowMenu, type RowAction } from '../components/RowMenu.js';
 import { useSession } from '../session.js';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { todayISO } from '@ev8/shared';
 import { ColorText, CustomerName, Empty, Loading, PlaceText, StateBadge, Vin } from '../components/ui.js';
 import { placeOf } from '../lib/place.js';
+import { rowClick } from '../lib/rowLink.js';
 import { fmtDate, formatGel } from '../format.js';
 import { useT } from '../i18n/index.js';
 
@@ -78,6 +79,7 @@ export function FleetPage() {
   const [data, setData] = useState<Fleet | null>(null);
   const [tick, setTick] = useState(0);
   const models = useLoad<Models>(can('settings.manage') ? '/api/models' : null);
+  const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const [q, setQ] = useState('');
   // The row a park move has just touched. It keeps its place in the list for
@@ -302,7 +304,11 @@ export function FleetPage() {
             /* Source order is the laptop's column order; the phone re-lays
                them out by name with grid-template-areas, so neither shape
                depends on the other. */
-            <li key={v.id} className={`vrow ${moved?.id === v.id ? 'vrow-changed' : ''}`}>
+            <li
+              key={v.id}
+              className={`vrow vrow-go ${moved?.id === v.id ? 'vrow-changed' : ''}`}
+              onClick={rowClick(() => navigate(`/fleet/${v.id}`))}
+            >
               <Link to={`/fleet/${v.id}`} className="v-vin">
                 <Vin vin={v.vin} />
               </Link>
