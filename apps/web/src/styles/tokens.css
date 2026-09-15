@@ -29,6 +29,11 @@
   --crit-soft: #f9e3df; /* the tint behind a critical pill */
   --warn-soft: #fdeadf; /* the tint behind a service pill */
   --info-soft: #e4ecfb; /* the tint behind a rented pill */
+  --accent-ink: #4d6a4b; /* the word inside an available pill — the text green darkened until it clears 4.5:1 on its own tint (4.96). The site never sets these greens as 12px text, so this is ours and is measured, not chosen */
+  --rented-ink: #2f63c0; /* the word inside a rented pill: --blue-tag is 2.7:1 on its tint and unreadable small; this is 4.8:1 and the same blue */
+  --service-deep: #b2450f; /* the word inside a service pill: even the darker --service-ink is 3.0:1 on its tint; this is 4.8:1 */
+  --crit-ink: #b3392a; /* the word inside a written-off or overdue pill, 4.8:1 on --crit-soft */
+  --grey-ink: #666666; /* the word inside a sold pill, 5.2:1 on --surface-2 */
   --grey: #7a7a7a; /* finished and sold; PDF footers (site --grey-06/03) */
 
   /* rail — The navigation rail is the one dark surface in a light app: brand black with the light logo. */
@@ -70,11 +75,17 @@
   --tracking-tight: -0.02em; /* headings: the site sets -1px at 38px, -0.56px at 28px, -0.4px at 20px — all -0.02em */
   --tracking-button: -0.01em; /* buttons and chips (.button, .button-light) */
   --ease: 0.3s ease; /* every hover on the site moves at this speed */
+  --enter: 0.26s cubic-bezier(0.32, 0.72, 0, 1); /* something arriving over the page — a panel, a menu. Faster than a hover and slowed at the end, so it reads as sliding into place rather than being switched on. An addition: nothing on the site arrives */
+  --undo-window: 10s; /* how long a park move stays undoable, drawn as the line draining under the undo button; the same ten seconds the screen counts and the API enforces */
   --hairline: 0.82px; /* the outline button's border, exactly as the theme writes it */
 
   /* shape — One radius language: pills for buttons and chips, 16 px cards, nothing else. */
   --radius-card: 16px; /* cards and panels */
   --radius-pill: 999px; /* buttons and filter chips */
+  --control-dense: 34px; /* the same control on a screen driven by a pointer rather than a thumb. From 900px up, where 44px is the thumb's measure and nobody's finger is on the glass */
+  --row-y: 8px; /* a list row's air above and below, on a pointer screen. Every list in the system reads this, so a screen tightened here is not tightened again there */
+  --row-x: 10px; /* a list row's air left and right, and the gap between its columns */
+  --card-pad: 14px; /* inside a card, a tile, a number with its label. Was 18-20px, which is a poster's margin, not a working screen's */
   --control: 44px; /* touch targets no smaller than 44 px (spec §9.2) */
   --rail-w: 220px; /* the rail on a laptop */
 }

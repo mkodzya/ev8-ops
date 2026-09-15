@@ -44,6 +44,15 @@ export const ru: Dict = {
     customers: 'Клиенты',
   },
 
+  colors: {
+    black: 'Чёрный',
+    white: 'Белый',
+    red: 'Красный',
+    green: 'Зелёный',
+    grey: 'Серый',
+    purple: 'Фиолетовый',
+  },
+
   states: {
     available: 'Свободен',
     rented: 'В аренде',
@@ -102,9 +111,13 @@ export const ru: Dict = {
     noPoint: 'Без точки',
     addTip: 'Мопед из закупки заводить здесь не нужно: приход создаёт его сам — с датой, себестоимостью с учётом доставки и событием в ленте.',
     addTipLink: 'Открыть закупки',
+    rowActions: 'Действия',
     quietDays: (n: number) => `${n} ${days(n)}`,
     searchHint: 'Последние 4 знака VIN',
+    searchShort: '· · · 4 знака',
     empty: 'Парк пуст.',
+    nothingFound: 'Ничего не нашлось.',
+    showAll: (n: number) => `Показать все ${n}`,
     count: (n: number) => {
       const m10 = n % 10;
       const m100 = n % 100;
@@ -142,6 +155,7 @@ export const ru: Dict = {
     save: 'Сохранить',
     cancel: 'Отмена',
     open: 'Открыть',
+    undo: 'Отменить',
   },
 
   vehicle: {
@@ -366,9 +380,8 @@ export const ru: Dict = {
     listValue: 'По прайсу',
     perWeek: 'в неделю',
     move: 'Перевести',
-    toRent: '→ в аренду',
-    toSale: '→ в продажу',
-    toEither: '→ в аренду или продажу',
+    menuToRent: 'Перевести в аренду',
+    menuToSale: 'Перевести в продажу',
     incomingSub: (m: string) => `приходит ${m} в неделю`,
     idleSub: (m: string) => `мимо кассы ${m} в неделю`,
     notHandedOut: 'не выдаются',

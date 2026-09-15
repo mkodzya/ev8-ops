@@ -80,8 +80,8 @@ a { color: var(--accent); text-decoration: none; }
 .rail-user-name { display: block; font-weight: 600; }
 .rail-user-initial { display: none; }
 .rail-user-role { display: block; font: var(--text-overline); font-weight: 400; opacity: 0.7; text-transform: capitalize; }
-.page { padding: 28px 32px 40px; max-width: 1280px; width: 100%; }
-.page-head { display: flex; align-items: baseline; gap: 14px; margin-bottom: 18px; }
+.page { padding: 22px 26px 36px; max-width: 1280px; width: 100%; }
+.page-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 14px; }
 
 @media (max-width: 719px) {
   .shell { grid-template-columns: 1fr; }
@@ -108,6 +108,12 @@ a { color: var(--accent); text-decoration: none; }
 }
 
 /* ---- controls ------------------------------------------------------- */
+/* 44px is the thumb's measure. From 900px up nobody's finger is on the glass,
+   so the same controls answer to a pointer and give the screen its room back. */
+@media (min-width: 900px) {
+  .pill, .input { min-height: var(--control-dense); }
+  .pill { padding: 0 14px; }
+}
 .pill {
   display: inline-flex;
   align-items: center;
@@ -192,14 +198,17 @@ a { color: var(--accent); text-decoration: none; }
 }
 
 /* ---- cards, tiles, tables ------------------------------------------- */
+/* Density lives in tokens, not in the taste of whoever wrote the screen.
+   --card-pad, --row-y and --row-x are read by every card, list and table
+   here, so tightening the fleet tightened the rest of the system with it. */
 .card {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius-card);
-  padding: 18px 20px;
-  margin-bottom: 18px;
+  padding: var(--card-pad) calc(var(--card-pad) + 2px);
+  margin-bottom: 14px;
 }
-.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; margin-bottom: 18px; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; margin-bottom: 14px; }
 .tile {
   display: flex;
   flex-direction: column;
@@ -207,9 +216,9 @@ a { color: var(--accent); text-decoration: none; }
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius-card);
-  padding: 16px 18px;
+  padding: var(--card-pad);
   color: var(--ink);
-  min-height: 92px;
+  min-height: 78px;
 }
 .tile-num { font: var(--text-display); font-variant-numeric: tabular-nums; }
 .tile-lbl { font: var(--text-label); color: var(--muted); }
@@ -233,13 +242,13 @@ a { color: var(--accent); text-decoration: none; }
   font: var(--text-overline);
   color: var(--muted);
   background: var(--surface-2);
-  padding: 10px 14px;
+  padding: var(--row-y) 12px;
   white-space: nowrap;
 }
 .table th.num { text-align: right; }
-.table td { padding: 10px 14px; border-top: 1px solid var(--line-soft); vertical-align: top; }
+.table td { padding: var(--row-y) 12px; border-top: 1px solid var(--line-soft); vertical-align: top; }
 .table tbody tr:hover { background: var(--surface-2); }
-.empty { color: var(--muted); padding: 24px 0; }
+.empty { color: var(--muted); padding: 18px 0; }
 .inline-rental { display: inline-flex; gap: 6px; align-items: center; margin-right: 10px; }
 
 /* ---- VIN ------------------------------------------------------------ */
@@ -248,26 +257,37 @@ a { color: var(--accent); text-decoration: none; }
 .vin-tail { font-weight: 600; }
 
 /* ---- states: colour + shape + word ---------------------------------- */
-.state, .rstatus { display: inline-flex; align-items: center; gap: 6px; font-weight: 500; white-space: nowrap; }
-.state-mark { width: 10px; height: 10px; display: inline-block; background: currentColor; border-radius: 50%; }
-.state-available { color: var(--accent); }
-.state-rented { color: var(--rented); }
+/* A state is a pill: the word on its own tint, with the shape still inside it.
+   The tint is what makes a column of states readable as a column instead of
+   as coloured prose; the shape is what keeps it readable for someone who
+   cannot tell the green from the orange (brand.md: colour + shape + word).
+   Every ink here is the family colour darkened until it clears 4.5:1 on its
+   own tint — measured, not chosen, because 12px text on a tint is where the
+   site's own greens and blues stop being legible. */
+.state, .rstatus {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: var(--radius-pill);
+  font: var(--text-overline);
+  letter-spacing: 0;
+  text-transform: none;
+  white-space: nowrap;
+}
+.state-mark { width: 8px; height: 8px; display: inline-block; background: currentColor; border-radius: 50%; flex: none; }
+.state-available, .rstatus-active { background: var(--accent-soft); color: var(--accent-ink); }
+.state-rented, .rstatus-booked { background: var(--info-soft); color: var(--rented-ink); }
 .state-rented .state-mark { border-radius: 2px; }
-.state-service { color: var(--service-ink); }
-.state-service .state-mark { border-radius: 0; transform: rotate(45deg); width: 8px; height: 8px; }
-.state-out { color: var(--crit); }
+.state-service, .rstatus-paused { background: var(--warn-soft); color: var(--service-deep); }
+.state-service .state-mark { border-radius: 0; transform: rotate(45deg); width: 7px; height: 7px; }
+.state-out, .rstatus-overdue, .rstatus-disputed { background: var(--crit-soft); color: var(--crit-ink); }
 .state-out .state-mark { border-radius: 0; }
-.state-sold { color: var(--grey); }
+.state-sold, .rstatus-returned { background: var(--surface-2); color: var(--grey-ink); }
 .state-sold .state-mark { background: transparent; border: 2px solid currentColor; width: 8px; height: 8px; }
-.rstatus-active { color: var(--accent); }
-.rstatus-booked { color: var(--rented); }
 .rstatus-booked .state-mark { background: transparent; border: 2px solid currentColor; width: 8px; height: 8px; }
-.rstatus-overdue { color: var(--crit); }
-.rstatus-paused { color: var(--service-ink); }
 .rstatus-paused .state-mark { border-radius: 2px; }
-.rstatus-returned { color: var(--grey); }
-.rstatus-disputed { color: var(--crit); }
-.rstatus-disputed .state-mark { border-radius: 0; transform: rotate(45deg); width: 8px; height: 8px; }
+.rstatus-disputed .state-mark { border-radius: 0; transform: rotate(45deg); width: 7px; height: 7px; }
 
 /* ---- login ---------------------------------------------------------- */
 .login-wrap { min-height: 100%; display: grid; place-items: center; padding: 24px; }
@@ -297,7 +317,7 @@ a { color: var(--accent); text-decoration: none; }
 .spacer { flex: 1; }
 .two-col { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px; margin-bottom: 18px; }
 .two-col > .card { margin-bottom: 0; }
-.kv { display: grid; grid-template-columns: minmax(120px, 38%) 1fr; gap: 12px; padding: 8px 0; border-top: 1px solid var(--line-soft); font: var(--text-body-sm); }
+.kv { display: grid; grid-template-columns: minmax(120px, 38%) 1fr; gap: 12px; padding: 6px 0; border-top: 1px solid var(--line-soft); font: var(--text-body-sm); }
 .kv:first-child { border-top: 0; }
 .kv-k { color: var(--muted); }
 .pre { white-space: pre-wrap; }
@@ -613,18 +633,18 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
   top: 0;
   z-index: 5;
   background: var(--bg);
-  padding: 8px 0 10px;
+  padding: 4px 0 8px;
   margin-bottom: 0;
 }
-.seg-row { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 6px; scrollbar-width: none; }
+.seg-row { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: none; }
 .seg-row::-webkit-scrollbar { display: none; }
 .seg {
   display: inline-flex;
   align-items: center;
   gap: 8px;
   flex: none;
-  min-height: 38px;
-  padding: 0 14px;
+  min-height: var(--control-dense);
+  padding: 0 12px;
   border: 1px solid var(--line);
   border-radius: var(--radius-pill);
   background: var(--surface);
@@ -644,7 +664,7 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
 /* The park row reads as the heading of the two below it: bigger type, and a
    filled pill when chosen, so the state row underneath is plainly inside it. */
 .seg-pools { margin-bottom: 2px; }
-.seg-pool { font: var(--text-button); min-height: 42px; }
+.seg-pool { font: var(--text-button); min-height: calc(var(--control-dense) + 2px); }
 .seg-pool.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 .seg-pool.on .seg-num { color: var(--on-accent); opacity: 0.72; }
 .seg-pool-none.on { background: var(--service); border-color: var(--service); }
@@ -652,7 +672,7 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
 
 /* The park's numbers, which are also its filter: a number, the state it
    stands for, and what that state costs or brings. */
-.kpis { display: grid; gap: 10px; margin-bottom: 14px; }
+.kpis { display: grid; gap: 8px; margin-bottom: 10px; }
 .kpis-2 { grid-template-columns: repeat(2, 1fr); }
 .kpis-3 { grid-template-columns: repeat(3, 1fr); }
 .kpis-4 { grid-template-columns: repeat(4, 1fr); }
@@ -663,7 +683,7 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius-card);
-  padding: 14px 16px;
+  padding: 10px var(--card-pad);
   color: inherit;
   font: inherit;
   cursor: pointer;
@@ -675,8 +695,8 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
 .kpi-warn .k-n { color: var(--service-ink); }
 .kpi-warn.on { background: var(--warn-soft); }
 .k-n { display: block; font: var(--text-h2); }
-.k-l { display: block; margin-top: 2px; }
-.k-s { display: block; font: var(--text-label); color: var(--muted); margin-top: 6px; }
+.k-l { display: block; margin-top: 1px; }
+.k-s { display: block; font: var(--text-label); color: var(--muted); margin-top: 4px; }
 @media (max-width: 719px) {
   .kpis { grid-template-columns: 1fr 1fr; gap: 8px; }
   .kpi { padding: 10px 12px; }
@@ -685,27 +705,74 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
 }
 /* Which park a row is in, said only where both are on screen at once. */
 .pool-mark { font: var(--text-label); color: var(--accent); }
+/* A footnote to the state, not a second heading beside it: the same quiet
+   label the model line uses, no shouting in capitals. */
 .v-pool {
   display: block;
-  font: var(--text-overline);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  font: var(--text-label);
   color: var(--muted);
-  margin-top: 3px;
+  margin-top: 1px;
 }
 
-/* Search sits beside the title on a laptop and takes the next line on a
-   phone, where 210px next to a heading leaves room for four characters. */
+/* The search for a VIN belongs over the column of VINs. On a laptop it sits
+   in the heading row, which was already there and costs the screen nothing;
+   the heading word steps aside for it. On a phone that row does not exist —
+   the list is cards — so the field takes a line of its own under the title,
+   and the one in the heading is not rendered at all. */
 .page-head { flex-wrap: wrap; row-gap: 10px; }
-.page-head .input-search { width: 210px; }
 .page-head .pill { white-space: nowrap; }
-@media (max-width: 599px) {
-  .page-head .input-search { flex: 1 0 100%; width: auto; order: 3; }
-  .page-head .pill { order: 2; }
+.head-search { flex: 1 0 100%; width: auto; order: 3; }
+.list-search { display: none; }
+@media (min-width: 900px) {
+  .head-search { display: none; }
+  .list-head-vin { display: none; }
+  /* A field in a row of headings should be a heading that happens to accept
+     typing, not a box parked among words. No border, no fill, the height of
+     the line it sits on — and a hairline underneath so it still reads as
+     something you can type into. It becomes a proper field when it is used. */
+  .list-search {
+    display: block;
+    width: 100%;
+    min-height: 0;
+    padding: 1px 0 3px;
+    border: 0;
+    border-bottom: 1px solid var(--line);
+    border-radius: 0;
+    background: none;
+    font: var(--text-mono-sm);
+    text-transform: none;
+    letter-spacing: 0;
+    transition: var(--ease);
+  }
+  .list-search:hover { border-bottom-color: var(--muted); }
+  .list-search:focus {
+    border-bottom-color: var(--accent);
+    outline: 0;
+    background: var(--surface-2);
+    border-radius: 6px 6px 0 0;
+    padding-left: 6px;
+    padding-right: 6px;
+  }
 }
 
+/* Not a row: a sentence where the rows would have been, with the way back
+   beside it. It keeps the list's padding so the heading above it does not
+   look like the heading of nothing. */
+.vlist-empty {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 22px 12px;
+  color: var(--muted);
+}
 .vlist { list-style: none; margin: 0; padding: 0; }
 .vlist-head { display: none; }
+/* A row knows its own colour in one place. The cell that sticks to the right
+   edge and the fade in front of it both read it from here, so a row can never
+   again be white with one tinted patch in it. */
+.vrow, .vlist-head { --row-bg: var(--surface); }
+.vrow-changed { --row-bg: var(--accent-soft); }
 .vrow {
   display: grid;
   grid-template-areas: 'state quiet' 'vin vin' 'model model' 'where where' 'move move';
@@ -713,7 +780,7 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
   gap: 2px 12px;
   padding: 12px 14px;
   margin-bottom: 8px;
-  background: var(--surface);
+  background: var(--row-bg);
   border: 1px solid var(--line);
   border-radius: var(--radius-card);
 }
@@ -724,8 +791,12 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
 /* Two classes on purpose: the column's muted grey is restated at 900 px and
    would otherwise win on source order alone. */
 .v-quiet.v-loud { color: var(--crit); }
-.v-move { grid-area: move; display: flex; gap: 6px; flex-wrap: wrap; }
+.v-move { grid-area: move; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .v-move:empty { display: none; }
+/* A row that has just moved says so in its own skin — a tint and an edge —
+   rather than growing a line and pushing everything below it down. */
+.vrow-changed { box-shadow: inset 3px 0 0 var(--accent); }
+.v-pool-new { color: var(--accent); font-weight: 500; }
 .mv {
   border: var(--hairline) solid var(--line-soft);
   border-radius: var(--radius-pill);
@@ -739,19 +810,88 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
 }
 .mv:hover { border-color: var(--service); color: var(--service-ink); }
 .mv:disabled { opacity: 0.5; cursor: default; }
-/* "Paid through" belongs under the name it is about, not in a column of its own. */
-.v-paid { display: block; font: var(--text-label); color: var(--muted); }
+.mv-undo { position: relative; overflow: hidden; border-color: var(--accent); color: var(--accent); }
+/* The ten seconds, drawn. --undo-window is the same value the screen counts
+   down and the API refuses past. */
+.mv-clock {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 2px;
+  width: 100%;
+  background: var(--accent);
+  animation: undo-drain var(--undo-window) linear forwards;
+}
+@keyframes undo-drain { from { width: 100%; } to { width: 0; } }
+
+/* The three dots, and the menu behind them. Fixed, so the list's sideways
+   scroll cannot clip it. */
+.row-dots {
+  border: var(--hairline) solid transparent;
+  border-radius: var(--radius-pill);
+  background: none;
+  color: var(--muted);
+  font-size: 18px;
+  line-height: 1;
+  padding: 2px 10px 8px;
+  cursor: pointer;
+  transition: var(--ease);
+}
+.row-dots:hover, .row-dots.on { border-color: var(--line); background: var(--surface-2); color: var(--ink); }
+.row-menu {
+  position: fixed;
+  z-index: 50;
+  transform-origin: top right;
+  animation: menu-in var(--enter);
+  min-width: 220px;
+  padding: 6px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow);
+}
+.row-menu button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: none;
+  padding: 9px 12px;
+  border-radius: 10px;
+  font: var(--text-body-sm);
+  color: var(--ink);
+  cursor: pointer;
+}
+.row-menu button:hover { background: var(--surface-hover); }
+@keyframes menu-in { from { opacity: 0; transform: scale(0.96) translateY(-4px); } }
+
+/* Movement is a way of explaining what happened, so when the reader has asked
+   the system not to move, nothing does — and nothing is lost, because every
+   animation here only repeats what the words already say. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+/* The quiet tail under a column's one word: the colour under the model, the
+   park under the state, "paid through" under the name it is about. One class,
+   because they are one idea. */
+.v-sub { display: block; font: var(--text-label); color: var(--muted); }
 .v-where { grid-area: where; font: var(--text-label); color: var(--muted); margin-top: 2px; }
-/* A point nobody has named is a question, not an empty cell. */
-.place-unset { color: var(--service); }
-/* Colour is a card fact on a phone; year and arrival left the list entirely. */
+/* A point nobody has named is still a question, but it is asked once — by the
+   orange number above the list. Thirty-five orange cells in a column answer
+   nothing and leave no orange for the state that means a moped is in pieces. */
+.place-unset { color: var(--muted); }
+/* Colour stays a card fact on a phone: five lines in a card is enough, and
+   nobody picks a moped off a phone by its paint. */
 .v-color { display: none; }
 /* On a phone the whole VIN is noise: the last four are what anyone reads,
    and a column of em dashes where a free moped has no renter is worse than
    the silence it stands for. */
 @media (max-width: 899px) {
   .v-none { display: none; }
-  .v-color { display: none; }
   .vrow .vin-head { color: var(--muted); }
   .v-vin .vin { font: var(--text-mono); }
   .v-vin .vin-tail { font: var(--text-money); }
@@ -762,35 +902,97 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
   .vlist-head, .vrow {
     display: grid;
     grid-template-areas: none;
-    grid-template-columns: 170px minmax(100px, 1fr) 80px 140px minmax(150px, 1.2fr) 80px 150px;
+    grid-template-columns: 150px minmax(120px, 1fr) 140px minmax(130px, 1.2fr) 72px 104px;
     align-items: center;
-    gap: 12px;
-    padding: 10px 12px;
+    gap: var(--row-x);
+    padding: var(--row-y) var(--row-x);
     margin: 0;
     border: 0;
     border-top: 1px solid var(--line-soft);
     border-radius: 0;
-    background: none;
+    background: var(--row-bg);
   }
+  /* One typographic line: every cell in it sits on the same baseline, the
+     search included, and a rule underneath separates the heading from the
+     data instead of each row carrying a line of its own up here. */
   .vlist-head {
     font: var(--text-overline);
     letter-spacing: 0.04em;
     text-transform: uppercase;
     color: var(--muted);
+    align-items: end;
     border-top: 0;
-    padding-bottom: 6px;
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 7px;
+    margin-bottom: 2px;
   }
-  /* Nine columns do not always fit; the list scrolls sideways rather than
+  .vlist-head + .vrow { border-top: 0; }
+  /* A heading that sorts looks like a heading until the pointer is on it:
+     a column of buttons at the top of a list is a toolbar, not a heading. */
+  .col-sort {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 4px;
+    border: 0;
+    background: none;
+    padding: 0;
+    font: inherit;
+    letter-spacing: inherit;
+    text-transform: inherit;
+    color: inherit;
+    cursor: pointer;
+    transition: var(--ease);
+  }
+  .num .col-sort { flex-direction: row-reverse; }
+  .col-sort:hover { color: var(--ink); }
+  .col-sort.on { color: var(--ink); }
+  /* The arrow keeps its place whether or not it is there, so a heading does
+     not jump sideways the moment you sort by it. */
+  .col-arrow { font-style: normal; font-size: 11px; line-height: 1; width: 8px; display: inline-block; }
+  /* Six columns do not always fit; the list scrolls sideways rather than
      the page doing it. */
-  .vlist { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-card); padding: 8px 4px; overflow-x: auto; }
-  .vlist-head, .vrow { min-width: 940px; }
-  .v-state, .v-vin, .v-model, .v-color, .v-where, .v-quiet, .v-move { grid-area: auto; text-align: left; font: var(--text-body-sm); color: inherit; display: block; }
+  .vlist { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-card); padding: 4px 2px; overflow-x: auto; }
+  /* The sum of the columns and their gaps, and not a pixel more: the dots at
+     the end are the row's one action and must never be the part that falls
+     off a laptop's right edge. */
+  .vlist-head, .vrow { min-width: 760px; }
+  .v-state, .v-vin, .v-model, .v-where, .v-quiet, .v-move { grid-area: auto; text-align: left; font: var(--text-body-sm); color: inherit; display: block; }
+  /* The colour is the model's tail here, not a column of its own. */
+  .v-color { display: block; }
   .v-where { margin-top: 0; }
   .v-quiet { text-align: right; color: var(--muted); }
   /* Stacked and right-aligned: a moped in neither park offers two moves, and
      side by side they wrap into the column next door. Always visible — an
      action that appears only under a pointer is an action nobody finds. */
-  .v-move { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+  /* The row can be wider than the window, and the one thing it must never be
+     possible to scroll away from is the action. The last cell rides the right
+     edge instead, carrying the row's own colour. */
+  .v-move {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
+    position: sticky;
+    right: 0;
+    background: var(--row-bg);
+    padding-left: 8px;
+  }
+  /* What passes under it fades out rather than being cut off — and when the
+     row fits the window there is nothing underneath, so the fade is the row's
+     own colour over the row's own colour and nobody sees a thing. A shadow
+     here was visible either way, which is how it turned into a smudge down
+     the column. */
+  .v-move::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: -22px;
+    width: 22px;
+    background: linear-gradient(to right, transparent, var(--row-bg));
+    pointer-events: none;
+  }
+
   .vlist-head .num { text-align: right; }
 }
 
@@ -904,7 +1106,12 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
   display: flex;
   justify-content: flex-end;
   background: var(--scrim-soft);
+  animation: veil var(--enter);
 }
+@keyframes veil { from { background: transparent; } }
+/* It slides in from the edge it belongs to rather than appearing where it
+   already is: a panel that is simply there has no direction, and the eye has
+   to find it instead of following it. */
 .drawer {
   display: flex;
   flex-direction: column;
@@ -913,7 +1120,10 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
   background: var(--surface);
   border-left: 1px solid var(--line);
   box-shadow: var(--shadow);
+  animation: slide-in-right var(--enter);
 }
+@keyframes slide-in-right { from { transform: translateX(100%); } }
+@keyframes slide-up { from { transform: translateY(100%); } }
 .drawer-head {
   display: flex;
   align-items: center;
@@ -957,5 +1167,7 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
     border-top: 1px solid var(--line);
     border-radius: var(--radius-card) var(--radius-card) 0 0;
     padding-bottom: env(safe-area-inset-bottom);
+    /* Up from the thumb, not in from a side it never touched. */
+    animation: slide-up var(--enter);
   }
 }

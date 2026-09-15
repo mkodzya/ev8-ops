@@ -36,6 +36,15 @@ export const ka: Dict = {
     customers: 'კლიენტები',
   },
 
+  colors: {
+    black: 'შავი',
+    white: 'თეთრი',
+    red: 'წითელი',
+    green: 'მწვანე',
+    grey: 'ნაცრისფერი',
+    purple: 'იისფერი',
+  },
+
   states: {
     available: 'თავისუფალი',
     rented: 'ქირაშია',
@@ -94,9 +103,13 @@ export const ka: Dict = {
     noPoint: 'წერტილის გარეშე',
     addTip: 'შესყიდვიდან მოსული მოპედი აქ არ იწერება: მიღება თავად ქმნის მას — თარიღით, მიტანის ხარჯით და მოსვლის მოვლენით.',
     addTipLink: 'შესყიდვების გახსნა',
+    rowActions: 'მოქმედებები',
     quietDays: (n: number) => `${n} დღე`,
     searchHint: 'VIN-ის ბოლო 4 სიმბოლო',
+    searchShort: '· · · ბოლო 4',
     empty: 'პარკი ცარიელია.',
+    nothingFound: 'ვერაფერი მოიძებნა.',
+    showAll: (n: number) => `ყველას ჩვენება (${n})`,
     count: (n: number) => `${n} მოპედი`,
   },
 
@@ -129,6 +142,7 @@ export const ka: Dict = {
     save: 'შენახვა',
     cancel: 'გაუქმება',
     open: 'გახსნა',
+    undo: 'გაუქმება',
   },
 
   vehicle: {
@@ -353,9 +367,8 @@ export const ka: Dict = {
     listValue: 'ფასით',
     perWeek: 'კვირაში',
     move: 'გადატანა',
-    toRent: '→ ქირავნობაში',
-    toSale: '→ გასაყიდად',
-    toEither: '→ ქირავნობაში ან გასაყიდად',
+    menuToRent: 'ქირავნობის პარკში გადატანა',
+    menuToSale: 'გასაყიდ პარკში გადატანა',
     incomingSub: (m: string) => `შემოდის ${m} კვირაში`,
     idleSub: (m: string) => `კვირაში ${m} არ შემოდის`,
     notHandedOut: 'არ გაიცემა',

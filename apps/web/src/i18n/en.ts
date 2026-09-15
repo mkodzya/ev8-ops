@@ -43,6 +43,15 @@ export const en = {
   },
 
   // Vehicle states — colour + shape + word, the same everywhere (brand.md).
+  colors: {
+    black: 'Black',
+    white: 'White',
+    red: 'Red',
+    green: 'Green',
+    grey: 'Grey',
+    purple: 'Purple',
+  },
+
   states: {
     available: 'Available',
     rented: 'Rented',
@@ -101,9 +110,13 @@ export const en = {
     noPoint: 'No point',
     addTip: 'A moped from a purchase needs nothing typed here: the receipt creates it with the date, the landed cost and an arrival of its own.',
     addTipLink: 'Open purchases',
+    rowActions: 'Actions',
     quietDays: (n: number) => `${n} day${n === 1 ? '' : 's'}`,
     searchHint: 'Last 4 of VIN',
+    searchShort: '· · · last 4',
     empty: 'The fleet is empty.',
+    nothingFound: 'Nothing matches.',
+    showAll: (n: number) => `Show all ${n}`,
     count: (n: number) => `${n} moped${n === 1 ? '' : 's'}`,
   },
 
@@ -136,6 +149,7 @@ export const en = {
     save: 'Save',
     cancel: 'Cancel',
     open: 'Open',
+    undo: 'Undo',
   },
 
   vehicle: {
@@ -360,9 +374,8 @@ export const en = {
     listValue: 'At list price',
     perWeek: 'a week',
     move: 'Move',
-    toRent: '→ to rental',
-    toSale: '→ to sale',
-    toEither: '→ to rental or sale',
+    menuToRent: 'Move to the rental park',
+    menuToSale: 'Move to the sale park',
     incomingSub: (m: string) => `${m} a week coming in`,
     idleSub: (m: string) => `${m} a week not earned`,
     notHandedOut: 'not handed over',

@@ -35,6 +35,11 @@ export const tokens = {
   critSoft: '#f9e3df', // the tint behind a critical pill
   warnSoft: '#fdeadf', // the tint behind a service pill
   infoSoft: '#e4ecfb', // the tint behind a rented pill
+  accentInk: '#4d6a4b', // the word inside an available pill — the text green darkened until it clears 4.5:1 on its own tint (4.96). The site never sets these greens as 12px text, so this is ours and is measured, not chosen
+  rentedInk: '#2f63c0', // the word inside a rented pill: --blue-tag is 2.7:1 on its tint and unreadable small; this is 4.8:1 and the same blue
+  serviceDeep: '#b2450f', // the word inside a service pill: even the darker --service-ink is 3.0:1 on its tint; this is 4.8:1
+  critInk: '#b3392a', // the word inside a written-off or overdue pill, 4.8:1 on --crit-soft
+  greyInk: '#666666', // the word inside a sold pill, 5.2:1 on --surface-2
   grey: '#7a7a7a', // finished and sold; PDF footers (site --grey-06/03)
 
   /** rail — The navigation rail is the one dark surface in a light app: brand black with the light logo. */
@@ -76,11 +81,17 @@ export const tokens = {
   trackingTight: '-0.02em', // headings: the site sets -1px at 38px, -0.56px at 28px, -0.4px at 20px — all -0.02em
   trackingButton: '-0.01em', // buttons and chips (.button, .button-light)
   ease: '0.3s ease', // every hover on the site moves at this speed
+  enter: '0.26s cubic-bezier(0.32, 0.72, 0, 1)', // something arriving over the page — a panel, a menu. Faster than a hover and slowed at the end, so it reads as sliding into place rather than being switched on. An addition: nothing on the site arrives
+  undoWindow: '10s', // how long a park move stays undoable, drawn as the line draining under the undo button; the same ten seconds the screen counts and the API enforces
   hairline: '0.82px', // the outline button's border, exactly as the theme writes it
 
   /** shape — One radius language: pills for buttons and chips, 16 px cards, nothing else. */
   radiusCard: '16px', // cards and panels
   radiusPill: '999px', // buttons and filter chips
+  controlDense: '34px', // the same control on a screen driven by a pointer rather than a thumb. From 900px up, where 44px is the thumb's measure and nobody's finger is on the glass
+  rowY: '8px', // a list row's air above and below, on a pointer screen. Every list in the system reads this, so a screen tightened here is not tightened again there
+  rowX: '10px', // a list row's air left and right, and the gap between its columns
+  cardPad: '14px', // inside a card, a tile, a number with its label. Was 18-20px, which is a poster's margin, not a working screen's
   control: '44px', // touch targets no smaller than 44 px (spec §9.2)
   railW: '220px', // the rail on a laptop
 } as const;
@@ -248,6 +259,36 @@ export const tokenGroups: TokenGroup[] = [
         "cssVar": "--info-soft",
         "value": "#e4ecfb",
         "note": "the tint behind a rented pill"
+      },
+      {
+        "name": "accentInk",
+        "cssVar": "--accent-ink",
+        "value": "#4d6a4b",
+        "note": "the word inside an available pill — the text green darkened until it clears 4.5:1 on its own tint (4.96). The site never sets these greens as 12px text, so this is ours and is measured, not chosen"
+      },
+      {
+        "name": "rentedInk",
+        "cssVar": "--rented-ink",
+        "value": "#2f63c0",
+        "note": "the word inside a rented pill: --blue-tag is 2.7:1 on its tint and unreadable small; this is 4.8:1 and the same blue"
+      },
+      {
+        "name": "serviceDeep",
+        "cssVar": "--service-deep",
+        "value": "#b2450f",
+        "note": "the word inside a service pill: even the darker --service-ink is 3.0:1 on its tint; this is 4.8:1"
+      },
+      {
+        "name": "critInk",
+        "cssVar": "--crit-ink",
+        "value": "#b3392a",
+        "note": "the word inside a written-off or overdue pill, 4.8:1 on --crit-soft"
+      },
+      {
+        "name": "greyInk",
+        "cssVar": "--grey-ink",
+        "value": "#666666",
+        "note": "the word inside a sold pill, 5.2:1 on --surface-2"
       },
       {
         "name": "grey",
@@ -466,6 +507,18 @@ export const tokenGroups: TokenGroup[] = [
         "note": "every hover on the site moves at this speed"
       },
       {
+        "name": "enter",
+        "cssVar": "--enter",
+        "value": "0.26s cubic-bezier(0.32, 0.72, 0, 1)",
+        "note": "something arriving over the page — a panel, a menu. Faster than a hover and slowed at the end, so it reads as sliding into place rather than being switched on. An addition: nothing on the site arrives"
+      },
+      {
+        "name": "undoWindow",
+        "cssVar": "--undo-window",
+        "value": "10s",
+        "note": "how long a park move stays undoable, drawn as the line draining under the undo button; the same ten seconds the screen counts and the API enforces"
+      },
+      {
         "name": "hairline",
         "cssVar": "--hairline",
         "value": "0.82px",
@@ -488,6 +541,30 @@ export const tokenGroups: TokenGroup[] = [
         "cssVar": "--radius-pill",
         "value": "999px",
         "note": "buttons and filter chips"
+      },
+      {
+        "name": "controlDense",
+        "cssVar": "--control-dense",
+        "value": "34px",
+        "note": "the same control on a screen driven by a pointer rather than a thumb. From 900px up, where 44px is the thumb's measure and nobody's finger is on the glass"
+      },
+      {
+        "name": "rowY",
+        "cssVar": "--row-y",
+        "value": "8px",
+        "note": "a list row's air above and below, on a pointer screen. Every list in the system reads this, so a screen tightened here is not tightened again there"
+      },
+      {
+        "name": "rowX",
+        "cssVar": "--row-x",
+        "value": "10px",
+        "note": "a list row's air left and right, and the gap between its columns"
+      },
+      {
+        "name": "cardPad",
+        "cssVar": "--card-pad",
+        "value": "14px",
+        "note": "inside a card, a tile, a number with its label. Was 18-20px, which is a poster's margin, not a working screen's"
       },
       {
         "name": "control",

@@ -107,3 +107,65 @@ describe.skipIf(!HAS_DB)('a moped that has left the fleet', () => {
     expect(after.gone).toBe(before.gone + 1);
   });
 });
+
+describe.skipIf(!HAS_DB)('taking a park move back', () => {
+  it('restores "nobody has decided", which no second move could reach', async () => {
+    const director = await loginAs('director');
+    const { vehicle } = await fixtures();
+    await call(director, 'POST', `/api/fleet/${vehicle.id}/pool`, { pool: 'sale' });
+    expect((await card(director, vehicle.id)).vehicle.pool).toBe('sale');
+
+    const undo = await call(director, 'POST', `/api/fleet/${vehicle.id}/pool/undo`, {});
+    expect(undo.statusCode, undo.body).toBe(200);
+    expect(json<{ pool: string | null }>(undo).pool).toBeNull();
+
+    // A mis-click is not a decision, so it leaves no line in the moped's own
+    // history — the change journal keeps both halves instead.
+    const after = await card(director, vehicle.id);
+    expect(after.vehicle.pool).toBeNull();
+    expect(after.events.filter((e) => e.kind === 'to_sale')).toHaveLength(0);
+
+    const { prisma } = await import('../src/lib/db.js');
+    const trail = await prisma.auditLog.findMany({ where: { entityId: vehicle.id }, orderBy: { createdAt: 'asc' } });
+    expect(trail.map((a) => a.action)).toEqual(['vehicle.pool', 'vehicle.pool.undo']);
+  });
+
+  it('gives back the park the moped was in before, not an empty one', async () => {
+    const director = await loginAs('director');
+    const { vehicle } = await fixtures();
+    await call(director, 'POST', `/api/fleet/${vehicle.id}/pool`, { pool: 'rent' });
+    await call(director, 'POST', `/api/fleet/${vehicle.id}/pool`, { pool: 'sale' });
+    await call(director, 'POST', `/api/fleet/${vehicle.id}/pool/undo`, {});
+    expect((await card(director, vehicle.id)).vehicle.pool).toBe('rent');
+  });
+
+  it('is only for the person who made the move, and only when there is one', async () => {
+    const director = await loginAs('director');
+    const owner = await loginAs('owner');
+    const { vehicle } = await fixtures();
+
+    const nothing = await call(director, 'POST', `/api/fleet/${vehicle.id}/pool/undo`, {});
+    expect(nothing.statusCode).toBe(409);
+    expect(json<{ error: string }>(nothing).error).toBe('nothing_to_undo');
+
+    await call(director, 'POST', `/api/fleet/${vehicle.id}/pool`, { pool: 'sale' });
+    const notYours = await call(owner, 'POST', `/api/fleet/${vehicle.id}/pool/undo`, {});
+    expect(notYours.statusCode).toBe(409);
+    expect(json<{ error: string }>(notYours).error).toBe('not_yours');
+    expect((await card(director, vehicle.id)).vehicle.pool).toBe('sale');
+  });
+
+  it('stops being an undo once the move has had time to become a decision', async () => {
+    const { prisma } = await import('../src/lib/db.js');
+    const director = await loginAs('director');
+    const { vehicle } = await fixtures();
+    await call(director, 'POST', `/api/fleet/${vehicle.id}/pool`, { pool: 'sale' });
+    const event = await prisma.vehicleEvent.findFirstOrThrow({ where: { vehicleId: vehicle.id, kind: 'to_sale' } });
+    await prisma.vehicleEvent.update({ where: { id: event.id }, data: { createdAt: new Date(Date.now() - 11 * 60 * 1000) } });
+
+    const late = await call(director, 'POST', `/api/fleet/${vehicle.id}/pool/undo`, {});
+    expect(late.statusCode).toBe(409);
+    expect(json<{ error: string }>(late).error).toBe('too_late');
+    expect((await card(director, vehicle.id)).vehicle.pool).toBe('sale');
+  });
+});

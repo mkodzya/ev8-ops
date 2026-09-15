@@ -1,13 +1,14 @@
-import { VEHICLE_POOLS, VEHICLE_STATES, daysBetween, type VehiclePool, type VehicleState } from '@ev8/shared';
+import { VEHICLE_POOLS, VEHICLE_STATES, daysBetween, tokens, type VehiclePool, type VehicleState } from '@ev8/shared';
 import { useEffect, useMemo, useState } from 'react';
 import { errorText, useLoad } from '../lib/use.js';
 import { Field } from '../components/Wizard.js';
 import { Drawer } from '../components/Drawer.js';
+import { RowMenu, type RowAction } from '../components/RowMenu.js';
 import { useSession } from '../session.js';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { todayISO } from '@ev8/shared';
-import { CustomerName, Empty, Loading, PlaceText, StateBadge, Vin } from '../components/ui.js';
+import { ColorText, CustomerName, Empty, Loading, PlaceText, StateBadge, Vin } from '../components/ui.js';
 import { placeOf } from '../lib/place.js';
 import { fmtDate, formatGel } from '../format.js';
 import { useT } from '../i18n/index.js';
@@ -38,6 +39,19 @@ interface Fleet {
  * belongs to neither park, and one nobody has decided on is its own answer
  * rather than the likelier of the two (ADR-0005).
  */
+const UNDO_WINDOW_MS = Number.parseFloat(tokens.undoWindow) * 1000;
+
+/**
+ * What a column sorts by, and which way it means first.
+ *
+ * Silence leads by default and leads downwards, because the list is a queue of
+ * decisions: the moped nobody has touched since March is the one to answer
+ * for. The others read upwards, the way a person expects a list of words to.
+ */
+const SORTS = ['model', 'state', 'where', 'quiet'] as const;
+type SortKey = (typeof SORTS)[number];
+const FIRST_DIR: Record<SortKey, 'asc' | 'desc'> = { model: 'asc', state: 'asc', where: 'asc', quiet: 'desc' };
+
 type PoolKey = VehiclePool | 'none' | 'gone';
 const POOL_KEYS: PoolKey[] = ['rent', 'sale', 'none', 'gone'];
 const poolOf = (v: Vehicle): PoolKey => (v.state === 'sold' || v.state === 'out' ? 'gone' : (v.pool ?? 'none'));
@@ -66,13 +80,46 @@ export function FleetPage() {
   const models = useLoad<Models>(can('settings.manage') ? '/api/models' : null);
   const [params, setParams] = useSearchParams();
   const [q, setQ] = useState('');
+  // The row a park move has just touched. It keeps its place in the list for
+  // a while, even when the filter no longer wants it, so that the undo is
+  // where the finger already is and nothing disappears under it.
+  const [moved, setMoved] = useState<{ id: string; to: VehiclePool } | null>(null);
   const state = params.get('state') as VehicleState | null;
   const pool = params.get('pool') as PoolKey | null;
   const noPoint = params.get('place') === 'unset';
+  const sortParam = params.get('sort') as SortKey | null;
+  const sort: SortKey = sortParam && SORTS.includes(sortParam) ? sortParam : 'quiet';
+  const dir = params.get('dir') === 'asc' ? 'asc' : params.get('dir') === 'desc' ? 'desc' : FIRST_DIR[sort];
 
   useEffect(() => {
     void api.get<Fleet>('/api/fleet').then(setData);
   }, [tick]);
+
+  // Long enough to notice a wrong click, short enough that the list is not
+  // left holding rows that no longer belong in it. The same figure draws the
+  // line draining under the button, so it is read from the token rather than
+  // written twice and left to drift.
+  useEffect(() => {
+    if (!moved) return;
+    const id = setTimeout(() => setMoved(null), UNDO_WINDOW_MS);
+    return () => clearTimeout(id);
+  }, [moved]);
+
+  /** The screen knows the answer before the server is asked again. */
+  const patch = (id: string, pool: VehiclePool | null) =>
+    setData((d) => (d ? { ...d, vehicles: d.vehicles.map((v) => (v.id === id ? { ...v, pool } : v)) } : d));
+
+  const movePool = async (v: Vehicle, pool: VehiclePool) => {
+    await api.post(`/api/fleet/${v.id}/pool`, { pool });
+    patch(v.id, pool);
+    setMoved({ id: v.id, to: pool });
+  };
+
+  const undoPool = async (id: string) => {
+    const { pool } = await api.post<{ pool: VehiclePool | null }>(`/api/fleet/${id}/pool/undo`, {});
+    patch(id, pool);
+    setMoved(null);
+  };
 
   // Both counts are worked out from the rows already on the screen, so the
   // state counters mean "inside this park" the moment a park is chosen —
@@ -94,27 +141,59 @@ export function FleetPage() {
   // A moped with no date to count from sinks to the bottom rather than posing
   // as the freshest thing in the yard.
   const today = todayISO();
+  // Where a moped stands, as the one string the column is ordered by: the
+  // renter's name, the point, or nothing — and nothing sorts last, whichever
+  // way the column is pointing, because "nobody said" is not a name.
+  const whereKey = (v: Vehicle) =>
+    v.currentRental?.customer.name ?? v.location?.name ?? '';
+
   const rows = useMemo(() => {
     const needle = q.trim().toUpperCase();
-    return inPool
-      .filter(
-        (v) =>
-          (!state || v.state === state) &&
-          (!noPoint || placeOf(v).kind === 'unset') &&
-          (!needle || v.vin.endsWith(needle) || v.vin.includes(needle)),
-      )
+    // Every filter at once, and one exception above all of them: a moped that
+    // has just been moved holds its place while the undo is still on offer.
+    // The park it was moved out of is the first filter it stops matching, so
+    // the exception has to sit outside all three and not only the last two.
+    const matches = (v: Vehicle) =>
+      (!pool || poolOf(v) === pool) && (!state || v.state === state) && (!noPoint || placeOf(v).kind === 'unset');
+    const sign = dir === 'asc' ? 1 : -1;
+    const by = (a: Vehicle, b: Vehicle): number => {
+      if (sort === 'model') return sign * a.model.localeCompare(b.model);
+      if (sort === 'state') return sign * (VEHICLE_STATES.indexOf(a.state) - VEHICLE_STATES.indexOf(b.state));
+      if (sort === 'where') {
+        const ka = whereKey(a);
+        const kb = whereKey(b);
+        if (!ka || !kb) return ka ? -1 : kb ? 1 : 0;
+        return sign * ka.localeCompare(kb);
+      }
+      const qa = quietDays(a, today);
+      const qb = quietDays(b, today);
+      if (qa == null || qb == null) return qa == null ? (qb == null ? 0 : 1) : -1;
+      return sign * (qa - qb);
+    };
+    return (data?.vehicles ?? [])
+      .filter((v) => (v.id === moved?.id || matches(v)) && (!needle || v.vin.endsWith(needle) || v.vin.includes(needle)))
       .slice()
-      .sort((a, b) => (quietDays(b, today) ?? -1) - (quietDays(a, today) ?? -1));
-  }, [inPool, state, noPoint, q, today]);
+      // The VIN breaks every tie, so the same list is the same list twice.
+      .sort((a, b) => by(a, b) || a.vin.localeCompare(b.vin));
+  }, [data, pool, state, noPoint, q, today, moved, sort, dir]);
 
   // One filter at a time below the park: a card is either the state it names
   // or the mopeds nobody has placed, and clicking the one that is already on
   // turns it off. Two of them at once would ask a question no card answers.
-  const pick = (next: { pool?: PoolKey | null; state?: VehicleState | null; noPoint?: boolean }) => {
+  const pick = (next: { pool?: PoolKey | null; state?: VehicleState | null; noPoint?: boolean; sort?: SortKey }) => {
     const p = 'pool' in next ? next.pool : pool;
     const st = 'state' in next ? next.state : 'noPoint' in next ? null : state;
     const np = 'noPoint' in next ? next.noPoint : 'state' in next ? false : noPoint;
-    setParams({ ...(p ? { pool: p } : {}), ...(st ? { state: st } : {}), ...(np ? { place: 'unset' } : {}) });
+    // Clicking the column that is already sorting turns it round; a new column
+    // starts the way that column is usually read.
+    const so = next.sort ?? sort;
+    const di = next.sort ? (next.sort === sort ? (dir === 'asc' ? 'desc' : 'asc') : FIRST_DIR[next.sort]) : dir;
+    setParams({
+      ...(p ? { pool: p } : {}),
+      ...(st ? { state: st } : {}),
+      ...(np ? { place: 'unset' } : {}),
+      ...(so === 'quiet' && di === FIRST_DIR.quiet ? {} : { sort: so, dir: di }),
+    });
   };
 
   if (!data) return <Loading />;
@@ -125,9 +204,15 @@ export function FleetPage() {
         <h1>{t.fleet.title}</h1>
         <span className="muted">{t.fleet.count(data.vehicles.length)}</span>
         <span className="spacer" />
-        {/* Search is a field, not a band: it belongs beside the title, where
-            it costs no row of its own. */}
-        <input className="input input-search mono" placeholder={t.fleet.searchHint} value={q} onChange={(e) => setQ(e.target.value)} />
+        {/* On a phone the search is a field of its own, because the list has
+            no column headings to hide in. On a laptop it lives in the VIN
+            column, and this one is not rendered. */}
+        <input
+          className="input input-search head-search mono"
+          placeholder={t.fleet.searchHint}
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+        />
         {can('settings.manage') && models.data && (
           <NewVehicle models={models.data.models} onDone={() => setTick((n) => n + 1)} />
         )}
@@ -153,7 +238,12 @@ export function FleetPage() {
           filter as well: a number, the filter it stands for, and what it costs
           or brings underneath. A second row of pills would say this twice. */}
       <PoolCards pool={pool} rows={inPool} state={state} noPoint={noPoint} unplaced={unplaced} byState={byState} pick={pick} />
-      {rows.length === 0 ? (
+      {/* An empty fleet and a search that found nothing are two different
+          things, and only one of them is about the fleet. A search that found
+          nothing keeps its heading — and with it the field the words were
+          typed into, which used to vanish along with the rows and leave
+          nowhere to take them back. */}
+      {data.vehicles.length === 0 ? (
         <Empty text={t.fleet.empty} />
       ) : (
         /* One markup, two shapes: a list a thumb can read on a phone, and the
@@ -163,30 +253,79 @@ export function FleetPage() {
           {/* Seven columns, not eleven. Year and arrival are card facts; the
               renter is the answer to "where", not a column beside it; and
               "paid through" belongs under the name it is about. */}
-          <li className="vlist-head" aria-hidden="true">
-            <span>{t.fleet.vin}</span>
-            <span>{t.fleet.model}</span>
-            <span>{t.fleet.color}</span>
-            <span>{t.fleet.state}</span>
-            <span>{t.fleet.where}</span>
-            <span className="num">{t.fleet.quiet}</span>
-            <span />
+          {/* The heading row carries the search, because a search for a VIN
+              belongs over the column of VINs and nowhere else. It costs the
+              screen nothing: the row was already there. */}
+          <li className="vlist-head">
+            <span>
+              <input
+                className="input list-search mono"
+                placeholder={t.fleet.searchShort}
+                aria-label={t.fleet.searchHint}
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+              />
+              <span className="list-head-vin">{t.fleet.vin}</span>
+            </span>
+            <span>
+              <ColHead k="model" label={t.fleet.model} sort={sort} dir={dir} pick={pick} />
+            </span>
+            <span>
+              <ColHead k="state" label={t.fleet.state} sort={sort} dir={dir} pick={pick} />
+            </span>
+            <span>
+              <ColHead k="where" label={t.fleet.where} sort={sort} dir={dir} pick={pick} />
+            </span>
+            <span className="num">
+              <ColHead k="quiet" label={t.fleet.quiet} sort={sort} dir={dir} pick={pick} />
+            </span>
+            {/* The header's last cell rides the right edge with the row's, or
+                the columns would slide out from under a floating heading. */}
+            <span className="v-move" />
           </li>
+          {rows.length === 0 && (
+            <li className="vlist-empty">
+              <span>{t.fleet.nothingFound}</span>
+              <button
+                type="button"
+                className="pill pill-sm"
+                onClick={() => {
+                  setQ('');
+                  setParams({});
+                }}
+              >
+                {t.fleet.showAll(data.vehicles.length)}
+              </button>
+            </li>
+          )}
           {rows.map((v) => (
             /* Source order is the laptop's column order; the phone re-lays
                them out by name with grid-template-areas, so neither shape
                depends on the other. */
-            <li key={v.id} className="vrow">
+            <li key={v.id} className={`vrow ${moved?.id === v.id ? 'vrow-changed' : ''}`}>
               <Link to={`/fleet/${v.id}`} className="v-vin">
                 <Vin vin={v.vin} />
               </Link>
-              <span className="v-model">{v.model}</span>
-              <span className="v-color">{v.color ?? t.common.dash}</span>
+              {/* Five columns, not seven. What is secondary sits under what it
+                  belongs to: the colour under the model, the park under the
+                  state, "paid through" under the name. Each column gets one
+                  word and one quiet tail, and none of them elbows the next. */}
+              <span className="v-model">
+                {v.model}
+                <span className="v-sub v-color">
+                  <ColorText of={v.color} />
+                </span>
+              </span>
               <span className="v-state">
                 <StateBadge state={v.state} />
-                {/* Inside a park every row would repeat its name; only the
-                    mixed list needs to say which is which. */}
-                {!pool && <span className="v-pool">{t.pools[poolOf(v)]}</span>}
+                {/* A label on every row is a label nobody reads. The park is
+                    said only when it is still a question — and on the row that
+                    has just moved, which says where it went. */}
+                {moved?.id === v.id ? (
+                  <span className="v-sub v-pool-new">→ {t.pools[moved.to]}</span>
+                ) : (
+                  !pool && poolOf(v) === 'none' && <span className="v-sub">{t.pools.none}</span>
+                )}
               </span>
               <span className="v-where">
                 {v.currentRental ? (
@@ -197,13 +336,13 @@ export function FleetPage() {
                   <PlaceText of={v} />
                 )}
                 {v.currentRental && (
-                  <span className="v-paid mono">
+                  <span className="v-sub mono">
                     {t.fleet.paidThrough}: {fmtDate(v.currentRental.paidThrough)}
                   </span>
                 )}
               </span>
               <Quiet v={v} today={today} />
-              <MoveChips v={v} can={can('fleet.pool.set')} onDone={() => setTick((n) => n + 1)} />
+              <Actions v={v} can={can('fleet.pool.set')} moved={moved} onMove={movePool} onUndo={undoPool} />
             </li>
           ))}
         </ul>
@@ -212,6 +351,34 @@ export function FleetPage() {
   );
 }
 
+
+/**
+ * A column heading that sorts. The arrow appears only on the column doing the
+ * sorting — an arrow on every heading is a row of arrows, and says nothing.
+ */
+function ColHead({
+  k,
+  label,
+  sort,
+  dir,
+  pick,
+}: {
+  k: SortKey;
+  label: string;
+  sort: SortKey;
+  dir: 'asc' | 'desc';
+  pick: (next: { sort: SortKey }) => void;
+}) {
+  const on = sort === k;
+  return (
+    <button type="button" className={`col-sort ${on ? 'on' : ''}`} onClick={() => pick({ sort: k })}>
+      {label}
+      <i className="col-arrow" aria-hidden="true">
+        {on ? (dir === 'asc' ? '↑' : '↓') : ''}
+      </i>
+    </button>
+  );
+}
 
 /** Days of silence, loud once they run past half a year. */
 function Quiet({ v, today }: { v: Vehicle; today: string }) {
@@ -222,32 +389,68 @@ function Quiet({ v, today }: { v: Vehicle; today: string }) {
 }
 
 /**
- * The one move this row is waiting for. A moped in a park offers the other
- * park; one in neither offers both; one that has left the fleet offers
- * nothing, because its park is no longer our question.
+ * What this row can be told to do, and what it just did.
+ *
+ * A park move used to be two chips that wrote at once and then took the row
+ * out of the list under the finger that clicked them. Now the choice lives
+ * behind the dots every table has, and for ten seconds afterwards the row
+ * stays exactly where it was, saying what happened and offering to take it
+ * back — including back to "nobody has decided", which no second click could
+ * ever reach.
  */
-function MoveChips({ v, can, onDone }: { v: Vehicle; can: boolean; onDone: () => void }) {
+function Actions({
+  v,
+  can,
+  moved,
+  onMove,
+  onUndo,
+}: {
+  v: Vehicle;
+  can: boolean;
+  moved: { id: string; to: VehiclePool } | null;
+  onMove: (v: Vehicle, pool: VehiclePool) => Promise<void>;
+  onUndo: (id: string) => Promise<void>;
+}) {
   const t = useT();
   const [busy, setBusy] = useState(false);
-  const where = poolOf(v);
-  if (!can || where === 'gone') return <span className="v-move" />;
-  const offer = where === 'none' ? VEHICLE_POOLS : VEHICLE_POOLS.filter((p) => p !== v.pool);
-  const move = async (pool: VehiclePool) => {
+  const run = async (fn: () => Promise<void>) => {
     setBusy(true);
     try {
-      await api.post(`/api/fleet/${v.id}/pool`, { pool });
-      onDone();
+      await fn();
     } finally {
       setBusy(false);
     }
   };
+
+  if (moved?.id === v.id) {
+    return (
+      <span className="v-move">
+        {/* The line under the word drains over exactly the seconds the offer
+            lasts, so the button disappearing reads as a countdown ending and
+            not as the screen misbehaving. */}
+        <button type="button" className="mv mv-undo" disabled={busy} onClick={() => void run(() => onUndo(v.id))}>
+          {t.actions.undo}
+          <i className="mv-clock" />
+        </button>
+      </span>
+    );
+  }
+
+  const where = poolOf(v);
+  const actions: RowAction[] = [];
+  if (can && where !== 'gone') {
+    for (const p of VEHICLE_POOLS) {
+      if (p === v.pool) continue;
+      actions.push({
+        key: p,
+        label: p === 'rent' ? t.pools.menuToRent : t.pools.menuToSale,
+        onPick: () => void run(() => onMove(v, p)),
+      });
+    }
+  }
   return (
     <span className="v-move">
-      {offer.map((p) => (
-        <button key={p} type="button" className="mv" disabled={busy} onClick={() => void move(p)}>
-          {p === 'rent' ? t.pools.toRent : t.pools.toSale}
-        </button>
-      ))}
+      <RowMenu actions={actions} />
     </span>
   );
 }
