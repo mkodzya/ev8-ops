@@ -355,7 +355,7 @@ export const ru: Dict = {
     archive: 'Убрать',
     restore: 'Вернуть',
     atCustomer: 'У клиента',
-    unset: 'Точка не указана',
+    unset: 'Не указана',
     place: 'Где стоит',
     rented: 'Мопед у клиента — точку он получит при возврате.',
   },

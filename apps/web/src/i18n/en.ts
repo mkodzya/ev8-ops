@@ -349,7 +349,7 @@ export const en = {
     archive: 'Retire',
     restore: 'Bring back',
     atCustomer: 'At the customer',
-    unset: 'No point set',
+    unset: 'Not set',
     place: 'Where',
     rented: 'This moped is with a customer; it takes a point back on return.',
   },
