@@ -237,17 +237,29 @@ a { color: var(--accent); text-decoration: none; }
 .state-list li:first-child a { border-top: 0; }
 .table-wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-card); }
 .table { border-collapse: collapse; width: 100%; font: var(--text-body-sm); }
+/* Every table in the system reads like the fleet list, because they are the
+   same thing drawn twice: a heading row that is one typographic line with a
+   rule under it — not a grey band — and rows that light up under the pointer
+   in the quietest tint there is. */
 .table th {
   text-align: left;
   font: var(--text-overline);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
   color: var(--muted);
-  background: var(--surface-2);
+  background: none;
   padding: var(--row-y) 12px;
+  border-bottom: 1px solid var(--line);
   white-space: nowrap;
+  vertical-align: bottom;
 }
 .table th.num { text-align: right; }
 .table td { padding: var(--row-y) 12px; border-top: 1px solid var(--line-soft); vertical-align: top; }
-.table tbody tr:hover { background: var(--surface-2); }
+.table tbody tr:first-child td { border-top: 0; }
+@media (hover: hover) {
+  .table tbody tr { transition: background-color var(--ease); }
+  .table tbody tr:hover { background: var(--surface-2); }
+}
 .empty { color: var(--muted); padding: 18px 0; }
 .inline-rental { display: inline-flex; gap: 6px; align-items: center; margin-right: 10px; }
 

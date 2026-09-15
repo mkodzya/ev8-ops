@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { api } from '../api.js';
 import { Empty, Loading } from '../components/ui.js';
 import { Field } from '../components/Wizard.js';
+import { Drawer } from '../components/Drawer.js';
 import { useT } from '../i18n/index.js';
 import { errorText, useLoad } from '../lib/use.js';
 import { useSession } from '../session.js';
@@ -196,13 +197,6 @@ function NewUser({ onDone, onError }: { onDone: () => void; onError: (e: string)
   const [open, setOpen] = useState(false);
   const [f, setF] = useState({ name: '', email: '', role: 'manager' as Role, password: '' });
   const [busy, setBusy] = useState(false);
-  if (!open) {
-    return (
-      <button type="button" className="pill pill-sm pill-accent" onClick={() => setOpen(true)}>
-        + {t.settings.addUser}
-      </button>
-    );
-  }
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setBusy(true);
@@ -218,36 +212,45 @@ function NewUser({ onDone, onError }: { onDone: () => void; onError: (e: string)
     }
   };
   return (
-    <form className="form sub-form" onSubmit={submit}>
-      <div className="two-col">
-        <Field label={t.users.name}>
-          <input className="input" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} required autoFocus />
-        </Field>
-        <Field label={t.users.email}>
-          <input className="input" type="email" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} required />
-        </Field>
-        <Field label={t.users.role}>
-          <select className="input" value={f.role} onChange={(e) => setF({ ...f, role: e.target.value as Role })}>
-            {ROLES.map((r) => (
-              <option key={r} value={r}>
-                {t.users.roles[r]}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <Field label={t.users.password} hint={t.users.passwordHint}>
-          <input className="input" value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} required minLength={8} />
-        </Field>
-      </div>
-      <div className="row-actions">
-        <button type="button" className="pill" onClick={() => setOpen(false)}>
-          {t.actions.cancel}
-        </button>
-        <button className="pill pill-accent" disabled={busy}>
-          {busy ? t.common.checking : t.actions.save}
-        </button>
-      </div>
-    </form>
+    <>
+      <button type="button" className="pill pill-sm pill-accent" onClick={() => setOpen(true)}>
+        + {t.settings.addUser}
+      </button>
+      {open && (
+        <Drawer title={t.settings.addUser} onClose={() => setOpen(false)}>
+          <form className="form" onSubmit={submit}>
+            <div className="two-col">
+              <Field label={t.users.name}>
+                <input className="input" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} required autoFocus />
+              </Field>
+              <Field label={t.users.email}>
+                <input className="input" type="email" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} required />
+              </Field>
+              <Field label={t.users.role}>
+                <select className="input" value={f.role} onChange={(e) => setF({ ...f, role: e.target.value as Role })}>
+                  {ROLES.map((r) => (
+                    <option key={r} value={r}>
+                      {t.users.roles[r]}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label={t.users.password} hint={t.users.passwordHint}>
+                <input className="input" value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} required minLength={8} />
+              </Field>
+            </div>
+            <div className="row-actions">
+              <button type="button" className="pill" onClick={() => setOpen(false)}>
+                {t.actions.cancel}
+              </button>
+              <button className="pill pill-accent" disabled={busy}>
+                {busy ? t.common.checking : t.actions.save}
+              </button>
+            </div>
+          </form>
+        </Drawer>
+      )}
+    </>
   );
 }
 
@@ -291,13 +294,6 @@ function NewModel({ onDone, onError }: { onDone: () => void; onError: (e: string
   const [open, setOpen] = useState(false);
   const [f, setF] = useState({ brand: '', name: '', weeklyRate: '', salePrice: '', cost: '', forRent: true, forSale: true });
   const [busy, setBusy] = useState(false);
-  if (!open) {
-    return (
-      <button type="button" className="pill pill-sm pill-accent" onClick={() => setOpen(true)}>
-        + {t.settings.addModel}
-      </button>
-    );
-  }
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setBusy(true);
@@ -320,41 +316,50 @@ function NewModel({ onDone, onError }: { onDone: () => void; onError: (e: string
     }
   };
   return (
-    <form className="form sub-form" onSubmit={submit}>
-      <div className="two-col">
-        <Field label={t.models.brand}>
-          <input className="input" value={f.brand} onChange={(e) => setF({ ...f, brand: e.target.value })} required autoFocus />
-        </Field>
-        <Field label={t.models.name}>
-          <input className="input" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} required />
-        </Field>
-        <Field label={t.models.weeklyRate}>
-          <input className="input input-amount mono" value={f.weeklyRate} onChange={(e) => setF({ ...f, weeklyRate: e.target.value })} inputMode="decimal" />
-        </Field>
-        <Field label={t.models.salePrice}>
-          <input className="input input-amount mono" value={f.salePrice} onChange={(e) => setF({ ...f, salePrice: e.target.value })} inputMode="decimal" />
-        </Field>
-        <Field label={t.models.cost}>
-          <input className="input input-amount mono" value={f.cost} onChange={(e) => setF({ ...f, cost: e.target.value })} inputMode="decimal" />
-        </Field>
-      </div>
-      <label className="check">
-        <input type="checkbox" checked={f.forRent} onChange={(e) => setF({ ...f, forRent: e.target.checked })} />
-        <span>{t.models.forRent}</span>
-      </label>
-      <label className="check">
-        <input type="checkbox" checked={f.forSale} onChange={(e) => setF({ ...f, forSale: e.target.checked })} />
-        <span>{t.models.forSale}</span>
-      </label>
-      <div className="row-actions">
-        <button type="button" className="pill" onClick={() => setOpen(false)}>
-          {t.actions.cancel}
-        </button>
-        <button className="pill pill-accent" disabled={busy}>
-          {busy ? t.common.checking : t.actions.save}
-        </button>
-      </div>
-    </form>
+    <>
+      <button type="button" className="pill pill-sm pill-accent" onClick={() => setOpen(true)}>
+        + {t.settings.addModel}
+      </button>
+      {open && (
+        <Drawer title={t.settings.addModel} onClose={() => setOpen(false)}>
+          <form className="form" onSubmit={submit}>
+            <div className="two-col">
+              <Field label={t.models.brand}>
+                <input className="input" value={f.brand} onChange={(e) => setF({ ...f, brand: e.target.value })} required autoFocus />
+              </Field>
+              <Field label={t.models.name}>
+                <input className="input" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} required />
+              </Field>
+              <Field label={t.models.weeklyRate}>
+                <input className="input input-amount mono" value={f.weeklyRate} onChange={(e) => setF({ ...f, weeklyRate: e.target.value })} inputMode="decimal" />
+              </Field>
+              <Field label={t.models.salePrice}>
+                <input className="input input-amount mono" value={f.salePrice} onChange={(e) => setF({ ...f, salePrice: e.target.value })} inputMode="decimal" />
+              </Field>
+              <Field label={t.models.cost}>
+                <input className="input input-amount mono" value={f.cost} onChange={(e) => setF({ ...f, cost: e.target.value })} inputMode="decimal" />
+              </Field>
+            </div>
+            <label className="check">
+              <input type="checkbox" checked={f.forRent} onChange={(e) => setF({ ...f, forRent: e.target.checked })} />
+              <span>{t.models.forRent}</span>
+            </label>
+            <label className="check">
+              <input type="checkbox" checked={f.forSale} onChange={(e) => setF({ ...f, forSale: e.target.checked })} />
+              <span>{t.models.forSale}</span>
+            </label>
+            <div className="row-actions">
+              <button type="button" className="pill" onClick={() => setOpen(false)}>
+                {t.actions.cancel}
+              </button>
+              <button className="pill pill-accent" disabled={busy}>
+                {busy ? t.common.checking : t.actions.save}
+              </button>
+            </div>
+          </form>
+        </Drawer>
+      )}
+    </>
   );
 }
 
@@ -379,13 +384,6 @@ function NewPoint({ onDone, onError }: { onDone: () => void; onError: (e: string
   const [open, setOpen] = useState(false);
   const [f, setF] = useState({ name: '', note: '', sortOrder: '' });
   const [busy, setBusy] = useState(false);
-  if (!open) {
-    return (
-      <button type="button" className="pill pill-sm pill-accent" onClick={() => setOpen(true)}>
-        + {t.settings.addPoint}
-      </button>
-    );
-  }
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setBusy(true);
@@ -405,28 +403,37 @@ function NewPoint({ onDone, onError }: { onDone: () => void; onError: (e: string
     }
   };
   return (
-    <form className="form sub-form" onSubmit={submit}>
-      <div className="two-col">
-        {/* The section already says what a point is; saying it twice under
-            the field is noise. */}
-        <Field label={t.points.name}>
-          <input className="input" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} required maxLength={120} autoFocus />
-        </Field>
-        <Field label={t.points.note} hint={t.points.noteHint}>
-          <input className="input" value={f.note} onChange={(e) => setF({ ...f, note: e.target.value })} maxLength={1000} />
-        </Field>
-        <Field label={t.points.order}>
-          <input className="input input-amount mono" value={f.sortOrder} onChange={(e) => setF({ ...f, sortOrder: e.target.value })} inputMode="numeric" />
-        </Field>
-      </div>
-      <div className="row-actions">
-        <button type="button" className="pill" onClick={() => setOpen(false)}>
-          {t.actions.cancel}
-        </button>
-        <button className="pill pill-accent" disabled={busy || f.name.trim().length === 0}>
-          {busy ? t.common.checking : t.actions.save}
-        </button>
-      </div>
-    </form>
+    <>
+      <button type="button" className="pill pill-sm pill-accent" onClick={() => setOpen(true)}>
+        + {t.settings.addPoint}
+      </button>
+      {open && (
+        <Drawer title={t.settings.addPoint} onClose={() => setOpen(false)}>
+          <form className="form" onSubmit={submit}>
+            <div className="two-col">
+              {/* The section already says what a point is; saying it twice under
+                  the field is noise. */}
+              <Field label={t.points.name}>
+                <input className="input" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} required maxLength={120} autoFocus />
+              </Field>
+              <Field label={t.points.note} hint={t.points.noteHint}>
+                <input className="input" value={f.note} onChange={(e) => setF({ ...f, note: e.target.value })} maxLength={1000} />
+              </Field>
+              <Field label={t.points.order}>
+                <input className="input input-amount mono" value={f.sortOrder} onChange={(e) => setF({ ...f, sortOrder: e.target.value })} inputMode="numeric" />
+              </Field>
+            </div>
+            <div className="row-actions">
+              <button type="button" className="pill" onClick={() => setOpen(false)}>
+                {t.actions.cancel}
+              </button>
+              <button className="pill pill-accent" disabled={busy || f.name.trim().length === 0}>
+                {busy ? t.common.checking : t.actions.save}
+              </button>
+            </div>
+          </form>
+        </Drawer>
+      )}
+    </>
   );
 }
