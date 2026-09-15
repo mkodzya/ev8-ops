@@ -6,6 +6,7 @@ import { Empty, Loading, Vin } from '../components/ui.js';
 import { Field } from '../components/Wizard.js';
 import { fmtDate, formatGel } from '../format.js';
 import { useT } from '../i18n/index.js';
+import { Drawer } from '../components/Drawer.js';
 import { errorText, useLoad } from '../lib/use.js';
 import { useSession } from '../session.js';
 
@@ -128,13 +129,6 @@ function NewSale({ onDone, onError }: { onDone: () => void; onError: (e: string)
 
   const free = useMemo(() => (fleet.data?.vehicles ?? []).filter((v) => v.state === 'available'), [fleet.data]);
 
-  if (!open) {
-    return (
-      <button type="button" className="pill pill-sm pill-accent" onClick={() => setOpen(true)}>
-        + {t.sales.newSale}
-      </button>
-    );
-  }
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -160,7 +154,13 @@ function NewSale({ onDone, onError }: { onDone: () => void; onError: (e: string)
   };
 
   return (
-    <form className="card card-drawer form" onSubmit={submit}>
+    <>
+      <button type="button" className="pill pill-sm pill-accent" onClick={() => setOpen(true)}>
+        + {t.sales.newSale}
+      </button>
+      {open && (
+        <Drawer title={t.sales.newSale} onClose={() => setOpen(false)}>
+          <form className="form" onSubmit={submit}>
       <div className="two-col">
         <Field label={t.sales.buyer}>
           <select className="input" value={f.customerId} onChange={(e) => setF({ ...f, customerId: e.target.value })} required>
@@ -214,6 +214,9 @@ function NewSale({ onDone, onError }: { onDone: () => void; onError: (e: string)
         </button>
       </div>
       {models.data && free.length === 0 && <p className="hint muted">{t.pickup.noAvailable}</p>}
-    </form>
+          </form>
+        </Drawer>
+      )}
+    </>
   );
 }
