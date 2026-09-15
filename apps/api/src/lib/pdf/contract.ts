@@ -1,3 +1,4 @@
+import { tokens } from '@ev8/shared';
 import { finish, gap, newDoc, write } from './doc.js';
 import { COMPANY, DISCLAIMER, LESSEE, LESSOR, TERMS, dmy, gel } from './company.js';
 import { bullet, check, field, h1, h2, para, rule, signatures, stampPages } from './layout.js';
@@ -29,8 +30,8 @@ export async function renderContract(d: ContractData): Promise<Buffer> {
   h1(doc, { ka: 'ელექტრო მოპედის ქირაობის ხელშეკრულება', en: 'Electric moped rental agreement' });
   write(doc, `№ ${d.number} · ${dmy(d.contractDate)}`, { align: 'center', size: 9.5, bold: true });
   gap(doc, 0.2);
-  write(doc, DISCLAIMER.ka, { size: 6.5, align: 'center', color: '#7a827a' });
-  write(doc, DISCLAIMER.en, { size: 6.5, align: 'center', color: '#7a827a' });
+  write(doc, DISCLAIMER.ka, { size: 6.5, align: 'center', color: tokens.grey });
+  write(doc, DISCLAIMER.en, { size: 6.5, align: 'center', color: tokens.grey });
   rule(doc);
 
   h2(doc, { ka: '1. ხელშეკრულების მხარეები', en: '1. Parties to the agreement' });

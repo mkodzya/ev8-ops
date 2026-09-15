@@ -48,6 +48,57 @@ export async function matchCandidates(): Promise<MatchCandidate[]> {
   });
 }
 
+export interface PreviewResult {
+  bank: 'bog' | 'tbc';
+  account: string | null;
+  periodFrom: string | null;
+  periodTo: string | null;
+  lineCount: number;
+  newLines: number;
+  alreadyIn: number;
+  incoming: number;
+  outgoing: number;
+  sample: { occurredOn: string; amountTetri: number; direction: 'in' | 'out'; payer: string | null; purpose: string | null }[];
+}
+
+/**
+ * What this file would do, without doing it (U8). Reading a statement is the
+ * one action here that cannot be undone by hand — a wrong file leaves rows
+ * somebody has to unpick — so the wizard shows the count first and asks.
+ *
+ * It writes nothing: the same parse, the same natural keys, no inserts.
+ */
+export async function previewStatement(input: { fileName: string; text: string }): Promise<PreviewResult> {
+  const parsed = parseStatement(input.text, { fileName: input.fileName });
+  const known = new Set(
+    (
+      await prisma.statementLine.findMany({
+        where: { bank: parsed.bank, naturalKey: { in: parsed.lines.map((l) => l.naturalKey) } },
+        select: { naturalKey: true },
+      })
+    ).map((l) => l.naturalKey),
+  );
+  const fresh = parsed.lines.filter((l) => !known.has(l.naturalKey));
+  return {
+    bank: parsed.bank,
+    account: parsed.account,
+    periodFrom: parsed.periodFrom,
+    periodTo: parsed.periodTo,
+    lineCount: parsed.lines.length,
+    newLines: fresh.length,
+    alreadyIn: parsed.lines.length - fresh.length,
+    incoming: fresh.filter((l) => l.direction === 'in').length,
+    outgoing: fresh.filter((l) => l.direction === 'out').length,
+    sample: fresh.slice(0, 5).map((l) => ({
+      occurredOn: l.occurredOn,
+      amountTetri: l.amountTetri,
+      direction: l.direction,
+      payer: l.payer,
+      purpose: l.purpose,
+    })),
+  };
+}
+
 export async function importStatement(input: {
   actorId: string;
   fileName: string;
@@ -179,6 +230,61 @@ function toMatchLine(line: ParsedLine) {
  * (PAY-03): the rentals whose open amount is exactly this, and the ones
  * handed over that day.
  */
+export interface Hint {
+  rentalId: string;
+  number: string;
+  customer: string;
+  why: 'amount' | 'pickup_day' | 'open';
+}
+
+/**
+ * The same ranking for one line and for a queue of them. The candidates and
+ * the rental numbers are read once by the caller: asking the database for
+ * them per line turned a queue of two hundred into two hundred round trips.
+ */
+function rankHints(
+  gross: number,
+  occurredOn: string | null,
+  candidates: Awaited<ReturnType<typeof matchCandidates>>,
+  byId: Map<string, { number: string; customer: { name: string } }>,
+): Hint[] {
+  return candidates
+    .map((c) => {
+      const why: Hint['why'] | null =
+        gross === c.openDepositTetri + c.openFirstPeriodTetri || gross === c.openFirstPeriodTetri || gross === c.openTotalTetri
+          ? 'amount'
+          : c.pickedUpOn === occurredOn
+            ? 'pickup_day'
+            : c.openTotalTetri > 0
+              ? 'open'
+              : null;
+      const r = byId.get(c.rentalId);
+      return why && r ? { rentalId: c.rentalId, number: r.number, customer: r.customer.name, why } : null;
+    })
+    .filter((h): h is Hint => h != null)
+    .sort((a, b) => (a.why === b.why ? a.number.localeCompare(b.number) : a.why === 'amount' ? -1 : b.why === 'amount' ? 1 : a.why === 'pickup_day' ? -1 : 1))
+    .slice(0, 12);
+}
+
+/** Hints for a whole queue, so the list can show them without being asked. */
+export async function hintsForLines(rows: { id: string; amountTetri: number; grossTetri: number | null; occurredOn: Date }[]): Promise<Map<string, Hint[]>> {
+  if (rows.length === 0) return new Map();
+  const candidates = await matchCandidates();
+  const numbers = await prisma.rental.findMany({
+    where: { id: { in: candidates.map((c) => c.rentalId) } },
+    select: { id: true, number: true, customer: { select: { name: true } } },
+  });
+  const byId = new Map(numbers.map((n) => [n.id, n]));
+  const out = new Map<string, Hint[]>();
+  for (const row of rows) {
+    const channel: 'transfer' | 'acquiring' = row.grossTetri != null ? 'acquiring' : 'transfer';
+    const occurredOn = isoDate(row.occurredOn);
+    const gross = grossOf({ amountTetri: row.amountTetri, grossTetri: row.grossTetri, occurredOn: occurredOn!, channel });
+    out.set(row.id, rankHints(gross, occurredOn, candidates, byId));
+  }
+  return out;
+}
+
 export async function hintsFor(lineId: string): Promise<{
   line: { id: string; occurredOn: string; amountTetri: number; grossTetri: number | null; payer: string | null; purpose: string | null; raw: string; channel: 'transfer' | 'acquiring' };
   hints: { rentalId: string; number: string; customer: string; why: 'amount' | 'pickup_day' | 'open' }[];
@@ -200,22 +306,7 @@ export async function hintsFor(lineId: string): Promise<{
   const byId = new Map(numbers.map((n) => [n.id, n]));
   const occurredOn = isoDate(row.occurredOn);
 
-  const hints = candidates
-    .map((c) => {
-      const why: 'amount' | 'pickup_day' | 'open' | null =
-        gross === c.openDepositTetri + c.openFirstPeriodTetri || gross === c.openFirstPeriodTetri || gross === c.openTotalTetri
-          ? 'amount'
-          : c.pickedUpOn === occurredOn
-            ? 'pickup_day'
-            : c.openTotalTetri > 0
-              ? 'open'
-              : null;
-      const r = byId.get(c.rentalId);
-      return why && r ? { rentalId: c.rentalId, number: r.number, customer: r.customer.name, why } : null;
-    })
-    .filter((h): h is { rentalId: string; number: string; customer: string; why: 'amount' | 'pickup_day' | 'open' } => h != null)
-    .sort((a, b) => (a.why === b.why ? a.number.localeCompare(b.number) : a.why === 'amount' ? -1 : b.why === 'amount' ? 1 : a.why === 'pickup_day' ? -1 : 1))
-    .slice(0, 12);
+  const hints = rankHints(gross, occurredOn, candidates, byId);
 
   return {
     line: {

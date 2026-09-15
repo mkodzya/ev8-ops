@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { LoginPage } from './LoginPage.js';
 import { Shell } from './Shell.js';
+import { DesignPage } from './pages/DesignPage.js';
 import { EconomicsPage } from './pages/EconomicsPage.js';
 import { PartPage } from './pages/PartPage.js';
 import { StockPage } from './pages/StockPage.js';
@@ -97,6 +98,9 @@ export function App() {
         <Route path="customers/:id" element={<CustomerPage />} />
         <Route path="profile" element={<ProfilePage />} />
         <Route path="settings" element={<RequireOwner><SettingsPage /></RequireOwner>} />
+        {/* Foundations is a review surface, not an operating screen: the owner
+            reads it, the team never needs it. */}
+        <Route path="design" element={<RequireOwner><DesignPage /></RequireOwner>} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

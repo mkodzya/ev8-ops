@@ -36,8 +36,9 @@ export function fleetRoutes(app: FastifyInstance): void {
       orderBy: [{ state: 'asc' }, { vin: 'asc' }],
       include: {
         model: { select: { brand: true, name: true } },
+        location: { select: { id: true, name: true } },
         currentRental: {
-          select: { id: true, number: true, paidThrough: true, customer: { select: { id: true, name: true } } },
+          select: { id: true, number: true, paidThrough: true, customer: { select: { id: true, name: true, nameKa: true, nameLat: true } } },
         },
       },
     });
@@ -53,6 +54,7 @@ export function fleetRoutes(app: FastifyInstance): void {
         year: v.year,
         arrivedOn: isoDate(v.arrivedOn),
         state: v.state,
+        location: v.location,
         odometerKm: v.odometerKm,
         notes: v.notes,
         currentRental: v.currentRental
@@ -72,10 +74,11 @@ export function fleetRoutes(app: FastifyInstance): void {
       where: { id: req.params.id },
       include: {
         model: true,
+        location: { select: { id: true, name: true } },
         events: { orderBy: [{ occurredOn: 'asc' }, { createdAt: 'asc' }], include: { actor: { select: { name: true } } } },
         rentals: {
           orderBy: { pickedUpOn: 'desc' },
-          include: { customer: { select: { id: true, name: true } } },
+          include: { customer: { select: { id: true, name: true, nameKa: true, nameLat: true } } },
         },
         serviceJobs: {
           orderBy: { openedOn: 'desc' },
@@ -93,6 +96,7 @@ export function fleetRoutes(app: FastifyInstance): void {
         year: v.year,
         arrivedOn: isoDate(v.arrivedOn),
         state: v.state,
+        location: v.location,
         odometerKm: v.odometerKm,
         notes: v.notes,
         costTetri: v.costTetri,

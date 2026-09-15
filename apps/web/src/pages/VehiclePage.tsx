@@ -2,7 +2,7 @@ import { VEHICLE_STATES, type RentalStatus, type VehicleEventKind, type VehicleS
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../api.js';
-import { Empty, Loading, RentalBadge, StateBadge, Vin } from '../components/ui.js';
+import { Empty, Loading, PlaceText, RentalBadge, StateBadge, Vin } from '../components/ui.js';
 import { Field, Row } from '../components/Wizard.js';
 import { fmtDate } from '../format.js';
 import { useT } from '../i18n/index.js';
@@ -21,6 +21,7 @@ interface Card {
     year: number | null;
     arrivedOn: string | null;
     state: VehicleState;
+    location: { id: string; name: string } | null;
     odometerKm: number | null;
     costTetri: number | null;
     notes: string | null;
@@ -47,6 +48,27 @@ export function VehiclePage() {
   const v = data.vehicle;
   const current = data.rentals.find((r) => r.id === v.currentRentalId) ?? null;
   const locked = v.state === 'rented' && !!v.currentRentalId;
+  const openJob = data.serviceJobs.find((j) => j.status === 'open') ?? null;
+
+  // One action, and which one depends on where the moped is (U4). A card
+  // that offers every verb makes the reader pick; a card that offers the
+  // next one makes the state readable from the button alone.
+  const primary: { label: string; to?: string; onClick?: () => void } | null =
+    v.state === 'available' && can('rental.create')
+      ? { label: t.actions.newRental, to: `/rentals/new?vehicle=${v.id}` }
+      : v.state === 'rented' && current && can('rental.return')
+        ? { label: t.actions.returnRental, to: `/rentals/${current.id}/return` }
+        : v.state === 'service' && openJob && can('service.manage')
+          ? { label: t.vehicle.backToFleet, to: `/service/${openJob.id}` }
+          : v.state === 'service' && can('fleet.state.manual')
+            ? {
+                label: t.vehicle.backToFleet,
+                onClick: () => {
+                  setToState('available');
+                  setOpen(true);
+                },
+              }
+            : null;
 
   const move = async () => {
     setBusy(true);
@@ -82,11 +104,16 @@ export function VehiclePage() {
         {can('service.manage') && v.state !== 'sold' && v.state !== 'out' && !data.serviceJobs.some((j) => j.status === 'open') && (
           <NewJob vehicleId={v.id} onDone={reload} onError={setErr} />
         )}
-        {v.state === 'available' && can('rental.create') && (
-          <Link className="pill pill-sm pill-accent" to={`/rentals/new?vehicle=${v.id}`}>
-            {t.actions.newRental}
-          </Link>
-        )}
+        {primary &&
+          (primary.to ? (
+            <Link className="pill pill-sm pill-accent head-primary" to={primary.to}>
+              {primary.label}
+            </Link>
+          ) : (
+            <button type="button" className="pill pill-sm pill-accent head-primary" onClick={primary.onClick}>
+              {primary.label}
+            </button>
+          ))}
       </header>
 
       {open && (
@@ -115,11 +142,28 @@ export function VehiclePage() {
         </section>
       )}
 
+      {/* On a phone the one action lives at the bottom, over the tab bar,
+          where a thumb already is (ux.md, principle 2). */}
+      {primary && (
+        <div className="page-actions">
+          {primary.to ? (
+            <Link className="pill pill-accent pill-wide" to={primary.to}>
+              {primary.label}
+            </Link>
+          ) : (
+            <button type="button" className="pill pill-accent pill-wide" onClick={primary.onClick}>
+              {primary.label}
+            </button>
+          )}
+        </div>
+      )}
+
       <div className="two-col">
         <section className="card">
           <Row k={t.fleet.color} v={v.color ?? t.common.dash} />
           <Row k={t.fleet.year} v={<span className="mono">{v.year ?? t.common.dash}</span>} />
           <Row k={t.fleet.arrived} v={<span className="mono">{fmtDate(v.arrivedOn)}</span>} />
+          <Row k={t.points.place} v={<PlaceRow v={v} onDone={reload} onError={setErr} />} />
           <Row k={t.vehicle.odometer} v={<span className="mono">{v.odometerKm ?? t.common.dash}</span>} />
           {v.costTetri != null && <Row k={t.purchases.cost} v={<span className="mono">{formatGel(v.costTetri)}</span>} />}
           <Row
@@ -226,5 +270,49 @@ export function VehiclePage() {
         )}
       </section>
     </>
+  );
+}
+
+/**
+ * Where this moped stands. Kardu and the mechanic may answer it, the owner
+ * names the places — so the row is a picker for whoever can move a moped and
+ * a plain sentence for everyone else. A moped out on rent has no point to
+ * choose: it is at its customer until it comes back.
+ */
+function PlaceRow({ v, onDone, onError }: { v: Card['vehicle']; onDone: () => void; onError: (e: string) => void }) {
+  const t = useT();
+  const { can } = useSession();
+  const editable = can('fleet.location.set') && v.state !== 'rented' && v.state !== 'sold' && v.state !== 'out';
+  const points = useLoad<{ locations: { id: string; name: string }[] }>(editable ? '/api/locations' : null);
+  const [busy, setBusy] = useState(false);
+
+  if (!editable || !points.data || points.data.locations.length === 0) {
+    return (
+      <>
+        <PlaceText of={v} />
+        {v.state === 'rented' && <div className="hint">{t.points.rented}</div>}
+      </>
+    );
+  }
+  const set = async (locationId: string) => {
+    setBusy(true);
+    try {
+      await api.post(`/api/fleet/${v.id}/location`, { locationId: locationId || null });
+      onDone();
+    } catch (e) {
+      onError(errorText(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <select className="input input-inline" value={v.location?.id ?? ''} disabled={busy} onChange={(e) => void set(e.target.value)}>
+      <option value="">{t.points.unset}</option>
+      {points.data.locations.map((l) => (
+        <option key={l.id} value={l.id}>
+          {l.name}
+        </option>
+      ))}
+    </select>
   );
 }

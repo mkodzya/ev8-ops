@@ -1,49 +1,122 @@
-# EV8 brand — taken from ev8.ge (theme `ev8`, `assets/css/style.min.css`, 13.09.2026)
+# EV8 brand — read from ev8.ge
 
-Everything here is read from the live site, not invented. When the site changes,
-update this file from the source, do not guess.
+Источник: тема `ev8`, `wp-content/themes/ev8/assets/css/style.min.css` (`?ver=1.0.67`).
+Прочитано с живого сайта **15.09.2026** — блок `:root` и правила кнопок скопированы
+из таблицы стилей, а не пересказаны. Когда сайт изменится, этот файл обновляется
+из источника, а не по памяти.
 
 ## Logo
-- `logo.svg` (112×28, sage green `#819481`) — light backgrounds.
-- `logo-light.svg` — dark backgrounds (app rail, dark theme, PDF headers on dark).
-- Source: `https://ev8.ge/wp-content/themes/ev8/assets/images/logo.svg`, `logo-light.svg`.
-- Never redraw, recolor or stretch. Minimum height in UI 24 px.
+- `logo.svg` (112×28, шалфейный `#819481`) — на светлом.
+- `logo-light.svg` — на тёмном (боковая панель, шапки PDF на тёмном).
+- Источник: `https://ev8.ge/wp-content/themes/ev8/assets/images/logo.svg`, `logo-light.svg`.
+- Не перерисовывать, не перекрашивать, не растягивать. Минимальная высота в UI 24 px.
 
-## Palette (site CSS variables and theme colours)
+## `:root` сайта — как есть
 
-| Token (site)          | Hex       | Use in EV8 Ops                                              |
-|-----------------------|-----------|-------------------------------------------------------------|
-| `--green`             | `#819481` | logo, large marks, fills. Not for text (3.2:1 on white)     |
-| theme hover green     | `#628767` | secondary buttons, borders of active elements               |
-| theme dark green      | `#557553` | **text green**: links, status text, primary button (5.2:1)  |
-| `--green-light`       | `#a2b9a2` | dark-theme accent, soft fills                               |
-| theme light grey-green| `#dbe4de` | lines, table headers, soft backgrounds                      |
-| `--avocado`           | `#e0ffa2` | the one highlight per screen: active nav item, selected card|
-| `--orange`            | `#fe5d02` | state "in service", warnings (dark variant `#e45e22`)       |
-| `--blue-tag`          | `#598eeb` | state "rented"                                              |
-| `--black`             | `#0b0b0b` | ink; dark-theme and rail background                         |
-| `--white-background`  | `#fbfbfb` | light-theme page background                                 |
+```css
+--main-font: "Be Vietnam Pro", sans-serif;   --second-family: "Inter", sans-serif;
+--font-size-mobile: 12px;                    --font-size-desktop: 14px;
+--color-dark: #0b0b0b;   --color-light: #fff;   --text-accent: #ddd;
+--green: #819481;        --green-light: #a2b9a2;  --avocado: #e0ffa2;
+--black: #0b0b0b;        --white: #fff;           --orange: #fe5d02;
+--white-background: #fbfbfb;                      --blue-tag: #598eeb;
+--grey-08: #424242;  --grey-07: #5d5d5d;  --grey-06: #7a7a7a;  --grey-05: #989898;
+--grey-04: #5d5d5d;  --grey-03: #7a7a7a;  --grey-02: #ebebeb;  --grey-01: #f3f3f3;
+--grey-00: rgba(248, 248, 248, 0.9);
+```
 
-Added for the ops UI (not on the site, marked as proposal in the spec):
-- critical / overdue / written-off: `#c8402f` (does not fight the orange)
-- finished / sold: neutral grey from the ink scale
-- mono for VIN and money: IBM Plex Mono
+Серые на сайте **нейтральные**, без зелёного подтона. В EV8 Ops вторичный текст
+и фоны берутся отсюда, а не подкрашиваются под зелёный.
 
-## Type
-- Site: **Be Vietnam Pro** 300–700 (`--main-font`), **Inter** (`--second-family`).
-- App: Be Vietnam Pro for headings, buttons, navigation; Inter for body and tables.
-- **Neither face has Georgian glyphs.** Add **Noto Sans Georgian** (400–700) to every
-  font stack; verify with real names (ვაჟა ჯაფარიძე, გიორგი სუთიძე) on every screen.
+## Три зелёных — это три состояния одной кнопки
 
-## Shape
-- Site buttons and chips are pills (radii 24–60 px). App: pills for buttons and
-  filter chips, 16 px cards, square cells inside tables.
+Главное, что было понято неправильно до 15.09.2026. `#819481`, `#628767` и
+`#557553` — не три цвета палитры, а покой, наведение и нажатие у `.button`:
 
-## Vehicle states — colour + shape + word, everywhere the same
-| state      | colour                | label ka / ru / en |
-|------------|-----------------------|--------------------|
-| available  | text green `#557553`  | თავისუფალი / Свободен / Available |
-| rented     | blue `#598eeb`        | ქირაშია / В аренде / Rented |
-| service    | orange `#fe5d02`      | სერვისში / В сервисе / In service |
-| out        | red `#c8402f`         | ჩამოწერილი / Списан / Written off |
-| sold       | grey                  | გაყიდული / Продан / Sold |
+```css
+.button        { background: var(--green) }   /* #819481 */
+.button:hover  { background-color: #628767 }
+.button:active { background-color: #557553 }
+```
+
+`#557553` встречается на сайте только как `:active`. В EV8 Ops он стоит в покое —
+**решение Мики 15.09.2026**: белый на `#819481` даёт контраст 2,55:1 и не проходит
+AA даже для крупного текста, а Kardu читает экран с телефона на улице. Следствие,
+которое надо знать: наведение у нас **светлее** покоя, тогда как на сайте темнее.
+Более тёмного зелёного в теме нет, а выдумывать его нельзя.
+
+## Палитра в EV8 Ops
+
+| Сайт | Hex | Роль у нас |
+|---|---|---|
+| `--green` | `#819481` | логотип, крупные марки, заливки. Не для текста (3,2:1 на белом) |
+| hover | `#628767` | наведение на главной кнопке, граница активного элемента |
+| active | `#557553` | **текст-зелёный**: ссылки, статусы, главная кнопка в покое (5,2:1) |
+| `--green-light` | `#a2b9a2` | мягкие заливки |
+| `#dbe4de` | `#dbe4de` | на сайте — фон карточки модели под курсором (`.model-item:hover`). У нас — линии и подсветка строки |
+| `--avocado` | `#e0ffa2` | один акцент на экран. На сайте — бейдж «sale», блок гарантии, пилюля цены |
+| `--orange` | `#fe5d02` | состояние «в сервисе», предупреждения; на сайте — заливка `.button-accent` |
+| orange hover | `#e45e22` | наведение на оранжевую кнопку; у нас — оранжевый текст на светлом |
+| `--blue-tag` | `#598eeb` | состояние «в аренде» |
+| `--black` | `#0b0b0b` | текст; фон боковой панели |
+| `--white-background` | `#fbfbfb` | фон страницы |
+| `--grey-07/04` | `#5d5d5d` | вторичный текст |
+| `--grey-06/03` | `#7a7a7a` | завершённое и проданное |
+| `--grey-01` | `#f3f3f3` | шапки таблиц, мягкие фоны |
+| `--grey-02` | `#ebebeb` | тихая линия |
+
+Добавлено для операционного интерфейса, на сайте этого нет:
+`#c8402f` — просрочка и списание (не спорит с оранжевым);
+IBM Plex Mono — VIN и суммы.
+
+## Шрифт
+
+- **Be Vietnam Pro** — весь текст, включая обычный: `body` на сайте это
+  `var(--main-font)`, 12 px на телефоне и 14 px на ноутбуке.
+  Inter (`--second-family`) — вторая гарнитура, не основная.
+- Заголовки: начертание **500**, межбуквенное **−0.02em**, интерлиньяж ≈ 110 %.
+  `h1` 38/41,8 px `-1px`; `h2` 28/30,8 px `-0.56px`; `h3` 20/27 px `-0.4px`.
+- **Ни у Be Vietnam Pro, ни у Inter нет грузинских букв.** В каждый стек
+  добавляется **Noto Sans Georgian** 400–700; проверка на реальных именах
+  (ვაჟა ჯაფარიძე, გიორგი სუთიძე) входит в приёмку каждого экрана.
+
+## Кнопки — три вида, скопированы из темы
+
+```css
+.button        { border-radius:33px; padding:15px; font-weight:500; font-size:14px;
+                 line-height:100%; letter-spacing:-.01em;
+                 background:var(--green); color:var(--white); transition:.3s ease }
+.button:hover  { background-color:#628767 }
+.button:active { background-color:#557553 }
+
+.button-light  { border:.82px solid var(--black); border-radius:33px; padding:15px 19px;
+                 font-weight:500; font-size:14px; line-height:100%; letter-spacing:-.01em;
+                 color:var(--black); transition:.3s ease }
+.button-light:hover { color:var(--orange); border:.82px solid var(--orange) }
+
+.button-accent { font-weight:500; font-size:19px; line-height:92%; letter-spacing:-.02em;
+                 background:var(--orange); border:1px solid var(--orange);
+                 border-radius:40px; padding:10px; color:var(--white); transition:.3s ease }
+.button-accent:hover { background-color:#e45e22 }
+```
+
+От 768 px `.button` и `.button-light` переходят на 16 px.
+
+Что из этого берём: начертание 500, разрядку −0.01em, переход 0.3s, контурную
+кнопку волосяной линией **в цвет текста** (не серой) с оранжевым наведением, и
+оранжевую `.button-accent` для единственного крупного действия экрана. Радиус
+33/40 px при высоте 44 px — это та же пилюля, что наш `999px`.
+
+## Форма
+
+Пилюли для кнопок и фильтров, карточки 16 px, внутри таблиц углов нет.
+
+## Состояния мопеда — цвет + форма + слово, одинаково везде
+
+| state | цвет | ka / ru / en |
+|---|---|---|
+| available | текст-зелёный `#557553` | თავისუფალი / Свободен / Available |
+| rented | синий `#598eeb` | ქირაშია / В аренде / Rented |
+| service | оранжевый `#fe5d02` | სერვისში / В сервисе / In service |
+| out | красный `#c8402f` | ჩამოწერილი / Списан / Written off |
+| sold | серый `#7a7a7a` | გაყიდული / Продан / Sold |

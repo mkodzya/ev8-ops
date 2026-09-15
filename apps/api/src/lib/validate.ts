@@ -40,7 +40,7 @@ export function tetri(body: Body, key: string, opts: { required?: boolean; min?:
   return n;
 }
 
-export function int(body: Body, key: string, opts: { required?: boolean; min?: number } = {}): number | null {
+export function int(body: Body, key: string, opts: { required?: boolean; min?: number; max?: number } = {}): number | null {
   const v = body[key];
   if (v == null || v === '') {
     if (opts.required) throw badRequest('missing_field', `${key} is required`, { field: key });
@@ -49,6 +49,7 @@ export function int(body: Body, key: string, opts: { required?: boolean; min?: n
   const n = typeof v === 'string' ? Number(v) : v;
   if (typeof n !== 'number' || !Number.isInteger(n)) throw badRequest('bad_field', `${key} must be a whole number`, { field: key });
   if (opts.min != null && n < opts.min) throw badRequest('bad_field', `${key} is below ${opts.min}`, { field: key });
+  if (opts.max != null && n > opts.max) throw badRequest('bad_field', `${key} is above ${opts.max}`, { field: key });
   return n;
 }
 

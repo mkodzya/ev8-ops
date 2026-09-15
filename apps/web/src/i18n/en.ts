@@ -31,6 +31,7 @@ export const en = {
 
   nav: {
     today: 'Today',
+    more: 'More',
     fleet: 'Fleet',
     rentals: 'Rentals',
     payments: 'Payments',
@@ -71,6 +72,15 @@ export const en = {
     customers: 'Customers',
     pickedUp: 'Handed over today',
     dueBack: 'Due back today',
+    overdueList: 'Overdue, deepest first',
+    daysOverdue: (n: number) => `${n} ${n === 1 ? 'day' : 'days'} late`,
+    remind: 'Remind',
+    markPaid: 'Record a payment',
+    goOpen: 'Open',
+    goReturn: 'Take back',
+    goSort: 'Sort out',
+    clear: 'Nothing is waiting.',
+    clearNote: 'No returns or hand-overs today, nothing overdue, no bank line unsorted.',
     depositsHeld: 'Deposits held',
     empty: 'No data yet. Run the Odoo import (tools/migrate_stage1.py) to fill the fleet, customers and rentals.',
   },
@@ -85,6 +95,7 @@ export const en = {
     state: 'State',
     renter: 'Renter',
     paidThrough: 'Paid through',
+    where: 'Where',
     searchHint: 'Last 4 of VIN',
     empty: 'The fleet is empty.',
     count: (n: number) => `${n} moped${n === 1 ? '' : 's'}`,
@@ -122,6 +133,7 @@ export const en = {
   },
 
   vehicle: {
+    backToFleet: 'Back to the fleet',
     title: 'Moped',
     history: 'History',
     rentalsOf: 'Rentals',
@@ -145,6 +157,7 @@ export const en = {
   },
 
   rental: {
+    owed: 'Owed',
     title: 'Rental',
     periods: 'Weekly periods',
     week: 'Week',
@@ -202,6 +215,7 @@ export const en = {
   },
 
   customer: {
+    whatsapp: 'WhatsApp',
     title: 'Customer',
     newTitle: 'New customer',
     name: 'Name (as the team writes it)',
@@ -239,6 +253,7 @@ export const en = {
   },
 
   docs: {
+    openTab: 'Open in a tab',
     contract: 'Contract PDF',
     returnAct: 'Return act PDF',
     regenerate: 'Rebuild the document',
@@ -279,6 +294,39 @@ export const en = {
     other: 'Other',
   },
 
+  design: {
+    title: 'Foundations',
+    note: 'Tokens, text styles and component states on the live values — a design review without Figma. Everything below is read from packages/shared/tokens.json; nothing on this page is written twice.',
+    tokens: 'Tokens',
+    type: 'Text styles',
+    typeNote: 'Each style on all three alphabets. Neither Be Vietnam Pro nor Inter has Georgian glyphs, and a missing face falls back to the system font without saying so — which is why the Georgian line is here and not only in acceptance.',
+    buttons: 'Buttons',
+    buttonsNote: 'Five states, accent and outline. Hover, pressed and focus are shown as themselves, so a state nobody can reach with a mouse still gets reviewed.',
+    states: 'States',
+    statesNote: 'Five for a moped, six for a rental.',
+    statesShape: 'Colour is never alone: every state carries a shape and a word as well, and the same three appear in the list, on the card and in the PDF.',
+    data: 'Numbers and identifiers',
+    vin: 'VIN — the last four carry the eye',
+    money: 'A sum',
+    debt: 'A debt',
+    tile: 'The figure a screen is about',
+    shape: 'Shape',
+    shapeNote: 'One radius language, and one smallest touch target.',
+    shapePill: 'buttons and filter chips',
+    shapeCard: 'cards and panels',
+    shapeTouch: 'nothing smaller answers to a thumb',
+    ctaNote: 'The theme\u2019s loud button. Not used on operating screens: orange already means \u201cin service\u201d here, and one colour cannot be both a state and a command.',
+    stateNames: {
+      default: 'Default',
+      hover: 'Hover',
+      pressed: 'Pressed',
+      focus: 'Focus',
+      disabled: 'Disabled',
+      small: 'Small',
+      selected: 'Selected',
+    },
+  },
+
   settings: {
     title: 'Settings',
     users: 'People and logins',
@@ -286,6 +334,24 @@ export const en = {
     addUser: 'Add a person',
     addModel: 'Add a model',
     addVehicle: 'Add a moped',
+    points: 'Points',
+    addPoint: 'Add a point',
+  },
+
+  points: {
+    name: 'Name',
+    note: 'Note',
+    order: 'Order',
+    vehicles: 'Mopeds',
+    hint: 'What the place is called out loud: yard, showroom, workshop.',
+    noteHint: 'Gate code, whose key it is — what to know before going there.',
+    empty: 'No points yet. Add the first one and mopeds gain an address.',
+    archive: 'Retire',
+    restore: 'Bring back',
+    atCustomer: 'At the customer',
+    unset: 'Not set',
+    place: 'Where',
+    rented: 'This moped is with a customer; it takes a point back on return.',
   },
 
   users: {
@@ -371,6 +437,9 @@ export const en = {
   },
 
   balance: {
+    owes: (sum: string) => `Owes ${sum}`,
+    overpaid: (sum: string) => `Paid ${sum} ahead`,
+    clear: 'Nothing owed',
     title: 'Balance',
     invoiced: 'Charged',
     paid: 'Paid',
@@ -380,6 +449,15 @@ export const en = {
   },
 
   statements: {
+    previewTitle: 'What this file would add',
+    previewNew: 'new lines',
+    previewKnown: 'already in',
+    previewIn: 'incoming',
+    previewOut: 'outgoing',
+    previewConfirm: 'Load it',
+    importCta: 'Load a statement',
+    looksLike: 'Looks like',
+    otherHints: (n: number) => `${n} more`,
     title: 'Statements',
     upload: 'Load a statement',
     uploadHint: 'CSV as the bank exports it: StatementExport.csv from Bank of Georgia, transactions_history.csv from TBC. Loading the same file twice changes nothing.',

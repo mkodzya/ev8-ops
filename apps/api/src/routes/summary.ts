@@ -1,4 +1,4 @@
-import { VEHICLE_STATES, effectiveRentalStatus, todayISO, type VehicleState } from '@ev8/shared';
+import { VEHICLE_STATES, effectiveRentalStatus, overdueDays, todayISO, type VehicleState } from '@ev8/shared';
 import type { FastifyInstance } from 'fastify';
 import { dateFromISO, isoDate } from '../lib/dates.js';
 import { prisma } from '../lib/db.js';
@@ -15,7 +15,18 @@ export function summaryRoutes(app: FastifyInstance): void {
       prisma.vehicle.groupBy({ by: ['state'], where: { archived: false }, _count: { _all: true } }),
       prisma.rental.findMany({
         where: { status: { in: ['active', 'overdue'] } },
-        select: { id: true, status: true, pickedUpOn: true, paidThrough: true, vinUnconfirmed: true },
+        select: {
+          id: true,
+          number: true,
+          status: true,
+          pickedUpOn: true,
+          paidThrough: true,
+          vinUnconfirmed: true,
+          customer: { select: { id: true, name: true, nameKa: true, nameLat: true, phone: true } },
+          // What is owed comes from the periods that were not paid, like
+          // everywhere else — there is no stored debt to disagree with them.
+          periods: { where: { payStatus: { not: 'paid' } }, select: { amountTetri: true, paidTetri: true } },
+        },
       }),
       prisma.customer.count({ where: { archived: false } }),
       prisma.deposit.aggregate({ where: { status: 'held' }, _sum: { amountTetri: true }, _count: { _all: true } }),
@@ -41,16 +52,31 @@ export function summaryRoutes(app: FastifyInstance): void {
     let overdue = 0;
     let active = 0;
     let withoutVin = 0;
+    // The overdue rentals themselves, deepest first: a count tells nobody who
+    // to call (U2). The days come from the same rule the rental card uses.
+    const overdueList: { id: string; number: string; customer: { id: string; name: string; phone: string | null }; days: number; debtTetri: number }[] = [];
     for (const r of rentals) {
-      const status = effectiveRentalStatus(r.status, isoDate(r.paidThrough), isoDate(r.pickedUpOn), today);
-      if (status === 'overdue') overdue++;
-      else active++;
+      const pickedUpOn = isoDate(r.pickedUpOn);
+      const paidThroughDate = isoDate(r.paidThrough);
+      const status = effectiveRentalStatus(r.status, paidThroughDate, pickedUpOn, today);
+      if (status === 'overdue') {
+        overdue++;
+        overdueList.push({
+          id: r.id,
+          number: r.number,
+          customer: r.customer,
+          days: pickedUpOn ? overdueDays(paidThroughDate, pickedUpOn, today) : 0,
+          debtTetri: r.periods.reduce((n, p) => n + (p.amountTetri - p.paidTetri), 0),
+        });
+      } else active++;
       if (r.vinUnconfirmed) withoutVin++;
     }
+    overdueList.sort((a, b) => b.days - a.days || b.debtTetri - a.debtTetri);
     return {
       today,
       fleet,
       rentals: { active, overdue, withoutVin },
+      overdueList,
       customers,
       deposits: { held: depositsHeld._count._all, heldTetri: depositsHeld._sum.amountTetri ?? 0 },
       // What today asks a person to do, not only what it counts (DSH-01).

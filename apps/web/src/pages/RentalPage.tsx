@@ -1,6 +1,6 @@
 import type { ActKind, DepositStatus, PeriodPayStatus, RentalStatus } from '@ev8/shared';
 import { useState } from 'react';
-import { parseGel, type VehicleState } from '@ev8/shared';
+import { parseGel, todayISO, type VehicleState } from '@ev8/shared';
 import { Field } from '../components/Wizard.js';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../api.js';
@@ -12,6 +12,15 @@ import { fmtDate, formatGel } from '../format.js';
 import { useT } from '../i18n/index.js';
 import { errorText, useLoad } from '../lib/use.js';
 import { useSession } from '../session.js';
+
+/** Paid, part-paid, the week we are in, late, or not yet started. */
+function periodTone(p: { startsOn: string; endsOn: string; payStatus: PeriodPayStatus }, today: string): string {
+  if (p.payStatus === 'paid') return 'paid';
+  if (p.payStatus === 'partial') return 'partial';
+  if (p.endsOn < today) return 'late';
+  if (p.startsOn <= today) return 'current';
+  return 'ahead';
+}
 
 export interface RentalCard {
   rental: {
@@ -50,9 +59,19 @@ export function RentalPage() {
   const { data, error, reload } = useLoad<RentalCard>(id ? `/api/rentals/${id}` : null);
   const [err, setErr] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
+  // Which document is showing in the card, if any (U15). Printing is the last
+  // step of every hand-over and every return, and a link that opens a new tab
+  // is a step where people find out the PDF was wrong after they printed it.
+  // Declared with the other hooks: below the early returns it would be called
+  // on some renders and not others, which React counts and then throws on.
+  const [preview, setPreview] = useState<'contract' | 'return-act' | null>(null);
   if (error) return <Empty text={error} />;
   if (!data) return <Loading />;
   const r = data.rental;
+  const today = todayISO();
+  // Owed is the unpaid part of the weeks, the same arithmetic the list and
+  // "Today" use. Nothing here is stored.
+  const debtTetri = data.periods.reduce((n, p) => n + (p.payStatus === 'paid' ? 0 : p.amountTetri - p.paidTetri), 0);
   const d = data.deposit;
   const open = r.status !== 'returned';
   const decided = d && d.status !== 'held';
@@ -73,13 +92,13 @@ export function RentalPage() {
         <RentalBadge status={r.status} />
         {r.odooName && <span className="muted mono">{r.odooName}</span>}
         <span className="spacer" />
-        <a className="pill pill-sm" href={`/api/rentals/${r.id}/contract.pdf`} target="_blank" rel="noreferrer">
+        <button type="button" className={`pill pill-sm ${preview === 'contract' ? 'on' : ''}`} onClick={() => setPreview((p) => (p === 'contract' ? null : 'contract'))}>
           {t.docs.contract}
-        </a>
+        </button>
         {!open && can('rental.return') && (
-          <a className="pill pill-sm" href={`/api/rentals/${r.id}/return-act.pdf`} target="_blank" rel="noreferrer">
+          <button type="button" className={`pill pill-sm ${preview === 'return-act' ? 'on' : ''}`} onClick={() => setPreview((p) => (p === 'return-act' ? null : 'return-act'))}>
             {t.docs.returnAct}
-          </a>
+          </button>
         )}
         {open && can('rental.create') && (
           <button type="button" className="pill pill-sm" onClick={() => setEditing((v) => !v)}>
@@ -112,6 +131,65 @@ export function RentalPage() {
           </a>{' '}
           — {t.docs.regenerateHint}
         </p>
+      )}
+
+      {preview && (
+        <section className="card doc-card">
+          <div className="doc-head">
+            <h2>{preview === 'contract' ? t.docs.contract : t.docs.returnAct}</h2>
+            <span className="spacer" />
+            <a className="pill pill-sm" href={`/api/rentals/${r.id}/${preview}.pdf`} target="_blank" rel="noreferrer">
+              {t.docs.openTab}
+            </a>
+            <button type="button" className="pill pill-sm" onClick={() => setPreview(null)}>
+              {t.actions.cancel}
+            </button>
+          </div>
+          {/* The browser's own PDF viewer. It prints, and what it prints is
+              the file the customer gets — not a picture of it. */}
+          <iframe className="doc-frame" title={preview} src={`/api/rentals/${r.id}/${preview}.pdf`} />
+        </section>
+      )}
+
+      {/* The answer first: paid through, what is owed, and the weeks as a
+          strip you can read without counting rows (U6). The table with the
+          amounts is one level down, where a list belongs (ux.md, 5). */}
+      <section className="card paid-hero">
+        <div className="paid-head">
+          <div>
+            <p className="t-label">{t.rentals.paidThrough}</p>
+            <p className="paid-date">{fmtDate(r.paidThrough)}</p>
+          </div>
+          {debtTetri > 0 && (
+            <div className="paid-debt">
+              <p className="t-label">{t.rental.owed}</p>
+              <p className="t-money crit-text paid-sum">{formatGel(debtTetri)}</p>
+            </div>
+          )}
+        </div>
+        {data.periods.length > 0 && (
+          <>
+            <ol className="strip">
+              {data.periods.map((p) => (
+                <li key={p.seq} className={`strip-seg strip-${periodTone(p, today)}`} title={`${fmtDate(p.startsOn)} — ${fmtDate(p.endsOn)}`}>
+                  <span className="strip-seq">{p.seq}</span>
+                </li>
+              ))}
+            </ol>
+            <p className="t-label strip-ends">
+              <span className="mono">{fmtDate(data.periods[0].startsOn)}</span>
+              <span className="mono">{fmtDate(data.periods[data.periods.length - 1].endsOn)}</span>
+            </p>
+          </>
+        )}
+      </section>
+
+      {!r.returnedOn && can('rental.return') && (
+        <div className="page-actions">
+          <Link className="pill pill-accent pill-wide" to={`/rentals/${r.id}/return`}>
+            {t.actions.returnRental}
+          </Link>
+        </div>
       )}
 
       <div className="two-col">

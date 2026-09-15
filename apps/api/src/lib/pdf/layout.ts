@@ -1,3 +1,4 @@
+import { tokens } from '@ev8/shared';
 import { gap, heightOf, keepTogether, write, type Doc } from './doc.js';
 
 // Bilingual blocks. Georgian carries the legal weight and sits first at full
@@ -11,8 +12,8 @@ export interface Bi {
   en: string;
 }
 
-const EN = '#5d6b5d';
-const RULE = '#dbe4de';
+const EN = tokens.muted;
+const RULE = tokens.line;
 
 export function h1(doc: Doc, t: Bi): void {
   write(doc, t.ka, { bold: true, size: 15, align: 'center' });
@@ -47,7 +48,7 @@ export function bullet(doc: Doc, t: Bi): void {
   const w = doc.width - indent;
   // The dot and the first line must not be separated; the rest may flow.
   keepTogether(doc, 24);
-  doc.pdf.circle(doc.left + 3.5, doc.pdf.y + 5, 1.7).fillColor('#0b0b0b').fill();
+  doc.pdf.circle(doc.left + 3.5, doc.pdf.y + 5, 1.7).fillColor(tokens.ink).fill();
   write(doc, t.ka, { size: 9, x: doc.left + indent, width: w });
   write(doc, t.en, { size: 8, color: EN, x: doc.left + indent, width: w });
   gap(doc, 0.3);
@@ -92,14 +93,14 @@ export function check(doc: Doc, on: boolean, t: Bi, note?: string): void {
   // The box and its label stay together; a long note may wrap onward.
   keepTogether(doc, 26);
   const top = doc.pdf.y;
-  doc.pdf.rect(doc.left + 1, top + 1.5, box, box).lineWidth(0.7).strokeColor('#0b0b0b').stroke();
+  doc.pdf.rect(doc.left + 1, top + 1.5, box, box).lineWidth(0.7).strokeColor(tokens.ink).stroke();
   if (on) {
     doc.pdf
       .moveTo(doc.left + 3, top + 6)
       .lineTo(doc.left + 5, top + 8.5)
       .lineTo(doc.left + 8.5, top + 3.2)
       .lineWidth(1.3)
-      .strokeColor('#0b0b0b')
+      .strokeColor(tokens.ink)
       .stroke();
   }
   write(doc, ka, { size: 9, x: doc.left + indent, y: top, width: w });
@@ -127,7 +128,7 @@ export function signatures(doc: Doc, left: Bi & { name: string }, right: Bi & { 
     write(doc, sides[i].ka, { size: 9, bold: true, x: xs[i], width: colW });
     write(doc, sides[i].en, { size: 7.5, color: EN, x: xs[i], width: colW });
     const lineY = top + 38;
-    doc.pdf.moveTo(xs[i], lineY).lineTo(xs[i] + colW, lineY).lineWidth(0.6).strokeColor('#0b0b0b').stroke();
+    doc.pdf.moveTo(xs[i], lineY).lineTo(xs[i] + colW, lineY).lineWidth(0.6).strokeColor(tokens.ink).stroke();
     write(doc, sides[i].name, { size: 9, x: xs[i], y: lineY + 5, width: colW });
     maxY = Math.max(maxY, doc.pdf.y);
   }
@@ -142,8 +143,8 @@ export function stampPages(doc: Doc, footer: string): void {
     const y = doc.pdf.page.height - doc.pdf.page.margins.bottom + 20;
     const keep = doc.bottom;
     doc.bottom = doc.pdf.page.height; // the footer sits below the text frame
-    write(doc, footer, { size: 7, color: '#7a827a', x: doc.left, y, width: doc.width });
-    write(doc, `${i - range.start + 1} / ${range.count}`, { size: 7, color: '#7a827a', x: doc.left, y, width: doc.width, align: 'right' });
+    write(doc, footer, { size: 7, color: tokens.grey, x: doc.left, y, width: doc.width });
+    write(doc, `${i - range.start + 1} / ${range.count}`, { size: 7, color: tokens.grey, x: doc.left, y, width: doc.width, align: 'right' });
     doc.bottom = keep;
   }
 }

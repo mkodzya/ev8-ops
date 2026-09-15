@@ -14,7 +14,10 @@ services:
       # the disposable database they insist on. Laptop stack only.
       - ./deploy/db-init:/docker-entrypoint-initdb.d:ro
     ports:
-      - "${DB_PORT:-5433}:5432"
+      # Loopback only: the database answers to this Mac and to the compose
+      # network, never to the café wifi. The stands keep it off the host
+      # entirely (docker-compose.stand.yml).
+      - "127.0.0.1:${DB_PORT:-5433}:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ev8ops} -d ${POSTGRES_DB:-ev8ops}"]
       interval: 5s
@@ -30,8 +33,9 @@ services:
       SESSION_SECRET: ${SESSION_SECRET:-dev-secret-change-me}
       WORKER_TOKEN: ${WORKER_TOKEN:-dev-worker-token}
       # The laptop stack says so out loud, so the API accepts the development
-      # secret. The server compose does not set this; a weak secret there
-      # stops the boot.
+      # secret and the development worker token. A stand overlays
+      # docker-compose.stand.yml, which turns this off and demands real ones;
+      # a weak secret there stops the boot.
       ALLOW_DEV_SECRET: "true"
       API_PORT: "8080"
       TZ: ${TZ:-Asia/Tbilisi}

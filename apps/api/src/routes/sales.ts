@@ -20,7 +20,7 @@ import { moveVehicle } from '../lib/vehicles.js';
 type Body = Record<string, unknown>;
 
 const INCLUDE = {
-  customer: { select: { id: true, name: true, phone: true } },
+  customer: { select: { id: true, name: true, nameKa: true, nameLat: true, phone: true } },
   vehicle: { select: { id: true, vin: true, model: { select: { brand: true, name: true } } } },
   instalments: { orderBy: { seq: 'asc' } },
 } as const;

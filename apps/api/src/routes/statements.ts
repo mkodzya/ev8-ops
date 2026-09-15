@@ -5,7 +5,7 @@ import { prisma } from '../lib/db.js';
 import { badRequest, conflict, notFound } from '../lib/errors.js';
 import { actorOf } from '../lib/guard.js';
 import { recordPayment } from '../lib/payments.js';
-import { hintsFor, importStatement } from '../lib/statements/import.js';
+import { hintsFor, hintsForLines, importStatement, previewStatement } from '../lib/statements/import.js';
 import { ParseError } from '../lib/statements/parse.js';
 import { str } from '../lib/validate.js';
 
@@ -66,6 +66,25 @@ export function statementRoutes(app: FastifyInstance): void {
     },
   );
 
+  /** The same file, read but not kept: what it would add (U8). */
+  app.post<{ Body: Body }>(
+    '/api/statements/preview',
+    { config: { scope: 'payments.reconcile' }, bodyLimit: BODY_LIMIT },
+    async (req) => {
+      const b = req.body ?? {};
+      const fileName = str(b, 'fileName', { required: true, max: 200 })!;
+      const text = typeof b.text === 'string' ? b.text : null;
+      if (!text) throw badRequest('missing_field', 'text is required', { field: 'text' });
+      if (Buffer.byteLength(text, 'utf8') > MAX_BYTES) throw badRequest('file_too_big', 'Statements up to 8 MB.');
+      try {
+        return await previewStatement({ fileName, text });
+      } catch (e) {
+        if (e instanceof ParseError) throw badRequest('unreadable_statement', e.message);
+        throw e;
+      }
+    },
+  );
+
   /** The queue: lines nobody could place, newest first. */
   app.get('/api/statement-lines', { config: { scope: 'payments.reconcile' } }, async () => {
     const lines = await prisma.statementLine.findMany({
@@ -74,6 +93,9 @@ export function statementRoutes(app: FastifyInstance): void {
       take: 200,
       include: { statement: { select: { bank: true, fileName: true } } },
     });
+    // The hints come with the queue rather than after a tap: "looks like
+    // Vakhtang Demo, R-00001" is what turns a row into a decision (U7).
+    const hints = await hintsForLines(lines);
     return {
       lines: lines.map((l) => ({
         id: l.id,
@@ -86,6 +108,7 @@ export function statementRoutes(app: FastifyInstance): void {
         purpose: l.purpose,
         raw: l.raw,
         fileName: l.statement.fileName,
+        hints: hints.get(l.id) ?? [],
       })),
     };
   });

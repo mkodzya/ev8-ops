@@ -1,0 +1,46 @@
+# EV8 Ops — the overlay a stand runs with.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.stand.yml up -d
+#
+# docker-compose.yml on its own is the laptop stack: it accepts the published
+# development secret, ships a password default and can be told to seed demo
+# rows. None of that may reach a machine on the internet, so every one of those
+# affordances is withdrawn here, and the values that replace them have no
+# defaults at all — an unset variable stops `docker compose` with the message
+# written beside it rather than booting something that looks like it works.
+#
+# The stands do not exist yet (hosting is still Mika's decision). This file is
+# here first on purpose: the base compose used to promise a server compose that
+# had never been written, and a promise like that is how a development secret
+# ends up in production.
+services:
+  db:
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?a stand needs its own database password}
+    # Not on the host at all: the API reaches it over the compose network.
+    ports: !override []
+
+  api:
+    environment:
+      # Held to the real rule: 32 characters or more, not the published
+      # development value. apps/api/src/lib/env.ts refuses the boot otherwise.
+      SESSION_SECRET: ${SESSION_SECRET:?generate one — openssl rand -base64 48}
+      WORKER_TOKEN: ${WORKER_TOKEN:?generate one — openssl rand -base64 48}
+      # The first owner login, and only on an empty database. Never a default.
+      OWNER_PASSWORD: ${OWNER_PASSWORD:?the first owner login needs a password}
+      OWNER_EMAIL: ${OWNER_EMAIL:?the first owner login needs an address}
+      # Off, so a weak secret stops the boot instead of being waved through.
+      ALLOW_DEV_SECRET: "false"
+      # Empty, always. The demo dataset refuses to run without ALLOW_DEV_SECRET
+      # anyway; this is the second lock on the same door.
+      SEED_MODE: ""
+    # The browser never calls the API directly — web proxies /api inside the
+    # compose network — so it needs no port on the host.
+    ports: !override []
+
+  web:
+    environment:
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:?the stand's own hostname, so vite answers to it}
+    # Loopback only. TLS is terminated in front of it by the reverse proxy on
+    # the host; nothing on this stack listens on a public interface.
+    ports: !override ["127.0.0.1:${WEB_PORT:-5175}:5173"]

@@ -1,6 +1,8 @@
 import type { RentalStatus, VehicleState } from '@ev8/shared';
-import { useT } from '../i18n/index.js';
+import { useLocale, useT } from '../i18n/index.js';
 import { vinParts } from '../format.js';
+import { primaryName, secondName, type Named } from '../lib/names.js';
+import { placeOf, type Place } from '../lib/place.js';
 
 /** Colour + shape + word, the same everywhere (brand.md). */
 export function StateBadge({ state }: { state: VehicleState }) {
@@ -40,4 +42,33 @@ export function Empty({ text }: { text: string }) {
 export function Loading() {
   const t = useT();
   return <p className="empty">{t.common.loading}</p>;
+}
+
+/**
+ * A person's name in the language of the interface, with the other spelling
+ * behind it in grey when it differs (U14). One component, so a list and a
+ * card never disagree about which of a customer's three spellings leads.
+ */
+export function CustomerName({ of, second = true }: { of: Named; second?: boolean }) {
+  const { locale } = useLocale();
+  const other = second ? secondName(of, locale) : null;
+  return (
+    <>
+      {primaryName(of, locale)}
+      {other && <span className="muted name-alt">{other}</span>}
+    </>
+  );
+}
+
+/**
+ * Where a moped stands. Three answers and no fourth: a point we named, the
+ * customer who has it, or nobody has said — the last one reads as a question
+ * rather than as a blank, because that is what it is.
+ */
+export function PlaceText({ of }: { of: { state: VehicleState; location: { name: string } | null } }) {
+  const t = useT();
+  const place: Place = placeOf(of);
+  if (place.kind === 'point') return <span>{place.name}</span>;
+  if (place.kind === 'customer') return <span className="muted">{t.points.atCustomer}</span>;
+  return <span className="place-unset">{t.points.unset}</span>;
 }

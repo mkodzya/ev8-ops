@@ -1,3 +1,4 @@
+import { tokens } from '@ev8/shared';
 import { finish, gap, newDoc, write } from './doc.js';
 import { COMPANY, DISCLAIMER, LESSEE, LESSOR, dmy, gel } from './company.js';
 import { check, field, h1, h2, para, rule, signatures, stampPages } from './layout.js';
@@ -72,8 +73,8 @@ export async function renderReturnAct(d: ReturnActData): Promise<Buffer> {
   });
   write(doc, `№ ${d.number} · ${dmy(d.returnedOn)}`, { align: 'center', size: 9.5, bold: true });
   gap(doc, 0.2);
-  write(doc, DISCLAIMER.ka, { size: 6.5, align: 'center', color: '#7a827a' });
-  write(doc, DISCLAIMER.en, { size: 6.5, align: 'center', color: '#7a827a' });
+  write(doc, DISCLAIMER.ka, { size: 6.5, align: 'center', color: tokens.grey });
+  write(doc, DISCLAIMER.en, { size: 6.5, align: 'center', color: tokens.grey });
   rule(doc);
 
   h2(doc, { ka: '1. მხარეები', en: '1. Parties' });

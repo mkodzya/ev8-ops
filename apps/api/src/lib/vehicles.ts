@@ -49,6 +49,10 @@ export async function moveVehicle(
     data: {
       state: to,
       currentRentalId: input.kind === 'pickup' ? input.rentalId ?? null : to === 'rented' ? v.currentRentalId : null,
+      // A moped that has left for a customer is at that customer, not at a
+      // point of ours. Keeping the yard it left would be a second answer to
+      // "where is it", and the wrong one.
+      locationId: to === 'rented' ? null : v.locationId,
       updatedAt: new Date(),
     },
   });

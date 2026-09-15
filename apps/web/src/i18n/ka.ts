@@ -25,6 +25,7 @@ export const ka: Dict = {
 
   nav: {
     today: 'დღეს',
+    more: 'მეტი',
     fleet: 'პარკი',
     rentals: 'ქირაობა',
     payments: 'გადახდები',
@@ -64,6 +65,15 @@ export const ka: Dict = {
     customers: 'კლიენტები',
     pickedUp: 'დღეს გაცემული',
     dueBack: 'დღეს დასაბრუნებელი',
+    overdueList: 'ვადაგადაცილებული, ღრმა ზემოთ',
+    daysOverdue: (n: number) => `გადაცილება ${n} დღე`,
+    remind: 'შეხსენება',
+    markPaid: 'გადახდის აღრიცხვა',
+    goOpen: 'გახსნა',
+    goReturn: 'დაბრუნების გაფორმება',
+    goSort: 'დახარისხება',
+    clear: 'არაფერი არ ელოდება.',
+    clearNote: 'დღეს არც დაბრუნება, არც გაცემა, ვადაგადაცილებული არ არის, ბანკის დაუხარისხებელი სტრიქონიც არა.',
     depositsHeld: 'დეპოზიტები ხელზე',
     empty: 'მონაცემები ჯერ არ არის. გაუშვით იმპორტი Odoo-დან (tools/migrate_stage1.py), რომ შეივსოს პარკი, კლიენტები და ქირაობა.',
   },
@@ -78,6 +88,7 @@ export const ka: Dict = {
     state: 'მდგომარეობა',
     renter: 'მოქირავნე',
     paidThrough: 'გადახდილია',
+    where: 'სად დგას',
     searchHint: 'VIN-ის ბოლო 4 სიმბოლო',
     empty: 'პარკი ცარიელია.',
     count: (n: number) => `${n} მოპედი`,
@@ -115,6 +126,7 @@ export const ka: Dict = {
   },
 
   vehicle: {
+    backToFleet: 'პარკში დაბრუნება',
     title: 'მოპედი',
     history: 'ისტორია',
     rentalsOf: 'ქირაობა',
@@ -138,6 +150,7 @@ export const ka: Dict = {
   },
 
   rental: {
+    owed: 'დავალიანება',
     title: 'ქირაობა',
     periods: 'კვირის პერიოდები',
     week: 'კვირა',
@@ -195,6 +208,7 @@ export const ka: Dict = {
   },
 
   customer: {
+    whatsapp: 'WhatsApp',
     title: 'კლიენტი',
     newTitle: 'ახალი კლიენტი',
     name: 'სახელი (როგორც გუნდი წერს)',
@@ -232,6 +246,7 @@ export const ka: Dict = {
   },
 
   docs: {
+    openTab: 'ახალ ჩანართში',
     contract: 'ხელშეკრულება PDF',
     returnAct: 'დაბრუნების აქტი PDF',
     regenerate: 'დოკუმენტის ხელახლა აწყობა',
@@ -272,6 +287,39 @@ export const ka: Dict = {
     other: 'სხვა',
   },
 
+  design: {
+    title: 'საფუძვლები',
+    note: 'ტოკენები, ტექსტის სტილები და კომპონენტების მდგომარეობები ცოცხალ მნიშვნელობებზე — დიზაინის მიმოხილვა Figma-ს გარეშე. ყველაფერი იკითხება packages/shared/tokens.json-იდან.',
+    tokens: 'ტოკენები',
+    type: 'ტექსტის სტილები',
+    typeNote: 'თითოეული სტილი სამივე ანბანზე. არც Be Vietnam Pro-ს და არც Inter-ს აქვს ქართული ასოები, და შრიფტი მათ გარეშე ჩუმად გადადის სისტემურზე — ამიტომ ქართული სტრიქონი აქ არის.',
+    buttons: 'ღილაკები',
+    buttonsNote: 'ხუთი მდგომარეობა, აქცენტური და კონტურული. მინიშნება, დაჭერა და ფოკუსი ნაჩვენებია როგორც არის.',
+    states: 'მდგომარეობები',
+    statesNote: 'ხუთი მოპედისთვის, ექვსი ქირისთვის.',
+    statesShape: 'ფერი არასოდეს არის მარტო: ყოველ მდგომარეობას აქვს ფორმაც და სიტყვაც, და სამივე ერთნაირია სიაში, ბარათზე და PDF-ში.',
+    data: 'ციფრები და იდენტიფიკატორები',
+    vin: 'VIN — ბოლო ოთხი ნიშანი',
+    money: 'თანხა',
+    debt: 'დავალიანება',
+    tile: 'ციფრი, რისთვისაც ეკრანია',
+    shape: 'ფორმა',
+    shapeNote: 'რადიუსების ერთი ენა და ერთი მინიმალური შეხების ზომა.',
+    shapePill: 'ღილაკები და ფილტრის ჩიპები',
+    shapeCard: 'ბარათები და პანელები',
+    shapeTouch: 'ამაზე ნაკლები თითს არ ეყოფა',
+    ctaNote: '\u10d7\u10d4\u10db\u10d8\u10e1 \u10ee\u10db\u10d0\u10db\u10d0\u10d2\u10d0\u10da\u10d8 \u10e6\u10d8\u10da\u10d0\u10d9\u10d8. \u10e1\u10d0\u10db\u10e3\u10e8\u10d0\u10dd \u10d4\u10d9\u10e0\u10d0\u10dc\u10d4\u10d1\u10d6\u10d4 \u10d0\u10e0 \u10d2\u10d0\u10db\u10dd\u10d8\u10e7\u10d4\u10dc\u10d4\u10d1\u10d0: \u10dc\u10d0\u10e0\u10d8\u10dc\u10ef\u10d8\u10e1\u10e4\u10d4\u10e0\u10d8 \u10d0\u10e5 \u10e3\u10d9\u10d5\u10d4 \u10dc\u10d8\u10e8\u10dc\u10d0\u10d5\u10e1 \u201e\u10e1\u10d4\u10e0\u10d5\u10d8\u10e1\u10e8\u10d8\u201c.',
+    stateNames: {
+      default: 'ჩვეულებრივი',
+      hover: 'მინიშნება',
+      pressed: 'დაჭერილი',
+      focus: 'ფოკუსი',
+      disabled: 'მიუწვდომელი',
+      small: 'პატარა',
+      selected: 'არჩეული',
+    },
+  },
+
   settings: {
     title: 'პარამეტრები',
     users: 'ხალხი და შესვლა',
@@ -279,6 +327,24 @@ export const ka: Dict = {
     addUser: 'ადამიანის დამატება',
     addModel: 'მოდელის დამატება',
     addVehicle: 'მოპედის დამატება',
+    points: 'წერტილები',
+    addPoint: 'წერტილის დამატება',
+  },
+
+  points: {
+    name: 'დასახელება',
+    note: 'შენიშვნა',
+    order: 'რიგი',
+    vehicles: 'მოპედი',
+    hint: 'როგორც ამ ადგილს ხმამაღლა ეძახით: საწყობი, შოურუმი, სერვისი.',
+    noteHint: 'ჭიშკრის კოდი, ვისთან არის გასაღები — რა უნდა იცოდე წასვლამდე.',
+    empty: 'წერტილები ჯერ არ არის. დაამატე პირველი და მოპედებს მისამართი გაუჩნდებათ.',
+    archive: 'მოხსნა',
+    restore: 'დაბრუნება',
+    atCustomer: 'კლიენტთან',
+    unset: 'არ არის მითითებული',
+    place: 'სად დგას',
+    rented: 'მოპედი კლიენტთანაა — წერტილს დაბრუნებისას მიიღებს.',
   },
 
   users: {
@@ -364,6 +430,9 @@ export const ka: Dict = {
   },
 
   balance: {
+    owes: (sum: string) => `ვალი ${sum}`,
+    overpaid: (sum: string) => `ზედმეტად გადახდილი ${sum}`,
+    clear: 'ვალი არ არის',
     title: 'ბალანსი',
     invoiced: 'დარიცხული',
     paid: 'გადახდილი',
@@ -373,6 +442,15 @@ export const ka: Dict = {
   },
 
   statements: {
+    previewTitle: 'რას დაამატებს ეს ფაილი',
+    previewNew: 'ახალი სტრიქონი',
+    previewKnown: 'უკვე ჩატვირთული',
+    previewIn: 'შემოსავალი',
+    previewOut: 'გასავალი',
+    previewConfirm: 'ჩატვირთვა',
+    importCta: 'ამონაწერის ატვირთვა',
+    looksLike: 'ჰგავს',
+    otherHints: (n: number) => `კიდევ ${n}`,
     title: 'ამონაწერები',
     upload: 'ამონაწერის ატვირთვა',
     uploadHint: 'CSV ისე, როგორც ბანკი გასცემს: StatementExport.csv — საქართველოს ბანკი, transactions_history.csv — თიბისი. ერთი ფაილის ორჯერ ატვირთვა არაფერს ცვლის.',

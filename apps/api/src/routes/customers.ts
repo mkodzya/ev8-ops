@@ -11,6 +11,31 @@ function canSeeIdentity(role: string): boolean {
 }
 
 export function customerRoutes(app: FastifyInstance): void {
+  /**
+   * Is this person already on a card? (U12, CST-02.)
+   *
+   * The same rule the create route enforces, asked before anybody fills in
+   * the rest of the form — a duplicate refused after typing nine fields is a
+   * duplicate somebody creates anyway with a changed digit.
+   */
+  app.get<{ Querystring: { phone?: string; personalId?: string } }>(
+    '/api/customers/lookup',
+    { config: { scope: 'customer.create' } },
+    async (req) => {
+      const phone = (req.query.phone ?? '').trim();
+      const personalId = (req.query.personalId ?? '').trim();
+      if (!phone && !personalId) return { existing: null };
+      const existing = await prisma.customer.findFirst({
+        where: {
+          archived: false,
+          OR: [...(personalId ? [{ personalId }] : []), ...(phone ? [{ phone }] : [])],
+        },
+        select: { id: true, name: true, phone: true },
+      });
+      return { existing };
+    },
+  );
+
   app.get('/api/customers', { config: { scope: 'fleet.view' } }, async (req) => {
     const identity = canSeeIdentity(req.actor!.role);
     const customers = await prisma.customer.findMany({
