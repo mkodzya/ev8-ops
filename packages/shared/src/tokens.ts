@@ -42,6 +42,14 @@ export const tokens = {
   greyInk: '#666666', // the word inside a sold pill, 5.2:1 on --surface-2
   grey: '#7a7a7a', // finished and sold; PDF footers (site --grey-06/03)
 
+  /** paint — What the six colour words look like, so the fleet's colour column can be read at a glance instead of spelled out. These are NOT paint codes: nobody has measured a moped, and Odoo holds a word and not a number. A swatch here depicts the word in the data — `Красный` — and nothing more. A word we do not know keeps being written out, because a guessed swatch would be a claim about a moped. */
+  paintBlack: '#1c1c1c', // not the ink: a moped read as black against white ink would disappear into it
+  paintWhite: '#ffffff', // invisible on the row, which is why every swatch carries a hairline
+  paintRed: '#d24b3a', // a red apart from --crit, which means overdue and must not be mistaken for paint
+  paintGreen: '#4f8a4f', // brighter than the brand green: this is a moped, not the wordmark
+  paintGrey: '#9a9a9a', // lighter than --grey so it does not read as disabled
+  paintPurple: '#7b5ea7', // for იისფერი, the only colour in the data with no Latin twin
+
   /** rail — The navigation rail is the one dark surface in a light app: brand black with the light logo. */
   rail: '#0b0b0b', // rail background
   railInk: '#c9d3c9', // rail text
@@ -295,6 +303,48 @@ export const tokenGroups: TokenGroup[] = [
         "cssVar": "--grey",
         "value": "#7a7a7a",
         "note": "finished and sold; PDF footers (site --grey-06/03)"
+      }
+    ]
+  },
+  {
+    "name": "paint",
+    "note": "What the six colour words look like, so the fleet's colour column can be read at a glance instead of spelled out. These are NOT paint codes: nobody has measured a moped, and Odoo holds a word and not a number. A swatch here depicts the word in the data — `Красный` — and nothing more. A word we do not know keeps being written out, because a guessed swatch would be a claim about a moped.",
+    "tokens": [
+      {
+        "name": "paintBlack",
+        "cssVar": "--paint-black",
+        "value": "#1c1c1c",
+        "note": "not the ink: a moped read as black against white ink would disappear into it"
+      },
+      {
+        "name": "paintWhite",
+        "cssVar": "--paint-white",
+        "value": "#ffffff",
+        "note": "invisible on the row, which is why every swatch carries a hairline"
+      },
+      {
+        "name": "paintRed",
+        "cssVar": "--paint-red",
+        "value": "#d24b3a",
+        "note": "a red apart from --crit, which means overdue and must not be mistaken for paint"
+      },
+      {
+        "name": "paintGreen",
+        "cssVar": "--paint-green",
+        "value": "#4f8a4f",
+        "note": "brighter than the brand green: this is a moped, not the wordmark"
+      },
+      {
+        "name": "paintGrey",
+        "cssVar": "--paint-grey",
+        "value": "#9a9a9a",
+        "note": "lighter than --grey so it does not read as disabled"
+      },
+      {
+        "name": "paintPurple",
+        "cssVar": "--paint-purple",
+        "value": "#7b5ea7",
+        "note": "for იისფერი, the only colour in the data with no Latin twin"
       }
     ]
   },

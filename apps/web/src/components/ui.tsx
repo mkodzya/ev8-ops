@@ -75,14 +75,18 @@ export function PlaceText({ of }: { of: { state: VehicleState; location: { name:
 }
 
 /**
- * A moped's colour, in the language of whoever is reading. Odoo holds the word
- * as it was typed — `შავი` on one card and `Black` on the next, the same
- * paint — so the screen says it once, its own way. A word nobody taught us is
- * shown exactly as it was typed: better an unfamiliar word than a wrong one.
+ * A moped's colour, drawn rather than spelled: a column of words in three
+ * alphabets was unreadable, and a column of colours is read without reading.
+ *
+ * The swatch depicts the word in the data and not the paint on the moped —
+ * Odoo holds `Красный`, never a number, and nobody has measured a fender. So
+ * a word we do not know is written out instead of being guessed at, and the
+ * word itself is always on the swatch for a pointer and for a screen reader.
  */
 export function ColorText({ of }: { of: string | null }) {
   const t = useT();
   const code = colorOf(of);
-  if (code) return <span>{t.colors[code]}</span>;
-  return <span>{of ?? t.common.dash}</span>;
+  if (code) return <span className={`swatch swatch-${code}`} title={t.colors[code]} aria-label={t.colors[code]} />;
+  // Not a colour we know, or none at all: the word as typed, or nothing.
+  return <span className="swatch-word">{of ?? ''}</span>;
 }
