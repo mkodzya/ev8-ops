@@ -14,6 +14,9 @@ import { movePool, moveVehicle } from '../lib/vehicles.js';
 
 type Body = Record<string, unknown>;
 
+/** How long a park move stays a slip that can be taken back rather than a decision. */
+const UNDO_WINDOW_MS = 10 * 60 * 1000;
+
 // Writes. Every one goes through the change journal.
 
 export function opsRoutes(app: FastifyInstance): void {
@@ -260,6 +263,35 @@ export function opsRoutes(app: FastifyInstance): void {
       return m;
     });
     return moved;
+  });
+
+  // Taking back a park move made a moment ago. A mis-click is not a decision,
+  // so the undone event leaves the moped's timeline rather than sitting there
+  // as history that never happened; the change journal keeps both halves, and
+  // that is where "who changed their mind" belongs. Only the person who made
+  // the move, only the last one, only while it is still fresh.
+  app.post<{ Params: { id: string } }>('/api/fleet/:id/pool/undo', { config: { scope: 'fleet.pool.set' } }, async (req) => {
+    const actor = actorOf(req);
+    const v = await prisma.vehicle.findUnique({ where: { id: req.params.id } });
+    if (!v) throw notFound('vehicle_not_found', 'No such moped.');
+    const last = await prisma.vehicleEvent.findFirst({
+      where: { vehicleId: v.id, kind: { in: ['to_rent', 'to_sale'] } },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (!last) throw conflict('nothing_to_undo', 'This moped has no park move to take back.');
+    if (last.actorId !== actor.id) throw conflict('not_yours', 'Only the person who moved it can take it back.');
+    if (Date.now() - last.createdAt.getTime() > UNDO_WINDOW_MS) {
+      throw conflict('too_late', 'That move is no longer fresh. Move it to the other park instead, which is a decision of its own.');
+    }
+    const back = last.fromPool;
+    await prisma.$transaction(async (tx) => {
+      await tx.vehicle.update({ where: { id: v.id }, data: { pool: back, updatedAt: new Date() } });
+      await tx.vehicleEvent.delete({ where: { id: last.id } });
+      await tx.auditLog.create({
+        data: { actorId: actor.id, action: 'vehicle.pool.undo', entityType: 'vehicle', entityId: v.id, before: { pool: last.toPool }, after: { pool: back } },
+      });
+    });
+    return { pool: back };
   });
 
   // ---- reference data: models and mopeds (owner) --------------------------
