@@ -83,6 +83,10 @@ export const tokens = {
   /** shape — One radius language: pills for buttons and chips, 16 px cards, nothing else. */
   radiusCard: '16px', // cards and panels
   radiusPill: '999px', // buttons and filter chips
+  controlDense: '34px', // the same control on a screen driven by a pointer rather than a thumb. From 900px up, where 44px is the thumb's measure and nobody's finger is on the glass
+  rowY: '8px', // a list row's air above and below, on a pointer screen. Every list in the system reads this, so a screen tightened here is not tightened again there
+  rowX: '10px', // a list row's air left and right, and the gap between its columns
+  cardPad: '14px', // inside a card, a tile, a number with its label. Was 18-20px, which is a poster's margin, not a working screen's
   control: '44px', // touch targets no smaller than 44 px (spec §9.2)
   railW: '220px', // the rail on a laptop
 } as const;
@@ -502,6 +506,30 @@ export const tokenGroups: TokenGroup[] = [
         "cssVar": "--radius-pill",
         "value": "999px",
         "note": "buttons and filter chips"
+      },
+      {
+        "name": "controlDense",
+        "cssVar": "--control-dense",
+        "value": "34px",
+        "note": "the same control on a screen driven by a pointer rather than a thumb. From 900px up, where 44px is the thumb's measure and nobody's finger is on the glass"
+      },
+      {
+        "name": "rowY",
+        "cssVar": "--row-y",
+        "value": "8px",
+        "note": "a list row's air above and below, on a pointer screen. Every list in the system reads this, so a screen tightened here is not tightened again there"
+      },
+      {
+        "name": "rowX",
+        "cssVar": "--row-x",
+        "value": "10px",
+        "note": "a list row's air left and right, and the gap between its columns"
+      },
+      {
+        "name": "cardPad",
+        "cssVar": "--card-pad",
+        "value": "14px",
+        "note": "inside a card, a tile, a number with its label. Was 18-20px, which is a poster's margin, not a working screen's"
       },
       {
         "name": "control",
