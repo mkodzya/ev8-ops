@@ -606,13 +606,15 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
 }
 
 /* ---- Fleet: segments that stay, rows that change shape (U3) ---------- */
+/* Only the park row sticks. The cards below it are data, and data that
+   follows you down a list of forty-eight rows is a wall, not a help. */
 .segments {
   position: sticky;
   top: 0;
   z-index: 5;
   background: var(--bg);
-  padding: 8px 0 12px;
-  margin-bottom: 4px;
+  padding: 8px 0 10px;
+  margin-bottom: 0;
 }
 .seg-row { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 6px; scrollbar-width: none; }
 .seg-row::-webkit-scrollbar { display: none; }
@@ -639,13 +641,74 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
 .seg-rented.on { background: var(--info-soft); border-color: var(--rented); }
 .seg-service.on { background: var(--warn-soft); border-color: var(--service); }
 .seg-out.on { background: var(--crit-soft); border-color: var(--crit); }
-.segments .input-search { width: 100%; }
+/* The park row reads as the heading of the two below it: bigger type, and a
+   filled pill when chosen, so the state row underneath is plainly inside it. */
+.seg-pools { margin-bottom: 2px; }
+.seg-pool { font: var(--text-button); min-height: 42px; }
+.seg-pool.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.seg-pool.on .seg-num { color: var(--on-accent); opacity: 0.72; }
+.seg-pool-none.on { background: var(--service); border-color: var(--service); }
+.seg-pool-gone.on { background: var(--grey); border-color: var(--grey); }
+
+/* The park's numbers, which are also its filter: a number, the state it
+   stands for, and what that state costs or brings. */
+.kpis { display: grid; gap: 10px; margin-bottom: 14px; }
+.kpis-2 { grid-template-columns: repeat(2, 1fr); }
+.kpis-3 { grid-template-columns: repeat(3, 1fr); }
+.kpis-4 { grid-template-columns: repeat(4, 1fr); }
+.kpi {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  padding: 14px 16px;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  transition: var(--ease);
+}
+.kpi:hover { border-color: var(--accent-hover); }
+.kpi.on { background: var(--accent-soft); border-color: var(--accent); }
+.kpi-warn { border-color: var(--service); }
+.kpi-warn .k-n { color: var(--service-ink); }
+.kpi-warn.on { background: var(--warn-soft); }
+.k-n { display: block; font: var(--text-h2); }
+.k-l { display: block; margin-top: 2px; }
+.k-s { display: block; font: var(--text-label); color: var(--muted); margin-top: 6px; }
+@media (max-width: 719px) {
+  .kpis { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .kpi { padding: 10px 12px; }
+  .k-n { font: var(--text-h3); }
+  .k-s { display: none; }
+}
+/* Which park a row is in, said only where both are on screen at once. */
+.pool-mark { font: var(--text-label); color: var(--accent); }
+.v-pool {
+  display: block;
+  font: var(--text-overline);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-top: 3px;
+}
+
+/* Search sits beside the title on a laptop and takes the next line on a
+   phone, where 210px next to a heading leaves room for four characters. */
+.page-head { flex-wrap: wrap; row-gap: 10px; }
+.page-head .input-search { width: 210px; }
+.page-head .pill { white-space: nowrap; }
+@media (max-width: 599px) {
+  .page-head .input-search { flex: 1 0 100%; width: auto; order: 3; }
+  .page-head .pill { order: 2; }
+}
 
 .vlist { list-style: none; margin: 0; padding: 0; }
 .vlist-head { display: none; }
 .vrow {
   display: grid;
-  grid-template-areas: 'state paid' 'vin renter' 'model renter' 'where where';
+  grid-template-areas: 'state quiet' 'vin vin' 'model model' 'where where' 'move move';
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 2px 12px;
   padding: 12px 14px;
@@ -657,18 +720,38 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
 .v-state { grid-area: state; font: var(--text-h3); }
 .v-vin { grid-area: vin; }
 .v-model { grid-area: model; font: var(--text-label); color: var(--muted); }
-.v-renter { grid-area: renter; text-align: right; }
-.v-paid { grid-area: paid; text-align: right; color: var(--muted); }
+.v-quiet { grid-area: quiet; text-align: right; color: var(--muted); }
+/* Two classes on purpose: the column's muted grey is restated at 900 px and
+   would otherwise win on source order alone. */
+.v-quiet.v-loud { color: var(--crit); }
+.v-move { grid-area: move; display: flex; gap: 6px; flex-wrap: wrap; }
+.v-move:empty { display: none; }
+.mv {
+  border: var(--hairline) solid var(--line-soft);
+  border-radius: var(--radius-pill);
+  background: none;
+  padding: 5px 11px;
+  font: var(--text-label);
+  color: var(--muted);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: var(--ease);
+}
+.mv:hover { border-color: var(--service); color: var(--service-ink); }
+.mv:disabled { opacity: 0.5; cursor: default; }
+/* "Paid through" belongs under the name it is about, not in a column of its own. */
+.v-paid { display: block; font: var(--text-label); color: var(--muted); }
 .v-where { grid-area: where; font: var(--text-label); color: var(--muted); margin-top: 2px; }
 /* A point nobody has named is a question, not an empty cell. */
 .place-unset { color: var(--service); }
-/* Colour, year and arrival are card facts, not list facts. */
-.v-color, .v-arrived, .v-year { display: none; }
+/* Colour is a card fact on a phone; year and arrival left the list entirely. */
+.v-color { display: none; }
 /* On a phone the whole VIN is noise: the last four are what anyone reads,
    and a column of em dashes where a free moped has no renter is worse than
    the silence it stands for. */
 @media (max-width: 899px) {
   .v-none { display: none; }
+  .v-color { display: none; }
   .vrow .vin-head { color: var(--muted); }
   .v-vin .vin { font: var(--text-mono); }
   .v-vin .vin-tail { font: var(--text-money); }
@@ -679,7 +762,7 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
   .vlist-head, .vrow {
     display: grid;
     grid-template-areas: none;
-    grid-template-columns: 200px minmax(120px, 1fr) 100px 60px 110px 150px 170px minmax(120px, 1fr) 110px;
+    grid-template-columns: 170px minmax(100px, 1fr) 80px 140px minmax(150px, 1.2fr) 80px 150px;
     align-items: center;
     gap: 12px;
     padding: 10px 12px;
@@ -700,9 +783,15 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
   /* Nine columns do not always fit; the list scrolls sideways rather than
      the page doing it. */
   .vlist { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-card); padding: 8px 4px; overflow-x: auto; }
-  .vlist-head, .vrow { min-width: 1110px; }
-  .v-state, .v-vin, .v-model, .v-color, .v-year, .v-arrived, .v-where, .v-renter, .v-paid { grid-area: auto; text-align: left; font: var(--text-body-sm); color: inherit; display: block; }
+  .vlist-head, .vrow { min-width: 940px; }
+  .v-state, .v-vin, .v-model, .v-color, .v-where, .v-quiet, .v-move { grid-area: auto; text-align: left; font: var(--text-body-sm); color: inherit; display: block; }
   .v-where { margin-top: 0; }
+  .v-quiet { text-align: right; color: var(--muted); }
+  /* Stacked and right-aligned: a moped in neither park offers two moves, and
+     side by side they wrap into the column next door. Always visible — an
+     action that appears only under a pointer is an action nobody finds. */
+  .v-move { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+  .vlist-head .num { text-align: right; }
 }
 
 /* ---- one action per screen, where the thumb is (U4) ------------------ */
@@ -804,4 +893,69 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
 .doc-frame { width: 100%; height: 70vh; min-height: 420px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-2); }
 @media (max-width: 719px) {
   .doc-frame { height: 60vh; min-height: 320px; }
+}
+
+/* ---- a panel that comes in from the right (Drawer.tsx) ---------------- */
+.no-scroll { overflow: hidden; }
+.drawer-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  justify-content: flex-end;
+  background: var(--scrim-soft);
+}
+.drawer {
+  display: flex;
+  flex-direction: column;
+  width: min(420px, 100%);
+  height: 100%;
+  background: var(--surface);
+  border-left: 1px solid var(--line);
+  box-shadow: var(--shadow);
+}
+.drawer-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.drawer-head h2 { margin: 0; font: var(--text-h3); }
+.drawer-x {
+  margin-left: auto;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font-size: 18px;
+  line-height: 1;
+  padding: 6px 8px;
+  cursor: pointer;
+  border-radius: var(--radius-pill);
+  transition: var(--ease);
+}
+.drawer-x:hover { color: var(--service-ink); background: var(--surface-2); }
+.drawer-body { flex: 1; overflow-y: auto; padding: 20px; }
+.drawer-body .form { margin: 0; }
+.drawer-body .two-col { grid-template-columns: 1fr; gap: 0; margin-bottom: 0; }
+.drawer-tip {
+  margin: 18px 0 0;
+  padding-top: 14px;
+  border-top: 1px solid var(--line-soft);
+  font: var(--text-label);
+  color: var(--muted);
+}
+/* On a phone a 420px panel is a page with wallpaper down one side, so it
+   becomes a sheet from the bottom, where the thumb already is. */
+@media (max-width: 719px) {
+  .drawer-scrim { align-items: flex-end; }
+  .drawer {
+    width: 100%;
+    height: auto;
+    max-height: 90%;
+    border-left: 0;
+    border-top: 1px solid var(--line);
+    border-radius: var(--radius-card) var(--radius-card) 0 0;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
 }

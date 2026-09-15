@@ -1,4 +1,4 @@
-import { VEHICLE_STATES, type RentalStatus, type VehicleEventKind, type VehicleState } from '@ev8/shared';
+import { VEHICLE_POOLS, VEHICLE_STATES, isPoolEvent, type RentalStatus, type VehicleEventKind, type VehiclePool, type VehicleState } from '@ev8/shared';
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../api.js';
@@ -21,13 +21,14 @@ interface Card {
     year: number | null;
     arrivedOn: string | null;
     state: VehicleState;
+    pool: VehiclePool | null;
     location: { id: string; name: string } | null;
     odometerKm: number | null;
     costTetri: number | null;
     notes: string | null;
     currentRentalId: string | null;
   };
-  events: { id: string; kind: VehicleEventKind; occurredOn: string; fromState: VehicleState | null; toState: VehicleState; rentalId: string | null; reason: string | null; actor: string | null }[];
+  events: { id: string; kind: VehicleEventKind; occurredOn: string; fromState: VehicleState | null; toState: VehicleState; fromPool: VehiclePool | null; toPool: VehiclePool | null; rentalId: string | null; reason: string | null; actor: string | null }[];
   serviceJobs: { id: string; number: string; status: 'open' | 'done' | 'cancelled'; payer: 'company' | 'customer'; reason: string; openedOn: string; closedOn: string | null; totalTetri: number; withheldTetri: number }[];
   rentals: { id: string; number: string; status: RentalStatus; customer: { id: string; name: string }; pickedUpOn: string | null; returnedOn: string | null; paidThrough: string | null; weeklyRateTetri: number }[];
 }
@@ -163,6 +164,7 @@ export function VehiclePage() {
           <Row k={t.fleet.color} v={v.color ?? t.common.dash} />
           <Row k={t.fleet.year} v={<span className="mono">{v.year ?? t.common.dash}</span>} />
           <Row k={t.fleet.arrived} v={<span className="mono">{fmtDate(v.arrivedOn)}</span>} />
+          <Row k={t.fleet.pool} v={<PoolRow v={v} onDone={reload} onError={setErr} />} />
           <Row k={t.points.place} v={<PlaceRow v={v} onDone={reload} onError={setErr} />} />
           <Row k={t.vehicle.odometer} v={<span className="mono">{v.odometerKm ?? t.common.dash}</span>} />
           {v.costTetri != null && <Row k={t.purchases.cost} v={<span className="mono">{formatGel(v.costTetri)}</span>} />}
@@ -184,7 +186,8 @@ export function VehiclePage() {
                 <li key={e.id}>
                   <span className="mono muted">{fmtDate(e.occurredOn)}</span>
                   <span>
-                    {t.vehicle.events[e.kind]} <StateBadge state={e.toState} />
+                    {t.vehicle.events[e.kind]}{' '}
+                    {isPoolEvent(e.kind) ? <span className="pool-mark">{e.toPool ? t.pools[e.toPool] : t.common.dash}</span> : <StateBadge state={e.toState} />}
                     {e.rentalId && (
                       <>
                         {' '}
@@ -314,5 +317,43 @@ function PlaceRow({ v, onDone, onError }: { v: Card['vehicle']; onDone: () => vo
         </option>
       ))}
     </select>
+  );
+}
+
+/**
+ * Which park this moped is in, and the one click that moves it to the other.
+ * A moped that has left the fleet is in neither, and says so; deciding what a
+ * sold moped is for would be a decision about somebody else's property.
+ */
+function PoolRow({ v, onDone, onError }: { v: Card['vehicle']; onDone: () => void; onError: (e: string) => void }) {
+  const t = useT();
+  const { can } = useSession();
+  const [busy, setBusy] = useState(false);
+  const gone = v.state === 'sold' || v.state === 'out';
+  if (gone) return <span className="muted">{t.pools.gone}</span>;
+  if (!can('fleet.pool.set')) return <span>{v.pool ? t.pools[v.pool] : <span className="place-unset">{t.pools.none}</span>}</span>;
+  const move = async (pool: VehiclePool) => {
+    setBusy(true);
+    try {
+      await api.post(`/api/fleet/${v.id}/pool`, { pool });
+      onDone();
+    } catch (e) {
+      onError(errorText(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <>
+      <div className="chips">
+        {VEHICLE_POOLS.map((p) => (
+          <button key={p} type="button" className={`pill pill-sm ${v.pool === p ? 'on' : ''}`} disabled={busy} onClick={() => void move(p)}>
+            {t.pools[p]}
+          </button>
+        ))}
+        {!v.pool && <span className="place-unset">{t.pools.none}</span>}
+      </div>
+      {v.state === 'rented' && <div className="hint">{t.pools.rentedNote}</div>}
+    </>
   );
 }

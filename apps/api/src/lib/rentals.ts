@@ -3,7 +3,7 @@ import { audit } from './audit.js';
 import { dateFromISO } from './dates.js';
 import { prisma } from './db.js';
 import { conflict, notFound } from './errors.js';
-import { moveVehicle } from './vehicles.js';
+import { movePool, moveVehicle } from './vehicles.js';
 
 // Hand-over and return (RNT-01, RNT-04, RNT-05). Each is one transaction:
 // the rental, its first period, the deposit, the act and the vehicle event
@@ -88,6 +88,16 @@ export async function pickUp(input: PickupInput): Promise<{ id: string; number: 
       },
     });
     if (input.vehicleId) {
+      // Handing a moped to a renter is the decision that it is a rental
+      // moped; nobody should have to say so twice. A moped already in the
+      // rental park gets no second event out of this (ADR-0005).
+      await movePool(tx, {
+        vehicleId: input.vehicleId,
+        pool: 'rent',
+        occurredOn: input.pickedUpOn,
+        actorId: input.actorId,
+        reason: `hand-over ${rental.number}`,
+      });
       await moveVehicle(tx, {
         vehicleId: input.vehicleId,
         kind: 'pickup',

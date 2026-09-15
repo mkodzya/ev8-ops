@@ -47,6 +47,7 @@ export const tokens = {
   /** effects — Shadow and scrim. Written out here so no component carries a colour literal of its own. */
   shadow: '0 12px 40px rgba(11, 11, 11, 0.16)', // the sheet and the sidebar
   scrim: 'rgba(11, 11, 11, 0.7)', // the dark disc over a photo thumbnail
+  scrimSoft: 'rgba(11, 11, 11, 0.32)', // the veil behind a side panel: the same ink as --scrim, lighter, because the list behind it is still the work
   onScrim: '#ffffff', // the glyph on that disc
 
   /** type — Neither Be Vietnam Pro nor Inter has Georgian glyphs, so Noto Sans Georgian is in every text stack. A face without the glyphs falls back to the system font silently — that is why it is checked on real names in acceptance. */
@@ -307,6 +308,12 @@ export const tokenGroups: TokenGroup[] = [
         "cssVar": "--scrim",
         "value": "rgba(11, 11, 11, 0.7)",
         "note": "the dark disc over a photo thumbnail"
+      },
+      {
+        "name": "scrimSoft",
+        "cssVar": "--scrim-soft",
+        "value": "rgba(11, 11, 11, 0.32)",
+        "note": "the veil behind a side panel: the same ink as --scrim, lighter, because the list behind it is still the work"
       },
       {
         "name": "onScrim",
