@@ -892,6 +892,26 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
     border-top: 0;
     padding-bottom: 4px;
   }
+  /* A heading that sorts looks like a heading until the pointer is on it:
+     a column of buttons at the top of a list is a toolbar, not a heading. */
+  .col-sort {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 4px;
+    border: 0;
+    background: none;
+    padding: 0;
+    font: inherit;
+    letter-spacing: inherit;
+    text-transform: inherit;
+    color: inherit;
+    cursor: pointer;
+    transition: var(--ease);
+  }
+  .num .col-sort { flex-direction: row-reverse; }
+  .col-sort:hover { color: var(--ink); }
+  .col-sort.on { color: var(--ink); }
+  .col-arrow { font-style: normal; font-size: 11px; line-height: 1; }
   /* Six columns do not always fit; the list scrolls sideways rather than
      the page doing it. */
   .vlist { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-card); padding: 4px 2px; overflow-x: auto; }
