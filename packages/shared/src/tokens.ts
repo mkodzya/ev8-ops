@@ -76,6 +76,8 @@ export const tokens = {
   trackingTight: '-0.02em', // headings: the site sets -1px at 38px, -0.56px at 28px, -0.4px at 20px — all -0.02em
   trackingButton: '-0.01em', // buttons and chips (.button, .button-light)
   ease: '0.3s ease', // every hover on the site moves at this speed
+  enter: '0.26s cubic-bezier(0.32, 0.72, 0, 1)', // something arriving over the page — a panel, a menu. Faster than a hover and slowed at the end, so it reads as sliding into place rather than being switched on. An addition: nothing on the site arrives
+  undoWindow: '10s', // how long a park move stays undoable, drawn as the line draining under the undo button; the same ten seconds the screen counts and the API enforces
   hairline: '0.82px', // the outline button's border, exactly as the theme writes it
 
   /** shape — One radius language: pills for buttons and chips, 16 px cards, nothing else. */
@@ -464,6 +466,18 @@ export const tokenGroups: TokenGroup[] = [
         "cssVar": "--ease",
         "value": "0.3s ease",
         "note": "every hover on the site moves at this speed"
+      },
+      {
+        "name": "enter",
+        "cssVar": "--enter",
+        "value": "0.26s cubic-bezier(0.32, 0.72, 0, 1)",
+        "note": "something arriving over the page — a panel, a menu. Faster than a hover and slowed at the end, so it reads as sliding into place rather than being switched on. An addition: nothing on the site arrives"
+      },
+      {
+        "name": "undoWindow",
+        "cssVar": "--undo-window",
+        "value": "10s",
+        "note": "how long a park move stays undoable, drawn as the line draining under the undo button; the same ten seconds the screen counts and the API enforces"
       },
       {
         "name": "hairline",

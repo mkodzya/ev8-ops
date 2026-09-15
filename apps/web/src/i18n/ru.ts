@@ -370,8 +370,6 @@ export const ru: Dict = {
     move: 'Перевести',
     menuToRent: 'Перевести в аренду',
     menuToSale: 'Перевести в продажу',
-    movedToRent: 'Перенесён в аренду',
-    movedToSale: 'Перенесён в продажу',
     incomingSub: (m: string) => `приходит ${m} в неделю`,
     idleSub: (m: string) => `мимо кассы ${m} в неделю`,
     notHandedOut: 'не выдаются',

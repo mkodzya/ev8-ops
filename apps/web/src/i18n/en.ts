@@ -364,8 +364,6 @@ export const en = {
     move: 'Move',
     menuToRent: 'Move to the rental park',
     menuToSale: 'Move to the sale park',
-    movedToRent: 'Moved to rental',
-    movedToSale: 'Moved to sale',
     incomingSub: (m: string) => `${m} a week coming in`,
     idleSub: (m: string) => `${m} a week not earned`,
     notHandedOut: 'not handed over',

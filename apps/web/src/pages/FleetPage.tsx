@@ -1,4 +1,4 @@
-import { VEHICLE_POOLS, VEHICLE_STATES, daysBetween, type VehiclePool, type VehicleState } from '@ev8/shared';
+import { VEHICLE_POOLS, VEHICLE_STATES, daysBetween, tokens, type VehiclePool, type VehicleState } from '@ev8/shared';
 import { useEffect, useMemo, useState } from 'react';
 import { errorText, useLoad } from '../lib/use.js';
 import { Field } from '../components/Wizard.js';
@@ -39,6 +39,8 @@ interface Fleet {
  * belongs to neither park, and one nobody has decided on is its own answer
  * rather than the likelier of the two (ADR-0005).
  */
+const UNDO_WINDOW_MS = Number.parseFloat(tokens.undoWindow) * 1000;
+
 type PoolKey = VehiclePool | 'none' | 'gone';
 const POOL_KEYS: PoolKey[] = ['rent', 'sale', 'none', 'gone'];
 const poolOf = (v: Vehicle): PoolKey => (v.state === 'sold' || v.state === 'out' ? 'gone' : (v.pool ?? 'none'));
@@ -79,11 +81,13 @@ export function FleetPage() {
     void api.get<Fleet>('/api/fleet').then(setData);
   }, [tick]);
 
-  // Ten seconds is long enough to notice a wrong click and short enough that
-  // the list is not left holding rows that no longer belong in it.
+  // Long enough to notice a wrong click, short enough that the list is not
+  // left holding rows that no longer belong in it. The same figure draws the
+  // line draining under the button, so it is read from the token rather than
+  // written twice and left to drift.
   useEffect(() => {
     if (!moved) return;
-    const id = setTimeout(() => setMoved(null), 10_000);
+    const id = setTimeout(() => setMoved(null), UNDO_WINDOW_MS);
     return () => clearTimeout(id);
   }, [moved]);
 
@@ -206,7 +210,7 @@ export function FleetPage() {
             /* Source order is the laptop's column order; the phone re-lays
                them out by name with grid-template-areas, so neither shape
                depends on the other. */
-            <li key={v.id} className="vrow">
+            <li key={v.id} className={`vrow ${moved?.id === v.id ? 'vrow-changed' : ''}`}>
               <Link to={`/fleet/${v.id}`} className="v-vin">
                 <Vin vin={v.vin} />
               </Link>
@@ -215,8 +219,13 @@ export function FleetPage() {
               <span className="v-state">
                 <StateBadge state={v.state} />
                 {/* Inside a park every row would repeat its name; only the
-                    mixed list needs to say which is which. */}
-                {!pool && <span className="v-pool">{t.pools[poolOf(v)]}</span>}
+                    mixed list needs to say which is which — and the row that
+                    has just moved, which says where it went instead. */}
+                {moved?.id === v.id ? (
+                  <span className="v-pool v-pool-new">→ {t.pools[moved.to]}</span>
+                ) : (
+                  !pool && <span className="v-pool">{t.pools[poolOf(v)]}</span>
+                )}
               </span>
               <span className="v-where">
                 {v.currentRental ? (
@@ -287,10 +296,13 @@ function Actions({
 
   if (moved?.id === v.id) {
     return (
-      <span className="v-move v-moved">
-        <span className="moved-what">{moved.to === 'rent' ? t.pools.movedToRent : t.pools.movedToSale}</span>
+      <span className="v-move">
+        {/* The line under the word drains over exactly the seconds the offer
+            lasts, so the button disappearing reads as a countdown ending and
+            not as the screen misbehaving. */}
         <button type="button" className="mv mv-undo" disabled={busy} onClick={() => void run(() => onUndo(v.id))}>
           {t.actions.undo}
+          <i className="mv-clock" />
         </button>
       </span>
     );
