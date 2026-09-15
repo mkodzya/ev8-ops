@@ -218,7 +218,6 @@ export function FleetPage() {
               <span className="list-head-vin">{t.fleet.vin}</span>
             </span>
             <span>{t.fleet.model}</span>
-            <span>{t.fleet.color}</span>
             <span>{t.fleet.state}</span>
             <span>{t.fleet.where}</span>
             <span className="num">{t.fleet.quiet}</span>
@@ -234,9 +233,15 @@ export function FleetPage() {
               <Link to={`/fleet/${v.id}`} className="v-vin">
                 <Vin vin={v.vin} />
               </Link>
-              <span className="v-model">{v.model}</span>
-              <span className="v-color">
-                <ColorText of={v.color} />
+              {/* Five columns, not seven. What is secondary sits under what it
+                  belongs to: the colour under the model, the park under the
+                  state, "paid through" under the name. Each column gets one
+                  word and one quiet tail, and none of them elbows the next. */}
+              <span className="v-model">
+                {v.model}
+                <span className="v-sub v-color">
+                  <ColorText of={v.color} />
+                </span>
               </span>
               <span className="v-state">
                 <StateBadge state={v.state} />
@@ -244,9 +249,9 @@ export function FleetPage() {
                     said only when it is still a question — and on the row that
                     has just moved, which says where it went. */}
                 {moved?.id === v.id ? (
-                  <span className="v-pool v-pool-new">→ {t.pools[moved.to]}</span>
+                  <span className="v-sub v-pool-new">→ {t.pools[moved.to]}</span>
                 ) : (
-                  !pool && poolOf(v) === 'none' && <span className="v-pool">{t.pools.none}</span>
+                  !pool && poolOf(v) === 'none' && <span className="v-sub">{t.pools.none}</span>
                 )}
               </span>
               <span className="v-where">
@@ -258,7 +263,7 @@ export function FleetPage() {
                   <PlaceText of={v} />
                 )}
                 {v.currentRental && (
-                  <span className="v-paid mono">
+                  <span className="v-sub mono">
                     {t.fleet.paidThrough}: {fmtDate(v.currentRental.paidThrough)}
                   </span>
                 )}
