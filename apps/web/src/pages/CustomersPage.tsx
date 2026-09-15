@@ -5,7 +5,8 @@ import { useSession } from '../session.js';
 import { api } from '../api.js';
 import { CustomerName, Empty, Loading, RentalBadge } from '../components/ui.js';
 import { useLocale, useT } from '../i18n/index.js';
-import { byName } from '../lib/names.js';
+import { byName, primaryName } from '../lib/names.js';
+import { SortHead, useSortable } from '../lib/sortable.js';
 
 interface Customer {
   id: string;
@@ -37,6 +38,20 @@ export function CustomersPage() {
     return [...found].sort(byName(locale));
   }, [rows, q, locale]);
 
+  // The name order the screen already uses stays the default and the tie-break;
+  // the headings only ask for something else.
+  const sorted = useSortable(
+    shown,
+    {
+      name: { value: (c) => primaryName(c, locale) },
+      phone: { value: (c) => c.phone },
+      personalId: { value: (c) => c.personalId },
+      tags: { value: (c) => c.tags.join(' ') },
+      openRentals: { value: (c) => c.openRentals.length, first: 'desc' },
+    },
+    byName(locale),
+  );
+
   if (!rows) return <Loading />;
 
   return (
@@ -61,15 +76,15 @@ export function CustomersPage() {
           <table className="table">
             <thead>
               <tr>
-                <th>{t.customers.name}</th>
-                <th>{t.customers.phone}</th>
-                <th>{t.customers.personalId}</th>
-                <th>{t.customers.tags}</th>
-                <th>{t.customers.openRentals}</th>
+                <th><SortHead k="name" label={t.customers.name} {...sorted} /></th>
+                <th><SortHead k="phone" label={t.customers.phone} {...sorted} /></th>
+                <th><SortHead k="personalId" label={t.customers.personalId} {...sorted} /></th>
+                <th><SortHead k="tags" label={t.customers.tags} {...sorted} /></th>
+                <th><SortHead k="openRentals" label={t.customers.openRentals} {...sorted} /></th>
               </tr>
             </thead>
             <tbody>
-              {shown.map((c) => (
+              {sorted.rows.map((c) => (
                 <tr key={c.id}>
                   <td>
                     <Link to={`/customers/${c.id}`}>
