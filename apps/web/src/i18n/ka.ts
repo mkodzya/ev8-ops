@@ -108,6 +108,8 @@ export const ka: Dict = {
     searchHint: 'VIN-ის ბოლო 4 სიმბოლო',
     searchShort: '· · · ბოლო 4',
     empty: 'პარკი ცარიელია.',
+    nothingFound: 'ვერაფერი მოიძებნა.',
+    showAll: (n: number) => `ყველას ჩვენება (${n})`,
     count: (n: number) => `${n} მოპედი`,
   },
 

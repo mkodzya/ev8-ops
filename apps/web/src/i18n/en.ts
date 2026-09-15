@@ -115,6 +115,8 @@ export const en = {
     searchHint: 'Last 4 of VIN',
     searchShort: '· · · last 4',
     empty: 'The fleet is empty.',
+    nothingFound: 'Nothing matches.',
+    showAll: (n: number) => `Show all ${n}`,
     count: (n: number) => `${n} moped${n === 1 ? '' : 's'}`,
   },
 

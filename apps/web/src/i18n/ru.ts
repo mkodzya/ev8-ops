@@ -116,6 +116,8 @@ export const ru: Dict = {
     searchHint: 'Последние 4 знака VIN',
     searchShort: '· · · 4 знака',
     empty: 'Парк пуст.',
+    nothingFound: 'Ничего не нашлось.',
+    showAll: (n: number) => `Показать все ${n}`,
     count: (n: number) => {
       const m10 = n % 10;
       const m100 = n % 100;

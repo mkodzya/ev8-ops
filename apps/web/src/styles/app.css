@@ -755,6 +755,17 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
   }
 }
 
+/* Not a row: a sentence where the rows would have been, with the way back
+   beside it. It keeps the list's padding so the heading above it does not
+   look like the heading of nothing. */
+.vlist-empty {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 22px 12px;
+  color: var(--muted);
+}
 .vlist { list-style: none; margin: 0; padding: 0; }
 .vlist-head { display: none; }
 /* A row knows its own colour in one place. The cell that sticks to the right
