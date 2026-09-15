@@ -4,6 +4,7 @@ export * from './money.js';
 export * from './time.js';
 export * from './periods.js';
 export * from './states.js';
+export * from './colors.js';
 export * from './payments.js';
 export * from './georgian.js';
 export * from './matching.js';

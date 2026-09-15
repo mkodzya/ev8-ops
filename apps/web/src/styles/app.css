@@ -694,11 +694,11 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
 }
 /* Which park a row is in, said only where both are on screen at once. */
 .pool-mark { font: var(--text-label); color: var(--accent); }
+/* A footnote to the state, not a second heading beside it: the same quiet
+   label the model line uses, no shouting in capitals. */
 .v-pool {
   display: block;
-  font: var(--text-overline);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  font: var(--text-label);
   color: var(--muted);
   margin-top: 1px;
 }
@@ -839,8 +839,10 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
 /* "Paid through" belongs under the name it is about, not in a column of its own. */
 .v-paid { display: block; font: var(--text-label); color: var(--muted); }
 .v-where { grid-area: where; font: var(--text-label); color: var(--muted); margin-top: 2px; }
-/* A point nobody has named is a question, not an empty cell. */
-.place-unset { color: var(--service); }
+/* A point nobody has named is still a question, but it is asked once — by the
+   orange number above the list. Thirty-five orange cells in a column answer
+   nothing and leave no orange for the state that means a moped is in pieces. */
+.place-unset { color: var(--muted); }
 /* Colour is a card fact on a phone; year and arrival left the list entirely. */
 .v-color { display: none; }
 /* On a phone the whole VIN is noise: the last four are what anyone reads,

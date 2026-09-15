@@ -44,6 +44,15 @@ export const ru: Dict = {
     customers: 'Клиенты',
   },
 
+  colors: {
+    black: 'Чёрный',
+    white: 'Белый',
+    red: 'Красный',
+    green: 'Зелёный',
+    grey: 'Серый',
+    purple: 'Фиолетовый',
+  },
+
   states: {
     available: 'Свободен',
     rented: 'В аренде',
