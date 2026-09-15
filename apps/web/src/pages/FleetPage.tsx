@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { errorText, useLoad } from '../lib/use.js';
 import { Field } from '../components/Wizard.js';
 import { Drawer } from '../components/Drawer.js';
+import { RowMenu, type RowAction } from '../components/RowMenu.js';
 import { useSession } from '../session.js';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
@@ -66,6 +67,10 @@ export function FleetPage() {
   const models = useLoad<Models>(can('settings.manage') ? '/api/models' : null);
   const [params, setParams] = useSearchParams();
   const [q, setQ] = useState('');
+  // The row a park move has just touched. It keeps its place in the list for
+  // a while, even when the filter no longer wants it, so that the undo is
+  // where the finger already is and nothing disappears under it.
+  const [moved, setMoved] = useState<{ id: string; to: VehiclePool } | null>(null);
   const state = params.get('state') as VehicleState | null;
   const pool = params.get('pool') as PoolKey | null;
   const noPoint = params.get('place') === 'unset';
@@ -73,6 +78,30 @@ export function FleetPage() {
   useEffect(() => {
     void api.get<Fleet>('/api/fleet').then(setData);
   }, [tick]);
+
+  // Ten seconds is long enough to notice a wrong click and short enough that
+  // the list is not left holding rows that no longer belong in it.
+  useEffect(() => {
+    if (!moved) return;
+    const id = setTimeout(() => setMoved(null), 10_000);
+    return () => clearTimeout(id);
+  }, [moved]);
+
+  /** The screen knows the answer before the server is asked again. */
+  const patch = (id: string, pool: VehiclePool | null) =>
+    setData((d) => (d ? { ...d, vehicles: d.vehicles.map((v) => (v.id === id ? { ...v, pool } : v)) } : d));
+
+  const movePool = async (v: Vehicle, pool: VehiclePool) => {
+    await api.post(`/api/fleet/${v.id}/pool`, { pool });
+    patch(v.id, pool);
+    setMoved({ id: v.id, to: pool });
+  };
+
+  const undoPool = async (id: string) => {
+    const { pool } = await api.post<{ pool: VehiclePool | null }>(`/api/fleet/${id}/pool/undo`, {});
+    patch(id, pool);
+    setMoved(null);
+  };
 
   // Both counts are worked out from the rows already on the screen, so the
   // state counters mean "inside this park" the moment a park is chosen —
@@ -99,13 +128,13 @@ export function FleetPage() {
     return inPool
       .filter(
         (v) =>
-          (!state || v.state === state) &&
-          (!noPoint || placeOf(v).kind === 'unset') &&
+          (v.id === moved?.id ||
+            ((!state || v.state === state) && (!noPoint || placeOf(v).kind === 'unset'))) &&
           (!needle || v.vin.endsWith(needle) || v.vin.includes(needle)),
       )
       .slice()
       .sort((a, b) => (quietDays(b, today) ?? -1) - (quietDays(a, today) ?? -1));
-  }, [inPool, state, noPoint, q, today]);
+  }, [inPool, state, noPoint, q, today, moved]);
 
   // One filter at a time below the park: a card is either the state it names
   // or the mopeds nobody has placed, and clicking the one that is already on
@@ -203,7 +232,7 @@ export function FleetPage() {
                 )}
               </span>
               <Quiet v={v} today={today} />
-              <MoveChips v={v} can={can('fleet.pool.set')} onDone={() => setTick((n) => n + 1)} />
+              <Actions v={v} can={can('fleet.pool.set')} moved={moved} onMove={movePool} onUndo={undoPool} />
             </li>
           ))}
         </ul>
@@ -222,32 +251,65 @@ function Quiet({ v, today }: { v: Vehicle; today: string }) {
 }
 
 /**
- * The one move this row is waiting for. A moped in a park offers the other
- * park; one in neither offers both; one that has left the fleet offers
- * nothing, because its park is no longer our question.
+ * What this row can be told to do, and what it just did.
+ *
+ * A park move used to be two chips that wrote at once and then took the row
+ * out of the list under the finger that clicked them. Now the choice lives
+ * behind the dots every table has, and for ten seconds afterwards the row
+ * stays exactly where it was, saying what happened and offering to take it
+ * back — including back to "nobody has decided", which no second click could
+ * ever reach.
  */
-function MoveChips({ v, can, onDone }: { v: Vehicle; can: boolean; onDone: () => void }) {
+function Actions({
+  v,
+  can,
+  moved,
+  onMove,
+  onUndo,
+}: {
+  v: Vehicle;
+  can: boolean;
+  moved: { id: string; to: VehiclePool } | null;
+  onMove: (v: Vehicle, pool: VehiclePool) => Promise<void>;
+  onUndo: (id: string) => Promise<void>;
+}) {
   const t = useT();
   const [busy, setBusy] = useState(false);
-  const where = poolOf(v);
-  if (!can || where === 'gone') return <span className="v-move" />;
-  const offer = where === 'none' ? VEHICLE_POOLS : VEHICLE_POOLS.filter((p) => p !== v.pool);
-  const move = async (pool: VehiclePool) => {
+  const run = async (fn: () => Promise<void>) => {
     setBusy(true);
     try {
-      await api.post(`/api/fleet/${v.id}/pool`, { pool });
-      onDone();
+      await fn();
     } finally {
       setBusy(false);
     }
   };
+
+  if (moved?.id === v.id) {
+    return (
+      <span className="v-move v-moved">
+        <span className="moved-what">{moved.to === 'rent' ? t.pools.movedToRent : t.pools.movedToSale}</span>
+        <button type="button" className="mv mv-undo" disabled={busy} onClick={() => void run(() => onUndo(v.id))}>
+          {t.actions.undo}
+        </button>
+      </span>
+    );
+  }
+
+  const where = poolOf(v);
+  const actions: RowAction[] = [];
+  if (can && where !== 'gone') {
+    for (const p of VEHICLE_POOLS) {
+      if (p === v.pool) continue;
+      actions.push({
+        key: p,
+        label: p === 'rent' ? t.pools.menuToRent : t.pools.menuToSale,
+        onPick: () => void run(() => onMove(v, p)),
+      });
+    }
+  }
   return (
     <span className="v-move">
-      {offer.map((p) => (
-        <button key={p} type="button" className="mv" disabled={busy} onClick={() => void move(p)}>
-          {p === 'rent' ? t.pools.toRent : t.pools.toSale}
-        </button>
-      ))}
+      <RowMenu actions={actions} />
     </span>
   );
 }
