@@ -2,7 +2,7 @@ import { VEHICLE_STATES, type VehicleState } from '@ev8/shared';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api.js';
-import { CustomerName, StateBadge, Loading } from '../components/ui.js';
+import { CustomerName, Loading, PageHead, StateBadge } from '../components/ui.js';
 import { formatGel } from '../format.js';
 import { dayTasks, type DayTask } from '../lib/tasks.js';
 import { useT } from '../i18n/index.js';
@@ -59,10 +59,7 @@ export function TodayPage() {
 
   return (
     <>
-      <header className="page-head">
-        <h1>{t.today.title}</h1>
-        <span className="mono muted">{s.today}</span>
-      </header>
+      <PageHead title={t.today.title} sub={<span className="mono">{s.today}</span>} />
 
       <section className="tasks-wrap">
         {tasks.length > 0 ? (

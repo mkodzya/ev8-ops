@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api.js';
-import { Empty, Loading } from '../components/ui.js';
+import { Empty, Loading, PageHead } from '../components/ui.js';
 import { fmtDate, formatGel } from '../format.js';
 import { useT } from '../i18n/index.js';
 import { errorText, useLoad } from '../lib/use.js';
@@ -122,15 +122,12 @@ export function StatementsPage() {
 
   return (
     <>
-      <header className="page-head page-head-wrap">
-        <h1>{t.statements.title}</h1>
-        <span className="spacer" />
+      <PageHead wrap title={t.statements.title} sub={t.statements.count(statements.data?.statements.length ?? 0)} note={t.statements.uploadHint}>
         <label className="pill pill-sm pill-accent">
           <input ref={fileRef} type="file" accept=".csv,text/csv" hidden onChange={(e) => void choose(e.target.files)} />
           {busy ? t.common.checking : `+ ${t.statements.upload}`}
         </label>
-      </header>
-      <p className="hint muted">{t.statements.uploadHint}</p>
+      </PageHead>
       {done && <div className="hint">{done}</div>}
       {err && <div className="hint hint-bad">{err}</div>}
 

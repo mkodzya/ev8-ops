@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Empty, Loading, Vin } from '../components/ui.js';
+import { Empty, Loading, PageHead, Vin } from '../components/ui.js';
 import { Row } from '../components/Wizard.js';
 import { formatGel } from '../format.js';
 import { useT } from '../i18n/index.js';
@@ -56,11 +56,7 @@ export function EconomicsPage() {
 
   return (
     <>
-      <header className="page-head page-head-wrap">
-        <h1>{t.economics.title}</h1>
-        <span className="mono muted">{totals.vehicles}</span>
-      </header>
-      <p className="hint">{t.economics.subtitle}</p>
+      <PageHead wrap title={t.economics.title} sub={t.economics.count(totals.vehicles)} note={t.economics.subtitle} />
 
       <div className="two-col">
         <section className="card">

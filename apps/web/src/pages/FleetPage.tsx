@@ -8,7 +8,7 @@ import { useSession } from '../session.js';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { todayISO } from '@ev8/shared';
-import { ColorText, CustomerName, Empty, Loading, PlaceText, StateBadge, Vin } from '../components/ui.js';
+import { ColorText, CustomerName, Empty, Loading, PageHead, PlaceText, StateBadge, Vin } from '../components/ui.js';
 import { placeOf } from '../lib/place.js';
 import { rowClick } from '../lib/rowLink.js';
 import { SortHead, useSortable } from '../lib/sortable.js';
@@ -188,10 +188,7 @@ export function FleetPage() {
 
   return (
     <>
-      <header className="page-head">
-        <h1>{t.fleet.title}</h1>
-        <span className="muted">{t.fleet.count(data.vehicles.length)}</span>
-        <span className="spacer" />
+      <PageHead title={t.fleet.title} sub={t.fleet.count(data.vehicles.length)}>
         {/* On a phone the search is a field of its own, because the list has
             no column headings to hide in. On a laptop it lives in the VIN
             column, and this one is not rendered. */}
@@ -204,7 +201,7 @@ export function FleetPage() {
         {can('settings.manage') && models.data && (
           <NewVehicle models={models.data.models} onDone={() => setTick((n) => n + 1)} />
         )}
-      </header>
+      </PageHead>
       <div className="segments">
         {/* What a moped is for comes first: it splits the fleet into two
             businesses, and the state only means something inside one of

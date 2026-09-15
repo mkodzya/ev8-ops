@@ -121,6 +121,7 @@ export const en = {
   },
 
   rentals: {
+    count: (n: number) => `${n} rental${n === 1 ? '' : 's'}`,
     title: 'Rentals',
     number: 'No.',
     customer: 'Customer',
@@ -465,6 +466,7 @@ export const en = {
   },
 
   payments: {
+    count: (n: number) => `${n} payment${n === 1 ? '' : 's'}`,
     title: 'Payments',
     add: 'Record a payment',
     date: 'Date',
@@ -502,6 +504,7 @@ export const en = {
   },
 
   statements: {
+    count: (n: number) => `${n} statement${n === 1 ? '' : 's'}`,
     previewTitle: 'What this file would add',
     previewNew: 'new lines',
     previewKnown: 'already in',
@@ -535,6 +538,7 @@ export const en = {
   },
 
   service: {
+    count: (n: number) => `${n} open job${n === 1 ? '' : 's'}`,
     title: 'Service',
     open: 'Open repairs',
     newJob: 'Open a repair',
@@ -565,6 +569,7 @@ export const en = {
   },
 
   sales: {
+    count: (n: number) => `${n} sale${n === 1 ? '' : 's'}`,
     title: 'Sales',
     newSale: 'Sell a moped',
     number: 'No.',
@@ -597,6 +602,7 @@ export const en = {
   },
 
   purchases: {
+    count: (n: number) => `${n} order${n === 1 ? '' : 's'}`,
     title: 'Purchases',
     newOrder: 'New order',
     number: 'No.',
@@ -637,6 +643,7 @@ export const en = {
 
 
   economics: {
+    count: (n: number) => `${n} moped${n === 1 ? '' : 's'}`,
     title: 'Economics',
     nav: 'Economics',
     subtitle: 'What each moped has earned and what it has cost. Everything is added up from payments, repairs and events, so a correction changes it at once.',
@@ -663,6 +670,7 @@ export const en = {
   },
 
   stock: {
+    partsCount: (n: number) => `${n} part${n === 1 ? '' : 's'}`,
     title: 'Warehouse',
     nav: 'Warehouse',
     mopeds: 'Mopeds by model',
@@ -703,6 +711,7 @@ export const en = {
     qtyOnShelf: 'on the shelf',
   },
   customers: {
+    count: (n: number) => `${n} customer${n === 1 ? '' : 's'}`,
     title: 'Customers',
     name: 'Name',
     phone: 'WhatsApp',

@@ -2,7 +2,7 @@ import { parseGel, todayISO } from '@ev8/shared';
 import { useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
-import { Empty, Loading, Vin } from '../components/ui.js';
+import { Empty, Loading, PageHead, Vin } from '../components/ui.js';
 import { Field } from '../components/Wizard.js';
 import { fmtDate, formatGel } from '../format.js';
 import { useT } from '../i18n/index.js';
@@ -57,12 +57,9 @@ export function ServicePage() {
 
   return (
     <>
-      <header className="page-head page-head-wrap">
-        <h1>{t.service.title}</h1>
-        <span className="mono muted">{data.open}</span>
-        <span className="spacer" />
+      <PageHead wrap title={t.service.title} sub={t.service.count(data.open)}>
         {can('service.manage') && <NewJob onDone={reload} onError={setErr} />}
-      </header>
+      </PageHead>
       {err && <div className="hint hint-bad">{err}</div>}
       <div className="toolbar">
         <div className="chips">
