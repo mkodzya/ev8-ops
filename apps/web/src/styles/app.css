@@ -726,15 +726,32 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
 @media (min-width: 900px) {
   .head-search { display: none; }
   .list-head-vin { display: none; }
+  /* A field in a row of headings should be a heading that happens to accept
+     typing, not a box parked among words. No border, no fill, the height of
+     the line it sits on — and a hairline underneath so it still reads as
+     something you can type into. It becomes a proper field when it is used. */
   .list-search {
     display: block;
-    min-height: 26px;
     width: 100%;
-    padding: 0 9px;
-    border-radius: 8px;
+    min-height: 0;
+    padding: 1px 0 3px;
+    border: 0;
+    border-bottom: 1px solid var(--line);
+    border-radius: 0;
+    background: none;
     font: var(--text-mono-sm);
     text-transform: none;
     letter-spacing: 0;
+    transition: var(--ease);
+  }
+  .list-search:hover { border-bottom-color: var(--muted); }
+  .list-search:focus {
+    border-bottom-color: var(--accent);
+    outline: 0;
+    background: var(--surface-2);
+    border-radius: 6px 6px 0 0;
+    padding-left: 6px;
+    padding-right: 6px;
   }
 }
 
@@ -884,14 +901,21 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
     border-radius: 0;
     background: var(--row-bg);
   }
+  /* One typographic line: every cell in it sits on the same baseline, the
+     search included, and a rule underneath separates the heading from the
+     data instead of each row carrying a line of its own up here. */
   .vlist-head {
     font: var(--text-overline);
     letter-spacing: 0.04em;
     text-transform: uppercase;
     color: var(--muted);
+    align-items: end;
     border-top: 0;
-    padding-bottom: 4px;
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 7px;
+    margin-bottom: 2px;
   }
+  .vlist-head + .vrow { border-top: 0; }
   /* A heading that sorts looks like a heading until the pointer is on it:
      a column of buttons at the top of a list is a toolbar, not a heading. */
   .col-sort {
@@ -911,7 +935,9 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
   .num .col-sort { flex-direction: row-reverse; }
   .col-sort:hover { color: var(--ink); }
   .col-sort.on { color: var(--ink); }
-  .col-arrow { font-style: normal; font-size: 11px; line-height: 1; }
+  /* The arrow keeps its place whether or not it is there, so a heading does
+     not jump sideways the moment you sort by it. */
+  .col-arrow { font-style: normal; font-size: 11px; line-height: 1; width: 8px; display: inline-block; }
   /* Six columns do not always fit; the list scrolls sideways rather than
      the page doing it. */
   .vlist { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-card); padding: 4px 2px; overflow-x: auto; }
