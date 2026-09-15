@@ -114,7 +114,7 @@ export const ru: Dict = {
     rowActions: 'Действия',
     quietDays: (n: number) => `${n} ${days(n)}`,
     searchHint: 'Последние 4 знака VIN',
-    searchShort: '· · · 4 знака',
+    searchShort: '4 знака VIN',
     empty: 'Парк пуст.',
     nothingFound: 'Ничего не нашлось.',
     showAll: (n: number) => `Показать все ${n}`,

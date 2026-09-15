@@ -86,6 +86,8 @@ export function FleetPage() {
   // a while, even when the filter no longer wants it, so that the undo is
   // where the finger already is and nothing disappears under it.
   const [moved, setMoved] = useState<{ id: string; to: VehiclePool } | null>(null);
+  // The heading opens into a field, and stays open while it holds anything.
+  const [finding, setFinding] = useState(false);
   const state = params.get('state') as VehicleState | null;
   const pool = params.get('pool') as PoolKey | null;
   const noPoint = params.get('place') === 'unset';
@@ -198,6 +200,12 @@ export function FleetPage() {
     });
   };
 
+  const findOpen = finding || q.length > 0;
+  const closeFind = () => {
+    setQ('');
+    setFinding(false);
+  };
+
   if (!data) return <Loading />;
 
   return (
@@ -259,15 +267,39 @@ export function FleetPage() {
               belongs over the column of VINs and nowhere else. It costs the
               screen nothing: the row was already there. */}
           <li className="vlist-head">
-            <span>
-              <input
-                className="input list-search mono"
-                placeholder={t.fleet.searchShort}
-                aria-label={t.fleet.searchHint}
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-              />
-              <span className="list-head-vin">{t.fleet.vin}</span>
+            {/* The VIN column is a heading until somebody wants to find a
+                moped, and then it is the field they find it with. It stays a
+                field while anything is typed in it, so a list that is
+                filtered never hides what filtered it. */}
+            <span className="vin-col">
+              {findOpen ? (
+                <span className="col-search">
+                  <input
+                    className="input list-search mono"
+                    placeholder={t.fleet.searchShort}
+                    aria-label={t.fleet.searchHint}
+                    value={q}
+                    autoFocus
+                    onChange={(e) => setQ(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Escape') closeFind();
+                    }}
+                    onBlur={() => {
+                      if (!q) setFinding(false);
+                    }}
+                  />
+                  <button type="button" className="col-x" aria-label={t.actions.cancel} onClick={closeFind}>
+                    ✕
+                  </button>
+                </span>
+              ) : (
+                <button type="button" className="col-find" aria-label={t.fleet.searchHint} onClick={() => setFinding(true)}>
+                  {t.fleet.vin}
+                  <i className="col-mag" aria-hidden="true">
+                    ⌕
+                  </i>
+                </button>
+              )}
             </span>
             <span>
               <ColHead k="model" label={t.fleet.model} sort={sort} dir={dir} pick={pick} />
