@@ -836,10 +836,16 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
      side by side they wrap into the column next door. Always visible — an
      action that appears only under a pointer is an action nobody finds. */
   .v-move { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
-  /* The last column is one button wide. The sentence a move leaves behind
-     needs more, so for those ten seconds it reaches back over the silence
-     beside it rather than spilling off the edge. */
-  .vrow .v-moved { grid-column: 6 / 8; flex-direction: row; align-items: center; justify-content: flex-end; }
+  /* The last column is one button wide, and the sentence a move leaves behind
+     is not. For those ten seconds the row grows a line of its own, right
+     under the moped it is about, rather than spilling off the edge. */
+  .vrow .v-moved {
+    grid-column: 1 / -1;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-end;
+    padding-top: 6px;
+  }
   .vlist-head .num { text-align: right; }
 }
 
