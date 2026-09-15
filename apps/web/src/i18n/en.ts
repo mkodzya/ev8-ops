@@ -96,6 +96,7 @@ export const en = {
     renter: 'Renter',
     paidThrough: 'Paid through',
     where: 'Where',
+    pool: 'Park',
     searchHint: 'Last 4 of VIN',
     empty: 'The fleet is empty.',
     count: (n: number) => `${n} moped${n === 1 ? '' : 's'}`,
@@ -153,6 +154,8 @@ export const en = {
       bought_back: 'Bought back',
       written_off: 'Written off',
       manual: 'By hand',
+      to_rent: 'To the rental park',
+      to_sale: 'To the sale park',
     },
   },
 
@@ -336,6 +339,26 @@ export const en = {
     addVehicle: 'Add a moped',
     points: 'Points',
     addPoint: 'Add a point',
+  },
+
+  pools: {
+    rent: 'Rental',
+    sale: 'Sale',
+    none: 'Not decided',
+    gone: 'Left the fleet',
+    outWith: 'With customers',
+    free: 'Free',
+    inService: 'In repair',
+    incoming: 'Coming in',
+    idleMoney: 'Standing idle',
+    onShelf: 'On the shelf',
+    listValue: 'At list price',
+    waiting: 'Awaiting a decision',
+    perWeek: 'a week',
+    noneHint: 'Pick a park on the moped\'s card — or it picks itself at the first hand-over.',
+    goneHint: 'These mopeds are no longer ours. A buy-back brings one back with an event.',
+    move: 'Move',
+    rentedNote: 'This moped is out on rent. Moving it to the sale park is allowed — that is what a renter buying it looks like.',
   },
 
   points: {

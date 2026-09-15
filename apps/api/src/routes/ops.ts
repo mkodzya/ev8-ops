@@ -1,4 +1,4 @@
-import { CUSTOMER_KINDS, DEFAULT_DEPOSIT_TETRI, VEHICLE_STATES, todayISO } from '@ev8/shared';
+import { CUSTOMER_KINDS, DEFAULT_DEPOSIT_TETRI, VEHICLE_POOLS, VEHICLE_STATES, todayISO } from '@ev8/shared';
 import type { FastifyInstance } from 'fastify';
 import { audit } from '../lib/audit.js';
 import { hasPerm } from '../lib/auth.js';
@@ -10,7 +10,7 @@ import { actorOf } from '../lib/guard.js';
 import { pickUp, returnRental } from '../lib/rentals.js';
 import { ITEM_STATES, RETURN_ITEMS, WITHHOLD_GROUNDS, type ItemState, type ReturnItem, type WithholdGround } from '../lib/pdf/returnAct.js';
 import { date, int, oneOf, str, strList, tetri } from '../lib/validate.js';
-import { moveVehicle } from '../lib/vehicles.js';
+import { movePool, moveVehicle } from '../lib/vehicles.js';
 
 type Body = Record<string, unknown>;
 
@@ -233,6 +233,30 @@ export function opsRoutes(app: FastifyInstance): void {
     const moved = await prisma.$transaction(async (tx) => {
       const m = await moveVehicle(tx, { vehicleId: v.id, kind: 'manual', occurredOn, actorId: actor.id, reason, toState });
       await tx.auditLog.create({ data: { actorId: actor.id, action: 'vehicle.state.manual', entityType: 'vehicle', entityId: v.id, before: { state: m.from }, after: { state: m.to }, note: reason } });
+      return m;
+    });
+    return moved;
+  });
+
+  // ---- fleet: which park a moped belongs to (ADR-0005) --------------------
+  app.post<{ Params: { id: string }; Body: Body }>('/api/fleet/:id/pool', { config: { scope: 'fleet.pool.set' } }, async (req) => {
+    const b = req.body ?? {};
+    const actor = actorOf(req);
+    const pool = oneOf(b, 'pool', VEHICLE_POOLS, { required: true })!;
+    const occurredOn = date(b, 'occurredOn') ?? todayISO(new Date(), env.TZ);
+    const reason = str(b, 'reason', { max: 1000 });
+    const v = await prisma.vehicle.findUnique({ where: { id: req.params.id } });
+    if (!v) throw notFound('vehicle_not_found', 'No such moped.');
+    // A moped that has left the fleet belongs to neither park. Deciding what
+    // a sold moped is for would be a decision about somebody else's property.
+    if (v.state === 'sold' || v.state === 'out') throw conflict('vehicle_gone', 'This moped has left the fleet. A buy-back brings it back, and then it takes a park.');
+    const moved = await prisma.$transaction(async (tx) => {
+      const m = await movePool(tx, { vehicleId: v.id, pool, occurredOn, actorId: actor.id, reason });
+      if (m.changed) {
+        await tx.auditLog.create({
+          data: { actorId: actor.id, action: 'vehicle.pool', entityType: 'vehicle', entityId: v.id, before: { pool: m.from }, after: { pool: m.to }, note: reason },
+        });
+      }
       return m;
     });
     return moved;

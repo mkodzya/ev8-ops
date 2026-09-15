@@ -1,4 +1,4 @@
-import { VEHICLE_STATES, type VehicleState } from '@ev8/shared';
+import { VEHICLE_STATES, type VehiclePool, type VehicleState } from '@ev8/shared';
 import { useEffect, useMemo, useState } from 'react';
 import { errorText, useLoad } from '../lib/use.js';
 import { Field } from '../components/Wizard.js';
@@ -7,7 +7,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { todayISO } from '@ev8/shared';
 import { CustomerName, Empty, Loading, PlaceText, StateBadge, Vin } from '../components/ui.js';
-import { fmtDate } from '../format.js';
+import { fmtDate, formatGel } from '../format.js';
 import { useT } from '../i18n/index.js';
 
 interface Vehicle {
@@ -18,6 +18,9 @@ interface Vehicle {
   year: number | null;
   arrivedOn: string | null;
   state: VehicleState;
+  pool: VehiclePool | null;
+  weeklyRateTetri: number | null;
+  salePriceTetri: number | null;
   location: { id: string; name: string } | null;
   currentRental: { id: string; number: string; paidThrough: string | null; customer: { id: string; name: string; nameKa: string | null; nameLat: string | null } } | null;
 }
@@ -26,6 +29,15 @@ interface Fleet {
   byState: Record<VehicleState, number>;
   vehicles: Vehicle[];
 }
+
+/**
+ * The park a moped counts in on this screen. A moped that has left the fleet
+ * belongs to neither park, and one nobody has decided on is its own answer
+ * rather than the likelier of the two (ADR-0005).
+ */
+type PoolKey = VehiclePool | 'none' | 'gone';
+const POOL_KEYS: PoolKey[] = ['rent', 'sale', 'none', 'gone'];
+const poolOf = (v: Vehicle): PoolKey => (v.state === 'sold' || v.state === 'out' ? 'gone' : (v.pool ?? 'none'));
 
 interface Models {
   models: { id: string; brand: string; name: string; forRent: boolean }[];
@@ -40,16 +52,37 @@ export function FleetPage() {
   const [params, setParams] = useSearchParams();
   const [q, setQ] = useState('');
   const state = params.get('state') as VehicleState | null;
+  const pool = params.get('pool') as PoolKey | null;
 
   useEffect(() => {
     void api.get<Fleet>('/api/fleet').then(setData);
   }, [tick]);
 
+  // Both counts are worked out from the rows already on the screen, so the
+  // state counters mean "inside this park" the moment a park is chosen —
+  // a segment reading 29 next to a list of two would be a lie.
+  const byPool = useMemo(() => {
+    const n: Record<PoolKey, number> = { rent: 0, sale: 0, none: 0, gone: 0 };
+    for (const v of data?.vehicles ?? []) n[poolOf(v)]++;
+    return n;
+  }, [data]);
+  const inPool = useMemo(() => (data ? data.vehicles.filter((v) => !pool || poolOf(v) === pool) : []), [data, pool]);
+  const byState = useMemo(() => {
+    const n = Object.fromEntries(VEHICLE_STATES.map((st) => [st, 0])) as Record<VehicleState, number>;
+    for (const v of inPool) n[v.state]++;
+    return n;
+  }, [inPool]);
+
   const rows = useMemo(() => {
-    if (!data) return [];
     const needle = q.trim().toUpperCase();
-    return data.vehicles.filter((v) => (!state || v.state === state) && (!needle || v.vin.endsWith(needle) || v.vin.includes(needle)));
-  }, [data, state, q]);
+    return inPool.filter((v) => (!state || v.state === state) && (!needle || v.vin.endsWith(needle) || v.vin.includes(needle)));
+  }, [inPool, state, q]);
+
+  const pick = (next: { pool?: PoolKey | null; state?: VehicleState | null }) => {
+    const p = 'pool' in next ? next.pool : pool;
+    const st = 'state' in next ? next.state : state;
+    setParams({ ...(p ? { pool: p } : {}), ...(st ? { state: st } : {}) });
+  };
 
   if (!data) return <Loading />;
 
@@ -64,15 +97,31 @@ export function FleetPage() {
         )}
       </header>
       <div className="segments">
-        <div className="seg-row">
-          <button type="button" className={`seg ${!state ? 'on' : ''}`} onClick={() => setParams({})}>
+        {/* What a moped is for comes first: it splits the fleet into two
+            businesses, and the state only means something inside one of
+            them (ADR-0005). */}
+        <div className="seg-row seg-pools">
+          <button type="button" className={`seg seg-pool ${!pool ? 'on' : ''}`} onClick={() => pick({ pool: null, state: null })}>
             <span className="seg-lbl">{t.common.all}</span>
             <span className="seg-num">{data.vehicles.length}</span>
           </button>
+          {POOL_KEYS.map((k) => (
+            <button key={k} type="button" className={`seg seg-pool seg-pool-${k} ${pool === k ? 'on' : ''}`} onClick={() => pick({ pool: k, state: null })}>
+              <span className="seg-lbl">{t.pools[k]}</span>
+              <span className="seg-num">{byPool[k]}</span>
+            </button>
+          ))}
+        </div>
+        <PoolStrip pool={pool} rows={inPool} />
+        <div className="seg-row">
+          <button type="button" className={`seg ${!state ? 'on' : ''}`} onClick={() => pick({ state: null })}>
+            <span className="seg-lbl">{t.common.all}</span>
+            <span className="seg-num">{inPool.length}</span>
+          </button>
           {VEHICLE_STATES.map((st) => (
-            <button key={st} type="button" className={`seg seg-${st} ${state === st ? 'on' : ''}`} onClick={() => setParams({ state: st })}>
+            <button key={st} type="button" className={`seg seg-${st} ${state === st ? 'on' : ''}`} onClick={() => pick({ state: st })}>
               <span className="seg-lbl">{t.states[st]}</span>
-              <span className="seg-num">{data.byState[st]}</span>
+              <span className="seg-num">{byState[st]}</span>
             </button>
           ))}
         </div>
@@ -110,6 +159,9 @@ export function FleetPage() {
               <span className="v-arrived mono">{fmtDate(v.arrivedOn)}</span>
               <span className="v-state">
                 <StateBadge state={v.state} />
+                {/* Inside a park every row would repeat its name; only the
+                    mixed list needs to say which is which. */}
+                {!pool && <span className="v-pool">{t.pools[poolOf(v)]}</span>}
               </span>
               {/* On a phone a rented moped already names its customer one line
                   up, so repeating "at the customer" underneath is noise. */}
@@ -130,6 +182,47 @@ export function FleetPage() {
   );
 }
 
+
+/**
+ * What the chosen park is worth this week. The rental park earns while its
+ * mopeds are out and loses while they stand; the sale park holds money still.
+ * Both numbers come from the rows on screen, so a filter changes them too.
+ */
+function PoolStrip({ pool, rows }: { pool: PoolKey | null; rows: Vehicle[] }) {
+  const t = useT();
+  if (!pool) return null;
+  if (pool === 'none') {
+    return (
+      <div className="pool-strip">
+        <span><b>{rows.length}</b> {t.pools.waiting}</span>
+        <span className="muted">{t.pools.noneHint}</span>
+      </div>
+    );
+  }
+  if (pool === 'gone') return <div className="pool-strip"><span className="muted">{t.pools.goneHint}</span></div>;
+  const sum = (of: Vehicle[], f: (v: Vehicle) => number | null) => of.reduce((n, v) => n + (f(v) ?? 0), 0);
+  const out = rows.filter((v) => v.state === 'rented');
+  const free = rows.filter((v) => v.state === 'available');
+  const inService = rows.filter((v) => v.state === 'service');
+  if (pool === 'rent') {
+    return (
+      <div className="pool-strip">
+        <span>{t.pools.outWith}: <b>{out.length}</b></span>
+        <span>{t.pools.free}: <b>{free.length}</b></span>
+        <span>{t.pools.inService}: <b>{inService.length}</b></span>
+        <span className="pool-good">{t.pools.incoming}: <b className="mono">{formatGel(sum(out, (v) => v.weeklyRateTetri), { decimals: false })}</b> {t.pools.perWeek}</span>
+        <span className="pool-bad">{t.pools.idleMoney}: <b className="mono">{formatGel(sum(free, (v) => v.weeklyRateTetri), { decimals: false })}</b> {t.pools.perWeek}</span>
+      </div>
+    );
+  }
+  return (
+    <div className="pool-strip">
+      <span>{t.pools.onShelf}: <b>{free.length}</b></span>
+      <span>{t.pools.inService}: <b>{inService.length}</b></span>
+      <span>{t.pools.listValue}: <b className="mono">{formatGel(sum(rows, (v) => v.salePriceTetri), { decimals: false })}</b></span>
+    </div>
+  );
+}
 
 /** Adding a moped by hand: the owner's way in before the Odoo import runs. */
 function NewVehicle({ models, onDone }: { models: Models['models']; onDone: () => void }) {

@@ -1,4 +1,4 @@
-import { VEHICLE_STATES, type VehicleState } from '@ev8/shared';
+import { VEHICLE_POOLS, VEHICLE_STATES, type VehiclePool, type VehicleState } from '@ev8/shared';
 import type { FastifyInstance } from 'fastify';
 import { isoDate } from '../lib/dates.js';
 import { prisma } from '../lib/db.js';
@@ -35,7 +35,7 @@ export function fleetRoutes(app: FastifyInstance): void {
       where: { archived: false },
       orderBy: [{ state: 'asc' }, { vin: 'asc' }],
       include: {
-        model: { select: { brand: true, name: true } },
+        model: { select: { brand: true, name: true, weeklyRateTetri: true, salePriceTetri: true } },
         location: { select: { id: true, name: true } },
         currentRental: {
           select: { id: true, number: true, paidThrough: true, customer: { select: { id: true, name: true, nameKa: true, nameLat: true } } },
@@ -44,16 +44,28 @@ export function fleetRoutes(app: FastifyInstance): void {
     });
     const byState = Object.fromEntries(VEHICLE_STATES.map((s) => [s, 0])) as Record<VehicleState, number>;
     for (const v of vehicles) byState[v.state as VehicleState]++;
+    // Counted the way the screen groups them: a moped that has left the fleet
+    // is neither park's, and one nobody has decided on is its own answer.
+    const byPool = { ...Object.fromEntries(VEHICLE_POOLS.map((p) => [p, 0])), none: 0, gone: 0 } as Record<VehiclePool | 'none' | 'gone', number>;
+    for (const v of vehicles) {
+      if (v.state === 'sold' || v.state === 'out') byPool.gone++;
+      else if (v.pool) byPool[v.pool as VehiclePool]++;
+      else byPool.none++;
+    }
     return {
       byState,
+      byPool,
       vehicles: vehicles.map((v) => ({
         id: v.id,
         vin: v.vin,
         model: `${v.model.brand} ${v.model.name}`,
+        weeklyRateTetri: v.model.weeklyRateTetri,
+        salePriceTetri: v.model.salePriceTetri,
         color: v.color,
         year: v.year,
         arrivedOn: isoDate(v.arrivedOn),
         state: v.state,
+        pool: v.pool,
         location: v.location,
         odometerKm: v.odometerKm,
         notes: v.notes,
@@ -96,6 +108,7 @@ export function fleetRoutes(app: FastifyInstance): void {
         year: v.year,
         arrivedOn: isoDate(v.arrivedOn),
         state: v.state,
+        pool: v.pool,
         location: v.location,
         odometerKm: v.odometerKm,
         notes: v.notes,
@@ -108,6 +121,8 @@ export function fleetRoutes(app: FastifyInstance): void {
         occurredOn: isoDate(e.occurredOn),
         fromState: e.fromState,
         toState: e.toState,
+        fromPool: e.fromPool,
+        toPool: e.toPool,
         rentalId: e.rentalId,
         reason: e.reason,
         actor: e.actor?.name ?? null,
