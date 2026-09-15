@@ -357,8 +357,6 @@ export const ka: Dict = {
     move: 'გადატანა',
     menuToRent: 'ქირავნობის პარკში გადატანა',
     menuToSale: 'გასაყიდ პარკში გადატანა',
-    movedToRent: 'გადატანილია ქირავნობაში',
-    movedToSale: 'გადატანილია გასაყიდად',
     incomingSub: (m: string) => `შემოდის ${m} კვირაში`,
     idleSub: (m: string) => `კვირაში ${m} არ შემოდის`,
     notHandedOut: 'არ გაიცემა',
