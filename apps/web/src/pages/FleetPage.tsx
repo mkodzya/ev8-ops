@@ -125,16 +125,17 @@ export function FleetPage() {
   const today = todayISO();
   const rows = useMemo(() => {
     const needle = q.trim().toUpperCase();
-    return inPool
-      .filter(
-        (v) =>
-          (v.id === moved?.id ||
-            ((!state || v.state === state) && (!noPoint || placeOf(v).kind === 'unset'))) &&
-          (!needle || v.vin.endsWith(needle) || v.vin.includes(needle)),
-      )
+    // Every filter at once, and one exception above all of them: a moped that
+    // has just been moved holds its place while the undo is still on offer.
+    // The park it was moved out of is the first filter it stops matching, so
+    // the exception has to sit outside all three and not only the last two.
+    const matches = (v: Vehicle) =>
+      (!pool || poolOf(v) === pool) && (!state || v.state === state) && (!noPoint || placeOf(v).kind === 'unset');
+    return (data?.vehicles ?? [])
+      .filter((v) => (v.id === moved?.id || matches(v)) && (!needle || v.vin.endsWith(needle) || v.vin.includes(needle)))
       .slice()
       .sort((a, b) => (quietDays(b, today) ?? -1) - (quietDays(a, today) ?? -1));
-  }, [inPool, state, noPoint, q, today, moved]);
+  }, [data, pool, state, noPoint, q, today, moved]);
 
   // One filter at a time below the park: a card is either the state it names
   // or the mopeds nobody has placed, and clicking the one that is already on
