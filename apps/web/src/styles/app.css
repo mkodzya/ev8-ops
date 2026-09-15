@@ -727,7 +727,7 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
 .v-move { grid-area: move; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .v-move:empty { display: none; }
 /* What a row just did, and the way back, in the place the click happened. */
-.v-moved { color: var(--accent); }
+.v-moved { color: var(--accent); white-space: nowrap; }
 .moved-what { font: var(--text-label); }
 .mv {
   border: var(--hairline) solid var(--line-soft);
@@ -804,7 +804,7 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
   .vlist-head, .vrow {
     display: grid;
     grid-template-areas: none;
-    grid-template-columns: 170px minmax(100px, 1fr) 80px 140px minmax(150px, 1.2fr) 80px 150px;
+    grid-template-columns: 170px minmax(100px, 1fr) 80px 140px minmax(150px, 1.2fr) 80px 56px;
     align-items: center;
     gap: 12px;
     padding: 10px 12px;
@@ -825,7 +825,7 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
   /* Nine columns do not always fit; the list scrolls sideways rather than
      the page doing it. */
   .vlist { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-card); padding: 8px 4px; overflow-x: auto; }
-  .vlist-head, .vrow { min-width: 940px; }
+  .vlist-head, .vrow { min-width: 860px; }
   .v-state, .v-vin, .v-model, .v-color, .v-where, .v-quiet, .v-move { grid-area: auto; text-align: left; font: var(--text-body-sm); color: inherit; display: block; }
   .v-where { margin-top: 0; }
   .v-quiet { text-align: right; color: var(--muted); }
@@ -833,6 +833,10 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
      side by side they wrap into the column next door. Always visible — an
      action that appears only under a pointer is an action nobody finds. */
   .v-move { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+  /* The last column is one button wide. The sentence a move leaves behind
+     needs more, so for those ten seconds it reaches back over the silence
+     beside it rather than spilling off the edge. */
+  .vrow .v-moved { grid-column: 6 / 8; flex-direction: row; align-items: center; justify-content: flex-end; }
   .vlist-head .num { text-align: right; }
 }
 
