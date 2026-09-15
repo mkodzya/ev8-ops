@@ -606,13 +606,15 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
 }
 
 /* ---- Fleet: segments that stay, rows that change shape (U3) ---------- */
+/* Only the park row sticks. The cards below it are data, and data that
+   follows you down a list of forty-eight rows is a wall, not a help. */
 .segments {
   position: sticky;
   top: 0;
   z-index: 5;
   background: var(--bg);
-  padding: 8px 0 12px;
-  margin-bottom: 4px;
+  padding: 8px 0 10px;
+  margin-bottom: 0;
 }
 .seg-row { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 6px; scrollbar-width: none; }
 .seg-row::-webkit-scrollbar { display: none; }
@@ -648,37 +650,38 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
 .seg-pool-none.on { background: var(--service); border-color: var(--service); }
 .seg-pool-gone.on { background: var(--grey); border-color: var(--grey); }
 
-/* Where the whole fleet stands, above the parks and before any filter. */
-.where-strip {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 4px 18px;
-  padding: 12px 16px;
-  margin-bottom: 14px;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-card);
-  font: var(--text-body-sm);
-}
-.where-strip b { font-weight: 500; }
-
-/* What the park is worth this week: three numbers, each with its consequence. */
-.kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 10px; }
+/* The park's numbers, which are also its filter: a number, the state it
+   stands for, and what that state costs or brings. */
+.kpis { display: grid; gap: 10px; margin-bottom: 14px; }
+.kpis-2 { grid-template-columns: repeat(2, 1fr); }
+.kpis-3 { grid-template-columns: repeat(3, 1fr); }
+.kpis-4 { grid-template-columns: repeat(4, 1fr); }
 .kpi {
+  display: block;
+  width: 100%;
+  text-align: left;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius-card);
   padding: 14px 16px;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  transition: var(--ease);
 }
-.k-n { font: var(--text-h2); }
-.k-l { margin-top: 2px; }
-.k-s { font: var(--text-label); color: var(--muted); margin-top: 6px; }
+.kpi:hover { border-color: var(--accent-hover); }
+.kpi.on { background: var(--accent-soft); border-color: var(--accent); }
+.kpi-warn { border-color: var(--service); }
+.kpi-warn .k-n { color: var(--service-ink); }
+.kpi-warn.on { background: var(--warn-soft); }
+.k-n { display: block; font: var(--text-h2); }
+.k-l { display: block; margin-top: 2px; }
+.k-s { display: block; font: var(--text-label); color: var(--muted); margin-top: 6px; }
 @media (max-width: 719px) {
-  .kpis { grid-template-columns: 1fr; gap: 8px; }
-  .kpi { padding: 10px 14px; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+  .kpis { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .kpi { padding: 10px 12px; }
   .k-n { font: var(--text-h3); }
-  .k-s { margin-top: 0; width: 100%; }
+  .k-s { display: none; }
 }
 /* Which park a row is in, said only where both are on screen at once. */
 .pool-mark { font: var(--text-label); color: var(--accent); }
@@ -691,7 +694,8 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
   margin-top: 3px;
 }
 
-.segments .input-search { width: 100%; }
+.page-head .input-search { width: 210px; }
+@media (max-width: 599px) { .page-head .input-search { width: 100%; } }
 
 .vlist { list-style: none; margin: 0; padding: 0; }
 .vlist-head { display: none; }

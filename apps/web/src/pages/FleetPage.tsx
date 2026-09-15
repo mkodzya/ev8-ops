@@ -67,6 +67,7 @@ export function FleetPage() {
   const [q, setQ] = useState('');
   const state = params.get('state') as VehicleState | null;
   const pool = params.get('pool') as PoolKey | null;
+  const noPoint = params.get('place') === 'unset';
 
   useEffect(() => {
     void api.get<Fleet>('/api/fleet').then(setData);
@@ -86,6 +87,7 @@ export function FleetPage() {
     for (const v of inPool) n[v.state]++;
     return n;
   }, [inPool]);
+  const unplaced = useMemo(() => inPool.filter((v) => placeOf(v).kind === 'unset').length, [inPool]);
 
   // Longest silence on top: the list is a queue of decisions, not a register.
   // A moped with no date to count from sinks to the bottom rather than posing
@@ -94,15 +96,24 @@ export function FleetPage() {
   const rows = useMemo(() => {
     const needle = q.trim().toUpperCase();
     return inPool
-      .filter((v) => (!state || v.state === state) && (!needle || v.vin.endsWith(needle) || v.vin.includes(needle)))
+      .filter(
+        (v) =>
+          (!state || v.state === state) &&
+          (!noPoint || placeOf(v).kind === 'unset') &&
+          (!needle || v.vin.endsWith(needle) || v.vin.includes(needle)),
+      )
       .slice()
       .sort((a, b) => (quietDays(b, today) ?? -1) - (quietDays(a, today) ?? -1));
-  }, [inPool, state, q, today]);
+  }, [inPool, state, noPoint, q, today]);
 
-  const pick = (next: { pool?: PoolKey | null; state?: VehicleState | null }) => {
+  // One filter at a time below the park: a card is either the state it names
+  // or the mopeds nobody has placed, and clicking the one that is already on
+  // turns it off. Two of them at once would ask a question no card answers.
+  const pick = (next: { pool?: PoolKey | null; state?: VehicleState | null; noPoint?: boolean }) => {
     const p = 'pool' in next ? next.pool : pool;
-    const st = 'state' in next ? next.state : state;
-    setParams({ ...(p ? { pool: p } : {}), ...(st ? { state: st } : {}) });
+    const st = 'state' in next ? next.state : 'noPoint' in next ? null : state;
+    const np = 'noPoint' in next ? next.noPoint : 'state' in next ? false : noPoint;
+    setParams({ ...(p ? { pool: p } : {}), ...(st ? { state: st } : {}), ...(np ? { place: 'unset' } : {}) });
   };
 
   if (!data) return <Loading />;
@@ -113,11 +124,13 @@ export function FleetPage() {
         <h1>{t.fleet.title}</h1>
         <span className="muted">{t.fleet.count(data.vehicles.length)}</span>
         <span className="spacer" />
+        {/* Search is a field, not a band: it belongs beside the title, where
+            it costs no row of its own. */}
+        <input className="input input-search mono" placeholder={t.fleet.searchHint} value={q} onChange={(e) => setQ(e.target.value)} />
         {can('settings.manage') && models.data && (
           <NewVehicle models={models.data.models} onDone={() => setTick((n) => n + 1)} />
         )}
       </header>
-      <WhereStrip rows={data.vehicles} />
       <div className="segments">
         {/* What a moped is for comes first: it splits the fleet into two
             businesses, and the state only means something inside one of
@@ -134,21 +147,11 @@ export function FleetPage() {
             </button>
           ))}
         </div>
-        <PoolCards pool={pool} rows={inPool} today={today} />
-        <div className="seg-row">
-          <button type="button" className={`seg ${!state ? 'on' : ''}`} onClick={() => pick({ state: null })}>
-            <span className="seg-lbl">{t.common.all}</span>
-            <span className="seg-num">{inPool.length}</span>
-          </button>
-          {VEHICLE_STATES.map((st) => (
-            <button key={st} type="button" className={`seg seg-${st} ${state === st ? 'on' : ''}`} onClick={() => pick({ state: st })}>
-              <span className="seg-lbl">{t.states[st]}</span>
-              <span className="seg-num">{byState[st]}</span>
-            </button>
-          ))}
-        </div>
-        <input className="input input-search mono" placeholder={t.fleet.searchHint} value={q} onChange={(e) => setQ(e.target.value)} />
       </div>
+      {/* The cards are the state breakdown of the park, so they are the state
+          filter as well: a number, the filter it stands for, and what it costs
+          or brings underneath. A second row of pills would say this twice. */}
+      <PoolCards pool={pool} rows={inPool} state={state} noPoint={noPoint} unplaced={unplaced} byState={byState} pick={pick} />
       {rows.length === 0 ? (
         <Empty text={t.fleet.empty} />
       ) : (
@@ -249,82 +252,92 @@ function MoveChips({ v, can, onDone }: { v: Vehicle; can: boolean; onDone: () =>
 }
 
 /**
- * Where the whole fleet stands, before any filter — and the point of the line
- * is the third number: how many mopeds nobody has placed yet.
+ * The park's own numbers, and the filter at the same time. Each card is a
+ * state of this park with what it costs or brings under it, plus the one
+ * question a state cannot answer: how many mopeds nobody has placed. Clicking
+ * the card that is already on turns it off.
  */
-function WhereStrip({ rows }: { rows: Vehicle[] }) {
+function PoolCards({
+  pool,
+  rows,
+  state,
+  noPoint,
+  unplaced,
+  byState,
+  pick,
+}: {
+  pool: PoolKey | null;
+  rows: Vehicle[];
+  state: VehicleState | null;
+  noPoint: boolean;
+  unplaced: number;
+  byState: Record<VehicleState, number>;
+  pick: (next: { state?: VehicleState | null; noPoint?: boolean }) => void;
+}) {
   const t = useT();
-  const n = { customer: 0, service: 0, point: 0, unset: 0, gone: 0 };
-  for (const v of rows) {
-    const place = placeOf(v);
-    if (place.kind === 'gone') n.gone++;
-    else if (place.kind === 'customer') n.customer++;
-    else if (v.state === 'service') n.service++;
-    else if (place.kind === 'point') n.point++;
-    else n.unset++;
-  }
-  return (
-    <div className="where-strip">
-      <span className="muted">{t.points.whereToday}:</span>
-      <span><b>{n.customer}</b> {t.points.atCustomersShort}</span>
-      <span><b>{n.service}</b> {t.points.inServiceShort}</span>
-      <span><b>{n.point}</b> {t.points.atPointsShort}</span>
-      <span className={n.unset > 0 ? 'place-unset' : ''}><b>{n.unset}</b> {t.points.unsetShort}</span>
-      <span className="muted"><b>{n.gone}</b> {t.points.goneShort}</span>
-    </div>
-  );
-}
-
-/**
- * What the chosen park is worth this week — three numbers, each with what it
- * costs or brings under it. The rental park earns while its mopeds are out and
- * loses while they stand; the sale park holds money still. Everything is read
- * off the rows on screen, so a filter moves these too.
- */
-function PoolCards({ pool, rows, today }: { pool: PoolKey | null; rows: Vehicle[]; today: string }) {
-  const t = useT();
-  if (!pool) return null;
   const sum = (of: Vehicle[], f: (v: Vehicle) => number | null) => of.reduce((n, v) => n + (f(v) ?? 0), 0);
   const money = (n: number) => formatGel(n, { decimals: false });
-  const out = rows.filter((v) => v.state === 'rented');
-  const free = rows.filter((v) => v.state === 'available');
-  const inService = rows.filter((v) => v.state === 'service');
-  const quiets = rows.map((v) => quietDays(v, today)).filter((n): n is number => n != null);
+  const weekly = (st: VehicleState) => money(sum(rows.filter((v) => v.state === st), (v) => v.weeklyRateTetri));
 
-  let cards: { n: string | number; label: string; sub: string }[];
+  type Card = { key: string; n: number; label: string; sub: string; on: boolean; go: () => void; warn?: boolean };
+  const forState = (st: VehicleState, label: string, sub: string): Card => ({
+    key: st,
+    n: byState[st],
+    label,
+    sub,
+    on: state === st,
+    go: () => pick({ state: state === st ? null : st }),
+  });
+  const placeCard: Card = {
+    key: 'place',
+    n: unplaced,
+    label: t.fleet.noPoint,
+    sub: t.pools.noPointSub,
+    on: noPoint,
+    warn: unplaced > 0,
+    go: () => pick({ noPoint: !noPoint }),
+  };
+
+  let cards: Card[];
   if (pool === 'rent') {
     cards = [
-      { n: out.length, label: t.pools.outWith, sub: t.pools.incomingSub(money(sum(out, (v) => v.weeklyRateTetri))) },
-      { n: free.length, label: t.pools.free, sub: t.pools.idleSub(money(sum(free, (v) => v.weeklyRateTetri))) },
-      { n: inService.length, label: t.pools.inService, sub: t.pools.notHandedOut },
+      forState('rented', t.pools.outWith, t.pools.incomingSub(weekly('rented'))),
+      forState('available', t.pools.free, t.pools.idleSub(weekly('available'))),
+      forState('service', t.pools.inService, t.pools.notHandedOut),
+      placeCard,
     ];
   } else if (pool === 'sale') {
     cards = [
-      { n: free.length, label: t.pools.onShelf, sub: t.pools.listSub(money(sum(rows, (v) => v.salePriceTetri))) },
-      { n: inService.length, label: t.pools.inPrep, sub: t.pools.notShown },
-      { n: quiets.length ? Math.max(...quiets) : t.common.dash, label: t.pools.oldest, sub: t.pools.shelfSince },
+      forState('available', t.pools.onShelf, t.pools.listSub(money(sum(rows, (v) => v.salePriceTetri)))),
+      forState('service', t.pools.inPrep, t.pools.notShown),
+      placeCard,
     ];
   } else if (pool === 'none') {
     cards = [
-      { n: rows.length, label: t.pools.waiting, sub: t.pools.neverChosen },
-      { n: free.length, label: t.pools.free, sub: t.pools.bothWays },
-      { n: inService.length, label: t.pools.inService, sub: t.pools.decidedOnExit },
+      forState('available', t.pools.free, t.pools.bothWays),
+      forState('service', t.pools.inService, t.pools.decidedOnExit),
+      placeCard,
     ];
+  } else if (pool === 'gone') {
+    cards = [forState('sold', t.states.sold, t.pools.goneMoney), forState('out', t.states.out, t.pools.buyBackNote)];
   } else {
+    // The whole fleet. The idle money counts only what is actually rentable —
+    // fifteen of the free ones are Luyuan, which never carried a weekly rate.
     cards = [
-      { n: rows.filter((v) => v.state === 'sold').length, label: t.states.sold, sub: t.pools.goneMoney },
-      { n: rows.filter((v) => v.state === 'out').length, label: t.states.out, sub: t.common.dash },
-      { n: rows.length, label: t.pools.canReturn, sub: t.pools.buyBackNote },
+      forState('available', t.pools.free, t.pools.idleAllSub(weekly('available'))),
+      forState('rented', t.pools.outWith, t.pools.incomingSub(weekly('rented'))),
+      forState('service', t.pools.inService, t.pools.notHandedOut),
+      placeCard,
     ];
   }
   return (
-    <div className="kpis">
+    <div className={`kpis kpis-${cards.length}`}>
       {cards.map((c) => (
-        <div className="kpi" key={c.label}>
-          <div className="k-n mono">{c.n}</div>
-          <div className="k-l">{c.label}</div>
-          <div className="k-s">{c.sub}</div>
-        </div>
+        <button type="button" key={c.key} className={`kpi ${c.on ? 'on' : ''} ${c.warn && c.n > 0 ? 'kpi-warn' : ''}`} onClick={c.go}>
+          <span className="k-n mono">{c.n}</span>
+          <span className="k-l">{c.label}</span>
+          <span className="k-s">{c.sub}</span>
+        </button>
       ))}
     </div>
   );
