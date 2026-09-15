@@ -6,6 +6,7 @@ import { Empty, Loading } from '../components/ui.js';
 import { Field } from '../components/Wizard.js';
 import { fmtDate, formatGel } from '../format.js';
 import { useT } from '../i18n/index.js';
+import { Drawer } from '../components/Drawer.js';
 import { errorText, useLoad } from '../lib/use.js';
 import { useSession } from '../session.js';
 
@@ -121,13 +122,6 @@ function NewPurchase({ onDone, onError }: { onDone: () => void; onError: (e: str
   const [f, setF] = useState({ supplierId: '', invoiceNo: '', invoiceDate: '', currency: 'CNY', orderedOn: todayISO(), extras: '', extrasNote: '' });
   const [busy, setBusy] = useState(false);
 
-  if (!open) {
-    return (
-      <button type="button" className="pill pill-sm pill-accent" onClick={() => setOpen(true)}>
-        + {t.purchases.newOrder}
-      </button>
-    );
-  }
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -152,7 +146,13 @@ function NewPurchase({ onDone, onError }: { onDone: () => void; onError: (e: str
   };
 
   return (
-    <form className="card card-drawer form" onSubmit={submit}>
+    <>
+      <button type="button" className="pill pill-sm pill-accent" onClick={() => setOpen(true)}>
+        + {t.purchases.newOrder}
+      </button>
+      {open && (
+        <Drawer title={t.purchases.newOrder} onClose={() => setOpen(false)}>
+          <form className="form" onSubmit={submit}>
       <div className="two-col">
         <Field label={t.purchases.supplier}>
           <select className="input" value={f.supplierId} onChange={(e) => setF({ ...f, supplierId: e.target.value })} required>
@@ -191,6 +191,9 @@ function NewPurchase({ onDone, onError }: { onDone: () => void; onError: (e: str
           {busy ? t.common.checking : t.actions.confirm}
         </button>
       </div>
-    </form>
+          </form>
+        </Drawer>
+      )}
+    </>
   );
 }

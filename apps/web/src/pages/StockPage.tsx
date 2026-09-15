@@ -6,6 +6,7 @@ import { Empty, Loading } from '../components/ui.js';
 import { Field } from '../components/Wizard.js';
 import { formatGel } from '../format.js';
 import { useT } from '../i18n/index.js';
+import { Drawer } from '../components/Drawer.js';
 import { errorText, useLoad } from '../lib/use.js';
 import { useSession } from '../session.js';
 
@@ -159,13 +160,6 @@ function NewPart({ onDone, onError }: { onDone: () => void; onError: (e: string)
   const [f, setF] = useState({ name: '', nameKa: '', sku: '', unit: 'pcs', minQty: '', price: '' });
   const [busy, setBusy] = useState(false);
 
-  if (!open) {
-    return (
-      <button type="button" className="pill pill-sm pill-accent" onClick={() => setOpen(true)}>
-        + {t.stock.newPart}
-      </button>
-    );
-  }
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -190,7 +184,13 @@ function NewPart({ onDone, onError }: { onDone: () => void; onError: (e: string)
   };
 
   return (
-    <form className="card card-drawer form" onSubmit={submit}>
+    <>
+      <button type="button" className="pill pill-sm pill-accent" onClick={() => setOpen(true)}>
+        + {t.stock.newPart}
+      </button>
+      {open && (
+        <Drawer title={t.stock.newPart} onClose={() => setOpen(false)}>
+          <form className="form" onSubmit={submit}>
       <div className="two-col">
         <Field label={t.stock.name}>
           <input className="input" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} required autoFocus />
@@ -225,6 +225,9 @@ function NewPart({ onDone, onError }: { onDone: () => void; onError: (e: string)
           {busy ? t.common.checking : t.actions.confirm}
         </button>
       </div>
-    </form>
+          </form>
+        </Drawer>
+      )}
+    </>
   );
 }

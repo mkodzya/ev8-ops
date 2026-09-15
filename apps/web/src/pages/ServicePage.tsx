@@ -6,6 +6,7 @@ import { Empty, Loading, Vin } from '../components/ui.js';
 import { Field } from '../components/Wizard.js';
 import { fmtDate, formatGel } from '../format.js';
 import { useT } from '../i18n/index.js';
+import { Drawer } from '../components/Drawer.js';
 import { errorText, useLoad } from '../lib/use.js';
 import { useSession } from '../session.js';
 
@@ -138,13 +139,6 @@ export function NewJob({ vehicleId, onDone, onError }: { vehicleId?: string; onD
   const chosen = repairable.find((v) => v.id === (f.vehicleId || vehicleId));
   const rented = chosen?.state === 'rented';
 
-  if (!open) {
-    return (
-      <button type="button" className="pill pill-sm pill-accent" onClick={() => setOpen(true)}>
-        + {t.service.newJob}
-      </button>
-    );
-  }
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -169,7 +163,13 @@ export function NewJob({ vehicleId, onDone, onError }: { vehicleId?: string; onD
   };
 
   return (
-    <form className="card card-drawer form" onSubmit={submit}>
+    <>
+      <button type="button" className="pill pill-sm pill-accent" onClick={() => setOpen(true)}>
+        + {t.service.newJob}
+      </button>
+      {open && (
+        <Drawer title={t.service.newJob} onClose={() => setOpen(false)}>
+          <form className="form" onSubmit={submit}>
       {!vehicleId && (
         <Field label={t.service.vehicle}>
           <select className="input" value={f.vehicleId} onChange={(e) => setF({ ...f, vehicleId: e.target.value })} required>
@@ -218,6 +218,9 @@ export function NewJob({ vehicleId, onDone, onError }: { vehicleId?: string; onD
           {busy ? t.common.checking : t.actions.confirm}
         </button>
       </div>
-    </form>
+          </form>
+        </Drawer>
+      )}
+    </>
   );
 }
