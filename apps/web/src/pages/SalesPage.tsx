@@ -6,6 +6,7 @@ import { Empty, Loading, Vin } from '../components/ui.js';
 import { Field } from '../components/Wizard.js';
 import { fmtDate, formatGel } from '../format.js';
 import { useT } from '../i18n/index.js';
+import { SortHead, useSortable } from '../lib/sortable.js';
 import { Drawer } from '../components/Drawer.js';
 import { errorText, useLoad } from '../lib/use.js';
 import { useSession } from '../session.js';
@@ -42,6 +43,22 @@ export function SalesPage() {
   const t = useT();
   const { can } = useSession();
   const { data, error, reload } = useLoad<{ overdueTetri: number; sales: Sale[] }>('/api/sales');
+  // Every heading sorts, and the newest sale breaks every tie.
+  const sorted = useSortable(
+    data?.sales ?? [],
+    {
+      number: { value: (s) => s.number },
+      soldOn: { value: (s) => s.soldOn, first: 'desc' },
+      buyer: { value: (s) => s.customer.name },
+      vehicle: { value: (s) => s.vehicle?.vin ?? s.vinNote },
+      price: { value: (s) => s.priceTetri, first: 'desc' },
+      paid: { value: (s) => s.paidTetri, first: 'desc' },
+      outstanding: { value: (s) => s.outstandingTetri, first: 'desc' },
+      overdue: { value: (s) => s.overdueTetri, first: 'desc' },
+      status: { value: (s) => s.status },
+    },
+    (a, b) => b.soldOn.localeCompare(a.soldOn) || a.number.localeCompare(b.number),
+  );
   const [err, setErr] = useState<string | null>(null);
 
   if (error) return <Empty text={error} />;
@@ -68,19 +85,19 @@ export function SalesPage() {
           <table className="table">
             <thead>
               <tr>
-                <th>{t.sales.number}</th>
-                <th>{t.sales.soldOn}</th>
-                <th>{t.sales.buyer}</th>
-                <th>{t.sales.vehicle}</th>
-                <th className="num">{t.sales.price}</th>
-                <th className="num">{t.sales.paid}</th>
-                <th className="num">{t.sales.outstanding}</th>
-                <th className="num">{t.sales.overdue}</th>
-                <th>{t.fleet.state}</th>
+                <th><SortHead k="number" label={t.sales.number} {...sorted} /></th>
+                <th><SortHead k="soldOn" label={t.sales.soldOn} {...sorted} /></th>
+                <th><SortHead k="buyer" label={t.sales.buyer} {...sorted} /></th>
+                <th><SortHead k="vehicle" label={t.sales.vehicle} {...sorted} /></th>
+                <th className="num"><SortHead k="price" label={t.sales.price} {...sorted} /></th>
+                <th className="num"><SortHead k="paid" label={t.sales.paid} {...sorted} /></th>
+                <th className="num"><SortHead k="outstanding" label={t.sales.outstanding} {...sorted} /></th>
+                <th className="num"><SortHead k="overdue" label={t.sales.overdue} {...sorted} /></th>
+                <th><SortHead k="status" label={t.fleet.state} {...sorted} /></th>
               </tr>
             </thead>
             <tbody>
-              {data.sales.map((s) => (
+              {sorted.rows.map((s) => (
                 <tr key={s.id} className={s.status === 'cancelled' ? 'row-off' : ''}>
                   <td>
                     <Link to={`/sales/${s.id}`} className="mono">

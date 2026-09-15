@@ -254,6 +254,28 @@ a { color: var(--accent); text-decoration: none; }
   vertical-align: bottom;
 }
 .table th.num { text-align: right; }
+/* A heading that sorts looks like a heading until the pointer is on it: a row
+   of buttons at the top of a list is a toolbar, not a heading. Every list in
+   the system uses it, so it lives with the tables and not with the fleet. */
+.col-sort {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  color: inherit;
+  cursor: pointer;
+  transition: var(--ease);
+}
+.num .col-sort, th.num .col-sort { flex-direction: row-reverse; }
+.col-sort:hover, .col-sort.on { color: var(--ink); }
+/* The arrow keeps its place whether or not it is there, so a heading does not
+   jump sideways the moment you sort by it. */
+.col-arrow { font-style: normal; font-size: 11px; line-height: 1; width: 8px; display: inline-block; }
 .table td { padding: var(--row-y) 12px; border-top: 1px solid var(--line-soft); vertical-align: top; }
 .table tbody tr:first-child td { border-top: 0; }
 @media (hover: hover) {
@@ -1002,28 +1024,6 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
     margin-bottom: 2px;
   }
   .vlist-head + .vrow { border-top: 0; }
-  /* A heading that sorts looks like a heading until the pointer is on it:
-     a column of buttons at the top of a list is a toolbar, not a heading. */
-  .col-sort {
-    display: inline-flex;
-    align-items: baseline;
-    gap: 4px;
-    border: 0;
-    background: none;
-    padding: 0;
-    font: inherit;
-    letter-spacing: inherit;
-    text-transform: inherit;
-    color: inherit;
-    cursor: pointer;
-    transition: var(--ease);
-  }
-  .num .col-sort { flex-direction: row-reverse; }
-  .col-sort:hover { color: var(--ink); }
-  .col-sort.on { color: var(--ink); }
-  /* The arrow keeps its place whether or not it is there, so a heading does
-     not jump sideways the moment you sort by it. */
-  .col-arrow { font-style: normal; font-size: 11px; line-height: 1; width: 8px; display: inline-block; }
   /* Six columns do not always fit; the list scrolls sideways rather than
      the page doing it. */
   .vlist { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-card); padding: 4px 2px; overflow-x: auto; }

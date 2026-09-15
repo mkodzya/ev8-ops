@@ -11,6 +11,7 @@ import { todayISO } from '@ev8/shared';
 import { ColorText, CustomerName, Empty, Loading, PlaceText, StateBadge, Vin } from '../components/ui.js';
 import { placeOf } from '../lib/place.js';
 import { rowClick } from '../lib/rowLink.js';
+import { SortHead, useSortable } from '../lib/sortable.js';
 import { fmtDate, formatGel } from '../format.js';
 import { useT } from '../i18n/index.js';
 
@@ -41,17 +42,6 @@ interface Fleet {
  * rather than the likelier of the two (ADR-0005).
  */
 const UNDO_WINDOW_MS = Number.parseFloat(tokens.undoWindow) * 1000;
-
-/**
- * What a column sorts by, and which way it means first.
- *
- * Silence leads by default and leads downwards, because the list is a queue of
- * decisions: the moped nobody has touched since March is the one to answer
- * for. The others read upwards, the way a person expects a list of words to.
- */
-const SORTS = ['model', 'color', 'state', 'where', 'quiet'] as const;
-type SortKey = (typeof SORTS)[number];
-const FIRST_DIR: Record<SortKey, 'asc' | 'desc'> = { model: 'asc', color: 'asc', state: 'asc', where: 'asc', quiet: 'desc' };
 
 type PoolKey = VehiclePool | 'none' | 'gone';
 const POOL_KEYS: PoolKey[] = ['rent', 'sale', 'none', 'gone'];
@@ -91,9 +81,6 @@ export function FleetPage() {
   const state = params.get('state') as VehicleState | null;
   const pool = params.get('pool') as PoolKey | null;
   const noPoint = params.get('place') === 'unset';
-  const sortParam = params.get('sort') as SortKey | null;
-  const sort: SortKey = sortParam && SORTS.includes(sortParam) ? sortParam : 'quiet';
-  const dir = params.get('dir') === 'asc' ? 'asc' : params.get('dir') === 'desc' ? 'desc' : FIRST_DIR[sort];
 
   useEffect(() => {
     void api.get<Fleet>('/api/fleet').then(setData);
@@ -141,17 +128,13 @@ export function FleetPage() {
   }, [inPool]);
   const unplaced = useMemo(() => inPool.filter((v) => placeOf(v).kind === 'unset').length, [inPool]);
 
-  // Longest silence on top: the list is a queue of decisions, not a register.
-  // A moped with no date to count from sinks to the bottom rather than posing
-  // as the freshest thing in the yard.
-  const today = todayISO();
   // Where a moped stands, as the one string the column is ordered by: the
   // renter's name, the point, or nothing — and nothing sorts last, whichever
   // way the column is pointing, because "nobody said" is not a name.
-  const whereKey = (v: Vehicle) =>
-    v.currentRental?.customer.name ?? v.location?.name ?? '';
+  const whereKey = (v: Vehicle) => v.currentRental?.customer.name ?? v.location?.name ?? '';
 
-  const rows = useMemo(() => {
+  const today = todayISO();
+  const shown = useMemo(() => {
     const needle = q.trim().toUpperCase();
     // Every filter at once, and one exception above all of them: a moped that
     // has just been moved holds its place while the undo is still on offer.
@@ -159,52 +142,39 @@ export function FleetPage() {
     // the exception has to sit outside all three and not only the last two.
     const matches = (v: Vehicle) =>
       (!pool || poolOf(v) === pool) && (!state || v.state === state) && (!noPoint || placeOf(v).kind === 'unset');
-    const sign = dir === 'asc' ? 1 : -1;
-    const by = (a: Vehicle, b: Vehicle): number => {
-      if (sort === 'model') return sign * a.model.localeCompare(b.model);
-      if (sort === 'color') {
-        // The six we know, in their own order; a word we do not know, and then
-        // no word at all, after them — whichever way the column points.
-        const ka = colorOf(a.color);
-        const kb = colorOf(b.color);
-        if (!ka || !kb) return ka ? -1 : kb ? 1 : (a.color ? -1 : b.color ? 1 : 0);
-        return sign * (VEHICLE_COLORS.indexOf(ka) - VEHICLE_COLORS.indexOf(kb));
-      }
-      if (sort === 'state') return sign * (VEHICLE_STATES.indexOf(a.state) - VEHICLE_STATES.indexOf(b.state));
-      if (sort === 'where') {
-        const ka = whereKey(a);
-        const kb = whereKey(b);
-        if (!ka || !kb) return ka ? -1 : kb ? 1 : 0;
-        return sign * ka.localeCompare(kb);
-      }
-      const qa = quietDays(a, today);
-      const qb = quietDays(b, today);
-      if (qa == null || qb == null) return qa == null ? (qb == null ? 0 : 1) : -1;
-      return sign * (qa - qb);
-    };
-    return (data?.vehicles ?? [])
-      .filter((v) => (v.id === moved?.id || matches(v)) && (!needle || v.vin.endsWith(needle) || v.vin.includes(needle)))
-      .slice()
-      // The VIN breaks every tie, so the same list is the same list twice.
-      .sort((a, b) => by(a, b) || a.vin.localeCompare(b.vin));
-  }, [data, pool, state, noPoint, q, today, moved, sort, dir]);
+    return (data?.vehicles ?? []).filter(
+      (v) => (v.id === moved?.id || matches(v)) && (!needle || v.vin.endsWith(needle) || v.vin.includes(needle)),
+    );
+  }, [data, pool, state, noPoint, q, moved]);
 
-  // One filter at a time below the park: a card is either the state it names
-  // or the mopeds nobody has placed, and clicking the one that is already on
-  // turns it off. Two of them at once would ask a question no card answers.
-  const pick = (next: { pool?: PoolKey | null; state?: VehicleState | null; noPoint?: boolean; sort?: SortKey }) => {
+  // Longest silence on top by default: the list is a queue of decisions, not a
+  // register. The order itself is the system's one sorting rule, shared with
+  // every other list (lib/sortable).
+  const sorted = useSortable(
+    shown,
+    {
+      model: { value: (v) => v.model },
+      color: { value: (v) => { const c = colorOf(v.color); return c ? VEHICLE_COLORS.indexOf(c) : null; } },
+      state: { value: (v) => VEHICLE_STATES.indexOf(v.state) },
+      where: { value: (v) => whereKey(v) },
+      quiet: { value: (v) => quietDays(v, today), first: 'desc' },
+    },
+    (a, b) => a.vin.localeCompare(b.vin),
+    'quiet',
+  );
+  const rows = sorted.rows;
+
+  const pick = (next: { pool?: PoolKey | null; state?: VehicleState | null; noPoint?: boolean }) => {
     const p = 'pool' in next ? next.pool : pool;
     const st = 'state' in next ? next.state : 'noPoint' in next ? null : state;
     const np = 'noPoint' in next ? next.noPoint : 'state' in next ? false : noPoint;
-    // Clicking the column that is already sorting turns it round; a new column
-    // starts the way that column is usually read.
-    const so = next.sort ?? sort;
-    const di = next.sort ? (next.sort === sort ? (dir === 'asc' ? 'desc' : 'asc') : FIRST_DIR[next.sort]) : dir;
+    // The order is not a filter and outlives every one of them.
+    const order = Object.fromEntries([...params.entries()].filter(([k]) => k === 'sort' || k === 'dir'));
     setParams({
+      ...order,
       ...(p ? { pool: p } : {}),
       ...(st ? { state: st } : {}),
       ...(np ? { place: 'unset' } : {}),
-      ...(so === 'quiet' && di === FIRST_DIR.quiet ? {} : { sort: so, dir: di }),
     });
   };
 
@@ -310,19 +280,19 @@ export function FleetPage() {
               )}
             </span>
             <span>
-              <ColHead k="model" label={t.fleet.model} sort={sort} dir={dir} pick={pick} />
+              <SortHead k="model" label={t.fleet.model} {...sorted} />
             </span>
             <span>
-              <ColHead k="color" label={t.fleet.color} sort={sort} dir={dir} pick={pick} />
+              <SortHead k="color" label={t.fleet.color} {...sorted} />
             </span>
             <span>
-              <ColHead k="state" label={t.fleet.state} sort={sort} dir={dir} pick={pick} />
+              <SortHead k="state" label={t.fleet.state} {...sorted} />
             </span>
             <span>
-              <ColHead k="where" label={t.fleet.where} sort={sort} dir={dir} pick={pick} />
+              <SortHead k="where" label={t.fleet.where} {...sorted} />
             </span>
             <span className="num">
-              <ColHead k="quiet" label={t.fleet.quiet} sort={sort} dir={dir} pick={pick} />
+              <SortHead k="quiet" label={t.fleet.quiet} {...sorted} />
             </span>
             {/* The header's last cell rides the right edge with the row's, or
                 the columns would slide out from under a floating heading. */}
@@ -398,34 +368,6 @@ export function FleetPage() {
   );
 }
 
-
-/**
- * A column heading that sorts. The arrow appears only on the column doing the
- * sorting — an arrow on every heading is a row of arrows, and says nothing.
- */
-function ColHead({
-  k,
-  label,
-  sort,
-  dir,
-  pick,
-}: {
-  k: SortKey;
-  label: string;
-  sort: SortKey;
-  dir: 'asc' | 'desc';
-  pick: (next: { sort: SortKey }) => void;
-}) {
-  const on = sort === k;
-  return (
-    <button type="button" className={`col-sort ${on ? 'on' : ''}`} onClick={() => pick({ sort: k })}>
-      {label}
-      <i className="col-arrow" aria-hidden="true">
-        {on ? (dir === 'asc' ? '↑' : '↓') : ''}
-      </i>
-    </button>
-  );
-}
 
 /** Days of silence, loud once they run past half a year. */
 function Quiet({ v, today }: { v: Vehicle; today: string }) {
