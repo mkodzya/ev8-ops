@@ -69,6 +69,7 @@ const TEXT_STYLES = [
   'mono',
   'money',
   'mono-sm',
+  'cta',
 ] as const;
 
 const BUTTON_STATES = [
@@ -134,6 +135,14 @@ export function DesignPage() {
             </button>
           ))}
         </div>
+        <div className="d-row">
+          {BUTTON_STATES.slice(0, 3).map((s) => (
+            <button key={`c-${s.key}`} type="button" className={`pill pill-cta ${s.cls}`}>
+              {t.design.stateNames[s.key]}
+            </button>
+          ))}
+        </div>
+        <p className="t-label">{t.design.ctaNote}</p>
         <div className="d-row">
           <button type="button" className="pill pill-sm">
             {t.design.stateNames.small}

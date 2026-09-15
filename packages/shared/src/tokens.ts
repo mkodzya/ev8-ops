@@ -12,16 +12,17 @@ export const tokens = {
   /** surfaces — The page, the cards on it, and the ink on both. */
   bg: '#fbfbfb', // light-theme page background (--white-background on the site)
   surface: '#ffffff', // cards, panels, table bodies
-  surface2: '#f3f6f3', // table headers, soft fills, inactive chips
+  surface2: '#f3f3f3', // table headers, soft fills, inactive chips (site --grey-01)
+  surfaceHover: '#dbe4de', // the row or card under the pointer — on the site this is what a model card turns when hovered
   ink: '#0b0b0b', // text (--black on the site)
-  muted: '#5d6b5d', // secondary text, PDF translations
+  muted: '#5d5d5d', // secondary text, PDF translations (site --grey-04/07). Neutral, not green-tinted: the site's greys carry no hue
   line: '#dbe4de', // borders and rules (site light grey-green)
-  lineSoft: '#e9efea', // the quieter rule inside a card
+  lineSoft: '#ebebeb', // the quieter rule inside a card (site --grey-02)
 
-  /** brand — The greens. The site green is a fill, never text: #819481 is 3.2:1 on white and fails AA. */
-  brand: '#819481', // logo and large marks; never text
-  accent: '#557553', // text green: links, status text, primary button — 5.2:1
-  accentHover: '#628767', // hover and the border of an active element
+  /** brand — The greens. On ev8.ge these three are one button's three states — #819481 at rest, #628767 on hover, #557553 when pressed. Here #557553 sits at rest instead (Mika, 15.09.2026): white on #819481 is 2.55:1 and Kardu reads the screen outdoors. The consequence is that hover lightens here where the site darkens; the theme has no darker green and inventing one is not allowed. */
+  brand: '#819481', // logo and large marks; the site button at rest. Never text: 3.2:1 on white
+  accent: '#557553', // text green: links, status text, primary button at rest — 5.2:1. The site uses it for :active
+  accentHover: '#628767', // hover on the primary button and the border of an active element (the site's own :hover)
   accentSoft: '#e3ebe3', // the tint behind an accent pill
   onAccent: '#ffffff', // text on the accent fill
   lime: '#e0ffa2', // the one highlight per screen (--avocado)
@@ -29,12 +30,12 @@ export const tokens = {
   /** states — Vehicle and rental states. Colour is never the only carrier: every state also has a shape and a word (brand.md). */
   rented: '#598eeb', // state rented (--blue-tag)
   service: '#fe5d02', // state in service (--orange)
-  serviceInk: '#e45e22', // the darker orange, for text on light
+  serviceInk: '#e45e22', // the darker orange: text on light here, and the site's hover on .button-accent
   crit: '#c8402f', // overdue, written off — added for the ops UI, does not fight the orange
   critSoft: '#f9e3df', // the tint behind a critical pill
   warnSoft: '#fdeadf', // the tint behind a service pill
   infoSoft: '#e4ecfb', // the tint behind a rented pill
-  grey: '#7a827a', // finished and sold; PDF footers
+  grey: '#7a7a7a', // finished and sold; PDF footers (site --grey-06/03)
 
   /** rail — The navigation rail is the one dark surface in a light app: brand black with the light logo. */
   rail: '#0b0b0b', // rail background
@@ -50,24 +51,31 @@ export const tokens = {
 
   /** type — Neither Be Vietnam Pro nor Inter has Georgian glyphs, so Noto Sans Georgian is in every text stack. A face without the glyphs falls back to the system font silently — that is why it is checked on real names in acceptance. */
   display: "'Be Vietnam Pro', 'Noto Sans Georgian', system-ui, -apple-system, 'Segoe UI', sans-serif", // headings, buttons, navigation
-  body: "'Inter', 'Noto Sans Georgian', system-ui, -apple-system, 'Segoe UI', sans-serif", // body text and tables
+  body: "'Be Vietnam Pro', 'Noto Sans Georgian', system-ui, -apple-system, 'Segoe UI', sans-serif", // body text and tables. The site sets body to --main-font, so Be Vietnam Pro leads here too; Inter is the second family
   mono: "'IBM Plex Mono', 'Noto Sans Georgian', ui-monospace, SFMono-Regular, Menlo, monospace", // VIN and money
 
   /** text — Named text styles. Fourteen of them, because the interface uses fourteen — the point is that they are named and counted, not that a component reaches for a size of its own. Each is a CSS `font` shorthand, so a rule says `font: var(--text-body)` and nothing else. The shorthand resets font-variant, so tabular figures are set by the .t-* class next to it, never by the token. */
-  textDisplay: '600 28px/1.1 var(--display)', // the number on a tile, the one figure a screen is about
-  textH1: '600 24px/1.25 var(--display)', // the page title
-  textH1Phone: '600 22px/1.25 var(--display)', // the same title under 900 px
-  textH2: '600 16px/1.35 var(--display)', // a section inside a page
-  textH3: '600 14px/1.4 var(--display)', // a subsection, and the head of a card
+  textDisplay: '500 28px/1.1 var(--display)', // the number on a tile, the one figure a screen is about
+  textH1: '500 24px/1.15 var(--display)', // the page title
+  textH1Phone: '500 22px/1.15 var(--display)', // the same title under 900 px
+  textH2: '500 16px/1.25 var(--display)', // a section inside a page
+  textH3: '500 14px/1.3 var(--display)', // a subsection, and the head of a card
   textBody: '400 15px/1.45 var(--body)', // running text; the page default
   textBodySm: '400 14px/1.45 var(--body)', // tables, key-value rows, the history feed
   textLabel: '400 13px/1.4 var(--body)', // field labels, hints, tile captions
-  textOverline: '600 12px/1.3 var(--display)', // table headers and small caps marks; the class adds the letter-spacing
-  textButton: '500 14px/1 var(--display)', // pills and buttons
+  textOverline: '500 12px/1.3 var(--display)', // table headers and small caps marks; the class adds the letter-spacing
+  textButton: '500 14px/1 var(--display)', // pills and buttons (.button, .button-light on the site)
+  textCta: '500 19px/0.92 var(--display)', // the one loud action of a screen (.button-accent on the site)
   textButtonSm: '500 13px/1 var(--display)', // the small pill and the inline field
   textMono: '400 14px/1.45 var(--mono)', // VIN and anything read character by character
-  textMoney: '600 14px/1.45 var(--mono)', // sums; the class adds tabular figures and right alignment
+  textMoney: '500 14px/1.45 var(--mono)', // sums; the class adds tabular figures and right alignment
   textMonoSm: '400 12px/1.4 var(--mono)', // code quoted inside the interface — token names on /design
+
+  /** motion — Letter-spacing and the one transition, copied from the theme. The CSS `font` shorthand cannot carry tracking, so it lives beside the text styles rather than inside them. */
+  trackingTight: '-0.02em', // headings: the site sets -1px at 38px, -0.56px at 28px, -0.4px at 20px — all -0.02em
+  trackingButton: '-0.01em', // buttons and chips (.button, .button-light)
+  ease: '0.3s ease', // every hover on the site moves at this speed
+  hairline: '0.82px', // the outline button's border, exactly as the theme writes it
 
   /** shape — One radius language: pills for buttons and chips, 16 px cards, nothing else. */
   radiusCard: '16px', // cards and panels
@@ -117,8 +125,14 @@ export const tokenGroups: TokenGroup[] = [
       {
         "name": "surface2",
         "cssVar": "--surface-2",
-        "value": "#f3f6f3",
-        "note": "table headers, soft fills, inactive chips"
+        "value": "#f3f3f3",
+        "note": "table headers, soft fills, inactive chips (site --grey-01)"
+      },
+      {
+        "name": "surfaceHover",
+        "cssVar": "--surface-hover",
+        "value": "#dbe4de",
+        "note": "the row or card under the pointer — on the site this is what a model card turns when hovered"
       },
       {
         "name": "ink",
@@ -129,8 +143,8 @@ export const tokenGroups: TokenGroup[] = [
       {
         "name": "muted",
         "cssVar": "--muted",
-        "value": "#5d6b5d",
-        "note": "secondary text, PDF translations"
+        "value": "#5d5d5d",
+        "note": "secondary text, PDF translations (site --grey-04/07). Neutral, not green-tinted: the site's greys carry no hue"
       },
       {
         "name": "line",
@@ -141,32 +155,32 @@ export const tokenGroups: TokenGroup[] = [
       {
         "name": "lineSoft",
         "cssVar": "--line-soft",
-        "value": "#e9efea",
-        "note": "the quieter rule inside a card"
+        "value": "#ebebeb",
+        "note": "the quieter rule inside a card (site --grey-02)"
       }
     ]
   },
   {
     "name": "brand",
-    "note": "The greens. The site green is a fill, never text: #819481 is 3.2:1 on white and fails AA.",
+    "note": "The greens. On ev8.ge these three are one button's three states — #819481 at rest, #628767 on hover, #557553 when pressed. Here #557553 sits at rest instead (Mika, 15.09.2026): white on #819481 is 2.55:1 and Kardu reads the screen outdoors. The consequence is that hover lightens here where the site darkens; the theme has no darker green and inventing one is not allowed.",
     "tokens": [
       {
         "name": "brand",
         "cssVar": "--brand",
         "value": "#819481",
-        "note": "logo and large marks; never text"
+        "note": "logo and large marks; the site button at rest. Never text: 3.2:1 on white"
       },
       {
         "name": "accent",
         "cssVar": "--accent",
         "value": "#557553",
-        "note": "text green: links, status text, primary button — 5.2:1"
+        "note": "text green: links, status text, primary button at rest — 5.2:1. The site uses it for :active"
       },
       {
         "name": "accentHover",
         "cssVar": "--accent-hover",
         "value": "#628767",
-        "note": "hover and the border of an active element"
+        "note": "hover on the primary button and the border of an active element (the site's own :hover)"
       },
       {
         "name": "accentSoft",
@@ -208,7 +222,7 @@ export const tokenGroups: TokenGroup[] = [
         "name": "serviceInk",
         "cssVar": "--service-ink",
         "value": "#e45e22",
-        "note": "the darker orange, for text on light"
+        "note": "the darker orange: text on light here, and the site's hover on .button-accent"
       },
       {
         "name": "crit",
@@ -237,8 +251,8 @@ export const tokenGroups: TokenGroup[] = [
       {
         "name": "grey",
         "cssVar": "--grey",
-        "value": "#7a827a",
-        "note": "finished and sold; PDF footers"
+        "value": "#7a7a7a",
+        "note": "finished and sold; PDF footers (site --grey-06/03)"
       }
     ]
   },
@@ -315,8 +329,8 @@ export const tokenGroups: TokenGroup[] = [
       {
         "name": "body",
         "cssVar": "--body",
-        "value": "'Inter', 'Noto Sans Georgian', system-ui, -apple-system, 'Segoe UI', sans-serif",
-        "note": "body text and tables"
+        "value": "'Be Vietnam Pro', 'Noto Sans Georgian', system-ui, -apple-system, 'Segoe UI', sans-serif",
+        "note": "body text and tables. The site sets body to --main-font, so Be Vietnam Pro leads here too; Inter is the second family"
       },
       {
         "name": "mono",
@@ -333,31 +347,31 @@ export const tokenGroups: TokenGroup[] = [
       {
         "name": "textDisplay",
         "cssVar": "--text-display",
-        "value": "600 28px/1.1 var(--display)",
+        "value": "500 28px/1.1 var(--display)",
         "note": "the number on a tile, the one figure a screen is about"
       },
       {
         "name": "textH1",
         "cssVar": "--text-h1",
-        "value": "600 24px/1.25 var(--display)",
+        "value": "500 24px/1.15 var(--display)",
         "note": "the page title"
       },
       {
         "name": "textH1Phone",
         "cssVar": "--text-h1-phone",
-        "value": "600 22px/1.25 var(--display)",
+        "value": "500 22px/1.15 var(--display)",
         "note": "the same title under 900 px"
       },
       {
         "name": "textH2",
         "cssVar": "--text-h2",
-        "value": "600 16px/1.35 var(--display)",
+        "value": "500 16px/1.25 var(--display)",
         "note": "a section inside a page"
       },
       {
         "name": "textH3",
         "cssVar": "--text-h3",
-        "value": "600 14px/1.4 var(--display)",
+        "value": "500 14px/1.3 var(--display)",
         "note": "a subsection, and the head of a card"
       },
       {
@@ -381,14 +395,20 @@ export const tokenGroups: TokenGroup[] = [
       {
         "name": "textOverline",
         "cssVar": "--text-overline",
-        "value": "600 12px/1.3 var(--display)",
+        "value": "500 12px/1.3 var(--display)",
         "note": "table headers and small caps marks; the class adds the letter-spacing"
       },
       {
         "name": "textButton",
         "cssVar": "--text-button",
         "value": "500 14px/1 var(--display)",
-        "note": "pills and buttons"
+        "note": "pills and buttons (.button, .button-light on the site)"
+      },
+      {
+        "name": "textCta",
+        "cssVar": "--text-cta",
+        "value": "500 19px/0.92 var(--display)",
+        "note": "the one loud action of a screen (.button-accent on the site)"
       },
       {
         "name": "textButtonSm",
@@ -405,7 +425,7 @@ export const tokenGroups: TokenGroup[] = [
       {
         "name": "textMoney",
         "cssVar": "--text-money",
-        "value": "600 14px/1.45 var(--mono)",
+        "value": "500 14px/1.45 var(--mono)",
         "note": "sums; the class adds tabular figures and right alignment"
       },
       {
@@ -413,6 +433,36 @@ export const tokenGroups: TokenGroup[] = [
         "cssVar": "--text-mono-sm",
         "value": "400 12px/1.4 var(--mono)",
         "note": "code quoted inside the interface — token names on /design"
+      }
+    ]
+  },
+  {
+    "name": "motion",
+    "note": "Letter-spacing and the one transition, copied from the theme. The CSS `font` shorthand cannot carry tracking, so it lives beside the text styles rather than inside them.",
+    "tokens": [
+      {
+        "name": "trackingTight",
+        "cssVar": "--tracking-tight",
+        "value": "-0.02em",
+        "note": "headings: the site sets -1px at 38px, -0.56px at 28px, -0.4px at 20px — all -0.02em"
+      },
+      {
+        "name": "trackingButton",
+        "cssVar": "--tracking-button",
+        "value": "-0.01em",
+        "note": "buttons and chips (.button, .button-light)"
+      },
+      {
+        "name": "ease",
+        "cssVar": "--ease",
+        "value": "0.3s ease",
+        "note": "every hover on the site moves at this speed"
+      },
+      {
+        "name": "hairline",
+        "cssVar": "--hairline",
+        "value": "0.82px",
+        "note": "the outline button's border, exactly as the theme writes it"
       }
     ]
   },

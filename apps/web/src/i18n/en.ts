@@ -314,6 +314,7 @@ export const en = {
     shapePill: 'buttons and filter chips',
     shapeCard: 'cards and panels',
     shapeTouch: 'nothing smaller answers to a thumb',
+    ctaNote: 'The theme\u2019s loud button. Not used on operating screens: orange already means \u201cin service\u201d here, and one colour cannot be both a state and a command.',
     stateNames: {
       default: 'Default',
       hover: 'Hover',
