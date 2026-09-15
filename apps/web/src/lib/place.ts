@@ -1,6 +1,6 @@
 import type { VehicleState } from '@ev8/shared';
 
-export type Place = { kind: 'point'; name: string } | { kind: 'customer' } | { kind: 'unset' };
+export type Place = { kind: 'point'; name: string } | { kind: 'customer' } | { kind: 'unset' } | { kind: 'gone' };
 
 /**
  * Where a moped is, as one rule the list and the card both read. A point is

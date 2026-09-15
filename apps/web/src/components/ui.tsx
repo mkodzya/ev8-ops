@@ -70,5 +70,6 @@ export function PlaceText({ of }: { of: { state: VehicleState; location: { name:
   const place: Place = placeOf(of);
   if (place.kind === 'point') return <span>{place.name}</span>;
   if (place.kind === 'customer') return <span className="muted">{t.points.atCustomer}</span>;
+  if (place.kind === 'gone') return <span className="muted">{t.common.dash}</span>;
   return <span className="place-unset">{t.points.unset}</span>;
 }
