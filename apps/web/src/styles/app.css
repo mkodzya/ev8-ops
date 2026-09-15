@@ -804,7 +804,7 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
   .vlist-head, .vrow {
     display: grid;
     grid-template-areas: none;
-    grid-template-columns: 170px minmax(100px, 1fr) 80px 140px minmax(150px, 1.2fr) 80px 56px;
+    grid-template-columns: 155px minmax(100px, 1fr) 76px 130px minmax(140px, 1.2fr) 76px 56px;
     align-items: center;
     gap: 12px;
     padding: 10px 12px;
@@ -825,7 +825,10 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
   /* Nine columns do not always fit; the list scrolls sideways rather than
      the page doing it. */
   .vlist { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-card); padding: 8px 4px; overflow-x: auto; }
-  .vlist-head, .vrow { min-width: 860px; }
+  /* The sum of the columns and their gaps, and not a pixel more: the dots at
+     the end are the row's one action and must never be the part that falls
+     off a laptop's right edge. */
+  .vlist-head, .vrow { min-width: 805px; }
   .v-state, .v-vin, .v-model, .v-color, .v-where, .v-quiet, .v-move { grid-area: auto; text-align: left; font: var(--text-body-sm); color: inherit; display: block; }
   .v-where { margin-top: 0; }
   .v-quiet { text-align: right; color: var(--muted); }
