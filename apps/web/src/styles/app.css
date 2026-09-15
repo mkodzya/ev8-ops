@@ -836,21 +836,23 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
     transition-duration: 0.01ms !important;
   }
 }
-/* "Paid through" belongs under the name it is about, not in a column of its own. */
-.v-paid { display: block; font: var(--text-label); color: var(--muted); }
+/* The quiet tail under a column's one word: the colour under the model, the
+   park under the state, "paid through" under the name it is about. One class,
+   because they are one idea. */
+.v-sub { display: block; font: var(--text-label); color: var(--muted); }
 .v-where { grid-area: where; font: var(--text-label); color: var(--muted); margin-top: 2px; }
 /* A point nobody has named is still a question, but it is asked once — by the
    orange number above the list. Thirty-five orange cells in a column answer
    nothing and leave no orange for the state that means a moped is in pieces. */
 .place-unset { color: var(--muted); }
-/* Colour is a card fact on a phone; year and arrival left the list entirely. */
+/* Colour stays a card fact on a phone: five lines in a card is enough, and
+   nobody picks a moped off a phone by its paint. */
 .v-color { display: none; }
 /* On a phone the whole VIN is noise: the last four are what anyone reads,
    and a column of em dashes where a free moped has no renter is worse than
    the silence it stands for. */
 @media (max-width: 899px) {
   .v-none { display: none; }
-  .v-color { display: none; }
   .vrow .vin-head { color: var(--muted); }
   .v-vin .vin { font: var(--text-mono); }
   .v-vin .vin-tail { font: var(--text-money); }
@@ -861,7 +863,7 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
   .vlist-head, .vrow {
     display: grid;
     grid-template-areas: none;
-    grid-template-columns: 150px minmax(100px, 1fr) 72px 128px minmax(130px, 1.2fr) 72px 104px;
+    grid-template-columns: 150px minmax(120px, 1fr) 140px minmax(130px, 1.2fr) 72px 104px;
     align-items: center;
     gap: var(--row-x);
     padding: var(--row-y) var(--row-x);
@@ -879,14 +881,16 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
     border-top: 0;
     padding-bottom: 4px;
   }
-  /* Nine columns do not always fit; the list scrolls sideways rather than
+  /* Six columns do not always fit; the list scrolls sideways rather than
      the page doing it. */
   .vlist { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-card); padding: 4px 2px; overflow-x: auto; }
   /* The sum of the columns and their gaps, and not a pixel more: the dots at
      the end are the row's one action and must never be the part that falls
      off a laptop's right edge. */
-  .vlist-head, .vrow { min-width: 830px; }
-  .v-state, .v-vin, .v-model, .v-color, .v-where, .v-quiet, .v-move { grid-area: auto; text-align: left; font: var(--text-body-sm); color: inherit; display: block; }
+  .vlist-head, .vrow { min-width: 760px; }
+  .v-state, .v-vin, .v-model, .v-where, .v-quiet, .v-move { grid-area: auto; text-align: left; font: var(--text-body-sm); color: inherit; display: block; }
+  /* The colour is the model's tail here, not a column of its own. */
+  .v-color { display: block; }
   .v-where { margin-top: 0; }
   .v-quiet { text-align: right; color: var(--muted); }
   /* Stacked and right-aligned: a moped in neither park offers two moves, and
