@@ -83,9 +83,11 @@ describe.skipIf(!HAS_DB)('confirming a VIN later (RNT-06)', () => {
     const card = json<{ events: { kind: string; occurredOn: string }[] }>(await call(director, 'GET', `/api/fleet/${vehicle.id}`));
     // The fixture makes the moped directly, so there is no `arrived` event.
     const kinds = card.events.map((e) => e.kind);
-    expect(kinds).toEqual(['pickup', 'return', 'pickup']);
+    // The first hand-over also decides which park the moped is in (ADR-0005);
+    // the second one finds it already decided and says nothing.
+    expect(kinds).toEqual(['to_rent', 'pickup', 'return', 'pickup']);
     // The second hand-over is dated today, not back inside the first rental.
-    expect(card.events[2].occurredOn > card.events[1].occurredOn).toBe(true);
+    expect(card.events[3].occurredOn > card.events[2].occurredOn).toBe(true);
 
     const v = await prisma.vehicle.findUniqueOrThrow({ where: { id: vehicle.id } });
     expect(v.state).toBe('rented');
@@ -172,7 +174,8 @@ describe.skipIf(!HAS_DB)('fleet by hand', () => {
     expect(out.statusCode).toBe(409);
 
     const card = json<{ events: { kind: string; toState: string; reason: string | null }[] }>(await call(mechanic, 'GET', `/api/fleet/${vehicle.id}`));
-    expect(card.events.map((e) => `${e.kind}:${e.toState}`)).toEqual(['manual:service', 'manual:available', 'pickup:rented']);
+    // A park move repeats the state it found, because it changes no state.
+    expect(card.events.map((e) => `${e.kind}:${e.toState}`)).toEqual(['manual:service', 'manual:available', 'to_rent:available', 'pickup:rented']);
   });
 });
 

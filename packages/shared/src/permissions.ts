@@ -9,6 +9,7 @@ export const PERMISSIONS = [
   'fleet.view',
   'fleet.state.manual', // move a VIN by hand, reason required (FLT-03)
   'fleet.location.set', // say which point a moped stands at; the list itself is settings
+  'fleet.pool.set', // move a moped between the rental and the sale park (ADR-0005)
   'rental.create', // hand-over wizard (RNT-01)
   'rental.return', // return wizard (RNT-04)
   'customer.create',
@@ -39,6 +40,7 @@ const MANAGER: Permission[] = [
 
 const DIRECTOR: Permission[] = [
   ...MANAGER,
+  'fleet.pool.set',
   'customer.documents.view',
   'payments.reconcile',
   'service.manage',

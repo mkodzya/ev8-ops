@@ -97,6 +97,7 @@ export const ru: Dict = {
     renter: 'Арендатор',
     paidThrough: 'Оплачено по',
     where: 'Где стоит',
+    pool: 'Парк',
     searchHint: 'Последние 4 знака VIN',
     empty: 'Парк пуст.',
     count: (n: number) => {
@@ -159,6 +160,8 @@ export const ru: Dict = {
       bought_back: 'Выкуплен',
       written_off: 'Списан',
       manual: 'Вручную',
+      to_rent: 'В парк аренды',
+      to_sale: 'В парк продажи',
     },
   },
 
@@ -342,6 +345,26 @@ export const ru: Dict = {
     addVehicle: 'Добавить мопед',
     points: 'Точки',
     addPoint: 'Добавить точку',
+  },
+
+  pools: {
+    rent: 'Аренда',
+    sale: 'Продажа',
+    none: 'Не назначен',
+    gone: 'Выбыли',
+    outWith: 'У клиентов',
+    free: 'Свободно',
+    inService: 'В ремонте',
+    incoming: 'Приходит',
+    idleMoney: 'Простаивает',
+    onShelf: 'На витрине',
+    listValue: 'По прайсу',
+    waiting: 'Ждут решения',
+    perWeek: 'в неделю',
+    noneHint: 'Выбери парк на карточке мопеда — или он выберется сам при первой выдаче.',
+    goneHint: 'Эти мопеды больше не наши. Выкуп вернёт мопед в парк событием.',
+    move: 'Перевести',
+    rentedNote: 'Мопед в аренде. Перевести в продажу можно — это бывает, когда арендатор его выкупает.',
   },
 
   points: {

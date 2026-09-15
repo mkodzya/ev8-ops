@@ -10,7 +10,18 @@ export type Role = (typeof ROLES)[number];
 export const VEHICLE_STATES = ['available', 'rented', 'service', 'out', 'sold'] as const;
 export type VehicleState = (typeof VEHICLE_STATES)[number];
 
-/** What moves a vehicle between states. `manual` always carries a reason. */
+/**
+ * What a moped is here for (ADR-0005). A vehicle may hold neither: nobody has
+ * decided yet, which is an answer and not a gap to fill with the likelier one.
+ */
+export const VEHICLE_POOLS = ['rent', 'sale'] as const;
+export type VehiclePool = (typeof VEHICLE_POOLS)[number];
+
+/**
+ * What moves a vehicle between states — plus the two that move it between
+ * parks instead and leave the state exactly where it was. `manual` always
+ * carries a reason.
+ */
 export const VEHICLE_EVENT_KINDS = [
   'arrived',
   'pickup',
@@ -21,6 +32,8 @@ export const VEHICLE_EVENT_KINDS = [
   'bought_back',
   'written_off',
   'manual',
+  'to_rent',
+  'to_sale',
 ] as const;
 export type VehicleEventKind = (typeof VEHICLE_EVENT_KINDS)[number];
 

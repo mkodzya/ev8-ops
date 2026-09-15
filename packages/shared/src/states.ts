@@ -1,10 +1,21 @@
-import type { RentalStatus, VehicleEventKind, VehicleState } from './types.js';
+import type { RentalStatus, VehicleEventKind, VehiclePool, VehicleState } from './types.js';
+
+/** Moving a moped between parks is its own event, and changes no state. */
+export const POOL_EVENT: Record<VehiclePool, Extract<VehicleEventKind, 'to_rent' | 'to_sale'>> = {
+  rent: 'to_rent',
+  sale: 'to_sale',
+};
+
+export function isPoolEvent(kind: VehicleEventKind): kind is 'to_rent' | 'to_sale' {
+  return kind === 'to_rent' || kind === 'to_sale';
+}
 
 /**
  * Which state an event leaves a vehicle in (spec FLT-03). `manual` is the
  * exception: the target state comes with the reason, so it is not here.
+ * Neither are the two park moves, which leave the state alone.
  */
-export const EVENT_TARGET_STATE: Record<Exclude<VehicleEventKind, 'manual'>, VehicleState> = {
+export const EVENT_TARGET_STATE: Record<Exclude<VehicleEventKind, 'manual' | 'to_rent' | 'to_sale'>, VehicleState> = {
   arrived: 'available',
   pickup: 'rented',
   return: 'available',

@@ -639,6 +639,34 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
 .seg-rented.on { background: var(--info-soft); border-color: var(--rented); }
 .seg-service.on { background: var(--warn-soft); border-color: var(--service); }
 .seg-out.on { background: var(--crit-soft); border-color: var(--crit); }
+/* The park row reads as the heading of the two below it: bigger type, and a
+   filled pill when chosen, so the state row underneath is plainly inside it. */
+.seg-pools { margin-bottom: 2px; }
+.seg-pool { font: var(--text-button); min-height: 42px; }
+.seg-pool.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.seg-pool.on .seg-num { color: var(--on-accent); opacity: 0.72; }
+.seg-pool-none.on { background: var(--service); border-color: var(--service); }
+.seg-pool-gone.on { background: var(--grey); border-color: var(--grey); }
+
+/* What the park is worth this week, in one line under its own tab. */
+.pool-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+  padding: 10px 14px;
+  margin-bottom: 8px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  font: var(--text-body-sm);
+}
+.pool-strip b { font-weight: 500; }
+.pool-good { color: var(--accent); }
+.pool-bad { color: var(--service-ink); }
+/* Which park a row is in, said only where both are on screen at once. */
+.pool-mark { font: var(--text-label); color: var(--accent); }
+.v-pool { font: var(--text-overline); letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); margin-left: 8px; }
+
 .segments .input-search { width: 100%; }
 
 .vlist { list-style: none; margin: 0; padding: 0; }

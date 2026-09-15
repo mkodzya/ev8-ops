@@ -43,8 +43,18 @@ enum VehicleEventKind {
   bought_back
   written_off
   manual
+  to_rent
+  to_sale
 
   @@map("vehicle_event_kind")
+}
+
+/// What a moped is here for. Nullable on a vehicle: nobody has decided yet.
+enum VehiclePool {
+  rent
+  sale
+
+  @@map("vehicle_pool")
 }
 
 enum RentalStatus {
@@ -272,6 +282,7 @@ model Vehicle {
   year            Int?
   arrivedOn       DateTime?    @map("arrived_on") @db.Date
   state           VehicleState @default(available)
+  pool            VehiclePool?
   currentRentalId String?      @map("current_rental_id") @db.Uuid
   locationId      String?      @map("location_id") @db.Uuid
   odometerKm      Int?         @map("odometer_km")
@@ -465,6 +476,8 @@ model VehicleEvent {
   occurredOn DateTime         @map("occurred_on") @db.Date
   fromState  VehicleState?    @map("from_state")
   toState    VehicleState     @map("to_state")
+  fromPool   VehiclePool?     @map("from_pool")
+  toPool     VehiclePool?     @map("to_pool")
   rentalId   String?          @map("rental_id") @db.Uuid
   reason     String?
   actorId    String?          @map("actor_id") @db.Uuid
