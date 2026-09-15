@@ -796,6 +796,17 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
 /* A row that has just moved says so in its own skin — a tint and an edge —
    rather than growing a line and pushing everything below it down. */
 .vrow-changed { box-shadow: inset 3px 0 0 var(--accent); }
+/* A row that opens something says so by lighting up under the pointer — the
+   site's own hover colour, the one a model card takes there. Touch screens
+   have no pointer to hover with and would keep the colour stuck on the last
+   row tapped, so the rule asks first. */
+.vrow-go { cursor: pointer; }
+@media (hover: hover) {
+  .vrow-go:hover { --row-bg: var(--surface-hover); }
+  /* A row still holding its undo keeps its own colour: that one is saying
+     something, and the pointer passing over is not news. */
+  .vrow-go.vrow-changed:hover { --row-bg: var(--accent-soft); }
+}
 .v-pool-new { color: var(--accent); font-weight: 500; }
 .mv {
   border: var(--hairline) solid var(--line-soft);
