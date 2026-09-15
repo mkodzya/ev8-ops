@@ -95,6 +95,7 @@ export const en = {
     state: 'State',
     renter: 'Renter',
     paidThrough: 'Paid through',
+    where: 'Where',
     searchHint: 'Last 4 of VIN',
     empty: 'The fleet is empty.',
     count: (n: number) => `${n} moped${n === 1 ? '' : 's'}`,
@@ -333,6 +334,24 @@ export const en = {
     addUser: 'Add a person',
     addModel: 'Add a model',
     addVehicle: 'Add a moped',
+    points: 'Points',
+    addPoint: 'Add a point',
+  },
+
+  points: {
+    name: 'Name',
+    note: 'Note',
+    order: 'Order',
+    vehicles: 'Mopeds',
+    hint: 'What the place is called out loud: yard, showroom, workshop.',
+    noteHint: 'Gate code, whose key it is — what to know before going there.',
+    empty: 'No points yet. Add the first one and mopeds gain an address.',
+    archive: 'Retire',
+    restore: 'Bring back',
+    atCustomer: 'At the customer',
+    unset: 'No point set',
+    place: 'Where',
+    rented: 'This moped is with a customer; it takes a point back on return.',
   },
 
   users: {

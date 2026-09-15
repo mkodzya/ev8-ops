@@ -645,7 +645,7 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
 .vlist-head { display: none; }
 .vrow {
   display: grid;
-  grid-template-areas: 'state paid' 'vin renter' 'model renter';
+  grid-template-areas: 'state paid' 'vin renter' 'model renter' 'where where';
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 2px 12px;
   padding: 12px 14px;
@@ -659,6 +659,9 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
 .v-model { grid-area: model; font: var(--text-label); color: var(--muted); }
 .v-renter { grid-area: renter; text-align: right; }
 .v-paid { grid-area: paid; text-align: right; color: var(--muted); }
+.v-where { grid-area: where; font: var(--text-label); color: var(--muted); margin-top: 2px; }
+/* A point nobody has named is a question, not an empty cell. */
+.place-unset { color: var(--service); }
 /* Colour, year and arrival are card facts, not list facts. */
 .v-color, .v-arrived, .v-year { display: none; }
 /* On a phone the whole VIN is noise: the last four are what anyone reads,
@@ -676,7 +679,7 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
   .vlist-head, .vrow {
     display: grid;
     grid-template-areas: none;
-    grid-template-columns: 200px minmax(120px, 1fr) 100px 60px 110px 150px minmax(120px, 1fr) 110px;
+    grid-template-columns: 200px minmax(120px, 1fr) 100px 60px 110px 150px 140px minmax(120px, 1fr) 110px;
     align-items: center;
     gap: 12px;
     padding: 10px 12px;
@@ -694,11 +697,12 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
     border-top: 0;
     padding-bottom: 6px;
   }
-  /* Eight columns do not always fit; the list scrolls sideways rather than
+  /* Nine columns do not always fit; the list scrolls sideways rather than
      the page doing it. */
   .vlist { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-card); padding: 8px 4px; overflow-x: auto; }
-  .vlist-head, .vrow { min-width: 940px; }
-  .v-state, .v-vin, .v-model, .v-color, .v-year, .v-arrived, .v-renter, .v-paid { grid-area: auto; text-align: left; font: var(--text-body-sm); color: inherit; display: block; }
+  .vlist-head, .vrow { min-width: 1080px; }
+  .v-state, .v-vin, .v-model, .v-color, .v-year, .v-arrived, .v-where, .v-renter, .v-paid { grid-area: auto; text-align: left; font: var(--text-body-sm); color: inherit; display: block; }
+  .v-where { margin-top: 0; }
 }
 
 /* ---- one action per screen, where the thumb is (U4) ------------------ */
