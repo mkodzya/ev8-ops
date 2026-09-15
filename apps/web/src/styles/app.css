@@ -754,6 +754,9 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
   }
   @keyframes field-open { from { opacity: 0; transform: translateX(-6px); } }
   .list-search {
+    /* It is hidden below 900px, where the phone's own field carries the
+       search; the rule that reveals it has to live here. */
+    display: block;
     flex: 1;
     min-width: 0;
     min-height: 0;
