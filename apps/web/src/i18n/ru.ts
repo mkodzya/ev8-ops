@@ -105,7 +105,7 @@ export const ru: Dict = {
     state: 'Состояние',
     renter: 'Арендатор',
     paidThrough: 'Оплачено по',
-    where: 'Где стоит',
+    where: 'Где',
     pool: 'Парк',
     quiet: 'Тишина',
     noPoint: 'Без точки',

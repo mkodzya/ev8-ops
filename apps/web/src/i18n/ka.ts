@@ -97,7 +97,7 @@ export const ka: Dict = {
     state: 'მდგომარეობა',
     renter: 'მოქირავნე',
     paidThrough: 'გადახდილია',
-    where: 'სად დგას',
+    where: 'სად',
     pool: 'პარკი',
     quiet: 'სიჩუმე',
     noPoint: 'წერტილის გარეშე',
