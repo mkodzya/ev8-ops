@@ -114,6 +114,7 @@ export const ka: Dict = {
   },
 
   rentals: {
+    count: (n: number) => `${n} ქირავნობა`,
     title: 'ქირაობა',
     number: '№',
     customer: 'კლიენტი',
@@ -458,6 +459,7 @@ export const ka: Dict = {
   },
 
   payments: {
+    count: (n: number) => `${n} გადახდა`,
     title: 'გადახდები',
     add: 'გადახდის გატარება',
     date: 'თარიღი',
@@ -495,6 +497,7 @@ export const ka: Dict = {
   },
 
   statements: {
+    count: (n: number) => `${n} ამონაწერი`,
     previewTitle: 'რას დაამატებს ეს ფაილი',
     previewNew: 'ახალი სტრიქონი',
     previewKnown: 'უკვე ჩატვირთული',
@@ -528,6 +531,7 @@ export const ka: Dict = {
   },
 
   service: {
+    count: (n: number) => `${n} ღია რემონტი`,
     title: 'სერვისი',
     open: 'ღია შეკეთებები',
     newJob: 'შეკეთების გახსნა',
@@ -558,6 +562,7 @@ export const ka: Dict = {
   },
 
   sales: {
+    count: (n: number) => `${n} გაყიდვა`,
     title: 'გაყიდვები',
     newSale: 'მოპედის გაყიდვა',
     number: '№',
@@ -590,6 +595,7 @@ export const ka: Dict = {
   },
 
   purchases: {
+    count: (n: number) => `${n} შეკვეთა`,
     title: 'შესყიდვები',
     newOrder: 'ახალი შეკვეთა',
     number: '№',
@@ -630,6 +636,7 @@ export const ka: Dict = {
 
 
   economics: {
+    count: (n: number) => `${n} მოპედი`,
     title: 'ეკონომიკა',
     nav: 'ეკონომიკა',
     subtitle: 'რა შემოიტანა მოპედმა და რა დაჯდა. ყველაფერი ითვლება გადახდებიდან, შეკეთებებიდან და მოვლენებიდან, ამიტომ შესწორება მაშინვე იცვლება.',
@@ -656,6 +663,7 @@ export const ka: Dict = {
   },
 
   stock: {
+    partsCount: (n: number) => `${n} ნაწილი`,
     title: 'საწყობი',
     nav: 'საწყობი',
     mopeds: 'მოპედები მოდელების მიხედვით',
@@ -696,6 +704,7 @@ export const ka: Dict = {
     qtyOnShelf: 'საწყობში',
   },
   customers: {
+    count: (n: number) => `${n} კლიენტი`,
     title: 'კლიენტები',
     name: 'სახელი',
     phone: 'WhatsApp',

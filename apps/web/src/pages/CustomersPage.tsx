@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useSession } from '../session.js';
 import { api } from '../api.js';
-import { CustomerName, Empty, Loading, RentalBadge } from '../components/ui.js';
+import { CustomerName, Empty, Loading, PageHead, RentalBadge } from '../components/ui.js';
 import { useLocale, useT } from '../i18n/index.js';
 import { byName, primaryName } from '../lib/names.js';
 import { SortHead, useSortable } from '../lib/sortable.js';
@@ -56,16 +56,13 @@ export function CustomersPage() {
 
   return (
     <>
-      <header className="page-head">
-        <h1>{t.customers.title}</h1>
-        <span className="mono muted">{rows.length}</span>
-        <span className="spacer" />
+      <PageHead title={t.customers.title} sub={t.customers.count(rows.length)}>
         {can('customer.create') && (
           <Link className="pill pill-sm pill-accent" to="/customers/new">
             {t.actions.newCustomer}
           </Link>
         )}
-      </header>
+      </PageHead>
       <div className="toolbar">
         <input className="input input-search" placeholder={t.common.search} value={q} onChange={(e) => setQ(e.target.value)} />
       </div>

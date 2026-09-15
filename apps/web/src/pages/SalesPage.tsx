@@ -2,7 +2,7 @@ import { parseGel, todayISO } from '@ev8/shared';
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api.js';
-import { Empty, Loading, Vin } from '../components/ui.js';
+import { Empty, Loading, PageHead, Vin } from '../components/ui.js';
 import { Field } from '../components/Wizard.js';
 import { fmtDate, formatGel } from '../format.js';
 import { useT } from '../i18n/index.js';
@@ -66,17 +66,14 @@ export function SalesPage() {
 
   return (
     <>
-      <header className="page-head page-head-wrap">
-        <h1>{t.sales.title}</h1>
-        <span className="mono muted">{data.sales.length}</span>
+      <PageHead wrap title={t.sales.title} sub={t.sales.count(data.sales.length)}>
         {data.overdueTetri > 0 && (
           <span className="crit-text mono">
             {t.sales.overdue}: {formatGel(data.overdueTetri, { decimals: false })}
           </span>
         )}
-        <span className="spacer" />
         {can('sales.manage') && <NewSale onDone={reload} onError={setErr} />}
-      </header>
+      </PageHead>
       {err && <div className="hint hint-bad">{err}</div>}
       {data.sales.length === 0 ? (
         <Empty text={t.sales.none} />

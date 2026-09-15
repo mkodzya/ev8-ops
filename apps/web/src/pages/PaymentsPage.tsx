@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api.js';
-import { Empty, Loading } from '../components/ui.js';
+import { Empty, Loading, PageHead } from '../components/ui.js';
 import { QueueItem, type QueueLine } from './StatementsPage.js';
 import { fmtDate, formatGel } from '../format.js';
 import { useT } from '../i18n/index.js';
@@ -59,10 +59,7 @@ export function PaymentsPage() {
 
   return (
     <>
-      <header className="page-head">
-        <h1>{t.payments.title}</h1>
-        <span className="mono muted">{data.payments.length}</span>
-      </header>
+      <PageHead title={t.payments.title} sub={t.payments.count(data.payments.length)} />
       {can('payments.reconcile') && (
         <div className="seg-row tabs">
           <button type="button" className={`seg ${view === 'queue' ? 'on' : ''}`} onClick={() => setTab('queue')}>

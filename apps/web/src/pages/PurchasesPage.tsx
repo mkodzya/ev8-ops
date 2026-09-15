@@ -2,7 +2,7 @@ import { parseGel, todayISO } from '@ev8/shared';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api.js';
-import { Empty, Loading } from '../components/ui.js';
+import { Empty, Loading, PageHead } from '../components/ui.js';
 import { Field } from '../components/Wizard.js';
 import { fmtDate, formatGel } from '../format.js';
 import { useT } from '../i18n/index.js';
@@ -80,12 +80,9 @@ export function PurchasesPage() {
 
   return (
     <>
-      <header className="page-head page-head-wrap">
-        <h1>{t.purchases.title}</h1>
-        <span className="mono muted">{data.purchases.length}</span>
-        <span className="spacer" />
+      <PageHead wrap title={t.purchases.title} sub={t.purchases.count(data.purchases.length)}>
         {can('settings.manage') && <NewPurchase onDone={reload} onError={setErr} />}
-      </header>
+      </PageHead>
       {err && <div className="hint hint-bad">{err}</div>}
       {data.purchases.length === 0 ? (
         <Empty text={t.purchases.none} />

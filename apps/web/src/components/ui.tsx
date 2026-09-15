@@ -1,4 +1,5 @@
 import { colorOf, type RentalStatus, type VehicleState } from '@ev8/shared';
+import type { ReactNode } from 'react';
 import { useLocale, useT } from '../i18n/index.js';
 import { vinParts } from '../format.js';
 import { primaryName, secondName, type Named } from '../lib/names.js';
@@ -89,4 +90,43 @@ export function ColorText({ of }: { of: string | null }) {
   if (code) return <span className={`swatch swatch-${code}`} title={t.colors[code]} aria-label={t.colors[code]} />;
   // Not a colour we know, or none at all: the word as typed, or nothing.
   return <span className="swatch-word">{of ?? ''}</span>;
+}
+
+/**
+ * The top of every page: a title, a supporting line, and the actions.
+ *
+ * Two type roles and no third. The title is the page's own name in the display
+ * face; the supporting line says how much of it there is, in the quiet face,
+ * sitting on the title's baseline. Anything longer than a phrase is a note
+ * under the pair, not a third thing beside them — a heading row with three
+ * weights in it stops being a heading.
+ */
+export function PageHead({
+  title,
+  sub,
+  note,
+  wrap = false,
+  children,
+}: {
+  title: ReactNode;
+  sub?: ReactNode;
+  note?: ReactNode;
+  wrap?: boolean;
+  children?: ReactNode;
+}) {
+  return (
+    <>
+      <header className={`page-head ${wrap ? 'page-head-wrap' : ''}`}>
+        <h1>{title}</h1>
+        {sub != null && <span className="page-sub">{sub}</span>}
+        {children != null && (
+          <>
+            <span className="spacer" />
+            {children}
+          </>
+        )}
+      </header>
+      {note != null && <p className="page-note">{note}</p>}
+    </>
+  );
 }

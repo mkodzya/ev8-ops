@@ -2,7 +2,7 @@ import { parseGel } from '@ev8/shared';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api.js';
-import { Empty, Loading } from '../components/ui.js';
+import { Empty, Loading, PageHead } from '../components/ui.js';
 import { Field } from '../components/Wizard.js';
 import { formatGel } from '../format.js';
 import { useT } from '../i18n/index.js';
@@ -52,12 +52,9 @@ export function StockPage() {
 
   return (
     <>
-      <header className="page-head page-head-wrap">
-        <h1>{t.stock.title}</h1>
-        <span className="spacer" />
+      <PageHead wrap title={t.stock.title} sub={t.stock.partsCount(parts.data?.parts.length ?? 0)} note={t.stock.subtitle}>
         {can('service.manage') && <NewPart onDone={parts.reload} onError={setErr} />}
-      </header>
-      <p className="hint">{t.stock.subtitle}</p>
+      </PageHead>
       {err && <div className="hint hint-bad">{err}</div>}
 
       <section className="card">

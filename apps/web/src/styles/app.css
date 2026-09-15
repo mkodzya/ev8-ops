@@ -81,7 +81,14 @@ a { color: var(--accent); text-decoration: none; }
 .rail-user-initial { display: none; }
 .rail-user-role { display: block; font: var(--text-overline); font-weight: 400; opacity: 0.7; text-transform: capitalize; }
 .page { padding: 22px 26px 36px; max-width: 1280px; width: 100%; }
+/* Two type roles at the top of a page and no third: the name in the display
+   face, and one quiet line beside it saying how much of it there is. They sit
+   on the same baseline; the actions push to the far end. */
 .page-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 14px; }
+.page-sub { font: var(--text-body-sm); color: var(--muted); white-space: nowrap; }
+/* A sentence about the page rather than a measure of it goes under the pair,
+   never beside them. */
+.page-note { font: var(--text-label); color: var(--muted); margin: -6px 0 14px; max-width: 80ch; }
 
 @media (max-width: 719px) {
   .shell { grid-template-columns: 1fr; }
