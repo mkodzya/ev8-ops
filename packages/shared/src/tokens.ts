@@ -88,8 +88,8 @@ export const tokens = {
   /** motion — Letter-spacing and the one transition, copied from the theme. The CSS `font` shorthand cannot carry tracking, so it lives beside the text styles rather than inside them. */
   trackingTight: '-0.02em', // headings: the site sets -1px at 38px, -0.56px at 28px, -0.4px at 20px — all -0.02em
   trackingButton: '-0.01em', // buttons and chips (.button, .button-light)
-  ease: '0.3s ease', // every hover on the site moves at this speed
-  enter: '0.26s cubic-bezier(0.32, 0.72, 0, 1)', // something arriving over the page — a panel, a menu. Faster than a hover and slowed at the end, so it reads as sliding into place rather than being switched on. An addition: nothing on the site arrives
+  ease: '0.36s cubic-bezier(0.2, 0, 0, 1)', // a colour changing under the pointer. The site writes .3s ease; ours is slower and decelerating, by the owner's decision (15.09.2026) — a working screen is looked at all day and an eased ending reads as softer than the same length linear-in-out
+  enter: '0.42s cubic-bezier(0.32, 0.72, 0, 1)', // something arriving over the page — a panel, a sheet, a menu. Slower than a hover and braked hard at the end, so it reads as sliding into place rather than being switched on. An addition: nothing on the site arrives
   undoWindow: '10s', // how long a park move stays undoable, drawn as the line draining under the undo button; the same ten seconds the screen counts and the API enforces
   hairline: '0.82px', // the outline button's border, exactly as the theme writes it
 
@@ -553,14 +553,14 @@ export const tokenGroups: TokenGroup[] = [
       {
         "name": "ease",
         "cssVar": "--ease",
-        "value": "0.3s ease",
-        "note": "every hover on the site moves at this speed"
+        "value": "0.36s cubic-bezier(0.2, 0, 0, 1)",
+        "note": "a colour changing under the pointer. The site writes .3s ease; ours is slower and decelerating, by the owner's decision (15.09.2026) — a working screen is looked at all day and an eased ending reads as softer than the same length linear-in-out"
       },
       {
         "name": "enter",
         "cssVar": "--enter",
-        "value": "0.26s cubic-bezier(0.32, 0.72, 0, 1)",
-        "note": "something arriving over the page — a panel, a menu. Faster than a hover and slowed at the end, so it reads as sliding into place rather than being switched on. An addition: nothing on the site arrives"
+        "value": "0.42s cubic-bezier(0.32, 0.72, 0, 1)",
+        "note": "something arriving over the page — a panel, a sheet, a menu. Slower than a hover and braked hard at the end, so it reads as sliding into place rather than being switched on. An addition: nothing on the site arrives"
       },
       {
         "name": "undoWindow",
