@@ -706,6 +706,11 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
 
 .vlist { list-style: none; margin: 0; padding: 0; }
 .vlist-head { display: none; }
+/* A row knows its own colour in one place. The cell that sticks to the right
+   edge and the fade in front of it both read it from here, so a row can never
+   again be white with one tinted patch in it. */
+.vrow, .vlist-head { --row-bg: var(--surface); }
+.vrow-changed { --row-bg: var(--accent-soft); }
 .vrow {
   display: grid;
   grid-template-areas: 'state quiet' 'vin vin' 'model model' 'where where' 'move move';
@@ -713,7 +718,7 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
   gap: 2px 12px;
   padding: 12px 14px;
   margin-bottom: 8px;
-  background: var(--surface);
+  background: var(--row-bg);
   border: 1px solid var(--line);
   border-radius: var(--radius-card);
 }
@@ -728,7 +733,7 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
 .v-move:empty { display: none; }
 /* A row that has just moved says so in its own skin — a tint and an edge —
    rather than growing a line and pushing everything below it down. */
-.vrow-changed { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); }
+.vrow-changed { box-shadow: inset 3px 0 0 var(--accent); }
 .v-pool-new { color: var(--accent); font-weight: 500; }
 .mv {
   border: var(--hairline) solid var(--line-soft);
@@ -839,7 +844,7 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
     border: 0;
     border-top: 1px solid var(--line-soft);
     border-radius: 0;
-    background: none;
+    background: var(--row-bg);
   }
   .vlist-head {
     font: var(--text-overline);
@@ -864,8 +869,7 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
      action that appears only under a pointer is an action nobody finds. */
   /* The row can be wider than the window, and the one thing it must never be
      possible to scroll away from is the action. The last cell rides the right
-     edge instead, with the row's own colour behind it so nothing shows
-     through, and a hairline to say the columns pass underneath. */
+     edge instead, carrying the row's own colour. */
   .v-move {
     display: flex;
     flex-direction: column;
@@ -873,12 +877,24 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
     gap: 4px;
     position: sticky;
     right: 0;
-    background: var(--surface);
-    box-shadow: -8px 0 8px -8px var(--scrim-soft);
+    background: var(--row-bg);
     padding-left: 8px;
   }
-  .vrow-changed .v-move { background: var(--accent-soft); }
-  .vlist-head .v-move { background: var(--surface); }
+  /* What passes under it fades out rather than being cut off — and when the
+     row fits the window there is nothing underneath, so the fade is the row's
+     own colour over the row's own colour and nobody sees a thing. A shadow
+     here was visible either way, which is how it turned into a smudge down
+     the column. */
+  .v-move::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: -22px;
+    width: 22px;
+    background: linear-gradient(to right, transparent, var(--row-bg));
+    pointer-events: none;
+  }
 
   .vlist-head .num { text-align: right; }
 }
