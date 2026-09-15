@@ -35,6 +35,11 @@ export const tokens = {
   critSoft: '#f9e3df', // the tint behind a critical pill
   warnSoft: '#fdeadf', // the tint behind a service pill
   infoSoft: '#e4ecfb', // the tint behind a rented pill
+  accentInk: '#4d6a4b', // the word inside an available pill — the text green darkened until it clears 4.5:1 on its own tint (4.96). The site never sets these greens as 12px text, so this is ours and is measured, not chosen
+  rentedInk: '#2f63c0', // the word inside a rented pill: --blue-tag is 2.7:1 on its tint and unreadable small; this is 4.8:1 and the same blue
+  serviceDeep: '#b2450f', // the word inside a service pill: even the darker --service-ink is 3.0:1 on its tint; this is 4.8:1
+  critInk: '#b3392a', // the word inside a written-off or overdue pill, 4.8:1 on --crit-soft
+  greyInk: '#666666', // the word inside a sold pill, 5.2:1 on --surface-2
   grey: '#7a7a7a', // finished and sold; PDF footers (site --grey-06/03)
 
   /** rail — The navigation rail is the one dark surface in a light app: brand black with the light logo. */
@@ -254,6 +259,36 @@ export const tokenGroups: TokenGroup[] = [
         "cssVar": "--info-soft",
         "value": "#e4ecfb",
         "note": "the tint behind a rented pill"
+      },
+      {
+        "name": "accentInk",
+        "cssVar": "--accent-ink",
+        "value": "#4d6a4b",
+        "note": "the word inside an available pill — the text green darkened until it clears 4.5:1 on its own tint (4.96). The site never sets these greens as 12px text, so this is ours and is measured, not chosen"
+      },
+      {
+        "name": "rentedInk",
+        "cssVar": "--rented-ink",
+        "value": "#2f63c0",
+        "note": "the word inside a rented pill: --blue-tag is 2.7:1 on its tint and unreadable small; this is 4.8:1 and the same blue"
+      },
+      {
+        "name": "serviceDeep",
+        "cssVar": "--service-deep",
+        "value": "#b2450f",
+        "note": "the word inside a service pill: even the darker --service-ink is 3.0:1 on its tint; this is 4.8:1"
+      },
+      {
+        "name": "critInk",
+        "cssVar": "--crit-ink",
+        "value": "#b3392a",
+        "note": "the word inside a written-off or overdue pill, 4.8:1 on --crit-soft"
+      },
+      {
+        "name": "greyInk",
+        "cssVar": "--grey-ink",
+        "value": "#666666",
+        "note": "the word inside a sold pill, 5.2:1 on --surface-2"
       },
       {
         "name": "grey",

@@ -257,26 +257,37 @@ a { color: var(--accent); text-decoration: none; }
 .vin-tail { font-weight: 600; }
 
 /* ---- states: colour + shape + word ---------------------------------- */
-.state, .rstatus { display: inline-flex; align-items: center; gap: 6px; font-weight: 500; white-space: nowrap; }
-.state-mark { width: 10px; height: 10px; display: inline-block; background: currentColor; border-radius: 50%; }
-.state-available { color: var(--accent); }
-.state-rented { color: var(--rented); }
+/* A state is a pill: the word on its own tint, with the shape still inside it.
+   The tint is what makes a column of states readable as a column instead of
+   as coloured prose; the shape is what keeps it readable for someone who
+   cannot tell the green from the orange (brand.md: colour + shape + word).
+   Every ink here is the family colour darkened until it clears 4.5:1 on its
+   own tint — measured, not chosen, because 12px text on a tint is where the
+   site's own greens and blues stop being legible. */
+.state, .rstatus {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: var(--radius-pill);
+  font: var(--text-overline);
+  letter-spacing: 0;
+  text-transform: none;
+  white-space: nowrap;
+}
+.state-mark { width: 8px; height: 8px; display: inline-block; background: currentColor; border-radius: 50%; flex: none; }
+.state-available, .rstatus-active { background: var(--accent-soft); color: var(--accent-ink); }
+.state-rented, .rstatus-booked { background: var(--info-soft); color: var(--rented-ink); }
 .state-rented .state-mark { border-radius: 2px; }
-.state-service { color: var(--service-ink); }
-.state-service .state-mark { border-radius: 0; transform: rotate(45deg); width: 8px; height: 8px; }
-.state-out { color: var(--crit); }
+.state-service, .rstatus-paused { background: var(--warn-soft); color: var(--service-deep); }
+.state-service .state-mark { border-radius: 0; transform: rotate(45deg); width: 7px; height: 7px; }
+.state-out, .rstatus-overdue, .rstatus-disputed { background: var(--crit-soft); color: var(--crit-ink); }
 .state-out .state-mark { border-radius: 0; }
-.state-sold { color: var(--grey); }
+.state-sold, .rstatus-returned { background: var(--surface-2); color: var(--grey-ink); }
 .state-sold .state-mark { background: transparent; border: 2px solid currentColor; width: 8px; height: 8px; }
-.rstatus-active { color: var(--accent); }
-.rstatus-booked { color: var(--rented); }
 .rstatus-booked .state-mark { background: transparent; border: 2px solid currentColor; width: 8px; height: 8px; }
-.rstatus-overdue { color: var(--crit); }
-.rstatus-paused { color: var(--service-ink); }
 .rstatus-paused .state-mark { border-radius: 2px; }
-.rstatus-returned { color: var(--grey); }
-.rstatus-disputed { color: var(--crit); }
-.rstatus-disputed .state-mark { border-radius: 0; transform: rotate(45deg); width: 8px; height: 8px; }
+.rstatus-disputed .state-mark { border-radius: 0; transform: rotate(45deg); width: 7px; height: 7px; }
 
 /* ---- login ---------------------------------------------------------- */
 .login-wrap { min-height: 100%; display: grid; place-items: center; padding: 24px; }
