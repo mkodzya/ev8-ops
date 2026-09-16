@@ -13,12 +13,22 @@ export type VehicleColor = (typeof VEHICLE_COLORS)[number];
 
 /** Every spelling seen in the data, lower-cased. Add to this, never guess past it. */
 const SPELLINGS: Record<VehicleColor, readonly string[]> = {
-  black: ['black', 'შავი'],
-  white: ['white', 'თეთრი'],
-  red: ['red', 'წითელი'],
-  green: ['green', 'მწვანე'],
-  grey: ['grey', 'gray', 'ნაცრისფერი'],
-  purple: ['purple', 'violet', 'იისფერი'],
+  black: ['black', 'შავი', 'чёрный', 'черный'],
+  white: ['white', 'თეთრი', 'белый'],
+  red: ['red', 'წითელი', 'красный'],
+  green: ['green', 'მწვანე', 'зелёный', 'зеленый'],
+  grey: ['grey', 'gray', 'ნაცრისფერი', 'серый'],
+  purple: ['purple', 'violet', 'იისფერი', 'фиолетовый'],
+};
+
+/** The two words a bilingual paper prints for a colour. */
+const PAPER: Record<VehicleColor, { ka: string; en: string }> = {
+  black: { ka: 'შავი', en: 'Black' },
+  white: { ka: 'თეთრი', en: 'White' },
+  red: { ka: 'წითელი', en: 'Red' },
+  green: { ka: 'მწვანე', en: 'Green' },
+  grey: { ka: 'ნაცრისფერი', en: 'Grey' },
+  purple: { ka: 'იისფერი', en: 'Purple' },
 };
 
 const BY_SPELLING = new Map<string, VehicleColor>(
@@ -29,4 +39,15 @@ const BY_SPELLING = new Map<string, VehicleColor>(
 export function colorOf(raw: string | null | undefined): VehicleColor | null {
   if (!raw) return null;
   return BY_SPELLING.get(raw.trim().toLowerCase()) ?? null;
+}
+
+/**
+ * The colour as a contract prints it: both languages for a colour we know,
+ * the text as written for one we do not, and nothing for nothing. A picker
+ * now stores the code (`black`), and a paper must not print a code.
+ */
+export function colorOnPaper(raw: string | null | undefined): string {
+  const code = colorOf(raw);
+  if (code) return `${PAPER[code].ka} / ${PAPER[code].en}`;
+  return raw?.trim() ?? '';
 }

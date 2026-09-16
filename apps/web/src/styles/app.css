@@ -1007,6 +1007,32 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
 .swatch-green { background: var(--paint-green); border-color: var(--paint-green); }
 .swatch-grey { background: var(--paint-grey); border-color: var(--paint-grey); }
 .swatch-purple { background: var(--paint-purple); border-color: var(--paint-purple); }
+/* The picker: the same paint as the list, large enough to hit with a thumb.
+   The chosen one gets a ring in the page colour and then in ink, so white on
+   white is as plainly chosen as black. */
+.cp { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.cp-dot {
+  width: 28px; height: 28px; padding: 0;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  cursor: pointer;
+  transition: box-shadow var(--ease), transform var(--ease);
+}
+.cp-dot:hover { transform: scale(1.08); }
+.cp-dot[aria-checked='true'] { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--ink); }
+.cp-other {
+  min-height: 28px; padding: 0 12px;
+  border: 1px solid var(--line); border-radius: var(--radius-pill);
+  background: var(--surface); color: var(--ink);
+  font: var(--text-button-sm); cursor: pointer;
+  transition: background var(--ease), border-color var(--ease);
+}
+.cp-other:hover { border-color: var(--accent-hover); }
+.cp-other[aria-checked='true'] { background: var(--lime); border-color: var(--lime); }
+.cp + .input { margin-top: 8px; }
+.cp-name { color: var(--muted); font-weight: 400; margin-left: 4px; }
+.swatch-named { display: inline-flex; align-items: center; gap: 6px; }
+@media (max-width: 899px) { .cp-dot { width: 36px; height: 36px; } }
 /* A word nobody taught us stays a word, small and quiet. */
 .swatch-word { font: var(--text-label); color: var(--muted); }
 /* On a phone the whole VIN is noise: the last four are what anyone reads,
