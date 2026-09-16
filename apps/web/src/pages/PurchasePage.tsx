@@ -2,7 +2,7 @@ import { parseGel, todayISO } from '@ev8/shared';
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../api.js';
-import { Empty, Loading, StateBadge, Vin } from '../components/ui.js';
+import { Empty, Loading, PageHead, StateBadge, Vin } from '../components/ui.js';
 import { Field, Row } from '../components/Wizard.js';
 import { fmtDate, formatGel } from '../format.js';
 import { useT } from '../i18n/index.js';
@@ -54,10 +54,7 @@ export function PurchasePage() {
 
   return (
     <>
-      <header className="page-head page-head-wrap">
-        <h1 className="mono">{p.number}</h1>
-        <span className="muted">{t.purchases.statuses[p.status]}</span>
-        <span className="spacer" />
+      <PageHead wrap title={p.number} sub={t.purchases.statuses[p.status]}>
         {open && can('payments.reconcile') && (
           <button type="button" className="pill pill-sm" onClick={() => setPay({ ...pay, open: !pay.open })}>
             {t.purchases.addPayment}
@@ -68,7 +65,7 @@ export function PurchasePage() {
             {t.purchases.receive}
           </button>
         )}
-      </header>
+      </PageHead>
       {err && <div className="hint hint-bad">{err}</div>}
 
       {pay.open && (

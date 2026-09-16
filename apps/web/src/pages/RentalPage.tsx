@@ -4,7 +4,7 @@ import { parseGel, todayISO, type VehicleState } from '@ev8/shared';
 import { Field } from '../components/Wizard.js';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../api.js';
-import { Empty, Loading, RentalBadge, Vin } from '../components/ui.js';
+import { Empty, Loading, PageHead, RentalBadge, Vin } from '../components/ui.js';
 import { PaymentForm } from '../components/PaymentForm.js';
 import { VoidPayment } from './PaymentsPage.js';
 import { Row } from '../components/Wizard.js';
@@ -87,11 +87,7 @@ export function RentalPage() {
 
   return (
     <>
-      <header className="page-head page-head-wrap">
-        <h1 className="mono">{r.number}</h1>
-        <RentalBadge status={r.status} />
-        {r.odooName && <span className="muted mono">{r.odooName}</span>}
-        <span className="spacer" />
+      <PageHead wrap title={r.number} badge={<RentalBadge status={r.status} />} sub={r.odooName ?? undefined}>
         <button type="button" className={`pill pill-sm ${preview === 'contract' ? 'on' : ''}`} onClick={() => setPreview((p) => (p === 'contract' ? null : 'contract'))}>
           {t.docs.contract}
         </button>
@@ -110,7 +106,7 @@ export function RentalPage() {
             {t.actions.returnRental}
           </Link>
         )}
-      </header>
+      </PageHead>
       {editing && (
         <RentalEdit
           rental={r}

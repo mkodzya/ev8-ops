@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { api } from '../api.js';
+import { PageHead } from '../components/ui.js';
 import { Field } from '../components/Wizard.js';
 import { LanguageToggle, useT } from '../i18n/index.js';
 import { errorText } from '../lib/use.js';
@@ -34,9 +35,7 @@ export function ProfilePage() {
 
   return (
     <>
-      <header className="page-head">
-        <h1>{t.profile.title}</h1>
-      </header>
+      <PageHead title={t.profile.title} />
       <div className="two-col">
         <section className="card">
           <div className="kv">

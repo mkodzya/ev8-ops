@@ -103,12 +103,15 @@ export function ColorText({ of }: { of: string | null }) {
  */
 export function PageHead({
   title,
+  badge,
   sub,
   note,
   wrap = false,
   children,
 }: {
   title: ReactNode;
+  /** The one state marker a single thing carries: a pill, beside its name. */
+  badge?: ReactNode;
   sub?: ReactNode;
   note?: ReactNode;
   wrap?: boolean;
@@ -118,6 +121,7 @@ export function PageHead({
     <>
       <header className={`page-head ${wrap ? 'page-head-wrap' : ''}`}>
         <h1>{title}</h1>
+        {badge != null && <span className="page-badge">{badge}</span>}
         {sub != null && <span className="page-sub">{sub}</span>}
         {children != null && (
           <>

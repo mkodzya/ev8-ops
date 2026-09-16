@@ -2,7 +2,7 @@ import { VEHICLE_POOLS, VEHICLE_STATES, isPoolEvent, type RentalStatus, type Veh
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../api.js';
-import { Empty, Loading, PlaceText, RentalBadge, StateBadge, Vin } from '../components/ui.js';
+import { Empty, Loading, PageHead, PlaceText, RentalBadge, StateBadge, Vin } from '../components/ui.js';
 import { Field, Row } from '../components/Wizard.js';
 import { fmtDate } from '../format.js';
 import { useT } from '../i18n/index.js';
@@ -88,15 +88,7 @@ export function VehiclePage() {
 
   return (
     <>
-      <header className="page-head page-head-wrap">
-        <h1>
-          <Vin vin={v.vin} />
-        </h1>
-        <StateBadge state={v.state} />
-        <span className="muted">
-          {v.model.brand} {v.model.name}
-        </span>
-        <span className="spacer" />
+      <PageHead wrap title={<Vin vin={v.vin} />} badge={<StateBadge state={v.state} />} sub={`${v.model.brand} ${v.model.name}`}>
         {can('fleet.state.manual') && (
           <button type="button" className="pill pill-sm" onClick={() => setOpen((o) => !o)} disabled={locked} title={locked ? t.vehicle.rentedLock : undefined}>
             {t.actions.changeState}
@@ -115,7 +107,7 @@ export function VehiclePage() {
               {primary.label}
             </button>
           ))}
-      </header>
+      </PageHead>
 
       {open && (
         <section className="card card-drawer">
