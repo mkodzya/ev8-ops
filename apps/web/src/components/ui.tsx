@@ -120,9 +120,14 @@ export function PageHead({
   return (
     <>
       <header className={`page-head ${wrap ? 'page-head-wrap' : ''}`}>
-        <h1>{title}</h1>
-        {badge != null && <span className="page-badge">{badge}</span>}
-        {sub != null && <span className="page-sub">{sub}</span>}
+        {/* The words share a baseline with each other; the group they make is
+            what the buttons centre on. Baseline and centre on one flex line
+            fight, and the buttons lose — they sank below the words. */}
+        <div className="head-text">
+          <h1>{title}</h1>
+          {badge != null && <span className="page-badge">{badge}</span>}
+          {sub != null && <span className="page-sub">{sub}</span>}
+        </div>
         {children != null && (
           <>
             <span className="spacer" />
@@ -146,8 +151,10 @@ export function BlockHead({ title, sub, note, children }: { title: ReactNode; su
   return (
     <>
       <div className="block-head">
-        <h2>{title}</h2>
-        {sub != null && <span className="block-sub">{sub}</span>}
+        <div className="head-text">
+          <h2>{title}</h2>
+          {sub != null && <span className="block-sub">{sub}</span>}
+        </div>
         {children != null && (
           <>
             <span className="spacer" />
