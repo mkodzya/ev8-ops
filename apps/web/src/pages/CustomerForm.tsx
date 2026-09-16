@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api, ApiError } from '../api.js';
 import { Field } from '../components/Wizard.js';
+import { PageHead } from '../components/ui.js';
 import { useT } from '../i18n/index.js';
 import { errorText } from '../lib/use.js';
 
@@ -62,9 +63,7 @@ export function CustomerForm({ onCreated, embedded }: { onCreated?: (id: string)
   return (
     <form className={embedded ? 'form' : 'form form-page'} onSubmit={submit}>
       {!embedded && (
-        <header className="page-head">
-          <h1>{t.customer.newTitle}</h1>
-        </header>
+        <PageHead title={t.customer.newTitle} />
       )}
       <Field label={t.customer.name}>
         <input className="input" value={f.name} onChange={set('name')} required autoFocus />

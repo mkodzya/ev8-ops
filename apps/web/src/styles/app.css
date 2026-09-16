@@ -354,7 +354,21 @@ a { color: var(--accent); text-decoration: none; }
 .login-note { color: var(--muted); font: var(--text-body-sm); margin: 0 0 18px; }
 
 /* ---- cards, key-value rows, timelines ------------------------------- */
-.page-head-wrap { flex-wrap: wrap; align-items: center; row-gap: 8px; }
+/* Wrapping never changes how a heading sits: the title and its quiet line
+   share a baseline on every page, wrapped or not. Only things that are boxes —
+   a state pill, the buttons — centre themselves on that line instead, because
+   a box on a text baseline hangs below the words beside it. */
+.page-head-wrap { flex-wrap: wrap; row-gap: 8px; }
+.page-head > .page-badge,
+.page-head > .pill,
+.page-head > a.pill,
+.page-head > label.pill,
+.page-head > button { align-self: center; }
+/* A title is the display face even when it is a code. A rental number or a VIN
+   in the mono face is a different weight of heading from "Парк" beside it in
+   the menu; set in the title face, the VIN keeps its quiet head and its heavy
+   last four, which is the part anyone reads off a sticker. */
+.page-head h1 .vin { font-family: inherit; }
 .spacer { flex: 1; }
 .two-col { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px; margin-bottom: 18px; }
 .two-col > .card { margin-bottom: 0; }

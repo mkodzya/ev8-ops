@@ -3,7 +3,7 @@ import { useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { preparePhoto, uploadFile } from '../lib/photos.js';
 import { errorText } from '../lib/use.js';
-import { Empty, Loading, RentalBadge, Vin } from '../components/ui.js';
+import { Empty, Loading, PageHead, RentalBadge, Vin } from '../components/ui.js';
 import { Row } from '../components/Wizard.js';
 import { fmtDate, formatGel } from '../format.js';
 import { useLocale, useT } from '../i18n/index.js';
@@ -60,10 +60,7 @@ export function CustomerPage() {
   };
   return (
     <>
-      <header className="page-head page-head-wrap">
-        <h1>{primaryName(c, locale)}</h1>
-        {secondName(c, locale) && <span className="muted">{secondName(c, locale)}</span>}
-        <span className="spacer" />
+      <PageHead wrap title={primaryName(c, locale)} sub={secondName(c, locale)}>
         {c.phone && (
           // The number the company actually reaches people on. A link, not an
           // integration: WhatsApp templates are MSG-01 and wait on a Meta token.
@@ -76,7 +73,7 @@ export function CustomerPage() {
             {t.actions.newRental}
           </Link>
         )}
-      </header>
+      </PageHead>
 
       {/* The first line answers the question the card is opened with (U9).
           The four figures it is made of are underneath, smaller. */}

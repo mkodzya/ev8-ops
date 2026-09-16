@@ -2,7 +2,7 @@ import { parseGel, todayISO } from '@ev8/shared';
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../api.js';
-import { Empty, Loading, Vin } from '../components/ui.js';
+import { Empty, Loading, PageHead, Vin } from '../components/ui.js';
 import { Field, Row } from '../components/Wizard.js';
 import { fmtDate, formatGel } from '../format.js';
 import { useT } from '../i18n/index.js';
@@ -48,10 +48,7 @@ export function SalePage() {
 
   return (
     <>
-      <header className="page-head page-head-wrap">
-        <h1 className="mono">{s.number}</h1>
-        <span className="muted">{t.sales.statuses[s.status]}</span>
-        <span className="spacer" />
+      <PageHead wrap title={s.number} sub={t.sales.statuses[s.status]}>
         {live && can('cash.record') && (
           <button type="button" className="pill pill-sm pill-accent" onClick={() => setPay({ ...pay, open: !pay.open })}>
             {t.sales.addPayment}
@@ -67,7 +64,7 @@ export function SalePage() {
             {t.sales.cancel}
           </button>
         )}
-      </header>
+      </PageHead>
       {err && <div className="hint hint-bad">{err}</div>}
 
       {pay.open && (

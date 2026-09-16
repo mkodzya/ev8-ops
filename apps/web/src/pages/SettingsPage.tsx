@@ -1,7 +1,7 @@
 import { ROLES, formatGel, parseGel, type Role } from '@ev8/shared';
 import { useState } from 'react';
 import { api } from '../api.js';
-import { Empty, Loading } from '../components/ui.js';
+import { Empty, Loading, PageHead } from '../components/ui.js';
 import { Field } from '../components/Wizard.js';
 import { Drawer } from '../components/Drawer.js';
 import { useT } from '../i18n/index.js';
@@ -39,9 +39,7 @@ export function SettingsPage() {
 
   return (
     <>
-      <header className="page-head">
-        <h1>{t.settings.title}</h1>
-      </header>
+      <PageHead title={t.settings.title} />
       {err && <div className="hint hint-bad">{err}</div>}
 
       <section className="card">
