@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api.js';
-import { Empty, Loading, PageHead } from '../components/ui.js';
+import { BlockHead, Empty, Loading, PageHead } from '../components/ui.js';
 import { fmtDate, formatGel } from '../format.js';
 import { useT } from '../i18n/index.js';
 import { errorText, useLoad } from '../lib/use.js';
@@ -133,7 +133,7 @@ export function StatementsPage() {
 
       {pending && (
         <section className="card prev-card">
-          <h2>{t.statements.previewTitle}</h2>
+          <BlockHead title={t.statements.previewTitle} />
           <p className="hint muted">
             {pending.fileName} · {t.statements.banks[pending.preview.bank]} · <span className="mono">{fmtDate(pending.preview.periodFrom)} — {fmtDate(pending.preview.periodTo)}</span>
           </p>
@@ -179,9 +179,7 @@ export function StatementsPage() {
       )}
 
       <section className="card">
-        <h2>
-          {t.statements.queue} {statements.data ? <span className="mono muted">{statements.data.queue}</span> : null}
-        </h2>
+        <BlockHead title={t.statements.queue} sub={statements.data ? t.statements.linesCount(statements.data.queue) : undefined} />
         {!queue.data ? (
           <Loading />
         ) : queue.data.lines.length === 0 ? (
@@ -196,7 +194,7 @@ export function StatementsPage() {
       </section>
 
       <section className="card">
-        <h2>{t.statements.title}</h2>
+        <BlockHead title={t.statements.title} sub={statements.data ? t.statements.count(statements.data.statements.length) : undefined} />
         {!statements.data ? (
           <Loading />
         ) : statements.data.statements.length === 0 ? (

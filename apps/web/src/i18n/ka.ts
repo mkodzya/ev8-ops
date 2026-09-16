@@ -147,6 +147,7 @@ export const ka: Dict = {
   },
 
   vehicle: {
+    eventsCount: (n: number) => `${n} მოვლენა`,
     backToFleet: 'პარკში დაბრუნება',
     title: 'მოპედი',
     history: 'ისტორია',
@@ -173,6 +174,8 @@ export const ka: Dict = {
   },
 
   rental: {
+    actsCount: (n: number) => `${n} აქტი`,
+    periodsCount: (n: number) => `${n} კვირა`,
     owed: 'დავალიანება',
     title: 'ქირაობა',
     periods: 'კვირის პერიოდები',
@@ -251,6 +254,7 @@ export const ka: Dict = {
   },
 
   photos: {
+    count: (n: number) => `${n} ფოტო`,
     add: 'ფოტო',
     remove: 'წაშლა',
     hint: 'ოთხი კუთხე და გარბენი. ფოტოები ტელეფონზევე მცირდება ატვირთვამდე.',
@@ -260,6 +264,7 @@ export const ka: Dict = {
   },
 
   documents: {
+    count: (n: number) => `${n} დოკუმენტი`,
     title: 'დოკუმენტები',
     kinds: { id_card: 'პირადობა', driver_licence: 'მართვის მოწმობა', other: 'სხვა' },
     add: 'დოკუმენტის დამატება',
@@ -386,6 +391,7 @@ export const ka: Dict = {
   },
 
   points: {
+    count: (n: number) => `${n} წერტილი`,
     name: 'დასახელება',
     note: 'შენიშვნა',
     order: 'რიგი',
@@ -402,6 +408,7 @@ export const ka: Dict = {
   },
 
   users: {
+    count: (n: number) => `${n} ადამიანი`,
     name: 'სახელი',
     email: 'ელფოსტა შესასვლელად',
     role: 'როლი',
@@ -423,6 +430,7 @@ export const ka: Dict = {
   },
 
   models: {
+    count: (n: number) => `${n} მოდელი`,
     brand: 'ბრენდი',
     name: 'მოდელი',
     salePrice: 'გასაყიდი ფასი, დღგ-ით',
@@ -497,6 +505,7 @@ export const ka: Dict = {
   },
 
   statements: {
+    linesCount: (n: number) => `${n} ხაზი`,
     count: (n: number) => `${n} ამონაწერი`,
     previewTitle: 'რას დაამატებს ეს ფაილი',
     previewNew: 'ახალი სტრიქონი',
@@ -531,6 +540,7 @@ export const ka: Dict = {
   },
 
   service: {
+    jobsCount: (n: number) => `${n} რემონტი`,
     count: (n: number) => `${n} ღია რემონტი`,
     title: 'სერვისი',
     open: 'ღია შეკეთებები',
@@ -562,6 +572,7 @@ export const ka: Dict = {
   },
 
   sales: {
+    instalmentsCount: (n: number) => `${n} შენატანი`,
     count: (n: number) => `${n} გაყიდვა`,
     title: 'გაყიდვები',
     newSale: 'მოპედის გაყიდვა',
@@ -595,6 +606,7 @@ export const ka: Dict = {
   },
 
   purchases: {
+    linesCount: (n: number) => `${n} ხაზი`,
     count: (n: number) => `${n} შეკვეთა`,
     title: 'შესყიდვები',
     newOrder: 'ახალი შეკვეთა',
@@ -663,6 +675,7 @@ export const ka: Dict = {
   },
 
   stock: {
+    movesCount: (n: number) => `${n} ოპერაცია`,
     partsCount: (n: number) => `${n} ნაწილი`,
     title: 'საწყობი',
     nav: 'საწყობი',

@@ -1,7 +1,7 @@
 import { ROLES, formatGel, parseGel, type Role } from '@ev8/shared';
 import { useState } from 'react';
 import { api } from '../api.js';
-import { Empty, Loading, PageHead } from '../components/ui.js';
+import { BlockHead, Empty, Loading, PageHead } from '../components/ui.js';
 import { Field } from '../components/Wizard.js';
 import { Drawer } from '../components/Drawer.js';
 import { useT } from '../i18n/index.js';
@@ -43,7 +43,9 @@ export function SettingsPage() {
       {err && <div className="hint hint-bad">{err}</div>}
 
       <section className="card">
-        <h2>{t.settings.users}</h2>
+        <BlockHead title={t.settings.users} sub={users.data ? t.users.count(users.data.users.length) : undefined}>
+          <NewUser onDone={users.reload} onError={setErr} />
+        </BlockHead>
         {!users.data ? (
           <Loading />
         ) : (
@@ -94,15 +96,15 @@ export function SettingsPage() {
             </table>
           </div>
         )}
-        <NewUser onDone={users.reload} onError={setErr} />
       </section>
 
       {/* Points. The list is the company's own words for its places, so it
           starts empty on purpose: a seeded "Warehouse" nobody says out loud
           would be the first wrong answer in the fleet. */}
       <section className="card">
-        <h2>{t.settings.points}</h2>
-        <p className="hint">{t.points.hint}</p>
+        <BlockHead title={t.settings.points} sub={points.data ? t.points.count(points.data.locations.length) : undefined} note={t.points.hint}>
+          <NewPoint onDone={points.reload} onError={setErr} />
+        </BlockHead>
         {!points.data ? (
           <Loading />
         ) : points.data.locations.length === 0 ? (
@@ -145,11 +147,12 @@ export function SettingsPage() {
             </table>
           </div>
         )}
-        <NewPoint onDone={points.reload} onError={setErr} />
       </section>
 
       <section className="card">
-        <h2>{t.settings.models}</h2>
+        <BlockHead title={t.settings.models} sub={models.data ? t.models.count(models.data.models.length) : undefined}>
+          <NewModel onDone={models.reload} onError={setErr} />
+        </BlockHead>
         {!models.data ? (
           <Loading />
         ) : models.data.models.length === 0 ? (
@@ -184,7 +187,6 @@ export function SettingsPage() {
             </table>
           </div>
         )}
-        <NewModel onDone={models.reload} onError={setErr} />
       </section>
     </>
   );

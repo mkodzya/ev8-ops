@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { PhotoPicker } from '../components/PhotoPicker.js';
-import { Empty, Loading, PageHead, Vin } from '../components/ui.js';
+import { BlockHead, Empty, Loading, PageHead, Vin } from '../components/ui.js';
 import { Field, Row } from '../components/Wizard.js';
 import { fmtDate, formatGel } from '../format.js';
 import { useT } from '../i18n/index.js';
@@ -154,7 +154,7 @@ export function ServiceJobPage() {
         </section>
 
         <section className="card">
-          <h2>{t.service.total}</h2>
+          <BlockHead title={t.service.total} />
           <Row k={t.service.labour} v={<span className="mono">{formatGel(j.labourTetri)}</span>} />
           <Row k={t.service.parts} v={<span className="mono">{formatGel(j.partsTetri)}</span>} />
           <Row k={t.service.total} v={<span className="mono">{formatGel(j.totalTetri)}</span>} />
@@ -163,7 +163,7 @@ export function ServiceJobPage() {
       </div>
 
       <section className="card">
-        <h2>{t.service.parts}</h2>
+        <BlockHead title={t.service.parts} sub={t.stock.partsCount(j.parts.length)} />
         {j.parts.length === 0 ? (
           <Empty text={t.common.dash} />
         ) : (
@@ -253,7 +253,7 @@ export function ServiceJobPage() {
       </section>
 
       <section className="card">
-        <h2>{t.photos.add}</h2>
+        <BlockHead title={t.photos.add} sub={t.photos.count(j.photos.length)} />
         {j.photos.length > 0 && (
           <div className="thumbs">
             {j.photos.map((p) => (

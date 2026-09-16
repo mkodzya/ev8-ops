@@ -158,6 +158,7 @@ export const ru: Dict = {
   },
 
   vehicle: {
+    eventsCount: counted('событие', 'события', 'событий'),
     backToFleet: 'Вернуть в парк',
     title: 'Мопед',
     history: 'История',
@@ -184,6 +185,8 @@ export const ru: Dict = {
   },
 
   rental: {
+    actsCount: counted('акт', 'акта', 'актов'),
+    periodsCount: counted('неделя', 'недели', 'недель'),
     owed: 'Долг',
     title: 'Аренда',
     periods: 'Недельные периоды',
@@ -262,6 +265,7 @@ export const ru: Dict = {
   },
 
   photos: {
+    count: counted('фото', 'фото', 'фото'),
     add: 'Фото',
     remove: 'Убрать',
     hint: 'Четыре ракурса и одометр. Фото уменьшаются на телефоне до отправки.',
@@ -271,6 +275,7 @@ export const ru: Dict = {
   },
 
   documents: {
+    count: counted('документ', 'документа', 'документов'),
     title: 'Документы',
     kinds: { id_card: 'Удостоверение', driver_licence: 'Водительские права', other: 'Другое' },
     add: 'Добавить документ',
@@ -397,6 +402,7 @@ export const ru: Dict = {
   },
 
   points: {
+    count: counted('точка', 'точки', 'точек'),
     name: 'Название',
     note: 'Заметка',
     order: 'Порядок',
@@ -413,6 +419,7 @@ export const ru: Dict = {
   },
 
   users: {
+    count: counted('человек', 'человека', 'человек'),
     name: 'Имя',
     email: 'Почта для входа',
     role: 'Роль',
@@ -434,6 +441,7 @@ export const ru: Dict = {
   },
 
   models: {
+    count: counted('модель', 'модели', 'моделей'),
     brand: 'Бренд',
     name: 'Модель',
     salePrice: 'Цена продажи с НДС',
@@ -508,6 +516,7 @@ export const ru: Dict = {
   },
 
   statements: {
+    linesCount: counted('строка', 'строки', 'строк'),
     count: counted('выписка', 'выписки', 'выписок'),
     previewTitle: 'Что добавит этот файл',
     previewNew: 'новых строк',
@@ -542,6 +551,7 @@ export const ru: Dict = {
   },
 
   service: {
+    jobsCount: counted('ремонт', 'ремонта', 'ремонтов'),
     count: counted('открытый ремонт', 'открытых ремонта', 'открытых ремонтов'),
     title: 'Сервис',
     open: 'Открытые ремонты',
@@ -573,6 +583,7 @@ export const ru: Dict = {
   },
 
   sales: {
+    instalmentsCount: counted('взнос', 'взноса', 'взносов'),
     count: counted('продажа', 'продажи', 'продаж'),
     title: 'Продажи',
     newSale: 'Продать мопед',
@@ -606,6 +617,7 @@ export const ru: Dict = {
   },
 
   purchases: {
+    linesCount: counted('строка', 'строки', 'строк'),
     count: counted('заказ', 'заказа', 'заказов'),
     title: 'Закупки',
     newOrder: 'Новый заказ',
@@ -674,6 +686,7 @@ export const ru: Dict = {
   },
 
   stock: {
+    movesCount: counted('движение', 'движения', 'движений'),
     partsCount: counted('запчасть', 'запчасти', 'запчастей'),
     title: 'Склад',
     nav: 'Склад',

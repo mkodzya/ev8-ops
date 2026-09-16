@@ -359,6 +359,13 @@ a { color: var(--accent); text-decoration: none; }
    a state pill, the buttons — centre themselves on that line instead, because
    a box on a text baseline hangs below the words beside it. */
 .page-head-wrap { flex-wrap: wrap; row-gap: 8px; }
+/* A block's heading is the page's heading one size down: the same baseline
+   rule, the same quiet line, the same boxes centred on it. */
+.block-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; row-gap: 6px; margin-bottom: 10px; }
+.block-head h2 { margin: 0; }
+.block-sub { font: var(--text-label); color: var(--muted); white-space: nowrap; }
+.block-head > .pill, .block-head > a.pill, .block-head > button, .block-head > .row-actions { align-self: center; }
+.block-note { font: var(--text-label); color: var(--muted); margin: -4px 0 10px; max-width: 80ch; }
 .page-head > .page-badge,
 .page-head > .pill,
 .page-head > a.pill,
@@ -1188,8 +1195,6 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
 
 /* A document previewed where it is issued (U15). */
 .doc-card { margin-bottom: 18px; }
-.doc-head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
-.doc-head h2 { margin: 0; }
 .doc-frame { width: 100%; height: 70vh; min-height: 420px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-2); }
 @media (max-width: 719px) {
   .doc-frame { height: 60vh; min-height: 320px; }

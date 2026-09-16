@@ -2,7 +2,7 @@ import { DEFAULT_DEPOSIT_TETRI, DEFAULT_WEEKLY_RATES_TETRI, gelFromTetri, parseG
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
-import { StateBadge, Vin } from '../components/ui.js';
+import { BlockHead, StateBadge, Vin } from '../components/ui.js';
 import { Field, Row, Wizard } from '../components/Wizard.js';
 import { fmtDate, formatGel } from '../format.js';
 import { useT } from '../i18n/index.js';
@@ -242,7 +242,7 @@ export function PickupWizard() {
           <PhotoPicker photos={photos} onChange={setPhotos} label={t.pickup.photos} />
           {progress && <p className="hint muted">{progress}</p>}
           <section className="card">
-            <h2>{t.pickup.summary}</h2>
+            <BlockHead title={t.pickup.summary} />
             <Row k={t.rentals.customer} v={customer?.name ?? ''} />
             <Row k={t.rentals.vehicle} v={vehicleCell} />
             <Row k={t.pickup.rate} v={<span className="mono">{formatGel(rateTetri, { decimals: false })}{t.rentals.perWeek}</span>} />

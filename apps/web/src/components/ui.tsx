@@ -134,3 +134,28 @@ export function PageHead({
     </>
   );
 }
+
+/**
+ * The top of a block inside a page, built exactly like the top of the page:
+ * the block's name, one quiet line on the same baseline saying how much of it
+ * there is, and its action at the far end of the same line rather than lost
+ * under a table. A block and the page it sits in should read as the same
+ * sentence said twice at two sizes.
+ */
+export function BlockHead({ title, sub, note, children }: { title: ReactNode; sub?: ReactNode; note?: ReactNode; children?: ReactNode }) {
+  return (
+    <>
+      <div className="block-head">
+        <h2>{title}</h2>
+        {sub != null && <span className="block-sub">{sub}</span>}
+        {children != null && (
+          <>
+            <span className="spacer" />
+            {children}
+          </>
+        )}
+      </div>
+      {note != null && <p className="block-note">{note}</p>}
+    </>
+  );
+}

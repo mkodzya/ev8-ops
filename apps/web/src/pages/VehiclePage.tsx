@@ -2,7 +2,7 @@ import { VEHICLE_POOLS, VEHICLE_STATES, isPoolEvent, type RentalStatus, type Veh
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../api.js';
-import { Empty, Loading, PageHead, PlaceText, RentalBadge, StateBadge, Vin } from '../components/ui.js';
+import { BlockHead, Empty, Loading, PageHead, PlaceText, RentalBadge, StateBadge, Vin } from '../components/ui.js';
 import { Field, Row } from '../components/Wizard.js';
 import { fmtDate } from '../format.js';
 import { useT } from '../i18n/index.js';
@@ -169,7 +169,7 @@ export function VehiclePage() {
         </section>
 
         <section className="card">
-          <h2>{t.vehicle.history}</h2>
+          <BlockHead title={t.vehicle.history} sub={t.vehicle.eventsCount(data.events.length)} />
           {data.events.length === 0 ? (
             <Empty text={t.common.dash} />
           ) : (
@@ -201,7 +201,7 @@ export function VehiclePage() {
       {can('reports.view') && <VehicleEconomics vehicleId={data.vehicle.id} />}
 
       <section className="card">
-        <h2>{t.service.history}</h2>
+        <BlockHead title={t.service.history} sub={t.service.jobsCount(data.serviceJobs.length)} />
         {data.serviceJobs.length === 0 ? (
           <Empty text={t.service.none} />
         ) : (
@@ -224,7 +224,7 @@ export function VehiclePage() {
       </section>
 
       <section className="card">
-        <h2>{t.vehicle.rentalsOf}</h2>
+        <BlockHead title={t.vehicle.rentalsOf} sub={t.rentals.count(data.rentals.length)} />
         {data.rentals.length === 0 ? (
           <Empty text={t.rentals.empty} />
         ) : (

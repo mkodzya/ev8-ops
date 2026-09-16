@@ -4,7 +4,7 @@ import { parseGel, todayISO, type VehicleState } from '@ev8/shared';
 import { Field } from '../components/Wizard.js';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../api.js';
-import { Empty, Loading, PageHead, RentalBadge, Vin } from '../components/ui.js';
+import { BlockHead, Empty, Loading, PageHead, RentalBadge, Vin } from '../components/ui.js';
 import { PaymentForm } from '../components/PaymentForm.js';
 import { VoidPayment } from './PaymentsPage.js';
 import { Row } from '../components/Wizard.js';
@@ -131,16 +131,14 @@ export function RentalPage() {
 
       {preview && (
         <section className="card doc-card">
-          <div className="doc-head">
-            <h2>{preview === 'contract' ? t.docs.contract : t.docs.returnAct}</h2>
-            <span className="spacer" />
+          <BlockHead title={preview === 'contract' ? t.docs.contract : t.docs.returnAct}>
             <a className="pill pill-sm" href={`/api/rentals/${r.id}/${preview}.pdf`} target="_blank" rel="noreferrer">
               {t.docs.openTab}
             </a>
             <button type="button" className="pill pill-sm" onClick={() => setPreview(null)}>
               {t.actions.cancel}
             </button>
-          </div>
+          </BlockHead>
           {/* The browser's own PDF viewer. It prints, and what it prints is
               the file the customer gets — not a picture of it. */}
           <iframe className="doc-frame" title={preview} src={`/api/rentals/${r.id}/${preview}.pdf`} />
@@ -225,7 +223,7 @@ export function RentalPage() {
         </section>
 
         <section className="card">
-          <h2>{t.rentals.deposit}</h2>
+          <BlockHead title={t.rentals.deposit} />
           {d ? (
             <>
               <Row k={t.rental.amount} v={<span className="mono">{formatGel(d.amountTetri, { decimals: false })}</span>} />
@@ -256,7 +254,7 @@ export function RentalPage() {
       </div>
 
       <section className="card">
-        <h2>{t.rental.periods}</h2>
+        <BlockHead title={t.rental.periods} sub={t.rental.periodsCount(data.periods.length)} />
         {data.periods.length === 0 ? (
           <Empty text={t.common.dash} />
         ) : (
@@ -290,7 +288,7 @@ export function RentalPage() {
       </section>
 
       <section className="card">
-        <h2>{t.payments.title}</h2>
+        <BlockHead title={t.payments.title} sub={t.payments.count(data.payments.length)} />
         {data.payments.length === 0 ? (
           <Empty text={t.payments.none} />
         ) : (
@@ -316,7 +314,7 @@ export function RentalPage() {
       </section>
 
       <section className="card">
-        <h2>{t.rental.acts}</h2>
+        <BlockHead title={t.rental.acts} sub={t.rental.actsCount(data.acts.length)} />
         {data.acts.length === 0 ? (
           <Empty text={t.common.dash} />
         ) : (
