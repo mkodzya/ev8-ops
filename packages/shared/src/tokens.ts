@@ -42,6 +42,14 @@ export const tokens = {
   greyInk: '#666666', // the word inside a sold pill, 5.2:1 on --surface-2
   grey: '#7a7a7a', // finished and sold; PDF footers (site --grey-06/03)
 
+  /** paint — What the six colour words look like, so the fleet's colour column can be read at a glance instead of spelled out. These are NOT paint codes: nobody has measured a moped, and Odoo holds a word and not a number. A swatch here depicts the word in the data — `Красный` — and nothing more. A word we do not know keeps being written out, because a guessed swatch would be a claim about a moped. */
+  paintBlack: '#1c1c1c', // not the ink: a moped read as black against white ink would disappear into it
+  paintWhite: '#ffffff', // invisible on the row, which is why every swatch carries a hairline
+  paintRed: '#d24b3a', // a red apart from --crit, which means overdue and must not be mistaken for paint
+  paintGreen: '#4f8a4f', // brighter than the brand green: this is a moped, not the wordmark
+  paintGrey: '#9a9a9a', // lighter than --grey so it does not read as disabled
+  paintPurple: '#7b5ea7', // for იისფერი, the only colour in the data with no Latin twin
+
   /** rail — The navigation rail is the one dark surface in a light app: brand black with the light logo. */
   rail: '#0b0b0b', // rail background
   railInk: '#c9d3c9', // rail text
@@ -80,8 +88,8 @@ export const tokens = {
   /** motion — Letter-spacing and the one transition, copied from the theme. The CSS `font` shorthand cannot carry tracking, so it lives beside the text styles rather than inside them. */
   trackingTight: '-0.02em', // headings: the site sets -1px at 38px, -0.56px at 28px, -0.4px at 20px — all -0.02em
   trackingButton: '-0.01em', // buttons and chips (.button, .button-light)
-  ease: '0.3s ease', // every hover on the site moves at this speed
-  enter: '0.26s cubic-bezier(0.32, 0.72, 0, 1)', // something arriving over the page — a panel, a menu. Faster than a hover and slowed at the end, so it reads as sliding into place rather than being switched on. An addition: nothing on the site arrives
+  ease: '0.36s cubic-bezier(0.2, 0, 0, 1)', // a colour changing under the pointer. The site writes .3s ease; ours is slower and decelerating, by the owner's decision (15.09.2026) — a working screen is looked at all day and an eased ending reads as softer than the same length linear-in-out
+  enter: '0.42s cubic-bezier(0.32, 0.72, 0, 1)', // something arriving over the page — a panel, a sheet, a menu. Slower than a hover and braked hard at the end, so it reads as sliding into place rather than being switched on. An addition: nothing on the site arrives
   undoWindow: '10s', // how long a park move stays undoable, drawn as the line draining under the undo button; the same ten seconds the screen counts and the API enforces
   hairline: '0.82px', // the outline button's border, exactly as the theme writes it
 
@@ -299,6 +307,48 @@ export const tokenGroups: TokenGroup[] = [
     ]
   },
   {
+    "name": "paint",
+    "note": "What the six colour words look like, so the fleet's colour column can be read at a glance instead of spelled out. These are NOT paint codes: nobody has measured a moped, and Odoo holds a word and not a number. A swatch here depicts the word in the data — `Красный` — and nothing more. A word we do not know keeps being written out, because a guessed swatch would be a claim about a moped.",
+    "tokens": [
+      {
+        "name": "paintBlack",
+        "cssVar": "--paint-black",
+        "value": "#1c1c1c",
+        "note": "not the ink: a moped read as black against white ink would disappear into it"
+      },
+      {
+        "name": "paintWhite",
+        "cssVar": "--paint-white",
+        "value": "#ffffff",
+        "note": "invisible on the row, which is why every swatch carries a hairline"
+      },
+      {
+        "name": "paintRed",
+        "cssVar": "--paint-red",
+        "value": "#d24b3a",
+        "note": "a red apart from --crit, which means overdue and must not be mistaken for paint"
+      },
+      {
+        "name": "paintGreen",
+        "cssVar": "--paint-green",
+        "value": "#4f8a4f",
+        "note": "brighter than the brand green: this is a moped, not the wordmark"
+      },
+      {
+        "name": "paintGrey",
+        "cssVar": "--paint-grey",
+        "value": "#9a9a9a",
+        "note": "lighter than --grey so it does not read as disabled"
+      },
+      {
+        "name": "paintPurple",
+        "cssVar": "--paint-purple",
+        "value": "#7b5ea7",
+        "note": "for იისფერი, the only colour in the data with no Latin twin"
+      }
+    ]
+  },
+  {
     "name": "rail",
     "note": "The navigation rail is the one dark surface in a light app: brand black with the light logo.",
     "tokens": [
@@ -503,14 +553,14 @@ export const tokenGroups: TokenGroup[] = [
       {
         "name": "ease",
         "cssVar": "--ease",
-        "value": "0.3s ease",
-        "note": "every hover on the site moves at this speed"
+        "value": "0.36s cubic-bezier(0.2, 0, 0, 1)",
+        "note": "a colour changing under the pointer. The site writes .3s ease; ours is slower and decelerating, by the owner's decision (15.09.2026) — a working screen is looked at all day and an eased ending reads as softer than the same length linear-in-out"
       },
       {
         "name": "enter",
         "cssVar": "--enter",
-        "value": "0.26s cubic-bezier(0.32, 0.72, 0, 1)",
-        "note": "something arriving over the page — a panel, a menu. Faster than a hover and slowed at the end, so it reads as sliding into place rather than being switched on. An addition: nothing on the site arrives"
+        "value": "0.42s cubic-bezier(0.32, 0.72, 0, 1)",
+        "note": "something arriving over the page — a panel, a sheet, a menu. Slower than a hover and braked hard at the end, so it reads as sliding into place rather than being switched on. An addition: nothing on the site arrives"
       },
       {
         "name": "undoWindow",

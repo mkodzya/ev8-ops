@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api.js';
-import { Empty, Loading } from '../components/ui.js';
+import { BlockHead, Empty, Loading, PageHead } from '../components/ui.js';
 import { fmtDate, formatGel } from '../format.js';
 import { useT } from '../i18n/index.js';
 import { errorText, useLoad } from '../lib/use.js';
@@ -122,21 +122,18 @@ export function StatementsPage() {
 
   return (
     <>
-      <header className="page-head page-head-wrap">
-        <h1>{t.statements.title}</h1>
-        <span className="spacer" />
+      <PageHead wrap title={t.statements.title} sub={t.statements.count(statements.data?.statements.length ?? 0)} note={t.statements.uploadHint}>
         <label className="pill pill-sm pill-accent">
           <input ref={fileRef} type="file" accept=".csv,text/csv" hidden onChange={(e) => void choose(e.target.files)} />
           {busy ? t.common.checking : `+ ${t.statements.upload}`}
         </label>
-      </header>
-      <p className="hint muted">{t.statements.uploadHint}</p>
+      </PageHead>
       {done && <div className="hint">{done}</div>}
       {err && <div className="hint hint-bad">{err}</div>}
 
       {pending && (
         <section className="card prev-card">
-          <h2>{t.statements.previewTitle}</h2>
+          <BlockHead title={t.statements.previewTitle} />
           <p className="hint muted">
             {pending.fileName} · {t.statements.banks[pending.preview.bank]} · <span className="mono">{fmtDate(pending.preview.periodFrom)} — {fmtDate(pending.preview.periodTo)}</span>
           </p>
@@ -182,9 +179,7 @@ export function StatementsPage() {
       )}
 
       <section className="card">
-        <h2>
-          {t.statements.queue} {statements.data ? <span className="mono muted">{statements.data.queue}</span> : null}
-        </h2>
+        <BlockHead title={t.statements.queue} sub={statements.data ? t.statements.linesCount(statements.data.queue) : undefined} />
         {!queue.data ? (
           <Loading />
         ) : queue.data.lines.length === 0 ? (
@@ -199,7 +194,7 @@ export function StatementsPage() {
       </section>
 
       <section className="card">
-        <h2>{t.statements.title}</h2>
+        <BlockHead title={t.statements.title} sub={statements.data ? t.statements.count(statements.data.statements.length) : undefined} />
         {!statements.data ? (
           <Loading />
         ) : statements.data.statements.length === 0 ? (

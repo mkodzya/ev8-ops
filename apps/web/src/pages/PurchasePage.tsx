@@ -2,7 +2,7 @@ import { parseGel, todayISO } from '@ev8/shared';
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../api.js';
-import { Empty, Loading, StateBadge, Vin } from '../components/ui.js';
+import { BlockHead, Empty, Loading, PageHead, StateBadge, Vin } from '../components/ui.js';
 import { Field, Row } from '../components/Wizard.js';
 import { fmtDate, formatGel } from '../format.js';
 import { useT } from '../i18n/index.js';
@@ -54,10 +54,7 @@ export function PurchasePage() {
 
   return (
     <>
-      <header className="page-head page-head-wrap">
-        <h1 className="mono">{p.number}</h1>
-        <span className="muted">{t.purchases.statuses[p.status]}</span>
-        <span className="spacer" />
+      <PageHead wrap title={p.number} sub={t.purchases.statuses[p.status]}>
         {open && can('payments.reconcile') && (
           <button type="button" className="pill pill-sm" onClick={() => setPay({ ...pay, open: !pay.open })}>
             {t.purchases.addPayment}
@@ -68,7 +65,7 @@ export function PurchasePage() {
             {t.purchases.receive}
           </button>
         )}
-      </header>
+      </PageHead>
       {err && <div className="hint hint-bad">{err}</div>}
 
       {pay.open && (
@@ -163,7 +160,7 @@ export function PurchasePage() {
       </div>
 
       <section className="card">
-        <h2>{t.purchases.lines}</h2>
+        <BlockHead title={t.purchases.lines} sub={t.purchases.linesCount(p.lines.length)} />
         {p.lines.length === 0 ? (
           <Empty text={t.common.dash} />
         ) : (
@@ -273,7 +270,7 @@ export function PurchasePage() {
 
       {data.vehicles.length > 0 && (
         <section className="card">
-          <h2>{t.purchases.vehicles}</h2>
+          <BlockHead title={t.purchases.vehicles} sub={t.fleet.count(data.vehicles.length)} />
           <div className="table-wrap table-flat">
             <table className="table">
               <thead>
@@ -306,7 +303,7 @@ export function PurchasePage() {
       )}
 
       <section className="card">
-        <h2>{t.payments.title}</h2>
+        <BlockHead title={t.payments.title} sub={t.payments.count(p.payments.length)} />
         {p.payments.length === 0 ? (
           <Empty text={t.payments.none} />
         ) : (

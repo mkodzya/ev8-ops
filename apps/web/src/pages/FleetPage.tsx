@@ -1,15 +1,17 @@
-import { VEHICLE_POOLS, VEHICLE_STATES, daysBetween, tokens, type VehiclePool, type VehicleState } from '@ev8/shared';
+import { VEHICLE_COLORS, VEHICLE_POOLS, VEHICLE_STATES, colorOf, daysBetween, tokens, type VehiclePool, type VehicleState } from '@ev8/shared';
 import { useEffect, useMemo, useState } from 'react';
 import { errorText, useLoad } from '../lib/use.js';
 import { Field } from '../components/Wizard.js';
 import { Drawer } from '../components/Drawer.js';
 import { RowMenu, type RowAction } from '../components/RowMenu.js';
 import { useSession } from '../session.js';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { todayISO } from '@ev8/shared';
-import { ColorText, CustomerName, Empty, Loading, PlaceText, StateBadge, Vin } from '../components/ui.js';
+import { ColorText, CustomerName, Empty, Loading, PageHead, PlaceText, StateBadge, Vin } from '../components/ui.js';
 import { placeOf } from '../lib/place.js';
+import { rowClick } from '../lib/rowLink.js';
+import { SortHead, useSortable } from '../lib/sortable.js';
 import { fmtDate, formatGel } from '../format.js';
 import { useT } from '../i18n/index.js';
 
@@ -41,17 +43,6 @@ interface Fleet {
  */
 const UNDO_WINDOW_MS = Number.parseFloat(tokens.undoWindow) * 1000;
 
-/**
- * What a column sorts by, and which way it means first.
- *
- * Silence leads by default and leads downwards, because the list is a queue of
- * decisions: the moped nobody has touched since March is the one to answer
- * for. The others read upwards, the way a person expects a list of words to.
- */
-const SORTS = ['model', 'state', 'where', 'quiet'] as const;
-type SortKey = (typeof SORTS)[number];
-const FIRST_DIR: Record<SortKey, 'asc' | 'desc'> = { model: 'asc', state: 'asc', where: 'asc', quiet: 'desc' };
-
 type PoolKey = VehiclePool | 'none' | 'gone';
 const POOL_KEYS: PoolKey[] = ['rent', 'sale', 'none', 'gone'];
 const poolOf = (v: Vehicle): PoolKey => (v.state === 'sold' || v.state === 'out' ? 'gone' : (v.pool ?? 'none'));
@@ -78,18 +69,18 @@ export function FleetPage() {
   const [data, setData] = useState<Fleet | null>(null);
   const [tick, setTick] = useState(0);
   const models = useLoad<Models>(can('settings.manage') ? '/api/models' : null);
+  const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const [q, setQ] = useState('');
   // The row a park move has just touched. It keeps its place in the list for
   // a while, even when the filter no longer wants it, so that the undo is
   // where the finger already is and nothing disappears under it.
   const [moved, setMoved] = useState<{ id: string; to: VehiclePool } | null>(null);
+  // The heading opens into a field, and stays open while it holds anything.
+  const [finding, setFinding] = useState(false);
   const state = params.get('state') as VehicleState | null;
   const pool = params.get('pool') as PoolKey | null;
   const noPoint = params.get('place') === 'unset';
-  const sortParam = params.get('sort') as SortKey | null;
-  const sort: SortKey = sortParam && SORTS.includes(sortParam) ? sortParam : 'quiet';
-  const dir = params.get('dir') === 'asc' ? 'asc' : params.get('dir') === 'desc' ? 'desc' : FIRST_DIR[sort];
 
   useEffect(() => {
     void api.get<Fleet>('/api/fleet').then(setData);
@@ -137,17 +128,13 @@ export function FleetPage() {
   }, [inPool]);
   const unplaced = useMemo(() => inPool.filter((v) => placeOf(v).kind === 'unset').length, [inPool]);
 
-  // Longest silence on top: the list is a queue of decisions, not a register.
-  // A moped with no date to count from sinks to the bottom rather than posing
-  // as the freshest thing in the yard.
-  const today = todayISO();
   // Where a moped stands, as the one string the column is ordered by: the
   // renter's name, the point, or nothing — and nothing sorts last, whichever
   // way the column is pointing, because "nobody said" is not a name.
-  const whereKey = (v: Vehicle) =>
-    v.currentRental?.customer.name ?? v.location?.name ?? '';
+  const whereKey = (v: Vehicle) => v.currentRental?.customer.name ?? v.location?.name ?? '';
 
-  const rows = useMemo(() => {
+  const today = todayISO();
+  const shown = useMemo(() => {
     const needle = q.trim().toUpperCase();
     // Every filter at once, and one exception above all of them: a moped that
     // has just been moved holds its place while the undo is still on offer.
@@ -155,55 +142,53 @@ export function FleetPage() {
     // the exception has to sit outside all three and not only the last two.
     const matches = (v: Vehicle) =>
       (!pool || poolOf(v) === pool) && (!state || v.state === state) && (!noPoint || placeOf(v).kind === 'unset');
-    const sign = dir === 'asc' ? 1 : -1;
-    const by = (a: Vehicle, b: Vehicle): number => {
-      if (sort === 'model') return sign * a.model.localeCompare(b.model);
-      if (sort === 'state') return sign * (VEHICLE_STATES.indexOf(a.state) - VEHICLE_STATES.indexOf(b.state));
-      if (sort === 'where') {
-        const ka = whereKey(a);
-        const kb = whereKey(b);
-        if (!ka || !kb) return ka ? -1 : kb ? 1 : 0;
-        return sign * ka.localeCompare(kb);
-      }
-      const qa = quietDays(a, today);
-      const qb = quietDays(b, today);
-      if (qa == null || qb == null) return qa == null ? (qb == null ? 0 : 1) : -1;
-      return sign * (qa - qb);
-    };
-    return (data?.vehicles ?? [])
-      .filter((v) => (v.id === moved?.id || matches(v)) && (!needle || v.vin.endsWith(needle) || v.vin.includes(needle)))
-      .slice()
-      // The VIN breaks every tie, so the same list is the same list twice.
-      .sort((a, b) => by(a, b) || a.vin.localeCompare(b.vin));
-  }, [data, pool, state, noPoint, q, today, moved, sort, dir]);
+    return (data?.vehicles ?? []).filter(
+      (v) => (v.id === moved?.id || matches(v)) && (!needle || v.vin.endsWith(needle) || v.vin.includes(needle)),
+    );
+  }, [data, pool, state, noPoint, q, moved]);
 
-  // One filter at a time below the park: a card is either the state it names
-  // or the mopeds nobody has placed, and clicking the one that is already on
-  // turns it off. Two of them at once would ask a question no card answers.
-  const pick = (next: { pool?: PoolKey | null; state?: VehicleState | null; noPoint?: boolean; sort?: SortKey }) => {
+  // Longest silence on top by default: the list is a queue of decisions, not a
+  // register. The order itself is the system's one sorting rule, shared with
+  // every other list (lib/sortable).
+  const sorted = useSortable(
+    shown,
+    {
+      model: { value: (v) => v.model },
+      color: { value: (v) => { const c = colorOf(v.color); return c ? VEHICLE_COLORS.indexOf(c) : null; } },
+      state: { value: (v) => VEHICLE_STATES.indexOf(v.state) },
+      where: { value: (v) => whereKey(v) },
+      quiet: { value: (v) => quietDays(v, today), first: 'desc' },
+    },
+    (a, b) => a.vin.localeCompare(b.vin),
+    'quiet',
+  );
+  const rows = sorted.rows;
+
+  const pick = (next: { pool?: PoolKey | null; state?: VehicleState | null; noPoint?: boolean }) => {
     const p = 'pool' in next ? next.pool : pool;
     const st = 'state' in next ? next.state : 'noPoint' in next ? null : state;
     const np = 'noPoint' in next ? next.noPoint : 'state' in next ? false : noPoint;
-    // Clicking the column that is already sorting turns it round; a new column
-    // starts the way that column is usually read.
-    const so = next.sort ?? sort;
-    const di = next.sort ? (next.sort === sort ? (dir === 'asc' ? 'desc' : 'asc') : FIRST_DIR[next.sort]) : dir;
+    // The order is not a filter and outlives every one of them.
+    const order = Object.fromEntries([...params.entries()].filter(([k]) => k === 'sort' || k === 'dir'));
     setParams({
+      ...order,
       ...(p ? { pool: p } : {}),
       ...(st ? { state: st } : {}),
       ...(np ? { place: 'unset' } : {}),
-      ...(so === 'quiet' && di === FIRST_DIR.quiet ? {} : { sort: so, dir: di }),
     });
+  };
+
+  const findOpen = finding || q.length > 0;
+  const closeFind = () => {
+    setQ('');
+    setFinding(false);
   };
 
   if (!data) return <Loading />;
 
   return (
     <>
-      <header className="page-head">
-        <h1>{t.fleet.title}</h1>
-        <span className="muted">{t.fleet.count(data.vehicles.length)}</span>
-        <span className="spacer" />
+      <PageHead title={t.fleet.title} sub={t.fleet.count(data.vehicles.length)}>
         {/* On a phone the search is a field of its own, because the list has
             no column headings to hide in. On a laptop it lives in the VIN
             column, and this one is not rendered. */}
@@ -216,7 +201,7 @@ export function FleetPage() {
         {can('settings.manage') && models.data && (
           <NewVehicle models={models.data.models} onDone={() => setTick((n) => n + 1)} />
         )}
-      </header>
+      </PageHead>
       <div className="segments">
         {/* What a moped is for comes first: it splits the fleet into two
             businesses, and the state only means something inside one of
@@ -257,27 +242,54 @@ export function FleetPage() {
               belongs over the column of VINs and nowhere else. It costs the
               screen nothing: the row was already there. */}
           <li className="vlist-head">
-            <span>
-              <input
-                className="input list-search mono"
-                placeholder={t.fleet.searchShort}
-                aria-label={t.fleet.searchHint}
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-              />
-              <span className="list-head-vin">{t.fleet.vin}</span>
+            {/* The VIN column is a heading until somebody wants to find a
+                moped, and then it is the field they find it with. It stays a
+                field while anything is typed in it, so a list that is
+                filtered never hides what filtered it. */}
+            <span className="vin-col">
+              {findOpen ? (
+                <span className="col-search">
+                  <input
+                    className="input list-search mono"
+                    placeholder={t.fleet.searchShort}
+                    aria-label={t.fleet.searchHint}
+                    value={q}
+                    autoFocus
+                    onChange={(e) => setQ(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Escape') closeFind();
+                    }}
+                    onBlur={() => {
+                      if (!q) setFinding(false);
+                    }}
+                  />
+                  <button type="button" className="col-x" aria-label={t.actions.cancel} onClick={closeFind}>
+                    ✕
+                  </button>
+                </span>
+              ) : (
+                <button type="button" className="col-find" aria-label={t.fleet.searchHint} onClick={() => setFinding(true)}>
+                  {t.fleet.vin}
+                  <i className="col-mag" aria-hidden="true">
+                    ⌕
+                  </i>
+                </button>
+              )}
             </span>
             <span>
-              <ColHead k="model" label={t.fleet.model} sort={sort} dir={dir} pick={pick} />
+              <SortHead k="model" label={t.fleet.model} {...sorted} />
             </span>
             <span>
-              <ColHead k="state" label={t.fleet.state} sort={sort} dir={dir} pick={pick} />
+              <SortHead k="color" label={t.fleet.color} {...sorted} />
             </span>
             <span>
-              <ColHead k="where" label={t.fleet.where} sort={sort} dir={dir} pick={pick} />
+              <SortHead k="state" label={t.fleet.state} {...sorted} />
+            </span>
+            <span>
+              <SortHead k="where" label={t.fleet.where} {...sorted} />
             </span>
             <span className="num">
-              <ColHead k="quiet" label={t.fleet.quiet} sort={sort} dir={dir} pick={pick} />
+              <SortHead k="quiet" label={t.fleet.quiet} {...sorted} />
             </span>
             {/* The header's last cell rides the right edge with the row's, or
                 the columns would slide out from under a floating heading. */}
@@ -302,7 +314,11 @@ export function FleetPage() {
             /* Source order is the laptop's column order; the phone re-lays
                them out by name with grid-template-areas, so neither shape
                depends on the other. */
-            <li key={v.id} className={`vrow ${moved?.id === v.id ? 'vrow-changed' : ''}`}>
+            <li
+              key={v.id}
+              className={`vrow vrow-go ${moved?.id === v.id ? 'vrow-changed' : ''}`}
+              onClick={rowClick(() => navigate(`/fleet/${v.id}`))}
+            >
               <Link to={`/fleet/${v.id}`} className="v-vin">
                 <Vin vin={v.vin} />
               </Link>
@@ -310,11 +326,9 @@ export function FleetPage() {
                   belongs to: the colour under the model, the park under the
                   state, "paid through" under the name. Each column gets one
                   word and one quiet tail, and none of them elbows the next. */}
-              <span className="v-model">
-                {v.model}
-                <span className="v-sub v-color">
-                  <ColorText of={v.color} />
-                </span>
+              <span className="v-model">{v.model}</span>
+              <span className="v-color">
+                <ColorText of={v.color} />
               </span>
               <span className="v-state">
                 <StateBadge state={v.state} />
@@ -351,34 +365,6 @@ export function FleetPage() {
   );
 }
 
-
-/**
- * A column heading that sorts. The arrow appears only on the column doing the
- * sorting — an arrow on every heading is a row of arrows, and says nothing.
- */
-function ColHead({
-  k,
-  label,
-  sort,
-  dir,
-  pick,
-}: {
-  k: SortKey;
-  label: string;
-  sort: SortKey;
-  dir: 'asc' | 'desc';
-  pick: (next: { sort: SortKey }) => void;
-}) {
-  const on = sort === k;
-  return (
-    <button type="button" className={`col-sort ${on ? 'on' : ''}`} onClick={() => pick({ sort: k })}>
-      {label}
-      <i className="col-arrow" aria-hidden="true">
-        {on ? (dir === 'asc' ? '↑' : '↓') : ''}
-      </i>
-    </button>
-  );
-}
 
 /** Days of silence, loud once they run past half a year. */
 function Quiet({ v, today }: { v: Vehicle; today: string }) {

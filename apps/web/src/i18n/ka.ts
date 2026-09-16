@@ -97,7 +97,7 @@ export const ka: Dict = {
     state: 'მდგომარეობა',
     renter: 'მოქირავნე',
     paidThrough: 'გადახდილია',
-    where: 'სად დგას',
+    where: 'სად',
     pool: 'პარკი',
     quiet: 'სიჩუმე',
     noPoint: 'წერტილის გარეშე',
@@ -106,7 +106,7 @@ export const ka: Dict = {
     rowActions: 'მოქმედებები',
     quietDays: (n: number) => `${n} დღე`,
     searchHint: 'VIN-ის ბოლო 4 სიმბოლო',
-    searchShort: '· · · ბოლო 4',
+    searchShort: 'VIN-ის ბოლო 4',
     empty: 'პარკი ცარიელია.',
     nothingFound: 'ვერაფერი მოიძებნა.',
     showAll: (n: number) => `ყველას ჩვენება (${n})`,
@@ -114,6 +114,7 @@ export const ka: Dict = {
   },
 
   rentals: {
+    count: (n: number) => `${n} ქირავნობა`,
     title: 'ქირაობა',
     number: '№',
     customer: 'კლიენტი',
@@ -146,6 +147,7 @@ export const ka: Dict = {
   },
 
   vehicle: {
+    eventsCount: (n: number) => `${n} მოვლენა`,
     backToFleet: 'პარკში დაბრუნება',
     title: 'მოპედი',
     history: 'ისტორია',
@@ -172,6 +174,8 @@ export const ka: Dict = {
   },
 
   rental: {
+    actsCount: (n: number) => `${n} აქტი`,
+    periodsCount: (n: number) => `${n} კვირა`,
     owed: 'დავალიანება',
     title: 'ქირაობა',
     periods: 'კვირის პერიოდები',
@@ -250,6 +254,7 @@ export const ka: Dict = {
   },
 
   photos: {
+    count: (n: number) => `${n} ფოტო`,
     add: 'ფოტო',
     remove: 'წაშლა',
     hint: 'ოთხი კუთხე და გარბენი. ფოტოები ტელეფონზევე მცირდება ატვირთვამდე.',
@@ -259,6 +264,7 @@ export const ka: Dict = {
   },
 
   documents: {
+    count: (n: number) => `${n} დოკუმენტი`,
     title: 'დოკუმენტები',
     kinds: { id_card: 'პირადობა', driver_licence: 'მართვის მოწმობა', other: 'სხვა' },
     add: 'დოკუმენტის დამატება',
@@ -385,6 +391,7 @@ export const ka: Dict = {
   },
 
   points: {
+    count: (n: number) => `${n} წერტილი`,
     name: 'დასახელება',
     note: 'შენიშვნა',
     order: 'რიგი',
@@ -401,6 +408,7 @@ export const ka: Dict = {
   },
 
   users: {
+    count: (n: number) => `${n} ადამიანი`,
     name: 'სახელი',
     email: 'ელფოსტა შესასვლელად',
     role: 'როლი',
@@ -422,6 +430,7 @@ export const ka: Dict = {
   },
 
   models: {
+    count: (n: number) => `${n} მოდელი`,
     brand: 'ბრენდი',
     name: 'მოდელი',
     salePrice: 'გასაყიდი ფასი, დღგ-ით',
@@ -458,6 +467,7 @@ export const ka: Dict = {
   },
 
   payments: {
+    count: (n: number) => `${n} გადახდა`,
     title: 'გადახდები',
     add: 'გადახდის გატარება',
     date: 'თარიღი',
@@ -495,6 +505,8 @@ export const ka: Dict = {
   },
 
   statements: {
+    linesCount: (n: number) => `${n} ხაზი`,
+    count: (n: number) => `${n} ამონაწერი`,
     previewTitle: 'რას დაამატებს ეს ფაილი',
     previewNew: 'ახალი სტრიქონი',
     previewKnown: 'უკვე ჩატვირთული',
@@ -528,6 +540,8 @@ export const ka: Dict = {
   },
 
   service: {
+    jobsCount: (n: number) => `${n} რემონტი`,
+    count: (n: number) => `${n} ღია რემონტი`,
     title: 'სერვისი',
     open: 'ღია შეკეთებები',
     newJob: 'შეკეთების გახსნა',
@@ -558,6 +572,8 @@ export const ka: Dict = {
   },
 
   sales: {
+    instalmentsCount: (n: number) => `${n} შენატანი`,
+    count: (n: number) => `${n} გაყიდვა`,
     title: 'გაყიდვები',
     newSale: 'მოპედის გაყიდვა',
     number: '№',
@@ -590,6 +606,8 @@ export const ka: Dict = {
   },
 
   purchases: {
+    linesCount: (n: number) => `${n} ხაზი`,
+    count: (n: number) => `${n} შეკვეთა`,
     title: 'შესყიდვები',
     newOrder: 'ახალი შეკვეთა',
     number: '№',
@@ -630,6 +648,7 @@ export const ka: Dict = {
 
 
   economics: {
+    count: (n: number) => `${n} მოპედი`,
     title: 'ეკონომიკა',
     nav: 'ეკონომიკა',
     subtitle: 'რა შემოიტანა მოპედმა და რა დაჯდა. ყველაფერი ითვლება გადახდებიდან, შეკეთებებიდან და მოვლენებიდან, ამიტომ შესწორება მაშინვე იცვლება.',
@@ -656,6 +675,8 @@ export const ka: Dict = {
   },
 
   stock: {
+    movesCount: (n: number) => `${n} ოპერაცია`,
+    partsCount: (n: number) => `${n} ნაწილი`,
     title: 'საწყობი',
     nav: 'საწყობი',
     mopeds: 'მოპედები მოდელების მიხედვით',
@@ -696,6 +717,7 @@ export const ka: Dict = {
     qtyOnShelf: 'საწყობში',
   },
   customers: {
+    count: (n: number) => `${n} კლიენტი`,
     title: 'კლიენტები',
     name: 'სახელი',
     phone: 'WhatsApp',

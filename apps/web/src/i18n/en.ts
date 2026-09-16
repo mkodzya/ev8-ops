@@ -113,7 +113,7 @@ export const en = {
     rowActions: 'Actions',
     quietDays: (n: number) => `${n} day${n === 1 ? '' : 's'}`,
     searchHint: 'Last 4 of VIN',
-    searchShort: '· · · last 4',
+    searchShort: 'Last 4 of VIN',
     empty: 'The fleet is empty.',
     nothingFound: 'Nothing matches.',
     showAll: (n: number) => `Show all ${n}`,
@@ -121,6 +121,7 @@ export const en = {
   },
 
   rentals: {
+    count: (n: number) => `${n} rental${n === 1 ? '' : 's'}`,
     title: 'Rentals',
     number: 'No.',
     customer: 'Customer',
@@ -153,6 +154,7 @@ export const en = {
   },
 
   vehicle: {
+    eventsCount: (n: number) => `${n} ${n === 1 ? 'event' : 'events'}`,
     backToFleet: 'Back to the fleet',
     title: 'Moped',
     history: 'History',
@@ -179,6 +181,8 @@ export const en = {
   },
 
   rental: {
+    actsCount: (n: number) => `${n} ${n === 1 ? 'act' : 'acts'}`,
+    periodsCount: (n: number) => `${n} ${n === 1 ? 'week' : 'weeks'}`,
     owed: 'Owed',
     title: 'Rental',
     periods: 'Weekly periods',
@@ -257,6 +261,7 @@ export const en = {
   },
 
   photos: {
+    count: (n: number) => `${n} ${n === 1 ? 'photo' : 'photos'}`,
     add: 'Photo',
     remove: 'Remove',
     hint: 'Four angles and the odometer. Photos are downsized on the phone before upload.',
@@ -266,6 +271,7 @@ export const en = {
   },
 
   documents: {
+    count: (n: number) => `${n} ${n === 1 ? 'document' : 'documents'}`,
     title: 'Documents',
     kinds: { id_card: 'ID card', driver_licence: 'Driver licence', other: 'Other' },
     add: 'Add document',
@@ -392,6 +398,7 @@ export const en = {
   },
 
   points: {
+    count: (n: number) => `${n} ${n === 1 ? 'point' : 'points'}`,
     name: 'Name',
     note: 'Note',
     order: 'Order',
@@ -408,6 +415,7 @@ export const en = {
   },
 
   users: {
+    count: (n: number) => `${n} ${n === 1 ? 'person' : 'people'}`,
     name: 'Name',
     email: 'Email for signing in',
     role: 'Role',
@@ -429,6 +437,7 @@ export const en = {
   },
 
   models: {
+    count: (n: number) => `${n} ${n === 1 ? 'model' : 'models'}`,
     brand: 'Brand',
     name: 'Model',
     salePrice: 'Sale price, VAT included',
@@ -465,6 +474,7 @@ export const en = {
   },
 
   payments: {
+    count: (n: number) => `${n} payment${n === 1 ? '' : 's'}`,
     title: 'Payments',
     add: 'Record a payment',
     date: 'Date',
@@ -502,6 +512,8 @@ export const en = {
   },
 
   statements: {
+    linesCount: (n: number) => `${n} ${n === 1 ? 'line' : 'lines'}`,
+    count: (n: number) => `${n} statement${n === 1 ? '' : 's'}`,
     previewTitle: 'What this file would add',
     previewNew: 'new lines',
     previewKnown: 'already in',
@@ -535,6 +547,8 @@ export const en = {
   },
 
   service: {
+    jobsCount: (n: number) => `${n} ${n === 1 ? 'repair' : 'repairs'}`,
+    count: (n: number) => `${n} open job${n === 1 ? '' : 's'}`,
     title: 'Service',
     open: 'Open repairs',
     newJob: 'Open a repair',
@@ -565,6 +579,8 @@ export const en = {
   },
 
   sales: {
+    instalmentsCount: (n: number) => `${n} ${n === 1 ? 'instalment' : 'instalments'}`,
+    count: (n: number) => `${n} sale${n === 1 ? '' : 's'}`,
     title: 'Sales',
     newSale: 'Sell a moped',
     number: 'No.',
@@ -597,6 +613,8 @@ export const en = {
   },
 
   purchases: {
+    linesCount: (n: number) => `${n} ${n === 1 ? 'line' : 'lines'}`,
+    count: (n: number) => `${n} order${n === 1 ? '' : 's'}`,
     title: 'Purchases',
     newOrder: 'New order',
     number: 'No.',
@@ -637,6 +655,7 @@ export const en = {
 
 
   economics: {
+    count: (n: number) => `${n} moped${n === 1 ? '' : 's'}`,
     title: 'Economics',
     nav: 'Economics',
     subtitle: 'What each moped has earned and what it has cost. Everything is added up from payments, repairs and events, so a correction changes it at once.',
@@ -663,6 +682,8 @@ export const en = {
   },
 
   stock: {
+    movesCount: (n: number) => `${n} ${n === 1 ? 'movement' : 'movements'}`,
+    partsCount: (n: number) => `${n} part${n === 1 ? '' : 's'}`,
     title: 'Warehouse',
     nav: 'Warehouse',
     mopeds: 'Mopeds by model',
@@ -703,6 +724,7 @@ export const en = {
     qtyOnShelf: 'on the shelf',
   },
   customers: {
+    count: (n: number) => `${n} customer${n === 1 ? '' : 's'}`,
     title: 'Customers',
     name: 'Name',
     phone: 'WhatsApp',

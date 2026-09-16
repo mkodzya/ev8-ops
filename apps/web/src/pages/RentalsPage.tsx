@@ -1,11 +1,12 @@
 import type { RentalStatus } from '@ev8/shared';
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useSession } from '../session.js';
 import { api } from '../api.js';
-import { CustomerName, Empty, Loading, RentalBadge, Vin } from '../components/ui.js';
+import { CustomerName, Empty, Loading, PageHead, RentalBadge, Vin } from '../components/ui.js';
 import { fmtDate, formatGel } from '../format.js';
 import { useT } from '../i18n/index.js';
+import { rowClick } from '../lib/rowLink.js';
 
 interface Rental {
   id: string;
@@ -27,6 +28,7 @@ interface Rental {
 
 export function RentalsPage() {
   const t = useT();
+  const navigate = useNavigate();
   const { can } = useSession();
   const [rows, setRows] = useState<Rental[] | null>(null);
   useEffect(() => {
@@ -36,16 +38,13 @@ export function RentalsPage() {
 
   return (
     <>
-      <header className="page-head">
-        <h1>{t.rentals.title}</h1>
-        <span className="mono muted">{rows.length}</span>
-        <span className="spacer" />
+      <PageHead title={t.rentals.title} sub={t.rentals.count(rows.length)}>
         {can('rental.create') && (
           <Link className="pill pill-sm pill-accent" to="/rentals/new">
             {t.actions.newRental}
           </Link>
         )}
-      </header>
+      </PageHead>
       {rows.length === 0 ? (
         <Empty text={t.rentals.empty} />
       ) : (
@@ -64,7 +63,7 @@ export function RentalsPage() {
             <span>{t.fleet.state}</span>
           </li>
           {rows.map((r) => (
-            <li key={r.id} className="vrow">
+            <li key={r.id} className="vrow vrow-go" onClick={rowClick(() => navigate(`/rentals/${r.id}`))}>
               <Link to={`/rentals/${r.id}`} className="r-num mono">
                 {r.number}
               </Link>

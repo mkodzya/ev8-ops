@@ -2,7 +2,7 @@ import { VEHICLE_STATES, type VehicleState } from '@ev8/shared';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api.js';
-import { CustomerName, StateBadge, Loading } from '../components/ui.js';
+import { BlockHead, CustomerName, Loading, PageHead, StateBadge } from '../components/ui.js';
 import { formatGel } from '../format.js';
 import { dayTasks, type DayTask } from '../lib/tasks.js';
 import { useT } from '../i18n/index.js';
@@ -59,10 +59,7 @@ export function TodayPage() {
 
   return (
     <>
-      <header className="page-head">
-        <h1>{t.today.title}</h1>
-        <span className="mono muted">{s.today}</span>
-      </header>
+      <PageHead title={t.today.title} sub={<span className="mono">{s.today}</span>} />
 
       <section className="tasks-wrap">
         {tasks.length > 0 ? (
@@ -87,7 +84,7 @@ export function TodayPage() {
 
       {s.overdueList.length > 0 && (
         <section className="card">
-          <h2>{t.today.overdueList}</h2>
+          <BlockHead title={t.today.overdueList} sub={t.rentals.count(s.overdueList.length)} />
           <ul className="od-list">
             {s.overdueList.map((r) => (
               <li key={r.id}>
@@ -140,7 +137,7 @@ export function TodayPage() {
         <div className="two-col">
           {s.pickedUpToday.length > 0 && (
             <section className="card">
-              <h2>{t.today.pickedUp}</h2>
+              <BlockHead title={t.today.pickedUp} sub={t.rentals.count(s.pickedUpToday.length)} />
               <ul className="timeline">
                 {s.pickedUpToday.map((r) => (
                   <li key={r.id}>
@@ -155,7 +152,7 @@ export function TodayPage() {
           )}
           {s.dueBackToday.length > 0 && (
             <section className="card">
-              <h2>{t.today.dueBack}</h2>
+              <BlockHead title={t.today.dueBack} sub={t.rentals.count(s.dueBackToday.length)} />
               <ul className="timeline">
                 {s.dueBackToday.map((r) => (
                   <li key={r.id}>
@@ -172,7 +169,7 @@ export function TodayPage() {
       )}
 
       <section className="card">
-        <h2>{t.today.fleet}</h2>
+        <BlockHead title={t.today.fleet} sub={t.fleet.count(VEHICLE_STATES.reduce((n, st) => n + s.fleet[st], 0))} />
         <ul className="state-list">
           {VEHICLE_STATES.map((st) => (
             <li key={st}>

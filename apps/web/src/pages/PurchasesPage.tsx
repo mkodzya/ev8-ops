@@ -2,10 +2,12 @@ import { parseGel, todayISO } from '@ev8/shared';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api.js';
-import { Empty, Loading } from '../components/ui.js';
+import { Empty, Loading, PageHead } from '../components/ui.js';
 import { Field } from '../components/Wizard.js';
 import { fmtDate, formatGel } from '../format.js';
 import { useT } from '../i18n/index.js';
+import { SortHead, useSortable } from '../lib/sortable.js';
+import { Drawer } from '../components/Drawer.js';
 import { errorText, useLoad } from '../lib/use.js';
 import { useSession } from '../session.js';
 
@@ -56,6 +58,21 @@ export function PurchasesPage() {
   const t = useT();
   const { can } = useSession();
   const { data, error, reload } = useLoad<{ purchases: Purchase[] }>('/api/purchases');
+  const sorted = useSortable(
+    data?.purchases ?? [],
+    {
+      number: { value: (p) => p.number },
+      supplier: { value: (p) => p.supplier.name },
+      invoiceNo: { value: (p) => p.invoiceNo },
+      orderedOn: { value: (p) => p.orderedOn, first: 'desc' },
+      receivedOn: { value: (p) => p.receivedOn, first: 'desc' },
+      invoiceTotal: { value: (p) => p.invoiceMinor, first: 'desc' },
+      paid: { value: (p) => p.paidTetri, first: 'desc' },
+      units: { value: (p) => p.units, first: 'desc' },
+      status: { value: (p) => p.status },
+    },
+    (a, b) => b.orderedOn.localeCompare(a.orderedOn) || a.number.localeCompare(b.number),
+  );
   const [err, setErr] = useState<string | null>(null);
 
   if (error) return <Empty text={error} />;
@@ -63,12 +80,9 @@ export function PurchasesPage() {
 
   return (
     <>
-      <header className="page-head page-head-wrap">
-        <h1>{t.purchases.title}</h1>
-        <span className="mono muted">{data.purchases.length}</span>
-        <span className="spacer" />
+      <PageHead wrap title={t.purchases.title} sub={t.purchases.count(data.purchases.length)}>
         {can('settings.manage') && <NewPurchase onDone={reload} onError={setErr} />}
-      </header>
+      </PageHead>
       {err && <div className="hint hint-bad">{err}</div>}
       {data.purchases.length === 0 ? (
         <Empty text={t.purchases.none} />
@@ -77,19 +91,19 @@ export function PurchasesPage() {
           <table className="table">
             <thead>
               <tr>
-                <th>{t.purchases.number}</th>
-                <th>{t.purchases.supplier}</th>
-                <th>{t.purchases.invoiceNo}</th>
-                <th>{t.purchases.orderedOn}</th>
-                <th>{t.purchases.receivedOn}</th>
-                <th className="num">{t.purchases.invoiceTotal}</th>
-                <th className="num">{t.purchases.paid}</th>
-                <th className="num">{t.purchases.units}</th>
-                <th>{t.fleet.state}</th>
+                <th><SortHead k="number" label={t.purchases.number} {...sorted} /></th>
+                <th><SortHead k="supplier" label={t.purchases.supplier} {...sorted} /></th>
+                <th><SortHead k="invoiceNo" label={t.purchases.invoiceNo} {...sorted} /></th>
+                <th><SortHead k="orderedOn" label={t.purchases.orderedOn} {...sorted} /></th>
+                <th><SortHead k="receivedOn" label={t.purchases.receivedOn} {...sorted} /></th>
+                <th className="num"><SortHead k="invoiceTotal" label={t.purchases.invoiceTotal} {...sorted} /></th>
+                <th className="num"><SortHead k="paid" label={t.purchases.paid} {...sorted} /></th>
+                <th className="num"><SortHead k="units" label={t.purchases.units} {...sorted} /></th>
+                <th><SortHead k="status" label={t.fleet.state} {...sorted} /></th>
               </tr>
             </thead>
             <tbody>
-              {data.purchases.map((p) => (
+              {sorted.rows.map((p) => (
                 <tr key={p.id} className={p.status === 'cancelled' ? 'row-off' : ''}>
                   <td>
                     <Link to={`/purchases/${p.id}`} className="mono">
@@ -121,13 +135,6 @@ function NewPurchase({ onDone, onError }: { onDone: () => void; onError: (e: str
   const [f, setF] = useState({ supplierId: '', invoiceNo: '', invoiceDate: '', currency: 'CNY', orderedOn: todayISO(), extras: '', extrasNote: '' });
   const [busy, setBusy] = useState(false);
 
-  if (!open) {
-    return (
-      <button type="button" className="pill pill-sm pill-accent" onClick={() => setOpen(true)}>
-        + {t.purchases.newOrder}
-      </button>
-    );
-  }
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -152,7 +159,13 @@ function NewPurchase({ onDone, onError }: { onDone: () => void; onError: (e: str
   };
 
   return (
-    <form className="card card-drawer form" onSubmit={submit}>
+    <>
+      <button type="button" className="pill pill-sm pill-accent" onClick={() => setOpen(true)}>
+        + {t.purchases.newOrder}
+      </button>
+      {open && (
+        <Drawer title={t.purchases.newOrder} onClose={() => setOpen(false)}>
+          <form className="form" onSubmit={submit}>
       <div className="two-col">
         <Field label={t.purchases.supplier}>
           <select className="input" value={f.supplierId} onChange={(e) => setF({ ...f, supplierId: e.target.value })} required>
@@ -191,6 +204,9 @@ function NewPurchase({ onDone, onError }: { onDone: () => void; onError: (e: str
           {busy ? t.common.checking : t.actions.confirm}
         </button>
       </div>
-    </form>
+          </form>
+        </Drawer>
+      )}
+    </>
   );
 }

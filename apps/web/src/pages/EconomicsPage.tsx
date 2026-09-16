@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Empty, Loading, Vin } from '../components/ui.js';
+import { BlockHead, Empty, Loading, PageHead, Vin } from '../components/ui.js';
 import { Row } from '../components/Wizard.js';
 import { formatGel } from '../format.js';
 import { useT } from '../i18n/index.js';
@@ -56,15 +56,11 @@ export function EconomicsPage() {
 
   return (
     <>
-      <header className="page-head page-head-wrap">
-        <h1>{t.economics.title}</h1>
-        <span className="mono muted">{totals.vehicles}</span>
-      </header>
-      <p className="hint">{t.economics.subtitle}</p>
+      <PageHead wrap title={t.economics.title} sub={t.economics.count(totals.vehicles)} note={t.economics.subtitle} />
 
       <div className="two-col">
         <section className="card">
-          <h2>{t.economics.totals}</h2>
+          <BlockHead title={t.economics.totals} />
           <Row k={t.economics.cost} v={<span className="mono">{formatGel(totals.costTetri, { decimals: false })}</span>} />
           <Row k={t.economics.rentalRevenue} v={<span className="mono">{formatGel(totals.rentalRevenueTetri, { decimals: false })}</span>} />
           <Row k={t.economics.serviceCompany} v={<span className="mono">{formatGel(totals.serviceCompanyTetri, { decimals: false })}</span>} />
@@ -152,7 +148,7 @@ export function VehicleEconomics({ vehicleId }: { vehicleId: string }) {
 
   return (
     <section className="card">
-      <h2>{t.economics.title}</h2>
+      <BlockHead title={t.economics.title} />
       <Row
         k={t.economics.cost}
         v={<span className="mono">{r.costTetri == null ? <span className="muted">{t.economics.noCost}</span> : formatGel(r.costTetri)}</span>}

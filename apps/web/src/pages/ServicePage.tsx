@@ -2,10 +2,11 @@ import { parseGel, todayISO } from '@ev8/shared';
 import { useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
-import { Empty, Loading, Vin } from '../components/ui.js';
+import { Empty, Loading, PageHead, Vin } from '../components/ui.js';
 import { Field } from '../components/Wizard.js';
 import { fmtDate, formatGel } from '../format.js';
 import { useT } from '../i18n/index.js';
+import { Drawer } from '../components/Drawer.js';
 import { errorText, useLoad } from '../lib/use.js';
 import { useSession } from '../session.js';
 
@@ -56,12 +57,9 @@ export function ServicePage() {
 
   return (
     <>
-      <header className="page-head page-head-wrap">
-        <h1>{t.service.title}</h1>
-        <span className="mono muted">{data.open}</span>
-        <span className="spacer" />
+      <PageHead wrap title={t.service.title} sub={t.service.count(data.open)}>
         {can('service.manage') && <NewJob onDone={reload} onError={setErr} />}
-      </header>
+      </PageHead>
       {err && <div className="hint hint-bad">{err}</div>}
       <div className="toolbar">
         <div className="chips">
@@ -138,13 +136,6 @@ export function NewJob({ vehicleId, onDone, onError }: { vehicleId?: string; onD
   const chosen = repairable.find((v) => v.id === (f.vehicleId || vehicleId));
   const rented = chosen?.state === 'rented';
 
-  if (!open) {
-    return (
-      <button type="button" className="pill pill-sm pill-accent" onClick={() => setOpen(true)}>
-        + {t.service.newJob}
-      </button>
-    );
-  }
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -169,7 +160,13 @@ export function NewJob({ vehicleId, onDone, onError }: { vehicleId?: string; onD
   };
 
   return (
-    <form className="card card-drawer form" onSubmit={submit}>
+    <>
+      <button type="button" className="pill pill-sm pill-accent" onClick={() => setOpen(true)}>
+        + {t.service.newJob}
+      </button>
+      {open && (
+        <Drawer title={t.service.newJob} onClose={() => setOpen(false)}>
+          <form className="form" onSubmit={submit}>
       {!vehicleId && (
         <Field label={t.service.vehicle}>
           <select className="input" value={f.vehicleId} onChange={(e) => setF({ ...f, vehicleId: e.target.value })} required>
@@ -218,6 +215,9 @@ export function NewJob({ vehicleId, onDone, onError }: { vehicleId?: string; onD
           {busy ? t.common.checking : t.actions.confirm}
         </button>
       </div>
-    </form>
+          </form>
+        </Drawer>
+      )}
+    </>
   );
 }

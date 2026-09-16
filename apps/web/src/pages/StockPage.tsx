@@ -2,10 +2,11 @@ import { parseGel } from '@ev8/shared';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api.js';
-import { Empty, Loading } from '../components/ui.js';
+import { BlockHead, Empty, Loading, PageHead } from '../components/ui.js';
 import { Field } from '../components/Wizard.js';
 import { formatGel } from '../format.js';
 import { useT } from '../i18n/index.js';
+import { Drawer } from '../components/Drawer.js';
 import { errorText, useLoad } from '../lib/use.js';
 import { useSession } from '../session.js';
 
@@ -51,16 +52,13 @@ export function StockPage() {
 
   return (
     <>
-      <header className="page-head page-head-wrap">
-        <h1>{t.stock.title}</h1>
-        <span className="spacer" />
+      <PageHead wrap title={t.stock.title} sub={t.stock.partsCount(parts.data?.parts.length ?? 0)} note={t.stock.subtitle}>
         {can('service.manage') && <NewPart onDone={parts.reload} onError={setErr} />}
-      </header>
-      <p className="hint">{t.stock.subtitle}</p>
+      </PageHead>
       {err && <div className="hint hint-bad">{err}</div>}
 
       <section className="card">
-        <h2>{t.stock.mopeds}</h2>
+        <BlockHead title={t.stock.mopeds} sub={t.models.count(mopeds.data.rows.length)} />
         <div className="table-wrap table-flat">
           <table className="table">
             <thead>
@@ -104,7 +102,7 @@ export function StockPage() {
       </section>
 
       <section className="card">
-        <h2>{t.stock.parts}</h2>
+        <BlockHead title={t.stock.parts} sub={t.stock.partsCount(parts.data.parts.length)} />
         {parts.data.totals.negative > 0 && <div className="hint hint-bad">{t.stock.negativeHint}</div>}
         {parts.data.parts.length === 0 ? (
           <Empty text={t.stock.none} />
@@ -159,13 +157,6 @@ function NewPart({ onDone, onError }: { onDone: () => void; onError: (e: string)
   const [f, setF] = useState({ name: '', nameKa: '', sku: '', unit: 'pcs', minQty: '', price: '' });
   const [busy, setBusy] = useState(false);
 
-  if (!open) {
-    return (
-      <button type="button" className="pill pill-sm pill-accent" onClick={() => setOpen(true)}>
-        + {t.stock.newPart}
-      </button>
-    );
-  }
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -190,7 +181,13 @@ function NewPart({ onDone, onError }: { onDone: () => void; onError: (e: string)
   };
 
   return (
-    <form className="card card-drawer form" onSubmit={submit}>
+    <>
+      <button type="button" className="pill pill-sm pill-accent" onClick={() => setOpen(true)}>
+        + {t.stock.newPart}
+      </button>
+      {open && (
+        <Drawer title={t.stock.newPart} onClose={() => setOpen(false)}>
+          <form className="form" onSubmit={submit}>
       <div className="two-col">
         <Field label={t.stock.name}>
           <input className="input" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} required autoFocus />
@@ -225,6 +222,9 @@ function NewPart({ onDone, onError }: { onDone: () => void; onError: (e: string)
           {busy ? t.common.checking : t.actions.confirm}
         </button>
       </div>
-    </form>
+          </form>
+        </Drawer>
+      )}
+    </>
   );
 }

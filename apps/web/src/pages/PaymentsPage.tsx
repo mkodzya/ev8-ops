@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api.js';
-import { Empty, Loading } from '../components/ui.js';
+import { Empty, Loading, PageHead } from '../components/ui.js';
 import { QueueItem, type QueueLine } from './StatementsPage.js';
 import { fmtDate, formatGel } from '../format.js';
 import { useT } from '../i18n/index.js';
+import { SortHead, useSortable } from '../lib/sortable.js';
 import { errorText, useLoad } from '../lib/use.js';
 import { useSession } from '../session.js';
 
@@ -29,6 +30,20 @@ export function PaymentsPage() {
   const t = useT();
   const { can } = useSession();
   const { data, error, reload } = useLoad<{ payments: PaymentRow[] }>('/api/payments');
+  const sorted = useSortable(
+    data?.payments ?? [],
+    {
+      date: { value: (p) => p.occurredOn, first: 'desc' },
+      channel: { value: (p) => p.channel },
+      gross: { value: (p) => p.grossTetri, first: 'desc' },
+      fee: { value: (p) => p.feeTetri, first: 'desc' },
+      allocated: { value: (p) => p.allocatedTetri, first: 'desc' },
+      customer: { value: (p) => p.customer?.name },
+      rental: { value: (p) => p.rental?.number },
+      bankText: { value: (p) => p.bankText },
+    },
+    (a, b) => b.occurredOn.localeCompare(a.occurredOn) || a.id.localeCompare(b.id),
+  );
   // The queue belongs on this screen, not two clicks away under Statements:
   // an unsorted bank line is a payment that has not found its rental yet.
   const queue = useLoad<{ lines: QueueLine[] }>(can('payments.reconcile') ? '/api/statement-lines' : null);
@@ -44,10 +59,7 @@ export function PaymentsPage() {
 
   return (
     <>
-      <header className="page-head">
-        <h1>{t.payments.title}</h1>
-        <span className="mono muted">{data.payments.length}</span>
-      </header>
+      <PageHead title={t.payments.title} sub={t.payments.count(data.payments.length)} />
       {can('payments.reconcile') && (
         <div className="seg-row tabs">
           <button type="button" className={`seg ${view === 'queue' ? 'on' : ''}`} onClick={() => setTab('queue')}>
@@ -98,19 +110,19 @@ export function PaymentsPage() {
           <table className="table">
             <thead>
               <tr>
-                <th>{t.payments.date}</th>
-                <th>{t.payments.channel}</th>
-                <th className="num">{t.payments.gross}</th>
-                <th className="num">{t.payments.fee}</th>
-                <th className="num">{t.payments.allocated}</th>
-                <th>{t.payments.customer}</th>
-                <th>{t.payments.forRental}</th>
-                <th>{t.payments.bankText}</th>
+                <th><SortHead k="date" label={t.payments.date} {...sorted} /></th>
+                <th><SortHead k="channel" label={t.payments.channel} {...sorted} /></th>
+                <th className="num"><SortHead k="gross" label={t.payments.gross} {...sorted} /></th>
+                <th className="num"><SortHead k="fee" label={t.payments.fee} {...sorted} /></th>
+                <th className="num"><SortHead k="allocated" label={t.payments.allocated} {...sorted} /></th>
+                <th><SortHead k="customer" label={t.payments.customer} {...sorted} /></th>
+                <th><SortHead k="rental" label={t.payments.forRental} {...sorted} /></th>
+                <th><SortHead k="bankText" label={t.payments.bankText} {...sorted} /></th>
                 <th />
               </tr>
             </thead>
             <tbody>
-              {data.payments.map((p) => (
+              {sorted.rows.map((p) => (
                 <tr key={p.id} className={p.voided ? 'row-off' : ''}>
                   <td className="mono">{fmtDate(p.occurredOn)}</td>
                   <td>{t.payments.channels[p.channel]}</td>

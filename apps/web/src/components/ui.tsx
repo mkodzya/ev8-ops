@@ -1,4 +1,5 @@
 import { colorOf, type RentalStatus, type VehicleState } from '@ev8/shared';
+import type { ReactNode } from 'react';
 import { useLocale, useT } from '../i18n/index.js';
 import { vinParts } from '../format.js';
 import { primaryName, secondName, type Named } from '../lib/names.js';
@@ -75,14 +76,93 @@ export function PlaceText({ of }: { of: { state: VehicleState; location: { name:
 }
 
 /**
- * A moped's colour, in the language of whoever is reading. Odoo holds the word
- * as it was typed — `შავი` on one card and `Black` on the next, the same
- * paint — so the screen says it once, its own way. A word nobody taught us is
- * shown exactly as it was typed: better an unfamiliar word than a wrong one.
+ * A moped's colour, drawn rather than spelled: a column of words in three
+ * alphabets was unreadable, and a column of colours is read without reading.
+ *
+ * The swatch depicts the word in the data and not the paint on the moped —
+ * Odoo holds `Красный`, never a number, and nobody has measured a fender. So
+ * a word we do not know is written out instead of being guessed at, and the
+ * word itself is always on the swatch for a pointer and for a screen reader.
  */
 export function ColorText({ of }: { of: string | null }) {
   const t = useT();
   const code = colorOf(of);
-  if (code) return <span>{t.colors[code]}</span>;
-  return <span>{of ?? t.common.dash}</span>;
+  if (code) return <span className={`swatch swatch-${code}`} title={t.colors[code]} aria-label={t.colors[code]} />;
+  // Not a colour we know, or none at all: the word as typed, or nothing.
+  return <span className="swatch-word">{of ?? ''}</span>;
+}
+
+/**
+ * The top of every page: a title, a supporting line, and the actions.
+ *
+ * Two type roles and no third. The title is the page's own name in the display
+ * face; the supporting line says how much of it there is, in the quiet face,
+ * sitting on the title's baseline. Anything longer than a phrase is a note
+ * under the pair, not a third thing beside them — a heading row with three
+ * weights in it stops being a heading.
+ */
+export function PageHead({
+  title,
+  badge,
+  sub,
+  note,
+  wrap = false,
+  children,
+}: {
+  title: ReactNode;
+  /** The one state marker a single thing carries: a pill, beside its name. */
+  badge?: ReactNode;
+  sub?: ReactNode;
+  note?: ReactNode;
+  wrap?: boolean;
+  children?: ReactNode;
+}) {
+  return (
+    <>
+      <header className={`page-head ${wrap ? 'page-head-wrap' : ''}`}>
+        {/* The words share a baseline with each other; the group they make is
+            what the buttons centre on. Baseline and centre on one flex line
+            fight, and the buttons lose — they sank below the words. */}
+        <div className="head-text">
+          <h1>{title}</h1>
+          {badge != null && <span className="page-badge">{badge}</span>}
+          {sub != null && <span className="page-sub">{sub}</span>}
+        </div>
+        {children != null && (
+          <>
+            <span className="spacer" />
+            {children}
+          </>
+        )}
+      </header>
+      {note != null && <p className="page-note">{note}</p>}
+    </>
+  );
+}
+
+/**
+ * The top of a block inside a page, built exactly like the top of the page:
+ * the block's name, one quiet line on the same baseline saying how much of it
+ * there is, and its action at the far end of the same line rather than lost
+ * under a table. A block and the page it sits in should read as the same
+ * sentence said twice at two sizes.
+ */
+export function BlockHead({ title, sub, note, children }: { title: ReactNode; sub?: ReactNode; note?: ReactNode; children?: ReactNode }) {
+  return (
+    <>
+      <div className="block-head">
+        <div className="head-text">
+          <h2>{title}</h2>
+          {sub != null && <span className="block-sub">{sub}</span>}
+        </div>
+        {children != null && (
+          <>
+            <span className="spacer" />
+            {children}
+          </>
+        )}
+      </div>
+      {note != null && <p className="block-note">{note}</p>}
+    </>
+  );
 }

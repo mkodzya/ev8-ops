@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { api } from '../api.js';
 import { formatGel } from '../format.js';
 import { useT } from '../i18n/index.js';
+import { Drawer } from './Drawer.js';
 import { errorText } from '../lib/use.js';
 import { useSession } from '../session.js';
 import { Field } from './Wizard.js';
@@ -43,18 +44,6 @@ export function PaymentForm({
   const channels: Channel[] = bank ? ['transfer', 'acquiring', 'cash'] : ['cash'];
   const tetriValue = parseGel(amount);
 
-  if (!open) {
-    return (
-      <div className="row-actions">
-        <button type="button" className="pill pill-sm pill-accent" onClick={() => setOpen(true)}>
-          + {t.payments.add}
-        </button>
-        {!bank && <span className="hint muted">{t.payments.cashOnly}</span>}
-        {done && <span className="hint">{done}</span>}
-      </div>
-    );
-  }
-
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setBusy(true);
@@ -83,7 +72,17 @@ export function PaymentForm({
   };
 
   return (
-    <form className="card card-drawer form" onSubmit={submit}>
+    <>
+      <div className="row-actions">
+        <button type="button" className="pill pill-sm pill-accent" onClick={() => setOpen(true)}>
+          + {t.payments.add}
+        </button>
+        {!bank && <span className="hint muted">{t.payments.cashOnly}</span>}
+        {done && <span className="hint">{done}</span>}
+      </div>
+      {open && (
+        <Drawer title={t.payments.add} onClose={() => setOpen(false)}>
+          <form className="form" onSubmit={submit}>
       <Field label={t.payments.channel}>
         <div className="chips">
           {channels.map((c) => (
@@ -122,6 +121,9 @@ export function PaymentForm({
           {busy ? t.common.checking : t.actions.confirm}
         </button>
       </div>
-    </form>
+          </form>
+        </Drawer>
+      )}
+    </>
   );
 }

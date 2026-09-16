@@ -2,7 +2,7 @@ import { todayISO } from '@ev8/shared';
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../api.js';
-import { Empty, Loading } from '../components/ui.js';
+import { BlockHead, Empty, Loading, PageHead } from '../components/ui.js';
 import { Field, Row } from '../components/Wizard.js';
 import { fmtDate, formatGel } from '../format.js';
 import { useT } from '../i18n/index.js';
@@ -52,16 +52,13 @@ export function PartPage() {
 
   return (
     <>
-      <header className="page-head page-head-wrap">
-        <h1>{p.name}</h1>
-        {p.archived && <span className="muted">{t.stock.archived}</span>}
-        <span className="spacer" />
+      <PageHead wrap title={p.name} sub={p.archived ? t.stock.archived : undefined}>
         {can('stock.count') && (
           <button type="button" className="pill pill-sm pill-accent" onClick={() => setCount({ ...count, open: !count.open, qty: String(p.onHand) })}>
             {t.stock.count}
           </button>
         )}
-      </header>
+      </PageHead>
       {err && <div className="hint hint-bad">{err}</div>}
 
       {count.open && (
@@ -111,7 +108,7 @@ export function PartPage() {
       </div>
 
       <section className="card">
-        <h2>{t.stock.ledger}</h2>
+        <BlockHead title={t.stock.ledger} sub={t.stock.movesCount(data.moves.length)} />
         {data.moves.length === 0 ? (
           <Empty text={t.stock.noMoves} />
         ) : (

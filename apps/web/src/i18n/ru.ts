@@ -1,13 +1,16 @@
 import type { Dict } from './en.js';
 
 // Typed as Dict: a missing or misspelled key fails the build.
-const days = (n: number): string => {
+/** Russian counts one thing, two things and five things three different ways. */
+const plural = (n: number, one: string, few: string, many: string): string => {
   const m10 = n % 10;
   const m100 = n % 100;
-  if (m10 === 1 && m100 !== 11) return 'день';
-  if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return 'дня';
-  return 'дней';
+  if (m10 === 1 && m100 !== 11) return one;
+  if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return few;
+  return many;
 };
+const days = (n: number): string => plural(n, 'день', 'дня', 'дней');
+const counted = (one: string, few: string, many: string) => (n: number) => `${n} ${plural(n, one, few, many)}`;
 
 export const ru: Dict = {
   lang: { label: 'Язык', ka: 'ქართული', ru: 'Русский', en: 'English' },
@@ -105,7 +108,7 @@ export const ru: Dict = {
     state: 'Состояние',
     renter: 'Арендатор',
     paidThrough: 'Оплачено по',
-    where: 'Где стоит',
+    where: 'Где',
     pool: 'Парк',
     quiet: 'Тишина',
     noPoint: 'Без точки',
@@ -114,19 +117,15 @@ export const ru: Dict = {
     rowActions: 'Действия',
     quietDays: (n: number) => `${n} ${days(n)}`,
     searchHint: 'Последние 4 знака VIN',
-    searchShort: '· · · 4 знака',
+    searchShort: '4 знака VIN',
     empty: 'Парк пуст.',
     nothingFound: 'Ничего не нашлось.',
     showAll: (n: number) => `Показать все ${n}`,
-    count: (n: number) => {
-      const m10 = n % 10;
-      const m100 = n % 100;
-      const word = m10 === 1 && m100 !== 11 ? 'мопед' : m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14) ? 'мопеда' : 'мопедов';
-      return `${n} ${word}`;
-    },
+    count: counted('мопед', 'мопеда', 'мопедов'),
   },
 
   rentals: {
+    count: counted('аренда', 'аренды', 'аренд'),
     title: 'Аренды',
     number: '№',
     customer: 'Клиент',
@@ -159,6 +158,7 @@ export const ru: Dict = {
   },
 
   vehicle: {
+    eventsCount: counted('событие', 'события', 'событий'),
     backToFleet: 'Вернуть в парк',
     title: 'Мопед',
     history: 'История',
@@ -185,6 +185,8 @@ export const ru: Dict = {
   },
 
   rental: {
+    actsCount: counted('акт', 'акта', 'актов'),
+    periodsCount: counted('неделя', 'недели', 'недель'),
     owed: 'Долг',
     title: 'Аренда',
     periods: 'Недельные периоды',
@@ -263,6 +265,7 @@ export const ru: Dict = {
   },
 
   photos: {
+    count: counted('фото', 'фото', 'фото'),
     add: 'Фото',
     remove: 'Убрать',
     hint: 'Четыре ракурса и одометр. Фото уменьшаются на телефоне до отправки.',
@@ -272,6 +275,7 @@ export const ru: Dict = {
   },
 
   documents: {
+    count: counted('документ', 'документа', 'документов'),
     title: 'Документы',
     kinds: { id_card: 'Удостоверение', driver_licence: 'Водительские права', other: 'Другое' },
     add: 'Добавить документ',
@@ -398,6 +402,7 @@ export const ru: Dict = {
   },
 
   points: {
+    count: counted('точка', 'точки', 'точек'),
     name: 'Название',
     note: 'Заметка',
     order: 'Порядок',
@@ -414,6 +419,7 @@ export const ru: Dict = {
   },
 
   users: {
+    count: counted('человек', 'человека', 'человек'),
     name: 'Имя',
     email: 'Почта для входа',
     role: 'Роль',
@@ -435,6 +441,7 @@ export const ru: Dict = {
   },
 
   models: {
+    count: counted('модель', 'модели', 'моделей'),
     brand: 'Бренд',
     name: 'Модель',
     salePrice: 'Цена продажи с НДС',
@@ -471,6 +478,7 @@ export const ru: Dict = {
   },
 
   payments: {
+    count: counted('платёж', 'платежа', 'платежей'),
     title: 'Платежи',
     add: 'Провести платёж',
     date: 'Дата',
@@ -508,6 +516,8 @@ export const ru: Dict = {
   },
 
   statements: {
+    linesCount: counted('строка', 'строки', 'строк'),
+    count: counted('выписка', 'выписки', 'выписок'),
     previewTitle: 'Что добавит этот файл',
     previewNew: 'новых строк',
     previewKnown: 'уже загружено',
@@ -541,6 +551,8 @@ export const ru: Dict = {
   },
 
   service: {
+    jobsCount: counted('ремонт', 'ремонта', 'ремонтов'),
+    count: counted('открытый ремонт', 'открытых ремонта', 'открытых ремонтов'),
     title: 'Сервис',
     open: 'Открытые ремонты',
     newJob: 'Открыть ремонт',
@@ -571,6 +583,8 @@ export const ru: Dict = {
   },
 
   sales: {
+    instalmentsCount: counted('взнос', 'взноса', 'взносов'),
+    count: counted('продажа', 'продажи', 'продаж'),
     title: 'Продажи',
     newSale: 'Продать мопед',
     number: '№',
@@ -603,6 +617,8 @@ export const ru: Dict = {
   },
 
   purchases: {
+    linesCount: counted('строка', 'строки', 'строк'),
+    count: counted('заказ', 'заказа', 'заказов'),
     title: 'Закупки',
     newOrder: 'Новый заказ',
     number: '№',
@@ -643,6 +659,7 @@ export const ru: Dict = {
 
 
   economics: {
+    count: counted('мопед', 'мопеда', 'мопедов'),
     title: 'Экономика',
     nav: 'Экономика',
     subtitle: 'Что мопед заработал и во что обошёлся. Всё складывается из платежей, ремонтов и событий, поэтому правка меняет цифру сразу.',
@@ -669,6 +686,8 @@ export const ru: Dict = {
   },
 
   stock: {
+    movesCount: counted('движение', 'движения', 'движений'),
+    partsCount: counted('запчасть', 'запчасти', 'запчастей'),
     title: 'Склад',
     nav: 'Склад',
     mopeds: 'Мопеды по моделям',
@@ -709,6 +728,7 @@ export const ru: Dict = {
     qtyOnShelf: 'на складе',
   },
   customers: {
+    count: counted('клиент', 'клиента', 'клиентов'),
     title: 'Клиенты',
     name: 'Имя',
     phone: 'WhatsApp',

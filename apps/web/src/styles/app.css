@@ -81,7 +81,19 @@ a { color: var(--accent); text-decoration: none; }
 .rail-user-initial { display: none; }
 .rail-user-role { display: block; font: var(--text-overline); font-weight: 400; opacity: 0.7; text-transform: capitalize; }
 .page { padding: 22px 26px 36px; max-width: 1280px; width: 100%; }
-.page-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 14px; }
+/* Two type roles at the top of a page and no third: the name in the display
+   face, and one quiet line beside it saying how much of it there is. They sit
+   on the same baseline; the actions push to the far end. */
+.page-head { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+/* The words share a baseline with each other, and the group they make is what
+   the buttons centre on. Both rules on one flex line fight: the line grows to
+   hold the baseline offsets, the buttons centre in that taller line, and they
+   landed seven pixels below the middle of the words. */
+.head-text { display: flex; align-items: baseline; flex-wrap: wrap; gap: 10px; row-gap: 4px; min-width: 0; }
+.page-sub { font: var(--text-body-sm); color: var(--muted); white-space: nowrap; }
+/* A sentence about the page rather than a measure of it goes under the pair,
+   never beside them. */
+.page-note { font: var(--text-label); color: var(--muted); margin: -6px 0 14px; max-width: 80ch; }
 
 @media (max-width: 719px) {
   .shell { grid-template-columns: 1fr; }
@@ -237,17 +249,51 @@ a { color: var(--accent); text-decoration: none; }
 .state-list li:first-child a { border-top: 0; }
 .table-wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-card); }
 .table { border-collapse: collapse; width: 100%; font: var(--text-body-sm); }
+/* Every table in the system reads like the fleet list, because they are the
+   same thing drawn twice: a heading row that is one typographic line with a
+   rule under it — not a grey band — and rows that light up under the pointer
+   in the quietest tint there is. */
 .table th {
   text-align: left;
   font: var(--text-overline);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
   color: var(--muted);
-  background: var(--surface-2);
+  background: none;
   padding: var(--row-y) 12px;
+  border-bottom: 1px solid var(--line);
   white-space: nowrap;
+  vertical-align: bottom;
 }
 .table th.num { text-align: right; }
+/* A heading that sorts looks like a heading until the pointer is on it: a row
+   of buttons at the top of a list is a toolbar, not a heading. Every list in
+   the system uses it, so it lives with the tables and not with the fleet. */
+.col-sort {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  color: inherit;
+  cursor: pointer;
+  transition: var(--ease);
+}
+.num .col-sort, th.num .col-sort { flex-direction: row-reverse; }
+.col-sort:hover, .col-sort.on { color: var(--ink); }
+/* The arrow keeps its place whether or not it is there, so a heading does not
+   jump sideways the moment you sort by it. */
+.col-arrow { font-style: normal; font-size: 11px; line-height: 1; width: 8px; display: inline-block; }
 .table td { padding: var(--row-y) 12px; border-top: 1px solid var(--line-soft); vertical-align: top; }
-.table tbody tr:hover { background: var(--surface-2); }
+.table tbody tr:first-child td { border-top: 0; }
+@media (hover: hover) {
+  .table tbody tr { transition: background-color var(--ease); }
+  .table tbody tr:hover { background: var(--surface-2); }
+}
 .empty { color: var(--muted); padding: 18px 0; }
 .inline-rental { display: inline-flex; gap: 6px; align-items: center; margin-right: 10px; }
 
@@ -313,7 +359,20 @@ a { color: var(--accent); text-decoration: none; }
 .login-note { color: var(--muted); font: var(--text-body-sm); margin: 0 0 18px; }
 
 /* ---- cards, key-value rows, timelines ------------------------------- */
-.page-head-wrap { flex-wrap: wrap; align-items: center; row-gap: 8px; }
+/* Wrapping never changes how a heading sits. */
+.page-head-wrap { flex-wrap: wrap; row-gap: 8px; }
+/* A block's heading is the page's heading one size down: the same grouping,
+   the same quiet line, the same boxes centred on the words. */
+.block-head { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; row-gap: 6px; margin-bottom: 10px; }
+.block-head .head-text { gap: 8px; }
+.block-head h2 { margin: 0; }
+.block-sub { font: var(--text-label); color: var(--muted); white-space: nowrap; }
+.block-note { font: var(--text-label); color: var(--muted); margin: -4px 0 10px; max-width: 80ch; }
+/* A title is the display face even when it is a code. A rental number or a VIN
+   in the mono face is a different weight of heading from "Парк" beside it in
+   the menu; set in the title face, the VIN keeps its quiet head and its heavy
+   last four, which is the part anyone reads off a sticker. */
+.page-head h1 .vin { font-family: inherit; }
 .spacer { flex: 1; }
 .two-col { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px; margin-bottom: 18px; }
 .two-col > .card { margin-bottom: 0; }
@@ -725,34 +784,61 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
 .list-search { display: none; }
 @media (min-width: 900px) {
   .head-search { display: none; }
-  .list-head-vin { display: none; }
-  /* A field in a row of headings should be a heading that happens to accept
-     typing, not a box parked among words. No border, no fill, the height of
-     the line it sits on — and a hairline underneath so it still reads as
-     something you can type into. It becomes a proper field when it is used. */
-  .list-search {
-    display: block;
-    width: 100%;
-    min-height: 0;
-    padding: 1px 0 3px;
+  /* Until somebody looks for a moped, this column is a heading like the
+     others — the word and a magnifier that only says the word can be typed
+     over. The field arrives in its place, the width of the column, and takes
+     the focus with it. */
+  .col-find {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
     border: 0;
-    border-bottom: 1px solid var(--line);
-    border-radius: 0;
     background: none;
+    padding: 0;
+    font: inherit;
+    letter-spacing: inherit;
+    text-transform: inherit;
+    color: inherit;
+    cursor: pointer;
+    transition: var(--ease);
+  }
+  .col-find:hover { color: var(--ink); }
+  .col-mag { font-style: normal; font-size: 14px; line-height: 1; }
+  .col-search {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    width: 100%;
+    animation: field-open var(--enter);
+  }
+  @keyframes field-open { from { opacity: 0; transform: translateX(-6px); } }
+  .list-search {
+    /* It is hidden below 900px, where the phone's own field carries the
+       search; the rule that reveals it has to live here. */
+    display: block;
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+    padding: 3px 8px;
+    border: 1px solid var(--accent);
+    border-radius: 8px;
+    background: var(--surface-2);
     font: var(--text-mono-sm);
     text-transform: none;
     letter-spacing: 0;
+  }
+  .list-search:focus { outline: 0; }
+  .col-x {
+    border: 0;
+    background: none;
+    padding: 2px 4px;
+    font-size: 11px;
+    line-height: 1;
+    color: var(--muted);
+    cursor: pointer;
     transition: var(--ease);
   }
-  .list-search:hover { border-bottom-color: var(--muted); }
-  .list-search:focus {
-    border-bottom-color: var(--accent);
-    outline: 0;
-    background: var(--surface-2);
-    border-radius: 6px 6px 0 0;
-    padding-left: 6px;
-    padding-right: 6px;
-  }
+  .col-x:hover { color: var(--service-ink); }
 }
 
 /* Not a row: a sentence where the rows would have been, with the way back
@@ -783,6 +869,7 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
   background: var(--row-bg);
   border: 1px solid var(--line);
   border-radius: var(--radius-card);
+  transition: background-color var(--ease);
 }
 .v-state { grid-area: state; font: var(--text-h3); }
 .v-vin { grid-area: vin; }
@@ -796,6 +883,23 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
 /* A row that has just moved says so in its own skin — a tint and an edge —
    rather than growing a line and pushing everything below it down. */
 .vrow-changed { box-shadow: inset 3px 0 0 var(--accent); }
+/* A row that opens something says so by lighting up under the pointer — but
+   quieter than any colour that carries a meaning. The site's --surface-hover
+   is the darkest tint we have (0.76 against white's 1.0) and a row wearing it
+   shouted louder than the row that had just been moved (0.81). A pointer
+   passing over is the least important thing on the screen, so it gets the
+   lightest tint there is, and fades in at the site's own hover speed instead
+   of snapping on.
+
+   Touch screens have no pointer to hover with and would keep the colour stuck
+   on the last row tapped, so the rule asks first. */
+.vrow-go { cursor: pointer; }
+@media (hover: hover) {
+  .vrow-go:hover { --row-bg: var(--surface-2); }
+  /* A row still holding its undo keeps its own colour: that one is saying
+     something, and the pointer passing over is not news. */
+  .vrow-go.vrow-changed:hover { --row-bg: var(--accent-soft); }
+}
 .v-pool-new { color: var(--accent); font-weight: 500; }
 .mv {
   border: var(--hairline) solid var(--line-soft);
@@ -887,6 +991,24 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
 /* Colour stays a card fact on a phone: five lines in a card is enough, and
    nobody picks a moped off a phone by its paint. */
 .v-color { display: none; }
+/* Drawn, not written. The hairline is what makes a white moped visible at all,
+   and it is on every swatch so that white is not the odd one out. */
+.swatch {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1px solid var(--line-soft);
+  vertical-align: -2px;
+}
+.swatch-black { background: var(--paint-black); border-color: var(--paint-black); }
+.swatch-white { background: var(--paint-white); }
+.swatch-red { background: var(--paint-red); border-color: var(--paint-red); }
+.swatch-green { background: var(--paint-green); border-color: var(--paint-green); }
+.swatch-grey { background: var(--paint-grey); border-color: var(--paint-grey); }
+.swatch-purple { background: var(--paint-purple); border-color: var(--paint-purple); }
+/* A word nobody taught us stays a word, small and quiet. */
+.swatch-word { font: var(--text-label); color: var(--muted); }
 /* On a phone the whole VIN is noise: the last four are what anyone reads,
    and a column of em dashes where a free moped has no renter is worse than
    the silence it stands for. */
@@ -902,7 +1024,7 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
   .vlist-head, .vrow {
     display: grid;
     grid-template-areas: none;
-    grid-template-columns: 150px minmax(120px, 1fr) 140px minmax(130px, 1.2fr) 72px 104px;
+    grid-template-columns: 150px minmax(110px, 1fr) 44px 136px minmax(120px, 1.2fr) 86px 104px;
     align-items: center;
     gap: var(--row-x);
     padding: var(--row-y) var(--row-x);
@@ -927,38 +1049,14 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
     margin-bottom: 2px;
   }
   .vlist-head + .vrow { border-top: 0; }
-  /* A heading that sorts looks like a heading until the pointer is on it:
-     a column of buttons at the top of a list is a toolbar, not a heading. */
-  .col-sort {
-    display: inline-flex;
-    align-items: baseline;
-    gap: 4px;
-    border: 0;
-    background: none;
-    padding: 0;
-    font: inherit;
-    letter-spacing: inherit;
-    text-transform: inherit;
-    color: inherit;
-    cursor: pointer;
-    transition: var(--ease);
-  }
-  .num .col-sort { flex-direction: row-reverse; }
-  .col-sort:hover { color: var(--ink); }
-  .col-sort.on { color: var(--ink); }
-  /* The arrow keeps its place whether or not it is there, so a heading does
-     not jump sideways the moment you sort by it. */
-  .col-arrow { font-style: normal; font-size: 11px; line-height: 1; width: 8px; display: inline-block; }
   /* Six columns do not always fit; the list scrolls sideways rather than
      the page doing it. */
   .vlist { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-card); padding: 4px 2px; overflow-x: auto; }
   /* The sum of the columns and their gaps, and not a pixel more: the dots at
      the end are the row's one action and must never be the part that falls
      off a laptop's right edge. */
-  .vlist-head, .vrow { min-width: 760px; }
-  .v-state, .v-vin, .v-model, .v-where, .v-quiet, .v-move { grid-area: auto; text-align: left; font: var(--text-body-sm); color: inherit; display: block; }
-  /* The colour is the model's tail here, not a column of its own. */
-  .v-color { display: block; }
+  .vlist-head, .vrow { min-width: 806px; }
+  .v-state, .v-vin, .v-model, .v-color, .v-where, .v-quiet, .v-move { grid-area: auto; text-align: left; font: var(--text-body-sm); color: inherit; display: block; }
   .v-where { margin-top: 0; }
   .v-quiet { text-align: right; color: var(--muted); }
   /* Stacked and right-aligned: a moped in neither park offers two moves, and
@@ -976,22 +1074,26 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
     right: 0;
     background: var(--row-bg);
     padding-left: 8px;
+    /* It carries the row's colour, so it has to change at the row's speed. */
+    transition: background-color var(--ease);
   }
-  /* What passes under it fades out rather than being cut off — and when the
-     row fits the window there is nothing underneath, so the fade is the row's
-     own colour over the row's own colour and nobody sees a thing. A shadow
-     here was visible either way, which is how it turned into a smudge down
-     the column. */
+  /* What passes under it fades out rather than being cut off. The fade is
+     narrower than the gap between the columns, and the silence column keeps a
+     little air on its right, so at a width where nothing is scrolling the
+     fade lies over empty space and not over the end of a word. I had it at
+     22px, which reached back into "0 дней" and dissolved the "дней". */
   .v-move::before {
     content: '';
     position: absolute;
     top: 0;
     bottom: 0;
-    left: -22px;
-    width: 22px;
+    left: -12px;
+    width: 12px;
     background: linear-gradient(to right, transparent, var(--row-bg));
     pointer-events: none;
   }
+  /* "550 дней" is one thing and breaks into two lines rather than admit it. */
+  .v-quiet { padding-right: 6px; white-space: nowrap; }
 
   .vlist-head .num { text-align: right; }
 }
@@ -1090,8 +1192,6 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
 
 /* A document previewed where it is issued (U15). */
 .doc-card { margin-bottom: 18px; }
-.doc-head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
-.doc-head h2 { margin: 0; }
 .doc-frame { width: 100%; height: 70vh; min-height: 420px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-2); }
 @media (max-width: 719px) {
   .doc-frame { height: 60vh; min-height: 320px; }
