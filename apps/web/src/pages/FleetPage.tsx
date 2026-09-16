@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { errorText, useLoad } from '../lib/use.js';
 import { Field } from '../components/Wizard.js';
 import { Drawer } from '../components/Drawer.js';
+import { ColorPicker } from '../components/ColorPicker.js';
 import { RowMenu, type RowAction } from '../components/RowMenu.js';
 import { useSession } from '../session.js';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
@@ -549,7 +550,7 @@ function NewVehicle({ models, onDone }: { models: Models['models']; onDone: () =
       await api.post('/api/fleet', {
         vin: f.vin.trim().toUpperCase(),
         modelId: f.modelId || models[0].id,
-        color: f.color || null,
+        color: f.color.trim() || null,
         year: f.year ? Number(f.year) : null,
         arrivedOn: f.arrivedOn || null,
       });
@@ -583,9 +584,6 @@ function NewVehicle({ models, onDone }: { models: Models['models']; onDone: () =
                   ))}
                 </select>
               </Field>
-              <Field label={t.models.color}>
-                <input className="input" value={f.color} onChange={(e) => setF({ ...f, color: e.target.value })} />
-              </Field>
               <Field label={t.models.year}>
                 <input className="input input-amount mono" value={f.year} onChange={(e) => setF({ ...f, year: e.target.value })} inputMode="numeric" />
               </Field>
@@ -593,6 +591,7 @@ function NewVehicle({ models, onDone }: { models: Models['models']; onDone: () =
                 <input className="input mono" type="date" value={f.arrivedOn} onChange={(e) => setF({ ...f, arrivedOn: e.target.value })} />
               </Field>
             </div>
+            <ColorPicker value={f.color} onChange={(color) => setF({ ...f, color })} />
             {err && <div className="hint hint-bad">{err}</div>}
             <div className="row-actions">
               <button type="button" className="pill" onClick={() => setOpen(false)}>

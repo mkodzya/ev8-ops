@@ -43,6 +43,9 @@ export const ka: Dict = {
     green: 'მწვანე',
     grey: 'ნაცრისფერი',
     purple: 'იისფერი',
+    other: 'სხვა',
+    none: 'არ არის მითითებული',
+    otherHint: 'როგორც წერია ჩარჩოზე ან დოკუმენტებში',
   },
 
   states: {

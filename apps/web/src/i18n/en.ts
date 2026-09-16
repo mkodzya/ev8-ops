@@ -50,6 +50,9 @@ export const en = {
     green: 'Green',
     grey: 'Grey',
     purple: 'Purple',
+    other: 'Other',
+    none: 'Not set',
+    otherHint: 'As written on the frame or the papers',
   },
 
   states: {

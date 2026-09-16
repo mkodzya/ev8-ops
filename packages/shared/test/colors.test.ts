@@ -1,6 +1,6 @@
 // One colour, however it was written down.
 import { describe, expect, it } from 'vitest';
-import { colorOf } from '../src/colors.js';
+import { colorOf, colorOnPaper } from '../src/colors.js';
 
 describe('the colour a moped is', () => {
   it('reads the same paint through both spellings the data holds', () => {
@@ -19,5 +19,18 @@ describe('the colour a moped is', () => {
     expect(colorOf('matte olive')).toBeNull();
     expect(colorOf('')).toBeNull();
     expect(colorOf(null)).toBeNull();
+  });
+
+  it('reads the words a Russian speaker types and the code a picker stores', () => {
+    expect(colorOf('Чёрный')).toBe('black');
+    expect(colorOf('зеленый')).toBe('green');
+    expect(colorOf('purple')).toBe('purple');
+  });
+
+  it('prints a known colour in both languages and an unknown one as written', () => {
+    expect(colorOnPaper('black')).toBe('შავი / Black');
+    expect(colorOnPaper('წითელი')).toBe('წითელი / Red');
+    expect(colorOnPaper(' matte olive ')).toBe('matte olive');
+    expect(colorOnPaper(null)).toBe('');
   });
 });

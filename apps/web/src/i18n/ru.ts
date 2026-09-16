@@ -54,6 +54,9 @@ export const ru: Dict = {
     green: 'Зелёный',
     grey: 'Серый',
     purple: 'Фиолетовый',
+    other: 'Другой',
+    none: 'Не указан',
+    otherHint: 'Как написано на раме или в документах',
   },
 
   states: {
