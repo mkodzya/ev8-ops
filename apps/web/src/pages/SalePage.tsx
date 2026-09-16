@@ -2,7 +2,7 @@ import { parseGel, todayISO } from '@ev8/shared';
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../api.js';
-import { Empty, Loading, PageHead, Vin } from '../components/ui.js';
+import { BlockHead, Empty, Loading, PageHead, Vin } from '../components/ui.js';
 import { Field, Row } from '../components/Wizard.js';
 import { fmtDate, formatGel } from '../format.js';
 import { useT } from '../i18n/index.js';
@@ -192,7 +192,7 @@ export function SalePage() {
       </div>
 
       <section className="card">
-        <h2>{t.sales.schedule}</h2>
+        <BlockHead title={t.sales.schedule} sub={t.sales.instalmentsCount(s.instalments.length)} />
         <div className="table-wrap table-flat">
           <table className="table">
             <thead>
@@ -222,7 +222,7 @@ export function SalePage() {
       </section>
 
       <section className="card">
-        <h2>{t.payments.title}</h2>
+        <BlockHead title={t.payments.title} sub={t.payments.count(data.payments.length)} />
         {data.payments.length === 0 ? (
           <Empty text={t.payments.none} />
         ) : (

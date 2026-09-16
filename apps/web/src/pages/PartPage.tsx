@@ -2,7 +2,7 @@ import { todayISO } from '@ev8/shared';
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../api.js';
-import { Empty, Loading, PageHead } from '../components/ui.js';
+import { BlockHead, Empty, Loading, PageHead } from '../components/ui.js';
 import { Field, Row } from '../components/Wizard.js';
 import { fmtDate, formatGel } from '../format.js';
 import { useT } from '../i18n/index.js';
@@ -108,7 +108,7 @@ export function PartPage() {
       </div>
 
       <section className="card">
-        <h2>{t.stock.ledger}</h2>
+        <BlockHead title={t.stock.ledger} sub={t.stock.movesCount(data.moves.length)} />
         {data.moves.length === 0 ? (
           <Empty text={t.stock.noMoves} />
         ) : (

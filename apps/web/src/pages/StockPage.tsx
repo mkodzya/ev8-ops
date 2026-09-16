@@ -2,7 +2,7 @@ import { parseGel } from '@ev8/shared';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api.js';
-import { Empty, Loading, PageHead } from '../components/ui.js';
+import { BlockHead, Empty, Loading, PageHead } from '../components/ui.js';
 import { Field } from '../components/Wizard.js';
 import { formatGel } from '../format.js';
 import { useT } from '../i18n/index.js';
@@ -58,7 +58,7 @@ export function StockPage() {
       {err && <div className="hint hint-bad">{err}</div>}
 
       <section className="card">
-        <h2>{t.stock.mopeds}</h2>
+        <BlockHead title={t.stock.mopeds} sub={t.models.count(mopeds.data.rows.length)} />
         <div className="table-wrap table-flat">
           <table className="table">
             <thead>
@@ -102,7 +102,7 @@ export function StockPage() {
       </section>
 
       <section className="card">
-        <h2>{t.stock.parts}</h2>
+        <BlockHead title={t.stock.parts} sub={t.stock.partsCount(parts.data.parts.length)} />
         {parts.data.totals.negative > 0 && <div className="hint hint-bad">{t.stock.negativeHint}</div>}
         {parts.data.parts.length === 0 ? (
           <Empty text={t.stock.none} />
