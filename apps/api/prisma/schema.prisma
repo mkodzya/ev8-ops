@@ -196,6 +196,7 @@ model User {
   updatedAt    DateTime @default(now()) @map("updated_at")
 
   sessions          Session[]
+  operationKeys     OperationKey[]
   rentalsCreated    Rental[]       @relation("rental_created_by")
   depositsDecided   Deposit[]      @relation("deposit_decided_by")
   depositsConfirmed Deposit[]      @relation("deposit_confirmed_by")
@@ -214,6 +215,22 @@ model User {
   locations         Location[]    @relation("location_author")
 
   @@map("users")
+}
+
+/// A form's key for one write (migration 0016): the first answer is kept and
+/// replayed to any repeat, so a retry never writes twice.
+model OperationKey {
+  userId     String   @map("user_id") @db.Uuid
+  key        String
+  route      String
+  statusCode Int?     @map("status_code")
+  body       String?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, key])
+  @@map("operation_keys")
 }
 
 model Session {
