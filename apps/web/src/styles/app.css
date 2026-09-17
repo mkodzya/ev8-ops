@@ -269,6 +269,8 @@ a { color: var(--accent); text-decoration: none; }
 }
 .table th.num { text-align: right; }
 .table-heads-wrap th { white-space: normal; }
+/* A one-word heading with a hyphen in it (Кол-во) would break at the hyphen. */
+.table-heads-wrap th.nowrap { white-space: nowrap; }
 /* A heading that sorts looks like a heading until the pointer is on it: a row
    of buttons at the top of a list is a toolbar, not a heading. Every list in
    the system uses it, so it lives with the tables and not with the fleet. */
