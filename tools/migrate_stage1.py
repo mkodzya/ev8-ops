@@ -147,9 +147,12 @@ def import_models(o: Odoo, cur, rep: Report) -> dict[int, str]:
                                         odoo_rental_product_id, odoo_fleet_model_id, notes)
             values (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
             on conflict (brand, name) do update set
-              sale_price_tetri = excluded.sale_price_tetri,
-              weekly_rate_tetri = excluded.weekly_rate_tetri,
-              cost_tetri = excluded.cost_tetri,
+              -- Prices are edited in EV8 Ops now (ADR-0011), and a received
+              -- purchase writes the cost. A re-run fills only what is empty,
+              -- so it never takes back a price somebody set here.
+              sale_price_tetri = coalesce(vehicle_models.sale_price_tetri, excluded.sale_price_tetri),
+              weekly_rate_tetri = coalesce(vehicle_models.weekly_rate_tetri, excluded.weekly_rate_tetri),
+              cost_tetri = coalesce(vehicle_models.cost_tetri, excluded.cost_tetri),
               for_rent = excluded.for_rent,
               odoo_sale_product_id = coalesce(excluded.odoo_sale_product_id, vehicle_models.odoo_sale_product_id),
               odoo_rental_product_id = coalesce(excluded.odoo_rental_product_id, vehicle_models.odoo_rental_product_id),

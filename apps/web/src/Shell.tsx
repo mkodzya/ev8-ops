@@ -58,6 +58,7 @@ export function Shell() {
   const items: { to: string; label: string; end?: boolean }[] = [
     { to: '/', label: t.nav.today, end: true },
     { to: '/fleet', label: t.nav.fleet },
+    { to: '/models', label: t.nav.models },
     { to: '/rentals', label: t.nav.rentals },
     { to: '/sales', label: t.nav.sales },
     ...(can('settings.manage') ? [{ to: '/purchases', label: t.nav.purchases }] : []),

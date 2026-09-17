@@ -20,7 +20,7 @@ import { date, int, oneOf, str, tetri } from '../lib/validate.js';
 
 type Body = Record<string, unknown>;
 
-const INCLUDE = {
+export const PURCHASE_INCLUDE = {
   supplier: { select: { id: true, name: true } },
   lines: { orderBy: { createdAt: 'asc' }, include: { model: { select: { id: true, brand: true, name: true } } } },
   payments: { where: { voidedAt: null }, orderBy: { occurredOn: 'asc' } },
@@ -50,7 +50,7 @@ type Row = {
   payments: { id: string; occurredOn: Date; grossTetri: number; channel: string; direction: string }[];
 };
 
-function serialize(p: Row) {
+export function serializePurchase(p: Row) {
   const paidTetri = p.payments.filter((x) => x.direction === 'out').reduce((n, x) => n + x.grossTetri, 0);
   const invoiceMinor = p.lines.reduce((n, l) => n + l.qty * l.unitPriceMinor, 0);
   const units = p.lines.filter((l) => l.model).reduce((n, l) => n + l.qty, 0);
@@ -106,12 +106,12 @@ function serialize(p: Row) {
 
 export function purchaseRoutes(app: FastifyInstance): void {
   app.get('/api/purchases', { config: { scope: 'fleet.view' } }, async () => {
-    const purchases = await prisma.purchase.findMany({ orderBy: { orderedOn: 'desc' }, take: 200, include: INCLUDE });
-    return { purchases: purchases.map(serialize) };
+    const purchases = await prisma.purchase.findMany({ orderBy: { orderedOn: 'desc' }, take: 200, include: PURCHASE_INCLUDE });
+    return { purchases: purchases.map(serializePurchase) };
   });
 
   app.get<{ Params: { id: string } }>('/api/purchases/:id', { config: { scope: 'fleet.view' } }, async (req) => {
-    const p = await prisma.purchase.findUnique({ where: { id: req.params.id }, include: INCLUDE });
+    const p = await prisma.purchase.findUnique({ where: { id: req.params.id }, include: PURCHASE_INCLUDE });
     if (!p) throw notFound('purchase_not_found', 'No such order.');
     const vehicles = await prisma.vehicle.findMany({
       where: { purchaseId: p.id },
@@ -119,7 +119,7 @@ export function purchaseRoutes(app: FastifyInstance): void {
       select: { id: true, vin: true, costTetri: true, state: true, model: { select: { brand: true, name: true } } },
     });
     return {
-      purchase: serialize(p),
+      purchase: serializePurchase(p),
       vehicles: vehicles.map((v) => ({
         id: v.id,
         vin: v.vin,
@@ -274,7 +274,7 @@ export function purchaseRoutes(app: FastifyInstance): void {
   app.post<{ Params: { id: string }; Body: Body }>('/api/purchases/:id/receive', { config: { scope: 'settings.manage' } }, async (req) => {
     const b = req.body ?? {};
     const actor = actorOf(req);
-    const p = await prisma.purchase.findUnique({ where: { id: req.params.id }, include: INCLUDE });
+    const p = await prisma.purchase.findUnique({ where: { id: req.params.id }, include: PURCHASE_INCLUDE });
     if (!p) throw notFound('purchase_not_found', 'No such order.');
     if (p.status !== 'ordered') throw conflict('purchase_closed', 'This order has already arrived, or was cancelled.');
     if (p.lines.length === 0) throw conflict('no_lines', 'An order with no lines has nothing to receive.');

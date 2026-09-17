@@ -75,7 +75,9 @@ export function StockPage() {
             <tbody>
               {mopeds.data.rows.map((m) => (
                 <tr key={m.id}>
-                  <td>{m.name}</td>
+                  <td>
+                    <Link to={`/models/${m.id}`}>{m.name}</Link>
+                  </td>
                   <td className="num mono state-available">{m.inStock}</td>
                   <td className="num mono">{m.byState.rented}</td>
                   <td className="num mono">{m.byState.service}</td>
