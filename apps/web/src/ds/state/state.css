@@ -32,3 +32,8 @@
 @keyframes sync-spin {
   to { transform: rotate(360deg); }
 }
+
+.state-empty { text-align: center; padding: 48px 12px; display: grid; justify-items: center; gap: 10px; }
+.state-empty-icon { width: 56px; height: 56px; border-radius: 50%; background: var(--accent-soft); color: var(--accent-ink); display: grid; place-items: center; }
+.state-empty-title { font: var(--text-h2); margin: 0; }
+.state-empty-text { font: var(--text-label); color: var(--muted); margin: 0; max-width: 40ch; }

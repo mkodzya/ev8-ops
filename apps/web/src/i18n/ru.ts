@@ -46,6 +46,67 @@ export const ru: Dict = {
     statements: 'Выписки',
     customers: 'Клиенты',
     models: 'Модели',
+    money: 'Деньги',
+    cash: 'Касса',
+    reports: 'Отчёты',
+    settings: 'Настройки',
+    groups: { work: 'Работа', money: 'Деньги', manage: 'Управление' },
+  },
+
+  shell: {
+    actionsTitle: 'Что сделать',
+    openActions: 'Действия',
+    search: 'Поиск',
+    back: 'Назад',
+    close: 'Закрыть',
+    menu: 'Меню',
+    myLogin: 'Мой вход · пароль',
+    actions: {
+      pickup: 'Выдать мопед',
+      return: 'Принять возврат',
+      newCustomer: 'Новый клиент',
+      openRepair: 'Открыть ремонт',
+      sell: 'Продать мопед',
+    },
+    tabs: {
+      vehicles: 'Мопеды',
+      models: 'Модели',
+      points: 'Точки',
+      jobs: 'Ремонты',
+      stock: 'Склад',
+      payments: 'Платежи',
+      statements: 'Выписки',
+      economics: 'Экономика',
+    },
+  },
+
+  searchUi: {
+    placeholder: 'VIN, имя, телефон, номер, сумма',
+    hint: '4 последних знака VIN · имя латиницей или по-грузински · цифры телефона · R-, SL-, PO-, SV-номер · сумма платежа',
+    recent: 'Недавно открытые',
+    recentNone: 'На этом устройстве пока ничего не открывали.',
+    offline: 'Нет связи — ищем среди недавно открытых на этом устройстве.',
+    failed: 'Поиск не ответил.',
+    nothing: (q: string) => `Ничего по «${q}»`,
+    newCustomerWith: (phone: string) => `Новый клиент с номером ${phone}`,
+    more: (n: number) => `Ещё ${n}`,
+    groups: { customers: 'Клиенты', vehicles: 'Мопеды', rentals: 'Аренды', sales: 'Продажи', payments: 'Платежи', purchases: 'Закупки', jobs: 'Ремонты' },
+  },
+
+  returnPick: {
+    title: 'Чей возврат?',
+    placeholder: 'Имя, телефон или 4 знака VIN',
+    today: 'Возврат сегодня',
+    all: 'Все действующие',
+    planToday: 'план сегодня',
+    late: (n: number) => `опаздывает ${n} ${days(n)}`,
+    none: 'Действующих аренд нет.',
+    nothing: (q: string) => `Ничего по «${q}».`,
+  },
+
+  noAccess: {
+    title: 'Это видят владельцы',
+    toToday: 'На «Сегодня»',
   },
 
   colors: {

@@ -1,6 +1,10 @@
-import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { REDIRECTS, type Permission } from '@ev8/shared';
+import { Navigate, Route, Routes, useLocation, useParams } from 'react-router-dom';
 import { LoginPage } from './LoginPage.js';
-import { Shell } from './Shell.js';
+import { AppShell } from './ds/shell/AppShell.js';
+import { NoAccess } from './ds/state/NoAccess.js';
+import { PointsPage } from './pages/PointsPage.js';
+import { ReturnPickPage } from './pages/ReturnPickPage.js';
 import { DesignPage } from './pages/DesignPage.js';
 import { EconomicsPage } from './pages/EconomicsPage.js';
 import { PartPage } from './pages/PartPage.js';
@@ -42,33 +46,25 @@ function RequireAuth({ children }: { children: React.ReactElement }) {
   return children;
 }
 
-// A hidden tab is not a closed door: the URL still exists and somebody will
-// arrive from a bookmark. Sent home rather than shown an error; the API
-// closes the same door for real.
-// Statements belong to whoever reconciles the bank. A hidden tab is not a
-// closed door, so a bookmark lands home; the API closes it for real.
-function RequireReconcile({ children }: { children: React.ReactElement }) {
+/**
+ * A section the role does not have (wave 1 §3.8, "Нет прав"): it is not in any
+ * menu, and a direct link says so instead of landing somewhere else. The API
+ * closes the same door for real.
+ */
+function Require({ perm, children }: { perm: Permission; children: React.ReactElement }) {
   const { me, loading, can } = useSession();
   if (loading) return null;
   if (!me) return <ToLogin />;
-  if (!can('payments.reconcile')) return <Navigate to="/" replace />;
+  if (!can(perm)) return <NoAccess />;
   return children;
 }
 
-function RequireReports({ children }: { children: React.ReactElement }) {
-  const { me, loading, can } = useSession();
-  if (loading) return null;
-  if (!me) return <ToLogin />;
-  if (!can('reports.view')) return <Navigate to="/" replace />;
-  return children;
-}
-
-function RequireOwner({ children }: { children: React.ReactElement }) {
-  const { me, loading, can } = useSession();
-  if (loading) return null;
-  if (!me) return <ToLogin />;
-  if (!can('users.manage')) return <Navigate to="/" replace />;
-  return children;
+/** An old address, with its :id carried over (build plan Р8). */
+function Moved({ to }: { to: string }) {
+  const params = useParams();
+  const { search } = useLocation();
+  const target = to.replace(/:(\w+)/g, (_, k: string) => params[k] ?? '');
+  return <Navigate to={target + search} replace />;
 }
 
 export function App() {
@@ -79,38 +75,54 @@ export function App() {
         path="/"
         element={
           <RequireAuth>
-            <Shell />
+            <AppShell />
           </RequireAuth>
         }
       >
         <Route index element={<TodayPage />} />
-        <Route path="fleet" element={<FleetPage />} />
-        <Route path="fleet/:id" element={<VehiclePage />} />
-        <Route path="models" element={<ModelsPage />} />
-        <Route path="models/:id" element={<ModelPage />} />
+
         <Route path="rentals" element={<RentalsPage />} />
         <Route path="rentals/new" element={<PickupWizard />} />
+        <Route path="rentals/return" element={<Require perm="rental.return"><ReturnPickPage /></Require>} />
         <Route path="rentals/:id" element={<RentalPage />} />
         <Route path="rentals/:id/return" element={<ReturnWizard />} />
-        <Route path="purchases" element={<PurchasesPage />} />
-        <Route path="purchases/:id" element={<PurchasePage />} />
+
+        <Route path="fleet" element={<FleetPage />} />
+        <Route path="fleet/models" element={<ModelsPage />} />
+        <Route path="fleet/models/:id" element={<ModelPage />} />
+        <Route path="fleet/points" element={<Require perm="settings.manage"><PointsPage /></Require>} />
+        <Route path="fleet/:id" element={<VehiclePage />} />
+
+        <Route path="service" element={<ServicePage />} />
+        <Route path="service/stock" element={<StockPage />} />
+        <Route path="service/stock/parts/:id" element={<PartPage />} />
+        <Route path="service/:id" element={<ServiceJobPage />} />
+
+        <Route path="money" element={<Navigate to="/money/payments" replace />} />
+        <Route path="money/payments" element={<Require perm="payments.view"><PaymentsPage /></Require>} />
+        <Route path="money/cash" element={<Require perm="cash.record"><PaymentsPage till /></Require>} />
+        <Route path="money/statements" element={<Require perm="payments.reconcile"><StatementsPage /></Require>} />
+
         <Route path="sales" element={<SalesPage />} />
         <Route path="sales/:id" element={<SalePage />} />
-        <Route path="service" element={<ServicePage />} />
-        <Route path="service/:id" element={<ServiceJobPage />} />
-        <Route path="payments" element={<PaymentsPage />} />
-        <Route path="statements" element={<RequireReconcile><StatementsPage /></RequireReconcile>} />
-        <Route path="stock" element={<StockPage />} />
-        <Route path="stock/parts/:id" element={<PartPage />} />
-        <Route path="economics" element={<RequireReports><EconomicsPage /></RequireReports>} />
+        <Route path="purchases" element={<Require perm="purchases.view"><PurchasesPage /></Require>} />
+        <Route path="purchases/:id" element={<Require perm="purchases.view"><PurchasePage /></Require>} />
+
+        <Route path="reports" element={<Navigate to="/reports/economics" replace />} />
+        <Route path="reports/economics" element={<Require perm="reports.view"><EconomicsPage /></Require>} />
+
         <Route path="customers" element={<CustomersPage />} />
         <Route path="customers/new" element={<CustomerForm />} />
         <Route path="customers/:id" element={<CustomerPage />} />
-        <Route path="profile" element={<ProfilePage />} />
-        <Route path="settings" element={<RequireOwner><SettingsPage /></RequireOwner>} />
-        {/* Foundations is a review surface, not an operating screen: the owner
-            reads it, the team never needs it. */}
-        <Route path="design" element={<RequireOwner><DesignPage /></RequireOwner>} />
+        <Route path="me" element={<ProfilePage />} />
+        <Route path="settings" element={<Require perm="users.manage"><SettingsPage /></Require>} />
+        {/* The design catalogue is a review surface, not an operating screen:
+            the owner reads it by address, it is in no menu. */}
+        <Route path="design" element={<Require perm="users.manage"><DesignPage /></Require>} />
+
+        {REDIRECTS.map((r) => (
+          <Route key={r.from} path={r.from.slice(1)} element={<Moved to={r.to} />} />
+        ))}
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

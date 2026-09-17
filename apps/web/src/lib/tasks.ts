@@ -29,7 +29,7 @@ export function dayTasks(s: DayTaskSource, t: Dict, can: (p: Permission) => bool
     { key: 'pickedUp', count: s.pickedUpToday.length, label: t.today.pickedUp, action: t.today.goOpen, to: '/rentals' },
     { key: 'overdue', count: s.rentals.overdue, label: t.today.overdue, action: t.today.goOpen, to: '/rentals', tone: 'crit' },
     ...(can('payments.reconcile')
-      ? [{ key: 'unmatched', count: s.unmatchedLines, label: t.today.unmatched, action: t.today.goSort, to: '/statements', tone: 'warn' as const }]
+      ? [{ key: 'unmatched', count: s.unmatchedLines, label: t.today.unmatched, action: t.today.goSort, to: '/money/statements', tone: 'warn' as const }]
       : []),
     { key: 'withoutVin', count: s.rentals.withoutVin, label: t.today.withoutVin, action: t.today.goOpen, to: '/rentals', tone: 'warn' },
     { key: 'service', count: s.openServiceJobs, label: t.today.openService, action: t.today.goOpen, to: '/service', tone: 'warn' },

@@ -1,0 +1,44 @@
+/* The header search (wave 1 §3.5; prototypes/wave-1-search.html). */
+.search-scrim { position: fixed; inset: 0; z-index: 50; background: var(--scrim-soft); display: flex; justify-content: center; align-items: flex-start; }
+.search-box { background: var(--bg); width: 100%; display: flex; flex-direction: column; }
+.search-field { display: flex; align-items: center; gap: 8px; padding: 8px var(--space4); border-bottom: 1px solid var(--line-soft); background: var(--surface); }
+.search-icon { color: var(--muted); flex: none; }
+.search-input { flex: 1; min-width: 0; min-height: var(--control); border: 0; background: none; font: var(--text-body); color: var(--ink); outline: none; }
+.search-body { overflow-y: auto; padding: var(--space3) var(--space4) var(--space5); }
+.search-group { display: flex; align-items: baseline; gap: 8px; margin: 14px 2px 6px; font: var(--text-overline); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.search-count { font: var(--text-label); text-transform: none; letter-spacing: 0; }
+.search-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  text-align: left;
+  background: var(--surface);
+  border: 0;
+  border-radius: var(--radius-card);
+  padding: 12px 14px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  color: var(--ink);
+}
+.search-row.on { box-shadow: var(--focus-ring); }
+.search-row-title { font: 500 15px/1.3 var(--body); display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.search-row-sub { font: var(--text-label); color: var(--muted); }
+.search-more { display: block; width: 100%; border: 0; background: none; color: var(--accent); font: var(--text-button-sm); padding: 8px; cursor: pointer; }
+.search-note { font: var(--text-label); color: var(--muted); margin: 10px 2px; }
+.search-nothing, .search-failed { padding: 32px 8px; text-align: center; display: grid; gap: 8px; justify-items: center; }
+.search-nothing-title { font: var(--text-h2); margin: 0; }
+.search-skeleton { display: grid; gap: 8px; margin-top: 12px; }
+
+@media (max-width: 899px) {
+  .search-scrim { background: var(--bg); }
+  .search-box { height: 100%; }
+  .search-body { flex: 1; }
+  .search-field { padding-left: 4px; }
+}
+@media (min-width: 900px) {
+  .search-scrim { padding-top: 10vh; }
+  .search-box { max-width: 640px; max-height: 70vh; border-radius: var(--radius-card); overflow: hidden; box-shadow: var(--shadow); }
+  .search-back { display: none; }
+  .search-field { padding-left: var(--space4); }
+}

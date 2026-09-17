@@ -125,7 +125,16 @@ export function ServicePage() {
 /** Opening a repair: a moped, what is wrong, and who pays. */
 export function NewJob({ vehicleId, onDone, onError }: { vehicleId?: string; onDone: () => void; onError: (e: string) => void }) {
   const t = useT();
-  const [open, setOpen] = useState(false);
+  // "Open a repair" / "Sell a moped" from the "+" arrive with ?new=1 (wave 1 §3.2).
+  const [params, setParams] = useSearchParams();
+  const [open, setOpenState] = useState(params.get('new') === '1');
+  const setOpen = (v: boolean) => {
+    setOpenState(v);
+    if (!v && params.has('new')) {
+      params.delete('new');
+      setParams(params, { replace: true });
+    }
+  };
   const fleet = useLoad<{ vehicles: FleetVehicle[] }>(open ? '/api/fleet' : null);
   const [f, setF] = useState({ vehicleId: vehicleId ?? '', reason: '', payer: 'company', labour: '', doneBy: '', openedOn: todayISO() });
   const [busy, setBusy] = useState(false);

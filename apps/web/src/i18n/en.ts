@@ -41,6 +41,68 @@ export const en = {
     statements: 'Statements',
     customers: 'Customers',
     models: 'Models',
+    money: 'Money',
+    cash: 'Till',
+    reports: 'Reports',
+    settings: 'Settings',
+    groups: { work: 'Work', money: 'Money', manage: 'Manage' },
+  },
+
+  // The frame around every screen (wave 1 §3.2–3.3).
+  shell: {
+    actionsTitle: 'What to do',
+    openActions: 'Actions',
+    search: 'Search',
+    back: 'Back',
+    close: 'Close',
+    menu: 'Menu',
+    myLogin: 'My login · password',
+    actions: {
+      pickup: 'Hand over a moped',
+      return: 'Take a moped back',
+      newCustomer: 'New customer',
+      openRepair: 'Open a repair',
+      sell: 'Sell a moped',
+    },
+    tabs: {
+      vehicles: 'Mopeds',
+      models: 'Models',
+      points: 'Points',
+      jobs: 'Repairs',
+      stock: 'Stock',
+      payments: 'Payments',
+      statements: 'Statements',
+      economics: 'Economics',
+    },
+  },
+
+  searchUi: {
+    placeholder: 'VIN, name, phone, number, amount',
+    hint: 'Last 4 of a VIN · a name in Latin or Georgian · digits of a phone · an R-, SL-, PO- or SV- number · a payment amount',
+    recent: 'Recently opened',
+    recentNone: 'Nothing opened on this device yet.',
+    offline: 'No connection — searching what was opened recently on this device.',
+    failed: 'The search did not answer.',
+    nothing: (q: string) => `Nothing matches “${q}”`,
+    newCustomerWith: (phone: string) => `New customer with ${phone}`,
+    more: (n: number) => `${n} more`,
+    groups: { customers: 'Customers', vehicles: 'Mopeds', rentals: 'Rentals', sales: 'Sales', payments: 'Payments', purchases: 'Purchases', jobs: 'Repairs' },
+  },
+
+  returnPick: {
+    title: 'Whose return?',
+    placeholder: 'Name, phone or last 4 of the VIN',
+    today: 'Due back today',
+    all: 'All active',
+    planToday: 'due today',
+    late: (n: number) => `${n} ${n === 1 ? 'day' : 'days'} late`,
+    none: 'No active rentals.',
+    nothing: (q: string) => `Nothing matches “${q}”.`,
+  },
+
+  noAccess: {
+    title: 'This is for the owners',
+    toToday: 'To Today',
   },
 
   // Vehicle states — colour + shape + word, the same everywhere (brand.md).

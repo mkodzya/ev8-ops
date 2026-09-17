@@ -95,7 +95,7 @@ export function VehiclePage() {
 
   return (
     <>
-      <PageHead wrap title={<Vin vin={v.vin} />} badge={<StateBadge state={v.state} />} sub={<Link to={`/models/${v.model.id}`}>{`${v.model.brand} ${v.model.name}`}</Link>}>
+      <PageHead wrap title={<Vin vin={v.vin} />} badge={<StateBadge state={v.state} />} sub={<Link to={`/fleet/models/${v.model.id}`}>{`${v.model.brand} ${v.model.name}`}</Link>}>
         {can('fleet.state.manual') && (
           <button type="button" className="pill pill-sm" onClick={() => setOpen(true)} disabled={locked} title={locked ? t.vehicle.rentedLock : undefined}>
             {t.actions.changeState}

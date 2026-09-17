@@ -206,7 +206,7 @@ export function PurchasePage() {
                       {l.model ? (
                         l.model.name
                       ) : l.partId ? (
-                        <Link to={`/stock/parts/${l.partId}`}>{l.partName}</Link>
+                        <Link to={`/service/stock/parts/${l.partId}`}>{l.partName}</Link>
                       ) : (
                         <span className="muted">{l.partName}</span>
                       )}
