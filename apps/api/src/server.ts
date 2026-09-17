@@ -3,6 +3,7 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import { env } from './lib/env.js';
 import { ApiError } from './lib/errors.js';
 import { installGuard } from './lib/guard.js';
+import { installOperationKeys } from './lib/operations.js';
 import { authRoutes } from './routes/auth.js';
 import { customerRoutes } from './routes/customers.js';
 import { documentRoutes } from './routes/documents.js';
@@ -34,6 +35,8 @@ export function buildApp(): FastifyInstance {
   // Everything registered after this is guarded; an undeclared scope is
   // owner-only (default-deny).
   installGuard(app);
+  // After the guard: a key is claimed only by a request that may run.
+  installOperationKeys(app);
 
   app.setErrorHandler((err, _req, reply) => {
     if (err instanceof ApiError) {

@@ -12,11 +12,19 @@ export class ApiError extends Error {
 
 export const SIGNED_OUT_EVENT = 'ev8:signed-out';
 
-async function request<T>(method: string, url: string, body?: unknown): Promise<T> {
+/** A write's options. `key` is the form's operation key (build plan Р5): the same key on a retry never writes twice. */
+export interface WriteOptions {
+  key?: string;
+}
+
+async function request<T>(method: string, url: string, body?: unknown, opts: WriteOptions = {}): Promise<T> {
+  const headers: Record<string, string> = {};
+  if (body !== undefined) headers['content-type'] = 'application/json';
+  if (opts.key) headers['idempotency-key'] = opts.key;
   const res = await fetch(url, {
     method,
     credentials: 'same-origin',
-    headers: body !== undefined ? { 'content-type': 'application/json' } : undefined,
+    headers,
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
   let data: Record<string, unknown> = {};
@@ -41,7 +49,18 @@ async function request<T>(method: string, url: string, body?: unknown): Promise<
 
 export const api = {
   get: <T>(url: string) => request<T>('GET', url),
-  post: <T>(url: string, body?: unknown) => request<T>('POST', url, body ?? {}),
-  patch: <T>(url: string, body?: unknown) => request<T>('PATCH', url, body ?? {}),
-  del: <T>(url: string) => request<T>('DELETE', url),
+  post: <T>(url: string, body?: unknown, opts?: WriteOptions) => request<T>('POST', url, body ?? {}, opts),
+  patch: <T>(url: string, body?: unknown, opts?: WriteOptions) => request<T>('PATCH', url, body ?? {}, opts),
+  del: <T>(url: string, opts?: WriteOptions) => request<T>('DELETE', url, undefined, opts),
 };
+
+/**
+ * A fresh operation key. crypto.randomUUID exists only in a secure context,
+ * and a phone opening the stand by its LAN address is not one — so the random
+ * bytes are asked for directly.
+ */
+export function newOperationKey(): string {
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+}

@@ -78,10 +78,11 @@ nice -n 10 docker run --rm -m 3g --network ev8-ops-platform_default \
   -w /w -e DATABASE_URL=postgresql://ev8ops:ev8ops@db:5432/ev8ops_test \
   -e SESSION_SECRET=test-secret-that-is-long-enough-for-checks-0001 \
   -e WORKER_TOKEN=test-worker-token-that-is-long-enough-0001 node:22-alpine \
-  sh -c "npm -w @ev8/api run generate >/dev/null 2>&1; npm run typecheck; npm test; npm -w @ev8/web run build"
+  sh -c "npm -w @ev8/api run generate >/dev/null 2>&1; npm -w @ev8/api run migrate; npm run typecheck; npm run guard; npm test; npm -w @ev8/web run build"
 ```
 
 - Без `generate` в новом worktree все тесты API падают (нет `src/generated/prisma`) — это не баг кода.
+- Тесты не накатывают миграции сами: новая миграция без `migrate` в гейте даёт 500 в тестах (`relation … does not exist`).
 - Стенд после слияния: `docker compose up -d --build web api` (web отдаёт собранный бандл —
   без пересборки изменения не видны), затем `scripts/qa-stand.sh images`. Порты: web 5175, api 8082,
   db 5433; QA — 5185, 8092, 5443. Открытая вкладка держит старый бандл — перезагрузить страницу.
