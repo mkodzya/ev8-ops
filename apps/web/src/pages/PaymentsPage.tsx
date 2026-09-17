@@ -8,7 +8,10 @@ import { DataList } from '../ds/list/DataList.js';
 import { QueueItem, type QueueLine } from './StatementsPage.js';
 import { fmtDate, formatGel } from '../format.js';
 import { useT } from '../i18n/index.js';
-import { errorText, useLoad } from '../lib/use.js';
+import { useLoad } from '../lib/use.js';
+import { SubmitButton } from '../ds/form/Form.js';
+import { useOperation } from '../ds/form/operation.js';
+import { useToast } from '../ds/feedback/Toast.js';
 import { useSession } from '../session.js';
 
 const CHANNELS = ['transfer', 'acquiring', 'cash'] as const;
@@ -91,7 +94,6 @@ export function PaymentsPage({ till = false }: { till?: boolean } = {}) {
                     queue.reload();
                     reload();
                   }}
-                  onError={setErr}
                 />
               ))}
             </ul>
@@ -166,7 +168,7 @@ export function PaymentsPage({ till = false }: { till?: boolean } = {}) {
                   {p.voidReason ? ` · ${p.voidReason}` : ''}
                 </span>
               ) : (
-                can('payments.reconcile') && <VoidPayment id={p.id} onDone={reload} onError={setErr} />
+                can('payments.reconcile') && <VoidPayment id={p.id} onDone={reload} />
               ),
           },
         ]}
@@ -178,8 +180,10 @@ export function PaymentsPage({ till = false }: { till?: boolean } = {}) {
 }
 
 /** Nothing is deleted: a payment entered by mistake is voided with a reason. */
-export function VoidPayment({ id, onDone, onError }: { id: string; onDone: () => void; onError: (e: string) => void }) {
+export function VoidPayment({ id, onDone }: { id: string; onDone: () => void }) {
   const t = useT();
+  const toast = useToast();
+  const op = useOperation();
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState('');
   if (!open) {
@@ -192,23 +196,23 @@ export function VoidPayment({ id, onDone, onError }: { id: string; onDone: () =>
   return (
     <span className="inline-form">
       <input className="input input-inline" placeholder={t.payments.voidReason} value={reason} onChange={(e) => setReason(e.target.value)} autoFocus />
-      <button
+      <SubmitButton
+        small
         type="button"
-        className="pill pill-sm pill-accent"
-        disabled={!reason.trim()}
+        state={op.state}
+        label={t.actions.confirm}
         onClick={async () => {
-          try {
-            await api.post(`/api/payments/${id}/void`, { reason });
-            setOpen(false);
-            setReason('');
-            onDone();
-          } catch (e) {
-            onError(errorText(e));
-          }
+          const res = await op.run((key) => api.post(`/api/payments/${id}/void`, { reason }, { key }));
+          if (!res.ok) return;
+          setOpen(false);
+          setReason('');
+          op.reset();
+          toast({ text: t.payments.voidedToast });
+          onDone();
         }}
-      >
-        {t.actions.confirm}
-      </button>
+      />
+      {/* The refusal belongs to this row, not to the page (QA-1-06). */}
+      {op.failure && <span className="field-err">{op.failure.fieldText ?? op.failure.text}</span>}
     </span>
   );
 }

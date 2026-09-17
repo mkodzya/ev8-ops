@@ -8,8 +8,8 @@ import { Field } from '../components/Wizard.js';
 import { fmtDate, formatGel } from '../format.js';
 import { useT } from '../i18n/index.js';
 import { DataList } from '../ds/list/DataList.js';
-import { Drawer } from '../components/Drawer.js';
-import { errorText, useLoad } from '../lib/use.js';
+import { FormSheet } from '../ds/form/Form.js';
+import { useLoad } from '../lib/use.js';
 import { useSession } from '../session.js';
 
 export type SaleStatus = 'active' | 'cancelled' | 'bought_back';
@@ -44,7 +44,6 @@ export function SalesPage() {
   const t = useT();
   const { can } = useSession();
   const { data, failure, reload } = useLoad<{ overdueTetri: number; sales: Sale[] }>('/api/sales');
-  const [err, setErr] = useState<string | null>(null);
 
   if (failure) return <LoadError failure={failure} onRetry={reload} />;
   if (!data) return <Loading />;
@@ -57,9 +56,8 @@ export function SalesPage() {
             {t.sales.overdue}: {formatGel(data.overdueTetri, { decimals: false })}
           </span>
         )}
-        {can('sales.manage') && <NewSale onDone={reload} onError={setErr} />}
+        {can('sales.manage') && <NewSale onDone={reload} />}
       </PageHead>
-      {err && <div className="hint hint-bad">{err}</div>}
       <DataList
         rows={data.sales}
         rowKey={(s) => s.id}
@@ -140,7 +138,9 @@ export function SalesPage() {
 }
 
 /** Selling: a buyer, a moped, a price, and how it will be paid for. */
-function NewSale({ onDone, onError }: { onDone: () => void; onError: (e: string) => void }) {
+const blankSale = () => ({ customerId: '', vehicleId: '', vinNote: '', price: '', down: '', months: '0', soldOn: todayISO(), extras: '' });
+
+function NewSale({ onDone }: { onDone: () => void }) {
   const t = useT();
   // "Open a repair" / "Sell a moped" from the "+" arrive with ?new=1 (wave 1 §3.2).
   const [params, setParams] = useSearchParams();
@@ -155,34 +155,10 @@ function NewSale({ onDone, onError }: { onDone: () => void; onError: (e: string)
   const fleet = useLoad<{ vehicles: FleetVehicle[] }>(open ? '/api/fleet' : null);
   const customers = useLoad<{ customers: { id: string; name: string; phone: string | null }[] }>(open ? '/api/customers' : null);
   const models = useLoad<{ models: { id: string; salePriceTetri: number | null }[] }>(open ? '/api/models' : null);
-  const [f, setF] = useState({ customerId: '', vehicleId: '', vinNote: '', price: '', down: '', months: '0', soldOn: todayISO(), extras: '' });
-  const [busy, setBusy] = useState(false);
+  const [f, setF] = useState(blankSale);
 
   const free = useMemo(() => (fleet.data?.vehicles ?? []).filter((v) => v.state === 'available'), [fleet.data]);
 
-
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setBusy(true);
-    try {
-      await api.post('/api/sales', {
-        customerId: f.customerId,
-        vehicleId: f.vehicleId || null,
-        vinNote: f.vehicleId ? null : f.vinNote || null,
-        priceTetri: parseGel(f.price),
-        downPaymentTetri: f.down ? parseGel(f.down) : 0,
-        months: Number(f.months) || 0,
-        soldOn: f.soldOn,
-        extras: f.extras || null,
-      });
-      setOpen(false);
-      onDone();
-    } catch (e) {
-      onError(errorText(e));
-    } finally {
-      setBusy(false);
-    }
-  };
 
   return (
     <>
@@ -190,10 +166,39 @@ function NewSale({ onDone, onError }: { onDone: () => void; onError: (e: string)
         + {t.sales.newSale}
       </button>
       {open && (
-        <Drawer title={t.sales.newSale} onClose={() => setOpen(false)}>
-          <form className="form" onSubmit={submit}>
+        <FormSheet
+          title={t.sales.newSale}
+          onClose={() => setOpen(false)}
+          value={f}
+          initial={blankSale()}
+          draft="sale-new"
+          onRestore={setF}
+          summary={(v) => (customers.data?.customers ?? []).find((c) => c.id === v.customerId)?.name}
+          label={t.sales.recordSale}
+          submit={async (key) => {
+            const sale = await api.post<{ id: string }>(
+              '/api/sales',
+              {
+                customerId: f.customerId,
+                vehicleId: f.vehicleId || null,
+                vinNote: f.vehicleId ? null : f.vinNote || null,
+                priceTetri: parseGel(f.price),
+                downPaymentTetri: f.down ? parseGel(f.down) : 0,
+                months: Number(f.months) || 0,
+                soldOn: f.soldOn,
+                extras: f.extras || null,
+              },
+              { key },
+            );
+            return { created: sale.id, toast: { text: t.sales.saleRecorded, open: `/sales/${sale.id}` } };
+          }}
+          onDone={() => {
+            setF(blankSale());
+            onDone();
+          }}
+        >
       <div className="two-col">
-        <Field label={t.sales.buyer}>
+        <Field label={t.sales.buyer} name="customerId">
           <select className="input" value={f.customerId} onChange={(e) => setF({ ...f, customerId: e.target.value })} required>
             <option value="">{t.common.dash}</option>
             {(customers.data?.customers ?? []).map((c) => (
@@ -203,7 +208,7 @@ function NewSale({ onDone, onError }: { onDone: () => void; onError: (e: string)
             ))}
           </select>
         </Field>
-        <Field label={t.sales.vehicle}>
+        <Field label={t.sales.vehicle} name="vehicleId">
           <select className="input" value={f.vehicleId} onChange={(e) => setF({ ...f, vehicleId: e.target.value })}>
             <option value="">{t.common.dash}</option>
             {free.map((v) => (
@@ -215,38 +220,29 @@ function NewSale({ onDone, onError }: { onDone: () => void; onError: (e: string)
         </Field>
       </div>
       {!f.vehicleId && (
-        <Field label={t.sales.noVehicle}>
+        <Field label={t.sales.noVehicle} name="vinNote">
           <input className="input" value={f.vinNote} onChange={(e) => setF({ ...f, vinNote: e.target.value })} />
         </Field>
       )}
       <div className="two-col">
-        <Field label={t.sales.price}>
+        <Field label={t.sales.price} name="priceTetri">
           <input className="input input-amount mono" value={f.price} onChange={(e) => setF({ ...f, price: e.target.value })} inputMode="decimal" required />
         </Field>
-        <Field label={t.sales.soldOn}>
+        <Field label={t.sales.soldOn} name="soldOn">
           <input className="input mono" type="date" value={f.soldOn} onChange={(e) => setF({ ...f, soldOn: e.target.value })} />
         </Field>
-        <Field label={t.sales.downPayment}>
+        <Field label={t.sales.downPayment} name="downPaymentTetri">
           <input className="input input-amount mono" value={f.down} onChange={(e) => setF({ ...f, down: e.target.value })} inputMode="decimal" />
         </Field>
-        <Field label={t.sales.months} hint={t.sales.monthsHint}>
+        <Field label={t.sales.months} hint={t.sales.monthsHint} name="months">
           <input className="input input-amount mono" value={f.months} onChange={(e) => setF({ ...f, months: e.target.value })} inputMode="numeric" />
         </Field>
       </div>
-      <Field label={t.sales.extras}>
+      <Field label={t.sales.extras} name="extras">
         <input className="input" value={f.extras} onChange={(e) => setF({ ...f, extras: e.target.value })} />
       </Field>
-      <div className="row-actions">
-        <button type="button" className="pill" onClick={() => setOpen(false)}>
-          {t.actions.cancel}
-        </button>
-        <button className="pill pill-accent" disabled={busy || !f.customerId || parseGel(f.price) == null || (!f.vehicleId && !f.vinNote.trim())}>
-          {busy ? t.common.checking : t.actions.confirm}
-        </button>
-      </div>
       {models.data && free.length === 0 && <p className="hint muted">{t.pickup.noAvailable}</p>}
-          </form>
-        </Drawer>
+        </FormSheet>
       )}
     </>
   );

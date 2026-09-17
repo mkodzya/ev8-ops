@@ -3,12 +3,12 @@ import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { LoadError } from '../components/LoadError.js';
-import { Drawer } from '../components/Drawer.js';
+import { FormSheet } from '../ds/form/Form.js';
 import { BlockHead, Empty, Loading, PageHead, Vin } from '../components/ui.js';
 import { Field, Row } from '../components/Wizard.js';
 import { fmtDate, formatGel } from '../format.js';
 import { useT } from '../i18n/index.js';
-import { errorText, useLoad } from '../lib/use.js';
+import { useLoad } from '../lib/use.js';
 import { useSession } from '../session.js';
 import type { Sale } from './SalesPage.js';
 
@@ -23,70 +23,58 @@ export function SalePage() {
   const t = useT();
   const { can } = useSession();
   const { data, failure, reload } = useLoad<SaleCard>(id ? `/api/sales/${id}` : null);
-  const [err, setErr] = useState<string | null>(null);
-  const [pay, setPay] = useState({ open: false, amount: '', channel: 'transfer' as 'transfer' | 'acquiring' | 'cash', on: todayISO() });
-  const [back, setBack] = useState({ open: false, amount: '', on: todayISO(), toState: 'available' as 'available' | 'service' });
+  const [panel, setPanel] = useState<'pay' | 'back' | 'cancel' | null>(null);
+  const blankPay = { amount: '', channel: 'transfer' as 'transfer' | 'acquiring' | 'cash', on: todayISO() };
+  const blankBack = { amount: '', on: todayISO(), toState: 'available' as 'available' | 'service' };
+  const [pay, setPay] = useState(blankPay);
+  const [back, setBack] = useState(blankBack);
   const [cancelReason, setCancelReason] = useState('');
-  const [cancelling, setCancelling] = useState(false);
-  const [busy, setBusy] = useState(false);
 
   if (failure) return <LoadError failure={failure} onRetry={reload} />;
   if (!data) return <Loading />;
   const s = data.sale;
   const live = s.status === 'active';
 
-  const act = async (fn: () => Promise<unknown>) => {
-    setBusy(true);
-    setErr(null);
-    try {
-      await fn();
-      reload();
-    } catch (e) {
-      setErr(errorText(e));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  // A drawer that closes takes its error with it: the page behind would
-  // otherwise keep showing a complaint about a form nobody can see.
-  const closePay = () => {
-    setPay({ ...pay, open: false });
-    setErr(null);
-  };
-  const closeBack = () => {
-    setBack({ ...back, open: false });
-    setErr(null);
-  };
-  const closeCancel = () => {
-    setCancelling(false);
-    setErr(null);
-  };
-
   return (
     <>
       <PageHead wrap title={s.number} sub={t.sales.statuses[s.status]}>
         {live && can('cash.record') && (
-          <button type="button" className="pill pill-sm pill-accent" onClick={() => setPay({ ...pay, open: true })}>
+          <button type="button" className="pill pill-sm pill-accent" onClick={() => setPanel('pay')}>
             {t.sales.addPayment}
           </button>
         )}
         {live && can('sales.manage') && s.vehicle && (
-          <button type="button" className="pill pill-sm" onClick={() => setBack({ ...back, open: true })}>
+          <button type="button" className="pill pill-sm" onClick={() => setPanel('back')}>
             {t.sales.buyBack}
           </button>
         )}
         {live && can('sales.manage') && (
-          <button type="button" className="pill pill-sm" onClick={() => setCancelling(true)}>
+          <button type="button" className="pill pill-sm" onClick={() => setPanel('cancel')}>
             {t.sales.cancel}
           </button>
         )}
       </PageHead>
-      {err && <div className="hint hint-bad">{err}</div>}
 
-      {pay.open && (
-        <Drawer title={t.sales.addPayment} onClose={closePay}>
-          <Field label={t.payments.channel}>
+      {panel === 'pay' && (
+        <FormSheet
+          title={t.sales.addPayment}
+          onClose={() => setPanel(null)}
+          value={pay}
+          initial={blankPay}
+          draft={`sale-pay:${s.id}`}
+          onRestore={setPay}
+          summary={(v) => v.amount}
+          label={t.payments.record}
+          submit={async (key) => {
+            await api.post(`/api/sales/${s.id}/payments`, { channel: pay.channel, grossTetri: parseGel(pay.amount), occurredOn: pay.on }, { key });
+            return { toast: { text: t.purchases.paymentRecorded } };
+          }}
+          onDone={() => {
+            setPay(blankPay);
+            reload();
+          }}
+        >
+          <Field label={t.payments.channel} name="channel">
             <div className="chips">
               {(['transfer', 'acquiring', 'cash'] as const).map((c) => (
                 <button key={c} type="button" className={`pill pill-sm ${pay.channel === c ? 'on' : ''}`} onClick={() => setPay({ ...pay, channel: c })}>
@@ -95,41 +83,41 @@ export function SalePage() {
               ))}
             </div>
           </Field>
-          <Field label={t.payments.gross}>
+          <Field label={t.payments.gross} name="grossTetri">
             <input className="input input-amount mono" value={pay.amount} onChange={(e) => setPay({ ...pay, amount: e.target.value })} inputMode="decimal" autoFocus />
           </Field>
-          <Field label={t.payments.date}>
+          <Field label={t.payments.date} name="occurredOn">
             <input className="input mono" type="date" value={pay.on} onChange={(e) => setPay({ ...pay, on: e.target.value })} />
           </Field>
-          {err && <div className="hint hint-bad">{err}</div>}
-          <div className="row-actions">
-            <button type="button" className="pill" onClick={closePay}>
-              {t.actions.cancel}
-            </button>
-            <button
-              type="button"
-              className="pill pill-accent"
-              disabled={busy || parseGel(pay.amount) == null}
-              onClick={() => void act(async () => {
-                await api.post(`/api/sales/${s.id}/payments`, { channel: pay.channel, grossTetri: parseGel(pay.amount), occurredOn: pay.on });
-                setPay({ ...pay, open: false, amount: '' });
-              })}
-            >
-              {t.actions.confirm}
-            </button>
-          </div>
-        </Drawer>
+        </FormSheet>
       )}
 
-      {back.open && (
-        <Drawer title={t.sales.buyBack} onClose={closeBack}>
-          <Field label={t.sales.buyBackAmount}>
+      {panel === 'back' && (
+        <FormSheet
+          title={t.sales.buyBack}
+          onClose={() => setPanel(null)}
+          value={back}
+          initial={blankBack}
+          draft={`sale-back:${s.id}`}
+          onRestore={setBack}
+          summary={(v) => v.amount}
+          label={t.sales.buyBackCta}
+          submit={async (key) => {
+            await api.post(`/api/sales/${s.id}/buy-back`, { amountTetri: parseGel(back.amount), occurredOn: back.on, toState: back.toState }, { key });
+            return { toast: { text: t.sales.boughtBack } };
+          }}
+          onDone={() => {
+            setBack(blankBack);
+            reload();
+          }}
+        >
+          <Field label={t.sales.buyBackAmount} name="amountTetri">
             <input className="input input-amount mono" value={back.amount} onChange={(e) => setBack({ ...back, amount: e.target.value })} inputMode="decimal" autoFocus />
           </Field>
-          <Field label={t.payments.date}>
+          <Field label={t.payments.date} name="occurredOn">
             <input className="input mono" type="date" value={back.on} onChange={(e) => setBack({ ...back, on: e.target.value })} />
           </Field>
-          <Field label={t.sales.buyBackState}>
+          <Field label={t.sales.buyBackState} name="toState">
             <div className="chips">
               {(['available', 'service'] as const).map((st) => (
                 <button key={st} type="button" className={`pill pill-sm ${back.toState === st ? 'on' : ''}`} onClick={() => setBack({ ...back, toState: st })}>
@@ -138,49 +126,32 @@ export function SalePage() {
               ))}
             </div>
           </Field>
-          {err && <div className="hint hint-bad">{err}</div>}
-          <div className="row-actions">
-            <button type="button" className="pill" onClick={closeBack}>
-              {t.actions.cancel}
-            </button>
-            <button
-              type="button"
-              className="pill pill-accent"
-              disabled={busy || parseGel(back.amount) == null}
-              onClick={() => void act(async () => {
-                await api.post(`/api/sales/${s.id}/buy-back`, { amountTetri: parseGel(back.amount), occurredOn: back.on, toState: back.toState });
-                setBack({ ...back, open: false, amount: '' });
-              })}
-            >
-              {t.actions.confirm}
-            </button>
-          </div>
-        </Drawer>
+        </FormSheet>
       )}
 
-      {cancelling && (
-        <Drawer title={t.sales.cancel} onClose={closeCancel}>
-          <Field label={t.sales.cancelReason}>
+      {panel === 'cancel' && (
+        <FormSheet
+          title={t.sales.cancel}
+          onClose={() => setPanel(null)}
+          value={cancelReason}
+          initial=""
+          draft={`sale-cancel:${s.id}`}
+          onRestore={setCancelReason}
+          summary={(v) => v}
+          label={t.sales.cancelCta}
+          submit={async (key) => {
+            await api.post(`/api/sales/${s.id}/cancel`, { reason: cancelReason }, { key });
+            return { toast: { text: t.sales.cancelled } };
+          }}
+          onDone={() => {
+            setCancelReason('');
+            reload();
+          }}
+        >
+          <Field label={t.sales.cancelReason} name="reason">
             <input className="input" value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} autoFocus />
           </Field>
-          {err && <div className="hint hint-bad">{err}</div>}
-          <div className="row-actions">
-            <button type="button" className="pill" onClick={closeCancel}>
-              {t.actions.cancel}
-            </button>
-            <button
-              type="button"
-              className="pill pill-accent"
-              disabled={busy || !cancelReason.trim()}
-              onClick={() => void act(async () => {
-                await api.post(`/api/sales/${s.id}/cancel`, { reason: cancelReason });
-                setCancelling(false);
-              })}
-            >
-              {t.actions.confirm}
-            </button>
-          </div>
-        </Drawer>
+        </FormSheet>
       )}
 
       <div className="two-col">

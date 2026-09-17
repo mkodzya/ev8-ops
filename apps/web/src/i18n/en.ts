@@ -89,6 +89,26 @@ export const en = {
     groups: { customers: 'Customers', vehicles: 'Mopeds', rentals: 'Rentals', sales: 'Sales', payments: 'Payments', purchases: 'Purchases', jobs: 'Repairs' },
   },
 
+  form: {
+    changesSaved: 'Changes saved',
+    saving: 'Saving…',
+    saved: 'Saved',
+    retry: 'Not saved — retry',
+    notSaved: 'Not saved:',
+    draftKept: 'The draft is kept on this device.',
+    fieldMissing: 'Fill this in.',
+    fieldBad: 'Check this field: the value does not fit.',
+    draftFrom: (time: string) => `Draft from ${time}`,
+    continueDraft: 'Continue',
+    startOver: 'Start over',
+    closeAsk: 'Close the form?',
+    closeNote: 'What you typed stays a draft on this device.',
+    back: 'Back',
+    close: 'Close',
+    open: 'Open',
+    undo: 'Undo',
+    undone: 'Undone',
+  },
   lists: {
     inFleet: (n: number) => `in the fleet ${n}`,
     onOrder: (n: number) => `on order ${n}`,
@@ -203,6 +223,8 @@ export const en = {
   },
 
   fleet: {
+    vehicleAdded: 'Moped added',
+    addVehicleCta: 'Add moped',
     title: 'Fleet',
     vin: 'VIN',
     model: 'Model',
@@ -262,6 +284,8 @@ export const en = {
   },
 
   vehicle: {
+    stateChanged: (state: string) => `State: ${state}`,
+    changeStateCta: 'Change state',
     eventsCount: (n: number) => `${n} ${n === 1 ? 'event' : 'events'}`,
     backToFleet: 'Back to the fleet',
     title: 'Moped',
@@ -289,6 +313,7 @@ export const en = {
   },
 
   rental: {
+    depositConfirmed: 'Deposit decision confirmed',
     actsCount: (n: number) => `${n} ${n === 1 ? 'act' : 'acts'}`,
     periodsCount: (n: number) => `${n} ${n === 1 ? 'week' : 'weeks'}`,
     owed: 'Owed',
@@ -312,6 +337,7 @@ export const en = {
   },
 
   pickup: {
+    handOver: 'Hand over the moped',
     title: 'Hand-over',
     steps: { customer: 'Customer', vehicle: 'Moped', terms: 'Terms', act: 'Act', done: 'Done' },
     stepOf: (i: number, n: number) => `Step ${i} of ${n}`,
@@ -333,6 +359,7 @@ export const en = {
   },
 
   ret: {
+    finish: 'Close the rental',
     title: 'Return',
     returnedOn: 'Return date',
     odometer: 'Odometer, km',
@@ -349,6 +376,8 @@ export const en = {
   },
 
   customer: {
+    created: 'Customer card created',
+    create: 'Create card',
     whatsapp: 'WhatsApp',
     title: 'Customer',
     newTitle: 'New customer',
@@ -369,6 +398,8 @@ export const en = {
   },
 
   photos: {
+    saved: 'Photos saved',
+    save: 'Save photos',
     count: (n: number) => `${n} ${n === 1 ? 'photo' : 'photos'}`,
     add: 'Photo',
     remove: 'Remove',
@@ -379,6 +410,7 @@ export const en = {
   },
 
   documents: {
+    added: 'Document added',
     count: (n: number) => `${n} ${n === 1 ? 'document' : 'documents'}`,
     title: 'Documents',
     kinds: { id_card: 'ID card', driver_licence: 'Driver licence', other: 'Other' },
@@ -473,6 +505,7 @@ export const en = {
   },
 
   pools: {
+    moved: (pool: string) => `Moved to the ${pool} park`,
     rent: 'Rental',
     sale: 'Sale',
     none: 'Not decided',
@@ -504,6 +537,11 @@ export const en = {
   },
 
   points: {
+    restored: (name: string) => `«${name}» back in the list`,
+    archived: (name: string) => `«${name}» removed from the list`,
+    created: (name: string) => `Point «${name}» added`,
+    create: 'Add point',
+    placeSaved: 'Place saved',
     count: (n: number) => `${n} ${n === 1 ? 'point' : 'points'}`,
     name: 'Name',
     note: 'Note',
@@ -521,6 +559,11 @@ export const en = {
   },
 
   users: {
+    created: (name: string) => `${name} can sign in`,
+    create: 'Add person',
+    switchedOn: (name: string) => `${name} switched on`,
+    switchedOff: (name: string) => `${name} switched off`,
+    roleChanged: (name: string, role: string) => `${name}: ${role}`,
     count: (n: number) => `${n} ${n === 1 ? 'person' : 'people'}`,
     name: 'Name',
     email: 'Email for signing in',
@@ -547,6 +590,7 @@ export const en = {
   },
 
   models: {
+    added: 'Model added',
     count: (n: number) => `${n} ${n === 1 ? 'model' : 'models'}`,
     brand: 'Brand',
     name: 'Model',
@@ -591,6 +635,7 @@ export const en = {
   },
 
   profile: {
+    changePassword: 'Change password',
     title: 'My login',
     currentPassword: 'Current password',
     newPassword: 'New password',
@@ -613,6 +658,8 @@ export const en = {
   },
 
   payments: {
+    voidedToast: 'Payment voided',
+    record: 'Record payment',
     count: (n: number) => `${n} payment${n === 1 ? '' : 's'}`,
     title: 'Payments',
     add: 'Record a payment',
@@ -651,6 +698,8 @@ export const en = {
   },
 
   statements: {
+    assigned: (number: string) => `Matched to ${number}`,
+    ignored: 'Marked: not a customer payment',
     linesCount: (n: number) => `${n} ${n === 1 ? 'line' : 'lines'}`,
     count: (n: number) => `${n} statement${n === 1 ? '' : 's'}`,
     previewTitle: 'What this file would add',
@@ -686,6 +735,13 @@ export const en = {
   },
 
   service: {
+    partAdded: 'Part added to the repair',
+    closed: 'Repair closed',
+    closeCta: 'Close repair',
+    cancelled: 'Repair cancelled',
+    cancelCta: 'Cancel repair',
+    jobOpened: 'Repair opened',
+    openJob: 'Open repair',
     jobsCount: (n: number) => `${n} ${n === 1 ? 'repair' : 'repairs'}`,
     count: (n: number) => `${n} open job${n === 1 ? '' : 's'}`,
     title: 'Service',
@@ -718,6 +774,12 @@ export const en = {
   },
 
   sales: {
+    cancelled: 'Sale cancelled',
+    cancelCta: 'Cancel sale',
+    boughtBack: 'Moped bought back',
+    buyBackCta: 'Buy back',
+    saleRecorded: 'Sale recorded',
+    recordSale: 'Record sale',
     instalmentsCount: (n: number) => `${n} ${n === 1 ? 'instalment' : 'instalments'}`,
     count: (n: number) => `${n} sale${n === 1 ? '' : 's'}`,
     title: 'Sales',
@@ -752,6 +814,13 @@ export const en = {
   },
 
   purchases: {
+    lineAdded: 'Line added',
+    received: 'Shipment received',
+    receiveCta: 'Receive',
+    paymentRecorded: 'Payment recorded',
+    recordPayment: 'Record payment',
+    orderCreated: 'Order created',
+    createOrder: 'Create order',
     linesCount: (n: number) => `${n} ${n === 1 ? 'line' : 'lines'}`,
     count: (n: number) => `${n} order${n === 1 ? '' : 's'}`,
     title: 'Purchases',
@@ -823,6 +892,8 @@ export const en = {
   },
 
   stock: {
+    countSaved: 'Count saved',
+    saveCount: 'Save count',
     movesCount: (n: number) => `${n} ${n === 1 ? 'movement' : 'movements'}`,
     partsCount: (n: number) => `${n} part${n === 1 ? '' : 's'}`,
     title: 'Warehouse',
@@ -846,6 +917,8 @@ export const en = {
     avgCost: 'Cost of one',
     salePrice: 'Charged for one',
     notes: 'Notes',
+    addPart: 'Add part',
+    partAdded: 'Part added',
     newPart: 'New part',
     count: 'Stock-take',
     countedQty: 'Counted',

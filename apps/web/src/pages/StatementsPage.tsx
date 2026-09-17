@@ -7,6 +7,10 @@ import { fmtDate, formatGel } from '../format.js';
 import { useT } from '../i18n/index.js';
 import { errorText, useLoad } from '../lib/use.js';
 import { LoadError } from '../components/LoadError.js';
+import { SubmitButton } from '../ds/form/Form.js';
+import '../ds/form/form.css';
+import { useOperation } from '../ds/form/operation.js';
+import { useToast } from '../ds/feedback/Toast.js';
 import { DataList } from '../ds/list/DataList.js';
 
 type Bank = 'bog' | 'tbc' | 'credo';
@@ -73,7 +77,8 @@ export function StatementsPage() {
   const fileRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const [done, setDone] = useState<string | null>(null);
+  const toast = useToast();
+  const importing = useOperation();
   // Step two of the wizard: what the chosen file would add, and the text it
   // would add it from, held until somebody says yes (U8).
   const [pending, setPending] = useState<{ fileName: string; text: string; preview: Preview } | null>(null);
@@ -91,8 +96,8 @@ export function StatementsPage() {
     if (!file) return;
     setBusy(true);
     setErr(null);
-    setDone(null);
     setPending(null);
+    importing.reset();
     try {
       // Read as text in the browser: the bank exports UTF-8 with a byte-order
       // mark and the parser on the other side wants characters, not bytes.
@@ -107,24 +112,17 @@ export function StatementsPage() {
     }
   };
 
-  /** Step three: the same text, now kept. */
+  /** Step three: the same text, now kept — once, however many times the button is pressed. */
   const confirm = async () => {
     if (!pending) return;
-    setBusy(true);
-    setErr(null);
-    try {
-      const res = await api.post<{ newLines: number; matched: number; unmatched: number }>('/api/statements', {
-        fileName: pending.fileName,
-        text: pending.text,
-      });
-      setDone(t.statements.result(String(res.newLines), String(res.matched), String(res.unmatched)));
-      setPending(null);
-      reloadAll();
-    } catch (e) {
-      setErr(errorText(e));
-    } finally {
-      setBusy(false);
-    }
+    const res = await importing.run((key) =>
+      api.post<{ newLines: number; matched: number; unmatched: number }>('/api/statements', { fileName: pending.fileName, text: pending.text }, { key }),
+    );
+    if (!res.ok) return;
+    toast({ text: t.statements.result(String(res.value.newLines), String(res.value.matched), String(res.value.unmatched)) });
+    setPending(null);
+    importing.reset();
+    reloadAll();
   };
 
   return (
@@ -135,7 +133,6 @@ export function StatementsPage() {
           {busy ? t.common.checking : `+ ${t.statements.upload}`}
         </label>
       </PageHead>
-      {done && <div className="hint">{done}</div>}
       {err && <div className="hint hint-bad">{err}</div>}
 
       {pending && (
@@ -174,13 +171,24 @@ export function StatementsPage() {
               ))}
             </ul>
           )}
+          {importing.failure && (
+            <div className="form-banner form-banner-bad" role="alert">
+              <div>
+                <b>{t.form.notSaved}</b> {importing.failure.text}
+              </div>
+            </div>
+          )}
           <div className="row-actions">
-            <button type="button" className="pill" onClick={() => setPending(null)} disabled={busy}>
+            <button type="button" className="pill" onClick={() => setPending(null)} disabled={importing.state === 'busy'}>
               {t.actions.cancel}
             </button>
-            <button type="button" className="pill pill-accent" onClick={() => void confirm()} disabled={busy || pending.preview.newLines === 0}>
-              {busy ? t.common.checking : t.statements.previewConfirm}
-            </button>
+            {pending.preview.newLines === 0 ? (
+              <button type="button" className="pill pill-accent" disabled>
+                {t.statements.previewConfirm}
+              </button>
+            ) : (
+              <SubmitButton type="button" state={importing.state} label={t.statements.previewConfirm} onClick={() => void confirm()} />
+            )}
           </div>
         </section>
       )}
@@ -194,7 +202,7 @@ export function StatementsPage() {
         ) : (
           <ul className="queue">
             {queue.data.lines.map((l) => (
-              <QueueItem key={l.id} line={l} onDone={reloadAll} onError={setErr} />
+              <QueueItem key={l.id} line={l} onDone={reloadAll} />
             ))}
           </ul>
         )}
@@ -256,19 +264,21 @@ export function StatementsPage() {
  * One unplaced line. Opening it asks the API what it might belong to, so
  * answering is a choice between named rentals rather than a search (PAY-03).
  */
-export function QueueItem({ line, onDone, onError }: { line: QueueLine; onDone: () => void; onError: (e: string) => void }) {
+export function QueueItem({ line, onDone }: { line: QueueLine; onDone: () => void }) {
   const t = useT();
+  const toast = useToast();
+  const op = useOperation();
   const [open, setOpen] = useState(false);
   const [ignoring, setIgnoring] = useState(false);
   const [reason, setReason] = useState('');
 
-  const act = async (fn: () => Promise<unknown>) => {
-    try {
-      await fn();
-      onDone();
-    } catch (e) {
-      onError(errorText(e));
-    }
+  // One line, one decision: a second tap while the first is on its way does
+  // nothing, and a refusal stays on this line (QA-1-03, QA-1-06).
+  const act = async (fn: (key: string) => Promise<unknown>, done: string, scope: string) => {
+    const res = await op.run(fn, scope);
+    if (!res.ok) return;
+    toast({ text: done });
+    onDone();
   };
 
   return (
@@ -286,7 +296,7 @@ export function QueueItem({ line, onDone, onError }: { line: QueueLine; onDone: 
           <button
             type="button"
             className="pill pill-sm pill-accent"
-            onClick={() => void act(() => api.post(`/api/statement-lines/${line.id}/assign`, { rentalId: line.hints[0].rentalId }))}
+            onClick={() => void act((key) => api.post(`/api/statement-lines/${line.id}/assign`, { rentalId: line.hints[0].rentalId }, { key }), t.statements.assigned(line.hints[0].number), `assign:${line.hints[0].rentalId}`)}
           >
             {line.hints[0].customer} · {line.hints[0].number}
           </button>
@@ -298,6 +308,7 @@ export function QueueItem({ line, onDone, onError }: { line: QueueLine; onDone: 
           )}
         </p>
       )}
+      {op.failure && <p className="field-err" role="alert">{op.failure.fieldText ?? op.failure.text}</p>}
       {open && (
         <div className="queue-body">
           <p className="hint muted">
@@ -309,7 +320,7 @@ export function QueueItem({ line, onDone, onError }: { line: QueueLine; onDone: 
               <ul className="pick-list">
                 {line.hints.map((h) => (
                   <li key={h.rentalId}>
-                    <button type="button" onClick={() => void act(() => api.post(`/api/statement-lines/${line.id}/assign`, { rentalId: h.rentalId }))}>
+                    <button type="button" onClick={() => void act((key) => api.post(`/api/statement-lines/${line.id}/assign`, { rentalId: h.rentalId }, { key }), t.statements.assigned(h.number), `assign:${h.rentalId}`)}>
                       <span>
                         <span className="mono">{h.number}</span> {h.customer}
                       </span>
@@ -329,14 +340,13 @@ export function QueueItem({ line, onDone, onError }: { line: QueueLine; onDone: 
                 ) : (
                   <span className="inline-form">
                     <input className="input input-inline" placeholder={t.statements.ignoreReason} value={reason} onChange={(e) => setReason(e.target.value)} autoFocus />
-                    <button
+                    <SubmitButton
+                      small
                       type="button"
-                      className="pill pill-sm pill-accent"
-                      disabled={!reason.trim()}
-                      onClick={() => void act(() => api.post(`/api/statement-lines/${line.id}/ignore`, { reason }))}
-                    >
-                      {t.actions.confirm}
-                    </button>
+                      state={op.state}
+                      label={t.actions.confirm}
+                      onClick={() => void act((key) => api.post(`/api/statement-lines/${line.id}/ignore`, { reason }, { key }), t.statements.ignored, 'ignore')}
+                    />
                   </span>
                 )}
               </div>

@@ -7,8 +7,8 @@ import { Field } from '../components/Wizard.js';
 import { fmtDate, formatGel } from '../format.js';
 import { useT } from '../i18n/index.js';
 import { DataList } from '../ds/list/DataList.js';
-import { Drawer } from '../components/Drawer.js';
-import { errorText, useLoad } from '../lib/use.js';
+import { FormSheet } from '../ds/form/Form.js';
+import { useLoad } from '../lib/use.js';
 import { useSession } from '../session.js';
 
 export type PurchaseStatus = 'ordered' | 'received' | 'cancelled';
@@ -58,7 +58,6 @@ export function PurchasesPage() {
   const t = useT();
   const { can } = useSession();
   const { data, failure, reload } = useLoad<{ purchases: Purchase[] }>('/api/purchases');
-  const [err, setErr] = useState<string | null>(null);
 
   if (failure) return <LoadError failure={failure} onRetry={reload} />;
   if (!data) return <Loading />;
@@ -66,9 +65,8 @@ export function PurchasesPage() {
   return (
     <>
       <PageHead wrap title={t.purchases.title} sub={t.purchases.count(data.purchases.length)}>
-        {can('settings.manage') && <NewPurchase onDone={reload} onError={setErr} />}
+        {can('settings.manage') && <NewPurchase onDone={reload} />}
       </PageHead>
-      {err && <div className="hint hint-bad">{err}</div>}
       <DataList
         rows={data.purchases}
         rowKey={(p) => p.id}
@@ -112,35 +110,13 @@ export function PurchasesPage() {
   );
 }
 
-function NewPurchase({ onDone, onError }: { onDone: () => void; onError: (e: string) => void }) {
+const blankPurchase = () => ({ supplierId: '', invoiceNo: '', invoiceDate: '', currency: 'CNY', orderedOn: todayISO(), extras: '', extrasNote: '' });
+
+function NewPurchase({ onDone }: { onDone: () => void }) {
   const t = useT();
   const [open, setOpen] = useState(false);
   const suppliers = useLoad<{ suppliers: { id: string; name: string }[] }>(open ? '/api/suppliers' : null);
-  const [f, setF] = useState({ supplierId: '', invoiceNo: '', invoiceDate: '', currency: 'CNY', orderedOn: todayISO(), extras: '', extrasNote: '' });
-  const [busy, setBusy] = useState(false);
-
-
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setBusy(true);
-    try {
-      await api.post('/api/purchases', {
-        supplierId: f.supplierId,
-        invoiceNo: f.invoiceNo || null,
-        invoiceDate: f.invoiceDate || null,
-        currency: f.currency,
-        orderedOn: f.orderedOn,
-        extrasTetri: f.extras ? parseGel(f.extras) : 0,
-        extrasNote: f.extrasNote || null,
-      });
-      setOpen(false);
-      onDone();
-    } catch (e) {
-      onError(errorText(e));
-    } finally {
-      setBusy(false);
-    }
-  };
+  const [f, setF] = useState(blankPurchase);
 
   return (
     <>
@@ -148,10 +124,38 @@ function NewPurchase({ onDone, onError }: { onDone: () => void; onError: (e: str
         + {t.purchases.newOrder}
       </button>
       {open && (
-        <Drawer title={t.purchases.newOrder} onClose={() => setOpen(false)}>
-          <form className="form" onSubmit={submit}>
+        <FormSheet
+          title={t.purchases.newOrder}
+          onClose={() => setOpen(false)}
+          value={f}
+          initial={blankPurchase()}
+          draft="purchase-new"
+          onRestore={setF}
+          summary={(v) => [v.invoiceNo, v.currency].filter(Boolean).join(' · ')}
+          label={t.purchases.createOrder}
+          submit={async (key) => {
+            const purchase = await api.post<{ id: string }>(
+              '/api/purchases',
+              {
+                supplierId: f.supplierId,
+                invoiceNo: f.invoiceNo || null,
+                invoiceDate: f.invoiceDate || null,
+                currency: f.currency,
+                orderedOn: f.orderedOn,
+                extrasTetri: f.extras ? parseGel(f.extras) : 0,
+                extrasNote: f.extrasNote || null,
+              },
+              { key },
+            );
+            return { created: purchase.id, toast: { text: t.purchases.orderCreated, open: `/purchases/${purchase.id}` } };
+          }}
+          onDone={() => {
+            setF(blankPurchase());
+            onDone();
+          }}
+        >
       <div className="two-col">
-        <Field label={t.purchases.supplier}>
+        <Field label={t.purchases.supplier} name="supplierId">
           <select className="input" value={f.supplierId} onChange={(e) => setF({ ...f, supplierId: e.target.value })} required>
             <option value="">{t.common.dash}</option>
             {(suppliers.data?.suppliers ?? []).map((s) => (
@@ -161,35 +165,26 @@ function NewPurchase({ onDone, onError }: { onDone: () => void; onError: (e: str
             ))}
           </select>
         </Field>
-        <Field label={t.purchases.currency}>
+        <Field label={t.purchases.currency} name="currency">
           <input className="input input-amount mono" value={f.currency} onChange={(e) => setF({ ...f, currency: e.target.value.toUpperCase() })} maxLength={3} />
         </Field>
-        <Field label={t.purchases.invoiceNo}>
+        <Field label={t.purchases.invoiceNo} name="invoiceNo">
           <input className="input" value={f.invoiceNo} onChange={(e) => setF({ ...f, invoiceNo: e.target.value })} />
         </Field>
-        <Field label={t.purchases.invoiceDate}>
+        <Field label={t.purchases.invoiceDate} name="invoiceDate">
           <input className="input mono" type="date" value={f.invoiceDate} onChange={(e) => setF({ ...f, invoiceDate: e.target.value })} />
         </Field>
-        <Field label={t.purchases.orderedOn}>
+        <Field label={t.purchases.orderedOn} name="orderedOn">
           <input className="input mono" type="date" value={f.orderedOn} onChange={(e) => setF({ ...f, orderedOn: e.target.value })} />
         </Field>
-        <Field label={t.purchases.extras} hint={t.purchases.extrasHint}>
+        <Field label={t.purchases.extras} hint={t.purchases.extrasHint} name="extrasTetri">
           <input className="input input-amount mono" value={f.extras} onChange={(e) => setF({ ...f, extras: e.target.value })} inputMode="decimal" />
         </Field>
       </div>
-      <Field label={t.purchases.extrasNote}>
+      <Field label={t.purchases.extrasNote} name="extrasNote">
         <input className="input" value={f.extrasNote} onChange={(e) => setF({ ...f, extrasNote: e.target.value })} />
       </Field>
-      <div className="row-actions">
-        <button type="button" className="pill" onClick={() => setOpen(false)}>
-          {t.actions.cancel}
-        </button>
-        <button className="pill pill-accent" disabled={busy || !f.supplierId}>
-          {busy ? t.common.checking : t.actions.confirm}
-        </button>
-      </div>
-          </form>
-        </Drawer>
+        </FormSheet>
       )}
     </>
   );

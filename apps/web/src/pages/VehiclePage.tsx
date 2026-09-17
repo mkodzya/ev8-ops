@@ -3,12 +3,14 @@ import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { LoadError } from '../components/LoadError.js';
-import { Drawer } from '../components/Drawer.js';
+import { FormSheet } from '../ds/form/Form.js';
+import { useOperation } from '../ds/form/operation.js';
+import { useToast } from '../ds/feedback/Toast.js';
 import { BlockHead, ColorText, Empty, Loading, PageHead, PlaceText, RentalBadge, StateBadge, Vin } from '../components/ui.js';
 import { Field, Row } from '../components/Wizard.js';
 import { fmtDate } from '../format.js';
 import { useT } from '../i18n/index.js';
-import { errorText, useLoad } from '../lib/use.js';
+import { useLoad } from '../lib/use.js';
 import { useSession } from '../session.js';
 import { VehicleEconomics } from './EconomicsPage.js';
 import { NewJob } from './ServicePage.js';
@@ -41,10 +43,7 @@ export function VehiclePage() {
   const { can } = useSession();
   const { data, failure, reload } = useLoad<Card>(id ? `/api/fleet/${id}` : null);
   const [open, setOpen] = useState(false);
-  const [toState, setToState] = useState<VehicleState>('service');
-  const [reason, setReason] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
+  const [move, setMove] = useState<{ toState: VehicleState; reason: string }>({ toState: 'service', reason: '' });
 
   if (failure) return <LoadError failure={failure} onRetry={reload} />;
   if (!data) return <Loading />;
@@ -67,31 +66,11 @@ export function VehiclePage() {
             ? {
                 label: t.vehicle.backToFleet,
                 onClick: () => {
-                  setToState('available');
+                  setMove({ ...move, toState: 'available' });
                   setOpen(true);
                 },
               }
             : null;
-
-  const closeMove = () => {
-    setOpen(false);
-    setErr(null);
-  };
-
-  const move = async () => {
-    setBusy(true);
-    setErr(null);
-    try {
-      await api.post(`/api/fleet/${v.id}/state`, { toState, reason });
-      setOpen(false);
-      setReason('');
-      reload();
-    } catch (e) {
-      setErr(errorText(e));
-    } finally {
-      setBusy(false);
-    }
-  };
 
   return (
     <>
@@ -102,7 +81,7 @@ export function VehiclePage() {
           </button>
         )}
         {can('service.manage') && v.state !== 'sold' && v.state !== 'out' && !data.serviceJobs.some((j) => j.status === 'open') && (
-          <NewJob vehicleId={v.id} onDone={reload} onError={setErr} />
+          <NewJob vehicleId={v.id} onDone={reload} />
         )}
         {primary &&
           (primary.to ? (
@@ -115,32 +94,36 @@ export function VehiclePage() {
             </button>
           ))}
       </PageHead>
-      {err && !open && <div className="hint hint-bad">{err}</div>}
 
       {open && (
-        <Drawer title={t.actions.changeState} onClose={closeMove}>
-          <Field label={t.vehicle.toState}>
+        <FormSheet
+          title={t.actions.changeState}
+          onClose={() => setOpen(false)}
+          value={move}
+          initial={{ toState: move.toState, reason: '' }}
+          label={t.vehicle.changeStateCta}
+          submit={async (key) => {
+            await api.post(`/api/fleet/${v.id}/state`, move, { key });
+            return { toast: { text: t.vehicle.stateChanged(t.states[move.toState]) } };
+          }}
+          onDone={() => {
+            setMove({ ...move, reason: '' });
+            reload();
+          }}
+        >
+          <Field label={t.vehicle.toState} name="toState">
             <div className="chips">
               {VEHICLE_STATES.filter((s) => s !== 'rented' && s !== v.state).map((s) => (
-                <button key={s} type="button" className={`pill pill-sm ${toState === s ? 'on' : ''}`} onClick={() => setToState(s)}>
+                <button key={s} type="button" className={`pill pill-sm ${move.toState === s ? 'on' : ''}`} onClick={() => setMove({ ...move, toState: s })}>
                   {t.states[s]}
                 </button>
               ))}
             </div>
           </Field>
-          <Field label={t.vehicle.reason} hint={t.vehicle.reasonHint}>
-            <input className="input" value={reason} onChange={(e) => setReason(e.target.value)} />
+          <Field label={t.vehicle.reason} hint={t.vehicle.reasonHint} name="reason">
+            <input className="input" value={move.reason} onChange={(e) => setMove({ ...move, reason: e.target.value })} />
           </Field>
-          {err && <div className="hint hint-bad">{err}</div>}
-          <div className="row-actions">
-            <button type="button" className="pill" onClick={closeMove}>
-              {t.actions.cancel}
-            </button>
-            <button type="button" className="pill pill-accent" disabled={!reason.trim() || busy} onClick={move}>
-              {t.actions.confirm}
-            </button>
-          </div>
-        </Drawer>
+        </FormSheet>
       )}
 
       {/* On a phone the one action lives at the bottom, over the tab bar,
@@ -164,8 +147,8 @@ export function VehiclePage() {
           <Row k={t.fleet.color} v={v.color ? <ColorText of={v.color} named /> : t.common.dash} />
           <Row k={t.fleet.year} v={<span className="mono">{v.year ?? t.common.dash}</span>} />
           <Row k={t.fleet.arrived} v={<span className="mono">{fmtDate(v.arrivedOn)}</span>} />
-          <Row k={t.fleet.pool} v={<PoolRow v={v} onDone={reload} onError={setErr} />} />
-          <Row k={t.points.place} v={<PlaceRow v={v} onDone={reload} onError={setErr} />} />
+          <Row k={t.fleet.pool} v={<PoolRow v={v} onDone={reload} />} />
+          <Row k={t.points.place} v={<PlaceRow v={v} onDone={reload} />} />
           <Row k={t.vehicle.odometer} v={<span className="mono">{v.odometerKm ?? t.common.dash}</span>} />
           {v.costTetri != null && <Row k={t.purchases.cost} v={<span className="mono">{formatGel(v.costTetri)}</span>} />}
           <Row
@@ -282,12 +265,13 @@ export function VehiclePage() {
  * a plain sentence for everyone else. A moped out on rent has no point to
  * choose: it is at its customer until it comes back.
  */
-function PlaceRow({ v, onDone, onError }: { v: Card['vehicle']; onDone: () => void; onError: (e: string) => void }) {
+function PlaceRow({ v, onDone }: { v: Card['vehicle']; onDone: () => void }) {
   const t = useT();
   const { can } = useSession();
+  const toast = useToast();
   const editable = can('fleet.location.set') && v.state !== 'rented' && v.state !== 'sold' && v.state !== 'out';
   const points = useLoad<{ locations: { id: string; name: string }[] }>(editable ? '/api/locations' : null);
-  const [busy, setBusy] = useState(false);
+  const op = useOperation();
 
   if (!editable || !points.data || points.data.locations.length === 0) {
     return (
@@ -298,25 +282,23 @@ function PlaceRow({ v, onDone, onError }: { v: Card['vehicle']; onDone: () => vo
     );
   }
   const set = async (locationId: string) => {
-    setBusy(true);
-    try {
-      await api.post(`/api/fleet/${v.id}/location`, { locationId: locationId || null });
-      onDone();
-    } catch (e) {
-      onError(errorText(e));
-    } finally {
-      setBusy(false);
-    }
+    const res = await op.run((key) => api.post(`/api/fleet/${v.id}/location`, { locationId: locationId || null }, { key }), locationId);
+    if (!res.ok) return;
+    toast({ text: t.points.placeSaved });
+    onDone();
   };
   return (
-    <select className="input input-inline" value={v.location?.id ?? ''} disabled={busy} onChange={(e) => void set(e.target.value)}>
-      <option value="">{t.points.unset}</option>
-      {points.data.locations.map((l) => (
-        <option key={l.id} value={l.id}>
-          {l.name}
-        </option>
-      ))}
-    </select>
+    <>
+      <select className="input input-inline" value={v.location?.id ?? ''} disabled={op.state === 'busy'} onChange={(e) => void set(e.target.value)}>
+        <option value="">{t.points.unset}</option>
+        {points.data.locations.map((l) => (
+          <option key={l.id} value={l.id}>
+            {l.name}
+          </option>
+        ))}
+      </select>
+      {op.failure && <div className="field-err">{op.failure.text}</div>}
+    </>
   );
 }
 
@@ -325,34 +307,38 @@ function PlaceRow({ v, onDone, onError }: { v: Card['vehicle']; onDone: () => vo
  * A moped that has left the fleet is in neither, and says so; deciding what a
  * sold moped is for would be a decision about somebody else's property.
  */
-function PoolRow({ v, onDone, onError }: { v: Card['vehicle']; onDone: () => void; onError: (e: string) => void }) {
+function PoolRow({ v, onDone }: { v: Card['vehicle']; onDone: () => void }) {
   const t = useT();
   const { can } = useSession();
-  const [busy, setBusy] = useState(false);
+  const toast = useToast();
+  const op = useOperation();
   const gone = v.state === 'sold' || v.state === 'out';
   if (gone) return <span className="muted">{t.pools.gone}</span>;
   if (!can('fleet.pool.set')) return <span>{v.pool ? t.pools[v.pool] : <span className="place-unset">{t.pools.none}</span>}</span>;
   const move = async (pool: VehiclePool) => {
-    setBusy(true);
-    try {
-      await api.post(`/api/fleet/${v.id}/pool`, { pool });
-      onDone();
-    } catch (e) {
-      onError(errorText(e));
-    } finally {
-      setBusy(false);
-    }
+    const res = await op.run((key) => api.post(`/api/fleet/${v.id}/pool`, { pool }, { key }), pool);
+    if (!res.ok) return;
+    // A move between parks is taken back with one tap for ten seconds (wave 1 §3.7).
+    toast({
+      text: t.pools.moved(t.pools[pool]),
+      undo: async () => {
+        await api.post(`/api/fleet/${v.id}/pool/undo`, {});
+        onDone();
+      },
+    });
+    onDone();
   };
   return (
     <>
       <div className="chips">
         {VEHICLE_POOLS.map((p) => (
-          <button key={p} type="button" className={`pill pill-sm ${v.pool === p ? 'on' : ''}`} disabled={busy} onClick={() => void move(p)}>
+          <button key={p} type="button" className={`pill pill-sm ${v.pool === p ? 'on' : ''}`} disabled={op.state === 'busy'} onClick={() => void move(p)}>
             {t.pools[p]}
           </button>
         ))}
         {!v.pool && <span className="place-unset">{t.pools.none}</span>}
       </div>
+      {op.failure && <div className="field-err">{op.failure.text}</div>}
       {v.state === 'rented' && <div className="hint">{t.pools.rentedNote}</div>}
     </>
   );

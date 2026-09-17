@@ -79,6 +79,12 @@ export function DataList<T>({
   const [sorting, setSorting] = useState(false);
   const [lit, setLit] = useState<string | null>((location.state as { created?: string } | null)?.created ?? null);
 
+  // A form on this page that just created a record says so in the address state.
+  const created = (location.state as { created?: string } | null)?.created;
+  useEffect(() => {
+    if (created) setLit(created);
+  }, [created]);
+
   useEffect(() => {
     if (!lit) return;
     const id = window.setTimeout(() => setLit(null), 2000);

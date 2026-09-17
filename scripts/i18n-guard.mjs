@@ -46,6 +46,8 @@ const NON_LATIN = /[Ͱ-῿℀-￿]/;
 const CODEY = /[;=(){}[\]|`$*&\\]|\/\/|=>/;
 const PROPERTY_ACCESS = /^[A-Za-z_$][\w$]*\s*\.\s*[A-Za-z_$][\w$]*$/;
 const LONE_TYPE_NAME = /^[A-Z][A-Za-z]+$/;
+// `}: FormProps<V>` — a destructured parameter's type, read up to its generic.
+const TYPE_ANNOTATION = /^:\s*[A-Z][A-Za-z]+$/;
 // `}, quiet: {` — the space between two object literals in a .tsx file. A word
 // ending in a colon is a key, and a key is code however English it looks.
 const OBJECT_KEY = /^[,;]?\s*[A-Za-z_$][\w$]*\s*:\s*$/;
@@ -60,7 +62,7 @@ function isProse(raw) {
   if (!text) return false;
   if (NON_LATIN.test(text)) return false;
   if (CODEY.test(text)) return false;
-  if (PROPERTY_ACCESS.test(text) || LONE_TYPE_NAME.test(text) || CSS_VAR.test(text) || OBJECT_KEY.test(text)) return false;
+  if (PROPERTY_ACCESS.test(text) || LONE_TYPE_NAME.test(text) || TYPE_ANNOTATION.test(text) || CSS_VAR.test(text) || OBJECT_KEY.test(text)) return false;
   if (OPENS_A_BLOCK.test(text)) return false;
   const words = (text.match(/[A-Za-z][A-Za-z'’-]*/g) ?? []).filter((w) => !ALLOW.has(w));
   if (words.length === 0) return false;

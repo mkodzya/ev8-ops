@@ -3,8 +3,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ApiError, api } from '../api.js';
 import { useT } from '../i18n/index.js';
-import { errorText } from '../lib/use.js';
-import { Drawer } from './Drawer.js';
+import { FormSheet } from '../ds/form/Form.js';
 import { Field } from './Wizard.js';
 
 export interface ModelFields {
@@ -44,54 +43,60 @@ export function ModelDrawer({
 }) {
   const t = useT();
   const known = [...new Set(brands)].sort((a, b) => a.localeCompare(b));
-  const [f, setF] = useState({
+  const initial = {
     brand: model?.brand ?? (known.length === 1 ? known[0] : ''),
     name: model?.name ?? '',
     weeklyRate: money(model?.weeklyRateTetri ?? null),
     salePrice: money(model?.salePriceTetri ?? null),
     archived: model?.archived ?? false,
-  });
+  };
+  const [f, setF] = useState(initial);
   const [newBrand, setNewBrand] = useState(known.length === 0);
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<{ text: string; twin?: { id: string; name: string } } | null>(null);
+  const [twin, setTwin] = useState<{ id: string; name: string } | null>(null);
 
-  const badMoney = (s: string) => s.trim() !== '' && parseGel(s) == null;
-  const ready = f.brand.trim() !== '' && f.name.trim() !== '' && !badMoney(f.weeklyRate) && !badMoney(f.salePrice);
-
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setBusy(true);
-    setErr(null);
-    const body = {
-      brand: f.brand.trim(),
-      name: f.name.trim(),
-      weeklyRateTetri: f.weeklyRate.trim() ? parseGel(f.weeklyRate) : null,
-      salePriceTetri: f.salePrice.trim() ? parseGel(f.salePrice) : null,
-    };
-    try {
-      if (model) {
-        await api.patch(`/api/models/${model.id}`, { ...body, archived: f.archived });
-        onSaved({ id: model.id, brand: body.brand, name: body.name });
-      } else {
-        const made = await api.post<{ id: string; brand: string; name: string }>('/api/models', body);
-        onSaved(made);
-      }
-    } catch (e) {
-      if (e instanceof ApiError && e.code === 'duplicate_model') {
-        const twin = e.extra.id ? { id: String(e.extra.id), name: String(e.extra.name ?? '') } : undefined;
-        setErr({ text: t.models.duplicate, twin });
-      } else {
-        setErr({ text: errorText(e) });
-      }
-    } finally {
-      setBusy(false);
-    }
+  // A price that does not read as money is refused here, under its field:
+  // sent as it is, it would arrive as "no price" and clear the one there.
+  const amount = (s: string, field: string) => {
+    if (!s.trim()) return null;
+    const v = parseGel(s);
+    if (v == null) throw new ApiError(400, 'bad_field', field, { field });
+    return v;
   };
 
   return (
-    <Drawer title={model ? t.models.editTitle : t.models.add} onClose={onClose}>
-      <form className="form" onSubmit={submit}>
-        <div className="field">
+    <FormSheet
+      title={model ? t.models.editTitle : t.models.add}
+      onClose={onClose}
+      value={f}
+      initial={initial}
+      draft={model ? `model-edit:${model.id}` : 'model-new'}
+      onRestore={setF}
+      summary={(v) => [v.brand, v.name].filter(Boolean).join(' ')}
+      label={model ? t.actions.save : t.models.create}
+      submit={async (key) => {
+        setTwin(null);
+        const body = {
+          brand: f.brand.trim(),
+          name: f.name.trim(),
+          weeklyRateTetri: amount(f.weeklyRate, 'weeklyRateTetri'),
+          salePriceTetri: amount(f.salePrice, 'salePriceTetri'),
+        };
+        try {
+          if (model) {
+            await api.patch(`/api/models/${model.id}`, { ...body, archived: f.archived }, { key });
+            onSaved({ id: model.id, brand: body.brand, name: body.name });
+            return { toast: { text: t.form.changesSaved } };
+          }
+          const made = await api.post<{ id: string; brand: string; name: string }>('/api/models', body, { key });
+          onSaved(made);
+          return { toast: { text: t.models.added } };
+        } catch (e) {
+          if (e instanceof ApiError && e.code === 'duplicate_model' && e.extra.id) setTwin({ id: String(e.extra.id), name: String(e.extra.name ?? '') });
+          throw e;
+        }
+      }}
+    >
+        <div className="field" data-field="brand">
           <span className="lbl">{t.models.brand}</span>
           <div className="chips-pick" role="radiogroup" aria-label={t.models.brand}>
             {known.map((b) => (
@@ -128,14 +133,14 @@ export function ModelDrawer({
             <input className="input" value={f.brand} onChange={(e) => setF({ ...f, brand: e.target.value })} maxLength={100} placeholder={t.models.brand} autoFocus={known.length > 0} />
           )}
         </div>
-        <Field label={t.models.name}>
+        <Field label={t.models.name} name="name">
           <input className="input" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} maxLength={100} required autoFocus={!newBrand} />
         </Field>
         <div className="two-col">
-          <Field label={t.models.weeklyRate}>
+          <Field label={t.models.weeklyRate} name="weeklyRateTetri">
             <input className="input input-amount mono" value={f.weeklyRate} onChange={(e) => setF({ ...f, weeklyRate: e.target.value })} inputMode="decimal" />
           </Field>
-          <Field label={t.models.salePrice}>
+          <Field label={t.models.salePrice} name="salePriceTetri">
             <input className="input input-amount mono" value={f.salePrice} onChange={(e) => setF({ ...f, salePrice: e.target.value })} inputMode="decimal" />
           </Field>
         </div>
@@ -145,27 +150,12 @@ export function ModelDrawer({
             <span>{t.models.archived}</span>
           </label>
         )}
-        {err && (
-          <div className="hint hint-bad">
-            {err.text}
-            {err.twin && (
-              <>
-                {' '}
-                <Link to={`/fleet/models/${err.twin.id}`}>{err.twin.name}</Link>
-              </>
-            )}
-          </div>
+        {twin && (
+          <p className="hint">
+            <Link to={`/fleet/models/${twin.id}`}>{twin.name}</Link>
+          </p>
         )}
-        <div className="row-actions">
-          <button type="button" className="pill" onClick={onClose}>
-            {t.actions.cancel}
-          </button>
-          <button className="pill pill-accent" disabled={busy || !ready}>
-            {busy ? t.common.checking : model ? t.actions.save : t.models.create}
-          </button>
-        </div>
         <p className="drawer-tip">{model ? t.models.editTip : t.models.addTip}</p>
-      </form>
-    </Drawer>
+    </FormSheet>
   );
 }
