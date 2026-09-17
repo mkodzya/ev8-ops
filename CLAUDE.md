@@ -4,6 +4,9 @@
 Own operational system of E-Motion Motors LLC (EV8, Tbilisi). Owner: Mika (remote,
 makes product decisions). Director on site: Kardu Kukhianidze (main daily user, phone).
 Spec: `docs/spec/ev8-ops-tz-v1.1.html`. State and next step: `docs/handoff.md`.
+Business rules, glossary, decisions and open questions live in the project book
+(`~/Developer/ev8/handbook`, GitHub `mkodzya/ev8-handbook`, ADR-0002 there):
+@~/Developer/ev8/handbook/CLAUDE.md
 
 ## Non-negotiable rules (from the owner)
 1. **Never invent data.** Only data confirmed in Odoo, Google Drive, files Mika
