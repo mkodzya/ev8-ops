@@ -18,6 +18,7 @@ export const tokens = {
   muted: '#5d5d5d', // secondary text, PDF translations (site --grey-04/07). Neutral, not green-tinted: the site's greys carry no hue
   line: '#dbe4de', // borders and rules (site light grey-green)
   lineSoft: '#ebebeb', // the quieter rule inside a card (site --grey-02)
+  lineControl: '#7a7a7a', // the border of an input, a select, an outline pill: 4.29:1 on white, clears the 3:1 a control needs outdoors (redesign 17.09.2026; site --grey-06). --line stays for rules and dividers
 
   /** brand — The greens. On ev8.ge these three are one button's three states — #819481 at rest, #628767 on hover, #557553 when pressed. Here #557553 sits at rest instead (Mika, 15.09.2026): white on #819481 is 2.55:1 and Kardu reads the screen outdoors. The consequence is that hover lightens here where the site darkens; the theme has no darker green and inventing one is not allowed. */
   brand: '#819481', // logo and large marks; the site button at rest. Never text: 3.2:1 on white
@@ -62,6 +63,10 @@ export const tokens = {
   scrim: 'rgba(11, 11, 11, 0.7)', // the dark disc over a photo thumbnail
   scrimSoft: 'rgba(11, 11, 11, 0.32)', // the veil behind a side panel: the same ink as --scrim, lighter, because the list behind it is still the work
   onScrim: '#ffffff', // the glyph on that disc
+  focusRing: '0 0 0 3px #e0ffa2, 0 0 0 5px #557553', // keyboard focus: lime inside, text green outside — visible on white and on the rail
+  toast: '#0b0b0b', // the success and undo message — the rail's ink, the one dark surface on a phone
+  toastInk: '#ffffff', // text on the toast, 19.7:1
+  toastAction: '#e0ffa2', // Undo and Open on the toast — lime on ink, 17.8:1
 
   /** type — Neither Be Vietnam Pro nor Inter has Georgian glyphs, so Noto Sans Georgian is in every text stack. A face without the glyphs falls back to the system font silently — that is why it is checked on real names in acceptance. */
   display: "'Be Vietnam Pro', 'Noto Sans Georgian', system-ui, -apple-system, 'Segoe UI', sans-serif", // headings, buttons, navigation
@@ -84,6 +89,8 @@ export const tokens = {
   textMono: '400 14px/1.45 var(--mono)', // VIN and anything read character by character
   textMoney: '500 14px/1.45 var(--mono)', // sums; the class adds tabular figures and right alignment
   textMonoSm: '400 12px/1.4 var(--mono)', // code quoted inside the interface — token names on /design
+  textMoneyLg: '500 22px/1.2 var(--mono)', // the sum in a Today row and in the money sheet — what Kardu reads first outdoors; tabular figures via the class
+  textTab: '500 12px/1.15 var(--display)', // the bottom bar label; wraps to two lines in Georgian rather than truncating
 
   /** motion — Letter-spacing and the one transition, copied from the theme. The CSS `font` shorthand cannot carry tracking, so it lives beside the text styles rather than inside them. */
   trackingTight: '-0.02em', // headings: the site sets -1px at 38px, -0.56px at 28px, -0.4px at 20px — all -0.02em
@@ -92,6 +99,8 @@ export const tokens = {
   enter: '0.42s cubic-bezier(0.32, 0.72, 0, 1)', // something arriving over the page — a panel, a sheet, a menu. Slower than a hover and braked hard at the end, so it reads as sliding into place rather than being switched on. An addition: nothing on the site arrives
   undoWindow: '10s', // how long a park move stays undoable, drawn as the line draining under the undo button; the same ten seconds the screen counts and the API enforces
   hairline: '0.82px', // the outline button's border, exactly as the theme writes it
+  skeletonDelay: '300ms', // nothing is drawn for a load shorter than this — no flash of skeleton
+  toastLife: '5s', // how long a success message stays
 
   /** shape — One radius language: pills for buttons and chips, 16 px cards, nothing else. */
   radiusCard: '16px', // cards and panels
@@ -102,6 +111,21 @@ export const tokens = {
   cardPad: '14px', // inside a card, a tile, a number with its label. Was 18-20px, which is a poster's margin, not a working screen's
   control: '44px', // touch targets no smaller than 44 px (spec §9.2)
   railW: '220px', // the rail on a laptop
+  controlLarge: '52px', // the one loud action: the + in the bar, the sticky primary in a wizard or card
+  touchGap: '8px', // the least space between two touch targets
+  headerH: '56px', // the phone header: title, search, avatar
+  tabbarH: '64px', // the phone bottom bar, without the safe-area inset
+  actionBarH: '76px', // the sticky action strip above the tab bar in a card or wizard: 52 + 12 + 12
+  space1: '4px',
+  space2: '8px',
+  space3: '12px',
+  space4: '16px', // the phone page gutter
+  space5: '24px', // between blocks
+  space6: '32px', // the laptop page gutter
+  iconSize: '24px',
+  iconStroke: '1.75px',
+  bpTablet: '720px', // below this a phone: cards, bottom bar. CSS media queries cannot read a custom property, so the stylesheet writes max-width: 719px beside a comment naming this token; code reads the value
+  bpLaptop: '900px', // from here the rail instead of the bottom bar, tables instead of cards, dense controls; CSS writes min-width: 900px / max-width: 899px
 } as const;
 
 export type TokenName = keyof typeof tokens;
@@ -177,6 +201,12 @@ export const tokenGroups: TokenGroup[] = [
         "cssVar": "--line-soft",
         "value": "#ebebeb",
         "note": "the quieter rule inside a card (site --grey-02)"
+      },
+      {
+        "name": "lineControl",
+        "cssVar": "--line-control",
+        "value": "#7a7a7a",
+        "note": "the border of an input, a select, an outline pill: 4.29:1 on white, clears the 3:1 a control needs outdoors (redesign 17.09.2026; site --grey-06). --line stays for rules and dividers"
       }
     ]
   },
@@ -411,6 +441,30 @@ export const tokenGroups: TokenGroup[] = [
         "cssVar": "--on-scrim",
         "value": "#ffffff",
         "note": "the glyph on that disc"
+      },
+      {
+        "name": "focusRing",
+        "cssVar": "--focus-ring",
+        "value": "0 0 0 3px #e0ffa2, 0 0 0 5px #557553",
+        "note": "keyboard focus: lime inside, text green outside — visible on white and on the rail"
+      },
+      {
+        "name": "toast",
+        "cssVar": "--toast",
+        "value": "#0b0b0b",
+        "note": "the success and undo message — the rail's ink, the one dark surface on a phone"
+      },
+      {
+        "name": "toastInk",
+        "cssVar": "--toast-ink",
+        "value": "#ffffff",
+        "note": "text on the toast, 19.7:1"
+      },
+      {
+        "name": "toastAction",
+        "cssVar": "--toast-action",
+        "value": "#e0ffa2",
+        "note": "Undo and Open on the toast — lime on ink, 17.8:1"
       }
     ]
   },
@@ -531,6 +585,18 @@ export const tokenGroups: TokenGroup[] = [
         "cssVar": "--text-mono-sm",
         "value": "400 12px/1.4 var(--mono)",
         "note": "code quoted inside the interface — token names on /design"
+      },
+      {
+        "name": "textMoneyLg",
+        "cssVar": "--text-money-lg",
+        "value": "500 22px/1.2 var(--mono)",
+        "note": "the sum in a Today row and in the money sheet — what Kardu reads first outdoors; tabular figures via the class"
+      },
+      {
+        "name": "textTab",
+        "cssVar": "--text-tab",
+        "value": "500 12px/1.15 var(--display)",
+        "note": "the bottom bar label; wraps to two lines in Georgian rather than truncating"
       }
     ]
   },
@@ -573,6 +639,18 @@ export const tokenGroups: TokenGroup[] = [
         "cssVar": "--hairline",
         "value": "0.82px",
         "note": "the outline button's border, exactly as the theme writes it"
+      },
+      {
+        "name": "skeletonDelay",
+        "cssVar": "--skeleton-delay",
+        "value": "300ms",
+        "note": "nothing is drawn for a load shorter than this — no flash of skeleton"
+      },
+      {
+        "name": "toastLife",
+        "cssVar": "--toast-life",
+        "value": "5s",
+        "note": "how long a success message stays"
       }
     ]
   },
@@ -627,6 +705,96 @@ export const tokenGroups: TokenGroup[] = [
         "cssVar": "--rail-w",
         "value": "220px",
         "note": "the rail on a laptop"
+      },
+      {
+        "name": "controlLarge",
+        "cssVar": "--control-large",
+        "value": "52px",
+        "note": "the one loud action: the + in the bar, the sticky primary in a wizard or card"
+      },
+      {
+        "name": "touchGap",
+        "cssVar": "--touch-gap",
+        "value": "8px",
+        "note": "the least space between two touch targets"
+      },
+      {
+        "name": "headerH",
+        "cssVar": "--header-h",
+        "value": "56px",
+        "note": "the phone header: title, search, avatar"
+      },
+      {
+        "name": "tabbarH",
+        "cssVar": "--tabbar-h",
+        "value": "64px",
+        "note": "the phone bottom bar, without the safe-area inset"
+      },
+      {
+        "name": "actionBarH",
+        "cssVar": "--action-bar-h",
+        "value": "76px",
+        "note": "the sticky action strip above the tab bar in a card or wizard: 52 + 12 + 12"
+      },
+      {
+        "name": "space1",
+        "cssVar": "--space1",
+        "value": "4px",
+        "note": ""
+      },
+      {
+        "name": "space2",
+        "cssVar": "--space2",
+        "value": "8px",
+        "note": ""
+      },
+      {
+        "name": "space3",
+        "cssVar": "--space3",
+        "value": "12px",
+        "note": ""
+      },
+      {
+        "name": "space4",
+        "cssVar": "--space4",
+        "value": "16px",
+        "note": "the phone page gutter"
+      },
+      {
+        "name": "space5",
+        "cssVar": "--space5",
+        "value": "24px",
+        "note": "between blocks"
+      },
+      {
+        "name": "space6",
+        "cssVar": "--space6",
+        "value": "32px",
+        "note": "the laptop page gutter"
+      },
+      {
+        "name": "iconSize",
+        "cssVar": "--icon-size",
+        "value": "24px",
+        "note": ""
+      },
+      {
+        "name": "iconStroke",
+        "cssVar": "--icon-stroke",
+        "value": "1.75px",
+        "note": ""
+      },
+      {
+        "name": "bpTablet",
+        "cssVar": "--bp-tablet",
+        "value": "720px",
+        "note": "below this a phone: cards, bottom bar. CSS media queries cannot read a custom property, so the stylesheet writes max-width: 719px beside a comment naming this token; code reads the value"
+      },
+      {
+        "name": "bpLaptop",
+        "cssVar": "--bp-laptop",
+        "value": "900px",
+        "note": "from here the rail instead of the bottom bar, tables instead of cards, dense controls; CSS writes min-width: 900px / max-width: 899px"
       }
     ]
   }

@@ -137,7 +137,7 @@ export function DesignPage() {
         </div>
         <div className="d-row">
           {BUTTON_STATES.slice(0, 3).map((s) => (
-            <button key={`c-${s.key}`} type="button" className={`pill pill-cta ${s.cls}`}>
+            <button key={`c-${s.key}`} type="button" className={`pill pill-accent pill-lg ${s.cls}`}>
               {t.design.stateNames[s.key]}
             </button>
           ))}
