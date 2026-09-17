@@ -76,22 +76,30 @@ export function Drawer({
         <div className="drawer-body">{children}</div>
         {asking && (
           <div className="drawer-ask" role="alertdialog" aria-label={t.form.closeAsk}>
-            <div className="drawer-ask-box">
-              <h3>{t.form.closeAsk}</h3>
-              <p className="muted">{t.form.closeNote}</p>
-              <div className="row-actions">
-                <button type="button" className="pill" onClick={() => setAsking(false)} autoFocus>
-                  {t.form.back}
-                </button>
-                <button type="button" className="pill pill-accent" onClick={onClose}>
-                  {t.form.close}
-                </button>
-              </div>
-            </div>
+            <CloseQuestion onBack={() => setAsking(false)} onClose={onClose} />
           </div>
         )}
       </aside>
     </div>,
     document.body,
+  );
+}
+
+/** «Закрыть форму?» — asked over a panel with something typed in it. */
+export function CloseQuestion({ onBack, onClose }: { onBack: () => void; onClose: () => void }) {
+  const t = useT();
+  return (
+    <div className="drawer-ask-box">
+      <h3>{t.form.closeAsk}</h3>
+      <p className="muted">{t.form.closeNote}</p>
+      <div className="row-actions">
+        <button type="button" className="pill" onClick={onBack} autoFocus>
+          {t.form.back}
+        </button>
+        <button type="button" className="pill pill-accent" onClick={onClose}>
+          {t.form.close}
+        </button>
+      </div>
+    </div>
   );
 }
