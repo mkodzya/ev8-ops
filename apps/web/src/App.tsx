@@ -6,6 +6,7 @@ import { NoAccess } from './ds/state/NoAccess.js';
 import { PointsPage } from './pages/PointsPage.js';
 import { ReturnPickPage } from './pages/ReturnPickPage.js';
 import { DesignPage } from './pages/DesignPage.js';
+import { DesignCatalog } from './pages/DesignCatalog.js';
 import { EconomicsPage } from './pages/EconomicsPage.js';
 import { PartPage } from './pages/PartPage.js';
 import { StockPage } from './pages/StockPage.js';
@@ -71,6 +72,8 @@ export function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      {/* Outside the frame: /design shows it inside two iframes of its own width. */}
+      <Route path="/design/catalog" element={<Require perm="users.manage"><DesignCatalog /></Require>} />
       <Route
         path="/"
         element={

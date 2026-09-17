@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { api, ApiError } from './api.js';
 import { useHeader } from './ds/shell/header.js';
@@ -27,14 +27,7 @@ export function LoginPage() {
           <LanguageToggle />
         </div>
         {signedOutOffline ? (
-          // Said honestly, once: the phone forgot the sign-in, the server has not heard yet (QA-1-01).
-          <div className="login-offline" role="status">
-            <p className="t-h3">{t.session.signedOutHere}</p>
-            <p className="login-note">{t.session.serverLater}</p>
-            <button type="button" className="pill pill-accent pill-wide" onClick={dismissOffline}>
-              {t.session.understood}
-            </button>
-          </div>
+          <SignedOutOffline onDismiss={dismissOffline} />
         ) : (
           <>
             <p className="login-note">{t.login.note}</p>
@@ -42,6 +35,20 @@ export function LoginPage() {
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+/** Said honestly, once: the phone forgot the sign-in, the server has not heard yet (QA-1-01). */
+export function SignedOutOffline({ onDismiss }: { onDismiss: () => void }) {
+  const t = useT();
+  return (
+    <div className="login-offline" role="status">
+      <p className="t-h3">{t.session.signedOutHere}</p>
+      <p className="login-note">{t.session.serverLater}</p>
+      <button type="button" className="pill pill-accent pill-wide" onClick={onDismiss}>
+        {t.session.understood}
+      </button>
     </div>
   );
 }
@@ -102,19 +109,26 @@ export function SessionEnded() {
   if (!ended) return null;
   return (
     <div className="session-ended" role="dialog" aria-modal="true" aria-label={t.session.ended}>
-      <div className="login-card">
-        <p className="t-h3">{t.session.ended}</p>
-        <p className="login-note">
-          {header?.title ? (
-            <>
-              {t.session.signInAgainTo} «{header.title}», {t.session.typedKept}
-            </>
-          ) : (
-            t.session.signInAgain
-          )}
-        </p>
-        <LoginForm email={ended.email} onSignedIn={() => {}} />
-      </div>
+      <SessionEndedCard title={header?.title} email={ended.email} />
+    </div>
+  );
+}
+
+export function SessionEndedCard({ title, email }: { title?: ReactNode; email: string }) {
+  const t = useT();
+  return (
+    <div className="login-card">
+      <p className="t-h3">{t.session.ended}</p>
+      <p className="login-note">
+        {title ? (
+          <>
+            {t.session.signInAgainTo} «{title}», {t.session.typedKept}
+          </>
+        ) : (
+          t.session.signInAgain
+        )}
+      </p>
+      <LoginForm email={email} onSignedIn={() => {}} />
     </div>
   );
 }

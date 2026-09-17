@@ -44,3 +44,7 @@
 @media (min-width: 900px) {
   .toast { left: auto; right: 24px; bottom: 24px; width: 380px; }
 }
+
+/* In the design catalogue: in the flow, not over the page. */
+.toast.toast-still { position: static; width: auto; animation: none; }
+.toast-still .toast-drain { animation-iteration-count: infinite; }
