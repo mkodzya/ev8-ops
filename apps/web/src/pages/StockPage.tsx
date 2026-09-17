@@ -1,11 +1,12 @@
-import { parseGel } from '@ev8/shared';
+import { parseGel, spellingMatches } from '@ev8/shared';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api.js';
-import { BlockHead, Empty, Loading, PageHead } from '../components/ui.js';
+import { BlockHead, Loading, PageHead } from '../components/ui.js';
+import { DataList } from '../ds/list/DataList.js';
 import { Field } from '../components/Wizard.js';
 import { formatGel } from '../format.js';
-import { useT } from '../i18n/index.js';
+import { useLocale, useT } from '../i18n/index.js';
 import { Drawer } from '../components/Drawer.js';
 import { errorText, useLoad } from '../lib/use.js';
 import { useSession } from '../session.js';
@@ -22,7 +23,7 @@ export interface PartRow {
   notes: string | null;
   archived: boolean;
   onHand: number;
-  valueTetri: number;
+  valueTetri: number | null;
   avgCostTetri: number | null;
   shortBy: number;
 }
@@ -47,6 +48,8 @@ export function StockPage() {
   );
   const parts = useLoad<{ parts: PartRow[]; totals: { parts: number; valueTetri: number; short: number; negative: number } }>('/api/parts');
   const [err, setErr] = useState<string | null>(null);
+  const { locale } = useLocale();
+  const partName = (p: PartRow) => (locale === 'ka' && p.nameKa) || p.name;
 
   if (!mopeds.data && mopeds.failure) return <LoadError failure={mopeds.failure} onRetry={mopeds.reload} />;
   if (!parts.data && parts.failure) return <LoadError failure={parts.failure} onRetry={parts.reload} />;
@@ -106,50 +109,69 @@ export function StockPage() {
       </section>
 
       <section className="card">
-        <BlockHead title={t.stock.parts} sub={t.stock.partsCount(parts.data.parts.length)} />
+        <BlockHead
+          title={t.stock.parts}
+          sub={
+            <>
+              {t.stock.partsCount(parts.data.parts.length)}
+              {can('cost.view') && parts.data.totals.valueTetri != null && <> · {t.stock.value} <span className="mono">{formatGel(parts.data.totals.valueTetri)}</span></>}
+            </>
+          }
+        />
         {parts.data.totals.negative > 0 && <div className="hint hint-bad">{t.stock.negativeHint}</div>}
-        {parts.data.parts.length === 0 ? (
-          <Empty text={t.stock.none} />
-        ) : (
-          <div className="table-wrap table-flat">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>{t.stock.name}</th>
-                  <th>{t.stock.sku}</th>
-                  <th className="num">{t.stock.onHand}</th>
-                  <th className="num">{t.stock.minQty}</th>
-                  <th className="num">{t.stock.avgCost}</th>
-                  <th className="num">{t.stock.value}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {parts.data.parts.map((p) => (
-                  <tr key={p.id}>
-                    <td>
-                      <Link to={`/service/stock/parts/${p.id}`}>{p.name}</Link>
-                    </td>
-                    <td className="muted mono">{p.sku ?? t.common.dash}</td>
-                    <td className={`num mono ${p.onHand < 0 ? 'crit-text' : p.shortBy > 0 ? 'warn-text' : ''}`}>
-                      {p.onHand} <span className="muted">{t.stock.units[p.unit]}</span>
-                    </td>
-                    <td className="num mono muted">{p.minQty > 0 ? p.minQty : t.common.dash}</td>
-                    <td className="num mono">{p.avgCostTetri == null ? t.common.dash : formatGel(p.avgCostTetri)}</td>
-                    <td className="num mono">{formatGel(p.valueTetri)}</td>
-                  </tr>
-                ))}
-                <tr className="row-total">
-                  <td>{t.stock.value}</td>
-                  <td />
-                  <td />
-                  <td />
-                  <td />
-                  <td className="num mono">{formatGel(parts.data.totals.valueTetri)}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        )}
+        <DataList
+          rows={parts.data.parts}
+          rowKey={(p) => p.id}
+          href={(p) => `/service/stock/parts/${p.id}`}
+          fallback={(a, b) => partName(a).localeCompare(partName(b))}
+          search={{
+            placeholder: t.lists.partsSearch,
+            match: (p, q) => spellingMatches(q, [p.name, p.nameKa, p.sku]),
+          }}
+          chips={[
+            { key: 'short', label: t.lists.chips.belowMin, test: (p) => p.shortBy > 0 },
+            { key: 'negative', label: t.lists.chips.negative, test: (p) => p.onHand < 0 },
+          ]}
+          empty={{ text: t.stock.none }}
+          card={(p) => ({
+            title: partName(p),
+            sub: (
+              <>
+                {p.sku && <span className="mono">{p.sku}</span>}
+                {p.sku && p.minQty > 0 && ' · '}
+                {p.minQty > 0 && t.lists.keepAtLeast(p.minQty)}
+              </>
+            ),
+            right: (
+              <span className={`t-money ${p.onHand < 0 ? 'crit-text' : p.shortBy > 0 ? 'warn-text' : ''}`}>
+                {p.onHand} <span className="muted">{t.stock.units[p.unit]}</span>
+              </span>
+            ),
+            rightSub: can('cost.view') && p.valueTetri != null ? formatGel(p.valueTetri) : undefined,
+          })}
+          columns={[
+            { key: 'name', label: t.stock.name, cell: (p) => partName(p), sort: { value: (p) => partName(p) } },
+            { key: 'sku', label: t.stock.sku, cell: (p) => <span className="muted mono">{p.sku ?? t.common.dash}</span>, sort: { value: (p) => p.sku } },
+            {
+              key: 'onHand',
+              label: t.stock.onHand,
+              num: true,
+              cell: (p) => (
+                <span className={`mono ${p.onHand < 0 ? 'crit-text' : p.shortBy > 0 ? 'warn-text' : ''}`}>
+                  {p.onHand} <span className="muted">{t.stock.units[p.unit]}</span>
+                </span>
+              ),
+              sort: { value: (p) => p.onHand },
+            },
+            { key: 'minQty', label: t.stock.minQty, num: true, cell: (p) => <span className="mono muted">{p.minQty > 0 ? p.minQty : t.common.dash}</span>, sort: { value: (p) => p.minQty, first: 'desc' } },
+            ...(can('cost.view')
+              ? [
+                  { key: 'avgCost', label: t.stock.avgCost, num: true, cell: (p: PartRow) => <span className="mono">{p.avgCostTetri == null ? t.common.dash : formatGel(p.avgCostTetri)}</span>, sort: { value: (p: PartRow) => p.avgCostTetri, first: 'desc' as const } },
+                  { key: 'value', label: t.stock.value, num: true, cell: (p: PartRow) => <span className="mono">{p.valueTetri == null ? t.common.dash : formatGel(p.valueTetri)}</span>, sort: { value: (p: PartRow) => p.valueTetri, first: 'desc' as const } },
+                ]
+              : []),
+          ]}
+        />
       </section>
     </>
   );

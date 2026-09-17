@@ -43,3 +43,28 @@ describe.skipIf(!HAS_DB)('a second card for the same person', () => {
     expect(empty.existing).toBeNull();
   });
 });
+
+// The customers list shows what each person owes and how many rentals they
+// had (wave 1 §3.6). The debt is the rentals list's own figure summed — one
+// rule for "owed", read in two places.
+describe.skipIf(!HAS_DB)('the customers list', () => {
+  it('owes what their rentals owe, counts their rentals, and a new card owes nothing', async () => {
+    const owner = await loginAs('owner');
+    const phone = `+99552${uniq().replace(/\D/g, '').slice(-7).padStart(7, '0')}`;
+    const created = json<{ id: string }>(await call(owner, 'POST', '/api/customers', { name: 'List Newcomer', phone }));
+
+    const { customers } = json<{ customers: { id: string; rentals: number; debtTetri: number; buyer: boolean }[] }>(
+      await call(owner, 'GET', '/api/customers'),
+    );
+    const { rentals } = json<{ rentals: { customer: { id: string }; debtTetri: number }[] }>(await call(owner, 'GET', '/api/rentals'));
+
+    const newcomer = customers.find((c) => c.id === created.id);
+    expect(newcomer).toMatchObject({ rentals: 0, debtTetri: 0, buyer: false });
+
+    for (const c of customers) {
+      const theirs = rentals.filter((r) => r.customer.id === c.id);
+      expect(c.rentals).toBe(theirs.length);
+      expect(c.debtTetri).toBe(theirs.reduce((n, r) => n + r.debtTetri, 0));
+    }
+  });
+});

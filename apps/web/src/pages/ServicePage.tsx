@@ -1,9 +1,10 @@
-import { parseGel, todayISO } from '@ev8/shared';
+import { daysBetween, numberMatches, parseGel, spellingMatches, todayISO, vinMatches } from '@ev8/shared';
 import { useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { LoadError } from '../components/LoadError.js';
-import { Empty, Loading, PageHead, Vin } from '../components/ui.js';
+import { Loading, PageHead, Vin } from '../components/ui.js';
+import { DataList } from '../ds/list/DataList.js';
 import { Field } from '../components/Wizard.js';
 import { fmtDate, formatGel } from '../format.js';
 import { useT } from '../i18n/index.js';
@@ -46,12 +47,9 @@ interface FleetVehicle {
 export function ServicePage() {
   const t = useT();
   const { can } = useSession();
-  const [params, setParams] = useSearchParams();
-  const status = params.get('status');
-  const { data, failure, reload } = useLoad<{ open: number; jobs: ServiceJob[] }>(
-    status ? `/api/service?status=${status}` : '/api/service',
-  );
+  const { data, failure, reload } = useLoad<{ open: number; jobs: ServiceJob[] }>('/api/service');
   const [err, setErr] = useState<string | null>(null);
+  const today = todayISO();
 
   if (failure) return <LoadError failure={failure} onRetry={reload} />;
   if (!data) return <Loading />;
@@ -62,62 +60,69 @@ export function ServicePage() {
         {can('service.manage') && <NewJob onDone={reload} onError={setErr} />}
       </PageHead>
       {err && <div className="hint hint-bad">{err}</div>}
-      <div className="toolbar">
-        <div className="chips">
-          <button type="button" className={`pill pill-sm ${!status ? 'on' : ''}`} onClick={() => setParams({})}>
-            {t.common.all}
-          </button>
-          {(['open', 'done', 'cancelled'] as ServiceStatus[]).map((s) => (
-            <button key={s} type="button" className={`pill pill-sm ${status === s ? 'on' : ''}`} onClick={() => setParams({ status: s })}>
-              {t.service.statuses[s]}
-            </button>
-          ))}
-        </div>
-      </div>
-      {data.jobs.length === 0 ? (
-        <Empty text={t.service.none} />
-      ) : (
-        <div className="table-wrap">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>{t.service.number}</th>
-                <th>{t.service.vehicle}</th>
-                <th>{t.service.reason}</th>
-                <th>{t.service.openedOn}</th>
-                <th>{t.service.closedOn}</th>
-                <th>{t.service.payer}</th>
-                <th className="num">{t.service.total}</th>
-                <th className="num">{t.service.withhold}</th>
-                <th>{t.fleet.state}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.jobs.map((j) => (
-                <tr key={j.id} className={j.status === 'cancelled' ? 'row-off' : ''}>
-                  <td>
-                    <Link to={`/service/${j.id}`} className="mono">
-                      {j.number}
-                    </Link>
-                  </td>
-                  <td>
-                    <Link to={`/fleet/${j.vehicle.id}`}>
-                      <Vin vin={j.vehicle.vin} />
-                    </Link>
-                  </td>
-                  <td>{j.reason}</td>
-                  <td className="mono">{fmtDate(j.openedOn)}</td>
-                  <td className="mono">{fmtDate(j.closedOn)}</td>
-                  <td>{t.service.payers[j.payer]}</td>
-                  <td className="num mono">{formatGel(j.totalTetri)}</td>
-                  <td className="num mono">{j.withheldTetri > 0 ? formatGel(j.withheldTetri) : t.common.dash}</td>
-                  <td className={j.status === 'open' ? 'warn-text' : 'muted'}>{t.service.statuses[j.status]}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <DataList
+        rows={data.jobs}
+        rowKey={(j) => j.id}
+        href={(j) => `/service/${j.id}`}
+        fallback={(a, b) => b.openedOn.localeCompare(a.openedOn) || b.number.localeCompare(a.number)}
+        search={{
+          placeholder: t.lists.jobsSearch,
+          match: (j, q) => numberMatches(q, j.number) || spellingMatches(q, [j.reason, j.vehicle.model, j.doneBy, j.customer?.name]) || vinMatches(q, j.vehicle.vin),
+        }}
+        chips={[
+          { key: 'open', label: t.lists.chips.open, test: (j) => j.status === 'open' },
+          { key: 'closed', label: t.lists.chips.closed, test: (j) => j.status !== 'open' },
+        ]}
+        empty={{ text: t.service.none }}
+        card={(j) => ({
+          title: (
+            <>
+              {j.vehicle.model} <span className="mono">···{j.vehicle.vin.slice(-4)}</span>
+            </>
+          ),
+          sub: (
+            <>
+              {j.number} · {j.reason}
+            </>
+          ),
+          sub2: j.doneBy ?? undefined,
+          right:
+            j.status === 'open' ? (
+              <span className="warn-text">{t.lists.daysOpen(daysBetween(j.openedOn, today))}</span>
+            ) : (
+              <span className="muted">{t.service.statuses[j.status]}</span>
+            ),
+          rightSub: t.service.payers[j.payer],
+        })}
+        columns={[
+          { key: 'number', label: t.service.number, cell: (j) => <span className="mono">{j.number}</span>, sort: { value: (j) => j.number } },
+          {
+            key: 'vehicle',
+            label: t.service.vehicle,
+            cell: (j) => (
+              <>
+                <Link to={`/fleet/${j.vehicle.id}`}>
+                  <Vin vin={j.vehicle.vin} />
+                </Link>{' '}
+                <span className="muted">{j.vehicle.model}</span>
+              </>
+            ),
+            sort: { value: (j) => j.vehicle.model },
+          },
+          { key: 'reason', label: t.service.reason, cell: (j) => j.reason },
+          { key: 'openedOn', label: t.service.openedOn, cell: (j) => <span className="mono">{fmtDate(j.openedOn)}</span>, sort: { value: (j) => j.openedOn, first: 'desc' } },
+          { key: 'closedOn', label: t.service.closedOn, cell: (j) => <span className="mono">{fmtDate(j.closedOn)}</span>, sort: { value: (j) => j.closedOn, first: 'desc' } },
+          { key: 'payer', label: t.service.payer, cell: (j) => t.service.payers[j.payer], sort: { value: (j) => j.payer } },
+          { key: 'total', label: t.service.total, num: true, cell: (j) => <span className="mono">{formatGel(j.totalTetri)}</span>, sort: { value: (j) => j.totalTetri, first: 'desc' } },
+          { key: 'withheld', label: t.service.withhold, num: true, cell: (j) => <span className="mono">{j.withheldTetri > 0 ? formatGel(j.withheldTetri) : t.common.dash}</span>, sort: { value: (j) => j.withheldTetri, first: 'desc' } },
+          {
+            key: 'status',
+            label: t.fleet.state,
+            cell: (j) => <span className={j.status === 'open' ? 'warn-text' : 'muted'}>{t.service.statuses[j.status]}</span>,
+            sort: { value: (j) => j.status },
+          },
+        ]}
+      />
     </>
   );
 }

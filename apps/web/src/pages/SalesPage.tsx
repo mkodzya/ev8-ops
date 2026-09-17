@@ -1,13 +1,13 @@
-import { parseGel, todayISO } from '@ev8/shared';
+import { numberMatches, parseGel, spellingMatches, todayISO, vinMatches } from '@ev8/shared';
 import { useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { LoadError } from '../components/LoadError.js';
-import { Empty, Loading, PageHead, Vin } from '../components/ui.js';
+import { Loading, PageHead, Vin } from '../components/ui.js';
 import { Field } from '../components/Wizard.js';
 import { fmtDate, formatGel } from '../format.js';
 import { useT } from '../i18n/index.js';
-import { SortHead, useSortable } from '../lib/sortable.js';
+import { DataList } from '../ds/list/DataList.js';
 import { Drawer } from '../components/Drawer.js';
 import { errorText, useLoad } from '../lib/use.js';
 import { useSession } from '../session.js';
@@ -44,22 +44,6 @@ export function SalesPage() {
   const t = useT();
   const { can } = useSession();
   const { data, failure, reload } = useLoad<{ overdueTetri: number; sales: Sale[] }>('/api/sales');
-  // Every heading sorts, and the newest sale breaks every tie.
-  const sorted = useSortable(
-    data?.sales ?? [],
-    {
-      number: { value: (s) => s.number },
-      soldOn: { value: (s) => s.soldOn, first: 'desc' },
-      buyer: { value: (s) => s.customer.name },
-      vehicle: { value: (s) => s.vehicle?.vin ?? s.vinNote },
-      price: { value: (s) => s.priceTetri, first: 'desc' },
-      paid: { value: (s) => s.paidTetri, first: 'desc' },
-      outstanding: { value: (s) => s.outstandingTetri, first: 'desc' },
-      overdue: { value: (s) => s.overdueTetri, first: 'desc' },
-      status: { value: (s) => s.status },
-    },
-    (a, b) => b.soldOn.localeCompare(a.soldOn) || a.number.localeCompare(b.number),
-  );
   const [err, setErr] = useState<string | null>(null);
 
   if (failure) return <LoadError failure={failure} onRetry={reload} />;
@@ -76,58 +60,81 @@ export function SalesPage() {
         {can('sales.manage') && <NewSale onDone={reload} onError={setErr} />}
       </PageHead>
       {err && <div className="hint hint-bad">{err}</div>}
-      {data.sales.length === 0 ? (
-        <Empty text={t.sales.none} />
-      ) : (
-        <div className="table-wrap">
-          <table className="table">
-            <thead>
-              <tr>
-                <th><SortHead k="number" label={t.sales.number} {...sorted} /></th>
-                <th><SortHead k="soldOn" label={t.sales.soldOn} {...sorted} /></th>
-                <th><SortHead k="buyer" label={t.sales.buyer} {...sorted} /></th>
-                <th><SortHead k="vehicle" label={t.sales.vehicle} {...sorted} /></th>
-                <th className="num"><SortHead k="price" label={t.sales.price} {...sorted} /></th>
-                <th className="num"><SortHead k="paid" label={t.sales.paid} {...sorted} /></th>
-                <th className="num"><SortHead k="outstanding" label={t.sales.outstanding} {...sorted} /></th>
-                <th className="num"><SortHead k="overdue" label={t.sales.overdue} {...sorted} /></th>
-                <th><SortHead k="status" label={t.fleet.state} {...sorted} /></th>
-              </tr>
-            </thead>
-            <tbody>
-              {sorted.rows.map((s) => (
-                <tr key={s.id} className={s.status === 'cancelled' ? 'row-off' : ''}>
-                  <td>
-                    <Link to={`/sales/${s.id}`} className="mono">
-                      {s.number}
-                    </Link>
-                  </td>
-                  <td className="mono">{fmtDate(s.soldOn)}</td>
-                  <td>
-                    <Link to={`/customers/${s.customer.id}`}>{s.customer.name}</Link>
-                  </td>
-                  <td>
-                    {s.vehicle ? (
-                      <Link to={`/fleet/${s.vehicle.id}`}>
-                        <Vin vin={s.vehicle.vin} />
-                      </Link>
-                    ) : (
-                      <span className="muted">{s.vinNote}</span>
-                    )}
-                  </td>
-                  <td className="num mono">{formatGel(s.priceTetri, { decimals: false })}</td>
-                  <td className="num mono">{formatGel(s.paidTetri, { decimals: false })}</td>
-                  <td className="num mono">{formatGel(s.outstandingTetri, { decimals: false })}</td>
-                  <td className={`num mono ${s.overdueTetri > 0 ? 'crit-text' : ''}`}>
-                    {s.overdueTetri > 0 ? formatGel(s.overdueTetri, { decimals: false }) : t.common.dash}
-                  </td>
-                  <td className="muted">{t.sales.statuses[s.status]}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <DataList
+        rows={data.sales}
+        rowKey={(s) => s.id}
+        href={(s) => `/sales/${s.id}`}
+        fallback={(a, b) => b.soldOn.localeCompare(a.soldOn) || a.number.localeCompare(b.number)}
+        search={{
+          placeholder: t.lists.salesSearch,
+          match: (s, q) => numberMatches(q, s.number) || spellingMatches(q, [s.customer.name, s.vehicle?.model, s.vinNote]) || vinMatches(q, s.vehicle?.vin),
+        }}
+        chips={[
+          { key: 'instalments', label: t.lists.chips.withInstalments, test: (s) => s.instalments.length > 0 },
+          { key: 'overdue', label: t.lists.chips.instalmentOverdue, test: (s) => s.overdueTetri > 0 },
+          { key: 'boughtBack', label: t.sales.statuses.bought_back, test: (s) => s.status === 'bought_back' },
+        ]}
+        empty={{ text: t.sales.none }}
+        card={(s) => {
+          const paidInstalments = s.instalments.filter((i) => i.payStatus === 'paid').length;
+          return {
+            title: s.customer.name,
+            sub: (
+              <>
+                {s.number}
+                {s.vehicle && (
+                  <>
+                    {' · '}
+                    {s.vehicle.model} <span className="mono">···{s.vehicle.vin.slice(-4)}</span>
+                  </>
+                )}
+              </>
+            ),
+            sub2: (
+              <>
+                {fmtDate(s.soldOn)}
+                {s.instalments.length > 0 && <> · {t.lists.instalmentOf(paidInstalments, s.instalments.length)}</>}
+              </>
+            ),
+            right:
+              s.overdueTetri > 0 ? (
+                <span className="t-money crit-text">{formatGel(s.overdueTetri, { decimals: false })}</span>
+              ) : (
+                <span className="t-money">{formatGel(s.outstandingTetri, { decimals: false })}</span>
+              ),
+            rightSub: t.sales.statuses[s.status],
+          };
+        }}
+        columns={[
+          { key: 'number', label: t.sales.number, cell: (s) => <span className="mono">{s.number}</span>, sort: { value: (s) => s.number } },
+          { key: 'soldOn', label: t.sales.soldOn, cell: (s) => <span className="mono">{fmtDate(s.soldOn)}</span>, sort: { value: (s) => s.soldOn, first: 'desc' } },
+          { key: 'buyer', label: t.sales.buyer, cell: (s) => <Link to={`/customers/${s.customer.id}`}>{s.customer.name}</Link>, sort: { value: (s) => s.customer.name } },
+          {
+            key: 'vehicle',
+            label: t.sales.vehicle,
+            cell: (s) =>
+              s.vehicle ? (
+                <Link to={`/fleet/${s.vehicle.id}`}>
+                  <Vin vin={s.vehicle.vin} />
+                </Link>
+              ) : (
+                <span className="muted">{s.vinNote}</span>
+              ),
+            sort: { value: (s) => s.vehicle?.vin ?? s.vinNote },
+          },
+          { key: 'price', label: t.sales.price, num: true, cell: (s) => <span className="mono">{formatGel(s.priceTetri, { decimals: false })}</span>, sort: { value: (s) => s.priceTetri, first: 'desc' } },
+          { key: 'paid', label: t.sales.paid, num: true, cell: (s) => <span className="mono">{formatGel(s.paidTetri, { decimals: false })}</span>, sort: { value: (s) => s.paidTetri, first: 'desc' } },
+          { key: 'outstanding', label: t.sales.outstanding, num: true, cell: (s) => <span className="mono">{formatGel(s.outstandingTetri, { decimals: false })}</span>, sort: { value: (s) => s.outstandingTetri, first: 'desc' } },
+          {
+            key: 'overdue',
+            label: t.sales.overdue,
+            num: true,
+            cell: (s) => <span className={`mono ${s.overdueTetri > 0 ? 'crit-text' : ''}`}>{s.overdueTetri > 0 ? formatGel(s.overdueTetri, { decimals: false }) : t.common.dash}</span>,
+            sort: { value: (s) => s.overdueTetri, first: 'desc' },
+          },
+          { key: 'status', label: t.fleet.state, cell: (s) => <span className="muted">{t.sales.statuses[s.status]}</span>, sort: { value: (s) => s.status } },
+        ]}
+      />
     </>
   );
 }
