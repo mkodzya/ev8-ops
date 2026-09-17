@@ -197,6 +197,8 @@ function NewPart({ onDone }: { onDone: () => void }) {
           onRestore={setF}
           summary={(v) => v.name}
           label={t.stock.addPart}
+          // The name or the article number is taken: the refusal goes under the one that was typed to be unique.
+          fieldOf={{ part_exists: f.sku.trim() ? 'sku' : 'name' }}
           submit={async (key) => {
             const part = await api.post<{ id: string }>(
               '/api/parts',
