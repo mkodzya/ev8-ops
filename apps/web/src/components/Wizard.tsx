@@ -1,3 +1,4 @@
+import { useFieldError } from '../ds/form/Form.js';
 import type { ReactNode } from 'react';
 import { useT } from '../i18n/index.js';
 
@@ -48,12 +49,17 @@ export function Wizard(props: {
   );
 }
 
-export function Field({ label, children, hint }: { label: string; children: ReactNode; hint?: string }) {
+/**
+ * A labelled field. `name` is the API's name for it: when the server refuses
+ * the form naming that field, the words come under it (QA-1-08).
+ */
+export function Field({ label, children, hint, name }: { label: string; children: ReactNode; hint?: string; name?: string }) {
+  const error = useFieldError(name);
   return (
-    <label className="field">
+    <label className={`field ${error ? 'field-bad' : ''}`} data-field={name}>
       <span className="lbl">{label}</span>
       {children}
-      {hint && <span className="hint muted">{hint}</span>}
+      {error ? <span className="field-err">{error}</span> : hint && <span className="hint muted">{hint}</span>}
     </label>
   );
 }
