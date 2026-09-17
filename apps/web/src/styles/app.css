@@ -972,6 +972,38 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
 /* Movement is a way of explaining what happened, so when the reader has asked
    the system not to move, nothing does — and nothing is lost, because every
    animation here only repeats what the words already say. */
+/* ---- models: the catalogue ------------------------------------------ */
+/* A card per model rather than a row: there are a dozen, each is looked at
+   on its own, and a price reads better beside its label than under a
+   heading three columns away. The whole card is the link. */
+.mcards { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px; margin-bottom: 14px; }
+.mcard {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: var(--card-pad);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  color: var(--ink);
+  text-decoration: none;
+  transition: background-color var(--ease), border-color var(--ease);
+}
+.mcard:hover { background: var(--surface-2); }
+.mcard:focus-visible { border-color: var(--accent-hover); }
+.mcard-hidden { opacity: 0.6; }
+.mcard-brand { font: var(--text-label); color: var(--muted); }
+.mcard-name { font: var(--text-h2); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+.mcard-flag { font-weight: 400; }
+.mcard-kv { display: flex; justify-content: space-between; gap: 10px; font: var(--text-label); color: var(--muted); }
+.mcard-kv > span:last-child { color: var(--ink); text-align: right; }
+.block-after { margin-top: 22px; }
+.tr-go { cursor: pointer; }
+/* A choice among a few words: the brand of a model. */
+.chips-pick { display: flex; flex-wrap: wrap; gap: 6px; }
+.seg[aria-checked='true'] { background: var(--lime); border-color: var(--lime); }
+.seg-sm { padding: 0 12px; }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;

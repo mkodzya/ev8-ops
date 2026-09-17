@@ -1,4 +1,4 @@
-import { ROLES, formatGel, parseGel, type Role } from '@ev8/shared';
+import { ROLES, type Role } from '@ev8/shared';
 import { useState } from 'react';
 import { api } from '../api.js';
 import { BlockHead, Empty, Loading, PageHead } from '../components/ui.js';
@@ -14,16 +14,12 @@ interface Users {
 interface Points {
   locations: { id: string; name: string; note: string | null; sortOrder: number; archived: boolean; vehicles: number }[];
 }
-interface Models {
-  models: { id: string; brand: string; name: string; salePriceTetri: number | null; weeklyRateTetri: number | null; costTetri: number | null; forSale: boolean; forRent: boolean; vehicles: number }[];
-}
 
 /** Everything the owner sets up by hand: who signs in, and what a moped is. */
 export function SettingsPage() {
   const t = useT();
   const { me } = useSession();
   const users = useLoad<Users>('/api/users');
-  const models = useLoad<Models>('/api/models');
   const points = useLoad<Points>('/api/locations?all=1');
   const [err, setErr] = useState<string | null>(null);
 
@@ -148,46 +144,6 @@ export function SettingsPage() {
           </div>
         )}
       </section>
-
-      <section className="card">
-        <BlockHead title={t.settings.models} sub={models.data ? t.models.count(models.data.models.length) : undefined}>
-          <NewModel onDone={models.reload} onError={setErr} />
-        </BlockHead>
-        {!models.data ? (
-          <Loading />
-        ) : models.data.models.length === 0 ? (
-          <Empty text={t.common.dash} />
-        ) : (
-          <div className="table-wrap table-flat">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>{t.models.brand}</th>
-                  <th>{t.models.name}</th>
-                  <th className="num">{t.models.weeklyRate}</th>
-                  <th className="num">{t.models.salePrice}</th>
-                  <th className="num">{t.models.cost}</th>
-                  <th>{t.models.forRent}</th>
-                  <th className="num">{t.models.vehicles}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {models.data.models.map((m) => (
-                  <tr key={m.id}>
-                    <td>{m.brand}</td>
-                    <td>{m.name}</td>
-                    <td className="num mono">{formatGel(m.weeklyRateTetri, { decimals: false })}</td>
-                    <td className="num mono">{formatGel(m.salePriceTetri, { decimals: false })}</td>
-                    <td className="num mono">{formatGel(m.costTetri, { decimals: false })}</td>
-                    <td>{m.forRent ? t.common.yes : t.common.no}</td>
-                    <td className="num mono">{m.vehicles}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
     </>
   );
 }
@@ -286,80 +242,6 @@ function ResetPassword({ id, onDone, onError }: { id: string; onDone: () => void
         {t.actions.save}
       </button>
     </span>
-  );
-}
-
-function NewModel({ onDone, onError }: { onDone: () => void; onError: (e: string) => void }) {
-  const t = useT();
-  const [open, setOpen] = useState(false);
-  const [f, setF] = useState({ brand: '', name: '', weeklyRate: '', salePrice: '', cost: '', forRent: true, forSale: true });
-  const [busy, setBusy] = useState(false);
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setBusy(true);
-    try {
-      await api.post('/api/models', {
-        brand: f.brand,
-        name: f.name,
-        weeklyRateTetri: f.weeklyRate ? parseGel(f.weeklyRate) : null,
-        salePriceTetri: f.salePrice ? parseGel(f.salePrice) : null,
-        costTetri: f.cost ? parseGel(f.cost) : null,
-        forRent: f.forRent,
-        forSale: f.forSale,
-      });
-      setOpen(false);
-      onDone();
-    } catch (e) {
-      onError(errorText(e));
-    } finally {
-      setBusy(false);
-    }
-  };
-  return (
-    <>
-      <button type="button" className="pill pill-sm pill-accent" onClick={() => setOpen(true)}>
-        + {t.settings.addModel}
-      </button>
-      {open && (
-        <Drawer title={t.settings.addModel} onClose={() => setOpen(false)}>
-          <form className="form" onSubmit={submit}>
-            <div className="two-col">
-              <Field label={t.models.brand}>
-                <input className="input" value={f.brand} onChange={(e) => setF({ ...f, brand: e.target.value })} required autoFocus />
-              </Field>
-              <Field label={t.models.name}>
-                <input className="input" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} required />
-              </Field>
-              <Field label={t.models.weeklyRate}>
-                <input className="input input-amount mono" value={f.weeklyRate} onChange={(e) => setF({ ...f, weeklyRate: e.target.value })} inputMode="decimal" />
-              </Field>
-              <Field label={t.models.salePrice}>
-                <input className="input input-amount mono" value={f.salePrice} onChange={(e) => setF({ ...f, salePrice: e.target.value })} inputMode="decimal" />
-              </Field>
-              <Field label={t.models.cost}>
-                <input className="input input-amount mono" value={f.cost} onChange={(e) => setF({ ...f, cost: e.target.value })} inputMode="decimal" />
-              </Field>
-            </div>
-            <label className="check">
-              <input type="checkbox" checked={f.forRent} onChange={(e) => setF({ ...f, forRent: e.target.checked })} />
-              <span>{t.models.forRent}</span>
-            </label>
-            <label className="check">
-              <input type="checkbox" checked={f.forSale} onChange={(e) => setF({ ...f, forSale: e.target.checked })} />
-              <span>{t.models.forSale}</span>
-            </label>
-            <div className="row-actions">
-              <button type="button" className="pill" onClick={() => setOpen(false)}>
-                {t.actions.cancel}
-              </button>
-              <button className="pill pill-accent" disabled={busy}>
-                {busy ? t.common.checking : t.actions.save}
-              </button>
-            </div>
-          </form>
-        </Drawer>
-      )}
-    </>
   );
 }
 

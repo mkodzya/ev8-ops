@@ -1,5 +1,9 @@
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { useT } from '../i18n/index.js';
+
+/** Open panels, oldest first. Escape belongs to the one on top. */
+const open: symbol[] = [];
 
 /**
  * A panel that comes in from the right and moves nothing behind it.
@@ -15,20 +19,30 @@ import { useT } from '../i18n/index.js';
  */
 export function Drawer({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
   const t = useT();
+  const close = useRef(onClose);
+  close.current = onClose;
   useEffect(() => {
+    // A panel can open over another — a new model over a new moped — and
+    // then Escape closes the top one only, and the page stays still until
+    // the last one is gone.
+    const me = Symbol('drawer');
+    open.push(me);
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape' && open[open.length - 1] === me) close.current();
     };
     document.addEventListener('keydown', onKey);
     // The page behind must not scroll away under the panel.
     document.body.classList.add('no-scroll');
     return () => {
       document.removeEventListener('keydown', onKey);
-      document.body.classList.remove('no-scroll');
+      open.splice(open.indexOf(me), 1);
+      if (open.length === 0) document.body.classList.remove('no-scroll');
     };
-  }, [onClose]);
+  }, []);
 
-  return (
+  // On the body, not where it was asked for: a panel inside a panel would
+  // otherwise be positioned by its parent's slide-in transform.
+  return createPortal(
     <div className="drawer-scrim" role="presentation" onClick={onClose}>
       <aside
         className="drawer"
@@ -45,6 +59,7 @@ export function Drawer({ title, onClose, children }: { title: string; onClose: (
         </header>
         <div className="drawer-body">{children}</div>
       </aside>
-    </div>
+    </div>,
+    document.body,
   );
 }

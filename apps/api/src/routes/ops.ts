@@ -294,52 +294,7 @@ export function opsRoutes(app: FastifyInstance): void {
     return { pool: back };
   });
 
-  // ---- reference data: models and mopeds (owner) --------------------------
-  app.post<{ Body: Body }>('/api/models', { config: { scope: 'settings.manage' } }, async (req, reply) => {
-    const b = req.body ?? {};
-    const actor = actorOf(req);
-    const m = await prisma.vehicleModel.create({
-      data: {
-        brand: str(b, 'brand', { required: true, max: 100 })!,
-        name: str(b, 'name', { required: true, max: 100 })!,
-        salePriceTetri: tetri(b, 'salePriceTetri', { min: 0 }),
-        weeklyRateTetri: tetri(b, 'weeklyRateTetri', { min: 0 }),
-        costTetri: tetri(b, 'costTetri', { min: 0 }),
-        forSale: b.forSale == null ? true : Boolean(b.forSale),
-        forRent: Boolean(b.forRent),
-        notes: str(b, 'notes', { max: 4000 }),
-      },
-    });
-    await audit({ actorId: actor.id, action: 'model.create', entityType: 'vehicle_model', entityId: m.id, after: { brand: m.brand, name: m.name } });
-    return reply.code(201).send({ id: m.id });
-  });
-
-  app.patch<{ Params: { id: string }; Body: Body }>('/api/models/:id', { config: { scope: 'settings.manage' } }, async (req) => {
-    const b = req.body ?? {};
-    const actor = actorOf(req);
-    const before = await prisma.vehicleModel.findUnique({ where: { id: req.params.id } });
-    if (!before) throw notFound('model_not_found', 'No such model.');
-    const data: Record<string, unknown> = {};
-    if ('brand' in b) data.brand = str(b, 'brand', { required: true, max: 100 });
-    if ('name' in b) data.name = str(b, 'name', { required: true, max: 100 });
-    for (const k of ['salePriceTetri', 'weeklyRateTetri', 'costTetri'] as const) {
-      if (k in b) data[k] = tetri(b, k, { min: 0 });
-    }
-    if ('forSale' in b) data.forSale = Boolean(b.forSale);
-    if ('forRent' in b) data.forRent = Boolean(b.forRent);
-    if ('notes' in b) data.notes = str(b, 'notes', { max: 4000 });
-    if ('archived' in b) data.archived = Boolean(b.archived);
-    if ('isSupplier' in b) data.isSupplier = Boolean(b.isSupplier);
-    try {
-      await prisma.vehicleModel.update({ where: { id: before.id }, data: { ...data, updatedAt: new Date() } });
-    } catch (e) {
-      if (isUniqueViolation(e)) throw conflict('duplicate_model', 'That brand and name are already a model.');
-      throw e;
-    }
-    await audit({ actorId: actor.id, action: 'model.update', entityType: 'vehicle_model', entityId: before.id, before: pickKeys(before, data) as object, after: data as object });
-    return { ok: true };
-  });
-
+  // ---- reference data: mopeds (owner); models live in routes/models.ts ----
   app.patch<{ Params: { id: string }; Body: Body }>('/api/fleet/:id', { config: { scope: 'settings.manage' } }, async (req) => {
     const b = req.body ?? {};
     const actor = actorOf(req);

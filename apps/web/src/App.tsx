@@ -22,6 +22,8 @@ import { ServiceJobPage } from './pages/ServiceJobPage.js';
 import { ServicePage } from './pages/ServicePage.js';
 import { StatementsPage } from './pages/StatementsPage.js';
 import { VehiclePage } from './pages/VehiclePage.js';
+import { ModelPage } from './pages/ModelPage.js';
+import { ModelsPage } from './pages/ModelsPage.js';
 import { FleetPage } from './pages/FleetPage.js';
 import { RentalsPage } from './pages/RentalsPage.js';
 import { TodayPage } from './pages/TodayPage.js';
@@ -78,6 +80,8 @@ export function App() {
         <Route index element={<TodayPage />} />
         <Route path="fleet" element={<FleetPage />} />
         <Route path="fleet/:id" element={<VehiclePage />} />
+        <Route path="models" element={<ModelsPage />} />
+        <Route path="models/:id" element={<ModelPage />} />
         <Route path="rentals" element={<RentalsPage />} />
         <Route path="rentals/new" element={<PickupWizard />} />
         <Route path="rentals/:id" element={<RentalPage />} />
