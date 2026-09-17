@@ -175,7 +175,7 @@ export function PurchasePage() {
               <thead>
                 <tr>
                   <th>{t.purchases.line}</th>
-                  <th className="num">{t.purchases.qty}</th>
+                  <th className="num nowrap">{t.purchases.qty}</th>
                   <th className="num">{t.purchases.unitPrice}</th>
                   <th className="num">{t.purchases.lineTotal}</th>
                   <th className="num">{t.purchases.fob}</th>
