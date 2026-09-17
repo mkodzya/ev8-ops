@@ -1,7 +1,7 @@
 # ТЗ EV8 Ops v2 — перенос бизнеса в систему
 
 Дата: 17.09.2026. Статус: **черновик на утверждение Mika**. Автор — продуктовый аналитик
-([`docs/agents/analyst.md`](../agents/analyst.md)).
+([`docs/agents/archive/analyst.md`](../agents/archive/analyst.md)).
 
 **Основание.**
 - Аудит [`docs/audit/2026-09-audit.md`](../audit/2026-09-audit.md) — дальше «аудит», ссылки вида

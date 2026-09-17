@@ -18,7 +18,7 @@
    `~/Developer/ev8/handbook` (GitHub `mkodzya/ev8-handbook`): `project.md`, `business/`,
    `register.md`, `knowledge.md`. Правило бизнеса живёт в книге, код его исполняет (ADR-0002 книги).
 4. Стенд: `docker compose ps`; если лежит — `docker compose up -d` (тяжёлая задача, одна за раз).
-5. Работа идёт тремя ролями — аналитик, разработчик, тестировщик: `docs/agents/README.md`. Роль сессии
+5. Идёт редизайн тремя ролями — дизайнер, разработчик, тестировщик, волнами: `docs/agents/README.md`. Роль сессии
    задаёт Mika первой строкой («Прочитай docs/agents/<роль>.md»).
 
 ## 2. Где продукт сейчас
