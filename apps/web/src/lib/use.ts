@@ -47,6 +47,9 @@ export function useLoad<T>(url: string | null): { data: T | null; error: string 
  */
 export function errorText(e: unknown): string {
   const t = currentDict().errors;
+  // A gateway with nobody behind it answers 5xx with no body of ours: that is
+  // "no connection to the server", not a fault somebody should report.
+  if (e instanceof ApiError && e.status >= 500 && (e.code === 'error' || e.status >= 502)) return t.network;
   if (e instanceof ApiError) {
     const known = (t.codes as Record<string, string>)[e.code];
     return known ?? `${t.unknown} (${e.code})`;
