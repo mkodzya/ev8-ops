@@ -349,9 +349,11 @@ RAIL_MANAGER = [
  ('Деньги', [('cash','Касса','cash'),('sales','Продажи','bag')]),
 ]
 
+WAVE1 = False
+
 def rail(on='today', role='owner', badge=None):
     items = RAIL_ITEMS if role == 'owner' else RAIL_MANAGER
-    cta = 'Принять деньги' if role == 'owner' else 'Выдать мопед'
+    cta = 'Выдать мопед' if (role != 'owner' or WAVE1) else 'Принять деньги'
     name, r = ('Mika', 'владелец') if role == 'owner' else ('Менеджер Пример', 'менеджер')
     out = [f'<nav class="rail"><div class="logo">EV8 <small>ops</small></div>',
            f'<a class="cta" href="#">{ic("plus","i s")}{cta}</a>',
