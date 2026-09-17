@@ -33,11 +33,11 @@ export interface ModelRow {
 export const unpriced = (m: Pick<ModelRow, 'salePriceTetri' | 'weeklyRateTetri'>) => m.salePriceTetri == null && m.weeklyRateTetri == null;
 
 /** Where a model's unit cost came from, in a few words. */
-export function CostFrom({ source }: { source: CostSource }) {
+export function CostFrom({ source, bare = false }: { source: CostSource; bare?: boolean }) {
   const t = useT();
   if (!source) return null;
-  if (source.kind === 'purchase') return <span className="muted"> · {source.number}</span>;
-  return <span className="muted"> · {source.kind === 'odoo' ? t.models.fromOdoo : t.models.byHand}</span>;
+  const words = source.kind === 'purchase' ? source.number : source.kind === 'odoo' ? t.models.fromOdoo : t.models.byHand;
+  return bare ? <>{words}</> : <span className="muted"> · {words}</span>;
 }
 
 /** The mopeds of a model by park, naming only the parks that hold any. */
@@ -118,12 +118,16 @@ function Cards({ models }: { models: ModelRow[] }) {
             <span className="mono">{m.salePriceTetri != null ? formatGel(m.salePriceTetri, { decimals: false }) : t.common.dash}</span>
           </span>
           <span className="mcard-kv">
-            <span>
-              {t.models.costShort}
-              <CostFrom source={m.costSource} />
-            </span>
+            <span>{t.models.costShort}</span>
             <span className="mono">{m.costTetri != null ? formatGel(m.costTetri) : t.common.dash}</span>
           </span>
+          {/* Where the figure came from, under it: beside it, a card this
+              narrow wraps the label or pushes the number out. */}
+          {m.costTetri != null && m.costSource && (
+            <span className="mcard-src">
+              <CostFrom source={m.costSource} bare />
+            </span>
+          )}
           <span className="mcard-kv">
             <span>{t.models.inFleet}</span>
             <span>

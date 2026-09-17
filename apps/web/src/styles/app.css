@@ -976,7 +976,7 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
 /* A card per model rather than a row: there are a dozen, each is looked at
    on its own, and a price reads better beside its label than under a
    heading three columns away. The whole card is the link. */
-.mcards { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px; margin-bottom: 14px; }
+.mcards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 270px), 1fr)); gap: 10px; margin-bottom: 14px; }
 .mcard {
   display: flex;
   flex-direction: column;
@@ -996,7 +996,8 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
 .mcard-name { font: var(--text-h2); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
 .mcard-flag { font-weight: 400; }
 .mcard-kv { display: flex; justify-content: space-between; gap: 10px; font: var(--text-label); color: var(--muted); }
-.mcard-kv > span:last-child { color: var(--ink); text-align: right; }
+.mcard-kv > span:last-child { color: var(--ink); text-align: right; white-space: nowrap; }
+.mcard-src { font: var(--text-label); color: var(--muted); text-align: right; margin-top: -4px; }
 .block-after { margin-top: 22px; }
 .tr-go { cursor: pointer; }
 /* A choice among a few words: the brand of a model. */
