@@ -1,0 +1,153 @@
+import { SEARCH_GROUP_LIMIT, spellingMatches, numberMatches, phoneMatches, readQuery, vinMatches, type Query } from '@ev8/shared';
+import type { FastifyInstance } from 'fastify';
+import { isoDate } from '../lib/dates.js';
+import { prisma } from '../lib/db.js';
+import { actorOf, mayView } from '../lib/guard.js';
+
+/**
+ * The search in the header (wave 1 §3.5): one field, every kind of record,
+ * grouped. Each group gives its first three and how many there are in all,
+ * so "More N" can open the section's list with the same search.
+ *
+ * The business is small enough — dozens of customers, a few hundred rentals
+ * and payments — that records are read and matched here with the shared
+ * rules, not with a text index. When that stops being true this is the one
+ * place that changes.
+ *
+ * Rights follow the rest of the API: no personal number for a manager, no
+ * purchases, and of payments only the cash they took themselves.
+ */
+
+interface Group<T> {
+  total: number;
+  items: T[];
+}
+
+const group = <T>(all: T[]): Group<T> => ({ total: all.length, items: all.slice(0, SEARCH_GROUP_LIMIT) });
+
+export function searchRoutes(app: FastifyInstance): void {
+  app.get<{ Querystring: { q?: string } }>('/api/search', { config: { scope: 'fleet.view' } }, async (req) => {
+    const q = readQuery(req.query.q ?? '');
+    if (!q) return { q: null, groups: null };
+    const actor = actorOf(req);
+    const seeIdentity = mayView(req, 'customer.documents.view');
+    const seeAllPayments = mayView(req, 'payments.view');
+    const seePurchases = mayView(req, 'purchases.view');
+
+    const [customers, vehicles, rentals, sales, payments, purchases, jobs] = await Promise.all([
+      prisma.customer.findMany({
+        where: { archived: false },
+        select: { id: true, name: true, nameKa: true, nameLat: true, phone: true, personalId: true, isSupplier: true },
+        orderBy: { name: 'asc' },
+      }),
+      prisma.vehicle.findMany({
+        where: { archived: false },
+        select: { id: true, vin: true, state: true, model: { select: { brand: true, name: true } } },
+        orderBy: { vin: 'asc' },
+      }),
+      prisma.rental.findMany({
+        select: {
+          id: true,
+          number: true,
+          status: true,
+          vinNote: true,
+          customer: { select: { name: true, nameKa: true, nameLat: true } },
+          vehicle: { select: { vin: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
+      prisma.sale.findMany({
+        select: {
+          id: true,
+          number: true,
+          status: true,
+          customer: { select: { name: true, nameKa: true, nameLat: true } },
+          vehicle: { select: { vin: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
+      q.amountTetri == null
+        ? Promise.resolve([])
+        : prisma.payment.findMany({
+            where: {
+              grossTetri: q.amountTetri,
+              ...(seeAllPayments ? {} : { createdById: actor.id, channel: 'cash' as const }),
+            },
+            select: {
+              id: true,
+              grossTetri: true,
+              occurredOn: true,
+              channel: true,
+              voidedAt: true,
+              customer: { select: { name: true } },
+              rental: { select: { id: true, number: true } },
+              sale: { select: { id: true, number: true } },
+            },
+            orderBy: [{ occurredOn: 'desc' }, { createdAt: 'desc' }],
+            take: 200,
+          }),
+      seePurchases
+        ? prisma.purchase.findMany({
+            select: { id: true, number: true, status: true, invoiceNo: true, supplier: { select: { name: true } } },
+            orderBy: { orderedOn: 'desc' },
+          })
+        : Promise.resolve([]),
+      prisma.serviceJob.findMany({
+        select: { id: true, number: true, status: true, reason: true, vehicle: { select: { vin: true, model: { select: { brand: true, name: true } } } } },
+        orderBy: { openedOn: 'desc' },
+      }),
+    ]);
+
+    const byCustomer = (c: { name: string; nameKa: string | null; nameLat: string | null }, q: Query) => spellingMatches(q, [c.name, c.nameKa, c.nameLat]);
+
+    return {
+      q: req.query.q,
+      groups: {
+        customers: group(
+          customers
+            .filter((c) => byCustomer(c, q) || phoneMatches(q, c.phone) || (seeIdentity && !!c.personalId && c.personalId.includes(q.text)))
+            .map((c) => ({ id: c.id, name: c.name, nameKa: c.nameKa, nameLat: c.nameLat, phone: c.phone, isSupplier: c.isSupplier })),
+        ),
+        vehicles: group(
+          vehicles
+            .filter((v) => vinMatches(q, v.vin) || spellingMatches(q, [`${v.model.brand} ${v.model.name}`]))
+            .map((v) => ({ id: v.id, vin: v.vin, state: v.state, model: `${v.model.brand} ${v.model.name}` })),
+        ),
+        rentals: group(
+          rentals
+            .filter((r) => numberMatches(q, r.number) || byCustomer(r.customer, q) || vinMatches(q, r.vehicle?.vin))
+            .map((r) => ({ id: r.id, number: r.number, status: r.status, customer: r.customer.name, vin: r.vehicle?.vin ?? null })),
+        ),
+        sales: group(
+          sales
+            .filter((s) => numberMatches(q, s.number) || byCustomer(s.customer, q) || vinMatches(q, s.vehicle?.vin))
+            .map((s) => ({ id: s.id, number: s.number, status: s.status, customer: s.customer.name, vin: s.vehicle?.vin ?? null })),
+        ),
+        payments: group(
+          payments.map((p) => ({
+            id: p.id,
+            grossTetri: p.grossTetri,
+            occurredOn: isoDate(p.occurredOn),
+            channel: p.channel,
+            voided: p.voidedAt != null,
+            customer: p.customer?.name ?? null,
+            rental: p.rental,
+            sale: p.sale,
+          })),
+        ),
+        purchases: seePurchases
+          ? group(
+              purchases
+                .filter((p) => numberMatches(q, p.number) || spellingMatches(q, [p.supplier.name, p.invoiceNo]))
+                .map((p) => ({ id: p.id, number: p.number, status: p.status, supplier: p.supplier.name, invoiceNo: p.invoiceNo })),
+            )
+          : null,
+        jobs: group(
+          jobs
+            .filter((j) => numberMatches(q, j.number) || vinMatches(q, j.vehicle.vin))
+            .map((j) => ({ id: j.id, number: j.number, status: j.status, reason: j.reason, vin: j.vehicle.vin, model: `${j.vehicle.model.brand} ${j.vehicle.model.name}` })),
+        ),
+      },
+    };
+  });
+}
