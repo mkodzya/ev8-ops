@@ -673,6 +673,7 @@ export const en = {
     unitCost: 'Cost of one, landed',
     units: 'Units',
     addPayment: 'Pay the supplier',
+    payAmount: 'Paid to the supplier, GEL',
     receive: 'Receive the shipment',
     receiveHint: 'Give every line its VINs — as many as were ordered. Each VIN is written with what it cost to land.',
     vins: 'VINs, one per line',

@@ -84,7 +84,8 @@ export function PurchasePage() {
 
       {pay.open && (
         <Drawer title={t.purchases.addPayment} onClose={closePay}>
-          <Field label={t.payments.gross}>
+          {/* Money going out: the customer-payment label read "the customer paid". */}
+          <Field label={t.purchases.payAmount}>
             <input className="input input-amount mono" value={pay.amount} onChange={(e) => setPay({ ...pay, amount: e.target.value })} inputMode="decimal" autoFocus />
           </Field>
           <Field label={t.payments.date}>
