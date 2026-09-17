@@ -94,6 +94,7 @@ export const ru: Dict = {
   },
 
   form: {
+    changesSaved: 'Изменения сохранены',
     saving: 'Записываем…',
     saved: 'Записано',
     retry: 'Не записалось — повторить',
@@ -225,6 +226,8 @@ export const ru: Dict = {
   },
 
   fleet: {
+    vehicleAdded: 'Мопед добавлен',
+    addVehicleCta: 'Добавить мопед',
     title: 'Парк',
     vin: 'VIN',
     model: 'Модель',
@@ -371,6 +374,8 @@ export const ru: Dict = {
   },
 
   customer: {
+    created: 'Карточка клиента создана',
+    create: 'Создать карточку',
     whatsapp: 'WhatsApp',
     title: 'Клиент',
     newTitle: 'Новый клиент',
@@ -569,6 +574,7 @@ export const ru: Dict = {
   },
 
   models: {
+    added: 'Модель добавлена',
     count: counted('модель', 'модели', 'моделей'),
     brand: 'Бренд',
     name: 'Модель',
@@ -635,6 +641,8 @@ export const ru: Dict = {
   },
 
   payments: {
+    voidedToast: 'Платёж отменён',
+    record: 'Записать платёж',
     count: counted('платёж', 'платежа', 'платежей'),
     title: 'Платежи',
     add: 'Провести платёж',
@@ -673,6 +681,8 @@ export const ru: Dict = {
   },
 
   statements: {
+    assigned: (number: string) => `Привязано к ${number}`,
+    ignored: 'Отмечено: не платёж клиента',
     linesCount: counted('строка', 'строки', 'строк'),
     count: counted('выписка', 'выписки', 'выписок'),
     previewTitle: 'Что добавит этот файл',
@@ -708,6 +718,8 @@ export const ru: Dict = {
   },
 
   service: {
+    jobOpened: 'Ремонт открыт',
+    openJob: 'Открыть ремонт',
     jobsCount: counted('ремонт', 'ремонта', 'ремонтов'),
     count: counted('открытый ремонт', 'открытых ремонта', 'открытых ремонтов'),
     title: 'Сервис',
@@ -740,6 +752,8 @@ export const ru: Dict = {
   },
 
   sales: {
+    saleRecorded: 'Продажа оформлена',
+    recordSale: 'Оформить продажу',
     instalmentsCount: counted('взнос', 'взноса', 'взносов'),
     count: counted('продажа', 'продажи', 'продаж'),
     title: 'Продажи',
@@ -774,6 +788,8 @@ export const ru: Dict = {
   },
 
   purchases: {
+    orderCreated: 'Заказ создан',
+    createOrder: 'Создать заказ',
     linesCount: counted('строка', 'строки', 'строк'),
     count: counted('заказ', 'заказа', 'заказов'),
     title: 'Закупки',
@@ -845,6 +861,8 @@ export const ru: Dict = {
   },
 
   stock: {
+    countSaved: 'Пересчёт записан',
+    saveCount: 'Записать пересчёт',
     movesCount: counted('движение', 'движения', 'движений'),
     partsCount: counted('запчасть', 'запчасти', 'запчастей'),
     title: 'Склад',

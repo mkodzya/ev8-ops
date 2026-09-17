@@ -90,6 +90,7 @@ export const en = {
   },
 
   form: {
+    changesSaved: 'Changes saved',
     saving: 'Saving…',
     saved: 'Saved',
     retry: 'Not saved — retry',
@@ -222,6 +223,8 @@ export const en = {
   },
 
   fleet: {
+    vehicleAdded: 'Moped added',
+    addVehicleCta: 'Add moped',
     title: 'Fleet',
     vin: 'VIN',
     model: 'Model',
@@ -368,6 +371,8 @@ export const en = {
   },
 
   customer: {
+    created: 'Customer card created',
+    create: 'Create card',
     whatsapp: 'WhatsApp',
     title: 'Customer',
     newTitle: 'New customer',
@@ -566,6 +571,7 @@ export const en = {
   },
 
   models: {
+    added: 'Model added',
     count: (n: number) => `${n} ${n === 1 ? 'model' : 'models'}`,
     brand: 'Brand',
     name: 'Model',
@@ -632,6 +638,8 @@ export const en = {
   },
 
   payments: {
+    voidedToast: 'Payment voided',
+    record: 'Record payment',
     count: (n: number) => `${n} payment${n === 1 ? '' : 's'}`,
     title: 'Payments',
     add: 'Record a payment',
@@ -670,6 +678,8 @@ export const en = {
   },
 
   statements: {
+    assigned: (number: string) => `Matched to ${number}`,
+    ignored: 'Marked: not a customer payment',
     linesCount: (n: number) => `${n} ${n === 1 ? 'line' : 'lines'}`,
     count: (n: number) => `${n} statement${n === 1 ? '' : 's'}`,
     previewTitle: 'What this file would add',
@@ -705,6 +715,8 @@ export const en = {
   },
 
   service: {
+    jobOpened: 'Repair opened',
+    openJob: 'Open repair',
     jobsCount: (n: number) => `${n} ${n === 1 ? 'repair' : 'repairs'}`,
     count: (n: number) => `${n} open job${n === 1 ? '' : 's'}`,
     title: 'Service',
@@ -737,6 +749,8 @@ export const en = {
   },
 
   sales: {
+    saleRecorded: 'Sale recorded',
+    recordSale: 'Record sale',
     instalmentsCount: (n: number) => `${n} ${n === 1 ? 'instalment' : 'instalments'}`,
     count: (n: number) => `${n} sale${n === 1 ? '' : 's'}`,
     title: 'Sales',
@@ -771,6 +785,8 @@ export const en = {
   },
 
   purchases: {
+    orderCreated: 'Order created',
+    createOrder: 'Create order',
     linesCount: (n: number) => `${n} ${n === 1 ? 'line' : 'lines'}`,
     count: (n: number) => `${n} order${n === 1 ? '' : 's'}`,
     title: 'Purchases',
@@ -842,6 +858,8 @@ export const en = {
   },
 
   stock: {
+    countSaved: 'Count saved',
+    saveCount: 'Save count',
     movesCount: (n: number) => `${n} ${n === 1 ? 'movement' : 'movements'}`,
     partsCount: (n: number) => `${n} part${n === 1 ? '' : 's'}`,
     title: 'Warehouse',

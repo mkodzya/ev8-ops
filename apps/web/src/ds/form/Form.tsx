@@ -152,7 +152,7 @@ export function Form<V>({
 
   return (
     <FieldErrors.Provider value={op.failure}>
-      <form ref={formRef} className={`form ${className ?? ''}`} onSubmit={onSubmit} noValidate={false}>
+      <form ref={formRef} className={`form ${className ?? ''}`} onSubmit={onSubmit} noValidate>
         {general && (
           <div className="form-banner form-banner-bad" role="alert">
             {general.network && <CloudOff size={18} strokeWidth={1.75} aria-hidden="true" />}

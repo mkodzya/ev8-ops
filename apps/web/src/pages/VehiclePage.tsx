@@ -102,7 +102,7 @@ export function VehiclePage() {
           </button>
         )}
         {can('service.manage') && v.state !== 'sold' && v.state !== 'out' && !data.serviceJobs.some((j) => j.status === 'open') && (
-          <NewJob vehicleId={v.id} onDone={reload} onError={setErr} />
+          <NewJob vehicleId={v.id} onDone={reload} />
         )}
         {primary &&
           (primary.to ? (

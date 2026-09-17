@@ -305,7 +305,7 @@ export function RentalPage() {
                       · {t.payments.fee} <span className="mono">{formatGel(p.feeTetri)}</span>
                     </span>
                   )}{' '}
-                  {can('payments.reconcile') && <VoidPayment id={p.id} onDone={reload} onError={setErr} />}
+                  {can('payments.reconcile') && <VoidPayment id={p.id} onDone={reload} />}
                 </span>
               </li>
             ))}

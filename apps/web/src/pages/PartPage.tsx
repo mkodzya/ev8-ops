@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { LoadError } from '../components/LoadError.js';
-import { Drawer } from '../components/Drawer.js';
+import { FormSheet } from '../ds/form/Form.js';
 import { BlockHead, Empty, Loading, PageHead } from '../components/ui.js';
 import { Field, Row } from '../components/Wizard.js';
 import { fmtDate, formatGel } from '../format.js';
@@ -30,66 +30,53 @@ export function PartPage() {
   const t = useT();
   const { can } = useSession();
   const { data, failure, reload } = useLoad<{ part: PartRow; moves: Move[] }>(id ? `/api/parts/${id}` : null);
-  const [count, setCount] = useState({ open: false, qty: '', reason: '', on: todayISO() });
-  const [err, setErr] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [counting, setCounting] = useState(false);
+  const [count, setCount] = useState({ qty: '', reason: '', on: todayISO() });
 
   if (failure) return <LoadError failure={failure} onRetry={reload} />;
   if (!data) return <Loading />;
   const p = data.part;
 
-  const submitCount = async () => {
-    setBusy(true);
-    setErr(null);
-    try {
-      await api.post(`/api/parts/${p.id}/count`, { countedQty: Number(count.qty), reason: count.reason, occurredOn: count.on });
-      setCount({ open: false, qty: '', reason: '', on: todayISO() });
-      reload();
-    } catch (e) {
-      setErr(errorText(e));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const closeCount = () => {
-    setCount({ ...count, open: false });
-    setErr(null);
-  };
-
   return (
     <>
       <PageHead wrap title={p.name} sub={p.archived ? t.stock.archived : undefined}>
         {can('stock.count') && (
-          <button type="button" className="pill pill-sm pill-accent" onClick={() => setCount({ ...count, open: true, qty: String(p.onHand) })}>
+          <button type="button" className="pill pill-sm pill-accent" onClick={() => {
+              setCount({ qty: String(p.onHand), reason: '', on: todayISO() });
+              setCounting(true);
+            }}>
             {t.stock.count}
           </button>
         )}
       </PageHead>
-      {err && <div className="hint hint-bad">{err}</div>}
 
-      {count.open && (
-        <Drawer title={t.stock.count} onClose={closeCount}>
+      {counting && (
+        <FormSheet
+          title={t.stock.count}
+          onClose={() => setCounting(false)}
+          value={count}
+          initial={{ qty: String(p.onHand), reason: '', on: todayISO() }}
+          draft={`part-count:${p.id}`}
+          onRestore={setCount}
+          summary={(v) => v.qty}
+          label={t.stock.saveCount}
+          submit={async (key) => {
+            await api.post(`/api/parts/${p.id}/count`, { countedQty: count.qty === '' ? null : Number(count.qty), reason: count.reason, occurredOn: count.on }, { key });
+            return { toast: { text: t.stock.countSaved } };
+          }}
+          onDone={reload}
+        >
           <p className="hint">{t.stock.countHint}</p>
-          <Field label={t.stock.countedQty}>
+          <Field label={t.stock.countedQty} name="countedQty">
             <input className="input input-amount mono" value={count.qty} onChange={(e) => setCount({ ...count, qty: e.target.value })} inputMode="numeric" autoFocus />
           </Field>
-          <Field label={t.stock.countReason}>
+          <Field label={t.stock.countReason} name="reason">
             <input className="input" value={count.reason} onChange={(e) => setCount({ ...count, reason: e.target.value })} />
           </Field>
-          <Field label={t.payments.date}>
+          <Field label={t.payments.date} name="occurredOn">
             <input className="input mono" type="date" value={count.on} onChange={(e) => setCount({ ...count, on: e.target.value })} />
           </Field>
-          {err && <div className="hint hint-bad">{err}</div>}
-          <div className="row-actions">
-            <button type="button" className="pill" onClick={closeCount}>
-              {t.actions.cancel}
-            </button>
-            <button type="button" className="pill pill-accent" disabled={busy || count.qty === '' || !count.reason.trim()} onClick={() => void submitCount()}>
-              {t.actions.confirm}
-            </button>
-          </div>
-        </Drawer>
+        </FormSheet>
       )}
 
       <div className="two-col">

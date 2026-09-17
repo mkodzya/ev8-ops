@@ -8,8 +8,8 @@ import { DataList } from '../ds/list/DataList.js';
 import { Field } from '../components/Wizard.js';
 import { fmtDate, formatGel } from '../format.js';
 import { useT } from '../i18n/index.js';
-import { Drawer } from '../components/Drawer.js';
-import { errorText, useLoad } from '../lib/use.js';
+import { FormSheet } from '../ds/form/Form.js';
+import { useLoad } from '../lib/use.js';
 import { useSession } from '../session.js';
 
 export type ServiceStatus = 'open' | 'done' | 'cancelled';
@@ -48,7 +48,6 @@ export function ServicePage() {
   const t = useT();
   const { can } = useSession();
   const { data, failure, reload } = useLoad<{ open: number; jobs: ServiceJob[] }>('/api/service');
-  const [err, setErr] = useState<string | null>(null);
   const today = todayISO();
 
   if (failure) return <LoadError failure={failure} onRetry={reload} />;
@@ -57,9 +56,8 @@ export function ServicePage() {
   return (
     <>
       <PageHead wrap title={t.service.title} sub={t.service.count(data.open)}>
-        {can('service.manage') && <NewJob onDone={reload} onError={setErr} />}
+        {can('service.manage') && <NewJob onDone={reload} />}
       </PageHead>
-      {err && <div className="hint hint-bad">{err}</div>}
       <DataList
         rows={data.jobs}
         rowKey={(j) => j.id}
@@ -128,7 +126,9 @@ export function ServicePage() {
 }
 
 /** Opening a repair: a moped, what is wrong, and who pays. */
-export function NewJob({ vehicleId, onDone, onError }: { vehicleId?: string; onDone: () => void; onError: (e: string) => void }) {
+const blankJob = (vehicleId?: string) => ({ vehicleId: vehicleId ?? '', reason: '', payer: 'company', labour: '', doneBy: '', openedOn: todayISO() });
+
+export function NewJob({ vehicleId, onDone }: { vehicleId?: string; onDone: () => void }) {
   const t = useT();
   // "Open a repair" / "Sell a moped" from the "+" arrive with ?new=1 (wave 1 §3.2).
   const [params, setParams] = useSearchParams();
@@ -141,8 +141,7 @@ export function NewJob({ vehicleId, onDone, onError }: { vehicleId?: string; onD
     }
   };
   const fleet = useLoad<{ vehicles: FleetVehicle[] }>(open ? '/api/fleet' : null);
-  const [f, setF] = useState({ vehicleId: vehicleId ?? '', reason: '', payer: 'company', labour: '', doneBy: '', openedOn: todayISO() });
-  const [busy, setBusy] = useState(false);
+  const [f, setF] = useState(() => blankJob(vehicleId));
 
   const repairable = useMemo(
     () => (fleet.data?.vehicles ?? []).filter((v) => v.state !== 'sold' && v.state !== 'out'),
@@ -152,38 +151,43 @@ export function NewJob({ vehicleId, onDone, onError }: { vehicleId?: string; onD
   const rented = chosen?.state === 'rented';
 
 
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setBusy(true);
-    try {
-      await api.post('/api/service', {
-        vehicleId: f.vehicleId || vehicleId,
-        reason: f.reason,
-        payer: rented ? f.payer : 'company',
-        labourTetri: f.labour ? parseGel(f.labour) : 0,
-        doneBy: f.doneBy || null,
-        openedOn: f.openedOn,
-      });
-      setF({ ...f, reason: '', labour: '', doneBy: '' });
-      setOpen(false);
-      onDone();
-    } catch (e) {
-      onError(errorText(e));
-    } finally {
-      setBusy(false);
-    }
-  };
-
   return (
     <>
       <button type="button" className="pill pill-sm pill-accent" onClick={() => setOpen(true)}>
         + {t.service.newJob}
       </button>
       {open && (
-        <Drawer title={t.service.newJob} onClose={() => setOpen(false)}>
-          <form className="form" onSubmit={submit}>
+        <FormSheet
+          title={t.service.newJob}
+          onClose={() => setOpen(false)}
+          value={f}
+          initial={blankJob(vehicleId)}
+          draft={vehicleId ? `job-new:${vehicleId}` : 'job-new'}
+          onRestore={setF}
+          summary={(v) => v.reason}
+          label={t.service.openJob}
+          submit={async (key) => {
+            const job = await api.post<{ id: string }>(
+              '/api/service',
+              {
+                vehicleId: f.vehicleId || vehicleId,
+                reason: f.reason,
+                payer: rented ? f.payer : 'company',
+                labourTetri: f.labour ? parseGel(f.labour) : 0,
+                doneBy: f.doneBy || null,
+                openedOn: f.openedOn,
+              },
+              { key },
+            );
+            return { created: job.id, toast: { text: t.service.jobOpened, open: `/service/${job.id}` } };
+          }}
+          onDone={() => {
+            setF(blankJob(vehicleId));
+            onDone();
+          }}
+        >
       {!vehicleId && (
-        <Field label={t.service.vehicle}>
+        <Field label={t.service.vehicle} name="vehicleId">
           <select className="input" value={f.vehicleId} onChange={(e) => setF({ ...f, vehicleId: e.target.value })} required>
             <option value="">{t.common.dash}</option>
             {repairable.map((v) => (
@@ -194,13 +198,13 @@ export function NewJob({ vehicleId, onDone, onError }: { vehicleId?: string; onD
           </select>
         </Field>
       )}
-      <Field label={t.service.reason}>
+      <Field label={t.service.reason} name="reason">
         <input className="input" value={f.reason} onChange={(e) => setF({ ...f, reason: e.target.value })} required autoFocus />
       </Field>
       {rented && (
         <>
           <p className="hint muted">{t.service.rentedNote}</p>
-          <Field label={t.service.payer}>
+          <Field label={t.service.payer} name="payer">
             <div className="chips">
               {(['company', 'customer'] as const).map((p) => (
                 <button key={p} type="button" className={`pill pill-sm ${f.payer === p ? 'on' : ''}`} onClick={() => setF({ ...f, payer: p })}>
@@ -212,26 +216,17 @@ export function NewJob({ vehicleId, onDone, onError }: { vehicleId?: string; onD
         </>
       )}
       <div className="two-col">
-        <Field label={t.service.labour}>
+        <Field label={t.service.labour} name="labourTetri">
           <input className="input input-amount mono" value={f.labour} onChange={(e) => setF({ ...f, labour: e.target.value })} inputMode="decimal" />
         </Field>
-        <Field label={t.service.doneBy}>
+        <Field label={t.service.doneBy} name="doneBy">
           <input className="input" value={f.doneBy} onChange={(e) => setF({ ...f, doneBy: e.target.value })} />
         </Field>
-        <Field label={t.service.openedOn}>
+        <Field label={t.service.openedOn} name="openedOn">
           <input className="input mono" type="date" value={f.openedOn} onChange={(e) => setF({ ...f, openedOn: e.target.value })} />
         </Field>
       </div>
-      <div className="row-actions">
-        <button type="button" className="pill" onClick={() => setOpen(false)}>
-          {t.actions.cancel}
-        </button>
-        <button className="pill pill-accent" disabled={busy || !f.reason.trim() || !(f.vehicleId || vehicleId)}>
-          {busy ? t.common.checking : t.actions.confirm}
-        </button>
-      </div>
-          </form>
-        </Drawer>
+        </FormSheet>
       )}
     </>
   );

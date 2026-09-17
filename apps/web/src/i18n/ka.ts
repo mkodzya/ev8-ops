@@ -83,6 +83,7 @@ export const ka: Dict = {
   },
 
   form: {
+    changesSaved: 'ცვლილებები შეინახა',
     saving: 'ინახება…',
     saved: 'შენახულია',
     retry: 'არ შეინახა — თავიდან',
@@ -214,6 +215,8 @@ export const ka: Dict = {
   },
 
   fleet: {
+    vehicleAdded: 'მოპედი დაემატა',
+    addVehicleCta: 'მოპედის დამატება',
     title: 'პარკი',
     vin: 'VIN',
     model: 'მოდელი',
@@ -360,6 +363,8 @@ export const ka: Dict = {
   },
 
   customer: {
+    created: 'კლიენტის ბარათი შეიქმნა',
+    create: 'ბარათის შექმნა',
     whatsapp: 'WhatsApp',
     title: 'კლიენტი',
     newTitle: 'ახალი კლიენტი',
@@ -558,6 +563,7 @@ export const ka: Dict = {
   },
 
   models: {
+    added: 'მოდელი დაემატა',
     count: (n: number) => `${n} მოდელი`,
     brand: 'ბრენდი',
     name: 'მოდელი',
@@ -624,6 +630,8 @@ export const ka: Dict = {
   },
 
   payments: {
+    voidedToast: 'გადახდა გაუქმდა',
+    record: 'გადახდის ჩაწერა',
     count: (n: number) => `${n} გადახდა`,
     title: 'გადახდები',
     add: 'გადახდის გატარება',
@@ -662,6 +670,8 @@ export const ka: Dict = {
   },
 
   statements: {
+    assigned: (number: string) => `მიბმულია ${number}-ზე`,
+    ignored: 'მოინიშნა: კლიენტის გადახდა არ არის',
     linesCount: (n: number) => `${n} ხაზი`,
     count: (n: number) => `${n} ამონაწერი`,
     previewTitle: 'რას დაამატებს ეს ფაილი',
@@ -697,6 +707,8 @@ export const ka: Dict = {
   },
 
   service: {
+    jobOpened: 'რემონტი გაიხსნა',
+    openJob: 'რემონტის გახსნა',
     jobsCount: (n: number) => `${n} რემონტი`,
     count: (n: number) => `${n} ღია რემონტი`,
     title: 'სერვისი',
@@ -729,6 +741,8 @@ export const ka: Dict = {
   },
 
   sales: {
+    saleRecorded: 'გაყიდვა გაფორმდა',
+    recordSale: 'გაყიდვის გაფორმება',
     instalmentsCount: (n: number) => `${n} შენატანი`,
     count: (n: number) => `${n} გაყიდვა`,
     title: 'გაყიდვები',
@@ -763,6 +777,8 @@ export const ka: Dict = {
   },
 
   purchases: {
+    orderCreated: 'შეკვეთა შეიქმნა',
+    createOrder: 'შეკვეთის შექმნა',
     linesCount: (n: number) => `${n} ხაზი`,
     count: (n: number) => `${n} შეკვეთა`,
     title: 'შესყიდვები',
@@ -834,6 +850,8 @@ export const ka: Dict = {
   },
 
   stock: {
+    countSaved: 'ინვენტარიზაცია ჩაიწერა',
+    saveCount: 'ინვენტარიზაციის ჩაწერა',
     movesCount: (n: number) => `${n} ოპერაცია`,
     partsCount: (n: number) => `${n} ნაწილი`,
     title: 'საწყობი',
