@@ -92,7 +92,7 @@ export function ModelsPage() {
           onSaved={(m) => {
             setAdding(false);
             reload();
-            navigate(`/models/${m.id}`);
+            navigate(`/fleet/models/${m.id}`);
           }}
         />
       )}
@@ -105,7 +105,7 @@ function Cards({ models }: { models: ModelRow[] }) {
   return (
     <div className="mcards">
       {models.map((m) => (
-        <Link key={m.id} to={`/models/${m.id}`} className={`mcard ${m.archived ? 'mcard-hidden' : ''}`}>
+        <Link key={m.id} to={`/fleet/models/${m.id}`} className={`mcard ${m.archived ? 'mcard-hidden' : ''}`}>
           <span className="mcard-brand">{m.brand}</span>
           <span className="mcard-name">
             {m.name}

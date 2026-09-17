@@ -15,22 +15,23 @@ export function LoadError({ failure, onRetry }: { failure: LoadFailure | null; o
   if (!failure) return null;
 
   if (failure.status === 404) {
-    const section = pathname.split('/')[1] ?? '';
-    const where: Record<string, { missing: keyof typeof t.errors.codes; list: string }> = {
-      fleet: { missing: 'vehicle_not_found', list: t.nav.fleet },
-      models: { missing: 'model_not_found', list: t.nav.models },
-      rentals: { missing: 'rental_not_found', list: t.nav.rentals },
-      sales: { missing: 'sale_not_found', list: t.nav.sales },
-      purchases: { missing: 'purchase_not_found', list: t.nav.purchases },
-      service: { missing: 'job_not_found', list: t.nav.service },
-      customers: { missing: 'customer_not_found', list: t.nav.customers },
-      stock: { missing: 'part_not_found', list: t.stock.nav },
-    };
-    const hit = where[section];
+    // The deepest known list the address sits under: /fleet/models/:id is a
+    // model, /service/stock/parts/:id a part.
+    const where: { prefix: string; missing: keyof typeof t.errors.codes; list: string }[] = [
+      { prefix: '/fleet/models', missing: 'model_not_found', list: t.nav.models },
+      { prefix: '/service/stock', missing: 'part_not_found', list: t.stock.nav },
+      { prefix: '/fleet', missing: 'vehicle_not_found', list: t.nav.fleet },
+      { prefix: '/rentals', missing: 'rental_not_found', list: t.nav.rentals },
+      { prefix: '/sales', missing: 'sale_not_found', list: t.nav.sales },
+      { prefix: '/purchases', missing: 'purchase_not_found', list: t.nav.purchases },
+      { prefix: '/service', missing: 'job_not_found', list: t.nav.service },
+      { prefix: '/customers', missing: 'customer_not_found', list: t.nav.customers },
+    ];
+    const hit = where.find((w) => pathname.startsWith(`${w.prefix}/`));
     return (
       <div className="load-error">
         <p className="empty">{t.errors.codes[hit?.missing ?? 'not_found']}</p>
-        <Link className="pill pill-sm" to={hit ? `/${section}` : '/'}>
+        <Link className="pill pill-sm" to={hit ? hit.prefix : '/'}>
           ← {hit ? hit.list : t.nav.today}
         </Link>
       </div>

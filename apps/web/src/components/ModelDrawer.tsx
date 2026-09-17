@@ -151,7 +151,7 @@ export function ModelDrawer({
             {err.twin && (
               <>
                 {' '}
-                <Link to={`/models/${err.twin.id}`}>{err.twin.name}</Link>
+                <Link to={`/fleet/models/${err.twin.id}`}>{err.twin.name}</Link>
               </>
             )}
           </div>

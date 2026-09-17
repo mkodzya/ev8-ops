@@ -1,6 +1,6 @@
 import { CUSTOMER_KINDS, type CustomerKind } from '@ev8/shared';
 import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api, ApiError } from '../api.js';
 import { Field } from '../components/Wizard.js';
 import { PageHead } from '../components/ui.js';
@@ -12,7 +12,9 @@ import { errorText } from '../lib/use.js';
 export function CustomerForm({ onCreated, embedded }: { onCreated?: (id: string) => void; embedded?: boolean } = {}) {
   const t = useT();
   const navigate = useNavigate();
-  const [f, setF] = useState({ name: '', nameKa: '', nameLat: '', personalId: '', phone: '', email: '', address: '', kind: 'person' as CustomerKind, tags: '', notes: '' });
+  // "New customer with this number" from the search arrives with ?phone= (wave 1 §3.5).
+  const [params] = useSearchParams();
+  const [f, setF] = useState({ name: '', nameKa: '', nameLat: '', personalId: '', phone: params.get('phone') ?? '', email: '', address: '', kind: 'person' as CustomerKind, tags: '', notes: '' });
   const [twin, setTwin] = useState<{ id: string; name: string } | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);

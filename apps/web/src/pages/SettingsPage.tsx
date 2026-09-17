@@ -21,7 +21,6 @@ export function SettingsPage() {
   const t = useT();
   const { me } = useSession();
   const users = useLoad<Users>('/api/users');
-  const points = useLoad<Points>('/api/locations?all=1');
   const [err, setErr] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   // A role is a set of rights, including the owner's: it changes after a
@@ -132,6 +131,32 @@ export function SettingsPage() {
         )}
       </section>
 
+      <PointsBlock />
+    </>
+  );
+}
+
+
+/**
+ * Points — the company's own words for its places. Lives in Settings and,
+ * for the owner, as the "Points" tab of the fleet (wave 1 §3.2).
+ */
+export function PointsBlock() {
+  const t = useT();
+  const points = useLoad<Points>('/api/locations?all=1');
+  const [err, setErr] = useState<string | null>(null);
+  const act = async (fn: () => Promise<unknown>, reload: () => void) => {
+    setErr(null);
+    try {
+      await fn();
+      reload();
+    } catch (e) {
+      setErr(errorText(e));
+    }
+  };
+  return (
+    <>
+      {err && <div className="hint hint-bad">{err}</div>}
       {/* Points. The list is the company's own words for its places, so it
           starts empty on purpose: a seeded "Warehouse" nobody says out loud
           would be the first wrong answer in the fleet. */}

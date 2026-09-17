@@ -35,6 +35,67 @@ export const ka: Dict = {
     statements: 'ამონაწერები',
     customers: 'კლიენტები',
     models: 'მოდელები',
+    money: 'ფული',
+    cash: 'სალარო',
+    reports: 'ანგარიშები',
+    settings: 'პარამეტრები',
+    groups: { work: 'მუშაობა', money: 'ფული', manage: 'მართვა' },
+  },
+
+  shell: {
+    actionsTitle: 'რა გავაკეთოთ',
+    openActions: 'ქმედებები',
+    search: 'ძებნა',
+    back: 'უკან',
+    close: 'დახურვა',
+    menu: 'მენიუ',
+    myLogin: 'ჩემი შესვლა · პაროლი',
+    actions: {
+      pickup: 'მოპედის გაცემა',
+      return: 'დაბრუნების მიღება',
+      newCustomer: 'ახალი კლიენტი',
+      openRepair: 'რემონტის გახსნა',
+      sell: 'მოპედის გაყიდვა',
+    },
+    tabs: {
+      vehicles: 'მოპედები',
+      models: 'მოდელები',
+      points: 'წერტილები',
+      jobs: 'რემონტები',
+      stock: 'საწყობი',
+      payments: 'გადახდები',
+      statements: 'ამონაწერები',
+      economics: 'ეკონომიკა',
+    },
+  },
+
+  searchUi: {
+    placeholder: 'VIN, სახელი, ტელეფონი, ნომერი, თანხა',
+    hint: 'VIN-ის ბოლო 4 · სახელი ლათინურად ან ქართულად · ტელეფონის ციფრები · R-, SL-, PO-, SV-ნომერი · გადახდის თანხა',
+    recent: 'ბოლოს გახსნილი',
+    recentNone: 'ამ მოწყობილობაზე ჯერ არაფერი გაიხსნა.',
+    offline: 'კავშირი არ არის — ვეძებთ ამ მოწყობილობაზე ბოლოს გახსნილებში.',
+    failed: 'ძებნამ არ უპასუხა.',
+    nothing: (q: string) => `„${q}“ — არაფერი მოიძებნა`,
+    newCustomerWith: (phone: string) => `ახალი კლიენტი ნომრით ${phone}`,
+    more: (n: number) => `კიდევ ${n}`,
+    groups: { customers: 'კლიენტები', vehicles: 'მოპედები', rentals: 'იჯარები', sales: 'გაყიდვები', payments: 'გადახდები', purchases: 'შესყიდვები', jobs: 'რემონტები' },
+  },
+
+  returnPick: {
+    title: 'ვისი დაბრუნება?',
+    placeholder: 'სახელი, ტელეფონი ან VIN-ის ბოლო 4',
+    today: 'დაბრუნება დღეს',
+    all: 'ყველა აქტიური',
+    planToday: 'გეგმა დღეს',
+    late: (n: number) => `აგვიანებს ${n} დღე`,
+    none: 'აქტიური იჯარა არ არის.',
+    nothing: (q: string) => `„${q}“ — არაფერი მოიძებნა.`,
+  },
+
+  noAccess: {
+    title: 'ეს მფლობელებისთვისაა',
+    toToday: '„დღეს“-ზე',
   },
 
   colors: {

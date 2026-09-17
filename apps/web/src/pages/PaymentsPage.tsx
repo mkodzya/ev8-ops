@@ -1,3 +1,4 @@
+import { todayISO } from '@ev8/shared';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api.js';
@@ -27,12 +28,19 @@ export interface PaymentRow {
   createdBy: string | null;
 }
 
-export function PaymentsPage() {
+/**
+ * Money → Payments for the owners; with `till`, the manager's "Till" until
+ * wave 2 builds the real one (wave 1 §3.2): the cash they took themselves
+ * today. The API already gives a manager only their own cash.
+ */
+export function PaymentsPage({ till = false }: { till?: boolean } = {}) {
   const t = useT();
   const { can } = useSession();
   const { data, failure, reload } = useLoad<{ payments: PaymentRow[] }>('/api/payments');
+  const today = todayISO();
+  const rows = till ? (data?.payments ?? []).filter((p) => p.channel === 'cash' && p.occurredOn === today) : (data?.payments ?? []);
   const sorted = useSortable(
-    data?.payments ?? [],
+    rows,
     {
       date: { value: (p) => p.occurredOn, first: 'desc' },
       channel: { value: (p) => p.channel },
@@ -60,7 +68,7 @@ export function PaymentsPage() {
 
   return (
     <>
-      <PageHead title={t.payments.title} sub={t.payments.count(data.payments.length)} />
+      <PageHead title={till ? t.nav.cash : t.payments.title} sub={t.payments.count(rows.length)} />
       {can('payments.reconcile') && (
         <div className="seg-row tabs">
           <button type="button" className={`seg ${view === 'queue' ? 'on' : ''}`} onClick={() => setTab('queue')}>
@@ -81,7 +89,7 @@ export function PaymentsPage() {
           ) : queue.data.lines.length === 0 ? (
             <div className="task-clear">
               <p className="t-h3">{t.statements.queueNone}</p>
-              <Link className="pill pill-accent" to="/statements">
+              <Link className="pill pill-accent" to="/money/statements">
                 {t.statements.importCta}
               </Link>
             </div>

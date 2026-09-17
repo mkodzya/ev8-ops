@@ -64,7 +64,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       // A phone at the showroom is shared: whatever a wizard kept on this
       // device for its author goes with the session (drafts are ev8-draft:*).
       try {
-        for (const key of Object.keys(localStorage)) if (key.startsWith('ev8-draft:')) localStorage.removeItem(key);
+        for (const key of Object.keys(localStorage)) if (key.startsWith('ev8-draft:') || key === 'ev8-recent') localStorage.removeItem(key);
       } catch {
         /* private mode: nothing was stored */
       }

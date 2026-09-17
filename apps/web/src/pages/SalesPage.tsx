@@ -1,6 +1,6 @@
 import { parseGel, todayISO } from '@ev8/shared';
 import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { LoadError } from '../components/LoadError.js';
 import { Empty, Loading, PageHead, Vin } from '../components/ui.js';
@@ -135,7 +135,16 @@ export function SalesPage() {
 /** Selling: a buyer, a moped, a price, and how it will be paid for. */
 function NewSale({ onDone, onError }: { onDone: () => void; onError: (e: string) => void }) {
   const t = useT();
-  const [open, setOpen] = useState(false);
+  // "Open a repair" / "Sell a moped" from the "+" arrive with ?new=1 (wave 1 §3.2).
+  const [params, setParams] = useSearchParams();
+  const [open, setOpenState] = useState(params.get('new') === '1');
+  const setOpen = (v: boolean) => {
+    setOpenState(v);
+    if (!v && params.has('new')) {
+      params.delete('new');
+      setParams(params, { replace: true });
+    }
+  };
   const fleet = useLoad<{ vehicles: FleetVehicle[] }>(open ? '/api/fleet' : null);
   const customers = useLoad<{ customers: { id: string; name: string; phone: string | null }[] }>(open ? '/api/customers' : null);
   const models = useLoad<{ models: { id: string; salePriceTetri: number | null }[] }>(open ? '/api/models' : null);

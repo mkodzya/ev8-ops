@@ -78,7 +78,7 @@ export function StockPage() {
               {mopeds.data.rows.map((m) => (
                 <tr key={m.id}>
                   <td>
-                    <Link to={`/models/${m.id}`}>{m.name}</Link>
+                    <Link to={`/fleet/models/${m.id}`}>{m.name}</Link>
                   </td>
                   <td className="num mono state-available">{m.inStock}</td>
                   <td className="num mono">{m.byState.rented}</td>
@@ -127,7 +127,7 @@ export function StockPage() {
                 {parts.data.parts.map((p) => (
                   <tr key={p.id}>
                     <td>
-                      <Link to={`/stock/parts/${p.id}`}>{p.name}</Link>
+                      <Link to={`/service/stock/parts/${p.id}`}>{p.name}</Link>
                     </td>
                     <td className="muted mono">{p.sku ?? t.common.dash}</td>
                     <td className={`num mono ${p.onHand < 0 ? 'crit-text' : p.shortBy > 0 ? 'warn-text' : ''}`}>
