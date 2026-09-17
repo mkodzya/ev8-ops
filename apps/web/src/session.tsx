@@ -1,6 +1,6 @@
 import type { Permission, Role } from '@ev8/shared';
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
-import { SIGNED_OUT_EVENT, api } from './api.js';
+import { ApiError, SIGNED_OUT_EVENT, api } from './api.js';
 
 export interface Me {
   id: string;
@@ -41,9 +41,20 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, [refresh]);
 
   useEffect(() => {
-    const gone = () => setMe(null);
-    window.addEventListener(SIGNED_OUT_EVENT, gone);
-    return () => window.removeEventListener(SIGNED_OUT_EVENT, gone);
+    // One refused request is a reason to ask, not proof: an API that is
+    // restarting answers 401 for a moment before it can read sessions again,
+    // and a live session must not be sent to type its password. The session
+    // is over only when "who am I" itself says so.
+    const check = () => {
+      api
+        .get<Me>('/api/me')
+        .then(setMe)
+        .catch((e) => {
+          if (e instanceof ApiError && e.status === 401) setMe(null);
+        });
+    };
+    window.addEventListener(SIGNED_OUT_EVENT, check);
+    return () => window.removeEventListener(SIGNED_OUT_EVENT, check);
   }, []);
 
   const logout = useCallback(async () => {
