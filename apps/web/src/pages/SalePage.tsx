@@ -2,6 +2,7 @@ import { parseGel, todayISO } from '@ev8/shared';
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../api.js';
+import { Drawer } from '../components/Drawer.js';
 import { BlockHead, Empty, Loading, PageHead, Vin } from '../components/ui.js';
 import { Field, Row } from '../components/Wizard.js';
 import { fmtDate, formatGel } from '../format.js';
@@ -46,21 +47,36 @@ export function SalePage() {
     }
   };
 
+  // A drawer that closes takes its error with it: the page behind would
+  // otherwise keep showing a complaint about a form nobody can see.
+  const closePay = () => {
+    setPay({ ...pay, open: false });
+    setErr(null);
+  };
+  const closeBack = () => {
+    setBack({ ...back, open: false });
+    setErr(null);
+  };
+  const closeCancel = () => {
+    setCancelling(false);
+    setErr(null);
+  };
+
   return (
     <>
       <PageHead wrap title={s.number} sub={t.sales.statuses[s.status]}>
         {live && can('cash.record') && (
-          <button type="button" className="pill pill-sm pill-accent" onClick={() => setPay({ ...pay, open: !pay.open })}>
+          <button type="button" className="pill pill-sm pill-accent" onClick={() => setPay({ ...pay, open: true })}>
             {t.sales.addPayment}
           </button>
         )}
         {live && can('sales.manage') && s.vehicle && (
-          <button type="button" className="pill pill-sm" onClick={() => setBack({ ...back, open: !back.open })}>
+          <button type="button" className="pill pill-sm" onClick={() => setBack({ ...back, open: true })}>
             {t.sales.buyBack}
           </button>
         )}
         {live && can('sales.manage') && (
-          <button type="button" className="pill pill-sm" onClick={() => setCancelling((v) => !v)}>
+          <button type="button" className="pill pill-sm" onClick={() => setCancelling(true)}>
             {t.sales.cancel}
           </button>
         )}
@@ -68,7 +84,7 @@ export function SalePage() {
       {err && <div className="hint hint-bad">{err}</div>}
 
       {pay.open && (
-        <section className="card card-drawer">
+        <Drawer title={t.sales.addPayment} onClose={closePay}>
           <Field label={t.payments.channel}>
             <div className="chips">
               {(['transfer', 'acquiring', 'cash'] as const).map((c) => (
@@ -84,8 +100,9 @@ export function SalePage() {
           <Field label={t.payments.date}>
             <input className="input mono" type="date" value={pay.on} onChange={(e) => setPay({ ...pay, on: e.target.value })} />
           </Field>
+          {err && <div className="hint hint-bad">{err}</div>}
           <div className="row-actions">
-            <button type="button" className="pill" onClick={() => setPay({ ...pay, open: false })}>
+            <button type="button" className="pill" onClick={closePay}>
               {t.actions.cancel}
             </button>
             <button
@@ -100,11 +117,11 @@ export function SalePage() {
               {t.actions.confirm}
             </button>
           </div>
-        </section>
+        </Drawer>
       )}
 
       {back.open && (
-        <section className="card card-drawer">
+        <Drawer title={t.sales.buyBack} onClose={closeBack}>
           <Field label={t.sales.buyBackAmount}>
             <input className="input input-amount mono" value={back.amount} onChange={(e) => setBack({ ...back, amount: e.target.value })} inputMode="decimal" autoFocus />
           </Field>
@@ -120,43 +137,49 @@ export function SalePage() {
               ))}
             </div>
           </Field>
+          {err && <div className="hint hint-bad">{err}</div>}
           <div className="row-actions">
-            <button type="button" className="pill" onClick={() => setBack({ ...back, open: false })}>
+            <button type="button" className="pill" onClick={closeBack}>
               {t.actions.cancel}
             </button>
             <button
               type="button"
               className="pill pill-accent"
               disabled={busy || parseGel(back.amount) == null}
-              onClick={() => void act(() =>
-                api.post(`/api/sales/${s.id}/buy-back`, { amountTetri: parseGel(back.amount), occurredOn: back.on, toState: back.toState }),
-              )}
+              onClick={() => void act(async () => {
+                await api.post(`/api/sales/${s.id}/buy-back`, { amountTetri: parseGel(back.amount), occurredOn: back.on, toState: back.toState });
+                setBack({ ...back, open: false, amount: '' });
+              })}
             >
               {t.actions.confirm}
             </button>
           </div>
-        </section>
+        </Drawer>
       )}
 
       {cancelling && (
-        <section className="card card-drawer">
+        <Drawer title={t.sales.cancel} onClose={closeCancel}>
           <Field label={t.sales.cancelReason}>
             <input className="input" value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} autoFocus />
           </Field>
+          {err && <div className="hint hint-bad">{err}</div>}
           <div className="row-actions">
-            <button type="button" className="pill" onClick={() => setCancelling(false)}>
+            <button type="button" className="pill" onClick={closeCancel}>
               {t.actions.cancel}
             </button>
             <button
               type="button"
               className="pill pill-accent"
               disabled={busy || !cancelReason.trim()}
-              onClick={() => void act(() => api.post(`/api/sales/${s.id}/cancel`, { reason: cancelReason }))}
+              onClick={() => void act(async () => {
+                await api.post(`/api/sales/${s.id}/cancel`, { reason: cancelReason });
+                setCancelling(false);
+              })}
             >
               {t.actions.confirm}
             </button>
           </div>
-        </section>
+        </Drawer>
       )}
 
       <div className="two-col">

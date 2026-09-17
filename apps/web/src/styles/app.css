@@ -389,7 +389,6 @@ a { color: var(--accent); text-decoration: none; }
 .timeline li { display: grid; grid-template-columns: 96px 1fr; gap: 12px; padding: 8px 0; border-top: 1px solid var(--line-soft); font: var(--text-body-sm); }
 .timeline li:first-child { border-top: 0; }
 .table-flat { border: 0; border-radius: 0; }
-.card-drawer { border-color: var(--accent-hover); }
 .row-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
 .rail-cta {
   display: flex; align-items: center; justify-content: center;
