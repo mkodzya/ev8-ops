@@ -36,6 +36,21 @@ export function checkWorkerToken(given: string, allowDev: boolean): string {
 
 const allowDev = (): boolean => process.env.ALLOW_DEV_SECRET === 'true';
 
+/**
+ * A laptop stack — this Mac's working stand or its QA copy — as opposed to a
+ * stand on the server. One flag decides everything that is fine on a laptop
+ * and never on a stand: the development secret, the demo dataset, the demo
+ * logins. Read on every call, so a test can switch it.
+ */
+export const isDevStack = allowDev;
+
+/** Logins of the demo dataset (seed.ts): nobody real signs in on this domain. */
+export const DEMO_EMAIL_DOMAIN = '@ev8.test';
+
+export function demoLoginRefused(email: string, devStack: boolean = isDevStack()): boolean {
+  return !devStack && email.trim().toLowerCase().endsWith(DEMO_EMAIL_DOMAIN);
+}
+
 export const env = {
   DATABASE_URL: process.env.DATABASE_URL ?? 'postgresql://ev8ops:ev8ops@localhost:5433/ev8ops',
   SESSION_SECRET: checkSessionSecret(process.env.SESSION_SECRET ?? '', allowDev()),

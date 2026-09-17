@@ -1,3 +1,4 @@
+import { phoneTabsFor, sectionsFor, type SectionPath } from '@ev8/shared';
 import { useEffect, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { api } from './api.js';
@@ -9,13 +10,12 @@ import { useSession } from './session.js';
 // one lime accent on the active item), a bottom bar on a phone — every item
 // reachable with a thumb (spec §9.2).
 //
-// The phone bar carries five things and no more (U11): Today, Fleet, Rentals,
-// Payments, More. Twelve items sharing 375 px is a list nobody can hit; the
-// rest live behind More, which opens a sheet above the bar. The badge on
-// Today counts what the first row of that screen actually lists — one rule,
-// in lib/tasks.ts, so the two can never disagree.
-
-const PHONE_TABS = ['/', '/fleet', '/rentals', '/payments'];
+// The phone bar carries five things and no more (U11): the four sections the
+// role reaches for first, then More. Which sections a role sees at all, and
+// which four come first, is one rule in @ev8/shared (navigation.ts) — a
+// mechanic gets Service and Stock where a manager has Rentals and Payments.
+// The badge on Today counts what the first row of that screen actually lists
+// — one rule, in lib/tasks.ts, so the two can never disagree.
 
 const STORAGE_KEY = 'ev8-lang';
 
@@ -51,29 +51,37 @@ export function Shell() {
     if (!stored && LOCALES.includes(me.locale as Locale)) setLocale(me.locale as Locale);
   }, [me, setLocale]);
 
+  const signOut = async () => {
+    await logout();
+    // Replace, so Back from the login page does not reopen the last screen.
+    navigate('/login', { replace: true });
+  };
+
   const remember = (l: Locale) => {
     void api.patch('/api/me/locale', { locale: l }).catch(() => {});
   };
 
-  const items: { to: string; label: string; end?: boolean }[] = [
-    { to: '/', label: t.nav.today, end: true },
-    { to: '/fleet', label: t.nav.fleet },
-    { to: '/models', label: t.nav.models },
-    { to: '/rentals', label: t.nav.rentals },
-    { to: '/sales', label: t.nav.sales },
-    ...(can('settings.manage') ? [{ to: '/purchases', label: t.nav.purchases }] : []),
-    { to: '/service', label: t.nav.service },
-    { to: '/stock', label: t.stock.nav },
-    { to: '/payments', label: t.nav.payments },
-    ...(can('payments.reconcile') ? [{ to: '/statements', label: t.nav.statements }] : []),
-    ...(can('reports.view') ? [{ to: '/economics', label: t.economics.nav }] : []),
-    { to: '/customers', label: t.nav.customers },
-    ...(can('users.manage') ? [{ to: '/settings', label: t.settings.title }] : []),
-    ...(can('users.manage') ? [{ to: '/design', label: t.design.title }] : []),
-  ];
-
-  const phone = items.filter((it) => PHONE_TABS.includes(it.to));
-  const rest = items.filter((it) => !PHONE_TABS.includes(it.to));
+  const labels: Record<SectionPath, string> = {
+    '/': t.nav.today,
+    '/fleet': t.nav.fleet,
+    '/models': t.nav.models,
+    '/rentals': t.nav.rentals,
+    '/sales': t.nav.sales,
+    '/purchases': t.nav.purchases,
+    '/service': t.nav.service,
+    '/stock': t.stock.nav,
+    '/payments': t.nav.payments,
+    '/statements': t.nav.statements,
+    '/economics': t.economics.nav,
+    '/customers': t.nav.customers,
+    '/settings': t.settings.title,
+    '/design': t.design.title,
+  };
+  const permissions = me?.permissions ?? [];
+  const items = sectionsFor(permissions).map((to) => ({ to, label: labels[to], end: to === '/' }));
+  const tabs: readonly string[] = phoneTabsFor(permissions);
+  const phone = tabs.map((to) => items.find((it) => it.to === to)!);
+  const rest = items.filter((it) => !tabs.includes(it.to));
 
   return (
     <div className="shell">
@@ -114,10 +122,7 @@ export function Shell() {
             <button
               type="button"
               className="rail-signout"
-              onClick={async () => {
-                await logout();
-                navigate('/login');
-              }}
+              onClick={() => void signOut()}
             >
               {t.common.signOut}
             </button>
@@ -140,6 +145,15 @@ export function Shell() {
               {me && (
                 <li>
                   <Link to="/profile">{t.profile.title}</Link>
+                </li>
+              )}
+              {/* On a phone the rail's sign-out is hidden; a shared phone at
+                  the showroom still has to be able to leave (B1-01). */}
+              {me && (
+                <li>
+                  <button type="button" className="more-signout" onClick={() => void signOut()}>
+                    {t.common.signOut}
+                  </button>
                 </li>
               )}
             </ul>

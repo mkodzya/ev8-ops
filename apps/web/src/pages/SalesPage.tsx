@@ -2,6 +2,7 @@ import { parseGel, todayISO } from '@ev8/shared';
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api.js';
+import { LoadError } from '../components/LoadError.js';
 import { Empty, Loading, PageHead, Vin } from '../components/ui.js';
 import { Field } from '../components/Wizard.js';
 import { fmtDate, formatGel } from '../format.js';
@@ -42,7 +43,7 @@ interface FleetVehicle {
 export function SalesPage() {
   const t = useT();
   const { can } = useSession();
-  const { data, error, reload } = useLoad<{ overdueTetri: number; sales: Sale[] }>('/api/sales');
+  const { data, failure, reload } = useLoad<{ overdueTetri: number; sales: Sale[] }>('/api/sales');
   // Every heading sorts, and the newest sale breaks every tie.
   const sorted = useSortable(
     data?.sales ?? [],
@@ -61,7 +62,7 @@ export function SalesPage() {
   );
   const [err, setErr] = useState<string | null>(null);
 
-  if (error) return <Empty text={error} />;
+  if (failure) return <LoadError failure={failure} onRetry={reload} />;
   if (!data) return <Loading />;
 
   return (

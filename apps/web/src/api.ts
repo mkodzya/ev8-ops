@@ -10,6 +10,8 @@ export class ApiError extends Error {
   }
 }
 
+export const SIGNED_OUT_EVENT = 'ev8:signed-out';
+
 async function request<T>(method: string, url: string, body?: unknown): Promise<T> {
   const res = await fetch(url, {
     method,
@@ -24,6 +26,13 @@ async function request<T>(method: string, url: string, body?: unknown): Promise<
     /* empty body */
   }
   if (!res.ok) {
+    // The session ended somewhere else — expired, signed out on another
+    // device, password changed. Whatever screen asked, the answer is the
+    // login page and then back here (B1-02). The login call itself and the
+    // first "who am I" are expected to meet a 401 and are left alone.
+    if (res.status === 401 && url !== '/api/auth/login' && url !== '/api/me') {
+      window.dispatchEvent(new Event(SIGNED_OUT_EVENT));
+    }
     const { error, message, ...extra } = data as { error?: string; message?: string };
     throw new ApiError(res.status, error ?? 'error', message ?? `Request failed (${res.status})`, extra);
   }

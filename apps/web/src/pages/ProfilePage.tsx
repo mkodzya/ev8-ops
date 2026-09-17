@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { api } from '../api.js';
 import { PageHead } from '../components/ui.js';
 import { Field } from '../components/Wizard.js';
@@ -9,7 +10,8 @@ import { useSession } from '../session.js';
 /** Your own login: the language and the password, nothing else. */
 export function ProfilePage() {
   const t = useT();
-  const { me } = useSession();
+  const { me, logout } = useSession();
+  const navigate = useNavigate();
   const [current, setCurrent] = useState('');
   const [next, setNext] = useState('');
   const [done, setDone] = useState(false);
@@ -56,13 +58,25 @@ export function ProfilePage() {
               <LanguageToggle onChange={(l) => void api.patch('/api/me/locale', { locale: l }).catch(() => {})} />
             </span>
           </div>
+          <div className="row-actions">
+            <button
+              type="button"
+              className="pill"
+              onClick={async () => {
+                await logout();
+                navigate('/login', { replace: true });
+              }}
+            >
+              {t.common.signOut}
+            </button>
+          </div>
         </section>
         <section className="card">
           <form className="form" onSubmit={submit}>
             <Field label={t.profile.currentPassword}>
               <input className="input" type="password" value={current} onChange={(e) => setCurrent(e.target.value)} autoComplete="current-password" />
             </Field>
-            <Field label={t.profile.newPassword} hint={t.users.passwordHint}>
+            <Field label={t.profile.newPassword} hint={t.profile.passwordHint}>
               <input className="input" type="password" value={next} onChange={(e) => setNext(e.target.value)} autoComplete="new-password" minLength={8} />
             </Field>
             {done && <div className="hint">{t.profile.changed}</div>}

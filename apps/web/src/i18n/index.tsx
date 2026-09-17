@@ -41,6 +41,13 @@ interface I18nCtx {
 
 const Ctx = createContext<I18nCtx | null>(null);
 
+// The dictionary on screen right now, for code that runs outside a component:
+// errorText is called from catch blocks and has no hook to ask.
+let active: Dict = DICTS[DEFAULT_LOCALE];
+export function currentDict(): Dict {
+  return active;
+}
+
 export function I18nProvider({ children }: { children: ReactNode }) {
   const [locale, setLocaleState] = useState<Locale>(initialLocale);
 
@@ -54,7 +61,10 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const value = useMemo<I18nCtx>(() => ({ locale, setLocale, t: DICTS[locale] }), [locale, setLocale]);
+  const value = useMemo<I18nCtx>(() => {
+    active = DICTS[locale];
+    return { locale, setLocale, t: DICTS[locale] };
+  }, [locale, setLocale]);
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 

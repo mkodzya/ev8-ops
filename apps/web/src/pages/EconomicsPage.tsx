@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { LoadError } from '../components/LoadError.js';
 import { BlockHead, Empty, Loading, PageHead, Vin } from '../components/ui.js';
 import { Row } from '../components/Wizard.js';
 import { formatGel } from '../format.js';
@@ -48,9 +49,9 @@ export function perRentedDay(row: EconomicsRow): number | null {
 /** What each moped earned and cost (DSH-03). */
 export function EconomicsPage() {
   const t = useT();
-  const { data, error } = useLoad<{ rows: EconomicsRow[]; totals: Totals }>('/api/economics');
+  const { data, failure, reload } = useLoad<{ rows: EconomicsRow[]; totals: Totals }>('/api/economics');
 
-  if (error) return <Empty text={error} />;
+  if (failure) return <LoadError failure={failure} onRetry={reload} />;
   if (!data) return <Loading />;
   const { rows, totals } = data;
 

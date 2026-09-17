@@ -1,6 +1,7 @@
 import type { VehiclePool, VehicleState } from '@ev8/shared';
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import { LoadError } from '../components/LoadError.js';
 import { ModelDrawer } from '../components/ModelDrawer.js';
 import { BlockHead, ColorText, Empty, Loading, PageHead, PlaceText, StateBadge, Vin } from '../components/ui.js';
 import { Row } from '../components/Wizard.js';
@@ -38,7 +39,7 @@ export function ModelPage() {
   const t = useT();
   const { can } = useSession();
   const navigate = useNavigate();
-  const { data, error, reload } = useLoad<Card>(id ? `/api/models/${id}` : null);
+  const { data, failure, reload } = useLoad<Card>(id ? `/api/models/${id}` : null);
   const all = useLoad<{ models: { brand: string }[] }>(can('settings.manage') ? '/api/models?archived=1' : null);
   const [editing, setEditing] = useState(false);
 
@@ -56,7 +57,7 @@ export function ModelPage() {
     'state',
   );
 
-  if (error) return <Empty text={error} />;
+  if (failure) return <LoadError failure={failure} onRetry={reload} />;
   if (!data) return <Loading />;
   const m = data.model;
 

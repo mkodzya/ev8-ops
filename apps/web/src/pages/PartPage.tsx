@@ -2,6 +2,7 @@ import { todayISO } from '@ev8/shared';
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../api.js';
+import { LoadError } from '../components/LoadError.js';
 import { Drawer } from '../components/Drawer.js';
 import { BlockHead, Empty, Loading, PageHead } from '../components/ui.js';
 import { Field, Row } from '../components/Wizard.js';
@@ -28,12 +29,12 @@ export function PartPage() {
   const { id } = useParams();
   const t = useT();
   const { can } = useSession();
-  const { data, error, reload } = useLoad<{ part: PartRow; moves: Move[] }>(id ? `/api/parts/${id}` : null);
+  const { data, failure, reload } = useLoad<{ part: PartRow; moves: Move[] }>(id ? `/api/parts/${id}` : null);
   const [count, setCount] = useState({ open: false, qty: '', reason: '', on: todayISO() });
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  if (error) return <Empty text={error} />;
+  if (failure) return <LoadError failure={failure} onRetry={reload} />;
   if (!data) return <Loading />;
   const p = data.part;
 

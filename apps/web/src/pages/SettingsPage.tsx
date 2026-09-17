@@ -22,9 +22,14 @@ export function SettingsPage() {
   const users = useLoad<Users>('/api/users');
   const points = useLoad<Points>('/api/locations?all=1');
   const [err, setErr] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  // A role is a set of rights, including the owner's: it changes after a
+  // yes, not on a stray tap in a dropdown (B1-03).
+  const [roleChange, setRoleChange] = useState<{ id: string; name: string; role: Role } | null>(null);
 
   const act = async (fn: () => Promise<unknown>, reload: () => void) => {
     setErr(null);
+    setNotice(null);
     try {
       await fn();
       reload();
@@ -37,6 +42,31 @@ export function SettingsPage() {
     <>
       <PageHead title={t.settings.title} />
       {err && <div className="hint hint-bad">{err}</div>}
+      {notice && <div className="hint">{notice}</div>}
+
+      {roleChange && (
+        <Drawer title={t.users.confirmRoleTitle} onClose={() => setRoleChange(null)}>
+          <p>{t.users.confirmRole(roleChange.name, t.users.rolesAs[roleChange.role])}</p>
+          {err && <div className="hint hint-bad">{err}</div>}
+          <div className="row-actions">
+            <button type="button" className="pill" onClick={() => setRoleChange(null)}>
+              {t.actions.cancel}
+            </button>
+            <button
+              type="button"
+              className="pill pill-accent"
+              onClick={() =>
+                void act(async () => {
+                  await api.patch(`/api/users/${roleChange.id}`, { role: roleChange.role });
+                  setRoleChange(null);
+                }, users.reload)
+              }
+            >
+              {t.actions.confirm}
+            </button>
+          </div>
+        </Drawer>
+      )}
 
       <section className="card">
         <BlockHead title={t.settings.users} sub={users.data ? t.users.count(users.data.users.length) : undefined}>
@@ -65,7 +95,7 @@ export function SettingsPage() {
                       <select
                         className="input input-inline"
                         value={u.role}
-                        onChange={(e) => void act(() => api.patch(`/api/users/${u.id}`, { role: e.target.value }), users.reload)}
+                        onChange={(e) => setRoleChange({ id: u.id, name: u.name, role: e.target.value as Role })}
                       >
                         {ROLES.map((r) => (
                           <option key={r} value={r}>
@@ -84,7 +114,14 @@ export function SettingsPage() {
                       >
                         {u.active ? t.users.switchOff : t.users.switchOn}
                       </button>{' '}
-                      <ResetPassword id={u.id} onDone={() => setErr(null)} onError={setErr} />
+                      <ResetPassword
+                        id={u.id}
+                        onDone={() => {
+                          setErr(null);
+                          setNotice(t.users.passwordSet(u.name));
+                        }}
+                        onError={setErr}
+                      />
                     </td>
                   </tr>
                 ))}

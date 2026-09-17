@@ -1,6 +1,7 @@
 import { VEHICLE_COLORS, VEHICLE_POOLS, VEHICLE_STATES, colorOf, daysBetween, tokens, type VehiclePool, type VehicleState } from '@ev8/shared';
 import { useEffect, useMemo, useState } from 'react';
-import { errorText, useLoad } from '../lib/use.js';
+import { errorText, failureOf, useLoad, type LoadFailure } from '../lib/use.js';
+import { LoadError } from '../components/LoadError.js';
 import { Field } from '../components/Wizard.js';
 import { Drawer } from '../components/Drawer.js';
 import { ColorPicker } from '../components/ColorPicker.js';
@@ -84,8 +85,13 @@ export function FleetPage() {
   const pool = params.get('pool') as PoolKey | null;
   const noPoint = params.get('place') === 'unset';
 
+  const [failure, setFailure] = useState<LoadFailure | null>(null);
   useEffect(() => {
-    void api.get<Fleet>('/api/fleet').then(setData);
+    setFailure(null);
+    api
+      .get<Fleet>('/api/fleet')
+      .then(setData)
+      .catch((e) => setFailure(failureOf(e)));
   }, [tick]);
 
   // Long enough to notice a wrong click, short enough that the list is not
@@ -186,6 +192,7 @@ export function FleetPage() {
     setFinding(false);
   };
 
+  if (!data && failure) return <LoadError failure={failure} onRetry={() => setTick((n) => n + 1)} />;
   if (!data) return <Loading />;
 
   return (

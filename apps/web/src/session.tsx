@@ -1,6 +1,6 @@
 import type { Permission, Role } from '@ev8/shared';
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
-import { api } from './api.js';
+import { SIGNED_OUT_EVENT, api } from './api.js';
 
 export interface Me {
   id: string;
@@ -40,10 +40,23 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     void refresh();
   }, [refresh]);
 
+  useEffect(() => {
+    const gone = () => setMe(null);
+    window.addEventListener(SIGNED_OUT_EVENT, gone);
+    return () => window.removeEventListener(SIGNED_OUT_EVENT, gone);
+  }, []);
+
   const logout = useCallback(async () => {
     try {
       await api.post('/api/auth/logout');
     } finally {
+      // A phone at the showroom is shared: whatever a wizard kept on this
+      // device for its author goes with the session (drafts are ev8-draft:*).
+      try {
+        for (const key of Object.keys(localStorage)) if (key.startsWith('ev8-draft:')) localStorage.removeItem(key);
+      } catch {
+        /* private mode: nothing was stored */
+      }
       setMe(null);
     }
   }, []);

@@ -2,6 +2,7 @@ import { parseGel, todayISO } from '@ev8/shared';
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api.js';
+import { LoadError } from '../components/LoadError.js';
 import { PhotoPicker } from '../components/PhotoPicker.js';
 import { Drawer } from '../components/Drawer.js';
 import { BlockHead, Empty, Loading, PageHead, Vin } from '../components/ui.js';
@@ -20,7 +21,7 @@ export function ServiceJobPage() {
   const t = useT();
   const navigate = useNavigate();
   const { can } = useSession();
-  const { data, error, reload } = useLoad<{ job: ServiceJob }>(id ? `/api/service/${id}` : null);
+  const { data, failure, reload } = useLoad<{ job: ServiceJob }>(id ? `/api/service/${id}` : null);
   const [err, setErr] = useState<string | null>(null);
   const [part, setPart] = useState({ partId: '', name: '', qty: '1', price: '' });
   const parts = useLoad<{ parts: PartRow[] }>(can('service.manage') ? '/api/parts' : null);
@@ -32,7 +33,7 @@ export function ServiceJobPage() {
   const [cancelReason, setCancelReason] = useState('');
   const [busy, setBusy] = useState(false);
 
-  if (error) return <Empty text={error} />;
+  if (failure) return <LoadError failure={failure} onRetry={reload} />;
   if (!data) return <Loading />;
   const j = data.job;
   const open = j.status === 'open';

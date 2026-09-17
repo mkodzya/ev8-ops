@@ -3,6 +3,8 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useSession } from '../session.js';
 import { api } from '../api.js';
+import { LoadError } from '../components/LoadError.js';
+import { failureOf, type LoadFailure } from '../lib/use.js';
 import { CustomerName, Empty, Loading, PageHead, RentalBadge, Vin } from '../components/ui.js';
 import { fmtDate, formatGel } from '../format.js';
 import { useT } from '../i18n/index.js';
@@ -31,9 +33,16 @@ export function RentalsPage() {
   const navigate = useNavigate();
   const { can } = useSession();
   const [rows, setRows] = useState<Rental[] | null>(null);
+  const [failure, setFailure] = useState<LoadFailure | null>(null);
+  const [tick, setTick] = useState(0);
   useEffect(() => {
-    void api.get<{ rentals: Rental[] }>('/api/rentals').then((r) => setRows(r.rentals));
-  }, []);
+    setFailure(null);
+    api
+      .get<{ rentals: Rental[] }>('/api/rentals')
+      .then((r) => setRows(r.rentals))
+      .catch((e) => setFailure(failureOf(e)));
+  }, [tick]);
+  if (!rows && failure) return <LoadError failure={failure} onRetry={() => setTick((n) => n + 1)} />;
   if (!rows) return <Loading />;
 
   return (

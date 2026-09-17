@@ -197,6 +197,7 @@ a { color: var(--accent); text-decoration: none; }
 .lbl { display: block; font: var(--text-label); color: var(--muted); margin-bottom: 6px; }
 .hint { font: var(--text-label); margin-bottom: 12px; }
 .hint-bad { color: var(--crit); }
+.load-error { display: grid; gap: 10px; justify-items: start; }
 /* A field's hint sits under its control, never beside a narrow one. */
 .field > .hint { display: block; margin: 6px 0 0; }
 .toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 16px; }
@@ -685,6 +686,20 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
     border-top: 1px solid var(--line-soft);
   }
   .more-sheet li:first-child a { border-top: 0; }
+  .more-signout {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    min-height: var(--control);
+    padding: 0;
+    border: 0;
+    border-top: 1px solid var(--line-soft);
+    background: none;
+    color: var(--muted);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
   .more-sheet a.on { color: var(--accent); font-weight: 600; }
 }
 

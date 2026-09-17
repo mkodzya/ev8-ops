@@ -46,6 +46,10 @@ export function buildApp(): FastifyInstance {
       const code = typeof framework.code === 'string' ? framework.code : 'bad_request';
       return reply.code(status).send({ error: code, message: framework.message ?? 'Bad request.' });
     }
+    // A record id that is not an id at all — /sales/new, a truncated link —
+    // names no record: that is a 404 for the screen to explain, not a fault
+    // (B1-02). Postgres says 22P02; Prisma wraps it in its own codes.
+    if (isMalformedId(err)) return reply.code(404).send({ error: 'not_found', message: 'No such record.' });
     app.log.error(err);
     return reply.code(500).send({ error: 'internal', message: 'Something broke on our side.' });
   });
@@ -71,4 +75,15 @@ export function buildApp(): FastifyInstance {
   purchaseRoutes(app);
 
   return app;
+}
+
+function isMalformedId(err: unknown): boolean {
+  const seen = new Set<unknown>();
+  for (let e: unknown = err; e && typeof e === 'object' && !seen.has(e); e = (e as { cause?: unknown }).cause) {
+    seen.add(e);
+    const { code, message } = e as { code?: unknown; message?: unknown };
+    if (code === '22P02' || code === 'P2023') return true;
+    if (typeof message === 'string' && /invalid input syntax for type uuid|Error creating UUID|invalid character.*UUID/i.test(message)) return true;
+  }
+  return false;
 }
