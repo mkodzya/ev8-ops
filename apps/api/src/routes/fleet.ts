@@ -1,4 +1,4 @@
-import { VEHICLE_POOLS, VEHICLE_STATES, type VehiclePool, type VehicleState } from '@ev8/shared';
+import { POOL_EVENT, VEHICLE_POOLS, VEHICLE_STATES, type VehiclePool, type VehicleState } from '@ev8/shared';
 import type { FastifyInstance } from 'fastify';
 import { isoDate } from '../lib/dates.js';
 import { prisma } from '../lib/db.js';
@@ -17,8 +17,14 @@ export function fleetRoutes(app: FastifyInstance): void {
         location: { select: { id: true, name: true } },
         // The last thing that happened to this moped. Nothing yet? Then the
         // day it arrived — and for the mopeds Odoo never dated, nothing at
-        // all, which the screen shows as a dash and not as a zero.
-        events: { select: { occurredOn: true }, orderBy: [{ occurredOn: 'desc' }, { createdAt: 'desc' }], take: 1 },
+        // all, which the screen shows as a dash and not as a zero. A park move
+        // is paper, not a ride: it does not break the silence.
+        events: {
+          where: { kind: { notIn: Object.values(POOL_EVENT) } },
+          select: { occurredOn: true },
+          orderBy: [{ occurredOn: 'desc' }, { createdAt: 'desc' }],
+          take: 1,
+        },
         currentRental: {
           select: { id: true, number: true, paidThrough: true, customer: { select: { id: true, name: true, nameKa: true, nameLat: true } } },
         },
