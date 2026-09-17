@@ -1,8 +1,8 @@
 /* Lists (wave 1 §3.6; prototypes/wave-1-lists.html). */
 .list-toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
-.list-search { flex: 1 1 240px; display: flex; align-items: center; gap: 8px; min-height: var(--control); padding: 0 14px; border: 1px solid var(--line-control); border-radius: 12px; background: var(--surface); color: var(--muted); max-width: 420px; }
-.list-search:focus-within { box-shadow: var(--focus-ring); }
-.list-search-input { flex: 1; min-width: 0; border: 0; outline: none; background: none; font: var(--text-body); color: var(--ink); min-height: calc(var(--control) - 2px); }
+.dl-search { flex: 1 1 240px; display: flex; align-items: center; gap: 8px; min-height: var(--control); padding: 0 14px; border: 1px solid var(--line-control); border-radius: 12px; background: var(--surface); color: var(--muted); max-width: 420px; }
+.dl-search:focus-within { box-shadow: var(--focus-ring); }
+.dl-search-input { flex: 1; min-width: 0; border: 0; outline: none; background: none; font: var(--text-body); color: var(--ink); min-height: calc(var(--control) - 2px); }
 .list-sort-btn { width: var(--control); height: var(--control); border-radius: 50%; border: var(--hairline) solid var(--ink); background: var(--surface); color: var(--ink); display: grid; place-items: center; cursor: pointer; flex: none; }
 .list-chips { flex: 1 1 100%; display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px; }
 .list-chip { display: inline-flex; align-items: center; gap: 6px; min-height: var(--control-dense); padding: 0 12px; border: 1px solid var(--line-control); border-radius: var(--radius-pill); background: var(--surface); font: var(--text-button-sm); color: var(--ink); white-space: nowrap; cursor: pointer; }
@@ -33,9 +33,10 @@ a.list-card:hover { background: var(--surface-hover); }
 }
 @media (max-width: 899px) {
   .list-table { display: none; }
-  .list-search { max-width: none; }
+  .dl-search { max-width: none; }
 }
 
 .strike {
   text-decoration: line-through;
 }
+.lc-sub .mono { white-space: nowrap; }

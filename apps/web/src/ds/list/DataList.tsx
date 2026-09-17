@@ -108,9 +108,9 @@ export function DataList<T>({
       {(search || chips.length > 0 || sortable.length > 0) && (
         <div className="list-toolbar">
           {search && (
-            <label className="list-search">
+            <label className="dl-search">
               <Search size={18} strokeWidth={1.75} aria-hidden="true" />
-              <input className="list-search-input" value={q} placeholder={search.placeholder} onChange={(e) => setParam('q', e.target.value || null)} aria-label={search.placeholder} />
+              <input className="dl-search-input" value={q} placeholder={search.placeholder} onChange={(e) => setParam('q', e.target.value || null)} aria-label={search.placeholder} />
             </label>
           )}
           {sortable.length > 0 && (
