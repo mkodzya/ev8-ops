@@ -1,3 +1,4 @@
+import { spellingMatches } from '@ev8/shared';
 import { useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api.js';
@@ -6,24 +7,29 @@ import { fmtDate, formatGel } from '../format.js';
 import { useT } from '../i18n/index.js';
 import { errorText, useLoad } from '../lib/use.js';
 import { LoadError } from '../components/LoadError.js';
+import { DataList } from '../ds/list/DataList.js';
 
 type Bank = 'bog' | 'tbc' | 'credo';
 
+const BANKS = ['bog', 'tbc', 'credo'] as const;
+
+interface Statement {
+  id: string;
+  bank: Bank;
+  fileName: string;
+  account: string | null;
+  periodFrom: string | null;
+  periodTo: string | null;
+  lineCount: number;
+  newLines: number;
+  matched: number;
+  uploadedBy: string | null;
+  createdAt: string;
+}
+
 interface Statements {
   queue: number;
-  statements: {
-    id: string;
-    bank: Bank;
-    fileName: string;
-    account: string | null;
-    periodFrom: string | null;
-    periodTo: string | null;
-    lineCount: number;
-    newLines: number;
-    matched: number;
-    uploadedBy: string | null;
-    createdAt: string;
-  }[];
+  statements: Statement[];
 }
 
 export interface Hint {
@@ -198,39 +204,48 @@ export function StatementsPage() {
         <BlockHead title={t.statements.title} sub={statements.data ? t.statements.count(statements.data.statements.length) : undefined} />
         {!statements.data ? (
           statements.failure ? <LoadError failure={statements.failure} onRetry={statements.reload} /> : <Loading />
-        ) : statements.data.statements.length === 0 ? (
-          <Empty text={t.statements.none} />
         ) : (
-          <div className="table-wrap table-flat">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>{t.statements.bank}</th>
-                  <th>{t.statements.file}</th>
-                  <th>{t.statements.period}</th>
-                  <th className="num">{t.statements.lines}</th>
-                  <th className="num">{t.statements.newLines}</th>
-                  <th className="num">{t.statements.matched}</th>
-                  <th>{t.statements.loadedBy}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {statements.data.statements.map((s) => (
-                  <tr key={s.id}>
-                    <td>{t.statements.banks[s.bank]}</td>
-                    <td className="muted">{s.fileName}</td>
-                    <td className="mono">
-                      {fmtDate(s.periodFrom)} — {fmtDate(s.periodTo)}
-                    </td>
-                    <td className="num mono">{s.lineCount}</td>
-                    <td className="num mono">{s.newLines}</td>
-                    <td className="num mono">{s.matched}</td>
-                    <td>{s.uploadedBy ?? t.common.dash}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <DataList
+            rows={statements.data.statements}
+            rowKey={(s) => s.id}
+            fallback={(a, b) => b.createdAt.localeCompare(a.createdAt)}
+            search={{ placeholder: t.lists.statementsSearch, match: (s, q) => spellingMatches(q, [s.fileName, s.account, s.uploadedBy]) }}
+            chips={BANKS.map((b) => ({ key: b, label: t.statements.banks[b], test: (s: Statement) => s.bank === b }))}
+            empty={{ text: t.statements.none }}
+            card={(s) => ({
+              title: (
+                <>
+                  {t.statements.banks[s.bank]} · <span className="mono">{fmtDate(s.periodFrom)} — {fmtDate(s.periodTo)}</span>
+                </>
+              ),
+              sub: (
+                <>
+                  {s.fileName}
+                  {s.uploadedBy && <> · {s.uploadedBy}</>}
+                </>
+              ),
+              right: <span className="mono">{s.newLines} / {s.matched}</span>,
+              rightSub: `${t.statements.newLines} / ${t.statements.matched}`,
+            })}
+            columns={[
+              { key: 'bank', label: t.statements.bank, cell: (s) => t.statements.banks[s.bank], sort: { value: (s) => s.bank } },
+              { key: 'file', label: t.statements.file, cell: (s) => <span className="muted">{s.fileName}</span>, sort: { value: (s) => s.fileName } },
+              {
+                key: 'period',
+                label: t.statements.period,
+                cell: (s) => (
+                  <span className="mono">
+                    {fmtDate(s.periodFrom)} — {fmtDate(s.periodTo)}
+                  </span>
+                ),
+                sort: { value: (s) => s.periodTo, first: 'desc' },
+              },
+              { key: 'lines', label: t.statements.lines, num: true, cell: (s) => <span className="mono">{s.lineCount}</span>, sort: { value: (s) => s.lineCount, first: 'desc' } },
+              { key: 'newLines', label: t.statements.newLines, num: true, cell: (s) => <span className="mono">{s.newLines}</span>, sort: { value: (s) => s.newLines, first: 'desc' } },
+              { key: 'matched', label: t.statements.matched, num: true, cell: (s) => <span className="mono">{s.matched}</span>, sort: { value: (s) => s.matched, first: 'desc' } },
+              { key: 'loadedBy', label: t.statements.loadedBy, cell: (s) => <span>{s.uploadedBy ?? t.common.dash}</span>, sort: { value: (s) => s.uploadedBy } },
+            ]}
+          />
         )}
       </section>
     </>

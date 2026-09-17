@@ -132,6 +132,7 @@ export function PageHead({
   useAnnounceHeader(title, sub);
   return (
     <>
+      <SectionTabs on="phone" />
       <header className={`page-head ${wrap ? 'page-head-wrap' : ''}`}>
         {/* The words share a baseline with each other; the group they make is
             what the buttons centre on. Baseline and centre on one flex line
@@ -149,7 +150,7 @@ export function PageHead({
         )}
       </header>
       {note != null && <p className="page-note">{note}</p>}
-      <SectionTabs />
+      <SectionTabs on="laptop" />
     </>
   );
 }

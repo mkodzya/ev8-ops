@@ -225,6 +225,8 @@
   white-space: nowrap;
 }
 .section-tab.on { color: var(--ink); border-color: var(--ink); }
+@media (min-width: 900px) { .section-tabs-phone { display: none; } }
+@media (max-width: 899px) { .section-tabs-laptop { display: none; } }
 @media (max-width: 899px) {
   .section-tabs { border-bottom: 0; gap: 8px; margin: 0 calc(-1 * var(--space4)) var(--space3); padding: 0 var(--space4) 4px; }
   .section-tab {
