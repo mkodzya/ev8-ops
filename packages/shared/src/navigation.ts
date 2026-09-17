@@ -14,12 +14,12 @@ export const SECTIONS = [
   { path: '/', anyOf: [] },
   { path: '/fleet', anyOf: ['fleet.view'] },
   { path: '/models', anyOf: ['fleet.view'] },
-  { path: '/rentals', anyOf: ['rental.create', 'rental.return', 'cash.record', 'reports.view'] },
-  { path: '/sales', anyOf: ['sales.manage', 'cash.record', 'reports.view'] },
-  { path: '/purchases', anyOf: ['settings.manage'] },
-  { path: '/service', anyOf: ['service.manage', 'fleet.state.manual'] },
+  { path: '/rentals', anyOf: ['fleet.view'] },
+  { path: '/sales', anyOf: ['fleet.view'] },
+  { path: '/purchases', anyOf: ['purchases.view'] },
+  { path: '/service', anyOf: ['fleet.view'] },
   { path: '/stock', anyOf: ['fleet.view'] },
-  { path: '/payments', anyOf: ['cash.record', 'payments.reconcile', 'reports.view'] },
+  { path: '/payments', anyOf: ['cash.record', 'payments.view'] },
   { path: '/statements', anyOf: ['payments.reconcile'] },
   { path: '/economics', anyOf: ['reports.view'] },
   { path: '/customers', anyOf: ['fleet.view'] },
@@ -31,9 +31,7 @@ export type SectionPath = (typeof SECTIONS)[number]['path'];
 
 /**
  * What a thumb reaches first, in order. The phone bar takes the first four a
- * role actually has; everything else is under More. A manager gets Today,
- * Fleet, Rentals, Payments; a mechanic, who has no rentals or payments, gets
- * Service and Stock in their place.
+ * role actually has; everything else is under More.
  */
 const PHONE_PRIORITY: readonly SectionPath[] = ['/', '/fleet', '/rentals', '/payments', '/service', '/stock', '/sales', '/customers'];
 export const PHONE_TAB_COUNT = 4;

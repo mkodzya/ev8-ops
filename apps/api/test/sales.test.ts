@@ -7,8 +7,8 @@ async function fixtures(price = 320600) {
   const model = await prisma.vehicleModel.create({ data: { brand: 'Test', name: `Model ${uniq()}`, salePriceTetri: price } });
   const vehicle = await prisma.vehicle.create({ data: { vin: `TESTL${uniq().replace(/\D/g, '').slice(-12).padStart(12, '0')}`, modelId: model.id } });
   const customer = await prisma.customer.create({ data: { name: `Buyer ${uniq()}` } });
-  const director = await loginAs('director');
-  return { prisma, model, vehicle, customer, director };
+  const owner = await loginAs('owner');
+  return { prisma, model, vehicle, customer, owner };
 }
 
 function saleCard(res: { body: string }) {
@@ -29,8 +29,8 @@ function saleCard(res: { body: string }) {
 
 describe.skipIf(!HAS_DB)('selling (SAL-01)', () => {
   it('takes the VIN out of the fleet and gives twelve months of warranty', async () => {
-    const { prisma, vehicle, customer, director } = await fixtures();
-    const res = await call(director, 'POST', '/api/sales', {
+    const { prisma, vehicle, customer, owner } = await fixtures();
+    const res = await call(owner, 'POST', '/api/sales', {
       customerId: customer.id,
       vehicleId: vehicle.id,
       priceTetri: '2900',
@@ -42,27 +42,27 @@ describe.skipIf(!HAS_DB)('selling (SAL-01)', () => {
     expect(number).toMatch(/^SL-\d{5}$/);
 
     expect((await prisma.vehicle.findUniqueOrThrow({ where: { id: vehicle.id } })).state).toBe('sold');
-    const card = saleCard(await call(director, 'GET', `/api/sales/${id}`));
+    const card = saleCard(await call(owner, 'GET', `/api/sales/${id}`));
     expect(card.sale.warrantyUntil).toBe('2027-05-19');
     // Paid in one go is one instalment, due the day of the sale.
     expect(card.sale.instalments).toHaveLength(1);
     expect(card.sale.instalments[0]).toMatchObject({ seq: 1, dueOn: '2026-05-19', amountTetri: 290000 });
     expect(card.sale.outstandingTetri).toBe(290000);
 
-    const fleet = json<{ events: { kind: string }[] }>(await call(director, 'GET', `/api/fleet/${vehicle.id}`));
+    const fleet = json<{ events: { kind: string }[] }>(await call(owner, 'GET', `/api/fleet/${vehicle.id}`));
     expect(fleet.events.map((e) => e.kind)).toContain('sold');
   });
 
   it('refuses a moped that is out with somebody, and one already sold', async () => {
-    const { prisma, vehicle, customer, director } = await fixtures();
+    const { prisma, vehicle, customer, owner } = await fixtures();
     await prisma.vehicle.update({ where: { id: vehicle.id }, data: { state: 'rented' } });
-    const rented = await call(director, 'POST', '/api/sales', { customerId: customer.id, vehicleId: vehicle.id, priceTetri: '2900' });
+    const rented = await call(owner, 'POST', '/api/sales', { customerId: customer.id, vehicleId: vehicle.id, priceTetri: '2900' });
     expect(rented.statusCode).toBe(409);
     expect(json<{ error: string }>(rented).error).toBe('vehicle_not_available');
 
     await prisma.vehicle.update({ where: { id: vehicle.id }, data: { state: 'available' } });
-    expect((await call(director, 'POST', '/api/sales', { customerId: customer.id, vehicleId: vehicle.id, priceTetri: '2900' })).statusCode).toBe(201);
-    const twice = await call(director, 'POST', '/api/sales', { customerId: customer.id, vehicleId: vehicle.id, priceTetri: '2900' });
+    expect((await call(owner, 'POST', '/api/sales', { customerId: customer.id, vehicleId: vehicle.id, priceTetri: '2900' })).statusCode).toBe(201);
+    const twice = await call(owner, 'POST', '/api/sales', { customerId: customer.id, vehicleId: vehicle.id, priceTetri: '2900' });
     expect(twice.statusCode).toBe(409);
   });
 
@@ -76,9 +76,9 @@ describe.skipIf(!HAS_DB)('selling (SAL-01)', () => {
 
 describe.skipIf(!HAS_DB)('the schedule (SAL-02)', () => {
   it('builds the real one and shows what is behind: 900 down, nine of 300', async () => {
-    const { vehicle, customer, director } = await fixtures();
+    const { vehicle, customer, owner } = await fixtures();
     const { id } = json<{ id: string }>(
-      await call(director, 'POST', '/api/sales', {
+      await call(owner, 'POST', '/api/sales', {
         customerId: customer.id,
         vehicleId: vehicle.id,
         priceTetri: '3600',
@@ -87,29 +87,29 @@ describe.skipIf(!HAS_DB)('the schedule (SAL-02)', () => {
         soldOn: '2025-05-27',
       }),
     );
-    let card = saleCard(await call(director, 'GET', `/api/sales/${id}`));
+    let card = saleCard(await call(owner, 'GET', `/api/sales/${id}`));
     expect(card.sale.instalments).toHaveLength(10);
     expect(card.sale.instalments[0].amountTetri).toBe(90000);
     expect(card.sale.instalments.slice(1).every((i) => i.amountTetri === 30000)).toBe(true);
 
     // Only the down payment arrived. Every monthly instalment is long past
     // due, so 2 700 is behind — the figure the company knows.
-    await call(director, 'POST', `/api/sales/${id}/payments`, { channel: 'transfer', grossTetri: '900', occurredOn: '2025-05-27' });
-    card = saleCard(await call(director, 'GET', `/api/sales/${id}`));
+    await call(owner, 'POST', `/api/sales/${id}/payments`, { channel: 'transfer', grossTetri: '900', occurredOn: '2025-05-27' });
+    card = saleCard(await call(owner, 'GET', `/api/sales/${id}`));
     expect(card.sale.paidTetri).toBe(90000);
     expect(card.sale.outstandingTetri).toBe(270000);
     expect(card.sale.overdueTetri).toBe(270000);
     expect(card.sale.instalments[0].payStatus).toBe('paid');
     expect(card.sale.instalments[1].overdue).toBe(true);
 
-    const summary = json<{ salesOverdueTetri: number }>(await call(director, 'GET', '/api/summary'));
+    const summary = json<{ salesOverdueTetri: number }>(await call(owner, 'GET', '/api/summary'));
     expect(summary.salesOverdueTetri).toBeGreaterThanOrEqual(270000);
   });
 
   it('a payment fills instalments from the oldest, part-paying the one it runs out on', async () => {
-    const { vehicle, customer, director } = await fixtures();
+    const { vehicle, customer, owner } = await fixtures();
     const { id } = json<{ id: string }>(
-      await call(director, 'POST', '/api/sales', {
+      await call(owner, 'POST', '/api/sales', {
         customerId: customer.id,
         vehicleId: vehicle.id,
         priceTetri: '1200',
@@ -117,27 +117,27 @@ describe.skipIf(!HAS_DB)('the schedule (SAL-02)', () => {
         soldOn: '2026-01-10',
       }),
     );
-    await call(director, 'POST', `/api/sales/${id}/payments`, { channel: 'cash', grossTetri: '450' });
-    const card = saleCard(await call(director, 'GET', `/api/sales/${id}`));
+    await call(owner, 'POST', `/api/sales/${id}/payments`, { channel: 'cash', grossTetri: '450' });
+    const card = saleCard(await call(owner, 'GET', `/api/sales/${id}`));
     expect(card.sale.instalments.map((i) => i.payStatus)).toEqual(['paid', 'partial', 'unpaid', 'unpaid']);
     expect(card.sale.instalments[1].paidTetri).toBe(15000);
   });
 
   it('counts a sale on the customer’s balance and takes it off when the payment is voided', async () => {
-    const { vehicle, customer, director } = await fixtures();
+    const { vehicle, customer, owner } = await fixtures();
     const { id } = json<{ id: string }>(
-      await call(director, 'POST', '/api/sales', { customerId: customer.id, vehicleId: vehicle.id, priceTetri: '1000', months: 2, soldOn: '2026-01-10' }),
+      await call(owner, 'POST', '/api/sales', { customerId: customer.id, vehicleId: vehicle.id, priceTetri: '1000', months: 2, soldOn: '2026-01-10' }),
     );
-    let balance = json<{ invoicedTetri: number; outstandingTetri: number }>(await call(director, 'GET', `/api/customers/${customer.id}/balance`));
+    let balance = json<{ invoicedTetri: number; outstandingTetri: number }>(await call(owner, 'GET', `/api/customers/${customer.id}/balance`));
     expect(balance.invoicedTetri).toBe(100000);
     expect(balance.outstandingTetri).toBe(100000);
 
-    const paid = json<{ id: string }>(await call(director, 'POST', `/api/sales/${id}/payments`, { channel: 'cash', grossTetri: '1000' }));
-    balance = json<{ invoicedTetri: number; outstandingTetri: number }>(await call(director, 'GET', `/api/customers/${customer.id}/balance`));
+    const paid = json<{ id: string }>(await call(owner, 'POST', `/api/sales/${id}/payments`, { channel: 'cash', grossTetri: '1000' }));
+    balance = json<{ invoicedTetri: number; outstandingTetri: number }>(await call(owner, 'GET', `/api/customers/${customer.id}/balance`));
     expect(balance.outstandingTetri).toBe(0);
 
-    expect((await call(director, 'POST', `/api/payments/${paid.id}/void`, { reason: 'wrong sale' })).statusCode).toBe(200);
-    const card = saleCard(await call(director, 'GET', `/api/sales/${id}`));
+    expect((await call(owner, 'POST', `/api/payments/${paid.id}/void`, { reason: 'wrong sale' })).statusCode).toBe(200);
+    const card = saleCard(await call(owner, 'GET', `/api/sales/${id}`));
     expect(card.sale.paidTetri).toBe(0);
     expect(card.sale.instalments.every((i) => i.payStatus === 'unpaid')).toBe(true);
   });
@@ -145,19 +145,19 @@ describe.skipIf(!HAS_DB)('the schedule (SAL-02)', () => {
 
 describe.skipIf(!HAS_DB)('buying it back (SAL-03)', () => {
   it('money goes out, the VIN comes back, and the history holds both events', async () => {
-    const { prisma, vehicle, customer, director } = await fixtures();
+    const { prisma, vehicle, customer, owner } = await fixtures();
     const { id } = json<{ id: string }>(
-      await call(director, 'POST', '/api/sales', { customerId: customer.id, vehicleId: vehicle.id, priceTetri: '2900', soldOn: '2026-05-19' }),
+      await call(owner, 'POST', '/api/sales', { customerId: customer.id, vehicleId: vehicle.id, priceTetri: '2900', soldOn: '2026-05-19' }),
     );
-    const back = await call(director, 'POST', `/api/sales/${id}/buy-back`, { amountTetri: '2440', occurredOn: '2026-06-03', channel: 'cash' });
+    const back = await call(owner, 'POST', `/api/sales/${id}/buy-back`, { amountTetri: '2440', occurredOn: '2026-06-03', channel: 'cash' });
     expect(back.statusCode, back.body).toBe(200);
 
     expect((await prisma.vehicle.findUniqueOrThrow({ where: { id: vehicle.id } })).state).toBe('available');
-    const card = saleCard(await call(director, 'GET', `/api/sales/${id}`));
+    const card = saleCard(await call(owner, 'GET', `/api/sales/${id}`));
     expect(card.sale.status).toBe('bought_back');
     expect(card.payments).toEqual([{ direction: 'out', grossTetri: 244000, occurredOn: '2026-06-03', channel: 'cash', id: expect.any(String) }]);
 
-    const fleet = json<{ events: { kind: string; occurredOn: string }[] }>(await call(director, 'GET', `/api/fleet/${vehicle.id}`));
+    const fleet = json<{ events: { kind: string; occurredOn: string }[] }>(await call(owner, 'GET', `/api/fleet/${vehicle.id}`));
     const kinds = fleet.events.map((e) => e.kind);
     expect(kinds).toContain('sold');
     expect(kinds).toContain('bought_back');
@@ -165,43 +165,43 @@ describe.skipIf(!HAS_DB)('buying it back (SAL-03)', () => {
   });
 
   it('can bring it back needing work instead of straight into the fleet', async () => {
-    const { prisma, vehicle, customer, director } = await fixtures();
+    const { prisma, vehicle, customer, owner } = await fixtures();
     const { id } = json<{ id: string }>(
-      await call(director, 'POST', '/api/sales', { customerId: customer.id, vehicleId: vehicle.id, priceTetri: '2900', soldOn: '2026-05-19' }),
+      await call(owner, 'POST', '/api/sales', { customerId: customer.id, vehicleId: vehicle.id, priceTetri: '2900', soldOn: '2026-05-19' }),
     );
-    await call(director, 'POST', `/api/sales/${id}/buy-back`, { amountTetri: '2000', occurredOn: '2026-06-03', toState: 'service' });
+    await call(owner, 'POST', `/api/sales/${id}/buy-back`, { amountTetri: '2000', occurredOn: '2026-06-03', toState: 'service' });
     expect((await prisma.vehicle.findUniqueOrThrow({ where: { id: vehicle.id } })).state).toBe('service');
   });
 
   it('refuses a buy-back dated before the sale, and a second one', async () => {
-    const { vehicle, customer, director } = await fixtures();
+    const { vehicle, customer, owner } = await fixtures();
     const { id } = json<{ id: string }>(
-      await call(director, 'POST', '/api/sales', { customerId: customer.id, vehicleId: vehicle.id, priceTetri: '2900', soldOn: '2026-05-19' }),
+      await call(owner, 'POST', '/api/sales', { customerId: customer.id, vehicleId: vehicle.id, priceTetri: '2900', soldOn: '2026-05-19' }),
     );
-    const early = await call(director, 'POST', `/api/sales/${id}/buy-back`, { amountTetri: '100', occurredOn: '2026-05-01' });
+    const early = await call(owner, 'POST', `/api/sales/${id}/buy-back`, { amountTetri: '100', occurredOn: '2026-05-01' });
     expect(json<{ error: string }>(early).error).toBe('before_sale');
-    expect((await call(director, 'POST', `/api/sales/${id}/buy-back`, { amountTetri: '100', occurredOn: '2026-06-01' })).statusCode).toBe(200);
-    expect((await call(director, 'POST', `/api/sales/${id}/buy-back`, { amountTetri: '100', occurredOn: '2026-06-02' })).statusCode).toBe(409);
+    expect((await call(owner, 'POST', `/api/sales/${id}/buy-back`, { amountTetri: '100', occurredOn: '2026-06-01' })).statusCode).toBe(200);
+    expect((await call(owner, 'POST', `/api/sales/${id}/buy-back`, { amountTetri: '100', occurredOn: '2026-06-02' })).statusCode).toBe(409);
   });
 });
 
 describe.skipIf(!HAS_DB)('a sale entered by mistake', () => {
   it('is cancelled with a reason and gives the VIN back, but not while money hangs on it', async () => {
-    const { prisma, vehicle, customer, director } = await fixtures();
+    const { prisma, vehicle, customer, owner } = await fixtures();
     const { id } = json<{ id: string }>(
-      await call(director, 'POST', '/api/sales', { customerId: customer.id, vehicleId: vehicle.id, priceTetri: '2900' }),
+      await call(owner, 'POST', '/api/sales', { customerId: customer.id, vehicleId: vehicle.id, priceTetri: '2900' }),
     );
-    await call(director, 'POST', `/api/sales/${id}/payments`, { channel: 'cash', grossTetri: '100' });
-    const held = await call(director, 'POST', `/api/sales/${id}/cancel`, { reason: 'wrong VIN' });
+    await call(owner, 'POST', `/api/sales/${id}/payments`, { channel: 'cash', grossTetri: '100' });
+    const held = await call(owner, 'POST', `/api/sales/${id}/cancel`, { reason: 'wrong VIN' });
     expect(held.statusCode).toBe(409);
     expect(json<{ error: string }>(held).error).toBe('sale_has_payments');
 
     const { prisma: db } = await import('../src/lib/db.js');
     const payment = await db.payment.findFirstOrThrow({ where: { saleId: id } });
-    await call(director, 'POST', `/api/payments/${payment.id}/void`, { reason: 'wrong sale' });
+    await call(owner, 'POST', `/api/payments/${payment.id}/void`, { reason: 'wrong sale' });
 
-    expect((await call(director, 'POST', `/api/sales/${id}/cancel`, {})).statusCode).toBe(400);
-    expect((await call(director, 'POST', `/api/sales/${id}/cancel`, { reason: 'wrong VIN' })).statusCode).toBe(200);
+    expect((await call(owner, 'POST', `/api/sales/${id}/cancel`, {})).statusCode).toBe(400);
+    expect((await call(owner, 'POST', `/api/sales/${id}/cancel`, { reason: 'wrong VIN' })).statusCode).toBe(200);
     expect((await prisma.vehicle.findUniqueOrThrow({ where: { id: vehicle.id } })).state).toBe('available');
   });
 });

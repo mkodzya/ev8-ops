@@ -21,9 +21,16 @@ export function paymentRoutes(app: FastifyInstance): void {
     '/api/payments',
     { config: { scope: 'fleet.view' } },
     async (req) => {
+      const actor = actorOf(req);
+      const scoped = Boolean(req.query.customerId || req.query.rentalId);
+      // The whole list is the owners'. A manager sees the cash they took
+      // themselves — their till — and the payments on a rental or customer
+      // card they have open (redesign §2.1; the till proper is wave 2).
+      const mineOnly = !scoped && !hasPerm(actor, 'payments.view');
       const where = {
         ...(req.query.customerId ? { customerId: req.query.customerId } : {}),
         ...(req.query.rentalId ? { rentalId: req.query.rentalId } : {}),
+        ...(mineOnly ? { createdById: actor.id, channel: 'cash' as const } : {}),
       };
       const payments = await prisma.payment.findMany({
         where,

@@ -22,7 +22,7 @@ describe.skipIf(!HAS_DB)('sign-in', () => {
   });
 
   it('logging out closes the session', async () => {
-    const u = await makeUser('director');
+    const u = await makeUser('manager');
     const cookie = await login(u.email);
     expect((await call(cookie, 'POST', '/api/auth/logout')).statusCode).toBe(200);
     expect((await call(cookie, 'GET', '/api/me')).statusCode).toBe(401);

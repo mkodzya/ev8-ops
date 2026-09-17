@@ -1,22 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import { ROLES, phoneTabsForRole, sectionsForRole } from '../src/index.js';
 
-describe('what each role sees in the menu (B1-05)', () => {
-  it('gives the mechanic Service and Stock on the phone bar, and no money at all', () => {
-    expect(phoneTabsForRole('mechanic')).toEqual(['/', '/fleet', '/service', '/stock']);
-    const all = sectionsForRole('mechanic');
-    expect(all).not.toContain('/payments');
-    expect(all).not.toContain('/statements');
-    expect(all).not.toContain('/rentals');
+describe('what each role sees in the menu', () => {
+  it('hides purchases, statements, reports and settings from a manager', () => {
+    const all = sectionsForRole('manager');
+    for (const owners of ['/purchases', '/statements', '/economics', '/settings', '/design'] as const) expect(all).not.toContain(owners);
   });
 
-  it('keeps the bar a manager and a director already know', () => {
-    expect(phoneTabsForRole('manager')).toEqual(['/', '/fleet', '/rentals', '/payments']);
-    expect(phoneTabsForRole('director')).toEqual(['/', '/fleet', '/rentals', '/payments']);
-  });
-
-  it('shows the owner every section, and nobody a section twice', () => {
+  it('shows the owner every section', () => {
     expect(sectionsForRole('owner')).toContain('/settings');
+    expect(sectionsForRole('owner')).toContain('/purchases');
+  });
+
+  it('never puts a section on the phone bar twice or one the role cannot open', () => {
     for (const role of ROLES) {
       const tabs = phoneTabsForRole(role);
       expect(tabs.length).toBeLessThanOrEqual(4);

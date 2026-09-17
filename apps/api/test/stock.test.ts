@@ -13,11 +13,11 @@ interface PartRow {
 }
 
 async function part(extra: Record<string, unknown> = {}) {
-  const mechanic = await loginAs('mechanic');
+  const otherOwner = await loginAs('owner');
   const name = `Brake pad ${uniq()}`;
-  const res = await call(mechanic, 'POST', '/api/parts', { name, ...extra });
+  const res = await call(otherOwner, 'POST', '/api/parts', { name, ...extra });
   expect(res.statusCode, res.body).toBe(201);
-  return { mechanic, name, id: json<{ id: string }>(res).id };
+  return { otherOwner, name, id: json<{ id: string }>(res).id };
 }
 
 const cardOf = async (cookie: string, id: string) =>
@@ -27,12 +27,12 @@ const cardOf = async (cookie: string, id: string) =>
 
 describe.skipIf(!HAS_DB)('the parts list', () => {
   it('starts a new part at nothing on the shelf, and refuses the same name twice', async () => {
-    const { mechanic, name, id } = await part({ minQty: 4 });
-    const card = await cardOf(mechanic, id);
+    const { otherOwner, name, id } = await part({ minQty: 4 });
+    const card = await cardOf(otherOwner, id);
     expect(card.part).toMatchObject({ onHand: 0, valueTetri: 0, avgCostTetri: null, shortBy: 4 });
     expect(card.moves).toEqual([]);
 
-    const again = await call(mechanic, 'POST', '/api/parts', { name: name.toUpperCase() });
+    const again = await call(otherOwner, 'POST', '/api/parts', { name: name.toUpperCase() });
     expect(again.statusCode).toBe(409);
     expect(json<{ error: string }>(again).error).toBe('part_exists');
   });
@@ -145,29 +145,30 @@ describe.skipIf(!HAS_DB)('a stock-take', () => {
   it('writes the difference with a reason, and refuses one without', async () => {
     const { prisma } = await import('../src/lib/db.js');
     const { id: partId } = await part();
-    const director = await loginAs('director');
+    const otherOwner = await loginAs('owner');
     await prisma.stockMove.create({
       data: { partId, kind: 'receipt', qty: 10, unitCostTetri: 1200, occurredOn: new Date('2026-04-01T00:00:00Z') },
     });
 
-    expect((await call(director, 'POST', `/api/parts/${partId}/count`, { countedQty: 8 })).statusCode).toBe(400);
-    const done = await call(director, 'POST', `/api/parts/${partId}/count`, { countedQty: 8, reason: 'two broke in the workshop' });
+    expect((await call(otherOwner, 'POST', `/api/parts/${partId}/count`, { countedQty: 8 })).statusCode).toBe(400);
+    const done = await call(otherOwner, 'POST', `/api/parts/${partId}/count`, { countedQty: 8, reason: 'two broke in the workshop' });
     expect(done.statusCode, done.body).toBe(200);
     expect(json<{ delta: number; onHand: number }>(done)).toMatchObject({ delta: -2, onHand: 8 });
 
-    const card = await cardOf(director, partId);
+    const card = await cardOf(otherOwner, partId);
     expect(card.part.onHand).toBe(8);
     // What is left keeps the price it had; a stock-take counts, it does not price.
     expect(card.part.avgCostTetri).toBe(1200);
     expect(card.moves[0].reason).toBe('two broke in the workshop');
 
     // Counting the same number again changes nothing and says so.
-    expect((await call(director, 'POST', `/api/parts/${partId}/count`, { countedQty: 8, reason: 'again' })).statusCode).toBe(409);
+    expect((await call(otherOwner, 'POST', `/api/parts/${partId}/count`, { countedQty: 8, reason: 'again' })).statusCode).toBe(409);
   });
 
-  it('is not for a mechanic to do', async () => {
-    const { id: partId, mechanic } = await part();
-    expect((await call(mechanic, 'POST', `/api/parts/${partId}/count`, { countedQty: 3, reason: 'found some' })).statusCode).toBe(403);
+  it('is not for a manager to do', async () => {
+    const { id: partId } = await part();
+    const manager = await loginAs('manager');
+    expect((await call(manager, 'POST', `/api/parts/${partId}/count`, { countedQty: 3, reason: 'found some' })).statusCode).toBe(403);
   });
 });
 

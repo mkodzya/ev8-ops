@@ -434,18 +434,12 @@ export const ru: Dict = {
     resetPassword: 'Задать новый пароль',
     roles: {
       owner: 'Владелец',
-      director: 'Директор',
       manager: 'Менеджер',
-      mechanic: 'Механик',
-      accountant: 'Бухгалтер',
     },
     lastOwner: 'Это последний действующий владелец.',
     rolesAs: {
       owner: 'владельцем',
-      director: 'директором',
       manager: 'менеджером',
-      mechanic: 'механиком',
-      accountant: 'бухгалтером',
     },
     confirmRoleTitle: 'Сменить роль',
     confirmRole: (name: string, role: string) => `Сделать ${name} ${role}? Права изменятся сразу.`,

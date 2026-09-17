@@ -8,13 +8,14 @@ describe.skipIf(!HAS_DB)('users', () => {
   it('the owner creates a login and the new person can sign in with the role they were given', async () => {
     const owner = await loginAs('owner');
     const email = `kardu.${uniq()}@test.ev8`;
-    const created = await call(owner, 'POST', '/api/users', { email, name: 'Test Director', role: 'director', password: 'let-me-in-1' });
+    const created = await call(owner, 'POST', '/api/users', { email, name: 'Test Manager', role: 'manager', password: 'let-me-in-1' });
     expect(created.statusCode, created.body).toBe(201);
 
     const theirs = await login(email, 'let-me-in-1');
     const me = json<{ role: string; permissions: string[] }>(await call(theirs, 'GET', '/api/me'));
-    expect(me.role).toBe('director');
-    expect(me.permissions).toContain('payments.reconcile');
+    expect(me.role).toBe('manager');
+    expect(me.permissions).toContain('cash.record');
+    expect(me.permissions).not.toContain('payments.reconcile');
     expect(me.permissions).not.toContain('users.manage');
   });
 
@@ -29,9 +30,9 @@ describe.skipIf(!HAS_DB)('users', () => {
   });
 
   it('nobody but an owner sees or changes the list', async () => {
-    const director = await loginAs('director');
-    expect((await call(director, 'GET', '/api/users')).statusCode).toBe(403);
-    expect((await call(director, 'POST', '/api/users', { email: `x.${uniq()}@t.ev8`, name: 'X', role: 'manager', password: 'long-enough-1' })).statusCode).toBe(403);
+    const manager = await loginAs('manager');
+    expect((await call(manager, 'GET', '/api/users')).statusCode).toBe(403);
+    expect((await call(manager, 'POST', '/api/users', { email: `x.${uniq()}@t.ev8`, name: 'X', role: 'manager', password: 'long-enough-1' })).statusCode).toBe(403);
   });
 
   it('switching somebody off ends their session at once', async () => {
@@ -88,10 +89,10 @@ describe.skipIf(!HAS_DB)('users', () => {
     const { prisma } = await import('../src/lib/db.js');
     const owner = await loginAs('owner');
     const person = await makeUser('manager');
-    expect((await call(owner, 'PATCH', `/api/users/${person.id}`, { role: 'director' })).statusCode).toBe(200);
+    expect((await call(owner, 'PATCH', `/api/users/${person.id}`, { role: 'owner' })).statusCode).toBe(200);
     const entry = await prisma.auditLog.findFirstOrThrow({ where: { entityId: person.id, action: 'user.update' } });
     expect(entry.before).toMatchObject({ role: 'manager' });
-    expect(entry.after).toMatchObject({ role: 'director' });
+    expect(entry.after).toMatchObject({ role: 'owner' });
   });
 
   it('no route ever answers with a password hash', async () => {

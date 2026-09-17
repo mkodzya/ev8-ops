@@ -423,18 +423,12 @@ export const ka: Dict = {
     resetPassword: 'ახალი პაროლის დაყენება',
     roles: {
       owner: 'მფლობელი',
-      director: 'დირექტორი',
       manager: 'მენეჯერი',
-      mechanic: 'მექანიკოსი',
-      accountant: 'ბუღალტერი',
     },
     lastOwner: 'ეს უკანასკნელი აქტიური მფლობელია.',
     rolesAs: {
       owner: 'მფლობელი',
-      director: 'დირექტორი',
       manager: 'მენეჯერი',
-      mechanic: 'მექანიკოსი',
-      accountant: 'ბუღალტერი',
     },
     confirmRoleTitle: 'როლის შეცვლა',
     confirmRole: (name: string, role: string) => `${name} გახდეს ${role}? უფლებები მაშინვე შეიცვლება.`,

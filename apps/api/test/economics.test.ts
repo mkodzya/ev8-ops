@@ -23,8 +23,8 @@ async function moped(costTetri: number | null = 168929) {
     data: { vin: `TESTE${uniq().replace(/\D/g, '').slice(-12).padStart(12, '0')}`, modelId: model.id, costTetri },
   });
   const customer = await prisma.customer.create({ data: { name: `Rider ${uniq()}` } });
-  const director = await loginAs('director');
-  return { prisma, model, vehicle, customer, director };
+  const otherOwner = await loginAs('owner');
+  return { prisma, model, vehicle, customer, otherOwner };
 }
 
 const economics = async (cookie: string, id: string) =>
@@ -32,9 +32,9 @@ const economics = async (cookie: string, id: string) =>
 
 describe.skipIf(!HAS_DB)('what a moped earned', () => {
   it('counts rent that was actually paid, not rent that was billed', async () => {
-    const { vehicle, customer, director } = await moped();
+    const { vehicle, customer, otherOwner } = await moped();
     const { id } = json<{ id: string }>(
-      await call(director, 'POST', '/api/rentals', {
+      await call(otherOwner, 'POST', '/api/rentals', {
         customerId: customer.id,
         vehicleId: vehicle.id,
         weeklyRateTetri: 15000,
@@ -43,16 +43,16 @@ describe.skipIf(!HAS_DB)('what a moped earned', () => {
       }),
     );
     // Three weeks stand open; two of them are paid.
-    await call(director, 'POST', '/api/payments', { rentalId: id, channel: 'cash', grossTetri: '300', occurredOn: '2026-08-08' });
-    const e = await economics(director, vehicle.id);
+    await call(otherOwner, 'POST', '/api/payments', { rentalId: id, channel: 'cash', grossTetri: '300', occurredOn: '2026-08-08' });
+    const e = await economics(otherOwner, vehicle.id);
     expect(e.rentalRevenueTetri).toBe(30000);
     expect(e.marginTetri).toBe(30000 - 168929);
   });
 
   it('leaves the deposit out — it is the customer’s money, not income', async () => {
-    const { vehicle, customer, director } = await moped();
+    const { vehicle, customer, otherOwner } = await moped();
     const { id } = json<{ id: string }>(
-      await call(director, 'POST', '/api/rentals', {
+      await call(otherOwner, 'POST', '/api/rentals', {
         customerId: customer.id,
         vehicleId: vehicle.id,
         weeklyRateTetri: 15000,
@@ -60,79 +60,78 @@ describe.skipIf(!HAS_DB)('what a moped earned', () => {
         pickedUpOn: '2026-08-01',
       }),
     );
-    await call(director, 'POST', '/api/payments', { rentalId: id, channel: 'cash', grossTetri: '330', occurredOn: '2026-08-01' });
-    const e = await economics(director, vehicle.id);
+    await call(otherOwner, 'POST', '/api/payments', { rentalId: id, channel: 'cash', grossTetri: '330', occurredOn: '2026-08-01' });
+    const e = await economics(otherOwner, vehicle.id);
     // 330 paid: 180 of deposit first, then 150 of the first week.
     expect(e.rentalRevenueTetri).toBe(15000);
   });
 
   it('forgets money that was voided', async () => {
-    const { prisma, vehicle, customer, director } = await moped();
+    const { prisma, vehicle, customer, otherOwner } = await moped();
     const { id } = json<{ id: string }>(
-      await call(director, 'POST', '/api/rentals', { customerId: customer.id, vehicleId: vehicle.id, weeklyRateTetri: 15000, depositTetri: 0, pickedUpOn: '2026-08-01' }),
+      await call(otherOwner, 'POST', '/api/rentals', { customerId: customer.id, vehicleId: vehicle.id, weeklyRateTetri: 15000, depositTetri: 0, pickedUpOn: '2026-08-01' }),
     );
-    const pay = json<{ id: string }>(await call(director, 'POST', '/api/payments', { rentalId: id, channel: 'cash', grossTetri: '150' }));
-    expect((await economics(director, vehicle.id)).rentalRevenueTetri).toBe(15000);
-    await call(director, 'POST', `/api/payments/${pay.id}/void`, { reason: 'entered twice' });
-    expect((await economics(director, vehicle.id)).rentalRevenueTetri).toBe(0);
+    const pay = json<{ id: string }>(await call(otherOwner, 'POST', '/api/payments', { rentalId: id, channel: 'cash', grossTetri: '150' }));
+    expect((await economics(otherOwner, vehicle.id)).rentalRevenueTetri).toBe(15000);
+    await call(otherOwner, 'POST', `/api/payments/${pay.id}/void`, { reason: 'entered twice' });
+    expect((await economics(otherOwner, vehicle.id)).rentalRevenueTetri).toBe(0);
     expect(await prisma.payment.count({ where: { id: pay.id, voidedAt: { not: null } } })).toBe(1);
   });
 
   it('separates a repair the company paid from one the renter paid', async () => {
-    const { vehicle, customer, director } = await moped();
+    const { vehicle, customer, otherOwner } = await moped();
     const { id } = json<{ id: string }>(
-      await call(director, 'POST', '/api/rentals', { customerId: customer.id, vehicleId: vehicle.id, weeklyRateTetri: 15000, pickedUpOn: '2026-08-01' }),
+      await call(otherOwner, 'POST', '/api/rentals', { customerId: customer.id, vehicleId: vehicle.id, weeklyRateTetri: 15000, pickedUpOn: '2026-08-01' }),
     );
     expect(id).toBeTruthy();
-    const mechanic = await loginAs('mechanic');
 
-    const opened = await call(mechanic, 'POST', '/api/service', { vehicleId: vehicle.id, reason: 'brake pads', openedOn: '2026-08-02' });
+    const opened = await call(otherOwner, 'POST', '/api/service', { vehicleId: vehicle.id, reason: 'brake pads', openedOn: '2026-08-02' });
     expect(opened.statusCode, opened.body).toBe(201);
     const ours = json<{ id: string }>(opened);
-    await call(mechanic, 'PATCH', `/api/service/${ours.id}`, { labourTetri: 4000 });
-    await call(mechanic, 'POST', `/api/service/${ours.id}/parts`, { name: 'pads', qty: 2, unitPriceTetri: 1500 });
-    expect((await call(mechanic, 'POST', `/api/service/${ours.id}/close`, { closedOn: '2026-08-03' })).statusCode).toBe(200);
+    await call(otherOwner, 'PATCH', `/api/service/${ours.id}`, { labourTetri: 4000 });
+    await call(otherOwner, 'POST', `/api/service/${ours.id}/parts`, { name: 'pads', qty: 2, unitPriceTetri: 1500 });
+    expect((await call(otherOwner, 'POST', `/api/service/${ours.id}/close`, { closedOn: '2026-08-03' })).statusCode).toBe(200);
 
-    const second = await call(mechanic, 'POST', '/api/service', { vehicleId: vehicle.id, reason: 'dropped it', openedOn: '2026-08-05' });
+    const second = await call(otherOwner, 'POST', '/api/service', { vehicleId: vehicle.id, reason: 'dropped it', openedOn: '2026-08-05' });
     expect(second.statusCode, second.body).toBe(201);
     const theirs = json<{ id: string }>(second);
-    const charged = await call(director, 'PATCH', `/api/service/${theirs.id}`, { payer: 'customer', labourTetri: 9000 });
+    const charged = await call(otherOwner, 'PATCH', `/api/service/${theirs.id}`, { payer: 'customer', labourTetri: 9000 });
     expect(charged.statusCode, charged.body).toBe(200);
 
-    const e = await economics(director, vehicle.id);
+    const e = await economics(otherOwner, vehicle.id);
     expect(e.serviceCompanyTetri).toBe(7000); // 40 labour + 2 x 15 parts
     expect(e.serviceChargedTetri).toBe(9000);
     expect(e.marginTetri).toBe(-7000 - 168929); // only ours comes off the moped
   });
 
   it('counts a sale in and a buy-back out', async () => {
-    const { vehicle, customer, director } = await moped(100000);
+    const { vehicle, customer, otherOwner } = await moped(100000);
     const { id } = json<{ id: string }>(
-      await call(director, 'POST', '/api/sales', { customerId: customer.id, vehicleId: vehicle.id, priceTetri: '2900', soldOn: '2026-05-19' }),
+      await call(otherOwner, 'POST', '/api/sales', { customerId: customer.id, vehicleId: vehicle.id, priceTetri: '2900', soldOn: '2026-05-19' }),
     );
-    await call(director, 'POST', `/api/sales/${id}/payments`, { channel: 'transfer', grossTetri: '2900', occurredOn: '2026-05-19' });
-    await call(director, 'POST', `/api/sales/${id}/buy-back`, { amountTetri: '2440', occurredOn: '2026-06-03', channel: 'cash' });
-    const e = await economics(director, vehicle.id);
+    await call(otherOwner, 'POST', `/api/sales/${id}/payments`, { channel: 'transfer', grossTetri: '2900', occurredOn: '2026-05-19' });
+    await call(otherOwner, 'POST', `/api/sales/${id}/buy-back`, { amountTetri: '2440', occurredOn: '2026-06-03', channel: 'cash' });
+    const e = await economics(otherOwner, vehicle.id);
     expect(e.saleRevenueTetri).toBe(290000);
     expect(e.buyBackTetri).toBe(244000);
     expect(e.marginTetri).toBe(290000 - 244000 - 100000);
   });
 
   it('says nothing about margin for a moped nobody priced', async () => {
-    const { vehicle, director } = await moped(null);
-    const e = await economics(director, vehicle.id);
+    const { vehicle, otherOwner } = await moped(null);
+    const e = await economics(otherOwner, vehicle.id);
     expect(e.costTetri).toBeNull();
     expect(e.marginTetri).toBeNull();
   });
 
   it('counts the days it stood idle against the days it was out', async () => {
-    const { vehicle, customer, director } = await moped();
+    const { vehicle, customer, otherOwner } = await moped();
     const { id } = json<{ id: string }>(
-      await call(director, 'POST', '/api/rentals', { customerId: customer.id, vehicleId: vehicle.id, weeklyRateTetri: 15000, pickedUpOn: '2026-08-01' }),
+      await call(otherOwner, 'POST', '/api/rentals', { customerId: customer.id, vehicleId: vehicle.id, weeklyRateTetri: 15000, pickedUpOn: '2026-08-01' }),
     );
-    await call(director, 'POST', '/api/payments', { rentalId: id, channel: 'cash', grossTetri: '600' });
-    await call(director, 'POST', `/api/rentals/${id}/return`, { returnedOn: '2026-08-15', odometerKm: 900 });
-    const e = await economics(director, vehicle.id);
+    await call(otherOwner, 'POST', '/api/payments', { rentalId: id, channel: 'cash', grossTetri: '600' });
+    await call(otherOwner, 'POST', `/api/rentals/${id}/return`, { returnedOn: '2026-08-15', odometerKm: 900 });
+    const e = await economics(otherOwner, vehicle.id);
     expect(e.days.rented).toBe(14);
     expect(e.idleDays).toBeGreaterThan(0);
   });
@@ -140,9 +139,9 @@ describe.skipIf(!HAS_DB)('what a moped earned', () => {
 
 describe.skipIf(!HAS_DB)('the fleet as a whole', () => {
   it('totals what is priced and says how many are not', async () => {
-    const { vehicle, director } = await moped(null);
+    const { vehicle, otherOwner } = await moped(null);
     const list = json<{ rows: Row[]; totals: { unpriced: number; vehicles: number; costTetri: number } }>(
-      await call(director, 'GET', '/api/economics'),
+      await call(otherOwner, 'GET', '/api/economics'),
     );
     expect(list.rows.some((r) => r.id === vehicle.id)).toBe(true);
     expect(list.totals.unpriced).toBeGreaterThanOrEqual(1);
@@ -152,7 +151,7 @@ describe.skipIf(!HAS_DB)('the fleet as a whole', () => {
   it('is not for a manager to see', async () => {
     const manager = await loginAs('manager');
     expect((await call(manager, 'GET', '/api/economics')).statusCode).toBe(403);
-    const accountant = await loginAs('accountant');
-    expect((await call(accountant, 'GET', '/api/economics')).statusCode).toBe(200);
+    const owner = await loginAs('owner');
+    expect((await call(owner, 'GET', '/api/economics')).statusCode).toBe(200);
   });
 });
