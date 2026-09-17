@@ -3,12 +3,13 @@ import type { FastifyInstance } from 'fastify';
 import { dateFromISO, isoDate } from '../lib/dates.js';
 import { prisma } from '../lib/db.js';
 import { env } from '../lib/env.js';
+import { mayView } from '../lib/guard.js';
 
 // The numbers on "Today" (DSH-01). Every figure here is also a list one
 // click away; nothing is computed that the lists cannot reproduce.
 
 export function summaryRoutes(app: FastifyInstance): void {
-  app.get('/api/summary', { config: { scope: 'session' } }, async () => {
+  app.get('/api/summary', { config: { scope: 'session' } }, async (req) => {
     const today = todayISO(new Date(), env.TZ);
     const day = dateFromISO(today)!;
     const [vehicles, rentals, customers, depositsHeld, pickedUpToday, unmatchedLines, openServiceJobs, overdueInstalments, dueBackToday] = await Promise.all([
@@ -78,7 +79,8 @@ export function summaryRoutes(app: FastifyInstance): void {
       rentals: { active, overdue, withoutVin },
       overdueList,
       customers,
-      deposits: { held: depositsHeld._count._all, heldTetri: depositsHeld._sum.amountTetri ?? 0 },
+      // How much deposit money is held is the owners' number (redesign §2.1).
+      deposits: { held: depositsHeld._count._all, heldTetri: mayView(req, 'deposit.decide') ? (depositsHeld._sum.amountTetri ?? 0) : null },
       // What today asks a person to do, not only what it counts (DSH-01).
       unmatchedLines,
       openServiceJobs,

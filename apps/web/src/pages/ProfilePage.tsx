@@ -1,37 +1,18 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { api } from '../api.js';
 import { PageHead } from '../components/ui.js';
 import { Field } from '../components/Wizard.js';
 import { LanguageToggle, useT } from '../i18n/index.js';
-import { errorText } from '../lib/use.js';
+import { Form } from '../ds/form/Form.js';
 import { useSession } from '../session.js';
 
 /** Your own login: the language and the password, nothing else. */
 export function ProfilePage() {
   const t = useT();
-  const { me } = useSession();
-  const [current, setCurrent] = useState('');
-  const [next, setNext] = useState('');
-  const [done, setDone] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setBusy(true);
-    setErr(null);
-    setDone(false);
-    try {
-      await api.post('/api/me/password', { currentPassword: current, newPassword: next });
-      setCurrent('');
-      setNext('');
-      setDone(true);
-    } catch (e) {
-      setErr(errorText(e));
-    } finally {
-      setBusy(false);
-    }
-  };
+  const { me, logout } = useSession();
+  const navigate = useNavigate();
+  const [pw, setPw] = useState({ current: '', next: '' });
 
   return (
     <>
@@ -56,21 +37,38 @@ export function ProfilePage() {
               <LanguageToggle onChange={(l) => void api.patch('/api/me/locale', { locale: l }).catch(() => {})} />
             </span>
           </div>
+          <div className="row-actions">
+            <button
+              type="button"
+              className="pill"
+              onClick={async () => {
+                await logout();
+                navigate('/login', { replace: true });
+              }}
+            >
+              {t.common.signOut}
+            </button>
+          </div>
         </section>
         <section className="card">
-          <form className="form" onSubmit={submit}>
-            <Field label={t.profile.currentPassword}>
-              <input className="input" type="password" value={current} onChange={(e) => setCurrent(e.target.value)} autoComplete="current-password" />
+          {/* No draft: passwords are not left on a device. */}
+          <Form
+            value={pw}
+            initial={{ current: '', next: '' }}
+            label={t.profile.changePassword}
+            submit={async (key) => {
+              await api.post('/api/me/password', { currentPassword: pw.current, newPassword: pw.next }, { key });
+              return { toast: { text: t.profile.changed } };
+            }}
+            onDone={() => setPw({ current: '', next: '' })}
+          >
+            <Field label={t.profile.currentPassword} name="currentPassword">
+              <input className="input" type="password" value={pw.current} onChange={(e) => setPw({ ...pw, current: e.target.value })} autoComplete="current-password" />
             </Field>
-            <Field label={t.profile.newPassword} hint={t.users.passwordHint}>
-              <input className="input" type="password" value={next} onChange={(e) => setNext(e.target.value)} autoComplete="new-password" minLength={8} />
+            <Field label={t.profile.newPassword} hint={t.profile.passwordHint} name="newPassword">
+              <input className="input" type="password" value={pw.next} onChange={(e) => setPw({ ...pw, next: e.target.value })} autoComplete="new-password" />
             </Field>
-            {done && <div className="hint">{t.profile.changed}</div>}
-            {err && <div className="hint hint-bad">{err}</div>}
-            <button className="pill pill-accent" disabled={busy || !current || next.length < 8}>
-              {busy ? t.common.checking : t.actions.save}
-            </button>
-          </form>
+          </Form>
         </section>
       </div>
     </>

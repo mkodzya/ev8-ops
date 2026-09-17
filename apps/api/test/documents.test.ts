@@ -13,9 +13,9 @@ async function rentalWithEverything() {
   const customer = await prisma.customer.create({
     data: { name: 'ვაჟა ტესტი', personalId: `T${uniq().replace(/\D/g, '')}`, phone: '+995500000000', address: 'თბილისი' },
   });
-  const director = await loginAs('director');
+  const owner = await loginAs('owner');
   const created = json<{ id: string; actId: string }>(
-    await call(director, 'POST', '/api/rentals', {
+    await call(owner, 'POST', '/api/rentals', {
       customerId: customer.id,
       vehicleId: vehicle.id,
       weeklyRateTetri: 15000,
@@ -25,14 +25,14 @@ async function rentalWithEverything() {
       chargers: 2,
     }),
   );
-  return { prisma, director, customer, vehicle, ...created };
+  return { prisma, owner, customer, vehicle, ...created };
 }
 
 describe.skipIf(!HAS_DB)('documents', () => {
   it('renders the contract, keeps the bytes, and hands the same copy back next time', async () => {
-    const { prisma, director, id } = await rentalWithEverything();
+    const { prisma, owner, id } = await rentalWithEverything();
 
-    const first = await call(director, 'GET', `/api/rentals/${id}/contract.pdf`);
+    const first = await call(owner, 'GET', `/api/rentals/${id}/contract.pdf`);
     expect(first.statusCode, first.body.slice(0, 200)).toBe(200);
     expect(first.headers['content-type']).toBe('application/pdf');
     expect(first.rawPayload.subarray(0, 5).toString()).toBe('%PDF-');
@@ -43,20 +43,20 @@ describe.skipIf(!HAS_DB)('documents', () => {
     expect(stored[0].docKind).toBe('contract');
     expect(stored[0].sizeBytes).toBe(first.rawPayload.length);
 
-    const second = await call(director, 'GET', `/api/rentals/${id}/contract.pdf`);
+    const second = await call(owner, 'GET', `/api/rentals/${id}/contract.pdf`);
     expect(Buffer.compare(second.rawPayload, first.rawPayload)).toBe(0);
     expect(await prisma.storedFile.count({ where: { rentalId: id, kind: 'pdf' } })).toBe(1);
   });
 
-  it('a manager may hand the contract over but not rebuild it; a director rebuild archives the old copy', async () => {
-    const { prisma, director, id } = await rentalWithEverything();
-    await call(director, 'GET', `/api/rentals/${id}/contract.pdf`);
+  it('a manager may hand the contract over but not rebuild it; a owner rebuild archives the old copy', async () => {
+    const { prisma, owner, id } = await rentalWithEverything();
+    await call(owner, 'GET', `/api/rentals/${id}/contract.pdf`);
 
     const manager = await loginAs('manager');
     expect((await call(manager, 'GET', `/api/rentals/${id}/contract.pdf`)).statusCode).toBe(200);
     expect((await call(manager, 'GET', `/api/rentals/${id}/contract.pdf?fresh=1`)).statusCode).toBe(409);
 
-    expect((await call(director, 'GET', `/api/rentals/${id}/contract.pdf?fresh=1`)).statusCode).toBe(200);
+    expect((await call(owner, 'GET', `/api/rentals/${id}/contract.pdf?fresh=1`)).statusCode).toBe(200);
     const all = await prisma.storedFile.findMany({ where: { rentalId: id, docKind: 'contract' } });
     expect(all).toHaveLength(2);
     expect(all.filter((f) => f.archived)).toHaveLength(1);
@@ -65,18 +65,18 @@ describe.skipIf(!HAS_DB)('documents', () => {
   });
 
   it('the return act exists only once the rental is closed, and carries the deposit decision', async () => {
-    const { prisma, director, id } = await rentalWithEverything();
-    const early = await call(director, 'GET', `/api/rentals/${id}/return-act.pdf`);
+    const { prisma, owner, id } = await rentalWithEverything();
+    const early = await call(owner, 'GET', `/api/rentals/${id}/return-act.pdf`);
     expect(early.statusCode).toBe(409);
     expect(json<{ error: string }>(early).error).toBe('not_returned');
 
-    await call(director, 'POST', `/api/rentals/${id}/return`, {
+    await call(owner, 'POST', `/api/rentals/${id}/return`, {
       returnedOn: '2026-09-12',
       items: { moped: { state: 'ok' }, key: { state: 'damaged', note: 'bent' }, battery_1: { state: 'missing' } },
       deposit: { returnedTetri: 13000, withheldTetri: 5000, withheldReason: 'broken mirror', grounds: ['moped_damage', 'other'] },
     });
 
-    const act = await call(director, 'GET', `/api/rentals/${id}/return-act.pdf`);
+    const act = await call(owner, 'GET', `/api/rentals/${id}/return-act.pdf`);
     expect(act.statusCode, act.body.slice(0, 200)).toBe(200);
     expect(act.rawPayload.subarray(0, 5).toString()).toBe('%PDF-');
 

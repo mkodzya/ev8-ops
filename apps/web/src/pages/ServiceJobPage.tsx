@@ -2,13 +2,17 @@ import { parseGel, todayISO } from '@ev8/shared';
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api.js';
+import { LoadError } from '../components/LoadError.js';
 import { PhotoPicker } from '../components/PhotoPicker.js';
+import { FormSheet, SubmitButton } from '../ds/form/Form.js';
+import { useOperation } from '../ds/form/operation.js';
+import { useToast } from '../ds/feedback/Toast.js';
 import { BlockHead, Empty, Loading, PageHead, Vin } from '../components/ui.js';
 import { Field, Row } from '../components/Wizard.js';
 import { fmtDate, formatGel } from '../format.js';
 import { useT } from '../i18n/index.js';
 import { uploadAll, type PreparedPhoto } from '../lib/photos.js';
-import { errorText, useLoad } from '../lib/use.js';
+import { useLoad } from '../lib/use.js';
 import { useSession } from '../session.js';
 import type { PartRow } from './StockPage.js';
 import type { ServiceJob } from './ServicePage.js';
@@ -19,36 +23,30 @@ export function ServiceJobPage() {
   const t = useT();
   const navigate = useNavigate();
   const { can } = useSession();
-  const { data, error, reload } = useLoad<{ job: ServiceJob }>(id ? `/api/service/${id}` : null);
-  const [err, setErr] = useState<string | null>(null);
+  const { data, failure, reload } = useLoad<{ job: ServiceJob }>(id ? `/api/service/${id}` : null);
   const [part, setPart] = useState({ partId: '', name: '', qty: '1', price: '' });
   const parts = useLoad<{ parts: PartRow[] }>(can('service.manage') ? '/api/parts' : null);
   const [photos, setPhotos] = useState<PreparedPhoto[]>([]);
   const [closing, setClosing] = useState(false);
-  const [closedOn, setClosedOn] = useState(todayISO());
-  const [withhold, setWithhold] = useState('');
+  const [closure, setClosure] = useState({ closedOn: todayISO(), withhold: '' });
   const [cancelling, setCancelling] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
-  const [busy, setBusy] = useState(false);
+  // Parts and photos are changed in place; one operation at a time, its refusal beside it.
+  const partOp = useOperation();
+  const photoOp = useOperation();
+  const toast = useToast();
 
-  if (error) return <Empty text={error} />;
+  if (failure) return <LoadError failure={failure} onRetry={reload} />;
   if (!data) return <Loading />;
   const j = data.job;
   const open = j.status === 'open';
   const mayEdit = open && can('service.manage');
   const mayWithhold = can('deposit.decide') && j.payer === 'customer' && j.rental != null;
 
-  const act = async (fn: () => Promise<unknown>) => {
-    setBusy(true);
-    setErr(null);
-    try {
-      await fn();
-      reload();
-    } catch (e) {
-      setErr(errorText(e));
-    } finally {
-      setBusy(false);
-    }
+  const partAct = async (fn: (key: string) => Promise<unknown>, scope: string) => {
+    const res = await partOp.run(fn, scope);
+    if (res.ok) reload();
+    return res.ok;
   };
 
   return (
@@ -56,70 +54,62 @@ export function ServiceJobPage() {
       <PageHead wrap title={j.number} sub={<span className={open ? 'warn-text' : undefined}>{t.service.statuses[j.status]}</span>}>
         {mayEdit && (
           <>
-            <button type="button" className="pill pill-sm" onClick={() => setCancelling((v) => !v)}>
+            <button type="button" className="pill pill-sm" onClick={() => setCancelling(true)}>
               {t.service.cancel}
             </button>
-            <button type="button" className="pill pill-sm pill-accent" onClick={() => setClosing((v) => !v)}>
+            <button type="button" className="pill pill-sm pill-accent" onClick={() => setClosing(true)}>
               {t.service.close}
             </button>
           </>
         )}
       </PageHead>
-      {err && <div className="hint hint-bad">{err}</div>}
 
       {cancelling && mayEdit && (
-        <section className="card card-drawer">
-          <Field label={t.service.cancelReason}>
+        <FormSheet
+          title={t.service.cancel}
+          onClose={() => setCancelling(false)}
+          value={cancelReason}
+          initial=""
+          draft={`job-cancel:${j.id}`}
+          onRestore={setCancelReason}
+          summary={(v) => v}
+          label={t.service.cancelCta}
+          submit={async (key) => {
+            await api.post(`/api/service/${j.id}/cancel`, { reason: cancelReason }, { key });
+            return { toast: { text: t.service.cancelled } };
+          }}
+          onDone={() => navigate('/service')}
+        >
+          <Field label={t.service.cancelReason} name="reason">
             <input className="input" value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} autoFocus />
           </Field>
-          <div className="row-actions">
-            <button type="button" className="pill" onClick={() => setCancelling(false)}>
-              {t.actions.cancel}
-            </button>
-            <button
-              type="button"
-              className="pill pill-accent"
-              disabled={busy || !cancelReason.trim()}
-              onClick={() => void act(async () => {
-                await api.post(`/api/service/${j.id}/cancel`, { reason: cancelReason });
-                navigate('/service');
-              })}
-            >
-              {t.actions.confirm}
-            </button>
-          </div>
-        </section>
+        </FormSheet>
       )}
 
       {closing && mayEdit && (
-        <section className="card card-drawer">
-          <Field label={t.service.closedOn}>
-            <input className="input mono" type="date" value={closedOn} onChange={(e) => setClosedOn(e.target.value)} />
+        <FormSheet
+          title={t.service.close}
+          onClose={() => setClosing(false)}
+          value={closure}
+          initial={{ closedOn: todayISO(), withhold: '' }}
+          draft={`job-close:${j.id}`}
+          onRestore={setClosure}
+          label={t.service.closeCta}
+          submit={async (key) => {
+            await api.post(`/api/service/${j.id}/close`, { closedOn: closure.closedOn, withheldTetri: closure.withhold ? parseGel(closure.withhold) : 0 }, { key });
+            return { toast: { text: t.service.closed } };
+          }}
+          onDone={reload}
+        >
+          <Field label={t.service.closedOn} name="closedOn">
+            <input className="input mono" type="date" value={closure.closedOn} onChange={(e) => setClosure({ ...closure, closedOn: e.target.value })} />
           </Field>
           {mayWithhold && (
-            <Field label={t.service.withhold} hint={t.service.withholdHint}>
-              <input className="input input-amount mono" value={withhold} onChange={(e) => setWithhold(e.target.value)} inputMode="decimal" />
+            <Field label={t.service.withhold} hint={t.service.withholdHint} name="withheldTetri">
+              <input className="input input-amount mono" value={closure.withhold} onChange={(e) => setClosure({ ...closure, withhold: e.target.value })} inputMode="decimal" />
             </Field>
           )}
-          <div className="row-actions">
-            <button type="button" className="pill" onClick={() => setClosing(false)}>
-              {t.actions.cancel}
-            </button>
-            <button
-              type="button"
-              className="pill pill-accent"
-              disabled={busy}
-              onClick={() => void act(() =>
-                api.post(`/api/service/${j.id}/close`, {
-                  closedOn,
-                  withheldTetri: withhold ? parseGel(withhold) : 0,
-                }),
-              )}
-            >
-              {t.actions.confirm}
-            </button>
-          </div>
-        </section>
+        </FormSheet>
       )}
 
       <div className="two-col">
@@ -190,7 +180,7 @@ export function ServiceJobPage() {
                         <button
                           type="button"
                           className="pill pill-sm"
-                          onClick={() => void act(() => api.del(`/api/service/${j.id}/parts/${p.id}`))}
+                          onClick={() => void partAct((key) => api.del(`/api/service/${j.id}/parts/${p.id}`, { key }), `del:${p.id}`)}
                         >
                           ×
                         </button>
@@ -232,23 +222,29 @@ export function ServiceJobPage() {
             )}
             <input className="input input-amount mono" placeholder={t.service.qty} value={part.qty} onChange={(e) => setPart({ ...part, qty: e.target.value })} inputMode="numeric" />
             <input className="input input-amount mono" placeholder={t.service.unitPrice} value={part.price} onChange={(e) => setPart({ ...part, price: e.target.value })} inputMode="decimal" />
-            <button
+            <SubmitButton
+              small
               type="button"
-              className="pill pill-sm pill-accent"
-              disabled={busy || (!part.name.trim() && !part.partId) || parseGel(part.price) == null}
-              onClick={() => void act(async () => {
-                await api.post(`/api/service/${j.id}/parts`, {
-                  partId: part.partId || null,
-                  name: part.partId ? null : part.name,
-                  qty: Number(part.qty) || 1,
-                  unitPriceTetri: parseGel(part.price),
-                });
-                setPart({ partId: '', name: '', qty: '1', price: '' });
-              })}
-            >
-              + {t.service.addPart}
-            </button>
+              state={partOp.state}
+              label={`+ ${t.service.addPart}`}
+              onClick={() =>
+                void partAct(async (key) => {
+                  await api.post(
+                    `/api/service/${j.id}/parts`,
+                    { partId: part.partId || null, name: part.partId ? null : part.name, qty: Number(part.qty) || 1, unitPriceTetri: parseGel(part.price) },
+                    { key },
+                  );
+                  setPart({ partId: '', name: '', qty: '1', price: '' });
+                  toast({ text: t.service.partAdded });
+                }, 'add')
+              }
+            />
           </div>
+        )}
+        {mayEdit && partOp.failure && (
+          <p className="field-err" role="alert">
+            {partOp.failure.fieldText ?? partOp.failure.text}
+          </p>
         )}
       </section>
 
@@ -267,17 +263,24 @@ export function ServiceJobPage() {
           <>
             <PhotoPicker photos={photos} onChange={setPhotos} label={t.photos.add} />
             {photos.length > 0 && (
-              <button
+              <SubmitButton
+                small
                 type="button"
-                className="pill pill-sm pill-accent"
-                disabled={busy}
-                onClick={() => void act(async () => {
-                  await uploadAll(`/api/service/${j.id}/photos`, photos);
+                state={photoOp.state}
+                label={t.photos.save}
+                onClick={async () => {
+                  const res = await photoOp.run((key) => uploadAll(`/api/service/${j.id}/photos`, photos, undefined, key));
+                  if (!res.ok) return;
                   setPhotos([]);
-                })}
-              >
-                {t.actions.save}
-              </button>
+                  toast({ text: t.photos.saved });
+                  reload();
+                }}
+              />
+            )}
+            {photoOp.failure && (
+              <p className="field-err" role="alert">
+                {photoOp.failure.text}
+              </p>
             )}
           </>
         )}

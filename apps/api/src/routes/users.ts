@@ -1,9 +1,10 @@
 import { ROLES, type Role } from '@ev8/shared';
 import type { FastifyInstance } from 'fastify';
 import { audit } from '../lib/audit.js';
-import { hashPassword, permissionsOf, verifyPassword } from '../lib/auth.js';
+import { SESSION_COOKIE, hashPassword, permissionsOf, verifyPassword } from '../lib/auth.js';
 import { prisma } from '../lib/db.js';
-import { badRequest, conflict, isUniqueViolation, notFound } from '../lib/errors.js';
+import { demoLoginRefused } from '../lib/env.js';
+import { badRequest, conflict, forbidden, isUniqueViolation, notFound } from '../lib/errors.js';
 import { actorOf } from '../lib/guard.js';
 import { oneOf, str } from '../lib/validate.js';
 
@@ -45,6 +46,7 @@ export function userRoutes(app: FastifyInstance): void {
     const b = req.body ?? {};
     const actor = actorOf(req);
     const email = str(b, 'email', { required: true, max: 200 })!.toLowerCase();
+    if (demoLoginRefused(email)) throw forbidden('demo_login_off', 'Demo logins are switched off on a stand.');
     const name = str(b, 'name', { required: true, max: 200 })!;
     const role = oneOf(b, 'role', ROLES, { required: true })!;
     const password = readPassword(b);
@@ -113,6 +115,9 @@ export function userRoutes(app: FastifyInstance): void {
     const me = await prisma.user.findUniqueOrThrow({ where: { id: actor.id } });
     if (!verifyPassword(current, me.passwordHash)) throw conflict('wrong_password', 'The current password does not match.');
     await prisma.user.update({ where: { id: me.id }, data: { passwordHash: hashPassword(next), updatedAt: new Date() } });
+    // A new password is usually a reaction to a phone left somewhere: every
+    // other device signs in again, this one stays (B1-03).
+    await prisma.session.deleteMany({ where: { userId: me.id, token: { not: req.cookies?.[SESSION_COOKIE] ?? '' } } });
     await audit({ actorId: actor.id, action: 'user.password.change', entityType: 'user', entityId: me.id });
     return { ok: true, permissions: permissionsOf(me.role as Role) };
   });

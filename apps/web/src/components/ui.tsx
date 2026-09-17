@@ -1,6 +1,9 @@
 import { colorOf, type RentalStatus, type VehicleState } from '@ev8/shared';
 import type { ReactNode } from 'react';
 import { useLocale, useT } from '../i18n/index.js';
+import { useAnnounceHeader } from '../ds/shell/header.js';
+import { SectionTabs } from '../ds/shell/SectionTabs.js';
+import { Skeleton } from '../ds/state/Skeleton.js';
 import { vinParts } from '../format.js';
 import { primaryName, secondName, type Named } from '../lib/names.js';
 import { placeOf, type Place } from '../lib/place.js';
@@ -40,9 +43,9 @@ export function Empty({ text }: { text: string }) {
   return <p className="empty">{text}</p>;
 }
 
-export function Loading() {
-  const t = useT();
-  return <p className="empty">{t.common.loading}</p>;
+/** Loading: the shared skeleton (ux.md) — nothing for 300 ms, then the shape of a list. */
+export function Loading({ rows }: { rows?: number } = {}) {
+  return <Skeleton rows={rows} />;
 }
 
 /**
@@ -125,8 +128,11 @@ export function PageHead({
   wrap?: boolean;
   children?: ReactNode;
 }) {
+  // On a phone the title and its count move up into the 56 px header (wave 1 §3.2).
+  useAnnounceHeader(title, sub);
   return (
     <>
+      <SectionTabs on="phone" />
       <header className={`page-head ${wrap ? 'page-head-wrap' : ''}`}>
         {/* The words share a baseline with each other; the group they make is
             what the buttons centre on. Baseline and centre on one flex line
@@ -144,6 +150,7 @@ export function PageHead({
         )}
       </header>
       {note != null && <p className="page-note">{note}</p>}
+      <SectionTabs on="laptop" />
     </>
   );
 }

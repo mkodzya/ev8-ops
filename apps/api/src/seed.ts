@@ -47,11 +47,8 @@ async function seedDemo(ownerId: string): Promise<void> {
   const today = todayISO(new Date(), env.TZ);
   const d = (iso: string) => dateFromISO(iso)!;
 
-  // Two extra logins so role differences can be tried. Same password as the owner.
-  for (const [email, name, role] of [
-    ['demo.director@ev8.test', 'Demo Director', 'director'],
-    ['demo.manager@ev8.test', 'Demo Manager', 'manager'],
-  ] as const) {
+  // One extra login so the manager's view can be tried. Same password as the owner.
+  for (const [email, name, role] of [['demo.manager@ev8.test', 'Demo Manager', 'manager']] as const) {
     await prisma.user.upsert({ where: { email }, update: {}, create: { email, name, passwordHash: hashPassword(env.OWNER_PASSWORD), role } });
   }
 

@@ -1,8 +1,10 @@
 import { VEHICLE_COLORS, VEHICLE_POOLS, VEHICLE_STATES, colorOf, daysBetween, tokens, type VehiclePool, type VehicleState } from '@ev8/shared';
+import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
-import { errorText, useLoad } from '../lib/use.js';
+import { useLoad } from '../lib/use.js';
+import { LoadError } from '../components/LoadError.js';
 import { Field } from '../components/Wizard.js';
-import { Drawer } from '../components/Drawer.js';
+import { FormSheet } from '../ds/form/Form.js';
 import { ColorPicker } from '../components/ColorPicker.js';
 import { ModelDrawer, NEW_MODEL } from '../components/ModelDrawer.js';
 import { RowMenu, type RowAction } from '../components/RowMenu.js';
@@ -68,8 +70,11 @@ interface Models {
 export function FleetPage() {
   const t = useT();
   const { can } = useSession();
-  const [data, setData] = useState<Fleet | null>(null);
-  const [tick, setTick] = useState(0);
+  const fleet = useLoad<Fleet>('/api/fleet');
+  const { data, failure } = fleet;
+  const client = useQueryClient();
+  // A park move redraws its row at once; the refetch after the write confirms it.
+  const setData = (update: (d: Fleet | null) => Fleet | null) => client.setQueryData<Fleet>(['/api/fleet'], (d) => update(d ?? null) ?? undefined);
   const models = useLoad<Models>(can('settings.manage') ? '/api/models' : null);
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
@@ -84,9 +89,6 @@ export function FleetPage() {
   const pool = params.get('pool') as PoolKey | null;
   const noPoint = params.get('place') === 'unset';
 
-  useEffect(() => {
-    void api.get<Fleet>('/api/fleet').then(setData);
-  }, [tick]);
 
   // Long enough to notice a wrong click, short enough that the list is not
   // left holding rows that no longer belong in it. The same figure draws the
@@ -186,6 +188,7 @@ export function FleetPage() {
     setFinding(false);
   };
 
+  if (!data && failure) return <LoadError failure={failure} onRetry={fleet.reload} />;
   if (!data) return <Loading />;
 
   return (
@@ -201,7 +204,7 @@ export function FleetPage() {
           onChange={(e) => setQ(e.target.value)}
         />
         {can('settings.manage') && models.data && (
-          <NewVehicle models={models.data.models} onModels={models.reload} onDone={() => setTick((n) => n + 1)} />
+          <NewVehicle models={models.data.models} onModels={models.reload} onDone={fleet.reload} />
         )}
       </PageHead>
       <div className="segments">
@@ -536,53 +539,62 @@ function PoolCards({
 }
 
 /** Adding a moped by hand: the owner's way in before the Odoo import runs. */
+const blankVehicle = () => ({ vin: '', modelId: '', color: '', year: '', arrivedOn: todayISO() });
+
 function NewVehicle({ models, onModels, onDone }: { models: Models['models']; onModels: () => void; onDone: () => void }) {
   const t = useT();
   const [open, setOpen] = useState(false);
   const [addingModel, setAddingModel] = useState(false);
-  const [f, setF] = useState({ vin: '', modelId: '', color: '', year: '', arrivedOn: todayISO() });
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
+  const [f, setF] = useState(blankVehicle);
 
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setBusy(true);
-    setErr(null);
-    try {
-      await api.post('/api/fleet', {
-        vin: f.vin.trim().toUpperCase(),
-        modelId: f.modelId || models[0]?.id,
-        color: f.color.trim() || null,
-        year: f.year ? Number(f.year) : null,
-        arrivedOn: f.arrivedOn || null,
-      });
-      setF({ vin: '', modelId: '', color: '', year: '', arrivedOn: todayISO() });
-      setOpen(false);
-      onDone();
-    } catch (e) {
-      setErr(errorText(e));
-    } finally {
-      setBusy(false);
-    }
-  };
   return (
     <>
       <button type="button" className="pill pill-sm pill-accent" onClick={() => setOpen(true)}>
         + {t.settings.addVehicle}
       </button>
       {open && (
-        <Drawer title={t.settings.addVehicle} onClose={() => setOpen(false)}>
-          <form className="form" onSubmit={submit}>
+        <FormSheet
+          title={t.settings.addVehicle}
+          onClose={() => setOpen(false)}
+          value={f}
+          initial={blankVehicle()}
+          draft="vehicle-new"
+          onRestore={setF}
+          summary={(v) => v.vin}
+          label={t.fleet.addVehicleCta}
+          submit={async (key) => {
+            const v = await api.post<{ id: string }>(
+              '/api/fleet',
+              {
+                vin: f.vin.trim().toUpperCase(),
+                modelId: f.modelId,
+                color: f.color.trim() || null,
+                year: f.year ? Number(f.year) : null,
+                arrivedOn: f.arrivedOn || null,
+              },
+              { key },
+            );
+            return { created: v.id, toast: { text: t.fleet.vehicleAdded, open: `/fleet/${v.id}` } };
+          }}
+          onDone={() => {
+            setF(blankVehicle());
+            onDone();
+          }}
+        >
             <div className="two-col">
-              <Field label={t.models.vin}>
+              <Field label={t.models.vin} name="vin">
                 <input className="input mono" value={f.vin} onChange={(e) => setF({ ...f, vin: e.target.value })} required maxLength={17} autoFocus />
               </Field>
-              <Field label={t.models.name}>
+              <Field label={t.models.name} name="modelId">
                 <select
                   className="input"
-                  value={f.modelId || models[0]?.id || ''}
+                  value={f.modelId}
                   onChange={(e) => (e.target.value === NEW_MODEL ? setAddingModel(true) : setF({ ...f, modelId: e.target.value }))}
+                  required
                 >
+                  {/* No model until someone picks one: a preselected first
+                      model gets saved by whoever did not look. */}
+                  <option value="">{t.common.dash}</option>
                   {models.map((m) => (
                     <option key={m.id} value={m.id}>
                       {m.brand} {m.name}
@@ -591,31 +603,21 @@ function NewVehicle({ models, onModels, onDone }: { models: Models['models']; on
                   <option value={NEW_MODEL}>+ {t.models.addEllipsis}</option>
                 </select>
               </Field>
-              <Field label={t.models.year}>
+              <Field label={t.models.year} name="year">
                 <input className="input input-amount mono" value={f.year} onChange={(e) => setF({ ...f, year: e.target.value })} inputMode="numeric" />
               </Field>
-              <Field label={t.models.arrivedOn}>
+              <Field label={t.models.arrivedOn} name="arrivedOn">
                 <input className="input mono" type="date" value={f.arrivedOn} onChange={(e) => setF({ ...f, arrivedOn: e.target.value })} />
               </Field>
             </div>
             <ColorPicker value={f.color} onChange={(color) => setF({ ...f, color })} />
-            {err && <div className="hint hint-bad">{err}</div>}
-            <div className="row-actions">
-              <button type="button" className="pill" onClick={() => setOpen(false)}>
-                {t.actions.cancel}
-              </button>
-              <button className="pill pill-accent" disabled={busy || f.vin.trim().length === 0 || models.length === 0}>
-                {busy ? t.common.checking : t.actions.save}
-              </button>
-            </div>
             {/* Nobody should type in by hand what a receipt already writes:
                 a purchase creates its mopeds with the date, the landed cost
                 and an "arrived" event of their own. */}
             <p className="drawer-tip">
               {t.fleet.addTip} <Link to="/purchases">{t.fleet.addTipLink}</Link>
             </p>
-          </form>
-        </Drawer>
+        </FormSheet>
       )}
       {addingModel && (
         <ModelDrawer

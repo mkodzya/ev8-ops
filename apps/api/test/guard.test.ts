@@ -45,8 +45,8 @@ describe.skipIf(!HAS_DB)('who may read what', () => {
     expect((await call(null, 'GET', '/api/fleet')).statusCode).toBe(401);
   });
 
-  it('a manager, a mechanic and an accountant may read the fleet', async () => {
-    for (const role of ['manager', 'mechanic', 'accountant'] as const) {
+  it('both roles may read the fleet', async () => {
+    for (const role of ['owner', 'manager'] as const) {
       const cookie = await loginAs(role);
       const res = await call(cookie, 'GET', '/api/fleet');
       expect(res.statusCode, role).toBe(200);
@@ -63,13 +63,13 @@ describe.skipIf(!HAS_DB)('who may read what', () => {
     const asManager = json<{ customer: { personalId: string } }>(await call(manager, 'GET', `/api/customers/${c.id}`));
     expect(asManager.customer.personalId).toBe('••••');
 
-    const director = await loginAs('director');
-    const asDirector = json<{ customer: { personalId: string } }>(await call(director, 'GET', `/api/customers/${c.id}`));
-    expect(asDirector.customer.personalId).toBe(personalId);
+    const owner = await loginAs('owner');
+    const asOwner = json<{ customer: { personalId: string } }>(await call(owner, 'GET', `/api/customers/${c.id}`));
+    expect(asOwner.customer.personalId).toBe(personalId);
   });
 
   it('the summary answers any signed-in role', async () => {
-    const cookie = await loginAs('accountant');
+    const cookie = await loginAs('manager');
     const res = await call(cookie, 'GET', '/api/summary');
     expect(res.statusCode).toBe(200);
     const body = json<{ fleet: Record<string, number>; rentals: { active: number; overdue: number } }>(res);

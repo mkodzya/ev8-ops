@@ -10,7 +10,7 @@ import {
   verifyPassword,
 } from '../lib/auth.js';
 import { prisma } from '../lib/db.js';
-import { env } from '../lib/env.js';
+import { demoLoginRefused, env } from '../lib/env.js';
 import { actorOf } from '../lib/guard.js';
 import type { Role } from '@ev8/shared';
 
@@ -51,6 +51,9 @@ export function authRoutes(app: FastifyInstance): void {
       const password = req.body?.password ?? '';
       if (!email || !password) return reply.code(400).send({ error: 'missing_credentials' });
       if (!loginAllowed(email)) return reply.code(429).send({ error: 'too_many_attempts' });
+      // The demo dataset's logins share the laptop's default password. On a
+      // stand on the server they must not open anything (B1-04).
+      if (demoLoginRefused(email)) return reply.code(403).send({ error: 'demo_login_off' });
       const user = await prisma.user.findUnique({ where: { email } });
       if (!user || !user.active || !verifyPassword(password, user.passwordHash)) {
         recordLoginFailure(email);

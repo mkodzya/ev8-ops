@@ -2,13 +2,12 @@ import type { FastifyInstance } from 'fastify';
 import { isoDate } from '../lib/dates.js';
 import { prisma } from '../lib/db.js';
 import { notFound } from '../lib/errors.js';
+import { mayView } from '../lib/guard.js';
 
 // Customers, read side (CST-01). Personal numbers are shown only to roles
 // that may see documents (CST-03): a manager sees the card, not the number.
 
-function canSeeIdentity(role: string): boolean {
-  return role === 'owner' || role === 'director';
-}
+const OPEN_RENTAL: string[] = ['active', 'overdue', 'paused', 'disputed'];
 
 export function customerRoutes(app: FastifyInstance): void {
   /**
@@ -37,12 +36,17 @@ export function customerRoutes(app: FastifyInstance): void {
   );
 
   app.get('/api/customers', { config: { scope: 'fleet.view' } }, async (req) => {
-    const identity = canSeeIdentity(req.actor!.role);
+    const identity = mayView(req, 'customer.documents.view');
     const customers = await prisma.customer.findMany({
       where: { archived: false },
       orderBy: { name: 'asc' },
       include: {
-        rentals: { where: { status: { in: ['active', 'overdue', 'paused', 'disputed'] } }, select: { id: true, number: true, status: true, paidThrough: true } },
+        // Every rental: the list counts them and sums the debt with the rule
+        // the rentals list uses (periods not paid); only open ones are named.
+        rentals: {
+          select: { id: true, number: true, status: true, paidThrough: true, periods: { where: { payStatus: { not: 'paid' } }, select: { amountTetri: true, paidTetri: true } } },
+        },
+        _count: { select: { sales: { where: { status: { not: 'cancelled' } } } } },
       },
     });
     return {
@@ -57,13 +61,18 @@ export function customerRoutes(app: FastifyInstance): void {
         kind: c.kind,
         isSupplier: c.isSupplier,
         tags: c.tags,
-        openRentals: c.rentals.map((r) => ({ id: r.id, number: r.number, status: r.status, paidThrough: isoDate(r.paidThrough) })),
+        openRentals: c.rentals
+          .filter((r) => OPEN_RENTAL.includes(r.status))
+          .map((r) => ({ id: r.id, number: r.number, status: r.status, paidThrough: isoDate(r.paidThrough) })),
+        rentals: c.rentals.length,
+        debtTetri: c.rentals.reduce((n, r) => n + r.periods.reduce((m, p) => m + (p.amountTetri - p.paidTetri), 0), 0),
+        buyer: c._count.sales > 0,
       })),
     };
   });
 
   app.get<{ Params: { id: string } }>('/api/customers/:id', { config: { scope: 'fleet.view' } }, async (req) => {
-    const identity = canSeeIdentity(req.actor!.role);
+    const identity = mayView(req, 'customer.documents.view');
     const c = await prisma.customer.findUnique({
       where: { id: req.params.id },
       include: {

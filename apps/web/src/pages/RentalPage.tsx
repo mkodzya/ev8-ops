@@ -1,16 +1,20 @@
 import type { ActKind, DepositStatus, PeriodPayStatus, RentalStatus } from '@ev8/shared';
 import { useState } from 'react';
 import { parseGel, todayISO, type VehicleState } from '@ev8/shared';
+import { LoadError } from '../components/LoadError.js';
 import { Field } from '../components/Wizard.js';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../api.js';
+import { FormSheet, SubmitButton } from '../ds/form/Form.js';
+import { useOperation } from '../ds/form/operation.js';
+import { useToast } from '../ds/feedback/Toast.js';
 import { BlockHead, Empty, Loading, PageHead, RentalBadge, Vin } from '../components/ui.js';
 import { PaymentForm } from '../components/PaymentForm.js';
 import { VoidPayment } from './PaymentsPage.js';
 import { Row } from '../components/Wizard.js';
 import { fmtDate, formatGel } from '../format.js';
 import { useT } from '../i18n/index.js';
-import { errorText, useLoad } from '../lib/use.js';
+import { useLoad } from '../lib/use.js';
 import { useSession } from '../session.js';
 
 /** Paid, part-paid, the week we are in, late, or not yet started. */
@@ -56,16 +60,17 @@ export function RentalPage() {
   const { id } = useParams();
   const t = useT();
   const { can } = useSession();
-  const { data, error, reload } = useLoad<RentalCard>(id ? `/api/rentals/${id}` : null);
-  const [err, setErr] = useState<string | null>(null);
+  const { data, failure, reload } = useLoad<RentalCard>(id ? `/api/rentals/${id}` : null);
   const [editing, setEditing] = useState(false);
+  const depositOp = useOperation();
+  const toast = useToast();
   // Which document is showing in the card, if any (U15). Printing is the last
   // step of every hand-over and every return, and a link that opens a new tab
   // is a step where people find out the PDF was wrong after they printed it.
   // Declared with the other hooks: below the early returns it would be called
   // on some renders and not others, which React counts and then throws on.
   const [preview, setPreview] = useState<'contract' | 'return-act' | null>(null);
-  if (error) return <Empty text={error} />;
+  if (failure) return <LoadError failure={failure} onRetry={reload} />;
   if (!data) return <Loading />;
   const r = data.rental;
   const today = todayISO();
@@ -77,12 +82,10 @@ export function RentalPage() {
   const decided = d && d.status !== 'held';
 
   const confirm = async () => {
-    try {
-      await api.post(`/api/rentals/${r.id}/deposit/confirm`);
-      reload();
-    } catch (e) {
-      setErr(errorText(e));
-    }
+    const res = await depositOp.run((key) => api.post(`/api/rentals/${r.id}/deposit/confirm`, {}, { key }));
+    if (!res.ok) return;
+    toast({ text: t.rental.depositConfirmed });
+    reload();
   };
 
   return (
@@ -97,7 +100,7 @@ export function RentalPage() {
           </button>
         )}
         {open && can('rental.create') && (
-          <button type="button" className="pill pill-sm" onClick={() => setEditing((v) => !v)}>
+          <button type="button" className="pill pill-sm" onClick={() => setEditing(true)}>
             {t.rentalEdit.title}
           </button>
         )}
@@ -115,10 +118,8 @@ export function RentalPage() {
             setEditing(false);
             reload();
           }}
-          onError={setErr}
         />
       )}
-      {err && <div className="hint hint-bad">{err}</div>}
       {can('deposit.decide') && (
         <p className="hint muted">
           {t.docs.note}{' '}
@@ -238,10 +239,9 @@ export function RentalPage() {
                     <div className="row-actions">
                       <span className="warn-text">{t.rental.awaitingOwner}</span>
                       {can('deposit.confirm') && (
-                        <button type="button" className="pill pill-sm pill-accent" onClick={confirm}>
-                          {t.actions.confirmDeposit}
-                        </button>
+                        <SubmitButton small type="button" state={depositOp.state} label={t.actions.confirmDeposit} onClick={() => void confirm()} />
                       )}
+                      {depositOp.failure && <span className="field-err">{depositOp.failure.text}</span>}
                     </div>
                   )}
                 </>
@@ -304,7 +304,7 @@ export function RentalPage() {
                       · {t.payments.fee} <span className="mono">{formatGel(p.feeTetri)}</span>
                     </span>
                   )}{' '}
-                  {can('payments.reconcile') && <VoidPayment id={p.id} onDone={reload} onError={setErr} />}
+                  {can('payments.reconcile') && <VoidPayment id={p.id} onDone={reload} />}
                 </span>
               </li>
             ))}
@@ -359,94 +359,86 @@ function RentalEdit({
   rental,
   onClose,
   onSaved,
-  onError,
 }: {
   rental: RentalCard['rental'];
   onClose: () => void;
   onSaved: () => void;
-  onError: (e: string) => void;
 }) {
   const t = useT();
   const fleet = useLoad<FreeVehicles>(rental.vinUnconfirmed ? '/api/fleet' : null);
-  const [vehicleId, setVehicleId] = useState('');
-  const [status, setStatus] = useState(rental.storedStatus === 'returned' ? 'active' : rental.storedStatus);
-  const [reason, setReason] = useState('');
-  const [target, setTarget] = useState(rental.buyoutTargetTetri ? String(rental.buyoutTargetTetri / 100) : '');
-  const [per, setPer] = useState(rental.buyoutPerPaymentTetri ? String(rental.buyoutPerPaymentTetri / 100) : '');
-  const [notes, setNotes] = useState(rental.notes ?? '');
-  const [busy, setBusy] = useState(false);
+  const initial = {
+    vehicleId: '',
+    status: rental.storedStatus === 'returned' ? 'active' : rental.storedStatus,
+    reason: '',
+    target: rental.buyoutTargetTetri ? String(rental.buyoutTargetTetri / 100) : '',
+    per: rental.buyoutPerPaymentTetri ? String(rental.buyoutPerPaymentTetri / 100) : '',
+    notes: rental.notes ?? '',
+  };
+  const [f, setF] = useState(initial);
 
   const free = (fleet.data?.vehicles ?? []).filter((v) => v.state === 'available');
-  const statusChanged = status !== rental.storedStatus;
-  const needsReason = statusChanged && status !== 'active';
-
-  const save = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setBusy(true);
-    try {
-      const body: Record<string, unknown> = { notes: notes || null };
-      if (vehicleId) body.vehicleId = vehicleId;
-      if (statusChanged) body.status = status;
-      if (reason) body.reason = reason;
-      body.buyoutTargetTetri = target ? parseGel(target) : null;
-      body.buyoutPerPaymentTetri = per ? parseGel(per) : null;
-      await api.patch(`/api/rentals/${rental.id}`, body);
-      onSaved();
-    } catch (e) {
-      onError(errorText(e));
-    } finally {
-      setBusy(false);
-    }
-  };
+  const statusChanged = f.status !== rental.storedStatus;
+  const needsReason = statusChanged && f.status !== 'active';
 
   return (
-    <form className="card card-drawer form" onSubmit={save}>
-      {rental.vinUnconfirmed && (
-        <Field label={t.rentalEdit.assignVehicle} hint={t.rentalEdit.assignHint}>
-          <select className="input" value={vehicleId} onChange={(e) => setVehicleId(e.target.value)}>
-            <option value="">{t.common.dash}</option>
-            {free.map((v) => (
-              <option key={v.id} value={v.id}>
-                {v.vin} · {v.model}
-              </option>
+    <FormSheet
+      title={t.rentalEdit.title}
+      onClose={onClose}
+      value={f}
+      initial={initial}
+      draft={`rental-edit:${rental.id}`}
+      onRestore={setF}
+      label={t.actions.save}
+      submit={async (key) => {
+        const body: Record<string, unknown> = { notes: f.notes || null };
+        if (f.vehicleId) body.vehicleId = f.vehicleId;
+        if (statusChanged) body.status = f.status;
+        if (f.reason) body.reason = f.reason;
+        body.buyoutTargetTetri = f.target ? parseGel(f.target) : null;
+        body.buyoutPerPaymentTetri = f.per ? parseGel(f.per) : null;
+        await api.patch(`/api/rentals/${rental.id}`, body, { key });
+        return { toast: { text: t.form.changesSaved } };
+      }}
+      onDone={onSaved}
+    >
+        {rental.vinUnconfirmed && (
+          <Field label={t.rentalEdit.assignVehicle} hint={t.rentalEdit.assignHint} name="vehicleId">
+            <select className="input" value={f.vehicleId} onChange={(e) => setF({ ...f, vehicleId: e.target.value })}>
+              <option value="">{t.common.dash}</option>
+              {free.map((v) => (
+                <option key={v.id} value={v.id}>
+                  {v.vin} · {v.model}
+                </option>
+              ))}
+            </select>
+          </Field>
+        )}
+        <Field label={t.rentalEdit.status} name="status">
+          <div className="chips">
+            {(['active', 'paused', 'disputed'] as const).map((st) => (
+              <button key={st} type="button" className={`pill pill-sm ${f.status === st ? 'on' : ''}`} onClick={() => setF({ ...f, status: st })}>
+                {t.rentalStatus[st]}
+              </button>
             ))}
-          </select>
+          </div>
         </Field>
-      )}
-      <Field label={t.rentalEdit.status}>
-        <div className="chips">
-          {(['active', 'paused', 'disputed'] as const).map((st) => (
-            <button key={st} type="button" className={`pill pill-sm ${status === st ? 'on' : ''}`} onClick={() => setStatus(st)}>
-              {t.rentalStatus[st]}
-            </button>
-          ))}
+        {needsReason && (
+          <Field label={t.rentalEdit.reason} hint={t.rentalEdit.reasonHint} name="reason">
+            <input className="input" value={f.reason} onChange={(e) => setF({ ...f, reason: e.target.value })} />
+          </Field>
+        )}
+        <span className="lbl">{t.rentalEdit.buyout}</span>
+        <div className="two-col">
+          <Field label={t.rentalEdit.buyoutTarget} name="buyoutTargetTetri">
+            <input className="input input-amount mono" value={f.target} onChange={(e) => setF({ ...f, target: e.target.value })} inputMode="decimal" />
+          </Field>
+          <Field label={t.rentalEdit.buyoutPerPayment} name="buyoutPerPaymentTetri">
+            <input className="input input-amount mono" value={f.per} onChange={(e) => setF({ ...f, per: e.target.value })} inputMode="decimal" />
+          </Field>
         </div>
-      </Field>
-      {needsReason && (
-        <Field label={t.rentalEdit.reason} hint={t.rentalEdit.reasonHint}>
-          <input className="input" value={reason} onChange={(e) => setReason(e.target.value)} />
+        <Field label={t.rentalEdit.notes} name="notes">
+          <textarea className="input textarea" rows={3} value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })} />
         </Field>
-      )}
-      <span className="lbl">{t.rentalEdit.buyout}</span>
-      <div className="two-col">
-        <Field label={t.rentalEdit.buyoutTarget}>
-          <input className="input input-amount mono" value={target} onChange={(e) => setTarget(e.target.value)} inputMode="decimal" />
-        </Field>
-        <Field label={t.rentalEdit.buyoutPerPayment}>
-          <input className="input input-amount mono" value={per} onChange={(e) => setPer(e.target.value)} inputMode="decimal" />
-        </Field>
-      </div>
-      <Field label={t.rentalEdit.notes}>
-        <textarea className="input textarea" rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} />
-      </Field>
-      <div className="row-actions">
-        <button type="button" className="pill" onClick={onClose}>
-          {t.actions.cancel}
-        </button>
-        <button className="pill pill-accent" disabled={busy || (needsReason && !reason.trim())}>
-          {busy ? t.common.checking : t.actions.save}
-        </button>
-      </div>
-    </form>
+    </FormSheet>
   );
 }

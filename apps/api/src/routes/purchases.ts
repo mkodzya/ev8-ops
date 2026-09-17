@@ -105,12 +105,12 @@ export function serializePurchase(p: Row) {
 }
 
 export function purchaseRoutes(app: FastifyInstance): void {
-  app.get('/api/purchases', { config: { scope: 'fleet.view' } }, async () => {
+  app.get('/api/purchases', { config: { scope: 'purchases.view' } }, async () => {
     const purchases = await prisma.purchase.findMany({ orderBy: { orderedOn: 'desc' }, take: 200, include: PURCHASE_INCLUDE });
     return { purchases: purchases.map(serializePurchase) };
   });
 
-  app.get<{ Params: { id: string } }>('/api/purchases/:id', { config: { scope: 'fleet.view' } }, async (req) => {
+  app.get<{ Params: { id: string } }>('/api/purchases/:id', { config: { scope: 'purchases.view' } }, async (req) => {
     const p = await prisma.purchase.findUnique({ where: { id: req.params.id }, include: PURCHASE_INCLUDE });
     if (!p) throw notFound('purchase_not_found', 'No such order.');
     const vehicles = await prisma.vehicle.findMany({
@@ -131,7 +131,7 @@ export function purchaseRoutes(app: FastifyInstance): void {
   });
 
   /** Suppliers are parties like any other; this is the short list for pickers. */
-  app.get('/api/suppliers', { config: { scope: 'fleet.view' } }, async () => {
+  app.get('/api/suppliers', { config: { scope: 'purchases.view' } }, async () => {
     const suppliers = await prisma.customer.findMany({
       where: { isSupplier: true, archived: false },
       orderBy: { name: 'asc' },

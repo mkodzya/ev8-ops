@@ -1,6 +1,6 @@
 {
   "name": "ev8-ops",
-  "version": "0.5.1",
+  "version": "0.6.0",
   "private": true,
   "description": "EV8 Ops — operational system of E-Motion Motors LLC: fleet, rentals, payments, sales, service, WhatsApp",
   "workspaces": [
@@ -19,7 +19,8 @@
     "guard:i18n": "node scripts/i18n-guard.mjs",
     "guard:tokens": "node scripts/tokens.mjs --check",
     "guard:code": "node scripts/guard-code.mjs",
-    "guard": "npm run guard:i18n && npm run guard:tokens && npm run guard:code",
+    "guard:errors": "node scripts/errors-guard.mjs",
+    "guard": "npm run guard:i18n && npm run guard:tokens && npm run guard:code && npm run guard:errors",
     "test": "npm run guard && npm -w @ev8/shared run test && npm -w @ev8/api run test",
     "test:shared": "npm -w @ev8/shared run test",
     "test:api": "npm -w @ev8/api run test",

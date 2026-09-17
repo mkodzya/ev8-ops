@@ -3,7 +3,7 @@ import { audit } from '../lib/audit.js';
 import { isoDate } from '../lib/dates.js';
 import { prisma } from '../lib/db.js';
 import { conflict, isUniqueViolation, notFound } from '../lib/errors.js';
-import { actorOf } from '../lib/guard.js';
+import { actorOf, mayView } from '../lib/guard.js';
 import { str, tetri } from '../lib/validate.js';
 import { PURCHASE_INCLUDE, serializePurchase } from './purchases.js';
 
@@ -109,13 +109,16 @@ export function modelRoutes(app: FastifyInstance): void {
       where: withArchived ? {} : { archived: false },
       orderBy: [{ brand: 'asc' }, { name: 'asc' }],
     });
-    return { models: await describe(models) };
+    const rows = await describe(models);
+    return { models: mayView(req, 'cost.view') ? rows : rows.map(withoutCost) };
   });
 
   app.get<{ Params: { id: string } }>('/api/models/:id', { config: { scope: 'fleet.view' } }, async (req) => {
     const m = await prisma.vehicleModel.findUnique({ where: { id: req.params.id } });
     if (!m) throw notFound('model_not_found', 'No such model.');
-    const [model] = await describe([m]);
+    const seeCost = mayView(req, 'cost.view');
+    const [described] = await describe([m]);
+    const model = seeCost ? described : withoutCost(described);
 
     const vehicles = await prisma.vehicle.findMany({
       where: { modelId: m.id, archived: false },
@@ -148,7 +151,8 @@ export function modelRoutes(app: FastifyInstance): void {
         }));
     });
 
-    return { model, vehicles, orders };
+    // Orders are purchases, and purchases are the owners' (redesign §2.1).
+    return { model, vehicles, orders: mayView(req, 'purchases.view') ? orders : [] };
   });
 
   app.post<{ Body: Body }>('/api/models', { config: { scope: 'settings.manage' } }, async (req, reply) => {
@@ -205,4 +209,9 @@ export function modelRoutes(app: FastifyInstance): void {
     await audit({ actorId: actor.id, action: 'model.update', entityType: 'vehicle_model', entityId: before.id, before: was, after: data });
     return { ok: true };
   });
+}
+
+/** A model as a manager reads it: prices yes, what it cost us no. */
+function withoutCost<T extends { costTetri: number | null; costSource: unknown }>(m: T): T {
+  return { ...m, costTetri: null, costSource: null };
 }

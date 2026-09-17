@@ -63,16 +63,23 @@ function toBase64(blob: Blob): Promise<string> {
 }
 
 /** Upload one prepared photo or document to an endpoint that takes {mimeType, label, dataBase64}. */
-export async function uploadFile(url: string, file: { name: string; mimeType: string; blob: Blob }, extra: Record<string, unknown> = {}): Promise<string> {
-  const { id } = await api.post<{ id: string }>(url, { mimeType: file.mimeType, label: file.name, dataBase64: await toBase64(file.blob), ...extra });
+export async function uploadFile(
+  url: string,
+  file: { name: string; mimeType: string; blob: Blob },
+  extra: Record<string, unknown> = {},
+  key?: string,
+): Promise<string> {
+  const { id } = await api.post<{ id: string }>(url, { mimeType: file.mimeType, label: file.name, dataBase64: await toBase64(file.blob), ...extra }, { key });
   return id;
 }
 
 /** Sequential, so a phone on a weak link is not asked to push four uploads at once. */
-export async function uploadAll(url: string, files: PreparedPhoto[], onDone?: (n: number) => void): Promise<string[]> {
+export async function uploadAll(url: string, files: PreparedPhoto[], onDone?: (n: number) => void, key?: string): Promise<string[]> {
   const ids: string[] = [];
-  for (const f of files) {
-    ids.push(await uploadFile(url, f));
+  // With a key, each photo gets its own derived from it: a retry after a lost
+  // answer finds the ones already stored instead of storing them twice.
+  for (const [i, f] of files.entries()) {
+    ids.push(await uploadFile(url, f, {}, key ? `${key}-${i}` : undefined));
     onDone?.(ids.length);
   }
   return ids;

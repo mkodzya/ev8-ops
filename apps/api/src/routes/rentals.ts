@@ -13,7 +13,8 @@ export function rentalRoutes(app: FastifyInstance): void {
     const rentals = await prisma.rental.findMany({
       orderBy: [{ status: 'asc' }, { pickedUpOn: 'desc' }],
       include: {
-        customer: { select: { id: true, name: true, nameKa: true, nameLat: true } },
+        // The phone too: "Whose return?" finds a renter by the digits of it (wave 1 §3.2).
+        customer: { select: { id: true, name: true, nameKa: true, nameLat: true, phone: true } },
         vehicle: { select: { id: true, vin: true, model: { select: { brand: true, name: true } } } },
         deposit: { select: { amountTetri: true, status: true } },
         // What is owed, from the periods that were not paid — the list shows

@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useT } from '../i18n/index.js';
 
@@ -16,11 +16,27 @@ const open: symbol[] = [];
  *
  * On a phone it becomes a sheet from the bottom, because a 400px panel on a
  * 375px screen is a page with a stripe of wallpaper down one side.
+ *
+ * `confirmClose`: the panel holds a form with something typed in it. Escape,
+ * the cross and a click behind then ask «Закрыть форму?» first; what was
+ * typed stays a draft either way (wave 1 §3.7).
  */
-export function Drawer({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
+export function Drawer({
+  title,
+  onClose,
+  confirmClose = false,
+  children,
+}: {
+  title: string;
+  onClose: () => void;
+  confirmClose?: boolean;
+  children: ReactNode;
+}) {
   const t = useT();
-  const close = useRef(onClose);
-  close.current = onClose;
+  const [asking, setAsking] = useState(false);
+  const tryClose = () => (confirmClose ? setAsking(true) : onClose());
+  const close = useRef(tryClose);
+  close.current = asking ? () => setAsking(false) : tryClose;
   useEffect(() => {
     // A panel can open over another — a new model over a new moped — and
     // then Escape closes the top one only, and the page stays still until
@@ -43,7 +59,7 @@ export function Drawer({ title, onClose, children }: { title: string; onClose: (
   // On the body, not where it was asked for: a panel inside a panel would
   // otherwise be positioned by its parent's slide-in transform.
   return createPortal(
-    <div className="drawer-scrim" role="presentation" onClick={onClose}>
+    <div className="drawer-scrim" role="presentation" onClick={() => close.current()}>
       <aside
         className="drawer"
         role="dialog"
@@ -53,11 +69,27 @@ export function Drawer({ title, onClose, children }: { title: string; onClose: (
       >
         <header className="drawer-head">
           <h2>{title}</h2>
-          <button type="button" className="drawer-x" onClick={onClose} aria-label={t.actions.cancel}>
+          <button type="button" className="drawer-x" onClick={tryClose} aria-label={t.form.close}>
             ✕
           </button>
         </header>
         <div className="drawer-body">{children}</div>
+        {asking && (
+          <div className="drawer-ask" role="alertdialog" aria-label={t.form.closeAsk}>
+            <div className="drawer-ask-box">
+              <h3>{t.form.closeAsk}</h3>
+              <p className="muted">{t.form.closeNote}</p>
+              <div className="row-actions">
+                <button type="button" className="pill" onClick={() => setAsking(false)} autoFocus>
+                  {t.form.back}
+                </button>
+                <button type="button" className="pill pill-accent" onClick={onClose}>
+                  {t.form.close}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </aside>
     </div>,
     document.body,

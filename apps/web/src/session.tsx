@@ -1,6 +1,6 @@
 import type { Permission, Role } from '@ev8/shared';
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
-import { api } from './api.js';
+import { ApiError, SIGNED_OUT_EVENT, api } from './api.js';
 
 export interface Me {
   id: string;
@@ -40,10 +40,34 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     void refresh();
   }, [refresh]);
 
+  useEffect(() => {
+    // One refused request is a reason to ask, not proof: an API that is
+    // restarting answers 401 for a moment before it can read sessions again,
+    // and a live session must not be sent to type its password. The session
+    // is over only when "who am I" itself says so.
+    const check = () => {
+      api
+        .get<Me>('/api/me')
+        .then(setMe)
+        .catch((e) => {
+          if (e instanceof ApiError && e.status === 401) setMe(null);
+        });
+    };
+    window.addEventListener(SIGNED_OUT_EVENT, check);
+    return () => window.removeEventListener(SIGNED_OUT_EVENT, check);
+  }, []);
+
   const logout = useCallback(async () => {
     try {
       await api.post('/api/auth/logout');
     } finally {
+      // A phone at the showroom is shared: whatever a wizard kept on this
+      // device for its author goes with the session (drafts are ev8-draft:*).
+      try {
+        for (const key of Object.keys(localStorage)) if (key.startsWith('ev8-draft:') || key === 'ev8-recent') localStorage.removeItem(key);
+      } catch {
+        /* private mode: nothing was stored */
+      }
       setMe(null);
     }
   }, []);

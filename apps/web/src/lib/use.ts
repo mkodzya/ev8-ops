@@ -1,26 +1,72 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { useCallback } from 'react';
 import { api, ApiError } from '../api.js';
+import { currentDict } from '../i18n/index.js';
 
-/** Load one URL; `reload` after a write. Errors surface as a message, never a blank page. */
-export function useLoad<T>(url: string | null): { data: T | null; error: string | null; reload: () => void } {
-  const [data, setData] = useState<T | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [tick, setTick] = useState(0);
-  useEffect(() => {
-    if (!url) return;
-    let alive = true;
-    api
-      .get<T>(url)
-      .then((d) => alive && setData(d))
-      .catch((e) => alive && setError(e instanceof ApiError ? `${e.code}: ${e.message}` : String(e)));
-    return () => {
-      alive = false;
-    };
-  }, [url, tick]);
-  const reload = useCallback(() => setTick((n) => n + 1), []);
-  return { data, error, reload };
+/** Why a screen has nothing to show: the HTTP status (0 = no connection) and the words for it. */
+export interface LoadFailure {
+  status: number;
+  code: string;
+  text: string;
 }
 
+export function failureOf(e: unknown): LoadFailure {
+  if (e instanceof ApiError) return { status: e.status, code: e.code, text: errorText(e) };
+  return { status: 0, code: 'network', text: errorText(e) };
+}
+
+export interface Loaded<T> {
+  data: T | null;
+  error: string | null;
+  /** Set only when there is nothing to show. Data already on screen stays, and the sync bar speaks for the failed refetch. */
+  failure: LoadFailure | null;
+  reload: () => void;
+  /** When the data on screen was fetched (ms), for "данные на HH:MM". */
+  updatedAt: number | null;
+}
+
+/**
+ * Load one URL through the shared cache (build plan Р4). The same URL on two
+ * screens is one request; data stays on screen while it refreshes; a failure
+ * is kept as a status as well as words, so a screen can tell "no such
+ * record" from "no connection" (B1-02). Never a blank page, never a spinner
+ * that waits forever.
+ */
+export function useLoad<T>(url: string | null): Loaded<T> {
+  const q = useQuery<T>({
+    queryKey: [url],
+    queryFn: () => api.get<T>(url!),
+    enabled: url != null,
+  });
+  const refetch = q.refetch;
+  const reload = useCallback(() => {
+    void refetch();
+  }, [refetch]);
+  const failure = q.data === undefined && q.error ? failureOf(q.error) : null;
+  return {
+    data: q.data ?? null,
+    error: failure?.text ?? null,
+    failure,
+    reload,
+    updatedAt: q.dataUpdatedAt || null,
+  };
+}
+
+/**
+ * What went wrong, in the language on screen, saying what to do. A code the
+ * dictionary does not know yet (errors-guard keeps that from shipping) still
+ * reads as a sentence, with the code small at the end for whoever is asked.
+ */
 export function errorText(e: unknown): string {
-  return e instanceof ApiError ? `${e.code}: ${e.message}` : e instanceof Error ? e.message : String(e);
+  const t = currentDict().errors;
+  // A gateway with nobody behind it answers 5xx with no body of ours: that is
+  // "no connection to the server", not a fault somebody should report.
+  if (e instanceof ApiError && e.status >= 500 && (e.code === 'error' || e.status >= 502)) return t.network;
+  if (e instanceof ApiError) {
+    const known = (t.codes as Record<string, string>)[e.code];
+    return known ?? `${t.unknown} (${e.code})`;
+  }
+  // fetch rejects with a TypeError when the request never reached the server.
+  if (e instanceof TypeError) return t.network;
+  return t.unknown;
 }

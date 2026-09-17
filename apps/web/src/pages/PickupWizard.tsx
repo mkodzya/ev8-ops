@@ -2,14 +2,18 @@ import { DEFAULT_DEPOSIT_TETRI, DEFAULT_WEEKLY_RATES_TETRI, gelFromTetri, parseG
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
-import { BlockHead, ColorText, StateBadge, Vin } from '../components/ui.js';
+import { BlockHead, ColorText, Loading, StateBadge, Vin } from '../components/ui.js';
 import { Field, Row, Wizard } from '../components/Wizard.js';
 import { fmtDate, formatGel } from '../format.js';
 import { useT } from '../i18n/index.js';
-import { errorText, useLoad } from '../lib/use.js';
+import { useLoad } from '../lib/use.js';
+import { DraftOffer } from '../ds/form/Form.js';
+import { useDraft } from '../ds/form/drafts.js';
+import { useOperation } from '../ds/form/operation.js';
 import { uploadAll, type PreparedPhoto } from '../lib/photos.js';
 import { PhotoPicker } from '../components/PhotoPicker.js';
 import { CustomerForm } from './CustomerForm.js';
+import { LoadError } from '../components/LoadError.js';
 
 interface Customers {
   customers: { id: string; name: string; nameLat: string | null; phone: string | null }[];
@@ -24,7 +28,8 @@ export function PickupWizard() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const steps = [t.pickup.steps.customer, t.pickup.steps.vehicle, t.pickup.steps.terms, t.pickup.steps.act, t.pickup.steps.done];
-  const [step, setStep] = useState(0);
+  // Arrived from a card with the customer already chosen: the list step is skipped.
+  const [step, setStep] = useState(params.get('customer') ? 1 : 0);
 
   const customers = useLoad<Customers>('/api/customers');
   const fleet = useLoad<Fleet>('/api/fleet');
@@ -47,9 +52,30 @@ export function PickupWizard() {
   const [condition, setCondition] = useState('');
   const [photos, setPhotos] = useState<PreparedPhoto[]>([]);
   const [progress, setProgress] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
   const [result, setResult] = useState<{ id: string; number: string } | null>(null);
+  const op = useOperation();
+
+  // The draft: everything typed except the photos, which are files. A hand-over
+  // interrupted by a call is picked up where it stopped (wave 1 §3.7).
+  const typed = { step, customerId, noVin, vinNote, vehicleId, rate, deposit, pickedUpOn, expectedReturnOn, nightParking, batteries, chargers, odometer, condition };
+  const [start] = useState(() => typed);
+  const drafts = useDraft({ id: 'pickup', value: typed, initial: start, hold: result != null });
+  const restore = (d: typeof typed) => {
+    setStep(Math.min(d.step, 3));
+    setCustomerId(d.customerId);
+    setNoVin(d.noVin);
+    setVinNote(d.vinNote);
+    setVehicleId(d.vehicleId);
+    setRate(d.rate);
+    setDeposit(d.deposit);
+    setPickedUpOn(d.pickedUpOn);
+    setExpectedReturnOn(d.expectedReturnOn);
+    setNightParking(d.nightParking);
+    setBatteries(d.batteries);
+    setChargers(d.chargers);
+    setOdometer(d.odometer);
+    setCondition(d.condition);
+  };
 
   // Arrived from a card with the customer or the moped already chosen: skip ahead.
   useEffect(() => {
@@ -93,44 +119,70 @@ export function PickupWizard() {
     ''
   );
 
+  // One hand-over, however many times the button is pressed: the rental and
+  // each photo carry keys, so a retry after a lost answer or a failed photo
+  // finds what is already stored instead of storing it twice.
   const submit = async () => {
-    setBusy(true);
-    setErr(null);
-    try {
-      const r = await api.post<{ id: string; number: string; actId: string }>('/api/rentals', {
-        customerId,
-        vehicleId: noVin ? null : vehicleId,
-        vinNote: noVin ? vinNote : null,
-        weeklyRateTetri: rateTetri,
-        depositTetri,
-        pickedUpOn,
-        expectedReturnOn: expectedReturnOn || null,
-        nightParkingAddress: nightParking || null,
-        batteries: batteries === '' ? null : Number(batteries),
-        chargers: chargers === '' ? null : Number(chargers),
-        odometerKm: odometer ? Number(odometer) : null,
-        condition: condition || null,
-      });
+    const res = await op.run(async (key) => {
+      const r = await api.post<{ id: string; number: string; actId: string }>(
+        '/api/rentals',
+        {
+          customerId,
+          vehicleId: noVin ? null : vehicleId,
+          vinNote: noVin ? vinNote : null,
+          weeklyRateTetri: rateTetri,
+          depositTetri,
+          pickedUpOn,
+          expectedReturnOn: expectedReturnOn || null,
+          nightParkingAddress: nightParking || null,
+          batteries: batteries === '' ? null : Number(batteries),
+          chargers: chargers === '' ? null : Number(chargers),
+          odometerKm: odometer ? Number(odometer) : null,
+          condition: condition || null,
+        },
+        { key },
+      );
       setResult(r);
-      // The rental exists now; a photo that fails to upload is reported, not lost.
-      await uploadAll(`/api/acts/${r.actId}/photos`, photos, (n) => setProgress(t.photos.uploading(n, photos.length)));
-      setProgress(null);
-      setStep(4);
-    } catch (e) {
-      setErr(errorText(e));
-      if (result) setStep(4);
-    } finally {
-      setBusy(false);
-    }
+      drafts.drop();
+      await uploadAll(`/api/acts/${r.actId}/photos`, photos, (n) => setProgress(t.photos.uploading(n, photos.length)), `${key}-photo`);
+      return r;
+    });
+    setProgress(null);
+    if (res.ok) setStep(4);
   };
+  // A refusal about a field on an earlier step goes back to that step, where the words sit under the field.
+  const stepOfField: Record<string, number> = {
+    customerId: 0,
+    vehicleId: 1,
+    vinNote: 1,
+    weeklyRateTetri: 2,
+    depositTetri: 2,
+    pickedUpOn: 2,
+    expectedReturnOn: 2,
+    nightParkingAddress: 2,
+    batteries: 2,
+    chargers: 2,
+  };
+  useEffect(() => {
+    const field = op.failure?.field;
+    if (field && stepOfField[field] != null) setStep(stepOfField[field]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [op.failure]);
+
+  if (drafts.offer) {
+    return (
+      <Wizard title={t.pickup.title} steps={steps} step={0}>
+        <DraftOffer at={drafts.offer.at} words={customers.data?.customers.find((c) => c.id === drafts.offer!.value.customerId)?.name} onContinue={() => drafts.accept(restore)} onDiscard={drafts.discard} />
+      </Wizard>
+    );
+  }
 
   return (
     <Wizard
       title={t.pickup.title}
       steps={steps}
       step={step}
-      error={err}
-      busy={busy}
+      submit={step === 3 ? { state: op.state, failure: op.failure, label: t.pickup.handOver } : undefined}
       onBack={step > 0 && step < 4 ? () => setStep(step - 1) : undefined}
       onNext={step < 3 ? () => setStep(step + 1) : step === 3 ? submit : () => navigate(`/rentals/${result!.id}`)}
       nextLabel={step === 4 ? t.actions.open : step === 3 ? t.actions.confirm : undefined}
@@ -139,6 +191,9 @@ export function PickupWizard() {
       {step === 0 && (
         <>
           <input className="input" placeholder={t.pickup.searchCustomer} value={q} onChange={(e) => setQ(e.target.value)} autoFocus />
+          {/* The list is what stops a second card for somebody already here:
+              when it cannot load, that is said, not shown as "nobody". */}
+          {!customers.data && (customers.failure ? <LoadError failure={customers.failure} onRetry={customers.reload} /> : <Loading rows={3} />)}
           <ul className="pick-list">
             {shownCustomers.map((c) => (
               <li key={c.id}>
@@ -171,7 +226,8 @@ export function PickupWizard() {
       {step === 1 && (
         <>
           <input className="input mono" placeholder={t.fleet.searchHint} value={vq} onChange={(e) => setVq(e.target.value)} disabled={noVin} />
-          {available.length === 0 && !noVin && <p className="empty">{t.pickup.noAvailable}</p>}
+          {!fleet.data && (fleet.failure ? <LoadError failure={fleet.failure} onRetry={fleet.reload} /> : <Loading rows={3} />)}
+          {fleet.data && available.length === 0 && !noVin && <p className="empty">{t.pickup.noAvailable}</p>}
           <ul className={`pick-list ${noVin ? 'dim' : ''}`}>
             {available.map((v) => (
               <li key={v.id}>
@@ -189,7 +245,7 @@ export function PickupWizard() {
             <span>{t.pickup.noVehicle}</span>
           </label>
           {noVin && (
-            <Field label={t.rentals.vinUnconfirmed} hint={t.pickup.noVehicleHint}>
+            <Field label={t.rentals.vinUnconfirmed} hint={t.pickup.noVehicleHint} name="vinNote">
               <input className="input" value={vinNote} onChange={(e) => setVinNote(e.target.value)} />
             </Field>
           )}
@@ -198,7 +254,7 @@ export function PickupWizard() {
 
       {step === 2 && (
         <>
-          <Field label={t.pickup.rate}>
+          <Field label={t.pickup.rate} name="weeklyRateTetri">
             <div className="chips">
               {DEFAULT_WEEKLY_RATES_TETRI.map((r) => (
                 <button key={r} type="button" className={`pill pill-sm ${parseGel(rate) === r ? 'on' : ''}`} onClick={() => setRate(gelFromTetri(r).toString())}>
@@ -208,23 +264,23 @@ export function PickupWizard() {
               <input className="input input-amount mono" value={rate} onChange={(e) => setRate(e.target.value)} inputMode="decimal" />
             </div>
           </Field>
-          <Field label={t.pickup.deposit}>
+          <Field label={t.pickup.deposit} name="depositTetri">
             <input className="input input-amount mono" value={deposit} onChange={(e) => setDeposit(e.target.value)} inputMode="decimal" />
           </Field>
-          <Field label={t.pickup.pickedUpOn}>
+          <Field label={t.pickup.pickedUpOn} name="pickedUpOn">
             <input className="input mono" type="date" value={pickedUpOn} onChange={(e) => setPickedUpOn(e.target.value)} />
           </Field>
-          <Field label={t.pickup.expectedReturnOn}>
+          <Field label={t.pickup.expectedReturnOn} name="expectedReturnOn">
             <input className="input mono" type="date" value={expectedReturnOn} onChange={(e) => setExpectedReturnOn(e.target.value)} />
           </Field>
-          <Field label={t.handover.nightParking} hint={t.handover.nightParkingHint}>
+          <Field label={t.handover.nightParking} hint={t.handover.nightParkingHint} name="nightParkingAddress">
             <input className="input" value={nightParking} onChange={(e) => setNightParking(e.target.value)} />
           </Field>
           <div className="two-col">
-            <Field label={t.handover.batteries}>
+            <Field label={t.handover.batteries} name="batteries">
               <input className="input input-amount mono" value={batteries} onChange={(e) => setBatteries(e.target.value)} inputMode="numeric" />
             </Field>
-            <Field label={t.handover.chargers}>
+            <Field label={t.handover.chargers} name="chargers">
               <input className="input input-amount mono" value={chargers} onChange={(e) => setChargers(e.target.value)} inputMode="numeric" />
             </Field>
           </div>
@@ -233,10 +289,10 @@ export function PickupWizard() {
 
       {step === 3 && (
         <>
-          <Field label={t.pickup.odometer}>
+          <Field label={t.pickup.odometer} name="odometerKm">
             <input className="input mono" value={odometer} onChange={(e) => setOdometer(e.target.value)} inputMode="numeric" />
           </Field>
-          <Field label={t.pickup.condition}>
+          <Field label={t.pickup.condition} name="condition">
             <textarea className="input textarea" rows={3} value={condition} onChange={(e) => setCondition(e.target.value)} />
           </Field>
           <PhotoPicker photos={photos} onChange={setPhotos} label={t.pickup.photos} />

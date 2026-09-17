@@ -1,0 +1,39 @@
+/* States shared by every screen (ux.md, "Шесть состояний"). */
+
+.skeleton-wait { min-height: 1px; }
+.skeleton { display: grid; gap: 8px; padding: 4px 0; }
+.skeleton-row { background: var(--surface); border-radius: var(--radius-card); padding: 12px 14px; display: grid; gap: 8px; }
+.skeleton-card .skeleton-row { padding: var(--card-pad); }
+.skel { display: block; height: 14px; border-radius: 8px; background: var(--surface-2); }
+.skel-a { width: 62%; }
+.skel-b { width: 38%; height: 12px; }
+@media (prefers-reduced-motion: no-preference) {
+  .skel { animation: skel-breathe 1.4s ease-in-out infinite; }
+}
+@keyframes skel-breathe {
+  50% { opacity: 0.55; }
+}
+
+.syncbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 6px var(--space4);
+  margin: 0 calc(-1 * var(--space4)) var(--space3);
+  font: var(--text-label);
+  color: var(--ink);
+  background: var(--surface-2);
+}
+.syncbar-back { background: var(--accent-soft); color: var(--accent-ink); }
+@media (prefers-reduced-motion: no-preference) {
+  .syncbar .spin { animation: sync-spin 1s linear infinite; }
+}
+@keyframes sync-spin {
+  to { transform: rotate(360deg); }
+}
+
+.state-empty { text-align: center; padding: 48px 12px; display: grid; justify-items: center; gap: 10px; }
+.state-empty-icon { width: 56px; height: 56px; border-radius: 50%; background: var(--accent-soft); color: var(--accent-ink); display: grid; place-items: center; }
+.state-empty-title { font: var(--text-h2); margin: 0; }
+.state-empty-text { font: var(--text-label); color: var(--muted); margin: 0; max-width: 40ch; }

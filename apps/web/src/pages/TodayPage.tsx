@@ -2,6 +2,8 @@ import { VEHICLE_STATES, type VehicleState } from '@ev8/shared';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api.js';
+import { LoadError } from '../components/LoadError.js';
+import { useLoad } from '../lib/use.js';
 import { BlockHead, CustomerName, Loading, PageHead, StateBadge } from '../components/ui.js';
 import { formatGel } from '../format.js';
 import { dayTasks, type DayTask } from '../lib/tasks.js';
@@ -49,10 +51,8 @@ function TaskRow({ task }: { task: DayTask }) {
 export function TodayPage() {
   const t = useT();
   const { can } = useSession();
-  const [s, setS] = useState<Summary | null>(null);
-  useEffect(() => {
-    void api.get<Summary>('/api/summary').then(setS);
-  }, []);
+  const { data: s, failure, reload } = useLoad<Summary>('/api/summary');
+  if (!s && failure) return <LoadError failure={failure} onRetry={reload} />;
   if (!s) return <Loading />;
 
   const tasks = dayTasks(s, t, can);

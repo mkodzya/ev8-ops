@@ -3,6 +3,7 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import { env } from './lib/env.js';
 import { ApiError } from './lib/errors.js';
 import { installGuard } from './lib/guard.js';
+import { installOperationKeys } from './lib/operations.js';
 import { authRoutes } from './routes/auth.js';
 import { customerRoutes } from './routes/customers.js';
 import { documentRoutes } from './routes/documents.js';
@@ -18,6 +19,7 @@ import { paymentRoutes } from './routes/payments.js';
 import { rentalRoutes } from './routes/rentals.js';
 import { purchaseRoutes } from './routes/purchases.js';
 import { saleRoutes } from './routes/sales.js';
+import { searchRoutes } from './routes/search.js';
 import { serviceRoutes } from './routes/service.js';
 import { statementRoutes } from './routes/statements.js';
 import { summaryRoutes } from './routes/summary.js';
@@ -34,6 +36,8 @@ export function buildApp(): FastifyInstance {
   // Everything registered after this is guarded; an undeclared scope is
   // owner-only (default-deny).
   installGuard(app);
+  // After the guard: a key is claimed only by a request that may run.
+  installOperationKeys(app);
 
   app.setErrorHandler((err, _req, reply) => {
     if (err instanceof ApiError) {
@@ -46,6 +50,10 @@ export function buildApp(): FastifyInstance {
       const code = typeof framework.code === 'string' ? framework.code : 'bad_request';
       return reply.code(status).send({ error: code, message: framework.message ?? 'Bad request.' });
     }
+    // A record id that is not an id at all — /sales/new, a truncated link —
+    // names no record: that is a 404 for the screen to explain, not a fault
+    // (B1-02). Postgres says 22P02; Prisma wraps it in its own codes.
+    if (isMalformedId(err)) return reply.code(404).send({ error: 'not_found', message: 'No such record.' });
     app.log.error(err);
     return reply.code(500).send({ error: 'internal', message: 'Something broke on our side.' });
   });
@@ -69,6 +77,18 @@ export function buildApp(): FastifyInstance {
   serviceRoutes(app);
   saleRoutes(app);
   purchaseRoutes(app);
+  searchRoutes(app);
 
   return app;
+}
+
+function isMalformedId(err: unknown): boolean {
+  const seen = new Set<unknown>();
+  for (let e: unknown = err; e && typeof e === 'object' && !seen.has(e); e = (e as { cause?: unknown }).cause) {
+    seen.add(e);
+    const { code, message } = e as { code?: unknown; message?: unknown };
+    if (code === '22P02' || code === 'P2023') return true;
+    if (typeof message === 'string' && /invalid input syntax for type uuid|Error creating UUID|invalid character.*UUID/i.test(message)) return true;
+  }
+  return false;
 }

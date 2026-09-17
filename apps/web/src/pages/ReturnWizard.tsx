@@ -6,14 +6,18 @@ const ITEM_STATES = ['ok', 'damaged', 'missing'] as const;
 type ItemState = (typeof ITEM_STATES)[number];
 const GROUNDS = ['rent_arrears', 'fines', 'moped_damage', 'incomplete_return', 'key_loss', 'charger_loss', 'cleaning', 'other'] as const;
 type Ground = (typeof GROUNDS)[number];
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api.js';
+import { LoadError } from '../components/LoadError.js';
 import { Empty, Loading, Vin } from '../components/ui.js';
 import { Field, Row, Wizard } from '../components/Wizard.js';
 import { fmtDate, formatGel } from '../format.js';
 import { useT } from '../i18n/index.js';
-import { errorText, useLoad } from '../lib/use.js';
+import { useLoad } from '../lib/use.js';
+import { DraftOffer } from '../ds/form/Form.js';
+import { useDraft } from '../ds/form/drafts.js';
+import { useOperation } from '../ds/form/operation.js';
 import { uploadAll, type PreparedPhoto } from '../lib/photos.js';
 import { PhotoPicker } from '../components/PhotoPicker.js';
 import { useSession } from '../session.js';
@@ -29,7 +33,7 @@ export function ReturnWizard() {
   const t = useT();
   const navigate = useNavigate();
   const { can } = useSession();
-  const { data, error } = useLoad<RentalCard>(id ? `/api/rentals/${id}` : null);
+  const { data, failure, reload } = useLoad<RentalCard>(id ? `/api/rentals/${id}` : null);
   const decides = can('deposit.decide');
   const steps = decides ? [t.ret.title, t.ret.depositDecision, t.pickup.steps.done] : [t.ret.title, t.pickup.steps.done];
   const [step, setStep] = useState(0);
@@ -46,10 +50,32 @@ export function ReturnWizard() {
   const [withheld, setWithheld] = useState('');
   const [reason, setReason] = useState('');
   const [returnedTo, setReturnedTo] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
+  const [done, setDone] = useState(false);
+  const op = useOperation();
 
-  if (error) return <Empty text={error} />;
+  // The draft: everything typed except the photos, which are files.
+  const typed = { step, returnedOn, odometer, condition, items, grounds, decision, withheld, reason, returnedTo };
+  const [start] = useState(() => typed);
+  const drafts = useDraft({ id: id ? `return:${id}` : undefined, value: typed, initial: start, hold: done });
+  const restore = (d: typeof typed) => {
+    setStep(Math.min(d.step, decides ? 1 : 0));
+    setReturnedOn(d.returnedOn);
+    setOdometer(d.odometer);
+    setCondition(d.condition);
+    setItems(d.items);
+    setGrounds(d.grounds);
+    setDecision(d.decision);
+    setWithheld(d.withheld);
+    setReason(d.reason);
+    setReturnedTo(d.returnedTo);
+  };
+  // A refusal about a field on the first screen goes back to it.
+  useEffect(() => {
+    const field = op.failure?.field;
+    if (field && ['returnedOn', 'odometerKm', 'condition', 'items'].includes(field)) setStep(0);
+  }, [op.failure]);
+
+  if (failure) return <LoadError failure={failure} onRetry={reload} />;
   if (!data) return <Loading />;
   const r = data.rental;
   const amount = data.deposit?.amountTetri ?? r.depositTetri;
@@ -57,28 +83,38 @@ export function ReturnWizard() {
   const depositOk = !decides || (withheldTetri >= 0 && withheldTetri <= amount && (withheldTetri === 0 || reason.trim().length > 0));
   const lastStep = steps.length - 1;
 
+  // One return, however many times the button is pressed: the act and each
+  // photo carry keys, so a retry finds what is already stored.
   const submit = async () => {
-    setBusy(true);
-    setErr(null);
-    try {
-      const { actId } = await api.post<{ ok: boolean; actId: string }>(`/api/rentals/${r.id}/return`, {
-        returnedOn,
-        odometerKm: odometer ? Number(odometer) : null,
-        condition: condition || null,
-        items,
-        deposit: decides
-          ? { returnedTetri: amount - withheldTetri, withheldTetri, withheldReason: reason || null, returnedTo: returnedTo || null, grounds }
-          : undefined,
-      });
-      await uploadAll(`/api/acts/${actId}/photos`, photos, (n) => setProgress(t.photos.uploading(n, photos.length)));
-      setProgress(null);
-      setStep(lastStep);
-    } catch (e) {
-      setErr(errorText(e));
-    } finally {
-      setBusy(false);
-    }
+    const res = await op.run(async (key) => {
+      const { actId } = await api.post<{ ok: boolean; actId: string }>(
+        `/api/rentals/${r.id}/return`,
+        {
+          returnedOn,
+          odometerKm: odometer ? Number(odometer) : null,
+          condition: condition || null,
+          items,
+          deposit: decides
+            ? { returnedTetri: amount - withheldTetri, withheldTetri, withheldReason: reason || null, returnedTo: returnedTo || null, grounds }
+            : undefined,
+        },
+        { key },
+      );
+      setDone(true);
+      drafts.drop();
+      await uploadAll(`/api/acts/${actId}/photos`, photos, (n) => setProgress(t.photos.uploading(n, photos.length)), `${key}-photo`);
+    });
+    setProgress(null);
+    if (res.ok) setStep(lastStep);
   };
+
+  if (drafts.offer) {
+    return (
+      <Wizard title={`${t.ret.title} · ${r.number}`} steps={steps} step={0}>
+        <DraftOffer at={drafts.offer.at} words={r.customer.name} onContinue={() => drafts.accept(restore)} onDiscard={drafts.discard} />
+      </Wizard>
+    );
+  }
 
   const confirmStep = decides ? 1 : 0;
   return (
@@ -86,8 +122,7 @@ export function ReturnWizard() {
       title={`${t.ret.title} · ${r.number}`}
       steps={steps}
       step={step}
-      error={err}
-      busy={busy}
+      submit={step === confirmStep ? { state: op.state, failure: op.failure, label: t.ret.finish } : undefined}
       onBack={step > 0 && step < lastStep ? () => setStep(step - 1) : undefined}
       onNext={step < confirmStep ? () => setStep(step + 1) : step === confirmStep ? submit : () => navigate(`/rentals/${r.id}`)}
       nextLabel={step === lastStep ? t.actions.open : step === confirmStep ? t.actions.confirm : undefined}
@@ -101,13 +136,13 @@ export function ReturnWizard() {
             <Row k={t.rentals.pickedUp} v={<span className="mono">{fmtDate(r.pickedUpOn)}</span>} />
             <Row k={t.rentals.paidThrough} v={<span className="mono">{fmtDate(r.paidThrough)}</span>} />
           </section>
-          <Field label={t.ret.returnedOn}>
+          <Field label={t.ret.returnedOn} name="returnedOn">
             <input className="input mono" type="date" value={returnedOn} onChange={(e) => setReturnedOn(e.target.value)} />
           </Field>
-          <Field label={t.ret.odometer}>
+          <Field label={t.ret.odometer} name="odometerKm">
             <input className="input mono" value={odometer} onChange={(e) => setOdometer(e.target.value)} inputMode="numeric" />
           </Field>
-          <Field label={t.ret.condition}>
+          <Field label={t.ret.condition} name="condition">
             <textarea className="input textarea" rows={3} value={condition} onChange={(e) => setCondition(e.target.value)} />
           </Field>
           <h2 className="sub">{t.returnItems.title}</h2>
