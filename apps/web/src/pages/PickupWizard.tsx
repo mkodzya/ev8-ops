@@ -2,7 +2,7 @@ import { DEFAULT_DEPOSIT_TETRI, DEFAULT_WEEKLY_RATES_TETRI, gelFromTetri, parseG
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
-import { BlockHead, StateBadge, Vin } from '../components/ui.js';
+import { BlockHead, ColorText, StateBadge, Vin } from '../components/ui.js';
 import { Field, Row, Wizard } from '../components/Wizard.js';
 import { fmtDate, formatGel } from '../format.js';
 import { useT } from '../i18n/index.js';
@@ -178,7 +178,7 @@ export function PickupWizard() {
                 <button type="button" className={v.id === vehicleId ? 'on' : ''} disabled={noVin} onClick={() => setVehicleId(v.id)}>
                   <Vin vin={v.vin} />
                   <span className="muted">
-                    {v.model} · {v.color ?? ''}
+                    {v.model}{v.color && <> · <ColorText of={v.color} named /></>}
                   </span>
                 </button>
               </li>

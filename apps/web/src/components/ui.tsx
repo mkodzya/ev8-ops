@@ -84,11 +84,19 @@ export function PlaceText({ of }: { of: { state: VehicleState; location: { name:
  * a word we do not know is written out instead of being guessed at, and the
  * word itself is always on the swatch for a pointer and for a screen reader.
  */
-export function ColorText({ of }: { of: string | null }) {
+export function ColorText({ of, named = false }: { of: string | null; named?: boolean }) {
   const t = useT();
   const code = colorOf(of);
+  if (code && named)
+    return (
+      <span className="swatch-named">
+        <span className={`swatch swatch-${code}`} aria-hidden="true" />
+        {t.colors[code]}
+      </span>
+    );
   if (code) return <span className={`swatch swatch-${code}`} title={t.colors[code]} aria-label={t.colors[code]} />;
   // Not a colour we know, or none at all: the word as typed, or nothing.
+  if (named) return <>{of ?? ''}</>;
   return <span className="swatch-word">{of ?? ''}</span>;
 }
 

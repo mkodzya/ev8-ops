@@ -2,7 +2,7 @@ import { VEHICLE_POOLS, VEHICLE_STATES, isPoolEvent, type RentalStatus, type Veh
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../api.js';
-import { BlockHead, Empty, Loading, PageHead, PlaceText, RentalBadge, StateBadge, Vin } from '../components/ui.js';
+import { BlockHead, ColorText, Empty, Loading, PageHead, PlaceText, RentalBadge, StateBadge, Vin } from '../components/ui.js';
 import { Field, Row } from '../components/Wizard.js';
 import { fmtDate } from '../format.js';
 import { useT } from '../i18n/index.js';
@@ -88,7 +88,7 @@ export function VehiclePage() {
 
   return (
     <>
-      <PageHead wrap title={<Vin vin={v.vin} />} badge={<StateBadge state={v.state} />} sub={`${v.model.brand} ${v.model.name}`}>
+      <PageHead wrap title={<Vin vin={v.vin} />} badge={<StateBadge state={v.state} />} sub={<Link to={`/models/${v.model.id}`}>{`${v.model.brand} ${v.model.name}`}</Link>}>
         {can('fleet.state.manual') && (
           <button type="button" className="pill pill-sm" onClick={() => setOpen((o) => !o)} disabled={locked} title={locked ? t.vehicle.rentedLock : undefined}>
             {t.actions.changeState}
@@ -153,7 +153,7 @@ export function VehiclePage() {
 
       <div className="two-col">
         <section className="card">
-          <Row k={t.fleet.color} v={v.color ?? t.common.dash} />
+          <Row k={t.fleet.color} v={v.color ? <ColorText of={v.color} named /> : t.common.dash} />
           <Row k={t.fleet.year} v={<span className="mono">{v.year ?? t.common.dash}</span>} />
           <Row k={t.fleet.arrived} v={<span className="mono">{fmtDate(v.arrivedOn)}</span>} />
           <Row k={t.fleet.pool} v={<PoolRow v={v} onDone={reload} onError={setErr} />} />

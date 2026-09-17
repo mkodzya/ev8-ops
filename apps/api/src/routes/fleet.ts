@@ -8,28 +8,6 @@ import { notFound } from '../lib/errors.js';
 // and return wizards in step 4 of stage 1; state changes go through events.
 
 export function fleetRoutes(app: FastifyInstance): void {
-  app.get('/api/models', { config: { scope: 'fleet.view' } }, async () => {
-    const models = await prisma.vehicleModel.findMany({
-      where: { archived: false },
-      orderBy: [{ brand: 'asc' }, { name: 'asc' }],
-      include: { _count: { select: { vehicles: true } } },
-    });
-    return {
-      models: models.map((m) => ({
-        id: m.id,
-        brand: m.brand,
-        name: m.name,
-        salePriceTetri: m.salePriceTetri,
-        weeklyRateTetri: m.weeklyRateTetri,
-        costTetri: m.costTetri,
-        forSale: m.forSale,
-        forRent: m.forRent,
-        photoUrl: m.photoUrl,
-        vehicles: m._count.vehicles,
-      })),
-    };
-  });
-
   app.get('/api/fleet', { config: { scope: 'fleet.view' } }, async () => {
     const vehicles = await prisma.vehicle.findMany({
       where: { archived: false },

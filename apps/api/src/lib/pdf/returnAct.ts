@@ -1,4 +1,4 @@
-import { tokens } from '@ev8/shared';
+import { colorOnPaper, tokens } from '@ev8/shared';
 import { finish, gap, newDoc, write } from './doc.js';
 import { COMPANY, DISCLAIMER, LESSEE, LESSOR, dmy, gel } from './company.js';
 import { check, field, h1, h2, para, rule, signatures, stampPages } from './layout.js';
@@ -96,7 +96,7 @@ export async function renderReturnAct(d: ReturnActData): Promise<Buffer> {
   h2(doc, { ka: '3. დასაბრუნებელი მოპედის მონაცემები', en: '3. Details of the moped being returned' });
   field(doc, { ka: 'მოდელი', en: 'Model' }, d.vehicle ? `${d.vehicle.brand} ${d.vehicle.model}` : '—');
   field(doc, { ka: 'VIN', en: 'VIN' }, d.vehicle?.vin ?? d.vinNote ?? '—');
-  field(doc, { ka: 'ფერი', en: 'Colour' }, d.vehicle?.color ?? '');
+  field(doc, { ka: 'ფერი', en: 'Colour' }, colorOnPaper(d.vehicle?.color));
 
   h2(doc, { ka: '4. დაბრუნებული ქონების მდგომარეობა', en: '4. Condition of the returned property' });
   for (const item of RETURN_ITEMS) {

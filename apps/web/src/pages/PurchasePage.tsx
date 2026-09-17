@@ -2,6 +2,7 @@ import { parseGel, todayISO } from '@ev8/shared';
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../api.js';
+import { ModelDrawer, NEW_MODEL } from '../components/ModelDrawer.js';
 import { BlockHead, Empty, Loading, PageHead, StateBadge, Vin } from '../components/ui.js';
 import { Field, Row } from '../components/Wizard.js';
 import { fmtDate, formatGel } from '../format.js';
@@ -32,6 +33,9 @@ export function PurchasePage() {
   const [vins, setVins] = useState<Record<string, string>>({});
   const [receivedOn, setReceivedOn] = useState(todayISO());
   const [busy, setBusy] = useState(false);
+  // The model on the invoice may not be in the catalogue yet; it is made
+  // here, over the order, rather than by leaving a half-typed line behind.
+  const [addingModel, setAddingModel] = useState(false);
 
   if (error) return <Empty text={error} />;
   if (!data) return <Loading />;
@@ -232,13 +236,18 @@ export function PurchasePage() {
                 )}
               </>
             ) : (
-              <select className="input input-inline" value={line.modelId} onChange={(e) => setLine({ ...line, modelId: e.target.value })}>
+              <select
+                className="input input-inline"
+                value={line.modelId}
+                onChange={(e) => (e.target.value === NEW_MODEL ? setAddingModel(true) : setLine({ ...line, modelId: e.target.value }))}
+              >
                 <option value="">{t.common.dash}</option>
                 {(models.data?.models ?? []).map((m) => (
                   <option key={m.id} value={m.id}>
                     {m.brand} {m.name}
                   </option>
                 ))}
+                <option value={NEW_MODEL}>+ {t.models.addEllipsis}</option>
               </select>
             )}
             <input className="input input-amount mono" placeholder={t.purchases.qty} value={line.qty} onChange={(e) => setLine({ ...line, qty: e.target.value })} inputMode="numeric" />
@@ -317,6 +326,17 @@ export function PurchasePage() {
           </ul>
         )}
       </section>
+      {addingModel && (
+        <ModelDrawer
+          brands={(models.data?.models ?? []).map((m) => m.brand)}
+          onClose={() => setAddingModel(false)}
+          onSaved={(m) => {
+            setAddingModel(false);
+            models.reload();
+            setLine((l) => ({ ...l, modelId: m.id, asPart: false }));
+          }}
+        />
+      )}
     </>
   );
 }

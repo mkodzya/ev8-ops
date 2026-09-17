@@ -1,4 +1,4 @@
-import { tokens } from '@ev8/shared';
+import { colorOnPaper, tokens } from '@ev8/shared';
 import { finish, gap, newDoc, write } from './doc.js';
 import { COMPANY, DISCLAIMER, LESSEE, LESSOR, TERMS, dmy, gel } from './company.js';
 import { bullet, check, field, h1, h2, para, rule, signatures, stampPages } from './layout.js';
@@ -53,7 +53,7 @@ export async function renderContract(d: ContractData): Promise<Buffer> {
   });
   field(doc, { ka: 'მოდელი', en: 'Model' }, d.vehicle ? `${d.vehicle.brand} ${d.vehicle.model}` : '—');
   field(doc, { ka: 'VIN', en: 'VIN' }, d.vehicle?.vin ?? d.vinNote ?? '—');
-  field(doc, { ka: 'ფერი', en: 'Colour' }, d.vehicle?.color ?? '');
+  field(doc, { ka: 'ფერი', en: 'Colour' }, colorOnPaper(d.vehicle?.color));
   para(doc, {
     ka: 'გადაცემის აქტი წარმოადგენს წინამდებარე ხელშეკრულების განუყოფელ და არსებით ნაწილს. აქტში მითითებული ინფორმაცია (მდგომარეობა, კომპლექტაცია, შენიშვნები) სავალდებულოა ორივე მხარისთვის.',
     en: 'The hand-over act is an inseparable and essential part of this agreement. The information stated in the act (condition, equipment, remarks) is binding on both parties.',
