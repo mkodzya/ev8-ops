@@ -89,7 +89,7 @@ export function ModelDrawer({
   };
 
   return (
-    <Drawer title={model ? t.models.edit : t.models.add} onClose={onClose}>
+    <Drawer title={model ? t.models.editTitle : t.models.add} onClose={onClose}>
       <form className="form" onSubmit={submit}>
         <div className="field">
           <span className="lbl">{t.models.brand}</span>

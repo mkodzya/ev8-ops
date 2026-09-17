@@ -197,6 +197,8 @@ a { color: var(--accent); text-decoration: none; }
 .lbl { display: block; font: var(--text-label); color: var(--muted); margin-bottom: 6px; }
 .hint { font: var(--text-label); margin-bottom: 12px; }
 .hint-bad { color: var(--crit); }
+/* A field's hint sits under its control, never beside a narrow one. */
+.field > .hint { display: block; margin: 6px 0 0; }
 .toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 16px; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .chip {
@@ -266,6 +268,7 @@ a { color: var(--accent); text-decoration: none; }
   vertical-align: bottom;
 }
 .table th.num { text-align: right; }
+.table-heads-wrap th { white-space: normal; }
 /* A heading that sorts looks like a heading until the pointer is on it: a row
    of buttons at the top of a list is a toolbar, not a heading. Every list in
    the system uses it, so it lives with the tables and not with the fleet. */
@@ -1002,6 +1005,7 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
 .tr-go { cursor: pointer; }
 /* A choice among a few words: the brand of a model. */
 .chips-pick { display: flex; flex-wrap: wrap; gap: 6px; }
+.chips-pick + .input { margin-top: 8px; }
 .seg[aria-checked='true'] { background: var(--lime); border-color: var(--lime); }
 .seg-sm { padding: 0 12px; }
 

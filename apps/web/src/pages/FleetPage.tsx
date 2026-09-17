@@ -551,7 +551,7 @@ function NewVehicle({ models, onModels, onDone }: { models: Models['models']; on
     try {
       await api.post('/api/fleet', {
         vin: f.vin.trim().toUpperCase(),
-        modelId: f.modelId || models[0]?.id,
+        modelId: f.modelId,
         color: f.color.trim() || null,
         year: f.year ? Number(f.year) : null,
         arrivedOn: f.arrivedOn || null,
@@ -580,9 +580,13 @@ function NewVehicle({ models, onModels, onDone }: { models: Models['models']; on
               <Field label={t.models.name}>
                 <select
                   className="input"
-                  value={f.modelId || models[0]?.id || ''}
+                  value={f.modelId}
                   onChange={(e) => (e.target.value === NEW_MODEL ? setAddingModel(true) : setF({ ...f, modelId: e.target.value }))}
+                  required
                 >
+                  {/* No model until someone picks one: a preselected first
+                      model gets saved by whoever did not look. */}
+                  <option value="">{t.common.dash}</option>
                   {models.map((m) => (
                     <option key={m.id} value={m.id}>
                       {m.brand} {m.name}
@@ -604,7 +608,7 @@ function NewVehicle({ models, onModels, onDone }: { models: Models['models']; on
               <button type="button" className="pill" onClick={() => setOpen(false)}>
                 {t.actions.cancel}
               </button>
-              <button className="pill pill-accent" disabled={busy || f.vin.trim().length === 0 || models.length === 0}>
+              <button className="pill pill-accent" disabled={busy || f.vin.trim().length === 0 || !f.modelId}>
                 {busy ? t.common.checking : t.actions.save}
               </button>
             </div>
