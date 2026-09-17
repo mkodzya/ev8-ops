@@ -5,6 +5,7 @@ import { BlockHead, Empty, Loading, PageHead } from '../components/ui.js';
 import { fmtDate, formatGel } from '../format.js';
 import { useT } from '../i18n/index.js';
 import { errorText, useLoad } from '../lib/use.js';
+import { LoadError } from '../components/LoadError.js';
 
 type Bank = 'bog' | 'tbc' | 'credo';
 
@@ -181,7 +182,7 @@ export function StatementsPage() {
       <section className="card">
         <BlockHead title={t.statements.queue} sub={statements.data ? t.statements.linesCount(statements.data.queue) : undefined} />
         {!queue.data ? (
-          <Loading />
+          queue.failure ? <LoadError failure={queue.failure} onRetry={queue.reload} /> : <Loading />
         ) : queue.data.lines.length === 0 ? (
           <Empty text={t.statements.queueNone} />
         ) : (
@@ -196,7 +197,7 @@ export function StatementsPage() {
       <section className="card">
         <BlockHead title={t.statements.title} sub={statements.data ? t.statements.count(statements.data.statements.length) : undefined} />
         {!statements.data ? (
-          <Loading />
+          statements.failure ? <LoadError failure={statements.failure} onRetry={statements.reload} /> : <Loading />
         ) : statements.data.statements.length === 0 ? (
           <Empty text={t.statements.none} />
         ) : (

@@ -9,6 +9,7 @@ import { useT } from '../i18n/index.js';
 import { Drawer } from '../components/Drawer.js';
 import { errorText, useLoad } from '../lib/use.js';
 import { useSession } from '../session.js';
+import { LoadError } from '../components/LoadError.js';
 
 export interface PartRow {
   id: string;
@@ -47,7 +48,8 @@ export function StockPage() {
   const parts = useLoad<{ parts: PartRow[]; totals: { parts: number; valueTetri: number; short: number; negative: number } }>('/api/parts');
   const [err, setErr] = useState<string | null>(null);
 
-  if (mopeds.error) return <Empty text={mopeds.error} />;
+  if (!mopeds.data && mopeds.failure) return <LoadError failure={mopeds.failure} onRetry={mopeds.reload} />;
+  if (!parts.data && parts.failure) return <LoadError failure={parts.failure} onRetry={parts.reload} />;
   if (!mopeds.data || !parts.data) return <Loading />;
 
   return (

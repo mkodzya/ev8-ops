@@ -77,7 +77,7 @@ export function PaymentsPage() {
       {view === 'queue' && (
         <section className="card">
           {!queue.data ? (
-            <Loading />
+            queue.failure ? <LoadError failure={queue.failure} onRetry={queue.reload} /> : <Loading />
           ) : queue.data.lines.length === 0 ? (
             <div className="task-clear">
               <p className="t-h3">{t.statements.queueNone}</p>

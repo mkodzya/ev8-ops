@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import { useSession } from '../session.js';
 import { api } from '../api.js';
 import { LoadError } from '../components/LoadError.js';
-import { failureOf, type LoadFailure } from '../lib/use.js';
+import { useLoad } from '../lib/use.js';
 import { CustomerName, Empty, Loading, PageHead, RentalBadge } from '../components/ui.js';
 import { useLocale, useT } from '../i18n/index.js';
 import { byName, primaryName } from '../lib/names.js';
@@ -25,17 +25,9 @@ export function CustomersPage() {
   const t = useT();
   const { locale } = useLocale();
   const { can } = useSession();
-  const [rows, setRows] = useState<Customer[] | null>(null);
-  const [failure, setFailure] = useState<LoadFailure | null>(null);
-  const [tick, setTick] = useState(0);
+  const { data, failure, reload } = useLoad<{ customers: Customer[] }>('/api/customers');
+  const rows = data?.customers ?? null;
   const [q, setQ] = useState('');
-  useEffect(() => {
-    setFailure(null);
-    api
-      .get<{ customers: Customer[] }>('/api/customers')
-      .then((r) => setRows(r.customers))
-      .catch((e) => setFailure(failureOf(e)));
-  }, [tick]);
 
   const shown = useMemo(() => {
     if (!rows) return [];
@@ -60,7 +52,7 @@ export function CustomersPage() {
     byName(locale),
   );
 
-  if (!rows && failure) return <LoadError failure={failure} onRetry={() => setTick((n) => n + 1)} />;
+  if (!rows && failure) return <LoadError failure={failure} onRetry={reload} />;
   if (!rows) return <Loading />;
 
   return (

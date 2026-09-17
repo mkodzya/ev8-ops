@@ -1,6 +1,7 @@
 import { colorOf, type RentalStatus, type VehicleState } from '@ev8/shared';
 import type { ReactNode } from 'react';
 import { useLocale, useT } from '../i18n/index.js';
+import { Skeleton } from '../ds/state/Skeleton.js';
 import { vinParts } from '../format.js';
 import { primaryName, secondName, type Named } from '../lib/names.js';
 import { placeOf, type Place } from '../lib/place.js';
@@ -40,9 +41,9 @@ export function Empty({ text }: { text: string }) {
   return <p className="empty">{text}</p>;
 }
 
-export function Loading() {
-  const t = useT();
-  return <p className="empty">{t.common.loading}</p>;
+/** Loading: the shared skeleton (ux.md) — nothing for 300 ms, then the shape of a list. */
+export function Loading({ rows }: { rows?: number } = {}) {
+  return <Skeleton rows={rows} />;
 }
 
 /**

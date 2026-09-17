@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { useCallback } from 'react';
 import { api, ApiError } from '../api.js';
 import { currentDict } from '../i18n/index.js';
 
@@ -14,30 +15,41 @@ export function failureOf(e: unknown): LoadFailure {
   return { status: 0, code: 'network', text: errorText(e) };
 }
 
+export interface Loaded<T> {
+  data: T | null;
+  error: string | null;
+  /** Set only when there is nothing to show. Data already on screen stays, and the sync bar speaks for the failed refetch. */
+  failure: LoadFailure | null;
+  reload: () => void;
+  /** When the data on screen was fetched (ms), for "данные на HH:MM". */
+  updatedAt: number | null;
+}
+
 /**
- * Load one URL; `reload` after a write. A failure is kept as a status as
- * well as words, so a screen can tell "no such record" from "no connection"
- * and offer the right way on (B1-02). Never a blank page, never a spinner
+ * Load one URL through the shared cache (build plan Р4). The same URL on two
+ * screens is one request; data stays on screen while it refreshes; a failure
+ * is kept as a status as well as words, so a screen can tell "no such
+ * record" from "no connection" (B1-02). Never a blank page, never a spinner
  * that waits forever.
  */
-export function useLoad<T>(url: string | null): { data: T | null; error: string | null; failure: LoadFailure | null; reload: () => void } {
-  const [data, setData] = useState<T | null>(null);
-  const [failure, setFailure] = useState<LoadFailure | null>(null);
-  const [tick, setTick] = useState(0);
-  useEffect(() => {
-    if (!url) return;
-    let alive = true;
-    setFailure(null);
-    api
-      .get<T>(url)
-      .then((d) => alive && setData(d))
-      .catch((e) => alive && setFailure(failureOf(e)));
-    return () => {
-      alive = false;
-    };
-  }, [url, tick]);
-  const reload = useCallback(() => setTick((n) => n + 1), []);
-  return { data, error: failure?.text ?? null, failure, reload };
+export function useLoad<T>(url: string | null): Loaded<T> {
+  const q = useQuery<T>({
+    queryKey: [url],
+    queryFn: () => api.get<T>(url!),
+    enabled: url != null,
+  });
+  const refetch = q.refetch;
+  const reload = useCallback(() => {
+    void refetch();
+  }, [refetch]);
+  const failure = q.data === undefined && q.error ? failureOf(q.error) : null;
+  return {
+    data: q.data ?? null,
+    error: failure?.text ?? null,
+    failure,
+    reload,
+    updatedAt: q.dataUpdatedAt || null,
+  };
 }
 
 /**

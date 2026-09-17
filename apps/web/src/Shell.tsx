@@ -2,6 +2,8 @@ import { phoneTabsFor, sectionsFor, type SectionPath } from '@ev8/shared';
 import { useEffect, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { api } from './api.js';
+import { SyncBar } from './ds/state/SyncBar.js';
+import { useLoad } from './lib/use.js';
 import { LanguageToggle, LOCALES, useLocale, useT, type Locale } from './i18n/index.js';
 import { dayTaskCount, dayTasks, type DayTaskSource } from './lib/tasks.js';
 import { useSession } from './session.js';
@@ -26,17 +28,14 @@ export function Shell() {
   const navigate = useNavigate();
   const location = useLocation();
   const [more, setMore] = useState(false);
-  const [badge, setBadge] = useState(0);
+  // The badge reads the same cached summary "Today" reads: one request, and
+  // it moves the moment a write marks the summary stale.
+  const summary = useLoad<DayTaskSource>(me ? '/api/summary' : null);
+  const badge = summary.data ? dayTaskCount(dayTasks(summary.data, t, can)) : 0;
 
-  // Re-read on every navigation: the number is stale the moment somebody
-  // records a payment, and this screen is where they come back to.
   useEffect(() => {
     setMore(false);
-    void api
-      .get<DayTaskSource>('/api/summary')
-      .then((s) => setBadge(dayTaskCount(dayTasks(s, t, can))))
-      .catch(() => setBadge(0));
-  }, [location.pathname, t, can]);
+  }, [location.pathname]);
 
   // A person's stored language follows them to a new device; a choice made
   // on this device (localStorage) still wins.
@@ -174,6 +173,7 @@ export function Shell() {
       </nav>
 
       <main className="page">
+        <SyncBar />
         <Outlet />
       </main>
     </div>

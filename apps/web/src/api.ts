@@ -10,7 +10,16 @@ export class ApiError extends Error {
   }
 }
 
+import { markDown, markUp } from './lib/connection.js';
+
 export const SIGNED_OUT_EVENT = 'ev8:signed-out';
+
+const writeListeners = new Set<() => void>();
+/** Called after every successful write; the data layer marks its cache stale. */
+export function onWrite(listener: () => void): () => void {
+  writeListeners.add(listener);
+  return () => writeListeners.delete(listener);
+}
 
 /** A write's options. `key` is the form's operation key (build plan Р5): the same key on a retry never writes twice. */
 export interface WriteOptions {
@@ -21,12 +30,24 @@ async function request<T>(method: string, url: string, body?: unknown, opts: Wri
   const headers: Record<string, string> = {};
   if (body !== undefined) headers['content-type'] = 'application/json';
   if (opts.key) headers['idempotency-key'] = opts.key;
-  const res = await fetch(url, {
-    method,
-    credentials: 'same-origin',
-    headers,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  });
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method,
+      credentials: 'same-origin',
+      headers,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+  } catch (e) {
+    // Never reached the server.
+    markDown();
+    throw e;
+  }
+  // A gateway answering for a server that is not there (the dev proxy says
+  // 500 with an empty body, a real one 502–504) is no connection either.
+  const gateway = res.status >= 502 || (res.status === 500 && res.headers.get('content-length') === '0');
+  if (gateway) markDown();
+  else markUp();
   let data: Record<string, unknown> = {};
   try {
     data = (await res.json()) as Record<string, unknown>;
@@ -44,6 +65,7 @@ async function request<T>(method: string, url: string, body?: unknown, opts: Wri
     const { error, message, ...extra } = data as { error?: string; message?: string };
     throw new ApiError(res.status, error ?? 'error', message ?? `Request failed (${res.status})`, extra);
   }
+  if (method !== 'GET') for (const l of writeListeners) l();
   return data as T;
 }
 

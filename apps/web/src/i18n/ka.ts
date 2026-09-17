@@ -764,6 +764,11 @@ export const ka: Dict = {
     empty: 'კლიენტები ჯერ არ არიან.',
   },
 
+  sync: {
+    offline: 'სერვერთან კავშირი არ არის.',
+    offlineSince: (time: string) => `კავშირი არ არის — მონაცემები ${time}-ის`,
+    back: (time: string) => `კავშირი აღდგა — განახლდა ${time}-ზე`,
+  },
   // What an API refusal means to the person who met it, and what to do next
   // (B1-02). Every code the API can send has a line here, in every language:
   // scripts/errors-guard.mjs fails the build when one is missing.

@@ -193,9 +193,10 @@ export function CustomerPage() {
 /** The sales this customer has, with what is still owed on each. */
 function CustomerSales({ customerId }: { customerId: string }) {
   const t = useT();
-  const { data } = useLoad<{ sales: { id: string; number: string; soldOn: string; customer: { id: string }; priceTetri: number; outstandingTetri: number; overdueTetri: number; status: 'active' | 'cancelled' | 'bought_back' }[] }>(
+  const { data, failure, reload } = useLoad<{ sales: { id: string; number: string; soldOn: string; customer: { id: string }; priceTetri: number; outstandingTetri: number; overdueTetri: number; status: 'active' | 'cancelled' | 'bought_back' }[] }>(
     '/api/sales',
   );
+  if (!data && failure) return <LoadError failure={failure} onRetry={reload} />;
   if (!data) return <Loading />;
   const mine = data.sales.filter((s) => s.customer.id === customerId);
   if (mine.length === 0) return <Empty text={t.sales.none} />;
