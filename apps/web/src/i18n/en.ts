@@ -771,6 +771,11 @@ export const en = {
     empty: 'No customers yet.',
   },
 
+  sync: {
+    offline: 'No connection to the server.',
+    offlineSince: (time: string) => `No connection — data as of ${time}`,
+    back: (time: string) => `Connected again — refreshed at ${time}`,
+  },
   // What an API refusal means to the person who met it, and what to do next
   // (B1-02). Every code the API can send has a line here, in every language:
   // scripts/errors-guard.mjs fails the build when one is missing.

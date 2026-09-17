@@ -7,6 +7,7 @@ import { Drawer } from '../components/Drawer.js';
 import { useT } from '../i18n/index.js';
 import { errorText, useLoad } from '../lib/use.js';
 import { useSession } from '../session.js';
+import { LoadError } from '../components/LoadError.js';
 
 interface Users {
   users: { id: string; name: string; email: string; role: Role; active: boolean; createdAt: string }[];
@@ -73,7 +74,7 @@ export function SettingsPage() {
           <NewUser onDone={users.reload} onError={setErr} />
         </BlockHead>
         {!users.data ? (
-          <Loading />
+          users.failure ? <LoadError failure={users.failure} onRetry={users.reload} /> : <Loading />
         ) : (
           <div className="table-wrap table-flat">
             <table className="table">
@@ -139,7 +140,7 @@ export function SettingsPage() {
           <NewPoint onDone={points.reload} onError={setErr} />
         </BlockHead>
         {!points.data ? (
-          <Loading />
+          points.failure ? <LoadError failure={points.failure} onRetry={points.reload} /> : <Loading />
         ) : points.data.locations.length === 0 ? (
           <Empty text={t.points.empty} />
         ) : (

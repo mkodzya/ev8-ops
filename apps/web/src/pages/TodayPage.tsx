@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api.js';
 import { LoadError } from '../components/LoadError.js';
-import { failureOf, type LoadFailure } from '../lib/use.js';
+import { useLoad } from '../lib/use.js';
 import { BlockHead, CustomerName, Loading, PageHead, StateBadge } from '../components/ui.js';
 import { formatGel } from '../format.js';
 import { dayTasks, type DayTask } from '../lib/tasks.js';
@@ -51,17 +51,8 @@ function TaskRow({ task }: { task: DayTask }) {
 export function TodayPage() {
   const t = useT();
   const { can } = useSession();
-  const [s, setS] = useState<Summary | null>(null);
-  const [failure, setFailure] = useState<LoadFailure | null>(null);
-  const [tick, setTick] = useState(0);
-  useEffect(() => {
-    setFailure(null);
-    api
-      .get<Summary>('/api/summary')
-      .then(setS)
-      .catch((e) => setFailure(failureOf(e)));
-  }, [tick]);
-  if (!s && failure) return <LoadError failure={failure} onRetry={() => setTick((n) => n + 1)} />;
+  const { data: s, failure, reload } = useLoad<Summary>('/api/summary');
+  if (!s && failure) return <LoadError failure={failure} onRetry={reload} />;
   if (!s) return <Loading />;
 
   const tasks = dayTasks(s, t, can);

@@ -775,6 +775,11 @@ export const ru: Dict = {
     empty: 'Клиентов пока нет.',
   },
 
+  sync: {
+    offline: 'Нет связи с сервером.',
+    offlineSince: (time: string) => `Нет связи — данные на ${time}`,
+    back: (time: string) => `Связь есть — обновили в ${time}`,
+  },
   // What an API refusal means to the person who met it, and what to do next
   // (B1-02). Every code the API can send has a line here, in every language:
   // scripts/errors-guard.mjs fails the build when one is missing.

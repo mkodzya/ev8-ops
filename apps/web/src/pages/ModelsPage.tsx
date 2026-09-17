@@ -6,6 +6,7 @@ import { formatGel } from '../format.js';
 import { useT } from '../i18n/index.js';
 import { useLoad } from '../lib/use.js';
 import { useSession } from '../session.js';
+import { LoadError } from '../components/LoadError.js';
 
 export type CostSource =
   | { kind: 'purchase'; purchaseId: string; number: string; receivedOn: string | null }
@@ -56,9 +57,10 @@ export function ModelsPage() {
   const t = useT();
   const { can } = useSession();
   const navigate = useNavigate();
-  const { data, reload } = useLoad<{ models: ModelRow[] }>('/api/models?archived=1');
+  const { data, failure, reload } = useLoad<{ models: ModelRow[] }>('/api/models?archived=1');
   const [adding, setAdding] = useState(false);
 
+  if (failure) return <LoadError failure={failure} onRetry={reload} />;
   if (!data) return <Loading />;
   const active = data.models.filter((m) => !m.archived);
   const hidden = data.models.filter((m) => m.archived);

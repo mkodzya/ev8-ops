@@ -1,6 +1,7 @@
 import { VEHICLE_COLORS, VEHICLE_POOLS, VEHICLE_STATES, colorOf, daysBetween, tokens, type VehiclePool, type VehicleState } from '@ev8/shared';
+import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
-import { errorText, failureOf, useLoad, type LoadFailure } from '../lib/use.js';
+import { errorText, useLoad } from '../lib/use.js';
 import { LoadError } from '../components/LoadError.js';
 import { Field } from '../components/Wizard.js';
 import { Drawer } from '../components/Drawer.js';
@@ -69,8 +70,11 @@ interface Models {
 export function FleetPage() {
   const t = useT();
   const { can } = useSession();
-  const [data, setData] = useState<Fleet | null>(null);
-  const [tick, setTick] = useState(0);
+  const fleet = useLoad<Fleet>('/api/fleet');
+  const { data, failure } = fleet;
+  const client = useQueryClient();
+  // A park move redraws its row at once; the refetch after the write confirms it.
+  const setData = (update: (d: Fleet | null) => Fleet | null) => client.setQueryData<Fleet>(['/api/fleet'], (d) => update(d ?? null) ?? undefined);
   const models = useLoad<Models>(can('settings.manage') ? '/api/models' : null);
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
@@ -85,14 +89,6 @@ export function FleetPage() {
   const pool = params.get('pool') as PoolKey | null;
   const noPoint = params.get('place') === 'unset';
 
-  const [failure, setFailure] = useState<LoadFailure | null>(null);
-  useEffect(() => {
-    setFailure(null);
-    api
-      .get<Fleet>('/api/fleet')
-      .then(setData)
-      .catch((e) => setFailure(failureOf(e)));
-  }, [tick]);
 
   // Long enough to notice a wrong click, short enough that the list is not
   // left holding rows that no longer belong in it. The same figure draws the
@@ -192,7 +188,7 @@ export function FleetPage() {
     setFinding(false);
   };
 
-  if (!data && failure) return <LoadError failure={failure} onRetry={() => setTick((n) => n + 1)} />;
+  if (!data && failure) return <LoadError failure={failure} onRetry={fleet.reload} />;
   if (!data) return <Loading />;
 
   return (
@@ -208,7 +204,7 @@ export function FleetPage() {
           onChange={(e) => setQ(e.target.value)}
         />
         {can('settings.manage') && models.data && (
-          <NewVehicle models={models.data.models} onModels={models.reload} onDone={() => setTick((n) => n + 1)} />
+          <NewVehicle models={models.data.models} onModels={models.reload} onDone={fleet.reload} />
         )}
       </PageHead>
       <div className="segments">

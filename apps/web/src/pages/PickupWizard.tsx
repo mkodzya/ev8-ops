@@ -2,7 +2,7 @@ import { DEFAULT_DEPOSIT_TETRI, DEFAULT_WEEKLY_RATES_TETRI, gelFromTetri, parseG
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
-import { BlockHead, ColorText, StateBadge, Vin } from '../components/ui.js';
+import { BlockHead, ColorText, Loading, StateBadge, Vin } from '../components/ui.js';
 import { Field, Row, Wizard } from '../components/Wizard.js';
 import { fmtDate, formatGel } from '../format.js';
 import { useT } from '../i18n/index.js';
@@ -10,6 +10,7 @@ import { errorText, useLoad } from '../lib/use.js';
 import { uploadAll, type PreparedPhoto } from '../lib/photos.js';
 import { PhotoPicker } from '../components/PhotoPicker.js';
 import { CustomerForm } from './CustomerForm.js';
+import { LoadError } from '../components/LoadError.js';
 
 interface Customers {
   customers: { id: string; name: string; nameLat: string | null; phone: string | null }[];
@@ -139,6 +140,9 @@ export function PickupWizard() {
       {step === 0 && (
         <>
           <input className="input" placeholder={t.pickup.searchCustomer} value={q} onChange={(e) => setQ(e.target.value)} autoFocus />
+          {/* The list is what stops a second card for somebody already here:
+              when it cannot load, that is said, not shown as "nobody". */}
+          {!customers.data && (customers.failure ? <LoadError failure={customers.failure} onRetry={customers.reload} /> : <Loading rows={3} />)}
           <ul className="pick-list">
             {shownCustomers.map((c) => (
               <li key={c.id}>
@@ -171,7 +175,8 @@ export function PickupWizard() {
       {step === 1 && (
         <>
           <input className="input mono" placeholder={t.fleet.searchHint} value={vq} onChange={(e) => setVq(e.target.value)} disabled={noVin} />
-          {available.length === 0 && !noVin && <p className="empty">{t.pickup.noAvailable}</p>}
+          {!fleet.data && (fleet.failure ? <LoadError failure={fleet.failure} onRetry={fleet.reload} /> : <Loading rows={3} />)}
+          {fleet.data && available.length === 0 && !noVin && <p className="empty">{t.pickup.noAvailable}</p>}
           <ul className={`pick-list ${noVin ? 'dim' : ''}`}>
             {available.map((v) => (
               <li key={v.id}>
