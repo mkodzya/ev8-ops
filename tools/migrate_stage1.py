@@ -710,6 +710,13 @@ def main() -> int:
                     help="очистить операционные таблицы перед импортом (логины и журнал не трогаются)")
     ap.add_argument("--db", default=os.environ.get("DATABASE_URL", DEFAULT_DB))
     args = ap.parse_args()
+    # Очистка — только на ноутбучном стеке, тем же признаком, по которому API
+    # принимает dev-секрет и сид заливает демо (B1-04, B3-01). На стенде на
+    # сервере этой переменной нет, и --wipe отказывает до подключения к базе.
+    if args.wipe and os.environ.get("ALLOW_DEV_SECRET") != "true":
+        print("--wipe запрещён: это не ноутбучный стек. На своём Mac запустите с ALLOW_DEV_SECRET=true.",
+              file=sys.stderr)
+        return 2
     if not args.apply:
         print("Сухой прогон: Odoo читается, в базу не пишется. Для записи — --apply.\n")
 

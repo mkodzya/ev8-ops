@@ -3,7 +3,8 @@ import type { FastifyInstance } from 'fastify';
 import { audit } from '../lib/audit.js';
 import { SESSION_COOKIE, hashPassword, permissionsOf, verifyPassword } from '../lib/auth.js';
 import { prisma } from '../lib/db.js';
-import { badRequest, conflict, isUniqueViolation, notFound } from '../lib/errors.js';
+import { demoLoginRefused } from '../lib/env.js';
+import { badRequest, conflict, forbidden, isUniqueViolation, notFound } from '../lib/errors.js';
 import { actorOf } from '../lib/guard.js';
 import { oneOf, str } from '../lib/validate.js';
 
@@ -45,6 +46,7 @@ export function userRoutes(app: FastifyInstance): void {
     const b = req.body ?? {};
     const actor = actorOf(req);
     const email = str(b, 'email', { required: true, max: 200 })!.toLowerCase();
+    if (demoLoginRefused(email)) throw forbidden('demo_login_off', 'Demo logins are switched off on a stand.');
     const name = str(b, 'name', { required: true, max: 200 })!;
     const role = oneOf(b, 'role', ROLES, { required: true })!;
     const password = readPassword(b);
