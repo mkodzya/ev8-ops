@@ -276,6 +276,8 @@ export const ka: Dict = {
   },
 
   vehicle: {
+    stateChanged: (state: string) => `სტატუსი: ${state}`,
+    changeStateCta: 'სტატუსის შეცვლა',
     eventsCount: (n: number) => `${n} მოვლენა`,
     backToFleet: 'პარკში დაბრუნება',
     title: 'მოპედი',
@@ -303,6 +305,7 @@ export const ka: Dict = {
   },
 
   rental: {
+    depositConfirmed: 'დეპოზიტის შესახებ გადაწყვეტილება დადასტურდა',
     actsCount: (n: number) => `${n} აქტი`,
     periodsCount: (n: number) => `${n} კვირა`,
     owed: 'დავალიანება',
@@ -326,6 +329,7 @@ export const ka: Dict = {
   },
 
   pickup: {
+    handOver: 'მოპედის გაცემა',
     title: 'გაცემა',
     steps: { customer: 'კლიენტი', vehicle: 'მოპედი', terms: 'პირობები', act: 'აქტი', done: 'მზადაა' },
     stepOf: (i: number, n: number) => `ნაბიჯი ${i}/${n}`,
@@ -347,6 +351,7 @@ export const ka: Dict = {
   },
 
   ret: {
+    finish: 'ქირის დახურვა',
     title: 'დაბრუნება',
     returnedOn: 'დაბრუნების თარიღი',
     odometer: 'გარბენი, კმ',
@@ -385,6 +390,8 @@ export const ka: Dict = {
   },
 
   photos: {
+    saved: 'ფოტოები შეინახა',
+    save: 'ფოტოების შენახვა',
     count: (n: number) => `${n} ფოტო`,
     add: 'ფოტო',
     remove: 'წაშლა',
@@ -395,6 +402,7 @@ export const ka: Dict = {
   },
 
   documents: {
+    added: 'დოკუმენტი დაემატა',
     count: (n: number) => `${n} დოკუმენტი`,
     title: 'დოკუმენტები',
     kinds: { id_card: 'პირადობა', driver_licence: 'მართვის მოწმობა', other: 'სხვა' },
@@ -489,6 +497,7 @@ export const ka: Dict = {
   },
 
   pools: {
+    moved: (pool: string) => `გადატანილია: ${pool}`,
     rent: 'ქირავნობა',
     sale: 'გაყიდვა',
     none: 'არ არის არჩეული',
@@ -520,6 +529,11 @@ export const ka: Dict = {
   },
 
   points: {
+    restored: (name: string) => `«${name}» ისევ სიაშია`,
+    archived: (name: string) => `«${name}» სიიდან მოიშორა`,
+    created: (name: string) => `წერტილი «${name}» დაემატა`,
+    create: 'წერტილის დამატება',
+    placeSaved: 'ადგილი ჩაიწერა',
     count: (n: number) => `${n} წერტილი`,
     name: 'დასახელება',
     note: 'შენიშვნა',
@@ -537,6 +551,11 @@ export const ka: Dict = {
   },
 
   users: {
+    created: (name: string) => `${name} შეუძლია შესვლა`,
+    create: 'ადამიანის დამატება',
+    switchedOn: (name: string) => `${name}: შესვლა ჩართულია`,
+    switchedOff: (name: string) => `${name}: შესვლა გამოირთულია`,
+    roleChanged: (name: string, role: string) => `${name}: ${role}`,
     count: (n: number) => `${n} ადამიანი`,
     name: 'სახელი',
     email: 'ელფოსტა შესასვლელად',
@@ -608,6 +627,7 @@ export const ka: Dict = {
   },
 
   profile: {
+    changePassword: 'პაროლის შეცვლა',
     title: 'ჩემი შესვლა',
     currentPassword: 'მიმდინარე პაროლი',
     newPassword: 'ახალი პაროლი',
@@ -707,6 +727,11 @@ export const ka: Dict = {
   },
 
   service: {
+    partAdded: 'ნაწილი დაემატა რემონტს',
+    closed: 'რემონტი დაიხურა',
+    closeCta: 'რემონტის დახურვა',
+    cancelled: 'რემონტი გაუქმდა',
+    cancelCta: 'რემონტის გაუქმება',
     jobOpened: 'რემონტი გაიხსნა',
     openJob: 'რემონტის გახსნა',
     jobsCount: (n: number) => `${n} რემონტი`,
@@ -741,6 +766,10 @@ export const ka: Dict = {
   },
 
   sales: {
+    cancelled: 'გაყიდვა გაუქმდა',
+    cancelCta: 'გაყიდვის გაუქმება',
+    boughtBack: 'მოპედი გამოსყიდულია',
+    buyBackCta: 'გამოსყიდვა',
     saleRecorded: 'გაყიდვა გაფორმდა',
     recordSale: 'გაყიდვის გაფორმება',
     instalmentsCount: (n: number) => `${n} შენატანი`,
@@ -777,6 +806,11 @@ export const ka: Dict = {
   },
 
   purchases: {
+    lineAdded: 'ხაზი დაემატა',
+    received: 'მიწოდება მიღებულია',
+    receiveCta: 'მიღება',
+    paymentRecorded: 'გადახდა ჩაიწერა',
+    recordPayment: 'გადახდის ჩაწერა',
     orderCreated: 'შეკვეთა შეიქმნა',
     createOrder: 'შეკვეთის შექმნა',
     linesCount: (n: number) => `${n} ხაზი`,

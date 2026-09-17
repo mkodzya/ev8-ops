@@ -274,8 +274,8 @@ export function QueueItem({ line, onDone }: { line: QueueLine; onDone: () => voi
 
   // One line, one decision: a second tap while the first is on its way does
   // nothing, and a refusal stays on this line (QA-1-03, QA-1-06).
-  const act = async (fn: (key: string) => Promise<unknown>, done: string) => {
-    const res = await op.run(fn);
+  const act = async (fn: (key: string) => Promise<unknown>, done: string, scope: string) => {
+    const res = await op.run(fn, scope);
     if (!res.ok) return;
     toast({ text: done });
     onDone();
@@ -296,7 +296,7 @@ export function QueueItem({ line, onDone }: { line: QueueLine; onDone: () => voi
           <button
             type="button"
             className="pill pill-sm pill-accent"
-            onClick={() => void act((key) => api.post(`/api/statement-lines/${line.id}/assign`, { rentalId: line.hints[0].rentalId }, { key }), t.statements.assigned(line.hints[0].number))}
+            onClick={() => void act((key) => api.post(`/api/statement-lines/${line.id}/assign`, { rentalId: line.hints[0].rentalId }, { key }), t.statements.assigned(line.hints[0].number), `assign:${line.hints[0].rentalId}`)}
           >
             {line.hints[0].customer} · {line.hints[0].number}
           </button>
@@ -320,7 +320,7 @@ export function QueueItem({ line, onDone }: { line: QueueLine; onDone: () => voi
               <ul className="pick-list">
                 {line.hints.map((h) => (
                   <li key={h.rentalId}>
-                    <button type="button" onClick={() => void act((key) => api.post(`/api/statement-lines/${line.id}/assign`, { rentalId: h.rentalId }, { key }), t.statements.assigned(h.number))}>
+                    <button type="button" onClick={() => void act((key) => api.post(`/api/statement-lines/${line.id}/assign`, { rentalId: h.rentalId }, { key }), t.statements.assigned(h.number), `assign:${h.rentalId}`)}>
                       <span>
                         <span className="mono">{h.number}</span> {h.customer}
                       </span>
@@ -345,7 +345,7 @@ export function QueueItem({ line, onDone }: { line: QueueLine; onDone: () => voi
                       type="button"
                       state={op.state}
                       label={t.actions.confirm}
-                      onClick={() => void act((key) => api.post(`/api/statement-lines/${line.id}/ignore`, { reason }, { key }), t.statements.ignored)}
+                      onClick={() => void act((key) => api.post(`/api/statement-lines/${line.id}/ignore`, { reason }, { key }), t.statements.ignored, 'ignore')}
                     />
                   </span>
                 )}

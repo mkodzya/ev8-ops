@@ -8,7 +8,7 @@ import { BlockHead, Empty, Loading, PageHead } from '../components/ui.js';
 import { Field, Row } from '../components/Wizard.js';
 import { fmtDate, formatGel } from '../format.js';
 import { useT } from '../i18n/index.js';
-import { errorText, useLoad } from '../lib/use.js';
+import { useLoad } from '../lib/use.js';
 import { useSession } from '../session.js';
 import type { PartRow } from './StockPage.js';
 

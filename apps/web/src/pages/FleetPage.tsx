@@ -1,7 +1,7 @@
 import { VEHICLE_COLORS, VEHICLE_POOLS, VEHICLE_STATES, colorOf, daysBetween, tokens, type VehiclePool, type VehicleState } from '@ev8/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
-import { errorText, useLoad } from '../lib/use.js';
+import { useLoad } from '../lib/use.js';
 import { LoadError } from '../components/LoadError.js';
 import { Field } from '../components/Wizard.js';
 import { FormSheet } from '../ds/form/Form.js';

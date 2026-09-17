@@ -2,7 +2,9 @@ import type { CustomerKind, DepositStatus, RentalStatus } from '@ev8/shared';
 import { useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { preparePhoto, uploadFile } from '../lib/photos.js';
-import { errorText } from '../lib/use.js';
+import { useOperation } from '../ds/form/operation.js';
+import { useToast } from '../ds/feedback/Toast.js';
+import '../ds/form/form.css';
 import { LoadError } from '../components/LoadError.js';
 import { BlockHead, Empty, Loading, PageHead, RentalBadge, Vin } from '../components/ui.js';
 import { Row } from '../components/Wizard.js';
@@ -36,8 +38,8 @@ export function CustomerPage() {
   const { data, failure, reload } = useLoad<Card>(id ? `/api/customers/${id}` : null);
   const balance = useLoad<Balance>(id ? `/api/customers/${id}/balance` : null);
   const [docKind, setDocKind] = useState<'id_card' | 'driver_licence' | 'other'>('id_card');
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
+  const upload = useOperation();
+  const toast = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
   if (failure) return <LoadError failure={failure} onRetry={reload} />;
   if (!data) return <Loading />;
@@ -46,18 +48,17 @@ export function CustomerPage() {
   const addDocument = async (list: FileList | null) => {
     const f = list?.[0];
     if (!f) return;
-    setBusy(true);
-    setErr(null);
-    try {
+    // Each chosen file is its own write: the scope is the file, so choosing it
+    // again after a lost answer is a retry, and another file is a new document.
+    const res = await upload.run(async (key) => {
       const prepared = f.type === 'application/pdf' ? { name: f.name, mimeType: 'application/pdf', blob: f } : await preparePhoto(f);
-      await uploadFile(`/api/customers/${c.id}/documents`, prepared, { docKind });
-      reload();
-    } catch (e) {
-      setErr(errorText(e));
-    } finally {
-      if (fileRef.current) fileRef.current.value = '';
-      setBusy(false);
-    }
+      await uploadFile(`/api/customers/${c.id}/documents`, prepared, { docKind }, key);
+    }, `${f.name}:${f.size}:${f.lastModified}:${docKind}`);
+    if (fileRef.current) fileRef.current.value = '';
+    if (!res.ok) return;
+    upload.reset();
+    toast({ text: t.documents.added });
+    reload();
   };
   return (
     <>
@@ -154,11 +155,11 @@ export function CustomerPage() {
               </select>
               <label className="pill pill-sm">
                 <input ref={fileRef} type="file" accept="image/*,application/pdf" capture="environment" hidden onChange={(e) => void addDocument(e.target.files)} />
-                {busy ? t.common.checking : `+ ${t.documents.add}`}
+                {upload.state === 'busy' ? t.form.saving : `+ ${t.documents.add}`}
               </label>
             </div>
           )}
-          {err && <div className="hint hint-bad">{err}</div>}
+          {upload.failure && <div className="field-err" role="alert">{upload.failure.text}</div>}
         </section>
         <section className="card">
           <BlockHead title={t.sales.title} />

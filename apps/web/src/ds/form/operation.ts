@@ -43,13 +43,19 @@ export function useOperation(fieldOf?: Record<string, string>) {
   const fields = useRef(fieldOf);
   fields.current = fieldOf;
   const running = useRef(false);
+  const lastScope = useRef('');
   const [state, setState] = useState<SubmitState>('idle');
   const [failure, setFailure] = useState<Failure | null>(null);
 
   const run = useCallback(
-    async <R,>(write: (key: string) => Promise<R>): Promise<{ ok: true; value: R } | { ok: false }> => {
+    async <R,>(write: (key: string) => Promise<R>, scope = ''): Promise<{ ok: true; value: R } | { ok: false }> => {
       if (running.current) return { ok: false };
       running.current = true;
+      // One key, one write: a different action from the same place (adding a
+      // line, then removing another) gets its own, or the server would take
+      // it for a retry of the first and refuse it.
+      if (scope !== lastScope.current) key.current = newOperationKey();
+      lastScope.current = scope;
       setState('busy');
       setFailure(null);
       try {

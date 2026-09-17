@@ -287,6 +287,8 @@ export const ru: Dict = {
   },
 
   vehicle: {
+    stateChanged: (state: string) => `Состояние: ${state}`,
+    changeStateCta: 'Сменить состояние',
     eventsCount: counted('событие', 'события', 'событий'),
     backToFleet: 'Вернуть в парк',
     title: 'Мопед',
@@ -314,6 +316,7 @@ export const ru: Dict = {
   },
 
   rental: {
+    depositConfirmed: 'Решение по депозиту подтверждено',
     actsCount: counted('акт', 'акта', 'актов'),
     periodsCount: counted('неделя', 'недели', 'недель'),
     owed: 'Долг',
@@ -337,6 +340,7 @@ export const ru: Dict = {
   },
 
   pickup: {
+    handOver: 'Выдать мопед',
     title: 'Выдача',
     steps: { customer: 'Клиент', vehicle: 'Мопед', terms: 'Условия', act: 'Акт', done: 'Готово' },
     stepOf: (i: number, n: number) => `Шаг ${i} из ${n}`,
@@ -358,6 +362,7 @@ export const ru: Dict = {
   },
 
   ret: {
+    finish: 'Закрыть аренду',
     title: 'Возврат',
     returnedOn: 'Дата возврата',
     odometer: 'Пробег, км',
@@ -396,6 +401,8 @@ export const ru: Dict = {
   },
 
   photos: {
+    saved: 'Фото сохранены',
+    save: 'Сохранить фото',
     count: counted('фото', 'фото', 'фото'),
     add: 'Фото',
     remove: 'Убрать',
@@ -406,6 +413,7 @@ export const ru: Dict = {
   },
 
   documents: {
+    added: 'Документ добавлен',
     count: counted('документ', 'документа', 'документов'),
     title: 'Документы',
     kinds: { id_card: 'Удостоверение', driver_licence: 'Водительские права', other: 'Другое' },
@@ -500,6 +508,7 @@ export const ru: Dict = {
   },
 
   pools: {
+    moved: (pool: string) => `Перенесён в парк «${pool}»`,
     rent: 'Аренда',
     sale: 'Продажа',
     none: 'Не назначен',
@@ -531,6 +540,11 @@ export const ru: Dict = {
   },
 
   points: {
+    restored: (name: string) => `«${name}» снова в списке`,
+    archived: (name: string) => `«${name}» убрана из списка`,
+    created: (name: string) => `Точка «${name}» добавлена`,
+    create: 'Добавить точку',
+    placeSaved: 'Место записано',
     count: counted('точка', 'точки', 'точек'),
     name: 'Название',
     note: 'Заметка',
@@ -548,6 +562,11 @@ export const ru: Dict = {
   },
 
   users: {
+    created: (name: string) => `${name} может входить`,
+    create: 'Добавить человека',
+    switchedOn: (name: string) => `${name}: вход включён`,
+    switchedOff: (name: string) => `${name}: вход отключён`,
+    roleChanged: (name: string, role: string) => `Роль «${name}»: ${role}`,
     count: counted('человек', 'человека', 'человек'),
     name: 'Имя',
     email: 'Почта для входа',
@@ -619,6 +638,7 @@ export const ru: Dict = {
   },
 
   profile: {
+    changePassword: 'Сменить пароль',
     title: 'Мой вход',
     currentPassword: 'Текущий пароль',
     newPassword: 'Новый пароль',
@@ -718,6 +738,11 @@ export const ru: Dict = {
   },
 
   service: {
+    partAdded: 'Запчасть добавлена в ремонт',
+    closed: 'Ремонт закрыт',
+    closeCta: 'Закрыть ремонт',
+    cancelled: 'Ремонт отменён',
+    cancelCta: 'Отменить ремонт',
     jobOpened: 'Ремонт открыт',
     openJob: 'Открыть ремонт',
     jobsCount: counted('ремонт', 'ремонта', 'ремонтов'),
@@ -752,6 +777,10 @@ export const ru: Dict = {
   },
 
   sales: {
+    cancelled: 'Продажа отменена',
+    cancelCta: 'Отменить продажу',
+    boughtBack: 'Мопед выкуплен',
+    buyBackCta: 'Выкупить',
     saleRecorded: 'Продажа оформлена',
     recordSale: 'Оформить продажу',
     instalmentsCount: counted('взнос', 'взноса', 'взносов'),
@@ -788,6 +817,11 @@ export const ru: Dict = {
   },
 
   purchases: {
+    lineAdded: 'Строка добавлена',
+    received: 'Поставка принята',
+    receiveCta: 'Принять',
+    paymentRecorded: 'Оплата записана',
+    recordPayment: 'Записать оплату',
     orderCreated: 'Заказ создан',
     createOrder: 'Создать заказ',
     linesCount: counted('строка', 'строки', 'строк'),

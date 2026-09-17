@@ -1,10 +1,10 @@
 import { Check, CloudOff, History } from 'lucide-react';
-import { createContext, useContext, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, type FormEvent, type ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Drawer } from '../../components/Drawer.js';
 import { useT } from '../../i18n/index.js';
 import { useToast, type ToastSpec } from '../feedback/Toast.js';
-import { dropDraft, readDraft, sameValue, writeDraft, type Draft } from './drafts.js';
+import { sameValue, useDraft } from './drafts.js';
 import { useOperation, type Failure, type SubmitState } from './operation.js';
 import './form.css';
 
@@ -16,6 +16,9 @@ export interface Done {
 }
 
 const FieldErrors = createContext<Failure | null>(null);
+
+/** For a step-by-step wizard, which is not a <Form>: its refusal reaches the fields the same way. */
+export const FailureProvider = FieldErrors.Provider;
 
 /** The words under a field, when the last refusal named it (QA-1-08). */
 export function useFieldError(name: string | undefined): string | null {
@@ -70,21 +73,7 @@ export function Form<V>({
   const location = useLocation();
   const op = useOperation(fieldOf);
   const formRef = useRef<HTMLFormElement>(null);
-  const [offer, setOffer] = useState<Draft<V> | null>(() => {
-    if (!draft || !onRestore) return null;
-    const found = readDraft<V>(draft);
-    return found && !sameValue(found.value, initial) ? found : null;
-  });
-
-  // Keep the draft in step with what is typed — not while the offer is on
-  // screen, or the untouched form would overwrite the draft it offers.
-  useEffect(() => {
-    if (!draft || offer || op.state === 'done') return;
-    if (sameValue(value, initial)) dropDraft(draft);
-    else writeDraft(draft, value);
-    // `initial` is a fresh object on every render of most forms; its content is what matters.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draft, offer, JSON.stringify(value), JSON.stringify(initial), op.state]);
+  const drafts = useDraft({ id: onRestore ? draft : undefined, value, initial, hold: op.state === 'done' });
 
   // The field the server named takes the focus.
   useEffect(() => {
@@ -105,47 +94,15 @@ export function Form<V>({
     e.preventDefault();
     const res = await op.run(submit);
     if (!res.ok) return;
-    if (draft) dropDraft(draft);
+    drafts.drop();
     const done = res.value;
     if (done?.created) navigate(location.pathname + location.search, { replace: true, state: { created: done.created } });
     if (done?.toast) toast(done.toast);
     onDone?.(done);
   };
 
-  if (offer && onRestore) {
-    const words = summary?.(offer.value);
-    const at = new Date(offer.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
-    return (
-      <div className="draft-offer">
-        <div className="form-banner form-banner-ok">
-          <History size={18} strokeWidth={1.75} aria-hidden="true" />
-          <div>
-            <b>{t.form.draftFrom(at)}</b>
-            {words ? <> · «{words}»</> : null}
-          </div>
-        </div>
-        <button
-          type="button"
-          className="pill pill-accent pill-lg submit-wide"
-          onClick={() => {
-            onRestore(offer.value);
-            setOffer(null);
-          }}
-        >
-          {t.form.continueDraft}
-        </button>
-        <button
-          type="button"
-          className="pill submit-wide submit-quiet"
-          onClick={() => {
-            if (draft) dropDraft(draft);
-            setOffer(null);
-          }}
-        >
-          {t.form.startOver}
-        </button>
-      </div>
-    );
+  if (drafts.offer && onRestore) {
+    return <DraftOffer at={drafts.offer.at} words={summary?.(drafts.offer.value)} onContinue={() => drafts.accept(onRestore)} onDiscard={drafts.discard} />;
   }
 
   const general = op.failure && !(op.failure.field && op.failure.fieldText && formHas(formRef.current, op.failure.field)) ? op.failure : null;
@@ -177,6 +134,29 @@ export function Form<V>({
   );
 }
 
+/** «Черновик от HH:MM · …» with Continue / Start over — for forms and wizards alike. */
+export function DraftOffer({ at, words, onContinue, onDiscard }: { at: string; words?: string | null; onContinue: () => void; onDiscard: () => void }) {
+  const t = useT();
+  const time = new Date(at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+  return (
+    <div className="draft-offer">
+      <div className="form-banner form-banner-ok">
+        <History size={18} strokeWidth={1.75} aria-hidden="true" />
+        <div>
+          <b>{t.form.draftFrom(time)}</b>
+          {words ? <> · «{words}»</> : null}
+        </div>
+      </div>
+      <button type="button" className="pill pill-accent pill-lg submit-wide" onClick={onContinue}>
+        {t.form.continueDraft}
+      </button>
+      <button type="button" className="pill submit-wide submit-quiet" onClick={onDiscard}>
+        {t.form.startOver}
+      </button>
+    </div>
+  );
+}
+
 function formHas(form: HTMLFormElement | null, field: string): boolean {
   return !!form?.querySelector(`[data-field="${CSS.escape(field)}"]`);
 }
@@ -188,19 +168,21 @@ export function SubmitButton({
   type = 'submit',
   onClick,
   small = false,
+  className = '',
 }: {
   state: SubmitState;
   label: string;
   type?: 'submit' | 'button';
   onClick?: () => void;
   small?: boolean;
+  className?: string;
 }) {
   const t = useT();
   const busy = state === 'busy';
   return (
     <button
       type={type}
-      className={`pill ${small ? 'pill-sm' : ''} submit submit-${state} ${state === 'failed' ? '' : 'pill-accent'}`}
+      className={`pill ${small ? 'pill-sm' : ''} submit submit-${state} ${state === 'failed' ? '' : 'pill-accent'} ${className}`}
       aria-disabled={busy || undefined}
       aria-busy={busy || undefined}
       onClick={(e) => {

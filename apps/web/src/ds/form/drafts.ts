@@ -1,3 +1,5 @@
+import { useEffect, useState } from 'react';
+
 /**
  * Drafts of forms and wizards (wave 1 §3.7): what somebody typed and did not
  * send stays on this device until it is sent, thrown away, or its author
@@ -43,4 +45,40 @@ export function dropDraft(id: string): void {
 /** Two form values are the same when they serialise the same — forms hold plain strings, numbers and flags. */
 export function sameValue(a: unknown, b: unknown): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
+}
+
+/**
+ * A draft kept in step with a form or a wizard. While a stored draft is on
+ * offer nothing is written, or the untouched form would overwrite the draft
+ * it offers. `hold` pauses writing (after a successful write, before the
+ * form resets).
+ */
+export function useDraft<V>({ id, value, initial, hold = false }: { id?: string; value: V; initial: V; hold?: boolean }) {
+  const [offer, setOffer] = useState<Draft<V> | null>(() => {
+    if (!id) return null;
+    const found = readDraft<V>(id);
+    return found && !sameValue(found.value, initial) ? found : null;
+  });
+  const v = JSON.stringify(value);
+  const i = JSON.stringify(initial);
+  useEffect(() => {
+    if (!id || offer || hold) return;
+    if (v === i) dropDraft(id);
+    else writeDraft(id, JSON.parse(v) as V);
+  }, [id, offer, hold, v, i]);
+  return {
+    offer,
+    /** The stored value, taken back into the form. */
+    accept: (restore: (value: V) => void) => {
+      if (offer) restore(offer.value);
+      setOffer(null);
+    },
+    discard: () => {
+      if (id) dropDraft(id);
+      setOffer(null);
+    },
+    drop: () => {
+      if (id) dropDraft(id);
+    },
+  };
 }

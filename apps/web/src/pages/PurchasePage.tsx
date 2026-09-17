@@ -4,12 +4,14 @@ import { Link, useParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { LoadError } from '../components/LoadError.js';
 import { ModelDrawer, NEW_MODEL } from '../components/ModelDrawer.js';
-import { Drawer } from '../components/Drawer.js';
+import { FormSheet, SubmitButton } from '../ds/form/Form.js';
+import { useOperation } from '../ds/form/operation.js';
+import { useToast } from '../ds/feedback/Toast.js';
 import { BlockHead, Empty, Loading, PageHead, StateBadge, Vin } from '../components/ui.js';
 import { Field, Row } from '../components/Wizard.js';
 import { fmtDate, formatGel } from '../format.js';
 import { useT } from '../i18n/index.js';
-import { errorText, useLoad } from '../lib/use.js';
+import { useLoad } from '../lib/use.js';
 import { useSession } from '../session.js';
 import { fmtForeign, type Purchase } from './PurchasesPage.js';
 import type { PartRow } from './StockPage.js';
@@ -28,13 +30,14 @@ export function PurchasePage() {
   const { data, failure, reload } = useLoad<Card>(id ? `/api/purchases/${id}` : null);
   const models = useLoad<{ models: { id: string; brand: string; name: string }[] }>(can('settings.manage') ? '/api/models' : null);
   const parts = useLoad<{ parts: PartRow[] }>(can('settings.manage') ? '/api/parts' : null);
-  const [err, setErr] = useState<string | null>(null);
   const [line, setLine] = useState({ modelId: '', partId: '', partName: '', qty: '1', price: '', asPart: false });
-  const [pay, setPay] = useState({ open: false, amount: '', on: todayISO() });
+  const [paying, setPaying] = useState(false);
+  const [pay, setPay] = useState({ amount: '', on: todayISO() });
   const [receiving, setReceiving] = useState(false);
-  const [vins, setVins] = useState<Record<string, string>>({});
-  const [receivedOn, setReceivedOn] = useState(todayISO());
-  const [busy, setBusy] = useState(false);
+  const [receipt, setReceipt] = useState<{ receivedOn: string; vins: Record<string, string> }>({ receivedOn: todayISO(), vins: {} });
+  // Lines are added and removed in place; one operation at a time, its refusal under the lines.
+  const lineOp = useOperation();
+  const toast = useToast();
   // The model on the invoice may not be in the catalogue yet; it is made
   // here, over the order, rather than by leaving a half-typed line behind.
   const [addingModel, setAddingModel] = useState(false);
@@ -45,33 +48,16 @@ export function PurchasePage() {
   const open = p.status === 'ordered';
   const mayEdit = open && can('settings.manage');
 
-  const act = async (fn: () => Promise<unknown>) => {
-    setBusy(true);
-    setErr(null);
-    try {
-      await fn();
-      reload();
-    } catch (e) {
-      setErr(errorText(e));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const closePay = () => {
-    setPay({ ...pay, open: false });
-    setErr(null);
-  };
-  const closeReceive = () => {
-    setReceiving(false);
-    setErr(null);
+  const act = async (fn: (key: string) => Promise<unknown>, scope = 'add') => {
+    const res = await lineOp.run(fn, scope);
+    if (res.ok) reload();
   };
 
   return (
     <>
       <PageHead wrap title={p.number} sub={t.purchases.statuses[p.status]}>
         {open && can('payments.reconcile') && (
-          <button type="button" className="pill pill-sm" onClick={() => setPay({ ...pay, open: true })}>
+          <button type="button" className="pill pill-sm" onClick={() => setPaying(true)}>
             {t.purchases.addPayment}
           </button>
         )}
@@ -81,79 +67,80 @@ export function PurchasePage() {
           </button>
         )}
       </PageHead>
-      {err && <div className="hint hint-bad">{err}</div>}
 
-      {pay.open && (
-        <Drawer title={t.purchases.addPayment} onClose={closePay}>
+      {paying && (
+        <FormSheet
+          title={t.purchases.addPayment}
+          onClose={() => setPaying(false)}
+          value={pay}
+          initial={{ amount: '', on: todayISO() }}
+          draft={`purchase-pay:${p.id}`}
+          onRestore={setPay}
+          summary={(v) => v.amount}
+          label={t.purchases.recordPayment}
+          submit={async (key) => {
+            await api.post(`/api/purchases/${p.id}/payments`, { grossTetri: parseGel(pay.amount), occurredOn: pay.on }, { key });
+            return { toast: { text: t.purchases.paymentRecorded } };
+          }}
+          onDone={() => {
+            setPay({ amount: '', on: todayISO() });
+            reload();
+          }}
+        >
           {/* Money going out: the customer-payment label read "the customer paid". */}
-          <Field label={t.purchases.payAmount}>
+          <Field label={t.purchases.payAmount} name="grossTetri">
             <input className="input input-amount mono" value={pay.amount} onChange={(e) => setPay({ ...pay, amount: e.target.value })} inputMode="decimal" autoFocus />
           </Field>
-          <Field label={t.payments.date}>
+          <Field label={t.payments.date} name="occurredOn">
             <input className="input mono" type="date" value={pay.on} onChange={(e) => setPay({ ...pay, on: e.target.value })} />
           </Field>
-          {err && <div className="hint hint-bad">{err}</div>}
-          <div className="row-actions">
-            <button type="button" className="pill" onClick={closePay}>
-              {t.actions.cancel}
-            </button>
-            <button
-              type="button"
-              className="pill pill-accent"
-              disabled={busy || parseGel(pay.amount) == null}
-              onClick={() => void act(async () => {
-                await api.post(`/api/purchases/${p.id}/payments`, { grossTetri: parseGel(pay.amount), occurredOn: pay.on });
-                setPay({ ...pay, open: false, amount: '' });
-              })}
-            >
-              {t.actions.confirm}
-            </button>
-          </div>
-        </Drawer>
+        </FormSheet>
       )}
 
       {receiving && mayEdit && (
-        <Drawer title={t.purchases.receive} onClose={closeReceive}>
+        <FormSheet
+          title={t.purchases.receive}
+          onClose={() => setReceiving(false)}
+          value={receipt}
+          initial={{ receivedOn: todayISO(), vins: {} }}
+          draft={`purchase-receive:${p.id}`}
+          onRestore={setReceipt}
+          label={t.purchases.receiveCta}
+          submit={async (key) => {
+            await api.post(
+              `/api/purchases/${p.id}/receive`,
+              {
+                receivedOn: receipt.receivedOn,
+                vins: Object.fromEntries(
+                  p.lines
+                    .filter((l) => l.model)
+                    .map((l) => [l.id, (receipt.vins[l.id] ?? '').split('\n').map((v) => v.trim()).filter(Boolean)]),
+                ),
+              },
+              { key },
+            );
+            return { toast: { text: t.purchases.received } };
+          }}
+          onDone={reload}
+        >
           <p className="hint muted">{t.purchases.receiveHint}</p>
-          <Field label={t.purchases.receivedOn}>
-            <input className="input mono" type="date" value={receivedOn} onChange={(e) => setReceivedOn(e.target.value)} />
+          <Field label={t.purchases.receivedOn} name="receivedOn">
+            <input className="input mono" type="date" value={receipt.receivedOn} onChange={(e) => setReceipt({ ...receipt, receivedOn: e.target.value })} />
           </Field>
-          {p.lines.filter((l) => l.model).map((l) => (
-            <Field key={l.id} label={`${l.model!.name} — ${l.qty}`}>
-              <textarea
-                className="input textarea mono"
-                rows={Math.min(l.qty, 6)}
-                placeholder={t.purchases.vins}
-                value={vins[l.id] ?? ''}
-                onChange={(e) => setVins({ ...vins, [l.id]: e.target.value })}
-              />
-            </Field>
-          ))}
-          {err && <div className="hint hint-bad">{err}</div>}
-          <div className="row-actions">
-            <button type="button" className="pill" onClick={closeReceive}>
-              {t.actions.cancel}
-            </button>
-            <button
-              type="button"
-              className="pill pill-accent"
-              disabled={busy}
-              onClick={() => void act(async () => {
-                await api.post(`/api/purchases/${p.id}/receive`, {
-                  receivedOn,
-                  vins: Object.fromEntries(
-                    p.lines
-                      .filter((l) => l.model)
-                      .map((l) => [l.id, (vins[l.id] ?? '').split('\n').map((v) => v.trim()).filter(Boolean)]),
-                  ),
-                });
-                setReceiving(false);
-              })}
-            >
-              {t.actions.confirm}
-            </button>
+          <div data-field="vins">
+            {p.lines.filter((l) => l.model).map((l) => (
+              <Field key={l.id} label={`${l.model!.name} — ${l.qty}`}>
+                <textarea
+                  className="input textarea mono"
+                  rows={Math.min(l.qty, 6)}
+                  placeholder={t.purchases.vins}
+                  value={receipt.vins[l.id] ?? ''}
+                  onChange={(e) => setReceipt({ ...receipt, vins: { ...receipt.vins, [l.id]: e.target.value } })}
+                />
+              </Field>
+            ))}
           </div>
-        </Drawer>
+        </FormSheet>
       )}
 
       <div className="two-col">
@@ -219,7 +206,7 @@ export function PurchasePage() {
                     <td className="num mono">{formatGel(l.unitCostTetri)}</td>
                     <td className="num">
                       {mayEdit && (
-                        <button type="button" className="pill pill-sm" onClick={() => void act(() => api.del(`/api/purchases/${p.id}/lines/${l.id}`))}>
+                        <button type="button" className="pill pill-sm" onClick={() => void act((key) => api.del(`/api/purchases/${p.id}/lines/${l.id}`, { key }), `del:${l.id}`)}>
                           ×
                         </button>
                       )}
@@ -273,24 +260,35 @@ export function PurchasePage() {
               <input type="checkbox" checked={line.asPart} onChange={(e) => setLine({ ...line, asPart: e.target.checked })} />
               <span>{t.purchases.part}</span>
             </label>
-            <button
+            <SubmitButton
+              small
               type="button"
-              className="pill pill-sm pill-accent"
-              disabled={busy || parseGel(line.price) == null || (line.asPart ? !line.partName.trim() && !line.partId : !line.modelId)}
-              onClick={() => void act(async () => {
-                await api.post(`/api/purchases/${p.id}/lines`, {
-                  modelId: line.asPart ? null : line.modelId,
-                  partId: line.asPart && line.partId ? line.partId : null,
-                  partName: line.asPart && !line.partId ? line.partName : null,
-                  qty: Number(line.qty) || 1,
-                  unitPrice: parseGel(line.price),
-                });
-                setLine({ ...line, partName: '', partId: '', qty: '1', price: '' });
-              })}
-            >
-              + {t.purchases.addLine}
-            </button>
+              state={lineOp.state}
+              label={`+ ${t.purchases.addLine}`}
+              onClick={() =>
+                void act(async (key) => {
+                  await api.post(
+                    `/api/purchases/${p.id}/lines`,
+                    {
+                      modelId: line.asPart ? null : line.modelId || null,
+                      partId: line.asPart && line.partId ? line.partId : null,
+                      partName: line.asPart && !line.partId ? line.partName : null,
+                      qty: Number(line.qty) || 1,
+                      unitPrice: parseGel(line.price),
+                    },
+                    { key },
+                  );
+                  setLine({ ...line, partName: '', partId: '', qty: '1', price: '' });
+                  toast({ text: t.purchases.lineAdded });
+                })
+              }
+            />
           </div>
+        )}
+        {mayEdit && lineOp.failure && (
+          <p className="field-err" role="alert">
+            {lineOp.failure.fieldText ?? lineOp.failure.text}
+          </p>
         )}
       </section>
 
