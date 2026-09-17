@@ -2,6 +2,7 @@ import { VEHICLE_POOLS, VEHICLE_STATES, isPoolEvent, type RentalStatus, type Veh
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../api.js';
+import { Drawer } from '../components/Drawer.js';
 import { BlockHead, ColorText, Empty, Loading, PageHead, PlaceText, RentalBadge, StateBadge, Vin } from '../components/ui.js';
 import { Field, Row } from '../components/Wizard.js';
 import { fmtDate } from '../format.js';
@@ -71,6 +72,11 @@ export function VehiclePage() {
               }
             : null;
 
+  const closeMove = () => {
+    setOpen(false);
+    setErr(null);
+  };
+
   const move = async () => {
     setBusy(true);
     setErr(null);
@@ -90,7 +96,7 @@ export function VehiclePage() {
     <>
       <PageHead wrap title={<Vin vin={v.vin} />} badge={<StateBadge state={v.state} />} sub={<Link to={`/models/${v.model.id}`}>{`${v.model.brand} ${v.model.name}`}</Link>}>
         {can('fleet.state.manual') && (
-          <button type="button" className="pill pill-sm" onClick={() => setOpen((o) => !o)} disabled={locked} title={locked ? t.vehicle.rentedLock : undefined}>
+          <button type="button" className="pill pill-sm" onClick={() => setOpen(true)} disabled={locked} title={locked ? t.vehicle.rentedLock : undefined}>
             {t.actions.changeState}
           </button>
         )}
@@ -108,9 +114,10 @@ export function VehiclePage() {
             </button>
           ))}
       </PageHead>
+      {err && !open && <div className="hint hint-bad">{err}</div>}
 
       {open && (
-        <section className="card card-drawer">
+        <Drawer title={t.actions.changeState} onClose={closeMove}>
           <Field label={t.vehicle.toState}>
             <div className="chips">
               {VEHICLE_STATES.filter((s) => s !== 'rented' && s !== v.state).map((s) => (
@@ -125,14 +132,14 @@ export function VehiclePage() {
           </Field>
           {err && <div className="hint hint-bad">{err}</div>}
           <div className="row-actions">
-            <button type="button" className="pill" onClick={() => setOpen(false)}>
+            <button type="button" className="pill" onClick={closeMove}>
               {t.actions.cancel}
             </button>
             <button type="button" className="pill pill-accent" disabled={!reason.trim() || busy} onClick={move}>
               {t.actions.confirm}
             </button>
           </div>
-        </section>
+        </Drawer>
       )}
 
       {/* On a phone the one action lives at the bottom, over the tab bar,

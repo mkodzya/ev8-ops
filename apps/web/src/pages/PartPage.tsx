@@ -2,6 +2,7 @@ import { todayISO } from '@ev8/shared';
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../api.js';
+import { Drawer } from '../components/Drawer.js';
 import { BlockHead, Empty, Loading, PageHead } from '../components/ui.js';
 import { Field, Row } from '../components/Wizard.js';
 import { fmtDate, formatGel } from '../format.js';
@@ -50,11 +51,16 @@ export function PartPage() {
     }
   };
 
+  const closeCount = () => {
+    setCount({ ...count, open: false });
+    setErr(null);
+  };
+
   return (
     <>
       <PageHead wrap title={p.name} sub={p.archived ? t.stock.archived : undefined}>
         {can('stock.count') && (
-          <button type="button" className="pill pill-sm pill-accent" onClick={() => setCount({ ...count, open: !count.open, qty: String(p.onHand) })}>
+          <button type="button" className="pill pill-sm pill-accent" onClick={() => setCount({ ...count, open: true, qty: String(p.onHand) })}>
             {t.stock.count}
           </button>
         )}
@@ -62,7 +68,7 @@ export function PartPage() {
       {err && <div className="hint hint-bad">{err}</div>}
 
       {count.open && (
-        <section className="card card-drawer">
+        <Drawer title={t.stock.count} onClose={closeCount}>
           <p className="hint">{t.stock.countHint}</p>
           <Field label={t.stock.countedQty}>
             <input className="input input-amount mono" value={count.qty} onChange={(e) => setCount({ ...count, qty: e.target.value })} inputMode="numeric" autoFocus />
@@ -73,15 +79,16 @@ export function PartPage() {
           <Field label={t.payments.date}>
             <input className="input mono" type="date" value={count.on} onChange={(e) => setCount({ ...count, on: e.target.value })} />
           </Field>
+          {err && <div className="hint hint-bad">{err}</div>}
           <div className="row-actions">
-            <button type="button" className="pill" onClick={() => setCount({ ...count, open: false })}>
+            <button type="button" className="pill" onClick={closeCount}>
               {t.actions.cancel}
             </button>
             <button type="button" className="pill pill-accent" disabled={busy || count.qty === '' || !count.reason.trim()} onClick={() => void submitCount()}>
               {t.actions.confirm}
             </button>
           </div>
-        </section>
+        </Drawer>
       )}
 
       <div className="two-col">

@@ -4,6 +4,7 @@ import { parseGel, todayISO, type VehicleState } from '@ev8/shared';
 import { Field } from '../components/Wizard.js';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../api.js';
+import { Drawer } from '../components/Drawer.js';
 import { BlockHead, Empty, Loading, PageHead, RentalBadge, Vin } from '../components/ui.js';
 import { PaymentForm } from '../components/PaymentForm.js';
 import { VoidPayment } from './PaymentsPage.js';
@@ -97,7 +98,7 @@ export function RentalPage() {
           </button>
         )}
         {open && can('rental.create') && (
-          <button type="button" className="pill pill-sm" onClick={() => setEditing((v) => !v)}>
+          <button type="button" className="pill pill-sm" onClick={() => setEditing(true)}>
             {t.rentalEdit.title}
           </button>
         )}
@@ -115,7 +116,6 @@ export function RentalPage() {
             setEditing(false);
             reload();
           }}
-          onError={setErr}
         />
       )}
       {err && <div className="hint hint-bad">{err}</div>}
@@ -359,12 +359,10 @@ function RentalEdit({
   rental,
   onClose,
   onSaved,
-  onError,
 }: {
   rental: RentalCard['rental'];
   onClose: () => void;
   onSaved: () => void;
-  onError: (e: string) => void;
 }) {
   const t = useT();
   const fleet = useLoad<FreeVehicles>(rental.vinUnconfirmed ? '/api/fleet' : null);
@@ -375,6 +373,8 @@ function RentalEdit({
   const [per, setPer] = useState(rental.buyoutPerPaymentTetri ? String(rental.buyoutPerPaymentTetri / 100) : '');
   const [notes, setNotes] = useState(rental.notes ?? '');
   const [busy, setBusy] = useState(false);
+  // Its own error: the page's line sits behind the drawer.
+  const [err, setErr] = useState<string | null>(null);
 
   const free = (fleet.data?.vehicles ?? []).filter((v) => v.state === 'available');
   const statusChanged = status !== rental.storedStatus;
@@ -383,6 +383,7 @@ function RentalEdit({
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
     setBusy(true);
+    setErr(null);
     try {
       const body: Record<string, unknown> = { notes: notes || null };
       if (vehicleId) body.vehicleId = vehicleId;
@@ -393,60 +394,63 @@ function RentalEdit({
       await api.patch(`/api/rentals/${rental.id}`, body);
       onSaved();
     } catch (e) {
-      onError(errorText(e));
+      setErr(errorText(e));
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    <form className="card card-drawer form" onSubmit={save}>
-      {rental.vinUnconfirmed && (
-        <Field label={t.rentalEdit.assignVehicle} hint={t.rentalEdit.assignHint}>
-          <select className="input" value={vehicleId} onChange={(e) => setVehicleId(e.target.value)}>
-            <option value="">{t.common.dash}</option>
-            {free.map((v) => (
-              <option key={v.id} value={v.id}>
-                {v.vin} · {v.model}
-              </option>
+    <Drawer title={t.rentalEdit.title} onClose={onClose}>
+      <form className="form" onSubmit={save}>
+        {rental.vinUnconfirmed && (
+          <Field label={t.rentalEdit.assignVehicle} hint={t.rentalEdit.assignHint}>
+            <select className="input" value={vehicleId} onChange={(e) => setVehicleId(e.target.value)}>
+              <option value="">{t.common.dash}</option>
+              {free.map((v) => (
+                <option key={v.id} value={v.id}>
+                  {v.vin} · {v.model}
+                </option>
+              ))}
+            </select>
+          </Field>
+        )}
+        <Field label={t.rentalEdit.status}>
+          <div className="chips">
+            {(['active', 'paused', 'disputed'] as const).map((st) => (
+              <button key={st} type="button" className={`pill pill-sm ${status === st ? 'on' : ''}`} onClick={() => setStatus(st)}>
+                {t.rentalStatus[st]}
+              </button>
             ))}
-          </select>
+          </div>
         </Field>
-      )}
-      <Field label={t.rentalEdit.status}>
-        <div className="chips">
-          {(['active', 'paused', 'disputed'] as const).map((st) => (
-            <button key={st} type="button" className={`pill pill-sm ${status === st ? 'on' : ''}`} onClick={() => setStatus(st)}>
-              {t.rentalStatus[st]}
-            </button>
-          ))}
+        {needsReason && (
+          <Field label={t.rentalEdit.reason} hint={t.rentalEdit.reasonHint}>
+            <input className="input" value={reason} onChange={(e) => setReason(e.target.value)} />
+          </Field>
+        )}
+        <span className="lbl">{t.rentalEdit.buyout}</span>
+        <div className="two-col">
+          <Field label={t.rentalEdit.buyoutTarget}>
+            <input className="input input-amount mono" value={target} onChange={(e) => setTarget(e.target.value)} inputMode="decimal" />
+          </Field>
+          <Field label={t.rentalEdit.buyoutPerPayment}>
+            <input className="input input-amount mono" value={per} onChange={(e) => setPer(e.target.value)} inputMode="decimal" />
+          </Field>
         </div>
-      </Field>
-      {needsReason && (
-        <Field label={t.rentalEdit.reason} hint={t.rentalEdit.reasonHint}>
-          <input className="input" value={reason} onChange={(e) => setReason(e.target.value)} />
+        <Field label={t.rentalEdit.notes}>
+          <textarea className="input textarea" rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} />
         </Field>
-      )}
-      <span className="lbl">{t.rentalEdit.buyout}</span>
-      <div className="two-col">
-        <Field label={t.rentalEdit.buyoutTarget}>
-          <input className="input input-amount mono" value={target} onChange={(e) => setTarget(e.target.value)} inputMode="decimal" />
-        </Field>
-        <Field label={t.rentalEdit.buyoutPerPayment}>
-          <input className="input input-amount mono" value={per} onChange={(e) => setPer(e.target.value)} inputMode="decimal" />
-        </Field>
-      </div>
-      <Field label={t.rentalEdit.notes}>
-        <textarea className="input textarea" rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} />
-      </Field>
-      <div className="row-actions">
-        <button type="button" className="pill" onClick={onClose}>
-          {t.actions.cancel}
-        </button>
-        <button className="pill pill-accent" disabled={busy || (needsReason && !reason.trim())}>
-          {busy ? t.common.checking : t.actions.save}
-        </button>
-      </div>
-    </form>
+        {err && <div className="hint hint-bad">{err}</div>}
+        <div className="row-actions">
+          <button type="button" className="pill" onClick={onClose}>
+            {t.actions.cancel}
+          </button>
+          <button className="pill pill-accent" disabled={busy || (needsReason && !reason.trim())}>
+            {busy ? t.common.checking : t.actions.save}
+          </button>
+        </div>
+      </form>
+    </Drawer>
   );
 }

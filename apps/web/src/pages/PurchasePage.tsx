@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { ModelDrawer, NEW_MODEL } from '../components/ModelDrawer.js';
+import { Drawer } from '../components/Drawer.js';
 import { BlockHead, Empty, Loading, PageHead, StateBadge, Vin } from '../components/ui.js';
 import { Field, Row } from '../components/Wizard.js';
 import { fmtDate, formatGel } from '../format.js';
@@ -56,16 +57,25 @@ export function PurchasePage() {
     }
   };
 
+  const closePay = () => {
+    setPay({ ...pay, open: false });
+    setErr(null);
+  };
+  const closeReceive = () => {
+    setReceiving(false);
+    setErr(null);
+  };
+
   return (
     <>
       <PageHead wrap title={p.number} sub={t.purchases.statuses[p.status]}>
         {open && can('payments.reconcile') && (
-          <button type="button" className="pill pill-sm" onClick={() => setPay({ ...pay, open: !pay.open })}>
+          <button type="button" className="pill pill-sm" onClick={() => setPay({ ...pay, open: true })}>
             {t.purchases.addPayment}
           </button>
         )}
         {mayEdit && p.lines.some((l) => l.model) && (
-          <button type="button" className="pill pill-sm pill-accent" onClick={() => setReceiving((v) => !v)}>
+          <button type="button" className="pill pill-sm pill-accent" onClick={() => setReceiving(true)}>
             {t.purchases.receive}
           </button>
         )}
@@ -73,15 +83,16 @@ export function PurchasePage() {
       {err && <div className="hint hint-bad">{err}</div>}
 
       {pay.open && (
-        <section className="card card-drawer">
+        <Drawer title={t.purchases.addPayment} onClose={closePay}>
           <Field label={t.payments.gross}>
             <input className="input input-amount mono" value={pay.amount} onChange={(e) => setPay({ ...pay, amount: e.target.value })} inputMode="decimal" autoFocus />
           </Field>
           <Field label={t.payments.date}>
             <input className="input mono" type="date" value={pay.on} onChange={(e) => setPay({ ...pay, on: e.target.value })} />
           </Field>
+          {err && <div className="hint hint-bad">{err}</div>}
           <div className="row-actions">
-            <button type="button" className="pill" onClick={() => setPay({ ...pay, open: false })}>
+            <button type="button" className="pill" onClick={closePay}>
               {t.actions.cancel}
             </button>
             <button
@@ -96,11 +107,11 @@ export function PurchasePage() {
               {t.actions.confirm}
             </button>
           </div>
-        </section>
+        </Drawer>
       )}
 
       {receiving && mayEdit && (
-        <section className="card card-drawer">
+        <Drawer title={t.purchases.receive} onClose={closeReceive}>
           <p className="hint muted">{t.purchases.receiveHint}</p>
           <Field label={t.purchases.receivedOn}>
             <input className="input mono" type="date" value={receivedOn} onChange={(e) => setReceivedOn(e.target.value)} />
@@ -116,29 +127,31 @@ export function PurchasePage() {
               />
             </Field>
           ))}
+          {err && <div className="hint hint-bad">{err}</div>}
           <div className="row-actions">
-            <button type="button" className="pill" onClick={() => setReceiving(false)}>
+            <button type="button" className="pill" onClick={closeReceive}>
               {t.actions.cancel}
             </button>
             <button
               type="button"
               className="pill pill-accent"
               disabled={busy}
-              onClick={() => void act(() =>
-                api.post(`/api/purchases/${p.id}/receive`, {
+              onClick={() => void act(async () => {
+                await api.post(`/api/purchases/${p.id}/receive`, {
                   receivedOn,
                   vins: Object.fromEntries(
                     p.lines
                       .filter((l) => l.model)
                       .map((l) => [l.id, (vins[l.id] ?? '').split('\n').map((v) => v.trim()).filter(Boolean)]),
                   ),
-                }),
-              )}
+                });
+                setReceiving(false);
+              })}
             >
               {t.actions.confirm}
             </button>
           </div>
-        </section>
+        </Drawer>
       )}
 
       <div className="two-col">

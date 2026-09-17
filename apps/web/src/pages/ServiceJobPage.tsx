@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { PhotoPicker } from '../components/PhotoPicker.js';
+import { Drawer } from '../components/Drawer.js';
 import { BlockHead, Empty, Loading, PageHead, Vin } from '../components/ui.js';
 import { Field, Row } from '../components/Wizard.js';
 import { fmtDate, formatGel } from '../format.js';
@@ -51,15 +52,24 @@ export function ServiceJobPage() {
     }
   };
 
+  const closeCancel = () => {
+    setCancelling(false);
+    setErr(null);
+  };
+  const closeClose = () => {
+    setClosing(false);
+    setErr(null);
+  };
+
   return (
     <>
       <PageHead wrap title={j.number} sub={<span className={open ? 'warn-text' : undefined}>{t.service.statuses[j.status]}</span>}>
         {mayEdit && (
           <>
-            <button type="button" className="pill pill-sm" onClick={() => setCancelling((v) => !v)}>
+            <button type="button" className="pill pill-sm" onClick={() => setCancelling(true)}>
               {t.service.cancel}
             </button>
-            <button type="button" className="pill pill-sm pill-accent" onClick={() => setClosing((v) => !v)}>
+            <button type="button" className="pill pill-sm pill-accent" onClick={() => setClosing(true)}>
               {t.service.close}
             </button>
           </>
@@ -68,12 +78,13 @@ export function ServiceJobPage() {
       {err && <div className="hint hint-bad">{err}</div>}
 
       {cancelling && mayEdit && (
-        <section className="card card-drawer">
+        <Drawer title={t.service.cancel} onClose={closeCancel}>
           <Field label={t.service.cancelReason}>
             <input className="input" value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} autoFocus />
           </Field>
+          {err && <div className="hint hint-bad">{err}</div>}
           <div className="row-actions">
-            <button type="button" className="pill" onClick={() => setCancelling(false)}>
+            <button type="button" className="pill" onClick={closeCancel}>
               {t.actions.cancel}
             </button>
             <button
@@ -88,11 +99,11 @@ export function ServiceJobPage() {
               {t.actions.confirm}
             </button>
           </div>
-        </section>
+        </Drawer>
       )}
 
       {closing && mayEdit && (
-        <section className="card card-drawer">
+        <Drawer title={t.service.close} onClose={closeClose}>
           <Field label={t.service.closedOn}>
             <input className="input mono" type="date" value={closedOn} onChange={(e) => setClosedOn(e.target.value)} />
           </Field>
@@ -101,25 +112,27 @@ export function ServiceJobPage() {
               <input className="input input-amount mono" value={withhold} onChange={(e) => setWithhold(e.target.value)} inputMode="decimal" />
             </Field>
           )}
+          {err && <div className="hint hint-bad">{err}</div>}
           <div className="row-actions">
-            <button type="button" className="pill" onClick={() => setClosing(false)}>
+            <button type="button" className="pill" onClick={closeClose}>
               {t.actions.cancel}
             </button>
             <button
               type="button"
               className="pill pill-accent"
               disabled={busy}
-              onClick={() => void act(() =>
-                api.post(`/api/service/${j.id}/close`, {
+              onClick={() => void act(async () => {
+                await api.post(`/api/service/${j.id}/close`, {
                   closedOn,
                   withheldTetri: withhold ? parseGel(withhold) : 0,
-                }),
-              )}
+                });
+                setClosing(false);
+              })}
             >
               {t.actions.confirm}
             </button>
           </div>
-        </section>
+        </Drawer>
       )}
 
       <div className="two-col">
