@@ -60,6 +60,11 @@ export function authRoutes(app: FastifyInstance): void {
         return reply.code(401).send({ error: 'invalid_credentials' });
       }
       clearLoginFailures(email);
+      // A phone that signed out without a connection forgot its session but
+      // could not tell the server (QA-1-01). Whatever session this device still
+      // carries ends here, before the new one replaces its cookie.
+      const previous = req.cookies?.[SESSION_COOKIE];
+      if (previous) await destroySession(previous);
       const { token, expiresAt } = await createSession(user.id);
       reply.setCookie(SESSION_COOKIE, token, {
         path: '/',
