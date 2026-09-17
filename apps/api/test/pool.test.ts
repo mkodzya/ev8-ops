@@ -95,6 +95,25 @@ describe.skipIf(!HAS_DB)('moving between parks', () => {
   });
 });
 
+describe.skipIf(!HAS_DB)('silence on the fleet screen', () => {
+  it('is not broken by a park move — that is paper, not a ride', async () => {
+    const { prisma, vehicle } = await fixtures();
+    const director = await loginAs('director');
+    await prisma.vehicle.update({ where: { id: vehicle.id }, data: { arrivedOn: new Date('2026-03-01') } });
+    await prisma.vehicleEvent.create({ data: { vehicleId: vehicle.id, kind: 'return', occurredOn: new Date('2026-05-04'), toState: 'available' } });
+    await call(director, 'POST', `/api/fleet/${vehicle.id}/pool`, { pool: 'sale', reason: 'goes in the window' });
+
+    const seen = async () =>
+      json<{ vehicles: { id: string; lastSeenOn: string | null }[] }>(await call(director, 'GET', '/api/fleet')).vehicles.find((v) => v.id === vehicle.id)
+        ?.lastSeenOn;
+    expect(await seen()).toBe('2026-05-04');
+
+    // With nothing but the move, the silence runs from the day it arrived.
+    await prisma.vehicleEvent.deleteMany({ where: { vehicleId: vehicle.id, kind: 'return' } });
+    expect(await seen()).toBe('2026-03-01');
+  });
+});
+
 describe.skipIf(!HAS_DB)('a moped that has left the fleet', () => {
   it('counts in neither park on the fleet screen', async () => {
     const { prisma, vehicle } = await fixtures();
