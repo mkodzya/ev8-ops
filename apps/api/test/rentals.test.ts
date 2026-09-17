@@ -66,21 +66,21 @@ describe.skipIf(!HAS_DB)('hand-over', () => {
 describe.skipIf(!HAS_DB)('confirming a VIN later (RNT-06)', () => {
   it('hands the moped over as of today, so it never appears in two places at once', async () => {
     const { prisma, vehicle, customer } = await fixtures();
-    const director = await loginAs('director');
+    const otherOwner = await loginAs('owner');
     // This moped has a past: out with somebody else, and back.
     const earlier = await prisma.customer.create({ data: { name: `Earlier ${uniq()}` } });
     const first = json<{ id: string }>(
-      await call(director, 'POST', '/api/rentals', { customerId: earlier.id, vehicleId: vehicle.id, weeklyRateTetri: 15000, pickedUpOn: '2026-08-05' }),
+      await call(otherOwner, 'POST', '/api/rentals', { customerId: earlier.id, vehicleId: vehicle.id, weeklyRateTetri: 15000, pickedUpOn: '2026-08-05' }),
     );
-    await call(director, 'POST', `/api/rentals/${first.id}/return`, { returnedOn: '2026-08-26' });
+    await call(otherOwner, 'POST', `/api/rentals/${first.id}/return`, { returnedOn: '2026-08-26' });
 
     // A rental opened without a VIN, started BEFORE that return.
     const bare = json<{ id: string }>(
-      await call(director, 'POST', '/api/rentals', { customerId: customer.id, weeklyRateTetri: 14000, pickedUpOn: '2026-08-25', vinNote: 'contract scan unreadable' }),
+      await call(otherOwner, 'POST', '/api/rentals', { customerId: customer.id, weeklyRateTetri: 14000, pickedUpOn: '2026-08-25', vinNote: 'contract scan unreadable' }),
     );
-    expect((await call(director, 'PATCH', `/api/rentals/${bare.id}`, { vehicleId: vehicle.id })).statusCode).toBe(200);
+    expect((await call(otherOwner, 'PATCH', `/api/rentals/${bare.id}`, { vehicleId: vehicle.id })).statusCode).toBe(200);
 
-    const card = json<{ events: { kind: string; occurredOn: string }[] }>(await call(director, 'GET', `/api/fleet/${vehicle.id}`));
+    const card = json<{ events: { kind: string; occurredOn: string }[] }>(await call(otherOwner, 'GET', `/api/fleet/${vehicle.id}`));
     // The fixture makes the moped directly, so there is no `arrived` event.
     const kinds = card.events.map((e) => e.kind);
     // The first hand-over also decides which park the moped is in (ADR-0005);
@@ -96,13 +96,13 @@ describe.skipIf(!HAS_DB)('confirming a VIN later (RNT-06)', () => {
 
   it('refuses a moped that is already out with somebody else', async () => {
     const { vehicle, customer } = await fixtures();
-    const director = await loginAs('director');
+    const otherOwner = await loginAs('owner');
     const other = await (await import('../src/lib/db.js')).prisma.customer.create({ data: { name: `Other ${uniq()}` } });
-    await call(director, 'POST', '/api/rentals', { customerId: other.id, vehicleId: vehicle.id, weeklyRateTetri: 15000 });
+    await call(otherOwner, 'POST', '/api/rentals', { customerId: other.id, vehicleId: vehicle.id, weeklyRateTetri: 15000 });
     const bare = json<{ id: string }>(
-      await call(director, 'POST', '/api/rentals', { customerId: customer.id, weeklyRateTetri: 14000, vinNote: 'unreadable' }),
+      await call(otherOwner, 'POST', '/api/rentals', { customerId: customer.id, weeklyRateTetri: 14000, vinNote: 'unreadable' }),
     );
-    const res = await call(director, 'PATCH', `/api/rentals/${bare.id}`, { vehicleId: vehicle.id });
+    const res = await call(otherOwner, 'PATCH', `/api/rentals/${bare.id}`, { vehicleId: vehicle.id });
     expect(res.statusCode).toBe(409);
     expect(json<{ error: string }>(res).error).toBe('vehicle_not_available');
   });
@@ -124,56 +124,56 @@ describe.skipIf(!HAS_DB)('return', () => {
     expect(v.currentRentalId).toBeNull();
     const card = json<{ rental: { status: string; returnedOn: string }; deposit: { status: string }; acts: { kind: string }[] }>(await call(manager, 'GET', `/api/rentals/${id}`));
     expect(card.rental).toMatchObject({ status: 'returned', returnedOn: '2026-09-12' });
-    expect(card.deposit.status).toBe('held'); // waits for the director
+    expect(card.deposit.status).toBe('held'); // waits for an owner
     expect(card.acts.map((a) => a.kind)).toEqual(['pickup', 'return']);
 
     const again = await call(manager, 'POST', `/api/rentals/${id}/return`, { returnedOn: '2026-09-13' });
     expect(again.statusCode).toBe(409);
   });
 
-  it('a director withholds part of the deposit with a reason; the owner confirms (RNT-05)', async () => {
+  it('an owner withholds part of the deposit with a reason, and that decision needs no second owner (RNT-05, D18)', async () => {
     const { vehicle, customer } = await fixtures();
-    const director = await loginAs('director');
-    const { id } = json<{ id: string }>(await call(director, 'POST', '/api/rentals', { customerId: customer.id, vehicleId: vehicle.id, weeklyRateTetri: 15000, pickedUpOn: '2026-09-01' }));
+    const owner = await loginAs('owner');
+    const { id } = json<{ id: string }>(await call(owner, 'POST', '/api/rentals', { customerId: customer.id, vehicleId: vehicle.id, weeklyRateTetri: 15000, pickedUpOn: '2026-09-01' }));
 
-    const noReason = await call(director, 'POST', `/api/rentals/${id}/return`, { returnedOn: '2026-09-12', deposit: { returnedTetri: 13000, withheldTetri: 5000 } });
+    const noReason = await call(owner, 'POST', `/api/rentals/${id}/return`, { returnedOn: '2026-09-12', deposit: { returnedTetri: 13000, withheldTetri: 5000 } });
     expect(noReason.statusCode).toBe(409);
 
-    const ok = await call(director, 'POST', `/api/rentals/${id}/return`, {
+    const ok = await call(owner, 'POST', `/api/rentals/${id}/return`, {
       returnedOn: '2026-09-12',
       deposit: { returnedTetri: 13000, withheldTetri: 5000, withheldReason: 'broken mirror' },
     });
     expect(ok.statusCode, ok.body).toBe(200);
     const { prisma } = await import('../src/lib/db.js');
-    let dep = await prisma.deposit.findUniqueOrThrow({ where: { rentalId: id } });
-    expect(dep).toMatchObject({ status: 'partial', returnedTetri: 13000, withheldTetri: 5000, confirmedById: null });
-
-    expect((await call(director, 'POST', `/api/rentals/${id}/deposit/confirm`)).statusCode).toBe(403);
-    const owner = await loginAs('owner');
-    expect((await call(owner, 'POST', `/api/rentals/${id}/deposit/confirm`)).statusCode).toBe(200);
-    dep = await prisma.deposit.findUniqueOrThrow({ where: { rentalId: id } });
+    const dep = await prisma.deposit.findUniqueOrThrow({ where: { rentalId: id } });
+    expect(dep).toMatchObject({ status: 'partial', returnedTetri: 13000, withheldTetri: 5000 });
+    // The owner who decided is the confirmation (Mika, 17.09.2026).
     expect(dep.confirmedById).not.toBeNull();
+
+    const manager = await loginAs('manager');
+    expect((await call(manager, 'POST', `/api/rentals/${id}/deposit/confirm`)).statusCode).toBe(403);
   });
 });
 
 describe.skipIf(!HAS_DB)('fleet by hand', () => {
   it('a manual move needs a reason, never targets rented, and is refused while a moped is out', async () => {
     const { vehicle, customer } = await fixtures();
-    const mechanic = await loginAs('mechanic');
-    expect((await call(mechanic, 'POST', `/api/fleet/${vehicle.id}/state`, { toState: 'service' })).statusCode).toBe(400);
-    expect((await call(mechanic, 'POST', `/api/fleet/${vehicle.id}/state`, { toState: 'rented', reason: 'x' })).statusCode).toBe(409);
-    const ok = await call(mechanic, 'POST', `/api/fleet/${vehicle.id}/state`, { toState: 'service', reason: 'flat tyre' });
+    const otherOwner = await loginAs('owner');
+    expect((await call(await loginAs('manager'), 'POST', `/api/fleet/${vehicle.id}/state`, { toState: 'service', reason: 'x' })).statusCode).toBe(403);
+    expect((await call(otherOwner, 'POST', `/api/fleet/${vehicle.id}/state`, { toState: 'service' })).statusCode).toBe(400);
+    expect((await call(otherOwner, 'POST', `/api/fleet/${vehicle.id}/state`, { toState: 'rented', reason: 'x' })).statusCode).toBe(409);
+    const ok = await call(otherOwner, 'POST', `/api/fleet/${vehicle.id}/state`, { toState: 'service', reason: 'flat tyre' });
     expect(ok.statusCode, ok.body).toBe(200);
     expect(json<{ from: string; to: string }>(ok)).toEqual({ from: 'available', to: 'service' });
-    const back = await call(mechanic, 'POST', `/api/fleet/${vehicle.id}/state`, { toState: 'available', reason: 'fixed' });
+    const back = await call(otherOwner, 'POST', `/api/fleet/${vehicle.id}/state`, { toState: 'available', reason: 'fixed' });
     expect(back.statusCode).toBe(200);
 
     const manager = await loginAs('manager');
     await call(manager, 'POST', '/api/rentals', { customerId: customer.id, vehicleId: vehicle.id, weeklyRateTetri: 15000 });
-    const out = await call(mechanic, 'POST', `/api/fleet/${vehicle.id}/state`, { toState: 'service', reason: 'noise' });
+    const out = await call(otherOwner, 'POST', `/api/fleet/${vehicle.id}/state`, { toState: 'service', reason: 'noise' });
     expect(out.statusCode).toBe(409);
 
-    const card = json<{ events: { kind: string; toState: string; reason: string | null }[] }>(await call(mechanic, 'GET', `/api/fleet/${vehicle.id}`));
+    const card = json<{ events: { kind: string; toState: string; reason: string | null }[] }>(await call(otherOwner, 'GET', `/api/fleet/${vehicle.id}`));
     // A park move repeats the state it found, because it changes no state.
     expect(card.events.map((e) => `${e.kind}:${e.toState}`)).toEqual(['manual:service', 'manual:available', 'to_rent:available', 'pickup:rented']);
   });

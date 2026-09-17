@@ -430,18 +430,12 @@ export const en = {
     resetPassword: 'Set a new password',
     roles: {
       owner: 'Owner',
-      director: 'Director',
       manager: 'Manager',
-      mechanic: 'Mechanic',
-      accountant: 'Accountant',
     },
     lastOwner: 'This is the last active owner.',
     rolesAs: {
       owner: 'an owner',
-      director: 'a director',
       manager: 'a manager',
-      mechanic: 'a mechanic',
-      accountant: 'an accountant',
     },
     confirmRoleTitle: 'Change role',
     confirmRole: (name: string, role: string) => `Make ${name} ${role}? Their rights change at once.`,

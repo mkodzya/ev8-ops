@@ -74,3 +74,13 @@ export function actorOf(req: FastifyRequest): Actor {
   if (!req.actor) throw new Error('actor missing — route scope misconfigured');
   return req.actor;
 }
+
+/**
+ * May the person asking see this? For fields inside an answer rather than
+ * the route itself: a manager reads the fleet but not what a moped cost
+ * (redesign §2.1). The field goes out as null, so the screen shows nothing
+ * instead of a number the role must not have.
+ */
+export function mayView(req: FastifyRequest, perm: Permission): boolean {
+  return !!req.actor && hasPerm(req.actor, perm);
+}

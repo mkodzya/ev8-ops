@@ -3,6 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import { isoDate } from '../lib/dates.js';
 import { prisma } from '../lib/db.js';
 import { notFound } from '../lib/errors.js';
+import { mayView } from '../lib/guard.js';
 
 // Read side of the fleet (FLT-01, FLT-02). Writes arrive with the hand-over
 // and return wizards in step 4 of stage 1; state changes go through events.
@@ -101,7 +102,7 @@ export function fleetRoutes(app: FastifyInstance): void {
         location: v.location,
         odometerKm: v.odometerKm,
         notes: v.notes,
-        costTetri: v.costTetri,
+        costTetri: mayView(req, 'cost.view') ? v.costTetri : null,
         currentRentalId: v.currentRentalId,
       },
       events: v.events.map((e) => ({

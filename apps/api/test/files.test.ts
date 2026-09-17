@@ -34,7 +34,7 @@ describe.skipIf(!HAS_DB)('files', () => {
     expect(card.acts[0].photos.map((p) => p.id)).toEqual([fileId]);
   });
 
-  it('a manager attaches a customer document but cannot open it; the director can, and the opening is journaled', async () => {
+  it('a manager attaches a customer document but cannot open it; the owner can, and the opening is journaled', async () => {
     const { prisma } = await import('../src/lib/db.js');
     const customer = await prisma.customer.create({ data: { name: `Doc Customer ${uniq()}` } });
     const manager = await loginAs('manager');
@@ -47,13 +47,13 @@ describe.skipIf(!HAS_DB)('files', () => {
     expect(asManager.canOpenDocuments).toBe(false);
     expect((await call(manager, 'GET', `/api/files/${fileId}`)).statusCode).toBe(403);
 
-    const director = await loginAs('director');
-    expect((await call(director, 'GET', `/api/files/${fileId}`)).statusCode).toBe(200);
+    const owner = await loginAs('owner');
+    expect((await call(owner, 'GET', `/api/files/${fileId}`)).statusCode).toBe(200);
     const opened = await prisma.auditLog.findFirst({ where: { action: 'customer.document.open', entityId: customer.id } });
     expect(opened).not.toBeNull();
 
     expect((await call(manager, 'POST', `/api/files/${fileId}/archive`, { reason: 'wrong person' })).statusCode).toBe(403);
-    expect((await call(director, 'POST', `/api/files/${fileId}/archive`, { reason: 'wrong person' })).statusCode).toBe(200);
-    expect((await call(director, 'GET', `/api/files/${fileId}`)).statusCode).toBe(404);
+    expect((await call(owner, 'POST', `/api/files/${fileId}/archive`, { reason: 'wrong person' })).statusCode).toBe(200);
+    expect((await call(owner, 'GET', `/api/files/${fileId}`)).statusCode).toBe(404);
   });
 });

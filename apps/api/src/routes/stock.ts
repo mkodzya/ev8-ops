@@ -4,7 +4,7 @@
 // is here. Kept small on purpose — a catalogue, a ledger, a stock-take.
 import type { FastifyInstance } from 'fastify';
 import { audit } from '../lib/audit.js';
-import { actorOf } from '../lib/guard.js';
+import { actorOf, mayView } from '../lib/guard.js';
 import { dateFromISO, isoDate } from '../lib/dates.js';
 import { prisma } from '../lib/db.js';
 import { env } from '../lib/env.js';
@@ -19,12 +19,14 @@ const UNITS = ['pcs', 'set', 'l', 'kg', 'm'] as const;
 
 export function stockRoutes(app: FastifyInstance): void {
   app.get<{ Querystring: { all?: string } }>('/api/parts', { config: { scope: 'fleet.view' } }, async (req) => {
-    const parts = await partRows({ includeArchived: req.query.all === '1' });
+    const seeCost = mayView(req, 'cost.view');
+    const rows = await partRows({ includeArchived: req.query.all === '1' });
+    const parts = seeCost ? rows : rows.map(partWithoutCost);
     return {
       parts,
       totals: {
         parts: parts.length,
-        valueTetri: parts.reduce((n, p) => n + p.valueTetri, 0),
+        valueTetri: seeCost ? rows.reduce((n, p) => n + p.valueTetri, 0) : null,
         short: parts.filter((p) => p.shortBy > 0).length,
         negative: parts.filter((p) => p.onHand < 0).length,
       },
@@ -33,8 +35,10 @@ export function stockRoutes(app: FastifyInstance): void {
 
   app.get<{ Params: { id: string } }>('/api/parts/:id', { config: { scope: 'fleet.view' } }, async (req) => {
     const rows = await partRows({ includeArchived: true });
-    const part = rows.find((p) => p.id === req.params.id);
-    if (!part) throw notFound('part_not_found', 'No such part.');
+    const seeCost = mayView(req, 'cost.view');
+    const found = rows.find((p) => p.id === req.params.id);
+    if (!found) throw notFound('part_not_found', 'No such part.');
+    const part = seeCost ? found : partWithoutCost(found);
     const moves = await prisma.stockMove.findMany({
       where: { partId: part.id },
       orderBy: [{ occurredOn: 'desc' }, { createdAt: 'desc' }],
@@ -51,7 +55,7 @@ export function stockRoutes(app: FastifyInstance): void {
         id: m.id,
         kind: m.kind,
         qty: m.qty,
-        unitCostTetri: m.unitCostTetri,
+        unitCostTetri: seeCost ? m.unitCostTetri : null,
         occurredOn: isoDate(m.occurredOn),
         reason: m.reason,
         actor: m.createdBy?.name ?? null,
@@ -158,7 +162,8 @@ export function stockRoutes(app: FastifyInstance): void {
    * for but has not arrived. No table of its own — a moped is a VIN with a
    * state, and an order that has not landed is a line on that order.
    */
-  app.get('/api/stock/vehicles', { config: { scope: 'fleet.view' } }, async () => {
+  app.get('/api/stock/vehicles', { config: { scope: 'fleet.view' } }, async (req) => {
+    const seeCost = mayView(req, 'cost.view');
     const models = await prisma.vehicleModel.findMany({
       where: { archived: false },
       orderBy: [{ brand: 'asc' }, { name: 'asc' }],
@@ -193,14 +198,14 @@ export function stockRoutes(app: FastifyInstance): void {
       return {
         id: m.id,
         name: `${m.brand} ${m.name}`,
-        costTetri: m.costTetri,
+        costTetri: seeCost ? m.costTetri : null,
         salePriceTetri: m.salePriceTetri,
         byState,
         inStock: byState.available,
         ours: byState.available + byState.rented + byState.service,
         onOrder: ordered.get(m.id) ?? 0,
-        valueTetri,
-        unpriced,
+        valueTetri: seeCost ? valueTetri : null,
+        unpriced: seeCost ? unpriced : null,
       };
     });
     return {
@@ -209,9 +214,14 @@ export function stockRoutes(app: FastifyInstance): void {
         inStock: rows.reduce((n, r) => n + r.inStock, 0),
         ours: rows.reduce((n, r) => n + r.ours, 0),
         onOrder: rows.reduce((n, r) => n + r.onOrder, 0),
-        valueTetri: rows.reduce((n, r) => n + r.valueTetri, 0),
-        unpriced: rows.reduce((n, r) => n + r.unpriced, 0),
+        valueTetri: seeCost ? rows.reduce((n, r) => n + (r.valueTetri ?? 0), 0) : null,
+        unpriced: seeCost ? rows.reduce((n, r) => n + (r.unpriced ?? 0), 0) : null,
       },
     };
   });
+}
+
+/** A part as a manager reads it: what is on the shelf, not what it is worth. */
+function partWithoutCost<T extends { avgCostTetri: number | null; valueTetri: number }>(p: T): Omit<T, 'avgCostTetri' | 'valueTetri'> & { avgCostTetri: null; valueTetri: null } {
+  return { ...p, avgCostTetri: null, valueTetri: null };
 }

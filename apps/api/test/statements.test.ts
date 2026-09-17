@@ -48,22 +48,22 @@ async function rentalFor(name: { ru: string; ka: string }, opts: { rate?: number
   const model = await prisma.vehicleModel.create({ data: { brand: 'Test', name: `Model ${uniq()}`, forRent: true } });
   const vehicle = await prisma.vehicle.create({ data: { vin: `TESTS${uniq().replace(/\D/g, '').slice(-12).padStart(12, '0')}`, modelId: model.id } });
   const customer = await prisma.customer.create({ data: { name: name.ru, nameKa: name.ka } });
-  const director = await loginAs('director');
+  const owner = await loginAs('owner');
   const { id } = json<{ id: string }>(
-    await call(director, 'POST', '/api/rentals', {
+    await call(owner, 'POST', '/api/rentals', {
       customerId: customer.id,
       vehicleId: vehicle.id,
       weeklyRateTetri: opts.rate ?? 14000,
       pickedUpOn: opts.pickedUpOn ?? '2026-09-01',
     }),
   );
-  return { prisma, director, customer, rentalId: id };
+  return { prisma, owner, customer, rentalId: id };
 }
 
 describe.skipIf(!HAS_DB)('reading a Bank of Georgia export', () => {
   it('skips the preamble and the balance rows, and finds the payer inside the text', async () => {
     const who = tagged({ ru: 'Важа Тестовый', ka: 'ვაჟა ტესტიძე' });
-    const { director, rentalId } = await rentalFor(who);
+    const { owner, rentalId } = await rentalFor(who);
     const text = [
       BOG_HEADER,
       bogRow(
@@ -74,7 +74,7 @@ describe.skipIf(!HAS_DB)('reading a Bank of Georgia export', () => {
       BOG_SUMMARY,
     ].join('\n');
 
-    const res = await call(director, 'POST', '/api/statements', { fileName: 'StatementExport.csv', text });
+    const res = await call(owner, 'POST', '/api/statements', { fileName: 'StatementExport.csv', text });
     expect(res.statusCode, res.body).toBe(201);
     const result = json<{ bank: string; lineCount: number; newLines: number; matched: number }>(res);
     expect(result.bank).toBe('bog');
@@ -82,7 +82,7 @@ describe.skipIf(!HAS_DB)('reading a Bank of Georgia export', () => {
     expect(result.matched).toBe(1);
 
     const card = json<{ rental: { paidThrough: string | null }; deposit: { paidTetri: number } }>(
-      await call(director, 'GET', `/api/rentals/${rentalId}`),
+      await call(owner, 'GET', `/api/rentals/${rentalId}`),
     );
     expect(card.deposit.paidTetri).toBe(18000);
     expect(card.rental.paidThrough).toBe('2026-09-07');
@@ -90,7 +90,7 @@ describe.skipIf(!HAS_DB)('reading a Bank of Georgia export', () => {
 
   it('reads a card line for what the customer paid, not what the bank credited (PAY-04)', async () => {
     const who = tagged({ ru: 'Нино Картовна', ka: 'ნინო ბარათიძე' });
-    const { director, rentalId } = await rentalFor(who, { rate: 14000, pickedUpOn: '2026-09-03' });
+    const { owner, rentalId } = await rentalFor(who, { rate: 14000, pickedUpOn: '2026-09-03' });
     const text = [
       BOG_HEADER,
       bogRow(
@@ -99,7 +99,7 @@ describe.skipIf(!HAS_DB)('reading a Bank of Georgia export', () => {
         `Caricxva - Tanxa GEL315.20; gadmomricxavi: baraTiZe nino ${who.tag}; gadaxda - TariRi: 03/09/2026 18:21:14; Tanxa:GEL 320; sakomisio: GEL 4.80; terminalis ID: POS30LTG`,
       ),
     ].join('\n');
-    const res = await call(director, 'POST', '/api/statements', { fileName: 'StatementExport.csv', text });
+    const res = await call(owner, 'POST', '/api/statements', { fileName: 'StatementExport.csv', text });
     expect(res.statusCode, res.body).toBe(201);
     expect(json<{ matched: number }>(res).matched).toBe(1);
 
@@ -114,13 +114,13 @@ describe.skipIf(!HAS_DB)('reading a Bank of Georgia export', () => {
   it('loading the same file twice adds nothing the second time (PAY-01)', async () => {
     const tag = uniq();
     const who = tagged({ ru: 'Давид Двойной', ka: 'დავით ორმაგიძე' });
-    const { director, prisma } = await rentalFor(who);
+    const { owner, prisma } = await rentalFor(who);
     const text = [BOG_HEADER, bogRow('06.09.2026', '140.0', `Caricxva: gadmomricxavi: ormagiZe daviT ${who.tag}; daniSnuleba: qira ${tag}`)].join('\n');
 
-    const first = json<{ newLines: number; matched: number }>(await call(director, 'POST', '/api/statements', { fileName: 'a.csv', text }));
+    const first = json<{ newLines: number; matched: number }>(await call(owner, 'POST', '/api/statements', { fileName: 'a.csv', text }));
     expect(first.newLines).toBe(1);
     const second = json<{ lineCount: number; newLines: number; matched: number }>(
-      await call(director, 'POST', '/api/statements', { fileName: 'a.csv', text }),
+      await call(owner, 'POST', '/api/statements', { fileName: 'a.csv', text }),
     );
     expect(second.lineCount).toBe(1);
     expect(second.newLines).toBe(0);
@@ -129,12 +129,12 @@ describe.skipIf(!HAS_DB)('reading a Bank of Georgia export', () => {
   });
 
   it('money leaving the account is kept but never queued as a customer payment', async () => {
-    const { director } = await rentalFor({ ru: 'Лука Расходов', ka: 'ლუკა ხარჯიძე' });
+    const { owner } = await rentalFor({ ru: 'Лука Расходов', ka: 'ლუკა ხარჯიძე' });
     const text = [
       BOG_HEADER,
       `"09.09.2026","0018","GE89BG0000000902936900GEL","95.0","","1","95.0","my auto.ge: gadaricxva - Tanxa: GEL95.00; mimRebi: TNET LLC ${uniq()}"`,
     ].join('\n');
-    const res = json<{ outgoing: number; unmatched: number }>(await call(director, 'POST', '/api/statements', { fileName: 'out.csv', text }));
+    const res = json<{ outgoing: number; unmatched: number }>(await call(owner, 'POST', '/api/statements', { fileName: 'out.csv', text }));
     expect(res.outgoing).toBe(1);
     expect(res.unmatched).toBe(0);
   });
@@ -143,73 +143,73 @@ describe.skipIf(!HAS_DB)('reading a Bank of Georgia export', () => {
 describe.skipIf(!HAS_DB)('reading a TBC export', () => {
   it('matches a payer written in Georgian and keeps the bank’s own transaction id', async () => {
     const who = tagged({ ru: 'Георгий Тбисиев', ka: 'გიორგი თბისიძე' });
-    const { director, rentalId } = await rentalFor(who);
+    const { owner, rentalId } = await rentalFor(who);
     const txn = `1532697${uniq().replace(/\D/g, '').slice(-8)}.20`;
     const text = [TBC_HEADER, tbcRow('04/09/2026', '320.0', `თბისიძე გიორგი ${who.tag}`, txn)].join('\n');
 
-    const res = json<{ bank: string; matched: number }>(await call(director, 'POST', '/api/statements', { fileName: 'transactions_history.csv', text }));
+    const res = json<{ bank: string; matched: number }>(await call(owner, 'POST', '/api/statements', { fileName: 'transactions_history.csv', text }));
     expect(res.bank).toBe('tbc');
     expect(res.matched).toBe(1);
 
-    const card = json<{ rental: { paidThrough: string | null } }>(await call(director, 'GET', `/api/rentals/${rentalId}`));
+    const card = json<{ rental: { paidThrough: string | null } }>(await call(owner, 'GET', `/api/rentals/${rentalId}`));
     expect(card.rental.paidThrough).toBe('2026-09-07');
 
     // The same transaction id in a second file is the same transaction.
-    const again = json<{ newLines: number }>(await call(director, 'POST', '/api/statements', { fileName: 'overlap.csv', text }));
+    const again = json<{ newLines: number }>(await call(owner, 'POST', '/api/statements', { fileName: 'overlap.csv', text }));
     expect(again.newLines).toBe(0);
   });
 });
 
 describe.skipIf(!HAS_DB)('the queue of lines nobody could place (PAY-03)', () => {
   it('holds a line with no name and no matching amount, and offers hints', async () => {
-    const { director } = await rentalFor({ ru: 'Тамара Безымянная', ka: 'თამარ უსახელოძე' }, { rate: 15000, pickedUpOn: '2026-08-02' });
+    const { owner } = await rentalFor({ ru: 'Тамара Безымянная', ka: 'თამარ უსახელოძე' }, { rate: 15000, pickedUpOn: '2026-08-02' });
     const tag = uniq();
     const text = [BOG_HEADER, bogRow('20.09.2026', '77.77', `Caricxva - Tanxa GEL77.77; Wallet/domestic MC cards ${tag}`)].join('\n');
-    const res = json<{ unmatched: number; matched: number }>(await call(director, 'POST', '/api/statements', { fileName: 'q.csv', text }));
+    const res = json<{ unmatched: number; matched: number }>(await call(owner, 'POST', '/api/statements', { fileName: 'q.csv', text }));
     expect(res.matched).toBe(0);
     expect(res.unmatched).toBe(1);
 
-    const queue = json<{ lines: { id: string; amountTetri: number; raw: string }[] }>(await call(director, 'GET', '/api/statement-lines'));
+    const queue = json<{ lines: { id: string; amountTetri: number; raw: string }[] }>(await call(owner, 'GET', '/api/statement-lines'));
     const mine = queue.lines.find((l) => l.raw.includes(tag));
     expect(mine).toBeTruthy();
     expect(mine!.amountTetri).toBe(7777);
 
     const detail = json<{ line: { id: string }; hints: { rentalId: string; why: string }[] }>(
-      await call(director, 'GET', `/api/statement-lines/${mine!.id}`),
+      await call(owner, 'GET', `/api/statement-lines/${mine!.id}`),
     );
     expect(detail.hints.length).toBeGreaterThan(0);
   });
 
   it('assigning a line to a rental makes the payment and takes it out of the queue', async () => {
-    const { director, rentalId } = await rentalFor({ ru: 'Лаша Неопознанный', ka: 'ლაშა უცნობიძე' }, { rate: 15000 });
+    const { owner, rentalId } = await rentalFor({ ru: 'Лаша Неопознанный', ka: 'ლაშა უცნობიძე' }, { rate: 15000 });
     const tag = uniq();
     const text = [BOG_HEADER, bogRow('21.09.2026', '99.99', `Caricxva - Tanxa GEL99.99; Wallet/domestic MC cards ${tag}`)].join('\n');
-    await call(director, 'POST', '/api/statements', { fileName: 'q2.csv', text });
-    const queue = json<{ lines: { id: string; raw: string }[] }>(await call(director, 'GET', '/api/statement-lines'));
+    await call(owner, 'POST', '/api/statements', { fileName: 'q2.csv', text });
+    const queue = json<{ lines: { id: string; raw: string }[] }>(await call(owner, 'GET', '/api/statement-lines'));
     const line = queue.lines.find((l) => l.raw.includes(tag))!;
 
-    const assigned = await call(director, 'POST', `/api/statement-lines/${line.id}/assign`, { rentalId });
+    const assigned = await call(owner, 'POST', `/api/statement-lines/${line.id}/assign`, { rentalId });
     expect(assigned.statusCode, assigned.body).toBe(200);
 
-    const after = json<{ lines: { id: string }[] }>(await call(director, 'GET', '/api/statement-lines'));
+    const after = json<{ lines: { id: string }[] }>(await call(owner, 'GET', '/api/statement-lines'));
     expect(after.lines.find((l) => l.id === line.id)).toBeUndefined();
 
     const { prisma } = await import('../src/lib/db.js');
     const p = await prisma.payment.findFirstOrThrow({ where: { rentalId, source: 'statement' } });
     expect(p.grossTetri).toBe(9999);
-    expect((await call(director, 'POST', `/api/statement-lines/${line.id}/assign`, { rentalId })).statusCode).toBe(409);
+    expect((await call(owner, 'POST', `/api/statement-lines/${line.id}/assign`, { rentalId })).statusCode).toBe(409);
   });
 
   it('a line that is not a customer payment is put aside with a reason', async () => {
-    const { director } = await rentalFor({ ru: 'Отложенный Тест', ka: 'ტესტ გადადებული' });
+    const { owner } = await rentalFor({ ru: 'Отложенный Тест', ka: 'ტესტ გადადებული' });
     const tag = uniq();
     const text = [BOG_HEADER, bogRow('22.09.2026', '5.0', `Caricxva - Tanxa GEL5.00; Business Package S paketis momsaxurebis sakomisio ${tag}`)].join('\n');
-    await call(director, 'POST', '/api/statements', { fileName: 'q3.csv', text });
-    const queue = json<{ lines: { id: string; raw: string }[] }>(await call(director, 'GET', '/api/statement-lines'));
+    await call(owner, 'POST', '/api/statements', { fileName: 'q3.csv', text });
+    const queue = json<{ lines: { id: string; raw: string }[] }>(await call(owner, 'GET', '/api/statement-lines'));
     const line = queue.lines.find((l) => l.raw.includes(tag))!;
-    expect((await call(director, 'POST', `/api/statement-lines/${line.id}/ignore`, {})).statusCode).toBe(400);
-    expect((await call(director, 'POST', `/api/statement-lines/${line.id}/ignore`, { reason: 'bank package fee' })).statusCode).toBe(200);
-    const after = json<{ lines: { id: string }[] }>(await call(director, 'GET', '/api/statement-lines'));
+    expect((await call(owner, 'POST', `/api/statement-lines/${line.id}/ignore`, {})).statusCode).toBe(400);
+    expect((await call(owner, 'POST', `/api/statement-lines/${line.id}/ignore`, { reason: 'bank package fee' })).statusCode).toBe(200);
+    const after = json<{ lines: { id: string }[] }>(await call(owner, 'GET', '/api/statement-lines'));
     expect(after.lines.find((l) => l.id === line.id)).toBeUndefined();
   });
 });
@@ -218,8 +218,8 @@ describe.skipIf(!HAS_DB)('who may load a statement', () => {
   it('a manager may not, and an unreadable file is refused with a sentence that says why', async () => {
     const manager = await loginAs('manager');
     expect((await call(manager, 'POST', '/api/statements', { fileName: 'x.csv', text: 'anything' })).statusCode).toBe(403);
-    const director = await loginAs('director');
-    const bad = await call(director, 'POST', '/api/statements', { fileName: 'x.csv', text: 'name,amount\nfoo,1' });
+    const owner = await loginAs('owner');
+    const bad = await call(owner, 'POST', '/api/statements', { fileName: 'x.csv', text: 'name,amount\nfoo,1' });
     expect(bad.statusCode).toBe(400);
     expect(json<{ error: string; message: string }>(bad).error).toBe('unreadable_statement');
     expect(json<{ message: string }>(bad).message).toMatch(/Bank of Georgia|TBC/);

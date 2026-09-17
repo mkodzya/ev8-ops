@@ -2,13 +2,10 @@ import type { FastifyInstance } from 'fastify';
 import { isoDate } from '../lib/dates.js';
 import { prisma } from '../lib/db.js';
 import { notFound } from '../lib/errors.js';
+import { mayView } from '../lib/guard.js';
 
 // Customers, read side (CST-01). Personal numbers are shown only to roles
 // that may see documents (CST-03): a manager sees the card, not the number.
-
-function canSeeIdentity(role: string): boolean {
-  return role === 'owner' || role === 'director';
-}
 
 export function customerRoutes(app: FastifyInstance): void {
   /**
@@ -37,7 +34,7 @@ export function customerRoutes(app: FastifyInstance): void {
   );
 
   app.get('/api/customers', { config: { scope: 'fleet.view' } }, async (req) => {
-    const identity = canSeeIdentity(req.actor!.role);
+    const identity = mayView(req, 'customer.documents.view');
     const customers = await prisma.customer.findMany({
       where: { archived: false },
       orderBy: { name: 'asc' },
@@ -63,7 +60,7 @@ export function customerRoutes(app: FastifyInstance): void {
   });
 
   app.get<{ Params: { id: string } }>('/api/customers/:id', { config: { scope: 'fleet.view' } }, async (req) => {
-    const identity = canSeeIdentity(req.actor!.role);
+    const identity = mayView(req, 'customer.documents.view');
     const c = await prisma.customer.findUnique({
       where: { id: req.params.id },
       include: {

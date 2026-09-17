@@ -80,12 +80,12 @@ describe.skipIf(!HAS_DB)('an order (PUR-01)', () => {
     expect((await call(owner, 'POST', `/api/purchases/${id}/lines`, { partName: 'Charger 60V 5A', qty: 10, unitPrice: '43.50' })).statusCode).toBe(201);
   });
 
-  it('only the owner buys; everybody else may look', async () => {
+  it('only an owner buys, and only an owner looks (redesign §2.1)', async () => {
     const owner = await loginAs('owner');
     const s = await supplier();
-    const director = await loginAs('director');
-    expect((await call(director, 'POST', '/api/purchases', { supplierId: s.id })).statusCode).toBe(403);
-    expect((await call(director, 'GET', '/api/purchases')).statusCode).toBe(200);
+    const manager = await loginAs('manager');
+    expect((await call(manager, 'POST', '/api/purchases', { supplierId: s.id })).statusCode).toBe(403);
+    expect((await call(manager, 'GET', '/api/purchases')).statusCode).toBe(403);
     expect((await call(owner, 'POST', '/api/purchases', { supplierId: s.id })).statusCode).toBe(201);
   });
 });

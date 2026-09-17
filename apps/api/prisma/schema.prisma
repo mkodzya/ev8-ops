@@ -15,10 +15,7 @@ datasource db {
 
 enum UserRole {
   owner
-  director
   manager
-  mechanic
-  accountant
 
   @@map("user_role")
 }

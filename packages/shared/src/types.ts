@@ -3,7 +3,10 @@
 // from the web dictionaries, never from these values.
 
 /** Five roles, fixed in code (spec §3): rights come from the role, not the person. */
-export const ROLES = ['owner', 'director', 'manager', 'mechanic', 'accountant'] as const;
+// Two roles (Mika, 17.09.2026; redesign blueprint D0): the owners — Mika and
+// Kardu — and the managers. Director, mechanic and accountant were roles of
+// spec v1.1 and are not any more; migration 0015 moved their people over.
+export const ROLES = ['owner', 'manager'] as const;
 export type Role = (typeof ROLES)[number];
 
 /** Vehicle state, derived from events (spec FLT-03); brand.md fixes colour + label per state. */
