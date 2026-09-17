@@ -1,0 +1,316 @@
+<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Список аренд: поиск и фильтры — EV8 Ops, прототип</title><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=Noto+Sans+Georgian:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap"><style>:root {
+  --bg: #fbfbfb;
+  --surface: #ffffff;
+  --surface-2: #f3f3f3;
+  --surface-hover: #dbe4de;
+  --ink: #0b0b0b;
+  --muted: #5d5d5d;
+  --line: #dbe4de;
+  --line-soft: #ebebeb;
+  --brand: #819481;
+  --accent: #557553;
+  --accent-hover: #628767;
+  --accent-soft: #e3ebe3;
+  --on-accent: #ffffff;
+  --lime: #e0ffa2;
+  --rented: #598eeb;
+  --service: #fe5d02;
+  --service-ink: #e45e22;
+  --crit: #c8402f;
+  --crit-soft: #f9e3df;
+  --warn-soft: #fdeadf;
+  --info-soft: #e4ecfb;
+  --accent-ink: #4d6a4b;
+  --rented-ink: #2f63c0;
+  --service-deep: #b2450f;
+  --crit-ink: #b3392a;
+  --grey-ink: #666666;
+  --grey: #7a7a7a;
+  --paint-black: #1c1c1c;
+  --paint-white: #ffffff;
+  --paint-red: #d24b3a;
+  --paint-green: #4f8a4f;
+  --paint-grey: #9a9a9a;
+  --paint-purple: #7b5ea7;
+  --rail: #0b0b0b;
+  --rail-ink: #c9d3c9;
+  --rail-active: #1b211b;
+  --rail-accent: #e0ffa2;
+  --rail-line: #2a332b;
+  --shadow: 0 12px 40px rgba(11, 11, 11, 0.16);
+  --scrim: rgba(11, 11, 11, 0.7);
+  --scrim-soft: rgba(11, 11, 11, 0.32);
+  --on-scrim: #ffffff;
+  --display: 'Be Vietnam Pro', 'Noto Sans Georgian', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --body: 'Be Vietnam Pro', 'Noto Sans Georgian', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --mono: 'IBM Plex Mono', 'Noto Sans Georgian', ui-monospace, SFMono-Regular, Menlo, monospace;
+  --text-display: 500 28px/1.1 var(--display);
+  --text-h1: 500 24px/1.15 var(--display);
+  --text-h1-phone: 500 22px/1.15 var(--display);
+  --text-h2: 500 16px/1.25 var(--display);
+  --text-h3: 500 14px/1.3 var(--display);
+  --text-body: 400 15px/1.45 var(--body);
+  --text-body-sm: 400 14px/1.45 var(--body);
+  --text-label: 400 13px/1.4 var(--body);
+  --text-overline: 500 12px/1.3 var(--display);
+  --text-button: 500 14px/1 var(--display);
+  --text-cta: 500 19px/0.92 var(--display);
+  --text-button-sm: 500 13px/1 var(--display);
+  --text-mono: 400 14px/1.45 var(--mono);
+  --text-money: 500 14px/1.45 var(--mono);
+  --text-mono-sm: 400 12px/1.4 var(--mono);
+  --tracking-tight: -0.02em;
+  --tracking-button: -0.01em;
+  --ease: 0.36s cubic-bezier(0.2, 0, 0, 1);
+  --enter: 0.42s cubic-bezier(0.32, 0.72, 0, 1);
+  --undo-window: 10s;
+  --hairline: 0.82px;
+  --radius-card: 16px;
+  --radius-pill: 999px;
+  --control-dense: 34px;
+  --row-y: 8px;
+  --row-x: 10px;
+  --card-pad: 14px;
+  --control: 44px;
+  --rail-w: 220px;
+}
+
+/* ===== ПРЕДЛОЖЕНИЕ дизайнера — blueprint §3.4. Нет в packages/shared/tokens.json, пока А3 не утверждён ===== */
+:root {
+  --line-control: #7a7a7a;
+  --focus-ring: 0 0 0 3px #e0ffa2, 0 0 0 5px #557553;
+  --toast: #0b0b0b; --toast-ink: #ffffff; --toast-action: #e0ffa2;
+  --control-large: 52px; --touch-gap: 8px;
+  --header-h: 56px; --tabbar-h: 64px; --action-bar-h: 76px;
+  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 24px; --space-6: 32px;
+  --text-money-lg: 500 22px/1.2 var(--mono);
+  --text-tab: 500 12px/1.15 var(--display);
+  --icon-size: 24px; --icon-stroke: 1.75px;
+}
+
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { font: var(--text-body); color: var(--ink); background: #e9e9e9; }
+a { color: inherit; text-decoration: none; }
+.t-num { font-variant-numeric: tabular-nums; }
+.mono { font-family: var(--mono); }
+.muted { color: var(--muted); }
+.crit { color: var(--crit-ink); }
+.ok { color: var(--accent); }
+svg.i { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+svg.i.s { width: 18px; height: 18px; }
+
+/* ---- document chrome around the frames ---- */
+.doc { max-width: 1320px; margin: 0 auto; padding: 32px 32px 8px; }
+.doc .back { font: var(--text-label); color: var(--accent); }
+.doc h1 { font: 500 30px/1.15 var(--display); letter-spacing: var(--tracking-tight); margin: 10px 0 8px; }
+.doc .lead { max-width: 900px; margin: 0 0 14px; }
+.doc .demo { display: inline-block; background: var(--lime); padding: 2px 10px; border-radius: 999px; font: var(--text-overline); margin-right: 8px; }
+.meta { display: grid; grid-template-columns: 170px 1fr; gap: 4px 16px; max-width: 1000px; font: var(--text-body-sm); margin: 0 0 8px; }
+.meta dt { color: var(--muted); }
+.meta dd { margin: 0; }
+.band { max-width: 1320px; margin: 0 auto; padding: 16px 32px; }
+.band > h2 { font: 500 20px/1.2 var(--display); letter-spacing: var(--tracking-tight); margin: 18px 0 12px; }
+.frames { display: flex; flex-wrap: wrap; gap: 28px; align-items: flex-start; }
+figure.f { margin: 0; }
+figure.f > figcaption { font: var(--text-body-sm); max-width: 375px; margin: 10px 4px 0; }
+figure.f > figcaption b { font-weight: 600; }
+figure.wide > figcaption { max-width: 900px; }
+.notes { max-width: 1320px; margin: 0 auto; padding: 8px 32px 48px; }
+.notes h2 { font: 500 20px/1.2 var(--display); margin: 18px 0 8px; }
+.notes table { border-collapse: collapse; background: #fff; font: var(--text-body-sm); max-width: 1100px; }
+.notes th, .notes td { text-align: left; vertical-align: top; padding: 8px 12px; border-bottom: 1px solid var(--line-soft); }
+.notes th { font: var(--text-overline); color: var(--muted); }
+.notes ul { max-width: 1000px; }
+
+/* ---- phone ---- */
+.phone { width: 395px; height: 800px; border: 10px solid #0b0b0b; border-radius: 44px; overflow: hidden; position: relative; background: var(--bg); }
+.ph-head { position: absolute; top: 0; left: 0; right: 0; height: var(--header-h); display: flex; align-items: center; gap: 2px; padding: 0 8px 0 16px; background: var(--bg); border-bottom: 1px solid var(--line-soft); z-index: 3; }
+.ph-head .title { font: var(--text-h1-phone); letter-spacing: var(--tracking-tight); flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ph-head .sub { font: var(--text-label); color: var(--muted); margin-left: 8px; }
+.icon-btn { width: 44px; height: 44px; display: inline-grid; place-items: center; border-radius: 50%; color: var(--ink); flex: none; }
+.avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--ink); color: var(--lime); display: grid; place-items: center; font: 600 14px/1 var(--display); }
+.ph-body { position: absolute; top: var(--header-h); bottom: var(--tabbar-h); left: 0; right: 0; overflow-y: auto; padding: 12px 16px 24px; }
+.ph-body.no-tabs { bottom: 0; }
+.ph-body.with-bar { bottom: calc(var(--tabbar-h) + var(--action-bar-h)); }
+.ph-body.bar-only { bottom: var(--action-bar-h); }
+.tabbar { position: absolute; bottom: 0; left: 0; right: 0; height: var(--tabbar-h); display: grid; grid-template-columns: repeat(5, 1fr); background: var(--surface); border-top: 1px solid var(--line-soft); z-index: 3; }
+.tab { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; font: var(--text-tab); color: var(--muted); text-align: center; padding: 4px 2px; }
+.tab .ic { display: grid; place-items: center; width: 52px; height: 28px; border-radius: 999px; }
+.tab.on { color: var(--ink); }
+.tab.on .ic { background: var(--lime); }
+.tab .badge { position: absolute; top: 4px; left: calc(50% + 6px); }
+.tab-plus { display: grid; place-items: center; }
+.plus { width: var(--control-large); height: var(--control-large); border-radius: 50%; background: var(--accent); color: var(--on-accent); display: grid; place-items: center; margin-top: -20px; box-shadow: 0 6px 18px rgba(11,11,11,.22); border: 3px solid var(--surface); }
+.badge { min-width: 18px; height: 18px; border-radius: 9px; background: var(--crit); color: #fff; font: 600 11px/18px var(--body); padding: 0 5px; text-align: center; }
+.action-bar { position: absolute; left: 0; right: 0; bottom: var(--tabbar-h); height: var(--action-bar-h); padding: 12px 16px; background: var(--surface); border-top: 1px solid var(--line-soft); display: flex; gap: 8px; z-index: 2; }
+.action-bar.bottom { bottom: 0; }
+.syncbar { position: absolute; top: var(--header-h); left: 0; right: 0; min-height: 36px; background: var(--surface-2); display: flex; align-items: center; gap: 8px; padding: 6px 16px; font: var(--text-label); z-index: 2; }
+.syncbar + .ph-body { top: calc(var(--header-h) + 36px); }
+
+/* ---- buttons ---- */
+.btn { min-height: var(--control); border-radius: var(--radius-pill); padding: 0 18px; font: var(--text-button); letter-spacing: var(--tracking-button); display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: var(--hairline) solid var(--ink); background: var(--surface); color: var(--ink); white-space: nowrap; }
+.btn-primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.btn-lg { min-height: var(--control-large); font: var(--text-cta); letter-spacing: var(--tracking-tight); flex: 1; }
+.btn-sm { min-height: var(--control-dense); padding: 0 12px; font: var(--text-button-sm); }
+.btn-quiet { border-color: transparent; background: transparent; }
+.btn-round { width: var(--control); padding: 0; }
+.btn[aria-disabled] { opacity: .55; }
+.btn.sending { background: var(--accent-hover); border-color: var(--accent-hover); }
+.btn.failed { background: var(--surface); color: var(--crit-ink); border-color: var(--crit); }
+
+/* ---- pills ---- */
+.st { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 10px; border-radius: 999px; font: 500 12px/1 var(--display); white-space: nowrap; }
+.mk { width: 8px; height: 8px; display: inline-block; background: currentColor; border-radius: 50%; flex: none; }
+.st-available, .st-active { background: var(--accent-soft); color: var(--accent-ink); }
+.st-rented, .st-booked { background: var(--info-soft); color: var(--rented-ink); }
+.st-rented .mk { border-radius: 2px; }
+.st-service, .st-paused { background: var(--warn-soft); color: var(--service-deep); }
+.st-service .mk { border-radius: 0; transform: rotate(45deg); width: 7px; height: 7px; }
+.st-out, .st-overdue, .st-disputed { background: var(--crit-soft); color: var(--crit-ink); }
+.st-out .mk, .st-overdue .mk { border-radius: 0; }
+.st-sold, .st-returned { background: var(--surface-2); color: var(--grey-ink); }
+.st-sold .mk { background: transparent; border: 2px solid currentColor; }
+.st-waiting { background: var(--surface); color: var(--ink); border: 1px solid var(--line-control); }
+.st-waiting .mk { background: transparent; border: 2px solid currentColor; }
+.chip { display: inline-flex; align-items: center; gap: 6px; min-height: var(--control-dense); padding: 0 12px; border: 1px solid var(--line-control); border-radius: 999px; background: var(--surface); font: var(--text-button-sm); white-space: nowrap; }
+.chip.on { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+.chip .n { font: 500 12px/1 var(--mono); color: var(--muted); }
+.chip.on .n { color: var(--lime); }
+.chips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; margin: 0 -16px 8px; padding-left: 16px; padding-right: 16px; }
+
+/* ---- blocks ---- */
+.card { background: var(--surface); border-radius: var(--radius-card); padding: var(--card-pad); margin-bottom: 8px; }
+.grp { display: flex; justify-content: space-between; align-items: baseline; margin: 18px 2px 8px; }
+.grp:first-child { margin-top: 4px; }
+.grp h3 { margin: 0; font: var(--text-overline); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.grp .cnt { font: var(--text-label); color: var(--muted); }
+.qrow { background: var(--surface); border-radius: var(--radius-card); padding: 12px 14px; margin-bottom: 8px; display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; }
+.qrow.t-crit { box-shadow: inset 3px 0 0 var(--crit); }
+.qrow.t-warn { box-shadow: inset 3px 0 0 var(--service); }
+.qrow.t-decide { box-shadow: inset 3px 0 0 var(--accent); }
+.q-who { font: 500 15px/1.3 var(--body); grid-column: 1; }
+.q-why { grid-column: 1; }
+.qrow.nosum { grid-template-columns: 1fr; }
+.q-why { font: var(--text-label); color: var(--muted); }
+.q-sum { font: var(--text-money-lg); font-variant-numeric: tabular-nums; text-align: right; grid-row: 1 / span 2; grid-column: 2; align-self: center; }
+.q-acts { grid-column: 1 / -1; display: flex; gap: 8px; margin-top: 10px; align-items: center; }
+.q-acts .btn-primary { flex: 1; }
+.q-more { display: block; text-align: center; font: var(--text-button-sm); color: var(--accent); padding: 10px; }
+.vin { font: var(--text-mono); letter-spacing: .02em; }
+.vin b { font-weight: 600; background: var(--lime); padding: 0 2px; border-radius: 3px; color: var(--ink); }
+.nums { display: flex; gap: 8px; overflow-x: auto; margin: 0 -16px; padding: 0 16px 4px; }
+.num { flex: none; min-width: 104px; background: var(--surface); border-radius: var(--radius-card); padding: 10px 12px; }
+.num .v { font: 500 20px/1.2 var(--mono); font-variant-numeric: tabular-nums; }
+.num .l { font: var(--text-label); color: var(--muted); white-space: nowrap; }
+.date { font: var(--text-label); color: var(--muted); margin: 0 2px 6px; }
+.kv { display: grid; grid-template-columns: auto 1fr; gap: 8px 16px; font: var(--text-body-sm); }
+.kv dt { color: var(--muted); }
+.kv dd { margin: 0; text-align: right; }
+.hero { font: var(--text-display); letter-spacing: var(--tracking-tight); font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.hr { height: 1px; background: var(--line-soft); margin: 12px 0; }
+.sheet-scrim { position: absolute; inset: 0; background: var(--scrim-soft); z-index: 5; }
+.sheet { position: absolute; left: 0; right: 0; bottom: 0; background: var(--surface); border-radius: 20px 20px 0 0; padding: 8px 16px 20px; z-index: 6; box-shadow: var(--shadow); }
+.sheet .grab { width: 40px; height: 4px; border-radius: 2px; background: var(--line-soft); margin: 0 auto 10px; }
+.sheet h4 { font: var(--text-h2); margin: 4px 0 12px; }
+.act-list a { display: flex; align-items: center; gap: 14px; min-height: 52px; border-bottom: 1px solid var(--line-soft); font: 500 16px/1.2 var(--display); }
+.act-list a:last-child { border-bottom: 0; }
+.act-list .ico { width: 40px; height: 40px; border-radius: 50%; background: var(--accent-soft); color: var(--accent-ink); display: grid; place-items: center; }
+.toast { position: absolute; left: 12px; right: 12px; bottom: calc(var(--tabbar-h) + 12px); background: var(--toast); color: var(--toast-ink); border-radius: 14px; padding: 12px 14px; display: flex; align-items: center; gap: 12px; font: var(--text-body-sm); z-index: 7; overflow: hidden; }
+.toast a { color: var(--toast-action); font-weight: 600; margin-left: auto; }
+.toast .drain { position: absolute; left: 0; bottom: 0; height: 3px; width: 64%; background: var(--toast-action); }
+.field { display: block; margin-bottom: 14px; }
+.field > .lbl { display: block; font: var(--text-label); color: var(--muted); margin: 0 2px 6px; }
+.input { min-height: var(--control); padding: 0 14px; border-radius: 12px; border: 1px solid var(--line-control); background: var(--surface); display: flex; align-items: center; gap: 8px; font: var(--text-body); }
+.input.focus { box-shadow: var(--focus-ring); border-color: var(--accent); }
+.input .ph { color: var(--muted); }
+.input.err { border-color: var(--crit); }
+.ferr { font: var(--text-label); color: var(--crit-ink); margin: 6px 2px 0; }
+.hint { font: var(--text-label); color: var(--muted); margin: 6px 2px 0; }
+.seg3 { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--line-control); border-radius: 12px; overflow: hidden; }
+.seg3 span { min-height: 44px; display: grid; place-items: center; font: var(--text-button-sm); border-right: 1px solid var(--line-soft); text-align: center; padding: 0 4px; }
+.seg3 span:last-child { border-right: 0; }
+.seg3 span.on { background: var(--accent-soft); color: var(--accent-ink); font-weight: 600; }
+.seg3 span.on.bad { background: var(--crit-soft); color: var(--crit-ink); }
+.seg3 span.on.warn { background: var(--warn-soft); color: var(--service-deep); }
+.steps { display: flex; gap: 6px; align-items: center; margin: 2px 2px 12px; font: var(--text-label); color: var(--muted); }
+.steps i { width: 22px; height: 4px; border-radius: 2px; background: var(--line-soft); }
+.steps i.done { background: var(--accent); }
+.steps i.cur { background: var(--ink); }
+.steps span { margin-left: auto; }
+.lcard { background: var(--surface); border-radius: var(--radius-card); padding: 12px 14px; margin-bottom: 8px; display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; }
+.lcard .a { font: 500 15px/1.3 var(--body); }
+.lcard .b { font: var(--text-label); color: var(--muted); }
+.lcard .r { text-align: right; }
+.money { font: var(--text-money); font-variant-numeric: tabular-nums; }
+.in { color: var(--accent-ink); }
+.out { color: var(--ink); }
+.banner { border-radius: 12px; padding: 10px 12px; font: var(--text-body-sm); display: flex; gap: 10px; align-items: flex-start; margin-bottom: 12px; }
+.banner.crit { background: var(--crit-soft); color: var(--crit-ink); }
+.banner.warn { background: var(--warn-soft); color: var(--service-deep); }
+.banner.info { background: var(--surface-2); color: var(--ink); }
+.banner.ok { background: var(--accent-soft); color: var(--accent-ink); }
+.skel { background: var(--surface-2); border-radius: 8px; height: 14px; margin: 6px 0; }
+.empty { text-align: center; padding: 48px 12px; }
+.empty .big { width: 56px; height: 56px; border-radius: 50%; background: var(--accent-soft); color: var(--accent-ink); display: grid; place-items: center; margin: 0 auto 12px; }
+.empty h4 { font: var(--text-h2); margin: 0 0 6px; }
+.empty p { font: var(--text-label); color: var(--muted); margin: 0 0 16px; }
+.photo { width: 72px; height: 72px; border-radius: 12px; background: repeating-linear-gradient(45deg, var(--surface-2), var(--surface-2) 6px, #e7e7e7 6px, #e7e7e7 12px); display: grid; place-items: center; color: var(--muted); font: var(--text-label); }
+.photo.add { background: var(--surface); border: 1px dashed var(--line-control); }
+.photos { display: flex; gap: 8px; flex-wrap: wrap; }
+.strip { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 3px; }
+.strip i { height: 26px; border-radius: 6px; display: grid; place-items: center; font: 500 11px/1 var(--mono); font-style: normal; }
+.s-paid { background: var(--accent); color: var(--on-accent); }
+.s-late { background: var(--crit); color: var(--on-accent); }
+.s-cur { background: var(--lime); border: 1px solid var(--accent); }
+.s-ahead { background: var(--surface-2); color: var(--muted); }
+.tl { list-style: none; margin: 0; padding: 0; }
+.tl li { display: grid; grid-template-columns: 12px 1fr; gap: 10px; padding: 0 0 14px; position: relative; font: var(--text-body-sm); }
+.tl li::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); margin-top: 6px; }
+.tl li::after { content: ""; position: absolute; left: 3.5px; top: 18px; bottom: 0; width: 1px; background: var(--line-soft); }
+.tl li:last-child::after { display: none; }
+.tl .when { font: var(--text-label); color: var(--muted); }
+.lang-row { display: flex; gap: 6px; }
+.lang-row span { min-width: 44px; min-height: 34px; border-radius: 999px; border: 1px solid var(--line-control); display: grid; place-items: center; font: var(--text-button-sm); }
+.lang-row span.on { background: var(--lime); border-color: var(--lime); }
+
+/* ---- laptop ---- */
+.desk { width: 1280px; height: 800px; border: 1px solid #cfcfcf; border-radius: 12px; overflow: hidden; background: var(--bg); display: grid; grid-template-columns: var(--rail-w) 1fr; box-shadow: 0 8px 30px rgba(0,0,0,.08); }
+.desk-wrap { max-width: 100%; overflow-x: auto; }
+.rail { background: var(--rail); color: var(--rail-ink); padding: 18px 12px; display: flex; flex-direction: column; gap: 4px; }
+.rail .logo { font: 700 22px/1 var(--display); color: #fff; letter-spacing: -.02em; padding: 0 8px 14px; }
+.rail .logo small { font: 500 11px/1 var(--display); background: var(--lime); color: var(--ink); padding: 2px 6px; border-radius: 999px; vertical-align: middle; margin-left: 4px; }
+.rail .cta { min-height: 40px; border-radius: 999px; background: var(--accent); color: #fff; display: flex; align-items: center; justify-content: center; gap: 6px; font: var(--text-button); margin: 0 0 8px; }
+.rail .search { min-height: 36px; border-radius: 999px; border: 1px solid var(--rail-line); display: flex; align-items: center; gap: 8px; padding: 0 12px; font: var(--text-label); color: #9aa39a; margin-bottom: 8px; }
+.rail .search kbd { margin-left: auto; font: 500 11px/1 var(--mono); border: 1px solid var(--rail-line); border-radius: 4px; padding: 2px 5px; }
+.rail .g { font: 500 11px/1 var(--display); letter-spacing: .08em; text-transform: uppercase; color: #7f887f; padding: 12px 10px 4px; }
+.rail a.it { display: flex; align-items: center; gap: 10px; min-height: 34px; padding: 0 10px; border-radius: 999px; font: var(--text-button); }
+.rail a.it svg { width: 18px; height: 18px; }
+.rail a.it.on { background: var(--rail-accent); color: var(--ink); }
+.rail a.it .badge { margin-left: auto; }
+.rail .foot { margin-top: auto; display: flex; align-items: center; gap: 10px; padding: 10px 6px 0; border-top: 1px solid var(--rail-line); font: var(--text-label); }
+.main { overflow: hidden; display: flex; flex-direction: column; }
+.d-head { display: flex; align-items: baseline; gap: 12px; padding: 22px 32px 8px; }
+.d-head h2 { font: var(--text-h1); letter-spacing: var(--tracking-tight); margin: 0; }
+.d-head .sub { font: var(--text-label); color: var(--muted); }
+.d-head .acts { margin-left: auto; display: flex; gap: 8px; align-self: center; }
+.d-tabs { display: flex; gap: 4px; padding: 0 32px; border-bottom: 1px solid var(--line-soft); }
+.d-tabs a { padding: 10px 12px; font: var(--text-button); color: var(--muted); border-bottom: 2px solid transparent; display: flex; gap: 6px; align-items: center; }
+.d-tabs a.on { color: var(--ink); border-color: var(--ink); }
+.d-tabs .n { font: 500 12px/1 var(--mono); background: var(--surface-2); padding: 3px 6px; border-radius: 999px; }
+.d-body { padding: 16px 32px 32px; overflow: auto; flex: 1; }
+.cols { display: grid; gap: 24px; }
+.table { width: 100%; border-collapse: collapse; background: var(--surface); border-radius: var(--radius-card); overflow: hidden; font: var(--text-body-sm); }
+.table th { text-align: left; font: var(--text-overline); letter-spacing: .04em; color: var(--muted); padding: 10px 12px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.table td { padding: 10px 12px; border-bottom: 1px solid var(--line-soft); vertical-align: middle; }
+.table tr:last-child td { border-bottom: 0; }
+.table td.r, .table th.r { text-align: right; }
+.table tr.sel td { background: var(--surface-2); }
+.toolbar { display: flex; gap: 8px; align-items: center; margin: 0 0 12px; flex-wrap: wrap; }
+.toolbar .input { min-height: var(--control-dense); min-width: 280px; }
+.panel { position: absolute; top: 0; right: 0; bottom: 0; width: 420px; background: var(--surface); box-shadow: var(--shadow); padding: 20px 24px; overflow: auto; }
+.rel { position: relative; }
+.h3 { font: var(--text-h2); margin: 0 0 10px; }
+.small { font: var(--text-label); }
+</style></head><body><header class="doc"><a class="back" href="index.html">← Все прототипы</a><h1>Список аренд: поиск и фильтры</h1><p class="lead"><span class="demo">ПРИМЕР</span>Образец для всех списков: поиск, сегменты со счётчиками, сортировка, карточки на телефоне и таблица на ноутбуке. Продажи, ремонты, склад и платежи строятся так же.</p><dl class="meta"><dt>Экран</dt><dd>«Аренды»</dd><dt>Схема</dt><dd>blueprint §3.1 «Правила экранов»; D14; принципы №8, №10</dd><dt>Данные</dt><dd>Пример</dd></dl></header><section class="band"><h2>Телефон</h2><div class="frames"><figure class="f"><div class="phone"><header class="ph-head"><span class="title">Аренды<span class="sub">43</span></span><a class="icon-btn" href="#"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg></a><a class="icon-btn" href="#"><span class="avatar">K</span></a></header><main class="ph-body "><div style="display:flex;gap:8px;margin-bottom:10px"><div class="input" style="flex:1"><svg class="i s" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg><span class="ph">№, имя, телефон, 4 знака VIN</span></div><a class="btn btn-round" href="#" aria-label="Сортировка"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4v16M3 16l4 4 4-4M17 20V4M13 8l4-4 4 4"/></svg></a></div><div class="chips"><span class="chip">Действуют <span class=n>18</span></span><span class="chip on">Просрочены <span class=n>4</span></span><span class="chip">Ждут оплаты <span class=n>1</span></span><span class="chip">Возврат сегодня <span class=n>2</span></span><span class="chip">Без VIN <span class=n>2</span></span><span class="chip">Спорные <span class=n>0</span></span><span class="chip">Завершены <span class=n>25</span></span></div><div class="date">4 аренды · долг 750 ₾ · сначала дольше всех</div><a class="lcard" href="#" style=""><div><div class="a">Клиент Пример Б</div><div class="b">R-00488 · F-150 ···2231</div><div class="b">оплачено по 02.09</div></div><div class="r"><div class="money crit" style="font-size:16px">300 ₾</div><div style="margin-top:6px"><span class="st st-overdue"><i class="mk"></i>15 дней</span></div></div></a><a class="lcard" href="#" style=""><div><div class="a">Клиент Пример В</div><div class="b">R-00491 · XL1200 ···1180</div><div class="b">оплачено по 11.09</div></div><div class="r"><div class="money crit" style="font-size:16px">150 ₾</div><div style="margin-top:6px"><span class="st st-overdue"><i class="mk"></i>6 дней</span></div></div></a><a class="lcard" href="#" style=""><div><div class="a">Клиент Пример Г</div><div class="b">R-00503 · Eagle ···5530</div><div class="b">оплачено по 15.09</div></div><div class="r"><div class="money crit" style="font-size:16px">150 ₾</div><div style="margin-top:6px"><span class="st st-overdue"><i class="mk"></i>2 дня</span></div></div></a><a class="lcard" href="#" style=""><div><div class="a">კლიენტი მაგალითი ხარაზიშვილი-ჯაფარიძე</div><div class="b">R-00509 · B11 ···3390</div><div class="b">оплачено по 16.09</div></div><div class="r"><div class="money crit" style="font-size:16px">150 ₾</div><div style="margin-top:6px"><span class="st st-overdue"><i class="mk"></i>1 день</span></div></div></a></main><nav class="tabbar"><a class="tab" href="#"><span class="ic"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/><path d="m9 15 2 2 4-4"/></svg></span>Сегодня<span class="badge">14</span></a><a class="tab on" href="#"><span class="ic"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg></span>Аренды</a><a class="tab-plus" href="#" aria-label="Действия"><span class="plus"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span></a><a class="tab" href="#"><span class="ic"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h13a2 2 0 0 0 2-2v-3"/><path d="M21 9h-5a3 3 0 0 0 0 6h5z"/></svg></span>Деньги</a><a class="tab" href="#"><span class="ic"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5.5" cy="17" r="3"/><circle cx="18.5" cy="17" r="3"/><path d="M8.5 17h7l-2.5-8h3.5M13 9l-3 4H5.5"/></svg></span>Парк</a></nav></div><figcaption><b>Аренды — телефон.</b> Поиск по номеру, имени, телефону и 4 знакам VIN; сегменты со счётчиками; сортировка кнопкой. Сегмент, поиск и сортировка — в адресе (<code>/rentals?seg=overdue</code>), поэтому строка «Сегодня» ведёт прямо сюда. Длинное грузинское имя переносится, сумма не съезжает.</figcaption></figure><figure class="f"><div class="phone"><header class="ph-head"><span class="title">Аренды<span class="sub">43</span></span><a class="icon-btn" href="#"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg></a><a class="icon-btn" href="#"><span class="avatar">K</span></a></header><main class="ph-body "><div style="display:flex;gap:8px;margin-bottom:10px"><div class="input" style="flex:1"><svg class="i s" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg><span class="ph">№, имя, телефон, 4 знака VIN</span></div><a class="btn btn-round" href="#" aria-label="Сортировка"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4v16M3 16l4 4 4-4M17 20V4M13 8l4-4 4 4"/></svg></a></div><div class="chips"><span class="chip">Действуют <span class=n>18</span></span><span class="chip on">Просрочены <span class=n>4</span></span><span class="chip">Ждут оплаты <span class=n>1</span></span><span class="chip">Возврат сегодня <span class=n>2</span></span><span class="chip">Без VIN <span class=n>2</span></span><span class="chip">Спорные <span class=n>0</span></span><span class="chip">Завершены <span class=n>25</span></span></div><div class="date">4 аренды · долг 750 ₾ · сначала дольше всех</div><a class="lcard" href="#" style=""><div><div class="a">Клиент Пример Б</div><div class="b">R-00488 · F-150 ···2231</div><div class="b">оплачено по 02.09</div></div><div class="r"><div class="money crit" style="font-size:16px">300 ₾</div><div style="margin-top:6px"><span class="st st-overdue"><i class="mk"></i>15 дней</span></div></div></a><a class="lcard" href="#" style=""><div><div class="a">Клиент Пример В</div><div class="b">R-00491 · XL1200 ···1180</div><div class="b">оплачено по 11.09</div></div><div class="r"><div class="money crit" style="font-size:16px">150 ₾</div><div style="margin-top:6px"><span class="st st-overdue"><i class="mk"></i>6 дней</span></div></div></a><a class="lcard" href="#" style=""><div><div class="a">Клиент Пример Г</div><div class="b">R-00503 · Eagle ···5530</div><div class="b">оплачено по 15.09</div></div><div class="r"><div class="money crit" style="font-size:16px">150 ₾</div><div style="margin-top:6px"><span class="st st-overdue"><i class="mk"></i>2 дня</span></div></div></a><a class="lcard" href="#" style=""><div><div class="a">კლიენტი მაგალითი ხარაზიშვილი-ჯაფარიძე</div><div class="b">R-00509 · B11 ···3390</div><div class="b">оплачено по 16.09</div></div><div class="r"><div class="money crit" style="font-size:16px">150 ₾</div><div style="margin-top:6px"><span class="st st-overdue"><i class="mk"></i>1 день</span></div></div></a></main><nav class="tabbar"><a class="tab" href="#"><span class="ic"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/><path d="m9 15 2 2 4-4"/></svg></span>Сегодня<span class="badge">14</span></a><a class="tab on" href="#"><span class="ic"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg></span>Аренды</a><a class="tab-plus" href="#" aria-label="Действия"><span class="plus"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span></a><a class="tab" href="#"><span class="ic"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h13a2 2 0 0 0 2-2v-3"/><path d="M21 9h-5a3 3 0 0 0 0 6h5z"/></svg></span>Деньги</a><a class="tab" href="#"><span class="ic"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5.5" cy="17" r="3"/><circle cx="18.5" cy="17" r="3"/><path d="M8.5 17h7l-2.5-8h3.5M13 9l-3 4H5.5"/></svg></span>Парк</a></nav><div class="sheet-scrim"></div><div class="sheet"><div class="grab"></div><h4>Сортировка</h4><div class="act-list"><a href="#"><span class="ico"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7"/></svg></span>Дольше всех просрочены</a><a href="#"><span class="ico" style="background:none"></span>Больше долг</a><a href="#"><span class="ico" style="background:none"></span>Скоро оплата</a><a href="#"><span class="ico" style="background:none"></span>Новые выдачи</a><a href="#"><span class="ico" style="background:none"></span>Имя А → Я</a></div></div></div><figcaption><b>Сортировка на телефоне</b> — выбором в листе, а не заголовками (U17 только на ноутбуке).</figcaption></figure><figure class="f"><div class="phone"><header class="ph-head"><span class="title">Аренды<span class="sub">43</span></span><a class="icon-btn" href="#"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg></a><a class="icon-btn" href="#"><span class="avatar">K</span></a></header><main class="ph-body "><div style="display:flex;gap:8px;margin-bottom:10px"><div class="input" style="flex:1"><svg class="i s" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg><span class="ph">№, имя, телефон, 4 знака VIN</span></div><a class="btn btn-round" href="#" aria-label="Сортировка"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4v16M3 16l4 4 4-4M17 20V4M13 8l4-4 4 4"/></svg></a></div><div class="chips"><span class="chip">Действуют <span class=n>18</span></span><span class="chip">Просрочены <span class=n>4</span></span><span class="chip">Ждут оплаты <span class=n>1</span></span><span class="chip">Возврат сегодня <span class=n>2</span></span><span class="chip">Без VIN <span class=n>2</span></span><span class="chip on">Спорные <span class=n>0</span></span><span class="chip">Завершены <span class=n>25</span></span></div><div class="empty"><div class="big"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7"/></svg></div><h4>Спорных аренд нет</h4><p>Спорная аренда останавливает недели; история сохраняется.</p><a class="btn" href="#">Все действующие · 18</a></div></main><nav class="tabbar"><a class="tab" href="#"><span class="ic"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/><path d="m9 15 2 2 4-4"/></svg></span>Сегодня<span class="badge">14</span></a><a class="tab on" href="#"><span class="ic"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg></span>Аренды</a><a class="tab-plus" href="#" aria-label="Действия"><span class="plus"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span></a><a class="tab" href="#"><span class="ic"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h13a2 2 0 0 0 2-2v-3"/><path d="M21 9h-5a3 3 0 0 0 0 6h5z"/></svg></span>Деньги</a><a class="tab" href="#"><span class="ic"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5.5" cy="17" r="3"/><circle cx="18.5" cy="17" r="3"/><path d="M8.5 17h7l-2.5-8h3.5M13 9l-3 4H5.5"/></svg></span>Парк</a></nav></div><figcaption><b>Пустой сегмент.</b> Говорит, что пусто именно здесь, и ведёт туда, где есть работа.</figcaption></figure><figure class="f"><div class="phone"><header class="ph-head"><span class="title">Аренды<span class="sub">43</span></span><a class="icon-btn" href="#"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg></a><a class="icon-btn" href="#"><span class="avatar">K</span></a></header><main class="ph-body "><div style="display:flex;gap:8px;margin-bottom:10px"><div class="input focus" style="flex:1"><svg class="i s" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>7781</div><a class="btn btn-round" href="#"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4v16M3 16l4 4 4-4M17 20V4M13 8l4-4 4 4"/></svg></a></div><div class="chips"><span class="chip">Действуют <span class=n>18</span></span><span class="chip on">Просрочены <span class=n>4</span></span><span class="chip">Ждут оплаты <span class=n>1</span></span><span class="chip">Возврат сегодня <span class=n>2</span></span><span class="chip">Без VIN <span class=n>2</span></span><span class="chip">Спорные <span class=n>0</span></span><span class="chip">Завершены <span class=n>25</span></span></div><div class="empty"><div class="big"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg></div><h4>В «Просрочены» нет «7781»</h4><p>Может быть, аренда в другом сегменте или это продажа.</p><a class="btn" href="#">Искать везде</a></div></main><nav class="tabbar"><a class="tab" href="#"><span class="ic"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/><path d="m9 15 2 2 4-4"/></svg></span>Сегодня<span class="badge">14</span></a><a class="tab on" href="#"><span class="ic"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg></span>Аренды</a><a class="tab-plus" href="#" aria-label="Действия"><span class="plus"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span></a><a class="tab" href="#"><span class="ic"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h13a2 2 0 0 0 2-2v-3"/><path d="M21 9h-5a3 3 0 0 0 0 6h5z"/></svg></span>Деньги</a><a class="tab" href="#"><span class="ic"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5.5" cy="17" r="3"/><circle cx="18.5" cy="17" r="3"/><path d="M8.5 17h7l-2.5-8h3.5M13 9l-3 4H5.5"/></svg></span>Парк</a></nav></div><figcaption><b>Поиск в списке ничего не нашёл</b> — предлагает искать везде (глобальный поиск) и снять сегмент.</figcaption></figure></div></section><section class="band"><h2>Ноутбук</h2><div class="frames"><figure class="f wide"><div class="desk-wrap"><div class="desk"><nav class="rail"><div class="logo">EV8 <small>ops</small></div><a class="cta" href="#"><svg class="i s" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Принять деньги</a><div class="search"><svg class="i s" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>Поиск<kbd>/</kbd></div><div class="g">Работа</div><a class="it" href="#"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/><path d="m9 15 2 2 4-4"/></svg>Сегодня<span class="badge">14</span></a><a class="it on" href="#"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg>Аренды</a><a class="it" href="#"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5.5" cy="17" r="3"/><circle cx="18.5" cy="17" r="3"/><path d="M8.5 17h7l-2.5-8h3.5M13 9l-3 4H5.5"/></svg>Парк</a><a class="it" href="#"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.7 6.3a4 4 0 0 0 5 5l-9.4 9.4a2.1 2.1 0 0 1-3-3z"/><path d="M14.7 6.3 17 4l3 3-2.3 2.3"/></svg>Сервис</a><div class="g">Деньги</div><a class="it" href="#"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h13a2 2 0 0 0 2-2v-3"/><path d="M21 9h-5a3 3 0 0 0 0 6h5z"/></svg>Деньги</a><a class="it" href="#"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 8h14l-1 13H6z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/></svg>Продажи</a><a class="it" href="#"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 6h12v10H2zM14 10h4l4 4v2h-8"/><circle cx="6" cy="18" r="2"/><circle cx="18" cy="18" r="2"/></svg>Закупки</a><div class="g">Управление</div><a class="it" href="#"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21h18M6 17v-6M11 17V5M16 17v-9M21 17v-3"/></svg>Отчёты</a><a class="it" href="#"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"/></svg>Настройки</a><div class="foot"><span class="avatar">M</span><span>Mika<br><span style="color:#7f887f">владелец · RU</span></span></div></nav><div class="main rel"><div class="d-head"><h2>Аренды</h2><span class="sub">43 аренды</span><div class="acts"><a class="btn btn-sm btn-primary" href="#">+ Выдать мопед</a></div></div><div class="d-tabs"><a href="#">Действуют <span class="n">18</span></a><a class="on" href="#">Просрочены <span class="n">4</span></a><a href="#">Ждут оплаты <span class="n">1</span></a><a href="#">Возврат сегодня <span class="n">2</span></a><a href="#">Без VIN <span class="n">2</span></a><a href="#">Спорные <span class="n">0</span></a><a href="#">Завершены <span class="n">25</span></a></div><div class="d-body"><div class="toolbar"><div class="input"><svg class="i s" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg><span class="ph">№, имя, телефон, 4 знака VIN</span></div><span class="small muted">4 аренды · долг 750 ₾</span></div><table class="table"><tr><th>№</th><th>Клиент</th><th>Мопед</th><th>Оплачено по ↑</th><th class="r">Тариф</th><th class="r">Долг</th><th>Статус</th><th></th></tr><tr><td class="mono">R-00488</td><td><b>Клиент Пример Б</b></td><td>F-150 ···2231</td><td>02.09</td><td class="r money">150</td><td class="r money crit">300</td><td><span class="st st-overdue"><i class="mk"></i>15 дней</span></td><td class="r"><a class="btn btn-sm btn-primary" href="#">Принять оплату</a></td></tr><tr><td class="mono">R-00491</td><td><b>Клиент Пример В</b></td><td>XL1200 ···1180</td><td>11.09</td><td class="r money">150</td><td class="r money crit">150</td><td><span class="st st-overdue"><i class="mk"></i>6 дней</span></td><td class="r"><a class="btn btn-sm btn-primary" href="#">Принять оплату</a></td></tr><tr><td class="mono">R-00503</td><td><b>Клиент Пример Г</b></td><td>Eagle ···5530</td><td>15.09</td><td class="r money">150</td><td class="r money crit">150</td><td><span class="st st-overdue"><i class="mk"></i>2 дня</span></td><td class="r"><a class="btn btn-sm btn-primary" href="#">Принять оплату</a></td></tr><tr><td class="mono">R-00509</td><td><b>Клиент Пример Ж</b></td><td>B11 ···3390</td><td>16.09</td><td class="r money">150</td><td class="r money crit">150</td><td><span class="st st-overdue"><i class="mk"></i>1 день</span></td><td class="r"><a class="btn btn-sm btn-primary" href="#">Принять оплату</a></td></tr></table></div></div></div></div><figcaption><b>Ноутбук.</b> Сегменты — вкладками, таблица сортируется заголовком (U17), главное действие строки — в строке.</figcaption></figure></div></section><section class="notes"><h2>Что закрывает</h2><table><tr><th>ID</th><th>Как</th></tr><tr><td>B6-02, T3</td><td>Сегменты: Действуют · Ждут оплаты · Просрочены · Возврат сегодня · Без VIN · Спорные · Завершены; поиск; всё в адресе</td></tr><tr><td>B6-05, T7</td><td>Карточки на телефоне, сортировка выбором; этот образец — для продаж, закупок, сервиса, склада, клиентов</td></tr><tr><td>аудит §4.4</td><td>Одно слово на статус: «просрочена N дней» и в списке, и в карточке</td></tr></table></section></body></html>
