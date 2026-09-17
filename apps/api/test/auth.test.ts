@@ -21,6 +21,14 @@ describe.skipIf(!HAS_DB)('sign-in', () => {
     expect(me.permissions).not.toContain('payments.reconcile');
   });
 
+  it('signing in again on the same device ends the session it carried', async () => {
+    const u = await makeUser('manager');
+    const first = await login(u.email);
+    const again = await call(first, 'POST', '/api/auth/login', { email: u.email, password: PASSWORD });
+    expect(again.statusCode).toBe(200);
+    expect((await call(first, 'GET', '/api/me')).statusCode).toBe(401);
+  });
+
   it('logging out closes the session', async () => {
     const u = await makeUser('manager');
     const cookie = await login(u.email);

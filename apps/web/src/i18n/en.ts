@@ -25,6 +25,15 @@ export const en = {
     dash: '—',
   },
 
+  session: {
+    ended: 'Your sign-in ended',
+    signInAgainTo: 'Sign in again — we will bring you back to',
+    typedKept: 'what you typed is kept.',
+    signInAgain: 'Sign in again — what you typed is kept.',
+    signedOutHere: 'You signed out on this phone',
+    serverLater: 'The server will close the sign-in when the connection is back. If the phone is lost, an owner ends the sign-in in Settings → People.',
+    understood: 'Got it',
+  },
   login: {
     note: 'E-Motion Motors operations. Sign in with the login the owner gave you.',
   },
