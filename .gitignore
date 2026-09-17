@@ -20,3 +20,5 @@ odoo_snapshot.json
 *.xlsx
 *.csv
 *.pdf
+# macOS Finder litter.
+.DS_Store
