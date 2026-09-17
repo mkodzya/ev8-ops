@@ -19,6 +19,7 @@ import { paymentRoutes } from './routes/payments.js';
 import { rentalRoutes } from './routes/rentals.js';
 import { purchaseRoutes } from './routes/purchases.js';
 import { saleRoutes } from './routes/sales.js';
+import { searchRoutes } from './routes/search.js';
 import { serviceRoutes } from './routes/service.js';
 import { statementRoutes } from './routes/statements.js';
 import { summaryRoutes } from './routes/summary.js';
@@ -76,6 +77,7 @@ export function buildApp(): FastifyInstance {
   serviceRoutes(app);
   saleRoutes(app);
   purchaseRoutes(app);
+  searchRoutes(app);
 
   return app;
 }
