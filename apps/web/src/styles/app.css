@@ -685,6 +685,20 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
     border-top: 1px solid var(--line-soft);
   }
   .more-sheet li:first-child a { border-top: 0; }
+  .more-signout {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    min-height: var(--control);
+    padding: 0;
+    border: 0;
+    border-top: 1px solid var(--line-soft);
+    background: none;
+    color: var(--muted);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
   .more-sheet a.on { color: var(--accent); font-weight: 600; }
 }
 

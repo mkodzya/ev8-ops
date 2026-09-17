@@ -51,6 +51,12 @@ export function Shell() {
     if (!stored && LOCALES.includes(me.locale as Locale)) setLocale(me.locale as Locale);
   }, [me, setLocale]);
 
+  const signOut = async () => {
+    await logout();
+    // Replace, so Back from the login page does not reopen the last screen.
+    navigate('/login', { replace: true });
+  };
+
   const remember = (l: Locale) => {
     void api.patch('/api/me/locale', { locale: l }).catch(() => {});
   };
@@ -114,10 +120,7 @@ export function Shell() {
             <button
               type="button"
               className="rail-signout"
-              onClick={async () => {
-                await logout();
-                navigate('/login');
-              }}
+              onClick={() => void signOut()}
             >
               {t.common.signOut}
             </button>
@@ -140,6 +143,15 @@ export function Shell() {
               {me && (
                 <li>
                   <Link to="/profile">{t.profile.title}</Link>
+                </li>
+              )}
+              {/* On a phone the rail's sign-out is hidden; a shared phone at
+                  the showroom still has to be able to leave (B1-01). */}
+              {me && (
+                <li>
+                  <button type="button" className="more-signout" onClick={() => void signOut()}>
+                    {t.common.signOut}
+                  </button>
                 </li>
               )}
             </ul>

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { api } from '../api.js';
 import { PageHead } from '../components/ui.js';
 import { Field } from '../components/Wizard.js';
@@ -9,7 +10,8 @@ import { useSession } from '../session.js';
 /** Your own login: the language and the password, nothing else. */
 export function ProfilePage() {
   const t = useT();
-  const { me } = useSession();
+  const { me, logout } = useSession();
+  const navigate = useNavigate();
   const [current, setCurrent] = useState('');
   const [next, setNext] = useState('');
   const [done, setDone] = useState(false);
@@ -55,6 +57,18 @@ export function ProfilePage() {
             <span className="kv-v">
               <LanguageToggle onChange={(l) => void api.patch('/api/me/locale', { locale: l }).catch(() => {})} />
             </span>
+          </div>
+          <div className="row-actions">
+            <button
+              type="button"
+              className="pill"
+              onClick={async () => {
+                await logout();
+                navigate('/login', { replace: true });
+              }}
+            >
+              {t.common.signOut}
+            </button>
           </div>
         </section>
         <section className="card">
