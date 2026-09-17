@@ -75,6 +75,25 @@ describe.skipIf(!HAS_DB)('users', () => {
     expect((await call(theirs, 'GET', '/api/me')).statusCode).toBe(401);
   });
 
+  it('a new password of your own signs out every other device and keeps this one', async () => {
+    const person = await makeUser('manager');
+    const laptop = await login(person.email);
+    const phone = await login(person.email);
+    expect((await call(phone, 'POST', '/api/me/password', { currentPassword: PASSWORD, newPassword: 'left-it-on-a-bus-1' })).statusCode).toBe(200);
+    expect((await call(phone, 'GET', '/api/me')).statusCode).toBe(200);
+    expect((await call(laptop, 'GET', '/api/me')).statusCode).toBe(401);
+  });
+
+  it('a role change is journaled with what it was and what it became', async () => {
+    const { prisma } = await import('../src/lib/db.js');
+    const owner = await loginAs('owner');
+    const person = await makeUser('manager');
+    expect((await call(owner, 'PATCH', `/api/users/${person.id}`, { role: 'director' })).statusCode).toBe(200);
+    const entry = await prisma.auditLog.findFirstOrThrow({ where: { entityId: person.id, action: 'user.update' } });
+    expect(entry.before).toMatchObject({ role: 'manager' });
+    expect(entry.after).toMatchObject({ role: 'director' });
+  });
+
   it('no route ever answers with a password hash', async () => {
     const owner = await loginAs('owner');
     const body = (await call(owner, 'GET', '/api/users')).body;

@@ -440,6 +440,16 @@ export const ru: Dict = {
       accountant: 'Бухгалтер',
     },
     lastOwner: 'Это последний действующий владелец.',
+    rolesAs: {
+      owner: 'владельцем',
+      director: 'директором',
+      manager: 'менеджером',
+      mechanic: 'механиком',
+      accountant: 'бухгалтером',
+    },
+    confirmRoleTitle: 'Сменить роль',
+    confirmRole: (name: string, role: string) => `Сделать ${name} ${role}? Права изменятся сразу.`,
+    passwordSet: (name: string) => `Пароль для ${name} задан. Все входы этого человека закрыты.`,
   },
 
   models: {
@@ -490,7 +500,8 @@ export const ru: Dict = {
     title: 'Мой вход',
     currentPassword: 'Текущий пароль',
     newPassword: 'Новый пароль',
-    changed: 'Пароль изменён.',
+    changed: 'Пароль изменён. На других устройствах нужно войти заново.',
+    passwordHint: 'Не меньше 8 символов.',
   },
 
   rentalEdit: {

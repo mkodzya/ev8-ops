@@ -436,6 +436,16 @@ export const en = {
       accountant: 'Accountant',
     },
     lastOwner: 'This is the last active owner.',
+    rolesAs: {
+      owner: 'an owner',
+      director: 'a director',
+      manager: 'a manager',
+      mechanic: 'a mechanic',
+      accountant: 'an accountant',
+    },
+    confirmRoleTitle: 'Change role',
+    confirmRole: (name: string, role: string) => `Make ${name} ${role}? Their rights change at once.`,
+    passwordSet: (name: string) => `Password set for ${name}. All of their sessions are closed.`,
   },
 
   models: {
@@ -486,7 +496,8 @@ export const en = {
     title: 'My login',
     currentPassword: 'Current password',
     newPassword: 'New password',
-    changed: 'Password changed.',
+    changed: 'Password changed. Other devices have to sign in again.',
+    passwordHint: 'At least 8 characters.',
   },
 
   rentalEdit: {

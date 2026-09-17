@@ -429,6 +429,16 @@ export const ka: Dict = {
       accountant: 'ბუღალტერი',
     },
     lastOwner: 'ეს უკანასკნელი აქტიური მფლობელია.',
+    rolesAs: {
+      owner: 'მფლობელი',
+      director: 'დირექტორი',
+      manager: 'მენეჯერი',
+      mechanic: 'მექანიკოსი',
+      accountant: 'ბუღალტერი',
+    },
+    confirmRoleTitle: 'როლის შეცვლა',
+    confirmRole: (name: string, role: string) => `${name} გახდეს ${role}? უფლებები მაშინვე შეიცვლება.`,
+    passwordSet: (name: string) => `${name}-ს ახალი პაროლი დაყენდა. მისი ყველა შესვლა დაიხურა.`,
   },
 
   models: {
@@ -479,7 +489,8 @@ export const ka: Dict = {
     title: 'ჩემი შესვლა',
     currentPassword: 'მიმდინარე პაროლი',
     newPassword: 'ახალი პაროლი',
-    changed: 'პაროლი შეიცვალა.',
+    changed: 'პაროლი შეიცვალა. სხვა მოწყობილობებზე საჭიროა ხელახლა შესვლა.',
+    passwordHint: 'მინიმუმ 8 სიმბოლო.',
   },
 
   rentalEdit: {

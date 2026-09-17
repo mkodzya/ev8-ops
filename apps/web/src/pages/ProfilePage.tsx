@@ -76,7 +76,7 @@ export function ProfilePage() {
             <Field label={t.profile.currentPassword}>
               <input className="input" type="password" value={current} onChange={(e) => setCurrent(e.target.value)} autoComplete="current-password" />
             </Field>
-            <Field label={t.profile.newPassword} hint={t.users.passwordHint}>
+            <Field label={t.profile.newPassword} hint={t.profile.passwordHint}>
               <input className="input" type="password" value={next} onChange={(e) => setNext(e.target.value)} autoComplete="new-password" minLength={8} />
             </Field>
             {done && <div className="hint">{t.profile.changed}</div>}
