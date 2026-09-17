@@ -169,7 +169,9 @@ export function PurchasePage() {
           <Empty text={t.common.dash} />
         ) : (
           <div className="table-wrap table-flat">
-            <table className="table">
+            {/* Seven money columns with long names: the headings wrap so the
+                numbers fit the card instead of scrolling out of it. */}
+            <table className="table table-heads-wrap">
               <thead>
                 <tr>
                   <th>{t.purchases.line}</th>
@@ -251,7 +253,7 @@ export function PurchasePage() {
               </select>
             )}
             <input className="input input-amount mono" placeholder={t.purchases.qty} value={line.qty} onChange={(e) => setLine({ ...line, qty: e.target.value })} inputMode="numeric" />
-            <input className="input input-amount mono" placeholder={t.purchases.unitPrice} value={line.price} onChange={(e) => setLine({ ...line, price: e.target.value })} inputMode="decimal" />
+            <input className="input input-amount mono" placeholder={t.purchases.unitPriceShort(p.currency)} value={line.price} onChange={(e) => setLine({ ...line, price: e.target.value })} inputMode="decimal" />
             <label className="check">
               <input type="checkbox" checked={line.asPart} onChange={(e) => setLine({ ...line, asPart: e.target.checked })} />
               <span>{t.purchases.part}</span>

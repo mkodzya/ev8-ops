@@ -78,8 +78,8 @@ export function ModelPage() {
       <div className="two-col">
         <section className="card">
           <BlockHead title={t.models.prices} />
-          <Row k={t.models.weeklyRate} v={<span className="mono">{m.weeklyRateTetri != null ? formatGel(m.weeklyRateTetri) : t.models.notRented}</span>} />
-          <Row k={t.models.salePrice} v={<span className="mono">{m.salePriceTetri != null ? formatGel(m.salePriceTetri) : t.common.dash}</span>} />
+          <Row k={t.models.weeklyRate} v={<span className="mono">{m.weeklyRateTetri != null ? formatGel(m.weeklyRateTetri, { decimals: false }) : t.models.notRented}</span>} />
+          <Row k={t.models.salePrice} v={<span className="mono">{m.salePriceTetri != null ? formatGel(m.salePriceTetri, { decimals: false }) : t.common.dash}</span>} />
           <Row
             k={t.models.cost}
             v={
