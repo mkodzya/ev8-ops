@@ -2,6 +2,7 @@ import { parseGel, todayISO } from '@ev8/shared';
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../api.js';
+import { LoadError } from '../components/LoadError.js';
 import { Drawer } from '../components/Drawer.js';
 import { BlockHead, Empty, Loading, PageHead, Vin } from '../components/ui.js';
 import { Field, Row } from '../components/Wizard.js';
@@ -21,7 +22,7 @@ export function SalePage() {
   const { id } = useParams();
   const t = useT();
   const { can } = useSession();
-  const { data, error, reload } = useLoad<SaleCard>(id ? `/api/sales/${id}` : null);
+  const { data, failure, reload } = useLoad<SaleCard>(id ? `/api/sales/${id}` : null);
   const [err, setErr] = useState<string | null>(null);
   const [pay, setPay] = useState({ open: false, amount: '', channel: 'transfer' as 'transfer' | 'acquiring' | 'cash', on: todayISO() });
   const [back, setBack] = useState({ open: false, amount: '', on: todayISO(), toState: 'available' as 'available' | 'service' });
@@ -29,7 +30,7 @@ export function SalePage() {
   const [cancelling, setCancelling] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  if (error) return <Empty text={error} />;
+  if (failure) return <LoadError failure={failure} onRetry={reload} />;
   if (!data) return <Loading />;
   const s = data.sale;
   const live = s.status === 'active';

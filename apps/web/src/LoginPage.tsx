@@ -1,11 +1,14 @@
 import { useState } from 'react';
-import { Navigate, useNavigate } from 'react-router-dom';
+import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { api, ApiError } from './api.js';
 import { LanguageToggle, useT } from './i18n/index.js';
+import { errorText } from './lib/use.js';
 import { useSession } from './session.js';
 
 export function LoginPage() {
   const navigate = useNavigate();
+  // Where the person was when the session ended; home when they came here first.
+  const from = (useLocation().state as { from?: string } | null)?.from ?? '/';
   const { me, loading, refresh } = useSession();
   const t = useT();
   const [email, setEmail] = useState('');
@@ -13,7 +16,7 @@ export function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  if (!loading && me) return <Navigate to="/" replace />;
+  if (!loading && me) return <Navigate to={from} replace />;
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -22,9 +25,9 @@ export function LoginPage() {
     try {
       await api.post('/api/auth/login', { email, password });
       await refresh();
-      navigate('/');
+      navigate(from, { replace: true });
     } catch (err) {
-      setError(err instanceof ApiError && err.status === 401 ? t.common.loginFailed : (err as Error).message);
+      setError(err instanceof ApiError && err.status === 401 ? t.common.loginFailed : errorText(err));
       setBusy(false);
     }
   };

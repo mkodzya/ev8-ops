@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api.js';
+import { LoadError } from '../components/LoadError.js';
 import { Empty, Loading, PageHead } from '../components/ui.js';
 import { QueueItem, type QueueLine } from './StatementsPage.js';
 import { fmtDate, formatGel } from '../format.js';
@@ -29,7 +30,7 @@ export interface PaymentRow {
 export function PaymentsPage() {
   const t = useT();
   const { can } = useSession();
-  const { data, error, reload } = useLoad<{ payments: PaymentRow[] }>('/api/payments');
+  const { data, failure, reload } = useLoad<{ payments: PaymentRow[] }>('/api/payments');
   const sorted = useSortable(
     data?.payments ?? [],
     {
@@ -49,7 +50,7 @@ export function PaymentsPage() {
   const queue = useLoad<{ lines: QueueLine[] }>(can('payments.reconcile') ? '/api/statement-lines' : null);
   const [tab, setTab] = useState<'queue' | 'all' | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  if (error) return <Empty text={error} />;
+  if (failure) return <LoadError failure={failure} onRetry={reload} />;
   if (!data) return <Loading />;
 
   const waiting = queue.data?.lines.length ?? 0;

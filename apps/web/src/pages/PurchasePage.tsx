@@ -2,6 +2,7 @@ import { parseGel, todayISO } from '@ev8/shared';
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../api.js';
+import { LoadError } from '../components/LoadError.js';
 import { ModelDrawer, NEW_MODEL } from '../components/ModelDrawer.js';
 import { Drawer } from '../components/Drawer.js';
 import { BlockHead, Empty, Loading, PageHead, StateBadge, Vin } from '../components/ui.js';
@@ -24,7 +25,7 @@ export function PurchasePage() {
   const { id } = useParams();
   const t = useT();
   const { can } = useSession();
-  const { data, error, reload } = useLoad<Card>(id ? `/api/purchases/${id}` : null);
+  const { data, failure, reload } = useLoad<Card>(id ? `/api/purchases/${id}` : null);
   const models = useLoad<{ models: { id: string; brand: string; name: string }[] }>(can('settings.manage') ? '/api/models' : null);
   const parts = useLoad<{ parts: PartRow[] }>(can('settings.manage') ? '/api/parts' : null);
   const [err, setErr] = useState<string | null>(null);
@@ -38,7 +39,7 @@ export function PurchasePage() {
   // here, over the order, rather than by leaving a half-typed line behind.
   const [addingModel, setAddingModel] = useState(false);
 
-  if (error) return <Empty text={error} />;
+  if (failure) return <LoadError failure={failure} onRetry={reload} />;
   if (!data) return <Loading />;
   const p = data.purchase;
   const open = p.status === 'ordered';

@@ -1,6 +1,7 @@
 import type { ActKind, DepositStatus, PeriodPayStatus, RentalStatus } from '@ev8/shared';
 import { useState } from 'react';
 import { parseGel, todayISO, type VehicleState } from '@ev8/shared';
+import { LoadError } from '../components/LoadError.js';
 import { Field } from '../components/Wizard.js';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../api.js';
@@ -57,7 +58,7 @@ export function RentalPage() {
   const { id } = useParams();
   const t = useT();
   const { can } = useSession();
-  const { data, error, reload } = useLoad<RentalCard>(id ? `/api/rentals/${id}` : null);
+  const { data, failure, reload } = useLoad<RentalCard>(id ? `/api/rentals/${id}` : null);
   const [err, setErr] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   // Which document is showing in the card, if any (U15). Printing is the last
@@ -66,7 +67,7 @@ export function RentalPage() {
   // Declared with the other hooks: below the early returns it would be called
   // on some renders and not others, which React counts and then throws on.
   const [preview, setPreview] = useState<'contract' | 'return-act' | null>(null);
-  if (error) return <Empty text={error} />;
+  if (failure) return <LoadError failure={failure} onRetry={reload} />;
   if (!data) return <Loading />;
   const r = data.rental;
   const today = todayISO();

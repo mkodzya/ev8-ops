@@ -3,6 +3,7 @@ import { useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { preparePhoto, uploadFile } from '../lib/photos.js';
 import { errorText } from '../lib/use.js';
+import { LoadError } from '../components/LoadError.js';
 import { BlockHead, Empty, Loading, PageHead, RentalBadge, Vin } from '../components/ui.js';
 import { Row } from '../components/Wizard.js';
 import { fmtDate, formatGel } from '../format.js';
@@ -32,13 +33,13 @@ export function CustomerPage() {
   const t = useT();
   const { locale } = useLocale();
   const { can } = useSession();
-  const { data, error, reload } = useLoad<Card>(id ? `/api/customers/${id}` : null);
+  const { data, failure, reload } = useLoad<Card>(id ? `/api/customers/${id}` : null);
   const balance = useLoad<Balance>(id ? `/api/customers/${id}/balance` : null);
   const [docKind, setDocKind] = useState<'id_card' | 'driver_licence' | 'other'>('id_card');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
-  if (error) return <Empty text={error} />;
+  if (failure) return <LoadError failure={failure} onRetry={reload} />;
   if (!data) return <Loading />;
   const c = data.customer;
 

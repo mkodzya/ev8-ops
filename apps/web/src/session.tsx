@@ -1,6 +1,6 @@
 import type { Permission, Role } from '@ev8/shared';
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
-import { api } from './api.js';
+import { SIGNED_OUT_EVENT, api } from './api.js';
 
 export interface Me {
   id: string;
@@ -39,6 +39,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    const gone = () => setMe(null);
+    window.addEventListener(SIGNED_OUT_EVENT, gone);
+    return () => window.removeEventListener(SIGNED_OUT_EVENT, gone);
+  }, []);
 
   const logout = useCallback(async () => {
     try {

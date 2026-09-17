@@ -2,6 +2,7 @@ import { parseGel, todayISO } from '@ev8/shared';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api.js';
+import { LoadError } from '../components/LoadError.js';
 import { Empty, Loading, PageHead } from '../components/ui.js';
 import { Field } from '../components/Wizard.js';
 import { fmtDate, formatGel } from '../format.js';
@@ -57,7 +58,7 @@ export function fmtForeign(minor: number, currency: string): string {
 export function PurchasesPage() {
   const t = useT();
   const { can } = useSession();
-  const { data, error, reload } = useLoad<{ purchases: Purchase[] }>('/api/purchases');
+  const { data, failure, reload } = useLoad<{ purchases: Purchase[] }>('/api/purchases');
   const sorted = useSortable(
     data?.purchases ?? [],
     {
@@ -75,7 +76,7 @@ export function PurchasesPage() {
   );
   const [err, setErr] = useState<string | null>(null);
 
-  if (error) return <Empty text={error} />;
+  if (failure) return <LoadError failure={failure} onRetry={reload} />;
   if (!data) return <Loading />;
 
   return (

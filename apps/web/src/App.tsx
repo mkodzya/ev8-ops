@@ -1,4 +1,4 @@
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { LoginPage } from './LoginPage.js';
 import { Shell } from './Shell.js';
 import { DesignPage } from './pages/DesignPage.js';
@@ -29,10 +29,16 @@ import { RentalsPage } from './pages/RentalsPage.js';
 import { TodayPage } from './pages/TodayPage.js';
 import { useSession } from './session.js';
 
+/** To the login page, remembering this screen so signing in comes back to it (B1-02). */
+function ToLogin() {
+  const { pathname, search } = useLocation();
+  return <Navigate to="/login" replace state={{ from: pathname + search }} />;
+}
+
 function RequireAuth({ children }: { children: React.ReactElement }) {
   const { me, loading } = useSession();
   if (loading) return null;
-  if (!me) return <Navigate to="/login" replace />;
+  if (!me) return <ToLogin />;
   return children;
 }
 
@@ -44,7 +50,7 @@ function RequireAuth({ children }: { children: React.ReactElement }) {
 function RequireReconcile({ children }: { children: React.ReactElement }) {
   const { me, loading, can } = useSession();
   if (loading) return null;
-  if (!me) return <Navigate to="/login" replace />;
+  if (!me) return <ToLogin />;
   if (!can('payments.reconcile')) return <Navigate to="/" replace />;
   return children;
 }
@@ -52,7 +58,7 @@ function RequireReconcile({ children }: { children: React.ReactElement }) {
 function RequireReports({ children }: { children: React.ReactElement }) {
   const { me, loading, can } = useSession();
   if (loading) return null;
-  if (!me) return <Navigate to="/login" replace />;
+  if (!me) return <ToLogin />;
   if (!can('reports.view')) return <Navigate to="/" replace />;
   return children;
 }
@@ -60,7 +66,7 @@ function RequireReports({ children }: { children: React.ReactElement }) {
 function RequireOwner({ children }: { children: React.ReactElement }) {
   const { me, loading, can } = useSession();
   if (loading) return null;
-  if (!me) return <Navigate to="/login" replace />;
+  if (!me) return <ToLogin />;
   if (!can('users.manage')) return <Navigate to="/" replace />;
   return children;
 }

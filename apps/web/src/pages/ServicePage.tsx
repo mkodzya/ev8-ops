@@ -2,6 +2,7 @@ import { parseGel, todayISO } from '@ev8/shared';
 import { useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
+import { LoadError } from '../components/LoadError.js';
 import { Empty, Loading, PageHead, Vin } from '../components/ui.js';
 import { Field } from '../components/Wizard.js';
 import { fmtDate, formatGel } from '../format.js';
@@ -47,12 +48,12 @@ export function ServicePage() {
   const { can } = useSession();
   const [params, setParams] = useSearchParams();
   const status = params.get('status');
-  const { data, error, reload } = useLoad<{ open: number; jobs: ServiceJob[] }>(
+  const { data, failure, reload } = useLoad<{ open: number; jobs: ServiceJob[] }>(
     status ? `/api/service?status=${status}` : '/api/service',
   );
   const [err, setErr] = useState<string | null>(null);
 
-  if (error) return <Empty text={error} />;
+  if (failure) return <LoadError failure={failure} onRetry={reload} />;
   if (!data) return <Loading />;
 
   return (

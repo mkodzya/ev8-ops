@@ -9,6 +9,7 @@ type Ground = (typeof GROUNDS)[number];
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api.js';
+import { LoadError } from '../components/LoadError.js';
 import { Empty, Loading, Vin } from '../components/ui.js';
 import { Field, Row, Wizard } from '../components/Wizard.js';
 import { fmtDate, formatGel } from '../format.js';
@@ -29,7 +30,7 @@ export function ReturnWizard() {
   const t = useT();
   const navigate = useNavigate();
   const { can } = useSession();
-  const { data, error } = useLoad<RentalCard>(id ? `/api/rentals/${id}` : null);
+  const { data, failure, reload } = useLoad<RentalCard>(id ? `/api/rentals/${id}` : null);
   const decides = can('deposit.decide');
   const steps = decides ? [t.ret.title, t.ret.depositDecision, t.pickup.steps.done] : [t.ret.title, t.pickup.steps.done];
   const [step, setStep] = useState(0);
@@ -49,7 +50,7 @@ export function ReturnWizard() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  if (error) return <Empty text={error} />;
+  if (failure) return <LoadError failure={failure} onRetry={reload} />;
   if (!data) return <Loading />;
   const r = data.rental;
   const amount = data.deposit?.amountTetri ?? r.depositTetri;

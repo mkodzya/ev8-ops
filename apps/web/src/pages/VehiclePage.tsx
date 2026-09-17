@@ -2,6 +2,7 @@ import { VEHICLE_POOLS, VEHICLE_STATES, isPoolEvent, type RentalStatus, type Veh
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../api.js';
+import { LoadError } from '../components/LoadError.js';
 import { Drawer } from '../components/Drawer.js';
 import { BlockHead, ColorText, Empty, Loading, PageHead, PlaceText, RentalBadge, StateBadge, Vin } from '../components/ui.js';
 import { Field, Row } from '../components/Wizard.js';
@@ -38,14 +39,14 @@ export function VehiclePage() {
   const { id } = useParams();
   const t = useT();
   const { can } = useSession();
-  const { data, error, reload } = useLoad<Card>(id ? `/api/fleet/${id}` : null);
+  const { data, failure, reload } = useLoad<Card>(id ? `/api/fleet/${id}` : null);
   const [open, setOpen] = useState(false);
   const [toState, setToState] = useState<VehicleState>('service');
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  if (error) return <Empty text={error} />;
+  if (failure) return <LoadError failure={failure} onRetry={reload} />;
   if (!data) return <Loading />;
   const v = data.vehicle;
   const current = data.rentals.find((r) => r.id === v.currentRentalId) ?? null;
