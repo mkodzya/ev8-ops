@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { acquiringNet, customerBalance, instalmentSchedule, spreadOverOwed, spreadPayment } from '../src/index.js';
+import { acquiringNet, instalmentSchedule, spreadOverOwed, spreadPayment } from '../src/index.js';
 
 const period = (seq: number, amountTetri: number, paidTetri = 0) => ({ id: `p${seq}`, seq, amountTetri, paidTetri });
 
@@ -51,40 +51,6 @@ describe('spreading a payment (PAY-02)', () => {
 
   it('places nothing when there is nothing open', () => {
     expect(spreadPayment(10000, [], null)).toEqual({ allocations: [], leftoverTetri: 10000 });
-  });
-});
-
-describe('customer balance (PAY-06)', () => {
-  it('separates what is owed from what was paid ahead', () => {
-    const owing = customerBalance({
-      periods: [{ amountTetri: 15000, paidTetri: 15000 }, { amountTetri: 15000, paidTetri: 0 }],
-      deposits: [{ amountTetri: 18000, paidTetri: 18000, held: true }],
-      paidTetri: 33000,
-    });
-    expect(owing).toEqual({
-      invoicedTetri: 48000,
-      paidTetri: 33000,
-      outstandingTetri: 15000,
-      creditTetri: 0,
-      depositHeldTetri: 18000,
-    });
-
-    const ahead = customerBalance({
-      periods: [{ amountTetri: 15000, paidTetri: 15000 }],
-      deposits: [{ amountTetri: 18000, paidTetri: 18000, held: true }],
-      paidTetri: 40000,
-    });
-    expect(ahead.outstandingTetri).toBe(0);
-    expect(ahead.creditTetri).toBe(7000);
-  });
-
-  it('stops counting a deposit as held once the rental is closed', () => {
-    const b = customerBalance({
-      periods: [],
-      deposits: [{ amountTetri: 18000, paidTetri: 18000, held: false }],
-      paidTetri: 18000,
-    });
-    expect(b.depositHeldTetri).toBe(0);
   });
 });
 

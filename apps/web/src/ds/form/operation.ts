@@ -26,7 +26,9 @@ export function failureOf(e: unknown, fieldOf: Record<string, string> = {}): Fai
   const named = typeof e.extra.field === 'string' ? e.extra.field : null;
   const field = named ?? fieldOf[e.code] ?? null;
   // A generic "field is wrong" reads as what to do under the field itself.
-  const fieldText = !field ? null : e.code === 'missing_field' ? t.form.fieldMissing : e.code === 'bad_field' ? t.form.fieldBad : text;
+  // A check made on the screen may bring its own words for the field it is about.
+  const own = typeof e.extra.fieldText === 'string' ? e.extra.fieldText : null;
+  const fieldText = !field ? null : own ?? (e.code === 'missing_field' ? t.form.fieldMissing : e.code === 'bad_field' ? t.form.fieldBad : text);
   return { text, field, fieldText, code: e.code, network };
 }
 

@@ -701,6 +701,7 @@ export const ru: Dict = {
 
 
   money: {
+    tillMinusNeed: 'Отметьте, если выдаёте из своих.',
     tillMinus: (onHand: string, minus: string) => `В кассе у вас ${onHand} — выдаёте больше, касса уйдёт в минус −${minus}`,
     tillMinusOk: 'Да, выдаю — касса уйдёт в минус',
     take: 'Принять деньги',
@@ -913,7 +914,6 @@ export const ru: Dict = {
     backdate: 'Прошлой датой, потому что',
     paidTo: 'Выдан',
     rate: 'Курс',
-    notFound: 'Платёж не найден.',
   },
 
   payList: {
@@ -962,15 +962,6 @@ export const ru: Dict = {
     cashOnly: 'Менеджер проводит наличные. Перевод и карту заводит владелец.',
   },
 
-  balance: {
-    owes: (sum: string) => `Должен ${sum}`,
-    overpaid: (sum: string) => `Переплата ${sum}`,
-    clear: 'Долга нет',
-    paid: 'Оплачено',
-    outstanding: 'Долг',
-    credit: 'Переплата',
-    depositHeld: 'Залог на руках',
-  },
 
   statements: {
     through: (d: string) => `по ${d}`,
@@ -991,40 +982,15 @@ export const ru: Dict = {
     doneSummary: (r: number, m: number, q: number) => `${r} совпали с внесёнными · ${m} привязаны правилами · ${q} ждут разбора`,
     sortN: (n: number) => `Разобрать ${n}`,
     uploads: 'Загрузки',
-    assigned: (number: string) => `Привязано к ${number}`,
-    ignored: 'Отмечено: не платёж клиента',
     linesCount: counted('строка', 'строки', 'строк'),
-    count: counted('выписка', 'выписки', 'выписок'),
-    previewTitle: 'Что добавит этот файл',
     previewNew: 'новых строк',
     previewKnown: 'уже загружено',
-    previewIn: 'поступления',
-    previewOut: 'списания',
-    previewConfirm: 'Загрузить',
     importCta: 'Загрузить выписку',
-    looksLike: 'Похоже на',
-    otherHints: (n: number) => `ещё ${n}`,
     title: 'Выписки',
     upload: 'Загрузить выписку',
     uploadHint: 'CSV в том виде, в каком его отдаёт банк: StatementExport.csv у Bank of Georgia, transactions_history.csv у TBC. Повторная загрузка того же файла ничего не меняет.',
     bank: 'Банк',
     banks: { bog: 'Bank of Georgia', tbc: 'TBC', credo: 'Credo' },
-    file: 'Файл',
-    period: 'Период',
-    lines: 'Строк',
-    newLines: 'Новых',
-    matched: 'Разобрано',
-    loadedBy: 'Загрузил',
-    none: 'Выписок пока нет.',
-    result: (fresh: string, matched: string, queued: string) => `Новых строк ${fresh}, разобрано ${matched}, в очередь ${queued}.`,
-    queue: 'Очередь',
-    queueNone: 'Очередь пуста.',
-    hints: 'К какой аренде это относится?',
-    why: { amount: 'сумма совпадает с открытой', pickup_day: 'выдан в этот день', open: 'есть непогашенное' },
-    assign: 'Эта',
-    ignore: 'Не платёж клиента',
-    ignoreReason: 'Что это на самом деле',
-    line: 'Строка банка',
   },
 
   service: {

@@ -690,6 +690,7 @@ export const ka: Dict = {
 
 
   money: {
+    tillMinusNeed: 'მონიშნეთ, თუ სხვა ფულიდან აბრუნებთ.',
     tillMinus: (onHand: string, minus: string) => `სალაროში გაქვთ ${onHand} — მეტს აბრუნებთ, სალარო მინუსში წავა −${minus}`,
     tillMinusOk: 'დიახ, ვაბრუნებ — სალარო მინუსში წავა',
     take: 'ფულის მიღება',
@@ -902,7 +903,6 @@ export const ka: Dict = {
     backdate: 'წინა თარიღით, რადგან',
     paidTo: 'გადაეცა',
     rate: 'კურსი',
-    notFound: 'ასეთი გადახდა არ არის.',
   },
 
   payList: {
@@ -951,15 +951,6 @@ export const ka: Dict = {
     cashOnly: 'მენეჯერი ატარებს ნაღდს. გადარიცხვას და ბარათს მფლობელი ატარებს.',
   },
 
-  balance: {
-    owes: (sum: string) => `ვალი ${sum}`,
-    overpaid: (sum: string) => `ზედმეტად გადახდილი ${sum}`,
-    clear: 'ვალი არ არის',
-    paid: 'გადახდილი',
-    outstanding: 'დავალიანება',
-    credit: 'ავანსი',
-    depositHeld: 'დეპოზიტი ხელზე',
-  },
 
   statements: {
     through: (d: string) => `${d}-მდე`,
@@ -980,40 +971,15 @@ export const ka: Dict = {
     doneSummary: (r: number, m: number, q: number) => `${r} დაემთხვა გატარებულს · ${m} წესებით მიება · ${q} ელოდება დახარისხებას`,
     sortN: (n: number) => `დახარისხება ${n}`,
     uploads: 'ჩატვირთვები',
-    assigned: (number: string) => `მიბმულია ${number}-ზე`,
-    ignored: 'მოინიშნა: კლიენტის გადახდა არ არის',
     linesCount: (n: number) => `${n} ხაზი`,
-    count: (n: number) => `${n} ამონაწერი`,
-    previewTitle: 'რას დაამატებს ეს ფაილი',
     previewNew: 'ახალი სტრიქონი',
     previewKnown: 'უკვე ჩატვირთული',
-    previewIn: 'შემოსავალი',
-    previewOut: 'გასავალი',
-    previewConfirm: 'ჩატვირთვა',
     importCta: 'ამონაწერის ატვირთვა',
-    looksLike: 'ჰგავს',
-    otherHints: (n: number) => `კიდევ ${n}`,
     title: 'ამონაწერები',
     upload: 'ამონაწერის ატვირთვა',
     uploadHint: 'CSV ისე, როგორც ბანკი გასცემს: StatementExport.csv — საქართველოს ბანკი, transactions_history.csv — თიბისი. ერთი ფაილის ორჯერ ატვირთვა არაფერს ცვლის.',
     bank: 'ბანკი',
     banks: { bog: 'საქართველოს ბანკი', tbc: 'თიბისი', credo: 'კრედო' },
-    file: 'ფაილი',
-    period: 'პერიოდი',
-    lines: 'ჩანაწერი',
-    newLines: 'ახალი',
-    matched: 'დაკავშირდა',
-    loadedBy: 'ატვირთა',
-    none: 'ამონაწერი ჯერ არ არის.',
-    result: (fresh: string, matched: string, queued: string) => `${fresh} ახალი ჩანაწერი, ${matched} დაკავშირდა, ${queued} რიგში.`,
-    queue: 'რიგი',
-    queueNone: 'რიგი ცარიელია.',
-    hints: 'რომელი ქირაობაა?',
-    why: { amount: 'თანხა ზუსტად ემთხვევა', pickup_day: 'იმ დღეს გაიცა', open: 'აქვს გადასახდელი' },
-    assign: 'ეს',
-    ignore: 'კლიენტის გადახდა არ არის',
-    ignoreReason: 'რა არის სინამდვილეში',
-    line: 'ბანკის ჩანაწერი',
   },
 
   service: {
