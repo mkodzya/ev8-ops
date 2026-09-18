@@ -1,6 +1,6 @@
 import { FailureProvider, SubmitButton, useFieldError } from '../ds/form/Form.js';
 import type { Failure, SubmitState } from '../ds/form/operation.js';
-import type { ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { useT } from '../i18n/index.js';
 
 // One step per screen, one button at the bottom, reachable with a thumb
@@ -21,6 +21,10 @@ export function Wizard(props: {
 }) {
   const t = useT();
   const last = props.step >= props.steps.length - 1;
+  // A new step starts at its top, not where the last one was scrolled to.
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [props.step]);
   return (
     <div className="wizard">
       <header className="wizard-head">
