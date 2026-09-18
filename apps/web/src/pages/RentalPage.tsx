@@ -6,8 +6,6 @@ import { Field } from '../components/Wizard.js';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { FormSheet, SubmitButton } from '../ds/form/Form.js';
-import { useOperation } from '../ds/form/operation.js';
-import { useToast } from '../ds/feedback/Toast.js';
 import { BlockHead, Empty, Loading, PageHead, RentalBadge, Vin } from '../components/ui.js';
 import { useMoneyForm } from '../ds/money/MoneyForm.js';
 import { Row } from '../components/Wizard.js';
@@ -64,8 +62,6 @@ export function RentalPage() {
   const { can } = useSession();
   const { data, failure, reload } = useLoad<RentalCard>(id ? `/api/rentals/${id}` : null);
   const [editing, setEditing] = useState(false);
-  const depositOp = useOperation();
-  const toast = useToast();
   // Which document is showing in the card, if any (U15). Printing is the last
   // step of every hand-over and every return, and a link that opens a new tab
   // is a step where people find out the PDF was wrong after they printed it.
@@ -82,13 +78,6 @@ export function RentalPage() {
   const d = data.deposit;
   const open = r.status !== 'returned';
   const decided = d && d.status !== 'held';
-
-  const confirm = async () => {
-    const res = await depositOp.run((key) => api.post(`/api/rentals/${r.id}/deposit/confirm`, {}, { key }));
-    if (!res.ok) return;
-    toast({ text: t.rental.depositConfirmed });
-    reload();
-  };
 
   return (
     <>
@@ -237,15 +226,6 @@ export function RentalPage() {
                   {d.returnedTetri > 0 && <Row k={t.rentals.returned} v={<span className="mono">{formatGel(d.returnedTetri, { decimals: false })} · {fmtDate(d.returnedOn)}</span>} />}
                   {d.withheldTetri > 0 && <Row k={t.rental.withheldReason} v={<span><span className="mono">{formatGel(d.withheldTetri, { decimals: false })}</span> · {d.withheldReason}</span>} />}
                   {d.returnedTo && <Row k={t.rental.returnedTo} v={d.returnedTo} />}
-                  {d.confirmed === false && (
-                    <div className="row-actions">
-                      <span className="warn-text">{t.rental.awaitingOwner}</span>
-                      {can('deposit.confirm') && (
-                        <SubmitButton small type="button" state={depositOp.state} label={t.actions.confirmDeposit} onClick={() => void confirm()} />
-                      )}
-                      {depositOp.failure && <span className="field-err">{depositOp.failure.text}</span>}
-                    </div>
-                  )}
                 </>
               )}
             </>

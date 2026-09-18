@@ -28,6 +28,7 @@ export function summaryRoutes(app: FastifyInstance): void {
           // What is owed comes from the periods that were not paid, like
           // everywhere else — there is no stored debt to disagree with them.
           periods: { where: { payStatus: { not: 'paid' } }, select: { amountTetri: true, paidTetri: true } },
+          deposit: { select: { paidTetri: true } },
         },
       }),
       prisma.customer.count({ where: { archived: false } }),
@@ -57,11 +58,17 @@ export function summaryRoutes(app: FastifyInstance): void {
     // The overdue rentals themselves, deepest first: a count tells nobody who
     // to call (U2). The days come from the same rule the rental card uses.
     const overdueList: { id: string; number: string; customer: { id: string; name: string; phone: string | null }; days: number; debtTetri: number }[] = [];
+    // Handed over today, nothing paid yet (wave 3 §3.3): not a debt — a task.
+    const awaitingPayment: { id: string; number: string; customer: string }[] = [];
     for (const r of rentals) {
       const pickedUpOn = isoDate(r.pickedUpOn);
       const paidThroughDate = isoDate(r.paidThrough);
-      const status = effectiveRentalStatus(r.status, paidThroughDate, pickedUpOn, today);
-      if (status === 'overdue') {
+      const nothingPaid = !paidThroughDate && (r.deposit?.paidTetri ?? 0) === 0 && r.periods.every((p) => p.paidTetri === 0);
+      const status = effectiveRentalStatus(r.status, paidThroughDate, pickedUpOn, today, nothingPaid);
+      if (status === 'awaiting_payment') {
+        awaitingPayment.push({ id: r.id, number: r.number, customer: r.customer.name });
+        active++;
+      } else if (status === 'overdue') {
         overdue++;
         overdueList.push({
           id: r.id,
@@ -79,7 +86,22 @@ export function summaryRoutes(app: FastifyInstance): void {
       o.debtTetri = (debts.get(o.customer.id)?.parts ?? []).filter((p) => p.id === o.id).reduce((n, p) => n + p.owesTetri, 0);
     }
     overdueList.sort((a, b) => b.days - a.days || b.debtTetri - a.debtTetri);
+    // Returns a manager closed: the deposit waits for an owner (wave 3 §3.5, D8).
+    const undecided = mayView(req, 'deposit.decide')
+      ? await prisma.rental.findMany({
+          where: { status: 'returned', deposit: { status: 'held', decidedById: null, paidTetri: { gt: 0 } } },
+          select: { id: true, number: true, returnedOn: true, customer: { select: { name: true } } },
+          orderBy: { returnedOn: 'asc' },
+        })
+      : [];
     return {
+      awaitingPayment,
+      depositsUndecided: undecided.map((r) => ({
+        id: r.id,
+        number: r.number,
+        customer: r.customer.name,
+        days: r.returnedOn ? Math.max(0, Math.round((day.getTime() - r.returnedOn.getTime()) / 86_400_000)) : 0,
+      })),
       today,
       fleet,
       rentals: { active, overdue, withoutVin },

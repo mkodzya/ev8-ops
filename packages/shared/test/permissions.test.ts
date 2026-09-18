@@ -17,7 +17,7 @@ describe('roles and permissions (redesign §2.1, Mika 17.09.2026)', () => {
   });
 
   it('a manager never sees cost, purchases, reports, documents or other people\'s money, and decides no deposit', () => {
-    for (const p of ['cost.view', 'purchases.view', 'reports.view', 'customer.documents.view', 'payments.view', 'payments.reconcile', 'deposit.decide', 'deposit.confirm', 'service.manage', 'settings.manage', 'users.manage'] as const) {
+    for (const p of ['cost.view', 'purchases.view', 'reports.view', 'customer.documents.view', 'payments.view', 'payments.reconcile', 'deposit.decide', 'service.manage', 'settings.manage', 'users.manage'] as const) {
       expect(roleCan('manager', p), p).toBe(false);
     }
   });

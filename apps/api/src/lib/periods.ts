@@ -1,9 +1,10 @@
-import { periodsThrough, spreadPayment, todayISO } from '@ev8/shared';
+import { periodsThrough, todayISO } from '@ev8/shared';
 import { audit } from './audit.js';
 import { dateFromISO, isoDate } from './dates.js';
 import { prisma } from './db.js';
 import { env } from './env.js';
 import { recomputeRental } from './payments.js';
+import { rentalOwed, spreadRental, writeAllocations } from './rentalMoney.js';
 
 // The nightly job (RNT-02, PAY-06), and the reason it lives in the API
 // rather than in the worker: the worker is the clock, this is the brain.
@@ -43,27 +44,10 @@ export async function settleCredit(rentalId: string): Promise<number> {
       const credit = p.grossTetri - p.allocations.reduce((n, a) => n + a.amountTetri, 0);
       if (credit <= 0) continue;
 
-      const periods = await tx.rentalPeriod.findMany({ where: { rentalId }, orderBy: { seq: 'asc' } });
-      const deposit = await tx.deposit.findUnique({ where: { rentalId } });
-      const spread = spreadPayment(
-        credit,
-        periods.map((x) => ({ id: x.id, seq: x.seq, amountTetri: x.amountTetri, paidTetri: x.paidTetri })),
-        deposit ? { id: deposit.id, amountTetri: deposit.amountTetri, paidTetri: deposit.paidTetri } : null,
-      );
+      const spread = spreadRental(credit, await rentalOwed(tx, rentalId));
       if (spread.allocations.length === 0) continue;
-
-      for (const a of spread.allocations) {
-        await tx.paymentAllocation.create({
-          data: {
-            paymentId: p.id,
-            target: a.target,
-            periodId: a.target === 'period' ? a.id : null,
-            depositId: a.target === 'deposit' ? a.id : null,
-            amountTetri: a.amountTetri,
-          },
-        });
-        placed += a.amountTetri;
-      }
+      await writeAllocations(tx, p.id, spread.allocations);
+      placed += spread.allocations.reduce((n, a) => n + a.amountTetri, 0);
       await recomputeRental(tx, rentalId);
     }
     return placed;

@@ -1,4 +1,4 @@
-import { acquiringFee, paidThrough, periodPayStatus, spreadOverOwed, spreadPayment, todayISO, type Allocation } from '@ev8/shared';
+import { acquiringFee, paidThrough, periodPayStatus, spreadOverOwed, todayISO, type Allocation } from '@ev8/shared';
 import type { Prisma } from '../generated/prisma/client.js';
 import { hasPerm, type Actor } from './auth.js';
 import { dateFromISO, isoDate } from './dates.js';
@@ -6,6 +6,7 @@ import { prisma } from './db.js';
 import { env } from './env.js';
 import { badRequest, conflict, forbidden, notFound } from './errors.js';
 import { recordPaymentTx } from './payments.js';
+import { rentalOwed, spreadRental } from './rentalMoney.js';
 import { moveVehicle } from './vehicles.js';
 
 // One way money moves (wave 2 §3.1). The money form, a card's "take money",
@@ -48,7 +49,7 @@ export interface MoneyInput {
 
 /** One thing a payment will close, in words the form can say. */
 export interface Closes {
-  target: 'deposit' | 'period' | 'instalment' | 'service' | 'sale' | 'purchase';
+  target: 'deposit' | 'period' | 'instalment' | 'charge' | 'service' | 'sale' | 'purchase';
   amountTetri: number;
   /** What this thing asks for in full, and what was open on it before. */
   fullTetri: number;
@@ -201,17 +202,11 @@ export async function planMoney(tx: Tx, input: MoneyInput): Promise<MoneyPlan> {
 }
 
 async function planRental(tx: Tx, rentalId: string, gross: number): Promise<Pick<MoneyPlan, 'closes' | 'leftoverTetri' | 'paidThroughBefore' | 'paidThroughAfter'>> {
-  const periods = await tx.rentalPeriod.findMany({ where: { rentalId }, orderBy: { seq: 'asc' } });
-  const deposit = await tx.deposit.findUnique({ where: { rentalId } });
-  if (periods.length === 0 && !deposit) {
-    const exists = await tx.rental.findUnique({ where: { id: rentalId }, select: { id: true } });
-    if (!exists) throw notFound('rental_not_found', 'No such rental.');
-  }
-  const spread = spreadPayment(
-    gross,
-    periods.map((p) => ({ id: p.id, seq: p.seq, amountTetri: p.amountTetri, paidTetri: p.paidTetri })),
-    deposit ? { id: deposit.id, amountTetri: deposit.amountTetri, paidTetri: deposit.paidTetri } : null,
-  );
+  const exists = await tx.rental.findUnique({ where: { id: rentalId }, select: { id: true } });
+  if (!exists) throw notFound('rental_not_found', 'No such rental.');
+  const owed = await rentalOwed(tx, rentalId);
+  const { periods, deposit } = owed;
+  const spread = spreadRental(gross, owed);
   const added = new Map<string, number>(spread.allocations.map((a: Allocation) => [a.id, a.amountTetri]));
   const rows = (extra: boolean) =>
     periods.map((p) => ({ seq: p.seq, endsOn: isoDate(p.endsOn)!, payStatus: periodPayStatus(p.amountTetri, p.paidTetri + (extra ? added.get(p.id) ?? 0 : 0)) }));
@@ -226,6 +221,11 @@ async function planRental(tx: Tx, rentalId: string, gross: number): Promise<Pick
     const amount = added.get(p.id) ?? 0;
     if (p.paidTetri >= p.amountTetri || (amount === 0 && isoDate(p.startsOn)! > today)) continue;
     closes.push({ target: 'period', amountTetri: amount, fullTetri: p.amountTetri, openTetri: p.amountTetri - p.paidTetri, seq: p.seq, startsOn: isoDate(p.startsOn), endsOn: isoDate(p.endsOn) });
+  }
+  // What a return charged — a key, days of delay — after the weeks (B5-08).
+  for (const c of owed.charges) {
+    if (c.paidTetri >= c.amountTetri) continue;
+    closes.push({ target: 'charge', amountTetri: added.get(c.id) ?? 0, fullTetri: c.amountTetri, openTetri: c.amountTetri - c.paidTetri, number: c.kind });
   }
   return {
     closes,

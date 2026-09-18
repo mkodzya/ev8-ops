@@ -20,6 +20,8 @@ export interface DebtRental {
   open: boolean;
   periods: { startsOn: ISODate; amountTetri: Tetri; paidTetri: Tetri }[];
   deposit: { amountTetri: Tetri; paidTetri: Tetri } | null;
+  /** What a return charged beyond the weeks: a key, days of delay, what was kept (wave 3). */
+  charges?: { amountTetri: Tetri; paidTetri: Tetri }[];
 }
 
 export interface DebtSale {
@@ -49,7 +51,7 @@ export interface DebtInput {
 }
 
 export interface DebtPart {
-  kind: 'rent' | 'deposit' | 'sale' | 'service';
+  kind: 'rent' | 'deposit' | 'charge' | 'sale' | 'service';
   id: string;
   number: string;
   owesTetri: Tetri;
@@ -83,6 +85,8 @@ export function customerDebt(input: DebtInput): Debt {
       const short = open(r.deposit.amountTetri, r.deposit.paidTetri);
       if (short > 0) parts.push({ kind: 'deposit', id: r.id, number: r.number, owesTetri: short });
     }
+    const charged = (r.charges ?? []).reduce((n, c) => n + open(c.amountTetri, c.paidTetri), 0);
+    if (charged > 0) parts.push({ kind: 'charge', id: r.id, number: r.number, owesTetri: charged });
   }
 
   for (const s of input.sales) {

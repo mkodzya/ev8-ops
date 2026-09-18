@@ -154,7 +154,7 @@ export function searchRoutes(app: FastifyInstance): void {
     const debts = await debtsOf([...groups.customers.items.map((c) => c.id), ...groups.rentals.items.map((r) => r.customerId)]);
     const owes = (customerId: string, rentalId?: string) =>
       rentalId
-        ? (debts.get(customerId)?.parts ?? []).filter((p) => p.id === rentalId && (p.kind === 'rent' || p.kind === 'deposit')).reduce((n, p) => n + p.owesTetri, 0)
+        ? (debts.get(customerId)?.parts ?? []).filter((p) => p.id === rentalId && (p.kind === 'rent' || p.kind === 'deposit' || p.kind === 'charge')).reduce((n, p) => n + p.owesTetri, 0)
         : debts.get(customerId)?.owesTetri ?? 0;
     return {
       q: req.query.q,
