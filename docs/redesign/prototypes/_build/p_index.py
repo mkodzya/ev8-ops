@@ -22,6 +22,12 @@ wave2 = [
  ('wave-2-payments-cash.html', 'Волна 2 · Платежи и касса', 'Платежи со знаком, страница платежа, касса по людям: сдал и принял', 'wave-2.md §3.3–3.4'),
  ('wave-2-statements-deposits.html', 'Волна 2 · Выписки, залоги, долг', 'Загрузка с предпросмотром, свежесть, залоги к выдаче, одна цифра долга', 'wave-2.md §3.5–3.7'),
 ]
+wave3 = [
+ ('wave-3-pickup.html', 'Волна 3 · Выдача', 'Шаги, новый клиент в шаге, должник, перенос аренды, оплата, «Готово», подпись на экране; KA; ноутбук', 'wave-3.md §3.1–3.3'),
+ ('wave-3-return.html', 'Волна 3 · Возврат и залог', 'Акт по комплекту, расчёт, залог владельцем и менеджером, где встал, подтверждение, решить позже', 'wave-3.md §3.4–3.6'),
+ ('wave-3-rental-actions.html', 'Волна 3 · После выдачи', 'Правка условий, пауза и спорная, отмена возврата, долг после возврата, «Ждут решения»', 'wave-3.md §3.7'),
+]
+rows3 = ''.join(f'<tr><td><a class="ok" href="{f}"><b>{t}</b></a></td><td>{d}</td><td class="small muted">{i}</td></tr>' for f, t, d, i in wave3)
 rows2 = ''.join(f'<tr><td><a class="ok" href="{f}"><b>{t}</b></a></td><td>{d}</td><td class="small muted">{i}</td></tr>' for f, t, d, i in wave2)
 rows1 = ''.join(f'<tr><td><a class="ok" href="{f}"><b>{t}</b></a></td><td>{d}</td><td class="small muted">{i}</td></tr>' for f, t, d, i in wave1)
 rows = ''.join(f'<tr><td><a class="ok" href="{f}"><b>{t}</b></a></td><td>{d}</td><td class="small muted">{i}</td></tr>' for f, t, d, i in items)
@@ -32,6 +38,7 @@ html = (f'<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name=
  '<dt>Роли</dt><dd>Владелец (Mika, Kardu) и менеджер — решение Mika 17.09.2026</dd>'
  '<dt>Дата</dt><dd>17.09.2026</dd></dl></header>'
  '<section class="notes"><h2>Схема (утверждена 17.09.2026)</h2><table style="width:100%"><tr><th>Прототип</th><th>Что внутри</th><th>Схема · ТЗ v2</th></tr>' + rows + '</table>'
+ '<h2>Волна 3 — утверждена</h2><table style="width:100%"><tr><th>Прототип</th><th>Что внутри</th><th>Где описано</th></tr>' + rows3 + '</table>'
  '<h2>Волна 2 — утверждена</h2><table style="width:100%"><tr><th>Прототип</th><th>Что внутри</th><th>Где описано</th></tr>' + rows2 + '</table>'
  '<h2>Волна 1 — принята</h2><table style="width:100%"><tr><th>Прототип</th><th>Что внутри</th><th>Где описано</th></tr>' + rows1 + '</table>'
  '<h2>Как смотреть</h2><ul><li>Каждый кадр телефона прокручивается внутри рамки.</li><li>Подпись под кадром объясняет решение и называет пункт аудита или ТЗ.</li><li>Грузинский текст — из словаря интерфейса (носителем не вычитан, register #15) или помечен как предложение.</li></ul>'
