@@ -15,6 +15,7 @@ export function depositRoutes(app: FastifyInstance): void {
       include: {
         rental: { select: { id: true, number: true, status: true, returnedOn: true, customer: { select: { id: true, name: true, nameKa: true, nameLat: true } } } },
         payouts: { where: { voidedAt: null }, select: { grossTetri: true } },
+        withholdings: { where: { voidedAt: null }, orderBy: { createdAt: 'asc' }, include: { serviceJob: { select: { number: true } } } },
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -22,7 +23,9 @@ export function depositRoutes(app: FastifyInstance): void {
       const paidOut = d.paidOutBeforeTetri + d.payouts.reduce((n, p) => n + p.grossTetri, 0);
       const st = depositState({ amountTetri: d.amountTetri, paidTetri: d.paidTetri, returnedTetri: d.returnedTetri, withheldTetri: d.withheldTetri, paidOutTetri: paidOut });
       const open = OPEN.includes(d.rental.status);
-      const segment = st.toHandBackTetri > 0 ? 'to_hand_back' : open && st.shortTetri > 0 ? 'short' : st.heldTetri > 0 ? 'held' : 'closed';
+      // Back with the moped, and nobody has said what happens to the deposit (wave 3 §3.5).
+      const undecided = d.rental.status === 'returned' && d.status === 'held' && !d.decidedById && st.heldTetri > 0;
+      const segment = undecided ? 'undecided' : st.toHandBackTetri > 0 ? 'to_hand_back' : open && st.shortTetri > 0 ? 'short' : st.heldTetri > 0 ? 'held' : 'closed';
       return {
         rentalId: d.rental.id,
         number: d.rental.number,
@@ -38,6 +41,8 @@ export function depositRoutes(app: FastifyInstance): void {
         paidOutTetri: paidOut,
         ...st,
         segment,
+        // What was kept, line by line: a repair's and a return's (B5-04).
+        withholdings: d.withholdings.map((w) => ({ source: w.source, amountTetri: w.amountTetri, number: w.serviceJob?.number ?? d.rental.number, reason: w.reason, grounds: w.grounds })),
         // Still being decided: the rental runs, or it came back and nobody has said what happens to the deposit.
         live: open || d.status === 'held',
       };

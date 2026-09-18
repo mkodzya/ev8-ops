@@ -1,5 +1,5 @@
 import { numberMatches, phoneMatches, spellingMatches, vinMatches, type RentalStatus } from '@ev8/shared';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useSession } from '../session.js';
 import { LoadError } from '../components/LoadError.js';
 import { useLoad } from '../lib/use.js';
@@ -25,6 +25,8 @@ interface Rental {
   paidThrough: string | null;
   overdueDays: number;
   debtTetri: number;
+  /** Signed on the screen (wave 3 §3.2). */
+  contractSigned?: boolean;
 }
 
 export function RentalsPage() {
@@ -32,9 +34,14 @@ export function RentalsPage() {
   const { can } = useSession();
   const { locale } = useLocale();
   const { data, failure, reload } = useLoad<{ rentals: Rental[] }>('/api/rentals');
-  const rows = data?.rentals ?? null;
-  if (!rows && failure) return <LoadError failure={failure} onRetry={reload} />;
-  if (!rows) return <Loading />;
+  const [params, setParams] = useSearchParams();
+  const all = data?.rentals ?? null;
+  if (!all && failure) return <LoadError failure={failure} onRetry={reload} />;
+  if (!all) return <Loading />;
+  // "Не подписан": a running rental whose contract has no signature yet (wave 3 §3.2).
+  const unsignedRows = all.filter((r) => r.status !== 'returned' && r.contractSigned === false);
+  const unsigned = params.get('f') === 'unsigned';
+  const rows = unsigned ? unsignedRows : all;
 
   // What the right of a row says: the debt when there is one, otherwise how
   // far it is paid — one figure, as on the card (U5).
@@ -47,13 +54,20 @@ export function RentalsPage() {
 
   return (
     <>
-      <PageHead title={t.rentals.title} sub={t.rentals.count(rows.length)}>
+      <PageHead title={t.rentals.title} sub={t.rentals.count(all.length)}>
         {can('rental.create') && (
           <Link className="pill pill-sm pill-accent" to="/rentals/new">
             {t.actions.newRental}
           </Link>
         )}
       </PageHead>
+      {unsignedRows.length > 0 && (
+        <div className="list-chips">
+          <button type="button" className={`list-chip ${unsigned ? 'on' : ''}`} onClick={() => setParams(unsigned ? {} : { f: 'unsigned' }, { replace: true })}>
+            {t.w3.unsigned} <span className="n">{unsignedRows.length}</span>
+          </button>
+        </div>
+      )}
       <DataList
         rows={rows}
         rowKey={(r) => r.id}

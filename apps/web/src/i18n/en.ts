@@ -7,6 +7,7 @@
 // screen. Values that need data are functions, so interpolation is checked.
 //
 // Money keeps ONE format in every language (formatGel in @ev8/shared).
+import { wave3En } from './wave3.js';
 export const en = {
   lang: { label: 'Language', ka: 'ქართული', ru: 'Русский', en: 'English' },
 
@@ -204,6 +205,7 @@ export const en = {
 
   rentalStatus: {
     booked: 'Booked',
+    awaiting_payment: 'Awaiting payment',
     active: 'Active',
     overdue: 'Overdue',
     paused: 'Paused',
@@ -1247,7 +1249,6 @@ export const en = {
       demo_login_off: 'Demo logins are switched off on this stand.',
       deposit_decision_forbidden: 'Only an owner decides on a deposit.',
       deposit_not_found: 'This rental has no deposit.',
-      deposit_split: 'Returned and withheld together come to more than the deposit.',
       deposit_too_small: 'The deposit does not hold that much.',
       documents_restricted: 'Customer documents are for the owners only.',
       down_payment_too_big: 'The down payment is more than the price.',
@@ -1281,7 +1282,6 @@ export const en = {
       not_paid: 'Nothing has been paid for this order yet, so the unit cost cannot be counted.',
       not_returned: 'The return act appears once the rental is closed.',
       not_yours: 'Only the person who made this move can undo it.',
-      nothing_to_confirm: 'There is no decision on this deposit yet.',
       nothing_to_correct: 'The count already says that.',
       nothing_to_undo: 'This moped has no park move to undo.',
       outgoing_line: 'Money leaving the account is not a customer payment.',
@@ -1295,6 +1295,15 @@ export const en = {
       purchase_has_payments: 'Cancel the payments on this order first.',
       purchase_not_found: 'Order not found.',
       reason_required: 'Withholding needs a reason.',
+      customer_in_debt: 'This customer owes money. Only an owner can hand over a moped, with a reason.',
+      deposit_decided: 'The deposit has already been decided.',
+      document_gaps: 'The document is missing data. Fill it in before signing.',
+      odometer_below: 'The mileage is below the last recorded one. Give a reason.',
+      odometer_below_pickup: 'The mileage is below the one at pick-up.',
+      transfer_date: 'A rental brought over must start before today, and paid weeks must end on a week boundary.',
+      undo_return_too_late: 'A return can be cancelled only within 24 hours.',
+      use_status_route: 'The status is changed through its own action, with a reason.',
+      vehicle_in_sale_pool: 'This moped is in the sale pool. Only an owner can hand it over.',
       reconcile_required: 'Only an owner enters bank payments.',
       regenerate_forbidden: 'Only an owner can replace a document already issued.',
       rental_not_found: 'Rental not found.',
@@ -1321,6 +1330,7 @@ export const en = {
       wrong_password: 'The current password is wrong.',
     },
   },
+  ...wave3En,
 };
 
 export type Dict = typeof en;

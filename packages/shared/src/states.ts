@@ -41,9 +41,14 @@ export function effectiveRentalStatus(
   paidThrough: string | null,
   pickedUpOn: string | null,
   today: string,
+  /** Nothing at all paid on it yet — no week, no deposit. */
+  nothingPaid = false,
 ): RentalStatus {
   if (stored !== 'active' && stored !== 'overdue') return stored;
   if (!pickedUpOn) return 'booked';
+  // Handed over today and waiting for its first payment is not a debt yet —
+  // the false "overdue" of B4-01; from tomorrow it is (Q7).
+  if (nothingPaid && pickedUpOn >= today) return 'awaiting_payment';
   const covered = paidThrough ?? '';
   return covered < today ? 'overdue' : 'active';
 }

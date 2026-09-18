@@ -9,6 +9,7 @@ import { badRequest, conflict, notFound } from '../lib/errors.js';
 import { issueForServicePart, unissueForServicePart } from '../lib/stock.js';
 import { actorOf } from '../lib/guard.js';
 import { date, int, oneOf, str, tetri } from '../lib/validate.js';
+import { syncDeposit } from '../lib/rentalMoney.js';
 import { moveVehicle } from '../lib/vehicles.js';
 
 // Repair jobs (SRV-01, SRV-02).
@@ -263,24 +264,31 @@ export function serviceRoutes(app: FastifyInstance): void {
 
     await prisma.$transaction(async (tx) => {
       if (withheldTetri > 0) {
-        const deposit = await tx.deposit.findUnique({ where: { rentalId: job.rentalId! } });
+        const deposit = await tx.deposit.findUnique({
+          where: { rentalId: job.rentalId! },
+          include: { withholdings: { where: { voidedAt: null } }, payouts: { where: { voidedAt: null }, select: { grossTetri: true } } },
+        });
         if (!deposit) throw conflict('no_deposit', 'This rental has no deposit.');
-        const free = deposit.paidTetri - deposit.returnedTetri - deposit.withheldTetri;
+        const kept = deposit.withholdings.reduce((n, w) => n + w.amountTetri, 0);
+        const paidOut = deposit.paidOutBeforeTetri + deposit.payouts.reduce((n, p) => n + p.grossTetri, 0);
+        const free = deposit.paidTetri - kept - paidOut;
         if (withheldTetri > free) {
           throw conflict('deposit_too_small', 'The deposit does not hold that much.', { freeTetri: free });
         }
-        const withheld = deposit.withheldTetri + withheldTetri;
-        await tx.deposit.update({
-          where: { id: deposit.id },
+        // A row of its own beside a return's: neither overwrites the other (B5-04).
+        await tx.depositWithholding.create({
           data: {
-            withheldTetri: withheld,
-            withheldReason: [deposit.withheldReason, `${job.number}: ${job.reason}`].filter(Boolean).join('; ').slice(0, 1000),
-            withheldGrounds: [...new Set([...deposit.withheldGrounds, 'moped_damage'])],
-            status: withheld >= deposit.amountTetri ? 'withheld' : 'partial',
-            decidedById: actor.id,
-            updatedAt: new Date(),
+            depositId: deposit.id,
+            source: 'service',
+            rentalId: job.rentalId,
+            serviceJobId: job.id,
+            amountTetri: withheldTetri,
+            grounds: ['moped_damage'],
+            reason: `${job.number}: ${job.reason}`.slice(0, 1000),
+            createdById: actor.id,
           },
         });
+        await syncDeposit(tx, deposit.id);
       }
       await tx.serviceJob.update({
         where: { id: job.id },

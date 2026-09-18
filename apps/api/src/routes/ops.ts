@@ -7,8 +7,6 @@ import { prisma } from '../lib/db.js';
 import { env } from '../lib/env.js';
 import { conflict, isUniqueViolation, notFound } from '../lib/errors.js';
 import { actorOf } from '../lib/guard.js';
-import { pickUp, returnRental } from '../lib/rentals.js';
-import { ITEM_STATES, RETURN_ITEMS, WITHHOLD_GROUNDS, type ItemState, type ReturnItem, type WithholdGround } from '../lib/pdf/returnAct.js';
 import { date, int, oneOf, str, strList, tetri } from '../lib/validate.js';
 import { movePool, moveVehicle } from '../lib/vehicles.js';
 
@@ -87,85 +85,9 @@ export function opsRoutes(app: FastifyInstance): void {
     return { ok: true };
   });
 
-  // ---- hand-over (RNT-01) --------------------------------------------------
-  app.post<{ Body: Body }>('/api/rentals', { config: { scope: 'rental.create' } }, async (req, reply) => {
-    const b = req.body ?? {};
-    const actor = actorOf(req);
-    const vehicleId = str(b, 'vehicleId');
-    const vinNote = str(b, 'vinNote', { max: 200 });
-    if (!vehicleId && !vinNote) throw conflict('vin_or_note', 'Pick a moped from the fleet, or say why the VIN is not confirmed.');
-    const today = todayISO(new Date(), env.TZ);
-    const result = await pickUp({
-      actorId: actor.id,
-      customerId: str(b, 'customerId', { required: true })!,
-      vehicleId,
-      vinNote,
-      weeklyRateTetri: tetri(b, 'weeklyRateTetri', { required: true, min: 0 })!,
-      depositTetri: tetri(b, 'depositTetri', { min: 0 }) ?? DEFAULT_DEPOSIT_TETRI,
-      pickedUpOn: date(b, 'pickedUpOn') ?? today,
-      expectedReturnOn: date(b, 'expectedReturnOn'),
-      odometerKm: int(b, 'odometerKm', { min: 0 }),
-      condition: str(b, 'condition', { max: 4000 }),
-      notes: str(b, 'notes', { max: 4000 }),
-      buyoutTargetTetri: tetri(b, 'buyoutTargetTetri', { min: 1 }),
-      buyoutPerPaymentTetri: tetri(b, 'buyoutPerPaymentTetri', { min: 1 }),
-      nightParkingAddress: str(b, 'nightParkingAddress', { max: 300 }),
-      batteries: int(b, 'batteries', { min: 0 }),
-      chargers: int(b, 'chargers', { min: 0 }),
-      today,
-    });
-    return reply.code(201).send(result);
-  });
-
-  // ---- return (RNT-04, RNT-05) --------------------------------------------
-  app.post<{ Params: { id: string }; Body: Body }>('/api/rentals/:id/return', { config: { scope: 'rental.return' } }, async (req) => {
-    const b = req.body ?? {};
-    const actor = actorOf(req);
-    const today = todayISO(new Date(), env.TZ);
-    let deposit: {
-      returnedTetri: number;
-      withheldTetri: number;
-      withheldReason: string | null;
-      returnedTo: string | null;
-      grounds: WithholdGround[];
-    } | null = null;
-    if (b.deposit && typeof b.deposit === 'object') {
-      if (!hasPerm(actor, 'deposit.decide')) throw conflict('deposit_decision_forbidden', 'Only an owner decides on a deposit.');
-      const d = b.deposit as Body;
-      deposit = {
-        returnedTetri: tetri(d, 'returnedTetri', { min: 0 }) ?? 0,
-        withheldTetri: tetri(d, 'withheldTetri', { min: 0 }) ?? 0,
-        withheldReason: str(d, 'withheldReason', { max: 1000 }),
-        returnedTo: str(d, 'returnedTo', { max: 200 }),
-        grounds: strList(d, 'grounds').filter((g): g is WithholdGround => (WITHHOLD_GROUNDS as readonly string[]).includes(g)),
-      };
-    }
-    const { actId } = await returnRental({
-      actorId: actor.id,
-      rentalId: req.params.id,
-      returnedOn: date(b, 'returnedOn') ?? today,
-      odometerKm: int(b, 'odometerKm', { min: 0 }),
-      condition: str(b, 'condition', { max: 4000 }),
-      items: readItems(b.items),
-      deposit,
-      canConfirm: hasPerm(actor, 'deposit.confirm'),
-    });
-    return { ok: true, actId };
-  });
-
-  // Owner confirms a withholding or a third-party return (RNT-05).
-  app.post<{ Params: { id: string } }>('/api/rentals/:id/deposit/confirm', { config: { scope: 'deposit.confirm' } }, async (req) => {
-    const actor = actorOf(req);
-    const d = await prisma.deposit.findUnique({ where: { rentalId: req.params.id } });
-    if (!d) throw notFound('deposit_not_found', 'No deposit on this rental.');
-    if (d.status === 'held') throw conflict('nothing_to_confirm', 'No decision has been made on this deposit yet.');
-    await prisma.deposit.update({ where: { id: d.id }, data: { confirmedById: actor.id, updatedAt: new Date() } });
-    await audit({ actorId: actor.id, action: 'deposit.confirm', entityType: 'deposit', entityId: d.id, after: { status: d.status, withheldTetri: d.withheldTetri, returnedTo: d.returnedTo } });
-    return { ok: true };
-  });
-
-  // Small edits on a rental: notes, expected return, pause / dispute with a
-  // reason, and confirming the VIN of a rental that was opened without one.
+  // Small edits on a rental (wave 3 §3.7, B4-08): the night parking address,
+  // batteries, chargers, the planned return, notes, and confirming the VIN of a
+  // rental opened without one. The tariff of a running rental does not change (Q12).
   app.patch<{ Params: { id: string }; Body: Body }>('/api/rentals/:id', { config: { scope: 'rental.create' } }, async (req) => {
     const b = req.body ?? {};
     const actor = actorOf(req);
@@ -187,12 +109,8 @@ export function opsRoutes(app: FastifyInstance): void {
       data.buyoutTargetTetri = target;
       data.buyoutPerPaymentTetri = per;
     }
-    if ('status' in b) {
-      const status = oneOf(b, 'status', ['active', 'paused', 'disputed'] as const, { required: true })!;
-      if (r.status === 'returned') throw conflict('already_returned', 'A closed rental does not change status.');
-      if (status !== 'active' && !str(b, 'reason')) throw conflict('reason_required', 'Pausing or disputing a rental needs a reason.');
-      data.status = status;
-    }
+    // Pause and dispute are an owner's, with a reason: POST /api/rentals/:id/status (wave 3 §3.7).
+    if ('status' in b) throw conflict('use_status_route', 'The status of a rental changes through its own action.');
     const vehicleId = str(b, 'vehicleId');
     await prisma.$transaction(async (tx) => {
       if (vehicleId) {
@@ -347,21 +265,6 @@ export function opsRoutes(app: FastifyInstance): void {
       throw e;
     }
   });
-}
-
-/** The return act's per-item checklist, kept to the codes the form has. */
-function readItems(raw: unknown): Partial<Record<ReturnItem, { state: ItemState; note: string | null }>> {
-  if (!raw || typeof raw !== 'object') return {};
-  const out: Partial<Record<ReturnItem, { state: ItemState; note: string | null }>> = {};
-  for (const item of RETURN_ITEMS) {
-    const rec = (raw as Record<string, unknown>)[item];
-    if (!rec || typeof rec !== 'object') continue;
-    const state = (rec as { state?: unknown }).state;
-    if (typeof state !== 'string' || !(ITEM_STATES as readonly string[]).includes(state)) continue;
-    const note = (rec as { note?: unknown }).note;
-    out[item] = { state: state as ItemState, note: typeof note === 'string' && note.trim() ? note.trim().slice(0, 500) : null };
-  }
-  return out;
 }
 
 function pickKeys(obj: object, keys: Record<string, unknown>): Record<string, unknown> {

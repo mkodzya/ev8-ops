@@ -115,7 +115,13 @@ export function rule(doc: Doc): void {
 }
 
 /** Two signature lines side by side, named underneath. */
-export function signatures(doc: Doc, left: Bi & { name: string }, right: Bi & { name: string }): void {
+/** A signature drawn on the screen (D17): the picture over the line, and when and before whom. */
+export interface DrawnSignature {
+  png: Buffer;
+  note: string;
+}
+
+export function signatures(doc: Doc, left: Bi & { name: string }, right: Bi & { name: string; drawn?: DrawnSignature | null }): void {
   keepTogether(doc, 84);
   gap(doc, 0.7);
   const colW = (doc.width - 32) / 2;
@@ -128,8 +134,11 @@ export function signatures(doc: Doc, left: Bi & { name: string }, right: Bi & { 
     write(doc, sides[i].ka, { size: 9, bold: true, x: xs[i], width: colW });
     write(doc, sides[i].en, { size: 7.5, color: EN, x: xs[i], width: colW });
     const lineY = top + 38;
+    const drawn = i === 1 ? right.drawn : null;
+    if (drawn) doc.pdf.image(drawn.png, xs[i], lineY - 30, { fit: [colW * 0.7, 30] });
     doc.pdf.moveTo(xs[i], lineY).lineTo(xs[i] + colW, lineY).lineWidth(0.6).strokeColor(tokens.ink).stroke();
     write(doc, sides[i].name, { size: 9, x: xs[i], y: lineY + 5, width: colW });
+    if (drawn) write(doc, drawn.note, { size: 6.5, color: tokens.grey, x: xs[i], width: colW });
     maxY = Math.max(maxY, doc.pdf.y);
   }
   doc.pdf.y = maxY;

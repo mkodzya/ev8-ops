@@ -1,6 +1,7 @@
-import { paidThrough, spreadOverOwed, spreadPayment, type PeriodPayStatus } from '@ev8/shared';
+import { paidThrough, spreadOverOwed, type PeriodPayStatus } from '@ev8/shared';
 import type { Prisma } from '../generated/prisma/client.js';
 import { dateFromISO, isoDate } from './dates.js';
+import { rentalOwed, spreadRental, writeAllocations } from './rentalMoney.js';
 import { prisma } from './db.js';
 import { conflict, notFound } from './errors.js';
 
@@ -37,7 +38,8 @@ export async function recomputeRental(tx: Tx, rentalId: string): Promise<void> {
   });
   const rows: { seq: number; endsOn: string; payStatus: PeriodPayStatus }[] = [];
   for (const p of periods) {
-    const paid = p.allocations.reduce((n, a) => n + a.amountTetri, 0);
+    // A week brought over as paid before the transfer is paid without a payment (B3-02, Q3).
+    const paid = p.paidBeforeTransfer ? p.amountTetri : p.allocations.reduce((n, a) => n + a.amountTetri, 0);
     const payStatus: PeriodPayStatus = paid <= 0 ? 'unpaid' : paid >= p.amountTetri ? 'paid' : 'partial';
     if (paid !== p.paidTetri || payStatus !== p.payStatus) {
       await tx.rentalPeriod.update({ where: { id: p.id }, data: { paidTetri: paid, payStatus, updatedAt: new Date() } });
@@ -49,7 +51,7 @@ export async function recomputeRental(tx: Tx, rentalId: string): Promise<void> {
     include: { allocations: { where: { payment: { voidedAt: null } }, select: { amountTetri: true } } },
   });
   if (deposit) {
-    const paid = deposit.allocations.reduce((n, a) => n + a.amountTetri, 0);
+    const paid = deposit.receivedBeforeTransferTetri + deposit.allocations.reduce((n, a) => n + a.amountTetri, 0);
     if (paid !== deposit.paidTetri) {
       await tx.deposit.update({ where: { id: deposit.id }, data: { paidTetri: paid, updatedAt: new Date() } });
     }
@@ -168,24 +170,8 @@ export async function recordPaymentTx(tx: Tx, input: RecordPaymentInput): Promis
   let left = input.grossTetri;
   for (const id of rentalIds) {
     if (left <= 0) break;
-    const periods = await tx.rentalPeriod.findMany({ where: { rentalId: id }, orderBy: { seq: 'asc' } });
-    const deposit = await tx.deposit.findUnique({ where: { rentalId: id } });
-    const spread = spreadPayment(
-      left,
-      periods.map((p) => ({ id: p.id, seq: p.seq, amountTetri: p.amountTetri, paidTetri: p.paidTetri })),
-      deposit ? { id: deposit.id, amountTetri: deposit.amountTetri, paidTetri: deposit.paidTetri } : null,
-    );
-    for (const a of spread.allocations) {
-      await tx.paymentAllocation.create({
-        data: {
-          paymentId: payment.id,
-          target: a.target,
-          periodId: a.target === 'period' ? a.id : null,
-          depositId: a.target === 'deposit' ? a.id : null,
-          amountTetri: a.amountTetri,
-        },
-      });
-    }
+    const spread = spreadRental(left, await rentalOwed(tx, id));
+    await writeAllocations(tx, payment.id, spread.allocations);
     left = spread.leftoverTetri;
     await recomputeRental(tx, id);
   }

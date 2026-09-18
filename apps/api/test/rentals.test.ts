@@ -55,7 +55,7 @@ describe.skipIf(!HAS_DB)('hand-over', () => {
     const { customer } = await fixtures();
     const manager = await loginAs('manager');
     const bare = await call(manager, 'POST', '/api/rentals', { customerId: customer.id, weeklyRateTetri: 14000 });
-    expect(bare.statusCode).toBe(409);
+    expect(json<{ error: string }>(bare).error).toBe('vin_or_note');
     const ok = await call(manager, 'POST', '/api/rentals', { customerId: customer.id, weeklyRateTetri: 14000, vinNote: 'contract scan unreadable' });
     expect(ok.statusCode).toBe(201);
     const list = json<{ rentals: { id: string; vinUnconfirmed: boolean }[] }>(await call(manager, 'GET', '/api/rentals'));
@@ -72,7 +72,7 @@ describe.skipIf(!HAS_DB)('confirming a VIN later (RNT-06)', () => {
     const first = json<{ id: string }>(
       await call(otherOwner, 'POST', '/api/rentals', { customerId: earlier.id, vehicleId: vehicle.id, weeklyRateTetri: 15000, pickedUpOn: '2026-08-05' }),
     );
-    await call(otherOwner, 'POST', `/api/rentals/${first.id}/return`, { returnedOn: '2026-08-26' });
+    await call(otherOwner, 'POST', `/api/rentals/${first.id}/return`, { returnedOn: '2026-08-26', odometerKm: 100 });
 
     // A rental opened without a VIN, started BEFORE that return.
     const bare = json<{ id: string }>(
@@ -114,8 +114,8 @@ describe.skipIf(!HAS_DB)('return', () => {
     const manager = await loginAs('manager');
     const { id } = json<{ id: string }>(await call(manager, 'POST', '/api/rentals', { customerId: customer.id, vehicleId: vehicle.id, weeklyRateTetri: 15000, pickedUpOn: '2026-09-01' }));
 
-    const refused = await call(manager, 'POST', `/api/rentals/${id}/return`, { returnedOn: '2026-09-12', deposit: { returnedTetri: 18000 } });
-    expect(refused.statusCode).toBe(409);
+    const refused = await call(manager, 'POST', `/api/rentals/${id}/return`, { returnedOn: '2026-09-12', odometerKm: 640, deposit: { action: 'return_all' } });
+    expect(refused.statusCode).toBe(403);
 
     const ok = await call(manager, 'POST', `/api/rentals/${id}/return`, { returnedOn: '2026-09-12', odometerKm: 640 });
     expect(ok.statusCode, ok.body).toBe(200);
@@ -127,7 +127,7 @@ describe.skipIf(!HAS_DB)('return', () => {
     expect(card.deposit.status).toBe('held'); // waits for an owner
     expect(card.acts.map((a) => a.kind)).toEqual(['pickup', 'return']);
 
-    const again = await call(manager, 'POST', `/api/rentals/${id}/return`, { returnedOn: '2026-09-13' });
+    const again = await call(manager, 'POST', `/api/rentals/${id}/return`, { returnedOn: '2026-09-13', odometerKm: 650 });
     expect(again.statusCode).toBe(409);
   });
 
@@ -135,13 +135,16 @@ describe.skipIf(!HAS_DB)('return', () => {
     const { vehicle, customer } = await fixtures();
     const owner = await loginAs('owner');
     const { id } = json<{ id: string }>(await call(owner, 'POST', '/api/rentals', { customerId: customer.id, vehicleId: vehicle.id, weeklyRateTetri: 15000, pickedUpOn: '2026-09-01' }));
+    // The deposit and the first week were paid; the second week is owed at the return.
+    await call(owner, 'POST', '/api/money', { kind: 'rent', rentalId: id, amountTetri: '330', channel: 'cash', occurredOn: '2026-09-01', backdateReason: 'test' });
 
-    const noReason = await call(owner, 'POST', `/api/rentals/${id}/return`, { returnedOn: '2026-09-12', deposit: { returnedTetri: 13000, withheldTetri: 5000 } });
-    expect(noReason.statusCode).toBe(409);
+    const noReason = await call(owner, 'POST', `/api/rentals/${id}/return`, { returnedOn: '2026-09-12', odometerKm: 10, deposit: { action: 'withhold', withheldTetri: 5000 } });
+    expect(noReason.statusCode).toBe(400);
 
     const ok = await call(owner, 'POST', `/api/rentals/${id}/return`, {
       returnedOn: '2026-09-12',
-      deposit: { returnedTetri: 13000, withheldTetri: 5000, withheldReason: 'broken mirror' },
+      odometerKm: 10,
+      deposit: { action: 'withhold', withheldTetri: 5000, grounds: ['moped_damage'], reason: 'broken mirror' },
     });
     expect(ok.statusCode, ok.body).toBe(200);
     const { prisma } = await import('../src/lib/db.js');
@@ -151,7 +154,7 @@ describe.skipIf(!HAS_DB)('return', () => {
     expect(dep.confirmedById).not.toBeNull();
 
     const manager = await loginAs('manager');
-    expect((await call(manager, 'POST', `/api/rentals/${id}/deposit/confirm`)).statusCode).toBe(403);
+    expect((await call(manager, 'POST', `/api/rentals/${id}/deposit/decide`, { action: 'return_all' })).statusCode).toBe(403);
   });
 });
 
