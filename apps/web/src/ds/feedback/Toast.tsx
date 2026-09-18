@@ -51,40 +51,53 @@ function ToastView({ toast, onGone, replace }: { toast: Shown; onGone: () => voi
   }, [life, onGone]);
 
   return (
-    <div className="toast" role="status" aria-live="polite">
+    <ToastCard
+      text={toast.text}
+      life={life}
+      onOpen={
+        toast.open
+          ? () => {
+              onGone();
+              navigate(toast.open!);
+            }
+          : undefined
+      }
+      onUndo={
+        toast.undo
+          ? async () => {
+              if (undoing) return;
+              setUndoing(true);
+              try {
+                await toast.undo!();
+                replace({ text: t.form.undone });
+              } catch (e) {
+                replace({ text: errorText(e) });
+              }
+            }
+          : undefined
+      }
+    />
+  );
+}
+
+/** The message as it looks, with no timer behind it — also what the design catalogue shows. */
+export function ToastCard({ text, life = LIFE_MS, onOpen, onUndo, still = false }: { text: string; life?: number; onOpen?: () => void; onUndo?: () => void; still?: boolean }) {
+  const t = useT();
+  return (
+    <div className={`toast ${still ? 'toast-still' : ''}`} role="status" aria-live="polite">
       <Check size={18} strokeWidth={2} aria-hidden="true" />
-      <span className="toast-text">{toast.text}</span>
-      {toast.open && (
-        <button
-          type="button"
-          className="toast-act"
-          onClick={() => {
-            onGone();
-            navigate(toast.open!);
-          }}
-        >
+      <span className="toast-text">{text}</span>
+      {onOpen && (
+        <button type="button" className="toast-act" onClick={onOpen}>
           {t.form.open}
         </button>
       )}
-      {toast.undo && (
-        <button
-          type="button"
-          className="toast-act"
-          disabled={undoing}
-          onClick={async () => {
-            setUndoing(true);
-            try {
-              await toast.undo!();
-              replace({ text: t.form.undone });
-            } catch (e) {
-              replace({ text: errorText(e) });
-            }
-          }}
-        >
+      {onUndo && (
+        <button type="button" className="toast-act" onClick={onUndo}>
           {t.form.undo}
         </button>
       )}
-      {toast.undo && <span className="toast-drain" style={{ animationDuration: `${life}ms` }} />}
+      {onUndo && <span className="toast-drain" style={{ animationDuration: `${life}ms` }} />}
     </div>
   );
 }

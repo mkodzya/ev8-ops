@@ -68,6 +68,15 @@ export function I18nProvider({ children }: { children: ReactNode }) {
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 
+/**
+ * A part of the screen in a language of its own, whatever the app is set to —
+ * the design catalogue shows each component in Russian and in Georgian.
+ */
+export function FixedLocale({ locale, children }: { locale: Locale; children: ReactNode }) {
+  const value = useMemo<I18nCtx>(() => ({ locale, setLocale: () => {}, t: DICTS[locale] }), [locale]);
+  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
+}
+
 function useI18n(): I18nCtx {
   const ctx = useContext(Ctx);
   if (!ctx) throw new Error('useT must be used inside <I18nProvider>');

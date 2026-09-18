@@ -21,6 +21,7 @@ import { useSession } from '../../session.js';
 import { SearchOverlay } from '../search/SearchOverlay.js';
 import { SyncBar } from '../state/SyncBar.js';
 import { HeaderProvider, useHeader } from './header.js';
+import { SessionEnded } from '../../LoginPage.js';
 import { ACTION_ICON, ICON, SECTION_ICON } from './icons.js';
 import './shell.css';
 
@@ -195,6 +196,7 @@ function Frame() {
         <SyncBar />
         <Outlet />
       </main>
+      <SessionEnded />
 
       <nav className="app-tabbar" aria-label={t.shell.menu}>
         {tabs.slice(0, 2).map((id) => (
@@ -244,7 +246,8 @@ function Frame() {
                   <span className="act-ico">
                     <Icon size={20} strokeWidth={1.75} aria-hidden="true" />
                   </span>
-                  {label(id)}
+                  {/* The owner runs the stock too; the menu says so (wave 1 §3.2). */}
+                  {id === 'service' && can('stock.count') ? t.nav.serviceStock : label(id)}
                 </Link>
               );
             })}

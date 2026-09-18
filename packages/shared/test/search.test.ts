@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { spellingMatches, numberMatches, phoneMatches, readQuery, vinMatches } from '../src/index.js';
+import { paymentMatches, spellingMatches, numberMatches, phoneMatches, readQuery, vinMatches } from '../src/index.js';
 
 const q = (s: string) => readQuery(s)!;
 
@@ -39,5 +39,16 @@ describe('what the header search understands (wave 1 §3.5)', () => {
     expect(q('150').amountTetri).toBe(15000);
     expect(q('150,5').amountTetri).toBe(15050);
     expect(q('Dato').amountTetri).toBeNull();
+  });
+});
+
+describe('paymentMatches', () => {
+  const q = (s: string) => readQuery(s)!;
+  const p = { grossTetri: 15000, customer: 'Giorgi', bankText: 'TRANSFER 1150 REF', note: null, createdBy: 'Kardu', rentalNumber: 'R-00150' };
+  it('is the one rule for the header search and the list: amount, text, rental number', () => {
+    expect(paymentMatches(q('150'), p)).toBe(true);
+    expect(paymentMatches(q('150'), { ...p, grossTetri: 100 })).toBe(true); // bank text and rental number
+    expect(paymentMatches(q('150'), { grossTetri: 100, rentalNumber: 'R-00151' })).toBe(false);
+    expect(paymentMatches(q('kard'), p)).toBe(true);
   });
 });

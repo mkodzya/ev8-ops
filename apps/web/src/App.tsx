@@ -6,6 +6,7 @@ import { NoAccess } from './ds/state/NoAccess.js';
 import { PointsPage } from './pages/PointsPage.js';
 import { ReturnPickPage } from './pages/ReturnPickPage.js';
 import { DesignPage } from './pages/DesignPage.js';
+import { DesignCatalog } from './pages/DesignCatalog.js';
 import { EconomicsPage } from './pages/EconomicsPage.js';
 import { PartPage } from './pages/PartPage.js';
 import { StockPage } from './pages/StockPage.js';
@@ -31,6 +32,7 @@ import { ModelsPage } from './pages/ModelsPage.js';
 import { FleetPage } from './pages/FleetPage.js';
 import { RentalsPage } from './pages/RentalsPage.js';
 import { TodayPage } from './pages/TodayPage.js';
+import { useT } from './i18n/index.js';
 import { useSession } from './session.js';
 
 /** To the login page, remembering this screen so signing in comes back to it (B1-02). */
@@ -40,8 +42,9 @@ function ToLogin() {
 }
 
 function RequireAuth({ children }: { children: React.ReactElement }) {
-  const { me, loading } = useSession();
+  const { me, loading, unreachable } = useSession();
   if (loading) return null;
+  if (!me && unreachable) return <Unreachable />;
   if (!me) return <ToLogin />;
   return children;
 }
@@ -52,11 +55,29 @@ function RequireAuth({ children }: { children: React.ReactElement }) {
  * closes the same door for real.
  */
 function Require({ perm, children }: { perm: Permission; children: React.ReactElement }) {
-  const { me, loading, can } = useSession();
+  const { me, loading, can, unreachable } = useSession();
   if (loading) return null;
+  if (!me && unreachable) return <Unreachable />;
   if (!me) return <ToLogin />;
   if (!can(perm)) return <NoAccess />;
   return children;
+}
+
+/** Opened with the server out of reach: wait for it, do not ask for a password nobody can check. */
+function Unreachable() {
+  const t = useT();
+  const { refresh } = useSession();
+  return (
+    <div className="login-wrap">
+      <div className="login-card" role="status">
+        <p className="t-h3">{t.session.unreachable}</p>
+        <p className="login-note">{t.session.unreachableNote}</p>
+        <button type="button" className="pill pill-accent pill-wide" onClick={() => void refresh()}>
+          {t.errors.retry}
+        </button>
+      </div>
+    </div>
+  );
 }
 
 /** An old address, with its :id carried over (build plan Р8). */
@@ -71,6 +92,8 @@ export function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      {/* Outside the frame: /design shows it inside two iframes of its own width. */}
+      <Route path="/design/catalog" element={<Require perm="users.manage"><DesignCatalog /></Require>} />
       <Route
         path="/"
         element={

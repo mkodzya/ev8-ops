@@ -1,7 +1,8 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ApiError, newOperationKey } from '../../api.js';
 import { currentDict } from '../../i18n/index.js';
 import { errorText } from '../../lib/use.js';
+import { useSession } from '../../session.js';
 
 export type SubmitState = 'idle' | 'busy' | 'done' | 'failed';
 
@@ -64,8 +65,12 @@ export function useOperation(fieldOf?: Record<string, string>) {
         setState('done');
         return { ok: true, value };
       } catch (e) {
-        setFailure(failureOf(e, fields.current));
-        setState('failed');
+        const f = failureOf(e, fields.current);
+        setFailure(f);
+        // A refusal about one field is fixed in that field: the button stays
+        // as it was, it is not a write that "did not go through" (prototype
+        // wave-1-forms-states.html, "Отказ по полю").
+        setState(f.field ? 'idle' : 'failed');
         return { ok: false };
       } finally {
         running.current = false;
@@ -78,6 +83,15 @@ export function useOperation(fieldOf?: Record<string, string>) {
     setState('idle');
     setFailure(null);
   }, []);
+
+  // "The session ended" is no longer true once the person has signed in over
+  // the page: the form is back at rest, what was typed still in it (QA-W1-08).
+  const { ended } = useSession();
+  const wasEnded = useRef(ended);
+  useEffect(() => {
+    if (wasEnded.current && !ended && failure?.code === 'unauthenticated') reset();
+    wasEnded.current = ended;
+  }, [ended, failure, reset]);
 
   return { state, failure, run, reset };
 }

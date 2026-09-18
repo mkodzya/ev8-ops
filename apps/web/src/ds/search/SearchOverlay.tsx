@@ -242,8 +242,14 @@ export function SearchOverlay({ onClose }: { onClose: () => void }) {
             const i = index;
             return (
               <button key={r.key} type="button" className={`search-row ${i === active ? 'on' : ''}`} onMouseEnter={() => setActive(i)} onClick={() => open(r.href, r.recent)}>
-                <span className="search-row-title">{r.title}</span>
-                {r.sub && <span className="search-row-sub">{r.sub}</span>}
+                <span className="search-row-title">
+                  <Lit text={r.title} q={q} />
+                </span>
+                {r.sub && (
+                  <span className="search-row-sub">
+                    <Lit text={r.sub} q={q} />
+                  </span>
+                )}
               </button>
             );
           })}
@@ -304,3 +310,22 @@ function RecentList({ items, onOpen, active = -1, empty }: { items: Recent[]; on
 }
 
 export { forgetRecent };
+
+/**
+ * What was typed, in bold where it occurs (wave 1 §3.5, "Совпадение
+ * подсвечено"). Only plain text is marked: a VIN tail or a formatted amount is
+ * already the part that matched.
+ */
+function Lit({ text, q }: { text: React.ReactNode; q: string }) {
+  if (typeof text !== 'string' || !q) return <>{text}</>;
+  const at = text.toLowerCase().indexOf(q.toLowerCase());
+  if (at < 0) return <>{text}</>;
+  // One span: the row title is a flex line, and bare pieces would be spaced apart.
+  return (
+    <span>
+      {text.slice(0, at)}
+      <mark className="search-hit">{text.slice(at, at + q.length)}</mark>
+      {text.slice(at + q.length)}
+    </span>
+  );
+}

@@ -28,20 +28,22 @@ export function SyncBar() {
 
   if (!online) {
     const newest = Math.max(0, ...client.getQueryCache().getAll().map((q) => q.state.dataUpdatedAt));
-    return (
-      <div className="syncbar syncbar-off" role="status">
-        <CloudOff size={18} strokeWidth={1.75} aria-hidden="true" />
-        <span>{newest ? t.sync.offlineSince(hhmm(newest)) : t.sync.offline}</span>
-      </div>
-    );
+    return <SyncStrip off text={newest ? t.sync.offlineSince(hhmm(newest)) : t.sync.offline} />;
   }
-  if (showBack && backAt) {
-    return (
-      <div className="syncbar syncbar-back" role="status">
-        <RefreshCw size={18} strokeWidth={1.75} aria-hidden="true" className={fetching ? 'spin' : undefined} />
-        <span>{t.sync.back(hhmm(backAt))}</span>
-      </div>
-    );
-  }
+  if (showBack && backAt) return <SyncStrip text={t.sync.back(hhmm(backAt))} spinning={fetching > 0} />;
   return null;
+}
+
+/** The strip itself, without the connection behind it — for the design catalogue. */
+export function SyncStrip({ off = false, text, spinning = false }: { off?: boolean; text: string; spinning?: boolean }) {
+  return (
+    <div className={`syncbar ${off ? 'syncbar-off' : 'syncbar-back'}`} role="status">
+      {off ? (
+        <CloudOff size={18} strokeWidth={1.75} aria-hidden="true" />
+      ) : (
+        <RefreshCw size={18} strokeWidth={1.75} aria-hidden="true" className={spinning ? 'spin' : undefined} />
+      )}
+      <span>{text}</span>
+    </div>
+  );
 }
