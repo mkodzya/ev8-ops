@@ -23,6 +23,8 @@ export function rentalRoutes(app: FastifyInstance): void {
         // the debt beside the status (U5) and must not invent a second rule.
         periods: { where: { payStatus: { not: 'paid' } }, select: { amountTetri: true, paidTetri: true } },
         _count: { select: { periods: true } },
+        // Signed on the screen or not: the "Не подписан" filter (wave 3 §3.2).
+        documents: { where: { kind: 'pdf', archived: false, docKind: 'contract', signedAt: { not: null } }, select: { id: true } },
       },
     });
     // A rental's debt is its part of its customer's one figure: its unpaid weeks and deposit.
@@ -57,6 +59,7 @@ export function rentalRoutes(app: FastifyInstance): void {
           periods: r._count.periods,
           buyoutTargetTetri: r.buyoutTargetTetri,
           buyoutPerPaymentTetri: r.buyoutPerPaymentTetri,
+          contractSigned: r.documents.length > 0,
         };
       }),
     };

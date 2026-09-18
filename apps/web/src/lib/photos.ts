@@ -53,7 +53,7 @@ export async function preparePhoto(file: File): Promise<PreparedPhoto> {
   return { name: file.name.replace(/\.[^.]+$/, '') + '.jpg', mimeType: 'image/jpeg', blob, previewUrl: URL.createObjectURL(blob) };
 }
 
-function toBase64(blob: Blob): Promise<string> {
+export function toBase64(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const r = new FileReader();
     r.onload = () => resolve((r.result as string).split(',')[1] ?? '');

@@ -7,6 +7,7 @@
 // screen. Values that need data are functions, so interpolation is checked.
 //
 // Money keeps ONE format in every language (formatGel in @ev8/shared).
+import { wave3En } from './wave3.js';
 export const en = {
   lang: { label: 'Language', ka: 'ქართული', ru: 'Русский', en: 'English' },
 
@@ -1329,6 +1330,7 @@ export const en = {
       wrong_password: 'The current password is wrong.',
     },
   },
+  ...wave3En,
 };
 
 export type Dict = typeof en;

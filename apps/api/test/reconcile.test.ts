@@ -3,7 +3,7 @@
 // Georgia export's real shape; every customer carries a tag of its own so a
 // name never matches somebody an earlier run left behind.
 import { addDays, todayISO } from '@ev8/shared';
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { HAS_DB, call, json, loginAs, uniq } from './helpers.js';
 
 const today = () => todayISO(new Date(), 'Asia/Tbilisi');
@@ -17,6 +17,17 @@ const BOG_HEADER = [
 const inRow = (iso: string, amount: string, content: string) => `"${dmy(iso)}","0017","GE38TB7756045063400002","","${amount}","1","${amount}","${content}"`;
 const outRow = (iso: string, amount: string, content: string) => `"${dmy(iso)}","0018","GE89BG0000000902936900GEL","${amount}","","1","${amount}","${content}"`;
 const file = (...rows: string[]) => [BOG_HEADER, ...rows].join('\n');
+
+// The rules match a line to the one rental its amount and date fit. Suites
+// that ran before this one leave rentals handed over today at 150 + 180 still
+// open (they are deleted only when the whole run ends); any of them makes a
+// 330 card line ambiguous here. They are closed first, in this throwaway
+// database, so every test below counts only the rentals it made.
+beforeAll(async () => {
+  if (!HAS_DB) return;
+  const { prisma } = await import('../src/lib/db.js');
+  await prisma.rental.updateMany({ where: { status: { not: 'returned' } }, data: { status: 'returned' } });
+});
 
 function tag(): string {
   return `t${uniq().replace(/\D/g, '').slice(-9)}`;

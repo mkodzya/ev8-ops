@@ -1,3 +1,4 @@
+import { wave3Ru } from './wave3.js';
 import type { Dict } from './en.js';
 
 // Typed as Dict: a missing or misspelled key fails the build.
@@ -1332,4 +1333,5 @@ export const ru: Dict = {
       wrong_password: 'Текущий пароль неверный.',
     },
   },
+  ...wave3Ru,
 };
