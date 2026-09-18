@@ -1,3 +1,4 @@
+import { localDateTime } from '@ev8/shared';
 import { Check, CloudOff, History } from 'lucide-react';
 import { createContext, useContext, useEffect, useRef, type FormEvent, type ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -151,7 +152,7 @@ export function Form<V>({
 /** «Черновик от HH:MM · …» with Continue / Start over — for forms and wizards alike. */
 export function DraftOffer({ at, words, onContinue, onDiscard }: { at: string; words?: string | null; onContinue: () => void; onDiscard: () => void }) {
   const t = useT();
-  const time = new Date(at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+  const time = localDateTime(at).time;
   return (
     <div className="draft-offer">
       <div className="form-banner form-banner-ok">

@@ -10,6 +10,7 @@ import { badRequest, conflict, forbidden, notFound } from './errors.js';
 import { recomputeRental, recordPaymentTx } from './payments.js';
 import { rentalOwed, spreadRental, syncDeposit, writeAllocations } from './rentalMoney.js';
 import { movePool, moveVehicle } from './vehicles.js';
+import { itemLabel } from './pdf/returnAct.js';
 
 // Hand-over and return (RNT-01, RNT-04, RNT-05; redesign wave 3). Each is one
 // transaction: whatever it makes — a new customer, the rental, its weeks, the
@@ -423,7 +424,8 @@ export async function returnRental(input: ReturnInput): Promise<{ actId: string;
       await tx.vehicle.update({ where: { id: r.vehicleId }, data: { odometerKm: input.odometerKm } });
       if (toService) {
         // Damage in the act opens a repair as a draft (wave 3 §3.4; the section itself is wave 5).
-        const reason = damaged.map(([k, v]) => `${k}: ${v.note ?? ''}`.trim()).join('; ') || `after return ${r.number}`;
+        // What the act says was damaged, in the act's own words: the moped by its note, a key or a battery by its name.
+        const reason = damaged.map(([k, v]) => (k === 'moped' ? v.note?.trim() || itemLabel(k).ka : [itemLabel(k).ka, v.note?.trim()].filter(Boolean).join(': '))).join('; ') || `after return ${r.number}`;
         const job = await tx.serviceJob.create({
           data: {
             vehicleId: r.vehicleId,

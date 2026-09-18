@@ -122,6 +122,7 @@ export function PickupWizard() {
   const [licencePhoto, setLicencePhoto] = useState<PreparedPhoto[]>([]);
   const [photos, setPhotos] = useState<PreparedPhoto[]>([]);
   const [photosLost, setPhotosLost] = useState(false);
+  const [docsLost, setDocsLost] = useState(false);
   const [fewOk, setFewOk] = useState(false);
   const [askFew, setAskFew] = useState(false);
   const [q, setQ] = useState('');
@@ -135,7 +136,11 @@ export function PickupWizard() {
 
   const drafts = useDraft({ id: 'pickup', value: f, initial, hold: result != null });
   const restore = (d: typeof start) => {
-    setF({ ...d, step: Math.min(d.step, 4) });
+    // A new customer's personal number and ID photo were not kept (B4-02): back to them first (QA-W3-02).
+    if (d.creating) {
+      setF({ ...d, step: 0 });
+      setDocsLost(true);
+    } else setF({ ...d, step: Math.min(d.step, 4) });
     if (d.step >= 3) setPhotosLost(true);
   };
 
@@ -204,6 +209,7 @@ export function PickupWizard() {
     (!f.expectedReturnOn || f.expectedReturnOn >= f.pickedUpOn) &&
     f.nightParking.trim().length > 0 &&
     (!transfer || (f.pickedUpOn < today && depositBeforeTetri >= 0 && depositBeforeTetri <= depositTetri));
+  const pickedUpError = f.pickedUpOn > today ? t.hand.notAfterToday : transfer && f.pickedUpOn >= today ? t.hand.transferBefore : null;
   const lastKm = vehicle?.odometerKm ?? null;
   const km = f.odometer.trim() === '' ? null : Number(f.odometer.replace(/\s/g, ''));
   const kmValid = km == null || (Number.isInteger(km) && km >= 0);
@@ -324,6 +330,7 @@ export function PickupWizard() {
       steps={steps}
       step={f.step}
       submit={f.step === 5 ? { state: op.state, failure: op.failure, label: t.hand.handOver } : undefined}
+      failure={f.step === 5 ? null : op.failure}
       onBack={f.step > 0 ? back : undefined}
       onNext={f.step === 5 ? () => void submit() : next}
       nextLabel={f.step === 4 ? t.hand.toSummary : f.step === 0 && f.creating ? t.hand.saveAndNext : undefined}
@@ -355,7 +362,7 @@ export function PickupWizard() {
               {debt && (
                 <section className="card card-warn">
                   <p>
-                    <b>{t.hand.debtLine(formatGel(debt.debtTetri, { decimals: false }), debt.debtIn.map((p) => p.number).join(', '))}</b>
+                    <b>{t.hand.debtLine(formatGel(debt.debtTetri, { decimals: false }), [...new Set(debt.debtIn.map((p) => p.number))].join(', '))}</b>
                     {!owner && <> {t.hand.ownerOnly}</>}
                   </p>
                   {!owner && can('cash.record') && firstDebt && (
@@ -388,6 +395,7 @@ export function PickupWizard() {
               )}
             </>
           )}
+          {f.creating && docsLost && <p className="hint warn-text">{t.hand.docsLost}</p>}
           {f.creating && (
             <section className="card">
               <div className="row-actions row-between">
@@ -510,7 +518,7 @@ export function PickupWizard() {
               <input className="input input-amount mono" value={f.deposit} onChange={(e) => set({ deposit: e.target.value })} inputMode="decimal" />
             </Field>
           </div>
-          <Field label={t.hand.pickedUpOn} hint={!transfer ? t.hand.firstWeek(short(f.pickedUpOn), short(addDays(f.pickedUpOn, 6))) : undefined} name="pickedUpOn">
+          <Field label={t.hand.pickedUpOn} hint={!transfer ? t.hand.firstWeek(short(f.pickedUpOn), short(addDays(f.pickedUpOn, 6))) : undefined} name="pickedUpOn" error={pickedUpError}>
             <input className="input mono" type="date" max={transfer ? addDays(today, -1) : today} value={f.pickedUpOn} onChange={(e) => set({ pickedUpOn: e.target.value, paidThrough: '' })} />
           </Field>
           {transfer && (
@@ -542,7 +550,7 @@ export function PickupWizard() {
             <Stepper label={t.hand.batteries} value={f.batteries} onChange={(n) => set({ batteries: n })} />
             <Stepper label={t.hand.chargers} value={f.chargers} onChange={(n) => set({ chargers: n })} />
           </div>
-          <Field label={t.hand.expectedReturn} hint={t.hand.expectedReturnHint} name="expectedReturnOn">
+          <Field label={t.hand.expectedReturn} hint={t.hand.expectedReturnHint} name="expectedReturnOn" error={f.expectedReturnOn && f.expectedReturnOn < f.pickedUpOn ? t.hand.notBeforePickup : null}>
             <input className="input mono" type="date" min={f.pickedUpOn} value={f.expectedReturnOn} onChange={(e) => set({ expectedReturnOn: e.target.value })} />
           </Field>
         </>
@@ -654,6 +662,13 @@ export function PickupWizard() {
           />
           <SumRow k={`${t.hand.rate} · ${t.hand.deposit}`} v={<span className="mono">{formatGel(rateTetri, { decimals: false })} · {formatGel(depositTetri, { decimals: false })}</span>} go={() => set({ step: 2 })} />
           <SumRow k={t.hand.pickedUpOn} v={<span className="mono">{fmtDate(f.pickedUpOn)}</span>} go={() => set({ step: 2 })} />
+          {transfer && (
+            <>
+              <SumRow k={t.hand.transfer} v={<span className="mono">{t.hand.paidThrough} {f.paidThrough ? fmtDate(f.paidThrough) : t.hand.notPaid}</span>} go={() => set({ step: 2 })} />
+              <SumRow k={t.hand.paidBefore} v={<span className="mono">{paidWeeks} / {weeksTotal}</span>} go={() => set({ step: 2 })} />
+              <SumRow k={t.hand.depositBefore} v={<span className="mono">{formatGel(Math.max(0, depositBeforeTetri))}</span>} go={() => set({ step: 2 })} />
+            </>
+          )}
           <SumRow k={t.hand.nightParking} v={f.nightParking} go={() => set({ step: 2 })} />
           <SumRow k={t.hand.batteries} v={t.hand.kit(f.batteries, f.chargers)} go={() => set({ step: 2 })} />
           <SumRow k={t.hand.steps.act} v={t.hand.actLine(km != null ? String(km) : '—', photos.length)} go={() => set({ step: 3 })} />

@@ -1,3 +1,4 @@
+import { localDateTime } from '@ev8/shared';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { createHash } from 'node:crypto';
 import { audit } from '../lib/audit.js';
@@ -202,7 +203,9 @@ export function signRoutes(app: FastifyInstance): void {
           if (gaps.length > 0) throw conflict('document_gaps', 'The contract has an empty field.', { gaps, field: gaps[0] });
         }
         const at = new Date();
-        const note = `${at.toISOString().slice(0, 16).replace('T', ' ')} UTC · ${actor.name}`;
+        // Tbilisi time, as the customer read the clock when signing (QA-W3-03).
+        const local = localDateTime(at);
+        const note = `${local.date} ${local.time} · ${actor.name}`;
         const bytes = await render(kind, rental, { png, note });
         await prisma.storedFile.updateMany({ where: { rentalId: rental.id, kind: 'pdf', docKind: kind, archived: false }, data: { archived: true } });
         const file = await prisma.storedFile.create({

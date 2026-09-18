@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { effectiveRentalStatus, returnSettlement } from '../src/index.js';
+import { effectiveRentalStatus, localDateTime, returnSettlement } from '../src/index.js';
 
 const week = (seq: number, startsOn: string, endsOn: string, paid = 0) => ({ id: `p${seq}`, seq, startsOn, endsOn, amountTetri: 15000, paidTetri: paid });
 
@@ -11,7 +11,7 @@ describe('a return’s settlement (wave 3 §3.4)', () => {
 
   it('offers the week or the days of delay, and takes the smaller (crit. 36б)', () => {
     const s = returnSettlement({ returnedOn: '2026-09-18', expectedReturnOn: '2026-09-16', periods: [week(1, '2026-09-11', '2026-09-17', 15000), week(2, '2026-09-18', '2026-09-24')], keyMissing: false });
-    expect(s.late).toMatchObject({ days: 2, amountTetri: 6000, weekTetri: 15000 });
+    expect(s.late).toMatchObject({ days: 2, amountTetri: 6000, weekTetri: 15000, startsOn: '2026-09-18', endsOn: '2026-09-24' });
     expect(s.choice).toBe('late');
     expect(s.claimsTetri).toBe(6000);
     const week2 = returnSettlement({ returnedOn: '2026-09-18', expectedReturnOn: '2026-09-16', periods: [week(1, '2026-09-11', '2026-09-17', 15000), week(2, '2026-09-18', '2026-09-24')], keyMissing: false, lateChoice: 'week' });
@@ -29,5 +29,12 @@ describe('waiting for the first payment (wave 3 §3.3, Q7)', () => {
     expect(effectiveRentalStatus('active', null, '2026-09-18', '2026-09-18', true)).toBe('awaiting_payment');
     expect(effectiveRentalStatus('active', null, '2026-09-17', '2026-09-18', true)).toBe('overdue');
     expect(effectiveRentalStatus('active', '2026-09-24', '2026-09-18', '2026-09-18', false)).toBe('active');
+  });
+});
+
+describe('a moment as Tbilisi reads it (QA-W3-03)', () => {
+  it('is UTC+4, whatever the machine’s clock', () => {
+    expect(localDateTime('2026-09-18T17:39:00Z')).toEqual({ date: '18.09.2026', time: '21:39' });
+    expect(localDateTime('2026-09-18T21:30:00Z')).toEqual({ date: '19.09.2026', time: '01:30' });
   });
 });

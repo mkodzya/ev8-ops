@@ -36,7 +36,8 @@ export interface Settlement {
   weeks: { id: string; seq: number; startsOn: ISODate; endsOn: ISODate; owesTetri: Tetri }[];
   /** Weeks the delay replaces when it is chosen. */
   replacedWeeks: { id: string; seq: number; owesTetri: Tetri }[];
-  late: null | { days: number; perDayTetri: Tetri; amountTetri: Tetri; weekTetri: Tetri };
+  /** The days of delay against the weeks they fall in: `startsOn`–`endsOn` are those weeks' span. */
+  late: null | { days: number; perDayTetri: Tetri; amountTetri: Tetri; weekTetri: Tetri; startsOn: ISODate; endsOn: ISODate };
   choice: 'week' | 'late' | null;
   keyTetri: Tetri;
   /** Everything owed at the return: the weeks (or the delay) and the key. */
@@ -63,6 +64,8 @@ export function returnSettlement(input: SettlementInput): Settlement {
         perDayTetri: LATE_FEE_PER_DAY_TETRI,
         amountTetri: days * LATE_FEE_PER_DAY_TETRI,
         weekTetri: replaced.reduce((n, w) => n + w.owesTetri, 0),
+        startsOn: begun.find((w) => w.id === replaced[0].id)!.startsOn,
+        endsOn: begun.find((w) => w.id === replaced[replaced.length - 1].id)!.endsOn,
       };
     }
   }
