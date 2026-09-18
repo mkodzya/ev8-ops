@@ -114,7 +114,7 @@ export function documentRoutes(app: FastifyInstance): void {
         const actor = actorOf(req);
         const fresh = req.query.fresh === '1';
         if (fresh && !hasPerm(actor, 'deposit.decide')) {
-          throw conflict('regenerate_forbidden', 'Only the director or the owner replaces a document that was already made.');
+          throw conflict('regenerate_forbidden', 'Only an owner replaces a document that was already made.');
         }
         const existing = await prisma.storedFile.findFirst({
           where: { rentalId: req.params.id, kind: 'pdf', docKind: kind, archived: false },

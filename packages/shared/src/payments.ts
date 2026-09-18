@@ -87,44 +87,6 @@ export function spreadPayment(
   return { allocations: [...allocations, ...rest.allocations], leftoverTetri: rest.leftoverTetri };
 }
 
-export interface BalanceInput {
-  /** Every period of every rental of this customer. */
-  periods: { amountTetri: Tetri; paidTetri: Tetri }[];
-  /** Every instalment of every sale to this customer. */
-  instalments?: { amountTetri: Tetri; paidTetri: Tetri }[];
-  /** Deposits of rentals that are still open. */
-  deposits: { amountTetri: Tetri; paidTetri: Tetri; held: boolean }[];
-  /** Gross of every payment that is not voided. */
-  paidTetri: Tetri;
-}
-
-export interface Balance {
-  /** What has been charged: periods plus deposits asked for. */
-  invoicedTetri: Tetri;
-  paidTetri: Tetri;
-  /** Still owed. Zero when the customer is square or ahead. */
-  outstandingTetri: Tetri;
-  /** Paid beyond what is owed — goes towards the next period (PAY-06). */
-  creditTetri: Tetri;
-  /** Deposits we are holding for this customer right now. */
-  depositHeldTetri: Tetri;
-}
-
-export function customerBalance(input: BalanceInput): Balance {
-  const periodsTotal = input.periods.reduce((n, p) => n + p.amountTetri, 0);
-  const instalmentsTotal = (input.instalments ?? []).reduce((n, i) => n + i.amountTetri, 0);
-  const depositsTotal = input.deposits.reduce((n, d) => n + d.amountTetri, 0);
-  const invoiced = periodsTotal + instalmentsTotal + depositsTotal;
-  const diff = invoiced - input.paidTetri;
-  return {
-    invoicedTetri: invoiced,
-    paidTetri: input.paidTetri,
-    outstandingTetri: Math.max(0, diff),
-    creditTetri: Math.max(0, -diff),
-    depositHeldTetri: input.deposits.filter((d) => d.held).reduce((n, d) => n + d.paidTetri, 0),
-  };
-}
-
 /**
  * A schedule for a sale (SAL-02): a deposit today, then `months` equal
  * instalments on the same day of each following month.

@@ -71,6 +71,11 @@ export interface RecordPaymentInput {
   bankText: string | null;
   note: string | null;
   source: 'manual' | 'statement' | 'log';
+  /** Defaults from the links: a sale → sale, a rental → rent, else on account. */
+  kind?: 'rent' | 'sale' | 'on_account';
+  /** The statement line this payment is, set in the same transaction (B2-02). */
+  statementLineId?: string | null;
+  backdateReason?: string | null;
 }
 
 /**
@@ -82,129 +87,139 @@ export interface RecordPaymentInput {
  * customer's credit and lands on the next period the worker creates.
  */
 export async function recordPayment(input: RecordPaymentInput): Promise<{ id: string; allocated: number; leftover: number }> {
-  return prisma.$transaction(async (tx) => {
-    if (input.rentalId) {
-      const r = await tx.rental.findUnique({ where: { id: input.rentalId }, select: { id: true, customerId: true } });
-      if (!r) throw notFound('rental_not_found', 'No such rental.');
-      if (input.customerId && input.customerId !== r.customerId) {
-        throw conflict('customer_mismatch', 'That rental belongs to a different customer.');
-      }
-      input.customerId = r.customerId;
-    }
-    if (input.saleId) {
-      const sale = await tx.sale.findUnique({ where: { id: input.saleId }, select: { customerId: true } });
-      if (!sale) throw notFound('sale_not_found', 'No such sale.');
-      input.customerId = sale.customerId;
-    }
-    const payment = await tx.payment.create({
-      data: {
-        occurredOn: dateFromISO(input.occurredOn)!,
-        direction: 'in',
-        channel: input.channel,
-        grossTetri: input.grossTetri,
-        feeTetri: input.feeTetri,
-        netTetri: input.grossTetri - input.feeTetri,
-        customerId: input.customerId,
-        rentalId: input.rentalId,
-        saleId: input.saleId ?? null,
-        bankText: input.bankText,
-        note: input.note,
-        source: input.source,
-        createdById: input.actorId,
-      },
-    });
+  return prisma.$transaction((tx) => recordPaymentTx(tx, input));
+}
 
-    // A payment made for a sale settles that sale's schedule and nothing
-    // else: rent and a purchase are different debts.
-    if (input.saleId) {
-      const instalments = await tx.saleInstalment.findMany({ where: { saleId: input.saleId }, orderBy: { seq: 'asc' } });
-      const spread = spreadOverOwed(
-        input.grossTetri,
-        instalments.map((i) => ({ id: i.id, seq: i.seq, amountTetri: i.amountTetri, paidTetri: i.paidTetri })),
-        'instalment',
-      );
-      for (const a of spread.allocations) {
-        await tx.paymentAllocation.create({
-          data: { paymentId: payment.id, target: 'instalment', instalmentId: a.id, amountTetri: a.amountTetri },
-        });
-      }
-      await recomputeSale(tx, input.saleId);
-      await tx.auditLog.create({
-        data: {
-          actorId: input.actorId,
-          action: 'payment.record',
-          entityType: 'payment',
-          entityId: payment.id,
-          after: { occurredOn: input.occurredOn, channel: input.channel, grossTetri: input.grossTetri, saleId: input.saleId, allocated: input.grossTetri - spread.leftoverTetri },
-        },
+/** The same, inside a transaction the caller holds — a statement line and its payment go in together. */
+export async function recordPaymentTx(tx: Tx, input: RecordPaymentInput): Promise<{ id: string; allocated: number; leftover: number }> {
+  if (input.rentalId) {
+    const r = await tx.rental.findUnique({ where: { id: input.rentalId }, select: { id: true, customerId: true } });
+    if (!r) throw notFound('rental_not_found', 'No such rental.');
+    if (input.customerId && input.customerId !== r.customerId) {
+      throw conflict('customer_mismatch', 'That rental belongs to a different customer.');
+    }
+    input.customerId = r.customerId;
+  }
+  if (input.saleId) {
+    const sale = await tx.sale.findUnique({ where: { id: input.saleId }, select: { customerId: true } });
+    if (!sale) throw notFound('sale_not_found', 'No such sale.');
+    input.customerId = sale.customerId;
+  }
+  const payment = await tx.payment.create({
+    data: {
+      occurredOn: dateFromISO(input.occurredOn)!,
+      direction: 'in',
+      channel: input.channel,
+      grossTetri: input.grossTetri,
+      feeTetri: input.feeTetri,
+      netTetri: input.grossTetri - input.feeTetri,
+      customerId: input.customerId,
+      rentalId: input.rentalId,
+      saleId: input.saleId ?? null,
+      bankText: input.bankText,
+      note: input.note,
+      source: input.source,
+      createdById: input.actorId,
+      kind: input.kind ?? (input.saleId ? 'sale' : input.rentalId ? 'rent' : 'on_account'),
+      statementLineId: input.statementLineId ?? null,
+      backdateReason: input.backdateReason ?? null,
+    },
+  });
+
+  // A payment made for a sale settles that sale's schedule and nothing
+  // else: rent and a purchase are different debts.
+  if (input.saleId) {
+    const instalments = await tx.saleInstalment.findMany({ where: { saleId: input.saleId }, orderBy: { seq: 'asc' } });
+    const spread = spreadOverOwed(
+      input.grossTetri,
+      instalments.map((i) => ({ id: i.id, seq: i.seq, amountTetri: i.amountTetri, paidTetri: i.paidTetri })),
+      'instalment',
+    );
+    for (const a of spread.allocations) {
+      await tx.paymentAllocation.create({
+        data: { paymentId: payment.id, target: 'instalment', instalmentId: a.id, amountTetri: a.amountTetri },
       });
-      return { id: payment.id, allocated: input.grossTetri - spread.leftoverTetri, leftover: spread.leftoverTetri };
     }
-
-    const rentalIds = input.rentalId
-      ? [input.rentalId]
-      : input.customerId
-        ? (
-            await tx.rental.findMany({
-              where: { customerId: input.customerId, status: { in: ['booked', 'active', 'overdue', 'paused', 'disputed'] } },
-              orderBy: { pickedUpOn: 'asc' },
-              select: { id: true },
-            })
-          ).map((r) => r.id)
-        : [];
-
-    let left = input.grossTetri;
-    for (const id of rentalIds) {
-      if (left <= 0) break;
-      const periods = await tx.rentalPeriod.findMany({ where: { rentalId: id }, orderBy: { seq: 'asc' } });
-      const deposit = await tx.deposit.findUnique({ where: { rentalId: id } });
-      const spread = spreadPayment(
-        left,
-        periods.map((p) => ({ id: p.id, seq: p.seq, amountTetri: p.amountTetri, paidTetri: p.paidTetri })),
-        deposit ? { id: deposit.id, amountTetri: deposit.amountTetri, paidTetri: deposit.paidTetri } : null,
-      );
-      for (const a of spread.allocations) {
-        await tx.paymentAllocation.create({
-          data: {
-            paymentId: payment.id,
-            target: a.target,
-            periodId: a.target === 'period' ? a.id : null,
-            depositId: a.target === 'deposit' ? a.id : null,
-            amountTetri: a.amountTetri,
-          },
-        });
-      }
-      left = spread.leftoverTetri;
-      await recomputeRental(tx, id);
-    }
-
+    await recomputeSale(tx, input.saleId);
     await tx.auditLog.create({
       data: {
         actorId: input.actorId,
         action: 'payment.record',
         entityType: 'payment',
         entityId: payment.id,
-        after: {
-          occurredOn: input.occurredOn,
-          channel: input.channel,
-          grossTetri: input.grossTetri,
-          feeTetri: input.feeTetri,
-          customerId: input.customerId,
-          rentalId: input.rentalId,
-          allocated: input.grossTetri - left,
-        },
+        after: { occurredOn: input.occurredOn, channel: input.channel, grossTetri: input.grossTetri, saleId: input.saleId, allocated: input.grossTetri - spread.leftoverTetri },
       },
     });
-    return { id: payment.id, allocated: input.grossTetri - left, leftover: left };
+    return { id: payment.id, allocated: input.grossTetri - spread.leftoverTetri, leftover: spread.leftoverTetri };
+  }
+
+  const rentalIds = input.rentalId
+    ? [input.rentalId]
+    : input.customerId
+      ? (
+          await tx.rental.findMany({
+            where: { customerId: input.customerId, status: { in: ['booked', 'active', 'overdue', 'paused', 'disputed'] } },
+            orderBy: { pickedUpOn: 'asc' },
+            select: { id: true },
+          })
+        ).map((r) => r.id)
+      : [];
+
+  let left = input.grossTetri;
+  for (const id of rentalIds) {
+    if (left <= 0) break;
+    const periods = await tx.rentalPeriod.findMany({ where: { rentalId: id }, orderBy: { seq: 'asc' } });
+    const deposit = await tx.deposit.findUnique({ where: { rentalId: id } });
+    const spread = spreadPayment(
+      left,
+      periods.map((p) => ({ id: p.id, seq: p.seq, amountTetri: p.amountTetri, paidTetri: p.paidTetri })),
+      deposit ? { id: deposit.id, amountTetri: deposit.amountTetri, paidTetri: deposit.paidTetri } : null,
+    );
+    for (const a of spread.allocations) {
+      await tx.paymentAllocation.create({
+        data: {
+          paymentId: payment.id,
+          target: a.target,
+          periodId: a.target === 'period' ? a.id : null,
+          depositId: a.target === 'deposit' ? a.id : null,
+          amountTetri: a.amountTetri,
+        },
+      });
+    }
+    left = spread.leftoverTetri;
+    await recomputeRental(tx, id);
+  }
+
+  await tx.auditLog.create({
+    data: {
+      actorId: input.actorId,
+      action: 'payment.record',
+      entityType: 'payment',
+      entityId: payment.id,
+      after: {
+        occurredOn: input.occurredOn,
+        channel: input.channel,
+        grossTetri: input.grossTetri,
+        feeTetri: input.feeTetri,
+        customerId: input.customerId,
+        rentalId: input.rentalId,
+        allocated: input.grossTetri - left,
+      },
+    },
   });
+  return { id: payment.id, allocated: input.grossTetri - left, leftover: left };
 }
 
 /** A payment entered by mistake. Nothing is deleted: it is voided with a reason. */
-export async function voidPayment(input: { actorId: string; paymentId: string; reason: string }): Promise<void> {
+export async function voidPayment(input: { actorId: string; paymentId: string; reason: string; kind?: 'void' | 'undo' }): Promise<void> {
   await prisma.$transaction(async (tx) => {
     const p = await tx.payment.findUnique({
       where: { id: input.paymentId },
-      include: { allocations: { select: { periodId: true, instalmentId: true, deposit: { select: { rentalId: true } } } } },
+      include: {
+        allocations: {
+          select: { target: true, amountTetri: true, periodId: true, instalmentId: true, deposit: { select: { rentalId: true } }, period: { select: { seq: true, startsOn: true, endsOn: true } }, instalment: { select: { seq: true } } },
+        },
+      },
     });
     if (!p) throw notFound('payment_not_found', 'No such payment.');
     if (p.voidedAt) throw conflict('already_voided', 'This payment is already void.');
@@ -232,18 +247,41 @@ export async function voidPayment(input: { actorId: string; paymentId: string; r
     await tx.paymentAllocation.deleteMany({ where: { paymentId: p.id } });
     await tx.payment.update({
       where: { id: p.id },
-      data: { voidedAt: new Date(), voidReason: input.reason, voidedById: input.actorId },
+      data: { voidedAt: new Date(), voidReason: input.reason, voidedById: input.actorId, voidKind: input.kind ?? 'void' },
     });
+    // The bank line this payment was goes back to the queue, to be attached
+    // to the right record (B2-07).
+    if (p.statementLineId) {
+      await tx.statementLine.update({
+        where: { id: p.statementLineId },
+        data: { status: 'unmatched', matchedRule: null, paymentId: null, resolution: null, resolutionReason: null },
+      });
+    }
     for (const rentalId of touched) await recomputeRental(tx, rentalId);
     for (const saleId of saleIds) await recomputeSale(tx, saleId);
 
     await tx.auditLog.create({
       data: {
         actorId: input.actorId,
-        action: 'payment.void',
+        action: input.kind === 'undo' ? 'payment.undo' : 'payment.void',
         entityType: 'payment',
         entityId: p.id,
-        before: { grossTetri: p.grossTetri, channel: p.channel, rentalId: p.rentalId },
+        // What it closed stays in the journal after the allocations are gone.
+        before: {
+          grossTetri: p.grossTetri,
+          channel: p.channel,
+          kind: p.kind,
+          rentalId: p.rentalId,
+          saleId: p.saleId,
+          statementLineId: p.statementLineId,
+          closed: p.allocations.map((a) => ({
+            target: a.target,
+            amountTetri: a.amountTetri,
+            seq: a.period?.seq ?? a.instalment?.seq ?? null,
+            startsOn: a.period ? isoDate(a.period.startsOn) : null,
+            endsOn: a.period ? isoDate(a.period.endsOn) : null,
+          })),
+        },
         note: input.reason,
       },
     });

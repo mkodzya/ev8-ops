@@ -1,6 +1,7 @@
 import { effectiveRentalStatus, overdueDays, todayISO } from '@ev8/shared';
 import type { FastifyInstance } from 'fastify';
 import { isoDate } from '../lib/dates.js';
+import { debtsOf } from '../lib/debt.js';
 import { prisma } from '../lib/db.js';
 import { env } from '../lib/env.js';
 import { notFound } from '../lib/errors.js';
@@ -23,6 +24,10 @@ export function rentalRoutes(app: FastifyInstance): void {
         _count: { select: { periods: true } },
       },
     });
+    // A rental's debt is its part of its customer's one figure: its unpaid weeks and deposit.
+    const debts = await debtsOf(rentals.map((r) => r.customerId));
+    const debtOfRental = (customerId: string, rentalId: string) =>
+      (debts.get(customerId)?.parts ?? []).filter((p) => p.id === rentalId && (p.kind === 'rent' || p.kind === 'deposit')).reduce((n, p) => n + p.owesTetri, 0);
     return {
       today,
       rentals: rentals.map((r) => {
@@ -46,7 +51,7 @@ export function rentalRoutes(app: FastifyInstance): void {
           returnedOn: isoDate(r.returnedOn),
           paidThrough,
           overdueDays: status === 'overdue' && pickedUpOn ? overdueDays(paidThrough, pickedUpOn, today) : 0,
-          debtTetri: r.periods.reduce((n, p) => n + (p.amountTetri - p.paidTetri), 0),
+          debtTetri: debtOfRental(r.customerId, r.id),
           periods: r._count.periods,
           buyoutTargetTetri: r.buyoutTargetTetri,
           buyoutPerPaymentTetri: r.buyoutPerPaymentTetri,
@@ -71,10 +76,14 @@ export function rentalRoutes(app: FastifyInstance): void {
     const today = todayISO(new Date(), env.TZ);
     const pickedUpOn = isoDate(r.pickedUpOn);
     const paidThrough = isoDate(r.paidThrough);
+    // This rental's part of its customer's one debt figure (B7-02): weeks and an unpaid deposit (QA-W2-01).
+    const debt = (await debtsOf([r.customerId])).get(r.customerId);
+    const debtTetri = (debt?.parts ?? []).filter((p) => p.id === r.id && (p.kind === 'rent' || p.kind === 'deposit')).reduce((n, p) => n + p.owesTetri, 0);
     return {
       rental: {
         id: r.id,
         number: r.number,
+        debtTetri,
         odooName: r.odooName,
         status: effectiveRentalStatus(r.status, paidThrough, pickedUpOn, today),
         storedStatus: r.status,

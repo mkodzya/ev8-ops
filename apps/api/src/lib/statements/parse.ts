@@ -145,7 +145,11 @@ export function parseBog(text: string, opts: { fileName: string }): ParsedStatem
 
     const grossText = BOG_CARD_GROSS.exec(content)?.[1];
     const feeText = BOG_CARD_FEE.exec(content)?.[1];
-    const isCard = grossText != null && feeText != null;
+    // "Wallet/domestic MC cards" is a card payment too (B2-06): the account
+    // was credited the net, and the gross is recovered from it.
+    const isWallet = /Wallet\/domestic MC cards/i.test(content);
+    const isCard = (grossText != null && feeText != null) || isWallet;
+    const stated = grossText != null && feeText != null;
     const payer = (direction === 'in' ? BOG_PAYER : BOG_RECIPIENT).exec(content)?.[1]?.trim() ?? null;
 
     lines.push({
@@ -153,8 +157,8 @@ export function parseBog(text: string, opts: { fileName: string }): ParsedStatem
       occurredOn,
       direction,
       amountTetri,
-      grossTetri: isCard ? parseBankAmount(grossText) : null,
-      feeTetri: isCard ? parseBankAmount(feeText) : null,
+      grossTetri: stated ? parseBankAmount(grossText) : null,
+      feeTetri: stated ? parseBankAmount(feeText) : null,
       payer,
       purpose: BOG_PURPOSE.exec(content)?.[1]?.trim() ?? content.slice(0, 200),
       raw: [r[0], r[1], r[2], r[3], r[4], r[7]].join(' | '),

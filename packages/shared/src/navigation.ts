@@ -41,7 +41,7 @@ export const SECTIONS: readonly Section[] = [
   { id: 'rentals', path: '/rentals', group: 'work', anyOf: ['fleet.view'] },
   { id: 'fleet', path: '/fleet', group: 'work', anyOf: ['fleet.view'] },
   { id: 'service', path: '/service', group: 'work', anyOf: ['fleet.view'] },
-  { id: 'money', path: '/money/payments', group: 'money', anyOf: ['payments.view'] },
+  { id: 'money', path: '/money', group: 'money', anyOf: ['payments.view'] },
   { id: 'cash', path: '/money/cash', group: 'money', anyOf: ['cash.record'], noneOf: ['payments.view'] },
   { id: 'sales', path: '/sales', group: 'money', anyOf: ['fleet.view'] },
   { id: 'purchases', path: '/purchases', group: 'money', anyOf: ['purchases.view'] },
@@ -80,7 +80,7 @@ export function menuSectionsFor(permissions: readonly Permission[]): SectionId[]
   return [...rest.filter((id) => id === 'customers'), ...rest.filter((id) => id !== 'customers')];
 }
 
-export type TabId = 'vehicles' | 'models' | 'points' | 'jobs' | 'stock' | 'payments' | 'statements' | 'economics';
+export type TabId = 'vehicles' | 'models' | 'points' | 'jobs' | 'stock' | 'sort' | 'payments' | 'till' | 'statements' | 'deposits' | 'mine' | 'economics';
 
 /** Tabs inside a section, in the address (wave 1 §3.2). */
 export const SECTION_TABS: Partial<Record<SectionId, readonly { id: TabId; path: string; anyOf: readonly Permission[] }[]>> = {
@@ -93,9 +93,19 @@ export const SECTION_TABS: Partial<Record<SectionId, readonly { id: TabId; path:
     { id: 'jobs', path: '/service', anyOf: ['fleet.view'] },
     { id: 'stock', path: '/service/stock', anyOf: ['fleet.view'] },
   ],
+  // Money in one place (wave 2 §3.0): sort the bank lines, the payments,
+  // the till by person, the statements, the deposits.
   money: [
+    { id: 'sort', path: '/money/sort', anyOf: ['payments.reconcile'] },
     { id: 'payments', path: '/money/payments', anyOf: ['payments.view'] },
+    { id: 'till', path: '/money/cash', anyOf: ['payments.reconcile'] },
     { id: 'statements', path: '/money/statements', anyOf: ['payments.reconcile'] },
+    { id: 'deposits', path: '/money/deposits', anyOf: ['payments.view'] },
+  ],
+  // A manager's money: their own till and their own payments.
+  cash: [
+    { id: 'till', path: '/money/cash', anyOf: ['cash.record'] },
+    { id: 'mine', path: '/money/mine', anyOf: ['cash.record'] },
   ],
   reports: [{ id: 'economics', path: '/reports/economics', anyOf: ['reports.view'] }],
 };
@@ -104,12 +114,15 @@ export function tabsFor(section: SectionId, permissions: readonly Permission[]) 
   return (SECTION_TABS[section] ?? []).filter((t) => allowed(t, permissions));
 }
 
-export type ActionId = 'pickup' | 'return' | 'newCustomer' | 'openRepair' | 'sell';
+export type ActionId = 'pickup' | 'return' | 'takeMoney' | 'takeCash' | 'newCustomer' | 'openRepair' | 'sell';
 
 /** What the "+" offers, most frequent first (wave 1 §3.2). */
-export const ACTIONS: readonly { id: ActionId; path: string; anyOf: readonly Permission[] }[] = [
+export const ACTIONS: readonly { id: ActionId; path: string; anyOf: readonly Permission[]; noneOf?: readonly Permission[] }[] = [
   { id: 'pickup', path: '/rentals/new', anyOf: ['rental.create'] },
   { id: 'return', path: '/rentals/return', anyOf: ['rental.return'] },
+  // Third on the "+" (wave 2 §3.0): the one money form, opened over the money section.
+  { id: 'takeMoney', path: '/money/payments?take=1', anyOf: ['payments.reconcile'] },
+  { id: 'takeCash', path: '/money/cash?take=1', anyOf: ['cash.record'], noneOf: ['payments.reconcile'] },
   { id: 'newCustomer', path: '/customers/new', anyOf: ['customer.create'] },
   { id: 'openRepair', path: '/service?new=1', anyOf: ['service.manage'] },
   { id: 'sell', path: '/sales?new=1', anyOf: ['sales.manage'] },
@@ -120,10 +133,14 @@ export function actionsFor(permissions: readonly Permission[]) {
 }
 
 /** Which section an address belongs to, for the lit item and the header title. */
-export function sectionOfPath(pathname: string): SectionId {
+export function sectionOfPath(pathname: string, permissions?: readonly Permission[]): SectionId {
   const first = pathname.split('/')[1] ?? '';
   if (first === '') return 'today';
-  if (first === 'money') return pathname.startsWith('/money/cash') ? 'cash' : 'money';
+  // The till and "my payments" are the manager's section of their own; for an owner they are tabs of Money.
+  if (first === 'money') {
+    const owner = permissions ? permissions.includes('payments.view') : false;
+    return !owner && (pathname.startsWith('/money/cash') || pathname.startsWith('/money/mine')) ? 'cash' : 'money';
+  }
   if (first === 'reports') return 'reports';
   const known: Record<string, SectionId> = {
     rentals: 'rentals',

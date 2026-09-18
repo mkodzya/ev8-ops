@@ -242,3 +242,6 @@
   }
   .section-tab.on { background: var(--ink); color: var(--surface); border-color: var(--ink); }
 }
+
+.section-tab-n { margin-left: 6px; font-size: 12px; color: var(--muted); }
+.section-tab.on .section-tab-n { color: inherit; }

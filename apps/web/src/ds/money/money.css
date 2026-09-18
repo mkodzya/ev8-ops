@@ -1,0 +1,68 @@
+/* The money form and the money section (wave 2). */
+.money-who { display: grid; gap: 10px; }
+.money-who-head { display: grid; gap: 10px; margin-bottom: 4px; }
+.money-who-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.money-who-row p { margin: 0; }
+.money-records { display: grid; gap: 6px; }
+.money-records .pick-card { justify-content: space-between; }
+.pick-card-quiet .pick-card-title { color: var(--muted); }
+.money-chips { margin: -4px 0 12px; }
+.money-note { margin: -4px 0 12px; font: var(--text-body-sm); color: var(--ink); }
+.money-facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 0 0 12px; }
+.money-facts div { display: grid; gap: 2px; }
+.money-facts dt { font: var(--text-label); color: var(--muted); }
+.money-facts dd { margin: 0; }
+.money-closes { border-top: 1px solid var(--line-soft); margin-top: 8px; padding-top: 10px; }
+.money-closes h3 { margin: 0 0 6px; }
+.money-closes ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.money-closes li { display: flex; justify-content: space-between; gap: 12px; }
+.money-after { margin: 8px 0 0; font: var(--text-body-sm); }
+
+/* Amounts with a sign (§3.3): in is the accent ink, out is ink with a minus. */
+.amt-in { color: var(--accent-ink); }
+.amt-out { color: var(--ink); }
+.amt-void { color: var(--muted); text-decoration: line-through; }
+
+.money-totals { display: flex; flex-wrap: wrap; gap: 8px 20px; margin: 0 0 12px; }
+.money-totals div { display: grid; gap: 2px; }
+.money-totals dt { font: var(--text-label); color: var(--muted); }
+.money-totals dd { margin: 0; font: var(--text-money); }
+.money-filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+.money-filters select { min-height: var(--control-dense); width: auto; max-width: 100%; flex: 0 1 auto; }
+
+/* "Разобрать" (§3.2). */
+.sort-group { margin: 16px 0 8px; display: flex; gap: 8px; align-items: baseline; }
+.sort-line { display: grid; gap: 8px; padding: 14px; border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--surface); margin-bottom: 10px; transition: opacity var(--ease); }
+.sort-line.busy { opacity: 0.55; }
+.sort-line-head { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
+.sort-line-head .t-money { white-space: nowrap; }
+.sort-line-meta { flex: 1; min-width: 0; }
+.sort-line-meta { font: var(--text-label); color: var(--muted); }
+.sort-line-text { font: var(--text-mono-sm); color: var(--muted); overflow-wrap: anywhere; margin: 0; }
+.sort-reason { margin: 0; font: var(--text-body-sm); }
+.sort-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.sort-foot { margin: 16px 0; font: var(--text-body-sm); }
+
+/* The till (§3.4). */
+.till-person { display: grid; gap: 6px; padding: 14px; border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--surface); margin-bottom: 10px; }
+.till-person-head { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+.till-row { display: flex; justify-content: space-between; gap: 12px; font: var(--text-body-sm); }
+.till-onhand { font: var(--text-display); font-family: var(--mono); margin: 4px 0 12px; }
+.till-sticky { position: sticky; bottom: 8px; padding-top: 8px; background: linear-gradient(transparent, var(--bg) 30%); }
+
+/* Banks (§3.5). */
+.bank-cards { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); margin-bottom: 16px; }
+.bank-card { padding: 14px; border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--surface); display: grid; gap: 4px; }
+.bank-card.stale { border-color: var(--service); background: var(--warn-soft); }
+.upload-summary { display: grid; gap: 4px; margin: 8px 0 14px; }
+.upload-summary div { display: flex; justify-content: space-between; gap: 12px; }
+@media (max-width: 899px) {
+  /* A bar of its own above the phone's bottom bar, whatever the length of the day (QA-W2-12). */
+  .till-fixed { position: fixed; left: 0; right: 0; bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom)); padding: 8px 16px; background: var(--bg); border-top: 1px solid var(--line-soft); z-index: 5; }
+  .till-fixed .submit { width: 100%; }
+}
+.nowrap { white-space: nowrap; }
+.till-row span:first-child { min-width: 0; }
+
+/* The "⋯" of a bank line is a target like any other on a phone. */
+@media (max-width: 899px) { .sort-line .row-dots { min-width: var(--control); min-height: var(--control); } }

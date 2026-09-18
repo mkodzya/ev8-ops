@@ -74,7 +74,7 @@ export function fileRoutes(app: FastifyInstance): void {
   );
 
   // Customer documents (CST-03): a manager may attach an ID photo at the
-  // counter; opening it later is for director and owner only.
+  // counter; opening it later is for the owners only.
   app.post<{ Params: { id: string }; Body: Body }>(
     '/api/customers/:id/documents',
     { config: { scope: 'customer.create' }, bodyLimit: BODY_LIMIT },
@@ -95,7 +95,7 @@ export function fileRoutes(app: FastifyInstance): void {
   );
 
   // The file itself. Act photos: anyone who sees the fleet. Customer
-  // documents: director and owner, and the access is journaled (spec §8).
+  // documents: the owners, and the access is journaled (spec §8).
   app.get<{ Params: { id: string } }>('/api/files/:id', { config: { scope: 'session' } }, async (req, reply) => {
     const actor = actorOf(req);
     const meta = await prisma.storedFile.findUnique({
@@ -104,7 +104,7 @@ export function fileRoutes(app: FastifyInstance): void {
     });
     if (!meta || meta.archived) throw notFound('file_not_found', 'No such file.');
     if (meta.kind === 'customer_document') {
-      if (!hasPerm(actor, 'customer.documents.view')) throw forbidden('documents_restricted', 'Customer documents are for the director and the owner.');
+      if (!hasPerm(actor, 'customer.documents.view')) throw forbidden('documents_restricted', 'Customer documents are for the owners only.');
       await audit({ actorId: actor.id, action: 'customer.document.open', entityType: 'customer', entityId: meta.customerId, after: { fileId: meta.id } });
     } else if (!hasPerm(actor, 'fleet.view')) {
       throw forbidden('forbidden', 'No access to files.');

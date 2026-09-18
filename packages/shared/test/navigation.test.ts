@@ -18,15 +18,16 @@ describe('the structure each role sees (wave 1 §3.2)', () => {
     expect(sectionsForRole('owner').map((s) => s.id)).not.toContain('cash');
   });
 
-  it('offers the owner five actions under + and the manager three', () => {
-    expect(actionsForRole('owner').map((a) => a.id)).toEqual(['pickup', 'return', 'newCustomer', 'openRepair', 'sell']);
-    expect(actionsForRole('manager').map((a) => a.id)).toEqual(['pickup', 'return', 'newCustomer']);
+  it('offers the owner six actions under + and the manager four', () => {
+    expect(actionsForRole('owner').map((a) => a.id)).toEqual(['pickup', 'return', 'takeMoney', 'newCustomer', 'openRepair', 'sell']);
+    expect(actionsForRole('manager').map((a) => a.id)).toEqual(['pickup', 'return', 'takeCash', 'newCustomer']);
   });
 
   it('shows the points tab and statements only to the owner', () => {
     expect(tabsForRole('fleet', 'owner').map((t) => t.id)).toEqual(['vehicles', 'models', 'points']);
     expect(tabsForRole('fleet', 'manager').map((t) => t.id)).toEqual(['vehicles', 'models']);
-    expect(tabsForRole('money', 'owner').map((t) => t.id)).toEqual(['payments', 'statements']);
+    expect(tabsForRole('money', 'owner').map((t) => t.id)).toEqual(['sort', 'payments', 'till', 'statements', 'deposits']);
+    expect(tabsForRole('cash', 'manager').map((t) => t.id)).toEqual(['till', 'mine']);
   });
 
   it('knows which section an address belongs to', () => {
@@ -34,6 +35,7 @@ describe('the structure each role sees (wave 1 §3.2)', () => {
     expect(sectionOfPath('/fleet/models/abc')).toBe('fleet');
     expect(sectionOfPath('/service/stock/parts/x')).toBe('service');
     expect(sectionOfPath('/money/cash')).toBe('cash');
+    expect(sectionOfPath('/money/cash', ['payments.view'])).toBe('money');
     expect(sectionOfPath('/money/statements')).toBe('money');
     expect(sectionOfPath('/rentals/abc/return')).toBe('rentals');
   });

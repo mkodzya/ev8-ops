@@ -5,6 +5,7 @@
 // payer inside a Bank of Georgia line, the way a card payment states its
 // commission — with the people and the amounts made up for the test.
 import { describe, expect, it } from 'vitest';
+import { acquiringGross } from '@ev8/shared';
 import { HAS_DB, call, json, loginAs, uniq } from './helpers.js';
 
 const BOG_HEADER = [
@@ -128,15 +129,21 @@ describe.skipIf(!HAS_DB)('reading a Bank of Georgia export', () => {
     expect(await prisma.payment.count({ where: { bankText: { contains: tag } } })).toBe(1);
   });
 
-  it('money leaving the account is kept but never queued as a customer payment', async () => {
-    const { owner } = await rentalFor({ ru: 'Лука Расходов', ka: 'ლუკა ხარჯიძე' });
+  it('money leaving the account waits under "Списания", never as a customer payment (wave 2 §3.2)', async () => {
+    const { owner, rentalId } = await rentalFor({ ru: 'Лука Расходов', ka: 'ლუკა ხარჯიძე' });
     const text = [
       BOG_HEADER,
       `"09.09.2026","0018","GE89BG0000000902936900GEL","95.0","","1","95.0","my auto.ge: gadaricxva - Tanxa: GEL95.00; mimRebi: TNET LLC ${uniq()}"`,
     ].join('\n');
-    const res = json<{ outgoing: number; unmatched: number }>(await call(owner, 'POST', '/api/statements', { fileName: 'out.csv', text }));
+    const res = json<{ outgoing: number; unmatched: number; matched: number }>(await call(owner, 'POST', '/api/statements', { fileName: 'out.csv', text }));
     expect(res.outgoing).toBe(1);
-    expect(res.unmatched).toBe(0);
+    expect(res.matched).toBe(0);
+    const queue = json<{ lines: { id: string; direction: string; raw: string }[] }>(await call(owner, 'GET', '/api/statement-lines?direction=out'));
+    const line = queue.lines.find((l) => l.raw.includes('TNET LLC'))!;
+    expect(line.direction).toBe('out');
+    // A customer's record cannot take it; "company expense" puts it away in one tap.
+    expect((await call(owner, 'POST', `/api/statement-lines/${line.id}/assign`, { rentalId })).statusCode).toBe(409);
+    expect((await call(owner, 'POST', `/api/statement-lines/${line.id}/expense`, {})).statusCode).toBe(200);
   });
 });
 
@@ -174,10 +181,9 @@ describe.skipIf(!HAS_DB)('the queue of lines nobody could place (PAY-03)', () =>
     expect(mine).toBeTruthy();
     expect(mine!.amountTetri).toBe(7777);
 
-    const detail = json<{ line: { id: string }; hints: { rentalId: string; why: string }[] }>(
-      await call(owner, 'GET', `/api/statement-lines/${mine!.id}`),
-    );
-    expect(detail.hints.length).toBeGreaterThan(0);
+    // An amount nobody's debt fits and no name: no hint to invent — the search, straight away (§3.2).
+    const detail = json<{ line: { id: string }; group: string }>(await call(owner, 'GET', `/api/statement-lines/${mine!.id}`));
+    expect(detail.group).toBe('none');
   });
 
   it('assigning a line to a rental makes the payment and takes it out of the queue', async () => {
@@ -196,7 +202,9 @@ describe.skipIf(!HAS_DB)('the queue of lines nobody could place (PAY-03)', () =>
 
     const { prisma } = await import('../src/lib/db.js');
     const p = await prisma.payment.findFirstOrThrow({ where: { rentalId, source: 'statement' } });
-    expect(p.grossTetri).toBe(9999);
+    // "Wallet/domestic MC cards" is a card (B2-06): 99.99 credited is the net of what the customer paid.
+    expect(p.channel).toBe('acquiring');
+    expect(p.grossTetri).toBe(acquiringGross(9999));
     expect((await call(owner, 'POST', `/api/statement-lines/${line.id}/assign`, { rentalId })).statusCode).toBe(409);
   });
 

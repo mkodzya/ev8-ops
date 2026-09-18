@@ -83,6 +83,20 @@ export function Form<V>({
     el?.focus();
   }, [op.failure]);
 
+  // A refusal about one field is answered by changing the form: once it
+  // changes, the words under the field go (QA-W2-10). The next attempt asks again.
+  const shape = JSON.stringify(value);
+  const refusedAt = useRef<string | null>(null);
+  useEffect(() => {
+    if (op.failure?.field) {
+      if (refusedAt.current == null) refusedAt.current = shape;
+      else if (refusedAt.current !== shape) {
+        refusedAt.current = null;
+        op.reset();
+      }
+    } else refusedAt.current = null;
+  }, [shape, op.failure, op.reset]);
+
   // After "Done", an inline form goes back to rest; a sheet has closed by then.
   useEffect(() => {
     if (op.state !== 'done') return;
