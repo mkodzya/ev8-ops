@@ -211,7 +211,8 @@ export function modelRoutes(app: FastifyInstance): void {
   });
 }
 
-/** A model as a manager reads it: prices yes, what it cost us no. */
-function withoutCost<T extends { costTetri: number | null; costSource: unknown }>(m: T): T {
-  return { ...m, costTetri: null, costSource: null };
+/** A model as a manager reads it: prices yes, what it cost us no — the fields are not in the answer at all (QA-W1-07). */
+function withoutCost<T extends { costTetri: number | null; costSource: unknown }>(m: T): Omit<T, 'costTetri' | 'costSource'> {
+  const { costTetri: _cost, costSource: _source, ...rest } = m;
+  return rest;
 }

@@ -27,11 +27,12 @@ describe.skipIf(!HAS_DB)('what a manager does not see', () => {
 
     const models = async (c: string) =>
       json<{ models: { id: string; costTetri: number | null }[] }>(await call(c, 'GET', '/api/models')).models.find((m) => m.id === model.id)!;
-    expect((await models(manager)).costTetri).toBeNull();
+    expect((await models(manager)).costTetri).toBeUndefined();
+    expect('costSource' in (await models(manager))).toBe(false);
     expect((await models(owner)).costTetri).toBe(168929);
 
     const card = json<{ model: { costTetri: number | null }; orders: unknown[] }>(await call(manager, 'GET', `/api/models/${model.id}`));
-    expect(card.model.costTetri).toBeNull();
+    expect(card.model.costTetri).toBeUndefined();
     expect(card.orders).toEqual([]);
 
     const moped = async (c: string) => json<{ vehicle: { costTetri: number | null } }>(await call(c, 'GET', `/api/fleet/${vehicle.id}`)).vehicle.costTetri;

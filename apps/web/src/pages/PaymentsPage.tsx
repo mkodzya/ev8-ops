@@ -1,4 +1,4 @@
-import { addDays, numberMatches, spellingMatches, todayISO } from '@ev8/shared';
+import { addDays, paymentMatches, todayISO } from '@ev8/shared';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api.js';
@@ -66,9 +66,9 @@ export function PaymentsPage({ till = false }: { till?: boolean } = {}) {
             <span className="seg-lbl">{t.statements.queue}</span>
             <span className="seg-num">{waiting}</span>
           </button>
+          {/* The payments themselves; how many is the list's own "Все" chip, not said twice (QA-W1 расхождение 4). */}
           <button type="button" className={`seg ${view === 'all' ? 'on' : ''}`} onClick={() => setTab('all')}>
-            <span className="seg-lbl">{t.common.all}</span>
-            <span className="seg-num">{data.payments.length}</span>
+            <span className="seg-lbl">{t.payments.title}</span>
           </button>
         </div>
       )}
@@ -109,9 +109,7 @@ export function PaymentsPage({ till = false }: { till?: boolean } = {}) {
         search={{
           placeholder: t.lists.paymentsSearch,
           match: (p, q) =>
-            (q.amountTetri != null && p.grossTetri === q.amountTetri) ||
-            spellingMatches(q, [p.customer?.name, p.bankText, p.note, p.createdBy]) ||
-            (!!p.rental && numberMatches(q, p.rental.number)),
+            paymentMatches(q, { grossTetri: p.grossTetri, customer: p.customer?.name, bankText: p.bankText, note: p.note, createdBy: p.createdBy, rentalNumber: p.rental?.number }),
         }}
         chips={[
           { key: 'today', label: t.lists.chips.today, test: (p) => p.occurredOn === today },

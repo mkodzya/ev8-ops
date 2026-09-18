@@ -26,11 +26,34 @@ function set(next: ConnectionState) {
   for (const l of listeners) l();
 }
 
+// While the server is out of reach it is asked every few seconds whether it
+// is back: the browser's "online" event fires only when the network itself
+// returns, and a screen waiting on a stopped server must not wait for a tap.
+const PROBE_MS = 5000;
+let probe: number | null = null;
+
+function probing(on: boolean) {
+  if (typeof window === 'undefined') return;
+  if (on && probe == null) {
+    probe = window.setInterval(() => {
+      void fetch('/api/health', { cache: 'no-store' }).then(
+        (r) => r.ok && markUp(),
+        () => {},
+      );
+    }, PROBE_MS);
+  } else if (!on && probe != null) {
+    window.clearInterval(probe);
+    probe = null;
+  }
+}
+
 export function markDown(): void {
   if (state.online) set({ online: false, backAt: null });
+  probing(true);
 }
 
 export function markUp(): void {
+  probing(false);
   if (!state.online) {
     set({ online: true, backAt: Date.now() });
     for (const h of reconnectHandlers) h();

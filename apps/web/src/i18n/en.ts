@@ -26,6 +26,8 @@ export const en = {
   },
 
   session: {
+    unreachable: 'No connection to the server',
+    unreachableNote: 'The app opens as soon as the server answers. What you typed on this phone before is kept.',
     ended: 'Your sign-in ended',
     signInAgainTo: 'Sign in again — we will bring you back to',
     typedKept: 'what you typed is kept.',
@@ -39,6 +41,7 @@ export const en = {
   },
 
   nav: {
+    serviceStock: 'Service · Stock',
     today: 'Today',
     more: 'More',
     fleet: 'Fleet',
@@ -380,7 +383,7 @@ export const en = {
     withheldAmount: 'Withheld amount',
     withheldReason: 'Reason',
     returnedTo: 'Returned to (blank = the payer)',
-    leaveToDirector: 'The director decides on the deposit.',
+    leaveToDirector: 'An owner decides on the deposit.',
     done: 'Return recorded.',
   },
 
@@ -424,7 +427,7 @@ export const en = {
     title: 'Documents',
     kinds: { id_card: 'ID card', driver_licence: 'Driver licence', other: 'Other' },
     add: 'Add document',
-    restricted: 'Documents are opened by the director and the owner only. You see that they exist.',
+    restricted: 'Documents are opened by the owners only. You see that they exist.',
     none: 'No documents.',
     pick: 'Take a photo or choose a file',
   },
@@ -434,7 +437,7 @@ export const en = {
     contract: 'Contract PDF',
     returnAct: 'Return act PDF',
     regenerate: 'Rebuild the document',
-    regenerateHint: 'The copy that was handed over is archived and a new one is made from the current data. Director and owner only.',
+    regenerateHint: 'The copy that was handed over is archived and a new one is made from the current data. Owners only.',
     note: 'The Georgian text is authentic; the English is an unofficial translation.',
   },
 
@@ -720,7 +723,7 @@ export const en = {
     voidReason: 'Why it is being voided',
     recorded: (closed: string, left: string) => `Recorded. Closed ${closed}, ${left} left as credit.`,
     none: 'No payments yet.',
-    cashOnly: 'A manager records cash. A transfer or a card payment is entered by the director.',
+    cashOnly: 'A manager records cash. A transfer or a card payment is entered by an owner.',
   },
 
   balance: {
@@ -1015,11 +1018,11 @@ export const en = {
       customer_mismatch: 'That rental belongs to a different customer. Pick this customer’s own rental.',
       customer_not_found: 'Customer not found.',
       demo_login_off: 'Demo logins are switched off on this stand.',
-      deposit_decision_forbidden: 'Only the director or the owner decides on a deposit.',
+      deposit_decision_forbidden: 'Only an owner decides on a deposit.',
       deposit_not_found: 'This rental has no deposit.',
       deposit_split: 'Returned and withheld together come to more than the deposit.',
       deposit_too_small: 'The deposit does not hold that much.',
-      documents_restricted: 'Customer documents are for the director and the owner only.',
+      documents_restricted: 'Customer documents are for the owners only.',
       down_payment_too_big: 'The down payment is more than the price.',
       duplicate_customer: 'A customer with this personal number or phone already exists.',
       duplicate_email: 'Somebody already signs in with this email.',
@@ -1065,8 +1068,8 @@ export const en = {
       purchase_has_payments: 'Cancel the payments on this order first.',
       purchase_not_found: 'Order not found.',
       reason_required: 'Withholding needs a reason.',
-      reconcile_required: 'Only the director or the owner enters bank payments.',
-      regenerate_forbidden: 'Only the director or the owner can replace a document already issued.',
+      reconcile_required: 'Only an owner enters bank payments.',
+      regenerate_forbidden: 'Only an owner can replace a document already issued.',
       rental_not_found: 'Rental not found.',
       return_before_pickup: 'The return date is before the pickup date.',
       sale_closed: 'This sale is closed.',

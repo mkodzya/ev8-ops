@@ -246,7 +246,8 @@ function Frame() {
                   <span className="act-ico">
                     <Icon size={20} strokeWidth={1.75} aria-hidden="true" />
                   </span>
-                  {label(id)}
+                  {/* The owner runs the stock too; the menu says so (wave 1 §3.2). */}
+                  {id === 'service' && can('stock.count') ? t.nav.serviceStock : label(id)}
                 </Link>
               );
             })}

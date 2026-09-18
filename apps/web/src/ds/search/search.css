@@ -42,3 +42,6 @@
   .search-back { display: none; }
   .search-field { padding-left: var(--space4); }
 }
+
+/* The typed part of a result, in bold — not a coloured highlight. */
+.search-hit { background: none; color: inherit; font-weight: 700; }

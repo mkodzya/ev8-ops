@@ -1,6 +1,6 @@
 import { parseGel, spellingMatches } from '@ev8/shared';
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../api.js';
 import { BlockHead, Loading, PageHead } from '../components/ui.js';
 import { DataList } from '../ds/list/DataList.js';
@@ -8,6 +8,7 @@ import { Field } from '../components/Wizard.js';
 import { formatGel } from '../format.js';
 import { useLocale, useT } from '../i18n/index.js';
 import { FormSheet } from '../ds/form/Form.js';
+import { rowClick } from '../lib/rowLink.js';
 import { useLoad } from '../lib/use.js';
 import { useSession } from '../session.js';
 import { LoadError } from '../components/LoadError.js';
@@ -41,6 +42,7 @@ interface ModelRow {
 
 /** The warehouse: parts on the shelf, and mopeds counted by model. */
 export function StockPage() {
+  const navigate = useNavigate();
   const t = useT();
   const { can } = useSession();
   const mopeds = useLoad<{ rows: ModelRow[]; totals: { inStock: number; ours: number; onOrder: number; valueTetri: number; unpriced: number } }>(
@@ -77,7 +79,8 @@ export function StockPage() {
             </thead>
             <tbody>
               {mopeds.data.rows.map((m) => (
-                <tr key={m.id}>
+                // The whole row opens the model: the name alone is too small a target on a phone (QA-W1-04).
+                <tr key={m.id} className="row-go" onClick={rowClick(() => navigate(`/fleet/models/${m.id}`))}>
                   <td>
                     <Link to={`/fleet/models/${m.id}`}>{m.name}</Link>
                   </td>

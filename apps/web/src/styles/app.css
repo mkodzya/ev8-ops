@@ -1231,3 +1231,11 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
   .d-frames { flex-direction: column; }
   .d-fig-laptop { display: none; }
 }
+
+/* Thumb-sized on a phone (wave 1 §6 crit. 32, QA-W1-04): the dense 34 px
+   control is for a pointer, from 900 px up. Chips, section tabs, small pills,
+   row actions and the list search all read it. */
+@media (max-width: 899px) {
+  :root { --control-dense: var(--control); }
+  .pill-sm { min-height: var(--control); }
+}

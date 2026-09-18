@@ -1,4 +1,4 @@
-import { SEARCH_GROUP_LIMIT, spellingMatches, numberMatches, phoneMatches, readQuery, vinMatches, type Query } from '@ev8/shared';
+import { SEARCH_GROUP_LIMIT, spellingMatches, numberMatches, paymentMatches, phoneMatches, readQuery, vinMatches, type Query } from '@ev8/shared';
 import type { FastifyInstance } from 'fastify';
 import { isoDate } from '../lib/dates.js';
 import { prisma } from '../lib/db.js';
@@ -66,26 +66,23 @@ export function searchRoutes(app: FastifyInstance): void {
         },
         orderBy: { createdAt: 'desc' },
       }),
-      q.amountTetri == null
-        ? Promise.resolve([])
-        : prisma.payment.findMany({
-            where: {
-              grossTetri: q.amountTetri,
-              ...(seeAllPayments ? {} : { createdById: actor.id, channel: 'cash' as const }),
-            },
-            select: {
-              id: true,
-              grossTetri: true,
-              occurredOn: true,
-              channel: true,
-              voidedAt: true,
-              customer: { select: { name: true } },
-              rental: { select: { id: true, number: true } },
-              sale: { select: { id: true, number: true } },
-            },
-            orderBy: [{ occurredOn: 'desc' }, { createdAt: 'desc' }],
-            take: 200,
-          }),
+      prisma.payment.findMany({
+        where: seeAllPayments ? {} : { createdById: actor.id, channel: 'cash' as const },
+        select: {
+          id: true,
+          grossTetri: true,
+          occurredOn: true,
+          channel: true,
+          voidedAt: true,
+          bankText: true,
+          note: true,
+          customer: { select: { name: true } },
+          createdBy: { select: { name: true } },
+          rental: { select: { id: true, number: true } },
+          sale: { select: { id: true, number: true } },
+        },
+        orderBy: [{ occurredOn: 'desc' }, { createdAt: 'desc' }],
+      }),
       seePurchases
         ? prisma.purchase.findMany({
             select: { id: true, number: true, status: true, invoiceNo: true, supplier: { select: { name: true } } },
@@ -124,7 +121,11 @@ export function searchRoutes(app: FastifyInstance): void {
             .map((s) => ({ id: s.id, number: s.number, status: s.status, customer: s.customer.name, vin: s.vehicle?.vin ?? null })),
         ),
         payments: group(
-          payments.map((p) => ({
+          payments
+            .filter((p) =>
+              paymentMatches(q, { grossTetri: p.grossTetri, customer: p.customer?.name, bankText: p.bankText, note: p.note, createdBy: p.createdBy?.name, rentalNumber: p.rental?.number }),
+            )
+            .map((p) => ({
             id: p.id,
             grossTetri: p.grossTetri,
             occurredOn: isoDate(p.occurredOn),
