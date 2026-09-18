@@ -690,6 +690,8 @@ export const ka: Dict = {
 
 
   money: {
+    tillMinus: (onHand: string, minus: string) => `სალაროში გაქვთ ${onHand} — მეტს აბრუნებთ, სალარო მინუსში წავა −${minus}`,
+    tillMinusOk: 'დიახ, ვაბრუნებ — სალარო მინუსში წავა',
     take: 'ფულის მიღება',
     takeCash: 'ნაღდის მიღება',
     takeFor: (n: string) => `გადახდის მიღება · ${n}`,
@@ -766,6 +768,7 @@ export const ka: Dict = {
   },
 
   sort: {
+    itsPayment: (n: string) => `ეს ${n}-ის გადახდაა`,
     incoming: 'შემოსავლები',
     outgoing: 'ჩამოწერები',
     recordedGroup: 'ჰგავს, უკვე გატარებულია',
@@ -814,6 +817,7 @@ export const ka: Dict = {
   },
 
   till: {
+    taken: 'მფლობელმა მიიღო',
     today: 'დღეს',
     week: 'კვირა',
     onHandToday: 'დღეს ხელზე',
@@ -852,6 +856,7 @@ export const ka: Dict = {
   },
 
   deposits: {
+    setNote: (n: number) => `${n} ქირით: მიმდინარე და გადაწყვეტილების მომლოდინე`,
     onHand: 'ხელზე (მიღებული)',
     contract: 'ხელშეკრულებებით დარიცხული',
     held: 'ხელზე',
@@ -873,6 +878,7 @@ export const ka: Dict = {
   },
 
   paymentPage: {
+    wasLinked: 'იყო მიბმული; ანულირების შემდეგ ხაზი «დასახარისხებელში» დაბრუნდა',
     acts: { record: 'ჩაიწერა', void: 'ანულირდა', undo: 'მაშინვე გაუქმდა' },
     title: (n: string) => `გადახდა ${n}`,
     customer: 'კლიენტი',

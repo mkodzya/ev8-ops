@@ -1,7 +1,7 @@
 import { formatGel, parseGel, SEARCH_MIN, todayISO } from '@ev8/shared';
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { api } from '../../api.js';
+import { api, ApiError } from '../../api.js';
 import { Field } from '../../components/Wizard.js';
 import { fmtDate } from '../../format.js';
 import { useT } from '../../i18n/index.js';
@@ -79,6 +79,8 @@ interface State {
   foreignAmount: string;
   bankFee: string;
   toState: 'available' | 'service';
+  /** A deposit handed back in cash beyond what is in the till: said and agreed to (designer's answer 1). */
+  minusOk: boolean;
 }
 
 interface Closes {
@@ -142,6 +144,7 @@ function MoneySheet({ opening, onClose }: { opening: Opening; onClose: () => voi
       foreignAmount: '',
       bankFee: '',
       toState: 'available',
+      minusOk: false,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
@@ -152,6 +155,8 @@ function MoneySheet({ opening, onClose }: { opening: Opening; onClose: () => voi
   const kind = s.target?.kind ?? null;
   const tetri = parseGel(s.amount);
   const plan = usePlan(s, tetri);
+  const till = useLoad<{ me: string; rows: { userId: string; onHandTetri: number }[] }>(kind === 'deposit_payout' && owner ? '/api/till' : null);
+  const tillOnHand = till.data?.rows.find((r) => r.userId === till.data!.me)?.onHandTetri ?? null;
   const amountText = tetri ? formatGel(tetri) : '';
 
   const title = !s.target
@@ -179,6 +184,9 @@ function MoneySheet({ opening, onClose }: { opening: Opening; onClose: () => voi
       label={label}
       submit={async (key) => {
         if (!s.target) throw new Error('no target');
+        if (s.target.kind === 'deposit_payout' && s.channel === 'cash' && tetri != null && tetri > (tillOnHand ?? Infinity) && !s.minusOk) {
+          throw new ApiError(400, 'missing_field', 'Confirm the till going below zero.', { field: 'minusOk' });
+        }
         const body = {
           kind: s.target.kind,
           rentalId: s.target.rentalId,
@@ -268,22 +276,30 @@ function MoneySheet({ opening, onClose }: { opening: Opening; onClose: () => voi
           {s.channel === 'transfer' && s.direction === 'in' && <p className="hint muted">{t.money.transferHint}</p>}
 
           {kind === 'deposit_payout' && (
-            <Field label={t.money.to} name="paidTo">
-              <div className="chips">
-                <button type="button" className={`pill pill-sm ${!s.toOther ? 'on' : ''}`} onClick={() => set({ toOther: false })}>
-                  {t.money.payer(s.target.customer ?? '')}
-                </button>
-                <button type="button" className={`pill pill-sm ${s.toOther ? 'on' : ''}`} onClick={() => set({ toOther: true })}>
-                  {t.money.other}
-                </button>
-              </div>
+            <>
+              <Field label={t.money.to} name="toOther">
+                <div className="chips">
+                  <button type="button" className={`pill pill-sm ${!s.toOther ? 'on' : ''}`} onClick={() => set({ toOther: false })}>
+                    {t.money.payer(s.target.customer ?? '')}
+                  </button>
+                  <button type="button" className={`pill pill-sm ${s.toOther ? 'on' : ''}`} onClick={() => set({ toOther: true })}>
+                    {t.money.other}
+                  </button>
+                </div>
+              </Field>
+              {/* Each in a field of its own: a refusal lands under the one it is about (QA-W2-03). */}
               {s.toOther && (
                 <>
-                  <input className="input" placeholder={t.money.otherName} value={s.paidTo} onChange={(e) => set({ paidTo: e.target.value })} />
-                  <input className="input" placeholder={t.money.otherReason} value={s.paidToReason} onChange={(e) => set({ paidToReason: e.target.value })} data-field="paidToReason" />
+                  <Field label={t.money.otherName} name="paidTo">
+                    <input className="input" value={s.paidTo} onChange={(e) => set({ paidTo: e.target.value })} />
+                  </Field>
+                  <Field label={t.money.otherReason} hint={t.money.otherHint} name="paidToReason">
+                    <input className="input" value={s.paidToReason} onChange={(e) => set({ paidToReason: e.target.value })} />
+                  </Field>
                 </>
               )}
-            </Field>
+              {s.channel === 'cash' && <TillMinus amountTetri={tetri} confirmed={s.minusOk} onConfirm={(v) => set({ minusOk: v })} />}
+            </>
           )}
           {kind === 'buyback' && (
             <Field label={t.money.toState} name="toState">
@@ -680,5 +696,25 @@ function PurchaseFacts({ info }: { info: { currency: string } | null }) {
         <dd className="mono">{info.currency}</dd>
       </div>
     </dl>
+  );
+}
+
+/**
+ * A deposit handed back in cash with less than that in the till: allowed —
+ * the customer gets their money, the cash may come from elsewhere — but said,
+ * and agreed to (designer's answer 1 to wave 2 round 1).
+ */
+function TillMinus({ amountTetri, confirmed, onConfirm }: { amountTetri: number | null; confirmed: boolean; onConfirm: (v: boolean) => void }) {
+  const t = useT();
+  const till = useLoad<{ me: string; rows: { userId: string; onHandTetri: number }[] }>('/api/till');
+  const onHand = till.data?.rows.find((r) => r.userId === till.data!.me)?.onHandTetri;
+  if (onHand == null || amountTetri == null || amountTetri <= onHand) return null;
+  return (
+    <Field label={t.money.tillMinus(formatGel(onHand), formatGel(amountTetri - onHand))} name="minusOk">
+      <label className="check">
+        <input type="checkbox" checked={confirmed} onChange={(e) => onConfirm(e.target.checked)} />
+        <span>{t.money.tillMinusOk}</span>
+      </label>
+    </Field>
   );
 }

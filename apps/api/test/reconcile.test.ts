@@ -252,3 +252,24 @@ describe.skipIf(!HAS_DB)('the till (§3.4)', () => {
     expect(await queued(owner, t)).toBeUndefined();
   });
 });
+
+describe.skipIf(!HAS_DB)('round 1 of wave 2 (QA-W2-04, designer’s answer 3)', () => {
+  it('a name attaches only to a record that owes this sum — a rental paid ahead waits for a person (QA-W2-04)', async () => {
+    const { prisma, owner, rentalId, tag: t } = await rental({ pickedUpOn: today() });
+    await call(owner, 'POST', '/api/money', { kind: 'rent', rentalId, amountTetri: '330', channel: 'cash' });
+    await call(owner, 'POST', '/api/statements', { fileName: 's.csv', text: file(inRow(addDays(today(), 1), '150.00', `gadmomricxavi: testaZe gela ${t}`)) });
+    expect(await prisma.payment.count({ where: { rentalId, source: 'statement' } })).toBe(0);
+    expect((await queued(owner, t))?.group).toBe('suggested');
+  });
+
+  it('a line that is both a hand-entered payment and another rental’s first card payment is asked about, not linked', async () => {
+    const entered = await rental({ pickedUpOn: addDays(today(), -1) });
+    const fresh = await rental({ pickedUpOn: today() });
+    await call(entered.owner, 'POST', '/api/money', { kind: 'rent', rentalId: entered.rentalId, amountTetri: '330', channel: 'acquiring', occurredOn: addDays(today(), -1), backdateReason: 'x' });
+    const t = tag();
+    await call(entered.owner, 'POST', '/api/statements', { fileName: 's.csv', text: file(inRow(today(), '325.05', `Wallet/domestic MC cards ${t}`)) });
+    const line = await queued(entered.owner, t);
+    expect(line?.group).toBe('recorded');
+    expect(line?.suggestions.map((s) => s.id)).toContain(fresh.rentalId);
+  });
+});

@@ -1,6 +1,7 @@
 import { sectionOfPath, tabsFor } from '@ev8/shared';
 import { NavLink, useLocation } from 'react-router-dom';
 import { useT } from '../../i18n/index.js';
+import { useLoad } from '../../lib/use.js';
 import { useSession } from '../../session.js';
 import './shell.css';
 
@@ -17,12 +18,15 @@ export function SectionTabs({ on }: { on: 'phone' | 'laptop' }) {
   const { pathname } = useLocation();
   const section = sectionOfPath(pathname, me?.permissions);
   const tabs = tabsFor(section, me?.permissions ?? []);
+  // Money says how much waits (§3.0): lines to sort, hand-overs to take.
+  const counts = useLoad<{ sort: number; till: number }>(section === 'money' && me?.permissions.includes('payments.reconcile') ? '/api/money/counts' : null);
   if (tabs.length < 2 || !tabs.some((tab) => tab.path === pathname)) return null;
   return (
     <nav className={`section-tabs section-tabs-${on}`} aria-label={t.shell.menu}>
       {tabs.map((tab) => (
         <NavLink key={tab.id} to={tab.path} end className={({ isActive }) => `section-tab ${isActive ? 'on' : ''}`}>
           {t.shell.tabs[tab.id]}
+          {(tab.id === 'sort' || tab.id === 'till') && (counts.data?.[tab.id] ?? 0) > 0 && <span className="section-tab-n mono">{counts.data![tab.id]}</span>}
         </NavLink>
       ))}
     </nav>

@@ -19,6 +19,8 @@ export interface TillRow {
   bankTetri: number;
   /** Counted short on a handover and still the person's to explain. */
   shortTetri: number;
+  /** Of what this person handed over in the period, what an owner has taken (§3.4 "принял владелец"). */
+  takenTetri: number;
   /** Now, whatever the period: what this person should have on them. */
   onHandTetri: number;
   /** Handed over and not yet accepted. */
@@ -80,6 +82,7 @@ export async function tillRows(opts: { from: Date; to: Date; userIds?: string[] 
       acceptedTetri: sum(accepted.filter((h) => within(h.decidedAt!)), received),
       bankTetri: sum(toBank.filter((b) => within(b.createdAt)), (b) => b.amountTetri),
       shortTetri: sum(handed.filter((h) => h.status === 'disputed'), (h) => h.amountTetri - (h.countedTetri ?? 0)),
+      takenTetri: sum(handed.filter((h) => h.status !== 'pending' && within(h.handedAt)), received),
       onHandTetri: onHand,
       pendingTetri: sum(pending, (h) => h.amountTetri),
       pending: pending.map((h) => ({ id: h.id, amountTetri: h.amountTetri, handedAt: h.handedAt.toISOString() })),

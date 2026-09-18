@@ -57,9 +57,12 @@
 .upload-summary { display: grid; gap: 4px; margin: 8px 0 14px; }
 .upload-summary div { display: flex; justify-content: space-between; gap: 12px; }
 @media (max-width: 899px) {
-  /* Above the phone's bottom bar. */
-  .till-sticky { bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 8px); }
+  /* A bar of its own above the phone's bottom bar, whatever the length of the day (QA-W2-12). */
+  .till-fixed { position: fixed; left: 0; right: 0; bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom)); padding: 8px 16px; background: var(--bg); border-top: 1px solid var(--line-soft); z-index: 5; }
+  .till-fixed .submit { width: 100%; }
 }
+.nowrap { white-space: nowrap; }
+.till-row span:first-child { min-width: 0; }
 
 /* The "⋯" of a bank line is a target like any other on a phone. */
 @media (max-width: 899px) { .sort-line .row-dots { min-width: var(--control); min-height: var(--control); } }
