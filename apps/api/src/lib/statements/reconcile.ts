@@ -248,8 +248,8 @@ export function decide(line: Line, ctx: Ctx): Decision {
   const text = [line.payer, line.purpose].filter(Boolean).join(' ');
 
   // 1. The name, and one record of that customer's that this amount fits.
-  if (text) {
-    const who = ctx.customers.filter((c) => nameMatches(text, c.names));
+  const who = text ? ctx.customers.filter((c) => nameMatches(text, c.names)) : [];
+  {
     if (who.length === 1) {
       const c = who[0];
       const rentals = eligible.filter((r) => r.customerId === c.id && rentalFits(r, gross));
@@ -264,8 +264,11 @@ export function decide(line: Line, ctx: Ctx): Decision {
   }
 
   // 2. The amount, and the date: the pick-up day, or inside the week it closes.
+  //    A line that names somebody is about that somebody: nobody else's rental.
+  const named = new Set(who.map((c) => c.id));
   const byDate = eligible.filter(
     (r) =>
+      (named.size === 0 || named.has(r.customerId)) &&
       rentalFits(r, gross) &&
       (r.pickedUpOn === line.occurredOn || (!!r.firstOpenPeriod && line.occurredOn >= r.firstOpenPeriod.startsOn && line.occurredOn <= r.firstOpenPeriod.endsOn)),
   );
