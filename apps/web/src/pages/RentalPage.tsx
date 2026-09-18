@@ -9,8 +9,7 @@ import { FormSheet, SubmitButton } from '../ds/form/Form.js';
 import { useOperation } from '../ds/form/operation.js';
 import { useToast } from '../ds/feedback/Toast.js';
 import { BlockHead, Empty, Loading, PageHead, RentalBadge, Vin } from '../components/ui.js';
-import { PaymentForm } from '../components/PaymentForm.js';
-import { VoidPayment } from './PaymentsPage.js';
+import { useMoneyForm } from '../ds/money/MoneyForm.js';
 import { Row } from '../components/Wizard.js';
 import { fmtDate, formatGel } from '../format.js';
 import { useT } from '../i18n/index.js';
@@ -59,6 +58,7 @@ export interface RentalCard {
 export function RentalPage() {
   const { id } = useParams();
   const t = useT();
+  const openMoney = useMoneyForm();
   const { can } = useSession();
   const { data, failure, reload } = useLoad<RentalCard>(id ? `/api/rentals/${id}` : null);
   const [editing, setEditing] = useState(false);
@@ -304,13 +304,29 @@ export function RentalPage() {
                       · {t.payments.fee} <span className="mono">{formatGel(p.feeTetri)}</span>
                     </span>
                   )}{' '}
-                  {can('payments.reconcile') && <VoidPayment id={p.id} onDone={reload} />}
+                  {can('payments.view') && (
+                    <Link className="pill pill-sm" to={`/money/payments/${p.id}`}>
+                      {t.sort.open}
+                    </Link>
+                  )}
                 </span>
               </li>
             ))}
           </ul>
         )}
-        {can('cash.record') && open && <PaymentForm rentalId={r.id} onDone={reload} />}
+        {/* One money form for everything (wave 2 §3.1); a returned rental with a debt still takes money. */}
+        <div className="row-actions">
+          {can('cash.record') && (
+            <button type="button" className="pill pill-sm pill-accent" onClick={() => openMoney({ target: { kind: 'rent', rentalId: r.id, number: r.number, customerId: r.customer.id, customer: r.customer.name } })}>
+              {can('payments.reconcile') ? t.money.take : t.money.takeCash}
+            </button>
+          )}
+          {can('payments.reconcile') && d && d.returnedTetri > 0 && (
+            <button type="button" className="pill pill-sm" onClick={() => openMoney({ target: { kind: 'deposit_payout', rentalId: r.id, number: r.number, customerId: r.customer.id, customer: r.customer.name } })}>
+              {t.deposits.handBack}
+            </button>
+          )}
+        </div>
       </section>
 
       <section className="card">

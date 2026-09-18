@@ -21,6 +21,7 @@ import { useSession } from '../../session.js';
 import { SearchOverlay } from '../search/SearchOverlay.js';
 import { SyncBar } from '../state/SyncBar.js';
 import { HeaderProvider, useHeader } from './header.js';
+import { MoneyProvider } from '../money/MoneyForm.js';
 import { SessionEnded } from '../../LoginPage.js';
 import { ACTION_ICON, ICON, SECTION_ICON } from './icons.js';
 import './shell.css';
@@ -39,7 +40,9 @@ const STORAGE_KEY = 'ev8-lang';
 export function AppShell() {
   return (
     <HeaderProvider>
-      <Frame />
+      <MoneyProvider>
+        <Frame />
+      </MoneyProvider>
     </HeaderProvider>
   );
 }
@@ -56,7 +59,7 @@ function Frame() {
 
   const permissions = me?.permissions ?? [];
   const sections = sectionsFor(permissions);
-  const current = sectionOfPath(pathname);
+  const current = sectionOfPath(pathname, permissions);
   const label = (id: SectionId) => t.nav[id];
 
   // The badge reads the same cached summary "Today" reads: one request, and
@@ -117,7 +120,8 @@ function Frame() {
   const tabs = phoneTabsFor(permissions);
   const actions = actionsFor(permissions);
   const initial = (me?.name ?? '?').trim().charAt(0).toUpperCase();
-  const mainAction = actions.find((a) => a.id === 'pickup');
+  // The owner's first thing is money coming in (wave 2 §3.0); a manager's is handing a moped over.
+  const mainAction = actions.find((a) => a.id === 'takeMoney') ?? actions.find((a) => a.id === 'pickup');
 
   return (
     <div className="app">

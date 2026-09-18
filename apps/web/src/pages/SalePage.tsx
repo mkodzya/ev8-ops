@@ -1,7 +1,7 @@
-import { parseGel, todayISO } from '@ev8/shared';
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../api.js';
+import { useMoneyForm } from '../ds/money/MoneyForm.js';
 import { LoadError } from '../components/LoadError.js';
 import { FormSheet } from '../ds/form/Form.js';
 import { BlockHead, Empty, Loading, PageHead, Vin } from '../components/ui.js';
@@ -23,11 +23,8 @@ export function SalePage() {
   const t = useT();
   const { can } = useSession();
   const { data, failure, reload } = useLoad<SaleCard>(id ? `/api/sales/${id}` : null);
-  const [panel, setPanel] = useState<'pay' | 'back' | 'cancel' | null>(null);
-  const blankPay = { amount: '', channel: 'transfer' as 'transfer' | 'acquiring' | 'cash', on: todayISO() };
-  const blankBack = { amount: '', on: todayISO(), toState: 'available' as 'available' | 'service' };
-  const [pay, setPay] = useState(blankPay);
-  const [back, setBack] = useState(blankBack);
+  const [panel, setPanel] = useState<'cancel' | null>(null);
+  const openMoney = useMoneyForm();
   const [cancelReason, setCancelReason] = useState('');
 
   if (failure) return <LoadError failure={failure} onRetry={reload} />;
@@ -39,12 +36,12 @@ export function SalePage() {
     <>
       <PageHead wrap title={s.number} sub={t.sales.statuses[s.status]}>
         {live && can('cash.record') && (
-          <button type="button" className="pill pill-sm pill-accent" onClick={() => setPanel('pay')}>
+          <button type="button" className="pill pill-sm pill-accent" onClick={() => openMoney({ target: { kind: 'sale', saleId: s.id, number: s.number, customerId: s.customer.id, customer: s.customer.name } })}>
             {t.sales.addPayment}
           </button>
         )}
         {live && can('sales.manage') && s.vehicle && (
-          <button type="button" className="pill pill-sm" onClick={() => setPanel('back')}>
+          <button type="button" className="pill pill-sm" onClick={() => openMoney({ target: { kind: 'buyback', saleId: s.id, number: s.number, customerId: s.customer.id, customer: s.customer.name } })}>
             {t.sales.buyBack}
           </button>
         )}
@@ -54,80 +51,6 @@ export function SalePage() {
           </button>
         )}
       </PageHead>
-
-      {panel === 'pay' && (
-        <FormSheet
-          title={t.sales.addPayment}
-          onClose={() => setPanel(null)}
-          value={pay}
-          initial={blankPay}
-          draft={`sale-pay:${s.id}`}
-          onRestore={setPay}
-          summary={(v) => v.amount}
-          label={t.payments.record}
-          submit={async (key) => {
-            await api.post(`/api/sales/${s.id}/payments`, { channel: pay.channel, grossTetri: parseGel(pay.amount), occurredOn: pay.on }, { key });
-            return { toast: { text: t.purchases.paymentRecorded } };
-          }}
-          onDone={() => {
-            setPay(blankPay);
-            reload();
-          }}
-        >
-          <Field label={t.payments.channel} name="channel">
-            <div className="chips">
-              {(['transfer', 'acquiring', 'cash'] as const).map((c) => (
-                <button key={c} type="button" className={`pill pill-sm ${pay.channel === c ? 'on' : ''}`} onClick={() => setPay({ ...pay, channel: c })}>
-                  {t.payments.channels[c]}
-                </button>
-              ))}
-            </div>
-          </Field>
-          <Field label={t.payments.gross} name="grossTetri">
-            <input className="input input-amount mono" value={pay.amount} onChange={(e) => setPay({ ...pay, amount: e.target.value })} inputMode="decimal" autoFocus />
-          </Field>
-          <Field label={t.payments.date} name="occurredOn">
-            <input className="input mono" type="date" value={pay.on} onChange={(e) => setPay({ ...pay, on: e.target.value })} />
-          </Field>
-        </FormSheet>
-      )}
-
-      {panel === 'back' && (
-        <FormSheet
-          title={t.sales.buyBack}
-          onClose={() => setPanel(null)}
-          value={back}
-          initial={blankBack}
-          draft={`sale-back:${s.id}`}
-          onRestore={setBack}
-          summary={(v) => v.amount}
-          label={t.sales.buyBackCta}
-          submit={async (key) => {
-            await api.post(`/api/sales/${s.id}/buy-back`, { amountTetri: parseGel(back.amount), occurredOn: back.on, toState: back.toState }, { key });
-            return { toast: { text: t.sales.boughtBack } };
-          }}
-          onDone={() => {
-            setBack(blankBack);
-            reload();
-          }}
-        >
-          <Field label={t.sales.buyBackAmount} name="amountTetri">
-            <input className="input input-amount mono" value={back.amount} onChange={(e) => setBack({ ...back, amount: e.target.value })} inputMode="decimal" autoFocus />
-          </Field>
-          <Field label={t.payments.date} name="occurredOn">
-            <input className="input mono" type="date" value={back.on} onChange={(e) => setBack({ ...back, on: e.target.value })} />
-          </Field>
-          <Field label={t.sales.buyBackState} name="toState">
-            <div className="chips">
-              {(['available', 'service'] as const).map((st) => (
-                <button key={st} type="button" className={`pill pill-sm ${back.toState === st ? 'on' : ''}`} onClick={() => setBack({ ...back, toState: st })}>
-                  {t.states[st]}
-                </button>
-              ))}
-            </div>
-          </Field>
-        </FormSheet>
-      )}
 
       {panel === 'cancel' && (
         <FormSheet

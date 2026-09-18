@@ -13,7 +13,12 @@ import { StockPage } from './pages/StockPage.js';
 import { CustomerForm } from './pages/CustomerForm.js';
 import { CustomerPage } from './pages/CustomerPage.js';
 import { CustomersPage } from './pages/CustomersPage.js';
-import { PaymentsPage } from './pages/PaymentsPage.js';
+import { DepositsPage } from './pages/money/DepositsPage.js';
+import { MoneyHome } from './pages/money/MoneyHome.js';
+import { PaymentPage } from './pages/money/PaymentPage.js';
+import { PaymentsList } from './pages/money/PaymentsList.js';
+import { RulesPage, SortPage } from './pages/money/SortPage.js';
+import { TillPage } from './pages/money/TillPage.js';
 import { PickupWizard } from './pages/PickupWizard.js';
 import { ProfilePage } from './pages/ProfilePage.js';
 import { SettingsPage } from './pages/SettingsPage.js';
@@ -25,7 +30,7 @@ import { SalePage } from './pages/SalePage.js';
 import { SalesPage } from './pages/SalesPage.js';
 import { ServiceJobPage } from './pages/ServiceJobPage.js';
 import { ServicePage } from './pages/ServicePage.js';
-import { StatementsPage } from './pages/StatementsPage.js';
+import { StatementsPage } from './pages/money/StatementsPage.js';
 import { VehiclePage } from './pages/VehiclePage.js';
 import { ModelPage } from './pages/ModelPage.js';
 import { ModelsPage } from './pages/ModelsPage.js';
@@ -121,10 +126,16 @@ export function App() {
         <Route path="service/stock/parts/:id" element={<PartPage />} />
         <Route path="service/:id" element={<ServiceJobPage />} />
 
-        <Route path="money" element={<Navigate to="/money/payments" replace />} />
-        <Route path="money/payments" element={<Require perm="payments.view"><PaymentsPage /></Require>} />
-        <Route path="money/cash" element={<Require perm="cash.record"><PaymentsPage till /></Require>} />
+        {/* Money in one place (wave 2 §3.0). */}
+        <Route path="money" element={<Require perm="payments.view"><MoneyHome /></Require>} />
+        <Route path="money/sort" element={<Require perm="payments.reconcile"><SortPage /></Require>} />
+        <Route path="money/sort/rules" element={<Require perm="payments.reconcile"><RulesPage /></Require>} />
+        <Route path="money/payments" element={<Require perm="payments.view"><PaymentsList /></Require>} />
+        <Route path="money/payments/:id" element={<Require perm="cash.record"><PaymentPage /></Require>} />
+        <Route path="money/mine" element={<Require perm="cash.record"><PaymentsList mine /></Require>} />
+        <Route path="money/cash" element={<Require perm="cash.record"><TillPage /></Require>} />
         <Route path="money/statements" element={<Require perm="payments.reconcile"><StatementsPage /></Require>} />
+        <Route path="money/deposits" element={<Require perm="payments.view"><DepositsPage /></Require>} />
 
         <Route path="sales" element={<SalesPage />} />
         <Route path="sales/:id" element={<SalePage />} />

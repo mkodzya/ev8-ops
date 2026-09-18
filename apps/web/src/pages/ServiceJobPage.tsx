@@ -2,6 +2,7 @@ import { parseGel, todayISO } from '@ev8/shared';
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api.js';
+import { useMoneyForm } from '../ds/money/MoneyForm.js';
 import { LoadError } from '../components/LoadError.js';
 import { PhotoPicker } from '../components/PhotoPicker.js';
 import { FormSheet, SubmitButton } from '../ds/form/Form.js';
@@ -21,6 +22,7 @@ import type { ServiceJob } from './ServicePage.js';
 export function ServiceJobPage() {
   const { id } = useParams();
   const t = useT();
+  const openMoney = useMoneyForm();
   const navigate = useNavigate();
   const { can } = useSession();
   const { data, failure, reload } = useLoad<{ job: ServiceJob }>(id ? `/api/service/${id}` : null);
@@ -149,6 +151,18 @@ export function ServiceJobPage() {
           <Row k={t.service.parts} v={<span className="mono">{formatGel(j.partsTetri)}</span>} />
           <Row k={t.service.total} v={<span className="mono">{formatGel(j.totalTetri)}</span>} />
           {j.withheldTetri > 0 && <Row k={t.service.withhold} v={<span className="mono">{formatGel(j.withheldTetri)}</span>} />}
+          {/* A repair charged to the customer is paid through the one money form (wave 2 §3.1). */}
+          {j.payer === 'customer' && j.status === 'done' && j.customer && can('cash.record') && (
+            <div className="row-actions">
+              <button
+                type="button"
+                className="pill pill-sm pill-accent"
+                onClick={() => openMoney({ target: { kind: 'service', serviceJobId: j.id, number: j.number, customerId: j.customer!.id, customer: j.customer!.name } })}
+              >
+                {can('payments.reconcile') ? t.money.take : t.money.takeCash}
+              </button>
+            </div>
+          )}
         </section>
       </div>
 
