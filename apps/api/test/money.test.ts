@@ -201,3 +201,27 @@ describe.skipIf(!HAS_DB)('deposits and the one debt figure (§3.6, §3.7)', () =
     expect(await settleCredit(rentalId)).toBe(0);
   });
 });
+
+describe.skipIf(!HAS_DB)('one debt figure on every screen (QA-W2-01, QA-W2-02)', () => {
+  it('the rental card and the search carry an unpaid deposit in the debt, as the customer does', async () => {
+    const { owner, customer, rentalId } = await freshRental();
+    await call(owner, 'POST', '/api/money', { kind: 'rent', rentalId, amountTetri: '100', channel: 'cash' });
+    const card = json<{ rental: { debtTetri: number; number: string } }>(await call(owner, 'GET', `/api/rentals/${rentalId}`));
+    expect(card.rental.debtTetri).toBe(23000);
+    const found = json<{ groups: { customers: { items: { id: string; debtTetri: number }[] }; rentals: { items: { id: string; debtTetri: number }[] } } }>(
+      await call(owner, 'GET', `/api/search?q=${encodeURIComponent(card.rental.number)}`),
+    );
+    expect(found.groups.rentals.items.find((r) => r.id === rentalId)?.debtTetri).toBe(23000);
+    const byName = json<{ groups: { customers: { items: { id: string; debtTetri: number }[] } } }>(await call(owner, 'GET', `/api/search?q=${encodeURIComponent(customer.name)}`));
+    expect(byName.groups.customers.items.find((c) => c.id === customer.id)?.debtTetri).toBe(23000);
+  });
+
+  it('deposit totals are over one set of rentals, and say how many', async () => {
+    const owner = await loginAs('owner');
+    const d = json<{ totals: { heldTetri: number; contractTetri: number; rentals: number }; deposits: { live: boolean; heldTetri: number; amountTetri: number }[] }>(await call(owner, 'GET', '/api/deposits'));
+    const live = d.deposits.filter((x) => x.live);
+    expect(d.totals.rentals).toBe(live.length);
+    expect(d.totals.heldTetri).toBe(live.reduce((n, x) => n + x.heldTetri, 0));
+    expect(d.totals.contractTetri).toBe(live.reduce((n, x) => n + x.amountTetri, 0));
+  });
+});

@@ -78,7 +78,8 @@ export function statementRoutes(app: FastifyInstance): void {
         bank,
         lastUploadAt: last?.createdAt.toISOString() ?? null,
         throughOn: upTo,
-        daysOld: upTo ? daysBetween(upTo, today) : null,
+        // A line dated ahead of today is not "−7 days ago" (QA-W2-05).
+        daysOld: upTo ? Math.max(0, daysBetween(upTo, today)) : null,
         stale: upTo ? daysBetween(upTo, today) > STALE_DAYS : false,
         never: !last,
       };

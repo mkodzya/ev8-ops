@@ -701,6 +701,8 @@ export const ru: Dict = {
 
 
   money: {
+    tillMinus: (onHand: string, minus: string) => `В кассе у вас ${onHand} — выдаёте больше, касса уйдёт в минус −${minus}`,
+    tillMinusOk: 'Да, выдаю — касса уйдёт в минус',
     take: 'Принять деньги',
     takeCash: 'Принять наличные',
     takeFor: (n: string) => `Принять оплату · ${n}`,
@@ -777,6 +779,7 @@ export const ru: Dict = {
   },
 
   sort: {
+    itsPayment: (n: string) => `Это оплата ${n}`,
     incoming: 'Поступления',
     outgoing: 'Списания',
     recordedGroup: 'Похоже, уже записан',
@@ -825,6 +828,7 @@ export const ru: Dict = {
   },
 
   till: {
+    taken: 'Принял владелец',
     today: 'Сегодня',
     week: 'Неделя',
     onHandToday: 'На руках сегодня',
@@ -863,6 +867,7 @@ export const ru: Dict = {
   },
 
   deposits: {
+    setNote: (n: number) => `по ${n} арендам: действующие и ждущие решения`,
     onHand: 'На руках (получено)',
     contract: 'Начислено по договорам',
     held: 'На руках',
@@ -884,6 +889,7 @@ export const ru: Dict = {
   },
 
   paymentPage: {
+    wasLinked: 'была привязана; после аннулирования строка вернулась в «Разобрать»',
     acts: { record: 'записан', void: 'аннулирован', undo: 'отменён сразу' },
     title: (n: string) => `Платёж ${n}`,
     customer: 'Клиент',

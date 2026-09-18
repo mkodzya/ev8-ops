@@ -29,6 +29,8 @@ export interface RentalCard {
   rental: {
     id: string;
     number: string;
+    /** This rental's part of the customer's one debt figure. */
+    debtTetri: number;
     nightParkingAddress?: string | null;
     batteries?: number | null;
     chargers?: number | null;
@@ -76,7 +78,7 @@ export function RentalPage() {
   const today = todayISO();
   // Owed is the unpaid part of the weeks, the same arithmetic the list and
   // "Today" use. Nothing here is stored.
-  const debtTetri = data.periods.reduce((n, p) => n + (p.payStatus === 'paid' ? 0 : p.amountTetri - p.paidTetri), 0);
+  const debtTetri = r.debtTetri;
   const d = data.deposit;
   const open = r.status !== 'returned';
   const decided = d && d.status !== 'held';

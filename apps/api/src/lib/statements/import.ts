@@ -80,11 +80,13 @@ export async function previewStatement(input: { fileName: string; text: string }
     if (d.type === 'recorded' || d.type === 'bank_deposit') recorded++;
     else if (d.type === 'rule') matched++;
   }
+  // The period as the bank states it, or else as the lines span it (§3.5, QA-W2-07).
+  const days = parsed.lines.map((l) => l.occurredOn).sort();
   return {
     bank: parsed.bank,
     account: parsed.account,
-    periodFrom: parsed.periodFrom,
-    periodTo: parsed.periodTo,
+    periodFrom: parsed.periodFrom ?? days[0] ?? null,
+    periodTo: parsed.periodTo ?? days[days.length - 1] ?? null,
     lineCount: parsed.lines.length,
     newLines: fresh.length,
     alreadyIn: parsed.lines.length - fresh.length,

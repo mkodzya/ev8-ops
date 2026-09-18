@@ -38,13 +38,19 @@ export function depositRoutes(app: FastifyInstance): void {
         paidOutTetri: paidOut,
         ...st,
         segment,
+        // Still being decided: the rental runs, or it came back and nobody has said what happens to the deposit.
+        live: open || d.status === 'held',
       };
     });
+    // Both totals over one set of rentals (designer's answer 2 to wave 2 round 1),
+    // so "held" and "asked for" can stand side by side.
+    const live = rows.filter((r) => r.live);
     return {
       totals: {
-        heldTetri: rows.reduce((n, r) => n + r.heldTetri, 0),
-        contractTetri: rows.filter((r) => OPEN.includes(r.rentalStatus)).reduce((n, r) => n + r.amountTetri, 0),
+        heldTetri: live.reduce((n, r) => n + r.heldTetri, 0),
+        contractTetri: live.reduce((n, r) => n + r.amountTetri, 0),
         toHandBackTetri: rows.reduce((n, r) => n + r.toHandBackTetri, 0),
+        rentals: live.length,
       },
       deposits: rows,
     };

@@ -698,6 +698,8 @@ export const en = {
 
 
   money: {
+    tillMinus: (onHand: string, minus: string) => `You have ${onHand} in the till — handing back more takes it to −${minus}`,
+    tillMinusOk: 'Yes, hand it back — the till goes below zero',
     take: 'Take money',
     takeCash: 'Take cash',
     takeFor: (n: string) => `Take payment · ${n}`,
@@ -774,6 +776,7 @@ export const en = {
   },
 
   sort: {
+    itsPayment: (n: string) => `It is ${n}’s payment`,
     incoming: 'Money in',
     outgoing: 'Money out',
     recordedGroup: 'Looks already recorded',
@@ -822,6 +825,7 @@ export const en = {
   },
 
   till: {
+    taken: 'Taken by an owner',
     today: 'Today',
     week: 'Week',
     onHandToday: 'On hand today',
@@ -860,6 +864,7 @@ export const en = {
   },
 
   deposits: {
+    setNote: (n: number) => `over ${n} rentals: running, and waiting for a decision`,
     onHand: 'Held (received)',
     contract: 'Asked for by the contracts',
     held: 'Held',
@@ -881,6 +886,7 @@ export const en = {
   },
 
   paymentPage: {
+    wasLinked: 'was attached; when the payment was annulled the line went back to “Sort”',
     acts: { record: 'recorded', void: 'annulled', undo: 'undone at once' },
     title: (n: string) => `Payment ${n}`,
     customer: 'Customer',

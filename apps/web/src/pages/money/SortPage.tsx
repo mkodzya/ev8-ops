@@ -205,18 +205,29 @@ function LineCard({ line, onOther, onNotOurs }: { line: SortLine; onOther: () =>
       <p className="sort-line-text">{[line.payer, line.purpose].filter(Boolean).join(' · ') || line.raw}</p>
 
       {line.group === 'recorded' &&
-        line.recorded.map((p) => (
+        line.recorded.map((p, i) => (
           <div key={p.id} className="sort-actions">
             <p className="sort-reason">
               {(line.direction === 'out' ? t.sort.recordedOut : t.sort.recordedText)(
                 [formatGel(p.amountTetri ?? 0), fmtDate(p.occurredOn), p.customer, p.number].filter(Boolean).join(', '),
               )}
             </p>
-            <button type="button" className="pill pill-sm pill-accent" disabled={busy} onClick={() => act('link', { paymentId: p.id }, { text: t.sort.linked })}>
+            {/* The first is the main answer, the rest are quiet (§3.2, QA-W2-08). */}
+            <button type="button" className={`pill pill-sm ${i === 0 ? 'pill-accent' : ''}`} disabled={busy} onClick={() => act('link', { paymentId: p.id }, { text: t.sort.linked })}>
               {busy ? t.sort.attaching : line.direction === 'out' ? t.sort.yesShe : t.sort.yes}
             </button>
           </div>
         ))}
+      {/* Entered by hand, or this other record's money — the person says which (designer's answer 3). */}
+      {line.group === 'recorded' && line.suggestions.length > 0 && (
+        <div className="sort-actions">
+          {line.suggestions.map((s) => (
+            <button key={s.id} type="button" className="pill pill-sm" disabled={busy} onClick={() => attach(s)}>
+              {t.sort.itsPayment(s.number ?? '')}
+            </button>
+          ))}
+        </div>
+      )}
 
       {line.group === 'suggested' && first && (
         <>
@@ -390,7 +401,19 @@ export function RulesPage() {
       <PageHead title={t.sort.rulesTitle} sub={data ? t.sort.rulesSub(data.lines.length) : undefined} />
       {!data && <Skeleton rows={4} />}
       {data?.lines.map((l) => (
-        <RuleCard key={l.id} line={l} text={l.reason ? reason(l.reason, l) : l.payment ? t.sort.reason.recorded(l.payment.number ? `, ${l.payment.number}` : '') : ''} />
+        <RuleCard
+          key={l.id}
+          line={l}
+          text={
+            l.reason
+              ? reason(l.reason, l)
+              : l.rule === 'bank_deposit'
+                ? t.sort.reason.bank_deposit
+                : l.payment
+                  ? t.sort.reason.recorded(l.payment.number ? `, ${l.payment.number}` : '')
+                  : ''
+          }
+        />
       ))}
     </>
   );

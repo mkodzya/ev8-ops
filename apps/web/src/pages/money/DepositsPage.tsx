@@ -37,7 +37,7 @@ export function DepositsPage() {
   const t = useT();
   const openMoney = useMoneyForm();
   const [params, setParams] = useSearchParams();
-  const { data, failure, reload } = useLoad<{ totals: { heldTetri: number; contractTetri: number; toHandBackTetri: number }; deposits: DepositRow[] }>('/api/deposits');
+  const { data, failure, reload } = useLoad<{ totals: { heldTetri: number; contractTetri: number; toHandBackTetri: number; rentals: number }; deposits: DepositRow[] }>('/api/deposits');
   const segment = (['held', 'to_hand_back', 'short', 'closed'] as const).find((s) => s === params.get('s')) ?? 'held';
   if (failure) return <LoadError failure={failure} onRetry={reload} />;
   const rows = (data?.deposits ?? []).filter((d) => (segment === 'held' ? d.heldTetri > 0 : d.segment === segment));
@@ -60,6 +60,7 @@ export function DepositsPage() {
               <dd className="muted">{formatGel(data.totals.contractTetri)}</dd>
             </div>
           </dl>
+          <p className="hint muted">{t.deposits.setNote(data.totals.rentals)}</p>
           <div className="list-chips">
             {(['held', 'to_hand_back', 'short', 'closed'] as const).map((s) => (
               <button key={s} type="button" className={`list-chip ${segment === s ? 'on' : ''}`} onClick={() => setParams(s === 'held' ? {} : { s }, { replace: true })}>

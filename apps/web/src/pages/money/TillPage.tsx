@@ -26,6 +26,7 @@ interface TillRow {
   acceptedTetri: number;
   bankTetri: number;
   shortTetri: number;
+  takenTetri: number;
   onHandTetri: number;
   pendingTetri: number;
   pending: { id: string; amountTetri: number; handedAt: string }[];
@@ -86,10 +87,11 @@ function OwnerTill({ till }: { till: Till }) {
           <Line k={`${t.till.cashIn} · ${r.cashInCount}`} v={r.cashInTetri} />
           {r.cashOutTetri > 0 && <Line k={t.till.cashOut} v={-r.cashOutTetri} />}
           {r.handedTetri > 0 && <Line k={t.till.handed} v={r.handedTetri} />}
+          {r.takenTetri > 0 && <Line k={t.till.taken} v={r.takenTetri} />}
           {r.acceptedTetri > 0 && <Line k={t.till.acceptedFrom} v={r.acceptedTetri} />}
           {r.bankTetri > 0 && <Line k={t.till.toBank} v={-r.bankTetri} />}
           {r.shortTetri > 0 && <Line k={t.till.short} v={-r.shortTetri} crit />}
-          <Line k={t.till.onHand} v={r.onHandTetri} strong />
+          <Line k={t.till.onHand} v={r.onHandTetri} strong crit={r.onHandTetri < 0} />
           {r.pending.map((h) => (
             <div key={h.id} className="sort-actions">
               <AcceptButton id={h.id} amount={h.amountTetri} />
@@ -117,7 +119,7 @@ function Line({ k, v, strong = false, crit = false }: { k: string; v: number; st
   return (
     <div className={`till-row ${crit ? 'crit-text' : ''}`}>
       <span>{k}</span>
-      <span className={`mono ${strong ? 't-money' : ''}`}>{v < 0 ? `−${formatGel(-v)}` : formatGel(v)}</span>
+      <span className={`mono nowrap ${strong ? 't-money' : ''}`}>{v < 0 ? `−${formatGel(-v)}` : formatGel(v)}</span>
     </div>
   );
 }
@@ -259,13 +261,13 @@ function ManagerTill({ till }: { till: Till }) {
               <span>
                 {m.customer ?? ''} {m.number ? `· ${m.number}` : ''} · {hhmm(m.at)}
               </span>
-              <span className="mono amt-in">+{formatGel(m.grossTetri)}</span>
+              <span className="mono amt-in nowrap">+{formatGel(m.grossTetri)}</span>
             </div>
           ))}
         </section>
       )}
       {me.onHandTetri > 0 && (
-        <div className="till-sticky">
+        <div className="till-sticky till-fixed">
           <SubmitButton
             type="button"
             className="pill-grow"

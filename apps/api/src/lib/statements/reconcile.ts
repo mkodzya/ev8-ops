@@ -62,6 +62,7 @@ interface SaleCand {
 interface PaymentCand {
   id: string;
   customerId: string | null;
+  rentalId: string | null;
   direction: 'in' | 'out';
   kind: string;
   occurredOn: string;
@@ -115,6 +116,7 @@ export async function loadCtx(): Promise<Ctx> {
         grossTetri: true,
         netTetri: true,
         customerId: true,
+        rentalId: true,
         customer: { select: { name: true } },
         rental: { select: { number: true } },
         sale: { select: { number: true } },
@@ -162,6 +164,7 @@ export async function loadCtx(): Promise<Ctx> {
     payments: payments.map((p) => ({
       id: p.id,
       customerId: p.customerId,
+      rentalId: p.rentalId,
       direction: p.direction,
       kind: p.kind,
       occurredOn: isoDate(p.occurredOn)!,
@@ -211,6 +214,29 @@ function saleFits(s: SaleCand, gross: number): boolean {
   return [s.nextOpenTetri, s.dueOpenTetri].some((n) => n > 0 && n === gross);
 }
 
+/**
+ * The name rule's second sign: a record with a debt of exactly this sum — not
+ * a week that is not owed yet (§3.2, QA-W2-04). A rental paid ahead takes
+ * nothing by name; the line waits for a person.
+ */
+function rentalOwes(r: RentalCand, gross: number): boolean {
+  if (r.owedNowTetri <= 0) return false;
+  return [r.owedNowTetri, r.openDepositTetri + r.openFirstPeriodTetri, r.openTotalTetri].some((n) => n > 0 && n === gross);
+}
+function saleOwes(s: SaleCand, gross: number): boolean {
+  return s.dueOpenTetri > 0 && [s.dueOpenTetri, s.nextOpenTetri].some((n) => n > 0 && n === gross);
+}
+
+/** Records this line could pay by its own signs — name with a debt, or pick-up day — for the "is it this or that" check. */
+function otherCandidates(line: Line, ctx: Ctx, except: string | null): RentalCand[] {
+  const gross = lineGross(line);
+  const text = [line.payer, line.purpose].filter(Boolean).join(' ');
+  const who = text ? new Set(ctx.customers.filter((c) => nameMatches(text, c.names)).map((c) => c.id)) : new Set<string>();
+  return ctx.rentals.filter(
+    (r) => r.id !== except && RULE_RENTALS.has(r.status) && ((who.has(r.customerId) && rentalOwes(r, gross)) || (r.pickedUpOn === line.occurredOn && rentalFits(r, gross) && r.owedNowTetri > 0)),
+  );
+}
+
 export type RuleTarget = { rentalId: string; saleId?: undefined } | { saleId: string; rentalId?: undefined };
 
 export type Decision =
@@ -233,8 +259,11 @@ export interface Reason {
 
 export function decide(line: Line, ctx: Ctx): Decision {
   const recorded = recordedFor(line, ctx);
-  if (recorded.length === 1) return { type: 'recorded', paymentId: recorded[0].id };
-  if (recorded.length > 1) return { type: 'queue' };
+  // Linked to what was entered by hand only when nothing else could be this
+  // money: a second record with a debt of this sum on that day is a question
+  // for a person (designer's answer 3 to wave 2 round 1; ADR-0004).
+  if (recorded.length === 1 && otherCandidates(line, ctx, recorded[0].rentalId).length === 0) return { type: 'recorded', paymentId: recorded[0].id };
+  if (recorded.length > 0) return { type: 'queue' };
   if (line.direction === 'out') return { type: 'queue' };
 
   if (isCashDeposit(line)) {
@@ -252,8 +281,8 @@ export function decide(line: Line, ctx: Ctx): Decision {
   {
     if (who.length === 1) {
       const c = who[0];
-      const rentals = eligible.filter((r) => r.customerId === c.id && rentalFits(r, gross));
-      const sales = ctx.sales.filter((s) => s.customerId === c.id && saleFits(s, gross));
+      const rentals = eligible.filter((r) => r.customerId === c.id && rentalOwes(r, gross));
+      const sales = ctx.sales.filter((s) => s.customerId === c.id && saleOwes(s, gross));
       if (rentals.length + sales.length === 1) {
         const target: RuleTarget = rentals[0] ? { rentalId: rentals[0].id } : { saleId: sales[0].id };
         const number = rentals[0]?.number ?? sales[0].number;
@@ -314,7 +343,15 @@ export function suggest(line: Line, ctx: Ctx): { group: 'recorded' | 'suggested'
     occurredOn: p.occurredOn,
     reason: { code: 'recorded', number: p.number ?? undefined, name: p.customer ?? undefined },
   }));
-  if (recorded.length > 0) return { group: 'recorded', recorded, suggestions: [] };
+  if (recorded.length > 0) {
+    // Beside the payment entered by hand, the other record this could be (§3.2, answer 3).
+    const alt = recorded.length === 1 ? otherCandidates(line, ctx, recordedFor(line, ctx)[0].rentalId) : [];
+    return {
+      group: 'recorded',
+      recorded,
+      suggestions: alt.map((r) => ({ kind: 'rental' as const, id: r.id, number: r.number, customer: r.customer, customerId: r.customerId, reason: { code: 'amount' as const, number: r.number, debtTetri: r.owedNowTetri } })),
+    };
+  }
 
   const out: Suggestion[] = [];
   if (line.direction === 'in') {

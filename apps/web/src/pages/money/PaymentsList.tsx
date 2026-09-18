@@ -165,11 +165,11 @@ export function PaymentsList({ mine = false }: { mine?: boolean }) {
           <dl className="money-totals">
             <div>
               <dt>{t.payList.totalIn}</dt>
-              <dd className="amt-in">+{formatGel(data.totals.inTetri)}</dd>
+              <dd className="amt-in">{data.totals.inTetri > 0 ? '+' : ''}{formatGel(data.totals.inTetri)}</dd>
             </div>
             <div>
               <dt>{t.payList.totalOut}</dt>
-              <dd>−{formatGel(data.totals.outTetri)}</dd>
+              <dd>{data.totals.outTetri > 0 ? '−' : ''}{formatGel(data.totals.outTetri)}</dd>
             </div>
             {data.totals.acquiringFeeTetri > 0 && (
               <div>

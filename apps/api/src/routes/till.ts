@@ -25,6 +25,12 @@ function period(q: { from?: string; to?: string }): { from: Date; to: Date; from
 }
 
 export function tillRoutes(app: FastifyInstance): void {
+  /** The numbers on the Money tabs (§3.0): lines to sort, hand-overs waiting to be taken. */
+  app.get('/api/money/counts', { config: { scope: 'payments.reconcile' } }, async () => {
+    const [sort, till] = await Promise.all([prisma.statementLine.count({ where: { status: 'unmatched' } }), prisma.cashHandover.count({ where: { status: 'pending' } })]);
+    return { sort, till };
+  });
+
   app.get<{ Querystring: { from?: string; to?: string } }>('/api/till', { config: { scope: 'cash.record' } }, async (req) => {
     const actor = actorOf(req);
     const p = period(req.query);

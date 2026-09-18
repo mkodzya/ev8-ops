@@ -109,7 +109,9 @@ export function PaymentPage() {
             {t.statements.banks[p.statementLine.bank]} · {fmtDate(p.statementLine.occurredOn)} · {[p.statementLine.payer, p.statementLine.purpose].filter(Boolean).join(' · ')} ·{' '}
             {formatGel(p.statementLine.amountTetri)}
           </p>
-          <p className="hint muted">{p.statementLine.matchedRule === 'by_hand' || p.statementLine.matchedRule === 'recorded_by_hand' ? t.paymentPage.byHand : t.paymentPage.byRule}</p>
+          <p className="hint muted">
+            {p.voided ? t.paymentPage.wasLinked : p.statementLine.matchedRule === 'by_hand' || p.statementLine.matchedRule === 'recorded_by_hand' ? t.paymentPage.byHand : t.paymentPage.byRule}
+          </p>
         </section>
       )}
 
