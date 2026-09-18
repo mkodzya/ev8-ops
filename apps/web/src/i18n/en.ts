@@ -698,6 +698,7 @@ export const en = {
 
 
   money: {
+    tillMinusNeed: 'Tick this if you hand it back from other money.',
     tillMinus: (onHand: string, minus: string) => `You have ${onHand} in the till — handing back more takes it to −${minus}`,
     tillMinusOk: 'Yes, hand it back — the till goes below zero',
     take: 'Take money',
@@ -910,7 +911,6 @@ export const en = {
     backdate: 'Dated earlier because',
     paidTo: 'Handed to',
     rate: 'Rate',
-    notFound: 'No such payment.',
   },
 
   payList: {
@@ -959,15 +959,6 @@ export const en = {
     cashOnly: 'A manager records cash. A transfer or a card payment is entered by an owner.',
   },
 
-  balance: {
-    owes: (sum: string) => `Owes ${sum}`,
-    overpaid: (sum: string) => `Paid ${sum} ahead`,
-    clear: 'Nothing owed',
-    paid: 'Paid',
-    outstanding: 'Owed',
-    credit: 'Paid ahead',
-    depositHeld: 'Deposit held',
-  },
 
   statements: {
     through: (d: string) => `through ${d}`,
@@ -988,40 +979,15 @@ export const en = {
     doneSummary: (r: number, m: number, q: number) => `${r} matched what was entered · ${m} attached by the rules · ${q} to sort`,
     sortN: (n: number) => `Sort ${n}`,
     uploads: 'Uploads',
-    assigned: (number: string) => `Matched to ${number}`,
-    ignored: 'Marked: not a customer payment',
     linesCount: (n: number) => `${n} ${n === 1 ? 'line' : 'lines'}`,
-    count: (n: number) => `${n} statement${n === 1 ? '' : 's'}`,
-    previewTitle: 'What this file would add',
     previewNew: 'new lines',
     previewKnown: 'already in',
-    previewIn: 'incoming',
-    previewOut: 'outgoing',
-    previewConfirm: 'Load it',
     importCta: 'Load a statement',
-    looksLike: 'Looks like',
-    otherHints: (n: number) => `${n} more`,
     title: 'Statements',
     upload: 'Load a statement',
     uploadHint: 'CSV as the bank exports it: StatementExport.csv from Bank of Georgia, transactions_history.csv from TBC. Loading the same file twice changes nothing.',
     bank: 'Bank',
     banks: { bog: 'Bank of Georgia', tbc: 'TBC', credo: 'Credo' },
-    file: 'File',
-    period: 'Period',
-    lines: 'Lines',
-    newLines: 'New',
-    matched: 'Matched',
-    loadedBy: 'Loaded by',
-    none: 'No statements loaded yet.',
-    result: (fresh: string, matched: string, queued: string) => `${fresh} new lines, ${matched} matched, ${queued} for the queue.`,
-    queue: 'Queue',
-    queueNone: 'The queue is empty.',
-    hints: 'Which rental is this?',
-    why: { amount: 'the amount is exactly what is open', pickup_day: 'handed over that day', open: 'has something open' },
-    assign: 'This one',
-    ignore: 'Not a customer payment',
-    ignoreReason: 'What it is instead',
-    line: 'Bank line',
   },
 
   service: {

@@ -185,7 +185,7 @@ function MoneySheet({ opening, onClose }: { opening: Opening; onClose: () => voi
       submit={async (key) => {
         if (!s.target) throw new Error('no target');
         if (s.target.kind === 'deposit_payout' && s.channel === 'cash' && tetri != null && tetri > (tillOnHand ?? Infinity) && !s.minusOk) {
-          throw new ApiError(400, 'missing_field', 'Confirm the till going below zero.', { field: 'minusOk' });
+          throw new ApiError(400, 'missing_field', 'Confirm the till going below zero.', { field: 'minusOk', fieldText: t.money.tillMinusNeed });
         }
         const body = {
           kind: s.target.kind,
