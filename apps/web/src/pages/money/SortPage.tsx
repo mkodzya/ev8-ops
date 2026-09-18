@@ -315,7 +315,7 @@ function OtherSheet({ line, onClose }: { line: SortLine; onClose: () => void }) 
       onClose={onClose}
       value={pick}
       initial={null}
-      label={pick ? t.sort.attachTo(pick.label) : t.sort.other}
+      label={pick ? (pick.body.customerId ? pick.label : t.sort.attachTo(pick.label)) : t.sort.other}
       submit={async (key) => {
         if (!pick) throw new Error('nothing picked');
         const r = await api.post<{ id: string }>(`/api/statement-lines/${line.id}/assign`, pick.body, { key });

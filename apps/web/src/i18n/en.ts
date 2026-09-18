@@ -881,6 +881,7 @@ export const en = {
   },
 
   paymentPage: {
+    acts: { record: 'recorded', void: 'annulled', undo: 'undone at once' },
     title: (n: string) => `Payment ${n}`,
     customer: 'Customer',
     channel: 'Channel',

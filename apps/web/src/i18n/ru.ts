@@ -884,6 +884,7 @@ export const ru: Dict = {
   },
 
   paymentPage: {
+    acts: { record: 'записан', void: 'аннулирован', undo: 'отменён сразу' },
     title: (n: string) => `Платёж ${n}`,
     customer: 'Клиент',
     channel: 'Канал',
@@ -978,9 +979,9 @@ export const ru: Dict = {
     previewRules: 'Привяжут правила',
     previewQueue: 'Уйдут в «Разобрать»',
     previewInOut: 'Поступлений · списаний',
-    loadN: (n: number) => `Загрузить ${n} строк`,
+    loadN: (n: number) => `Загрузить ${n} ${plural(n, 'строку', 'строки', 'строк')}`,
     otherFile: 'Другой файл',
-    doneN: (n: number) => `Загружено ${n} строк`,
+    doneN: (n: number) => `Загружено: ${n} ${plural(n, 'строка', 'строки', 'строк')}`,
     doneSummary: (r: number, m: number, q: number) => `${r} совпали с внесёнными · ${m} привязаны правилами · ${q} ждут разбора`,
     sortN: (n: number) => `Разобрать ${n}`,
     uploads: 'Загрузки',

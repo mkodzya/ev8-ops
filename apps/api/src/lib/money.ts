@@ -215,15 +215,20 @@ async function planRental(tx: Tx, rentalId: string, gross: number): Promise<Pick
   const added = new Map<string, number>(spread.allocations.map((a: Allocation) => [a.id, a.amountTetri]));
   const rows = (extra: boolean) =>
     periods.map((p) => ({ seq: p.seq, endsOn: isoDate(p.endsOn)!, payStatus: periodPayStatus(p.amountTetri, p.paidTetri + (extra ? added.get(p.id) ?? 0 : 0)) }));
-  const byId = new Map(periods.map((p) => [p.id, p]));
+  // Everything owed now is listed, the part this payment does not reach at 0:
+  // "deposit 100 of 180, week 0 of 150" says what stays owed (§3.1, crit. 3).
+  const today = todayISO(new Date(), env.TZ);
+  const closes: Closes[] = [];
+  if (deposit && deposit.amountTetri > deposit.paidTetri) {
+    closes.push({ target: 'deposit', amountTetri: added.get(deposit.id) ?? 0, fullTetri: deposit.amountTetri, openTetri: deposit.amountTetri - deposit.paidTetri });
+  }
+  for (const p of periods) {
+    const amount = added.get(p.id) ?? 0;
+    if (p.paidTetri >= p.amountTetri || (amount === 0 && isoDate(p.startsOn)! > today)) continue;
+    closes.push({ target: 'period', amountTetri: amount, fullTetri: p.amountTetri, openTetri: p.amountTetri - p.paidTetri, seq: p.seq, startsOn: isoDate(p.startsOn), endsOn: isoDate(p.endsOn) });
+  }
   return {
-    closes: spread.allocations.map((a) => {
-      if (a.target === 'deposit') {
-        return { target: 'deposit' as const, amountTetri: a.amountTetri, fullTetri: deposit!.amountTetri, openTetri: deposit!.amountTetri - deposit!.paidTetri };
-      }
-      const p = byId.get(a.id)!;
-      return { target: 'period' as const, amountTetri: a.amountTetri, fullTetri: p.amountTetri, openTetri: p.amountTetri - p.paidTetri, seq: p.seq, startsOn: isoDate(p.startsOn), endsOn: isoDate(p.endsOn) };
-    }),
+    closes,
     leftoverTetri: spread.leftoverTetri,
     paidThroughBefore: paidThrough(rows(false)),
     paidThroughAfter: paidThrough(rows(true)),

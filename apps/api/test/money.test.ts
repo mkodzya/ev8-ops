@@ -18,7 +18,7 @@ async function freshRental(opts: { rate?: number; pickedUpOn?: string } = {}) {
   return { prisma, owner, customer, rentalId: id, modelId: model.id };
 }
 
-type Plan = { closes: { target: string; amountTetri: number; fullTetri: number }[]; leftoverTetri: number; feeTetri: number; netTetri: number; paidThroughAfter: string | null; rate: number | null };
+type Plan = { closes: { target: string; amountTetri: number; fullTetri: number; openTetri: number }[]; leftoverTetri: number; feeTetri: number; netTetri: number; paidThroughAfter: string | null; rate: number | null };
 const debt = async (who: string, customerId: string) =>
   json<{ owesTetri: number; creditTetri: number; aheadTetri: number; depositHeldTetri: number; parts: { kind: string; owesTetri: number }[] }>(
     await call(who, 'GET', `/api/customers/${customerId}/balance`),
@@ -30,8 +30,12 @@ describe.skipIf(!HAS_DB)('the money form (§3.1)', () => {
     expect((await debt(owner, customer.id)).owesTetri).toBe(33000);
 
     const plan = json<Plan>(await call(owner, 'POST', '/api/money/preview', { kind: 'rent', rentalId, amountTetri: '100', channel: 'cash' }));
-    // Deposit first, then the weeks (Q6): 100 of 180, and the week untouched.
-    expect(plan.closes).toEqual([expect.objectContaining({ target: 'deposit', amountTetri: 10000, fullTetri: 18000 })]);
+    // Deposit first, then the weeks (Q6): 100 of 180, the week at 0 of 150 — 230 stays owed.
+    expect(plan.closes).toEqual([
+      expect.objectContaining({ target: 'deposit', amountTetri: 10000, openTetri: 18000 }),
+      expect.objectContaining({ target: 'period', amountTetri: 0, openTetri: 15000 }),
+    ]);
+    expect(plan.closes.reduce((n, c) => n + c.openTetri - c.amountTetri, 0)).toBe(23000);
 
     const res = await call(owner, 'POST', '/api/money', { kind: 'rent', rentalId, amountTetri: '100', channel: 'cash' });
     expect(res.statusCode, res.body).toBe(201);
