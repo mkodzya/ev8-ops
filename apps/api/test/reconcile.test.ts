@@ -20,14 +20,17 @@ const file = (...rows: string[]) => [BOG_HEADER, ...rows].join('\n');
 
 // The rules match a line to the one rental its amount and date fit. Suites
 // that ran before this one leave rentals handed over today at 150 + 180 still
-// open (they are deleted only when the whole run ends); any of them makes a
-// 330 card line ambiguous here, and so do the ones an earlier test in this
-// file made. They are closed before each test, in this throwaway database,
-// so every test counts only the rentals it made itself.
+// open, and card payments entered by hand (all deleted only when the whole
+// run ends); any of them makes a 330 card line ambiguous here, and so do the
+// ones an earlier test in this file made. They are closed before each test,
+// in this throwaway database, so every test counts only what it made itself.
 beforeEach(async () => {
   if (!HAS_DB) return;
   const { prisma } = await import('../src/lib/db.js');
   await prisma.rental.updateMany({ where: { status: { not: 'returned' } }, data: { status: 'returned' } });
+  // Card and transfer payments entered by hand wait for their bank line; one
+  // of 330 from the hand-over suite takes a 325.05 line as "already recorded".
+  await prisma.payment.updateMany({ where: { statementLineId: null, voidedAt: null, source: 'manual', channel: { not: 'cash' } }, data: { voidedAt: new Date(), voidReason: 'test isolation', voidKind: 'void' } });
 });
 
 function tag(): string {
