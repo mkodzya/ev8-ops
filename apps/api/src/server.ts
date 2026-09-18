@@ -22,6 +22,8 @@ import { saleRoutes } from './routes/sales.js';
 import { searchRoutes } from './routes/search.js';
 import { serviceRoutes } from './routes/service.js';
 import { statementRoutes } from './routes/statements.js';
+import { tillRoutes } from './routes/till.js';
+import { depositRoutes } from './routes/deposits.js';
 import { summaryRoutes } from './routes/summary.js';
 import { userRoutes } from './routes/users.js';
 
@@ -73,6 +75,8 @@ export function buildApp(): FastifyInstance {
   userRoutes(app);
   paymentRoutes(app);
   statementRoutes(app);
+  tillRoutes(app);
+  depositRoutes(app);
   jobRoutes(app);
   serviceRoutes(app);
   saleRoutes(app);

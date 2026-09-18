@@ -29,6 +29,9 @@ export async function settleCredit(rentalId: string): Promise<number> {
       where: {
         voidedAt: null,
         direction: 'in',
+        // A sale's or a repair's payment is that record's own: it never pays
+        // rent, however much of it is left over (B2-08).
+        kind: { in: ['rent', 'on_account'] },
         OR: [{ rentalId }, { customerId: rental.customerId, rentalId: null }],
       },
       orderBy: [{ occurredOn: 'asc' }, { createdAt: 'asc' }],

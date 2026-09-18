@@ -327,6 +327,7 @@ async function seedDemo(ownerId: string): Promise<void> {
         netTetri: amount,
         customerId: factory.id,
         purchaseId: order.id,
+        kind: 'supplier',
         note: DEMO_NOTE,
         createdById: ownerId,
       },

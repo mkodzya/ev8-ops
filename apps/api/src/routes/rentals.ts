@@ -1,6 +1,7 @@
 import { effectiveRentalStatus, overdueDays, todayISO } from '@ev8/shared';
 import type { FastifyInstance } from 'fastify';
 import { isoDate } from '../lib/dates.js';
+import { debtsOf } from '../lib/debt.js';
 import { prisma } from '../lib/db.js';
 import { env } from '../lib/env.js';
 import { notFound } from '../lib/errors.js';
@@ -23,6 +24,10 @@ export function rentalRoutes(app: FastifyInstance): void {
         _count: { select: { periods: true } },
       },
     });
+    // A rental's debt is its part of its customer's one figure: its unpaid weeks and deposit.
+    const debts = await debtsOf(rentals.map((r) => r.customerId));
+    const debtOfRental = (customerId: string, rentalId: string) =>
+      (debts.get(customerId)?.parts ?? []).filter((p) => p.id === rentalId && (p.kind === 'rent' || p.kind === 'deposit')).reduce((n, p) => n + p.owesTetri, 0);
     return {
       today,
       rentals: rentals.map((r) => {
@@ -46,7 +51,7 @@ export function rentalRoutes(app: FastifyInstance): void {
           returnedOn: isoDate(r.returnedOn),
           paidThrough,
           overdueDays: status === 'overdue' && pickedUpOn ? overdueDays(paidThrough, pickedUpOn, today) : 0,
-          debtTetri: r.periods.reduce((n, p) => n + (p.amountTetri - p.paidTetri), 0),
+          debtTetri: debtOfRental(r.customerId, r.id),
           periods: r._count.periods,
           buyoutTargetTetri: r.buyoutTargetTetri,
           buyoutPerPaymentTetri: r.buyoutPerPaymentTetri,

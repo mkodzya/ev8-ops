@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { isoDate } from '../lib/dates.js';
+import { debtsOf } from '../lib/debt.js';
 import { prisma } from '../lib/db.js';
 import { notFound } from '../lib/errors.js';
 import { mayView } from '../lib/guard.js';
@@ -49,6 +50,7 @@ export function customerRoutes(app: FastifyInstance): void {
         _count: { select: { sales: { where: { status: { not: 'cancelled' } } } } },
       },
     });
+    const debts = await debtsOf(customers.map((c) => c.id));
     return {
       customers: customers.map((c) => ({
         id: c.id,
@@ -65,7 +67,9 @@ export function customerRoutes(app: FastifyInstance): void {
           .filter((r) => OPEN_RENTAL.includes(r.status))
           .map((r) => ({ id: r.id, number: r.number, status: r.status, paidThrough: isoDate(r.paidThrough) })),
         rentals: c.rentals.length,
-        debtTetri: c.rentals.reduce((n, r) => n + r.periods.reduce((m, p) => m + (p.amountTetri - p.paidTetri), 0), 0),
+        // The one debt figure (B7-02): the same the card, "Today" and the search show.
+        debtTetri: debts.get(c.id)?.owesTetri ?? 0,
+        creditTetri: debts.get(c.id)?.creditTetri ?? 0,
         buyer: c._count.sales > 0,
       })),
     };
