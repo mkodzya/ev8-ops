@@ -134,7 +134,6 @@ a { color: var(--accent); text-decoration: none; }
 .load-error { display: grid; gap: 10px; justify-items: start; }
 /* A field's hint sits under its control, never beside a narrow one. */
 .field > .hint { display: block; margin: 6px 0 0; }
-.toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 16px; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .chip {
   display: inline-block;
@@ -173,7 +172,6 @@ a { color: var(--accent); text-decoration: none; }
 .tile-lbl { font: var(--text-label); color: var(--muted); }
 .tile-crit { border-color: var(--crit); background: var(--crit-soft); }
 .tile-crit .tile-num { color: var(--crit); }
-.tile-warn { border-color: var(--service); background: var(--warn-soft); }
 .state-list { list-style: none; margin: 0; padding: 0; }
 .state-list li a {
   display: flex;
@@ -401,8 +399,6 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
 .item-list .input { flex: 1 1 100%; }
 
 /* ---- settings, inline forms ----------------------------------------- */
-.sub-form { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line-soft); }
-.sub-form.card { border: 1px solid var(--accent-hover); padding: 16px 18px; margin: 12px 0 0; }
 .input-inline { min-height: 34px; min-width: 132px; max-width: 200px; padding: 0 10px; font: var(--text-button-sm); }
 .inline-form { display: inline-flex; gap: 6px; align-items: center; }
 .row-off { opacity: 0.55; }
@@ -589,10 +585,6 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
 .seg.on { background: var(--lime); border-color: var(--lime); }
 .seg-num { font: var(--text-mono-sm); font-variant-numeric: tabular-nums; color: var(--muted); }
 .seg.on .seg-num { color: var(--ink); }
-.seg-available.on { background: var(--accent-soft); border-color: var(--accent); }
-.seg-rented.on { background: var(--info-soft); border-color: var(--rented); }
-.seg-service.on { background: var(--warn-soft); border-color: var(--service); }
-.seg-out.on { background: var(--crit-soft); border-color: var(--crit); }
 /* The park row reads as the heading of the two below it: bigger type, and a
    filled pill when chosen, so the state row underneath is plainly inside it. */
 .seg-pools { margin-bottom: 2px; }
@@ -946,7 +938,6 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
    and a column of em dashes where a free moped has no renter is worse than
    the silence it stands for. */
 @media (max-width: 899px) {
-  .v-none { display: none; }
   .vrow .vin-head { color: var(--muted); }
   .v-vin .vin { font: var(--text-mono); }
   .v-vin .vin-tail { font: var(--text-money); }
@@ -1050,37 +1041,9 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
   .page { padding-bottom: calc(150px + env(safe-area-inset-bottom)); }
 }
 
-/* ---- Rentals: who, on what, paid through, owed (U5) ------------------ */
-.rlist .vrow {
-  grid-template-areas: 'who status' 'veh status' 'paid status' 'num num';
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 4px 12px;
-}
-.r-who { grid-area: who; font: var(--text-h3); color: var(--ink); }
-.r-veh { grid-area: veh; font: var(--text-label); }
-.r-paid { grid-area: paid; display: flex; gap: 6px; align-items: baseline; font: var(--text-label); }
-.r-paid-lbl { color: var(--muted); }
-.r-status { grid-area: status; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; text-align: right; }
+/* ---- Rentals list: the status column of the laptop table ---- */
+.r-status { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; }
 .r-days { font: var(--text-label); }
-.r-num { grid-area: num; font: var(--text-mono-sm); color: var(--muted); }
-.r-rate, .r-dep, .r-picked { display: none; }
-
-@media (min-width: 900px) {
-  .rlist .vlist-head, .rlist .vrow {
-    grid-template-areas: none;
-    grid-template-columns: 110px minmax(120px, 1fr) minmax(180px, 1.2fr) 110px 90px 110px 120px minmax(160px, 1fr);
-  }
-  .rlist .vlist-head, .rlist .vrow { min-width: 1020px; }
-  .r-num, .r-who, .r-veh, .r-rate, .r-dep, .r-picked, .r-paid, .r-status {
-    grid-area: auto;
-    display: block;
-    font: var(--text-body-sm);
-    text-align: left;
-    color: inherit;
-  }
-  .r-status { display: flex; flex-direction: row; align-items: baseline; gap: 8px; flex-wrap: wrap; }
-  .r-paid-lbl { display: none; }
-}
 
 /* ---- the rental card: paid through, and the weeks as a strip (U6) ---- */
 .paid-hero { margin-bottom: 18px; }

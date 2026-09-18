@@ -2,7 +2,7 @@
 //
 // Two rights, on purpose. Naming the places is the owner's (settings.manage);
 // saying which one a moped is at is everyone who touches mopeds, Kardu and
-// the mechanic included (fleet.location.set) — a point nobody may correct
+// a manager included (fleet.location.set) — a point nobody may correct
 // goes stale by the end of the first week.
 import type { FastifyInstance } from 'fastify';
 import { audit } from '../lib/audit.js';

@@ -130,7 +130,7 @@ export function opsRoutes(app: FastifyInstance): void {
       grounds: WithholdGround[];
     } | null = null;
     if (b.deposit && typeof b.deposit === 'object') {
-      if (!hasPerm(actor, 'deposit.decide')) throw conflict('deposit_decision_forbidden', 'Only the director or the owner decides on a deposit.');
+      if (!hasPerm(actor, 'deposit.decide')) throw conflict('deposit_decision_forbidden', 'Only an owner decides on a deposit.');
       const d = b.deposit as Body;
       deposit = {
         returnedTetri: tetri(d, 'returnedTetri', { min: 0 }) ?? 0,

@@ -27,7 +27,7 @@ type Decision = 'full' | 'part' | 'all';
 
 // Return in three screens (RNT-04, RNT-05): act → deposit → done. The deposit
 // screen appears only for roles that decide on it; a manager's return leaves
-// the deposit held for the director.
+// the deposit held for an owner.
 export function ReturnWizard() {
   const { id } = useParams();
   const t = useT();
@@ -175,7 +175,7 @@ export function ReturnWizard() {
           </ul>
           <PhotoPicker photos={photos} onChange={setPhotos} label={t.pickup.photos} />
           {progress && <p className="hint muted">{progress}</p>}
-          {!decides && <p className="hint muted">{t.ret.leaveToDirector}</p>}
+          {!decides && <p className="hint muted">{t.ret.leaveToOwner}</p>}
         </>
       )}
 

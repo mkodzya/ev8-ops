@@ -11,7 +11,7 @@ import { date, oneOf, str, tetri } from '../lib/validate.js';
 
 // Money in (PAY-04, PAY-05, PAY-06). Statements and automatic matching come
 // next; this is the part a person does: cash at the counter, and a transfer
-// or card payment a director enters from the bank.
+// or card payment an owner enters from the bank.
 
 const CHANNELS = ['transfer', 'acquiring', 'cash'] as const;
 type Body = Record<string, unknown>;
@@ -72,7 +72,7 @@ export function paymentRoutes(app: FastifyInstance): void {
     // A manager takes cash. Anything that arrives through a bank is entered
     // by whoever reconciles the bank (spec §3).
     if (channel !== 'cash' && !hasPerm(actor, 'payments.reconcile')) {
-      throw forbidden('reconcile_required', 'Only the director or the owner enters bank payments.');
+      throw forbidden('reconcile_required', 'Only an owner enters bank payments.');
     }
 
     // For acquiring either figure may be the one at hand: the counter knows
