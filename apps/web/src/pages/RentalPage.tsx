@@ -1,7 +1,7 @@
 import type { ActKind, DepositStatus, PeriodPayStatus, RentalStatus } from '@ev8/shared';
 import { useState } from 'react';
 import { parseGel, todayISO, type VehicleState } from '@ev8/shared';
-import { DocumentRow, type DocState } from '../components/Documents.js';
+import { DocumentRow, signedAtText, type DocState } from '../components/Documents.js';
 import { LoadError } from '../components/LoadError.js';
 import { DecideSheet } from '../components/ReturnMoney.js';
 import { RowMenu } from '../components/RowMenu.js';
@@ -548,9 +548,7 @@ function UndoSheet({ rental, until, onClose, onDone }: { rental: RentalCard['ren
   const t = useT();
   const initial = { reason: '' };
   const [f, setF] = useState(initial);
-  const at = new Date(until);
-  const p = (n: number) => String(n).padStart(2, '0');
-  const untilText = `${p(at.getDate())}.${p(at.getMonth() + 1)} ${p(at.getHours())}:${p(at.getMinutes())}`;
+  const untilText = signedAtText(until);
   return (
     <FormSheet
       title={t.rentalMenu.undoTitle(rental.number)}

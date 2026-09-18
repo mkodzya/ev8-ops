@@ -621,7 +621,7 @@ function RecordChoice({ targets, customer, onPick }: { targets: Targets; custome
 function AmountChips({ s, onPick }: { s: State; onPick: (v: string) => void }) {
   const t = useT();
   const target = s.target!;
-  const rental = useLoad<{ rental: { customer: { id: string }; weeklyRateTetri: number } }>(target.kind === 'rent' && target.rentalId ? `/api/rentals/${target.rentalId}` : null);
+  const rental = useLoad<{ rental: { customer: { id: string }; weeklyRateTetri: number; storedStatus?: string } }>(target.kind === 'rent' && target.rentalId ? `/api/rentals/${target.rentalId}` : null);
   const cid = target.customerId ?? rental.data?.rental.customer.id ?? null;
   const targets = useLoad<Targets>(cid && (target.kind === 'rent' || target.kind === 'sale' || target.kind === 'service') ? `/api/customers/${cid}/money-targets` : null);
   const deposits = useLoad<{ deposits: { rentalId: string; heldTetri: number; toHandBackTetri: number }[] }>(target.kind === 'deposit_payout' ? '/api/deposits' : null);
@@ -633,7 +633,8 @@ function AmountChips({ s, onPick }: { s: State; onPick: (v: string) => void }) {
     const owed = Math.min(owedOn(target.rentalId), targets.data?.debt.owesTetri ?? Infinity);
     const week = rental.data?.rental.weeklyRateTetri ?? 0;
     if (owed > 0) chips.push({ tetri: owed, label: t.money.chipDebt });
-    if (week > 0) chips.push({ tetri: owed + week, label: t.money.chipWeek });
+    // A returned rental has no next week to pay ahead for (QA-W3-10).
+    if (week > 0 && rental.data?.rental.storedStatus !== 'returned') chips.push({ tetri: owed + week, label: t.money.chipWeek });
   }
   if (target.kind === 'sale' && target.saleId) {
     const sale = targets.data?.sales.find((x) => x.id === target.saleId);

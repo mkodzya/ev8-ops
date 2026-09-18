@@ -33,3 +33,18 @@ export function maxDate(a: ISODate, b: ISODate): ISODate {
 export function minDate(a: ISODate, b: ISODate): ISODate {
   return a < b ? a : b;
 }
+
+/**
+ * A moment as it reads in Tbilisi, whatever the clock of the device or the
+ * server says: `{ date: '18.09.2026', time: '21:39' }`. Signatures, drafts and
+ * deadlines are read by people here (book: Asia/Tbilisi).
+ */
+export function localDateTime(at: Date | string, tz: string = ORG_TZ): { date: string; time: string } {
+  const d = typeof at === 'string' ? new Date(at) : at;
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-GB', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+      .formatToParts(d)
+      .map((p) => [p.type, p.value]),
+  );
+  return { date: `${parts.day}.${parts.month}.${parts.year}`, time: `${parts.hour}:${parts.minute}` };
+}

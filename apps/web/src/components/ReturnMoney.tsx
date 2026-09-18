@@ -22,7 +22,7 @@ export interface ReturnPreview {
   settlement: {
     weeks: { id: string; seq: number; startsOn: string; endsOn: string; owesTetri: number }[];
     replacedWeeks: { id: string; seq: number; owesTetri: number }[];
-    late: null | { days: number; perDayTetri: number; amountTetri: number; weekTetri: number };
+    late: null | { days: number; perDayTetri: number; amountTetri: number; weekTetri: number; startsOn: string; endsOn: string };
     choice: 'week' | 'late' | null;
     keyTetri: number;
     claimsTetri: number;
@@ -72,8 +72,7 @@ export function SettlementLines({
         <div className="late-choice">
           <span className="lbl">{t.back.lateTitle(fmtDate(paidThrough))}</span>
           {(['week', 'late'] as const).map((c) => {
-            const first = s.weeks.find((w) => replaced.has(w.id));
-            const label = c === 'week' ? t.back.lateWeek(short(first?.startsOn ?? ''), short(first?.endsOn ?? '')) : t.back.lateDays(s.late!.days, formatGel(s.late!.perDayTetri, { decimals: false }));
+            const label = c === 'week' ? t.back.lateWeek(short(s.late!.startsOn), short(s.late!.endsOn)) : t.back.lateDays(s.late!.days, formatGel(s.late!.perDayTetri, { decimals: false }));
             return (
               <label key={c} className={`radio-row ${s.choice === c ? 'on' : ''}`}>
                 <input type="radio" name="late" checked={s.choice === c} disabled={!onChoice} onChange={() => onChoice?.(c)} />
@@ -186,6 +185,7 @@ export function DepositDecision({ value, onChange, heldTetri, claimsTetri, sugge
               </button>
             ))}
           </div>
+          {value.grounds.length === 0 && <p className="field-err">{t.back.groundsNeeded}</p>}
           <Field label={t.back.reason} hint={t.back.reasonHint} name="reason">
             <input className="input" value={value.reason} onChange={(e) => set({ reason: e.target.value })} />
           </Field>
@@ -250,9 +250,11 @@ export function DecideSheet({ rentalId, number, returnedOn, paidThrough, onClose
   const [d, setD] = useState<DecisionState>(NO_DECISION);
   const op = useOperation();
   const held = preview?.deposit?.heldTetri ?? 0;
-  const ok = !!preview && decisionOk(d, held);
+  // Nothing received, or all of it kept already: there is nothing to choose, only to close (designer's question 1).
+  const nothing = !!preview && held === 0;
+  const ok = !!preview && (nothing || decisionOk(d, held));
   const decide = async () => {
-    const res = await op.run((key) => api.post(`/api/rentals/${rentalId}/deposit/decide`, decisionBody(d, held), { key }));
+    const res = await op.run((key) => api.post(`/api/rentals/${rentalId}/deposit/decide`, nothing ? { action: 'return_all' } : decisionBody(d, held), { key }));
     if (res.ok) onDone();
   };
   return (
@@ -262,7 +264,11 @@ export function DecideSheet({ rentalId, number, returnedOn, paidThrough, onClose
       ) : (
         <>
           <SettlementLines preview={preview} paidThrough={paidThrough} />
-          <DepositDecision value={d} onChange={setD} heldTetri={held} claimsTetri={claimsOf(preview)} suggest={claimsOf(preview) > 0 ? ['rent_arrears'] : []} />
+          {nothing ? (
+            <p className="hint muted">{t.back.nothingHeld}</p>
+          ) : (
+            <DepositDecision value={d} onChange={setD} heldTetri={held} claimsTetri={claimsOf(preview)} suggest={claimsOf(preview) > 0 ? ['rent_arrears'] : []} />
+          )}
           {op.failure && <p className="field-err">{op.failure.text}</p>}
           {ok ? (
             <SubmitButton type="button" state={op.state} label={t.back.decide} onClick={() => void decide()} />

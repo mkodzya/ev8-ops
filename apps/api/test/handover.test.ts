@@ -264,6 +264,14 @@ describe.skipIf(!HAS_DB)('wave 3 · return', () => {
     );
     expect(ret.serviceJobId).toBeTruthy();
     expect((await prisma.vehicle.findUniqueOrThrow({ where: { id: vehicle.id } })).state).toBe('service');
+    // The repair says what the act said, and gets the act's photos (QA-W3-04).
+    const job = await prisma.serviceJob.findUniqueOrThrow({ where: { id: ret.serviceJobId! } });
+    expect(job.reason).toMatch(/: cracked panel$/);
+    expect(job.reason).not.toMatch(/moped/);
+    const act = await prisma.act.findFirstOrThrow({ where: { rentalId: id, kind: 'return' } });
+    const PNG1 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
+    expect((await call(owner, 'POST', `/api/acts/${act.id}/photos`, { mimeType: 'image/png', label: 'panel', dataBase64: PNG1 })).statusCode).toBe(201);
+    expect(await prisma.storedFile.count({ where: { serviceJobId: job.id, kind: 'service_photo' } })).toBe(1);
 
     const other = await running(2);
     const loc = json<{ id: string }>(await call(owner, 'POST', '/api/locations', { name: `ТЕСТ шоурум ${uniq()}` }));

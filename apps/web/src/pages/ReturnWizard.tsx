@@ -118,12 +118,14 @@ export function ReturnWizard() {
   const held = preview.deposit?.heldTetri ?? 0;
   const decided = preview.deposit?.decided ?? false;
   const decides = owner && !decided && !!preview.deposit;
-  const calcOk = !decides || decisionOk(f.decision, held);
+  // Nothing held: an owner's return closes the deposit with nothing to choose (designer's question 1).
+  const nothingHeld = decides && held === 0;
+  const calcOk = !decides || nothingHeld || decisionOk(f.decision, held);
   const locations = points.data?.locations ?? [];
   const locationId = locations.some((l) => l.id === f.locationId) ? f.locationId : locations[0]?.id ?? '';
   const whereOk = toService || locations.length === 0 || !!locationId;
   const ok = [actOk, calcOk, whereOk, true][f.step];
-  const kept = decides ? keptOf(f.decision, held) ?? 0 : 0;
+  const kept = decides && !nothingHeld ? keptOf(f.decision, held) ?? 0 : 0;
 
   // What a withholding is likely for, offered as the grounds when an owner keeps money.
   const suggest: Ground[] = [];
@@ -147,7 +149,7 @@ export function ReturnWizard() {
           toService,
           locationId: toService ? null : locationId || null,
           lateChoice: owner ? preview.settlement.choice : null,
-          deposit: decides ? decisionBody(f.decision, held) : undefined,
+          deposit: !decides ? undefined : nothingHeld ? { action: 'return_all' } : decisionBody(f.decision, held),
         },
         { key },
       );
@@ -170,6 +172,7 @@ export function ReturnWizard() {
       steps={steps}
       step={f.step}
       submit={f.step === 3 ? { state: op.state, failure: op.failure, label: t.back.finish } : undefined}
+      failure={f.step === 3 ? null : op.failure}
       onBack={f.step > 0 ? () => set({ step: f.step - 1 }) : undefined}
       onNext={f.step === 3 ? onFinish : () => set({ step: f.step + 1 })}
       nextLabel={f.step === 2 ? t.hand.toSummary : undefined}
@@ -226,7 +229,9 @@ export function ReturnWizard() {
       {f.step === 1 && (
         <>
           <SettlementLines preview={preview} paidThrough={r.paidThrough} lost={lost} onChoice={owner ? (c) => set({ lateChoice: c }) : undefined} />
-          {decides ? (
+          {nothingHeld ? (
+            <p className="hint muted">{t.back.nothingHeld}</p>
+          ) : decides ? (
             <DepositDecision value={f.decision} onChange={(d: DecisionState) => set({ decision: d })} heldTetri={held} claimsTetri={claims} suggest={suggest} />
           ) : (
             !decided && <p className="hint muted">{t.back.ownerDecides}</p>

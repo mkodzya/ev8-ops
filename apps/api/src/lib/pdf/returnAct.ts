@@ -69,7 +69,7 @@ export interface ReturnActData {
 }
 
 /** "Battery No. 3" for any number handed over, not only two (B10-02). */
-function itemLabel(key: string): { ka: string; en: string } {
+export function itemLabel(key: string): { ka: string; en: string } {
   const fixed = (ITEM_LABEL as Record<string, { ka: string; en: string }>)[key];
   if (fixed) return fixed;
   const [kind, n] = key.split('_');
