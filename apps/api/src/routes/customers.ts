@@ -81,7 +81,7 @@ export function customerRoutes(app: FastifyInstance): void {
           include: { vehicle: { select: { id: true, vin: true } }, deposit: true },
         },
         // Documents: the fact of a document is visible to everyone who sees
-        // the card; the file itself only to director and owner (CST-03) —
+        // the card; the file itself only to the owners (CST-03) —
         // the files route enforces that, so ids are safe to list here.
         documents: { where: { archived: false }, orderBy: { createdAt: 'asc' }, select: { id: true, docKind: true, label: true, sizeBytes: true, mimeType: true, createdAt: true } },
       },

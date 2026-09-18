@@ -256,7 +256,7 @@ export function serviceRoutes(app: FastifyInstance): void {
     const total = totalOf(job);
 
     if (withheldTetri > 0) {
-      if (!hasPerm(actor, 'deposit.decide')) throw conflict('deposit_decision_forbidden', 'Only the director or the owner decides on a deposit.');
+      if (!hasPerm(actor, 'deposit.decide')) throw conflict('deposit_decision_forbidden', 'Only an owner decides on a deposit.');
       if (job.payer !== 'customer' || !job.rentalId) throw conflict('no_renter', 'Only a repair charged to a renter can come out of their deposit.');
       if (withheldTetri > total) throw conflict('withheld_over_total', 'More than the repair itself cannot be kept.');
     }

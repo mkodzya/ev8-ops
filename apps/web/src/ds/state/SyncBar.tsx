@@ -27,7 +27,8 @@ export function SyncBar() {
   }, [backAt]);
 
   if (!online) {
-    const newest = Math.max(0, ...client.getQueryCache().getAll().map((q) => q.state.dataUpdatedAt));
+    // The time of the data this screen shows; a screen that never loaded has none to date (QA-W1 раунд 2).
+    const newest = Math.max(0, ...client.getQueryCache().findAll({ type: 'active' }).map((q) => q.state.dataUpdatedAt));
     return <SyncStrip off text={newest ? t.sync.offlineSince(hhmm(newest)) : t.sync.offline} />;
   }
   if (showBack && backAt) return <SyncStrip text={t.sync.back(hhmm(backAt))} spinning={fetching > 0} />;

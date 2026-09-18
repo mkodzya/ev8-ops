@@ -128,7 +128,7 @@ export interface ReturnInput {
   condition: string | null;
   /** The return act's per-item checklist, as the paper form has it. */
   items: Record<string, { state: string; note: string | null }>;
-  /** Present only when the actor may decide on the deposit (director, owner). */
+  /** Present only when the actor may decide on the deposit (the owners). */
   deposit: null | {
     returnedTetri: number;
     withheldTetri: number;

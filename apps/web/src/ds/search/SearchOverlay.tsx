@@ -115,7 +115,7 @@ export function SearchOverlay({ onClose }: { onClose: () => void }) {
       key: `v-${v.id}`,
       title: (
         <>
-          {v.model} <Tail vin={v.vin} />
+          <Lit text={v.model} q={q} /> <Tail vin={v.vin} />
         </>
       ),
       sub: t.states[v.state as keyof typeof t.states] ?? v.state,
