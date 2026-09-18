@@ -3,6 +3,7 @@ import { useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { preparePhoto, uploadFile } from '../lib/photos.js';
 import { useOperation } from '../ds/form/operation.js';
+import { useMoneyForm } from '../ds/money/MoneyForm.js';
 import { useToast } from '../ds/feedback/Toast.js';
 import '../ds/form/form.css';
 import { LoadError } from '../components/LoadError.js';
@@ -23,11 +24,11 @@ interface Card {
 }
 
 interface Balance {
-  invoicedTetri: number;
-  paidTetri: number;
-  outstandingTetri: number;
+  owesTetri: number;
   creditTetri: number;
+  aheadTetri: number;
   depositHeldTetri: number;
+  parts: { kind: 'rent' | 'deposit' | 'sale' | 'service'; id: string; number: string; owesTetri: number }[];
 }
 
 export function CustomerPage() {
@@ -35,6 +36,7 @@ export function CustomerPage() {
   const t = useT();
   const { locale } = useLocale();
   const { can } = useSession();
+  const openMoney = useMoneyForm();
   const { data, failure, reload } = useLoad<Card>(id ? `/api/customers/${id}` : null);
   const balance = useLoad<Balance>(id ? `/api/customers/${id}/balance` : null);
   const [docKind, setDocKind] = useState<'id_card' | 'driver_licence' | 'other'>('id_card');
@@ -77,36 +79,30 @@ export function CustomerPage() {
         )}
       </PageHead>
 
-      {/* The first line answers the question the card is opened with (U9).
-          The four figures it is made of are underneath, smaller. */}
+      {/* The one debt figure (wave 2 §3.7, B7-02): what is owed, big; what it is
+          made of by record; the schedule ahead and the deposit quietly below —
+          neither is a debt. The same figure "Today", the rental and the search show. */}
       {balance.data && (
-        <p className={`bal-line ${balance.data.outstandingTetri > 0 ? 'crit-text' : balance.data.creditTetri > 0 ? 'state-available' : 'muted'}`}>
-          {balance.data.outstandingTetri > 0
-            ? t.balance.owes(formatGel(balance.data.outstandingTetri))
-            : balance.data.creditTetri > 0
-              ? t.balance.overpaid(formatGel(balance.data.creditTetri))
-              : t.balance.clear}
-        </p>
-      )}
-
-      {balance.data && (
-        <section className="tiles tiles-quiet">
-          <div className={`tile ${balance.data.outstandingTetri > 0 ? 'tile-crit' : ''}`}>
-            <span className="tile-num mono">{formatGel(balance.data.outstandingTetri, { decimals: false })}</span>
-            <span className="tile-lbl">{t.balance.outstanding}</span>
-          </div>
-          <div className="tile">
-            <span className="tile-num mono">{formatGel(balance.data.creditTetri, { decimals: false })}</span>
-            <span className="tile-lbl">{t.balance.credit}</span>
-          </div>
-          <div className="tile">
-            <span className="tile-num mono">{formatGel(balance.data.depositHeldTetri, { decimals: false })}</span>
-            <span className="tile-lbl">{t.balance.depositHeld}</span>
-          </div>
-          <div className="tile">
-            <span className="tile-num mono">{formatGel(balance.data.paidTetri, { decimals: false })}</span>
-            <span className="tile-lbl">{t.balance.paid}</span>
-          </div>
+        <section className="card debt-card">
+          <p className={`bal-line ${balance.data.owesTetri > 0 ? 'crit-text' : balance.data.creditTetri > 0 ? 'state-available' : 'muted'}`}>
+            {balance.data.owesTetri > 0
+              ? t.money.owes(formatGel(balance.data.owesTetri))
+              : balance.data.creditTetri > 0
+                ? t.money.onAccount(formatGel(balance.data.creditTetri))
+                : `${t.money.noDebt} · ${formatGel(0)}`}
+          </p>
+          {balance.data.parts.map((p) => (
+            <Row key={`${p.kind}-${p.id}`} k={`${p.kind === 'deposit' ? t.money.closeDeposit : t.money.kinds[p.kind === 'service' ? 'service' : p.kind === 'sale' ? 'sale' : 'rent']} · ${p.number}`} v={<span className="mono">{formatGel(p.owesTetri)}</span>} />
+          ))}
+          {balance.data.aheadTetri > 0 && <Row k={t.money.ahead} v={<span className="mono muted">{formatGel(balance.data.aheadTetri)}</span>} />}
+          {balance.data.depositHeldTetri > 0 && <Row k={t.money.depositHeld} v={<span className="mono muted">{formatGel(balance.data.depositHeldTetri)}</span>} />}
+          {can('cash.record') && (
+            <div className="row-actions">
+              <button type="button" className="pill pill-sm pill-accent" onClick={() => openMoney({ target: { kind: 'on_account', customerId: c.id, customer: c.name } })}>
+                {can('payments.reconcile') ? t.money.take : t.money.takeCash}
+              </button>
+            </div>
+          )}
         </section>
       )}
       <div className="two-col">

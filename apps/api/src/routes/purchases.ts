@@ -1,6 +1,7 @@
 import { effectiveRate, landedCosts, todayISO } from '@ev8/shared';
 import type { FastifyInstance } from 'fastify';
 import { audit } from '../lib/audit.js';
+import { recordMoney } from '../lib/money.js';
 import { receivePartLine } from '../lib/stock.js';
 import { dateFromISO, isoDate } from '../lib/dates.js';
 import { prisma } from '../lib/db.js';
@@ -244,24 +245,16 @@ export function purchaseRoutes(app: FastifyInstance): void {
     if (!p) throw notFound('purchase_not_found', 'No such order.');
     if (p.status === 'cancelled') throw conflict('purchase_closed', 'This order is cancelled.');
     const grossTetri = tetri(b, 'grossTetri', { required: true, min: 1 })!;
-    const payment = await prisma.payment.create({
-      data: {
-        occurredOn: dateFromISO(date(b, 'occurredOn') ?? todayISO(new Date(), env.TZ))!,
-        direction: 'out',
-        channel: oneOf(b, 'channel', ['transfer', 'acquiring', 'cash'] as const) ?? 'transfer',
-        grossTetri,
-        feeTetri: 0,
-        netTetri: grossTetri,
-        customerId: p.supplierId,
-        purchaseId: p.id,
-        bankText: str(b, 'bankText', { max: 500 }),
-        note: str(b, 'note', { max: 1000 }),
-        source: 'manual',
-        createdById: actor.id,
-      },
-      select: { id: true },
+    const { id } = await recordMoney(actor, {
+      kind: 'supplier',
+      purchaseId: p.id,
+      amountTetri: grossTetri,
+      channel: oneOf(b, 'channel', ['transfer', 'acquiring', 'cash'] as const) ?? 'transfer',
+      occurredOn: date(b, 'occurredOn'),
+      backdateReason: str(b, 'backdateReason', { max: 500 }) ?? (date(b, 'occurredOn') ? 'dated on entry' : null),
+      note: str(b, 'note', { max: 1000 }),
     });
-    await audit({ actorId: actor.id, action: 'purchase.payment', entityType: 'purchase', entityId: p.id, after: { paymentId: payment.id, grossTetri } });
+    const payment = { id };
     return reply.code(201).send(payment);
   });
 

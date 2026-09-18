@@ -15,7 +15,7 @@ export function SectionTabs({ on }: { on: 'phone' | 'laptop' }) {
   const t = useT();
   const { me } = useSession();
   const { pathname } = useLocation();
-  const section = sectionOfPath(pathname);
+  const section = sectionOfPath(pathname, me?.permissions);
   const tabs = tabsFor(section, me?.permissions ?? []);
   if (tabs.length < 2 || !tabs.some((tab) => tab.path === pathname)) return null;
   return (

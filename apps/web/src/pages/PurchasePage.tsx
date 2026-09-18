@@ -2,6 +2,7 @@ import { parseGel, todayISO } from '@ev8/shared';
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../api.js';
+import { useMoneyForm } from '../ds/money/MoneyForm.js';
 import { LoadError } from '../components/LoadError.js';
 import { ModelDrawer, NEW_MODEL } from '../components/ModelDrawer.js';
 import { FormSheet, SubmitButton } from '../ds/form/Form.js';
@@ -31,8 +32,7 @@ export function PurchasePage() {
   const models = useLoad<{ models: { id: string; brand: string; name: string }[] }>(can('settings.manage') ? '/api/models' : null);
   const parts = useLoad<{ parts: PartRow[] }>(can('settings.manage') ? '/api/parts' : null);
   const [line, setLine] = useState({ modelId: '', partId: '', partName: '', qty: '1', price: '', asPart: false });
-  const [paying, setPaying] = useState(false);
-  const [pay, setPay] = useState({ amount: '', on: todayISO() });
+  const openMoney = useMoneyForm();
   const [receiving, setReceiving] = useState(false);
   const [receipt, setReceipt] = useState<{ receivedOn: string; vins: Record<string, string> }>({ receivedOn: todayISO(), vins: {} });
   // Lines are added and removed in place; one operation at a time, its refusal under the lines.
@@ -57,7 +57,7 @@ export function PurchasePage() {
     <>
       <PageHead wrap title={p.number} sub={t.purchases.statuses[p.status]}>
         {open && can('payments.reconcile') && (
-          <button type="button" className="pill pill-sm" onClick={() => setPaying(true)}>
+          <button type="button" className="pill pill-sm" onClick={() => openMoney({ target: { kind: 'supplier', purchaseId: p.id, number: p.number } })}>
             {t.purchases.addPayment}
           </button>
         )}
@@ -67,35 +67,6 @@ export function PurchasePage() {
           </button>
         )}
       </PageHead>
-
-      {paying && (
-        <FormSheet
-          title={t.purchases.addPayment}
-          onClose={() => setPaying(false)}
-          value={pay}
-          initial={{ amount: '', on: todayISO() }}
-          draft={`purchase-pay:${p.id}`}
-          onRestore={setPay}
-          summary={(v) => v.amount}
-          label={t.purchases.recordPayment}
-          submit={async (key) => {
-            await api.post(`/api/purchases/${p.id}/payments`, { grossTetri: parseGel(pay.amount), occurredOn: pay.on }, { key });
-            return { toast: { text: t.purchases.paymentRecorded } };
-          }}
-          onDone={() => {
-            setPay({ amount: '', on: todayISO() });
-            reload();
-          }}
-        >
-          {/* Money going out: the customer-payment label read "the customer paid". */}
-          <Field label={t.purchases.payAmount} name="grossTetri">
-            <input className="input input-amount mono" value={pay.amount} onChange={(e) => setPay({ ...pay, amount: e.target.value })} inputMode="decimal" autoFocus />
-          </Field>
-          <Field label={t.payments.date} name="occurredOn">
-            <input className="input mono" type="date" value={pay.on} onChange={(e) => setPay({ ...pay, on: e.target.value })} />
-          </Field>
-        </FormSheet>
-      )}
 
       {receiving && mayEdit && (
         <FormSheet

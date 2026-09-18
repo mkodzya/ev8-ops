@@ -6,6 +6,7 @@ import { prisma } from '../lib/db.js';
 import { env } from '../lib/env.js';
 import { conflict, notFound } from '../lib/errors.js';
 import { actorOf } from '../lib/guard.js';
+import { recordMoney } from '../lib/money.js';
 import { recordPayment } from '../lib/payments.js';
 import { date, int, oneOf, str, tetri } from '../lib/validate.js';
 import { moveVehicle } from '../lib/vehicles.js';
@@ -52,8 +53,14 @@ function serialize(s: SaleRow, today: string) {
     soldOn: isoDate(s.soldOn),
     priceTetri: s.priceTetri,
     paidTetri: paid,
-    outstandingTetri: s.priceTetri - paid,
-    overdueTetri: overdue,
+    // A sale bought back or cancelled owes nothing (M8).
+    outstandingTetri: s.status === 'active' ? s.priceTetri - paid : 0,
+    overdueTetri: s.status === 'active' ? overdue : 0,
+    // Due by today, the part of the customer's one debt figure this sale makes (B7-02).
+    owesTetri:
+      s.status === 'active'
+        ? s.instalments.filter((i) => isoDate(i.dueOn)! <= today).reduce((n, i) => n + Math.max(0, i.amountTetri - i.paidTetri), 0)
+        : 0,
     extras: s.extras,
     warrantyUntil: isoDate(s.warrantyUntil),
     status: s.status,
@@ -193,68 +200,19 @@ export function saleRoutes(app: FastifyInstance): void {
    * The company buys the moped back (SAL-03): money goes out, the VIN comes
    * back into the fleet, and both events stay on the VIN's own history.
    */
-  app.post<{ Params: { id: string }; Body: Body }>('/api/sales/:id/buy-back', { config: { scope: 'sales.manage' } }, async (req) => {
+  app.post<{ Params: { id: string }; Body: Body }>('/api/sales/:id/buy-back', { config: { scope: 'sales.manage' } }, async (req, reply) => {
     const b = req.body ?? {};
-    const actor = actorOf(req);
-    const sale = await prisma.sale.findUnique({ where: { id: req.params.id } });
-    if (!sale) throw notFound('sale_not_found', 'No such sale.');
-    if (sale.status !== 'active') throw conflict('sale_closed', 'This sale is already closed.');
-    if (!sale.vehicleId) throw conflict('no_vehicle', 'This sale names no moped in the fleet.');
-
-    const occurredOn = date(b, 'occurredOn') ?? todayISO(new Date(), env.TZ);
-    if (occurredOn < isoDate(sale.soldOn)!) throw conflict('before_sale', 'A moped cannot be bought back before it was sold.');
-    const amountTetri = tetri(b, 'amountTetri', { required: true, min: 1 })!;
-    const channel = oneOf(b, 'channel', ['transfer', 'acquiring', 'cash'] as const) ?? 'cash';
-    const toState = oneOf(b, 'toState', ['available', 'service'] as const) ?? 'available';
-
-    await prisma.$transaction(async (tx) => {
-      await tx.payment.create({
-        data: {
-          occurredOn: dateFromISO(occurredOn)!,
-          direction: 'out',
-          channel,
-          grossTetri: amountTetri,
-          feeTetri: 0,
-          netTetri: amountTetri,
-          customerId: sale.customerId,
-          saleId: sale.id,
-          note: str(b, 'note', { max: 1000 }) ?? `buy-back ${sale.number}`,
-          source: 'manual',
-          createdById: actor.id,
-        },
-      });
-      await tx.sale.update({
-        where: { id: sale.id },
-        data: { status: 'bought_back', boughtBackOn: dateFromISO(occurredOn)!, updatedAt: new Date() },
-      });
-      await moveVehicle(tx, {
-        vehicleId: sale.vehicleId!,
-        kind: 'bought_back',
-        occurredOn,
-        actorId: actor.id,
-        reason: `${sale.number}`,
-      });
-      if (toState === 'service') {
-        await moveVehicle(tx, {
-          vehicleId: sale.vehicleId!,
-          kind: 'manual',
-          toState: 'service',
-          occurredOn,
-          actorId: actor.id,
-          reason: `bought back under ${sale.number}, needs work`,
-        });
-      }
-      await tx.auditLog.create({
-        data: {
-          actorId: actor.id,
-          action: 'sale.buy_back',
-          entityType: 'sale',
-          entityId: sale.id,
-          after: { occurredOn, amountTetri, channel, toState },
-        },
-      });
+    const { id } = await recordMoney(actorOf(req), {
+      kind: 'buyback',
+      saleId: req.params.id,
+      amountTetri: tetri(b, 'amountTetri', { required: true, min: 1 })!,
+      channel: oneOf(b, 'channel', ['transfer', 'acquiring', 'cash'] as const) ?? 'cash',
+      occurredOn: date(b, 'occurredOn'),
+      backdateReason: str(b, 'backdateReason', { max: 500 }) ?? (date(b, 'occurredOn') ? 'dated on entry' : null),
+      note: str(b, 'note', { max: 1000 }),
+      toState: oneOf(b, 'toState', ['available', 'service'] as const) ?? 'available',
     });
-    return { ok: true };
+    return reply.code(200).send({ ok: true, id });
   });
 
   /** A sale entered by mistake. The VIN goes back to where it was. */

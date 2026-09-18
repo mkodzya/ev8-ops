@@ -1,6 +1,7 @@
 import { VEHICLE_STATES, effectiveRentalStatus, overdueDays, todayISO, type VehicleState } from '@ev8/shared';
 import type { FastifyInstance } from 'fastify';
 import { dateFromISO, isoDate } from '../lib/dates.js';
+import { debtsOf } from '../lib/debt.js';
 import { prisma } from '../lib/db.js';
 import { env } from '../lib/env.js';
 import { mayView } from '../lib/guard.js';
@@ -71,6 +72,11 @@ export function summaryRoutes(app: FastifyInstance): void {
         });
       } else active++;
       if (r.vinUnconfirmed) withoutVin++;
+    }
+    // The same figure as everywhere else (B7-02), not a second sum over the weeks.
+    const debts = await debtsOf(overdueList.map((o) => o.customer.id));
+    for (const o of overdueList) {
+      o.debtTetri = (debts.get(o.customer.id)?.parts ?? []).filter((p) => p.id === o.id).reduce((n, p) => n + p.owesTetri, 0);
     }
     overdueList.sort((a, b) => b.days - a.days || b.debtTetri - a.debtTetri);
     return {

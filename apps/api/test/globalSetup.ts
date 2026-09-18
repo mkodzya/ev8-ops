@@ -37,6 +37,9 @@ export async function teardown(): Promise<void> {
     // sides drop to NULL on delete (migration 0006), so the order here is
     // free. Payments first, then the statements that carried them.
     await prisma.payment.deleteMany({ where: { createdAt: since } }); // allocations cascade
+    // The till's own rows point at people: they go before the people do.
+    await prisma.cashHandover.deleteMany({ where: { handedAt: since } });
+    await prisma.bankCashDeposit.deleteMany({ where: { createdAt: since } });
     await prisma.statement.deleteMany({ where: { createdAt: since } }); // lines cascade
     await prisma.serviceJob.deleteMany({ where: { createdAt: since } }); // parts and photos cascade
     await prisma.sale.deleteMany({ where: { createdAt: since } }); // instalments cascade

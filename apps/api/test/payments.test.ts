@@ -107,10 +107,10 @@ describe.skipIf(!HAS_DB)('recording a payment', () => {
 
     const res = await call(owner, 'POST', '/api/payments', { rentalId, channel: 'cash', grossTetri: owed + 4000 });
     expect(json<{ leftover: number }>(res).leftover).toBe(4000);
-    const balance = json<{ outstandingTetri: number; creditTetri: number; depositHeldTetri: number }>(
+    const balance = json<{ owesTetri: number; creditTetri: number; depositHeldTetri: number }>(
       await call(owner, 'GET', `/api/customers/${customer.id}/balance`),
     );
-    expect(balance.outstandingTetri).toBe(0);
+    expect(balance.owesTetri).toBe(0);
     expect(balance.creditTetri).toBe(4000);
     expect(balance.depositHeldTetri).toBe(18000);
   });

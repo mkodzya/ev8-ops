@@ -128,13 +128,13 @@ describe.skipIf(!HAS_DB)('the schedule (SAL-02)', () => {
     const { id } = json<{ id: string }>(
       await call(owner, 'POST', '/api/sales', { customerId: customer.id, vehicleId: vehicle.id, priceTetri: '1000', months: 2, soldOn: '2026-01-10' }),
     );
-    let balance = json<{ invoicedTetri: number; outstandingTetri: number }>(await call(owner, 'GET', `/api/customers/${customer.id}/balance`));
-    expect(balance.invoicedTetri).toBe(100000);
-    expect(balance.outstandingTetri).toBe(100000);
+    // Both instalments fell due in February and March: all of it is owed now (B7-02).
+    let balance = json<{ owesTetri: number }>(await call(owner, 'GET', `/api/customers/${customer.id}/balance`));
+    expect(balance.owesTetri).toBe(100000);
 
     const paid = json<{ id: string }>(await call(owner, 'POST', `/api/sales/${id}/payments`, { channel: 'cash', grossTetri: '1000' }));
-    balance = json<{ invoicedTetri: number; outstandingTetri: number }>(await call(owner, 'GET', `/api/customers/${customer.id}/balance`));
-    expect(balance.outstandingTetri).toBe(0);
+    balance = json<{ owesTetri: number }>(await call(owner, 'GET', `/api/customers/${customer.id}/balance`));
+    expect(balance.owesTetri).toBe(0);
 
     expect((await call(owner, 'POST', `/api/payments/${paid.id}/void`, { reason: 'wrong sale' })).statusCode).toBe(200);
     const card = saleCard(await call(owner, 'GET', `/api/sales/${id}`));

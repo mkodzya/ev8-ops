@@ -48,7 +48,7 @@ describe.skipIf(!HAS_DB)('a second card for the same person', () => {
 // had (wave 1 §3.6). The debt is the rentals list's own figure summed — one
 // rule for "owed", read in two places.
 describe.skipIf(!HAS_DB)('the customers list', () => {
-  it('owes what their rentals owe, counts their rentals, and a new card owes nothing', async () => {
+  it('owes the one debt figure, counts their rentals, and a new card owes nothing', async () => {
     const owner = await loginAs('owner');
     const phone = `+99552${uniq().replace(/\D/g, '').slice(-7).padStart(7, '0')}`;
     const created = json<{ id: string }>(await call(owner, 'POST', '/api/customers', { name: 'List Newcomer', phone }));
@@ -61,10 +61,11 @@ describe.skipIf(!HAS_DB)('the customers list', () => {
     const newcomer = customers.find((c) => c.id === created.id);
     expect(newcomer).toMatchObject({ rentals: 0, debtTetri: 0, buyer: false });
 
-    for (const c of customers) {
-      const theirs = rentals.filter((r) => r.customer.id === c.id);
-      expect(c.rentals).toBe(theirs.length);
-      expect(c.debtTetri).toBe(theirs.reduce((n, r) => n + r.debtTetri, 0));
+    for (const c of customers) expect(c.rentals).toBe(rentals.filter((r) => r.customer.id === c.id).length);
+    // The list's debt is the card's (B7-02) — checked on the customers who owe most.
+    for (const c of [...customers].sort((a, b) => b.debtTetri - a.debtTetri).slice(0, 5)) {
+      const card = json<{ owesTetri: number }>(await call(owner, 'GET', `/api/customers/${c.id}/balance`));
+      expect(c.debtTetri).toBe(card.owesTetri);
     }
   });
 });
