@@ -58,3 +58,19 @@ export function numberMatches(q: Query, number: string): boolean {
   const own = number.replace(/\D/g, '');
   return Number(own) === Number(q.digits) && q.digits.length >= 2;
 }
+
+/**
+ * One payment against a query — the header search and the payments list use
+ * this same rule, so "Ещё N" opens a list of exactly N (QA-W1-05): the amount,
+ * whoever paid or recorded it, the bank's text and the note, the rental number.
+ */
+export function paymentMatches(
+  q: Query,
+  p: { grossTetri: number; customer?: string | null; bankText?: string | null; note?: string | null; createdBy?: string | null; rentalNumber?: string | null },
+): boolean {
+  return (
+    (q.amountTetri != null && p.grossTetri === q.amountTetri) ||
+    spellingMatches(q, [p.customer, p.bankText, p.note, p.createdBy]) ||
+    (!!p.rentalNumber && numberMatches(q, p.rentalNumber))
+  );
+}

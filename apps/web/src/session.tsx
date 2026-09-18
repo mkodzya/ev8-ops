@@ -28,6 +28,12 @@ interface SessionCtx {
   /** Signed out here while the server could not be reached (QA-1-01): the login screen says so once. */
   signedOutOffline: boolean;
   dismissOffline: () => void;
+  /**
+   * Who is signed in could not be asked: the server was out of reach when the
+   * app opened. That is not a sign-out — the app waits for the server rather
+   * than show a login nobody can complete offline.
+   */
+  unreachable: boolean;
 }
 
 const Ctx = createContext<SessionCtx>(null as unknown as SessionCtx);
@@ -70,6 +76,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [ended, setEnded] = useState<{ email: string } | null>(null);
   const [signedOutOffline, setSignedOutOffline] = useState(false);
+  const [unreachable, setUnreachable] = useState(false);
   const meRef = useRef<Me | null>(null);
   meRef.current = me;
 
@@ -82,8 +89,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       }
       setMe(await api.get<Me>('/api/me'));
       setEnded(null);
-    } catch {
+      setUnreachable(false);
+    } catch (e) {
       setMe(null);
+      setUnreachable(!(e instanceof ApiError && e.status < 500));
     } finally {
       setLoading(false);
     }
@@ -98,8 +107,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     () =>
       onReconnect(() => {
         if (pendingSignOut()) void closeOnServer().then((closed) => closed && setPendingSignOut(false));
+        else if (!meRef.current) void refresh();
       }),
-    [],
+    [refresh],
   );
 
   useEffect(() => {
@@ -146,7 +156,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const can = useCallback((p: Permission) => !!me && me.permissions.includes(p), [me]);
 
   return (
-    <Ctx.Provider value={{ me, loading, refresh, logout, can, ended, signedOutOffline, dismissOffline: () => setSignedOutOffline(false) }}>
+    <Ctx.Provider value={{ me, loading, refresh, logout, can, ended, signedOutOffline, dismissOffline: () => setSignedOutOffline(false), unreachable }}>
       {children}
     </Ctx.Provider>
   );

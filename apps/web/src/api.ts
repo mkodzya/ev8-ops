@@ -43,9 +43,12 @@ async function request<T>(method: string, url: string, body?: unknown, opts: Wri
     markDown();
     throw e;
   }
-  // A gateway answering for a server that is not there (the dev proxy says
-  // 500 with an empty body, a real one 502–504) is no connection either.
-  const gateway = res.status >= 502 || (res.status === 500 && res.headers.get('content-length') === '0');
+  // A gateway answering for a server that is not there is no connection
+  // either: a real one says 502–504, the Vite proxy 500 in plain text. Our
+  // API answers every error in JSON, so a 5xx that is not JSON never came
+  // from it (QA-W1-01).
+  const fromApi = (res.headers.get('content-type') ?? '').includes('application/json');
+  const gateway = res.status >= 502 || (res.status >= 500 && !fromApi);
   if (gateway) markDown();
   else markUp();
   let data: Record<string, unknown> = {};

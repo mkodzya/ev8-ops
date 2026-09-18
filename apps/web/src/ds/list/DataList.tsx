@@ -1,6 +1,6 @@
 import { readQuery, type Query } from '@ev8/shared';
 import { ArrowDownUp, Search } from 'lucide-react';
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { Drawer } from '../../components/Drawer.js';
 import { useT } from '../../i18n/index.js';
@@ -91,6 +91,14 @@ export function DataList<T>({
     return () => window.clearTimeout(id);
   }, [lit]);
 
+  // The new record is brought into view: lit below the fold it is not seen at all (QA-W1-06).
+  const root = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!lit) return;
+    const el = [...(root.current?.querySelectorAll<HTMLElement>('.lit') ?? [])].find((e) => e.offsetParent !== null);
+    el?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }, [lit, rows]);
+
   const setParam = (key: string, value: string | null) => {
     const next = new URLSearchParams(params);
     if (value) next.set(key, value);
@@ -110,7 +118,7 @@ export function DataList<T>({
   const counts = useMemo(() => Object.fromEntries(chips.map((c) => [c.key, searched.filter(c.test).length])), [chips, searched]);
 
   return (
-    <div className="datalist">
+    <div className="datalist" ref={root}>
       {(search || chips.length > 0 || sortable.length > 0) && (
         <div className="list-toolbar">
           {search && (
