@@ -884,6 +884,7 @@ export const ru: Dict = {
   },
 
   paymentPage: {
+    acts: { record: 'записан', void: 'аннулирован', undo: 'отменён сразу' },
     title: (n: string) => `Платёж ${n}`,
     customer: 'Клиент',
     channel: 'Канал',

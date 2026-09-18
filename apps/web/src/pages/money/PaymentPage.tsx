@@ -117,7 +117,7 @@ export function PaymentPage() {
         <section className="card">
           <BlockHead title={t.paymentPage.journal} />
           {data.journal.map((j, i) => (
-            <Row key={i} k={`${fmtDate(j.at.slice(0, 10))} ${hhmm(j.at)}`} v={`${j.who ?? ''} · ${j.action}${j.note ? ` · ${j.note}` : ''}`} />
+            <Row key={i} k={`${fmtDate(j.at.slice(0, 10))} ${hhmm(j.at)}`} v={`${j.who ?? ''} · ${actWord(t, j.action)}${j.note ? ` · ${j.note}` : ''}`} />
           ))}
         </section>
       )}
@@ -125,6 +125,13 @@ export function PaymentPage() {
       {voiding && <VoidSheet id={p.id} amount={signed} onClose={() => setVoiding(false)} />}
     </>
   );
+}
+
+/** A journal entry in words: written, annulled, undone. */
+function actWord(t: ReturnType<typeof useT>, action: string): string {
+  if (action === 'payment.void') return t.paymentPage.acts.void;
+  if (action === 'payment.undo') return t.paymentPage.acts.undo;
+  return t.paymentPage.acts.record;
 }
 
 /** The record a payment belongs to, as a link. */

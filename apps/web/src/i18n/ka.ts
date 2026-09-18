@@ -873,6 +873,7 @@ export const ka: Dict = {
   },
 
   paymentPage: {
+    acts: { record: 'ჩაიწერა', void: 'ანულირდა', undo: 'მაშინვე გაუქმდა' },
     title: (n: string) => `გადახდა ${n}`,
     customer: 'კლიენტი',
     channel: 'არხი',
