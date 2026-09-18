@@ -28,13 +28,15 @@
 .money-totals dt { font: var(--text-label); color: var(--muted); }
 .money-totals dd { margin: 0; font: var(--text-money); }
 .money-filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
-.money-filters select { min-height: var(--control-dense); }
+.money-filters select { min-height: var(--control-dense); width: auto; max-width: 100%; flex: 0 1 auto; }
 
 /* "Разобрать" (§3.2). */
 .sort-group { margin: 16px 0 8px; display: flex; gap: 8px; align-items: baseline; }
 .sort-line { display: grid; gap: 8px; padding: 14px; border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--surface); margin-bottom: 10px; transition: opacity var(--ease); }
 .sort-line.busy { opacity: 0.55; }
-.sort-line-head { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+.sort-line-head { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
+.sort-line-head .t-money { white-space: nowrap; }
+.sort-line-meta { flex: 1; min-width: 0; }
 .sort-line-meta { font: var(--text-label); color: var(--muted); }
 .sort-line-text { font: var(--text-mono-sm); color: var(--muted); overflow-wrap: anywhere; margin: 0; }
 .sort-reason { margin: 0; font: var(--text-body-sm); }
@@ -58,3 +60,6 @@
   /* Above the phone's bottom bar. */
   .till-sticky { bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 8px); }
 }
+
+/* The "⋯" of a bank line is a target like any other on a phone. */
+@media (max-width: 899px) { .sort-line .row-dots { min-width: var(--control); min-height: var(--control); } }

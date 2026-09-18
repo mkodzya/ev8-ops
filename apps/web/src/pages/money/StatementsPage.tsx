@@ -133,7 +133,7 @@ export function StatementsPage() {
         <section className="card">
           <BlockHead
             title={t.statements.upload}
-            sub={`${t.statements.banks[pending.preview.bank]} · ${fmtDate(pending.preview.periodFrom)}–${fmtDate(pending.preview.periodTo)}`}
+            sub={[t.statements.banks[pending.preview.bank], pending.preview.periodFrom ? `${fmtDate(pending.preview.periodFrom)}–${fmtDate(pending.preview.periodTo)}` : null].filter(Boolean).join(' · ')}
           />
           <p className="muted">
             {pending.fileName} · {Math.round(pending.size / 1024)} KB
@@ -197,7 +197,7 @@ export function StatementsPage() {
                 {t.statements.banks[s.bank]} · {s.fileName}
                 <span className="muted">
                   {' '}
-                  · {fmtDate(s.periodFrom)}–{fmtDate(s.periodTo)} · {s.uploadedBy ?? ''} · {fmtDate(s.createdAt.slice(0, 10))}
+                  · {[s.periodFrom ? `${fmtDate(s.periodFrom)}–${fmtDate(s.periodTo)}` : null, s.uploadedBy, fmtDate(s.createdAt.slice(0, 10))].filter(Boolean).join(' · ')}
                 </span>
               </span>
               <span className="mono">

@@ -388,7 +388,9 @@ function Closing({ plan }: { plan: Plan | null }) {
         {plan.closes.map((c, i) => (
           <li key={i}>
             <span>{closeLabel(t, c)}</span>
-            <span className="mono">{c.target === 'sale' ? '' : c.amountTetri < c.openTetri ? t.money.ofFull(formatGel(c.amountTetri), formatGel(c.openTetri, { decimals: false })) : formatGel(c.amountTetri)}</span>
+            <span className={`mono ${c.amountTetri === 0 && c.target !== 'sale' ? 'muted' : ''}`}>
+              {c.target === 'sale' ? '' : c.amountTetri < c.openTetri ? t.money.ofFull(formatGel(c.amountTetri), formatGel(c.openTetri, { decimals: false })) : formatGel(c.amountTetri)}
+            </span>
           </li>
         ))}
       </ul>
@@ -530,7 +532,7 @@ function TargetHead({ s, fixed, onChange, onPick }: { s: State; fixed: boolean; 
           {debt && (
             <p className={debt.owesTetri > 0 ? 'crit-text' : 'muted'}>
               {debt.owesTetri > 0 ? t.money.owes(formatGel(debt.owesTetri)) : debt.creditTetri > 0 ? t.money.onAccount(formatGel(debt.creditTetri)) : t.money.noDebt}
-              {debt.parts.length > 0 && <span className="muted"> · {debt.parts.map((p) => `${p.number} ${formatGel(p.owesTetri, { decimals: false })}`).join(', ')}</span>}
+              {debt.parts.length > 0 && <span className="muted"> · {debt.parts.map((p) => `${p.number}${p.kind === 'deposit' ? ` ${t.money.closeDeposit.toLowerCase()}` : ''} ${formatGel(p.owesTetri, { decimals: false })}`).join(', ')}</span>}
             </p>
           )}
         </div>
@@ -611,7 +613,8 @@ function AmountChips({ s, onPick }: { s: State; onPick: (v: string) => void }) {
   const chips: { tetri: number; label: string }[] = [];
   const owedOn = (id: string) => (targets.data?.debt.parts ?? []).filter((p) => p.id === id).reduce((n, p) => n + p.owesTetri, 0);
   if (target.kind === 'rent' && target.rentalId) {
-    const owed = owedOn(target.rentalId);
+    // Never more than the customer's one figure: money on their account comes off it.
+    const owed = Math.min(owedOn(target.rentalId), targets.data?.debt.owesTetri ?? Infinity);
     const week = rental.data?.rental.weeklyRateTetri ?? 0;
     if (owed > 0) chips.push({ tetri: owed, label: t.money.chipDebt });
     if (week > 0) chips.push({ tetri: owed + week, label: t.money.chipWeek });
