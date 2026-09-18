@@ -120,6 +120,26 @@ enum PaymentSource {
   @@map("payment_source")
 }
 
+enum PaymentKind {
+  rent
+  sale
+  service
+  on_account
+  deposit_payout
+  buyback
+  supplier
+
+  @@map("payment_kind")
+}
+
+enum HandoverStatus {
+  pending
+  accepted
+  disputed
+
+  @@map("handover_status")
+}
+
 enum AllocationTarget {
   period
   deposit
@@ -213,6 +233,9 @@ model User {
   parts             Part[]
   stockMoves        StockMove[]
   locations         Location[]    @relation("location_author")
+  handoversFrom     CashHandover[] @relation("handover_from")
+  handoversDecided  CashHandover[] @relation("handover_decided_by")
+  bankDeposits      BankCashDeposit[]
 
   @@map("users")
 }
@@ -419,6 +442,7 @@ model Deposit {
   withheldReason String?       @map("withheld_reason")
   withheldGrounds String[]     @default([]) @map("withheld_grounds")
   paidTetri       Int          @default(0) @map("paid_tetri")
+  paidOutBeforeTetri Int       @default(0) @map("paid_out_before_tetri")
   returnedTo     String?       @map("returned_to")
   returnedOn     DateTime?     @map("returned_on") @db.Date
   decidedById    String?       @map("decided_by") @db.Uuid
@@ -431,6 +455,7 @@ model Deposit {
   decidedBy   User?               @relation("deposit_decided_by", fields: [decidedById], references: [id])
   confirmedBy User?               @relation("deposit_confirmed_by", fields: [confirmedById], references: [id])
   allocations PaymentAllocation[]
+  payouts     Payment[]           @relation("deposit_payouts")
 
   @@map("deposits")
 }
@@ -528,12 +553,23 @@ model Payment {
   voidedById    String?          @map("voided_by") @db.Uuid
   odooPaymentId Int?             @unique @map("odoo_payment_id")
   statementLineId String?        @map("statement_line_id") @db.Uuid
+  kind            PaymentKind
+  serviceJobId    String?        @map("service_job_id") @db.Uuid
+  depositId       String?        @map("deposit_id") @db.Uuid
+  paidTo          String?        @map("paid_to")
+  paidToReason    String?        @map("paid_to_reason")
+  backdateReason  String?        @map("backdate_reason")
+  foreignMinor    BigInt?        @map("foreign_minor")
+  foreignCurrency String?        @map("foreign_currency")
+  voidKind        String?        @map("void_kind")
 
   statementLine StatementLine?    @relation("payment_of_line", fields: [statementLineId], references: [id], onDelete: SetNull)
   customer    Customer?           @relation(fields: [customerId], references: [id])
   rental      Rental?             @relation(fields: [rentalId], references: [id])
   sale        Sale?               @relation(fields: [saleId], references: [id])
   purchase    Purchase?           @relation(fields: [purchaseId], references: [id])
+  serviceJob  ServiceJob?         @relation(fields: [serviceJobId], references: [id])
+  deposit     Deposit?            @relation("deposit_payouts", fields: [depositId], references: [id])
   createdBy   User?               @relation("payment_created_by", fields: [createdById], references: [id])
   voidedBy    User?               @relation("payment_voided_by", fields: [voidedById], references: [id])
   allocations PaymentAllocation[]
@@ -598,11 +634,16 @@ model StatementLine {
   raw         String
   status      StatementLineStatus @default(unmatched)
   matchedRule String?             @map("matched_rule")
+  resolution  String?
+  resolutionReason String?        @map("resolution_reason")
+  resolvedById String?            @map("resolved_by") @db.Uuid
+  resolvedAt  DateTime?           @map("resolved_at")
   paymentId   String?             @map("payment_id") @db.Uuid
   createdAt   DateTime            @default(now()) @map("created_at")
 
   statement Statement @relation(fields: [statementId], references: [id], onDelete: Cascade)
   payments  Payment[] @relation("payment_of_line")
+  bankDeposit BankCashDeposit?
 
   @@unique([bank, naturalKey])
   @@map("statement_lines")
@@ -637,6 +678,7 @@ model ServiceJob {
   createdBy User?         @relation(fields: [createdById], references: [id])
   parts     ServicePart[]
   photos    StoredFile[]
+  payments  Payment[]
 
   @@map("service_jobs")
 }
@@ -821,4 +863,48 @@ model AuditLog {
   actor User? @relation(fields: [actorId], references: [id])
 
   @@map("audit_log")
+}
+
+/// A manager hands the cash they took to an owner (money.md, В3).
+model CashHandover {
+  id           String         @id @default(uuid()) @db.Uuid
+  fromUserId   String         @map("from_user") @db.Uuid
+  amountTetri  Int            @map("amount_tetri")
+  handedAt     DateTime       @default(now()) @map("handed_at")
+  status       HandoverStatus @default(pending)
+  countedTetri Int?           @map("counted_tetri")
+  reason       String?
+  decidedById  String?        @map("decided_by") @db.Uuid
+  decidedAt    DateTime?      @map("decided_at")
+
+  fromUser  User  @relation("handover_from", fields: [fromUserId], references: [id])
+  decidedBy User? @relation("handover_decided_by", fields: [decidedById], references: [id])
+
+  @@map("cash_handovers")
+}
+
+/// Cash an owner took to the bank: out of the till, found by the statement's cash-deposit line.
+model BankCashDeposit {
+  id              String    @id @default(uuid()) @db.Uuid
+  userId          String    @map("user_id") @db.Uuid
+  amountTetri     Int       @map("amount_tetri")
+  bank            BankName
+  occurredOn      DateTime  @map("occurred_on") @db.Date
+  statementLineId String?   @unique @map("statement_line_id") @db.Uuid
+  createdAt       DateTime  @default(now()) @map("created_at")
+  voidedAt        DateTime? @map("voided_at")
+  voidReason      String?   @map("void_reason")
+
+  user          User           @relation(fields: [userId], references: [id])
+  statementLine StatementLine? @relation(fields: [statementLineId], references: [id], onDelete: SetNull)
+
+  @@map("bank_cash_deposits")
+}
+
+/// One row: from when the till counts.
+model MoneySettings {
+  id        Boolean  @id @default(true)
+  tillSince DateTime @default(now()) @map("till_since")
+
+  @@map("money_settings")
 }
