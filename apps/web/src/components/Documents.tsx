@@ -184,18 +184,18 @@ export function SignScreen({ rentalId, kind, onClose, onSigned }: { rentalId: st
           {t.sign.close}
         </button>
       </header>
-      <iframe className="sign-doc" src={`/api/rentals/${rentalId}/${kind}.pdf#view=FitH`} title={kind === 'contract' ? t.sign.contract : t.sign.returnAct} />
+      <iframe className="sign-doc" src={`/api/rentals/${rentalId}/${kind}.pdf#navpanes=0&view=FitH`} title={kind === 'contract' ? t.sign.contract : t.sign.returnAct} />
       <p className="hint muted">{t.sign.scroll}</p>
       <div className="sign-pad">
         <span className="lbl">{t.sign.field}</span>
         <canvas ref={canvas} className="sign-canvas" onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} onPointerLeave={up} />
       </div>
-      <label className="check">
-        <input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} />
-        <span>{t.sign.agree}</span>
-      </label>
       {op.failure && <p className="field-err">{op.failure.text}</p>}
       <footer className="sign-foot">
+        <label className="check">
+          <input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} />
+          <span>{t.sign.agree}</span>
+        </label>
         <button type="button" className="pill" onClick={clear} disabled={!drawn}>
           {t.sign.clear}
         </button>

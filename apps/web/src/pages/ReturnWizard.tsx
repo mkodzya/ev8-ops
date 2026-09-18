@@ -265,7 +265,7 @@ export function ReturnWizard() {
 
       {f.step === 3 && (
         <section className="card summary-card">
-          <SumRow k={t.back.sumOdometer} v={<span className="mono">{km} km</span>} go={() => set({ step: 0 })} />
+          <SumRow k={t.back.sumOdometer} v={<span className="mono">{km} {t.back.km}</span>} go={() => set({ step: 0 })} />
           <SumRow k={t.back.sumKit} v={kitProblems.length ? kitProblems.join(' · ') : t.back.kitOk} go={() => set({ step: 0 })} />
           <SumRow k={t.back.sumClaims} v={<span className="mono">{formatGel(claims)}</span>} go={() => set({ step: 1 })} />
           <SumRow k={t.back.sumDeposit} v={!decides ? t.back.decisionOwner : kept > 0 ? t.back.decisionKeep(formatGel(kept, { decimals: false })) : t.back.decisionReturn} go={() => set({ step: 1 })} />

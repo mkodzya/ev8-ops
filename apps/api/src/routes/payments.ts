@@ -90,7 +90,8 @@ export function paymentRoutes(app: FastifyInstance): void {
     // acquirer kept. A voided payment is shown, not counted.
     const live = payments.filter((p) => !p.voidedAt);
     const totals = {
-      inTetri: live.filter((p) => p.direction === 'in').reduce((n, p) => n + p.grossTetri, 0),
+      // Money kept from a deposit came in once already, as the deposit: it is not counted twice.
+      inTetri: live.filter((p) => p.direction === 'in' && p.channel !== 'deposit').reduce((n, p) => n + p.grossTetri, 0),
       outTetri: live.filter((p) => p.direction === 'out').reduce((n, p) => n + p.grossTetri, 0),
       acquiringFeeTetri: live.filter((p) => p.channel === 'acquiring' && p.direction === 'in').reduce((n, p) => n + p.feeTetri, 0),
     };
