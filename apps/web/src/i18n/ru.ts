@@ -291,7 +291,6 @@ export const ru: Dict = {
     returnRental: 'Возврат',
     newCustomer: 'Новый клиент',
     changeState: 'Изменить состояние',
-    confirmDeposit: 'Подтвердить решение по залогу',
     assignVehicle: 'Привязать мопед',
     back: 'Назад',
     next: 'Дальше',
@@ -332,7 +331,6 @@ export const ru: Dict = {
   },
 
   rental: {
-    depositConfirmed: 'Решение по депозиту подтверждено',
     actsCount: counted('акт', 'акта', 'актов'),
     periodsCount: counted('неделя', 'недели', 'недель'),
     owed: 'Долг',
@@ -349,48 +347,18 @@ export const ru: Dict = {
     depositStatus: { held: 'На руках', returned: 'Возвращён', withheld: 'Удержан', partial: 'Удержан частично' },
     withheldReason: 'Причина удержания',
     returnedTo: 'Кому возвращён',
-    awaitingOwner: 'Ждёт подтверждения владельца',
     buyout: 'Выкуп',
     buyoutProgress: (target: string, per: string) => `${per} с каждого платежа в счёт ${target}`,
     notes: 'Заметки',
   },
 
   pickup: {
-    handOver: 'Выдать мопед',
-    title: 'Выдача',
-    steps: { customer: 'Клиент', vehicle: 'Мопед', terms: 'Условия', act: 'Акт', done: 'Готово' },
     stepOf: (i: number, n: number) => `Шаг ${i} из ${n}`,
-    searchCustomer: 'Имя или телефон',
-    noVehicle: 'VIN не подтверждён — почему',
     noVehicleHint: 'Не выбирайте мопед и напишите, что в договоре; аренда попадёт в список «без VIN».',
-    rate: 'Недельный тариф',
-    deposit: 'Залог',
-    pickedUpOn: 'Дата выдачи',
     expectedReturnOn: 'Ожидаемый возврат',
-    odometer: 'Пробег, км',
-    condition: 'Состояние, повреждения',
-    photos: 'Фото',
-    summary: 'Итог',
-    created: (n: string) => `Выдача ${n} оформлена.`,
     noAvailable: 'Свободных мопедов сейчас нет.',
   },
 
-  ret: {
-    finish: 'Закрыть аренду',
-    title: 'Возврат',
-    returnedOn: 'Дата возврата',
-    odometer: 'Пробег, км',
-    condition: 'Состояние, повреждения',
-    depositDecision: 'Залог',
-    returnFull: 'Вернуть полностью',
-    withholdPart: 'Удержать часть',
-    withholdAll: 'Удержать полностью',
-    withheldAmount: 'Сумма удержания',
-    withheldReason: 'Причина',
-    returnedTo: 'Кому возвращён (пусто = плательщику)',
-    leaveToOwner: 'Решение по залогу примет владелец.',
-    done: 'Возврат оформлен.',
-  },
 
   customer: {
     created: 'Карточка клиента создана',
@@ -453,17 +421,7 @@ export const ru: Dict = {
   },
 
   returnItems: {
-    title: 'Возвращённое имущество',
-    items: {
-      moped: 'Мопед',
-      key: 'Ключ',
-      battery_1: 'Батарея 1',
-      battery_2: 'Батарея 2',
-      charger_1: 'Зарядное 1',
-      charger_2: 'Зарядное 2',
-    },
     states: { ok: 'Исправно', damaged: 'Повреждено', missing: 'Не возвращено' },
-    note: 'Замечание',
   },
 
   grounds: {
@@ -689,12 +647,8 @@ export const ru: Dict = {
   },
 
   rentalEdit: {
-    title: 'Правка аренды',
     assignVehicle: 'Привязать мопед',
     assignHint: 'Аренда заведена без подтверждённого VIN. Выбранный здесь мопед выдаётся датой выдачи.',
-    status: 'Статус',
-    reason: 'Причина',
-    reasonHint: 'Пауза и спорная аренда требуют причины, она попадает в журнал.',
     buyout: 'Выкуп из аренды',
     buyoutTarget: 'Целевая сумма',
     buyoutPerPayment: 'С каждого платежа в счёт',

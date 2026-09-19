@@ -288,7 +288,6 @@ export const en = {
     returnRental: 'Return',
     newCustomer: 'New customer',
     changeState: 'Change state',
-    confirmDeposit: 'Confirm deposit decision',
     assignVehicle: 'Assign a moped',
     back: 'Back',
     next: 'Next',
@@ -329,7 +328,6 @@ export const en = {
   },
 
   rental: {
-    depositConfirmed: 'Deposit decision confirmed',
     actsCount: (n: number) => `${n} ${n === 1 ? 'act' : 'acts'}`,
     periodsCount: (n: number) => `${n} ${n === 1 ? 'week' : 'weeks'}`,
     owed: 'Owed',
@@ -346,48 +344,18 @@ export const en = {
     depositStatus: { held: 'Held', returned: 'Returned', withheld: 'Withheld', partial: 'Partly withheld' },
     withheldReason: 'Reason withheld',
     returnedTo: 'Returned to',
-    awaitingOwner: 'Awaiting the owner’s confirmation',
     buyout: 'Buy-out',
     buyoutProgress: (target: string, per: string) => `${per} of each payment towards ${target}`,
     notes: 'Notes',
   },
 
   pickup: {
-    handOver: 'Hand over the moped',
-    title: 'Hand-over',
-    steps: { customer: 'Customer', vehicle: 'Moped', terms: 'Terms', act: 'Act', done: 'Done' },
     stepOf: (i: number, n: number) => `Step ${i} of ${n}`,
-    searchCustomer: 'Name or phone',
-    noVehicle: 'VIN not confirmed — write why',
     noVehicleHint: 'Leave the moped unpicked and say what the contract shows; the rental lands on the “without VIN” list.',
-    rate: 'Weekly rate',
-    deposit: 'Deposit',
-    pickedUpOn: 'Pickup date',
     expectedReturnOn: 'Expected return',
-    odometer: 'Odometer, km',
-    condition: 'Condition, damage',
-    photos: 'Photos',
-    summary: 'Summary',
-    created: (n: string) => `Hand-over ${n} recorded.`,
     noAvailable: 'No moped is available right now.',
   },
 
-  ret: {
-    finish: 'Close the rental',
-    title: 'Return',
-    returnedOn: 'Return date',
-    odometer: 'Odometer, km',
-    condition: 'Condition, damage',
-    depositDecision: 'Deposit',
-    returnFull: 'Return in full',
-    withholdPart: 'Withhold part',
-    withholdAll: 'Withhold all',
-    withheldAmount: 'Withheld amount',
-    withheldReason: 'Reason',
-    returnedTo: 'Returned to (blank = the payer)',
-    leaveToOwner: 'An owner decides on the deposit.',
-    done: 'Return recorded.',
-  },
 
   customer: {
     created: 'Customer card created',
@@ -450,17 +418,7 @@ export const en = {
   },
 
   returnItems: {
-    title: 'Returned property',
-    items: {
-      moped: 'Moped',
-      key: 'Key',
-      battery_1: 'Battery 1',
-      battery_2: 'Battery 2',
-      charger_1: 'Charger 1',
-      charger_2: 'Charger 2',
-    },
     states: { ok: 'In order', damaged: 'Damaged', missing: 'Not returned' },
-    note: 'Note',
   },
 
   grounds: {
@@ -686,12 +644,8 @@ export const en = {
   },
 
   rentalEdit: {
-    title: 'Edit the rental',
     assignVehicle: 'Assign a moped',
     assignHint: 'The rental was opened without a confirmed VIN. Picking a moped here hands it over on the pickup date.',
-    status: 'Status',
-    reason: 'Reason',
-    reasonHint: 'Pausing or disputing a rental needs a reason, and it goes into the journal.',
     buyout: 'Buy-out from the rental',
     buyoutTarget: 'Target amount',
     buyoutPerPayment: 'Of each payment towards it',
