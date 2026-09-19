@@ -336,6 +336,20 @@ describe.skipIf(!HAS_DB)('wave 3 · return', () => {
 });
 
 describe.skipIf(!HAS_DB)('wave 3 · after the hand-over', () => {
+  it('a manager changes the terms; the journal keeps was and became; the rate does not change (crit. 32)', async () => {
+    const { prisma, id } = await running(2);
+    const manager = await loginAs('manager');
+    const res = await call(manager, 'PATCH', `/api/rentals/${id}`, { nightParkingAddress: 'ТЕСТ new street 2', chargers: 1 });
+    expect(res.statusCode, res.body).toBe(200);
+    const r = await prisma.rental.findUniqueOrThrow({ where: { id } });
+    expect(r).toMatchObject({ nightParkingAddress: 'ТЕСТ new street 2', chargers: 1, weeklyRateTetri: 15000 });
+    const log = await prisma.auditLog.findFirstOrThrow({ where: { entityId: id, action: 'rental.update' }, orderBy: { createdAt: 'desc' } });
+    expect(log.before).toMatchObject({ nightParkingAddress: 'Test street 1', chargers: 2 });
+    expect(log.after).toMatchObject({ nightParkingAddress: 'ТЕСТ new street 2', chargers: 1 });
+    await call(manager, 'PATCH', `/api/rentals/${id}`, { weeklyRateTetri: 1 });
+    expect((await prisma.rental.findUniqueOrThrow({ where: { id } })).weeklyRateTetri).toBe(15000);
+  });
+
   it('pause and disputed are an owner’s, with a reason; no weeks are added for the time (crit. 33, 34)', async () => {
     const { id, owner } = await running(2);
     const manager = await loginAs('manager');
