@@ -25,6 +25,7 @@ export async function debtsOf(customerIds: string[]): Promise<Map<string, Debt>>
         status: true,
         customerId: true,
         periods: { select: { startsOn: true, amountTetri: true, paidTetri: true } },
+        charges: { where: { voidedAt: null }, select: { amountTetri: true, allocations: { where: { payment: { voidedAt: null } }, select: { amountTetri: true } } } },
         deposit: {
           select: { amountTetri: true, paidTetri: true, withheldTetri: true, paidOutBeforeTetri: true, payouts: { where: { voidedAt: null }, select: { grossTetri: true } } },
         },
@@ -71,6 +72,7 @@ export async function debtsOf(customerIds: string[]): Promise<Map<string, Debt>>
           open: OPEN.has(r.status),
           periods: r.periods.map((p) => ({ startsOn: isoDate(p.startsOn)!, amountTetri: p.amountTetri, paidTetri: p.paidTetri })),
           deposit: r.deposit ? { amountTetri: r.deposit.amountTetri, paidTetri: r.deposit.paidTetri } : null,
+          charges: r.charges.map((c) => ({ amountTetri: c.amountTetri, paidTetri: c.allocations.reduce((n, a) => n + a.amountTetri, 0) })),
         })),
         sales: sales
           .filter((s) => s.customerId === id)

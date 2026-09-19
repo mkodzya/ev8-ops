@@ -1,4 +1,4 @@
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { LoadError } from '../../components/LoadError.js';
 import { PageHead } from '../../components/ui.js';
 import { DataList } from '../../ds/list/DataList.js';
@@ -9,7 +9,7 @@ import { fmtDate, formatGel } from '../../format.js';
 import { useT } from '../../i18n/index.js';
 import { useLoad } from '../../lib/use.js';
 
-type Segment = 'held' | 'to_hand_back' | 'short' | 'closed';
+type Segment = 'undecided' | 'held' | 'to_hand_back' | 'short' | 'closed';
 
 interface DepositRow {
   rentalId: string;
@@ -38,7 +38,7 @@ export function DepositsPage() {
   const openMoney = useMoneyForm();
   const [params, setParams] = useSearchParams();
   const { data, failure, reload } = useLoad<{ totals: { heldTetri: number; contractTetri: number; toHandBackTetri: number; rentals: number }; deposits: DepositRow[] }>('/api/deposits');
-  const segment = (['held', 'to_hand_back', 'short', 'closed'] as const).find((s) => s === params.get('s')) ?? 'held';
+  const segment = (['undecided', 'held', 'to_hand_back', 'short', 'closed'] as const).find((s) => s === params.get('s')) ?? 'held';
   if (failure) return <LoadError failure={failure} onRetry={reload} />;
   const rows = (data?.deposits ?? []).filter((d) => (segment === 'held' ? d.heldTetri > 0 : d.segment === segment));
   const count = (s: Segment) => (data?.deposits ?? []).filter((d) => (s === 'held' ? d.heldTetri > 0 : d.segment === s)).length;
@@ -62,11 +62,13 @@ export function DepositsPage() {
           </dl>
           <p className="hint muted">{t.deposits.setNote(data.totals.rentals)}</p>
           <div className="list-chips">
-            {(['held', 'to_hand_back', 'short', 'closed'] as const).map((s) => (
-              <button key={s} type="button" className={`list-chip ${segment === s ? 'on' : ''}`} onClick={() => setParams(s === 'held' ? {} : { s }, { replace: true })}>
-                {t.deposits[s]} <span className="n">{count(s)}</span>
-              </button>
-            ))}
+            {(['undecided', 'held', 'to_hand_back', 'short', 'closed'] as const)
+              .filter((s) => s !== 'undecided' || count(s) > 0)
+              .map((s) => (
+                <button key={s} type="button" className={`list-chip ${segment === s ? 'on' : ''}`} onClick={() => setParams(s === 'held' ? {} : { s }, { replace: true })}>
+                  {s === 'undecided' ? t.w3.undecided : t.deposits[s]} <span className="n">{count(s)}</span>
+                </button>
+              ))}
           </div>
           <DataList
             rows={rows}
@@ -79,7 +81,9 @@ export function DepositsPage() {
               sub: (
                 <>
                   {d.number} ·{' '}
-                  {d.segment === 'to_hand_back'
+                  {d.segment === 'undecided'
+                    ? t.w3.undecidedSub(fmtDate(d.returnedOn))
+                    : d.segment === 'to_hand_back'
                     ? `${t.deposits.returnedOn(fmtDate(d.returnedOn))} · ${d.returnedTetri >= d.paidTetri ? t.deposits.decidedAll : t.deposits.decidedPart(formatGel(d.returnedTetri))}`
                     : d.segment === 'short'
                       ? t.deposits.shortOf(formatGel(d.paidTetri, { decimals: false }), formatGel(d.amountTetri, { decimals: false }), formatGel(d.shortTetri, { decimals: false }))
@@ -90,7 +94,11 @@ export function DepositsPage() {
               ),
               right: <span className="t-money">{formatGel(d.segment === 'to_hand_back' ? d.toHandBackTetri : d.heldTetri)}</span>,
               rightSub:
-                d.segment === 'to_hand_back' ? (
+                d.segment === 'undecided' ? (
+                  <Link className="pill pill-sm pill-accent" to={`/rentals/${d.rentalId}?decide=1`} onClick={(e) => e.stopPropagation()}>
+                    {t.w3.decide}
+                  </Link>
+                ) : d.segment === 'to_hand_back' ? (
                   <button
                     type="button"
                     className="pill pill-sm pill-accent"
@@ -116,7 +124,11 @@ export function DepositsPage() {
                 key: 'act',
                 label: '',
                 cell: (d) =>
-                  d.segment === 'to_hand_back' ? (
+                  d.segment === 'undecided' ? (
+                    <Link className="pill pill-sm pill-accent" to={`/rentals/${d.rentalId}?decide=1`} onClick={(e) => e.stopPropagation()}>
+                      {t.w3.decide}
+                    </Link>
+                  ) : d.segment === 'to_hand_back' ? (
                     <button
                       type="button"
                       className="pill pill-sm pill-accent"

@@ -1,232 +1,373 @@
-import { gelFromTetri, parseGel, todayISO } from '@ev8/shared';
-
-const RETURN_ITEMS = ['moped', 'key', 'battery_1', 'battery_2', 'charger_1', 'charger_2'] as const;
-type Item = (typeof RETURN_ITEMS)[number];
-const ITEM_STATES = ['ok', 'damaged', 'missing'] as const;
-type ItemState = (typeof ITEM_STATES)[number];
-const GROUNDS = ['rent_arrears', 'fines', 'moped_damage', 'incomplete_return', 'key_loss', 'charger_loss', 'cleaning', 'other'] as const;
-type Ground = (typeof GROUNDS)[number];
+import { todayISO } from '@ev8/shared';
 import { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { api } from '../api.js';
+import { DocumentRow } from '../components/Documents.js';
 import { LoadError } from '../components/LoadError.js';
-import { Empty, Loading, Vin } from '../components/ui.js';
-import { Field, Row, Wizard } from '../components/Wizard.js';
-import { fmtDate, formatGel } from '../format.js';
-import { useT } from '../i18n/index.js';
-import { useLoad } from '../lib/use.js';
+import { PhotoPicker } from '../components/PhotoPicker.js';
+import { claimsOf, decisionBody, decisionOk, DepositDecision, keptOf, NO_DECISION, SettlementLines, useReturnPreview, type DecisionState, type Ground } from '../components/ReturnMoney.js';
+import { Loading, Vin } from '../components/ui.js';
+import { Field, Wizard } from '../components/Wizard.js';
 import { DraftOffer } from '../ds/form/Form.js';
 import { useDraft } from '../ds/form/drafts.js';
 import { useOperation } from '../ds/form/operation.js';
+import { useMoneyForm } from '../ds/money/MoneyForm.js';
+import { fmtDate, formatGel } from '../format.js';
+import { useT } from '../i18n/index.js';
 import { uploadAll, type PreparedPhoto } from '../lib/photos.js';
-import { PhotoPicker } from '../components/PhotoPicker.js';
+import { useLoad } from '../lib/use.js';
 import { useSession } from '../session.js';
+import { SumRow } from './PickupWizard.js';
 import type { RentalCard } from './RentalPage.js';
 
-type Decision = 'full' | 'part' | 'all';
+type ItemState = 'ok' | 'damaged' | 'missing';
+const ITEM_STATES: ItemState[] = ['ok', 'damaged', 'missing'];
+type Items = Record<string, { state: ItemState; note: string }>;
+const LAST_POINT = 'ev8-last-point';
 
-// Return in three screens (RNT-04, RNT-05): act → deposit → done. The deposit
-// screen appears only for roles that decide on it; a manager's return leaves
-// the deposit held for an owner.
+function lastPoint(): string {
+  try {
+    return localStorage.getItem(LAST_POINT) ?? '';
+  } catch {
+    return '';
+  }
+}
+function rememberPoint(id: string) {
+  try {
+    localStorage.setItem(LAST_POINT, id);
+  } catch {
+    /* no storage — nothing remembered */
+  }
+}
+
+// Return in four screens and "Done" (wave 3 §3.4): act by what was handed over
+// → the settlement (and, for an owner, the deposit) → where the moped stands →
+// summary. A manager's return is recorded to the end; the deposit waits.
 export function ReturnWizard() {
   const { id } = useParams();
   const t = useT();
-  const navigate = useNavigate();
   const { can } = useSession();
-  const { data, failure, reload } = useLoad<RentalCard>(id ? `/api/rentals/${id}` : null);
-  const decides = can('deposit.decide');
-  const steps = decides ? [t.ret.title, t.ret.depositDecision, t.pickup.steps.done] : [t.ret.title, t.pickup.steps.done];
-  const [step, setStep] = useState(0);
-  const [returnedOn, setReturnedOn] = useState(todayISO());
-  const [odometer, setOdometer] = useState('');
-  const [condition, setCondition] = useState('');
-  const [photos, setPhotos] = useState<PreparedPhoto[]>([]);
-  const [items, setItems] = useState<Record<Item, { state: ItemState; note: string }>>(
-    () => Object.fromEntries(RETURN_ITEMS.map((i) => [i, { state: 'ok' as ItemState, note: '' }])) as Record<Item, { state: ItemState; note: string }>,
-  );
-  const [grounds, setGrounds] = useState<Ground[]>([]);
-  const [progress, setProgress] = useState<string | null>(null);
-  const [decision, setDecision] = useState<Decision>('full');
-  const [withheld, setWithheld] = useState('');
-  const [reason, setReason] = useState('');
-  const [returnedTo, setReturnedTo] = useState('');
-  const [done, setDone] = useState(false);
-  const op = useOperation();
+  const owner = can('deposit.decide');
+  const card = useLoad<RentalCard>(id ? `/api/rentals/${id}` : null);
+  const points = useLoad<{ locations: { id: string; name: string }[] }>('/api/locations');
+  const steps = [t.back.steps.act, owner ? `${t.back.steps.calc} · ${t.back.steps.deposit}` : t.back.steps.calc, t.back.steps.where, t.back.steps.summary];
 
-  // The draft: everything typed except the photos, which are files.
-  const typed = { step, returnedOn, odometer, condition, items, grounds, decision, withheld, reason, returnedTo };
-  const [start] = useState(() => typed);
-  const drafts = useDraft({ id: id ? `return:${id}` : undefined, value: typed, initial: start, hold: done });
-  const restore = (d: typeof typed) => {
-    setStep(Math.min(d.step, decides ? 1 : 0));
-    setReturnedOn(d.returnedOn);
-    setOdometer(d.odometer);
-    setCondition(d.condition);
-    setItems(d.items);
-    setGrounds(d.grounds);
-    setDecision(d.decision);
-    setWithheld(d.withheld);
-    setReason(d.reason);
-    setReturnedTo(d.returnedTo);
+  const start = {
+    step: 0,
+    returnedOn: todayISO(),
+    odometer: '',
+    condition: '',
+    items: {} as Items,
+    lateChoice: null as 'week' | 'late' | null,
+    decision: NO_DECISION,
+    toService: null as boolean | null,
+    locationId: lastPoint(),
   };
-  // A refusal about a field on the first screen goes back to it.
+  const [initial] = useState(start);
+  const [f, setF] = useState(start);
+  const set = (patch: Partial<typeof start>) => setF((x) => ({ ...x, ...patch }));
+  const [photos, setPhotos] = useState<PreparedPhoto[]>([]);
+  const [confirming, setConfirming] = useState(false);
+  const [progress, setProgress] = useState<string | null>(null);
+  const [result, setResult] = useState<{ serviceJobId: string | null; point: string | null } | null>(null);
+  const op = useOperation();
+  const drafts = useDraft({ id: id ? `return:${id}` : undefined, value: f, initial, hold: result != null });
+
+  const { preview } = useReturnPreview(id, { returnedOn: f.returnedOn, keyMissing: f.items.key?.state === 'missing', lateChoice: f.lateChoice });
+
+  // A refusal goes back to the step whose field it names.
   useEffect(() => {
     const field = op.failure?.field;
-    if (field && ['returnedOn', 'odometerKm', 'condition', 'items'].includes(field)) setStep(0);
+    if (field && ['returnedOn', 'odometerKm', 'condition'].includes(field)) set({ step: 0 });
+    if (field && ['withheldTetri', 'grounds', 'reason', 'returnedTo', 'returnedToReason'].includes(field)) set({ step: 1 });
+    if (field === 'locationId') set({ step: 2 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [op.failure]);
 
-  if (failure) return <LoadError failure={failure} onRetry={reload} />;
-  if (!data) return <Loading />;
-  const r = data.rental;
-  const amount = data.deposit?.amountTetri ?? r.depositTetri;
-  const withheldTetri = decision === 'full' ? 0 : decision === 'all' ? amount : parseGel(withheld) ?? -1;
-  const depositOk = !decides || (withheldTetri >= 0 && withheldTetri <= amount && (withheldTetri === 0 || reason.trim().length > 0));
-  const lastStep = steps.length - 1;
-
-  // One return, however many times the button is pressed: the act and each
-  // photo carry keys, so a retry finds what is already stored.
-  const submit = async () => {
-    const res = await op.run(async (key) => {
-      const { actId } = await api.post<{ ok: boolean; actId: string }>(
-        `/api/rentals/${r.id}/return`,
-        {
-          returnedOn,
-          odometerKm: odometer ? Number(odometer) : null,
-          condition: condition || null,
-          items,
-          deposit: decides
-            ? { returnedTetri: amount - withheldTetri, withheldTetri, withheldReason: reason || null, returnedTo: returnedTo || null, grounds }
-            : undefined,
-        },
-        { key },
-      );
-      setDone(true);
-      drafts.drop();
-      await uploadAll(`/api/acts/${actId}/photos`, photos, (n) => setProgress(t.photos.uploading(n, photos.length)), `${key}-photo`);
-    });
-    setProgress(null);
-    if (res.ok) setStep(lastStep);
-  };
+  if (card.failure) return <LoadError failure={card.failure} onRetry={card.reload} />;
+  if (result && card.data) return <ReturnDone rentalId={card.data.rental.id} serviceJobId={result.serviceJobId} point={result.point} />;
+  if (!card.data || !preview) return <Loading />;
+  const r = card.data.rental;
 
   if (drafts.offer) {
     return (
-      <Wizard title={`${t.ret.title} · ${r.number}`} steps={steps} step={0}>
-        <DraftOffer at={drafts.offer.at} words={r.customer.name} onContinue={() => drafts.accept(restore)} onDiscard={drafts.discard} />
+      <Wizard title={`${t.back.title} · ${r.number}`} steps={steps} step={0}>
+        <DraftOffer at={drafts.offer.at} words={r.customer.name} onContinue={() => drafts.accept((d) => setF({ ...d, step: Math.min(d.step, 3) }))} onDiscard={drafts.discard} />
       </Wizard>
     );
   }
 
-  const confirmStep = decides ? 1 : 0;
+  // The act lists what was handed over (B5-07, B10-02).
+  const batteries = preview.batteries ?? 2;
+  const chargers = preview.chargers ?? 2;
+  const itemKeys = ['moped', 'key', ...Array.from({ length: batteries }, (_, i) => `battery_${i + 1}`), ...Array.from({ length: chargers }, (_, i) => `charger_${i + 1}`)];
+  const itemName = (k: string) =>
+    k === 'moped' ? t.back.items.moped : k === 'key' ? t.back.items.key : k.startsWith('battery_') ? t.back.items.battery(Number(k.slice(8))) : t.back.items.charger(Number(k.slice(8)));
+  const item = (k: string) => f.items[k] ?? { state: 'ok' as ItemState, note: '' };
+  const setItem = (k: string, patch: Partial<{ state: ItemState; note: string }>) => set({ items: { ...f.items, [k]: { ...item(k), ...patch } } });
+  const damaged = item('moped').state === 'damaged';
+  const lost = itemKeys.filter((k) => k !== 'moped' && k !== 'key' && item(k).state === 'missing').map(itemName);
+  const toService = f.toService ?? damaged;
+
+  const km = f.odometer.trim() === '' ? null : Number(f.odometer.replace(/\s/g, ''));
+  const pickupKm = preview.pickupKm;
+  const kmBelow = km != null && pickupKm != null && km < pickupKm;
+  const actOk = km != null && Number.isInteger(km) && km >= 0 && !kmBelow && f.returnedOn <= todayISO();
+
+  const claims = claimsOf(preview);
+  const held = preview.deposit?.heldTetri ?? 0;
+  const decided = preview.deposit?.decided ?? false;
+  const decides = owner && !decided && !!preview.deposit;
+  // Nothing held: an owner's return closes the deposit with nothing to choose (designer's question 1).
+  const nothingHeld = decides && held === 0;
+  const calcOk = !decides || nothingHeld || decisionOk(f.decision, held);
+  const locations = points.data?.locations ?? [];
+  const locationId = locations.some((l) => l.id === f.locationId) ? f.locationId : locations[0]?.id ?? '';
+  const whereOk = toService || locations.length === 0 || !!locationId;
+  const ok = [actOk, calcOk, whereOk, true][f.step];
+  const kept = decides && !nothingHeld ? keptOf(f.decision, held) ?? 0 : 0;
+
+  // What a withholding is likely for, offered as the grounds when an owner keeps money.
+  const suggest: Ground[] = [];
+  if (preview.settlement.weeks.length > 0) suggest.push('rent_arrears');
+  if (preview.settlement.choice === 'late') suggest.push('fines');
+  if (item('key').state === 'missing') suggest.push('key_loss');
+  if (damaged) suggest.push('moped_damage');
+  if (itemKeys.some((k) => k.startsWith('charger_') && item(k).state === 'missing')) suggest.push('charger_loss');
+  if (itemKeys.some((k) => k.startsWith('battery_') && item(k).state === 'missing')) suggest.push('incomplete_return');
+
+  const submit = async () => {
+    setConfirming(false);
+    const res = await op.run(async (key) => {
+      const out = await api.post<{ actId: string; serviceJobId: string | null }>(
+        `/api/rentals/${r.id}/return`,
+        {
+          returnedOn: f.returnedOn,
+          odometerKm: km,
+          condition: f.condition.trim() || null,
+          items: Object.fromEntries(itemKeys.map((k) => [k, { state: item(k).state, note: item(k).note.trim() || null }])),
+          toService,
+          locationId: toService ? null : locationId || null,
+          lateChoice: owner ? preview.settlement.choice : null,
+          deposit: !decides ? undefined : nothingHeld ? { action: 'return_all' } : decisionBody(f.decision, held),
+        },
+        { key },
+      );
+      drafts.drop();
+      if (!toService && locationId) rememberPoint(locationId);
+      await uploadAll(`/api/acts/${out.actId}/photos`, photos, (n) => setProgress(t.hand.photosUploading(n, photos.length)), `${key}-photo`).catch(() => undefined);
+      return out;
+    });
+    setProgress(null);
+    if (res.ok) setResult({ serviceJobId: res.value.serviceJobId, point: toService ? null : locations.find((l) => l.id === locationId)?.name ?? null });
+  };
+  // Keeping money is not undone by a tap: the sum and what stays owed, in words, first.
+  const onFinish = () => (kept > 0 ? setConfirming(true) : void submit());
+
+  const kitProblems = itemKeys.filter((k) => item(k).state !== 'ok').map((k) => `${itemName(k)} — ${t.returnItems.states[item(k).state]}`);
+
   return (
     <Wizard
-      title={`${t.ret.title} · ${r.number}`}
+      title={`${t.back.title} · ${r.number}`}
       steps={steps}
-      step={step}
-      submit={step === confirmStep ? { state: op.state, failure: op.failure, label: t.ret.finish } : undefined}
-      onBack={step > 0 && step < lastStep ? () => setStep(step - 1) : undefined}
-      onNext={step < confirmStep ? () => setStep(step + 1) : step === confirmStep ? submit : () => navigate(`/rentals/${r.id}`)}
-      nextLabel={step === lastStep ? t.actions.open : step === confirmStep ? t.actions.confirm : undefined}
-      nextDisabled={step === confirmStep && !depositOk}
+      step={f.step}
+      submit={f.step === 3 ? { state: op.state, failure: op.failure, label: t.back.finish } : undefined}
+      failure={f.step === 3 ? null : op.failure}
+      onBack={f.step > 0 ? () => set({ step: f.step - 1 }) : undefined}
+      onNext={f.step === 3 ? onFinish : () => set({ step: f.step + 1 })}
+      nextLabel={f.step === 2 ? t.hand.toSummary : undefined}
+      nextDisabled={!ok}
     >
-      {step === 0 && (
+      {f.step === 0 && (
         <>
           <section className="card">
-            <Row k={t.rentals.customer} v={r.customer.name} />
-            <Row k={t.rentals.vehicle} v={r.vehicle ? <Vin vin={r.vehicle.vin} /> : <span className="warn-text">{t.rentals.vinUnconfirmed}</span>} />
-            <Row k={t.rentals.pickedUp} v={<span className="mono">{fmtDate(r.pickedUpOn)}</span>} />
-            <Row k={t.rentals.paidThrough} v={<span className="mono">{fmtDate(r.paidThrough)}</span>} />
+            <b>{r.customer.name}</b>
+            <p className="muted">
+              {r.vehicle ? (
+                <>
+                  {r.vehicle.model} <Vin vin={r.vehicle.vin} />
+                </>
+              ) : (
+                t.rentals.vinUnconfirmed
+              )}{' '}
+              · {t.back.handedOn(fmtDate(r.pickedUpOn))} · {t.back.paidThrough(fmtDate(r.paidThrough))}
+            </p>
           </section>
-          <Field label={t.ret.returnedOn} name="returnedOn">
-            <input className="input mono" type="date" value={returnedOn} onChange={(e) => setReturnedOn(e.target.value)} />
-          </Field>
-          <Field label={t.ret.odometer} name="odometerKm">
-            <input className="input mono" value={odometer} onChange={(e) => setOdometer(e.target.value)} inputMode="numeric" />
-          </Field>
-          <Field label={t.ret.condition} name="condition">
-            <textarea className="input textarea" rows={3} value={condition} onChange={(e) => setCondition(e.target.value)} />
-          </Field>
-          <h2 className="sub">{t.returnItems.title}</h2>
+          <div className="two-col two-col-tight">
+            <Field label={t.back.returnedOn} name="returnedOn">
+              <input className="input mono" type="date" max={todayISO()} min={r.pickedUpOn ?? undefined} value={f.returnedOn} onChange={(e) => set({ returnedOn: e.target.value })} />
+            </Field>
+            <Field label={t.back.odometer} hint={pickupKm != null ? t.back.odometerMin(String(pickupKm), fmtDate(r.pickedUpOn)) : undefined} name="odometerKm">
+              <input className="input mono" value={f.odometer} onChange={(e) => set({ odometer: e.target.value })} inputMode="numeric" />
+            </Field>
+          </div>
+          {kmBelow && <p className="field-err">{t.back.odometerBelow}</p>}
           <ul className="item-list">
-            {RETURN_ITEMS.map((item) => (
-              <li key={item}>
-                <span className="item-name">{t.returnItems.items[item]}</span>
+            {itemKeys.map((k) => (
+              <li key={k}>
+                <span className="item-name">{itemName(k)}</span>
                 <span className="chips">
                   {ITEM_STATES.map((st) => (
-                    <button
-                      key={st}
-                      type="button"
-                      className={`pill pill-sm ${items[item].state === st ? 'on' : ''}`}
-                      onClick={() => setItems({ ...items, [item]: { ...items[item], state: st } })}
-                    >
+                    <button key={st} type="button" className={`pill pill-sm ${item(k).state === st ? 'on' : ''}`} onClick={() => setItem(k, { state: st })}>
                       {t.returnItems.states[st]}
                     </button>
                   ))}
                 </span>
-                {items[item].state === 'damaged' && (
-                  <input
-                    className="input"
-                    placeholder={t.returnItems.note}
-                    value={items[item].note}
-                    onChange={(e) => setItems({ ...items, [item]: { ...items[item], note: e.target.value } })}
-                  />
+                {item(k).state === 'damaged' && (
+                  <input className="input" placeholder={t.back.damagedWhat} aria-label={t.back.damagedWhat} value={item(k).note} onChange={(e) => setItem(k, { note: e.target.value })} />
                 )}
               </li>
             ))}
           </ul>
-          <PhotoPicker photos={photos} onChange={setPhotos} label={t.pickup.photos} />
-          {progress && <p className="hint muted">{progress}</p>}
-          {!decides && <p className="hint muted">{t.ret.leaveToOwner}</p>}
+          <PhotoPicker photos={photos} onChange={setPhotos} label={t.back.photos} />
+          <Field label={t.back.condition} name="condition">
+            <textarea className="input textarea" rows={2} value={f.condition} onChange={(e) => set({ condition: e.target.value })} />
+          </Field>
         </>
       )}
 
-      {decides && step === 1 && (
+      {f.step === 1 && (
         <>
-          <Row k={t.rentals.deposit} v={<span className="mono">{formatGel(amount, { decimals: false })}</span>} />
-          <div className="chips">
-            {(['full', 'part', 'all'] as Decision[]).map((d) => (
-              <button key={d} type="button" className={`pill pill-sm ${decision === d ? 'on' : ''}`} onClick={() => setDecision(d)}>
-                {d === 'full' ? t.ret.returnFull : d === 'part' ? t.ret.withholdPart : t.ret.withholdAll}
-              </button>
-            ))}
-          </div>
-          {decision === 'part' && (
-            <Field label={t.ret.withheldAmount}>
-              <input className="input input-amount mono" value={withheld} onChange={(e) => setWithheld(e.target.value)} inputMode="decimal" placeholder={gelFromTetri(amount).toString()} />
-            </Field>
-          )}
-          {decision !== 'full' && (
-            <>
-              <span className="lbl">{t.grounds.title}</span>
-              <div className="chips">
-                {GROUNDS.map((g) => (
-                  <button
-                    key={g}
-                    type="button"
-                    className={`pill pill-sm ${grounds.includes(g) ? 'on' : ''}`}
-                    onClick={() => setGrounds(grounds.includes(g) ? grounds.filter((x) => x !== g) : [...grounds, g])}
-                  >
-                    {t.grounds[g]}
-                  </button>
-                ))}
-              </div>
-              <Field label={t.ret.withheldReason}>
-                <input className="input" value={reason} onChange={(e) => setReason(e.target.value)} />
-              </Field>
-            </>
-          )}
-          {decision !== 'all' && (
-            <Field label={t.ret.returnedTo}>
-              <input className="input" value={returnedTo} onChange={(e) => setReturnedTo(e.target.value)} />
-            </Field>
+          <SettlementLines preview={preview} paidThrough={r.paidThrough} lost={lost} onChoice={owner ? (c) => set({ lateChoice: c }) : undefined} />
+          {nothingHeld ? (
+            <p className="hint muted">{t.back.nothingHeld}</p>
+          ) : decides ? (
+            <DepositDecision value={f.decision} onChange={(d: DecisionState) => set({ decision: d })} heldTetri={held} claimsTetri={claims} suggest={suggest} />
+          ) : (
+            !decided && <p className="hint muted">{t.back.ownerDecides}</p>
           )}
         </>
       )}
 
-      {step === lastStep && (
-        <section className="card">
-          <p>{t.ret.done}</p>
+      {f.step === 2 && (
+        <>
+          <span className="lbl">{t.back.state}</span>
+          <div className="chips">
+            <button type="button" className={`pill ${!toService ? 'on' : ''}`} onClick={() => set({ toService: false })}>
+              {t.back.free}
+            </button>
+            <button type="button" className={`pill ${toService ? 'on' : ''}`} onClick={() => set({ toService: true })}>
+              {t.back.toService}
+            </button>
+          </div>
+          {!toService &&
+            (locations.length === 0 ? (
+              <p className="hint warn-text">{can('settings.manage') ? <Link to="/fleet/points">{t.back.noPoints}</Link> : t.back.noPoints}</p>
+            ) : (
+              <>
+                <span className="lbl">{t.back.point}</span>
+                <div className="chips">
+                  {locations.map((l) => (
+                    <button key={l.id} type="button" className={`pill ${locationId === l.id ? 'on' : ''}`} onClick={() => set({ locationId: l.id })}>
+                      {l.name}
+                    </button>
+                  ))}
+                </div>
+              </>
+            ))}
+        </>
+      )}
+
+      {f.step === 3 && (
+        <section className="card summary-card">
+          <SumRow k={t.back.sumOdometer} v={<span className="mono">{km} {t.back.km}</span>} go={() => set({ step: 0 })} />
+          <SumRow k={t.back.sumKit} v={kitProblems.length ? kitProblems.join(' · ') : t.back.kitOk} go={() => set({ step: 0 })} />
+          <SumRow k={t.back.sumClaims} v={<span className="mono">{formatGel(claims)}</span>} go={() => set({ step: 1 })} />
+          <SumRow k={t.back.sumDeposit} v={!decides ? t.back.decisionOwner : kept > 0 ? t.back.decisionKeep(formatGel(kept, { decimals: false })) : t.back.decisionReturn} go={() => set({ step: 1 })} />
+          {decides && <SumRow k={t.back.sumDebt} v={<span className="mono">{formatGel(Math.max(0, claims - kept))}</span>} go={() => set({ step: 1 })} />}
+          <SumRow k={t.back.sumWhere} v={toService ? t.back.toService : `${t.back.free} · ${locations.find((l) => l.id === locationId)?.name ?? '—'}`} go={() => set({ step: 2 })} />
+          {progress && <p className="hint muted">{progress}</p>}
+          {confirming && (
+            <div className="form-banner form-banner-warn" role="alertdialog">
+              <div>
+                <b>{t.back.confirmKeep(formatGel(kept))}</b>
+                <br />
+                {claims - kept > 0 ? t.back.confirmDebt(formatGel(claims - kept)) : t.back.confirmNoDebt}
+              </div>
+              <div className="row-actions">
+                <button type="button" className="pill pill-sm" onClick={() => setConfirming(false)}>
+                  {t.back.cancel}
+                </button>
+                <button type="button" className="pill pill-sm pill-accent" onClick={() => void submit()}>
+                  {t.back.keep} {formatGel(kept, { decimals: false })}
+                </button>
+              </div>
+            </div>
+          )}
         </section>
       )}
     </Wizard>
+  );
+}
+
+/** "Готово": the moped and where it stands, what was kept, what is owed, the act to sign. */
+function ReturnDone({ rentalId, serviceJobId, point }: { rentalId: string; serviceJobId: string | null; point: string | null }) {
+  const t = useT();
+  const openMoney = useMoneyForm();
+  const { can } = useSession();
+  const { data, reload } = useLoad<RentalCard>(`/api/rentals/${rentalId}`);
+  const job = useLoad<{ job: { number: string } }>(serviceJobId ? `/api/service/${serviceJobId}` : null);
+  if (!data) return <Loading />;
+  const r = data.rental;
+  const d = data.deposit;
+  const toHandBack = d ? Math.max(0, d.returnedTetri - d.paidOutTetri) : 0;
+  const target = { rentalId: r.id, number: r.number, customerId: r.customer.id, customer: r.customer.name };
+  return (
+    <div className="wizard">
+      <header className="wizard-head">
+        <h1>{t.back.done}</h1>
+      </header>
+      <section className="card">
+        <p>
+          <b>{r.number}</b>
+          {r.vehicle && (
+            <>
+              {' '}
+              · {r.vehicle.model} <Vin vin={r.vehicle.vin} />
+            </>
+          )}
+        </p>
+        <p className="muted">{serviceJobId ? t.back.doneService : point ? t.back.doneWhere(point) : ''}</p>
+        {d?.decided && d.withheldTetri > 0 && <p>{t.back.kept(formatGel(d.withheldTetri, { decimals: false }))}</p>}
+        {r.debtTetri > 0 && <p className="crit-text">{t.back.debt(formatGel(r.debtTetri, { decimals: false }))}</p>}
+        {d && !d.decided && <p className="warn-text">{can('deposit.decide') ? t.rentalMoney.undecided : t.back.managerDone}</p>}
+        {serviceJobId && (
+          <p>
+            <Link to={`/service/${serviceJobId}`}>{t.back.serviceOpened(job.data?.job.number ?? '')}</Link>
+          </p>
+        )}
+      </section>
+      {data.documents.returnAct && (
+        <section className="card">
+          <DocumentRow
+            rentalId={r.id}
+            kind="return-act"
+            title={t.back.act}
+            sub={d && !d.decided ? t.back.undecided : undefined}
+            state={data.documents.returnAct}
+            customerId={r.customer.id}
+            onChanged={reload}
+          />
+        </section>
+      )}
+      <div className="row-actions">
+        {toHandBack > 0 && can('payments.reconcile') && (
+          <button type="button" className="pill pill-accent" onClick={() => openMoney({ target: { kind: 'deposit_payout', ...target } })}>
+            {t.back.payOut(formatGel(toHandBack, { decimals: false }))}
+          </button>
+        )}
+        {r.debtTetri > 0 && can('cash.record') && (
+          <button type="button" className="pill pill-accent" onClick={() => openMoney({ target: { kind: 'rent', ...target } })}>
+            {t.back.takeDebt(formatGel(r.debtTetri, { decimals: false }))}
+          </button>
+        )}
+        <Link to="/" className="pill">
+          {t.hand.toToday}
+        </Link>
+        <Link to={`/rentals/${r.id}`} className="pill">
+          {t.hand.openRental}
+        </Link>
+      </div>
+    </div>
   );
 }

@@ -1,6 +1,6 @@
 import { FailureProvider, SubmitButton, useFieldError } from '../ds/form/Form.js';
 import type { Failure, SubmitState } from '../ds/form/operation.js';
-import type { ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { useT } from '../i18n/index.js';
 
 // One step per screen, one button at the bottom, reachable with a thumb
@@ -18,9 +18,15 @@ export function Wizard(props: {
   error?: string | null;
   /** The write at the end: the button shows its four states and the refusal reaches the fields (wave 1 §3.7). */
   submit?: { state: SubmitState; failure: Failure | null; label: string };
+  /** The last refusal, shown on any step — the step it sent you back to included (QA-W3-01). */
+  failure?: Failure | null;
 }) {
   const t = useT();
   const last = props.step >= props.steps.length - 1;
+  // A new step starts at its top, not where the last one was scrolled to.
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [props.step]);
   return (
     <div className="wizard">
       <header className="wizard-head">
@@ -34,13 +40,13 @@ export function Wizard(props: {
           </li>
         ))}
       </ol>
-      <FailureProvider value={props.submit?.failure ?? null}>
+      <FailureProvider value={props.submit?.failure ?? props.failure ?? null}>
         <section className="wizard-body">{props.children}</section>
       </FailureProvider>
-      {props.submit?.failure && (
+      {(props.submit?.failure ?? props.failure) && (
         <div className="form-banner form-banner-bad" role="alert">
           <div>
-            <b>{t.form.notSaved}</b> {props.submit.failure.text}
+            <b>{t.form.notSaved}</b> {(props.submit?.failure ?? props.failure)!.text}
           </div>
         </div>
       )}
@@ -68,8 +74,9 @@ export function Wizard(props: {
  * A labelled field. `name` is the API's name for it: when the server refuses
  * the form naming that field, the words come under it (QA-1-08).
  */
-export function Field({ label, children, hint, name }: { label: string; children: ReactNode; hint?: string; name?: string }) {
-  const error = useFieldError(name);
+export function Field({ label, children, hint, name, error: own }: { label: string; children: ReactNode; hint?: string; name?: string; error?: string | null }) {
+  // The server's words, or the form's own when it already knows the value will not pass (QA-W3-05).
+  const error = useFieldError(name) ?? own ?? null;
   return (
     <label className={`field ${error ? 'field-bad' : ''}`} data-field={name}>
       <span className="lbl">{label}</span>

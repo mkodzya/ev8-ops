@@ -1,7 +1,7 @@
 import { colorOnPaper, tokens } from '@ev8/shared';
 import { finish, gap, newDoc, write } from './doc.js';
 import { COMPANY, DISCLAIMER, LESSEE, LESSOR, dmy, gel } from './company.js';
-import { check, field, h1, h2, para, rule, signatures, stampPages } from './layout.js';
+import { check, field, h1, h2, para, rule, signatures, stampPages, type DrawnSignature } from './layout.js';
 
 // The return and final settlement act, set from the company's own template
 // as read from Google Drive on 14.09.2026. The paper form numbers its
@@ -54,7 +54,8 @@ export interface ReturnActData {
   customer: { name: string; personalId: string | null; phone: string | null; email: string | null; address: string | null };
   vehicle: { brand: string; model: string; vin: string; color: string | null } | null;
   vinNote: string | null;
-  items: Partial<Record<ReturnItem, { state: ItemState; note?: string | null }>>;
+  /** By what was handed over: moped, key, battery_1…N, charger_1…N (B5-07). */
+  items: Record<string, { state: ItemState; note?: string | null }>;
   hasPhotos: boolean;
   depositTetri: number;
   withheldTetri: number;
@@ -62,7 +63,22 @@ export interface ReturnActData {
   withheldGrounds: WithholdGround[];
   withheldReason: string | null;
   returnedTo: string | null;
+  /** No owner has decided on the deposit yet (a manager's return, wave 3 §3.5). */
+  decided: boolean;
+  signature?: DrawnSignature | null;
 }
+
+/** "Battery No. 3" for any number handed over, not only two (B10-02). */
+export function itemLabel(key: string): { ka: string; en: string } {
+  const fixed = (ITEM_LABEL as Record<string, { ka: string; en: string }>)[key];
+  if (fixed) return fixed;
+  const [kind, n] = key.split('_');
+  if (kind === 'battery') return { ka: `ბატარეა №${n}`, en: `Battery No. ${n}` };
+  if (kind === 'charger') return { ka: `დამტენი №${n}`, en: `Charger No. ${n}` };
+  return { ka: key, en: key };
+}
+
+const ITEM_ORDER = (key: string) => (key === 'moped' ? 0 : key === 'key' ? 1 : key.startsWith('battery') ? 100 + Number(key.split('_')[1]) : 200 + Number(key.split('_')[1] ?? 0));
 
 export async function renderReturnAct(d: ReturnActData): Promise<Buffer> {
   const doc = newDoc(`EV8 ${d.number} — დაბრუნების აქტი`);
@@ -99,11 +115,12 @@ export async function renderReturnAct(d: ReturnActData): Promise<Buffer> {
   field(doc, { ka: 'ფერი', en: 'Colour' }, colorOnPaper(d.vehicle?.color));
 
   h2(doc, { ka: '4. დაბრუნებული ქონების მდგომარეობა', en: '4. Condition of the returned property' });
-  for (const item of RETURN_ITEMS) {
+  for (const item of Object.keys(d.items).sort((a, b) => ITEM_ORDER(a) - ITEM_ORDER(b))) {
     const rec = d.items[item];
     if (!rec) continue;
+    const label = itemLabel(item);
     gap(doc, 0.2);
-    write(doc, `${ITEM_LABEL[item].ka} / ${ITEM_LABEL[item].en}`, { bold: true, size: 9 });
+    write(doc, `${label.ka} / ${label.en}`, { bold: true, size: 9 });
     check(doc, rec.state === 'ok', { ka: 'გამართულია', en: 'In order' });
     check(doc, rec.state === 'damaged', { ka: 'დაზიანებულია', en: 'Damaged' }, rec.note ?? undefined);
     check(doc, rec.state === 'missing', { ka: 'არ დაბრუნებულა', en: 'Not returned' });
@@ -119,34 +136,44 @@ export async function renderReturnAct(d: ReturnActData): Promise<Buffer> {
 
   h2(doc, { ka: '6. დეპოზიტისა და საბოლოო ანგარიშსწორების ინფორმაცია', en: '6. Deposit and final settlement' });
   field(doc, { ka: 'შეტანილი დეპოზიტის ოდენობა (ლარი)', en: 'Deposit paid (GEL)' }, gel(d.depositTetri));
-  field(doc, { ka: 'დაკავებული თანხა (ლარი)', en: 'Amount withheld (GEL)' }, gel(d.withheldTetri));
-  field(doc, { ka: 'ფაქტობრივად დაბრუნებული თანხა (ლარი)', en: 'Amount actually returned (GEL)' }, gel(d.returnedTetri));
-  if (d.returnedTo) {
-    field(doc, { ka: 'თანხა დაუბრუნდა', en: 'Amount returned to' }, d.returnedTo);
-  }
+  if (!d.decided) {
+    // A manager's return: the deposit waits for an owner, and the paper says so
+    // rather than settle it with zeros (wave 3 §3.4, B5-07).
+    para(doc, { ka: 'დეპოზიტის შესახებ გადაწყვეტილება ჯერ არ არის მიღებული.', en: 'No decision on the deposit has been made yet.' });
+  } else {
+    field(doc, { ka: 'დაკავებული თანხა (ლარი)', en: 'Amount withheld (GEL)' }, gel(d.withheldTetri));
+    field(doc, { ka: 'ფაქტობრივად დაბრუნებული თანხა (ლარი)', en: 'Amount actually returned (GEL)' }, gel(d.returnedTetri));
+    if (d.returnedTo) {
+      field(doc, { ka: 'თანხა დაუბრუნდა', en: 'Amount returned to' }, d.returnedTo);
+    }
 
-  h2(doc, { ka: '7. დაკავებული თანხის საფუძველი', en: '7. Grounds for the amount withheld' });
-  for (const g of WITHHOLD_GROUNDS) {
-    check(doc, d.withheldGrounds.includes(g), GROUND_LABEL[g], g === 'other' ? d.withheldReason ?? undefined : undefined);
+    h2(doc, { ka: '7. დაკავებული თანხის საფუძველი', en: '7. Grounds for the amount withheld' });
+    for (const g of WITHHOLD_GROUNDS) {
+      check(doc, d.withheldGrounds.includes(g), GROUND_LABEL[g]);
+    }
+    // The reason is printed whenever something was kept, not only under "other".
+    if (d.withheldTetri > 0 && d.withheldReason) field(doc, { ka: 'მიზეზი', en: 'Reason' }, d.withheldReason);
   }
 
   h2(doc, { ka: '8. მხარეთა დადასტურება', en: '8. Confirmation by the parties' });
   para(doc, { ka: 'მოქირავე ადასტურებს, რომ:', en: 'The Lessee confirms that:' });
-  for (const line of [
-    { ka: 'მის მიერ დაბრუნებულია ზემოაღნიშნული ქონება;', en: 'the property listed above has been returned by them;' },
-    { ka: 'მიღებულია საბოლოო ანგარიშსწორება;', en: 'the final settlement has been received;' },
-    { ka: 'არ გააჩნია პრეტენზია განხორციელებულ ანგარიშსწორებასთან დაკავშირებით;', en: 'they have no claim in connection with the settlement made;' },
-    { ka: 'ადასტურებს ზემოაღნიშნული თანხის მიღებას;', en: 'they confirm receipt of the amount stated above;' },
-    { ka: 'არ გააჩნია სხვა ფინანსური ან ქონებრივი პრეტენზიები დამქირავებლის მიმართ.', en: 'they have no other financial or property claims against the Lessor.' },
-  ]) {
-    para(doc, line);
+  const lines = [{ ka: 'მის მიერ დაბრუნებულია ზემოაღნიშნული ქონება;', en: 'the property listed above has been returned by them;' }];
+  // "No claims" is said only once the settlement is made.
+  if (d.decided) {
+    lines.push(
+      { ka: 'მიღებულია საბოლოო ანგარიშსწორება;', en: 'the final settlement has been received;' },
+      { ka: 'არ გააჩნია პრეტენზია განხორციელებულ ანგარიშსწორებასთან დაკავშირებით;', en: 'they have no claim in connection with the settlement made;' },
+      { ka: 'ადასტურებს ზემოაღნიშნული თანხის მიღებას;', en: 'they confirm receipt of the amount stated above;' },
+      { ka: 'არ გააჩნია სხვა ფინანსური ან ქონებრივი პრეტენზიები დამქირავებლის მიმართ.', en: 'they have no other financial or property claims against the Lessor.' },
+    );
   }
+  for (const line of lines) para(doc, line);
 
   h2(doc, { ka: '9. ხელმოწერები', en: '9. Signatures' });
   signatures(
     doc,
     { ...LESSOR, name: `${COMPANY.nameKa} · ${COMPANY.directorKa}` },
-    { ...LESSEE, name: d.customer.name },
+    { ...LESSEE, name: d.customer.name, drawn: d.signature },
   );
 
   stampPages(doc, `${COMPANY.nameKa} · ${COMPANY.nameEn} · ს/ნ ${COMPANY.taxId} · ${d.number}`);

@@ -70,6 +70,8 @@ export function customerRoutes(app: FastifyInstance): void {
         // The one debt figure (B7-02): the same the card, "Today" and the search show.
         debtTetri: debts.get(c.id)?.owesTetri ?? 0,
         creditTetri: debts.get(c.id)?.creditTetri ?? 0,
+        // Where the debt sits: «Долг 300 по R-00488» in the hand-over (wave 3 §3.1).
+        debtIn: (debts.get(c.id)?.parts ?? []).filter((p) => p.owesTetri > 0).map((p) => ({ kind: p.kind, id: p.id, number: p.number, owesTetri: p.owesTetri })),
         buyer: c._count.sales > 0,
       })),
     };

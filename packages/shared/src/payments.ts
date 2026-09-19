@@ -21,7 +21,7 @@ export interface OpenDeposit {
 }
 
 export interface Allocation {
-  target: 'period' | 'deposit' | 'instalment';
+  target: 'period' | 'deposit' | 'instalment' | 'charge';
   id: string;
   amountTetri: Tetri;
 }
@@ -38,7 +38,7 @@ export interface Owed {
  * Put `amountTetri` on what is owed, oldest first, and say what is left.
  * The order is the rule: a debt is paid off in the order it was incurred.
  */
-export function spreadOverOwed(amountTetri: Tetri, owed: Owed[], target: 'period' | 'instalment'): Spread {
+export function spreadOverOwed(amountTetri: Tetri, owed: Owed[], target: 'period' | 'instalment' | 'charge'): Spread {
   const allocations: Allocation[] = [];
   let left = amountTetri;
   for (const o of [...owed].sort((a, b) => a.seq - b.seq)) {

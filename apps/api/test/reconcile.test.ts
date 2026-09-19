@@ -3,7 +3,7 @@
 // Georgia export's real shape; every customer carries a tag of its own so a
 // name never matches somebody an earlier run left behind.
 import { addDays, todayISO } from '@ev8/shared';
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { HAS_DB, call, json, loginAs, uniq } from './helpers.js';
 
 const today = () => todayISO(new Date(), 'Asia/Tbilisi');
@@ -17,6 +17,21 @@ const BOG_HEADER = [
 const inRow = (iso: string, amount: string, content: string) => `"${dmy(iso)}","0017","GE38TB7756045063400002","","${amount}","1","${amount}","${content}"`;
 const outRow = (iso: string, amount: string, content: string) => `"${dmy(iso)}","0018","GE89BG0000000902936900GEL","${amount}","","1","${amount}","${content}"`;
 const file = (...rows: string[]) => [BOG_HEADER, ...rows].join('\n');
+
+// The rules match a line to the one rental its amount and date fit. Suites
+// that ran before this one leave rentals handed over today at 150 + 180 still
+// open, and card payments entered by hand (all deleted only when the whole
+// run ends); any of them makes a 330 card line ambiguous here, and so do the
+// ones an earlier test in this file made. They are closed before each test,
+// in this throwaway database, so every test counts only what it made itself.
+beforeEach(async () => {
+  if (!HAS_DB) return;
+  const { prisma } = await import('../src/lib/db.js');
+  await prisma.rental.updateMany({ where: { status: { not: 'returned' } }, data: { status: 'returned' } });
+  // Card and transfer payments entered by hand wait for their bank line; one
+  // of 330 from the hand-over suite takes a 325.05 line as "already recorded".
+  await prisma.payment.updateMany({ where: { statementLineId: null, voidedAt: null, source: 'manual', channel: { not: 'cash' } }, data: { voidedAt: new Date(), voidReason: 'test isolation', voidKind: 'void' } });
+});
 
 function tag(): string {
   return `t${uniq().replace(/\D/g, '').slice(-9)}`;

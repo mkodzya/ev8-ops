@@ -139,7 +139,8 @@ describe.skipIf(!HAS_DB)('charging the renter (SRV-02)', () => {
       await call(otherOwner, 'GET', `/api/rentals/${rentalId}`),
     );
     expect(card.deposit.withheldTetri).toBe(5500);
-    expect(card.deposit.status).toBe('partial');
+    // A repair's keeping is a line on the deposit; the deposit itself is decided at the return (wave 3 §3.6).
+    expect(card.deposit.status).toBe('held');
     expect(card.deposit.withheldGrounds).toContain('moped_damage');
     expect(card.deposit.withheldReason).toMatch(/SV-\d{5}: broken mirror/);
 

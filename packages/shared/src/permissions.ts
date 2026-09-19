@@ -22,8 +22,8 @@ export const PERMISSIONS = [
   'service.manage', // repair jobs (SRV-01), and the parts catalogue
   'stock.count', // correct a count by hand — a stock-take
   'sales.manage', // sales and buy-backs (SAL-01..03)
-  'deposit.decide', // return / withhold on return (RNT-05)
-  'deposit.confirm', // confirm a withholding or a return to a third party (RNT-05)
+  // Return or keep a deposit. One owner decides; there is no second confirmation (D18).
+  'deposit.decide',
   'reports.view',
   'settings.manage', // models, tariffs, points
   'users.manage',

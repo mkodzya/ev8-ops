@@ -1,3 +1,4 @@
+import { wave3Ka } from './wave3.js';
 import type { Dict } from './en.js';
 
 // Typed as Dict: a missing or misspelled key fails the build.
@@ -196,6 +197,7 @@ export const ka: Dict = {
 
   rentalStatus: {
     booked: 'დაჯავშნილი',
+    awaiting_payment: 'ელოდება გადახდას',
     active: 'აქტიური',
     overdue: 'ვადაგადაცილებული',
     paused: 'შეჩერებული',
@@ -278,7 +280,6 @@ export const ka: Dict = {
     returnRental: 'დაბრუნება',
     newCustomer: 'ახალი კლიენტი',
     changeState: 'მდგომარეობის შეცვლა',
-    confirmDeposit: 'დეპოზიტის გადაწყვეტილების დადასტურება',
     assignVehicle: 'მოპედის მიბმა',
     back: 'უკან',
     next: 'შემდეგი',
@@ -319,7 +320,6 @@ export const ka: Dict = {
   },
 
   rental: {
-    depositConfirmed: 'დეპოზიტის შესახებ გადაწყვეტილება დადასტურდა',
     actsCount: (n: number) => `${n} აქტი`,
     periodsCount: (n: number) => `${n} კვირა`,
     owed: 'დავალიანება',
@@ -336,48 +336,18 @@ export const ka: Dict = {
     depositStatus: { held: 'ხელზე', returned: 'დაბრუნებული', withheld: 'დაკავებული', partial: 'ნაწილობრივ დაკავებული' },
     withheldReason: 'დაკავების მიზეზი',
     returnedTo: 'ვის დაუბრუნდა',
-    awaitingOwner: 'ელოდება მფლობელის დადასტურებას',
     buyout: 'გამოსყიდვა',
     buyoutProgress: (target: string, per: string) => `თითო გადახდიდან ${per} ${target}-ის ანგარიშში`,
     notes: 'შენიშვნები',
   },
 
   pickup: {
-    handOver: 'მოპედის გაცემა',
-    title: 'გაცემა',
-    steps: { customer: 'კლიენტი', vehicle: 'მოპედი', terms: 'პირობები', act: 'აქტი', done: 'მზადაა' },
     stepOf: (i: number, n: number) => `ნაბიჯი ${i}/${n}`,
-    searchCustomer: 'სახელი ან ტელეფონი',
-    noVehicle: 'VIN დაუდასტურებელია — მიზეზი',
     noVehicleHint: 'მოპედი არ აირჩიოთ და ჩაწერეთ, რა წერია ხელშეკრულებაში; ქირაობა „VIN-ის გარეშე“ სიაში მოხვდება.',
-    rate: 'კვირის ტარიფი',
-    deposit: 'დეპოზიტი',
-    pickedUpOn: 'გაცემის თარიღი',
     expectedReturnOn: 'სავარაუდო დაბრუნება',
-    odometer: 'გარბენი, კმ',
-    condition: 'მდგომარეობა, დაზიანებები',
-    photos: 'ფოტოები',
-    summary: 'შეჯამება',
-    created: (n: string) => `გაცემა ${n} გაფორმდა.`,
     noAvailable: 'ამჟამად თავისუფალი მოპედი არ არის.',
   },
 
-  ret: {
-    finish: 'ქირის დახურვა',
-    title: 'დაბრუნება',
-    returnedOn: 'დაბრუნების თარიღი',
-    odometer: 'გარბენი, კმ',
-    condition: 'მდგომარეობა, დაზიანებები',
-    depositDecision: 'დეპოზიტი',
-    returnFull: 'სრულად დაბრუნება',
-    withholdPart: 'ნაწილის დაკავება',
-    withholdAll: 'სრულად დაკავება',
-    withheldAmount: 'დაკავებული თანხა',
-    withheldReason: 'მიზეზი',
-    returnedTo: 'ვის დაუბრუნდა (ცარიელი = გადამხდელს)',
-    leaveToOwner: 'დეპოზიტზე მფლობელი გადაწყვეტს.',
-    done: 'დაბრუნება გაფორმდა.',
-  },
 
   customer: {
     created: 'კლიენტის ბარათი შეიქმნა',
@@ -440,17 +410,7 @@ export const ka: Dict = {
   },
 
   returnItems: {
-    title: 'დაბრუნებული ქონება',
-    items: {
-      moped: 'მოპედი',
-      key: 'გასაღები',
-      battery_1: 'ბატარეა 1',
-      battery_2: 'ბატარეა 2',
-      charger_1: 'დამტენი 1',
-      charger_2: 'დამტენი 2',
-    },
     states: { ok: 'გამართულია', damaged: 'დაზიანებულია', missing: 'არ დაბრუნებულა' },
-    note: 'შენიშვნა',
   },
 
   grounds: {
@@ -676,12 +636,8 @@ export const ka: Dict = {
   },
 
   rentalEdit: {
-    title: 'ქირაობის რედაქტირება',
     assignVehicle: 'მოპედის მიბმა',
     assignHint: 'ქირაობა დაიწყო დაუდასტურებელი VIN-ით. აქ არჩეული მოპედი გაიცემა გაცემის თარიღით.',
-    status: 'სტატუსი',
-    reason: 'მიზეზი',
-    reasonHint: 'შეჩერება ან სადავოდ გამოცხადება საჭიროებს მიზეზს, რომელიც ჟურნალში იწერება.',
     buyout: 'გამოსყიდვა ქირაობიდან',
     buyoutTarget: 'სამიზნე თანხა',
     buyoutPerPayment: 'თითო გადახდიდან',
@@ -931,7 +887,7 @@ export const ka: Dict = {
     add: 'გადახდის გატარება',
     date: 'თარიღი',
     channel: 'არხი',
-    channels: { transfer: 'გადარიცხვა', acquiring: 'ბარათი', cash: 'ნაღდი' },
+    channels: { transfer: 'გადარიცხვა', acquiring: 'ბარათი', cash: 'ნაღდი', deposit: 'დეპოზიტიდან' },
     gross: 'კლიენტმა გადაიხადა',
     net: 'ბანკმა ჩარიცხა',
     fee: 'ექვაირინგის საკომისიო',
@@ -1239,7 +1195,6 @@ export const ka: Dict = {
       demo_login_off: 'დემო ანგარიშები ამ სტენდზე გამორთულია.',
       deposit_decision_forbidden: 'გირაოს შესახებ გადაწყვეტას იღებს მფლობელი.',
       deposit_not_found: 'ამ იჯარას გირაო არ აქვს.',
-      deposit_split: 'დაბრუნებული და დაკავებული ერთად აღემატება გირაოს.',
       deposit_too_small: 'გირაოში ამდენი თანხა არ არის.',
       documents_restricted: 'კლიენტის დოკუმენტებს ხედავენ მხოლოდ მფლობელები.',
       down_payment_too_big: 'პირველი შენატანი აღემატება ფასს.',
@@ -1273,7 +1228,6 @@ export const ka: Dict = {
       not_paid: 'შეკვეთაზე ჯერ არაფერი გადახდილა — თვითღირებულების დათვლა შეუძლებელია.',
       not_returned: 'დაბრუნების აქტი გამოჩნდება იჯარის დახურვის შემდეგ.',
       not_yours: 'ამ ცვლილების გაუქმება შეუძლია მხოლოდ მას, ვინც ის გააკეთა.',
-      nothing_to_confirm: 'გირაოს შესახებ გადაწყვეტა ჯერ არ არის.',
       nothing_to_correct: 'ნაშთი უკვე ასეთია.',
       nothing_to_undo: 'ამ მოპედს არ აქვს გადაყვანა, რომლის გაუქმებაც შესაძლებელია.',
       outgoing_line: 'ანგარიშიდან ჩამოჭრა კლიენტის გადახდა არ არის.',
@@ -1287,6 +1241,15 @@ export const ka: Dict = {
       purchase_has_payments: 'ჯერ გააუქმეთ ამ შეკვეთის გადახდები.',
       purchase_not_found: 'შეკვეთა ვერ მოიძებნა.',
       reason_required: 'დაკავებისთვის საჭიროა მიზეზი.',
+      customer_in_debt: 'კლიენტს აქვს დავალიანება. მოპედის გაცემა შეუძლია მხოლოდ მფლობელს, მიზეზით.',
+      deposit_decided: 'გირაოზე გადაწყვეტილება უკვე მიღებულია.',
+      document_gaps: 'დოკუმენტს აკლია მონაცემები. შეავსეთ ხელმოწერამდე.',
+      odometer_below: 'გარბენი ბოლო ჩაწერილზე ნაკლებია. მიუთითეთ მიზეზი.',
+      odometer_below_pickup: 'გარბენი გაცემისას ჩაწერილზე ნაკლებია.',
+      transfer_date: 'გადმოტანილი ქირა უნდა იწყებოდეს დღევანდელ დღემდე, ხოლო გადახდილი კვირები უნდა მთავრდებოდეს კვირის საზღვარზე.',
+      undo_return_too_late: 'დაბრუნების გაუქმება შესაძლებელია მხოლოდ 24 საათის განმავლობაში.',
+      use_status_route: 'სტატუსი იცვლება ცალკე მოქმედებით, მიზეზით.',
+      vehicle_in_sale_pool: 'მოპედი გასაყიდ პარკშია. მისი გაცემა შეუძლია მხოლოდ მფლობელს.',
       reconcile_required: 'საბანკო გადახდებს შეიყვანს მფლობელი.',
       regenerate_forbidden: 'უკვე გაცემული დოკუმენტის ჩანაცვლება შეუძლია მხოლოდ მფლობელს.',
       rental_not_found: 'იჯარა ვერ მოიძებნა.',
@@ -1313,4 +1276,5 @@ export const ka: Dict = {
       wrong_password: 'მიმდინარე პაროლი არასწორია.',
     },
   },
+  ...wave3Ka,
 };

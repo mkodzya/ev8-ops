@@ -41,7 +41,7 @@ export function fileRoutes(app: FastifyInstance): void {
     { config: { scope: 'rental.create' }, bodyLimit: BODY_LIMIT },
     async (req, reply) => {
       const actor = actorOf(req);
-      const act = await prisma.act.findUnique({ where: { id: req.params.id }, select: { id: true, rentalId: true } });
+      const act = await prisma.act.findUnique({ where: { id: req.params.id }, select: { id: true, rentalId: true, kind: true, settlement: true } });
       if (!act) throw notFound('act_not_found', 'No such act.');
       const { bytes, mime, label } = readUpload(req.body ?? {});
       if (!mime.startsWith('image/')) throw badRequest('bad_mime', 'Act photos are images.');
@@ -49,7 +49,14 @@ export function fileRoutes(app: FastifyInstance): void {
         data: { kind: 'act_photo', actId: act.id, label, mimeType: mime, sizeBytes: bytes.length, sha256: sha(bytes), bytes: new Uint8Array(bytes), uploadedById: actor.id },
         select: { id: true },
       });
-      await audit({ actorId: actor.id, action: 'act.photo.add', entityType: 'act', entityId: act.id, after: { fileId: f.id, sizeBytes: bytes.length } });
+      // Damage in a return act opened a repair: its photos are that repair's photos too (wave 3, crit. 28).
+      const serviceJobId = act.kind === 'return' ? (act.settlement as { serviceJobId?: string | null } | null)?.serviceJobId : null;
+      if (serviceJobId) {
+        await prisma.storedFile.create({
+          data: { kind: 'service_photo', serviceJobId, label, mimeType: mime, sizeBytes: bytes.length, sha256: sha(bytes), bytes: new Uint8Array(bytes), uploadedById: actor.id },
+        });
+      }
+      await audit({ actorId: actor.id, action: 'act.photo.add', entityType: 'act', entityId: act.id, after: { fileId: f.id, sizeBytes: bytes.length, serviceJobId: serviceJobId ?? undefined } });
       return reply.code(201).send({ id: f.id });
     },
   );

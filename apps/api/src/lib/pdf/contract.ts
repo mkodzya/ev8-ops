@@ -1,7 +1,7 @@
 import { colorOnPaper, tokens } from '@ev8/shared';
 import { finish, gap, newDoc, write } from './doc.js';
 import { COMPANY, DISCLAIMER, LESSEE, LESSOR, TERMS, dmy, gel } from './company.js';
-import { bullet, check, field, h1, h2, para, rule, signatures, stampPages } from './layout.js';
+import { bullet, check, field, h1, h2, para, rule, signatures, stampPages, type DrawnSignature } from './layout.js';
 
 // The rental contract with annex 1 (the hand-over act), set from the
 // company's own Signify template as read from Google Drive on 14.09.2026.
@@ -22,6 +22,8 @@ export interface ContractData {
   pickedUpOn: string | null;
   condition: string | null;
   hasPhotos: boolean;
+  /** Signed on the screen (D17); none — the lines stay empty for a pen. */
+  signature?: DrawnSignature | null;
 }
 
 export async function renderContract(d: ContractData): Promise<Buffer> {
@@ -143,7 +145,7 @@ export async function renderContract(d: ContractData): Promise<Buffer> {
   signatures(
     doc,
     { ...LESSOR, name: `${COMPANY.nameKa} · ${COMPANY.directorKa}` },
-    { ...LESSEE, name: d.customer.name },
+    { ...LESSEE, name: d.customer.name, drawn: d.signature },
   );
 
   // ---- Annex 1: the hand-over act -----------------------------------------
@@ -187,7 +189,7 @@ export async function renderContract(d: ContractData): Promise<Buffer> {
   signatures(
     doc,
     { ...LESSOR, name: `${COMPANY.nameKa} · ${COMPANY.directorKa}` },
-    { ...LESSEE, name: d.customer.name },
+    { ...LESSEE, name: d.customer.name, drawn: d.signature },
   );
 
   stampPages(doc, `${COMPANY.nameKa} · ${COMPANY.nameEn} · ს/ნ ${COMPANY.taxId} · ${d.number}`);

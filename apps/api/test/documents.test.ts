@@ -4,6 +4,9 @@
 import { describe, expect, it } from 'vitest';
 import { HAS_DB, call, json, loginAs, uniq } from './helpers.js';
 
+/** A one-pixel PNG, as a signature pad would send one. */
+const PNG = 'data:image/png;base64,' + 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
+
 async function rentalWithEverything() {
   const { prisma } = await import('../src/lib/db.js');
   const model = await prisma.vehicleModel.create({ data: { brand: 'Test', name: `Model ${uniq()}`, forRent: true } });
@@ -29,26 +32,35 @@ async function rentalWithEverything() {
 }
 
 describe.skipIf(!HAS_DB)('documents', () => {
-  it('renders the contract, keeps the bytes, and hands the same copy back next time', async () => {
-    const { prisma, owner, id } = await rentalWithEverything();
+  it('renders the contract; unsigned it follows the card, signed on the screen it is kept as it was (D17, B4-06)', async () => {
+    const { prisma, owner, customer, id } = await rentalWithEverything();
 
     const first = await call(owner, 'GET', `/api/rentals/${id}/contract.pdf`);
     expect(first.statusCode, first.body.slice(0, 200)).toBe(200);
     expect(first.headers['content-type']).toBe('application/pdf');
     expect(first.rawPayload.subarray(0, 5).toString()).toBe('%PDF-');
     expect(first.rawPayload.length).toBeGreaterThan(20_000); // fonts are embedded
+    expect(await prisma.storedFile.count({ where: { rentalId: id, kind: 'pdf', archived: false } })).toBe(1);
 
-    const stored = await prisma.storedFile.findMany({ where: { rentalId: id, kind: 'pdf', archived: false } });
-    expect(stored).toHaveLength(1);
-    expect(stored[0].docKind).toBe('contract');
-    expect(stored[0].sizeBytes).toBe(first.rawPayload.length);
+    // A field the contract needs, emptied: it is named and signing waits for it.
+    await prisma.customer.update({ where: { id: customer.id }, data: { personalId: null } });
+    const card = json<{ documents: { contract: { gaps: string[]; signedAt: string | null } } }>(await call(owner, 'GET', `/api/rentals/${id}`));
+    expect(card.documents.contract).toEqual({ gaps: ['personalId'], signedAt: null, signedBy: null });
+    const refused = await call(owner, 'POST', `/api/rentals/${id}/contract/sign`, { agree: true, signaturePng: PNG });
+    expect(json<{ error: string }>(refused).error).toBe('document_gaps');
+    await prisma.customer.update({ where: { id: customer.id }, data: { personalId: `T${uniq().replace(/\D/g, '')}` } });
 
-    const second = await call(owner, 'GET', `/api/rentals/${id}/contract.pdf`);
-    expect(Buffer.compare(second.rawPayload, first.rawPayload)).toBe(0);
-    expect(await prisma.storedFile.count({ where: { rentalId: id, kind: 'pdf' } })).toBe(1);
+    expect((await call(owner, 'POST', `/api/rentals/${id}/contract/sign`, { agree: false, signaturePng: PNG })).statusCode).toBe(400);
+    const signed = await call(owner, 'POST', `/api/rentals/${id}/contract/sign`, { agree: true, signaturePng: PNG });
+    expect(signed.statusCode, signed.body).toBe(201);
+    const a = await call(owner, 'GET', `/api/rentals/${id}/contract.pdf`);
+    const b = await call(owner, 'GET', `/api/rentals/${id}/contract.pdf`);
+    expect(Buffer.compare(a.rawPayload, b.rawPayload)).toBe(0);
+    const after = json<{ documents: { contract: { signedAt: string | null } } }>(await call(owner, 'GET', `/api/rentals/${id}`));
+    expect(after.documents.contract.signedAt).not.toBeNull();
   });
 
-  it('a manager may hand the contract over but not rebuild it; a owner rebuild archives the old copy', async () => {
+  it('a manager may hand the contract over but not rebuild it; an owner rebuild archives the old copy', async () => {
     const { prisma, owner, id } = await rentalWithEverything();
     await call(owner, 'GET', `/api/rentals/${id}/contract.pdf`);
 
@@ -58,8 +70,7 @@ describe.skipIf(!HAS_DB)('documents', () => {
 
     expect((await call(owner, 'GET', `/api/rentals/${id}/contract.pdf?fresh=1`)).statusCode).toBe(200);
     const all = await prisma.storedFile.findMany({ where: { rentalId: id, docKind: 'contract' } });
-    expect(all).toHaveLength(2);
-    expect(all.filter((f) => f.archived)).toHaveLength(1);
+    expect(all.filter((f) => !f.archived)).toHaveLength(1);
     const journal = await prisma.auditLog.findFirst({ where: { entityId: id, action: 'document.regenerate' } });
     expect(journal).not.toBeNull();
   });
@@ -70,11 +81,14 @@ describe.skipIf(!HAS_DB)('documents', () => {
     expect(early.statusCode).toBe(409);
     expect(json<{ error: string }>(early).error).toBe('not_returned');
 
-    await call(owner, 'POST', `/api/rentals/${id}/return`, {
+    await call(owner, 'POST', '/api/money', { kind: 'rent', rentalId: id, amountTetri: '330', channel: 'cash', occurredOn: '2026-09-01', backdateReason: 'test' });
+    const back = await call(owner, 'POST', `/api/rentals/${id}/return`, {
       returnedOn: '2026-09-12',
+      odometerKm: 10,
       items: { moped: { state: 'ok' }, key: { state: 'damaged', note: 'bent' }, battery_1: { state: 'missing' } },
-      deposit: { returnedTetri: 13000, withheldTetri: 5000, withheldReason: 'broken mirror', grounds: ['moped_damage', 'other'] },
+      deposit: { action: 'withhold', withheldTetri: 5000, reason: 'broken mirror', grounds: ['moped_damage', 'other'] },
     });
+    expect(back.statusCode, back.body).toBe(200);
 
     const act = await call(owner, 'GET', `/api/rentals/${id}/return-act.pdf`);
     expect(act.statusCode, act.body.slice(0, 200)).toBe(200);

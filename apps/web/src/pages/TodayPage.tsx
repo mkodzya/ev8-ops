@@ -27,6 +27,10 @@ interface Summary {
   fleet: Record<VehicleState, number>;
   rentals: { active: number; overdue: number; withoutVin: number };
   overdueList: OverdueRow[];
+  /** Handed over today with nothing paid yet (wave 3 §3.3). */
+  awaitingPayment?: { id: string; number: string; customer: string }[];
+  /** Returns a manager closed; the deposit waits for an owner (wave 3 §3.5). */
+  depositsUndecided?: { id: string; number: string; customer: string; days: number }[];
   customers: number;
   unmatchedLines: number;
   openServiceJobs: number;
@@ -81,6 +85,51 @@ export function TodayPage() {
           </div>
         )}
       </section>
+
+      {(s.awaitingPayment ?? []).length > 0 && (
+        <section className="card">
+          <BlockHead title={t.w3.awaitingPayment} sub={t.rentals.count(s.awaitingPayment!.length)} />
+          <ul className="od-list">
+            {s.awaitingPayment!.map((r) => (
+              <li key={r.id}>
+                <Link to={`/rentals/${r.id}`} className="od-who">
+                  <span className="od-name">{r.customer}</span>
+                  <span className="mono muted od-num">{r.number}</span>
+                </Link>
+                <span className="od-acts">
+                  {can('cash.record') && (
+                    <Link to={`/rentals/${r.id}`} className="pill pill-sm pill-accent">
+                      {t.today.markPaid}
+                    </Link>
+                  )}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {(s.depositsUndecided ?? []).length > 0 && (
+        <section className="card">
+          <BlockHead title={t.w3.depositsUndecided} sub={t.rentals.count(s.depositsUndecided!.length)} />
+          <ul className="od-list">
+            {s.depositsUndecided!.map((r) => (
+              <li key={r.id}>
+                <Link to={`/rentals/${r.id}`} className="od-who">
+                  <span className="od-name">{r.customer}</span>
+                  <span className="mono muted od-num">{r.number}</span>
+                </Link>
+                <span className="od-days warn-text">{t.w3.daysWaiting(r.days)}</span>
+                <span className="od-acts">
+                  <Link to={`/rentals/${r.id}?decide=1`} className="pill pill-sm pill-accent">
+                    {t.w3.decide}
+                  </Link>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {s.overdueList.length > 0 && (
         <section className="card">

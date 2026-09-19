@@ -1,13 +1,14 @@
 import type { ActKind, DepositStatus, PeriodPayStatus, RentalStatus } from '@ev8/shared';
 import { useState } from 'react';
 import { parseGel, todayISO, type VehicleState } from '@ev8/shared';
+import { DocumentRow, signedAtText, type DocState } from '../components/Documents.js';
 import { LoadError } from '../components/LoadError.js';
+import { DecideSheet } from '../components/ReturnMoney.js';
+import { RowMenu } from '../components/RowMenu.js';
 import { Field } from '../components/Wizard.js';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { FormSheet, SubmitButton } from '../ds/form/Form.js';
-import { useOperation } from '../ds/form/operation.js';
-import { useToast } from '../ds/feedback/Toast.js';
 import { BlockHead, Empty, Loading, PageHead, RentalBadge, Vin } from '../components/ui.js';
 import { useMoneyForm } from '../ds/money/MoneyForm.js';
 import { Row } from '../components/Wizard.js';
@@ -50,9 +51,16 @@ export interface RentalCard {
     buyoutTargetTetri: number | null;
     buyoutPerPaymentTetri: number | null;
     notes: string | null;
+    transferredAt?: string | null;
+    debtOverrideReason?: string | null;
+    /** Until when an owner may take the return back (B5-08); null — not any more. */
+    undoReturnUntil?: string | null;
   };
+  /** What a return charged beyond the weeks: a key, days of delay (wave 3 §3.4). */
+  charges: { kind: string; amountTetri: number; note: string | null; paidTetri: number }[];
+  documents: { contract: DocState; returnAct: DocState | null };
   payments: { id: string; occurredOn: string; channel: 'transfer' | 'acquiring' | 'cash'; grossTetri: number; feeTetri: number }[];
-  deposit: { amountTetri: number; paidTetri: number; status: DepositStatus; returnedTetri: number; withheldTetri: number; withheldReason: string | null; withheldGrounds: string[]; returnedTo: string | null; returnedOn: string | null; confirmed?: boolean | null } | null;
+  deposit: { amountTetri: number; paidTetri: number; status: DepositStatus; returnedTetri: number; withheldTetri: number; withheldReason: string | null; withheldGrounds: string[]; returnedTo: string | null; returnedOn: string | null; decided: boolean; paidOutTetri: number; withholdings: { source: string; amountTetri: number; number: string; reason: string }[] } | null;
   periods: { seq: number; startsOn: string; endsOn: string; amountTetri: number; paidTetri: number; payStatus: PeriodPayStatus }[];
   acts: { id: string; kind: ActKind; occurredOn: string; odometerKm: number | null; condition: string | null; photos: { id: string; label: string }[]; pdfUrl: string | null }[];
 }
@@ -63,9 +71,12 @@ export function RentalPage() {
   const openMoney = useMoneyForm();
   const { can } = useSession();
   const { data, failure, reload } = useLoad<RentalCard>(id ? `/api/rentals/${id}` : null);
-  const [editing, setEditing] = useState(false);
-  const depositOp = useOperation();
-  const toast = useToast();
+  const [params, setParams] = useSearchParams();
+  const [sheet, setSheet] = useState<null | 'edit' | 'status' | 'undo' | 'decide'>(params.get('decide') === '1' ? 'decide' : null);
+  const closeSheet = () => {
+    setSheet(null);
+    if (params.get('decide')) setParams({}, { replace: true });
+  };
   // Which document is showing in the card, if any (U15). Printing is the last
   // step of every hand-over and every return, and a link that opens a new tab
   // is a step where people find out the PDF was wrong after they printed it.
@@ -81,14 +92,13 @@ export function RentalPage() {
   const debtTetri = r.debtTetri;
   const d = data.deposit;
   const open = r.status !== 'returned';
-  const decided = d && d.status !== 'held';
-
-  const confirm = async () => {
-    const res = await depositOp.run((key) => api.post(`/api/rentals/${r.id}/deposit/confirm`, {}, { key }));
-    if (!res.ok) return;
-    toast({ text: t.rental.depositConfirmed });
-    reload();
-  };
+  const owner = can('deposit.decide');
+  const menu = [
+    ...(open && can('rental.create') ? [{ key: 'edit', label: t.rentalMenu.edit, onPick: () => setSheet('edit') }] : []),
+    ...(open && owner ? [{ key: 'status', label: t.rentalMenu.status, onPick: () => setSheet('status') }] : []),
+    ...(!open && owner && r.undoReturnUntil ? [{ key: 'undo', label: t.rentalMenu.undo, onPick: () => setSheet('undo') }] : []),
+    ...(!open && owner && d && !d.decided ? [{ key: 'decide', label: t.rentalMenu.decide, onPick: () => setSheet('decide') }] : []),
+  ];
 
   return (
     <>
@@ -101,26 +111,27 @@ export function RentalPage() {
             {t.docs.returnAct}
           </button>
         )}
-        {open && can('rental.create') && (
-          <button type="button" className="pill pill-sm" onClick={() => setEditing(true)}>
-            {t.rentalEdit.title}
-          </button>
-        )}
         {open && can('rental.return') && (
           <Link className="pill pill-sm pill-accent" to={`/rentals/${r.id}/return`}>
             {t.actions.returnRental}
           </Link>
         )}
+        <RowMenu actions={menu} />
       </PageHead>
-      {editing && (
+      {sheet === 'edit' && (
         <RentalEdit
           rental={r}
-          onClose={() => setEditing(false)}
+          onClose={closeSheet}
           onSaved={() => {
-            setEditing(false);
+            closeSheet();
             reload();
           }}
         />
+      )}
+      {sheet === 'status' && <StatusSheet rental={r} onClose={closeSheet} onDone={() => { closeSheet(); reload(); }} />}
+      {sheet === 'undo' && r.undoReturnUntil && <UndoSheet rental={r} until={r.undoReturnUntil} onClose={closeSheet} onDone={() => { closeSheet(); reload(); }} />}
+      {sheet === 'decide' && r.returnedOn && (
+        <DecideSheet rentalId={r.id} number={r.number} returnedOn={r.returnedOn} paidThrough={r.paidThrough} onClose={closeSheet} onDone={() => { closeSheet(); reload(); }} />
       )}
       {can('deposit.decide') && (
         <p className="hint muted">
@@ -189,6 +200,39 @@ export function RentalPage() {
         </div>
       )}
 
+      {data.charges.length > 0 && (
+        <section className="card">
+          {data.charges.map((c, i) => (
+            <Row
+              key={i}
+              k={t.rentalMoney.charges[c.kind] ?? c.kind}
+              v={
+                <span>
+                  <span className="mono">{formatGel(c.amountTetri, { decimals: false })}</span>
+                  {c.paidTetri < c.amountTetri && c.paidTetri > 0 && <span className="muted"> · {t.rentalMoney.rest(formatGel(c.amountTetri - c.paidTetri, { decimals: false }))}</span>}
+                </span>
+              }
+            />
+          ))}
+        </section>
+      )}
+
+      <section className="card">
+        <BlockHead title={t.rentalMenu.documents} />
+        <DocumentRow rentalId={r.id} kind="contract" title={t.hand.contract} state={data.documents.contract} customerId={r.customer.id} onChanged={reload} />
+        {data.documents.returnAct && (
+          <DocumentRow
+            rentalId={r.id}
+            kind="return-act"
+            title={t.back.act}
+            sub={d && !d.decided ? t.back.undecided : undefined}
+            state={data.documents.returnAct}
+            customerId={r.customer.id}
+            onChanged={reload}
+          />
+        )}
+      </section>
+
       <div className="two-col">
         <section className="card">
           <Row k={t.rentals.customer} v={<Link to={`/customers/${r.customer.id}`}>{r.customer.name}</Link>} />
@@ -229,24 +273,31 @@ export function RentalPage() {
           <BlockHead title={t.rentals.deposit} />
           {d ? (
             <>
-              <Row k={t.rental.amount} v={<span className="mono">{formatGel(d.amountTetri, { decimals: false })}</span>} />
-              <Row k={t.rental.paid} v={<span className="mono">{formatGel(d.paidTetri, { decimals: false })}</span>} />
-              <Row k={t.fleet.state} v={t.rental.depositStatus[d.status]} />
-              {decided && (
-                <>
-                  {d.returnedTetri > 0 && <Row k={t.rentals.returned} v={<span className="mono">{formatGel(d.returnedTetri, { decimals: false })} · {fmtDate(d.returnedOn)}</span>} />}
-                  {d.withheldTetri > 0 && <Row k={t.rental.withheldReason} v={<span><span className="mono">{formatGel(d.withheldTetri, { decimals: false })}</span> · {d.withheldReason}</span>} />}
-                  {d.returnedTo && <Row k={t.rental.returnedTo} v={d.returnedTo} />}
-                  {d.confirmed === false && (
-                    <div className="row-actions">
-                      <span className="warn-text">{t.rental.awaitingOwner}</span>
-                      {can('deposit.confirm') && (
-                        <SubmitButton small type="button" state={depositOp.state} label={t.actions.confirmDeposit} onClick={() => void confirm()} />
-                      )}
-                      {depositOp.failure && <span className="field-err">{depositOp.failure.text}</span>}
-                    </div>
+              {/* Received of what the contract asks, what was kept line by line, handed back, on hand (B5-04, §3.3). */}
+              <Row k={t.rental.paid} v={<span className="mono">{t.rentalMoney.receivedOf(formatGel(d.paidTetri, { decimals: false }), formatGel(d.amountTetri, { decimals: false }))}</span>} />
+              {d.withholdings.map((w, i) => (
+                <Row
+                  key={i}
+                  k={w.source === 'service' ? t.rentalMoney.keptRepair(w.number) : t.rentalMoney.keptReturn}
+                  v={
+                    <span>
+                      <span className="mono">{formatGel(w.amountTetri, { decimals: false })}</span> <span className="muted">· {w.reason}</span>
+                    </span>
+                  }
+                />
+              ))}
+              {d.paidOutTetri > 0 && <Row k={t.rentalMoney.paidOut} v={<span className="mono">{formatGel(d.paidOutTetri, { decimals: false })}</span>} />}
+              <Row k={t.rentalMoney.onHand} v={<span className="mono">{formatGel(Math.max(0, d.paidTetri - d.withheldTetri - d.paidOutTetri), { decimals: false })}</span>} />
+              {d.decided && d.returnedTo && <Row k={t.rental.returnedTo} v={d.returnedTo} />}
+              {!open && !d.decided && (
+                <div className="row-actions">
+                  <span className="warn-text">{t.rentalMoney.undecided}</span>
+                  {owner && (
+                    <button type="button" className="pill pill-sm pill-accent" onClick={() => setSheet('decide')}>
+                      {t.w3.decide}
+                    </button>
                   )}
-                </>
+                </div>
               )}
             </>
           ) : (
@@ -369,38 +420,30 @@ interface FreeVehicles {
 }
 
 /**
- * The edits the rental requirements ask for after a hand-over: giving a
- * rental its moped once the VIN is confirmed (RNT-06), pausing or disputing
- * it with a reason (RNT-06), and the buy-out terms (RNT-07).
+ * "Change terms" (wave 3 §3.7, B4-08): night parking, batteries, chargers, the
+ * planned return — an owner or a manager, "was / became" in the journal. The
+ * rate of a running rental does not change (Q12). Also here: giving a rental
+ * its moped once the VIN is confirmed (RNT-06), the buy-out terms (RNT-07), notes.
  */
-function RentalEdit({
-  rental,
-  onClose,
-  onSaved,
-}: {
-  rental: RentalCard['rental'];
-  onClose: () => void;
-  onSaved: () => void;
-}) {
+function RentalEdit({ rental, onClose, onSaved }: { rental: RentalCard['rental']; onClose: () => void; onSaved: () => void }) {
   const t = useT();
   const fleet = useLoad<FreeVehicles>(rental.vinUnconfirmed ? '/api/fleet' : null);
   const initial = {
+    nightParking: rental.nightParkingAddress ?? '',
+    batteries: rental.batteries != null ? String(rental.batteries) : '',
+    chargers: rental.chargers != null ? String(rental.chargers) : '',
+    expectedReturnOn: rental.expectedReturnOn ?? '',
     vehicleId: '',
-    status: rental.storedStatus === 'returned' ? 'active' : rental.storedStatus,
-    reason: '',
     target: rental.buyoutTargetTetri ? String(rental.buyoutTargetTetri / 100) : '',
     per: rental.buyoutPerPaymentTetri ? String(rental.buyoutPerPaymentTetri / 100) : '',
     notes: rental.notes ?? '',
   };
   const [f, setF] = useState(initial);
-
   const free = (fleet.data?.vehicles ?? []).filter((v) => v.state === 'available');
-  const statusChanged = f.status !== rental.storedStatus;
-  const needsReason = statusChanged && f.status !== 'active';
 
   return (
     <FormSheet
-      title={t.rentalEdit.title}
+      title={t.rentalMenu.editTitle(rental.number)}
       onClose={onClose}
       value={f}
       initial={initial}
@@ -408,55 +451,121 @@ function RentalEdit({
       onRestore={setF}
       label={t.actions.save}
       submit={async (key) => {
-        const body: Record<string, unknown> = { notes: f.notes || null };
+        const body: Record<string, unknown> = {};
+        if (f.nightParking !== initial.nightParking) body.nightParkingAddress = f.nightParking.trim() || null;
+        if (f.batteries !== initial.batteries) body.batteries = f.batteries === '' ? null : Number(f.batteries);
+        if (f.chargers !== initial.chargers) body.chargers = f.chargers === '' ? null : Number(f.chargers);
+        if (f.expectedReturnOn !== initial.expectedReturnOn) body.expectedReturnOn = f.expectedReturnOn || null;
+        if (f.notes !== initial.notes) body.notes = f.notes || null;
         if (f.vehicleId) body.vehicleId = f.vehicleId;
-        if (statusChanged) body.status = f.status;
-        if (f.reason) body.reason = f.reason;
-        body.buyoutTargetTetri = f.target ? parseGel(f.target) : null;
-        body.buyoutPerPaymentTetri = f.per ? parseGel(f.per) : null;
+        if (f.target !== initial.target || f.per !== initial.per) {
+          body.buyoutTargetTetri = f.target ? parseGel(f.target) : null;
+          body.buyoutPerPaymentTetri = f.per ? parseGel(f.per) : null;
+        }
         await api.patch(`/api/rentals/${rental.id}`, body, { key });
         return { toast: { text: t.form.changesSaved } };
       }}
       onDone={onSaved}
     >
-        {rental.vinUnconfirmed && (
-          <Field label={t.rentalEdit.assignVehicle} hint={t.rentalEdit.assignHint} name="vehicleId">
-            <select className="input" value={f.vehicleId} onChange={(e) => setF({ ...f, vehicleId: e.target.value })}>
-              <option value="">{t.common.dash}</option>
-              {free.map((v) => (
-                <option key={v.id} value={v.id}>
-                  {v.vin} · {v.model}
-                </option>
-              ))}
-            </select>
-          </Field>
-        )}
-        <Field label={t.rentalEdit.status} name="status">
-          <div className="chips">
-            {(['active', 'paused', 'disputed'] as const).map((st) => (
-              <button key={st} type="button" className={`pill pill-sm ${f.status === st ? 'on' : ''}`} onClick={() => setF({ ...f, status: st })}>
-                {t.rentalStatus[st]}
-              </button>
+      <p className="hint muted">{t.rentalMenu.rateFixed(formatGel(rental.weeklyRateTetri, { decimals: false }))}</p>
+      <Field label={t.hand.nightParking} name="nightParkingAddress">
+        <input className="input" value={f.nightParking} onChange={(e) => setF({ ...f, nightParking: e.target.value })} />
+      </Field>
+      <div className="two-col two-col-tight">
+        <Field label={t.hand.batteries} name="batteries">
+          <input className="input input-amount mono" value={f.batteries} onChange={(e) => setF({ ...f, batteries: e.target.value })} inputMode="numeric" />
+        </Field>
+        <Field label={t.hand.chargers} name="chargers">
+          <input className="input input-amount mono" value={f.chargers} onChange={(e) => setF({ ...f, chargers: e.target.value })} inputMode="numeric" />
+        </Field>
+      </div>
+      <Field label={t.hand.expectedReturn} hint={t.hand.expectedReturnHint} name="expectedReturnOn">
+        <input className="input mono" type="date" min={rental.pickedUpOn ?? undefined} value={f.expectedReturnOn} onChange={(e) => setF({ ...f, expectedReturnOn: e.target.value })} />
+      </Field>
+      {rental.vinUnconfirmed && (
+        <Field label={t.rentalEdit.assignVehicle} hint={t.rentalEdit.assignHint} name="vehicleId">
+          <select className="input" value={f.vehicleId} onChange={(e) => setF({ ...f, vehicleId: e.target.value })}>
+            <option value="">{t.common.dash}</option>
+            {free.map((v) => (
+              <option key={v.id} value={v.id}>
+                {v.vin} · {v.model}
+              </option>
             ))}
-          </div>
+          </select>
         </Field>
-        {needsReason && (
-          <Field label={t.rentalEdit.reason} hint={t.rentalEdit.reasonHint} name="reason">
-            <input className="input" value={f.reason} onChange={(e) => setF({ ...f, reason: e.target.value })} />
-          </Field>
-        )}
-        <span className="lbl">{t.rentalEdit.buyout}</span>
-        <div className="two-col">
-          <Field label={t.rentalEdit.buyoutTarget} name="buyoutTargetTetri">
-            <input className="input input-amount mono" value={f.target} onChange={(e) => setF({ ...f, target: e.target.value })} inputMode="decimal" />
-          </Field>
-          <Field label={t.rentalEdit.buyoutPerPayment} name="buyoutPerPaymentTetri">
-            <input className="input input-amount mono" value={f.per} onChange={(e) => setF({ ...f, per: e.target.value })} inputMode="decimal" />
-          </Field>
-        </div>
-        <Field label={t.rentalEdit.notes} name="notes">
-          <textarea className="input textarea" rows={3} value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })} />
+      )}
+      <span className="lbl">{t.rentalEdit.buyout}</span>
+      <div className="two-col two-col-tight">
+        <Field label={t.rentalEdit.buyoutTarget} name="buyoutTargetTetri">
+          <input className="input input-amount mono" value={f.target} onChange={(e) => setF({ ...f, target: e.target.value })} inputMode="decimal" />
         </Field>
+        <Field label={t.rentalEdit.buyoutPerPayment} name="buyoutPerPaymentTetri">
+          <input className="input input-amount mono" value={f.per} onChange={(e) => setF({ ...f, per: e.target.value })} inputMode="decimal" />
+        </Field>
+      </div>
+      <Field label={t.rentalEdit.notes} name="notes">
+        <textarea className="input textarea" rows={3} value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })} />
+      </Field>
+    </FormSheet>
+  );
+}
+
+/** Pause · Disputed · Active again — an owner, with a reason (§3.7, Q11). */
+function StatusSheet({ rental, onClose, onDone }: { rental: RentalCard['rental']; onClose: () => void; onDone: () => void }) {
+  const t = useT();
+  const current = rental.storedStatus === 'paused' || rental.storedStatus === 'disputed' ? rental.storedStatus : 'active';
+  const initial = { status: current as 'active' | 'paused' | 'disputed', reason: '' };
+  const [f, setF] = useState(initial);
+  return (
+    <FormSheet
+      title={`${t.rentalMenu.statusTitle} · ${rental.number}`}
+      onClose={onClose}
+      value={f}
+      initial={initial}
+      label={t.rentalMenu.statusSet[f.status]}
+      submit={async (key) => {
+        await api.post(`/api/rentals/${rental.id}/status`, { status: f.status, reason: f.reason.trim() }, { key });
+        return { toast: { text: t.form.changesSaved } };
+      }}
+      onDone={onDone}
+    >
+      <div className="chips">
+        {(['active', 'paused', 'disputed'] as const).map((st) => (
+          <button key={st} type="button" className={`pill pill-sm ${f.status === st ? 'on' : ''}`} onClick={() => setF({ ...f, status: st })}>
+            {t.rentalStatus[st]}
+          </button>
+        ))}
+      </div>
+      <Field label={t.rentalMenu.reason} hint={f.status === 'active' ? t.rentalMenu.resumeHint : t.rentalMenu.statusHint} name="reason">
+        <input className="input" value={f.reason} onChange={(e) => setF({ ...f, reason: e.target.value })} />
+      </Field>
+    </FormSheet>
+  );
+}
+
+/** "Cancel the return" — an owner, within a day, with a reason (§3.7, B5-08). */
+function UndoSheet({ rental, until, onClose, onDone }: { rental: RentalCard['rental']; until: string; onClose: () => void; onDone: () => void }) {
+  const t = useT();
+  const initial = { reason: '' };
+  const [f, setF] = useState(initial);
+  const untilText = signedAtText(until);
+  return (
+    <FormSheet
+      title={t.rentalMenu.undoTitle(rental.number)}
+      onClose={onClose}
+      value={f}
+      initial={initial}
+      label={t.rentalMenu.undo}
+      submit={async (key) => {
+        await api.post(`/api/rentals/${rental.id}/return/undo`, { reason: f.reason.trim() }, { key });
+        return { toast: { text: t.form.changesSaved } };
+      }}
+      onDone={onDone}
+    >
+      <Field label={t.rentalMenu.reason} name="reason">
+        <input className="input" value={f.reason} onChange={(e) => setF({ reason: e.target.value })} />
+      </Field>
+      <p className="hint muted">{t.rentalMenu.undoUntil(untilText)}</p>
     </FormSheet>
   );
 }

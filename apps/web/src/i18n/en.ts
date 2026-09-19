@@ -7,6 +7,7 @@
 // screen. Values that need data are functions, so interpolation is checked.
 //
 // Money keeps ONE format in every language (formatGel in @ev8/shared).
+import { wave3En } from './wave3.js';
 export const en = {
   lang: { label: 'Language', ka: 'ქართული', ru: 'Русский', en: 'English' },
 
@@ -204,6 +205,7 @@ export const en = {
 
   rentalStatus: {
     booked: 'Booked',
+    awaiting_payment: 'Awaiting payment',
     active: 'Active',
     overdue: 'Overdue',
     paused: 'Paused',
@@ -286,7 +288,6 @@ export const en = {
     returnRental: 'Return',
     newCustomer: 'New customer',
     changeState: 'Change state',
-    confirmDeposit: 'Confirm deposit decision',
     assignVehicle: 'Assign a moped',
     back: 'Back',
     next: 'Next',
@@ -327,7 +328,6 @@ export const en = {
   },
 
   rental: {
-    depositConfirmed: 'Deposit decision confirmed',
     actsCount: (n: number) => `${n} ${n === 1 ? 'act' : 'acts'}`,
     periodsCount: (n: number) => `${n} ${n === 1 ? 'week' : 'weeks'}`,
     owed: 'Owed',
@@ -344,48 +344,18 @@ export const en = {
     depositStatus: { held: 'Held', returned: 'Returned', withheld: 'Withheld', partial: 'Partly withheld' },
     withheldReason: 'Reason withheld',
     returnedTo: 'Returned to',
-    awaitingOwner: 'Awaiting the owner’s confirmation',
     buyout: 'Buy-out',
     buyoutProgress: (target: string, per: string) => `${per} of each payment towards ${target}`,
     notes: 'Notes',
   },
 
   pickup: {
-    handOver: 'Hand over the moped',
-    title: 'Hand-over',
-    steps: { customer: 'Customer', vehicle: 'Moped', terms: 'Terms', act: 'Act', done: 'Done' },
     stepOf: (i: number, n: number) => `Step ${i} of ${n}`,
-    searchCustomer: 'Name or phone',
-    noVehicle: 'VIN not confirmed — write why',
     noVehicleHint: 'Leave the moped unpicked and say what the contract shows; the rental lands on the “without VIN” list.',
-    rate: 'Weekly rate',
-    deposit: 'Deposit',
-    pickedUpOn: 'Pickup date',
     expectedReturnOn: 'Expected return',
-    odometer: 'Odometer, km',
-    condition: 'Condition, damage',
-    photos: 'Photos',
-    summary: 'Summary',
-    created: (n: string) => `Hand-over ${n} recorded.`,
     noAvailable: 'No moped is available right now.',
   },
 
-  ret: {
-    finish: 'Close the rental',
-    title: 'Return',
-    returnedOn: 'Return date',
-    odometer: 'Odometer, km',
-    condition: 'Condition, damage',
-    depositDecision: 'Deposit',
-    returnFull: 'Return in full',
-    withholdPart: 'Withhold part',
-    withholdAll: 'Withhold all',
-    withheldAmount: 'Withheld amount',
-    withheldReason: 'Reason',
-    returnedTo: 'Returned to (blank = the payer)',
-    leaveToOwner: 'An owner decides on the deposit.',
-    done: 'Return recorded.',
-  },
 
   customer: {
     created: 'Customer card created',
@@ -448,17 +418,7 @@ export const en = {
   },
 
   returnItems: {
-    title: 'Returned property',
-    items: {
-      moped: 'Moped',
-      key: 'Key',
-      battery_1: 'Battery 1',
-      battery_2: 'Battery 2',
-      charger_1: 'Charger 1',
-      charger_2: 'Charger 2',
-    },
     states: { ok: 'In order', damaged: 'Damaged', missing: 'Not returned' },
-    note: 'Note',
   },
 
   grounds: {
@@ -684,12 +644,8 @@ export const en = {
   },
 
   rentalEdit: {
-    title: 'Edit the rental',
     assignVehicle: 'Assign a moped',
     assignHint: 'The rental was opened without a confirmed VIN. Picking a moped here hands it over on the pickup date.',
-    status: 'Status',
-    reason: 'Reason',
-    reasonHint: 'Pausing or disputing a rental needs a reason, and it goes into the journal.',
     buyout: 'Buy-out from the rental',
     buyoutTarget: 'Target amount',
     buyoutPerPayment: 'Of each payment towards it',
@@ -939,7 +895,7 @@ export const en = {
     add: 'Record a payment',
     date: 'Date',
     channel: 'Channel',
-    channels: { transfer: 'Transfer', acquiring: 'Card', cash: 'Cash' },
+    channels: { transfer: 'Transfer', acquiring: 'Card', cash: 'Cash', deposit: 'From the deposit' },
     gross: 'Paid by the customer',
     net: 'Credited by the bank',
     fee: 'Acquirer fee',
@@ -1247,7 +1203,6 @@ export const en = {
       demo_login_off: 'Demo logins are switched off on this stand.',
       deposit_decision_forbidden: 'Only an owner decides on a deposit.',
       deposit_not_found: 'This rental has no deposit.',
-      deposit_split: 'Returned and withheld together come to more than the deposit.',
       deposit_too_small: 'The deposit does not hold that much.',
       documents_restricted: 'Customer documents are for the owners only.',
       down_payment_too_big: 'The down payment is more than the price.',
@@ -1281,7 +1236,6 @@ export const en = {
       not_paid: 'Nothing has been paid for this order yet, so the unit cost cannot be counted.',
       not_returned: 'The return act appears once the rental is closed.',
       not_yours: 'Only the person who made this move can undo it.',
-      nothing_to_confirm: 'There is no decision on this deposit yet.',
       nothing_to_correct: 'The count already says that.',
       nothing_to_undo: 'This moped has no park move to undo.',
       outgoing_line: 'Money leaving the account is not a customer payment.',
@@ -1295,6 +1249,15 @@ export const en = {
       purchase_has_payments: 'Cancel the payments on this order first.',
       purchase_not_found: 'Order not found.',
       reason_required: 'Withholding needs a reason.',
+      customer_in_debt: 'This customer owes money. Only an owner can hand over a moped, with a reason.',
+      deposit_decided: 'The deposit has already been decided.',
+      document_gaps: 'The document is missing data. Fill it in before signing.',
+      odometer_below: 'The mileage is below the last recorded one. Give a reason.',
+      odometer_below_pickup: 'The mileage is below the one at pick-up.',
+      transfer_date: 'A rental brought over must start before today, and paid weeks must end on a week boundary.',
+      undo_return_too_late: 'A return can be cancelled only within 24 hours.',
+      use_status_route: 'The status is changed through its own action, with a reason.',
+      vehicle_in_sale_pool: 'This moped is in the sale park. Only an owner can hand it over.',
       reconcile_required: 'Only an owner enters bank payments.',
       regenerate_forbidden: 'Only an owner can replace a document already issued.',
       rental_not_found: 'Rental not found.',
@@ -1321,6 +1284,7 @@ export const en = {
       wrong_password: 'The current password is wrong.',
     },
   },
+  ...wave3En,
 };
 
 export type Dict = typeof en;

@@ -1,3 +1,4 @@
+import { wave3Ru } from './wave3.js';
 import type { Dict } from './en.js';
 
 // Typed as Dict: a missing or misspelled key fails the build.
@@ -207,6 +208,7 @@ export const ru: Dict = {
 
   rentalStatus: {
     booked: 'Бронь',
+    awaiting_payment: 'Ждёт оплаты',
     active: 'Активна',
     overdue: 'Просрочена',
     paused: 'Пауза',
@@ -289,7 +291,6 @@ export const ru: Dict = {
     returnRental: 'Возврат',
     newCustomer: 'Новый клиент',
     changeState: 'Изменить состояние',
-    confirmDeposit: 'Подтвердить решение по залогу',
     assignVehicle: 'Привязать мопед',
     back: 'Назад',
     next: 'Дальше',
@@ -330,7 +331,6 @@ export const ru: Dict = {
   },
 
   rental: {
-    depositConfirmed: 'Решение по депозиту подтверждено',
     actsCount: counted('акт', 'акта', 'актов'),
     periodsCount: counted('неделя', 'недели', 'недель'),
     owed: 'Долг',
@@ -347,48 +347,18 @@ export const ru: Dict = {
     depositStatus: { held: 'На руках', returned: 'Возвращён', withheld: 'Удержан', partial: 'Удержан частично' },
     withheldReason: 'Причина удержания',
     returnedTo: 'Кому возвращён',
-    awaitingOwner: 'Ждёт подтверждения владельца',
     buyout: 'Выкуп',
     buyoutProgress: (target: string, per: string) => `${per} с каждого платежа в счёт ${target}`,
     notes: 'Заметки',
   },
 
   pickup: {
-    handOver: 'Выдать мопед',
-    title: 'Выдача',
-    steps: { customer: 'Клиент', vehicle: 'Мопед', terms: 'Условия', act: 'Акт', done: 'Готово' },
     stepOf: (i: number, n: number) => `Шаг ${i} из ${n}`,
-    searchCustomer: 'Имя или телефон',
-    noVehicle: 'VIN не подтверждён — почему',
     noVehicleHint: 'Не выбирайте мопед и напишите, что в договоре; аренда попадёт в список «без VIN».',
-    rate: 'Недельный тариф',
-    deposit: 'Залог',
-    pickedUpOn: 'Дата выдачи',
     expectedReturnOn: 'Ожидаемый возврат',
-    odometer: 'Пробег, км',
-    condition: 'Состояние, повреждения',
-    photos: 'Фото',
-    summary: 'Итог',
-    created: (n: string) => `Выдача ${n} оформлена.`,
     noAvailable: 'Свободных мопедов сейчас нет.',
   },
 
-  ret: {
-    finish: 'Закрыть аренду',
-    title: 'Возврат',
-    returnedOn: 'Дата возврата',
-    odometer: 'Пробег, км',
-    condition: 'Состояние, повреждения',
-    depositDecision: 'Залог',
-    returnFull: 'Вернуть полностью',
-    withholdPart: 'Удержать часть',
-    withholdAll: 'Удержать полностью',
-    withheldAmount: 'Сумма удержания',
-    withheldReason: 'Причина',
-    returnedTo: 'Кому возвращён (пусто = плательщику)',
-    leaveToOwner: 'Решение по залогу примет владелец.',
-    done: 'Возврат оформлен.',
-  },
 
   customer: {
     created: 'Карточка клиента создана',
@@ -451,17 +421,7 @@ export const ru: Dict = {
   },
 
   returnItems: {
-    title: 'Возвращённое имущество',
-    items: {
-      moped: 'Мопед',
-      key: 'Ключ',
-      battery_1: 'Батарея 1',
-      battery_2: 'Батарея 2',
-      charger_1: 'Зарядное 1',
-      charger_2: 'Зарядное 2',
-    },
     states: { ok: 'Исправно', damaged: 'Повреждено', missing: 'Не возвращено' },
-    note: 'Замечание',
   },
 
   grounds: {
@@ -687,12 +647,8 @@ export const ru: Dict = {
   },
 
   rentalEdit: {
-    title: 'Правка аренды',
     assignVehicle: 'Привязать мопед',
     assignHint: 'Аренда заведена без подтверждённого VIN. Выбранный здесь мопед выдаётся датой выдачи.',
-    status: 'Статус',
-    reason: 'Причина',
-    reasonHint: 'Пауза и спорная аренда требуют причины, она попадает в журнал.',
     buyout: 'Выкуп из аренды',
     buyoutTarget: 'Целевая сумма',
     buyoutPerPayment: 'С каждого платежа в счёт',
@@ -942,7 +898,7 @@ export const ru: Dict = {
     add: 'Провести платёж',
     date: 'Дата',
     channel: 'Канал',
-    channels: { transfer: 'Перевод', acquiring: 'Карта', cash: 'Наличные' },
+    channels: { transfer: 'Перевод', acquiring: 'Карта', cash: 'Наличные', deposit: 'Из залога' },
     gross: 'Клиент заплатил',
     net: 'Банк зачислил',
     fee: 'Комиссия эквайринга',
@@ -1250,7 +1206,6 @@ export const ru: Dict = {
       demo_login_off: 'Демо-учётки на этом стенде отключены.',
       deposit_decision_forbidden: 'Решение по залогу принимает владелец.',
       deposit_not_found: 'У этой аренды нет залога.',
-      deposit_split: 'Возвращено и удержано вместе больше залога.',
       deposit_too_small: 'В залоге нет такой суммы.',
       documents_restricted: 'Документы клиента видят только владельцы.',
       down_payment_too_big: 'Первый взнос больше цены.',
@@ -1284,7 +1239,6 @@ export const ru: Dict = {
       not_paid: 'По заказу ещё ничего не оплачено — себестоимость не посчитать.',
       not_returned: 'Акт возврата появится, когда аренда будет закрыта.',
       not_yours: 'Отменить перевод может только тот, кто его сделал.',
-      nothing_to_confirm: 'Решения по залогу ещё нет.',
       nothing_to_correct: 'Остаток уже такой.',
       nothing_to_undo: 'У этого мопеда нет перевода, который можно отменить.',
       outgoing_line: 'Списание со счёта — не платёж клиента.',
@@ -1298,6 +1252,15 @@ export const ru: Dict = {
       purchase_has_payments: 'Сначала отмените платежи по этому заказу.',
       purchase_not_found: 'Заказ не найден.',
       reason_required: 'Для удержания нужна причина.',
+      customer_in_debt: 'У клиента долг. Выдать мопед может только владелец, с причиной.',
+      deposit_decided: 'По залогу уже есть решение.',
+      document_gaps: 'В документе не хватает данных. Заполните их перед подписью.',
+      odometer_below: 'Пробег меньше последнего записанного. Укажите причину.',
+      odometer_below_pickup: 'Пробег меньше, чем при выдаче.',
+      transfer_date: 'Перенесённая аренда должна начинаться раньше сегодняшнего дня, а оплаченные недели — заканчиваться на границе недели.',
+      undo_return_too_late: 'Отменить возврат можно только в течение 24 часов.',
+      use_status_route: 'Статус меняется отдельным действием, с причиной.',
+      vehicle_in_sale_pool: 'Мопед в парке продажи. Выдать его может только владелец.',
       reconcile_required: 'Банковские платежи вносит владелец.',
       regenerate_forbidden: 'Заменить уже выданный документ может только владелец.',
       rental_not_found: 'Аренда не найдена.',
@@ -1324,4 +1287,5 @@ export const ru: Dict = {
       wrong_password: 'Текущий пароль неверный.',
     },
   },
+  ...wave3Ru,
 };
