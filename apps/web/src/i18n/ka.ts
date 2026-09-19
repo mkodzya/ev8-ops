@@ -280,7 +280,6 @@ export const ka: Dict = {
     returnRental: 'დაბრუნება',
     newCustomer: 'ახალი კლიენტი',
     changeState: 'მდგომარეობის შეცვლა',
-    confirmDeposit: 'დეპოზიტის გადაწყვეტილების დადასტურება',
     assignVehicle: 'მოპედის მიბმა',
     back: 'უკან',
     next: 'შემდეგი',
@@ -321,7 +320,6 @@ export const ka: Dict = {
   },
 
   rental: {
-    depositConfirmed: 'დეპოზიტის შესახებ გადაწყვეტილება დადასტურდა',
     actsCount: (n: number) => `${n} აქტი`,
     periodsCount: (n: number) => `${n} კვირა`,
     owed: 'დავალიანება',
@@ -338,48 +336,18 @@ export const ka: Dict = {
     depositStatus: { held: 'ხელზე', returned: 'დაბრუნებული', withheld: 'დაკავებული', partial: 'ნაწილობრივ დაკავებული' },
     withheldReason: 'დაკავების მიზეზი',
     returnedTo: 'ვის დაუბრუნდა',
-    awaitingOwner: 'ელოდება მფლობელის დადასტურებას',
     buyout: 'გამოსყიდვა',
     buyoutProgress: (target: string, per: string) => `თითო გადახდიდან ${per} ${target}-ის ანგარიშში`,
     notes: 'შენიშვნები',
   },
 
   pickup: {
-    handOver: 'მოპედის გაცემა',
-    title: 'გაცემა',
-    steps: { customer: 'კლიენტი', vehicle: 'მოპედი', terms: 'პირობები', act: 'აქტი', done: 'მზადაა' },
     stepOf: (i: number, n: number) => `ნაბიჯი ${i}/${n}`,
-    searchCustomer: 'სახელი ან ტელეფონი',
-    noVehicle: 'VIN დაუდასტურებელია — მიზეზი',
     noVehicleHint: 'მოპედი არ აირჩიოთ და ჩაწერეთ, რა წერია ხელშეკრულებაში; ქირაობა „VIN-ის გარეშე“ სიაში მოხვდება.',
-    rate: 'კვირის ტარიფი',
-    deposit: 'დეპოზიტი',
-    pickedUpOn: 'გაცემის თარიღი',
     expectedReturnOn: 'სავარაუდო დაბრუნება',
-    odometer: 'გარბენი, კმ',
-    condition: 'მდგომარეობა, დაზიანებები',
-    photos: 'ფოტოები',
-    summary: 'შეჯამება',
-    created: (n: string) => `გაცემა ${n} გაფორმდა.`,
     noAvailable: 'ამჟამად თავისუფალი მოპედი არ არის.',
   },
 
-  ret: {
-    finish: 'ქირის დახურვა',
-    title: 'დაბრუნება',
-    returnedOn: 'დაბრუნების თარიღი',
-    odometer: 'გარბენი, კმ',
-    condition: 'მდგომარეობა, დაზიანებები',
-    depositDecision: 'დეპოზიტი',
-    returnFull: 'სრულად დაბრუნება',
-    withholdPart: 'ნაწილის დაკავება',
-    withholdAll: 'სრულად დაკავება',
-    withheldAmount: 'დაკავებული თანხა',
-    withheldReason: 'მიზეზი',
-    returnedTo: 'ვის დაუბრუნდა (ცარიელი = გადამხდელს)',
-    leaveToOwner: 'დეპოზიტზე მფლობელი გადაწყვეტს.',
-    done: 'დაბრუნება გაფორმდა.',
-  },
 
   customer: {
     created: 'კლიენტის ბარათი შეიქმნა',
@@ -442,17 +410,7 @@ export const ka: Dict = {
   },
 
   returnItems: {
-    title: 'დაბრუნებული ქონება',
-    items: {
-      moped: 'მოპედი',
-      key: 'გასაღები',
-      battery_1: 'ბატარეა 1',
-      battery_2: 'ბატარეა 2',
-      charger_1: 'დამტენი 1',
-      charger_2: 'დამტენი 2',
-    },
     states: { ok: 'გამართულია', damaged: 'დაზიანებულია', missing: 'არ დაბრუნებულა' },
-    note: 'შენიშვნა',
   },
 
   grounds: {
@@ -678,12 +636,8 @@ export const ka: Dict = {
   },
 
   rentalEdit: {
-    title: 'ქირაობის რედაქტირება',
     assignVehicle: 'მოპედის მიბმა',
     assignHint: 'ქირაობა დაიწყო დაუდასტურებელი VIN-ით. აქ არჩეული მოპედი გაიცემა გაცემის თარიღით.',
-    status: 'სტატუსი',
-    reason: 'მიზეზი',
-    reasonHint: 'შეჩერება ან სადავოდ გამოცხადება საჭიროებს მიზეზს, რომელიც ჟურნალში იწერება.',
     buyout: 'გამოსყიდვა ქირაობიდან',
     buyoutTarget: 'სამიზნე თანხა',
     buyoutPerPayment: 'თითო გადახდიდან',
