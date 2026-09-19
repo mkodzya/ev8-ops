@@ -194,6 +194,11 @@ export function PickupWizard() {
     : Math.max(0, rateTetri) + Math.max(0, depositTetri);
   const amountTetri = f.amount ? parseGel(f.amount) : dueTetri;
   const paymentNeeded = !transfer || dueTetri > 0;
+  // What the money closes, the way the server spreads it: the deposit first, then the weeks (Q6).
+  const depositDue = transfer ? Math.max(0, depositTetri - Math.max(0, depositBeforeTetri)) : Math.max(0, depositTetri);
+  const weeksDue = Math.max(0, dueTetri - depositDue);
+  const closesDeposit = Math.min(Math.max(0, amountTetri ?? 0), depositDue);
+  const closesWeeks = Math.min(Math.max(0, (amountTetri ?? 0) - closesDeposit), weeksDue);
 
   // ---- what each step needs ---------------------------------------------------
   const ncPhoneOk = phoneKey(f.ncPhone).length === 9;
@@ -637,6 +642,9 @@ export function PickupWizard() {
                   <Field label={t.hand.paid} hint={t.hand.partialHint} name="amountTetri">
                     <input className="input input-amount mono" value={f.amount || gel(dueTetri)} onChange={(e) => set({ amount: e.target.value })} inputMode="decimal" />
                   </Field>
+                  {amountTetri != null && amountTetri > 0 && amountTetri < dueTetri && (
+                    <p className="hint">{t.hand.closes(formatGel(closesDeposit), formatGel(depositDue), formatGel(closesWeeks), formatGel(weeksDue))}</p>
+                  )}
                   {f.channel === 'acquiring' && amountTetri != null && amountTetri > 0 && (
                     <p className="hint muted">{t.hand.cardNet(formatGel(acquiringNet(amountTetri)), formatGel(acquiringFee(amountTetri)))}</p>
                   )}
