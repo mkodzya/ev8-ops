@@ -3,6 +3,7 @@ export * from './permissions.js';
 export * from './money.js';
 export * from './time.js';
 export * from './today.js';
+export * from './batteries.js';
 export * from './periods.js';
 export * from './states.js';
 export * from './colors.js';

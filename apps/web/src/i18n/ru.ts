@@ -88,6 +88,7 @@ export const ru: Dict = {
       vehicles: 'Мопеды',
       models: 'Модели',
       points: 'Точки',
+      batteries: 'Батареи',
       jobs: 'Ремонты',
       stock: 'Склад',
       payments: 'Платежи',

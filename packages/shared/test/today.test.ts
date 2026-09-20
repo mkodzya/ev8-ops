@@ -111,3 +111,20 @@ describe('the queue of “Today”', () => {
     expect(queueCount([])).toBe(0);
   });
 });
+
+describe('the battery count (wave 4 §3.8, D16)', () => {
+  it('takes the stocktake and moves it on: couriers from the acts, losses off the total (crit. 29, 31)', async () => {
+    const { batteryCount } = await import('../src/index.js');
+    const inventory = { countedOn: '2026-09-01', showroomQty: 7, repairQty: 1, couriersQty: 34, totalQty: 42 };
+    expect(batteryCount({ inventory, movesSince: [], couriersNow: 34 })).toEqual({ total: 42, couriers: 34, repair: 1, showroom: 7 });
+    // Two more went out with a hand-over, one was lost on a return.
+    expect(batteryCount({ inventory, movesSince: [{ kind: 'lost', qty: 1 }], couriersNow: 36 })).toEqual({ total: 41, couriers: 36, repair: 1, showroom: 4 });
+    // Two to repair and one back.
+    expect(batteryCount({ inventory, movesSince: [{ kind: 'to_repair', qty: 2 }, { kind: 'from_repair', qty: 1 }], couriersNow: 34 })).toEqual({ total: 42, couriers: 34, repair: 2, showroom: 6 });
+  });
+
+  it('counts nothing until somebody counts (no stocktake yet)', async () => {
+    const { batteryCount } = await import('../src/index.js');
+    expect(batteryCount({ inventory: null, movesSince: [], couriersNow: 10 })).toEqual({ total: 0, couriers: 0, repair: 0, showroom: 0 });
+  });
+});

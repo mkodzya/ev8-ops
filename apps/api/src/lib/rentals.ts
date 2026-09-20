@@ -418,6 +418,12 @@ export async function returnRental(input: ReturnInput): Promise<{ actId: string;
     await tx.rental.update({ where: { id: r.id }, data: { status: 'returned', returnedOn: dateFromISO(input.returnedOn)!, updatedAt: new Date() } });
     const applied = await applyCharges(tx, input.actor.id, r.id, settlement);
 
+    const lostBatteries = Object.entries(input.items).filter(([k, v]) => k.startsWith('battery_') && v.state === 'missing').length;
+    if (lostBatteries > 0) {
+      await tx.batteryMove.create({
+        data: { kind: 'lost', qty: lostBatteries, reason: `${r.number}: ${input.items.battery_1?.note ?? ''}`.trim(), rentalId: r.id, occurredOn: dateFromISO(input.returnedOn)!, createdById: input.actor.id },
+      });
+    }
     const damaged = Object.entries(input.items).filter(([, v]) => v.state === 'damaged');
     let serviceJobId: string | null = null;
     const toService = input.toService || damaged.length > 0;

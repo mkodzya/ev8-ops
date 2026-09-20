@@ -77,6 +77,7 @@ export const ka: Dict = {
       vehicles: 'მოპედები',
       models: 'მოდელები',
       points: 'წერტილები',
+      batteries: 'ბატარეები',
       jobs: 'რემონტები',
       stock: 'საწყობი',
       payments: 'გადახდები',

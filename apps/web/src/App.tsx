@@ -3,6 +3,7 @@ import { Navigate, Route, Routes, useLocation, useParams } from 'react-router-do
 import { LoginPage } from './LoginPage.js';
 import { AppShell } from './ds/shell/AppShell.js';
 import { NoAccess } from './ds/state/NoAccess.js';
+import { BatteriesPage } from './pages/BatteriesPage.js';
 import { PointsPage } from './pages/PointsPage.js';
 import { ReturnPickPage } from './pages/ReturnPickPage.js';
 import { DesignPage } from './pages/DesignPage.js';
@@ -118,6 +119,7 @@ export function App() {
         <Route path="fleet" element={<FleetPage />} />
         <Route path="fleet/models" element={<ModelsPage />} />
         <Route path="fleet/models/:id" element={<ModelPage />} />
+        <Route path="fleet/batteries" element={<BatteriesPage />} />
         <Route path="fleet/points" element={<Require perm="settings.manage"><PointsPage /></Require>} />
         <Route path="fleet/:id" element={<VehiclePage />} />
 
