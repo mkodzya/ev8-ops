@@ -1184,6 +1184,8 @@ export const en = {
       documents_restricted: 'Customer documents are for the owners only.',
       down_payment_too_big: 'The down payment is more than the price.',
       duplicate_customer: 'A customer with this personal number or phone already exists.',
+      duplicate_phone: 'This number is already on another card.',
+      sold_by_sale: 'A moped is sold by a sale, and comes back by a buy-back.',
       duplicate_email: 'Somebody already signs in with this email.',
       duplicate_location: 'A point with this name already exists.',
       duplicate_model: 'This model already exists.',

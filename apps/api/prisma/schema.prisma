@@ -356,6 +356,8 @@ model Customer {
   phone         String?
   email         String?
   kind          CustomerKind @default(person)
+  /// Where they came from: myauto, friends, social, site, other (wave 4 §3.5).
+  source        String?
   isSupplier    Boolean      @default(false) @map("is_supplier")
   tags          String[]     @default([])
   address       String?

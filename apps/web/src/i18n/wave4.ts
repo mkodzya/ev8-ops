@@ -119,6 +119,22 @@ export const wave4En = {
       return lang === 'ka' ? ka : lang === 'ru' ? ru : en;
     },
   },
+  vehicleW4: {
+    soldNote: 'Sold is what a sale says; a buy-back brings it back.',
+  },
+  customerW4: {
+    source: 'Came from',
+    sources: { myauto: 'myauto.ge', friends: 'Friends', social: 'Social media', site: 'ev8.ge', other: 'Other' } as Record<string, string>,
+    edit: 'Edit',
+    editTitle: (who: string) => `Edit · ${who}`,
+    phoneTaken: (who: string) => `This number is already on “${who}”. Open that card?`,
+    show: 'show',
+    salesTitle: 'Rentals and sales',
+    feed: 'Feed',
+    feedAll: 'all',
+    feedFilters: { all: 'All', payment: 'Payments', document: 'Documents', log: 'Changes' } as Record<string, string>,
+    instalmentsOf: (paid: number, all: number) => `instalment ${paid} of ${all}`,
+  },
   seg: {
     active: 'Running',
     awaiting: 'Waiting for payment',
@@ -221,6 +237,22 @@ export const wave4Ru: Wave4 = {
     logged: 'Записано в ленту аренды',
     text: wave4En.wa.text,
   },
+  vehicleW4: {
+    soldNote: 'Продан — только продажей; вернуть проданный — только выкупом.',
+  },
+  customerW4: {
+    source: 'Откуда пришёл',
+    sources: { myauto: 'myauto.ge', friends: 'Знакомые', social: 'Соцсети', site: 'Сайт ev8.ge', other: 'Другое' },
+    edit: 'Изменить',
+    editTitle: (who) => `Изменить · ${who}`,
+    phoneTaken: (who) => `Этот номер уже у «${who}». Открыть его карточку?`,
+    show: 'показать',
+    salesTitle: 'Аренды и продажи',
+    feed: 'Лента',
+    feedAll: 'все',
+    feedFilters: { all: 'Все', payment: 'Платежи', document: 'Документы', log: 'Изменения' },
+    instalmentsOf: (paid, all) => `взнос ${paid} из ${all}`,
+  },
   seg: {
     active: 'Действуют',
     awaiting: 'Ждут оплаты',
@@ -320,6 +352,22 @@ export const wave4Ka: Wave4 = {
     open: 'WhatsApp-ის გახსნა',
     logged: 'ჩაიწერა ქირის ლენტაში',
     text: wave4En.wa.text,
+  },
+  vehicleW4: {
+    soldNote: 'გაყიდვა ფორმდება გაყიდვით; უკან აბრუნებს გამოსყიდვა.',
+  },
+  customerW4: {
+    source: 'საიდან მოვიდა',
+    sources: { myauto: 'myauto.ge', friends: 'ნაცნობები', social: 'სოცქსელები', site: 'საიტი ev8.ge', other: 'სხვა' },
+    edit: 'შეცვლა',
+    editTitle: (who) => `შეცვლა · ${who}`,
+    phoneTaken: (who) => `ეს ნომერი უკვე აქვს „${who}“-ს. გავხსნათ მისი ბარათი?`,
+    show: 'ჩვენება',
+    salesTitle: 'ქირაობები და გაყიდვები',
+    feed: 'ლენტა',
+    feedAll: 'ყველა',
+    feedFilters: { all: 'ყველა', payment: 'გადახდები', document: 'დოკუმენტები', log: 'ცვლილებები' },
+    instalmentsOf: (paid, all) => `შენატანი ${paid} / ${all}`,
   },
   seg: {
     active: 'მოქმედი',

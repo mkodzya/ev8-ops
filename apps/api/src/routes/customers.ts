@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { isoDate } from '../lib/dates.js';
-import { debtsOf } from '../lib/debt.js';
+import { debtOf, debtsOf } from '../lib/debt.js';
 import { prisma } from '../lib/db.js';
 import { notFound } from '../lib/errors.js';
 import { mayView } from '../lib/guard.js';
@@ -93,7 +93,48 @@ export function customerRoutes(app: FastifyInstance): void {
       },
     });
     if (!c) throw notFound('customer_not_found', 'No such customer.');
+    // The one debt figure and what it is made of (B7-04, wave 2), the sales,
+    // and one timeline: money, documents, changes of the card.
+    const debt = await debtOf(c.id);
+    const [sales, payments, log] = await Promise.all([
+      prisma.sale.findMany({
+        where: { customerId: c.id, status: { not: 'cancelled' } },
+        orderBy: { createdAt: 'desc' },
+        select: { id: true, number: true, status: true, soldOn: true, priceTetri: true, instalments: { select: { seq: true, payStatus: true } } },
+      }),
+      prisma.payment.findMany({
+        where: { customerId: c.id, voidedAt: null },
+        orderBy: { occurredOn: 'desc' },
+        take: 50,
+        select: { id: true, occurredOn: true, channel: true, kind: true, direction: true, grossTetri: true, rental: { select: { number: true } }, sale: { select: { number: true } } },
+      }),
+      prisma.auditLog.findMany({ where: { entityType: 'customer', entityId: c.id }, orderBy: { createdAt: 'desc' }, take: 50, include: { actor: { select: { name: true } } } }),
+    ]);
+    const feed = [
+      ...payments.map((p) => ({
+        at: isoDate(p.occurredOn)!,
+        kind: 'payment' as const,
+        text: p.channel,
+        number: p.rental?.number ?? p.sale?.number ?? null,
+        amountTetri: p.direction === 'out' ? -p.grossTetri : p.grossTetri,
+        by: null as string | null,
+        note: null as string | null,
+      })),
+      ...c.documents.map((d) => ({ at: d.createdAt.toISOString().slice(0, 10), kind: 'document' as const, text: d.docKind ?? '', number: null, amountTetri: null, by: null, note: d.label })),
+      ...log.map((l) => ({ at: l.createdAt.toISOString().slice(0, 10), kind: 'log' as const, text: l.action, number: null, amountTetri: null, by: l.actor?.name ?? null, note: l.note })),
+    ].sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
     return {
+      debt: { owesTetri: debt.owesTetri, creditTetri: debt.creditTetri, depositHeldTetri: debt.depositHeldTetri, aheadTetri: debt.aheadTetri, parts: debt.parts },
+      sales: sales.map((s2) => ({
+        id: s2.id,
+        number: s2.number,
+        status: s2.status,
+        soldOn: isoDate(s2.soldOn),
+        priceTetri: s2.priceTetri,
+        instalments: s2.instalments.length,
+        instalmentsPaid: s2.instalments.filter((i) => i.payStatus === 'paid').length,
+      })),
+      feed,
       customer: {
         id: c.id,
         name: c.name,
@@ -107,6 +148,7 @@ export function customerRoutes(app: FastifyInstance): void {
         tags: c.tags,
         address: c.address,
         notes: c.notes,
+        source: c.source,
       },
       documents: c.documents.map((d) => ({ id: d.id, docKind: d.docKind, label: d.label, sizeBytes: d.sizeBytes, mimeType: d.mimeType, createdAt: d.createdAt.toISOString() })),
       canOpenDocuments: identity,

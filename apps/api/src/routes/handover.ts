@@ -1,4 +1,4 @@
-import { DEFAULT_DEPOSIT_TETRI, todayISO } from '@ev8/shared';
+import { CUSTOMER_SOURCES, DEFAULT_DEPOSIT_TETRI, todayISO } from '@ev8/shared';
 import type { FastifyInstance } from 'fastify';
 import { env } from '../lib/env.js';
 import { badRequest, notFound } from '../lib/errors.js';
@@ -39,6 +39,7 @@ function pickupInput(req: { body: Body }, actor: PickupInput['actor'], strict: b
         personalId: str(nc, 'personalId', { max: 40 }) ?? '',
         nameKa: str(nc, 'nameKa', { max: 200 }),
         nameLat: str(nc, 'nameLat', { max: 200 }),
+        source: oneOf(nc, 'source', CUSTOMER_SOURCES),
         idPhoto: photo(nc.idPhoto),
         licencePhoto: photo(nc.licencePhoto),
       }

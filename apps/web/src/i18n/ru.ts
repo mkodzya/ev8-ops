@@ -1187,6 +1187,8 @@ export const ru: Dict = {
       documents_restricted: 'Документы клиента видят только владельцы.',
       down_payment_too_big: 'Первый взнос больше цены.',
       duplicate_customer: 'Клиент с таким личным номером или телефоном уже есть.',
+      duplicate_phone: 'Этот номер уже на другой карточке.',
+      sold_by_sale: 'Мопед продаётся продажей, а возвращается выкупом.',
       duplicate_email: 'С этой почтой уже кто-то входит.',
       duplicate_location: 'Точка с таким названием уже есть.',
       duplicate_model: 'Такая модель уже есть.',
