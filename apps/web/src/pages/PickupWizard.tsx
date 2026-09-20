@@ -642,6 +642,7 @@ export function PickupWizard() {
                   <Field label={t.hand.paid} hint={t.hand.partialHint} name="amountTetri">
                     <input className="input input-amount mono" value={f.amount || gel(dueTetri)} onChange={(e) => set({ amount: e.target.value })} inputMode="decimal" />
                   </Field>
+                  {amountTetri != null && amountTetri > dueTetri && <p className="hint">{t.hand.overpay(formatGel(amountTetri - dueTetri))}</p>}
                   {amountTetri != null && amountTetri > 0 && amountTetri < dueTetri && (
                     <p className="hint">{t.hand.closes(formatGel(closesDeposit), formatGel(depositDue), formatGel(closesWeeks), formatGel(weeksDue))}</p>
                   )}
