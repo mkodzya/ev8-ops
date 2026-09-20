@@ -1,4 +1,4 @@
-import { numberMatches, phoneMatches, spellingMatches, vinMatches, type RentalStatus } from '@ev8/shared';
+import { numberMatches, phoneMatches, spellingMatches, todayISO, vinMatches, type RentalStatus } from '@ev8/shared';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useSession } from '../session.js';
 import { LoadError } from '../components/LoadError.js';
@@ -21,6 +21,7 @@ interface Rental {
   weeklyRateTetri: number;
   depositTetri: number;
   pickedUpOn: string | null;
+  expectedReturnOn: string | null;
   returnedOn: string | null;
   paidThrough: string | null;
   overdueDays: number;
@@ -33,15 +34,30 @@ export function RentalsPage() {
   const t = useT();
   const { can } = useSession();
   const { locale } = useLocale();
-  const { data, failure, reload } = useLoad<{ rentals: Rental[] }>('/api/rentals');
+  const { data, failure, reload } = useLoad<{ today: string; rentals: Rental[] }>('/api/rentals');
   const [params, setParams] = useSearchParams();
   const all = data?.rentals ?? null;
   if (!all && failure) return <LoadError failure={failure} onRetry={reload} />;
   if (!all) return <Loading />;
-  // "Не подписан": a running rental whose contract has no signature yet (wave 3 §3.2).
-  const unsignedRows = all.filter((r) => r.status !== 'returned' && r.contractSigned === false);
-  const unsigned = params.get('f') === 'unsigned';
-  const rows = unsigned ? unsignedRows : all;
+  // The segments of the list (wave 4 §3.3, B6-02): each one a question
+  // somebody actually asks, the answer in the address so it can be sent.
+  const today = data?.today ?? todayISO();
+  const open = (r: Rental) => r.status !== 'returned';
+  const SEGMENTS = {
+    active: (r: Rental) => open(r) && r.status !== 'paused' && r.status !== 'disputed',
+    awaiting: (r: Rental) => r.status === 'awaiting_payment',
+    overdue: (r: Rental) => r.status === 'overdue',
+    returns: (r: Rental) => open(r) && !!r.expectedReturnOn && r.expectedReturnOn <= today,
+    unsigned: (r: Rental) => open(r) && r.contractSigned === false,
+    novin: (r: Rental) => open(r) && r.vinUnconfirmed,
+    paused: (r: Rental) => r.status === 'paused' || r.status === 'disputed',
+    done: (r: Rental) => r.status === 'returned',
+  } as const;
+  type Segment = keyof typeof SEGMENTS;
+  const segment = (Object.keys(SEGMENTS) as Segment[]).find((s) => s === params.get('s')) ?? null;
+  const rows = segment ? all.filter(SEGMENTS[segment]) : all;
+  const count = (s: Segment) => all.filter(SEGMENTS[s]).length;
+  const debtOf = (list: Rental[]) => list.reduce((n, r) => n + r.debtTetri, 0);
 
   // What the right of a row says: the debt when there is one, otherwise how
   // far it is paid — one figure, as on the card (U5).
@@ -61,13 +77,16 @@ export function RentalsPage() {
           </Link>
         )}
       </PageHead>
-      {unsignedRows.length > 0 && (
-        <div className="list-chips">
-          <button type="button" className={`list-chip ${unsigned ? 'on' : ''}`} onClick={() => setParams(unsigned ? {} : { f: 'unsigned' }, { replace: true })}>
-            {t.w3.unsigned} <span className="n">{unsignedRows.length}</span>
-          </button>
-        </div>
-      )}
+      <div className="list-chips">
+        {(Object.keys(SEGMENTS) as Segment[])
+          .filter((s) => count(s) > 0 || segment === s)
+          .map((s) => (
+            <button key={s} type="button" className={`list-chip ${segment === s ? 'on' : ''}`} onClick={() => setParams(segment === s ? {} : { s }, { replace: true })}>
+              {t.seg[s]} <span className="n">{count(s)}</span>
+            </button>
+          ))}
+      </div>
+      <p className="hint muted">{t.seg.totals(rows.length, formatGel(debtOf(rows), { decimals: false }))}</p>
       <DataList
         rows={rows}
         rowKey={(r) => r.id}
