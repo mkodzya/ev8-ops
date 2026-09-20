@@ -27,6 +27,18 @@ wave3 = [
  ('wave-3-return.html', 'Волна 3 · Возврат и залог', 'Акт по комплекту, расчёт, залог владельцем и менеджером, где встал, подтверждение, решить позже', 'wave-3.md §3.4–3.6'),
  ('wave-3-rental-actions.html', 'Волна 3 · После выдачи', 'Правка условий, пауза и спорная, отмена возврата, долг после возврата, «Ждут решения»', 'wave-3.md §3.7'),
 ]
+wave4 = [
+ ('wave-4-today.html', 'Волна 4 · «Сегодня»', 'Очередь владельца RU и KA, менеджера, WhatsApp с текстом, пусто, после действия; ноутбук', 'wave-4.md §3.1–3.2'),
+ ('wave-4-cards.html', 'Волна 4 · Аренды и карточки', 'Сегменты аренд, аренда по статусам, клиент и правка, мопед и смена состояния; ноутбук', 'wave-4.md §3.3–3.6'),
+ ('wave-4-fleet.html', 'Волна 4 · Парк и батареи', 'Парк на общем списке, точки, батареи, инвентаризация, подсказка в выдаче', 'wave-4.md §3.7–3.8'),
+]
+wave5 = [
+ ('wave-5-sales.html', 'Волна 5 · Продажа и рассрочка', 'Мастер продажи, график сразу, перенос, карточка продажи, выкуп обратно; ноутбук', 'wave-5.md §3.1–3.3'),
+ ('wave-5-purchases.html', 'Волна 5 · Закупка и приёмка', 'Новый поставщик в заказе, курс и долг, приёмка вставкой VIN, пересчёт после доплаты; ноутбук', 'wave-5.md §3.4–3.6'),
+ ('wave-5-service-stock.html', 'Волна 5 · Сервис и склад', 'Сообщить о поломке, ремонт с работой по часам, долг клиента, склад с нехваткой и начальным остатком', 'wave-5.md §3.7–3.10'),
+]
+rows5 = ''.join(f'<tr><td><a class="ok" href="{f}"><b>{t}</b></a></td><td>{d}</td><td class="small muted">{i}</td></tr>' for f, t, d, i in wave5)
+rows4 = ''.join(f'<tr><td><a class="ok" href="{f}"><b>{t}</b></a></td><td>{d}</td><td class="small muted">{i}</td></tr>' for f, t, d, i in wave4)
 rows3 = ''.join(f'<tr><td><a class="ok" href="{f}"><b>{t}</b></a></td><td>{d}</td><td class="small muted">{i}</td></tr>' for f, t, d, i in wave3)
 rows2 = ''.join(f'<tr><td><a class="ok" href="{f}"><b>{t}</b></a></td><td>{d}</td><td class="small muted">{i}</td></tr>' for f, t, d, i in wave2)
 rows1 = ''.join(f'<tr><td><a class="ok" href="{f}"><b>{t}</b></a></td><td>{d}</td><td class="small muted">{i}</td></tr>' for f, t, d, i in wave1)
@@ -38,6 +50,8 @@ html = (f'<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name=
  '<dt>Роли</dt><dd>Владелец (Mika, Kardu) и менеджер — решение Mika 17.09.2026</dd>'
  '<dt>Дата</dt><dd>17.09.2026</dd></dl></header>'
  '<section class="notes"><h2>Схема (утверждена 17.09.2026)</h2><table style="width:100%"><tr><th>Прототип</th><th>Что внутри</th><th>Схема · ТЗ v2</th></tr>' + rows + '</table>'
+ '<h2>Волна 5 — утверждена</h2><table style="width:100%"><tr><th>Прототип</th><th>Что внутри</th><th>Где описано</th></tr>' + rows5 + '</table>'
+ '<h2>Волна 4 — утверждена</h2><table style="width:100%"><tr><th>Прототип</th><th>Что внутри</th><th>Где описано</th></tr>' + rows4 + '</table>'
  '<h2>Волна 3 — утверждена</h2><table style="width:100%"><tr><th>Прототип</th><th>Что внутри</th><th>Где описано</th></tr>' + rows3 + '</table>'
  '<h2>Волна 2 — утверждена</h2><table style="width:100%"><tr><th>Прототип</th><th>Что внутри</th><th>Где описано</th></tr>' + rows2 + '</table>'
  '<h2>Волна 1 — принята</h2><table style="width:100%"><tr><th>Прототип</th><th>Что внутри</th><th>Где описано</th></tr>' + rows1 + '</table>'
