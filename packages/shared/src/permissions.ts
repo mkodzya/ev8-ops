@@ -36,7 +36,7 @@ export type Permission = (typeof PERMISSIONS)[number];
  * beyond their own cash, cost, purchases, reports and settings are the
  * owners' (redesign blueprint §2.1, Mika 17.09.2026).
  */
-const MANAGER: Permission[] = ['fleet.view', 'fleet.location.set', 'rental.create', 'rental.return', 'customer.create', 'cash.record'];
+const MANAGER: Permission[] = ['fleet.view', 'fleet.location.set', 'fleet.state.manual', 'rental.create', 'rental.return', 'customer.create', 'cash.record'];
 
 export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
   owner: PERMISSIONS,
