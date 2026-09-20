@@ -1,0 +1,113 @@
+// The queue of "Today" (wave 4 §3.1, criteria 1–6, 10, 11).
+import { describe, expect, it } from 'vitest';
+import { dayQueue, queueCount, type QueueInput, type QueueRental } from '../src/index.js';
+
+const TODAY = '2026-09-20';
+
+const rental = (over: Partial<QueueRental> = {}): QueueRental => ({
+  id: 'r1',
+  number: 'R-00001',
+  customer: { id: 'c1', name: 'ТЕСТ Клиент', phone: '+995555000001' },
+  vin: 'TEST0000000000001',
+  pickedUpOn: '2026-09-01',
+  expectedReturnOn: null,
+  paidThrough: '2026-09-17',
+  status: 'overdue',
+  debtTetri: 15000,
+  awaitingPayment: false,
+  depositUndecided: false,
+  vinUnconfirmed: false,
+  contractUnsigned: false,
+  ...over,
+});
+
+const input = (over: Partial<QueueInput> = {}): QueueInput => ({
+  today: TODAY,
+  owner: true,
+  rentals: [],
+  tills: [],
+  myTillTetri: 0,
+  unmatchedLines: 0,
+  staleBanks: [],
+  instalments: [],
+  service: { open: 0, longerThanWeek: 0, longestDays: 0 },
+  purchases: [],
+  vehiclesWithoutPool: 0,
+  vehiclesWithoutPoint: 0,
+  ...over,
+});
+
+const group = (g: ReturnType<typeof dayQueue>, name: string) => g.find((x) => x.group === name);
+
+describe('the queue of “Today”', () => {
+  it('puts an overdue rental in its group with the days and the debt, longest first (crit. 1)', () => {
+    const q = dayQueue(input({ rentals: [rental(), rental({ id: 'r2', number: 'R-00002', paidThrough: '2026-09-10', debtTetri: 30000 })] }));
+    const overdue = group(q, 'overdue')!;
+    expect(overdue.rows.map((r) => r.number)).toEqual(['R-00002', 'R-00001']);
+    expect(overdue.rows[0]).toMatchObject({ days: 10, amountTetri: 30000, action: 'take_money' });
+    expect(overdue.totalTetri).toBe(45000);
+  });
+
+  it('keeps a rental waiting for its first payment out of “overdue” (crit. 2)', () => {
+    const q = dayQueue(input({ rentals: [rental({ status: 'awaiting_payment', awaitingPayment: true, paidThrough: null, pickedUpOn: TODAY, debtTetri: 33000 })] }));
+    expect(group(q, 'overdue')).toBeUndefined();
+    expect(group(q, 'awaiting')!.rows[0]).toMatchObject({ number: 'R-00001', amountTetri: 33000 });
+  });
+
+  it('gives an owner the deposit a manager’s return left, and a manager nothing of it (crit. 3)', () => {
+    const left = rental({ status: 'returned', depositUndecided: true, debtTetri: 0 });
+    expect(group(dayQueue(input({ rentals: [left] })), 'decide')!.rows[0]).toMatchObject({ action: 'decide_deposit', href: '/rentals/r1?decide=1' });
+    expect(group(dayQueue(input({ owner: false, rentals: [left] })), 'decide')).toBeUndefined();
+  });
+
+  it('shows three rows and counts the rest (crit. 6, 11)', () => {
+    const rentals = [1, 2, 3, 4, 5].map((n) => rental({ id: `r${n}`, number: `R-0000${n}`, paidThrough: `2026-09-1${n}`, debtTetri: 15000 }));
+    const q = dayQueue(input({ rentals }));
+    const overdue = group(q, 'overdue')!;
+    expect(overdue.rows).toHaveLength(3);
+    expect(overdue.total).toBe(5);
+    expect(overdue.totalTetri).toBe(75000);
+    expect(queueCount(q)).toBe(5);
+  });
+
+  it('leaves a manager without the owners’ groups, and gives them their own till (crit. 10)', () => {
+    const q = dayQueue(
+      input({
+        owner: false,
+        myTillTetri: 12000,
+        unmatchedLines: 4,
+        staleBanks: [{ bank: 'bog', days: 9 }],
+        purchases: [{ id: 'p1', number: 'PO-00001', who: 'Factory', note: 'ordered' }],
+        vehiclesWithoutPool: 2,
+        rentals: [rental()],
+      }),
+    );
+    expect(q.map((g) => g.group)).toEqual(['decide', 'overdue']);
+    expect(group(q, 'decide')!.rows[0]).toMatchObject({ action: 'hand_over_till', amountTetri: 12000 });
+    expect(group(q, 'overdue')!.rows[0].action).toBe('take_cash');
+  });
+
+  it('says the return is due, and how many days it is late (crit. 5)', () => {
+    const q = dayQueue(input({ rentals: [rental({ expectedReturnOn: '2026-09-18', debtTetri: 0, status: 'active' })] }));
+    expect(group(q, 'returns')!.rows[0]).toMatchObject({ days: 2, action: 'return' });
+    const returned = dayQueue(input({ rentals: [rental({ status: 'returned', expectedReturnOn: '2026-09-18', debtTetri: 0 })] }));
+    expect(group(returned, 'returns')).toBeUndefined();
+  });
+
+  it('asks for what is not filled in: an unsigned contract, a rental without a VIN, mopeds without a point (crit. 15)', () => {
+    const q = dayQueue(input({ rentals: [rental({ contractUnsigned: true, debtTetri: 0, status: 'active' }), rental({ id: 'r2', number: 'R-00002', vinUnconfirmed: true, debtTetri: 0, status: 'active' })], vehiclesWithoutPoint: 3 }));
+    const fill = group(q, 'fill')!;
+    expect(fill.rows.map((r) => r.action)).toEqual(['sign', 'set_vin', 'set_point']);
+    expect(fill.rows[2].note).toBe('3');
+  });
+
+  it('says the repairs in one line (В8, crit. 9)', () => {
+    const q = dayQueue(input({ service: { open: 10, longerThanWeek: 4, longestDays: 21 } }));
+    expect(group(q, 'service')!.rows[0]).toMatchObject({ note: '10/4', days: 21, action: 'open_service' });
+  });
+
+  it('is empty when nothing waits (crit. 13)', () => {
+    expect(dayQueue(input())).toEqual([]);
+    expect(queueCount([])).toBe(0);
+  });
+});

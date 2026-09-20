@@ -1,235 +1,235 @@
-import { VEHICLE_STATES, type VehicleState } from '@ev8/shared';
-import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { api } from '../api.js';
+import { ORG_TZ, type TaskGroupRows, type TaskRow, type VehicleState } from '@ev8/shared';
+import { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { LoadError } from '../components/LoadError.js';
-import { useLoad } from '../lib/use.js';
-import { BlockHead, CustomerName, Loading, PageHead, StateBadge } from '../components/ui.js';
+import { Loading } from '../components/ui.js';
+import { WhatsappSheet, type WaTarget } from '../components/Whatsapp.js';
+import { useMoneyForm } from '../ds/money/MoneyForm.js';
 import { formatGel } from '../format.js';
-import { dayTasks, type DayTask } from '../lib/tasks.js';
-import { useT } from '../i18n/index.js';
+import { useLocale, useT } from '../i18n/index.js';
+import { useLoad } from '../lib/use.js';
 import { useSession } from '../session.js';
 
-// "Today" answers one question: what needs doing (U1). The first row is the
-// work — each task a row with its own action — and the counts follow, smaller,
-// because a number nobody acts on is not the reason anyone opens this screen.
+// "Today" is the queue (wave 4 §3.1): group by group, three rows and what is
+// left over, one action per row. The rules are in @ev8/shared — this screen
+// only says them in words and puts the buttons under a thumb.
 
-interface OverdueRow {
-  id: string;
-  number: string;
-  customer: { id: string; name: string; nameKa: string | null; nameLat: string | null; phone: string | null };
-  days: number;
-  debtTetri: number;
-}
-
-interface Summary {
+export interface TodayData {
   today: string;
-  fleet: Record<VehicleState, number>;
-  rentals: { active: number; overdue: number; withoutVin: number };
-  overdueList: OverdueRow[];
-  /** Handed over today with nothing paid yet (wave 3 §3.3). */
-  awaitingPayment?: { id: string; number: string; customer: string }[];
-  /** Returns a manager closed; the deposit waits for an owner (wave 3 §3.5). */
-  depositsUndecided?: { id: string; number: string; customer: string; days: number }[];
-  customers: number;
-  unmatchedLines: number;
-  openServiceJobs: number;
-  salesOverdueTetri: number;
-  deposits: { held: number; heldTetri: number };
-  pickedUpToday: { id: string; number: string; customer: string }[];
-  dueBackToday: { id: string; number: string; customer: string }[];
+  owner: boolean;
+  queue: TaskGroupRows[];
+  count: number;
+  numbers: {
+    fleet: Record<VehicleState, number>;
+    overdueTetri: number | null;
+    depositsHeldTetri: number | null;
+    week: { rentTetri: number; saleTetri: number; serviceTetri: number; depositTetri: number; feeTetri: number; from: string } | null;
+    myTillTetri: number | null;
+    batteries?: { showroom: number; total: number } | null;
+  };
 }
 
-function TaskRow({ task }: { task: DayTask }) {
-  return (
-    <li className={`task ${task.tone ? `task-${task.tone}` : ''}`}>
-      <span className="task-num">{task.count}</span>
-      <span className="task-lbl">{task.label}</span>
-      <Link to={task.to} className="pill pill-sm task-go">
-        {task.action}
-      </Link>
-    </li>
-  );
+/** «Пятница, 18 сентября» — the day in the language on screen (U1). */
+function dayTitle(iso: string, locale: string): string {
+  const d = new Date(`${iso}T12:00:00Z`);
+  const tag = locale === 'ka' ? 'ka-GE' : locale === 'ru' ? 'ru-RU' : 'en-GB';
+  const text = new Intl.DateTimeFormat(tag, { weekday: 'long', day: 'numeric', month: 'long', timeZone: ORG_TZ }).format(d);
+  return text.charAt(0).toUpperCase() + text.slice(1);
 }
+
+/** The segment of the rentals list a group's "More N" opens. */
+const SEGMENT: Record<string, string> = { overdue: '/rentals?s=overdue', awaiting: '/rentals?s=awaiting', returns: '/rentals?s=returns', fill: '/rentals?s=unsigned' };
 
 export function TodayPage() {
   const t = useT();
+  const { locale } = useLocale();
   const { can } = useSession();
-  const { data: s, failure, reload } = useLoad<Summary>('/api/summary');
-  if (!s && failure) return <LoadError failure={failure} onRetry={reload} />;
-  if (!s) return <Loading />;
+  const openMoney = useMoneyForm();
+  const navigate = useNavigate();
+  const { data, failure, reload } = useLoad<TodayData>('/api/today');
+  const [wa, setWa] = useState<WaTarget | null>(null);
+  if (!data && failure) return <LoadError failure={failure} onRetry={reload} />;
+  if (!data) return <Loading />;
+  const n = data.numbers;
 
-  const tasks = dayTasks(s, t, can);
+  const rowSub = (r: TaskRow): string => {
+    const bits: string[] = [];
+    if (r.number) bits.push(r.number);
+    if (r.vin) bits.push(`···${r.vin.slice(-4)}`);
+    if (r.group === 'returns') bits.push(r.days && r.days > 0 ? t.today.lateBy(r.days) : t.today.duesToday);
+    else if (r.group === 'overdue' && r.days) bits.push(t.today.overdueDays(r.days));
+    else if (r.group === 'awaiting') bits.push(t.today.handedToday);
+    else if (r.action === 'take_instalment' && r.days) bits.push(t.today.overdueDays(r.days));
+    else if (r.action === 'open_purchase') bits.push(t.today.ordered);
+    return bits.join(' · ');
+  };
+
+  const rowTitle = (r: TaskRow): string => {
+    switch (r.action) {
+      case 'decide_deposit':
+        return `${t.today.deposit} · ${r.who ?? ''}`;
+      case 'accept_till':
+        return `${t.today.till} · ${r.who ?? ''}`;
+      case 'hand_over_till':
+        return t.today.actions.hand_over_till ?? '';
+      case 'sort':
+        return t.today.unsorted(Number(r.note ?? 0));
+      case 'upload_statement':
+        return t.today.staleBank(r.note ?? '', r.days ?? 0);
+      case 'open_service':
+        return t.today.inRepair(Number((r.note ?? '0/0').split('/')[0]));
+      case 'set_pool':
+        return t.today.noPool(Number(r.note ?? 0));
+      case 'set_point':
+        return t.today.noPoint(Number(r.note ?? 0));
+      case 'sign':
+        return t.today.unsignedContract(r.number ?? '');
+      case 'set_vin':
+        return `${r.who ?? ''} · ${t.today.noVin}`;
+      default:
+        return r.who ?? r.number ?? '';
+    }
+  };
+
+  const act = (r: TaskRow) => {
+    const id = r.id.split(':')[1];
+    if ((r.action === 'take_money' || r.action === 'take_cash') && r.number && id) {
+      openMoney({ target: { kind: 'rent', rentalId: id, number: r.number, customer: r.who ?? undefined } });
+      return;
+    }
+    if (r.action === 'take_instalment') {
+      openMoney({ target: { kind: 'sale', saleId: r.href.split('/').pop(), number: r.number ?? undefined, customer: r.who ?? undefined } });
+      return;
+    }
+    navigate(r.href);
+  };
 
   return (
     <>
-      <PageHead title={t.today.title} sub={<span className="mono">{s.today}</span>} />
+      <header className="day-head">
+        <h1>{t.today.title}</h1>
+        <p className="muted">{dayTitle(data.today, locale)}</p>
+      </header>
 
-      <section className="tasks-wrap">
-        {tasks.length > 0 ? (
-          <ul className="tasks">
-            {tasks.map((task) => (
-              <TaskRow key={task.key} task={task} />
-            ))}
-          </ul>
-        ) : (
-          // An empty state offers the next action rather than an empty box.
-          <div className="card task-clear">
-            <p className="t-h3">{t.today.clear}</p>
-            <p className="t-label">{t.today.clearNote}</p>
-            {can('rental.create') && (
+      <div className="num-strip">
+        <Num to="/fleet?f=rented" value={String(n.fleet.rented ?? 0)} label={t.today.numbers.rented ?? ''} />
+        <Num to="/fleet?f=available" value={String(n.fleet.available ?? 0)} label={t.today.numbers.available ?? ''} />
+        <Num to="/service" value={String(n.fleet.service ?? 0)} label={t.today.numbers.service ?? ''} />
+        {n.overdueTetri != null && <Num to="/rentals?s=overdue" value={formatGel(n.overdueTetri, { decimals: false })} label={t.today.numbers.overdue ?? ''} tone="crit" />}
+        {n.depositsHeldTetri != null && <Num to="/money/deposits" value={formatGel(n.depositsHeldTetri, { decimals: false })} label={t.today.numbers.deposits ?? ''} />}
+        {n.week && <Num to="/money/payments" value={formatGel(n.week.rentTetri + n.week.saleTetri + n.week.serviceTetri, { decimals: false })} label={t.today.numbers.week ?? ''} />}
+        {n.batteries && <Num to="/fleet/batteries" value={t.today.batteriesOf(n.batteries.showroom, n.batteries.total)} label={t.today.numbers.batteries ?? ''} />}
+        {n.myTillTetri != null && <Num to="/money/cash" value={formatGel(n.myTillTetri, { decimals: false })} label={t.today.numbers.myTill ?? ''} />}
+      </div>
+
+      {data.queue.length === 0 ? (
+        <section className="card empty-day">
+          <p className="empty-title">{t.today.allDone}</p>
+          <p className="muted">{t.today.allDoneSub}</p>
+          {data.owner && can('payments.reconcile') ? (
+            <Link to="/money/statements" className="pill pill-accent">
+              {t.today.uploadStatement}
+            </Link>
+          ) : (
+            can('rental.create') && (
               <Link to="/rentals/new" className="pill pill-accent">
-                {t.actions.newRental}
+                {t.today.handOver}
+              </Link>
+            )
+          )}
+        </section>
+      ) : (
+        data.queue.map((g) => (
+          <section key={g.group} className="card queue-card">
+            <div className="queue-head">
+              <h2>{t.today.groups[g.group]}</h2>
+              <span className="muted">
+                {g.total}
+                {g.group === 'overdue' && g.total > 1 ? ` · ${t.today.sortedLongest}` : ''}
+              </span>
+            </div>
+            <ul className="queue">
+              {g.rows.map((r) => (
+                <li key={r.id} className="q-row">
+                  <Link to={r.href} className="q-who">
+                    <span className="q-name">{rowTitle(r)}</span>
+                    <span className="q-sub muted">{r.action === 'open_service' ? t.today.inRepairSub(Number((r.note ?? '0/0').split('/')[1]), r.days ?? 0) : rowSub(r)}</span>
+                  </Link>
+                  {r.amountTetri != null && r.amountTetri > 0 && <span className={`t-money q-sum ${g.group === 'overdue' ? 'crit-text' : ''}`}>{formatGel(r.amountTetri, { decimals: false })}</span>}
+                  <span className="q-acts">
+                    {r.phone && (
+                      <>
+                        <a className="pill pill-sm" href={`tel:${r.phone}`} aria-label={t.today.call}>
+                          ☎
+                        </a>
+                        <button
+                          type="button"
+                          className="pill pill-sm"
+                          aria-label={t.today.whatsapp}
+                          onClick={() =>
+                            setWa({
+                              rentalId: r.id.split(':')[1] ?? null,
+                              number: r.number ?? '',
+                              name: r.who ?? '',
+                              phone: r.phone ?? '',
+                              paidThrough: null,
+                              debtTetri: r.amountTetri ?? 0,
+                            })
+                          }
+                        >
+                          WA
+                        </button>
+                      </>
+                    )}
+                    <button type="button" className="pill pill-sm pill-accent" onClick={() => act(r)}>
+                      {t.today.actions[r.action]}
+                    </button>
+                  </span>
+                </li>
+              ))}
+            </ul>
+            {g.total > g.rows.length && (
+              <Link className="queue-more" to={SEGMENT[g.group] ?? '/rentals'}>
+                {g.totalTetri > 0 ? t.today.more(g.total - g.rows.length, formatGel(g.totalTetri, { decimals: false })) : t.today.morePlain(g.total - g.rows.length)}
               </Link>
             )}
+          </section>
+        ))
+      )}
+
+      {n.week && (
+        <section className="card week-card">
+          <div className="queue-head">
+            <h2>{t.today.weekTitle}</h2>
+            <span className="muted">{t.today.weekFrom(`${n.week.from.slice(8)}.${n.week.from.slice(5, 7)}`)}</span>
           </div>
-        )}
-      </section>
-
-      {(s.awaitingPayment ?? []).length > 0 && (
-        <section className="card">
-          <BlockHead title={t.w3.awaitingPayment} sub={t.rentals.count(s.awaitingPayment!.length)} />
-          <ul className="od-list">
-            {s.awaitingPayment!.map((r) => (
-              <li key={r.id}>
-                <Link to={`/rentals/${r.id}`} className="od-who">
-                  <span className="od-name">{r.customer}</span>
-                  <span className="mono muted od-num">{r.number}</span>
-                </Link>
-                <span className="od-acts">
-                  {can('cash.record') && (
-                    <Link to={`/rentals/${r.id}`} className="pill pill-sm pill-accent">
-                      {t.today.markPaid}
-                    </Link>
-                  )}
-                </span>
-              </li>
-            ))}
-          </ul>
+          <WeekRow k={t.today.weekRent} v={n.week.rentTetri} />
+          <WeekRow k={t.today.weekSale} v={n.week.saleTetri} />
+          <WeekRow k={t.today.weekService} v={n.week.serviceTetri} />
+          <WeekRow k={t.today.weekDeposit} v={n.week.depositTetri} />
+          <WeekRow k={t.today.weekFee} v={-n.week.feeTetri} />
         </section>
       )}
 
-      {(s.depositsUndecided ?? []).length > 0 && (
-        <section className="card">
-          <BlockHead title={t.w3.depositsUndecided} sub={t.rentals.count(s.depositsUndecided!.length)} />
-          <ul className="od-list">
-            {s.depositsUndecided!.map((r) => (
-              <li key={r.id}>
-                <Link to={`/rentals/${r.id}`} className="od-who">
-                  <span className="od-name">{r.customer}</span>
-                  <span className="mono muted od-num">{r.number}</span>
-                </Link>
-                <span className="od-days warn-text">{t.w3.daysWaiting(r.days)}</span>
-                <span className="od-acts">
-                  <Link to={`/rentals/${r.id}?decide=1`} className="pill pill-sm pill-accent">
-                    {t.w3.decide}
-                  </Link>
-                </span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      {s.overdueList.length > 0 && (
-        <section className="card">
-          <BlockHead title={t.today.overdueList} sub={t.rentals.count(s.overdueList.length)} />
-          <ul className="od-list">
-            {s.overdueList.map((r) => (
-              <li key={r.id}>
-                <Link to={`/rentals/${r.id}`} className="od-who">
-                  <span className="od-name"><CustomerName of={r.customer} second={false} /></span>
-                  <span className="mono muted od-num">{r.number}</span>
-                </Link>
-                <span className="od-days crit-text">{t.today.daysOverdue(r.days)}</span>
-                <span className="t-money crit-text od-debt">{formatGel(r.debtTetri)}</span>
-                <span className="od-acts">
-                  {r.customer.phone && (
-                    <a className="pill pill-sm" href={`tel:${r.customer.phone}`}>
-                      {t.today.remind}
-                    </a>
-                  )}
-                  {can('cash.record') && (
-                    <Link to={`/rentals/${r.id}`} className="pill pill-sm pill-accent">
-                      {t.today.markPaid}
-                    </Link>
-                  )}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      <section className="tiles tiles-quiet">
-        <Link to="/rentals" className="tile">
-          <span className="tile-num">{s.rentals.active}</span>
-          <span className="tile-lbl">{t.today.activeRentals}</span>
-        </Link>
-        {s.salesOverdueTetri > 0 && (
-          <Link to="/sales" className="tile tile-crit">
-            <span className="tile-num mono">{formatGel(s.salesOverdueTetri, { decimals: false })}</span>
-            <span className="tile-lbl">{t.today.salesOverdue}</span>
-          </Link>
-        )}
-        <Link to="/customers" className="tile">
-          <span className="tile-num">{s.customers}</span>
-          <span className="tile-lbl">{t.today.customers}</span>
-        </Link>
-        <div className="tile">
-          <span className="tile-num mono">{formatGel(s.deposits.heldTetri, { decimals: false })}</span>
-          <span className="tile-lbl">{t.today.depositsHeld}</span>
-        </div>
-      </section>
-
-      {(s.pickedUpToday.length > 0 || s.dueBackToday.length > 0) && (
-        <div className="two-col">
-          {s.pickedUpToday.length > 0 && (
-            <section className="card">
-              <BlockHead title={t.today.pickedUp} sub={t.rentals.count(s.pickedUpToday.length)} />
-              <ul className="timeline">
-                {s.pickedUpToday.map((r) => (
-                  <li key={r.id}>
-                    <Link to={`/rentals/${r.id}`} className="mono">
-                      {r.number}
-                    </Link>
-                    <span>{r.customer}</span>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          )}
-          {s.dueBackToday.length > 0 && (
-            <section className="card">
-              <BlockHead title={t.today.dueBack} sub={t.rentals.count(s.dueBackToday.length)} />
-              <ul className="timeline">
-                {s.dueBackToday.map((r) => (
-                  <li key={r.id}>
-                    <Link to={`/rentals/${r.id}`} className="mono">
-                      {r.number}
-                    </Link>
-                    <span>{r.customer}</span>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          )}
-        </div>
-      )}
-
-      <section className="card">
-        <BlockHead title={t.today.fleet} sub={t.fleet.count(VEHICLE_STATES.reduce((n, st) => n + s.fleet[st], 0))} />
-        <ul className="state-list">
-          {VEHICLE_STATES.map((st) => (
-            <li key={st}>
-              <Link to={`/fleet?state=${st}`}>
-                <StateBadge state={st} />
-                <span className="num mono">{s.fleet[st]}</span>
-              </Link>
-            </li>
-          ))}
-        </ul>
-      </section>
+      {wa && <WhatsappSheet target={wa} onClose={() => setWa(null)} />}
     </>
+  );
+}
+
+function Num({ to, value, label, tone }: { to: string; value: string; label: string; tone?: 'crit' }) {
+  return (
+    <Link to={to} className={`num ${tone ? `num-${tone}` : ''}`}>
+      <span className="num-v">{value}</span>
+      <span className="num-l">{label}</span>
+    </Link>
+  );
+}
+
+function WeekRow({ k, v }: { k: string; v: number }) {
+  return (
+    <div className="kv">
+      <span className="kv-k">{k}</span>
+      <span className="kv-v mono">{formatGel(v)}</span>
+    </div>
   );
 }

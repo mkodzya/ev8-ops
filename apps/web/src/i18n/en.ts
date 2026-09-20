@@ -8,6 +8,7 @@
 //
 // Money keeps ONE format in every language (formatGel in @ev8/shared).
 import { wave3En } from './wave3.js';
+import { wave4En } from './wave4.js';
 export const en = {
   lang: { label: 'Language', ka: 'ქართული', ru: 'Русский', en: 'English' },
 
@@ -213,30 +214,6 @@ export const en = {
     disputed: 'Disputed',
   },
 
-  today: {
-    title: 'Today',
-    fleet: 'Fleet by state',
-    activeRentals: 'Active rentals',
-    overdue: 'Overdue',
-    salesOverdue: 'Behind on instalments',
-    openService: 'Open repairs',
-    unmatched: 'Unmatched bank lines',
-    withoutVin: 'Without a confirmed VIN',
-    customers: 'Customers',
-    pickedUp: 'Handed over today',
-    dueBack: 'Due back today',
-    overdueList: 'Overdue, deepest first',
-    daysOverdue: (n: number) => `${n} ${n === 1 ? 'day' : 'days'} late`,
-    remind: 'Remind',
-    markPaid: 'Record a payment',
-    goOpen: 'Open',
-    goReturn: 'Take back',
-    goSort: 'Sort out',
-    clear: 'Nothing is waiting.',
-    clearNote: 'No returns or hand-overs today, nothing overdue, no bank line unsorted.',
-    depositsHeld: 'Deposits held',
-    empty: 'No data yet. Run the Odoo import (tools/migrate_stage1.py) to fill the fleet, customers and rentals.',
-  },
 
   fleet: {
     vehicleAdded: 'Moped added',
@@ -1285,6 +1262,7 @@ export const en = {
     },
   },
   ...wave3En,
+  ...wave4En,
 };
 
 export type Dict = typeof en;

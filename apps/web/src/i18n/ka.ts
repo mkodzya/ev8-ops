@@ -1,4 +1,5 @@
 import { wave3Ka } from './wave3.js';
+import { wave4Ka } from './wave4.js';
 import type { Dict } from './en.js';
 
 // Typed as Dict: a missing or misspelled key fails the build.
@@ -205,30 +206,6 @@ export const ka: Dict = {
     disputed: 'სადავო',
   },
 
-  today: {
-    title: 'დღეს',
-    fleet: 'პარკი მდგომარეობის მიხედვით',
-    activeRentals: 'აქტიური ქირაობა',
-    overdue: 'ვადაგადაცილება',
-    salesOverdue: 'გრაფიკიდან ჩამორჩენა',
-    openService: 'ღია შეკეთებები',
-    unmatched: 'დაუკავშირებელი ჩანაწერები',
-    withoutVin: 'დაუდასტურებელი VIN-ით',
-    customers: 'კლიენტები',
-    pickedUp: 'დღეს გაცემული',
-    dueBack: 'დღეს დასაბრუნებელი',
-    overdueList: 'ვადაგადაცილებული, ღრმა ზემოთ',
-    daysOverdue: (n: number) => `გადაცილება ${n} დღე`,
-    remind: 'შეხსენება',
-    markPaid: 'გადახდის აღრიცხვა',
-    goOpen: 'გახსნა',
-    goReturn: 'დაბრუნების გაფორმება',
-    goSort: 'დახარისხება',
-    clear: 'არაფერი არ ელოდება.',
-    clearNote: 'დღეს არც დაბრუნება, არც გაცემა, ვადაგადაცილებული არ არის, ბანკის დაუხარისხებელი სტრიქონიც არა.',
-    depositsHeld: 'დეპოზიტები ხელზე',
-    empty: 'მონაცემები ჯერ არ არის. გაუშვით იმპორტი Odoo-დან (tools/migrate_stage1.py), რომ შეივსოს პარკი, კლიენტები და ქირაობა.',
-  },
 
   fleet: {
     vehicleAdded: 'მოპედი დაემატა',
@@ -1277,4 +1254,5 @@ export const ka: Dict = {
     },
   },
   ...wave3Ka,
+  ...wave4Ka,
 };
