@@ -38,7 +38,7 @@ export async function batteriesNow(): Promise<{ total: number; couriers: number;
 export function batteryRoutes(app: FastifyInstance): void {
   /** The count and how it moved (§3.8): everyone who sees the fleet sees it. */
   app.get('/api/batteries', { config: { scope: 'fleet.view' } }, async () => {
-    const [count, inventory, moves, inventories] = await Promise.all([
+    const [count, inventory, moves, inventories, rentals] = await Promise.all([
       batteriesNow(),
       prisma.batteryInventory.findFirst({ orderBy: [{ countedOn: 'desc' }, { createdAt: 'desc' }], include: { createdBy: { select: { name: true } } } }),
       prisma.batteryMove.findMany({
@@ -47,13 +47,30 @@ export function batteryRoutes(app: FastifyInstance): void {
         include: { rental: { select: { number: true } }, createdBy: { select: { name: true } } },
       }),
       prisma.batteryInventory.findMany({ orderBy: [{ countedOn: 'desc' }, { createdAt: 'desc' }], take: 10, include: { createdBy: { select: { name: true } } } }),
+      // Batteries leave and come back with the mopeds: those movements are the
+      // acts themselves, not rows anybody writes (QA-W4-07).
+      prisma.rental.findMany({
+        where: { batteries: { gt: 0 } },
+        orderBy: { createdAt: 'desc' },
+        take: 40,
+        select: { number: true, batteries: true, pickedUpOn: true, returnedOn: true },
+      }),
     ]);
     return {
       ...count,
+      // What the acts say the couriers hold, before any total clamps it: the
+      // stocktake sheet adds this to what is counted by hand (QA-W4-04).
+      couriersByActs: await couriersNow(),
       lastInventory: inventory
         ? { countedOn: isoDate(inventory.countedOn), showroomQty: inventory.showroomQty, repairQty: inventory.repairQty, couriersQty: inventory.couriersQty, totalQty: inventory.totalQty, by: inventory.createdBy?.name ?? null, reason: inventory.reason }
         : null,
-      moves: moves.map((m) => ({ id: m.id, kind: m.kind, qty: m.qty, reason: m.reason, number: m.rental?.number ?? null, occurredOn: isoDate(m.occurredOn), by: m.createdBy?.name ?? null })),
+      moves: [
+        ...moves.map((m) => ({ id: m.id, kind: m.kind, qty: m.qty, reason: m.reason, number: m.rental?.number ?? null, occurredOn: isoDate(m.occurredOn), by: m.createdBy?.name ?? null })),
+        ...rentals.flatMap((r) => [
+          ...(r.pickedUpOn ? [{ id: `out:${r.number}`, kind: 'handed_out', qty: r.batteries ?? 0, reason: null, number: r.number, occurredOn: isoDate(r.pickedUpOn), by: null }] : []),
+          ...(r.returnedOn ? [{ id: `back:${r.number}`, kind: 'came_back', qty: r.batteries ?? 0, reason: null, number: r.number, occurredOn: isoDate(r.returnedOn), by: null }] : []),
+        ]),
+      ].sort((a, b) => (a.occurredOn ?? '') < (b.occurredOn ?? '') ? 1 : (a.occurredOn ?? '') > (b.occurredOn ?? '') ? -1 : 0),
       inventories: inventories.map((i) => ({ id: i.id, countedOn: isoDate(i.countedOn), showroomQty: i.showroomQty, repairQty: i.repairQty, couriersQty: i.couriersQty, totalQty: i.totalQty, reason: i.reason, by: i.createdBy?.name ?? null })),
     };
   });

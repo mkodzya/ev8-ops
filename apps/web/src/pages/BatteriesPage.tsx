@@ -17,6 +17,7 @@ interface Batteries {
   couriers: number;
   repair: number;
   showroom: number;
+  couriersByActs: number;
   lastInventory: { countedOn: string; showroomQty: number; repairQty: number; couriersQty: number; totalQty: number; by: string | null; reason: string | null } | null;
   moves: { id: string; kind: string; qty: number; reason: string | null; number: string | null; occurredOn: string; by: string | null }[];
   inventories: { id: string; countedOn: string; totalQty: number; showroomQty: number; repairQty: number; couriersQty: number; reason: string | null; by: string | null }[];
@@ -77,8 +78,8 @@ export function BatteriesPage() {
               <li key={m.id}>
                 <span className="mono muted">{fmtDate(m.occurredOn)}</span>
                 <span>
-                  <span className="mono">{m.kind === 'lost' || m.kind === 'to_repair' ? `−${m.qty}` : `+${m.qty}`}</span> {t.bat.kinds[m.kind] ?? m.kind}
-                  {m.number && <span className="muted"> · {m.kind === 'lost' ? t.bat.lostOn(m.number) : t.bat.handedOut(m.number)}</span>}
+                  <span className="mono">{m.kind === 'lost' || m.kind === 'to_repair' || m.kind === 'handed_out' ? `−${m.qty}` : `+${m.qty}`}</span> {t.bat.kinds[m.kind] ?? t.batWords[m.kind] ?? m.kind}
+                  {m.number && <span className="muted"> · {m.kind === 'lost' ? t.bat.lostOn(m.number) : m.number}</span>}
                   {m.reason && <span className="muted"> · {m.reason}</span>}
                   {m.by && <span className="muted"> · {m.by}</span>}
                 </span>
@@ -113,7 +114,7 @@ function InventorySheet({ now, onClose, onSaved }: { now: Batteries; onClose: ()
   const t = useT();
   const initial = { showroom: String(now.showroom), repair: String(now.repair), reason: '' };
   const [f, setF] = useState(initial);
-  const counted = (Number(f.showroom) || 0) + (Number(f.repair) || 0) + now.couriers;
+  const counted = (Number(f.showroom) || 0) + (Number(f.repair) || 0) + now.couriersByActs;
   const differs = counted !== now.total;
   return (
     <FormSheet
@@ -137,7 +138,7 @@ function InventorySheet({ now, onClose, onSaved }: { now: Batteries; onClose: ()
           <input className="input input-amount mono" inputMode="numeric" value={f.repair} onChange={(e) => setF({ ...f, repair: e.target.value })} />
         </Field>
       </div>
-      <p className="hint muted">{t.bat.couriersNote(now.couriers)}</p>
+      <p className="hint muted">{t.bat.couriersNote(now.couriersByActs)}</p>
       <p className="hint">{t.bat.willBe(counted)}</p>
       {differs && <p className="warn-text">{t.bat.diff(now.total, counted)}</p>}
       <Field label={t.bat.reason} name="reason">

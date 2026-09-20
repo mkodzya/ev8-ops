@@ -146,12 +146,16 @@ export function todayRoutes(app: FastifyInstance): void {
     // the deposits stand apart from what the rentals and the sales brought.
     const inWeek = week.filter((p) => p.direction === 'in');
     const sum = (f: (p: (typeof inWeek)[number]) => boolean) => inWeek.filter(f).reduce((n, p) => n + p.grossTetri, 0);
+    const depositPart = depositsIn?._sum.amountTetri ?? 0;
     const weekMoney = owner
       ? {
-          rentTetri: sum((p) => p.kind === 'rent' || p.kind === 'on_account'),
+          // Deposits stand apart (`weekly.md`), so the rent line is what the
+          // week brought less the part of it that went onto deposits — the
+          // lines add up to what came in (QA-W4-03).
+          rentTetri: Math.max(0, sum((p) => p.kind === 'rent' || p.kind === 'on_account') - depositPart),
           saleTetri: sum((p) => p.kind === 'sale' || p.kind === 'buyback'),
           serviceTetri: sum((p) => p.kind === 'service'),
-          depositTetri: depositsIn?._sum.amountTetri ?? 0,
+          depositTetri: depositPart,
           feeTetri: inWeek.reduce((n, p) => n + p.feeTetri, 0),
           from: weekStart(today),
         }
