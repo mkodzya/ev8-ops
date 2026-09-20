@@ -5,6 +5,7 @@ import { DocumentRow, signedAtText, type DocState } from '../components/Document
 import { LoadError } from '../components/LoadError.js';
 import { DecideSheet } from '../components/ReturnMoney.js';
 import { RowMenu } from '../components/RowMenu.js';
+import { WhatsappSheet } from '../components/Whatsapp.js';
 import { Field } from '../components/Wizard.js';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
@@ -58,6 +59,8 @@ export interface RentalCard {
   };
   /** What a return charged beyond the weeks: a key, days of delay (wave 3 §3.4). */
   charges: { kind: string; amountTetri: number; note: string | null; paidTetri: number }[];
+  /** One timeline of the rental: money, acts, documents, the journal (ux №7). */
+  feed: { at: string; kind: 'payment' | 'act' | 'document' | 'log'; by: string | null; text: string; amountTetri: number | null; note: string | null }[];
   documents: { contract: DocState; returnAct: DocState | null };
   payments: { id: string; occurredOn: string; channel: 'transfer' | 'acquiring' | 'cash'; grossTetri: number; feeTetri: number }[];
   deposit: { amountTetri: number; paidTetri: number; status: DepositStatus; returnedTetri: number; withheldTetri: number; withheldReason: string | null; withheldGrounds: string[]; returnedTo: string | null; returnedOn: string | null; decided: boolean; paidOutTetri: number; withholdings: { source: string; amountTetri: number; number: string; reason: string }[] } | null;
@@ -73,6 +76,8 @@ export function RentalPage() {
   const { data, failure, reload } = useLoad<RentalCard>(id ? `/api/rentals/${id}` : null);
   const [params, setParams] = useSearchParams();
   const [sheet, setSheet] = useState<null | 'edit' | 'status' | 'undo' | 'decide'>(params.get('decide') === '1' ? 'decide' : null);
+  const [wa, setWa] = useState(false);
+  const [feedFilter, setFeedFilter] = useState<'all' | 'payment' | 'act' | 'document' | 'log'>('all');
   const closeSheet = () => {
     setSheet(null);
     if (params.get('decide')) setParams({}, { replace: true });
@@ -87,6 +92,8 @@ export function RentalPage() {
   if (!data) return <Loading />;
   const r = data.rental;
   const today = todayISO();
+  // What the state asks for first (§3.4): a return that is due beats taking money.
+  const dueBack = !!r.expectedReturnOn && r.expectedReturnOn <= today && r.status !== 'returned';
   // Owed is the unpaid part of the weeks, the same arithmetic the list and
   // "Today" use. Nothing here is stored.
   const debtTetri = r.debtTetri;
@@ -111,10 +118,24 @@ export function RentalPage() {
             {t.docs.returnAct}
           </button>
         )}
+        {r.customer.phone && (
+          <button type="button" className="pill pill-sm" onClick={() => setWa(true)}>
+            {t.customer.whatsapp}
+          </button>
+        )}
         {open && can('rental.return') && (
-          <Link className="pill pill-sm pill-accent" to={`/rentals/${r.id}/return`}>
+          <Link className={`pill pill-sm ${dueBack ? 'pill-accent' : ''}`} to={`/rentals/${r.id}/return`}>
             {t.actions.returnRental}
           </Link>
+        )}
+        {debtTetri > 0 && can('cash.record') && (
+          <button
+            type="button"
+            className={`pill pill-sm ${dueBack ? '' : 'pill-accent'}`}
+            onClick={() => openMoney({ target: { kind: 'rent', rentalId: r.id, number: r.number, customerId: r.customer.id, customer: r.customer.name } })}
+          >
+            {open ? t.today.actions.take_money : t.back.takeDebt(formatGel(debtTetri, { decimals: false }))}
+          </button>
         )}
         <RowMenu actions={menu} />
       </PageHead>
@@ -165,10 +186,18 @@ export function RentalPage() {
       <section className="card paid-hero">
         <div className="paid-head">
           <div>
-            <p className="t-label">{t.rentals.paidThrough}</p>
-            <p className="paid-date">{fmtDate(r.paidThrough)}</p>
+            {/* The first line answers this rental's own question (§3.4). */}
+            <p className="t-label">{r.status === 'awaiting_payment' ? t.hand.dueToday : r.status === 'returned' ? t.rentals.returned : t.rentals.paidThrough}</p>
+            <p className="paid-date">
+              {r.status === 'awaiting_payment' ? formatGel(debtTetri, { decimals: false }) : r.status === 'returned' ? fmtDate(r.returnedOn) : fmtDate(r.paidThrough)}
+            </p>
+            {r.status === 'awaiting_payment' && d && (
+              <p className="muted">
+                {t.rentals.deposit}: {t.rentalMoney.receivedOf(formatGel(d.paidTetri, { decimals: false }), formatGel(d.amountTetri, { decimals: false }))}
+              </p>
+            )}
           </div>
-          {debtTetri > 0 && (
+          {debtTetri > 0 && r.status !== 'awaiting_payment' && (
             <div className="paid-debt">
               <p className="t-label">{t.rental.owed}</p>
               <p className="t-money crit-text paid-sum">{formatGel(debtTetri)}</p>
@@ -383,6 +412,41 @@ export function RentalPage() {
       </section>
 
       <section className="card">
+        <div className="queue-head">
+          <h2>{t.customerW4.feed}</h2>
+          <div className="chips">
+            {(['all', 'payment', 'act', 'document', 'log'] as const).map((f) => (
+              <button key={f} type="button" className={`pill pill-sm ${feedFilter === f ? 'on' : ''}`} onClick={() => setFeedFilter(f)}>
+                {f === 'act' ? t.rental.acts : t.customerW4.feedFilters[f]}
+              </button>
+            ))}
+          </div>
+        </div>
+        <ul className="timeline">
+          {data.feed
+            .filter((e) => feedFilter === 'all' || e.kind === feedFilter)
+            .slice(0, 60)
+            .map((e, i) => (
+              <li key={`${e.at}-${i}`}>
+                <span className="mono muted">{fmtDate(e.at)}</span>
+                <span>
+                  {e.kind === 'payment' && (
+                    <>
+                      <span className="mono">{formatGel(e.amountTetri ?? 0)}</span> <span className="muted">{t.payments.channels[e.text as 'cash'] ?? e.text}</span>
+                    </>
+                  )}
+                  {e.kind === 'act' && <span>{t.rental.actKind[e.text as 'pickup']}</span>}
+                  {e.kind === 'document' && <span>{e.text === 'contract' ? t.hand.contract : t.back.act}</span>}
+                  {e.kind === 'log' && <span className="muted">{e.text}</span>}
+                  {e.note && <span className="muted"> · {e.note}</span>}
+                  {e.by && <span className="muted"> · {e.by}</span>}
+                </span>
+              </li>
+            ))}
+        </ul>
+      </section>
+
+      <section className="card">
         <BlockHead title={t.rental.acts} sub={t.rental.actsCount(data.acts.length)} />
         {data.acts.length === 0 ? (
           <Empty text={t.common.dash} />
@@ -410,6 +474,13 @@ export function RentalPage() {
           </ul>
         )}
       </section>
+
+      {wa && r.customer.phone && (
+        <WhatsappSheet
+          target={{ rentalId: r.id, number: r.number, name: r.customer.name, phone: r.customer.phone, paidThrough: r.paidThrough, debtTetri }}
+          onClose={() => setWa(false)}
+        />
+      )}
     </>
   );
 }
