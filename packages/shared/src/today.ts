@@ -5,7 +5,10 @@
 import type { ISODate } from './types.js';
 import type { Tetri } from './money.js';
 
-export const TASK_GROUPS = ['decide', 'returns', 'overdue', 'awaiting', 'money', 'instalments', 'service', 'purchases', 'decisions', 'fill'] as const;
+// "till" is a manager's last group (§3.1): their own cash, handed over at the
+// end of the day. An owner has no such group — a till handed to them is a
+// decision, and it stands in "decide".
+export const TASK_GROUPS = ['decide', 'returns', 'overdue', 'awaiting', 'money', 'instalments', 'service', 'purchases', 'decisions', 'fill', 'till'] as const;
 export type TaskGroup = (typeof TASK_GROUPS)[number];
 
 /** What the row's button does; the screen turns it into words and a link. */
@@ -102,8 +105,14 @@ export function dayQueue(input: QueueInput): TaskGroupRows[] {
   const rows: TaskRow[] = [];
   const open = input.rentals.filter((r) => r.status !== 'returned');
 
-  // 1. Decide — an owner's: a deposit a manager's return left, a till handed over.
+  // 1. Decide — an owner's: a till handed over today, a deposit a manager's
+  // return left. The till comes first: it is money on somebody's hands right
+  // now, while deposits can wait a day, and a group shows three rows — with a
+  // pile of old deposits the till would never be seen (QA-W4-12).
   if (input.owner) {
+    for (const t of input.tills) {
+      rows.push({ id: `till:${t.id}`, group: 'decide', action: 'accept_till', who: t.who, number: null, vin: null, days: null, amountTetri: t.amountTetri, href: '/money/cash', phone: null, note: null });
+    }
     for (const r of input.rentals.filter((x) => x.depositUndecided)) {
       rows.push({
         id: `deposit:${r.id}`,
@@ -118,9 +127,6 @@ export function dayQueue(input: QueueInput): TaskGroupRows[] {
         phone: r.customer.phone,
         note: null,
       });
-    }
-    for (const t of input.tills) {
-      rows.push({ id: `till:${t.id}`, group: 'decide', action: 'accept_till', who: t.who, number: null, vin: null, days: null, amountTetri: t.amountTetri, href: '/money/cash', phone: null, note: null });
     }
   }
 
@@ -232,9 +238,11 @@ export function dayQueue(input: QueueInput): TaskGroupRows[] {
     rows.push({ id: 'point', group: 'fill', action: 'set_point', who: null, number: null, vin: null, days: null, amountTetri: null, href: '/fleet?f=nopoint', phone: null, note: String(input.vehiclesWithoutPoint) });
   }
 
-  // A manager's own till: the last line, and only when there is money in it.
+  // A manager's own till: their own last group, "Касса", and only when there is
+  // money in it. A manager has no "decide" — §3.1 and criterion 10 say so, and
+  // the group's name has to be true of every row in it (QA-W4-11).
   if (!input.owner && input.myTillTetri > 0) {
-    rows.push({ id: 'my-till', group: 'decide', action: 'hand_over_till', who: null, number: null, vin: null, days: null, amountTetri: input.myTillTetri, href: '/money/cash', phone: null, note: null });
+    rows.push({ id: 'my-till', group: 'till', action: 'hand_over_till', who: null, number: null, vin: null, days: null, amountTetri: input.myTillTetri, href: '/money/cash', phone: null, note: null });
   }
 
   return TASK_GROUPS.map((group) => {

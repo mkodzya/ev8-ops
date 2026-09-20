@@ -42,8 +42,23 @@ function dayTitle(iso: string, t: ReturnType<typeof useT>): string {
   return t.today.day(weekday, d.getUTCDate(), month);
 }
 
-/** The segment of the rentals list a group's "More N" opens. */
-const SEGMENT: Record<string, string> = { overdue: '/rentals?s=overdue', awaiting: '/rentals?s=awaiting', returns: '/rentals?s=returns', fill: '/rentals?s=unsigned' };
+/**
+ * The list a group's "More N" opens: the one its rows were made from. Not every
+ * group is a segment of the rentals list — deposits waiting for a decision and
+ * a till handed over live in Money, and a list without the rows in it is worse
+ * than no link at all (QA-W4-12).
+ */
+const SEGMENT: Record<string, string> = {
+  decide: '/money/deposits',
+  returns: '/rentals?s=returns',
+  overdue: '/rentals?s=overdue',
+  awaiting: '/rentals?s=awaiting',
+  money: '/money/statements',
+  instalments: '/sales',
+  purchases: '/purchases',
+  fill: '/rentals?s=unsigned',
+  till: '/money/cash',
+};
 
 export function TodayPage() {
   const t = useT();

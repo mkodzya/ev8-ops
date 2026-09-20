@@ -82,9 +82,19 @@ describe('the queue of “Today”', () => {
         rentals: [rental()],
       }),
     );
-    expect(q.map((g) => g.group)).toEqual(['decide', 'overdue']);
-    expect(group(q, 'decide')!.rows[0]).toMatchObject({ action: 'hand_over_till', amountTetri: 12000 });
+    // A manager has no "decide": their own cash is a group of its own, last (QA-W4-11).
+    expect(q.map((g) => g.group)).toEqual(['overdue', 'till']);
+    expect(group(q, 'till')!.rows[0]).toMatchObject({ action: 'hand_over_till', amountTetri: 12000 });
     expect(group(q, 'overdue')!.rows[0].action).toBe('take_cash');
+  });
+
+  it('puts a till handed over above the deposits an owner has not decided (crit. 4, QA-W4-12)', () => {
+    const deposits = [1, 2, 3, 4].map((n) => rental({ id: `r${n}`, number: `R-0000${n}`, status: 'returned', depositUndecided: true, debtTetri: 0 }));
+    const q = dayQueue(input({ rentals: deposits, tills: [{ id: 'h1', who: 'Demo Manager', amountTetri: 16000 }] }));
+    const decide = group(q, 'decide')!;
+    expect(decide.rows[0]).toMatchObject({ action: 'accept_till', who: 'Demo Manager', amountTetri: 16000, href: '/money/cash' });
+    expect(decide.total).toBe(5);
+    expect(decide.rows.slice(1).every((r) => r.action === 'decide_deposit')).toBe(true);
   });
 
   it('says the return is due, and how many days it is late (crit. 5)', () => {
