@@ -145,7 +145,9 @@ page('wave-1-search.html', 'Волна 1 · Глобальный поиск',
 # ---------- LISTS ----------
 def lc(a, b, r='', b2=''):
     bb = f'<div class="b">{b2}</div>' if b2 else ''
-    return f'<a class="lcard" href="#"><div><div class="a">{a}</div><div class="b">{b}</div>{bb}</div><div class="r">{r}</div></a>'
+    tag = 'div' if '<a ' in r else 'a href="#"'
+    end = 'div' if '<a ' in r else 'a'
+    return f'<{tag} class="lcard"><div><div class="a">{a}</div><div class="b">{b}</div>{bb}</div><div class="r">{r}</div></{end}>'
 def tb(ph, chips):
     return ('<div style="display:flex;gap:8px;margin-bottom:10px"><div class="input" style="flex:1">' + ic('search','i s') + f'<span class="ph">{ph}</span></div><a class="btn btn-round" href="#">' + ic('sort') + '</a></div>' +
             '<div class="chips">' + ''.join(f'<span class="chip{" on" if i == 0 else ""}">{c}</span>' for i, c in enumerate(chips)) + '</div>')

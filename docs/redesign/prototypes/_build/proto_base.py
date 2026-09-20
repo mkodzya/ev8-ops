@@ -79,6 +79,7 @@ figure.wide > figcaption { max-width: 900px; }
 .badge { min-width: 18px; height: 18px; border-radius: 9px; background: var(--crit); color: #fff; font: 600 11px/18px var(--body); padding: 0 5px; text-align: center; }
 .action-bar { position: absolute; left: 0; right: 0; bottom: var(--tabbar-h); height: var(--action-bar-h); padding: 12px 16px; background: var(--surface); border-top: 1px solid var(--line-soft); display: flex; gap: 8px; z-index: 2; }
 .action-bar.bottom { bottom: 0; }
+.action-bar .btn-lg + .btn-lg, .action-bar .btn-lg:has(+ .btn-lg) { font: var(--text-button); }
 .syncbar { position: absolute; top: var(--header-h); left: 0; right: 0; min-height: 36px; background: var(--surface-2); display: flex; align-items: center; gap: 8px; padding: 6px 16px; font: var(--text-label); z-index: 2; }
 .syncbar + .ph-body { top: calc(var(--header-h) + 36px); }
 
