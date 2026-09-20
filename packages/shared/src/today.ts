@@ -217,7 +217,7 @@ export function dayQueue(input: QueueInput): TaskGroupRows[] {
     }
     // 9. Decisions — mopeds nobody has put in a park yet (register #14).
     if (input.vehiclesWithoutPool > 0) {
-      rows.push({ id: 'pool', group: 'decisions', action: 'set_pool', who: null, number: null, vin: null, days: null, amountTetri: null, href: '/fleet?f=nopool', phone: null, note: String(input.vehiclesWithoutPool) });
+      rows.push({ id: 'pool', group: 'decisions', action: 'set_pool', who: null, number: null, vin: null, days: null, amountTetri: null, href: '/fleet?pool=none', phone: null, note: String(input.vehiclesWithoutPool) });
     }
   }
 
@@ -229,7 +229,7 @@ export function dayQueue(input: QueueInput): TaskGroupRows[] {
     rows.push({ id: `vin:${r.id}`, group: 'fill', action: 'set_vin', who: r.customer.name, number: r.number, vin: null, days: null, amountTetri: null, href: `/rentals/${r.id}`, phone: r.customer.phone, note: null });
   }
   if (input.vehiclesWithoutPoint > 0) {
-    rows.push({ id: 'point', group: 'fill', action: 'set_point', who: null, number: null, vin: null, days: null, amountTetri: null, href: '/fleet?f=nopoint', phone: null, note: String(input.vehiclesWithoutPoint) });
+    rows.push({ id: 'point', group: 'fill', action: 'set_point', who: null, number: null, vin: null, days: null, amountTetri: null, href: '/fleet?place=unset', phone: null, note: String(input.vehiclesWithoutPoint) });
   }
 
   // A manager's own till: the last line, and only when there is money in it.
