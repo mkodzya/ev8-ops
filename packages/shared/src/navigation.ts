@@ -80,7 +80,7 @@ export function menuSectionsFor(permissions: readonly Permission[]): SectionId[]
   return [...rest.filter((id) => id === 'customers'), ...rest.filter((id) => id !== 'customers')];
 }
 
-export type TabId = 'vehicles' | 'models' | 'points' | 'jobs' | 'stock' | 'sort' | 'payments' | 'till' | 'statements' | 'deposits' | 'mine' | 'economics';
+export type TabId = 'vehicles' | 'models' | 'points' | 'batteries' | 'jobs' | 'stock' | 'sort' | 'payments' | 'till' | 'statements' | 'deposits' | 'mine' | 'economics';
 
 /** Tabs inside a section, in the address (wave 1 §3.2). */
 export const SECTION_TABS: Partial<Record<SectionId, readonly { id: TabId; path: string; anyOf: readonly Permission[] }[]>> = {
@@ -88,6 +88,7 @@ export const SECTION_TABS: Partial<Record<SectionId, readonly { id: TabId; path:
     { id: 'vehicles', path: '/fleet', anyOf: ['fleet.view'] },
     { id: 'models', path: '/fleet/models', anyOf: ['fleet.view'] },
     { id: 'points', path: '/fleet/points', anyOf: ['settings.manage'] },
+    { id: 'batteries', path: '/fleet/batteries', anyOf: ['fleet.view'] },
   ],
   service: [
     { id: 'jobs', path: '/service', anyOf: ['fleet.view'] },

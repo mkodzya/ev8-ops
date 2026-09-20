@@ -83,6 +83,7 @@ export function PickupWizard() {
   const customers = useLoad<{ customers: CustomerRow[] }>('/api/customers');
   const fleet = useLoad<{ vehicles: FleetRow[] }>('/api/fleet');
   const recentRentals = useLoad<{ rentals: { customer: { id: string } }[] }>('/api/rentals');
+  const batteries = useLoad<{ showroom: number }>('/api/batteries');
 
   const today = todayISO();
   const start = {
@@ -555,6 +556,12 @@ export function PickupWizard() {
             <Stepper label={t.hand.batteries} value={f.batteries} onChange={(n) => set({ batteries: n })} />
             <Stepper label={t.hand.chargers} value={f.chargers} onChange={(n) => set({ chargers: n })} />
           </div>
+          {batteries.data && (
+            <p className={`hint ${batteries.data.showroom < f.batteries ? 'warn-text' : 'muted'}`}>
+              {t.bat.shortInPickup(batteries.data.showroom)} · {t.bat.afterPickup(batteries.data.showroom - f.batteries)}
+              {batteries.data.showroom < f.batteries ? ` · ${t.bat.tooFew}` : ''}
+            </p>
+          )}
           <Field label={t.hand.expectedReturn} hint={t.hand.expectedReturnHint} name="expectedReturnOn" error={f.expectedReturnOn && f.expectedReturnOn < f.pickedUpOn ? t.hand.notBeforePickup : null}>
             <input className="input mono" type="date" min={f.pickedUpOn} value={f.expectedReturnOn} onChange={(e) => set({ expectedReturnOn: e.target.value })} />
           </Field>

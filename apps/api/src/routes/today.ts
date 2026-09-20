@@ -8,6 +8,7 @@ import { actorOf, mayView } from '../lib/guard.js';
 import { onHandOf } from '../lib/till.js';
 import { UNDO_RETURN_MS } from '../lib/rentals.js';
 import { BANKS } from './statements.js';
+import { batteriesNow } from './batteries.js';
 
 // "Today" (wave 4 §3.1): the queue and the numbers beside it. The rules of
 // the queue live in @ev8/shared, so the screen, the badge and the laptop's
@@ -167,6 +168,7 @@ export function todayRoutes(app: FastifyInstance): void {
         depositsHeldTetri: heldDeposits?._sum.paidTetri ?? null,
         week: weekMoney,
         myTillTetri: owner ? null : myTill,
+        batteries: await batteriesNow(),
       },
       undoReturnMs: UNDO_RETURN_MS,
     };
