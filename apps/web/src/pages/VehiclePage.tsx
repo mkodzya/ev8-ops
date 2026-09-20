@@ -105,7 +105,12 @@ export function VehiclePage() {
           initial={{ toState: move.toState, reason: '' }}
           label={t.vehicle.changeStateCta}
           submit={async (key) => {
-            if (move.toState === 'out' && !writeOff) throw new ApiError(400, 'confirm_write_off', t.vehicleW4.writeOffConfirm, { field: 'toState' });
+            // A refusal the screen makes itself brings its own words to the
+            // box it is about: a code the error dictionary has never heard of
+            // would otherwise read as «Не получилось» (QA-W4-10).
+            if (move.toState === 'out' && !writeOff) {
+              throw new ApiError(400, 'missing_field', 'Write-off is not confirmed.', { field: 'writeOff', fieldText: t.vehicleW4.writeOffAsk });
+            }
             await api.post(`/api/fleet/${v.id}/state`, move, { key });
             return { toast: { text: t.vehicle.stateChanged(t.states[move.toState]) } };
           }}
@@ -125,10 +130,12 @@ export function VehiclePage() {
             </div>
           </Field>
           {move.toState === 'out' && (
-            <label className="check">
-              <input type="checkbox" checked={writeOff} onChange={(e) => setWriteOff(e.target.checked)} />
-              <span>{t.vehicleW4.writeOffConfirm}</span>
-            </label>
+            <Field label={t.vehicleW4.writeOffTitle} name="writeOff">
+              <label className="check">
+                <input type="checkbox" checked={writeOff} onChange={(e) => setWriteOff(e.target.checked)} />
+                <span>{t.vehicleW4.writeOffConfirm}</span>
+              </label>
+            </Field>
           )}
           <Field label={t.vehicle.reason} hint={t.vehicle.reasonHint} name="reason">
             <input className="input" value={move.reason} onChange={(e) => setMove({ ...move, reason: e.target.value })} />

@@ -27,6 +27,7 @@ export const wave4En = {
       purchases: 'Purchases',
       decisions: 'Decisions',
       fill: 'Fill in',
+      till: 'Cash till',
     } as Record<string, string>,
     sortedLongest: 'longest first',
     /** The day is written from the dictionary: a phone without Georgian date data would otherwise answer in another language. */
@@ -126,6 +127,8 @@ export const wave4En = {
   vehicleW4: {
     soldNote: 'Sold is what a sale says; a buy-back brings it back.',
     writeOffConfirm: 'Yes, this moped is written off and is not coming back into the fleet.',
+    writeOffAsk: 'Tick the box to write this moped off.',
+    writeOffTitle: 'Write-off',
     atCustomers: (n: number) => `with customers ${n}`,
     noPoint: (n: number) => `without a point ${n}`,
   },
@@ -220,6 +223,7 @@ export const wave4Ru: Wave4 = {
       purchases: 'Закупки',
       decisions: 'Решения',
       fill: 'Дозаполнить',
+      till: 'Касса',
     },
     sortedLongest: 'сначала дольше всех',
     weekdays: ['Воскресенье', 'Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота'],
@@ -299,6 +303,8 @@ export const wave4Ru: Wave4 = {
   vehicleW4: {
     soldNote: 'Продан — только продажей; вернуть проданный — только выкупом.',
     writeOffConfirm: 'Да, мопед списывается и в парк не вернётся.',
+    writeOffAsk: 'Поставьте галочку, чтобы списать мопед.',
+    writeOffTitle: 'Списание',
     atCustomers: (n) => `у клиентов ${n}`,
     noPoint: (n) => `без точки ${n}`,
   },
@@ -390,6 +396,7 @@ export const wave4Ka: Wave4 = {
       purchases: 'შესყიდვები',
       decisions: 'გადაწყვეტილებები',
       fill: 'შესავსები',
+      till: 'სალარო',
     },
     sortedLongest: 'ჯერ ყველაზე დიდი ვადა',
     weekdays: ['კვირა', 'ორშაბათი', 'სამშაბათი', 'ოთხშაბათი', 'ხუთშაბათი', 'პარასკევი', 'შაბათი'],
@@ -469,6 +476,8 @@ export const wave4Ka: Wave4 = {
   vehicleW4: {
     soldNote: 'გაყიდვა ფორმდება გაყიდვით; უკან აბრუნებს გამოსყიდვა.',
     writeOffConfirm: 'დიახ, მოპედი ჩამოიწერება და პარკში აღარ დაბრუნდება.',
+    writeOffAsk: 'მონიშნეთ ველი, რომ მოპედი ჩამოიწეროს.',
+    writeOffTitle: 'ჩამოწერა',
     atCustomers: (n) => `კლიენტებთან ${n}`,
     noPoint: (n) => `წერტილის გარეშე ${n}`,
   },

@@ -63,4 +63,24 @@ describe.skipIf(!HAS_DB)('“Today” (wave 4)', () => {
     const managerSees = json<Today>(await call(manager, 'GET', '/api/today'));
     expect(managerSees.queue.some((g) => g.group === 'decide' && g.rows.some((r) => r.action === 'decide_deposit'))).toBe(false);
   });
+
+  it('asks an owner to take a till in before the deposits, and names a manager’s own cash for what it is (crit. 4)', async () => {
+    const { id } = await overdueRental();
+    const manager = await loginAs('manager');
+    expect((await call(manager, 'POST', '/api/payments', { rentalId: id, channel: 'cash', grossTetri: 16000 })).statusCode).toBe(201);
+    // A manager's own cash is a group of its own, "Касса" — never "Решить" (QA-W4-11).
+    const withCash = json<Today>(await call(manager, 'GET', '/api/today'));
+    expect(withCash.queue.some((g) => g.group === 'decide')).toBe(false);
+    expect(withCash.queue.find((g) => g.group === 'till')!.rows[0]).toMatchObject({ action: 'hand_over_till' });
+    const h = json<{ id: string }>(await call(manager, 'POST', '/api/till/handovers', { amountTetri: '160' }));
+    // Deposits nobody has decided pile up; a till handed over today stands
+    // above them, or an owner never sees it behind the "more" line (QA-W4-12).
+    const owner = await loginAs('owner');
+    const decide = json<Today>(await call(owner, 'GET', '/api/today')).queue.find((g) => g.group === 'decide')!;
+    expect(decide.rows[0].action).toBe('accept_till');
+    expect(decide.rows.some((r) => r.id === `till:${h.id}`)).toBe(true);
+    expect((await call(owner, 'POST', `/api/till/handovers/${h.id}/accept`)).statusCode).toBe(200);
+    const after = json<Today>(await call(owner, 'GET', '/api/today')).queue.find((g) => g.group === 'decide');
+    expect(after?.rows.some((r) => r.id === `till:${h.id}`) ?? false).toBe(false);
+  });
 });
