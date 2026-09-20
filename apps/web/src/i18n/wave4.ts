@@ -29,6 +29,10 @@ export const wave4En = {
       fill: 'Fill in',
     } as Record<string, string>,
     sortedLongest: 'longest first',
+    /** The day is written from the dictionary: a phone without Georgian date data would otherwise answer in another language. */
+    weekdays: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
+    months: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'],
+    day: (weekday: string, n: number, month: string) => `${weekday}, ${n} ${month}`,
     actions: {
       decide_deposit: 'Decide the deposit',
       accept_till: 'Accept the till',
@@ -195,6 +199,9 @@ export const wave4Ru: Wave4 = {
       fill: 'Дозаполнить',
     },
     sortedLongest: 'сначала дольше всех',
+    weekdays: ['Воскресенье', 'Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота'],
+    months: ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'],
+    day: (weekday, n, month) => `${weekday}, ${n} ${month}`,
     actions: {
       decide_deposit: 'Решить залог',
       accept_till: 'Принять кассу',
@@ -340,6 +347,9 @@ export const wave4Ka: Wave4 = {
       fill: 'შესავსები',
     },
     sortedLongest: 'ჯერ ყველაზე დიდი ვადა',
+    weekdays: ['კვირა', 'ორშაბათი', 'სამშაბათი', 'ოთხშაბათი', 'ხუთშაბათი', 'პარასკევი', 'შაბათი'],
+    months: ['იანვარი', 'თებერვალი', 'მარტი', 'აპრილი', 'მაისი', 'ივნისი', 'ივლისი', 'აგვისტო', 'სექტემბერი', 'ოქტომბერი', 'ნოემბერი', 'დეკემბერი'],
+    day: (weekday, n, month) => `${weekday}, ${n} ${month}`,
     actions: {
       decide_deposit: 'დეპოზიტის გადაწყვეტა',
       accept_till: 'სალაროს მიღება',

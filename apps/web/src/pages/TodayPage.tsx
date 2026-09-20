@@ -1,4 +1,4 @@
-import { ORG_TZ, type TaskGroupRows, type TaskRow, type VehicleState } from '@ev8/shared';
+import { type TaskGroupRows, type TaskRow, type VehicleState } from '@ev8/shared';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { LoadError } from '../components/LoadError.js';
@@ -6,7 +6,7 @@ import { Loading } from '../components/ui.js';
 import { WhatsappSheet, type WaTarget } from '../components/Whatsapp.js';
 import { useMoneyForm } from '../ds/money/MoneyForm.js';
 import { formatGel } from '../format.js';
-import { useLocale, useT } from '../i18n/index.js';
+import { useT } from '../i18n/index.js';
 import { useLoad } from '../lib/use.js';
 import { useSession } from '../session.js';
 
@@ -29,12 +29,17 @@ export interface TodayData {
   };
 }
 
-/** «Пятница, 18 сентября» — the day in the language on screen (U1). */
-function dayTitle(iso: string, locale: string): string {
+/**
+ * «Пятница, 18 сентября» — the day in the language on screen (U1). Written
+ * from the dictionary rather than from the device: a browser without Georgian
+ * date data answers in whatever language it does have, which on a stand here
+ * turned out to be Russian under a Georgian interface.
+ */
+function dayTitle(iso: string, t: ReturnType<typeof useT>): string {
   const d = new Date(`${iso}T12:00:00Z`);
-  const tag = locale === 'ka' ? 'ka-GE' : locale === 'ru' ? 'ru-RU' : 'en-GB';
-  const text = new Intl.DateTimeFormat(tag, { weekday: 'long', day: 'numeric', month: 'long', timeZone: ORG_TZ }).format(d);
-  return text.charAt(0).toUpperCase() + text.slice(1);
+  const weekday = t.today.weekdays[d.getUTCDay()] ?? '';
+  const month = t.today.months[d.getUTCMonth()] ?? '';
+  return t.today.day(weekday, d.getUTCDate(), month);
 }
 
 /** The segment of the rentals list a group's "More N" opens. */
@@ -42,7 +47,6 @@ const SEGMENT: Record<string, string> = { overdue: '/rentals?s=overdue', awaitin
 
 export function TodayPage() {
   const t = useT();
-  const { locale } = useLocale();
   const { can } = useSession();
   const openMoney = useMoneyForm();
   const navigate = useNavigate();
@@ -108,7 +112,7 @@ export function TodayPage() {
     <>
       <header className="day-head">
         <h1>{t.today.title}</h1>
-        <p className="muted">{dayTitle(data.today, locale)}</p>
+        <p className="muted">{dayTitle(data.today, t)}</p>
       </header>
 
       <div className="num-strip">
