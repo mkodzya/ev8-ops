@@ -1,23 +1,21 @@
-import { VEHICLE_COLORS, VEHICLE_POOLS, VEHICLE_STATES, colorOf, daysBetween, tokens, type VehiclePool, type VehicleState } from '@ev8/shared';
+import { vinMatches, VEHICLE_COLORS, VEHICLE_POOLS, VEHICLE_STATES, colorOf, daysBetween, tokens, todayISO, type VehiclePool, type VehicleState } from '@ev8/shared';
 import { useQueryClient } from '@tanstack/react-query';
-import { useEffect, useMemo, useState } from 'react';
-import { useLoad } from '../lib/use.js';
-import { LoadError } from '../components/LoadError.js';
-import { Field } from '../components/Wizard.js';
-import { FormSheet } from '../ds/form/Form.js';
+import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { api } from '../api.js';
 import { ColorPicker } from '../components/ColorPicker.js';
+import { LoadError } from '../components/LoadError.js';
 import { ModelDrawer, NEW_MODEL } from '../components/ModelDrawer.js';
 import { RowMenu, type RowAction } from '../components/RowMenu.js';
-import { useSession } from '../session.js';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { api } from '../api.js';
-import { todayISO } from '@ev8/shared';
-import { ColorText, CustomerName, Empty, Loading, PageHead, PlaceText, StateBadge, Vin } from '../components/ui.js';
-import { placeOf } from '../lib/place.js';
-import { rowClick } from '../lib/rowLink.js';
-import { SortHead, useSortable } from '../lib/sortable.js';
-import { fmtDate, formatGel } from '../format.js';
+import { ColorText, CustomerName, Loading, PageHead, PlaceText, StateBadge, Vin } from '../components/ui.js';
+import { Field } from '../components/Wizard.js';
+import { FormSheet } from '../ds/form/Form.js';
+import { DataList } from '../ds/list/DataList.js';
+import { fmtDate } from '../format.js';
 import { useT } from '../i18n/index.js';
+import { placeOf } from '../lib/place.js';
+import { useLoad } from '../lib/use.js';
+import { useSession } from '../session.js';
 
 interface Vehicle {
   id: string;
@@ -40,15 +38,9 @@ interface Fleet {
   vehicles: Vehicle[];
 }
 
-/**
- * The park a moped counts in on this screen. A moped that has left the fleet
- * belongs to neither park, and one nobody has decided on is its own answer
- * rather than the likelier of the two (ADR-0005).
- */
 const UNDO_WINDOW_MS = Number.parseFloat(tokens.undoWindow) * 1000;
 
 type PoolKey = VehiclePool | 'none' | 'gone';
-const POOL_KEYS: PoolKey[] = ['rent', 'sale', 'none', 'gone'];
 const poolOf = (v: Vehicle): PoolKey => (v.state === 'sold' || v.state === 'out' ? 'gone' : (v.pool ?? 'none'));
 
 /**
@@ -67,6 +59,12 @@ interface Models {
   models: { id: string; brand: string; name: string }[];
 }
 
+/**
+ * Парк → Мопеды on the one list every section uses (wave 4 §3.7, closes
+ * wave 1's deviation 1): the section's search, chips with counts, cards on a
+ * phone and a table on a laptop. What a moped is for is said on the row and
+ * changed in its menu, where the undo is (§3.6).
+ */
 export function FleetPage() {
   const t = useT();
   const { can } = useSession();
@@ -76,296 +74,118 @@ export function FleetPage() {
   // A park move redraws its row at once; the refetch after the write confirms it.
   const setData = (update: (d: Fleet | null) => Fleet | null) => client.setQueryData<Fleet>(['/api/fleet'], (d) => update(d ?? null) ?? undefined);
   const models = useLoad<Models>(can('settings.manage') ? '/api/models' : null);
-  const navigate = useNavigate();
-  const [params, setParams] = useSearchParams();
-  const [q, setQ] = useState('');
-  // The row a park move has just touched. It keeps its place in the list for
-  // a while, even when the filter no longer wants it, so that the undo is
-  // where the finger already is and nothing disappears under it.
+  // The row a park move has just touched: it keeps its place while the undo
+  // is still on offer, so nothing disappears under the finger.
   const [moved, setMoved] = useState<{ id: string; to: VehiclePool } | null>(null);
-  // The heading opens into a field, and stays open while it holds anything.
-  const [finding, setFinding] = useState(false);
-  const state = params.get('state') as VehicleState | null;
-  const pool = params.get('pool') as PoolKey | null;
-  const noPoint = params.get('place') === 'unset';
+  const today = todayISO();
 
-
-  // Long enough to notice a wrong click, short enough that the list is not
-  // left holding rows that no longer belong in it. The same figure draws the
-  // line draining under the button, so it is read from the token rather than
-  // written twice and left to drift.
   useEffect(() => {
     if (!moved) return;
     const id = setTimeout(() => setMoved(null), UNDO_WINDOW_MS);
     return () => clearTimeout(id);
   }, [moved]);
 
-  /** The screen knows the answer before the server is asked again. */
-  const patch = (id: string, pool: VehiclePool | null) =>
-    setData((d) => (d ? { ...d, vehicles: d.vehicles.map((v) => (v.id === id ? { ...v, pool } : v)) } : d));
-
   const movePool = async (v: Vehicle, pool: VehiclePool) => {
     await api.post(`/api/fleet/${v.id}/pool`, { pool });
-    patch(v.id, pool);
+    setData((d) => (d ? { ...d, vehicles: d.vehicles.map((x) => (x.id === v.id ? { ...x, pool } : x)) } : d));
     setMoved({ id: v.id, to: pool });
   };
-
   const undoPool = async (id: string) => {
-    const { pool } = await api.post<{ pool: VehiclePool | null }>(`/api/fleet/${id}/pool/undo`, {});
-    patch(id, pool);
+    const back = await api.post<{ pool: VehiclePool | null }>(`/api/fleet/${id}/pool/undo`, {});
+    setData((d) => (d ? { ...d, vehicles: d.vehicles.map((x) => (x.id === id ? { ...x, pool: back.pool } : x)) } : d));
     setMoved(null);
-  };
-
-  // Both counts are worked out from the rows already on the screen, so the
-  // state counters mean "inside this park" the moment a park is chosen —
-  // a segment reading 29 next to a list of two would be a lie.
-  const byPool = useMemo(() => {
-    const n: Record<PoolKey, number> = { rent: 0, sale: 0, none: 0, gone: 0 };
-    for (const v of data?.vehicles ?? []) n[poolOf(v)]++;
-    return n;
-  }, [data]);
-  const inPool = useMemo(() => (data ? data.vehicles.filter((v) => !pool || poolOf(v) === pool) : []), [data, pool]);
-  const byState = useMemo(() => {
-    const n = Object.fromEntries(VEHICLE_STATES.map((st) => [st, 0])) as Record<VehicleState, number>;
-    for (const v of inPool) n[v.state]++;
-    return n;
-  }, [inPool]);
-  const unplaced = useMemo(() => inPool.filter((v) => placeOf(v).kind === 'unset').length, [inPool]);
-
-  // Where a moped stands, as the one string the column is ordered by: the
-  // renter's name, the point, or nothing — and nothing sorts last, whichever
-  // way the column is pointing, because "nobody said" is not a name.
-  const whereKey = (v: Vehicle) => v.currentRental?.customer.name ?? v.location?.name ?? '';
-
-  const today = todayISO();
-  const shown = useMemo(() => {
-    const needle = q.trim().toUpperCase();
-    // Every filter at once, and one exception above all of them: a moped that
-    // has just been moved holds its place while the undo is still on offer.
-    // The park it was moved out of is the first filter it stops matching, so
-    // the exception has to sit outside all three and not only the last two.
-    const matches = (v: Vehicle) =>
-      (!pool || poolOf(v) === pool) && (!state || v.state === state) && (!noPoint || placeOf(v).kind === 'unset');
-    return (data?.vehicles ?? []).filter(
-      (v) => (v.id === moved?.id || matches(v)) && (!needle || v.vin.endsWith(needle) || v.vin.includes(needle)),
-    );
-  }, [data, pool, state, noPoint, q, moved]);
-
-  // Longest silence on top by default: the list is a queue of decisions, not a
-  // register. The order itself is the system's one sorting rule, shared with
-  // every other list (lib/sortable).
-  const sorted = useSortable(
-    shown,
-    {
-      model: { value: (v) => v.model },
-      color: { value: (v) => { const c = colorOf(v.color); return c ? VEHICLE_COLORS.indexOf(c) : null; } },
-      state: { value: (v) => VEHICLE_STATES.indexOf(v.state) },
-      where: { value: (v) => whereKey(v) },
-      quiet: { value: (v) => quietDays(v, today), first: 'desc' },
-    },
-    (a, b) => a.vin.localeCompare(b.vin),
-    'quiet',
-  );
-  const rows = sorted.rows;
-
-  const pick = (next: { pool?: PoolKey | null; state?: VehicleState | null; noPoint?: boolean }) => {
-    const p = 'pool' in next ? next.pool : pool;
-    const st = 'state' in next ? next.state : 'noPoint' in next ? null : state;
-    const np = 'noPoint' in next ? next.noPoint : 'state' in next ? false : noPoint;
-    // The order is not a filter and outlives every one of them.
-    const order = Object.fromEntries([...params.entries()].filter(([k]) => k === 'sort' || k === 'dir'));
-    setParams({
-      ...order,
-      ...(p ? { pool: p } : {}),
-      ...(st ? { state: st } : {}),
-      ...(np ? { place: 'unset' } : {}),
-    });
-  };
-
-  const findOpen = finding || q.length > 0;
-  const closeFind = () => {
-    setQ('');
-    setFinding(false);
+    fleet.reload();
   };
 
   if (!data && failure) return <LoadError failure={failure} onRetry={fleet.reload} />;
   if (!data) return <Loading />;
+  const rows = data.vehicles;
 
   return (
     <>
-      <PageHead title={t.fleet.title} sub={t.fleet.count(data.vehicles.length)}>
-        {/* On a phone the search is a field of its own, because the list has
-            no column headings to hide in. On a laptop it lives in the VIN
-            column, and this one is not rendered. */}
-        <input
-          className="input input-search head-search mono"
-          placeholder={t.fleet.searchHint}
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-        />
-        {can('settings.manage') && models.data && (
-          <NewVehicle models={models.data.models} onModels={models.reload} onDone={fleet.reload} />
-        )}
+      <PageHead title={t.fleet.title} sub={t.fleet.count(rows.length)}>
+        {can('settings.manage') && models.data && <NewVehicle models={models.data.models} onModels={models.reload} onDone={fleet.reload} />}
       </PageHead>
-      <div className="segments">
-        {/* What a moped is for comes first: it splits the fleet into two
-            businesses, and the state only means something inside one of
-            them (ADR-0005). */}
-        <div className="seg-row seg-pools">
-          <button type="button" className={`seg seg-pool ${!pool ? 'on' : ''}`} onClick={() => pick({ pool: null, state: null })}>
-            <span className="seg-lbl">{t.common.all}</span>
-            <span className="seg-num">{data.vehicles.length}</span>
-          </button>
-          {POOL_KEYS.map((k) => (
-            <button key={k} type="button" className={`seg seg-pool seg-pool-${k} ${pool === k ? 'on' : ''}`} onClick={() => pick({ pool: k, state: null })}>
-              <span className="seg-lbl">{t.pools[k]}</span>
-              <span className="seg-num">{byPool[k]}</span>
-            </button>
-          ))}
-        </div>
-      </div>
-      {/* The cards are the state breakdown of the park, so they are the state
-          filter as well: a number, the filter it stands for, and what it costs
-          or brings underneath. A second row of pills would say this twice. */}
-      <PoolCards pool={pool} rows={inPool} state={state} noPoint={noPoint} unplaced={unplaced} byState={byState} pick={pick} />
-      {/* An empty fleet and a search that found nothing are two different
-          things, and only one of them is about the fleet. A search that found
-          nothing keeps its heading — and with it the field the words were
-          typed into, which used to vanish along with the rows and leave
-          nowhere to take them back. */}
-      {data.vehicles.length === 0 ? (
-        <Empty text={t.fleet.empty} />
-      ) : (
-        /* One markup, two shapes: a list a thumb can read on a phone, and the
-           same rows as a table from 900 px up, where a laptop wants columns
-           (U3). Rendering it twice would be two things to keep in step. */
-        <ul className="vlist">
-          {/* Seven columns, not eleven. Year and arrival are card facts; the
-              renter is the answer to "where", not a column beside it; and
-              "paid through" belongs under the name it is about. */}
-          {/* The heading row carries the search, because a search for a VIN
-              belongs over the column of VINs and nowhere else. It costs the
-              screen nothing: the row was already there. */}
-          <li className="vlist-head">
-            {/* The VIN column is a heading until somebody wants to find a
-                moped, and then it is the field they find it with. It stays a
-                field while anything is typed in it, so a list that is
-                filtered never hides what filtered it. */}
-            <span className="vin-col">
-              {findOpen ? (
-                <span className="col-search">
-                  <input
-                    className="input list-search mono"
-                    placeholder={t.fleet.searchShort}
-                    aria-label={t.fleet.searchHint}
-                    value={q}
-                    autoFocus
-                    onChange={(e) => setQ(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Escape') closeFind();
-                    }}
-                    onBlur={() => {
-                      if (!q) setFinding(false);
-                    }}
-                  />
-                  <button type="button" className="col-x" aria-label={t.actions.cancel} onClick={closeFind}>
-                    ✕
-                  </button>
-                </span>
-              ) : (
-                <button type="button" className="col-find" aria-label={t.fleet.searchHint} onClick={() => setFinding(true)}>
-                  {t.fleet.vin}
-                  <i className="col-mag" aria-hidden="true">
-                    ⌕
-                  </i>
-                </button>
-              )}
+      <DataList
+        rows={rows}
+        rowKey={(v) => v.id}
+        href={(v) => `/fleet/${v.id}`}
+        fallback={(a, b) => a.vin.localeCompare(b.vin)}
+        byDefault="quiet"
+        search={{
+          placeholder: t.fleet.searchHint,
+          // The last four of a VIN, or the model by name (§3.7).
+          match: (v, q) => vinMatches(q, v.vin) || v.model.toLowerCase().includes(q.text),
+        }}
+        chips={[
+          { key: 'available', label: t.states.available, test: (v) => v.state === 'available' },
+          { key: 'rented', label: t.states.rented, test: (v) => v.state === 'rented' },
+          { key: 'service', label: t.states.service, test: (v) => v.state === 'service' },
+          { key: 'nopool', label: t.pools.none, test: (v) => poolOf(v) === 'none' },
+          { key: 'nopoint', label: t.points.unset, test: (v) => placeOf(v).kind === 'unset' },
+        ]}
+        empty={{ text: t.fleet.empty }}
+        card={(v) => ({
+          title: (
+            <>
+              {v.model} <ColorText of={v.color} />
+            </>
+          ),
+          sub: <Vin vin={v.vin} />,
+          right: <StateBadge state={v.state} />,
+          rightSub: (
+            <span className="muted">
+              {v.currentRental ? <CustomerName of={v.currentRental.customer} second={false} /> : <PlaceText of={v} />}
             </span>
-            <span>
-              <SortHead k="model" label={t.fleet.model} {...sorted} />
-            </span>
-            <span>
-              <SortHead k="color" label={t.fleet.color} {...sorted} />
-            </span>
-            <span>
-              <SortHead k="state" label={t.fleet.state} {...sorted} />
-            </span>
-            <span>
-              <SortHead k="where" label={t.fleet.where} {...sorted} />
-            </span>
-            <span className="num">
-              <SortHead k="quiet" label={t.fleet.quiet} {...sorted} />
-            </span>
-            {/* The header's last cell rides the right edge with the row's, or
-                the columns would slide out from under a floating heading. */}
-            <span className="v-move" />
-          </li>
-          {rows.length === 0 && (
-            <li className="vlist-empty">
-              <span>{t.fleet.nothingFound}</span>
-              <button
-                type="button"
-                className="pill pill-sm"
-                onClick={() => {
-                  setQ('');
-                  setParams({});
-                }}
-              >
-                {t.fleet.showAll(data.vehicles.length)}
-              </button>
-            </li>
-          )}
-          {rows.map((v) => (
-            /* Source order is the laptop's column order; the phone re-lays
-               them out by name with grid-template-areas, so neither shape
-               depends on the other. */
-            <li
-              key={v.id}
-              className={`vrow vrow-go ${moved?.id === v.id ? 'vrow-changed' : ''}`}
-              onClick={rowClick(() => navigate(`/fleet/${v.id}`))}
-            >
-              <Link to={`/fleet/${v.id}`} className="v-vin">
-                <Vin vin={v.vin} />
-              </Link>
-              {/* Five columns, not seven. What is secondary sits under what it
-                  belongs to: the colour under the model, the park under the
-                  state, "paid through" under the name. Each column gets one
-                  word and one quiet tail, and none of them elbows the next. */}
-              <span className="v-model">{v.model}</span>
-              <span className="v-color">
-                <ColorText of={v.color} />
-              </span>
+          ),
+        })}
+        columns={[
+          { key: 'vin', label: t.fleet.vin, cell: (v) => <Vin vin={v.vin} />, sort: { value: (v) => v.vin } },
+          { key: 'model', label: t.fleet.model, cell: (v) => <span>{v.model}</span>, sort: { value: (v) => v.model } },
+          {
+            key: 'color',
+            label: t.fleet.color,
+            cell: (v) => <ColorText of={v.color} />,
+            sort: {
+              value: (v) => {
+                const c = colorOf(v.color);
+                return c ? VEHICLE_COLORS.indexOf(c) : null;
+              },
+            },
+          },
+          {
+            key: 'state',
+            label: t.fleet.state,
+            cell: (v) => (
               <span className="v-state">
                 <StateBadge state={v.state} />
-                {/* A label on every row is a label nobody reads. The park is
-                    said only when it is still a question — and on the row that
-                    has just moved, which says where it went. */}
-                {moved?.id === v.id ? (
-                  <span className="v-sub v-pool-new">→ {t.pools[moved.to]}</span>
-                ) : (
-                  !pool && poolOf(v) === 'none' && <span className="v-sub">{t.pools.none}</span>
-                )}
+                {moved?.id === v.id ? <span className="v-sub v-pool-new">→ {t.pools[moved.to]}</span> : poolOf(v) === 'none' && <span className="v-sub">{t.pools.none}</span>}
               </span>
-              <span className="v-where">
-                {v.currentRental ? (
-                  <Link to={`/customers/${v.currentRental.customer.id}`}>
+            ),
+            sort: { value: (v) => VEHICLE_STATES.indexOf(v.state) },
+          },
+          {
+            key: 'where',
+            label: t.fleet.where,
+            cell: (v) =>
+              v.currentRental ? (
+                <span className="v-where">
+                  <Link to={`/customers/${v.currentRental.customer.id}`} onClick={(e) => e.stopPropagation()}>
                     <CustomerName of={v.currentRental.customer} second={false} />
                   </Link>
-                ) : (
-                  <PlaceText of={v} />
-                )}
-                {v.currentRental && (
                   <span className="v-sub mono">
                     {t.fleet.paidThrough}: {fmtDate(v.currentRental.paidThrough)}
                   </span>
-                )}
-              </span>
-              <Quiet v={v} today={today} />
-              <Actions v={v} can={can('fleet.pool.set')} moved={moved} onMove={movePool} onUndo={undoPool} />
-            </li>
-          ))}
-        </ul>
-      )}
+                </span>
+              ) : (
+                <PlaceText of={v} />
+              ),
+            sort: { value: (v) => v.currentRental?.customer.name ?? v.location?.name ?? '' },
+          },
+          { key: 'quiet', label: t.fleet.quiet, num: true, cell: (v) => <Quiet v={v} today={today} />, sort: { value: (v) => quietDays(v, today), first: 'desc' } },
+          { key: 'move', label: '', cell: (v) => <Actions v={v} can={can('fleet.pool.set')} moved={moved} onMove={movePool} onUndo={undoPool} /> },
+        ]}
+      />
     </>
   );
 }
@@ -443,98 +263,6 @@ function Actions({
     <span className="v-move">
       <RowMenu actions={actions} />
     </span>
-  );
-}
-
-/**
- * The park's own numbers, and the filter at the same time. Each card is a
- * state of this park with what it costs or brings under it, plus the one
- * question a state cannot answer: how many mopeds nobody has placed. Clicking
- * the card that is already on turns it off.
- */
-function PoolCards({
-  pool,
-  rows,
-  state,
-  noPoint,
-  unplaced,
-  byState,
-  pick,
-}: {
-  pool: PoolKey | null;
-  rows: Vehicle[];
-  state: VehicleState | null;
-  noPoint: boolean;
-  unplaced: number;
-  byState: Record<VehicleState, number>;
-  pick: (next: { state?: VehicleState | null; noPoint?: boolean }) => void;
-}) {
-  const t = useT();
-  const sum = (of: Vehicle[], f: (v: Vehicle) => number | null) => of.reduce((n, v) => n + (f(v) ?? 0), 0);
-  const money = (n: number) => formatGel(n, { decimals: false });
-  const weekly = (st: VehicleState) => money(sum(rows.filter((v) => v.state === st), (v) => v.weeklyRateTetri));
-
-  type Card = { key: string; n: number; label: string; sub: string; on: boolean; go: () => void; warn?: boolean };
-  const forState = (st: VehicleState, label: string, sub: string): Card => ({
-    key: st,
-    n: byState[st],
-    label,
-    sub,
-    on: state === st,
-    go: () => pick({ state: state === st ? null : st }),
-  });
-  const placeCard: Card = {
-    key: 'place',
-    n: unplaced,
-    label: t.fleet.noPoint,
-    sub: t.pools.noPointSub,
-    on: noPoint,
-    warn: unplaced > 0,
-    go: () => pick({ noPoint: !noPoint }),
-  };
-
-  let cards: Card[];
-  if (pool === 'rent') {
-    cards = [
-      forState('rented', t.pools.outWith, t.pools.incomingSub(weekly('rented'))),
-      forState('available', t.pools.free, t.pools.idleSub(weekly('available'))),
-      forState('service', t.pools.inService, t.pools.notHandedOut),
-      placeCard,
-    ];
-  } else if (pool === 'sale') {
-    cards = [
-      forState('available', t.pools.onShelf, t.pools.listSub(money(sum(rows, (v) => v.salePriceTetri)))),
-      forState('service', t.pools.inPrep, t.pools.notShown),
-      placeCard,
-    ];
-  } else if (pool === 'none') {
-    cards = [
-      forState('available', t.pools.free, t.pools.bothWays),
-      forState('service', t.pools.inService, t.pools.decidedOnExit),
-      placeCard,
-    ];
-  } else if (pool === 'gone') {
-    cards = [forState('sold', t.states.sold, t.pools.goneMoney), forState('out', t.states.out, t.pools.buyBackNote)];
-  } else {
-    // The whole fleet. The idle money counts only what is actually rentable —
-    // fifteen of the free ones are Luyuan, which never carried a weekly rate.
-    cards = [
-      forState('available', t.pools.free, t.pools.idleAllSub(weekly('available'))),
-      forState('rented', t.pools.outWith, t.pools.incomingSub(weekly('rented'))),
-      forState('service', t.pools.inService, t.pools.notHandedOut),
-      placeCard,
-    ];
-  }
-  return (
-    <div className={`kpis kpis-${cards.length}`}>
-      {cards.map((c) => (
-        <button type="button" key={c.key} className={`kpi ${c.on ? 'on' : ''} ${c.warn && c.n > 0 ? 'kpi-warn' : ''}`} onClick={c.go}>
-          <span className="k-n mono">{c.n}</span>
-          <span className="k-l">{c.label}</span>
-          <span className="k-s">{c.sub}</span>
-        </button>
-      ))}
-    </div>
   );
 }
 

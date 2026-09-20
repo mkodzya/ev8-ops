@@ -112,8 +112,8 @@ export function TodayPage() {
       </header>
 
       <div className="num-strip">
-        <Num to="/fleet?state=rented" value={String(n.fleet.rented ?? 0)} label={t.today.numbers.rented ?? ''} />
-        <Num to="/fleet?state=available" value={String(n.fleet.available ?? 0)} label={t.today.numbers.available ?? ''} />
+        <Num to="/fleet?f=rented" value={String(n.fleet.rented ?? 0)} label={t.today.numbers.rented ?? ''} />
+        <Num to="/fleet?f=available" value={String(n.fleet.available ?? 0)} label={t.today.numbers.available ?? ''} />
         <Num to="/service" value={String(n.fleet.service ?? 0)} label={t.today.numbers.service ?? ''} />
         {n.overdueTetri != null && <Num to="/rentals?s=overdue" value={formatGel(n.overdueTetri, { decimals: false })} label={t.today.numbers.overdue ?? ''} tone="crit" />}
         {n.depositsHeldTetri != null && <Num to="/money/deposits" value={formatGel(n.depositsHeldTetri, { decimals: false })} label={t.today.numbers.deposits ?? ''} />}
