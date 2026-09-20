@@ -1,4 +1,4 @@
-import { acquiringFee, acquiringNet, addDays, DEFAULT_DEPOSIT_TETRI, gelFromTetri, parseGel, todayISO, type VehiclePool, type VehicleState } from '@ev8/shared';
+import { acquiringFee, acquiringNet, addDays, CUSTOMER_SOURCES, DEFAULT_DEPOSIT_TETRI, gelFromTetri, parseGel, todayISO, type VehiclePool, type VehicleState } from '@ev8/shared';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api, ApiError } from '../api.js';
@@ -92,6 +92,7 @@ export function PickupWizard() {
     creating: false,
     ncPhone: '+995 ',
     ncName: '',
+    ncSource: '',
     why: '',
     vehicleId: presetVehicle,
     noVin: false,
@@ -260,7 +261,7 @@ export function PickupWizard() {
       const body = {
         customerId: f.creating ? undefined : f.customerId,
         newCustomer: f.creating
-          ? { name: f.ncName.trim(), phone: formatPhone(f.ncPhone), personalId: ncPersonalId.trim(), idPhoto: await photoBody(idPhoto[0] ?? null), licencePhoto: await photoBody(licencePhoto[0] ?? null) }
+          ? { name: f.ncName.trim(), phone: formatPhone(f.ncPhone), personalId: ncPersonalId.trim(), source: f.ncSource || null, idPhoto: await photoBody(idPhoto[0] ?? null), licencePhoto: await photoBody(licencePhoto[0] ?? null) }
           : undefined,
         vehicleId: f.noVin ? null : f.vehicleId,
         vinNote: f.noVin ? f.vinNote.trim() : null,
@@ -448,10 +449,19 @@ export function PickupWizard() {
               <Field label={t.hand.personalId} hint={t.hand.personalIdHint} name="personalId">
                 <input className="input mono" inputMode="numeric" value={ncPersonalId} onChange={(e) => setNcPersonalId(e.target.value)} />
               </Field>
+              <Field label={t.customerW4.source} name="source">
+                <div className="chips">
+                  {CUSTOMER_SOURCES.map((s) => (
+                    <button key={s} type="button" className={`pill pill-sm ${f.ncSource === s ? 'on' : ''}`} onClick={() => set({ ncSource: f.ncSource === s ? '' : s })}>
+                      {t.customerW4.sources[s]}
+                    </button>
+                  ))}
+                </div>
+              </Field>
               <p className="hint muted">{t.hand.docs}</p>
               <div className="two-col two-col-tight">
-                <PhotoPicker photos={idPhoto} onChange={(p) => setIdPhoto(p.slice(-1))} label={t.hand.idPhoto} />
-                <PhotoPicker photos={licencePhoto} onChange={(p) => setLicencePhoto(p.slice(-1))} label={t.hand.licencePhoto} />
+                <PhotoPicker photos={idPhoto} onChange={(p) => setIdPhoto(p.slice(-1))} label={t.hand.idPhoto} hint={t.hand.docsHint} />
+                <PhotoPicker photos={licencePhoto} onChange={(p) => setLicencePhoto(p.slice(-1))} label={t.hand.licencePhoto} hint={t.hand.docsHint} />
               </div>
               {idPhoto.length === 0 && (
                 <span className="hint warn-text" data-field="idPhoto">

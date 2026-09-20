@@ -3,7 +3,7 @@ import { useT } from '../i18n/index.js';
 import { preparePhoto, type PreparedPhoto } from '../lib/photos.js';
 
 /** Camera or gallery on a phone, file dialog on a laptop; thumbnails as they are picked. */
-export function PhotoPicker({ photos, onChange, label }: { photos: PreparedPhoto[]; onChange: (p: PreparedPhoto[]) => void; label: string }) {
+export function PhotoPicker({ photos, onChange, label, hint }: { photos: PreparedPhoto[]; onChange: (p: PreparedPhoto[]) => void; label: string; hint?: string }) {
   const t = useT();
   const ref = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
@@ -43,7 +43,7 @@ export function PhotoPicker({ photos, onChange, label }: { photos: PreparedPhoto
           <span>{busy ? '…' : `+ ${t.photos.add}`}</span>
         </label>
       </div>
-      <span className="hint muted">{t.photos.hint}</span>
+      <span className="hint muted">{hint ?? t.photos.hint}</span>
       {err && <span className="hint hint-bad">{err}</span>}
     </div>
   );

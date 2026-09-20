@@ -437,7 +437,7 @@ export function RentalPage() {
                   )}
                   {e.kind === 'act' && <span>{t.rental.actKind[e.text as 'pickup']}</span>}
                   {e.kind === 'document' && <span>{e.text === 'contract' ? t.hand.contract : t.back.act}</span>}
-                  {e.kind === 'log' && <span className="muted">{e.text}</span>}
+                  {e.kind === 'log' && <span>{t.feedWords[e.text] ?? e.text}</span>}
                   {e.note && <span className="muted"> · {e.note}</span>}
                   {e.by && <span className="muted"> · {e.by}</span>}
                 </span>

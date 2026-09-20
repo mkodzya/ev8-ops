@@ -421,7 +421,15 @@ export async function returnRental(input: ReturnInput): Promise<{ actId: string;
     const lostBatteries = Object.entries(input.items).filter(([k, v]) => k.startsWith('battery_') && v.state === 'missing').length;
     if (lostBatteries > 0) {
       await tx.batteryMove.create({
-        data: { kind: 'lost', qty: lostBatteries, reason: `${r.number}: ${input.items.battery_1?.note ?? ''}`.trim(), rentalId: r.id, occurredOn: dateFromISO(input.returnedOn)!, createdById: input.actor.id },
+        data: {
+          kind: 'lost',
+          qty: lostBatteries,
+          // The note if the act carried one; otherwise the act itself says it (QA-W4-07).
+          reason: Object.entries(input.items).find(([k, v]) => k.startsWith('battery_') && v.state === 'missing')?.[1].note?.trim() || null,
+          rentalId: r.id,
+          occurredOn: dateFromISO(input.returnedOn)!,
+          createdById: input.actor.id,
+        },
       });
     }
     const damaged = Object.entries(input.items).filter(([, v]) => v.state === 'damaged');

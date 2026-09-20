@@ -1,7 +1,7 @@
 import { VEHICLE_POOLS, VEHICLE_STATES, isPoolEvent, type RentalStatus, type VehicleEventKind, type VehiclePool, type VehicleState } from '@ev8/shared';
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { api } from '../api.js';
+import { api, ApiError } from '../api.js';
 import { LoadError } from '../components/LoadError.js';
 import { FormSheet } from '../ds/form/Form.js';
 import { useOperation } from '../ds/form/operation.js';
@@ -44,6 +44,8 @@ export function VehiclePage() {
   const { data, failure, reload } = useLoad<Card>(id ? `/api/fleet/${id}` : null);
   const [open, setOpen] = useState(false);
   const [move, setMove] = useState<{ toState: VehicleState; reason: string }>({ toState: 'service', reason: '' });
+  // Writing a moped off is the one state change that is confirmed as well as explained (crit. 26).
+  const [writeOff, setWriteOff] = useState(false);
 
   if (failure) return <LoadError failure={failure} onRetry={reload} />;
   if (!data) return <Loading />;
@@ -103,6 +105,7 @@ export function VehiclePage() {
           initial={{ toState: move.toState, reason: '' }}
           label={t.vehicle.changeStateCta}
           submit={async (key) => {
+            if (move.toState === 'out' && !writeOff) throw new ApiError(400, 'confirm_write_off', t.vehicleW4.writeOffConfirm, { field: 'toState' });
             await api.post(`/api/fleet/${v.id}/state`, move, { key });
             return { toast: { text: t.vehicle.stateChanged(t.states[move.toState]) } };
           }}
@@ -121,6 +124,12 @@ export function VehiclePage() {
               ))}
             </div>
           </Field>
+          {move.toState === 'out' && (
+            <label className="check">
+              <input type="checkbox" checked={writeOff} onChange={(e) => setWriteOff(e.target.checked)} />
+              <span>{t.vehicleW4.writeOffConfirm}</span>
+            </label>
+          )}
           <Field label={t.vehicle.reason} hint={t.vehicle.reasonHint} name="reason">
             <input className="input" value={move.reason} onChange={(e) => setMove({ ...move, reason: e.target.value })} />
           </Field>

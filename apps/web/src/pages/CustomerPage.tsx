@@ -232,7 +232,7 @@ export function CustomerPage() {
                       </>
                     )}
                     {e.kind === 'document' && <span>{t.documents.kinds[e.text as 'id_card'] ?? e.text}</span>}
-                    {e.kind === 'log' && <span className="muted">{e.text}{e.note ? ` · ${e.note}` : ''}</span>}
+                    {e.kind === 'log' && <span>{t.feedWords[e.text] ?? e.text}{e.note ? <span className="muted"> · {e.note}</span> : null}</span>}
                     {e.by && <span className="muted"> · {e.by}</span>}
                   </span>
                 </li>

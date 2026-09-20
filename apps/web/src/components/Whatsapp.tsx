@@ -1,8 +1,10 @@
+import { addDays } from '@ev8/shared';
 import { useState } from 'react';
 import { api } from '../api.js';
 import { Drawer } from './Drawer.js';
 import { fmtDate, formatGel } from '../format.js';
 import { useT } from '../i18n/index.js';
+import { useLoad } from '../lib/use.js';
 
 // WhatsApp from a row (wave 4 §3.2, decision В6): the ready text in the
 // customer's language, sent by a person from their own phone. When the Meta
@@ -20,17 +22,29 @@ export interface WaTarget {
   debtTetri: number;
 }
 
+/** What each template puts into the text: a template about the next week is not about the debt (QA-W4-02). */
+interface Rental {
+  rental: { paidThrough: string | null; weeklyRateTetri: number; debtTetri: number };
+}
+
 const digits = (s: string) => s.replace(/\D/g, '');
 
 export function WhatsappSheet({ target, onClose }: { target: WaTarget; onClose: () => void }) {
   const t = useT();
   const [kind, setKind] = useState<WaKind>(target.debtTetri > 0 ? 'overdue' : 'tomorrow');
   const [lang, setLang] = useState<WaLang>('ka');
+  // The rental itself answers what the next week costs and when it starts;
+  // the row that opened this sheet only knows the debt.
+  const card = useLoad<Rental>(target.rentalId ? `/api/rentals/${target.rentalId}` : null);
+  const paidThrough = card.data?.rental.paidThrough ?? target.paidThrough;
+  const debtTetri = card.data?.rental.debtTetri ?? target.debtTetri;
+  const weekTetri = card.data?.rental.weeklyRateTetri ?? 0;
   const text = t.wa.text(lang, kind, {
     name: target.name,
     number: target.number,
-    date: fmtDate(target.paidThrough).slice(0, 5),
-    amount: formatGel(target.debtTetri, { decimals: false }),
+    // "Overdue" is about the day it was paid through; "tomorrow" about the day the new week starts.
+    date: fmtDate(kind === 'overdue' ? paidThrough : paidThrough ? addDays(paidThrough, 1) : null).slice(0, 5),
+    amount: formatGel(kind === 'overdue' ? debtTetri : weekTetri, { decimals: false }),
   });
 
   const open = () => {
