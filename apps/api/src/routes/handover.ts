@@ -1,8 +1,10 @@
 import { DEFAULT_DEPOSIT_TETRI, todayISO } from '@ev8/shared';
 import type { FastifyInstance } from 'fastify';
 import { env } from '../lib/env.js';
-import { badRequest } from '../lib/errors.js';
+import { badRequest, notFound } from '../lib/errors.js';
 import { actorOf } from '../lib/guard.js';
+import { audit } from '../lib/audit.js';
+import { prisma } from '../lib/db.js';
 import { decideDeposit, pickUp, returnPreview, returnRental, setRentalStatus, undoReturn, type DepositDecision, type NewCustomer, type PickupInput } from '../lib/rentals.js';
 import { WITHHOLD_GROUNDS } from '../lib/pdf/returnAct.js';
 import { date, int, oneOf, str, strList, tetri } from '../lib/validate.js';
@@ -159,6 +161,18 @@ export function handoverRoutes(app: FastifyInstance): void {
   /** "Отменить возврат": an owner, within a day, with a reason (§3.7, B5-08). */
   app.post<{ Params: { id: string }; Body: Body }>('/api/rentals/:id/return/undo', { config: { scope: 'deposit.decide' } }, async (req) => {
     await undoReturn({ actor: actorOf(req), rentalId: req.params.id, reason: str(req.body ?? {}, 'reason', { max: 1000 }) ?? '', today: todayISO(new Date(), env.TZ) });
+    return { ok: true };
+  });
+
+  /** A message sent by hand from WhatsApp: the rental's feed says it happened (wave 4 §3.2, В6). */
+  app.post<{ Params: { id: string }; Body: Body }>('/api/rentals/:id/whatsapp', { config: { scope: 'fleet.view' } }, async (req) => {
+    const b = req.body ?? {};
+    const actor = actorOf(req);
+    const template = oneOf(b, 'template', ['overdue', 'tomorrow'] as const, { required: true })!;
+    const lang = oneOf(b, 'lang', ['ka', 'ru', 'en'] as const, { required: true })!;
+    const r = await prisma.rental.findUnique({ where: { id: req.params.id }, select: { id: true } });
+    if (!r) throw notFound('rental_not_found', 'No such rental.');
+    await audit({ actorId: actor.id, action: 'rental.whatsapp', entityType: 'rental', entityId: r.id, after: { template, lang } });
     return { ok: true };
   });
 
