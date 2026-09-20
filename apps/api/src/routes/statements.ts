@@ -22,7 +22,7 @@ export const MAX_STATEMENT_BYTES = 8 * 1024 * 1024;
 const BODY_LIMIT = Math.ceil(MAX_STATEMENT_BYTES * 1.2);
 /** Older than this, a bank's statements are stale (§3.5; the threshold is a proposal). */
 const STALE_DAYS = 7;
-const BANKS = ['bog', 'tbc', 'credo'] as const;
+export const BANKS = ['bog', 'tbc', 'credo'] as const;
 /** What the rules and the import attached by themselves. */
 const BY_RULES = ['payer_name', 'amount_date', 'card_pickup_day', 'recorded', 'bank_deposit'];
 
