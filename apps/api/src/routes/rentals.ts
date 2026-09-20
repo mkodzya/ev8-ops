@@ -85,6 +85,20 @@ export function rentalRoutes(app: FastifyInstance): void {
       },
     });
     if (!r) throw notFound('rental_not_found', 'No such rental.');
+    // One timeline of everything that happened to this rental (ux №7): money,
+    // acts, documents, and the journal's own entries — WhatsApp, statuses,
+    // changes of terms, a return taken back.
+    const log = await prisma.auditLog.findMany({
+      where: { entityType: 'rental', entityId: r.id },
+      orderBy: { createdAt: 'asc' },
+      include: { actor: { select: { name: true } } },
+    });
+    const feed = [
+      ...r.payments.map((p) => ({ at: isoDate(p.occurredOn)!, kind: 'payment' as const, by: null as string | null, text: p.channel, amountTetri: p.grossTetri, note: null as string | null })),
+      ...r.acts.map((a) => ({ at: isoDate(a.occurredOn)!, kind: 'act' as const, by: null, text: a.kind, amountTetri: null, note: a.condition })),
+      ...r.documents.filter((d) => d.signedAt).map((d) => ({ at: d.signedAt!.toISOString().slice(0, 10), kind: 'document' as const, by: d.signedBy, text: d.docKind ?? '', amountTetri: null, note: null })),
+      ...log.map((l) => ({ at: l.createdAt.toISOString().slice(0, 10), kind: 'log' as const, by: l.actor?.name ?? null, text: l.action, amountTetri: null, note: l.note })),
+    ].sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
     const today = todayISO(new Date(), env.TZ);
     const pickedUpOn = isoDate(r.pickedUpOn);
     const paidThrough = isoDate(r.paidThrough);
@@ -159,6 +173,7 @@ export function rentalRoutes(app: FastifyInstance): void {
         grossTetri: p.grossTetri,
         feeTetri: p.feeTetri,
       })),
+      feed,
       acts: r.acts.map((a) => ({
         id: a.id,
         kind: a.kind,

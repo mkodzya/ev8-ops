@@ -25,6 +25,8 @@ type Tx = Prisma.TransactionClient;
 
 export interface NewCustomer {
   name: string;
+  /** Where they came from (wave 4 §3.5); optional. */
+  source?: string | null;
   phone: string;
   personalId: string;
   nameKa: string | null;
@@ -153,7 +155,7 @@ export async function pickUp(input: PickupInput): Promise<PickupResult> {
     if (input.newCustomer) {
       const c = input.newCustomer;
       const made = await tx.customer.create({
-        data: { name: c.name.trim(), phone: c.phone.trim(), personalId: c.personalId.trim(), nameKa: c.nameKa, nameLat: c.nameLat, kind: 'person' },
+        data: { name: c.name.trim(), phone: c.phone.trim(), personalId: c.personalId.trim(), nameKa: c.nameKa, nameLat: c.nameLat, kind: 'person', source: c.source ?? null },
       });
       customerId = made.id;
       for (const [doc, kind] of [

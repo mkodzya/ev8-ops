@@ -111,9 +111,10 @@ export function VehiclePage() {
             reload();
           }}
         >
+          <p className="hint muted">{t.vehicleW4.soldNote}</p>
           <Field label={t.vehicle.toState} name="toState">
             <div className="chips">
-              {VEHICLE_STATES.filter((s) => s !== 'rented' && s !== v.state).map((s) => (
+              {VEHICLE_STATES.filter((s) => s !== 'rented' && s !== 'sold' && s !== v.state && (s !== 'out' || can('deposit.decide'))).map((s) => (
                 <button key={s} type="button" className={`pill pill-sm ${move.toState === s ? 'on' : ''}`} onClick={() => setMove({ ...move, toState: s })}>
                   {t.states[s]}
                 </button>

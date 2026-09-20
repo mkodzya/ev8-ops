@@ -1,11 +1,11 @@
-import { CUSTOMER_KINDS, DEFAULT_DEPOSIT_TETRI, VEHICLE_POOLS, VEHICLE_STATES, todayISO } from '@ev8/shared';
+import { CUSTOMER_KINDS, CUSTOMER_SOURCES, DEFAULT_DEPOSIT_TETRI, VEHICLE_POOLS, VEHICLE_STATES, todayISO } from '@ev8/shared';
 import type { FastifyInstance } from 'fastify';
 import { audit } from '../lib/audit.js';
 import { hasPerm } from '../lib/auth.js';
 import { dateFromISO } from '../lib/dates.js';
 import { prisma } from '../lib/db.js';
 import { env } from '../lib/env.js';
-import { conflict, isUniqueViolation, notFound } from '../lib/errors.js';
+import { conflict, forbidden, isUniqueViolation, notFound } from '../lib/errors.js';
 import { actorOf } from '../lib/guard.js';
 import { date, int, oneOf, str, strList, tetri } from '../lib/validate.js';
 import { movePool, moveVehicle } from '../lib/vehicles.js';
@@ -68,6 +68,22 @@ export function opsRoutes(app: FastifyInstance): void {
     const before = await prisma.customer.findUnique({ where: { id: req.params.id } });
     if (!before) throw notFound('customer_not_found', 'No such customer.');
     const data: Record<string, unknown> = {};
+    if ('source' in b) data.source = oneOf(b, 'source', CUSTOMER_SOURCES) ?? null;
+    if ('phone' in b) {
+      // Two cards with one number are two halves of one customer (B7-04).
+      const phone = str(b, 'phone', { max: 300 });
+      const digits = (s: string | null) => (s ?? '').replace(/\D/g, '').slice(-9);
+      if (phone && digits(phone).length === 9) {
+        const twin = await prisma.customer.findFirst({
+          where: { id: { not: before.id }, archived: false, phone: { not: null } },
+          select: { id: true, name: true, phone: true },
+          orderBy: { createdAt: 'asc' },
+        });
+        const all = await prisma.customer.findMany({ where: { id: { not: before.id }, archived: false, phone: { not: null } }, select: { id: true, name: true, phone: true } });
+        const found = all.find((c) => digits(c.phone) === digits(phone)) ?? (twin && digits(twin.phone) === digits(phone) ? twin : null);
+        if (found) throw conflict('duplicate_phone', 'This number is on another card.', { existing: { id: found.id, name: found.name }, field: 'phone' });
+      }
+    }
     for (const k of ['name', 'nameKa', 'nameLat', 'personalId', 'phone', 'email', 'address', 'notes'] as const) {
       if (k in b) data[k] = str(b, k, { max: k === 'notes' ? 4000 : 300, required: k === 'name' });
     }
@@ -151,6 +167,12 @@ export function opsRoutes(app: FastifyInstance): void {
     const v = await prisma.vehicle.findUnique({ where: { id: req.params.id } });
     if (!v) throw notFound('vehicle_not_found', 'No such moped.');
     if (v.state === 'rented' && v.currentRentalId) throw conflict('vehicle_rented', 'Close the rental first; a rented moped does not move by hand.');
+    // Sold is what a sale says, not what a hand says; a buy-back brings it
+    // back. Writing one off is an owner's (Q22, §3.6).
+    if (toState === 'sold' || v.state === 'sold') throw conflict('sold_by_sale', 'A moped is sold by a sale and comes back by a buy-back.');
+    if (!hasPerm(actor, 'deposit.decide') && toState !== 'available' && toState !== 'service') {
+      throw forbidden('owner_only', 'A manager moves a moped between free and service.');
+    }
     const moved = await prisma.$transaction(async (tx) => {
       const m = await moveVehicle(tx, { vehicleId: v.id, kind: 'manual', occurredOn, actorId: actor.id, reason, toState });
       await tx.auditLog.create({ data: { actorId: actor.id, action: 'vehicle.state.manual', entityType: 'vehicle', entityId: v.id, before: { state: m.from }, after: { state: m.to }, note: reason } });
