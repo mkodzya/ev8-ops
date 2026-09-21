@@ -1045,7 +1045,7 @@ export const en = {
     countedQty: 'Counted',
     countReason: 'What the difference is',
     countHint: 'Enter what was counted on the shelf. The difference is written down with your name on it.',
-    kinds: { receipt: 'Came in', issue: 'Went out', adjust: 'Stock-take' },
+    kinds: { receipt: 'Came in', issue: 'Went out', adjust: 'Stock-take', return: 'Came back from a repair' },
     negativeHint: 'A repair used parts the shelf never received. Count them.',
     none: 'No parts on the list yet.',
     noMoves: 'Nothing has moved yet.',

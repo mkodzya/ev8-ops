@@ -14,7 +14,7 @@ import { OrderButton, type PartRow } from './StockPage.js';
 
 interface Move {
   id: string;
-  kind: 'receipt' | 'issue' | 'adjust';
+  kind: 'receipt' | 'issue' | 'adjust' | 'return';
   qty: number;
   unitCostTetri: number | null;
   occurredOn: string;
@@ -38,6 +38,19 @@ type Sheet = 'initial' | 'receipt' | 'count' | 'edit';
  * added to — a receipt without an order, or a stocktake — and never
  * restarted.
  */
+/**
+ * The words of a movement's reason, when they add anything. `initial` is the
+ * shelf's own code for an opening balance — the row already says "Приход" —
+ * and a receipt carries the order number, which is linked beside it.
+ */
+function reasonOf(m: Move): string | null {
+  const reason = (m.reason ?? '').trim();
+  if (!reason || reason === 'initial') return null;
+  if (m.purchase && reason === m.purchase.number) return null;
+  if (m.job && reason.startsWith(`${m.job.number}: `)) return reason.slice(m.job.number.length + 2);
+  return reason;
+}
+
 export function PartPage() {
   const { id } = useParams();
   const t = useT();
@@ -162,7 +175,10 @@ export function PartPage() {
                       </Link>
                     </>
                   )}
-                  {m.reason && <span className="muted"> · {m.reason}</span>}
+                  {/* `initial` is a code the shelf writes for itself, and a
+                      receipt's reason is the order number already linked
+                      beside it: neither is worth printing twice (QA-W5-02). */}
+                  {reasonOf(m) && <span className="muted"> · {reasonOf(m)}</span>}
                   {m.actor && <span className="muted"> · {m.actor}</span>}
                 </span>
               </li>
