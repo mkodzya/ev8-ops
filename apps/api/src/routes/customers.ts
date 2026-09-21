@@ -63,7 +63,7 @@ export function customerRoutes(app: FastifyInstance): void {
         phone: c.phone,
         email: c.email,
         kind: c.kind,
-        isSupplier: c.isSupplier,
+        recordKind: c.recordKind,
         tags: c.tags,
         openRentals: c.rentals
           .filter((r) => OPEN_RENTAL.includes(r.status))
@@ -146,7 +146,7 @@ export function customerRoutes(app: FastifyInstance): void {
         phone: c.phone,
         email: c.email,
         kind: c.kind,
-        isSupplier: c.isSupplier,
+        recordKind: c.recordKind,
         tags: c.tags,
         address: c.address,
         notes: c.notes,

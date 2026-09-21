@@ -115,7 +115,7 @@ describe.skipIf(!HAS_DB)('the money form (§3.1)', () => {
   it('a supplier paid in two currencies shows the rate (crit. 9)', async () => {
     const { prisma } = await import('../src/lib/db.js');
     const owner = await loginAs('owner');
-    const supplier = await prisma.customer.create({ data: { name: `ТЕСТ Завод ${uniq()}`, isSupplier: true } });
+    const supplier = await prisma.customer.create({ data: { name: `ТЕСТ Завод ${uniq()}`, recordKind: 'supplier' } });
     const po = json<{ id: string }>(await call(owner, 'POST', '/api/purchases', { supplierId: supplier.id, currency: 'CNY', orderedOn: today() }));
     const plan = json<Plan>(await call(owner, 'POST', '/api/money/preview', { kind: 'supplier', purchaseId: po.id, amountTetri: '2541.42', foreignAmount: '6000', foreignCurrency: 'CNY', channel: 'transfer' }));
     expect(plan.rate).toBe(0.42357);

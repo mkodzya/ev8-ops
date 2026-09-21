@@ -51,7 +51,7 @@ describe.skipIf(!HAS_DB)('a model card', () => {
     await prisma.vehicle.create({ data: { vin: vin(), modelId: model.id, pool: 'rent' } });
     await prisma.vehicle.create({ data: { vin: vin(), modelId: model.id } });
     await prisma.vehicle.create({ data: { vin: vin(), modelId: model.id, pool: 'sale', state: 'sold' } });
-    const supplier = await prisma.customer.create({ data: { name: `Supplier ${uniq()}`, isSupplier: true } });
+    const supplier = await prisma.customer.create({ data: { name: `Supplier ${uniq()}`, recordKind: 'supplier' } });
     const { id: poId } = json<{ id: string }>(await call(owner, 'POST', '/api/purchases', { supplierId: supplier.id, currency: 'CNY', orderedOn: '2026-04-01' }));
     await call(owner, 'POST', `/api/purchases/${poId}/lines`, { modelId: model.id, qty: 3, unitPrice: '4000' });
 

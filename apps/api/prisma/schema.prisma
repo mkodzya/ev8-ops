@@ -368,7 +368,6 @@ model Customer {
   mergedIntoId  String?      @map("merged_into") @db.Uuid
   /// Where they came from: myauto, friends, social, site, other (wave 4 §3.5).
   source        String?
-  isSupplier    Boolean      @default(false) @map("is_supplier")
   tags          String[]     @default([])
   address       String?
   notes         String?
@@ -707,7 +706,6 @@ model ServiceJob {
   odometerKm    Int?          @map("odometer_km")
   /// What the customer owes for this repair after the deposit was drawn on (Q26).
   chargedTetri  Int           @default(0) @map("charged_tetri")
-  doneBy        String?       @map("done_by")
   notes         String?
   movedVehicle  Boolean       @default(false) @map("moved_vehicle")
   withheldTetri Int           @default(0) @map("withheld_tetri")

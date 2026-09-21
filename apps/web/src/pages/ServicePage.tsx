@@ -51,7 +51,6 @@ export interface ServiceJob {
   odometerKm: number | null;
   workshop: Workshop | null;
   closedAt: { id: string; name: string } | null;
-  doneBy: string | null;
   notes: string | null;
   /** True when this job is what took the moped out of the yard: only then does closing bring it back. */
   movedVehicle: boolean;

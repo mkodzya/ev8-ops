@@ -17,7 +17,7 @@ export function contactRoutes(app: FastifyInstance): void {
   /** Suppliers, for an order (B3-04): a factory is not looked for among customers. */
   app.get('/api/suppliers', { config: { scope: 'purchases.view' } }, async () => {
     const rows = await prisma.customer.findMany({
-      where: { archived: false, OR: [{ recordKind: 'supplier' }, { isSupplier: true }] },
+      where: { archived: false, recordKind: 'supplier' },
       orderBy: { name: 'asc' },
       select: { id: true, name: true, address: true, notes: true, phone: true },
     });
@@ -39,9 +39,9 @@ export function contactRoutes(app: FastifyInstance): void {
   app.get<{ Params: { id: string } }>('/api/suppliers/:id', { config: { scope: 'purchases.view' } }, async (req) => {
     const row = await prisma.customer.findUnique({
       where: { id: req.params.id },
-      select: { id: true, name: true, address: true, notes: true, phone: true, recordKind: true, isSupplier: true },
+      select: { id: true, name: true, address: true, notes: true, phone: true, recordKind: true },
     });
-    if (!row || !(row.recordKind === 'supplier' || row.isSupplier)) throw notFound('supplier_not_found', 'No such supplier.');
+    if (!row || row.recordKind !== 'supplier') throw notFound('supplier_not_found', 'No such supplier.');
     const orders = await prisma.purchase.findMany({
       where: { supplierId: row.id },
       orderBy: { orderedOn: 'desc' },
@@ -78,7 +78,6 @@ export function contactRoutes(app: FastifyInstance): void {
         notes: str(b, 'contact', { max: 1000 }),
         phone: str(b, 'phone', { max: 40 }),
         recordKind: 'supplier',
-        isSupplier: true,
         kind: 'company',
       },
       select: { id: true, name: true },

@@ -193,7 +193,6 @@ async function seedDemo(ownerId: string): Promise<void> {
         reason: r.reason,
         openedOn: d(addDays(today, -2)),
         labourTetri: r.labour,
-        doneBy: 'DEMO Nika workshop',
         notes: DEMO_NOTE,
         movedVehicle: true,
         createdById: ownerId,
@@ -285,7 +284,7 @@ async function seedDemo(ownerId: string): Promise<void> {
   // invoice in CNY, two payments in GEL, logistics split over the units,
   // and every VIN carrying what it cost to land.
   const factory = await prisma.customer.create({
-    data: { name: 'DEMO Zhejiang Factory', kind: 'company', isSupplier: true, notes: DEMO_NOTE },
+    data: { name: 'DEMO Zhejiang Factory', kind: 'company', recordKind: 'supplier', notes: DEMO_NOTE },
   });
   const order = await prisma.purchase.create({
     data: {

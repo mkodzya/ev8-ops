@@ -271,18 +271,22 @@ def import_customers(o: Odoo, cur, rep: Report) -> dict[int, str]:
             seen_pid[pid] = p["id"]
         cur.execute(
             """
-            insert into customers (name, personal_id, phone, email, kind, is_supplier, tags, address,
+            insert into customers (name, personal_id, phone, email, kind, record_kind, tags, address,
                                    odoo_partner_id, archived, notes)
             values (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
             on conflict (odoo_partner_id) do update set
               name = excluded.name, phone = excluded.phone, email = excluded.email,
-              kind = excluded.kind, is_supplier = excluded.is_supplier, tags = excluded.tags,
+              kind = excluded.kind, record_kind = excluded.record_kind, tags = excluded.tags,
               address = excluded.address, archived = excluded.archived, updated_at = now()
             returning id
             """,
             (name, pid, (p.get("phone") or None), (p.get("email") or None),
              "company" if p.get("is_company") else "person",
-             bool(p.get("supplier_rank")), [tags.get(t, "") for t in (p.get("category_id") or [])],
+             # What this record is (wave 5 §3.9): Odoo's supplier rank is the
+             # only thing the source says about it, and it says nothing about
+             # the two kinds a client can be.
+             ("supplier" if p.get("supplier_rank") else "client"),
+             [tags.get(t, "") for t in (p.get("category_id") or [])],
              addr, p["id"], not p.get("active", True), note),
         )
         ids[p["id"]] = cur.fetchone()[0]

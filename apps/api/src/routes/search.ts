@@ -38,7 +38,7 @@ export function searchRoutes(app: FastifyInstance): void {
     const [customers, vehicles, rentals, sales, payments, purchases, jobs] = await Promise.all([
       prisma.customer.findMany({
         where: { archived: false },
-        select: { id: true, name: true, nameKa: true, nameLat: true, phone: true, personalId: true, isSupplier: true },
+        select: { id: true, name: true, nameKa: true, nameLat: true, phone: true, personalId: true, recordKind: true },
         orderBy: { name: 'asc' },
       }),
       prisma.vehicle.findMany({
@@ -103,7 +103,7 @@ export function searchRoutes(app: FastifyInstance): void {
       customers: group(
         customers
           .filter((c) => byCustomer(c, q) || phoneMatches(q, c.phone) || (seeIdentity && !!c.personalId && c.personalId.includes(q.text)))
-          .map((c) => ({ id: c.id, name: c.name, nameKa: c.nameKa, nameLat: c.nameLat, phone: c.phone, isSupplier: c.isSupplier })),
+          .map((c) => ({ id: c.id, name: c.name, nameKa: c.nameKa, nameLat: c.nameLat, phone: c.phone, recordKind: c.recordKind })),
       ),
       vehicles: group(
         vehicles

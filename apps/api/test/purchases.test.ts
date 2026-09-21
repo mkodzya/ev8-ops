@@ -18,7 +18,7 @@ const FLYBROTHER = [
 
 async function supplier() {
   const { prisma } = await import('../src/lib/db.js');
-  return prisma.customer.create({ data: { name: `Factory ${uniq()}`, kind: 'company', isSupplier: true } });
+  return prisma.customer.create({ data: { name: `Factory ${uniq()}`, kind: 'company', recordKind: 'supplier' } });
 }
 
 async function models(owner: string) {
