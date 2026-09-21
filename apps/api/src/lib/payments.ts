@@ -7,14 +7,27 @@ import { conflict, notFound } from './errors.js';
 
 type Tx = Prisma.TransactionClient;
 
-/** The same, for a sale: each instalment's paid amount and status. */
+/**
+ * The same, for a sale: each instalment's paid amount and status.
+ *
+ * A sale carried over from the paper way of working says in one figure what
+ * had been paid by the day of the move (B3-03, wave 5 §3.1а). Those GEL went
+ * through somebody else's books, so there is no payment to allocate — the
+ * figure closes instalments oldest first, exactly as a payment would, and it
+ * is applied here so that a later payment cannot undo it.
+ */
 export async function recomputeSale(tx: Tx, saleId: string): Promise<void> {
+  const sale = await tx.sale.findUnique({ where: { id: saleId }, select: { paidBeforeTetri: true } });
   const instalments = await tx.saleInstalment.findMany({
     where: { saleId },
+    orderBy: { seq: 'asc' },
     include: { allocations: { where: { payment: { voidedAt: null } }, select: { amountTetri: true } } },
   });
+  let before = sale?.paidBeforeTetri ?? 0;
   for (const i of instalments) {
-    const paid = i.allocations.reduce((n, a) => n + a.amountTetri, 0);
+    const carried = Math.min(before, i.amountTetri);
+    before -= carried;
+    const paid = carried + i.allocations.reduce((n, a) => n + a.amountTetri, 0);
     const payStatus: PeriodPayStatus = paid <= 0 ? 'unpaid' : paid >= i.amountTetri ? 'paid' : 'partial';
     if (paid !== i.paidTetri || payStatus !== i.payStatus) {
       await tx.saleInstalment.update({ where: { id: i.id }, data: { paidTetri: paid, payStatus, updatedAt: new Date() } });

@@ -518,6 +518,7 @@ model StoredFile {
   actId        String?  @map("act_id") @db.Uuid
   customerId   String?  @map("customer_id") @db.Uuid
   rentalId     String?  @map("rental_id") @db.Uuid
+  saleId       String?  @map("sale_id") @db.Uuid
   serviceJobId String?  @map("service_job_id") @db.Uuid
   label        String   @default("")
   docKind      String?  @map("doc_kind")
@@ -534,6 +535,7 @@ model StoredFile {
   act        Act?      @relation(fields: [actId], references: [id], onDelete: Cascade)
   customer   Customer? @relation(fields: [customerId], references: [id], onDelete: Cascade)
   rental     Rental?     @relation(fields: [rentalId], references: [id], onDelete: Cascade)
+  sale       Sale?       @relation(fields: [saleId], references: [id], onDelete: Cascade)
   serviceJob ServiceJob? @relation(fields: [serviceJobId], references: [id], onDelete: Cascade)
   uploadedBy User?     @relation(fields: [uploadedById], references: [id])
 
@@ -775,6 +777,7 @@ model Sale {
   createdBy   User?            @relation(fields: [createdById], references: [id])
   instalments SaleInstalment[]
   payments    Payment[]
+  documents   StoredFile[]
 
   @@map("sales")
 }
