@@ -352,7 +352,7 @@ function EditSheet({ part, onClose, onSaved }: { part: PartRow; onClose: () => v
         </Field>
       </div>
       <Field label={t.stock.notes} name="notes">
-        <textarea className="input" rows={3} value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })} />
+        <textarea className="input textarea" rows={3} value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })} />
       </Field>
     </FormSheet>
   );

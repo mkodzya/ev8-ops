@@ -64,6 +64,10 @@ const blank = (vehicleId: string) => ({
   transfer: false,
   soldOn: todayISO(),
   paidBefore: '',
+  creating: false,
+  ncName: '',
+  ncPhone: '',
+  ncPersonalId: '',
   channel: null as Channel | 'later' | null,
   prepayment: '',
   why: '',
@@ -164,7 +168,8 @@ export function SaleWizard() {
   // A sale with nothing paid today is an owner's decision and carries a
   // reason; anything else needs a channel and an amount (§3.1, step 4).
   const paymentOk = !needsPrepayment || (f.channel === 'later' ? owner && f.why.trim().length > 2 : f.channel != null && prepaymentTetri > 0);
-  const ok = [vehicleOk, f.customerId !== '', priceOk, paymentOk, true][f.step];
+  const buyerOk = f.creating ? f.ncName.trim().length > 1 && f.ncPhone.trim().length > 5 : f.customerId !== '';
+  const ok = [vehicleOk, buyerOk, priceOk, paymentOk, true][f.step];
 
   const stepOfField: Record<string, number> = { vehicleId: 0, movePool: 0, customerId: 1, priceTetri: 2, downPaymentTetri: 2, paidBeforeTetri: 2, schedule: 2, channel: 3 };
   useEffect(() => {
@@ -177,8 +182,13 @@ export function SaleWizard() {
 
   const submit = async () => {
     const res = await op.run(async (key) => {
+      // A card for the buyer first, then the sale: the sale needs an id, and
+      // a customer written twice by a retry is what the key prevents.
+      const customerId = f.creating
+        ? (await api.post<{ id: string }>('/api/customers', { name: f.ncName.trim(), phone: f.ncPhone.trim(), personalId: f.ncPersonalId.trim() || undefined }, { key: `${key}-customer` })).id
+        : f.customerId;
       const body = {
-        customerId: f.customerId,
+        customerId,
         vehicleId: f.vehicleId,
         priceTetri,
         extraLines: f.extras.filter((e) => e.name.trim() !== '').map((e) => ({ name: e.name.trim(), amountTetri: parseGel(e.amount) ?? 0 })),
@@ -296,9 +306,32 @@ export function SaleWizard() {
             ))}
           </ul>
           {customer && customer.debtTetri > 0 && <p className="warn-text">{t.sell.debtor(formatGel(customer.debtTetri, { decimals: false }))}</p>}
-          <p className="hint muted">
-            <Link to="/customers/new">{t.hand.newCustomer}</Link>
-          </p>
+          {/* A buyer nobody has a card for yet, made here rather than in
+              another screen the wizard would have to be left for (§3.1). */}
+          {!f.creating && (
+            <button type="button" className="pill pill-sm" onClick={() => set({ creating: true, customerId: '' })}>
+              {t.hand.newCustomer}
+            </button>
+          )}
+          {f.creating && (
+            <section className="card">
+              <div className="row-actions row-between">
+                <h2 className="sub">{t.hand.newCustomer}</h2>
+                <button type="button" className="pill pill-sm" onClick={() => set({ creating: false })}>
+                  {t.back.cancel}
+                </button>
+              </div>
+              <Field label={t.hand.name} name="name">
+                <input className="input" value={f.ncName} onChange={(e) => set({ ncName: e.target.value })} />
+              </Field>
+              <Field label={t.hand.phone} name="phone">
+                <input className="input mono" inputMode="tel" value={f.ncPhone} onChange={(e) => set({ ncPhone: e.target.value })} />
+              </Field>
+              <Field label={t.hand.personalId} hint={t.hand.personalIdHint} name="personalId">
+                <input className="input mono" inputMode="numeric" value={f.ncPersonalId} onChange={(e) => set({ ncPersonalId: e.target.value })} />
+              </Field>
+            </section>
+          )}
         </>
       )}
 

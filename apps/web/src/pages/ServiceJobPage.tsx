@@ -382,7 +382,8 @@ function PayerSheet({ job, onClose, onSaved }: { job: ServiceJob; onClose: () =>
         </div>
       </Field>
       <p className="hint muted">{v === 'customer' ? t.repair.payerCustomerNote : t.repair.payerCompanyNote}</p>
-      {!job.rental && <p className="hint muted">{t.repair.rentedNote}</p>}
+      {/* Only the person who has the moped can be charged for it (`no_renter`). */}
+      {job.rental && <p className="hint muted">{t.repair.rentedNote}</p>}
     </FormSheet>
   );
 }

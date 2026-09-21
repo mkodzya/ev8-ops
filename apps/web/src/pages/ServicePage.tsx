@@ -257,13 +257,13 @@ export function NewJob({ vehicleId, onDone }: { vehicleId?: string; onDone: () =
       setParams(params, { replace: true });
     }
   };
-  const fleet = useLoad<{ vehicles: FleetVehicle[] }>(open && !vehicleId ? '/api/fleet' : null);
+  const fleet = useLoad<{ vehicles: FleetVehicle[] }>(open ? '/api/fleet' : null);
   const workshops = useLoad<{ workshops: Workshop[] }>(open && mayManage ? '/api/workshops' : null);
   const [f, setF] = useState(() => blankJob(vehicleId));
   const [photos, setPhotos] = useState<PreparedPhoto[]>([]);
 
   const repairable = useMemo(() => (fleet.data?.vehicles ?? []).filter((v) => v.state !== 'sold' && v.state !== 'out'), [fleet.data]);
-  const chosen = repairable.find((v) => v.id === f.vehicleId);
+  const chosen = repairable.find((v) => v.id === (f.vehicleId || vehicleId));
   // Only a moped that is out with somebody can be repaired at their expense.
   const rented = chosen?.state === 'rented';
   const label = mayManage ? t.repair.newJob : t.repair.report;
@@ -304,8 +304,11 @@ export function NewJob({ vehicleId, onDone }: { vehicleId?: string; onDone: () =
                 attached = false;
               }
             }
-            const said = mayManage ? t.repair.opened : t.repair.reported;
-            return { created: job.id, toast: { text: attached ? said : t.repair.photosNotSaved, open: `/service/${job.id}` } };
+            const said = attached ? (mayManage ? t.repair.opened : t.repair.reported) : t.repair.photosNotSaved;
+            // An owner is taken to the repair to fill it in, so the message
+            // does not also offer to open what is already open; a manager
+            // stays where they were and is offered the way there.
+            return { created: job.id, toast: mayManage && attached ? { text: said } : { text: said, open: `/service/${job.id}` } };
           }}
           onDone={(done) => {
             setF(blankJob(vehicleId));

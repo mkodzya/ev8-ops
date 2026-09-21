@@ -84,7 +84,7 @@ export function VehiclePage() {
             {t.actions.changeState}
           </button>
         )}
-        {can('service.manage') && v.state !== 'sold' && v.state !== 'out' && !data.serviceJobs.some((j) => j.status === 'open') && (
+        {can('service.report') && v.state !== 'sold' && v.state !== 'out' && !data.serviceJobs.some((j) => j.status === 'open') && (
           <NewJob vehicleId={v.id} onDone={reload} />
         )}
         {/* Selling starts from the moped as often as from the "+" (§3.1). */}
