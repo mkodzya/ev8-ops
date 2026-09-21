@@ -59,6 +59,15 @@ export async function utilisationVehicles(): Promise<{ input: UtilisationVehicle
         orderBy: [{ occurredOn: 'asc' }, { createdAt: 'asc' }],
         select: { occurredOn: true, toState: true, toPool: true, fromPool: true },
       },
+      // A sale carried over from Odoo has no event of its own: the deal was
+      // written straight into `sales`, and the moped went on counting as
+      // idle capacity for months (QA-W6-06). The day it was sold is known,
+      // so the sale itself stands in for the event that never happened.
+      sales: {
+        where: { status: { not: 'cancelled' } },
+        orderBy: { soldOn: 'asc' },
+        select: { soldOn: true, boughtBackOn: true },
+      },
     },
   });
 
@@ -70,11 +79,25 @@ export async function utilisationVehicles(): Promise<{ input: UtilisationVehicle
       // Where it was before anything moved it: the first move remembers, and
       // a moped that never moved is where it is now.
       initialPool: (firstMove?.fromPool ?? v.pool) as UtilisationVehicle['initialPool'],
-      events: v.events.map((e) => ({
-        occurredOn: isoDate(e.occurredOn) as string,
-        toState: e.toState as UtilisationVehicle['events'][number]['toState'],
-        toPool: e.toPool as UtilisationVehicle['events'][number]['toPool'],
-      })),
+      events: [
+        ...v.events.map((e) => ({
+          occurredOn: isoDate(e.occurredOn) as string,
+          toState: e.toState as UtilisationVehicle['events'][number]['toState'],
+          toPool: e.toPool as UtilisationVehicle['events'][number]['toPool'],
+        })),
+        // Sold on a day nobody wrote an event for. A buy-back that did leave
+        // one wins by being later, because the arithmetic reads the last
+        // word about each day.
+        ...v.sales.flatMap((sale) => {
+          const day = isoDate(sale.soldOn);
+          if (!day) return [];
+          const back = isoDate(sale.boughtBackOn);
+          return [
+            { occurredOn: day, toState: 'sold' as const, toPool: null },
+            ...(back ? [{ occurredOn: back, toState: 'available' as const, toPool: null }] : []),
+          ];
+        }),
+      ].sort((a, b) => a.occurredOn.localeCompare(b.occurredOn)),
     };
   });
 
