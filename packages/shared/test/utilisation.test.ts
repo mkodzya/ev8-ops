@@ -128,7 +128,16 @@ describe('what kept the figure down (§3.2, "что мешает")', () => {
     const b = fleetBlockers({
       from: '2026-09-01',
       to: '2026-09-30',
-      vehicles: [{ ...inRepair('sale-park', '2026-08-20'), initialPool: 'sale' }],
+      vehicles: [
+        {
+          id: 'sale-park',
+          initialPool: 'sale',
+          events: [
+            { occurredOn: '2026-08-01', toState: 'available', toPool: 'sale' },
+            { occurredOn: '2026-08-20', toState: 'service' },
+          ],
+        },
+      ],
     });
     expect(b.inRepairAllPeriod).toHaveLength(0);
   });
@@ -188,7 +197,7 @@ describe('mopeds per model (§3.2, the middle column)', () => {
       vehicles: [
         { id: 'a', modelId: 'm1', initialPool: 'rent', events: [arrived('2026-08-01')] },
         { id: 'b', modelId: 'm1', initialPool: 'rent', events: [arrived('2026-08-01')] },
-        { id: 'c', modelId: 'm2', initialPool: 'sale', events: [arrived('2026-08-01')] },
+        { id: 'c', modelId: 'm2', initialPool: 'sale', events: [{ occurredOn: '2026-08-01', toState: 'available' as const, toPool: 'sale' as const }] },
       ],
     });
     const per = utilisationModelVehicles(u);
