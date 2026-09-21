@@ -107,9 +107,14 @@ export function statusOf(p: Purchase): 'awaitingPayment' | 'ordered' | 'received
   return p.debtMinor > 0 ? 'awaitingPayment' : 'ordered';
 }
 
-/** The rate as a person here reads it: a comma, and no trailing zeroes. */
+/**
+ * The rate, with no trailing zeroes. The decimal mark is a point, as it is
+ * in every sum the app prints (`formatGel`), in all three languages: a comma
+ * here put two different marks in one line — "0,428333 GEL/CNY" beside
+ * "1 352.22 ₾" (QA-W5-24).
+ */
 export function fmtRate(rate: number | null): string {
-  return rate == null ? '' : String(rate).replace('.', ',');
+  return rate == null ? '' : String(rate);
 }
 
 export function PurchasesPage() {
