@@ -121,6 +121,35 @@ export function fleetUtilisation(input: { vehicles: readonly UtilisationVehicle[
   };
 }
 
+export interface VehicleOn {
+  state: VehicleState;
+  pool: VehiclePool | null;
+  /** The day the state it is in was set — for "in repair, and for how long". */
+  since: ISODate;
+}
+
+/**
+ * Where a moped stood on `day`, read from its own events — the fleet table
+ * knows where a VIN is now, only the events know where it was on the ninth.
+ * `null` before its first event: it was not ours yet, and a week that ran
+ * before it arrived should not count it (wave 6 §3.1).
+ */
+export function vehicleOn(v: UtilisationVehicle, day: ISODate): VehicleOn | null {
+  const sorted = [...v.events].sort((a, b) => a.occurredOn.localeCompare(b.occurredOn));
+  let state: VehicleState | null = null;
+  let since: ISODate | null = null;
+  let pool: VehiclePool | null = v.initialPool;
+  for (const e of sorted) {
+    if (e.occurredOn > day) break;
+    if (e.toState != null && e.toState !== state) {
+      state = e.toState;
+      since = e.occurredOn;
+    }
+    if (e.toPool != null) pool = e.toPool;
+  }
+  return state == null || since == null ? null : { state, pool, since };
+}
+
 /** The same figure per model, for the "по моделям" cut (§3.2). */
 export function utilisationByModel(u: Utilisation): { modelId: string; rentedDays: number; poolDays: number; percent: number | null }[] {
   const by = new Map<string, { rentedDays: number; poolDays: number }>();
