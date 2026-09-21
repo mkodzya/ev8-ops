@@ -177,14 +177,63 @@ describe.skipIf(!HAS_DB)('wave 5 · shipments', () => {
     const before = json<Card>(await call(owner, 'GET', `/api/purchases/${id}`));
     expect(before.vehicles.every((v) => v.costTetri === 135128)).toBe(true);
 
-    // The rest goes out at a slightly different rate: every VIN is written again.
-    await call(owner, 'POST', `/api/purchases/${id}/payments`, { grossTetri: '2115.03', foreignAmount: '5000', channel: 'transfer' });
+    // The rest goes out at a slightly different rate: every VIN is written
+    // again. It goes through the money form, which is the door the screen
+    // uses — the recost used to hang on the purchase route instead, so the
+    // suite stayed green while the cost on the screen never moved (QA-W5-10).
+    const settled = await call(owner, 'POST', '/api/money', {
+      kind: 'supplier',
+      purchaseId: id,
+      amountTetri: '2115.03',
+      foreignAmount: '5000',
+      foreignCurrency: 'CNY',
+      channel: 'transfer',
+    });
+    expect(settled.statusCode, settled.body).toBe(201);
     const after = json<Card>(await call(owner, 'GET', `/api/purchases/${id}`));
     expect(after.purchase.preliminary).toBe(false);
     expect(after.purchase.debtMinor).toBe(0);
     expect(after.vehicles.every((v) => v.costTetri !== 135128)).toBe(true);
     const moped = json<{ vehicle: { costTetri: number } }>(await call(owner, 'GET', `/api/fleet/${after.vehicles[0].id}`));
     expect(moped.vehicle.costTetri).toBe(after.vehicles[0].costTetri);
+    // And the journal says why the figure moved, for both mopeds.
+    const { prisma } = await import('../src/lib/db.js');
+    const written = await prisma.auditLog.findMany({
+      where: { action: 'vehicle.cost', entityId: { in: after.vehicles.map((v) => v.id) } },
+      select: { note: true },
+    });
+    expect(written).toHaveLength(2);
+    expect(written.every((w) => w.note === 'paid the supplier')).toBe(true);
+  });
+
+  it('takes the cost back off the mopeds when a supplier payment is annulled (§7)', async () => {
+    const { owner, id } = await order();
+    await call(owner, 'POST', `/api/purchases/${id}/payments`, { grossTetri: '423.57', foreignAmount: '1000', channel: 'transfer' });
+    const tag = uniq();
+    const lineId = json<{ purchase: { lines: { id: string }[] } }>(await call(owner, 'GET', `/api/purchases/${id}`)).purchase.lines[0].id;
+    await call(owner, 'POST', `/api/purchases/${id}/receive`, {
+      receivedOn: '2026-09-10',
+      pool: 'rent',
+      vins: { [lineId]: [vin('VDA', tag, 1), vin('VDB', tag, 2)] },
+    });
+    const settle = await call(owner, 'POST', '/api/money', {
+      kind: 'supplier',
+      purchaseId: id,
+      amountTetri: '2115.03',
+      foreignAmount: '5000',
+      foreignCurrency: 'CNY',
+      channel: 'transfer',
+    });
+    const paymentId = json<{ id: string }>(settle).id;
+    const settled = json<Card>(await call(owner, 'GET', `/api/purchases/${id}`));
+    expect(settled.purchase.preliminary).toBe(false);
+
+    const voided = await call(owner, 'POST', `/api/payments/${paymentId}/void`, { reason: 'ТЕСТ wrong order' });
+    expect(voided.statusCode, voided.body).toBe(200);
+    const back = json<Card>(await call(owner, 'GET', `/api/purchases/${id}`));
+    expect(back.purchase.preliminary).toBe(true);
+    // Back at the 17 % figure the shipment was received at.
+    expect(back.vehicles.every((v) => v.costTetri === 135128)).toBe(true);
   });
 
   it('names the line of a VIN that is not a VIN, and one the fleet already holds (crit. 14, 15)', async () => {

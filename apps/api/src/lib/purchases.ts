@@ -1,6 +1,5 @@
 import { landedCosts, paidSummary, type PaidSummary } from '@ev8/shared';
 import type { Prisma } from '../generated/prisma/client.js';
-import { prisma } from './db.js';
 
 // What a shipment has cost so far, and writing that onto the mopeds it
 // brought (wave 5 §3.5–3.7, Mika's answer to Q23).
@@ -121,7 +120,3 @@ export async function recostPurchase(tx: Prisma.TransactionClient, purchaseId: s
   return changed;
 }
 
-/** The same, outside a transaction of somebody else's. */
-export async function recost(purchaseId: string, actorId: string | null, reason: string): Promise<number> {
-  return prisma.$transaction((tx) => recostPurchase(tx, purchaseId, actorId, reason));
-}

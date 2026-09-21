@@ -2,7 +2,7 @@ import { checkVinList, todayISO, VEHICLE_POOLS } from '@ev8/shared';
 import type { FastifyInstance } from 'fastify';
 import { audit } from '../lib/audit.js';
 import { recordMoney } from '../lib/money.js';
-import { purchaseCosts, purchaseMoney, recost, recostPurchase } from '../lib/purchases.js';
+import { purchaseCosts, purchaseMoney, recostPurchase } from '../lib/purchases.js';
 import { partRows, receivePartLine } from '../lib/stock.js';
 import { dateFromISO, isoDate } from '../lib/dates.js';
 import { prisma } from '../lib/db.js';
@@ -279,9 +279,8 @@ export function purchaseRoutes(app: FastifyInstance): void {
       foreignCurrency: foreign ? p.currency : undefined,
       bankFeeTetri: tetri(b, 'bankFee', { min: 0 }) ?? undefined,
     });
-    // The mopeds of this shipment are already out earning; their cost follows
-    // the money the same day (§7).
-    await recost(p.id, actor.id, 'paid the factory');
+    // The cost of the mopeds follows inside recordMoney, on whichever door
+    // the money came through (§7).
     return reply.code(201).send({ id });
   });
 

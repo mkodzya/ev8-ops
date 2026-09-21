@@ -4,6 +4,7 @@ import { dateFromISO, isoDate } from './dates.js';
 import { rentalOwed, spreadRental, writeAllocations } from './rentalMoney.js';
 import { prisma } from './db.js';
 import { conflict, notFound } from './errors.js';
+import { recostPurchase } from './purchases.js';
 
 type Tx = Prisma.TransactionClient;
 
@@ -258,6 +259,9 @@ export async function voidPayment(input: { actorId: string; paymentId: string; r
     }
     for (const rentalId of touched) await recomputeRental(tx, rentalId);
     for (const saleId of saleIds) await recomputeSale(tx, saleId);
+    // Money taken back off a shipment moves its mopeds' cost the same way
+    // paying did (§7, QA-W5-10).
+    if (p.purchaseId) await recostPurchase(tx, p.purchaseId, input.actorId, 'supplier payment voided');
 
     await tx.auditLog.create({
       data: {
