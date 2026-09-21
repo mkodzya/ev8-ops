@@ -404,6 +404,10 @@ export function purchaseRoutes(app: FastifyInstance): void {
       await prisma.$transaction(async (tx) => {
         for (const { line, rows } of planned) {
           const cost = byLine.get(line.id)!;
+          // Nothing paid and no freight: what a unit cost is not known yet,
+          // and an empty cost is what that looks like (QA-W5-29). A recost
+          // fills it in the moment money moves.
+          const unitCostTetri = cost.unitCostTetri > 0 ? cost.unitCostTetri : null;
           for (const row of rows) {
             const v = await tx.vehicle.create({
               data: {
@@ -414,7 +418,7 @@ export function purchaseRoutes(app: FastifyInstance): void {
                 pool: (row.pool as 'rent' | 'sale' | null) ?? null,
                 locationId: row.locationId,
                 arrivedOn: dateFromISO(receivedOn),
-                costTetri: cost.unitCostTetri,
+                costTetri: unitCostTetri,
                 purchaseId: p.id,
               },
               select: { id: true },
@@ -424,8 +428,12 @@ export function purchaseRoutes(app: FastifyInstance): void {
             });
             created++;
           }
-          // The model's own cost is kept as the reference for the next batch.
-          await tx.vehicleModel.update({ where: { id: line.model!.id }, data: { costTetri: cost.unitCostTetri, updatedAt: new Date() } });
+          // The model's own cost is kept as the reference for the next batch —
+          // but only when this batch knows one, or an unpaid shipment would
+          // wipe what a paid one taught it.
+          if (unitCostTetri != null) {
+            await tx.vehicleModel.update({ where: { id: line.model!.id }, data: { costTetri: unitCostTetri, updatedAt: new Date() } });
+          }
         }
         // Parts from the catalogue land on the shelf at what they cost to
         // land; a line that names no part lands nowhere and said so (B8-03).

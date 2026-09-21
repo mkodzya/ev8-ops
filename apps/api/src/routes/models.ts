@@ -4,6 +4,7 @@ import { isoDate } from '../lib/dates.js';
 import { prisma } from '../lib/db.js';
 import { conflict, isUniqueViolation, notFound } from '../lib/errors.js';
 import { actorOf, mayView } from '../lib/guard.js';
+import { preliminaryOf } from '../lib/purchases.js';
 import { str, tetri } from '../lib/validate.js';
 import { PURCHASE_INCLUDE, serializePurchase } from './purchases.js';
 
@@ -19,7 +20,11 @@ import { PURCHASE_INCLUDE, serializePurchase } from './purchases.js';
 type Body = Record<string, unknown>;
 
 /** Where the model's unit cost came from, so a screen can say so. */
-type CostSource = { kind: 'purchase'; purchaseId: string; number: string; receivedOn: string | null } | { kind: 'odoo' } | { kind: 'manual' } | null;
+type CostSource =
+  | { kind: 'purchase'; purchaseId: string; number: string; receivedOn: string | null; preliminary: boolean; paidPercent: number }
+  | { kind: 'odoo' }
+  | { kind: 'manual' }
+  | null;
 
 interface ModelRow {
   id: string;
@@ -45,8 +50,10 @@ async function describe(models: ModelRow[]) {
   });
   const lines = await prisma.purchaseLine.findMany({
     where: { modelId: { in: ids }, purchase: { status: { in: ['ordered', 'received'] } } },
-    select: { modelId: true, qty: true, purchase: { select: { id: true, number: true, status: true, receivedOn: true } } },
+    select: { modelId: true, qty: true, purchase: { select: { id: true, number: true, status: true, receivedOn: true, costedAt: true } } },
   });
+  // Is the shipment that gave the figure settled, and at what share (§7)?
+  const settled = await preliminaryOf(lines.map((l) => l.purchase.id));
 
   return models.map((m) => {
     const fleet = { rent: 0, sale: 0, none: 0, gone: 0 };
@@ -57,13 +64,32 @@ async function describe(models: ModelRow[]) {
     }
     const mine = lines.filter((l) => l.modelId === m.id);
     const ordered = mine.filter((l) => l.purchase.status === 'ordered');
+    // Which shipment the figure on the model came from. `receivedOn` is a
+    // date without a time, so three shipments received on one day sorted
+    // arbitrarily and the card named a batch whose mopeds cost something
+    // else (QA-W5-29). The cost is written by a recost, so the moment of the
+    // recost is what orders them; the day the shipment landed only breaks a
+    // tie between shipments never recosted.
+    const when = (l: (typeof mine)[number]) => (l.purchase.costedAt ?? l.purchase.receivedOn)!.getTime();
     const received = mine
       .filter((l) => l.purchase.status === 'received' && l.purchase.receivedOn)
-      .sort((a, b) => b.purchase.receivedOn!.getTime() - a.purchase.receivedOn!.getTime())[0];
+      // A shipment nobody has paid for wrote no cost, so it names none either.
+      .filter((l) => !(settled.get(l.purchase.id)?.paidPercent === 0))
+      .sort((a, b) => when(b) - when(a) || b.purchase.number.localeCompare(a.purchase.number))[0];
 
     let costSource: CostSource = null;
-    if (received) costSource = { kind: 'purchase', purchaseId: received.purchase.id, number: received.purchase.number, receivedOn: isoDate(received.purchase.receivedOn) };
-    else if (m.costTetri != null) costSource = m.odooSaleProductId != null || m.odooRentalProductId != null || m.odooFleetModelId != null ? { kind: 'odoo' } : { kind: 'manual' };
+    if (m.costTetri == null) costSource = null;
+    else if (received) {
+      const money = settled.get(received.purchase.id);
+      costSource = {
+        kind: 'purchase',
+        purchaseId: received.purchase.id,
+        number: received.purchase.number,
+        receivedOn: isoDate(received.purchase.receivedOn),
+        preliminary: money?.preliminary ?? false,
+        paidPercent: money?.paidPercent ?? 0,
+      };
+    } else costSource = m.odooSaleProductId != null || m.odooRentalProductId != null || m.odooFleetModelId != null ? { kind: 'odoo' } : { kind: 'manual' };
 
     return {
       id: m.id,
