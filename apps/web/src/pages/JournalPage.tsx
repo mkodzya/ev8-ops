@@ -1,8 +1,7 @@
-import { JOURNAL_FILTERS, type JournalFilter } from '@ev8/shared';
+import { JOURNAL_FILTERS, localDateTime, type JournalFilter } from '@ev8/shared';
 import { useSearchParams } from 'react-router-dom';
 import { LoadError } from '../components/LoadError.js';
 import { Empty, Loading, PageHead } from '../components/ui.js';
-import { fmtDate } from '../format.js';
 import { useT } from '../i18n/index.js';
 import { ChangedFromTo, noteWords } from '../lib/journal.js';
 import { useLoad } from '../lib/use.js';
@@ -33,8 +32,15 @@ interface Line {
   times: number;
 }
 
-const hhmm = (at: string) => new Date(at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
-const when = (at: string) => `${fmtDate(at.slice(0, 10))} ${hhmm(at)}`;
+// The company's clock, not the reader's and not the server's (QA-W6-18).
+// The date used to come off the ISO string, which is UTC, and the time from
+// whatever zone the laptop was in: after midnight in London the two named
+// different days, and the period filter dropped the row.
+const hhmm = (at: string) => localDateTime(at).time;
+const when = (at: string) => {
+  const { date, time } = localDateTime(at);
+  return `${date} ${time}`;
+};
 
 export function JournalPage() {
   const t = useT();

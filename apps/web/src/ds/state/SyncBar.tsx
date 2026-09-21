@@ -5,6 +5,10 @@ import { useT } from '../../i18n/index.js';
 import { useConnection } from '../../lib/connection.js';
 import './state.css';
 
+// The reader's own clock on purpose, and the only place in the product that
+// uses it: "данные на 09:12" answers "how long ago did I load this", which is
+// a question about the person sitting here, not about the company's day
+// (QA-W6-18).
 const hhmm = (ms: number) => new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
 
 /**
