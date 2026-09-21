@@ -151,7 +151,7 @@ export function UtilisationPage() {
         <Blocker label={t.utilisationReport.freeTooLong(FREE_TOO_LONG_DAYS)} rows={u.blockers.freeTooLong} />
         {/* No record ties a repair to a battery, so this is words, not a number. */}
         <dl className="figures">
-          <div className="figure">
+          <div className="figure figure-stack">
             <dt>{t.utilisationReport.batteries}</dt>
             <dd className="muted">{t.utilisationReport.noRecord}</dd>
           </div>
