@@ -160,6 +160,9 @@ export function SaleWizard() {
     set({ rows: next, edited: true });
   };
 
+  // What is due today by the schedule: the prepayment field opens with it,
+  // because that is the figure the buyer was just shown (§3.1, step 4).
+  const firstDueTetri = rowsTetri[0]?.amountTetri ?? 0;
   const paidBeforeTetri = parseGel(f.paidBefore) ?? 0;
   const prepaymentTetri = parseGel(f.prepayment) ?? 0;
   const needsPrepayment = !f.transfer;
@@ -252,7 +255,7 @@ export function SaleWizard() {
       steps={t.sell.steps}
       step={f.step}
       onBack={f.step > 0 ? () => set({ step: f.step - 1 }) : undefined}
-      onNext={f.step === 4 ? () => void submit() : () => set({ step: f.step + 1 })}
+      onNext={f.step === 4 ? () => void submit() : () => set({ step: f.step + 1, ...(f.step === 2 ? { prepayment: f.prepayment || String(firstDueTetri / 100) } : {}) })}
       nextDisabled={!ok}
       nextLabel={f.step === 4 ? t.sell.confirm(formatGel(totalTetri, { decimals: false })) : undefined}
       submit={f.step === 4 ? { state: op.state, failure: op.failure, label: t.sell.confirm(formatGel(totalTetri, { decimals: false })) } : undefined}
@@ -268,7 +271,9 @@ export function SaleWizard() {
                 <button
                   type="button"
                   className={v.id === f.vehicleId ? 'on' : ''}
-                  onClick={() => set({ vehicleId: v.id, movePool: v.pool !== 'rent', price: '' })}
+                  // The price comes with the moped: picking another one puts
+                  // its model's price in, not an empty field (SAL-01).
+                  onClick={() => set({ vehicleId: v.id, movePool: v.pool !== 'rent', price: v.salePriceTetri != null ? String(v.salePriceTetri / 100) : '', edited: false })}
                 >
                   <span className="pick-main">
                     <span>
@@ -460,7 +465,7 @@ export function SaleWizard() {
                 <input
                   className="input input-amount mono"
                   inputMode="decimal"
-                  value={f.prepayment === '' && f.instalments ? f.down : f.prepayment}
+                  value={f.prepayment}
                   onChange={(e) => set({ prepayment: e.target.value })}
                 />
               </Field>
