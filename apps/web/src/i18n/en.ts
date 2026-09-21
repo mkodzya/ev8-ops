@@ -1200,6 +1200,8 @@ export const en = {
       vehicle_not_available: 'This moped cannot be handed over now: it is not free. Open the moped and check its state.',
       vehicle_not_found: 'Moped not found.',
       vehicle_rented: 'The moped is with a customer. It gets a point back on return.',
+      vehicle_rented_sale: 'The moped is out on rent. It cannot be sold until it comes back.',
+      vehicle_rented_move: 'The moped is with a customer. Close the rental first.',
       vin_or_note: 'Pick a moped from the fleet, or write why the VIN is not confirmed.',
       vins_count: 'The number of VINs in a line does not match the quantity ordered. Check each line.',
       vins_missing: 'A line has no VINs. Enter one VIN per row for every model line.',

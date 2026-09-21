@@ -174,7 +174,7 @@ export function opsRoutes(app: FastifyInstance): void {
     const occurredOn = date(b, 'occurredOn') ?? todayISO(new Date(), env.TZ);
     const v = await prisma.vehicle.findUnique({ where: { id: req.params.id } });
     if (!v) throw notFound('vehicle_not_found', 'No such moped.');
-    if (v.state === 'rented' && v.currentRentalId) throw conflict('vehicle_rented', 'Close the rental first; a rented moped does not move by hand.');
+    if (v.state === 'rented' && v.currentRentalId) throw conflict('vehicle_rented_move', 'Close the rental first; a rented moped does not move by hand.');
     // Sold is what a sale says, not what a hand says; a buy-back brings it
     // back. Writing one off is an owner's (Q22, §3.6).
     if (toState === 'sold' || v.state === 'sold') throw conflict('sold_by_sale', 'A moped is sold by a sale and comes back by a buy-back.');
@@ -257,7 +257,7 @@ export function opsRoutes(app: FastifyInstance): void {
     if ('modelId' in b) data.modelId = str(b, 'modelId', { required: true });
     if ('archived' in b) {
       // A moped out on rent is not something to hide from the fleet.
-      if (Boolean(b.archived) && before.state === 'rented') throw conflict('vehicle_rented', 'Close the rental first.');
+      if (Boolean(b.archived) && before.state === 'rented') throw conflict('vehicle_rented_move', 'Close the rental first.');
       data.archived = Boolean(b.archived);
     }
     await prisma.vehicle.update({ where: { id: before.id }, data: { ...data, updatedAt: new Date() } });

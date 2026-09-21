@@ -71,7 +71,10 @@ describe.skipIf(!HAS_DB)('wave 5 · selling', () => {
     expect(rental.statusCode, rental.body).toBe(201);
     const res = await call(owner, 'POST', '/api/sales', { customerId: customer.id, vehicleId: moped.id, priceTetri: '5000' });
     expect(res.statusCode).toBe(409);
-    expect(json<{ error: string }>(res).error).toBe('vehicle_rented');
+    // Its own code: `vehicle_rented` also answered "a rented moped takes no
+    // point" and "close the rental first", and the screen showed the wrong
+    // one of the three — the words crit. 2 forbids (QA-W5-04).
+    expect(json<{ error: string }>(res).error).toBe('vehicle_rented_sale');
   });
 
   it('carries a sale over with what was paid before the move (crit. 5)', async () => {
