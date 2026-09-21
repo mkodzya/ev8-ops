@@ -48,3 +48,52 @@ describe.skipIf(!HAS_DB)('utilisation of the rental fleet', () => {
     expect((await call(manager, 'GET', '/api/reports/utilisation')).statusCode).toBe(403);
   });
 });
+
+describe.skipIf(!HAS_DB)('what kept the figure down (§3.2)', () => {
+  it('names the moped that was in repair the whole period, and says nothing about batteries', async () => {
+    const { prisma } = await import('../src/lib/db.js');
+    const owner = await loginAs('owner');
+    const model = await prisma.vehicleModel.create({ data: { brand: 'Test', name: `Stuck ${uniq()}`, weeklyRateTetri: 15000 } });
+    const stuck = await prisma.vehicle.create({ data: { vin: vin(uniq()), modelId: model.id, pool: 'rent', state: 'service' } });
+    await prisma.vehicleEvent.create({ data: { vehicleId: stuck.id, kind: 'arrived', occurredOn: new Date('2026-07-01'), toState: 'available' } });
+    await prisma.vehicleEvent.create({ data: { vehicleId: stuck.id, kind: 'service_in', occurredOn: new Date('2026-07-10'), toState: 'service' } });
+
+    const u = json<{
+      blockers: { inRepairAllPeriod: { id: string; vin: string; days: number }[]; freeTooLong: { id: string }[]; batteriesHolding: null };
+    }>(await call(owner, 'GET', '/api/reports/utilisation?from=2026-08-01&to=2026-08-31'));
+
+    const mine = u.blockers.inRepairAllPeriod.find((r) => r.id === stuck.id);
+    expect(mine).toBeDefined();
+    expect(mine?.days).toBe(31);
+    expect(mine?.vin).toBe(stuck.vin);
+    // It is in repair, so it cannot also be on the "free too long" list.
+    expect(u.blockers.freeTooLong.some((r) => r.id === stuck.id)).toBe(false);
+    // No record ties a repair to a missing battery: null, never 0 (CLAUDE.md rule 1).
+    expect(u.blockers.batteriesHolding).toBeNull();
+  });
+
+  it('counts the mopeds per model beside the days, and the two agree (crit. 7)', async () => {
+    const owner = await loginAs('owner');
+    const u = json<{ vehicles: number; rows: unknown[]; byModel: { vehicles: number }[] }>(
+      await call(owner, 'GET', '/api/reports/utilisation?from=2026-09-01&to=2026-09-14'),
+    );
+    expect(u.vehicles).toBe(u.rows.length);
+    expect(u.byModel.reduce((n, m) => n + m.vehicles, 0)).toBe(u.vehicles);
+  });
+});
+
+describe.skipIf(!HAS_DB)('a moped carries its utilisation into the economics (§3.3)', () => {
+  it('answers with the same per cent M-10 gives for it', async () => {
+    const { prisma } = await import('../src/lib/db.js');
+    const owner = await loginAs('owner');
+    const model = await prisma.vehicleModel.create({ data: { brand: 'Test', name: `Econ ${uniq()}`, weeklyRateTetri: 15000 } });
+    const v = await prisma.vehicle.create({ data: { vin: vin(uniq()), modelId: model.id, pool: 'rent' } });
+    await prisma.vehicleEvent.create({ data: { vehicleId: v.id, kind: 'arrived', occurredOn: new Date('2026-08-01'), toState: 'available' } });
+
+    const econ = json<{ economics: { id: string; utilisation: number | null } }>(await call(owner, 'GET', `/api/fleet/${v.id}/economics`));
+    expect(econ.economics.utilisation).toBe(0);
+
+    const list = json<{ rows: { id: string; utilisation: number | null }[] }>(await call(owner, 'GET', '/api/economics'));
+    expect(list.rows.find((r) => r.id === v.id)?.utilisation).toBe(0);
+  });
+});

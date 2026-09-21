@@ -36,6 +36,14 @@ export function weekOf(day: ISODate): Period {
   return { from, to: addDays(from, 6) };
 }
 
+/** The first…last day of the calendar month `day` falls in. */
+export function monthOf(day: ISODate): Period {
+  const from = `${day.slice(0, 7)}-01` as ISODate;
+  const next = new Date(`${from}T00:00:00Z`);
+  next.setUTCMonth(next.getUTCMonth() + 1);
+  return { from, to: addDays(next.toISOString().slice(0, 10) as ISODate, -1) };
+}
+
 /** The week before `p` — by its own dates, seven days earlier. */
 export function previousWeek(p: Period): Period {
   return { from: addDays(p.from, -7), to: addDays(p.to, -7) };

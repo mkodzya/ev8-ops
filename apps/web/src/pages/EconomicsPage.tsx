@@ -23,6 +23,8 @@ export interface EconomicsRow {
   serviceChargedTetri: number;
   marginTetri: number | null;
   idleDays: number;
+  /** M-10 over the moped's whole life, from the one metric (§3.3). */
+  utilisation: number | null;
   days: Record<'available' | 'rented' | 'service' | 'out' | 'sold', number>;
 }
 
@@ -103,6 +105,7 @@ export function EconomicsPage() {
                 <th className="num">{t.economics.payback}</th>
                 <th className="num">{t.economics.rentedDays}</th>
                 <th className="num">{t.economics.idleDays}</th>
+                <th className="num">{t.utilisationReport.load}</th>
               </tr>
             </thead>
             <tbody>
@@ -130,6 +133,8 @@ export function EconomicsPage() {
                     <td className="num mono">{back == null ? t.common.dash : `${back}%`}</td>
                     <td className="num mono">{r.days.rented}</td>
                     <td className="num mono">{r.idleDays}</td>
+                    {/* The same M-10 the utilisation report shows (§3.3). */}
+                    <td className="num mono">{r.utilisation == null ? t.common.dash : `${r.utilisation} %`}</td>
                   </tr>
                 );
               })}
@@ -191,6 +196,11 @@ export function VehicleEconomics({ vehicleId }: { vehicleId: string }) {
       {back != null && <Row k={t.economics.payback} v={<span className="mono">{back}%</span>} />}
       <Row k={t.economics.rentedDays} v={<span className="mono">{r.days.rented}</span>} />
       <Row k={t.economics.idleDays} v={<span className="mono">{r.idleDays}</span>} />
+      {/* How busy this one was, by M-10 and nothing else (§3.3). */}
+      <Row
+        k={t.utilisationReport.load}
+        v={r.utilisation == null ? <span className="muted">{t.common.dash}</span> : <span className="mono">{r.utilisation} %</span>}
+      />
       {perDay != null && <Row k={t.economics.perRentedDay} v={<span className="mono">{formatGel(perDay)}</span>} />}
     </section>
   );

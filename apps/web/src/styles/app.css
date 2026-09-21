@@ -1334,3 +1334,15 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
    rows under it break the same money down by what it came in for. */
 .figure-total > dt { color: var(--ink); font-weight: 600; }
 .figure-total > dd { font: var(--text-h3); }
+
+/* ---- wave 6: the utilisation of the rental fleet (§3.2) ----------------- */
+/* One figure the screen is about, and under it the days it is made of. No
+   colour for "low": the book has no threshold, so nothing here paints one. */
+.util-total { text-align: center; }
+.util-hero { font: var(--text-display); font-family: var(--mono); font-variant-numeric: tabular-nums; margin: 0 0 4px; }
+.util-total .hint { margin-bottom: 0; }
+/* What the percentage left out, kept quiet but never hidden. */
+.util-aside { margin-top: 10px; }
+/* The mopeds behind a line of "что мешает" — short lists, named in place. */
+.util-list { list-style: none; margin: 0 0 10px; padding: 0 0 0 2px; font: var(--text-body-sm); }
+.util-list li { padding: 4px 0; }

@@ -1,6 +1,16 @@
-import { fleetUtilisation, utilisationByModel, type Utilisation, type UtilisationVehicle } from '@ev8/shared';
+import {
+  fleetBlockers,
+  fleetUtilisation,
+  todayISO,
+  utilisationByModel,
+  utilisationModelVehicles,
+  type BlockerRow,
+  type Utilisation,
+  type UtilisationVehicle,
+} from '@ev8/shared';
 import { isoDate } from './dates.js';
 import { prisma } from './db.js';
+import { env } from './env.js';
 
 // The data side of M-10 (wave 6 §3.2). The arithmetic lives in
 // `packages/shared/src/utilisation.ts` so the screen, the week's report and
@@ -12,10 +22,23 @@ import { prisma } from './db.js';
 // truth for everything before it; a moped that never moved has been in the
 // park it is in now since the day it arrived.
 
+/** A moped on the "что мешает" list, named so the screen can show it. */
+export interface BlockerVehicle extends BlockerRow {
+  vin: string;
+  model: string;
+}
+
 export interface UtilisationAnswer extends Utilisation {
   from: string;
   to: string;
-  byModel: { modelId: string; model: string; rentedDays: number; poolDays: number; percent: number | null }[];
+  /** Mopeds that stood in the rental park at all over the period. */
+  vehicles: number;
+  byModel: { modelId: string; model: string; vehicles: number; rentedDays: number; poolDays: number; percent: number | null }[];
+  /**
+   * What kept the figure down (§3.2). `batteriesHolding` is null, not 0:
+   * nothing in the data ties a repair to a missing battery.
+   */
+  blockers: { inRepairAllPeriod: BlockerVehicle[]; freeTooLong: BlockerVehicle[]; batteriesHolding: null };
 }
 
 /**
@@ -23,11 +46,12 @@ export interface UtilisationAnswer extends Utilisation {
  * The week's report reads the same rows for its own fleet counts, so the two
  * screens can never disagree about where a VIN stood on Tuesday.
  */
-export async function utilisationVehicles(): Promise<{ input: UtilisationVehicle[]; names: Map<string, string> }> {
+export async function utilisationVehicles(): Promise<{ input: UtilisationVehicle[]; names: Map<string, string>; vins: Map<string, string> }> {
   const vehicles = await prisma.vehicle.findMany({
     where: { archived: false },
     select: {
       id: true,
+      vin: true,
       modelId: true,
       pool: true,
       model: { select: { brand: true, name: true } },
@@ -54,18 +78,54 @@ export async function utilisationVehicles(): Promise<{ input: UtilisationVehicle
     };
   });
 
-  return { input, names: new Map(vehicles.map((v) => [v.modelId, `${v.model.brand} ${v.model.name}`])) };
+  return {
+    input,
+    names: new Map(vehicles.map((v) => [v.modelId, `${v.model.brand} ${v.model.name}`])),
+    vins: new Map(vehicles.map((v) => [v.id, v.vin])),
+  };
 }
 
 export async function utilisationOf(from: string, to: string): Promise<UtilisationAnswer> {
-  const { input, names } = await utilisationVehicles();
+  const { input, names, vins } = await utilisationVehicles();
   const u = fleetUtilisation({ vehicles: input, from, to });
+  const perModel = utilisationModelVehicles(u);
+  const blockers = fleetBlockers({ vehicles: input, from, to });
+  const named = (rows: BlockerRow[]): BlockerVehicle[] =>
+    rows.map((r) => ({ ...r, vin: vins.get(r.id) ?? '', model: r.modelId == null ? '' : names.get(r.modelId) ?? '' }));
+
   return {
     ...u,
     from,
     to,
+    vehicles: u.rows.length,
     byModel: utilisationByModel(u)
-      .map((m) => ({ ...m, model: names.get(m.modelId) ?? '' }))
+      .map((m) => ({ ...m, model: names.get(m.modelId) ?? '', vehicles: perModel.get(m.modelId) ?? 0 }))
       .sort((a, b) => (b.percent ?? -1) - (a.percent ?? -1) || a.model.localeCompare(b.model)),
+    blockers: {
+      inRepairAllPeriod: named(blockers.inRepairAllPeriod),
+      freeTooLong: named(blockers.freeTooLong),
+      batteriesHolding: blockers.batteriesHolding,
+    },
   };
+}
+
+/**
+ * M-10 for each moped over its whole life, for "Экономика" (§3.3). The same
+ * function as the screen's — a moped's card and the report cannot disagree
+ * about how busy it was. The period starts at the earliest event there is,
+ * because "за всё время" is exactly that.
+ */
+export async function lifetimeUtilisation(): Promise<Map<string, { percent: number | null; rentedDays: number; poolDays: number }>> {
+  const { input } = await utilisationVehicles();
+  const days = input.flatMap((v) => v.events.map((e) => e.occurredOn)).sort();
+  const to = todayISO(new Date(), env.TZ);
+  const from = days[0] ?? to;
+  // A moped whose only event is dated ahead of today still gets a period of one day.
+  const u = fleetUtilisation({ vehicles: input, from, to: from > to ? from : to });
+  return new Map(
+    u.rows.map((r) => [
+      r.id,
+      { percent: r.poolDays === 0 ? null : Math.round((r.rentedDays / r.poolDays) * 100), rentedDays: r.rentedDays, poolDays: r.poolDays },
+    ]),
+  );
 }

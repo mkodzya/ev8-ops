@@ -1,4 +1,4 @@
-import { addDays, todayISO, weekOf } from '@ev8/shared';
+import { addDays, todayISO, utilisationPath, weekOf } from '@ev8/shared';
 import { useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { LoadError } from '../components/LoadError.js';
@@ -148,6 +148,10 @@ export function WeekPage() {
       label: t.weekReport.utilisation,
       text: w.utilisation.percent == null ? t.weekReport.noRecord : `${w.utilisation.percent} %`,
       absent: w.utilisation.percent == null,
+      // The figure leads to the screen it is made of, over this same week
+      // (ux №10, crit. 1). The address is built by the shared rule, so the
+      // period cannot be lost between the link and the request (QA-W6-05).
+      to: utilisationPath({ from: w.from, to: w.to }),
       note: w.utilisation.percent == null ? undefined : t.weekReport.basis(w.utilisation.rentedDays, w.utilisation.poolDays),
     },
     {

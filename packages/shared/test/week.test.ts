@@ -1,7 +1,7 @@
 // The week of the book (wave 6 §3.1, criteria 1а, 1б, 3).
 import { describe, expect, it } from 'vitest';
 import { vehicleOn } from '../src/utilisation.js';
-import { PAYMENT_FILTERS, incomeRows, paymentInRow, paymentsQuery, previousWeek, weekIncome, weekOf, type WeekPayment } from '../src/week.js';
+import { PAYMENT_FILTERS, incomeRows, monthOf, paymentInRow, paymentsQuery, previousWeek, weekIncome, weekOf, type WeekPayment } from '../src/week.js';
 
 const pay = (p: Partial<WeekPayment> & { occurredOn: string; grossTetri: number }): WeekPayment => ({
   direction: 'in',
@@ -214,5 +214,14 @@ describe('the filters a screen sends when it asks for payments (QA-W6-05)', () =
     for (const key of ['from', 'to', 'channel', 'direction', 'kind', 'row', 'by', 'customerId', 'rentalId', 'saleId']) {
       expect(PAYMENT_FILTERS).toContain(key);
     }
+  });
+});
+
+describe('the month a day falls in (wave 6 §3.2 — the utilisation screen)', () => {
+  it('runs from the first to the last day, February and December included', () => {
+    expect(monthOf('2026-09-21')).toEqual({ from: '2026-09-01', to: '2026-09-30' });
+    expect(monthOf('2026-02-14')).toEqual({ from: '2026-02-01', to: '2026-02-28' });
+    expect(monthOf('2028-02-14')).toEqual({ from: '2028-02-01', to: '2028-02-29' });
+    expect(monthOf('2026-12-31')).toEqual({ from: '2026-12-01', to: '2026-12-31' });
   });
 });

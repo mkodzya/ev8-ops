@@ -5,7 +5,7 @@ import { isoDate } from '../lib/dates.js';
 import { fleetEconomics } from '../lib/economics.js';
 import { env } from '../lib/env.js';
 import { badRequest, notFound } from '../lib/errors.js';
-import { utilisationOf } from '../lib/utilisation.js';
+import { lifetimeUtilisation, utilisationOf } from '../lib/utilisation.js';
 import { date } from '../lib/validate.js';
 
 export function economicsRoutes(app: FastifyInstance): void {
@@ -22,7 +22,10 @@ export function economicsRoutes(app: FastifyInstance): void {
   });
 
   app.get('/api/economics', { config: { scope: 'reports.view' } }, async () => {
-    const rows = await fleetEconomics();
+    const [plain, busy] = await Promise.all([fleetEconomics(), lifetimeUtilisation()]);
+    // How busy each one was is M-10 over its whole life (§3.3): the same
+    // function the utilisation screen uses, never a second count of days.
+    const rows = plain.map((r) => ({ ...r, utilisation: busy.get(r.id)?.percent ?? null }));
     // Mopeds nobody priced are counted apart rather than folded in at zero,
     // so a total is never quietly short of what it claims to cover.
     const priced = rows.filter((r) => r.costTetri != null);
@@ -44,6 +47,7 @@ export function economicsRoutes(app: FastifyInstance): void {
   app.get<{ Params: { id: string } }>('/api/fleet/:id/economics', { config: { scope: 'reports.view' } }, async (req) => {
     const [row] = await fleetEconomics({ vehicleIds: [req.params.id] });
     if (!row) throw notFound('vehicle_not_found', 'No such vehicle.');
-    return { economics: row };
+    const busy = (await lifetimeUtilisation()).get(row.id) ?? null;
+    return { economics: { ...row, utilisation: busy?.percent ?? null } };
   });
 }

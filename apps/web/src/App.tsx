@@ -10,6 +10,7 @@ import { DesignPage } from './pages/DesignPage.js';
 import { DesignCatalog } from './pages/DesignCatalog.js';
 import { EconomicsPage } from './pages/EconomicsPage.js';
 import { WeekPage } from './pages/WeekPage.js';
+import { UtilisationPage } from './pages/UtilisationPage.js';
 import { PartPage } from './pages/PartPage.js';
 import { StockPage } from './pages/StockPage.js';
 import { CustomerForm } from './pages/CustomerForm.js';
@@ -152,6 +153,7 @@ export function App() {
         {/* Reports open on the week: it is what the Monday meeting reads (wave 6 §3.1). */}
         <Route path="reports" element={<Navigate to="/reports/week" replace />} />
         <Route path="reports/week" element={<Require perm="reports.view"><WeekPage /></Require>} />
+        <Route path="reports/utilisation" element={<Require perm="reports.view"><UtilisationPage /></Require>} />
         <Route path="reports/economics" element={<Require perm="reports.view"><EconomicsPage /></Require>} />
 
         <Route path="customers" element={<CustomersPage />} />
