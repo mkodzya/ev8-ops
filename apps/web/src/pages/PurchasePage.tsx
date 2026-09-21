@@ -512,7 +512,9 @@ function ReceiveSheet({ purchase: p, onClose, onDone }: { purchase: Purchase; on
           ? t.receipt.badKnown(row.line, row.vin)
           : t.receipt.badDuplicate(row.line);
 
-  const givenUnits = checked.reduce((n, c) => n + c.rows.length, 0);
+  // Only the VINs that would actually be received: a 16-character line is
+  // not a moped, and "Мопедов 2 из 2" over one good VIN was a lie (QA-W5-09).
+  const givenUnits = checked.reduce((n, c) => n + c.rows.filter((r) => !r.fault).length, 0);
   const wantedUnits = modelLines.reduce((n, l) => n + l.qty, 0);
   const partQty = partLines.reduce((n, l) => n + l.qty, 0);
   const allRows = checked.flatMap((c) => c.rows);
@@ -533,7 +535,11 @@ function ReceiveSheet({ purchase: p, onClose, onDone }: { purchase: Purchase; on
         // number in them, so the paste is corrected rather than resent.
         for (const { line, rows } of checked) {
           const bad = rows.find((r) => r.fault);
-          if (bad) throw new ApiError(400, 'bad_vin_line', faultText(bad), { field: 'vins', fieldText: faultText(bad) });
+          // The line itself already carries this message, under the box, put
+          // there while it was typed. Naming the field again replaced the
+          // box's own label with a second copy of it (QA-W5-09), so the
+          // refusal goes under the button, where a refusal goes.
+          if (bad) throw new ApiError(400, 'bad_vin_line', faultText(bad));
           if (rows.length !== line.qty) {
             const text = t.receipt.countWrong(line.model!.name, line.qty, rows.length);
             throw new ApiError(400, 'vins_count', text, { field: 'vins', fieldText: text });

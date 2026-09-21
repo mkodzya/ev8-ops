@@ -2,6 +2,7 @@ import { parseGel, spellingMatches } from '@ev8/shared';
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
+import { Drawer } from '../components/Drawer.js';
 import { LoadError } from '../components/LoadError.js';
 import { Loading, PageHead } from '../components/ui.js';
 import { Field } from '../components/Wizard.js';
@@ -185,23 +186,48 @@ export function OrderButton({ part }: { part: PartRow }) {
   const navigate = useNavigate();
   const toast = useToast();
   const op = useOperation();
+  // Nobody has supplied this part yet. The refusal used to be the end of the
+  // road — and a part somebody just created has no supplier by definition, so
+  // the button never worked for it (QA-W5-15). Now the refusal opens the
+  // question it was asking: which supplier.
+  const [asking, setAsking] = useState(false);
+  const suppliers = useLoad<{ suppliers: { id: string; name: string }[] }>(asking ? '/api/suppliers' : null);
+
+  const order = async (supplierId?: string) => {
+    const res = await op.run((key) =>
+      api.post<{ id: string; number: string }>('/api/purchases/from-part', { partId: part.id, ...(supplierId ? { supplierId } : {}) }, { key }),
+    );
+    // `run` reports the refusal through `op.failure`, which is read after it.
+    if (!res.ok) return;
+    setAsking(false);
+    toast({ text: t.shelf.ordered(res.value.number) });
+    navigate(`/purchases/${res.value.id}`);
+  };
+
   return (
     <>
-      <SubmitButton
-        small
-        type="button"
-        state={op.state}
-        label={t.shelf.order}
-        onClick={async () => {
-          const res = await op.run((key) => api.post<{ id: string; number: string }>('/api/purchases/from-part', { partId: part.id }, { key }));
-          if (!res.ok) return;
-          toast({ text: t.shelf.ordered(res.value.number) });
-          navigate(`/purchases/${res.value.id}`);
-        }}
-      />
-      {/* Nobody has ever supplied this part: the refusal belongs beside the
-          button that asked, there being no form here to put it in. */}
-      {op.failure && <span className="field-err">{op.failure.text}</span>}
+      <SubmitButton small type="button" state={op.state} label={t.shelf.order} onClick={() => void order()} />
+      {op.failure?.code === 'no_supplier' && !asking && (
+        <button type="button" className="pill pill-sm" onClick={() => setAsking(true)}>
+          {t.shelf.pickSupplier}
+        </button>
+      )}
+      {asking && (
+        <Drawer title={t.shelf.order} onClose={() => setAsking(false)}>
+          <p className="hint">{t.shelf.pickSupplier}</p>
+          <ul className="pick-list">
+            {(suppliers.data?.suppliers ?? []).map((sup) => (
+              <li key={sup.id}>
+                <button type="button" onClick={() => void order(sup.id)}>
+                  <span className="pick-main">{sup.name}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+          {suppliers.data?.suppliers.length === 0 && <p className="empty">{t.shelf.noSuppliers}</p>}
+        </Drawer>
+      )}
+      {op.failure && !asking && <span className="field-err">{op.failure.text}</span>}
     </>
   );
 }
