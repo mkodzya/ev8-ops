@@ -254,7 +254,9 @@ export function dayQueue(input: QueueInput): TaskGroupRows[] {
       vin: null,
       days: null,
       amountTetri: null,
-      href: '/service/stock?f=low',
+      // The chip on the shelf is `short`; `low` matched nothing and the list
+      // opened on «Все» with the part to find by eye (QA-W5-16).
+      href: '/service/stock?f=short',
       phone: null,
       note: `${input.lowParts.count}|${input.lowParts.note}`,
     });

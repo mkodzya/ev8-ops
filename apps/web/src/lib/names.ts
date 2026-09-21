@@ -26,6 +26,18 @@ export function secondName(c: Named, locale: Locale): string | null {
   return second === primaryName(c, locale) ? null : second;
 }
 
+/**
+ * Does any spelling of this name contain what was typed? A person written
+ * "ТЕСТ QA Зета" in one column and "Qatest Zeta" in another is one person,
+ * and a search that only looks at the spelling the current language leads
+ * with cannot find them (QA-W5-08).
+ */
+export function nameMatches(c: Named, needle: string): boolean {
+  const q = needle.trim().toLowerCase();
+  if (!q) return false;
+  return [c.name, c.nameKa, c.nameLat].some((n) => (n ?? '').toLowerCase().includes(q));
+}
+
 /** Sorting follows what is on screen, not what is in the first column. */
 export function byName(locale: Locale) {
   return (a: Named, b: Named): number => primaryName(a, locale).localeCompare(primaryName(b, locale), locale);

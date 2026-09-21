@@ -13,6 +13,9 @@ export interface EconomicsRow {
   state: 'available' | 'rented' | 'service' | 'out' | 'sold';
   arrivedOn: string | null;
   costTetri: number | null;
+  /** The shipment is not settled, so the cost is still moving (§7). */
+  costPreliminary: boolean;
+  costPaidPercent: number | null;
   rentalRevenueTetri: number;
   saleRevenueTetri: number;
   buyBackTetri: number;
@@ -152,7 +155,25 @@ export function VehicleEconomics({ vehicleId }: { vehicleId: string }) {
       <BlockHead title={t.economics.title} />
       <Row
         k={t.economics.cost}
-        v={<span className="mono">{r.costTetri == null ? <span className="muted">{t.economics.noCost}</span> : formatGel(r.costTetri)}</span>}
+        v={
+          <>
+            <span className="mono">
+              {r.costTetri == null ? (
+                <span className="muted">{t.economics.noCost}</span>
+              ) : (
+                <>
+                  {r.costPreliminary && <span className="muted">≈ </span>}
+                  {formatGel(r.costTetri)}
+                </>
+              )}
+            </span>
+            {/* "Итог" and "Окупаемость" below are built on this figure, so a
+                figure that is still moving says so before they are read (§7). */}
+            {r.costPreliminary && r.costPaidPercent != null && (
+              <span className="hint warn-text">{t.receipt.costPreliminary(r.costPaidPercent)}</span>
+            )}
+          </>
+        }
       />
       <Row k={t.economics.rentalRevenue} v={<span className="mono">{formatGel(r.rentalRevenueTetri)}</span>} />
       {r.serviceCompanyTetri > 0 && <Row k={t.economics.serviceCompany} v={<span className="mono">{formatGel(r.serviceCompanyTetri)}</span>} />}

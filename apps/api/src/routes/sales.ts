@@ -183,7 +183,9 @@ export function saleRoutes(app: FastifyInstance): void {
       if (!v || v.archived) throw notFound('vehicle_not_found', 'No such moped.');
       // Words about selling, not about handing over: a moped at a customer
       // cannot be sold until they bring it back (QA-1-07, crit. 2).
-      if (v.state === 'rented') throw conflict('vehicle_rented', 'This moped is out on rent; it cannot be sold until it comes back.', { state: v.state });
+      // Its own code: one `vehicle_rented` served three unrelated refusals,
+      // and the words the screen showed were another one's (QA-W5-04).
+      if (v.state === 'rented') throw conflict('vehicle_rented_sale', 'This moped is out on rent; it cannot be sold until it comes back.', { state: v.state });
       if (v.state === 'sold') throw conflict('vehicle_sold', 'This moped has already been sold.', { state: v.state });
       if (v.state !== 'available') throw conflict('vehicle_not_available', 'Only a moped standing free is sold.', { state: v.state });
       // A moped kept for renting can be sold, but somebody has to say so:

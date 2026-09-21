@@ -11,6 +11,7 @@ import { RowMenu } from '../components/RowMenu.js';
 import { Field, Row } from '../components/Wizard.js';
 import { fmtDate } from '../format.js';
 import { useT } from '../i18n/index.js';
+import { ChangedFromTo } from '../lib/journal.js';
 import { useLoad } from '../lib/use.js';
 import { useSession } from '../session.js';
 import { VehicleEconomics } from './EconomicsPage.js';
@@ -30,12 +31,16 @@ interface Card {
     location: { id: string; name: string } | null;
     odometerKm: number | null;
     costTetri: number | null;
+    costPreliminary: boolean;
+    costPaidPercent: number | null;
     notes: string | null;
     currentRentalId: string | null;
   };
   events: { id: string; kind: VehicleEventKind; occurredOn: string; fromState: VehicleState | null; toState: VehicleState; fromPool: VehiclePool | null; toPool: VehiclePool | null; rentalId: string | null; reason: string | null; actor: string | null }[];
   serviceJobs: { id: string; number: string; status: 'open' | 'done' | 'cancelled'; payer: 'company' | 'customer'; reason: string; openedOn: string; closedOn: string | null; totalTetri: number; withheldTetri: number }[];
   rentals: { id: string; number: string; status: RentalStatus; customer: { id: string; name: string }; pickedUpOn: string | null; returnedOn: string | null; paidThrough: string | null; weeklyRateTetri: number }[];
+  /** Corrections: what was changed by hand, from what to what, and why. */
+  journal: { id: string; at: string; occurredOn: string | null; action: string; by: string | null; note: string | null; before: unknown; after: unknown }[];
 }
 
 export function VehiclePage() {
@@ -188,7 +193,23 @@ export function VehiclePage() {
           <Row k={t.fleet.pool} v={<PoolRow v={v} onDone={reload} />} />
           <Row k={t.points.place} v={<PlaceRow v={v} onDone={reload} />} />
           <Row k={t.vehicle.odometer} v={<span className="mono">{v.odometerKm ?? t.common.dash}</span>} />
-          {v.costTetri != null && <Row k={t.purchases.cost} v={<span className="mono">{formatGel(v.costTetri)}</span>} />}
+          {v.costTetri != null && (
+            <Row
+              k={t.purchases.cost}
+              v={
+                <>
+                  <span className="mono">
+                    {v.costPreliminary && <span className="muted">≈ </span>}
+                    {formatGel(v.costTetri)}
+                  </span>
+                  {/* A figure worked out at a share of an unpaid invoice says so (§7). */}
+                  {v.costPreliminary && v.costPaidPercent != null && (
+                    <span className="hint warn-text">{t.receipt.costPreliminary(v.costPaidPercent)}</span>
+                  )}
+                </>
+              }
+            />
+          )}
           <Row
             k={t.fleet.renter}
             v={current ? <Link to={`/customers/${current.customer.id}`}>{current.customer.name}</Link> : t.common.dash}
@@ -198,11 +219,24 @@ export function VehiclePage() {
         </section>
 
         <section className="card">
-          <BlockHead title={t.vehicle.history} sub={t.vehicle.eventsCount(data.events.length)} />
-          {data.events.length === 0 ? (
+          <BlockHead title={t.vehicle.history} sub={t.vehicle.eventsCount(data.events.length + data.journal.length)} />
+          {data.events.length === 0 && data.journal.length === 0 ? (
             <Empty text={t.common.dash} />
           ) : (
             <ul className="timeline">
+              {/* What was corrected by hand belongs in the same history as
+                  what happened to the moped (crit. 32, QA-W5-01). */}
+              {data.journal.map((l) => (
+                <li key={l.id}>
+                  <span className="mono muted">{fmtDate(l.occurredOn)}</span>
+                  <span>
+                    {t.feedWords[l.action] ?? l.action}
+                    <ChangedFromTo before={l.before} after={l.after} />
+                    {l.note && <span className="muted"> · {l.note}</span>}
+                    {l.by && <span className="muted"> · {l.by}</span>}
+                  </span>
+                </li>
+              ))}
               {data.events.map((e) => (
                 <li key={e.id}>
                   <span className="mono muted">{fmtDate(e.occurredOn)}</span>

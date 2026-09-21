@@ -58,8 +58,12 @@ export interface InstalmentState {
   amountTetri: Tetri;
   paidTetri: Tetri;
   openTetri: Tetri;
-  /** paid · overdue · ahead — due today counts as due (a week and a month alike). */
-  state: 'paid' | 'overdue' | 'ahead';
+  /**
+   * paid · overdue · ahead — due today counts as due (a week and a month
+   * alike) — and `closed` for what a buy-back or a cancellation settled: a
+   * row that is nobody's debt any more is not "ahead" either (QA-W5-07).
+   */
+  state: 'paid' | 'overdue' | 'ahead' | 'closed';
   /** Days since it was due, for an overdue row. */
   days: number;
 }
@@ -96,8 +100,8 @@ export function saleState(input: {
         amountTetri: i.amountTetri,
         paidTetri: i.paidTetri,
         openTetri,
-        state: openTetri === 0 ? 'paid' : due ? 'overdue' : 'ahead',
-        days: openTetri > 0 && due ? daysBetween(i.dueOn, input.today) : 0,
+        state: openTetri === 0 ? 'paid' : !live ? 'closed' : due ? 'overdue' : 'ahead',
+        days: live && openTetri > 0 && due ? daysBetween(i.dueOn, input.today) : 0,
       };
     });
   return {

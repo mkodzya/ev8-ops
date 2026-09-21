@@ -6,6 +6,7 @@ import { prisma } from './db.js';
 import { env } from './env.js';
 import { badRequest, conflict, forbidden, notFound } from './errors.js';
 import { recordPaymentTx } from './payments.js';
+import { recostPurchase } from './purchases.js';
 import { rentalOwed, spreadRental } from './rentalMoney.js';
 import { moveVehicle } from './vehicles.js';
 
@@ -354,6 +355,12 @@ async function writeOther(tx: Tx, actor: Actor, input: MoneyInput, plan: MoneyPl
       throw new Error(`not written here: ${input.kind}`);
   }
   const payment = await tx.payment.create({ data: { ...common, customerId, ...extra }, select: { id: true } });
+  // The mopeds of a shipment are already out earning; their cost follows the
+  // money the same day (§7). This sits here, on the one way money is written,
+  // rather than on a route: the screen pays the supplier through the money
+  // form, and a cost that only followed one of the two doors was a cost that
+  // silently lied on the other (QA-W5-10).
+  if (input.kind === 'supplier') await recostPurchase(tx, input.purchaseId!, actor.id, 'paid the supplier');
   await tx.auditLog.create({
     data: {
       actorId: actor.id,

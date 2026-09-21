@@ -132,6 +132,8 @@ export const wave5serviceEn = {
     searchHint: 'Name, article number',
     chips: { short: 'Below the minimum', negative: 'Below zero' },
     order: 'Order it',
+    pickSupplier: 'Pick a supplier',
+    noSuppliers: 'No supplier has been added yet — add one in “Purchases”.',
     ordered: (number: string) => `Draft order ${number}`,
     keepAtLeast: (n: number) => `keep ≥ ${n}`,
 
@@ -287,6 +289,8 @@ export const wave5serviceRu: Wave5service = {
     searchHint: 'Название, артикул',
     chips: { short: 'Ниже минимума', negative: 'В минусе' },
     order: 'В заказ',
+    pickSupplier: 'Выберите поставщика',
+    noSuppliers: 'Поставщиков ещё нет — заведите в «Закупках».',
     ordered: (number) => `Черновик заказа ${number}`,
     keepAtLeast: (n) => `держать ≥ ${n}`,
 
@@ -440,6 +444,8 @@ export const wave5serviceKa: Wave5service = {
     searchHint: 'დასახელება, არტიკული',
     chips: { short: 'მინიმუმზე ნაკლები', negative: 'მინუსში' },
     order: 'შეკვეთაში',
+    pickSupplier: 'აირჩიეთ მომწოდებელი',
+    noSuppliers: 'მომწოდებლები ჯერ არ არის — დაამატეთ „შესყიდვებში“.',
     ordered: (number) => `შეკვეთის მონახაზი ${number}`,
     keepAtLeast: (n) => `გვქონდეს ≥ ${n}`,
 

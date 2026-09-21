@@ -27,7 +27,11 @@ import { fmtForeign, fmtRate, statusOf, type Purchase, type PurchaseLine } from 
 interface Card {
   purchase: Purchase;
   vehicles: { id: string; vin: string; state: VehicleState; costTetri: number | null; model: string }[];
+  /** Corrections to the order: logistics, a recost, money stated as paid before. */
+  journal: { id: string; at: string; occurredOn: string | null; action: string; by: string | null; note: string | null; after: unknown }[];
 }
+
+type JournalRow = Card['journal'][number];
 
 type Sheet = 'receive' | 'extras' | 'paidBefore' | 'cancel';
 
@@ -339,7 +343,7 @@ export function PurchasePage() {
         </section>
       )}
 
-      <Feed purchase={p} vehicles={data.vehicles.length} />
+      <Feed purchase={p} vehicles={data.vehicles.length} journal={data.journal} />
 
       {sheet === 'receive' && mayEdit && <ReceiveSheet purchase={p} onClose={() => setSheet(null)} onDone={done} />}
       {sheet === 'extras' && <ExtrasSheet purchase={p} onClose={() => setSheet(null)} onDone={done} />}
@@ -374,14 +378,20 @@ function LineName({ line }: { line: PurchaseLine }) {
 }
 
 /**
- * Лента заказа (§3.5). There is no feed endpoint for an order, so this is
- * built from what the card already carries — the day it was placed, the
- * payments, the money carried over, and the day the shipment landed. It
- * claims nothing it cannot show.
+ * Лента заказа (§3.5). Built from what the card carries — the day it was
+ * placed, the payments, the money carried over, the day the shipment landed
+ * — plus the order's own journal, so a correction of the logistics or a cost
+ * worked out again is visible where it happened (crit. 13, 19 — QA-W5-01).
  */
-function Feed({ purchase: p, vehicles }: { purchase: Purchase; vehicles: number }) {
+function Feed({ purchase: p, vehicles, journal }: { purchase: Purchase; vehicles: number; journal: JournalRow[] }) {
   const t = useT();
   const rows: { at: string; text: string; amount?: string; note?: string }[] = [
+    ...journal.map((l) => ({
+      at: l.occurredOn ?? p.orderedOn,
+      text: t.feedWords[l.action] ?? l.action,
+      amount: recostUnits(l.after) ?? undefined,
+      note: [l.note, l.by].filter(Boolean).join(' · ') || undefined,
+    })),
     { at: p.orderedOn, text: t.orderCard.words.created, amount: fmtForeign(p.invoiceMinor, p.currency) },
     ...p.payments
       .filter((x) => x.direction === 'out')
@@ -420,6 +430,14 @@ function Feed({ purchase: p, vehicles }: { purchase: Purchase; vehicles: number 
       )}
     </section>
   );
+}
+
+/** "Пересчитана себестоимость" says how many mopeds and parts it moved. */
+function recostUnits(after: unknown): string | null {
+  if (!after || typeof after !== 'object') return null;
+  const a = after as { vehicles?: unknown; parts?: unknown };
+  const n = (typeof a.vehicles === 'number' ? a.vehicles : 0) + (typeof a.parts === 'number' ? a.parts : 0);
+  return n > 0 ? String(n) : null;
 }
 
 /** One VIN of the paste, as the screen has judged it. */
@@ -494,7 +512,9 @@ function ReceiveSheet({ purchase: p, onClose, onDone }: { purchase: Purchase; on
           ? t.receipt.badKnown(row.line, row.vin)
           : t.receipt.badDuplicate(row.line);
 
-  const givenUnits = checked.reduce((n, c) => n + c.rows.length, 0);
+  // Only the VINs that would actually be received: a 16-character line is
+  // not a moped, and "Мопедов 2 из 2" over one good VIN was a lie (QA-W5-09).
+  const givenUnits = checked.reduce((n, c) => n + c.rows.filter((r) => !r.fault).length, 0);
   const wantedUnits = modelLines.reduce((n, l) => n + l.qty, 0);
   const partQty = partLines.reduce((n, l) => n + l.qty, 0);
   const allRows = checked.flatMap((c) => c.rows);
@@ -515,7 +535,11 @@ function ReceiveSheet({ purchase: p, onClose, onDone }: { purchase: Purchase; on
         // number in them, so the paste is corrected rather than resent.
         for (const { line, rows } of checked) {
           const bad = rows.find((r) => r.fault);
-          if (bad) throw new ApiError(400, 'bad_vin_line', faultText(bad), { field: 'vins', fieldText: faultText(bad) });
+          // The line itself already carries this message, under the box, put
+          // there while it was typed. Naming the field again replaced the
+          // box's own label with a second copy of it (QA-W5-09), so the
+          // refusal goes under the button, where a refusal goes.
+          if (bad) throw new ApiError(400, 'bad_vin_line', faultText(bad));
           if (rows.length !== line.qty) {
             const text = t.receipt.countWrong(line.model!.name, line.qty, rows.length);
             throw new ApiError(400, 'vins_count', text, { field: 'vins', fieldText: text });

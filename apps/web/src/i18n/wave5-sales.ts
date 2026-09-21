@@ -1,6 +1,14 @@
 // Wave 5 words: selling a moped, the schedule of the company's own credit,
 // the sale's card and buying a moped back (docs/redesign/wave-5.md §3.1–3.3).
 
+const ruPlural = (n: number, one: string, few: string, many: string): string => {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return one;
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return few;
+  return many;
+};
+
 export const wave5salesEn = {
   vinFix: {
     title: 'Correct the VIN',
@@ -10,6 +18,8 @@ export const wave5salesEn = {
     save: 'Correct',
   },
   merge: {
+    archived: 'This card is in the archive: it was merged into another one.',
+    openKept: (name: string) => `Open “${name}”`,
     title: 'Merge with…',
     which: 'Which card is the same person',
     into: (name: string) => `Everything will move to “${name}”.`,
@@ -23,6 +33,9 @@ export const wave5salesEn = {
     vinSearch: 'Last characters of the VIN',
     forSale: 'For sale and undecided',
     noneForSale: 'No moped is standing free for sale.',
+    askedRented: 'This moped is out on rent; it cannot be sold until it comes back.',
+    askedGone: 'This moped is not for sale: it is sold, in service or out of the fleet.',
+    askedOpen: 'Open the moped',
     modelPrice: 'Model price',
     noPrice: 'the model has no price',
     price: 'Price',
@@ -64,7 +77,7 @@ export const wave5salesEn = {
     movePool: 'This moped is kept for renting',
     movePoolNote: 'Selling it moves it to the sale park.',
     done: (number: string) => `Sold · ${number}`,
-    doneSub: (down: string, n: number, each: string) => `Prepayment ${down} · ${n} instalments of ${each}`,
+    doneSub: (down: string, n: number, each: string) => `Prepayment ${down} · ${n} instalment${n === 1 ? '' : 's'} of ${each}`,
     doneFull: (sum: string) => `Paid in full: ${sum}`,
     document: 'Sale document',
     documentSub: 'ka / en · PDF · with the schedule',
@@ -80,8 +93,8 @@ export const wave5salesEn = {
     paid: 'Paid',
     warranty: 'Warranty until',
     schedule: 'Schedule',
-    states: { paid: 'paid', overdue: 'overdue', ahead: 'ahead' } as Record<string, string>,
-    lateBy: (days: number) => `overdue ${days} d.`,
+    states: { paid: 'paid', overdue: 'overdue', ahead: 'ahead', closed: 'closed by the buy-back' } as Record<string, string>,
+    lateBy: (days: number) => (days === 0 ? 'due today' : `overdue ${days} d.`),
     takeInstalment: 'Take an instalment',
     documents: 'Documents',
     signedOn: (date: string) => `signed ${date}`,
@@ -128,6 +141,8 @@ export const wave5salesRu: Wave5sales = {
     save: 'Исправить',
   },
   merge: {
+    archived: 'Эта карточка в архиве: она объединена с другой.',
+    openKept: (name) => `Открыть «${name}»`,
     title: 'Объединить с…',
     which: 'Какая карточка — тот же человек',
     into: (name) => `Всё переедет в «${name}».`,
@@ -141,6 +156,9 @@ export const wave5salesRu: Wave5sales = {
     vinSearch: 'Последние знаки VIN',
     forSale: 'Парк продажи и «не решён»',
     noneForSale: 'Свободных мопедов на продажу нет.',
+    askedRented: 'Мопед в аренде — продать нельзя, пока не вернут.',
+    askedGone: 'Этот мопед не продаётся: он продан, в сервисе или выбыл из парка.',
+    askedOpen: 'Открыть мопед',
     modelPrice: 'Цена модели',
     noPrice: 'у модели нет цены',
     price: 'Цена',
@@ -182,7 +200,7 @@ export const wave5salesRu: Wave5sales = {
     movePool: 'Мопед стоит в парке аренды',
     movePoolNote: 'Продажа переведёт его в парк продажи.',
     done: (number) => `Продано · ${number}`,
-    doneSub: (down, n, each) => `Предоплата ${down} · ${n} взносов по ${each}`,
+    doneSub: (down, n, each) => `Предоплата ${down} · ${n} ${ruPlural(n, 'взнос', 'взноса', 'взносов')} по ${each}`,
     doneFull: (sum) => `Оплачено полностью: ${sum}`,
     document: 'Договор продажи',
     documentSub: 'ka / en · PDF · с графиком',
@@ -198,8 +216,8 @@ export const wave5salesRu: Wave5sales = {
     paid: 'Оплачено',
     warranty: 'Гарантия до',
     schedule: 'График',
-    states: { paid: 'оплачен', overdue: 'просрочен', ahead: 'впереди' },
-    lateBy: (days) => `просрочен ${days} дн.`,
+    states: { paid: 'оплачен', overdue: 'просрочен', ahead: 'впереди', closed: 'закрыт выкупом' },
+    lateBy: (days) => (days === 0 ? 'срок сегодня' : `просрочен ${days} ${ruPlural(days, 'день', 'дня', 'дней')}`),
     takeInstalment: 'Принять взнос',
     documents: 'Документы',
     signedOn: (date) => `подписан ${date}`,
@@ -244,6 +262,8 @@ export const wave5salesKa: Wave5sales = {
     save: 'გასწორება',
   },
   merge: {
+    archived: 'ეს ბარათი არქივშია: ის გაერთიანდა სხვასთან.',
+    openKept: (name) => `„${name}“-ის გახსნა`,
     title: 'გაერთიანება…',
     which: 'რომელი ბარათია იგივე ადამიანი',
     into: (name) => `ყველაფერი გადავა „${name}“-ში.`,
@@ -257,6 +277,9 @@ export const wave5salesKa: Wave5sales = {
     vinSearch: 'VIN-ის ბოლო სიმბოლოები',
     forSale: 'გასაყიდი პარკი და „გადაუწყვეტელი“',
     noneForSale: 'გასაყიდად თავისუფალი მოპედი არ არის.',
+    askedRented: 'მოპედი ქირაშია — გაყიდვა შეუძლებელია დაბრუნებამდე.',
+    askedGone: 'ეს მოპედი არ იყიდება: გაყიდულია, სერვისშია ან პარკიდან გავიდა.',
+    askedOpen: 'მოპედის გახსნა',
     modelPrice: 'მოდელის ფასი',
     noPrice: 'მოდელს ფასი არ აქვს',
     price: 'ფასი',
@@ -314,8 +337,8 @@ export const wave5salesKa: Wave5sales = {
     paid: 'გადახდილი',
     warranty: 'გარანტია',
     schedule: 'გრაფიკი',
-    states: { paid: 'გადახდილი', overdue: 'ვადაგადაცილებული', ahead: 'წინ' },
-    lateBy: (days) => `ვადაგადაცილება ${days} დღე`,
+    states: { paid: 'გადახდილი', overdue: 'ვადაგადაცილებული', ahead: 'წინ', closed: 'დაიხურა გამოსყიდვით' },
+    lateBy: (days) => (days === 0 ? 'ვადა დღეს' : `ვადაგადაცილება ${days} დღე`),
     takeInstalment: 'შენატანის მიღება',
     documents: 'დოკუმენტები',
     signedOn: (date) => `ხელმოწერილია ${date}`,

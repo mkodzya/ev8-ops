@@ -148,6 +148,43 @@ describe.skipIf(!HAS_DB)('a repair takes parts off the shelf', () => {
     expect(theirs.job.parts[0].unitPriceTetri).toBe(2500);
   });
 
+  /**
+   * QA-W5-13: the price was picked when the line was added and never looked
+   * at again, so switching "who pays" to the customer relabelled the line
+   * and billed them what the shelf paid.
+   */
+  it('prices the lines again when the payer changes, and leaves a typed price alone (wave 5 crit. 23)', async () => {
+    const { prisma, partId, owner } = await stocked(10, 1200);
+    await prisma.part.update({ where: { id: partId }, data: { salePriceTetri: 3000 } });
+    const rented = await rentedVehicle();
+    const { id: jobId } = json<{ id: string }>(
+      await call(owner, 'POST', '/api/service', { vehicleId: rented.vehicleId, reason: 'pads', openedOn: '2026-05-10' }),
+    );
+    // By the rule for a company job: what the shelf paid.
+    expect((await call(owner, 'POST', `/api/service/${jobId}/parts`, { partId, qty: 2 })).statusCode).toBe(201);
+    // And one line an owner priced by hand, which is nobody's rule but theirs.
+    expect((await call(owner, 'POST', `/api/service/${jobId}/parts`, { partId, qty: 1, unitPriceTetri: '19' })).statusCode).toBe(201);
+
+    const switched = await call(owner, 'PATCH', `/api/service/${jobId}`, { payer: 'customer' });
+    expect(switched.statusCode, switched.body).toBe(200);
+    expect(json<{ repriced: number }>(switched).repriced).toBe(1);
+
+    const job = json<{ job: { payer: string; parts: { qty: number; unitPriceTetri: number }[]; partsTetri: number } }>(
+      await call(owner, 'GET', `/api/service/${jobId}`),
+    );
+    expect(job.job.payer).toBe('customer');
+    expect(job.job.parts.find((l) => l.qty === 2)!.unitPriceTetri).toBe(3000);
+    expect(job.job.parts.find((l) => l.qty === 1)!.unitPriceTetri).toBe(1900);
+    expect(job.job.partsTetri).toBe(2 * 3000 + 1900);
+
+    // And back again: the rule line follows, the typed one still does not.
+    const backToUs = await call(owner, 'PATCH', `/api/service/${jobId}`, { payer: 'company' });
+    expect(json<{ repriced: number }>(backToUs).repriced).toBe(1);
+    const again = json<{ job: { parts: { qty: number; unitPriceTetri: number }[] } }>(await call(owner, 'GET', `/api/service/${jobId}`));
+    expect(again.job.parts.find((l) => l.qty === 2)!.unitPriceTetri).toBe(1200);
+    expect(again.job.parts.find((l) => l.qty === 1)!.unitPriceTetri).toBe(1900);
+  });
+
   it('records a repair even when the shelf is short, and says so out loud', async () => {
     // Refusing here would teach the workshop to stop recording repairs. The
     // count goes below zero instead, where a stock-take can see it.
@@ -162,6 +199,32 @@ describe.skipIf(!HAS_DB)('a repair takes parts off the shelf', () => {
 
     const list = json<{ totals: { negative: number } }>(await call(owner, 'GET', '/api/parts'));
     expect(list.totals.negative).toBeGreaterThanOrEqual(1);
+  });
+
+  /**
+   * QA-W5-14: cancelling a repair that had parts on it wrote a `return`
+   * movement the table's check constraint did not know, and the whole
+   * cancellation came back a 500 with the parts still off the shelf.
+   */
+  it('gives the parts back when the whole repair is cancelled (wave 5 crit. 27)', async () => {
+    const { partId, owner, vehicle } = await stocked(10, 1200);
+    const { id: jobId } = json<{ id: string }>(
+      await call(owner, 'POST', '/api/service', { vehicleId: vehicle.id, reason: 'pads', openedOn: '2026-05-10' }),
+    );
+    expect((await call(owner, 'POST', `/api/service/${jobId}/parts`, { partId, qty: 2 })).statusCode).toBe(201);
+    expect((await cardOf(owner, partId)).part.onHand).toBe(8);
+
+    const cancelled = await call(owner, 'POST', `/api/service/${jobId}/cancel`, { reason: 'ТЕСТ opened on the wrong VIN' });
+    expect(cancelled.statusCode, cancelled.body).toBe(200);
+
+    const card = await cardOf(owner, partId);
+    expect(card.part.onHand).toBe(10);
+    // Back at what it left at, so the shelf's average is where it was.
+    expect(card.part.valueTetri).toBe(12000);
+    const back = card.moves.find((m) => m.kind === 'return');
+    expect(back).toMatchObject({ kind: 'return', qty: 2 });
+    // The reason carries the job it came off, so the shelf can explain itself.
+    expect(back!.reason).toContain('ТЕСТ opened on the wrong VIN');
   });
 });
 

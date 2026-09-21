@@ -71,7 +71,10 @@ describe.skipIf(!HAS_DB)('wave 5 · selling', () => {
     expect(rental.statusCode, rental.body).toBe(201);
     const res = await call(owner, 'POST', '/api/sales', { customerId: customer.id, vehicleId: moped.id, priceTetri: '5000' });
     expect(res.statusCode).toBe(409);
-    expect(json<{ error: string }>(res).error).toBe('vehicle_rented');
+    // Its own code: `vehicle_rented` also answered "a rented moped takes no
+    // point" and "close the rental first", and the screen showed the wrong
+    // one of the three — the words crit. 2 forbids (QA-W5-04).
+    expect(json<{ error: string }>(res).error).toBe('vehicle_rented_sale');
   });
 
   it('carries a sale over with what was paid before the move (crit. 5)', async () => {
@@ -161,7 +164,7 @@ describe.skipIf(!HAS_DB)('wave 5 · shipments', () => {
   });
 
   it('arrives before it is paid for and is costed again by the payment that settles it (crit. 19, §7)', async () => {
-    const { owner, id } = await order();
+    const { owner, id, part } = await order();
     await call(owner, 'POST', `/api/purchases/${id}/payments`, { grossTetri: '423.57', foreignAmount: '1000', channel: 'transfer' });
     const tag = uniq();
     const received = await call(owner, 'POST', `/api/purchases/${id}/receive`, {
@@ -177,14 +180,81 @@ describe.skipIf(!HAS_DB)('wave 5 · shipments', () => {
     const before = json<Card>(await call(owner, 'GET', `/api/purchases/${id}`));
     expect(before.vehicles.every((v) => v.costTetri === 135128)).toBe(true);
 
-    // The rest goes out at a slightly different rate: every VIN is written again.
-    await call(owner, 'POST', `/api/purchases/${id}/payments`, { grossTetri: '2115.03', foreignAmount: '5000', channel: 'transfer' });
+    // The rest goes out at a slightly different rate: every VIN is written
+    // again. It goes through the money form, which is the door the screen
+    // uses — the recost used to hang on the purchase route instead, so the
+    // suite stayed green while the cost on the screen never moved (QA-W5-10).
+    const settled = await call(owner, 'POST', '/api/money', {
+      kind: 'supplier',
+      purchaseId: id,
+      amountTetri: '2115.03',
+      foreignAmount: '5000',
+      foreignCurrency: 'CNY',
+      channel: 'transfer',
+    });
+    expect(settled.statusCode, settled.body).toBe(201);
     const after = json<Card>(await call(owner, 'GET', `/api/purchases/${id}`));
     expect(after.purchase.preliminary).toBe(false);
     expect(after.purchase.debtMinor).toBe(0);
     expect(after.vehicles.every((v) => v.costTetri !== 135128)).toBe(true);
     const moped = json<{ vehicle: { costTetri: number } }>(await call(owner, 'GET', `/api/fleet/${after.vehicles[0].id}`));
     expect(moped.vehicle.costTetri).toBe(after.vehicles[0].costTetri);
+    // And the journal says why the figure moved, for both mopeds.
+    const { prisma } = await import('../src/lib/db.js');
+    const written = await prisma.auditLog.findMany({
+      where: { action: 'vehicle.cost', entityId: { in: after.vehicles.map((v) => v.id) } },
+      select: { note: true },
+    });
+    expect(written).toHaveLength(2);
+    expect(written.every((w) => w.note === 'paid the supplier')).toBe(true);
+
+    // The order's own feed carries the recost, which used to live only in
+    // audit_log where no screen read it (crit. 19, QA-W5-01).
+    const feed = json<{ journal: { action: string }[] }>(await call(owner, 'GET', `/api/purchases/${id}`));
+    expect(feed.journal.some((l) => l.action === 'purchase.recost')).toBe(true);
+
+    // The shelf follows the same money: parts landed at the 17 % rate were
+    // dragging the average down until the invoice was settled (QA-W5-17).
+    const shelf = json<{ part: { onHand: number; avgCostTetri: number | null } }>(await call(owner, 'GET', `/api/parts/${part.id}`));
+    expect(shelf.part.onHand).toBe(20);
+    // 1 694 at the 17 % rate; the settled invoice works it out again.
+    expect(shelf.part.avgCostTetri).toBe(1692);
+
+    // And a card that quotes a cost says whether the figure has stopped moving.
+    const card = json<{ vehicle: { costPreliminary: boolean; costPaidPercent: number | null } }>(
+      await call(owner, 'GET', `/api/fleet/${after.vehicles[0].id}`),
+    );
+    expect(card.vehicle).toMatchObject({ costPreliminary: false, costPaidPercent: 100 });
+  });
+
+  it('takes the cost back off the mopeds when a supplier payment is annulled (§7)', async () => {
+    const { owner, id } = await order();
+    await call(owner, 'POST', `/api/purchases/${id}/payments`, { grossTetri: '423.57', foreignAmount: '1000', channel: 'transfer' });
+    const tag = uniq();
+    const lineId = json<{ purchase: { lines: { id: string }[] } }>(await call(owner, 'GET', `/api/purchases/${id}`)).purchase.lines[0].id;
+    await call(owner, 'POST', `/api/purchases/${id}/receive`, {
+      receivedOn: '2026-09-10',
+      pool: 'rent',
+      vins: { [lineId]: [vin('VDA', tag, 1), vin('VDB', tag, 2)] },
+    });
+    const settle = await call(owner, 'POST', '/api/money', {
+      kind: 'supplier',
+      purchaseId: id,
+      amountTetri: '2115.03',
+      foreignAmount: '5000',
+      foreignCurrency: 'CNY',
+      channel: 'transfer',
+    });
+    const paymentId = json<{ id: string }>(settle).id;
+    const settled = json<Card>(await call(owner, 'GET', `/api/purchases/${id}`));
+    expect(settled.purchase.preliminary).toBe(false);
+
+    const voided = await call(owner, 'POST', `/api/payments/${paymentId}/void`, { reason: 'ТЕСТ wrong order' });
+    expect(voided.statusCode, voided.body).toBe(200);
+    const back = json<Card>(await call(owner, 'GET', `/api/purchases/${id}`));
+    expect(back.purchase.preliminary).toBe(true);
+    // Back at the 17 % figure the shipment was received at.
+    expect(back.vehicles.every((v) => v.costTetri === 135128)).toBe(true);
   });
 
   it('names the line of a VIN that is not a VIN, and one the fleet already holds (crit. 14, 15)', async () => {
@@ -255,6 +325,17 @@ describe.skipIf(!HAS_DB)('wave 5 · the shelf and the records', () => {
     expect(json<{ vin: string }>(fixed).vin).toBe(better);
     expect((await call(owner, 'PATCH', `/api/fleet/${moped.id}/vin`, { vin: 'TEST-1', reason: 'ТЕСТ' })).statusCode).toBe(400);
 
+    // The correction has to be visible on the card, not only in audit_log:
+    // crit. 32 asks for a "было / стало" and the card showed none (QA-W5-01).
+    const card = json<{ journal: { action: string; note: string | null; before: unknown; after: unknown }[] }>(
+      await call(owner, 'GET', `/api/fleet/${moped.id}`),
+    );
+    const entry = card.journal.find((l) => l.action === 'vehicle.vin');
+    expect(entry).toBeDefined();
+    expect(entry!.note).toBe('ТЕСТ опечатка в CMR');
+    expect(entry!.before).toMatchObject({ vin: moped.vin });
+    expect(entry!.after).toMatchObject({ vin: better });
+
     const keep = await prisma.customer.create({ data: { name: `ТЕСТ Keep ${uniq()}` } });
     const drop = await prisma.customer.create({ data: { name: `ТЕСТ Drop ${uniq()}` } });
     const rentalModel = await prisma.vehicleModel.create({ data: { brand: 'Test', name: `Merge ${uniq()}`, weeklyRateTetri: 15000 } });
@@ -265,6 +346,14 @@ describe.skipIf(!HAS_DB)('wave 5 · the shelf and the records', () => {
     expect(json<{ moved: { rentals: number } }>(merged).moved.rentals).toBe(1);
     const gone = await prisma.customer.findUniqueOrThrow({ where: { id: drop.id }, select: { archived: true, mergedIntoId: true } });
     expect(gone).toMatchObject({ archived: true, mergedIntoId: keep.id });
+
+    // And the card itself says so: an archive that opens like a live card,
+    // with "Новая выдача" on it, is not an archive (crit. 33, QA-W5-03).
+    const archived = json<{ customer: { archived: boolean; mergedInto: { id: string } | null } }>(
+      await call(owner, 'GET', `/api/customers/${drop.id}`),
+    );
+    expect(archived.customer.archived).toBe(true);
+    expect(archived.customer.mergedInto?.id).toBe(keep.id);
   });
 
   it('lets a manager report a breakdown and an owner take it up (crit. 21)', async () => {

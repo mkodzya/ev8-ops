@@ -116,6 +116,16 @@ export function SaleWizard() {
     return q ? list.filter((v) => v.vin.toUpperCase().includes(q) || v.model.toUpperCase().includes(q)) : list;
   }, [forSale, rentPool, owner, vq]);
 
+  // The moped a direct link asked for, when it is not one that can be sold:
+  // the screen says why rather than showing a list it is not in (crit. 2).
+  const askedFor = useMemo(() => {
+    const asked = params.get('vehicle');
+    if (!asked || (fleet.data?.vehicles ?? []).length === 0) return null;
+    if (offered.some((v) => v.id === asked)) return null;
+    return (fleet.data?.vehicles ?? []).find((v) => v.id === asked) ?? null;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fleet.data, offered, params]);
+
   const foundCustomers = useMemo(() => {
     const q = cq.trim().toLowerCase();
     const list = customers.data?.customers ?? [];
@@ -263,6 +273,20 @@ export function SaleWizard() {
     >
       {f.step === 0 && (
         <>
+          {/* A link that names a moped nobody can sell used to open a list
+              with nothing chosen and a grey button, and explain nothing
+              (crit. 2, QA-W5-04). */}
+          {askedFor && (
+            <div className="card" data-field="vehicleId">
+              <p className="warn-text">{askedFor.state === 'rented' ? t.sell.askedRented : t.sell.askedGone}</p>
+              <p className="muted">
+                {askedFor.model} <span className="mono">···{askedFor.vin.slice(-4)}</span>
+              </p>
+              <Link className="pill" to={`/fleet/${askedFor.id}`}>
+                {t.sell.askedOpen}
+              </Link>
+            </div>
+          )}
           <input className="input mono" placeholder={t.sell.vinSearch} aria-label={t.sell.vinSearch} value={vq} onChange={(e) => setVq(e.target.value)} />
           {offered.length === 0 && <p className="empty">{t.sell.noneForSale}</p>}
           <ul className="pick-list">
