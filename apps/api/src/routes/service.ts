@@ -68,7 +68,6 @@ function serialize(job: {
   workshopId: string | null;
   workshop?: { id: string; name: string } | null;
   closedAt?: { id: string; name: string } | null;
-  doneBy: string | null;
   notes: string | null;
   movedVehicle: boolean;
   withheldTetri: number;
@@ -98,7 +97,6 @@ function serialize(job: {
     odometerKm: job.odometerKm,
     workshop: job.workshop ?? null,
     closedAt: job.closedAt ?? null,
-    doneBy: job.doneBy,
     notes: job.notes,
     movedVehicle: job.movedVehicle,
     vehicle: { id: job.vehicle.id, vin: job.vehicle.vin, model: `${job.vehicle.model.brand} ${job.vehicle.model.name}` },
@@ -240,7 +238,6 @@ export function serviceRoutes(app: FastifyInstance): void {
           workshopId,
           labourMinutes: minutes,
           labourTetri: minutes > 0 ? labourFor(minutes) : (tetri(b, 'labourTetri', { min: 0 }) ?? 0),
-          doneBy: str(b, 'doneBy', { max: 200 }),
           notes: str(b, 'notes', { max: 4000 }),
           movedVehicle: !rented,
           createdById: actor.id,
@@ -283,7 +280,6 @@ export function serviceRoutes(app: FastifyInstance): void {
     } else if ('labourTetri' in b) data.labourTetri = tetri(b, 'labourTetri', { min: 0 }) ?? 0;
     // An owner picks a manager's report up and it becomes a repair (§3.10).
     if (b.open === true) data.status = 'open';
-    if ('doneBy' in b) data.doneBy = str(b, 'doneBy', { max: 200 });
     if ('notes' in b) data.notes = str(b, 'notes', { max: 4000 });
     // Who pays decides what a catalogue part costs (B8-04, crit. 22, 23), so
     // changing the payer repriced nothing and the lines already on the job

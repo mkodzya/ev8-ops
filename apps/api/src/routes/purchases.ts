@@ -190,7 +190,7 @@ export function purchaseRoutes(app: FastifyInstance): void {
     const b = req.body ?? {};
     const actor = actorOf(req);
     const supplierId = str(b, 'supplierId', { required: true })!;
-    const supplier = await prisma.customer.findUnique({ where: { id: supplierId }, select: { id: true, isSupplier: true } });
+    const supplier = await prisma.customer.findUnique({ where: { id: supplierId }, select: { id: true, recordKind: true } });
     if (!supplier) throw notFound('supplier_not_found', 'No such supplier.');
     const currency = (str(b, 'currency', { max: 3 }) ?? 'CNY').toUpperCase();
     if (!/^[A-Z]{3}$/.test(currency)) throw badRequest('bad_field', 'currency must be three letters', { field: 'currency' });
@@ -200,7 +200,7 @@ export function purchaseRoutes(app: FastifyInstance): void {
     // marked — it is on the invoice, it just will not reach the shelf (B8-03).
     const lines = Array.isArray(b.lines) ? (b.lines as Record<string, unknown>[]) : [];
     const purchase = await prisma.$transaction(async (tx) => {
-      if (!supplier.isSupplier) await tx.customer.update({ where: { id: supplierId }, data: { isSupplier: true, recordKind: 'supplier' } });
+      if (supplier.recordKind !== 'supplier') await tx.customer.update({ where: { id: supplierId }, data: { recordKind: 'supplier' } });
       const created = await tx.purchase.create({
         data: {
           supplierId,

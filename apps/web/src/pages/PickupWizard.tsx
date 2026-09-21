@@ -30,7 +30,7 @@ interface CustomerRow {
   nameKa: string | null;
   nameLat: string | null;
   phone: string | null;
-  isSupplier: boolean;
+  recordKind: string;
   rentals: number;
   debtTetri: number;
   debtIn: DebtPart[];
@@ -162,7 +162,7 @@ export function PickupWizard() {
   const shownCustomers = useMemo(() => {
     const needle = q.trim().toLowerCase();
     const needleDigits = digitsOf(q);
-    const people = allCustomers.filter((c) => !c.isSupplier || c.rentals > 0);
+    const people = allCustomers.filter((c) => c.recordKind !== 'supplier' || c.rentals > 0);
     if (!needle) {
       // Five most recent: the latest hand-overs' customers.
       const ids: string[] = [];

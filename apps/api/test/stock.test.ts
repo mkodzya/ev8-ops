@@ -49,7 +49,7 @@ describe.skipIf(!HAS_DB)('a shipment lands on the shelf', () => {
     const { prisma } = await import('../src/lib/db.js');
     const { id: partId } = await part();
     const owner = await loginAs('owner');
-    const supplier = await prisma.customer.create({ data: { name: `Supplier ${uniq()}`, isSupplier: true } });
+    const supplier = await prisma.customer.create({ data: { name: `Supplier ${uniq()}`, recordKind: 'supplier' } });
 
     const { id: poId } = json<{ id: string }>(
       await call(owner, 'POST', '/api/purchases', { supplierId: supplier.id, currency: 'CNY', orderedOn: '2026-04-01', extrasTetri: 0 }),
@@ -256,32 +256,5 @@ describe.skipIf(!HAS_DB)('a stock-take', () => {
     const { id: partId } = await part();
     const manager = await loginAs('manager');
     expect((await call(manager, 'POST', `/api/parts/${partId}/count`, { countedQty: 3, reason: 'found some' })).statusCode).toBe(403);
-  });
-});
-
-describe.skipIf(!HAS_DB)('mopeds by model', () => {
-  it('counts what stands here, what is ours, and what has been ordered but has not arrived', async () => {
-    const { prisma } = await import('../src/lib/db.js');
-    const owner = await loginAs('owner');
-    const model = await prisma.vehicleModel.create({ data: { brand: 'Test', name: `Stock ${uniq()}` } });
-    await prisma.vehicle.create({
-      data: { vin: `TESTV${uniq().replace(/\D/g, '').slice(-12).padStart(12, '0')}`, modelId: model.id, costTetri: 150000 },
-    });
-    await prisma.vehicle.create({
-      data: { vin: `TESTW${uniq().replace(/\D/g, '').slice(-12).padStart(12, '0')}`, modelId: model.id, costTetri: 150000, state: 'sold' },
-    });
-    const supplier = await prisma.customer.create({ data: { name: `Supplier ${uniq()}`, isSupplier: true } });
-    const { id: poId } = json<{ id: string }>(
-      await call(owner, 'POST', '/api/purchases', { supplierId: supplier.id, currency: 'CNY', orderedOn: '2026-04-01' }),
-    );
-    await call(owner, 'POST', `/api/purchases/${poId}/lines`, { modelId: model.id, qty: 5, unitPrice: '4000' });
-
-    const rows = json<{ rows: { id: string; inStock: number; ours: number; onOrder: number; valueTetri: number }[] }>(
-      await call(owner, 'GET', '/api/stock/vehicles'),
-    ).rows;
-    const row = rows.find((r) => r.id === model.id)!;
-    expect(row).toMatchObject({ inStock: 1, ours: 1, onOrder: 5 });
-    // A moped already sold is not stock and is not worth anything on a shelf.
-    expect(row.valueTetri).toBe(150000);
   });
 });

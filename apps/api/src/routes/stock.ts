@@ -200,69 +200,6 @@ export function stockRoutes(app: FastifyInstance): void {
     await audit({ actorId: actor.id, action: 'part.receipt', entityType: 'part', entityId: part.id, after: { qty, unitCostTetri, reason, moveId: move.id } });
     return reply.code(201).send({ ok: true });
   });
-
-  /**
-   * Mopeds by model: what stands here, what is out, and what has been paid
-   * for but has not arrived. No table of its own — a moped is a VIN with a
-   * state, and an order that has not landed is a line on that order.
-   */
-  app.get('/api/stock/vehicles', { config: { scope: 'fleet.view' } }, async (req) => {
-    const seeCost = mayView(req, 'cost.view');
-    const models = await prisma.vehicleModel.findMany({
-      where: { archived: false },
-      orderBy: [{ brand: 'asc' }, { name: 'asc' }],
-      select: {
-        id: true,
-        brand: true,
-        name: true,
-        costTetri: true,
-        salePriceTetri: true,
-        vehicles: { where: { archived: false }, select: { state: true, costTetri: true } },
-      },
-    });
-    const onOrder = await prisma.purchaseLine.groupBy({
-      by: ['modelId'],
-      where: { modelId: { not: null }, purchase: { status: 'ordered' } },
-      _sum: { qty: true },
-    });
-    const ordered = new Map(onOrder.map((o) => [o.modelId as string, o._sum.qty ?? 0]));
-
-    const rows = models.map((m) => {
-      const byState = { available: 0, rented: 0, service: 0, out: 0, sold: 0 } as Record<string, number>;
-      let valueTetri = 0;
-      let unpriced = 0;
-      for (const v of m.vehicles) {
-        byState[v.state]++;
-        // Sold and written off are gone; only what is still ours is worth
-        // anything on a shelf.
-        if (v.state === 'sold' || v.state === 'out') continue;
-        if (v.costTetri == null) unpriced++;
-        else valueTetri += v.costTetri;
-      }
-      return {
-        id: m.id,
-        name: `${m.brand} ${m.name}`,
-        costTetri: seeCost ? m.costTetri : null,
-        salePriceTetri: m.salePriceTetri,
-        byState,
-        inStock: byState.available,
-        ours: byState.available + byState.rented + byState.service,
-        onOrder: ordered.get(m.id) ?? 0,
-        valueTetri: seeCost ? valueTetri : null,
-        unpriced: seeCost ? unpriced : null,
-      };
-    });
-    return {
-      rows,
-      totals: {
-        inStock: rows.reduce((n, r) => n + r.inStock, 0),
-        ours: rows.reduce((n, r) => n + r.ours, 0),
-        onOrder: rows.reduce((n, r) => n + r.onOrder, 0),
-        valueTetri: seeCost ? rows.reduce((n, r) => n + (r.valueTetri ?? 0), 0) : null,
-        unpriced: seeCost ? rows.reduce((n, r) => n + (r.unpriced ?? 0), 0) : null,
-      },
-    };
-  });
 }
 
 /** A part as a manager reads it: what is on the shelf, not what it is worth. */
