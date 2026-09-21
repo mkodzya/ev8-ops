@@ -313,6 +313,7 @@ async function seedDemo(ownerId: string): Promise<void> {
     createdLines.push({ id: created.id, qty: l.qty, unitPriceMinor: l.unitPriceMinor, modelId: l.model.id });
   }
   const paidTetri = 1_500_000;
+  const invoiceMinor = createdLines.reduce((n, l) => n + l.qty * l.unitPriceMinor, 0);
   for (const [when, amount] of [
     ['2024-10-07', 450000],
     ['2024-12-10', 1_050_000],
@@ -335,7 +336,12 @@ async function seedDemo(ownerId: string): Promise<void> {
   }
   // The ten mopeds above came from this shipment; give them their cost.
   const costs = new Map(
-    landedCosts({ lines: createdLines.map((l) => ({ id: l.id, qty: l.qty, unitPriceMinor: l.unitPriceMinor })), paidTetri, extrasTetri: 10 * 23834 }).map((c) => [c.lineId, c]),
+    landedCosts({
+      lines: createdLines.map((l) => ({ id: l.id, qty: l.qty, unitPriceMinor: l.unitPriceMinor, isVehicle: true })),
+      // The shipment was paid in full, so its rate is what it went through at.
+      rate: invoiceMinor > 0 ? paidTetri / invoiceMinor : null,
+      extrasTetri: 10 * 23834,
+    }).map((c) => [c.lineId, c]),
   );
   for (const l of createdLines) {
     const unit = costs.get(l.id)!.unitCostTetri;

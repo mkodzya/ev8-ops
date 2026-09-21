@@ -1,7 +1,8 @@
-import { effectiveRate, landedCosts, todayISO } from '@ev8/shared';
+import { checkVinList, todayISO, VEHICLE_POOLS } from '@ev8/shared';
 import type { FastifyInstance } from 'fastify';
 import { audit } from '../lib/audit.js';
 import { recordMoney } from '../lib/money.js';
+import { purchaseCosts, purchaseMoney, recost, recostPurchase } from '../lib/purchases.js';
 import { receivePartLine } from '../lib/stock.js';
 import { dateFromISO, isoDate } from '../lib/dates.js';
 import { prisma } from '../lib/db.js';
@@ -23,7 +24,7 @@ type Body = Record<string, unknown>;
 
 export const PURCHASE_INCLUDE = {
   supplier: { select: { id: true, name: true } },
-  lines: { orderBy: { createdAt: 'asc' }, include: { model: { select: { id: true, brand: true, name: true } } } },
+  lines: { orderBy: { createdAt: 'asc' as const }, include: { model: { select: { id: true, brand: true, name: true } } } },
   payments: { where: { voidedAt: null }, orderBy: { occurredOn: 'asc' } },
 } as const;
 
@@ -39,6 +40,9 @@ type Row = {
   extrasTetri: number;
   extrasNote: string | null;
   notes: string | null;
+  paidBeforeTetri: number;
+  paidBeforeMinor: bigint | number;
+  paidBeforeOn: Date | null;
   supplier: { id: string; name: string };
   lines: {
     id: string;
@@ -46,21 +50,16 @@ type Row = {
     unitPriceMinor: number;
     partName: string | null;
     partId: string | null;
+    modelId: string | null;
     model: { id: string; brand: string; name: string } | null;
   }[];
-  payments: { id: string; occurredOn: Date; grossTetri: number; channel: string; direction: string }[];
+  payments: { id: string; occurredOn: Date; grossTetri: number; netTetri: number; feeTetri: number; channel: string; direction: string; foreignMinor: bigint | number | null; foreignCurrency: string | null }[];
 };
 
 export function serializePurchase(p: Row) {
-  const paidTetri = p.payments.filter((x) => x.direction === 'out').reduce((n, x) => n + x.grossTetri, 0);
-  const invoiceMinor = p.lines.reduce((n, l) => n + l.qty * l.unitPriceMinor, 0);
-  const units = p.lines.filter((l) => l.model).reduce((n, l) => n + l.qty, 0);
-  const costs = landedCosts({
-    lines: p.lines.map((l) => ({ id: l.id, qty: l.qty, unitPriceMinor: l.unitPriceMinor })),
-    paidTetri,
-    extrasTetri: p.extrasTetri,
-  });
+  const { money, costs } = purchaseCosts(p);
   const byLine = new Map(costs.map((c) => [c.lineId, c]));
+  const units = p.lines.filter((l) => l.model).reduce((n, l) => n + l.qty, 0);
   return {
     id: p.id,
     number: p.number,
@@ -71,12 +70,21 @@ export function serializePurchase(p: Row) {
     receivedOn: isoDate(p.receivedOn),
     status: p.status,
     supplier: p.supplier,
-    invoiceMinor,
-    paidTetri,
+    invoiceMinor: money.invoiceMinor,
+    paidTetri: money.paidTetri,
+    paidMinor: money.paidMinor,
+    /** 0…100 of the invoice, the figure the "preliminary" note quotes (§7). */
+    paidPercent: money.percent,
+    debtMinor: money.debtMinor,
+    /** Costs stop moving once the factory is paid in full. */
+    preliminary: !money.settled,
     extrasTetri: p.extrasTetri,
     extrasNote: p.extrasNote,
+    paidBeforeTetri: p.paidBeforeTetri,
+    paidBeforeMinor: Number(p.paidBeforeMinor),
+    paidBeforeOn: isoDate(p.paidBeforeOn),
     // Only meaningful once something has been paid; null says so out loud.
-    rate: effectiveRate(paidTetri, invoiceMinor),
+    rate: money.rate,
     units,
     notes: p.notes,
     lines: p.lines.map((l) => {
@@ -86,6 +94,9 @@ export function serializePurchase(p: Row) {
         model: l.model ? { id: l.model.id, name: `${l.model.brand} ${l.model.name}` } : null,
         partName: l.partName,
         partId: l.partId,
+        // A line that names no catalogue part will not reach the shelf, and
+        // the screen says so before the shipment arrives (B8-03).
+        onShelf: l.partId != null,
         qty: l.qty,
         unitPriceMinor: l.unitPriceMinor,
         lineMinor: l.qty * l.unitPriceMinor,
@@ -99,9 +110,35 @@ export function serializePurchase(p: Row) {
       id: x.id,
       occurredOn: isoDate(x.occurredOn),
       grossTetri: x.grossTetri,
+      netTetri: x.netTetri,
+      feeTetri: x.feeTetri,
+      foreignMinor: Number(x.foreignMinor ?? 0),
+      foreignCurrency: x.foreignCurrency,
       channel: x.channel,
       direction: x.direction,
     })),
+  };
+}
+
+/**
+ * One line of an invoice: a model, or a part — from the catalogue, so it
+ * lands on the shelf, or free text, so at least the invoice adds up (B8-03).
+ */
+async function lineData(tx: { part: { findUnique: (a: { where: { id: string }; select: { id: true; name: true } }) => Promise<{ id: string; name: string } | null> } }, raw: Record<string, unknown>) {
+  const modelId = str(raw, 'modelId');
+  const partId = str(raw, 'partId');
+  const catalogue = partId ? await tx.part.findUnique({ where: { id: partId }, select: { id: true, name: true } }) : null;
+  if (partId && !catalogue) throw notFound('part_not_found', 'No such part.');
+  const partName = catalogue?.name ?? str(raw, 'partName', { max: 200 });
+  if (!modelId === !partName) throw conflict('line_shape', 'A line is either a model or a part, not both and not neither.');
+  if (modelId && partId) throw conflict('line_shape', 'A line is either a model or a part, not both and not neither.');
+  return {
+    modelId,
+    partName,
+    partId: catalogue?.id ?? null,
+    qty: int(raw, 'qty', { required: true, min: 1 })!,
+    // The seller's own price, in their currency's minor unit.
+    unitPriceMinor: tetri(raw, 'unitPrice', { required: true, min: 0 })!,
   };
 }
 
@@ -131,17 +168,7 @@ export function purchaseRoutes(app: FastifyInstance): void {
     };
   });
 
-  /** Suppliers are parties like any other; this is the short list for pickers. */
-  app.get('/api/suppliers', { config: { scope: 'purchases.view' } }, async () => {
-    const suppliers = await prisma.customer.findMany({
-      where: { isSupplier: true, archived: false },
-      orderBy: { name: 'asc' },
-      select: { id: true, name: true },
-    });
-    return { suppliers };
-  });
-
-  app.post<{ Body: Body }>('/api/purchases', { config: { scope: 'settings.manage' } }, async (req, reply) => {
+  app.post<{ Body: Body }>('/api/purchases', { config: { scope: 'purchases.manage' } }, async (req, reply) => {
     const b = req.body ?? {};
     const actor = actorOf(req);
     const supplierId = str(b, 'supplierId', { required: true })!;
@@ -150,8 +177,12 @@ export function purchaseRoutes(app: FastifyInstance): void {
     const currency = (str(b, 'currency', { max: 3 }) ?? 'CNY').toUpperCase();
     if (!/^[A-Z]{3}$/.test(currency)) throw badRequest('bad_field', 'currency must be three letters', { field: 'currency' });
 
+    // The order is written with its lines, the way it is read off an invoice
+    // (§3.4): a line that names no catalogue part is kept all the same and
+    // marked — it is on the invoice, it just will not reach the shelf (B8-03).
+    const lines = Array.isArray(b.lines) ? (b.lines as Record<string, unknown>[]) : [];
     const purchase = await prisma.$transaction(async (tx) => {
-      if (!supplier.isSupplier) await tx.customer.update({ where: { id: supplierId }, data: { isSupplier: true } });
+      if (!supplier.isSupplier) await tx.customer.update({ where: { id: supplierId }, data: { isSupplier: true, recordKind: 'supplier' } });
       const created = await tx.purchase.create({
         data: {
           supplierId,
@@ -166,15 +197,19 @@ export function purchaseRoutes(app: FastifyInstance): void {
         },
         select: { id: true, number: true },
       });
+      for (const raw of lines) {
+        const line = await lineData(tx, raw);
+        await tx.purchaseLine.create({ data: { purchaseId: created.id, ...line } });
+      }
       await tx.auditLog.create({
-        data: { actorId: actor.id, action: 'purchase.create', entityType: 'purchase', entityId: created.id, after: { number: created.number, supplierId, currency } },
+        data: { actorId: actor.id, action: 'purchase.create', entityType: 'purchase', entityId: created.id, after: { number: created.number, supplierId, currency, lines: lines.length } },
       });
       return created;
     });
     return reply.code(201).send(purchase);
   });
 
-  app.patch<{ Params: { id: string }; Body: Body }>('/api/purchases/:id', { config: { scope: 'settings.manage' } }, async (req) => {
+  app.patch<{ Params: { id: string }; Body: Body }>('/api/purchases/:id', { config: { scope: 'purchases.manage' } }, async (req) => {
     const b = req.body ?? {};
     const actor = actorOf(req);
     const p = await prisma.purchase.findUnique({ where: { id: req.params.id } });
@@ -186,46 +221,30 @@ export function purchaseRoutes(app: FastifyInstance): void {
     if ('extrasTetri' in b) data.extrasTetri = tetri(b, 'extrasTetri', { min: 0 }) ?? 0;
     if ('extrasNote' in b) data.extrasNote = str(b, 'extrasNote', { max: 1000 });
     if ('notes' in b) data.notes = str(b, 'notes', { max: 4000 });
-    await prisma.purchase.update({ where: { id: p.id }, data: { ...data, updatedAt: new Date() } });
-    await audit({ actorId: actor.id, action: 'purchase.update', entityType: 'purchase', entityId: p.id, after: data as object });
+    await prisma.$transaction(async (tx) => {
+      await tx.purchase.update({ where: { id: p.id }, data: { ...data, updatedAt: new Date() } });
+      await tx.auditLog.create({ data: { actorId: actor.id, action: 'purchase.update', entityType: 'purchase', entityId: p.id, before: { extrasTetri: p.extrasTetri }, after: data as object } });
+      // Logistics are split over the mopeds, so correcting them moves what
+      // each one cost — even long after the shipment arrived (§7).
+      if ('extrasTetri' in data) await recostPurchase(tx, p.id, actor.id, 'logistics corrected');
+    });
     return { ok: true };
   });
 
-  app.post<{ Params: { id: string }; Body: Body }>('/api/purchases/:id/lines', { config: { scope: 'settings.manage' } }, async (req, reply) => {
+  app.post<{ Params: { id: string }; Body: Body }>('/api/purchases/:id/lines', { config: { scope: 'purchases.manage' } }, async (req, reply) => {
     const b = req.body ?? {};
     const actor = actorOf(req);
     const p = await prisma.purchase.findUnique({ where: { id: req.params.id }, select: { id: true, status: true } });
     if (!p) throw notFound('purchase_not_found', 'No such order.');
     if (p.status !== 'ordered') throw conflict('purchase_closed', 'An order that has arrived is a record; it is not edited.');
-    const modelId = str(b, 'modelId');
-    const partId = str(b, 'partId');
-    // A part line may point at the catalogue, and then it lands on the shelf
-    // when the shipment arrives. Its name is copied down all the same, so the
-    // order still reads as the order even if the catalogue is edited later.
-    const catalogue = partId ? await prisma.part.findUnique({ where: { id: partId }, select: { id: true, name: true } }) : null;
-    if (partId && !catalogue) throw notFound('part_not_found', 'No such part.');
-    const partName = catalogue?.name ?? str(b, 'partName', { max: 200 });
-    if (!modelId === !partName) throw conflict('line_shape', 'A line is either a model or a part, not both and not neither.');
-    if (modelId && partId) throw conflict('line_shape', 'A line is either a model or a part, not both and not neither.');
-    const line = await prisma.purchaseLine.create({
-      data: {
-        purchaseId: p.id,
-        modelId,
-        partName,
-        partId: catalogue?.id ?? null,
-        qty: int(b, 'qty', { required: true, min: 1 })!,
-        // The seller's own price, in their currency's minor unit.
-        unitPriceMinor: tetri(b, 'unitPrice', { required: true, min: 0 })!,
-      },
-      select: { id: true },
-    });
-    await audit({ actorId: actor.id, action: 'purchase.line.add', entityType: 'purchase', entityId: p.id, after: { lineId: line.id, modelId, partName, qty: b.qty } });
+    const line = await prisma.purchaseLine.create({ data: { purchaseId: p.id, ...(await lineData(prisma, b)) }, select: { id: true } });
+    await audit({ actorId: actor.id, action: 'purchase.line.add', entityType: 'purchase', entityId: p.id, after: { lineId: line.id, qty: b.qty } });
     return reply.code(201).send(line);
   });
 
   app.delete<{ Params: { id: string; lineId: string } }>(
     '/api/purchases/:id/lines/:lineId',
-    { config: { scope: 'settings.manage' } },
+    { config: { scope: 'purchases.manage' } },
     async (req) => {
       const actor = actorOf(req);
       const line = await prisma.purchaseLine.findUnique({ where: { id: req.params.lineId }, include: { purchase: { select: { id: true, status: true } } } });
@@ -238,13 +257,16 @@ export function purchaseRoutes(app: FastifyInstance): void {
   );
 
   /** Money to the supplier (PUR-03): a deposit, then the balance. */
-  app.post<{ Params: { id: string }; Body: Body }>('/api/purchases/:id/payments', { config: { scope: 'payments.reconcile' } }, async (req, reply) => {
+  app.post<{ Params: { id: string }; Body: Body }>('/api/purchases/:id/payments', { config: { scope: 'purchases.manage' } }, async (req, reply) => {
     const b = req.body ?? {};
     const actor = actorOf(req);
-    const p = await prisma.purchase.findUnique({ where: { id: req.params.id }, select: { id: true, supplierId: true, status: true } });
+    const p = await prisma.purchase.findUnique({ where: { id: req.params.id }, select: { id: true, supplierId: true, status: true, currency: true } });
     if (!p) throw notFound('purchase_not_found', 'No such order.');
     if (p.status === 'cancelled') throw conflict('purchase_closed', 'This order is cancelled.');
     const grossTetri = tetri(b, 'grossTetri', { required: true, min: 1 })!;
+    // What those GEL bought, in the factory's own currency: without it the
+    // order cannot say what is still owed or at what rate it went (B3-04).
+    const foreign = tetri(b, 'foreignAmount', { min: 0 });
     const { id } = await recordMoney(actor, {
       kind: 'supplier',
       purchaseId: p.id,
@@ -253,18 +275,53 @@ export function purchaseRoutes(app: FastifyInstance): void {
       occurredOn: date(b, 'occurredOn'),
       backdateReason: str(b, 'backdateReason', { max: 500 }) ?? (date(b, 'occurredOn') ? 'dated on entry' : null),
       note: str(b, 'note', { max: 1000 }),
+      foreignMinor: foreign ?? undefined,
+      foreignCurrency: foreign ? p.currency : undefined,
+      bankFeeTetri: tetri(b, 'bankFee', { min: 0 }) ?? undefined,
     });
-    const payment = { id };
-    return reply.code(201).send(payment);
+    // The mopeds of this shipment are already out earning; their cost follows
+    // the money the same day (§7).
+    await recost(p.id, actor.id, 'paid the factory');
+    return reply.code(201).send({ id });
   });
 
   /**
-   * The shipment arrives (PUR-02). Each model line is given its VINs, and
-   * every VIN is written with what it cost to land: its share of what was
-   * actually paid, plus an equal share of the shipment's logistics and
-   * customs.
+   * Money that went out before this system did (B3-04, §3.5): what left the
+   * account, what it bought in the factory's currency, and when. It is not a
+   * payment — it happened elsewhere — so it is stated on the order once.
    */
-  app.post<{ Params: { id: string }; Body: Body }>('/api/purchases/:id/receive', { config: { scope: 'settings.manage' } }, async (req) => {
+  app.post<{ Params: { id: string }; Body: Body }>('/api/purchases/:id/paid-before', { config: { scope: 'purchases.manage' } }, async (req) => {
+    const b = req.body ?? {};
+    const actor = actorOf(req);
+    const p = await prisma.purchase.findUnique({ where: { id: req.params.id }, select: { id: true, status: true, paidBeforeTetri: true } });
+    if (!p) throw notFound('purchase_not_found', 'No such order.');
+    if (p.status === 'cancelled') throw conflict('purchase_closed', 'This order is cancelled.');
+    const paidBeforeTetri = tetri(b, 'amountTetri', { required: true, min: 0 })!;
+    const paidBeforeMinor = tetri(b, 'foreignAmount', { required: true, min: 0 })!;
+    await prisma.$transaction(async (tx) => {
+      await tx.purchase.update({
+        where: { id: p.id },
+        data: { paidBeforeTetri, paidBeforeMinor: BigInt(paidBeforeMinor), paidBeforeOn: dateFromISO(date(b, 'occurredOn')), updatedAt: new Date() },
+      });
+      await tx.auditLog.create({
+        data: { actorId: actor.id, action: 'purchase.paid_before', entityType: 'purchase', entityId: p.id, before: { paidBeforeTetri: p.paidBeforeTetri }, after: { paidBeforeTetri, paidBeforeMinor } },
+      });
+      await recostPurchase(tx, p.id, actor.id, 'money paid before the move');
+    });
+    return { ok: true };
+  });
+
+  /**
+   * The shipment arrives (PUR-02, §3.6). The VINs come off the CMR, one to a
+   * line, and every one of them is checked before anything is written: a
+   * shipment half entered is worse than one not entered at all, and a VIN
+   * already in the fleet stops the whole receipt with the line named.
+   *
+   * It may arrive before it is paid for (Mika, Q23). What each moped cost is
+   * then preliminary — worked out at the rate of the payments made so far —
+   * and every later payment writes it again.
+   */
+  app.post<{ Params: { id: string }; Body: Body }>('/api/purchases/:id/receive', { config: { scope: 'purchases.manage' } }, async (req) => {
     const b = req.body ?? {};
     const actor = actorOf(req);
     const p = await prisma.purchase.findUnique({ where: { id: req.params.id }, include: PURCHASE_INCLUDE });
@@ -272,50 +329,70 @@ export function purchaseRoutes(app: FastifyInstance): void {
     if (p.status !== 'ordered') throw conflict('purchase_closed', 'This order has already arrived, or was cancelled.');
     if (p.lines.length === 0) throw conflict('no_lines', 'An order with no lines has nothing to receive.');
 
-    const paidTetri = p.payments.filter((x) => x.direction === 'out').reduce((n, x) => n + x.grossTetri, 0);
-    if (paidTetri <= 0) throw conflict('not_paid', 'What a unit cost comes from what was paid, and nothing has been paid yet.');
-
     const receivedOn = date(b, 'receivedOn') ?? todayISO(new Date(), env.TZ);
     const raw = b.vins;
-    if (!raw || typeof raw !== 'object') throw badRequest('missing_field', 'vins is required', { field: 'vins' });
-    const vinsByLine = raw as Record<string, unknown>;
-
-    // Every model line must get exactly as many VINs as it ordered: a
-    // shipment half entered is worse than one not entered at all.
     const modelLines = p.lines.filter((l) => l.model);
+    if (modelLines.length > 0 && (!raw || typeof raw !== 'object')) throw badRequest('missing_field', 'vins is required', { field: 'vins' });
+    const vinsByLine = (raw ?? {}) as Record<string, unknown>;
+
+    // One value for the whole batch, corrected row by row where a moped
+    // differs (B8-02).
+    const batch = {
+      color: str(b, 'color', { max: 60 }),
+      year: int(b, 'year', { min: 2000 }),
+      pool: oneOf(b, 'pool', VEHICLE_POOLS),
+      locationId: str(b, 'locationId'),
+    };
+    const rowOf = (v: unknown): { vin: string; color?: string | null; year?: number | null; pool?: string | null; locationId?: string | null } =>
+      typeof v === 'string' ? { vin: v } : (v as Record<string, unknown>) && typeof (v as Record<string, unknown>).vin === 'string' ? (v as never) : { vin: '' };
+
+    const known = await prisma.vehicle.findMany({ select: { vin: true } });
+    const planned: { line: (typeof p.lines)[number]; rows: { vin: string; color: string | null; year: number | null; pool: string | null; locationId: string | null }[] }[] = [];
     for (const line of modelLines) {
-      const list = vinsByLine[line.id];
-      if (!Array.isArray(list) || list.some((v) => typeof v !== 'string' || v.trim() === '')) {
-        throw conflict('vins_missing', `Line ${line.model!.brand} ${line.model!.name} has no VINs.`, { lineId: line.id, qty: line.qty });
+      const list = Array.isArray(vinsByLine[line.id]) ? (vinsByLine[line.id] as unknown[]) : null;
+      const rows = (list ?? []).map(rowOf).filter((r) => r.vin.trim() !== '');
+      const name = `${line.model!.brand} ${line.model!.name}`;
+      if (rows.length === 0) throw conflict('vins_missing', `Line ${name} has no VINs.`, { lineId: line.id, qty: line.qty, line: name });
+      if (rows.length !== line.qty) {
+        throw conflict('vins_count', `Line ${name} ordered ${line.qty} and was given ${rows.length} VINs.`, { lineId: line.id, qty: line.qty, given: rows.length, line: name });
       }
-      if (list.length !== line.qty) {
-        throw conflict('vins_count', `Line ${line.model!.brand} ${line.model!.name} ordered ${line.qty} and was given ${list.length} VINs.`, {
-          lineId: line.id,
-          qty: line.qty,
-          given: list.length,
-        });
+      // 17 characters without I, O or Q; no VIN twice in the paste; none of
+      // them already in the fleet (crit. 14, 15).
+      const checked = checkVinList(rows.map((r) => r.vin).join('\n'), known.map((v) => v.vin));
+      const bad = checked.find((c) => c.fault);
+      if (bad) {
+        throw conflict('bad_vin_line', `Line ${bad.line}: ${bad.vin} is not a VIN this shipment can take.`, { line: bad.line, vin: bad.vin, fault: bad.fault, lineId: line.id, field: 'vins' });
       }
+      planned.push({
+        line,
+        rows: rows.map((r, i) => ({
+          vin: checked[i].vin,
+          color: r.color ?? batch.color ?? null,
+          year: r.year ?? batch.year ?? null,
+          pool: r.pool ?? batch.pool ?? null,
+          locationId: r.locationId ?? batch.locationId ?? null,
+        })),
+      });
     }
 
-    const costs = new Map(
-      landedCosts({
-        lines: p.lines.map((l) => ({ id: l.id, qty: l.qty, unitPriceMinor: l.unitPriceMinor })),
-        paidTetri,
-        extrasTetri: p.extrasTetri,
-      }).map((c) => [c.lineId, c]),
-    );
+    const { money, costs } = purchaseCosts(p);
+    const byLine = new Map(costs.map((c) => [c.lineId, c]));
 
     let created = 0;
     let receivedParts = 0;
     try {
       await prisma.$transaction(async (tx) => {
-        for (const line of modelLines) {
-          const cost = costs.get(line.id)!;
-          for (const vin of vinsByLine[line.id] as string[]) {
+        for (const { line, rows } of planned) {
+          const cost = byLine.get(line.id)!;
+          for (const row of rows) {
             const v = await tx.vehicle.create({
               data: {
-                vin: vin.trim().toUpperCase(),
+                vin: row.vin,
                 modelId: line.model!.id,
+                color: row.color,
+                year: row.year,
+                pool: (row.pool as 'rent' | 'sale' | null) ?? null,
+                locationId: row.locationId,
                 arrivedOn: dateFromISO(receivedOn),
                 costTetri: cost.unitCostTetri,
                 purchaseId: p.id,
@@ -331,10 +408,10 @@ export function purchaseRoutes(app: FastifyInstance): void {
           await tx.vehicleModel.update({ where: { id: line.model!.id }, data: { costTetri: cost.unitCostTetri, updatedAt: new Date() } });
         }
         // Parts from the catalogue land on the shelf at what they cost to
-        // land, the same share of the shipment a moped gets.
+        // land; a line that names no part lands nowhere and said so (B8-03).
         for (const line of p.lines) {
           if (!line.partId) continue;
-          const cost = costs.get(line.id)!;
+          const cost = byLine.get(line.id)!;
           await receivePartLine(tx, {
             purchaseLineId: line.id,
             partId: line.partId,
@@ -346,14 +423,14 @@ export function purchaseRoutes(app: FastifyInstance): void {
           });
           receivedParts += line.qty;
         }
-        await tx.purchase.update({ where: { id: p.id }, data: { status: 'received', receivedOn: dateFromISO(receivedOn)!, updatedAt: new Date() } });
+        await tx.purchase.update({ where: { id: p.id }, data: { status: 'received', receivedOn: dateFromISO(receivedOn)!, costedAt: new Date(), updatedAt: new Date() } });
         await tx.auditLog.create({
           data: {
             actorId: actor.id,
             action: 'purchase.receive',
             entityType: 'purchase',
             entityId: p.id,
-            after: { receivedOn, vehicles: created, parts: receivedParts, paidTetri, extrasTetri: p.extrasTetri },
+            after: { receivedOn, vehicles: created, parts: receivedParts, paidPercent: money.percent, rate: money.rate, extrasTetri: p.extrasTetri },
           },
         });
       });
@@ -361,10 +438,10 @@ export function purchaseRoutes(app: FastifyInstance): void {
       if (isUniqueViolation(e)) throw conflict('duplicate_vin', 'One of those VINs is already in the fleet.');
       throw e;
     }
-    return { ok: true, vehicles: created, parts: receivedParts };
+    return { ok: true, vehicles: created, parts: receivedParts, preliminary: !money.settled, paidPercent: money.percent };
   });
 
-  app.post<{ Params: { id: string }; Body: Body }>('/api/purchases/:id/cancel', { config: { scope: 'settings.manage' } }, async (req) => {
+  app.post<{ Params: { id: string }; Body: Body }>('/api/purchases/:id/cancel', { config: { scope: 'purchases.manage' } }, async (req) => {
     const actor = actorOf(req);
     const reason = str(req.body ?? {}, 'reason', { required: true, max: 1000 })!;
     const p = await prisma.purchase.findUnique({ where: { id: req.params.id }, include: { payments: { where: { voidedAt: null } } } });
