@@ -1256,13 +1256,18 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
 .day-head h1 { margin: 0; font: var(--text-h1-phone); }
 .num-strip { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 6px; margin-bottom: 16px; scrollbar-width: none; }
 .num-strip::-webkit-scrollbar { display: none; }
-.num {
+/* Scoped to the strip on purpose. `.num` also means "a cell of numbers, hard
+   right" (top of this file), and an unscoped tile turned every `<td class=
+   "num">` in the system into a bordered box stacked under its neighbour —
+   the economics table had been drawn that way for three waves. Every tile is
+   a direct child of the strip, so the collision costs nothing to end. */
+.num-strip > .num {
   flex: none; min-width: 104px; display: flex; flex-direction: column; gap: 2px; padding: 10px 14px;
   border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--surface); color: inherit;
 }
 .num-v { font: var(--text-money); }
 .num-l { font: var(--text-label); color: var(--muted); }
-.num-crit .num-v { color: var(--crit); }
+.num-strip > .num-crit .num-v { color: var(--crit); }
 .queue-card { padding-bottom: 8px; }
 .queue-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 6px; }
 .queue-head h2 { margin: 0; font: var(--text-h3); }
