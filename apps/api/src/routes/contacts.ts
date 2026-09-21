@@ -5,6 +5,7 @@ import { prisma } from '../lib/db.js';
 import { badRequest, conflict, notFound } from '../lib/errors.js';
 import { actorOf } from '../lib/guard.js';
 import { str } from '../lib/validate.js';
+import { PURCHASE_INCLUDE, serializePurchase } from './purchases.js';
 
 // Records that turned out to be one record, and VINs that were typed wrong
 // (wave 5 §3.9, B3-06). Both are an owner's corrections: they rewrite
@@ -31,6 +32,33 @@ export function contactRoutes(app: FastifyInstance): void {
         orders: debts.get(r.id)?.orders ?? 0,
         debt: debts.get(r.id)?.debt ?? [],
       })),
+    };
+  });
+
+  /** One factory: what is owed to it and what has been ordered from it (§3.5). */
+  app.get<{ Params: { id: string } }>('/api/suppliers/:id', { config: { scope: 'purchases.view' } }, async (req) => {
+    const row = await prisma.customer.findUnique({
+      where: { id: req.params.id },
+      select: { id: true, name: true, address: true, notes: true, phone: true, recordKind: true, isSupplier: true },
+    });
+    if (!row || !(row.recordKind === 'supplier' || row.isSupplier)) throw notFound('supplier_not_found', 'No such supplier.');
+    const orders = await prisma.purchase.findMany({
+      where: { supplierId: row.id },
+      orderBy: { orderedOn: 'desc' },
+      include: PURCHASE_INCLUDE,
+    });
+    const debts = await supplierDebts([row.id]);
+    return {
+      supplier: {
+        id: row.id,
+        name: row.name,
+        country: row.address,
+        contact: row.notes,
+        phone: row.phone,
+        orders: orders.length,
+        debt: debts.get(row.id)?.debt ?? [],
+      },
+      orders: orders.map(serializePurchase),
     };
   });
 

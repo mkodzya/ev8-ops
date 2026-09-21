@@ -17,21 +17,16 @@ export function SupplierPage() {
   const { id } = useParams();
   const t = useT();
   const { can } = useSession();
-  const suppliers = useLoad<{ suppliers: Supplier[] }>('/api/suppliers');
-  const orders = useLoad<{ purchases: Purchase[] }>('/api/purchases');
+  // The factory and its orders in one answer: the section's list is capped at
+  // the newest two hundred, and a factory's own card must show all of its own.
+  const card = useLoad<{ supplier: Supplier; orders: Purchase[] }>(id ? `/api/suppliers/${id}` : null);
 
-  const reload = () => {
-    suppliers.reload();
-    orders.reload();
-  };
+  const reload = () => card.reload();
 
-  if (suppliers.failure) return <LoadError failure={suppliers.failure} onRetry={reload} />;
-  if (!suppliers.data) return <Loading />;
-  const s = suppliers.data.suppliers.find((x) => x.id === id) ?? null;
-  if (!s) return <Empty text={t.supplierCard.notFound} />;
-
-  // The order list is the section's own list, read here through this factory.
-  const mine = (orders.data?.purchases ?? []).filter((p) => p.supplier.id === s.id);
+  if (card.failure) return <LoadError failure={card.failure} onRetry={reload} />;
+  if (!card.data) return <Loading />;
+  const s = card.data.supplier;
+  const mine = card.data.orders;
   const debt = s.debt.filter((d) => d.minor > 0);
 
   return (
@@ -73,9 +68,7 @@ export function SupplierPage() {
 
       <section className="card">
         <BlockHead title={t.supplierCard.orders} sub={t.supplierCard.ordersCount(mine.length)} />
-        {orders.data == null ? (
-          <Loading rows={3} />
-        ) : mine.length === 0 ? (
+        {mine.length === 0 ? (
           <Empty text={t.supplierCard.none} />
         ) : (
           <div className="table-wrap table-flat">
