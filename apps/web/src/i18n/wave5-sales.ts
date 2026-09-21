@@ -2,6 +2,14 @@
 // the sale's card and buying a moped back (docs/redesign/wave-5.md §3.1–3.3).
 
 export const wave5salesEn = {
+  merge: {
+    title: 'Merge with…',
+    which: 'Which card is the same person',
+    into: (name: string) => `Everything will move to “${name}”.`,
+    moves: (from: string, into: string) => `The rentals, sales, payments and documents of “${from}” move to “${into}”; “${from}” goes to the archive.`,
+    reason: 'Why',
+    save: 'Merge',
+  },
   sell: {
     title: 'Sale',
     steps: ['Moped', 'Buyer', 'Price', 'Prepayment', 'Summary'],
@@ -105,6 +113,14 @@ export const wave5salesEn = {
 export type Wave5sales = typeof wave5salesEn;
 
 export const wave5salesRu: Wave5sales = {
+  merge: {
+    title: 'Объединить с…',
+    which: 'Какая карточка — тот же человек',
+    into: (name) => `Всё переедет в «${name}».`,
+    moves: (from, into) => `Аренды, продажи, платежи и документы «${from}» переедут в «${into}»; «${from}» уйдёт в архив.`,
+    reason: 'Причина',
+    save: 'Объединить',
+  },
   sell: {
     title: 'Продажа',
     steps: ['Мопед', 'Покупатель', 'Цена', 'Предоплата', 'Итог'],
@@ -206,6 +222,14 @@ export const wave5salesRu: Wave5sales = {
 };
 
 export const wave5salesKa: Wave5sales = {
+  merge: {
+    title: 'გაერთიანება…',
+    which: 'რომელი ბარათია იგივე ადამიანი',
+    into: (name) => `ყველაფერი გადავა „${name}“-ში.`,
+    moves: (from, into) => `„${from}“-ის ქირაობები, გაყიდვები, გადახდები და დოკუმენტები გადავა „${into}“-ში; „${from}“ არქივში წავა.`,
+    reason: 'მიზეზი',
+    save: 'გაერთიანება',
+  },
   sell: {
     title: 'გაყიდვა',
     steps: ['მოპედი', 'მყიდველი', 'ფასი', 'წინასწარი', 'შეჯამება'],

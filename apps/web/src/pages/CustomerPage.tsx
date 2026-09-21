@@ -11,6 +11,7 @@ import { FormSheet } from '../ds/form/Form.js';
 import { Field } from '../components/Wizard.js';
 import { WhatsappSheet } from '../components/Whatsapp.js';
 import { LoadError } from '../components/LoadError.js';
+import { RowMenu } from '../components/RowMenu.js';
 import { BlockHead, Empty, Loading, PageHead, RentalBadge, Vin } from '../components/ui.js';
 import { Row } from '../components/Wizard.js';
 import { fmtDate, formatGel } from '../format.js';
@@ -51,6 +52,7 @@ export function CustomerPage() {
   const fileRef = useRef<HTMLInputElement>(null);
   const [editing, setEditing] = useState(false);
   const [wa, setWa] = useState(false);
+  const [merging, setMerging] = useState(false);
   const [feedFilter, setFeedFilter] = useState<'all' | 'payment' | 'document' | 'log'>('all');
   if (failure) return <LoadError failure={failure} onRetry={reload} />;
   if (!data) return <Loading />;
@@ -95,7 +97,20 @@ export function CustomerPage() {
             {t.actions.newRental}
           </Link>
         )}
+        {can('settings.manage') && <RowMenu actions={[{ key: 'merge', label: t.merge.title, onPick: () => setMerging(true) }]} />}
       </PageHead>
+
+      {merging && (
+        <MergeSheet
+          keepId={c.id}
+          keepName={primaryName(c, locale)}
+          onClose={() => setMerging(false)}
+          onDone={() => {
+            setMerging(false);
+            reload();
+          }}
+        />
+      )}
 
       {/* The one debt figure (wave 2 §3.7, B7-02): what is owed, big; what it is
           made of by record; the schedule ahead and the deposit quietly below —
@@ -346,5 +361,66 @@ function CustomerSales({ customerId }: { customerId: string }) {
         </li>
       ))}
     </ul>
+  );
+}
+
+/**
+ * Two cards for one person (wave 5 §3.9, crit. 33). Everything the duplicate
+ * holds moves here; the duplicate goes to the archive pointing at this card,
+ * so an old link still leads somewhere true. Only an owner, always with a
+ * reason, and the journal keeps both names.
+ */
+function MergeSheet({ keepId, keepName, onClose, onDone }: { keepId: string; keepName: string; onClose: () => void; onDone: () => void }) {
+  const t = useT();
+  const { locale } = useLocale();
+  const list = useLoad<{ customers: { id: string; name: string; nameKa: string | null; nameLat: string | null; phone: string | null }[] }>('/api/customers');
+  const initial = { fromId: '', reason: '' };
+  const [f, setF] = useState(initial);
+  const [q, setQ] = useState('');
+  const found = (list.data?.customers ?? [])
+    .filter((c) => c.id !== keepId)
+    .filter((c) => {
+      const needle = q.trim().toLowerCase();
+      if (!needle) return false;
+      const digits = needle.replace(/\D/g, '');
+      return primaryName(c, locale).toLowerCase().includes(needle) || (digits.length >= 3 && (c.phone ?? '').replace(/\D/g, '').includes(digits));
+    })
+    .slice(0, 6);
+  const chosen = (list.data?.customers ?? []).find((c) => c.id === f.fromId) ?? null;
+  return (
+    <FormSheet
+      title={t.merge.title}
+      onClose={onClose}
+      value={f}
+      initial={initial}
+      onRestore={setF}
+      label={t.merge.save}
+      submit={async (key) => {
+        await api.post(`/api/customers/${keepId}/merge`, { fromId: f.fromId, reason: f.reason.trim() }, { key });
+        return { toast: { text: t.form.changesSaved } };
+      }}
+      onDone={onDone}
+    >
+      <p className="hint muted">{t.merge.into(keepName)}</p>
+      <Field label={t.merge.which} name="fromId">
+        <input className="input" value={q} onChange={(e) => setQ(e.target.value)} />
+      </Field>
+      <ul className="pick-list">
+        {found.map((c) => (
+          <li key={c.id}>
+            <button type="button" className={c.id === f.fromId ? 'on' : ''} onClick={() => setF({ ...f, fromId: c.id })}>
+              <span className="pick-main">
+                <span>{primaryName(c, locale)}</span>
+                <span className="muted mono">{c.phone ?? ''}</span>
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
+      {chosen && <p className="warn-text">{t.merge.moves(primaryName(chosen, locale), keepName)}</p>}
+      <Field label={t.merge.reason} name="reason">
+        <input className="input" value={f.reason} onChange={(e) => setF({ ...f, reason: e.target.value })} />
+      </Field>
+    </FormSheet>
   );
 }
