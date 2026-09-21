@@ -171,10 +171,20 @@ export function SaleWizard() {
   const buyerOk = f.creating ? f.ncName.trim().length > 1 && f.ncPhone.trim().length > 5 : f.customerId !== '';
   const ok = [vehicleOk, buyerOk, priceOk, paymentOk, true][f.step];
 
-  const stepOfField: Record<string, number> = { vehicleId: 0, movePool: 0, customerId: 1, priceTetri: 2, downPaymentTetri: 2, paidBeforeTetri: 2, schedule: 2, channel: 3 };
+  const stepOfField: Record<string, number> = { vehicleId: 0, movePool: 0, customerId: 1, name: 1, phone: 1, personalId: 1, priceTetri: 2, downPaymentTetri: 2, paidBeforeTetri: 2, schedule: 2, channel: 3 };
   useEffect(() => {
     const code = op.failure?.code ?? '';
-    const byCode: Record<string, number> = { vehicle_rented: 0, vehicle_sold: 0, vehicle_not_available: 0, vehicle_in_rent_pool: 0, customer_not_found: 1, down_payment_too_big: 2, paid_before_too_big: 2 };
+    const byCode: Record<string, number> = {
+      vehicle_rented: 0,
+      vehicle_sold: 0,
+      vehicle_not_available: 0,
+      vehicle_in_rent_pool: 0,
+      customer_not_found: 1,
+      duplicate_customer: 1,
+      duplicate_personal_id: 1,
+      down_payment_too_big: 2,
+      paid_before_too_big: 2,
+    };
     const to = stepOfField[op.failure?.field ?? ''] ?? byCode[code];
     if (to != null) set({ step: to });
     // eslint-disable-next-line react-hooks/exhaustive-deps
