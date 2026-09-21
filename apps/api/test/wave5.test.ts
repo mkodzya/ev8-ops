@@ -354,6 +354,20 @@ describe.skipIf(!HAS_DB)('wave 5 · the shelf and the records', () => {
     );
     expect(archived.customer.archived).toBe(true);
     expect(archived.customer.mergedInto?.id).toBe(keep.id);
+
+    // And nothing new is written onto it: hiding the buttons left the link
+    // to the duplicate working (QA-W5-03, round 2).
+    const money = await call(owner, 'POST', '/api/money', { kind: 'on_account', customerId: drop.id, amountTetri: '100', channel: 'cash' });
+    expect(money.statusCode).toBe(409);
+    expect(json<{ error: string }>(money).error).toBe('customer_archived');
+    const doc = await call(owner, 'POST', `/api/customers/${drop.id}/documents`, {
+      docKind: 'other',
+      name: 'test.pdf',
+      mimeType: 'application/pdf',
+      dataBase64: Buffer.from('ТЕСТ').toString('base64'),
+    });
+    expect(doc.statusCode).toBe(409);
+    expect(json<{ error: string }>(doc).error).toBe('customer_archived');
   });
 
   it('lets a manager report a breakdown and an owner take it up (crit. 21)', async () => {

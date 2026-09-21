@@ -215,6 +215,17 @@ export const wave4En = {
     'purchase.recost': 'The cost was worked out again',
     'purchase.cancel': 'The order was cancelled',
   } as Record<string, string>,
+  /**
+   * The system's own reasons, written into the journal in English by the
+   * code that recosts a shipment. A person's reason is their words and is
+   * shown as it was typed (QA-W5-21).
+   */
+  feedNotes: {
+    'paid the supplier': 'the supplier was paid',
+    'supplier payment voided': 'a payment to the supplier was annulled',
+    'logistics corrected': 'the logistics were corrected',
+    'money paid before the move': 'money paid before the move was stated',
+  } as Record<string, string>,
   batWords: { handed_out: 'Handed out', came_back: 'Came back' } as Record<string, string>,
   seg: {
     active: 'Running',
@@ -412,6 +423,12 @@ export const wave4Ru: Wave4 = {
     'purchase.recost': 'Пересчитана себестоимость',
     'purchase.cancel': 'Заказ отменён',
   },
+  feedNotes: {
+    'paid the supplier': 'оплата поставщику',
+    'supplier payment voided': 'платёж поставщику отменён',
+    'logistics corrected': 'правка логистики',
+    'money paid before the move': 'указана оплата до переноса',
+  },
   batWords: { handed_out: 'Выдано', came_back: 'Вернулось' },
   seg: {
     active: 'Действуют',
@@ -606,6 +623,12 @@ export const wave4Ka: Wave4 = {
     'purchase.receive': 'პარტია მიღებულია',
     'purchase.recost': 'თვითღირებულება გადაითვალა',
     'purchase.cancel': 'შეკვეთა გაუქმდა',
+  },
+  feedNotes: {
+    'paid the supplier': 'გადახდა მომწოდებელს',
+    'supplier payment voided': 'მომწოდებლის გადახდა გაუქმდა',
+    'logistics corrected': 'ლოგისტიკის შესწორება',
+    'money paid before the move': 'მითითებულია გადმოტანამდე გადახდილი',
   },
   batWords: { handed_out: 'გაიცა', came_back: 'დაბრუნდა' },
   seg: {

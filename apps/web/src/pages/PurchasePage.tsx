@@ -14,6 +14,7 @@ import { BlockHead, Empty, Loading, PageHead, StateBadge, Vin } from '../compone
 import { Field, Row } from '../components/Wizard.js';
 import { fmtDate, formatGel } from '../format.js';
 import { useT } from '../i18n/index.js';
+import { noteWords } from '../lib/journal.js';
 import { useLoad } from '../lib/use.js';
 import { useSession } from '../session.js';
 import { fmtForeign, fmtRate, statusOf, type Purchase, type PurchaseLine } from './PurchasesPage.js';
@@ -383,15 +384,27 @@ function LineName({ line }: { line: PurchaseLine }) {
  * — plus the order's own journal, so a correction of the logistics or a cost
  * worked out again is visible where it happened (crit. 13, 19 — QA-W5-01).
  */
+/**
+ * Journal entries the feed already tells from the order itself. The order
+ * was created, the shipment arrived, money was stated as paid before the
+ * move: each of those has its own row, on the day it happened. The journal
+ * knows the same events, but only the day somebody wrote them down — so the
+ * pair read as two events and the journal's half sat on the wrong date
+ * (QA-W5-22). What is left is what nothing else shows: a correction.
+ */
+const TOLD_ALREADY = new Set(['purchase.create', 'purchase.receive', 'purchase.paid_before']);
+
 function Feed({ purchase: p, vehicles, journal }: { purchase: Purchase; vehicles: number; journal: JournalRow[] }) {
   const t = useT();
   const rows: { at: string; text: string; amount?: string; note?: string }[] = [
-    ...journal.map((l) => ({
-      at: l.occurredOn ?? p.orderedOn,
-      text: t.feedWords[l.action] ?? l.action,
-      amount: recostUnits(l.after) ?? undefined,
-      note: [l.note, l.by].filter(Boolean).join(' · ') || undefined,
-    })),
+    ...journal
+      .filter((l) => !TOLD_ALREADY.has(l.action) && !l.action.startsWith('payment.'))
+      .map((l) => ({
+        at: l.occurredOn ?? p.orderedOn,
+        text: t.feedWords[l.action] ?? l.action,
+        amount: recostUnits(l.after) ?? undefined,
+        note: [noteWords(t, l.note), l.by].filter(Boolean).join(' · ') || undefined,
+      })),
     { at: p.orderedOn, text: t.orderCard.words.created, amount: fmtForeign(p.invoiceMinor, p.currency) },
     ...p.payments
       .filter((x) => x.direction === 'out')

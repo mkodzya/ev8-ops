@@ -3,7 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import { audit } from '../lib/audit.js';
 import { hasPerm } from '../lib/auth.js';
 import { prisma } from '../lib/db.js';
-import { badRequest, forbidden, notFound } from '../lib/errors.js';
+import { badRequest, conflict, forbidden, notFound } from '../lib/errors.js';
 import { actorOf } from '../lib/guard.js';
 import { oneOf, str } from '../lib/validate.js';
 
@@ -90,8 +90,12 @@ export function fileRoutes(app: FastifyInstance): void {
     async (req, reply) => {
       const actor = actorOf(req);
       const b = req.body ?? {};
-      const c = await prisma.customer.findUnique({ where: { id: req.params.id }, select: { id: true } });
+      const c = await prisma.customer.findUnique({ where: { id: req.params.id }, select: { id: true, archived: true } });
       if (!c) throw notFound('customer_not_found', 'No such customer.');
+      // A card merged away takes nothing new; it is a record of what was
+      // (crit. 33, QA-W5-03). Hiding the button was not enough — a link to
+      // the duplicate still reached this.
+      if (c.archived) throw conflict('customer_archived', 'This card was merged into another one; add it there.');
       const docKind = oneOf(b, 'docKind', DOC_KINDS) ?? 'other';
       const { bytes, mime, label } = readUpload(b);
       const f = await prisma.storedFile.create({
