@@ -166,6 +166,9 @@ export function UtilisationPage() {
  * under the count rather than behind a link — the lists are short, and the
  * whole point of the block is to name what to go and do something about.
  */
+/** How many of a blocker's mopeds are named before the list turns into a count. */
+const BLOCKER_SHOWN = 5;
+
 function Blocker({ label, rows }: { label: string; rows: BlockerVehicle[] }) {
   const t = useT();
   return (
@@ -180,7 +183,10 @@ function Blocker({ label, rows }: { label: string; rows: BlockerVehicle[] }) {
       </dl>
       {rows.length > 0 && (
         <ul className="util-list">
-          {rows.map((v) => (
+          {/* Five and a count, not the whole list: on a phone a long one
+              pushes the percentage itself off the screen, and the percentage
+              is what the screen is for (designer, 21.09.2026). */}
+          {rows.slice(0, BLOCKER_SHOWN).map((v) => (
             <li key={v.id}>
               <Link to={`/fleet/${v.id}`}>
                 <Vin vin={v.vin} />
@@ -190,6 +196,9 @@ function Blocker({ label, rows }: { label: string; rows: BlockerVehicle[] }) {
               </span>
             </li>
           ))}
+          {rows.length > BLOCKER_SHOWN && (
+            <li className="muted">{t.utilisationReport.andMore(rows.length - BLOCKER_SHOWN)}</li>
+          )}
         </ul>
       )}
     </>

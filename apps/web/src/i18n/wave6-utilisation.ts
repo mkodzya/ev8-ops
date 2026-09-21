@@ -34,6 +34,7 @@ export const wave6utilEn = {
     none: 'none',
     noRecord: 'no data — nothing ties a repair to a battery',
     days: (n: number) => `${n} ${n === 1 ? 'day' : 'days'}`,
+    andMore: (n: number) => `${n} more`,
   },
 };
 
@@ -65,6 +66,7 @@ export const wave6utilRu: typeof wave6utilEn = {
     none: 'нет',
     noRecord: 'нет данных — связи ремонта с батареями не ведётся',
     days: (n: number) => `${n} ${ruPlural(n, 'день', 'дня', 'дней')}`,
+    andMore: (n: number) => `Ещё ${n}`,
   },
 };
 
@@ -96,6 +98,7 @@ export const wave6utilKa: typeof wave6utilEn = {
     none: 'არ არის',
     noRecord: 'მონაცემები არ არის — შეკეთება ბატარეას არ უკავშირდება',
     days: (n: number) => `${n} დღე`,
+    andMore: (n) => `კიდევ ${n}`,
   },
 };
 
