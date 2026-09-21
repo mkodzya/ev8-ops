@@ -24,6 +24,8 @@ export interface PurchaseLineInput {
   qty: number;
   /** Price for one, in the invoice currency's minor unit (fen, cents). */
   unitPriceMinor: number;
+  /** A moped line carries the shipment's logistics; a part line does not (Q24). */
+  isVehicle?: boolean;
 }
 
 export interface LandedCost {
@@ -57,21 +59,69 @@ function shareOut(total: number, weights: number[]): number[] {
 }
 
 /**
+ * What a shipment has been paid, and at what rate (wave 5 §3.5).
+ *
+ * The rate is what the money did: the GEL that left the account divided by
+ * the invoice currency those payments bought. A shipment half paid has a
+ * rate already — the rate of the half that was paid — and that is the rate
+ * the goods are costed at until the rest goes out (Mika, Q23).
+ */
+export interface PaidSummary {
+  /** GEL that left the account, the bank's own charge included. */
+  paidTetri: Tetri;
+  /** What those GEL bought, in the invoice currency's minor unit. */
+  paidMinor: number;
+  /** 0…100, how much of the invoice is covered. */
+  percent: number;
+  /** GEL for one unit of the invoice currency, to six places; null until something is paid. */
+  rate: number | null;
+  /** Still owed to the factory, in its own currency (B3-04). */
+  debtMinor: number;
+  /** Nothing is owed any more: costs stop being preliminary. */
+  settled: boolean;
+}
+
+export function paidSummary(input: { payments: readonly { paidTetri: Tetri; paidMinor: number }[]; invoiceMinor: number }): PaidSummary {
+  const paidTetri = input.payments.reduce((n, p) => n + p.paidTetri, 0);
+  const paidMinor = input.payments.reduce((n, p) => n + p.paidMinor, 0);
+  const invoice = Math.max(0, input.invoiceMinor);
+  // A payment entered without its currency amount still says something: fall
+  // back to the invoice, or a whole shipment would read as unpaid.
+  const covered = paidMinor > 0 ? paidMinor : 0;
+  return {
+    paidTetri,
+    paidMinor,
+    percent: invoice > 0 ? Math.min(100, Math.round((covered / invoice) * 100)) : paidTetri > 0 ? 100 : 0,
+    rate: paidMinor > 0 && paidTetri > 0 ? Math.round((paidTetri / paidMinor) * 1e6) / 1e6 : null,
+    debtMinor: Math.max(0, invoice - covered),
+    settled: invoice > 0 && covered >= invoice,
+  };
+}
+
+/**
  * The landed cost of every line of a shipment.
  *
- * `paidTetri` is what the bank actually sent for these goods, and
- * `extrasTetri` is what the shipment's logistics and customs cost after the
- * refunded import VAT is taken out.
+ * The goods are costed at the rate the payments actually went through at,
+ * and the shipment's logistics and customs — after the refunded import VAT —
+ * are split evenly over the mopeds, which is what they were paid to move
+ * (умолчание Q24). A part costs what it cost; it did not ride in the
+ * container on its own account.
+ *
+ * Until the invoice is fully paid this is a preliminary figure by the rate of
+ * the payments made so far, and every further payment recomputes it (§7).
  */
 export function landedCosts(input: {
   lines: PurchaseLineInput[];
-  paidTetri: Tetri;
+  /** GEL per one minor unit of the invoice currency, from `paidSummary`. */
+  rate: number | null;
   extrasTetri: Tetri;
 }): LandedCost[] {
-  const values = input.lines.map((l) => l.qty * l.unitPriceMinor);
-  const fob = shareOut(input.paidTetri, values);
-  const units = input.lines.map((l) => l.qty);
-  const extras = shareOut(input.extrasTetri, units);
+  const rate = input.rate ?? 0;
+  const fob = input.lines.map((l) => Math.round(l.qty * l.unitPriceMinor * rate));
+  // Only the mopeds carry the freight; when a shipment holds none, the parts
+  // do, because the money was still spent on this shipment.
+  const carriers = input.lines.some((l) => l.isVehicle) ? input.lines.map((l) => (l.isVehicle ? l.qty : 0)) : input.lines.map((l) => l.qty);
+  const extras = shareOut(input.extrasTetri, carriers);
   return input.lines.map((l, i) => {
     const totalTetri = fob[i] + extras[i];
     return {
