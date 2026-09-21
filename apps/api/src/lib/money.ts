@@ -138,6 +138,9 @@ export async function planMoney(tx: Tx, input: MoneyInput): Promise<MoneyPlan> {
     }
     case 'on_account': {
       if (!input.customerId) throw badRequest('missing_field', 'customerId is required', { field: 'customerId' });
+      // Money goes to the card the person actually has (crit. 33, QA-W5-03).
+      const card = await tx.customer.findUnique({ where: { id: input.customerId }, select: { archived: true } });
+      if (card?.archived) throw conflict('customer_archived', 'This card was merged into another one; take the money there.');
       // The same order recordPayment follows: open rentals, oldest first.
       const rentals = await tx.rental.findMany({
         where: { customerId: input.customerId, status: { in: ['booked', 'active', 'overdue', 'paused', 'disputed'] } },

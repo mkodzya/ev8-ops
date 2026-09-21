@@ -19,6 +19,17 @@ function value(field: string, raw: unknown): string | null {
 }
 
 /**
+ * The words of a journal note. What the code writes for itself — the reasons
+ * a recost carries — is translated; what a person typed is shown as they
+ * typed it (QA-W5-21).
+ */
+export function noteWords(t: { feedNotes: Record<string, string> }, note: string | null | undefined): string | null {
+  const own = (note ?? '').trim();
+  if (!own) return null;
+  return t.feedNotes[own] ?? own;
+}
+
+/**
  * "было → стало" for the fields both sides name. A journal entry whose sides
  * say nothing legible shows nothing rather than a line of JSON.
  */

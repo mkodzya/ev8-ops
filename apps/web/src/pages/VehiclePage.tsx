@@ -11,7 +11,7 @@ import { RowMenu } from '../components/RowMenu.js';
 import { Field, Row } from '../components/Wizard.js';
 import { fmtDate } from '../format.js';
 import { useT } from '../i18n/index.js';
-import { ChangedFromTo } from '../lib/journal.js';
+import { ChangedFromTo, noteWords } from '../lib/journal.js';
 import { useLoad } from '../lib/use.js';
 import { useSession } from '../session.js';
 import { VehicleEconomics } from './EconomicsPage.js';
@@ -232,7 +232,7 @@ export function VehiclePage() {
                   <span>
                     {t.feedWords[l.action] ?? l.action}
                     <ChangedFromTo before={l.before} after={l.after} />
-                    {l.note && <span className="muted"> · {l.note}</span>}
+                    {noteWords(t, l.note) && <span className="muted"> · {noteWords(t, l.note)}</span>}
                     {l.by && <span className="muted"> · {l.by}</span>}
                   </span>
                 </li>

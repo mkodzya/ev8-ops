@@ -158,7 +158,9 @@ export function CustomerPage() {
           ))}
           {balance.data.aheadTetri > 0 && <Row k={t.money.ahead} v={<span className="mono muted">{formatGel(balance.data.aheadTetri)}</span>} />}
           {balance.data.depositHeldTetri > 0 && <Row k={t.money.depositHeld} v={<span className="mono muted">{formatGel(balance.data.depositHeldTetri)}</span>} />}
-          {can('cash.record') && (
+          {/* Money goes to the card the person actually has; an archived
+              duplicate takes none (crit. 33, QA-W5-03). */}
+          {!c.archived && can('cash.record') && (
             <div className="row-actions">
               <button type="button" className="pill pill-sm pill-accent" onClick={() => openMoney({ target: { kind: 'on_account', customerId: c.id, customer: c.name } })}>
                 {can('payments.reconcile') ? t.money.take : t.money.takeCash}
@@ -203,7 +205,7 @@ export function CustomerPage() {
             </ul>
           )}
           {!data.canOpenDocuments && data.documents.length > 0 && <p className="hint muted">{t.documents.restricted}</p>}
-          {can('customer.create') && (
+          {!c.archived && can('customer.create') && (
             <div className="row-actions">
               <select className="input input-amount" value={docKind} onChange={(e) => setDocKind(e.target.value as typeof docKind)}>
                 {(['id_card', 'driver_licence', 'other'] as const).map((k) => (

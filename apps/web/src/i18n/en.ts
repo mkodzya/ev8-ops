@@ -1201,6 +1201,7 @@ export const en = {
       vehicle_not_found: 'Moped not found.',
       vehicle_rented: 'The moped is with a customer. It gets a point back on return.',
       vehicle_rented_sale: 'The moped is out on rent. It cannot be sold until it comes back.',
+      customer_archived: 'This card was merged into another one. Work on the card it went into.',
       vehicle_rented_move: 'The moped is with a customer. Close the rental first.',
       vin_or_note: 'Pick a moped from the fleet, or write why the VIN is not confirmed.',
       vins_count: 'The number of VINs in a line does not match the quantity ordered. Check each line.',
