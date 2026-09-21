@@ -22,6 +22,31 @@ import { moveVehicle } from '../lib/vehicles.js';
 type Body = Record<string, unknown>;
 
 const PAYERS = ['company', 'customer'] as const;
+type Payer = (typeof PAYERS)[number];
+
+/**
+ * The payer changed, so the catalogue lines already on the job are priced
+ * again (crit. 23). A line is repriced only when it still carries the price
+ * the rule gave it: what the shelf paid for a company job, retail for a
+ * customer's. A figure somebody typed over that is their own and is left
+ * alone, and a line that names a part nobody stocks has no rule to follow.
+ */
+async function repriceLines(jobId: string, from: Payer, to: Payer): Promise<{ id: string; from: number; to: number }[]> {
+  const lines = await prisma.servicePart.findMany({
+    where: { jobId, partId: { not: null } },
+    select: { id: true, unitPriceTetri: true, unitCostTetri: true, part: { select: { salePriceTetri: true } } },
+  });
+  const out: { id: string; from: number; to: number }[] = [];
+  for (const l of lines) {
+    const shelf = { avgCostTetri: l.unitCostTetri, salePriceTetri: l.part?.salePriceTetri ?? null };
+    const was = partPriceTetri(from, shelf);
+    const now = partPriceTetri(to, shelf);
+    if (now == null || was == null || now === l.unitPriceTetri) continue;
+    if (l.unitPriceTetri !== was) continue; // a price somebody typed
+    out.push({ id: l.id, from: l.unitPriceTetri, to: now });
+  }
+  return out;
+}
 
 function totalOf(job: { labourTetri: number; parts: { qty: number; unitPriceTetri: number }[] }): number {
   return jobTotalTetri({ parts: job.parts, labourTetri: job.labourTetri });
@@ -260,6 +285,12 @@ export function serviceRoutes(app: FastifyInstance): void {
     if (b.open === true) data.status = 'open';
     if ('doneBy' in b) data.doneBy = str(b, 'doneBy', { max: 200 });
     if ('notes' in b) data.notes = str(b, 'notes', { max: 4000 });
+    // Who pays decides what a catalogue part costs (B8-04, crit. 22, 23), so
+    // changing the payer repriced nothing and the lines already on the job
+    // kept the other side's price: a customer was billed at what the shelf
+    // paid (QA-W5-13). Lines priced by the rule follow the payer; a price
+    // somebody typed is their own and stays.
+    let repriced: { id: string; from: number; to: number }[] = [];
     if ('payer' in b) {
       const payer = oneOf(b, 'payer', PAYERS, { required: true })!;
       if (payer === 'customer' && !job.rentalId) throw conflict('no_renter', 'This job names no renter to charge.');
@@ -269,10 +300,22 @@ export function serviceRoutes(app: FastifyInstance): void {
         const rental = await prisma.rental.findUniqueOrThrow({ where: { id: job.rentalId! }, select: { customerId: true } });
         data.customerId = rental.customerId;
       }
+      if (payer !== job.payer) repriced = await repriceLines(job.id, job.payer as Payer, payer);
     }
-    await prisma.serviceJob.update({ where: { id: job.id }, data: { ...data, updatedAt: new Date() } });
-    await audit({ actorId: actor.id, action: 'service.update', entityType: 'service_job', entityId: job.id, after: data as object });
-    return { ok: true };
+    await prisma.$transaction(async (tx) => {
+      await tx.serviceJob.update({ where: { id: job.id }, data: { ...data, updatedAt: new Date() } });
+      for (const line of repriced) {
+        await tx.servicePart.update({ where: { id: line.id }, data: { unitPriceTetri: line.to } });
+      }
+    });
+    await audit({
+      actorId: actor.id,
+      action: 'service.update',
+      entityType: 'service_job',
+      entityId: job.id,
+      after: repriced.length > 0 ? { ...(data as object), repriced } : (data as object),
+    });
+    return { ok: true, repriced: repriced.length };
   });
 
   app.post<{ Params: { id: string }; Body: Body }>('/api/service/:id/parts', { config: { scope: 'service.manage' } }, async (req, reply) => {
