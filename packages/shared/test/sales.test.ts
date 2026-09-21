@@ -55,6 +55,17 @@ describe('where a sale stands', () => {
     const state = saleState({ today: '2026-09-18', status: 'bought_back', instalments: rows });
     expect(state.owesTetri).toBe(0);
     expect(state.aheadTetri).toBe(0);
+    // The head said "Долг 0 · Впереди 0" while the rows still read "впереди"
+    // and "просрочен": a settled row is neither (QA-W5-07).
+    expect(state.rows.map((r) => r.state)).toEqual(['paid', 'paid', 'closed', 'closed']);
+    expect(state.worstDays).toBe(0);
+  });
+
+  it('an instalment due today is due, and nobody is late by nothing (QA-W5-05)', () => {
+    const state = saleState({ today: '2026-08-15', status: 'active', instalments: rows });
+    const today = state.rows.find((r) => r.seq === 3)!;
+    expect(today.state).toBe('overdue');
+    expect(today.days).toBe(0);
   });
 
   it('closes carried-over instalments from the oldest (B3-03, crit. 5)', () => {

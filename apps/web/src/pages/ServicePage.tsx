@@ -144,7 +144,10 @@ export function ServicePage() {
           ),
           sub: (
             <>
-              <span className="mono">{j.number}</span> · {j.status === 'draft' ? t.repair.fromManager : j.reason}
+              {/* The breakdown a manager wrote is what an owner decides by,
+                  so the row says it; "от менеджера" is the badge on the
+                  right, not a replacement for the words (QA-W5-19). */}
+              <span className="mono">{j.number}</span> · {j.reason}
             </>
           ),
           sub2: j.workshop?.name ?? undefined,
@@ -176,7 +179,7 @@ export function ServicePage() {
           {
             key: 'reason',
             label: t.repair.cols.what,
-            cell: (j) => (j.status === 'draft' ? <span className="warn-text">{t.repair.fromManager}</span> : j.reason),
+            cell: (j) => j.reason,
           },
           {
             key: 'workshop',

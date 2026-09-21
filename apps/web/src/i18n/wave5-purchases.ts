@@ -265,7 +265,7 @@ export const wave5purchasesRu: Wave5purchases = {
     newModel: 'Новая модель…',
     freeText: 'Вписать текстом',
     freeTextName: 'Как в инвойсе',
-    notOnShelf: (name) => `«${name}» не попадёт на склад — выберите запчасть или создайте`,
+    notOnShelf: (name) => `«${name}» не попадёт на склад — выберите запчасть из каталога или создайте новую`,
     notOnShelfShort: 'не попадёт на склад',
   },
 
