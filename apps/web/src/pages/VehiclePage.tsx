@@ -7,6 +7,7 @@ import { FormSheet } from '../ds/form/Form.js';
 import { useOperation } from '../ds/form/operation.js';
 import { useToast } from '../ds/feedback/Toast.js';
 import { BlockHead, ColorText, Empty, Loading, PageHead, PlaceText, RentalBadge, StateBadge, Vin } from '../components/ui.js';
+import { RowMenu } from '../components/RowMenu.js';
 import { Field, Row } from '../components/Wizard.js';
 import { fmtDate } from '../format.js';
 import { useT } from '../i18n/index.js';
@@ -46,6 +47,7 @@ export function VehiclePage() {
   const [move, setMove] = useState<{ toState: VehicleState; reason: string }>({ toState: 'service', reason: '' });
   // Writing a moped off is the one state change that is confirmed as well as explained (crit. 26).
   const [writeOff, setWriteOff] = useState(false);
+  const [fixing, setFixing] = useState(false);
 
   if (failure) return <LoadError failure={failure} onRetry={reload} />;
   if (!data) return <Loading />;
@@ -82,9 +84,16 @@ export function VehiclePage() {
             {t.actions.changeState}
           </button>
         )}
-        {can('service.manage') && v.state !== 'sold' && v.state !== 'out' && !data.serviceJobs.some((j) => j.status === 'open') && (
+        {can('service.report') && v.state !== 'sold' && v.state !== 'out' && !data.serviceJobs.some((j) => j.status === 'open') && (
           <NewJob vehicleId={v.id} onDone={reload} />
         )}
+        {/* Selling starts from the moped as often as from the "+" (§3.1). */}
+        {v.state === 'available' && can('sales.manage') && (
+          <Link className="pill pill-sm" to={`/sales/new?vehicle=${v.id}`}>
+            {t.sell.title}
+          </Link>
+        )}
+        {can('settings.manage') && <RowMenu actions={[{ key: 'vin', label: t.vinFix.title, onPick: () => setFixing(true) }]} />}
         {primary &&
           (primary.to ? (
             <Link className="pill pill-sm pill-accent head-primary" to={primary.to}>
@@ -96,6 +105,18 @@ export function VehiclePage() {
             </button>
           ))}
       </PageHead>
+
+      {fixing && (
+        <VinSheet
+          id={v.id}
+          vin={v.vin}
+          onClose={() => setFixing(false)}
+          onDone={() => {
+            setFixing(false);
+            reload();
+          }}
+        />
+      )}
 
       {open && (
         <FormSheet
@@ -358,5 +379,37 @@ function PoolRow({ v, onDone }: { v: Card['vehicle']; onDone: () => void }) {
       {op.failure && <div className="field-err">{op.failure.text}</div>}
       {v.state === 'rented' && <div className="hint">{t.pools.rentedNote}</div>}
     </>
+  );
+}
+
+/**
+ * A VIN typed wrong (wave 5 §3.9, crit. 32). Only an owner, always with a
+ * reason; the moped is the same moped and its history does not move.
+ */
+function VinSheet({ id, vin, onClose, onDone }: { id: string; vin: string; onClose: () => void; onDone: () => void }) {
+  const t = useT();
+  const initial = { vin, reason: '' };
+  const [f, setF] = useState(initial);
+  return (
+    <FormSheet
+      title={t.vinFix.title}
+      onClose={onClose}
+      value={f}
+      initial={initial}
+      onRestore={setF}
+      label={t.vinFix.save}
+      submit={async (key) => {
+        await api.patch(`/api/fleet/${id}/vin`, { vin: f.vin.trim(), reason: f.reason.trim() }, { key });
+        return { toast: { text: t.form.changesSaved } };
+      }}
+      onDone={onDone}
+    >
+      <Field label={t.vinFix.vin} hint={t.vinFix.hint} name="vin">
+        <input className="input mono" value={f.vin} onChange={(e) => setF({ ...f, vin: e.target.value.toUpperCase() })} />
+      </Field>
+      <Field label={t.vinFix.reason} name="reason">
+        <input className="input" value={f.reason} onChange={(e) => setF({ ...f, reason: e.target.value })} />
+      </Field>
+    </FormSheet>
   );
 }

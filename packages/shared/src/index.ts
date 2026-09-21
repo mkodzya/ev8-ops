@@ -18,3 +18,6 @@ export * from './navigation.js';
 export * from './search.js';
 export * from './debt.js';
 export * from './returns.js';
+export * from './sales.js';
+export * from './service.js';
+export * from './vin.js';

@@ -90,6 +90,17 @@ describe.skipIf(!HAS_DB)('an order (PUR-01)', () => {
   });
 });
 
+/**
+ * A VIN the fleet will accept: 17 characters without I, O or Q (wave 5 §3.9).
+ * The distinctive tail of whatever the test made up is kept, so two VINs from
+ * one run still differ.
+ */
+function vin(...parts: (string | number)[]): string {
+  const clean = parts.join('').toUpperCase().replace(/[^A-HJ-NPR-Z0-9]/g, '');
+  const tail = clean.slice(-17);
+  return tail.length === 17 ? tail : 'V'.repeat(17 - tail.length) + tail;
+}
+
 describe.skipIf(!HAS_DB)('paying and receiving (PUR-02, PUR-03)', () => {
   async function ordered() {
     const owner = await loginAs('owner');
@@ -140,7 +151,7 @@ describe.skipIf(!HAS_DB)('paying and receiving (PUR-02, PUR-03)', () => {
     const tag = uniq().replace(/\D/g, '').slice(-6);
     const vins: Record<string, string[]> = {};
     for (const line of FLYBROTHER) {
-      vins[lineIds[line.key]] = Array.from({ length: line.qty }, (_, i) => `PO${tag}${line.key.replace(/\W/g, '')}${i}`);
+      vins[lineIds[line.key]] = Array.from({ length: line.qty }, (_, i) => vin('PO', tag, line.key, i));
     }
     const res = await call(owner, 'POST', `/api/purchases/${id}/receive`, { receivedOn: '2025-03-14', vins });
     expect(res.statusCode, res.body).toBe(200);
@@ -164,18 +175,17 @@ describe.skipIf(!HAS_DB)('paying and receiving (PUR-02, PUR-03)', () => {
     expect(fleet.vehicle.arrivedOn).toBe('2025-03-14');
   });
 
-  it('refuses to receive a shipment nobody has paid for, or one missing VINs', async () => {
+  it('refuses a shipment whose VINs do not match what was ordered', async () => {
     const { owner, id, lineIds } = await ordered();
-    const unpaid = await call(owner, 'POST', `/api/purchases/${id}/receive`, { vins: {} });
-    expect(json<{ error: string }>(unpaid).error).toBe('not_paid');
-
+    // A shipment may arrive before it is paid for (Mika, Q23); what it may
+    // not do is arrive with the wrong VINs.
     await call(owner, 'POST', `/api/purchases/${id}/payments`, { grossTetri: '68394.19' });
     const none = await call(owner, 'POST', `/api/purchases/${id}/receive`, { vins: {} });
     expect(json<{ error: string }>(none).error).toBe('vins_missing');
 
     const tag = uniq().replace(/\D/g, '').slice(-6);
     const short: Record<string, string[]> = {};
-    for (const line of FLYBROTHER) short[lineIds[line.key]] = Array.from({ length: line.qty }, (_, i) => `SH${tag}${line.key.replace(/\W/g, '')}${i}`);
+    for (const line of FLYBROTHER) short[lineIds[line.key]] = Array.from({ length: line.qty }, (_, i) => vin('SH', tag, line.key, i));
     short[lineIds['B11']] = short[lineIds['B11']].slice(0, 5);
     const wrongCount = await call(owner, 'POST', `/api/purchases/${id}/receive`, { vins: short });
     expect(json<{ error: string; qty: number; given: number }>(wrongCount)).toMatchObject({ error: 'vins_count', qty: 6, given: 5 });
@@ -187,7 +197,7 @@ describe.skipIf(!HAS_DB)('paying and receiving (PUR-02, PUR-03)', () => {
     await call(owner, 'POST', `/api/purchases/${id}/payments`, { grossTetri: '68394.19' });
     const tag = uniq().replace(/\D/g, '').slice(-6);
     const vins: Record<string, string[]> = {};
-    for (const line of FLYBROTHER) vins[lineIds[line.key]] = Array.from({ length: line.qty }, (_, i) => `DUP${tag}${line.key.replace(/\W/g, '')}${i}`);
+    for (const line of FLYBROTHER) vins[lineIds[line.key]] = Array.from({ length: line.qty }, (_, i) => vin('DUP', tag, line.key, i));
     // The route upper-cases a VIN on the way in; a row made directly has to
     // do the same, because the column insists on it.
     const clash = vins[lineIds['Eagle']][0].toUpperCase();
@@ -207,7 +217,7 @@ describe.skipIf(!HAS_DB)('paying and receiving (PUR-02, PUR-03)', () => {
     await call(owner, 'POST', `/api/purchases/${id}/payments`, { grossTetri: '68394.19' });
     const tag = uniq().replace(/\D/g, '').slice(-6);
     const vins: Record<string, string[]> = {};
-    for (const line of FLYBROTHER) vins[lineIds[line.key]] = Array.from({ length: line.qty }, (_, i) => `RC${tag}${line.key.replace(/\W/g, '')}${i}`);
+    for (const line of FLYBROTHER) vins[lineIds[line.key]] = Array.from({ length: line.qty }, (_, i) => vin('RC', tag, line.key, i));
     await call(owner, 'POST', `/api/purchases/${id}/receive`, { vins });
     const late = await call(owner, 'POST', `/api/purchases/${id}/lines`, { modelId: ids['B11'], qty: 1, unitPrice: '1' });
     expect(json<{ error: string }>(late).error).toBe('purchase_closed');

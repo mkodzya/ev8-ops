@@ -39,7 +39,9 @@ export function customerRoutes(app: FastifyInstance): void {
   app.get('/api/customers', { config: { scope: 'fleet.view' } }, async (req) => {
     const identity = mayView(req, 'customer.documents.view');
     const customers = await prisma.customer.findMany({
-      where: { archived: false },
+      // Clients only (B3-06, wave 5 §3.9): a factory has a card of its own,
+      // and neither the hand-over nor the sale should have to step over it.
+      where: { archived: false, recordKind: { not: 'supplier' } },
       orderBy: { name: 'asc' },
       include: {
         // Every rental: the list counts them and sums the debt with the rule

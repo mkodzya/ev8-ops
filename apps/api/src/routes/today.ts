@@ -3,6 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import { dateFromISO, isoDate } from '../lib/dates.js';
 import { debtsOf } from '../lib/debt.js';
 import { prisma } from '../lib/db.js';
+import { partRows } from '../lib/stock.js';
 import { env } from '../lib/env.js';
 import { actorOf, mayView } from '../lib/guard.js';
 import { onHandOf } from '../lib/till.js';
@@ -33,7 +34,7 @@ export function todayRoutes(app: FastifyInstance): void {
     const day = dateFromISO(today)!;
     const monday = dateFromISO(weekStart(today))!;
 
-    const [rentalRows, tills, unmatchedLines, lastLines, instalmentRows, serviceJobs, purchaseRows, vehicles, week, myTill] = await Promise.all([
+    const [rentalRows, tills, unmatchedLines, lastLines, instalmentRows, serviceJobs, reportRows, parts, purchaseRows, vehicles, week, myTill] = await Promise.all([
       prisma.rental.findMany({
         where: { OR: [{ status: { not: 'returned' } }, { status: 'returned', deposit: { status: 'held', decidedById: null, paidTetri: { gt: 0 } } }] },
         select: {
@@ -62,6 +63,14 @@ export function todayRoutes(app: FastifyInstance): void {
           })
         : [],
       prisma.serviceJob.findMany({ where: { status: 'open' }, select: { openedOn: true } }),
+      owner
+        ? prisma.serviceJob.findMany({
+            where: { status: 'draft' },
+            orderBy: { createdAt: 'asc' },
+            select: { id: true, number: true, reason: true, vehicle: { select: { vin: true } }, createdBy: { select: { name: true } }, _count: { select: { photos: true } } },
+          })
+        : [],
+      owner ? partRows() : [],
       owner ? prisma.purchase.findMany({ where: { status: 'ordered' }, select: { id: true, number: true, supplier: { select: { name: true } } }, orderBy: { createdAt: 'asc' } }) : [],
       prisma.vehicle.findMany({ where: { archived: false }, select: { state: true, pool: true, locationId: true } }),
       owner
@@ -128,6 +137,26 @@ export function todayRoutes(app: FastifyInstance): void {
         amountTetri: i.amountTetri - i.paidTetri,
       })),
       service: { open: serviceJobs.length, longerThanWeek: serviceJobs.filter((j) => daysBetween(isoDate(j.openedOn)!, today) > 7).length, longestDays: longest },
+      // A breakdown a manager reported (wave 5 §3.10) and the shelf running
+      // low: both are the owners' to act on, and both are one line each.
+      reports: reportRows.map((j) => ({
+        id: j.id,
+        number: j.number,
+        vin: j.vehicle?.vin ?? null,
+        who: j.createdBy?.name ?? null,
+        note: j.reason,
+        photos: j._count.photos,
+      })),
+      lowParts: (() => {
+        const low = parts.filter((p) => p.minQty > 0 && p.onHand < p.minQty);
+        return {
+          count: low.length,
+          note: low
+            .slice(0, 2)
+            .map((p) => `${p.name}: ${p.onHand}/${p.minQty}`)
+            .join(' · '),
+        };
+      })(),
       purchases: purchaseRows.map((p) => ({ id: p.id, number: p.number, who: p.supplier.name, note: 'ordered' })),
       vehiclesWithoutPool: vehicles.filter((v) => v.pool == null && v.state !== 'sold' && v.state !== 'out').length,
       vehiclesWithoutPoint: vehicles.filter((v) => v.locationId == null && v.state === 'available').length,

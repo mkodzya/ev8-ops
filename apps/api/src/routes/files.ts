@@ -61,10 +61,12 @@ export function fileRoutes(app: FastifyInstance): void {
     },
   );
 
-  // Photos of the damage on a repair job (SRV-01).
+  // Photos of the damage on a repair job (SRV-01). A manager reporting a
+  // breakdown brings the photos with it (wave 5 §3.7): the picture is the
+  // half of the report words cannot carry.
   app.post<{ Params: { id: string }; Body: Body }>(
     '/api/service/:id/photos',
-    { config: { scope: 'service.manage' }, bodyLimit: BODY_LIMIT },
+    { config: { scope: 'service.report' }, bodyLimit: BODY_LIMIT },
     async (req, reply) => {
       const actor = actorOf(req);
       const job = await prisma.serviceJob.findUnique({ where: { id: req.params.id }, select: { id: true } });

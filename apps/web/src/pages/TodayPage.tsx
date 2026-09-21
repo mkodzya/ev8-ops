@@ -54,6 +54,7 @@ const SEGMENT: Record<string, string> = {
   overdue: '/rentals?s=overdue',
   awaiting: '/rentals?s=awaiting',
   money: '/money/statements',
+  service: '/service',
   instalments: '/sales',
   purchases: '/purchases',
   fill: '/rentals?s=unsigned',
@@ -80,6 +81,9 @@ export function TodayPage() {
     else if (r.group === 'awaiting') bits.push(t.today.handedToday);
     else if (r.action === 'take_instalment' && r.days) bits.push(t.today.overdueDays(r.days));
     else if (r.action === 'open_purchase') bits.push(t.today.ordered);
+    // A reported breakdown says what broke; the shelf row names the parts.
+    else if (r.action === 'open_report') bits.push(r.note ?? '');
+    else if (r.action === 'order_parts') return (r.note ?? '').split('|')[1] ?? '';
     return bits.join(' · ');
   };
 
@@ -97,6 +101,11 @@ export function TodayPage() {
         return t.today.staleBank(r.note ?? '', r.days ?? 0);
       case 'open_service':
         return t.today.inRepair(Number((r.note ?? '0/0').split('/')[0]));
+      // A breakdown somebody reported, and the shelf running low (wave 5 §3.10).
+      case 'open_report':
+        return t.today.reported;
+      case 'order_parts':
+        return t.today.lowParts(Number((r.note ?? '0|').split('|')[0]));
       case 'set_pool':
         return t.today.noPool(Number(r.note ?? 0));
       case 'set_point':

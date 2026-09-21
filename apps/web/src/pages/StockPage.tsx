@@ -1,17 +1,18 @@
 import { parseGel, spellingMatches } from '@ev8/shared';
-import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useEffect, useRef, useState } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
-import { BlockHead, Loading, PageHead } from '../components/ui.js';
-import { DataList } from '../ds/list/DataList.js';
+import { LoadError } from '../components/LoadError.js';
+import { Loading, PageHead } from '../components/ui.js';
 import { Field } from '../components/Wizard.js';
+import { useToast } from '../ds/feedback/Toast.js';
+import { FormSheet, SubmitButton } from '../ds/form/Form.js';
+import { useOperation } from '../ds/form/operation.js';
+import { DataList } from '../ds/list/DataList.js';
 import { formatGel } from '../format.js';
 import { useLocale, useT } from '../i18n/index.js';
-import { FormSheet } from '../ds/form/Form.js';
-import { rowClick } from '../lib/rowLink.js';
 import { useLoad } from '../lib/use.js';
 import { useSession } from '../session.js';
-import { LoadError } from '../components/LoadError.js';
 
 export interface PartRow {
   id: string;
@@ -26,154 +27,181 @@ export interface PartRow {
   onHand: number;
   valueTetri: number | null;
   avgCostTetri: number | null;
+  /** How many are missing against «держать не меньше»; 0 when the shelf is enough. */
   shortBy: number;
 }
 
-interface ModelRow {
-  id: string;
-  name: string;
-  byState: Record<'available' | 'rented' | 'service' | 'out' | 'sold', number>;
-  inStock: number;
-  ours: number;
-  onOrder: number;
-  valueTetri: number;
-  unpriced: number;
+interface Parts {
+  parts: PartRow[];
+  totals: { parts: number; valueTetri: number | null; short: number; negative: number };
 }
 
-/** The warehouse: parts on the shelf, and mopeds counted by model. */
+/**
+ * Склад (wave 5 §3.8). Parts only — the mopeds-by-model table went back to
+ * «Парк → Модели», where a moped is a VIN with a state rather than a line in
+ * a stock report (deviation 3 of wave 1, crit. 30). What is short opens the
+ * page by itself when anything is, because that is the only row on this
+ * screen that asks for something to be done today.
+ */
 export function StockPage() {
-  const navigate = useNavigate();
   const t = useT();
   const { can } = useSession();
-  const mopeds = useLoad<{ rows: ModelRow[]; totals: { inStock: number; ours: number; onOrder: number; valueTetri: number; unpriced: number } }>(
-    '/api/stock/vehicles',
-  );
-  const parts = useLoad<{ parts: PartRow[]; totals: { parts: number; valueTetri: number; short: number; negative: number } }>('/api/parts');
   const { locale } = useLocale();
-  const partName = (p: PartRow) => (locale === 'ka' && p.nameKa) || p.name;
+  const { data, failure, reload } = useLoad<Parts>('/api/parts');
+  const [params, setParams] = useSearchParams();
+  const applied = useRef(false);
 
-  if (!mopeds.data && mopeds.failure) return <LoadError failure={mopeds.failure} onRetry={mopeds.reload} />;
-  if (!parts.data && parts.failure) return <LoadError failure={parts.failure} onRetry={parts.reload} />;
-  if (!mopeds.data || !parts.data) return <Loading />;
+  const short = data?.totals.short ?? 0;
+  useEffect(() => {
+    // Once per visit: after that the chips are whatever the person chose,
+    // «Все» included, and the address is what they can send to somebody.
+    if (applied.current || short === 0) return;
+    applied.current = true;
+    if (params.get('f') != null || params.get('q')) return;
+    const next = new URLSearchParams(params);
+    next.set('f', 'short');
+    setParams(next, { replace: true });
+  }, [short, params, setParams]);
+
+  if (!data && failure) return <LoadError failure={failure} onRetry={reload} />;
+  if (!data) return <Loading />;
+  const partName = (p: PartRow) => (locale === 'ka' && p.nameKa) || p.name;
+  const seeCost = can('cost.view');
+  const mayOrder = can('purchases.manage');
 
   return (
     <>
-      <PageHead wrap title={t.stock.title} sub={t.stock.partsCount(parts.data?.parts.length ?? 0)} note={t.stock.subtitle}>
-        {can('service.manage') && <NewPart onDone={parts.reload} />}
+      <PageHead
+        wrap
+        title={t.shelf.title}
+        sub={
+          <>
+            {t.stock.partsCount(data.parts.length)}
+            {seeCost && data.totals.valueTetri != null && (
+              <>
+                {' · '}
+                {t.shelf.value} <span className="mono">{formatGel(data.totals.valueTetri)}</span>
+              </>
+            )}
+          </>
+        }
+      >
+        {can('service.manage') && <NewPart onDone={reload} />}
       </PageHead>
 
-      <section className="card">
-        <BlockHead title={t.stock.mopeds} sub={t.models.count(mopeds.data.rows.length)} />
-        <div className="table-wrap table-flat">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>{t.stock.model}</th>
-                <th className="num">{t.stock.inStock}</th>
-                <th className="num">{t.states.rented}</th>
-                <th className="num">{t.states.service}</th>
-                <th className="num">{t.stock.ours}</th>
-                <th className="num">{t.stock.onOrder}</th>
-                <th className="num">{t.stock.value}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {mopeds.data.rows.map((m) => (
-                // The whole row opens the model: the name alone is too small a target on a phone (QA-W1-04).
-                <tr key={m.id} className="row-go" onClick={rowClick(() => navigate(`/fleet/models/${m.id}`))}>
-                  <td>
-                    <Link to={`/fleet/models/${m.id}`}>{m.name}</Link>
-                  </td>
-                  <td className="num mono state-available">{m.inStock}</td>
-                  <td className="num mono">{m.byState.rented}</td>
-                  <td className="num mono">{m.byState.service}</td>
-                  <td className="num mono">{m.ours}</td>
-                  <td className="num mono">{m.onOrder > 0 ? m.onOrder : t.common.dash}</td>
-                  <td className="num mono">
-                    {formatGel(m.valueTetri, { decimals: false })}
-                    {m.unpriced > 0 && <span className="muted"> · {t.stock.unpriced}: {m.unpriced}</span>}
-                  </td>
-                </tr>
-              ))}
-              <tr className="row-total">
-                <td>{t.stock.value}</td>
-                <td className="num mono">{mopeds.data.totals.inStock}</td>
-                <td />
-                <td />
-                <td className="num mono">{mopeds.data.totals.ours}</td>
-                <td className="num mono">{mopeds.data.totals.onOrder}</td>
-                <td className="num mono">{formatGel(mopeds.data.totals.valueTetri, { decimals: false })}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
+      {data.totals.negative > 0 && <div className="hint hint-bad">{t.stock.negativeHint}</div>}
 
-      <section className="card">
-        <BlockHead
-          title={t.stock.parts}
-          sub={
+      <DataList
+        rows={data.parts}
+        rowKey={(p) => p.id}
+        fallback={(a, b) => b.shortBy - a.shortBy || partName(a).localeCompare(partName(b))}
+        search={{
+          placeholder: t.shelf.searchHint,
+          match: (p, q) => spellingMatches(q, [p.name, p.nameKa, p.sku]),
+        }}
+        chips={[
+          { key: 'short', label: t.shelf.chips.short, test: (p) => p.shortBy > 0 },
+          { key: 'negative', label: t.shelf.chips.negative, test: (p) => p.onHand < 0 },
+        ]}
+        empty={{ text: t.stock.none }}
+        card={(p) => ({
+          title: <Link to={`/service/stock/parts/${p.id}`}>{partName(p)}</Link>,
+          sub: (
             <>
-              {t.stock.partsCount(parts.data.parts.length)}
-              {can('cost.view') && parts.data.totals.valueTetri != null && <> · {t.stock.value} <span className="mono">{formatGel(parts.data.totals.valueTetri)}</span></>}
+              {p.sku && <span className="mono">{p.sku}</span>}
+              {p.sku && p.minQty > 0 && ' · '}
+              {p.minQty > 0 && t.shelf.keepAtLeast(p.minQty)}
             </>
-          }
-        />
-        {parts.data.totals.negative > 0 && <div className="hint hint-bad">{t.stock.negativeHint}</div>}
-        <DataList
-          rows={parts.data.parts}
-          rowKey={(p) => p.id}
-          href={(p) => `/service/stock/parts/${p.id}`}
-          fallback={(a, b) => partName(a).localeCompare(partName(b))}
-          search={{
-            placeholder: t.lists.partsSearch,
-            match: (p, q) => spellingMatches(q, [p.name, p.nameKa, p.sku]),
-          }}
-          chips={[
-            { key: 'short', label: t.lists.chips.belowMin, test: (p) => p.shortBy > 0 },
-            { key: 'negative', label: t.lists.chips.negative, test: (p) => p.onHand < 0 },
-          ]}
-          empty={{ text: t.stock.none }}
-          card={(p) => ({
-            title: partName(p),
-            sub: (
-              <>
-                {p.sku && <span className="mono">{p.sku}</span>}
-                {p.sku && p.minQty > 0 && ' · '}
-                {p.minQty > 0 && t.lists.keepAtLeast(p.minQty)}
-              </>
-            ),
-            right: (
-              <span className={`t-money ${p.onHand < 0 ? 'crit-text' : p.shortBy > 0 ? 'warn-text' : ''}`}>
+          ),
+          right: (
+            <span className={`t-money ${p.onHand < 0 ? 'crit-text' : p.shortBy > 0 ? 'warn-text' : ''}`}>
+              {p.onHand} <span className="muted">{t.stock.units[p.unit]}</span>
+            </span>
+          ),
+          rightSub: p.shortBy > 0 && mayOrder ? <OrderButton part={p} /> : seeCost && p.valueTetri != null ? formatGel(p.valueTetri) : undefined,
+        })}
+        columns={[
+          {
+            key: 'name',
+            label: t.stock.name,
+            cell: (p) => <Link to={`/service/stock/parts/${p.id}`}>{partName(p)}</Link>,
+            sort: { value: (p) => partName(p) },
+          },
+          { key: 'sku', label: t.stock.sku, cell: (p) => <span className="muted mono">{p.sku ?? t.common.dash}</span>, sort: { value: (p) => p.sku } },
+          {
+            key: 'onHand',
+            label: t.shelf.onHand,
+            num: true,
+            cell: (p) => (
+              <span className={`mono ${p.onHand < 0 ? 'crit-text' : p.shortBy > 0 ? 'warn-text' : ''}`}>
                 {p.onHand} <span className="muted">{t.stock.units[p.unit]}</span>
               </span>
             ),
-            rightSub: can('cost.view') && p.valueTetri != null ? formatGel(p.valueTetri) : undefined,
-          })}
-          columns={[
-            { key: 'name', label: t.stock.name, cell: (p) => partName(p), sort: { value: (p) => partName(p) } },
-            { key: 'sku', label: t.stock.sku, cell: (p) => <span className="muted mono">{p.sku ?? t.common.dash}</span>, sort: { value: (p) => p.sku } },
-            {
-              key: 'onHand',
-              label: t.stock.onHand,
-              num: true,
-              cell: (p) => (
-                <span className={`mono ${p.onHand < 0 ? 'crit-text' : p.shortBy > 0 ? 'warn-text' : ''}`}>
-                  {p.onHand} <span className="muted">{t.stock.units[p.unit]}</span>
-                </span>
-              ),
-              sort: { value: (p) => p.onHand },
-            },
-            { key: 'minQty', label: t.stock.minQty, num: true, cell: (p) => <span className="mono muted">{p.minQty > 0 ? p.minQty : t.common.dash}</span>, sort: { value: (p) => p.minQty, first: 'desc' } },
-            ...(can('cost.view')
-              ? [
-                  { key: 'avgCost', label: t.stock.avgCost, num: true, cell: (p: PartRow) => <span className="mono">{p.avgCostTetri == null ? t.common.dash : formatGel(p.avgCostTetri)}</span>, sort: { value: (p: PartRow) => p.avgCostTetri, first: 'desc' as const } },
-                  { key: 'value', label: t.stock.value, num: true, cell: (p: PartRow) => <span className="mono">{p.valueTetri == null ? t.common.dash : formatGel(p.valueTetri)}</span>, sort: { value: (p: PartRow) => p.valueTetri, first: 'desc' as const } },
-                ]
-              : []),
-          ]}
-        />
-      </section>
+            sort: { value: (p) => p.onHand },
+          },
+          {
+            key: 'minQty',
+            label: t.shelf.minQty,
+            num: true,
+            cell: (p) => <span className="mono muted">{p.minQty > 0 ? p.minQty : t.common.dash}</span>,
+            sort: { value: (p) => p.minQty, first: 'desc' },
+          },
+          ...(seeCost
+            ? [
+                {
+                  key: 'avgCost',
+                  label: t.shelf.avgCost,
+                  num: true,
+                  cell: (p: PartRow) => <span className="mono">{p.avgCostTetri == null ? t.common.dash : formatGel(p.avgCostTetri)}</span>,
+                  sort: { value: (p: PartRow) => p.avgCostTetri, first: 'desc' as const },
+                },
+                {
+                  key: 'value',
+                  label: t.shelf.value,
+                  num: true,
+                  cell: (p: PartRow) => <span className="mono">{p.valueTetri == null ? t.common.dash : formatGel(p.valueTetri)}</span>,
+                  sort: { value: (p: PartRow) => p.valueTetri, first: 'desc' as const },
+                },
+              ]
+            : []),
+          {
+            key: 'order',
+            label: '',
+            cell: (p) => (p.shortBy > 0 && mayOrder ? <OrderButton part={p} /> : null),
+          },
+        ]}
+      />
+    </>
+  );
+}
+
+/**
+ * «В заказ» (B8-05, crit. 28): a draft order to whoever supplied this part
+ * last, with one line for what is missing. The order opens straight away —
+ * the point of the button is that nobody has to go and build it.
+ */
+export function OrderButton({ part }: { part: PartRow }) {
+  const t = useT();
+  const navigate = useNavigate();
+  const toast = useToast();
+  const op = useOperation();
+  return (
+    <>
+      <SubmitButton
+        small
+        type="button"
+        state={op.state}
+        label={t.shelf.order}
+        onClick={async () => {
+          const res = await op.run((key) => api.post<{ id: string; number: string }>('/api/purchases/from-part', { partId: part.id }, { key }));
+          if (!res.ok) return;
+          toast({ text: t.shelf.ordered(res.value.number) });
+          navigate(`/purchases/${res.value.id}`);
+        }}
+      />
+      {/* Nobody has ever supplied this part: the refusal belongs beside the
+          button that asked, there being no form here to put it in. */}
+      {op.failure && <span className="field-err">{op.failure.text}</span>}
     </>
   );
 }
@@ -241,7 +269,7 @@ function NewPart({ onDone }: { onDone: () => void }) {
                 ))}
               </select>
             </Field>
-            <Field label={t.stock.minQty} name="minQty">
+            <Field label={t.shelf.minQty} name="minQty">
               <input className="input input-amount mono" value={f.minQty} onChange={(e) => setF({ ...f, minQty: e.target.value })} inputMode="numeric" />
             </Field>
             <Field label={t.stock.salePrice} name="salePriceTetri">

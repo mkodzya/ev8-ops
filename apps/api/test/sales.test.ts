@@ -58,7 +58,7 @@ describe.skipIf(!HAS_DB)('selling (SAL-01)', () => {
     await prisma.vehicle.update({ where: { id: vehicle.id }, data: { state: 'rented' } });
     const rented = await call(owner, 'POST', '/api/sales', { customerId: customer.id, vehicleId: vehicle.id, priceTetri: '2900' });
     expect(rented.statusCode).toBe(409);
-    expect(json<{ error: string }>(rented).error).toBe('vehicle_not_available');
+    expect(json<{ error: string }>(rented).error).toBe('vehicle_rented');
 
     await prisma.vehicle.update({ where: { id: vehicle.id }, data: { state: 'available' } });
     expect((await call(owner, 'POST', '/api/sales', { customerId: customer.id, vehicleId: vehicle.id, priceTetri: '2900' })).statusCode).toBe(201);
