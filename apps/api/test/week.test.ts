@@ -237,6 +237,11 @@ describe.skipIf(!HAS_DB)('wave 6 · the week', () => {
     expect(res.headers['content-type']).toBe('application/pdf');
     expect(res.rawPayload.subarray(0, 5).toString('latin1')).toBe('%PDF-');
     expect(res.rawPayload.length).toBeGreaterThan(2000);
+    // One page. Seventeen figures at the contract's type size ran to two, and
+    // a week that prints on two pages is a week nobody carries in (crit. 4).
+    expect(/\/Count\s+(\d+)/.exec(res.rawPayload.toString('latin1'))?.[1]).toBe('1');
+    // Georgian leads on this paper, so the face that can draw it is embedded.
+    expect(res.rawPayload.toString('latin1')).toContain('NotoSansGeorgian');
   });
 
   it('refuses a period that runs backwards, and is an owner’s figure', async () => {
