@@ -1348,6 +1348,14 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
 .util-total .hint { margin-bottom: 0; }
 /* What the percentage left out, kept quiet but never hidden. */
 .util-aside { margin-top: 10px; }
+/* A line whose value is a sentence, not a number: "нет данных — связи
+   ремонта с батареями не ведётся" stands beside a label just as long, and at
+   375 px the two columns cannot both have their way. The row stacks instead
+   of letting the words run through each other (the phone half of QA-W6-02). */
+@media (max-width: 560px) {
+  .figure-stack { grid-template-columns: 1fr; }
+  .figure-stack > dd { justify-self: start; text-align: left; }
+}
 /* The mopeds behind a line of "что мешает" — short lists, named in place. */
 .util-list { list-style: none; margin: 0 0 10px; padding: 0 0 0 2px; font: var(--text-body-sm); }
 .util-list li { padding: 4px 0; }
