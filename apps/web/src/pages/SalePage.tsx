@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { LoadError } from '../components/LoadError.js';
+import { KommoField } from '../components/Kommo.js';
 import { RowMenu } from '../components/RowMenu.js';
 import { SignScreen, signedAtText } from '../components/Documents.js';
 import { Empty, Loading, PageHead, Vin } from '../components/ui.js';
@@ -30,7 +31,7 @@ interface FeedRow {
 }
 
 interface SaleCard {
-  sale: Sale & { aheadTetri: number; lateDays: number; transferred: boolean; paidBeforeTetri: number };
+  sale: Sale & { aheadTetri: number; lateDays: number; transferred: boolean; paidBeforeTetri: number; kommoRef: string | null };
   documents: { id: string; docKind: string | null; signedAt: string | null; signedBy: string | null }[];
   feed: FeedRow[];
   payments: { id: string; occurredOn: string; channel: 'transfer' | 'acquiring' | 'cash'; direction: 'in' | 'out'; grossTetri: number }[];
@@ -131,6 +132,8 @@ export function SalePage() {
         <Row k={t.saleCard.warranty} v={<span className="mono">{fmtDate(s.warrantyUntil)}</span>} />
         {s.transferred && <Row k={t.saleCard.transferred} v={t.saleCard.paidBefore(formatGel(s.paidBeforeTetri))} />}
         {s.boughtBackOn && <Row k={t.saleCard.menu.buyback} v={<span className="mono">{fmtDate(s.boughtBackOn)}</span>} />}
+        {/* The front office's deal, one way only until the webhook tariff (B10-03). */}
+        <Row k={t.kommo.label} v={<KommoField url={`/api/sales/${s.id}`} value={s.kommoRef ?? null} onDone={reload} />} />
       </section>
 
       <section className="card">

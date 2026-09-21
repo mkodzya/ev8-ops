@@ -91,6 +91,10 @@ export function TodayPage() {
     switch (r.action) {
       case 'decide_deposit':
         return `${t.today.deposit} · ${r.who ?? ''}`;
+      // One row for everything the transfer left undecided (wave 6 §3.7):
+      // the count is in `days`, the money in `amountTetri`.
+      case 'sort_odoo_deposits':
+        return t.today.odooDeposits(r.days ?? 0);
       case 'accept_till':
         return `${t.today.till} · ${r.who ?? ''}`;
       case 'hand_over_till':

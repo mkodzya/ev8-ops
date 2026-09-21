@@ -2,6 +2,7 @@ import type { ActKind, DepositStatus, PeriodPayStatus, RentalStatus } from '@ev8
 import { useState } from 'react';
 import { parseGel, todayISO, type VehicleState } from '@ev8/shared';
 import { DocumentRow, signedAtText, type DocState } from '../components/Documents.js';
+import { KommoField } from '../components/Kommo.js';
 import { LoadError } from '../components/LoadError.js';
 import { DecideSheet } from '../components/ReturnMoney.js';
 import { RowMenu } from '../components/RowMenu.js';
@@ -34,6 +35,7 @@ export interface RentalCard {
     /** This rental's part of the customer's one debt figure. */
     debtTetri: number;
     nightParkingAddress?: string | null;
+    kommoRef?: string | null;
     batteries?: number | null;
     chargers?: number | null;
     odooName: string | null;
@@ -296,6 +298,8 @@ export function RentalPage() {
             />
           )}
           {r.notes && <Row k={t.rental.notes} v={<span className="pre">{r.notes}</span>} />}
+          {/* The front office's deal, one way only until the webhook tariff (B10-03). */}
+          <Row k={t.kommo.label} v={<KommoField url={`/api/rentals/${r.id}`} value={r.kommoRef ?? null} onDone={reload} />} />
         </section>
 
         <section className="card">

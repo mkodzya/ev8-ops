@@ -20,6 +20,7 @@ import { nameMatches, primaryName, secondName } from '../lib/names.js';
 import { useLoad } from '../lib/use.js';
 import { fmtDate as fmtDay } from '../format.js';
 import { useSession } from '../session.js';
+import { KommoField } from '../components/Kommo.js';
 
 interface Card {
   customer: {
@@ -35,6 +36,7 @@ interface Card {
     tags: string[];
     notes: string | null;
     source: string | null;
+    kommoRef: string | null;
     /** Merged away: the card is a record now, not a person to work with. */
     archived: boolean;
     mergedInto: { id: string; name: string; nameKa: string | null; nameLat: string | null } | null;
@@ -43,6 +45,8 @@ interface Card {
   sales: { id: string; number: string; status: string; soldOn: string | null; priceTetri: number; instalments: number; instalmentsPaid: number }[];
   feed: { at: string; kind: 'payment' | 'document' | 'log'; text: string; number: string | null; amountTetri: number | null; by: string | null; note: string | null }[];
   canOpenDocuments: boolean;
+  /** Is there a personal number, and may this person ask to see it (Q27). */
+  personalIdAvailable: boolean;
   rentals: { id: string; number: string; status: RentalStatus; vehicle: { id: string; vin: string } | null; vinUnconfirmed: boolean; pickedUpOn: string | null; returnedOn: string | null; paidThrough: string | null; weeklyRateTetri: number; deposit: { amountTetri: number; status: DepositStatus } | null }[];
 }
 
@@ -173,13 +177,15 @@ export function CustomerPage() {
         <section className="card">
           {c.nameKa && <Row k={t.customer.nameKa} v={c.nameKa} />}
           <Row k={t.customer.phone} v={<span className="mono">{c.phone ?? t.common.dash}</span>} />
-          <Row k={t.customer.personalId} v={<span className="mono">{c.personalId ?? t.common.dash}</span>} />
+          <Row k={t.customer.personalId} v={<PersonalId id={c.id} masked={c.personalId} may={data.personalIdAvailable} />} />
           <Row k={t.customer.email} v={c.email ?? t.common.dash} />
           <Row k={t.customer.address} v={c.address ?? t.common.dash} />
           <Row k={t.customer.kind} v={t.customer.kinds[c.kind]} />
           <Row k={t.customerW4.source} v={c.source ? t.customerW4.sources[c.source] ?? c.source : t.common.dash} />
           <Row k={t.customers.tags} v={c.tags.length ? c.tags.map((x) => <span key={x} className="chip">{x}</span>) : t.common.dash} />
           {c.notes && <Row k={t.customer.notes} v={<span className="pre">{c.notes}</span>} />}
+          {/* The front office's deal, one way only until the webhook tariff (B10-03). */}
+          <Row k={t.kommo.label} v={<KommoField url={`/api/customers/${c.id}`} value={c.kommoRef} onDone={reload} />} />
         </section>
         <section className="card">
           <BlockHead title={t.documents.title} sub={t.documents.count(data.documents.length)} />
@@ -454,5 +460,51 @@ function MergeSheet({ keepId, keepName, onClose, onDone }: { keepId: string; kee
         <input className="input" value={f.reason} onChange={(e) => setF({ ...f, reason: e.target.value })} />
       </Field>
     </FormSheet>
+  );
+}
+
+/**
+ * "Показать" a personal number (CST-03, Q27, wave 6 §3.8). The card carries
+ * `••••` for everybody; the number is asked for, and the asking is written
+ * to the journal — three looks in a day show there as one line with a
+ * counter. Shown once asked, until the page is left.
+ */
+function PersonalId({ id, masked, may }: { id: string; masked: string | null; may: boolean }) {
+  const t = useT();
+  const [shown, setShown] = useState<string | null>(null);
+  const [asking, setAsking] = useState(false);
+
+  if (masked == null) return <span className="muted">{t.personalIdW6.none}</span>;
+  if (shown != null) {
+    return (
+      <span className="inline-form">
+        <span className="mono">{shown}</span>{' '}
+        <button type="button" className="pill pill-sm" onClick={() => setShown(null)}>
+          {t.personalIdW6.hide}
+        </button>
+      </span>
+    );
+  }
+  return (
+    <span className="inline-form">
+      <span className="mono">{masked}</span>{' '}
+      {may && (
+        <button
+          type="button"
+          className="pill pill-sm"
+          title={t.personalIdW6.logged}
+          disabled={asking}
+          onClick={() => {
+            setAsking(true);
+            void api
+              .get<{ personalId: string | null }>(`/api/customers/${id}/personal-id`)
+              .then((r) => setShown(r.personalId))
+              .finally(() => setAsking(false));
+          }}
+        >
+          {t.personalIdW6.show}
+        </button>
+      )}
+    </span>
   );
 }

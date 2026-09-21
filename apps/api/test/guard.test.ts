@@ -26,6 +26,7 @@ describe('route table', () => {
       'GET /api/journal.csv',
       // Wave 6: what the transfer left, and the batch that sorts it (§3.6).
       'GET /api/migration',
+      'GET /api/settings/login',
       'GET /api/users',
       'PATCH /api/fleet/:id',
       'PATCH /api/fleet/:id/vin',

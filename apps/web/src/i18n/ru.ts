@@ -5,6 +5,7 @@ import { wave5purchasesRu } from './wave5-purchases.js';
 import { wave5serviceRu } from './wave5-service.js';
 import { wave6weekRu } from './wave6-week.js';
 import { wave6utilRu } from './wave6-utilisation.js';
+import { wave6manageRu } from './wave6-manage.js';
 import type { Dict } from './en.js';
 
 // Typed as Dict: a missing or misspelled key fails the build.
@@ -102,6 +103,11 @@ export const ru: Dict = {
       week: 'Неделя',
       utilisation: 'Загрузка парка',
       economics: 'Экономика',
+      people: 'Люди',
+      rental: 'Аренда',
+      journal: 'Журнал',
+      migration: 'Перенос',
+      login: 'Вход',
     },
   },
 
@@ -1200,4 +1206,5 @@ export const ru: Dict = {
   ...wave5serviceRu,
   ...wave6weekRu,
   ...wave6utilRu,
+  ...wave6manageRu,
 };
