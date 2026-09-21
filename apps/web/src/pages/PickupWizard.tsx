@@ -82,6 +82,8 @@ export function PickupWizard() {
 
   const customers = useLoad<{ customers: CustomerRow[] }>('/api/customers');
   const fleet = useLoad<{ vehicles: FleetRow[] }>('/api/fleet');
+  // What the owner set, not what the code decided (wave 6 §3.5, R5).
+  const settings = useLoad<{ depositTetri: number; quickRates: { id: string; rateTetri: number }[] }>('/api/settings/rental');
   const recentRentals = useLoad<{ rentals: { customer: { id: string } }[] }>('/api/rentals');
   const batteries = useLoad<{ showroom: number }>('/api/batteries');
 
@@ -152,6 +154,16 @@ export function PickupWizard() {
   const vehicles = fleet.data?.vehicles ?? [];
   const vehicle = vehicles.find((v) => v.id === f.vehicleId) ?? null;
   const inSale = vehicle?.pool === 'sale';
+
+  // The deposit the owner set, until somebody types another. It arrives a
+  // moment after the form does, so it is put in then — and never over a
+  // figure a person has already changed.
+  const [depositTouched, setDepositTouched] = useState(false);
+  useEffect(() => {
+    if (settings.data == null || depositTouched) return;
+    set({ deposit: gel(settings.data.depositTetri), depositBefore: gel(settings.data.depositTetri) });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settings.data?.depositTetri]);
 
   // The model's rate, until somebody types another (B4-05).
   useEffect(() => {
@@ -529,9 +541,33 @@ export function PickupWizard() {
           <div className="two-col two-col-tight">
             <Field label={t.hand.rate} hint={t.hand.rateHint} name="weeklyRateTetri">
               <input className="input input-amount mono" value={f.rate} onChange={(e) => set({ rate: e.target.value, rateTouched: true })} inputMode="decimal" />
+              {/* The buttons an owner keeps in the settings; the model's own
+                  rate is already in the field (§3.5). */}
+              {(settings.data?.quickRates ?? []).length > 0 && (
+                <div className="chips">
+                  {settings.data!.quickRates.map((r) => (
+                    <button
+                      key={r.id}
+                      type="button"
+                      className={`pill pill-sm ${parseGel(f.rate || '0') === r.rateTetri ? 'on' : ''}`}
+                      onClick={() => set({ rate: gel(r.rateTetri), rateTouched: true })}
+                    >
+                      <span className="mono">{formatGel(r.rateTetri, { decimals: false })}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </Field>
             <Field label={t.hand.deposit} name="depositTetri">
-              <input className="input input-amount mono" value={f.deposit} onChange={(e) => set({ deposit: e.target.value })} inputMode="decimal" />
+              <input
+                className="input input-amount mono"
+                value={f.deposit}
+                onChange={(e) => {
+                  setDepositTouched(true);
+                  set({ deposit: e.target.value });
+                }}
+                inputMode="decimal"
+              />
             </Field>
           </div>
           <Field label={t.hand.pickedUpOn} hint={!transfer ? t.hand.firstWeek(short(f.pickedUpOn), short(addDays(f.pickedUpOn, 6))) : undefined} name="pickedUpOn" error={pickedUpError}>

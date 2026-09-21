@@ -1,4 +1,4 @@
-import { ROLES, type Role } from '@ev8/shared';
+import { ROLES, formatGel, gelFromTetri, parseGel, type Role } from '@ev8/shared';
 import { useState } from 'react';
 import { api } from '../api.js';
 import { BlockHead, Empty, Loading, PageHead } from '../components/ui.js';
@@ -15,7 +15,16 @@ interface Users {
   users: { id: string; name: string; email: string; role: Role; active: boolean; createdAt: string }[];
 }
 interface Points {
-  locations: { id: string; name: string; note: string | null; sortOrder: number; archived: boolean; vehicles: number }[];
+  locations: { id: string; name: string; kind: LocationKind; note: string | null; sortOrder: number; archived: boolean; vehicles: number }[];
+}
+
+/** What a point is (B10-02). Nothing behaves differently by it yet. */
+const LOCATION_KINDS = ['showroom', 'store', 'workshop', 'swap'] as const;
+type LocationKind = (typeof LOCATION_KINDS)[number];
+
+interface RentalSettings {
+  depositTetri: number;
+  quickRates: { id: string; rateTetri: number }[];
 }
 
 /** Everything the owner sets up by hand: who signs in, and what a moped is. */
@@ -76,6 +85,10 @@ export function SettingsPage() {
       </section>
 
       <PointsBlock />
+
+      {/* The figures a hand-over proposes: an owner's to set, not a
+          developer's (wave 6 §3.5). */}
+      <RentalBlock />
     </>
   );
 }
@@ -139,6 +152,102 @@ function UserRow({ user: u, onRole, onDone }: { user: Users['users'][number]; on
 }
 
 /**
+ * Rental — the figures a hand-over proposes (wave 6 §3.5, R5).
+ *
+ * The model's own rate still goes in first; these are the buttons beside it.
+ * A rate taken off the buttons is archived, never deleted: a rental written
+ * at 140 ₾ has to keep reading 140 ₾.
+ */
+export function RentalBlock() {
+  const t = useT();
+  const settings = useLoad<RentalSettings>('/api/settings/rental');
+  const toast = useToast();
+  const op = useOperation();
+  const [adding, setAdding] = useState(false);
+  const [rate, setRate] = useState('');
+  const [deposit, setDeposit] = useState<string | null>(null);
+
+  if (!settings.data) {
+    return settings.failure ? <LoadError failure={settings.failure} onRetry={settings.reload} /> : <Loading />;
+  }
+  const s = settings.data;
+  const depositText = deposit ?? String(gelFromTetri(s.depositTetri));
+
+  const saveDeposit = async () => {
+    const parsed = parseGel(depositText);
+    if (parsed == null || parsed === s.depositTetri) {
+      setDeposit(null);
+      return;
+    }
+    const res = await op.run((key) => api.patch('/api/settings/rental', { depositTetri: depositText }, { key }), `deposit:${depositText}`);
+    if (!res.ok) return;
+    setDeposit(null);
+    toast({ text: t.rentalSettings.depositSaved(formatGel(parsed)) });
+    settings.reload();
+  };
+
+  const addRate = async () => {
+    const res = await op.run((key) => api.post('/api/settings/rates', { rateTetri: rate }, { key }), `rate:${rate}`);
+    if (!res.ok) return;
+    setRate('');
+    setAdding(false);
+    settings.reload();
+  };
+
+  const removeRate = async (id: string) => {
+    const res = await op.run((key) => api.del(`/api/settings/rates/${id}`, { key }), `off:${id}`);
+    if (res.ok) settings.reload();
+  };
+
+  return (
+    <section className="card">
+      <BlockHead title={t.settings.rental} note={t.rentalSettings.hint} />
+      <Field label={t.rentalSettings.rates} hint={t.rentalSettings.ratesHint} name="rates">
+        <div className="chips">
+          {s.quickRates.map((r) => (
+            <span key={r.id} className="pill pill-sm">
+              <span className="mono">{formatGel(r.rateTetri, { decimals: false })}</span>{' '}
+              <button type="button" className="pill pill-sm" aria-label={t.rentalSettings.removeRate} disabled={op.state === 'busy'} onClick={() => void removeRate(r.id)}>
+                ×
+              </button>
+            </span>
+          ))}
+          {adding ? (
+            <>
+              <input
+                className="input input-amount mono"
+                inputMode="decimal"
+                autoFocus
+                value={rate}
+                aria-label={t.rentalSettings.rates}
+                onChange={(e) => setRate(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && void addRate()}
+              />
+              <SubmitButton small type="button" state={op.state} label={t.actions.save} onClick={() => void addRate()} />
+            </>
+          ) : (
+            <button type="button" className="pill pill-sm" onClick={() => setAdding(true)}>
+              + {t.rentalSettings.addRate}
+            </button>
+          )}
+        </div>
+      </Field>
+      <Field label={t.rentalSettings.deposit} hint={t.rentalSettings.depositHint} name="depositTetri">
+        <input
+          className="input input-amount mono"
+          inputMode="decimal"
+          value={depositText}
+          aria-label={t.rentalSettings.deposit}
+          onChange={(e) => setDeposit(e.target.value)}
+          onBlur={() => void saveDeposit()}
+        />
+      </Field>
+      {op.failure && <div className="field-err">{op.failure.fieldText ?? op.failure.text}</div>}
+    </section>
+  );
+}
+
+/**
  * Points — the company's own words for its places. Lives in Settings and,
  * for the owner, as the "Points" tab of the fleet (wave 1 §3.2).
  */
@@ -164,6 +273,7 @@ export function PointsBlock() {
               <thead>
                 <tr>
                   <th>{t.points.name}</th>
+                  <th>{t.points.kind}</th>
                   <th>{t.points.note}</th>
                   <th className="num">{t.points.order}</th>
                   <th className="num">{t.points.vehicles}</th>
@@ -200,6 +310,11 @@ function PointRow({ point: l, onDone }: { point: Points['locations'][number]; on
     }
     onDone();
   };
+  const saveKind = async (kind: LocationKind) => {
+    if (kind === l.kind) return;
+    const res = await op.run((key) => api.patch(`/api/locations/${l.id}`, { kind }, { key }), `kind:${kind}`);
+    if (res.ok) onDone();
+  };
   const archive = async () => {
     const res = await op.run((key) => api.patch(`/api/locations/${l.id}`, { archived: !l.archived }, { key }), `archived:${!l.archived}`);
     if (!res.ok) return;
@@ -218,6 +333,23 @@ function PointRow({ point: l, onDone }: { point: Points['locations'][number]; on
       <td>
         <input className="input input-inline" value={name} onChange={(e) => setName(e.target.value)} onBlur={() => void save('name', name, l.name, setName)} aria-label={t.points.name} />
         {op.failure && <div className="field-err">{op.failure.fieldText ?? op.failure.text}</div>}
+      </td>
+      <td>
+        {/* A kind is corrected in place like a name; nothing behaves
+            differently by it yet (B10-02). */}
+        <select
+          className="input input-inline"
+          value={l.kind}
+          aria-label={t.points.kind}
+          disabled={op.state === 'busy'}
+          onChange={(e) => void saveKind(e.target.value as LocationKind)}
+        >
+          {LOCATION_KINDS.map((k) => (
+            <option key={k} value={k}>
+              {t.points.kinds[k]}
+            </option>
+          ))}
+        </select>
       </td>
       <td>
         <input className="input input-inline" value={note} onChange={(e) => setNote(e.target.value)} onBlur={() => void save('note', note, l.note ?? '', setNote)} aria-label={t.points.note} />
@@ -287,7 +419,7 @@ function NewUser({ onDone }: { onDone: () => void }) {
   );
 }
 
-const blankPoint = { name: '', note: '', sortOrder: '' };
+const blankPoint = { name: '', kind: 'showroom' as LocationKind, note: '', sortOrder: '' };
 
 function NewPoint({ onDone }: { onDone: () => void }) {
   const t = useT();
@@ -309,7 +441,7 @@ function NewPoint({ onDone }: { onDone: () => void }) {
           summary={(v) => v.name}
           label={t.points.create}
           submit={async (key) => {
-            await api.post('/api/locations', { name: f.name.trim(), note: f.note.trim() || null, sortOrder: f.sortOrder ? Number(f.sortOrder) : 0 }, { key });
+            await api.post('/api/locations', { name: f.name.trim(), kind: f.kind, note: f.note.trim() || null, sortOrder: f.sortOrder ? Number(f.sortOrder) : 0 }, { key });
             return { toast: { text: t.points.created(f.name.trim()) } };
           }}
           onDone={() => {
@@ -322,6 +454,15 @@ function NewPoint({ onDone }: { onDone: () => void }) {
                 the field is noise. */}
             <Field label={t.points.name} name="name">
               <input className="input" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} maxLength={120} autoFocus />
+            </Field>
+            <Field label={t.points.kind} hint={t.points.kindHint} name="kind">
+              <select className="input" value={f.kind} onChange={(e) => setF({ ...f, kind: e.target.value as LocationKind })}>
+                {LOCATION_KINDS.map((k) => (
+                  <option key={k} value={k}>
+                    {t.points.kinds[k]}
+                  </option>
+                ))}
+              </select>
             </Field>
             <Field label={t.points.note} hint={t.points.noteHint} name="note">
               <input className="input" value={f.note} onChange={(e) => setF({ ...f, note: e.target.value })} maxLength={1000} />

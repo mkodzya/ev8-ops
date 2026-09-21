@@ -240,6 +240,8 @@ model User {
   parts             Part[]
   stockMoves        StockMove[]
   locations         Location[]    @relation("location_author")
+  rentalSettings    RentalSettings[]
+  quickRates        QuickRate[]
   workshops         Workshop[]
   handoversFrom     CashHandover[] @relation("handover_from")
   handoversDecided  CashHandover[] @relation("handover_decided_by")
@@ -306,6 +308,9 @@ model VehicleModel {
 model Location {
   id        String   @id @default(uuid()) @db.Uuid
   name      String
+  /// showroom · store · workshop · swap — a kind so the swap network needs no
+  /// rebuild when it arrives (B10-02). Nothing behaves differently by it yet.
+  kind      String   @default("showroom")
   note      String?
   sortOrder Int      @default(0) @map("sort_order")
   archived  Boolean  @default(false)
@@ -977,6 +982,32 @@ model BankCashDeposit {
   statementLine StatementLine? @relation(fields: [statementLineId], references: [id], onDelete: SetNull)
 
   @@map("bank_cash_deposits")
+}
+
+/// One row: what a hand-over proposes when nobody says otherwise (wave 6 §3.5).
+model RentalSettings {
+  id           Boolean  @id @default(true)
+  depositTetri Int      @default(18000) @map("deposit_tetri")
+  updatedById  String?  @map("updated_by") @db.Uuid
+  updatedAt    DateTime @default(now()) @map("updated_at")
+
+  updatedBy User? @relation(fields: [updatedById], references: [id])
+
+  @@map("rental_settings")
+}
+
+/// The weekly rates offered as buttons beside the model's own (R5).
+model QuickRate {
+  id          String   @id @default(uuid()) @db.Uuid
+  rateTetri   Int      @map("rate_tetri")
+  sortOrder   Int      @default(0) @map("sort_order")
+  archived    Boolean  @default(false)
+  createdById String?  @map("created_by") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  createdBy User? @relation(fields: [createdById], references: [id])
+
+  @@map("quick_rates")
 }
 
 /// One row: from when the till counts.
