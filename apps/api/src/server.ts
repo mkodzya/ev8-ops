@@ -32,6 +32,7 @@ import { depositRoutes } from './routes/deposits.js';
 import { summaryRoutes } from './routes/summary.js';
 import { todayRoutes } from './routes/today.js';
 import { batteryRoutes } from './routes/batteries.js';
+import { journalRoutes } from './routes/journal.js';
 import { userRoutes } from './routes/users.js';
 
 export function buildApp(): FastifyInstance {
@@ -84,6 +85,7 @@ export function buildApp(): FastifyInstance {
   fileRoutes(app);
   documentRoutes(app);
   userRoutes(app);
+  journalRoutes(app);
   paymentRoutes(app);
   statementRoutes(app);
   tillRoutes(app);

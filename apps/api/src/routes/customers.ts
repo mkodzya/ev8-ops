@@ -1,9 +1,10 @@
 import type { FastifyInstance } from 'fastify';
+import { audit } from '../lib/audit.js';
 import { isoDate } from '../lib/dates.js';
 import { debtOf, debtsOf } from '../lib/debt.js';
 import { prisma } from '../lib/db.js';
 import { notFound } from '../lib/errors.js';
-import { mayView } from '../lib/guard.js';
+import { actorOf, mayView } from '../lib/guard.js';
 
 // Customers, read side (CST-01). Personal numbers are shown only to roles
 // that may see documents (CST-03): a manager sees the card, not the number.
@@ -59,7 +60,7 @@ export function customerRoutes(app: FastifyInstance): void {
         name: c.name,
         nameKa: c.nameKa,
         nameLat: c.nameLat,
-        personalId: identity ? c.personalId : c.personalId ? '••••' : null,
+        personalId: c.personalId ? '••••' : null,
         phone: c.phone,
         email: c.email,
         kind: c.kind,
@@ -142,7 +143,9 @@ export function customerRoutes(app: FastifyInstance): void {
         name: c.name,
         nameKa: c.nameKa,
         nameLat: c.nameLat,
-        personalId: identity ? c.personalId : c.personalId ? '••••' : null,
+        // The number itself is asked for separately, and the asking is
+        // written down (Q27, §3.8): a card anybody opens must not carry it.
+        personalId: c.personalId ? '••••' : null,
         phone: c.phone,
         email: c.email,
         kind: c.kind,
@@ -159,6 +162,8 @@ export function customerRoutes(app: FastifyInstance): void {
       },
       documents: c.documents.map((d) => ({ id: d.id, docKind: d.docKind, label: d.label, sizeBytes: d.sizeBytes, mimeType: d.mimeType, createdAt: d.createdAt.toISOString() })),
       canOpenDocuments: identity,
+      // Is there a number to ask for, and may this person ask.
+      personalIdAvailable: identity && Boolean(c.personalId),
       rentals: c.rentals.map((r) => ({
         id: r.id,
         number: r.number,
@@ -172,5 +177,20 @@ export function customerRoutes(app: FastifyInstance): void {
         deposit: r.deposit ? { amountTetri: r.deposit.amountTetri, status: r.deposit.status } : null,
       })),
     };
+  });
+
+  /**
+   * "Показать" the personal number (CST-03, Q27). Every look is written —
+   * three looks are three rows — because otherwise "looked three times" is
+   * exactly the thing that cannot be found out afterwards. The journal folds
+   * a day's looks into one line with a counter; the CSV keeps all three
+   * (wave 6 §3.8, crit. 19).
+   */
+  app.get<{ Params: { id: string } }>('/api/customers/:id/personal-id', { config: { scope: 'customer.documents.view' } }, async (req) => {
+    const actor = actorOf(req);
+    const c = await prisma.customer.findUnique({ where: { id: req.params.id }, select: { id: true, personalId: true } });
+    if (!c) throw notFound('customer_not_found', 'No such customer.');
+    await audit({ actorId: actor.id, action: 'customer.personalId.view', entityType: 'customer', entityId: c.id });
+    return { personalId: c.personalId };
   });
 }

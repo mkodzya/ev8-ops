@@ -23,3 +23,4 @@ export * from './service.js';
 export * from './vin.js';
 export * from './utilisation.js';
 export * from './week.js';
+export * from './journal.js';
