@@ -46,7 +46,9 @@ export function formatGel(tetri: Tetri | null | undefined, opts: { decimals?: bo
   const frac = abs % 100;
   const grouped = whole.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
   const body = decimals || frac !== 0 ? `${grouped}.${frac.toString().padStart(2, '0')}` : grouped;
-  return `${tetri < 0 ? '-' : ''}${body} ₾`;
+  // No-break spaces throughout: a sum never breaks across two lines, neither
+  // between its thousands nor before its currency.
+  return `${tetri < 0 ? '-' : ''}${body} ₾`;
 }
 
 /** VAT 18 % on top of a net amount. Gross is rounded once, VAT is the difference. */

@@ -74,7 +74,39 @@ describe.skipIf(!HAS_DB)('the journal on its own screen (wave 6 §3.8)', () => {
     const csv = await call(owner, 'GET', `/api/journal.csv?q=${encodeURIComponent(c.name)}`);
     expect(csv.statusCode).toBe(200);
     expect(csv.headers['content-type']).toContain('text/csv');
-    expect(csv.body.split('\n').filter((l) => l.includes('customer.personalId.view'))).toHaveLength(3);
+    const lines = csv.body.split('\n').filter((l) => l.includes('customer.personalId.view'));
+    expect(lines).toHaveLength(3);
+    // A cell for something that does not exist is empty, not the word "null",
+    // which a spreadsheet reads as a value somebody wrote (round 5 remark).
+    expect(lines[0]).not.toContain('null');
+    expect(lines[0].split(',').slice(5, 8)).toEqual(['', '', '']);
+  });
+
+  // QA-W6-10, crit. 20. A deposit and a payment are written under ids of
+  // their own; asking about the rental used to find the hand-over and
+  // nothing else.
+  it('a rental number finds what belongs to the rental — its money and its deposit', async () => {
+    const owner = await loginAs('owner');
+    const { prisma } = await import('../src/lib/db.js');
+    const model = await prisma.vehicleModel.create({ data: { brand: 'Test', name: `Search ${uniq()}`, weeklyRateTetri: 15000, forRent: true } });
+    const vehicle = await prisma.vehicle.create({ data: { vin: `TESTSEARCH${uniq().replace(/\D/g, '').slice(-6)}`, modelId: model.id, pool: 'rent' } });
+    const customer = await prisma.customer.create({ data: { name: `ТЕСТ Поиск ${uniq()}` } });
+    const rental = await prisma.rental.create({ data: { customerId: customer.id, vehicleId: vehicle.id, weeklyRateTetri: 15000, status: 'returned', returnedOn: new Date() } });
+    const deposit = await prisma.deposit.create({ data: { rentalId: rental.id, amountTetri: 18000, paidTetri: 18000 } });
+    const payment = await prisma.payment.create({
+      data: { customerId: customer.id, rentalId: rental.id, occurredOn: new Date(), grossTetri: 15000, netTetri: 15000, channel: 'cash', direction: 'in', kind: 'rent', source: 'manual' },
+    });
+    await prisma.auditLog.create({ data: { action: 'rental.pickup', entityType: 'rental', entityId: rental.id, after: { status: 'active' } } });
+    await prisma.auditLog.create({ data: { action: 'payment.record', entityType: 'payment', entityId: payment.id, after: { grossTetri: 15000 } } });
+    await prisma.auditLog.create({ data: { action: 'deposit.decide', entityType: 'deposit', entityId: deposit.id, after: { withheldTetri: 5000 }, note: 'ключ не вернул' } });
+
+    const found = await rows(owner, `?q=${rental.number}`);
+    const actions = found.map((r) => r.action);
+    expect(actions).toContain('rental.pickup');
+    expect(actions).toContain('payment.record');
+    expect(actions).toContain('deposit.decide');
+    // And each of them answers for the rental, rather than showing "—".
+    expect(found.every((r) => r.number === rental.number)).toBe(true);
   });
 
   it('the filters keep a line where it belongs, and "всё" keeps them all', async () => {

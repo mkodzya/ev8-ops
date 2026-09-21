@@ -27,7 +27,7 @@ async function numbersFor(rows: { entityType: string; entityId: string | null }[
       if (n) out.set(x.id, n);
     }
   };
-  const [rentals, sales, purchases, jobs, vehicles, customers, users, parts, locations] = await Promise.all([
+  const [rentals, sales, purchases, jobs, vehicles, customers, users, parts, locations, deposits, payments, acts] = await Promise.all([
     prisma.rental.findMany({ where: { id: { in: ids('rental') } }, select: { id: true, number: true } }),
     prisma.sale.findMany({ where: { id: { in: ids('sale') } }, select: { id: true, number: true } }),
     prisma.purchase.findMany({ where: { id: { in: ids('purchase') } }, select: { id: true, number: true } }),
@@ -37,6 +37,15 @@ async function numbersFor(rows: { entityType: string; entityId: string | null }[
     prisma.user.findMany({ where: { id: { in: [...ids('user'), ...ids('login')] } }, select: { id: true, name: true } }),
     prisma.part.findMany({ where: { id: { in: ids('part') } }, select: { id: true, name: true } }),
     prisma.location.findMany({ where: { id: { in: ids('location') } }, select: { id: true, name: true } }),
+    // A deposit, a payment and an act are written under ids of their own.
+    // In the journal they answer for the record they belong to, or the
+    // column "запись" reads "—" beside a line about R-00504 (QA-W6-10).
+    prisma.deposit.findMany({ where: { id: { in: ids('deposit') } }, select: { id: true, rental: { select: { number: true } } } }),
+    prisma.payment.findMany({
+      where: { id: { in: ids('payment') } },
+      select: { id: true, rental: { select: { number: true } }, sale: { select: { number: true } }, purchase: { select: { number: true } }, serviceJob: { select: { number: true } } },
+    }),
+    prisma.act.findMany({ where: { id: { in: ids('act') } }, select: { id: true, rental: { select: { number: true } } } }),
   ]);
   put(rentals, (x: { number: string }) => x.number);
   put(sales, (x: { number: string }) => x.number);
@@ -47,6 +56,11 @@ async function numbersFor(rows: { entityType: string; entityId: string | null }[
   put(users, (x: { name: string }) => x.name);
   put(parts, (x: { name: string }) => x.name);
   put(locations, (x: { name: string }) => x.name);
+  put(deposits, (x: { rental: { number: string } }) => x.rental.number);
+  put(payments, (x: { rental: { number: string } | null; sale: { number: string } | null; purchase: { number: string } | null; serviceJob: { number: string } | null }) =>
+    x.rental?.number ?? x.sale?.number ?? x.purchase?.number ?? x.serviceJob?.number ?? null,
+  );
+  put(acts, (x: { rental: { number: string } }) => x.rental.number);
   return out;
 }
 
@@ -61,13 +75,30 @@ async function idsMatching(query: string): Promise<{ ids: string[]; emails: stri
   if (!q) return { ids: [], emails: [] };
   const like = { contains: q, mode: 'insensitive' as const };
   if (looksLikeNumber(q)) {
+    const number = { equals: q, mode: 'insensitive' as const };
     const [r, s, p, j] = await Promise.all([
-      prisma.rental.findMany({ where: { number: { equals: q, mode: 'insensitive' } }, select: { id: true } }),
-      prisma.sale.findMany({ where: { number: { equals: q, mode: 'insensitive' } }, select: { id: true } }),
-      prisma.purchase.findMany({ where: { number: { equals: q, mode: 'insensitive' } }, select: { id: true } }),
-      prisma.serviceJob.findMany({ where: { number: { equals: q, mode: 'insensitive' } }, select: { id: true } }),
+      prisma.rental.findMany({ where: { number }, select: { id: true } }),
+      prisma.sale.findMany({ where: { number }, select: { id: true } }),
+      prisma.purchase.findMany({ where: { number }, select: { id: true } }),
+      prisma.serviceJob.findMany({ where: { number }, select: { id: true } }),
     ]);
-    return { ids: [...r, ...s, ...p, ...j].map((x) => x.id), emails: [] };
+    const rentalIds = r.map((x) => x.id);
+    const saleIds = s.map((x) => x.id);
+    const purchaseIds = p.map((x) => x.id);
+    const jobIds = j.map((x) => x.id);
+    // What belongs to the record answers for it: "все её изменения, включая
+    // удержание залога и платежи" (crit. 20). A deposit and a payment are
+    // written under their own ids, so asking only about the rental's id
+    // finds the hand-over and nothing else (QA-W6-10).
+    const [deposits, payments, acts] = await Promise.all([
+      rentalIds.length ? prisma.deposit.findMany({ where: { rentalId: { in: rentalIds } }, select: { id: true } }) : [],
+      prisma.payment.findMany({
+        where: { OR: [{ rentalId: { in: rentalIds } }, { saleId: { in: saleIds } }, { purchaseId: { in: purchaseIds } }, { serviceJobId: { in: jobIds } }] },
+        select: { id: true },
+      }),
+      rentalIds.length ? prisma.act.findMany({ where: { rentalId: { in: rentalIds } }, select: { id: true } }) : [],
+    ]);
+    return { ids: [...rentalIds, ...saleIds, ...purchaseIds, ...jobIds, ...deposits, ...payments, ...acts].map((x) => (typeof x === 'string' ? x : x.id)), emails: [] };
   }
   const [vehicles, customers, users] = await Promise.all([
     prisma.vehicle.findMany({ where: { vin: like }, select: { id: true } }),
@@ -145,9 +176,10 @@ export function journalRoutes(app: FastifyInstance): void {
     async (req, reply) => {
       const rows = await read(req.query);
       const head = ['at', 'actor', 'action', 'entity', 'number', 'before', 'after', 'note'];
-      const body = rows.map((r) =>
-        [r.at, r.actorName ?? '', r.action, r.entityType, r.number ?? '', JSON.stringify(r.before ?? null), JSON.stringify(r.after ?? null), r.note ?? ''].map(csvCell).join(','),
-      );
+      // A cell for something that does not exist is empty, not the word
+      // "null": a spreadsheet reads `null` as a value somebody wrote.
+      const side = (v: unknown) => (v == null ? '' : JSON.stringify(v));
+      const body = rows.map((r) => [r.at, r.actorName ?? '', r.action, r.entityType, r.number ?? '', side(r.before), side(r.after), r.note ?? ''].map(csvCell).join(','));
       await audit({ actorId: actorOf(req).id, action: 'journal.export', entityType: 'journal', after: { rows: rows.length, ...req.query } });
       // Excel on a Georgian laptop opens a CSV as the system's own code page
       // unless the file says otherwise: the BOM is what says otherwise.

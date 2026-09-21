@@ -126,6 +126,9 @@ function Deposits({ data, onDone }: { data: Migration['deposits']; onDone: () =>
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [reason, setReason] = useState('');
   const [decision, setDecision] = useState<Decision>('returned_earlier');
+  // What is still missing, said out loud. A button that does nothing when
+  // pressed is pressed again and again (QA-W6-12).
+  const [missing, setMissing] = useState<'' | 'ids' | 'reason'>('');
 
   const rows = data.due.rows;
   const toggle = (id: string) => {
@@ -137,6 +140,9 @@ function Deposits({ data, onDone }: { data: Migration['deposits']; onDone: () =>
 
   const mark = async () => {
     const ids = [...picked];
+    if (ids.length === 0) return setMissing('ids');
+    if (!reason.trim()) return setMissing('reason');
+    setMissing('');
     const res = await op.run((key) => api.post('/api/migration/deposits', { ids, decision, reason }, { key }), `${decision}:${ids.length}`);
     if (!res.ok) return;
     toast({ text: t.migrationPage.done(ids.length) });
@@ -199,18 +205,22 @@ function Deposits({ data, onDone }: { data: Migration['deposits']; onDone: () =>
             </div>
           </div>
 
-          <label className="field">
+          <label className="field" data-field="reason">
             <span className="field-label">{t.migrationPage.reason}</span>
-            <input className="input" value={reason} onChange={(e) => setReason(e.target.value)} placeholder={t.migrationPage.reasonHint} />
+            <input
+              className={`input ${missing === 'reason' ? 'field-bad' : ''}`}
+              value={reason}
+              onChange={(e) => {
+                setReason(e.target.value);
+                if (missing === 'reason') setMissing('');
+              }}
+              placeholder={t.migrationPage.reasonHint}
+            />
+            {missing === 'reason' && <span className="field-err">{t.migrationPage.needReason}</span>}
           </label>
+          {missing === 'ids' && <div className="field-err">{t.migrationPage.needPick}</div>}
           {op.failure && <div className="field-err">{op.failure.fieldText ?? op.failure.text}</div>}
-          <SubmitButton
-            type="button"
-            state={op.state}
-            label={t.migrationPage.mark(t.migrationPage.decide[decision])}
-            disabled={picked.size === 0 || !reason.trim()}
-            onClick={() => void mark()}
-          />
+          <SubmitButton type="button" state={op.state} label={t.migrationPage.mark(t.migrationPage.decide[decision])} onClick={() => void mark()} />
         </>
       )}
     </section>
