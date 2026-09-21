@@ -193,7 +193,8 @@ export function SalePage() {
             {data.feed.map((row, i) => {
               // A payment's line names the way the money came in; everything
               // else is an action the journal already has words for.
-              const word = row.kind === 'payment' ? (t.payments.channels[row.text] ?? t.saleCard.words[row.text] ?? row.text) : (t.saleCard.words[row.text] ?? t.feedWords[row.text] ?? row.text);
+              const channels: Record<string, string> = t.payments.channels;
+              const word = row.kind === 'payment' ? (channels[row.text] ?? t.saleCard.words[row.text] ?? row.text) : (t.saleCard.words[row.text] ?? t.feedWords[row.text] ?? row.text);
               return (
                 <li key={`${row.at}-${i}`}>
                   <span className="mono muted">{fmtDate(row.at)}</span>
