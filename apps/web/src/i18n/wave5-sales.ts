@@ -2,6 +2,13 @@
 // the sale's card and buying a moped back (docs/redesign/wave-5.md §3.1–3.3).
 
 export const wave5salesEn = {
+  vinFix: {
+    title: 'Correct the VIN',
+    vin: 'VIN',
+    hint: '17 characters, without I, O or Q.',
+    reason: 'Why',
+    save: 'Correct',
+  },
   merge: {
     title: 'Merge with…',
     which: 'Which card is the same person',
@@ -113,6 +120,13 @@ export const wave5salesEn = {
 export type Wave5sales = typeof wave5salesEn;
 
 export const wave5salesRu: Wave5sales = {
+  vinFix: {
+    title: 'Исправить VIN',
+    vin: 'VIN',
+    hint: '17 знаков, без букв I, O и Q.',
+    reason: 'Причина',
+    save: 'Исправить',
+  },
   merge: {
     title: 'Объединить с…',
     which: 'Какая карточка — тот же человек',
@@ -222,6 +236,13 @@ export const wave5salesRu: Wave5sales = {
 };
 
 export const wave5salesKa: Wave5sales = {
+  vinFix: {
+    title: 'VIN-ის გასწორება',
+    vin: 'VIN',
+    hint: '17 სიმბოლო, I, O და Q გარეშე.',
+    reason: 'მიზეზი',
+    save: 'გასწორება',
+  },
   merge: {
     title: 'გაერთიანება…',
     which: 'რომელი ბარათია იგივე ადამიანი',
