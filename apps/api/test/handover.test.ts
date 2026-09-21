@@ -136,6 +136,41 @@ describe.skipIf(!HAS_DB)('wave 3 · hand-over', () => {
     expect(err(await call(manager, 'POST', '/api/pickups', pickup(c2.id, v2.id, { payment: { later: false, channel: 'transfer', amountTetri: 33000 } }))).error).toBe('reconcile_required');
   });
 
+  /**
+   * A moped carried over from Odoo has an arrival date meaning "the day we
+   * wrote it down", so a rental older than that is normal, not an error —
+   * and utilisation would otherwise count the moped as idle capacity for the
+   * months it was actually out (designer, 21.09.2026).
+   */
+  it('moves the arrival date back when a rental brought over is older than it', async () => {
+    const { prisma, vehicle, customer } = await fixtures();
+    const recordedOn = addDays(today(), -5);
+    await prisma.vehicle.update({ where: { id: vehicle.id }, data: { arrivedOn: new Date(`${recordedOn}T00:00:00Z`) } });
+    const pickedUpOn = addDays(today(), -40);
+
+    const owner = await loginAs('owner');
+    const res = await call(owner, 'POST', '/api/pickups', {
+      ...pickup(customer.id, vehicle.id, {
+        pickedUpOn,
+        odometerKm: undefined,
+        payment: undefined,
+        transfer: { paidThrough: addDays(pickedUpOn, 6), depositReceivedTetri: 0 },
+      }),
+    });
+    expect(res.statusCode, res.body).toBe(201);
+
+    const after = await prisma.vehicle.findUniqueOrThrow({ where: { id: vehicle.id }, select: { arrivedOn: true } });
+    expect(after.arrivedOn?.toISOString().slice(0, 10)).toBe(pickedUpOn);
+
+    // And the correction says so, with what it was before.
+    const entry = await prisma.auditLog.findFirst({
+      where: { action: 'vehicle.arrived.aligned', entityId: vehicle.id },
+      orderBy: { createdAt: 'desc' },
+    });
+    expect(entry?.before).toMatchObject({ arrivedOn: recordedOn });
+    expect(entry?.after).toMatchObject({ arrivedOn: pickedUpOn });
+  });
+
   it('an owner brings a rental over: 9 weeks, 7 paid before, deposit received (crit. 17, 18)', async () => {
     const { prisma, vehicle, customer } = await fixtures();
     const pickedUpOn = addDays(today(), -60);

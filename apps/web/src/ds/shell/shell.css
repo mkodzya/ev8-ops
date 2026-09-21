@@ -121,7 +121,8 @@
     position: sticky;
     top: 0;
     z-index: 20;
-    height: var(--header-h);
+    /* Tall enough for one line, taller when a Georgian title takes two. */
+    min-height: var(--header-h);
     display: flex;
     align-items: center;
     gap: 2px;
@@ -130,12 +131,29 @@
     border-bottom: 1px solid var(--line-soft);
   }
   .head-back { margin-left: -12px; }
-  .head-title { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 8px; }
+  .head-title { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
   /* The record's number is what people call it by, so it keeps the room and
      the quiet line beside it gives way first. Before this the subtitle would
      not shrink at all and took every pixel of the squeeze: an order's number
      and a repair's had none left and were not drawn (QA-W5-23). */
-  .head-title-text { font: var(--text-h1-phone); letter-spacing: var(--tracking-tight); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 0 1 auto; min-width: 0; }
+  /* Georgian captions wrap, they are not cut (ux №12): a title that does not
+     fit takes a second line, and only what does not fit in two is clipped.
+     A record's number is one word and never wraps, so this costs it nothing
+     (QA-W6-08). */
+  .head-title-text {
+    font: var(--text-h1-phone);
+    letter-spacing: var(--tracking-tight);
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    overflow: hidden;
+    /* Between words only: a caption of two Georgian words takes a second
+       line, a VIN — one word with no spaces — stays on one and is clipped
+       with an ellipsis, exactly as it was. */
+    flex: 0 1 auto;
+    min-width: 0;
+  }
   .head-sub { font: var(--text-label); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 0 999 auto; min-width: 0; }
   .app-page { padding: var(--space3) var(--space4) calc(var(--tabbar-h) + 32px + env(safe-area-inset-bottom)); }
   /* The page's own title has moved into the header. */
