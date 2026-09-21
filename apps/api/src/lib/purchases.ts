@@ -115,10 +115,15 @@ export async function recostPurchase(tx: Prisma.TransactionClient, purchaseId: s
     if (!line.modelId) continue;
     const cost = byLine.get(line.id);
     if (!cost) continue;
+    // Nothing has been paid for this shipment and no freight has been put on
+    // it, so what a unit cost is not zero — it is not known yet. Writing the
+    // zero made a moped look free and wiped the model's known figure with it
+    // (QA-W5-29); an empty cost is what "we do not know" looks like here.
+    const unitCostTetri = cost.unitCostTetri > 0 ? cost.unitCostTetri : null;
     const mine = vehicles.filter((v) => v.modelId === line.modelId);
     for (const v of mine) {
-      if (v.costTetri === cost.unitCostTetri) continue;
-      await tx.vehicle.update({ where: { id: v.id }, data: { costTetri: cost.unitCostTetri, updatedAt: new Date() } });
+      if (v.costTetri === unitCostTetri) continue;
+      await tx.vehicle.update({ where: { id: v.id }, data: { costTetri: unitCostTetri, updatedAt: new Date() } });
       await tx.auditLog.create({
         data: {
           actorId,
@@ -126,13 +131,17 @@ export async function recostPurchase(tx: Prisma.TransactionClient, purchaseId: s
           entityType: 'vehicle',
           entityId: v.id,
           before: { costTetri: v.costTetri },
-          after: { costTetri: cost.unitCostTetri, percent: money.percent, rate: money.rate, order: p.number },
+          after: { costTetri: unitCostTetri, percent: money.percent, rate: money.rate, order: p.number },
           note: reason,
         },
       });
       changed++;
     }
-    if (mine.length > 0) await tx.vehicleModel.update({ where: { id: line.modelId }, data: { costTetri: cost.unitCostTetri, updatedAt: new Date() } });
+    // The model keeps the last figure anybody actually knows: an unpaid
+    // shipment leaves it alone rather than zeroing it.
+    if (mine.length > 0 && unitCostTetri != null) {
+      await tx.vehicleModel.update({ where: { id: line.modelId }, data: { costTetri: unitCostTetri, updatedAt: new Date() } });
+    }
   }
   // The shelf follows the money too (QA-W5-17). A shipment received before
   // it was paid for landed its parts at nothing and dragged the average
