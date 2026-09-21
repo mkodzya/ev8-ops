@@ -30,6 +30,8 @@ interface Card {
     location: { id: string; name: string } | null;
     odometerKm: number | null;
     costTetri: number | null;
+    costPreliminary: boolean;
+    costPaidPercent: number | null;
     notes: string | null;
     currentRentalId: string | null;
   };
@@ -188,7 +190,23 @@ export function VehiclePage() {
           <Row k={t.fleet.pool} v={<PoolRow v={v} onDone={reload} />} />
           <Row k={t.points.place} v={<PlaceRow v={v} onDone={reload} />} />
           <Row k={t.vehicle.odometer} v={<span className="mono">{v.odometerKm ?? t.common.dash}</span>} />
-          {v.costTetri != null && <Row k={t.purchases.cost} v={<span className="mono">{formatGel(v.costTetri)}</span>} />}
+          {v.costTetri != null && (
+            <Row
+              k={t.purchases.cost}
+              v={
+                <>
+                  <span className="mono">
+                    {v.costPreliminary && <span className="muted">≈ </span>}
+                    {formatGel(v.costTetri)}
+                  </span>
+                  {/* A figure worked out at a share of an unpaid invoice says so (§7). */}
+                  {v.costPreliminary && v.costPaidPercent != null && (
+                    <span className="hint warn-text">{t.receipt.costPreliminary(v.costPaidPercent)}</span>
+                  )}
+                </>
+              }
+            />
+          )}
           <Row
             k={t.fleet.renter}
             v={current ? <Link to={`/customers/${current.customer.id}`}>{current.customer.name}</Link> : t.common.dash}

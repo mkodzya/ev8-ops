@@ -161,7 +161,7 @@ describe.skipIf(!HAS_DB)('wave 5 · shipments', () => {
   });
 
   it('arrives before it is paid for and is costed again by the payment that settles it (crit. 19, §7)', async () => {
-    const { owner, id } = await order();
+    const { owner, id, part } = await order();
     await call(owner, 'POST', `/api/purchases/${id}/payments`, { grossTetri: '423.57', foreignAmount: '1000', channel: 'transfer' });
     const tag = uniq();
     const received = await call(owner, 'POST', `/api/purchases/${id}/receive`, {
@@ -204,6 +204,19 @@ describe.skipIf(!HAS_DB)('wave 5 · shipments', () => {
     });
     expect(written).toHaveLength(2);
     expect(written.every((w) => w.note === 'paid the supplier')).toBe(true);
+
+    // The shelf follows the same money: parts landed at the 17 % rate were
+    // dragging the average down until the invoice was settled (QA-W5-17).
+    const shelf = json<{ part: { onHand: number; avgCostTetri: number | null } }>(await call(owner, 'GET', `/api/parts/${part.id}`));
+    expect(shelf.part.onHand).toBe(20);
+    // 1 694 at the 17 % rate; the settled invoice works it out again.
+    expect(shelf.part.avgCostTetri).toBe(1692);
+
+    // And a card that quotes a cost says whether the figure has stopped moving.
+    const card = json<{ vehicle: { costPreliminary: boolean; costPaidPercent: number | null } }>(
+      await call(owner, 'GET', `/api/fleet/${after.vehicles[0].id}`),
+    );
+    expect(card.vehicle).toMatchObject({ costPreliminary: false, costPaidPercent: 100 });
   });
 
   it('takes the cost back off the mopeds when a supplier payment is annulled (§7)', async () => {

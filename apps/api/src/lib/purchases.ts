@@ -1,5 +1,6 @@
 import { landedCosts, paidSummary, type PaidSummary } from '@ev8/shared';
 import type { Prisma } from '../generated/prisma/client.js';
+import { prisma } from './db.js';
 
 // What a shipment has cost so far, and writing that onto the mopeds it
 // brought (wave 5 §3.5–3.7, Mika's answer to Q23).
@@ -38,6 +39,35 @@ export function purchaseMoney(p: MoneyRow): PurchaseMoney {
   return { ...paidSummary({ payments, invoiceMinor }), invoiceMinor };
 }
 
+/**
+ * Is what these mopeds cost still a preliminary figure, and at what share of
+ * the invoice was it worked out (§7)? A shipment may be received before it
+ * is paid for, and every screen that quotes a cost has to say so — the fleet
+ * card and "Экономика" said nothing, so a figure that was still moving read
+ * as final (QA-W5-11).
+ */
+export async function preliminaryOf(purchaseIds: readonly string[]): Promise<Map<string, { preliminary: boolean; paidPercent: number }>> {
+  const out = new Map<string, { preliminary: boolean; paidPercent: number }>();
+  const ids = [...new Set(purchaseIds)];
+  if (ids.length === 0) return out;
+  const orders = await prisma.purchase.findMany({
+    where: { id: { in: ids } },
+    select: {
+      id: true,
+      currency: true,
+      paidBeforeTetri: true,
+      paidBeforeMinor: true,
+      lines: { select: { qty: true, unitPriceMinor: true } },
+      payments: { where: { voidedAt: null }, select: { direction: true, netTetri: true, grossTetri: true, foreignMinor: true } },
+    },
+  });
+  for (const o of orders) {
+    const money = purchaseMoney(o);
+    out.set(o.id, { preliminary: !money.settled, paidPercent: money.percent });
+  }
+  return out;
+}
+
 /** The cost of every line at today's rate; a moped line carries the freight (Q24). */
 export function purchaseCosts(p: Omit<MoneyRow, 'lines'> & { extrasTetri: number; lines: { id: string; qty: number; unitPriceMinor: number; modelId: string | null }[] }) {
   const money = purchaseMoney(p);
@@ -72,7 +102,7 @@ export async function recostPurchase(tx: Prisma.TransactionClient, purchaseId: s
       extrasTetri: true,
       paidBeforeTetri: true,
       paidBeforeMinor: true,
-      lines: { select: { id: true, qty: true, unitPriceMinor: true, modelId: true } },
+      lines: { select: { id: true, qty: true, unitPriceMinor: true, modelId: true, partId: true } },
       payments: { where: { voidedAt: null }, select: { direction: true, netTetri: true, grossTetri: true, foreignMinor: true } },
     },
   });
@@ -104,15 +134,30 @@ export async function recostPurchase(tx: Prisma.TransactionClient, purchaseId: s
     }
     if (mine.length > 0) await tx.vehicleModel.update({ where: { id: line.modelId }, data: { costTetri: cost.unitCostTetri, updatedAt: new Date() } });
   }
+  // The shelf follows the money too (QA-W5-17). A shipment received before
+  // it was paid for landed its parts at nothing and dragged the average
+  // down; the receipt movement carries the figure, so the figure is what
+  // gets written again — the average is worked out from the movements and
+  // needs nothing else.
+  let shelf = 0;
+  for (const line of p.lines) {
+    if (!line.partId) continue;
+    const cost = byLine.get(line.id);
+    if (!cost) continue;
+    const move = await tx.stockMove.findFirst({ where: { purchaseLineId: line.id, kind: 'receipt' }, select: { id: true, unitCostTetri: true } });
+    if (!move || move.unitCostTetri === cost.unitCostTetri) continue;
+    await tx.stockMove.update({ where: { id: move.id }, data: { unitCostTetri: cost.unitCostTetri } });
+    shelf++;
+  }
   await tx.purchase.update({ where: { id: p.id }, data: { costedAt: new Date() } });
-  if (changed > 0) {
+  if (changed > 0 || shelf > 0) {
     await tx.auditLog.create({
       data: {
         actorId,
         action: 'purchase.recost',
         entityType: 'purchase',
         entityId: p.id,
-        after: { vehicles: changed, percent: money.percent, rate: money.rate },
+        after: { vehicles: changed, parts: shelf, percent: money.percent, rate: money.rate },
         note: reason,
       },
     });
