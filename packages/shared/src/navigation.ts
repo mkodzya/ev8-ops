@@ -134,7 +134,10 @@ export const SECTION_TABS: Partial<Record<SectionId, readonly { id: TabId; path:
   // Odoo left, and the rules of signing in.
   settings: [
     { id: 'people', path: '/settings', anyOf: ['users.manage'] },
-    { id: 'points', path: '/settings/points', anyOf: ['settings.manage'] },
+    // One list, one address: the points live in Fleet, where they have their
+    // counts and where a manager reaches them too (designer, 21.09.2026).
+    // Settings keeps the row, and the row leads there.
+    { id: 'points', path: '/fleet/points', anyOf: ['settings.manage'] },
     { id: 'rental', path: '/settings/rental', anyOf: ['settings.manage'] },
     { id: 'journal', path: '/settings/journal', anyOf: ['users.manage'] },
     { id: 'migration', path: '/settings/migration', anyOf: ['users.manage'] },

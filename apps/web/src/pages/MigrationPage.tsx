@@ -153,8 +153,10 @@ function Deposits({ data, onDone }: { data: Migration['deposits']; onDone: () =>
         sub={rows.length > 0 ? t.migrationPage.batchLead(data.due.count, formatGel(data.due.amountTetri)) : undefined}
         note={t.migrationPage.notMoney}
       />
-      {/* The ones nobody is asked about, named rather than hidden: an owner
-          who reads "42 held" elsewhere has to find the other ones here. */}
+      {/* The ones nobody is asked about, named rather than hidden and with
+          nothing to press: a deposit on a running rental is not undecided —
+          the moped is out, the answer comes with the return (designer,
+          21.09.2026). This sum plus the batch above is "held" entire. */}
       {data.running.count > 0 && <p className="hint muted">{t.migrationPage.depositsRunning(data.running.count, formatGel(data.running.amountTetri))}</p>}
 
       {rows.length === 0 ? (
