@@ -72,6 +72,17 @@ export function ReturnWizard() {
   const [result, setResult] = useState<{ serviceJobId: string | null; point: string | null } | null>(null);
   const op = useOperation();
   const drafts = useDraft({ id: id ? `return:${id}` : undefined, value: f, initial, hold: result != null });
+  // The button that asks the question is pinned to the bottom of the screen;
+  // the question itself appears in the page. On a phone the summary is longer
+  // than the screen, so a person pressed "Оформить возврат", saw nothing
+  // move, and pressed again (QA-W6-16). The question comes to the eye and
+  // takes the focus.
+  const confirmRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!confirming) return;
+    confirmRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    confirmRef.current?.focus();
+  }, [confirming]);
 
   const { preview } = useReturnPreview(id, { returnedOn: f.returnedOn, keyMissing: f.items.key?.state === 'missing', lateChoice: f.lateChoice });
 
@@ -164,17 +175,6 @@ export function ReturnWizard() {
   // Keeping money is not undone by a tap: the sum and what stays owed, in words, first.
   const onFinish = () => (decides && !nothingHeld && needsConfirming(f.decision, held) ? setConfirming(true) : void submit());
 
-  // The button that asks the question is pinned to the bottom of the screen;
-  // the question itself appears in the page. On a phone the summary is longer
-  // than the screen, so a person pressed "Оформить возврат", saw nothing
-  // move, and pressed again (QA-W6-16). The question comes to the eye and
-  // takes the focus.
-  const confirmRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!confirming) return;
-    confirmRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
-    confirmRef.current?.focus();
-  }, [confirming]);
 
   const kitProblems = itemKeys.filter((k) => item(k).state !== 'ok').map((k) => `${itemName(k)} — ${t.returnItems.states[item(k).state]}`);
 
