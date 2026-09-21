@@ -126,6 +126,7 @@ export function rentalRoutes(app: FastifyInstance): void {
         buyoutTargetTetri: r.buyoutTargetTetri,
         buyoutPerPaymentTetri: r.buyoutPerPaymentTetri,
         nightParkingAddress: r.nightParkingAddress,
+        kommoRef: r.kommoRef,
         batteries: r.batteries,
         chargers: r.chargers,
         notes: r.notes,

@@ -27,7 +27,12 @@ function readPassword(b: Body, field = 'password'): string {
 
 export function userRoutes(app: FastifyInstance): void {
   app.get('/api/users', { config: { scope: 'users.manage' } }, async () => {
-    const users = await prisma.user.findMany({ orderBy: [{ active: 'desc' }, { name: 'asc' }] });
+    const users = await prisma.user.findMany({
+      orderBy: [{ active: 'desc' }, { name: 'asc' }],
+      // When each of them was last seen, and on how many devices: the two
+      // numbers "Закрыть все входы" is decided by (§3.4).
+      include: { sessions: { select: { lastSeenAt: true } } },
+    });
     return {
       roles: ROLES,
       users: users.map((u) => ({
@@ -37,6 +42,8 @@ export function userRoutes(app: FastifyInstance): void {
         role: u.role,
         locale: u.locale,
         active: u.active,
+        sessions: u.sessions.length,
+        lastSeenAt: u.sessions.reduce<Date | null>((last, s) => (!last || s.lastSeenAt > last ? s.lastSeenAt : last), null)?.toISOString() ?? null,
         createdAt: u.createdAt.toISOString(),
       })),
     };
@@ -104,6 +111,21 @@ export function userRoutes(app: FastifyInstance): void {
     await prisma.session.deleteMany({ where: { userId: user.id } }); // every old session is now stale
     await audit({ actorId: actor.id, action: 'user.password.reset', entityType: 'user', entityId: user.id });
     return { ok: true };
+  });
+
+  /**
+   * Every device this person is signed in on signs in again (§3.4). The
+   * answer to a phone left in a taxi: the password is still theirs, but the
+   * sessions it opened are over — including, deliberately, their own if an
+   * owner does this to themselves.
+   */
+  app.post<{ Params: { id: string } }>('/api/users/:id/sessions/close', { config: { scope: 'users.manage' } }, async (req) => {
+    const actor = actorOf(req);
+    const user = await prisma.user.findUnique({ where: { id: req.params.id }, select: { id: true, name: true } });
+    if (!user) throw notFound('user_not_found', 'No such user.');
+    const { count } = await prisma.session.deleteMany({ where: { userId: user.id } });
+    await audit({ actorId: actor.id, action: 'user.sessions.closed', entityType: 'user', entityId: user.id, after: { sessions: count } });
+    return { ok: true, closed: count };
   });
 
   /** Changing your own password needs the current one, even for the owner. */

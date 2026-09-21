@@ -36,6 +36,7 @@ export const wave4En = {
     day: (weekday: string, n: number, month: string) => `${weekday}, ${n} ${month}`,
     actions: {
       decide_deposit: 'Decide the deposit',
+      sort_odoo_deposits: 'Sort them out',
       accept_till: 'Accept the till',
       hand_over_till: 'Hand the cash over',
       return: 'Take the moped back',
@@ -54,6 +55,8 @@ export const wave4En = {
       set_point: 'Set the point',
     } as Record<string, string>,
     deposit: 'Deposit',
+    /** The deposits the move from Odoo left undecided, as one row (wave 6 §3.7). */
+    odooDeposits: (n: number) => `Deposits from Odoo with no decision — ${n}`,
     till: 'Till',
     duesToday: 'planned today',
     lateBy: (n: number) => `${n} days late`,
@@ -264,6 +267,7 @@ export const wave4Ru: Wave4 = {
     day: (weekday, n, month) => `${weekday}, ${n} ${month}`,
     actions: {
       decide_deposit: 'Решить залог',
+      sort_odoo_deposits: 'Разобрать',
       accept_till: 'Принять кассу',
       hand_over_till: 'Сдать наличные',
       return: 'Принять возврат',
@@ -282,6 +286,7 @@ export const wave4Ru: Wave4 = {
       set_point: 'Указать точку',
     },
     deposit: 'Залог',
+    odooDeposits: (n: number) => `Залоги из Odoo без решения — ${n}`,
     till: 'Касса',
     duesToday: 'план сегодня',
     lateBy: (n) => `опаздывает ${n} ${ruPlural(n, 'день', 'дня', 'дней')}`,
@@ -465,6 +470,7 @@ export const wave4Ka: Wave4 = {
     day: (weekday, n, month) => `${weekday}, ${n} ${month}`,
     actions: {
       decide_deposit: 'დეპოზიტის გადაწყვეტა',
+      sort_odoo_deposits: 'გარჩევა',
       accept_till: 'სალაროს მიღება',
       hand_over_till: 'ნაღდის ჩაბარება',
       return: 'დაბრუნების მიღება',
@@ -483,6 +489,7 @@ export const wave4Ka: Wave4 = {
       set_point: 'წერტილის მითითება',
     },
     deposit: 'დეპოზიტი',
+    odooDeposits: (n: number) => `დეპოზიტები Odoo-დან გადაწყვეტილების გარეშე — ${n}`,
     till: 'სალარო',
     duesToday: 'გეგმით დღეს',
     lateBy: (n) => `აგვიანებს ${n} დღით`,

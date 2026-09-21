@@ -1,5 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { audit } from '../lib/audit.js';
+import { MAX_ATTEMPTS, SESSION_IDLE_MS, SESSION_TTL_MS } from '../lib/auth.js';
+import { isDevStack } from '../lib/env.js';
 import { prisma } from '../lib/db.js';
 import { conflict, isUniqueViolation, notFound } from '../lib/errors.js';
 import { actorOf } from '../lib/guard.js';
@@ -26,6 +28,18 @@ async function settingsRow() {
 }
 
 export function settingsRoutes(app: FastifyInstance): void {
+  /**
+   * The rules of signing in (wave 6 §3.9). Read from the code, not typed on
+   * the screen: they are constants, and a screen that keeps its own copy of
+   * a constant is a screen that will one day disagree with it.
+   */
+  app.get('/api/settings/login', { config: { scope: 'users.manage' } }, async () => ({
+    sessionDays: Math.round(SESSION_TTL_MS / 86_400_000),
+    idleDays: Math.round(SESSION_IDLE_MS / 86_400_000),
+    maxAttempts: MAX_ATTEMPTS,
+    demoLoginsRefused: !isDevStack(),
+  }));
+
   /** Read by anyone who hands a moped over; written by an owner. */
   app.get('/api/settings/rental', { config: { scope: 'rental.create' } }, async () => {
     const [row, rates] = await Promise.all([

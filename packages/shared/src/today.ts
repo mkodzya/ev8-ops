@@ -29,7 +29,8 @@ export type TaskAction =
   | 'set_pool'
   | 'sign'
   | 'set_vin'
-  | 'set_point';
+  | 'set_point'
+  | 'sort_odoo_deposits';
 
 export interface TaskRow {
   /** Stable across reloads: the record it is about plus what it asks for. */
@@ -88,6 +89,13 @@ export interface QueueInput {
   purchases: { id: string; number: string; who: string; note: string }[];
   vehiclesWithoutPool: number;
   vehiclesWithoutPoint: number;
+  /**
+   * Deposits Odoo brought over with no decision in them (wave 6 §3.7). They
+   * are one row, not forty-two: the answer to the tester's question of wave
+   * 3, where a pile of old deposits buried the till that was handed over
+   * this morning.
+   */
+  odooDeposits: { count: number; amountTetri: Tetri };
 }
 
 export interface TaskGroupRows {
@@ -118,6 +126,23 @@ export function dayQueue(input: QueueInput): TaskGroupRows[] {
   if (input.owner) {
     for (const t of input.tills) {
       rows.push({ id: `till:${t.id}`, group: 'decide', action: 'accept_till', who: t.who, number: null, vin: null, days: null, amountTetri: t.amountTetri, href: '/money/cash', phone: null, note: null });
+    }
+    // One row for everything the transfer left undecided, before the
+    // deposits that this week's returns left (§3.7).
+    if (input.odooDeposits.count > 0) {
+      rows.push({
+        id: 'deposit:odoo',
+        group: 'decide',
+        action: 'sort_odoo_deposits',
+        who: null,
+        number: null,
+        vin: null,
+        days: input.odooDeposits.count,
+        amountTetri: input.odooDeposits.amountTetri,
+        href: '/settings/migration',
+        phone: null,
+        note: null,
+      });
     }
     for (const r of input.rentals.filter((x) => x.depositUndecided)) {
       rows.push({

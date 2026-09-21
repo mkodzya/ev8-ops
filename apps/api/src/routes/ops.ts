@@ -89,6 +89,9 @@ export function opsRoutes(app: FastifyInstance): void {
     for (const k of ['name', 'nameKa', 'nameLat', 'personalId', 'phone', 'email', 'address', 'notes'] as const) {
       if (k in b) data[k] = str(b, k, { max: k === 'notes' ? 4000 : 300, required: k === 'name' });
     }
+    // The front office's deal, one way only until the webhook tariff
+    // (B10-03, register #5): a link or an id, kept as typed.
+    if ('kommoRef' in b) data.kommoRef = str(b, 'kommoRef', { max: 300 });
     if ('kind' in b) data.kind = oneOf(b, 'kind', CUSTOMER_KINDS, { required: true });
     if ('recordKind' in b) {
       data.recordKind = oneOf(b, 'recordKind', CONTACT_KINDS, { required: true })!;
@@ -119,6 +122,9 @@ export function opsRoutes(app: FastifyInstance): void {
     if ('nightParkingAddress' in b) data.nightParkingAddress = str(b, 'nightParkingAddress', { max: 300 });
     if ('batteries' in b) data.batteries = int(b, 'batteries', { min: 0 });
     if ('chargers' in b) data.chargers = int(b, 'chargers', { min: 0 });
+    // The front office's deal, one way only until the webhook tariff
+    // (B10-03, register #5): a link or an id, kept as typed.
+    if ('kommoRef' in b) data.kommoRef = str(b, 'kommoRef', { max: 300 });
     // Buy-out from a rental (RNT-07): a target and what each payment puts
     // towards it. Both or neither — half of the rule cannot be counted.
     if ('buyoutTargetTetri' in b || 'buyoutPerPaymentTetri' in b) {

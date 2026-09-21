@@ -21,6 +21,12 @@ describe('route table', () => {
       // Wave 5 moved the orders onto a purchases scope of their own; what is
       // left here is the settings and the people.
       'DELETE /api/settings/rates/:id',
+      // Wave 6: the journal and its export are an owner's (§3.8).
+      'GET /api/journal',
+      'GET /api/journal.csv',
+      // Wave 6: what the transfer left, and the batch that sorts it (§3.6).
+      'GET /api/migration',
+      'GET /api/settings/login',
       'GET /api/users',
       'PATCH /api/fleet/:id',
       'PATCH /api/fleet/:id/vin',
@@ -37,6 +43,7 @@ describe('route table', () => {
       'POST /api/settings/rates',
       'POST /api/users',
       'POST /api/users/:id/password',
+      'POST /api/users/:id/sessions/close',
       'POST /api/workshops',
     ]);
     const publicOnes = app.routeTable.filter((r) => r.scope === 'public').map((r) => r.url).sort();
@@ -58,18 +65,25 @@ describe.skipIf(!HAS_DB)('who may read what', () => {
     }
   });
 
-  it('a manager sees that a personal number exists but not the number (CST-03)', async () => {
+  it('nobody gets a personal number with the card; an owner asks for it and a manager may not (CST-03, Q27)', async () => {
     const { prisma } = await import('../src/lib/db.js');
     const personalId = `T${Date.now()}`;
     const c = await prisma.customer.create({ data: { name: 'Guard Probe', personalId } });
 
     const manager = await loginAs('manager');
-    const asManager = json<{ customer: { personalId: string } }>(await call(manager, 'GET', `/api/customers/${c.id}`));
+    const asManager = json<{ customer: { personalId: string }; personalIdAvailable: boolean }>(await call(manager, 'GET', `/api/customers/${c.id}`));
     expect(asManager.customer.personalId).toBe('••••');
+    expect(asManager.personalIdAvailable).toBe(false);
+    expect((await call(manager, 'GET', `/api/customers/${c.id}/personal-id`)).statusCode).toBe(403);
 
+    // The card no longer carries the number for an owner either: the number
+    // is asked for, and the asking is written down.
     const owner = await loginAs('owner');
-    const asOwner = json<{ customer: { personalId: string } }>(await call(owner, 'GET', `/api/customers/${c.id}`));
-    expect(asOwner.customer.personalId).toBe(personalId);
+    const asOwner = json<{ customer: { personalId: string }; personalIdAvailable: boolean }>(await call(owner, 'GET', `/api/customers/${c.id}`));
+    expect(asOwner.customer.personalId).toBe('••••');
+    expect(asOwner.personalIdAvailable).toBe(true);
+    const shown = json<{ personalId: string }>(await call(owner, 'GET', `/api/customers/${c.id}/personal-id`));
+    expect(shown.personalId).toBe(personalId);
   });
 
   it('the summary answers any signed-in role', async () => {

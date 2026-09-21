@@ -122,7 +122,16 @@ export function depositState(d: {
   returnedTetri: Tetri;
   withheldTetri: Tetri;
   paidOutTetri: Tetri;
+  /**
+   * Said about a deposit Odoo brought over (wave 6 §3.7): handed back before
+   * the transfer, kept before it, or nobody knows. Any of the three closes
+   * it — the company is not holding this money today — and none of them
+   * moves a figure, because no money moves today either. What happened is
+   * recorded in words, in the journal, not invented as an amount.
+   */
+  migrationDecision?: string | null;
 }): { heldTetri: Tetri; toHandBackTetri: Tetri; shortTetri: Tetri } {
+  if (d.migrationDecision) return { heldTetri: 0, toHandBackTetri: 0, shortTetri: 0 };
   return {
     heldTetri: Math.max(0, d.paidTetri - d.withheldTetri - d.paidOutTetri),
     toHandBackTetri: Math.max(0, d.returnedTetri - d.paidOutTetri),

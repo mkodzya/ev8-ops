@@ -3,16 +3,18 @@ import { useState } from 'react';
 import { api } from '../api.js';
 import { BlockHead, Empty, Loading, PageHead } from '../components/ui.js';
 import { Field } from '../components/Wizard.js';
+import { fmtDate } from '../format.js';
 import { FormSheet, SubmitButton } from '../ds/form/Form.js';
 import { useOperation } from '../ds/form/operation.js';
 import { useToast } from '../ds/feedback/Toast.js';
 import { useT } from '../i18n/index.js';
+import type { Dict } from '../i18n/en.js';
 import { useLoad } from '../lib/use.js';
 import { useSession } from '../session.js';
 import { LoadError } from '../components/LoadError.js';
 
 interface Users {
-  users: { id: string; name: string; email: string; role: Role; active: boolean; createdAt: string }[];
+  users: { id: string; name: string; email: string; role: Role; active: boolean; sessions: number; lastSeenAt: string | null; createdAt: string }[];
 }
 interface Points {
   locations: { id: string; name: string; kind: LocationKind; note: string | null; sortOrder: number; archived: boolean; vehicles: number }[];
@@ -84,11 +86,79 @@ export function SettingsPage() {
         )}
       </section>
 
-      <PointsBlock />
+    </>
+  );
+}
 
-      {/* The figures a hand-over proposes: an owner's to set, not a
-          developer's (wave 6 §3.5). */}
+/** Settings → Points (wave 6 §3.5). The same list Fleet → Points shows. */
+export function PointsSettingsPage() {
+  const t = useT();
+  return (
+    <>
+      <PageHead title={t.settings.title} />
+      <PointsBlock />
+    </>
+  );
+}
+
+/**
+ * Settings → Rental (wave 6 §3.5, R5): the figures a hand-over proposes, an
+ * owner's to set rather than a developer's.
+ */
+export function RentalSettingsPage() {
+  const t = useT();
+  return (
+    <>
+      <PageHead title={t.settings.title} />
       <RentalBlock />
+    </>
+  );
+}
+
+/**
+ * Settings → Sign-in (wave 6 §3.9, B9-03). Every figure comes from the
+ * server, which reads it from the code: these are rules, not settings, and a
+ * screen keeping its own copy of a rule is a screen that will disagree with
+ * it one day.
+ */
+export function LoginSettingsPage() {
+  const t = useT();
+  const rules = useLoad<{ sessionDays: number; idleDays: number; maxAttempts: number; demoLoginsRefused: boolean }>('/api/settings/login');
+  return (
+    <>
+      <PageHead title={t.loginSettings.title} sub={t.loginSettings.subtitle} />
+      <section className="card">
+        {!rules.data ? (
+          rules.failure ? <LoadError failure={rules.failure} onRetry={rules.reload} /> : <Loading />
+        ) : (
+          <div className="table-wrap table-flat">
+            <table className="table">
+              <tbody>
+                <tr>
+                  <td>{t.loginSettings.sessionTtl}</td>
+                  <td className="num">{t.loginSettings.sessionTtlValue(rules.data.sessionDays)}</td>
+                </tr>
+                <tr>
+                  <td>{t.loginSettings.idle}</td>
+                  <td className="num">{t.loginSettings.idleValue(rules.data.idleDays)}</td>
+                </tr>
+                <tr>
+                  <td>
+                    {t.loginSettings.attempts}
+                    <div className="hint muted">{t.loginSettings.attemptsNote}</div>
+                  </td>
+                  <td className="num">{t.loginSettings.attemptsValue(rules.data.maxAttempts)}</td>
+                </tr>
+                <tr>
+                  <td>{t.loginSettings.demo}</td>
+                  <td className="num">{rules.data.demoLoginsRefused ? t.loginSettings.demoOff : t.common.dash}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        )}
+        <p className="hint muted">{t.loginSettings.ownPassword}</p>
+      </section>
     </>
   );
 }
@@ -116,11 +186,27 @@ function UserRow({ user: u, onRole, onDone }: { user: Users['users'][number]; on
     op.reset();
     toast({ text: t.users.passwordSet(u.name) });
   };
+  /** A phone left somewhere: every device signs in again, the password stays theirs (§3.4). */
+  const closeSessions = async () => {
+    const res = await op.run((key) => api.post<{ closed: number }>(`/api/users/${u.id}/sessions/close`, {}, { key }), 'sessions');
+    if (!res.ok) return;
+    toast({ text: res.value.closed > 0 ? t.peopleW6.sessionsClosed(u.name, res.value.closed) : t.peopleW6.noSessions(u.name) });
+    op.reset();
+    onDone();
+  };
 
   return (
     <tr className={u.active ? '' : 'row-off'}>
       <td>{u.name}</td>
-      <td className="mono">{u.email}</td>
+      <td className="mono">
+        {u.email}
+        {/* When this person was last seen, and on how many devices: the two
+            things "Закрыть все входы" is decided by. */}
+        <div className="hint muted">
+          {u.lastSeenAt ? t.peopleW6.lastSeen(lastSeenWords(t, u.lastSeenAt)) : t.peopleW6.neverSeen}
+          {u.sessions > 0 && ` · ${t.peopleW6.devices(u.sessions)}`}
+        </div>
+      </td>
       <td>
         <select className="input input-inline" value={u.role} onChange={(e) => onRole(e.target.value as Role)}>
           {ROLES.map((r) => (
@@ -145,10 +231,30 @@ function UserRow({ user: u, onRole, onDone }: { user: Users['users'][number]; on
             <SubmitButton small type="button" state={op.state} label={t.actions.save} onClick={() => void reset()} />
           </span>
         )}
+        {!resetting && (
+          <>
+            {' '}
+            <button type="button" className="pill pill-sm" title={t.peopleW6.closeSessionsHint} onClick={() => void closeSessions()} disabled={op.state === 'busy'}>
+              {t.peopleW6.closeSessions}
+            </button>
+          </>
+        )}
         {op.failure && <div className="field-err">{op.failure.fieldText ?? op.failure.text}</div>}
       </td>
     </tr>
   );
+}
+
+/** "вход сегодня 09:12" / "вход вчера" / a date, as the prototype says it. */
+function lastSeenWords(t: Dict, at: string): string {
+  const seen = new Date(at);
+  const day = seen.toISOString().slice(0, 10);
+  const today = new Date().toISOString().slice(0, 10);
+  const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+  const hhmm = seen.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+  if (day === today) return `${t.peopleW6.today} ${hhmm}`;
+  if (day === yesterday) return t.peopleW6.yesterday;
+  return fmtDate(day);
 }
 
 /**

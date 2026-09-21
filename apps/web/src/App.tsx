@@ -24,7 +24,9 @@ import { RulesPage, SortPage } from './pages/money/SortPage.js';
 import { TillPage } from './pages/money/TillPage.js';
 import { PickupWizard } from './pages/PickupWizard.js';
 import { ProfilePage } from './pages/ProfilePage.js';
-import { SettingsPage } from './pages/SettingsPage.js';
+import { LoginSettingsPage, PointsSettingsPage, RentalSettingsPage, SettingsPage } from './pages/SettingsPage.js';
+import { JournalPage } from './pages/JournalPage.js';
+import { MigrationPage } from './pages/MigrationPage.js';
 import { RentalPage } from './pages/RentalPage.js';
 import { ReturnWizard } from './pages/ReturnWizard.js';
 import { PurchasePage } from './pages/PurchasePage.js';
@@ -160,7 +162,13 @@ export function App() {
         <Route path="customers/new" element={<CustomerForm />} />
         <Route path="customers/:id" element={<CustomerPage />} />
         <Route path="me" element={<ProfilePage />} />
+        {/* Settings is six tabs since wave 6 (§3.4–3.9); the people are first. */}
         <Route path="settings" element={<Require perm="users.manage"><SettingsPage /></Require>} />
+        <Route path="settings/points" element={<Require perm="settings.manage"><PointsSettingsPage /></Require>} />
+        <Route path="settings/rental" element={<Require perm="settings.manage"><RentalSettingsPage /></Require>} />
+        <Route path="settings/journal" element={<Require perm="users.manage"><JournalPage /></Require>} />
+        <Route path="settings/migration" element={<Require perm="users.manage"><MigrationPage /></Require>} />
+        <Route path="settings/login" element={<Require perm="users.manage"><LoginSettingsPage /></Require>} />
         {/* The design catalogue is a review surface, not an operating screen:
             the owner reads it by address, it is in no menu. */}
         <Route path="design" element={<Require perm="users.manage"><DesignPage /></Require>} />

@@ -82,6 +82,17 @@ enum DepositStatus {
   @@map("deposit_status")
 }
 
+/// What an owner said about a deposit Odoo brought over (wave 6 §3.7). The
+/// money moved before the transfer, or nobody wrote down that it did; either
+/// way it is not a payout made today.
+enum DepositMigrationDecision {
+  returned_earlier
+  kept_earlier
+  unknown
+
+  @@map("deposit_migration_decision")
+}
+
 enum ActKind {
   pickup
   return
@@ -266,6 +277,18 @@ model OperationKey {
   @@map("operation_keys")
 }
 
+/// A failed sign-in, counted in rows so a restart of the API does not forgive
+/// the attempts (wave 6 §3.9, crit. 22). No password, ever.
+model LoginAttempt {
+  id        String   @id @default(uuid()) @db.Uuid
+  email     String
+  ip        String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([email, createdAt(sort: Desc)], map: "login_attempts_email_idx")
+  @@map("login_attempts")
+}
+
 model Session {
   token      String   @id
   userId     String   @map("user_id") @db.Uuid
@@ -376,6 +399,8 @@ model Customer {
   tags          String[]     @default([])
   address       String?
   notes         String?
+  /// The front office's deal: a link or an id, one way only (B10-03).
+  kommoRef      String?      @map("kommo_ref")
   odooPartnerId Int?         @unique @map("odoo_partner_id")
   archived      Boolean      @default(false)
   createdAt     DateTime     @default(now()) @map("created_at")
@@ -413,6 +438,7 @@ model Rental {
   batteries             Int?
   chargers              Int?
   notes                 String?
+  kommoRef              String?      @map("kommo_ref")
   odooOrderId           Int?         @unique @map("odoo_order_id")
   odooName              String?      @map("odoo_name")
   transferredAt         DateTime?    @map("transferred_at")
@@ -477,6 +503,10 @@ model Deposit {
   decidedById    String?       @map("decided_by") @db.Uuid
   confirmedById  String?       @map("confirmed_by") @db.Uuid
   notes          String?
+  /// Closed by the transfer, not by a payout: see `DepositMigrationDecision`.
+  migrationDecision DepositMigrationDecision? @map("migration_decision")
+  migrationReason   String?                   @map("migration_reason")
+  migrationDecidedAt DateTime?                @map("migration_decided_at")
   createdAt      DateTime      @default(now()) @map("created_at")
   updatedAt      DateTime      @default(now()) @map("updated_at")
 
@@ -770,6 +800,7 @@ model Sale {
   paidBeforeTetri Int      @default(0) @map("paid_before_tetri")
   transferred   Boolean    @default(false)
   notes         String?
+  kommoRef      String?    @map("kommo_ref")
   odooOrderId   Int?       @unique @map("odoo_order_id")
   createdById   String?    @map("created_by") @db.Uuid
   createdAt     DateTime   @default(now()) @map("created_at")

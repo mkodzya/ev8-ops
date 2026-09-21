@@ -96,7 +96,12 @@ export type TabId =
   | 'mine'
   | 'week'
   | 'utilisation'
-  | 'economics';
+  | 'economics'
+  | 'people'
+  | 'rental'
+  | 'journal'
+  | 'migration'
+  | 'login';
 
 /** Tabs inside a section, in the address (wave 1 §3.2). */
 export const SECTION_TABS: Partial<Record<SectionId, readonly { id: TabId; path: string; anyOf: readonly Permission[] }[]>> = {
@@ -123,6 +128,17 @@ export const SECTION_TABS: Partial<Record<SectionId, readonly { id: TabId; path:
   cash: [
     { id: 'till', path: '/money/cash', anyOf: ['cash.record'] },
     { id: 'mine', path: '/money/mine', anyOf: ['cash.record'] },
+  ],
+  // Settings grew from one page to six tabs in wave 6 (§3.4–3.9): the people,
+  // the points, what a hand-over proposes, the journal, what the move from
+  // Odoo left, and the rules of signing in.
+  settings: [
+    { id: 'people', path: '/settings', anyOf: ['users.manage'] },
+    { id: 'points', path: '/settings/points', anyOf: ['settings.manage'] },
+    { id: 'rental', path: '/settings/rental', anyOf: ['settings.manage'] },
+    { id: 'journal', path: '/settings/journal', anyOf: ['users.manage'] },
+    { id: 'migration', path: '/settings/migration', anyOf: ['users.manage'] },
+    { id: 'login', path: '/settings/login', anyOf: ['users.manage'] },
   ],
   // The week first: it is what an owner opens Reports for (wave 6 §3.1).
   reports: [

@@ -27,7 +27,7 @@ export async function debtsOf(customerIds: string[]): Promise<Map<string, Debt>>
         periods: { select: { startsOn: true, amountTetri: true, paidTetri: true } },
         charges: { where: { voidedAt: null }, select: { amountTetri: true, allocations: { where: { payment: { voidedAt: null } }, select: { amountTetri: true } } } },
         deposit: {
-          select: { amountTetri: true, paidTetri: true, withheldTetri: true, paidOutBeforeTetri: true, payouts: { where: { voidedAt: null }, select: { grossTetri: true } } },
+          select: { amountTetri: true, paidTetri: true, withheldTetri: true, paidOutBeforeTetri: true, migrationDecision: true, payouts: { where: { voidedAt: null }, select: { grossTetri: true } } },
         },
       },
     }),
@@ -59,6 +59,8 @@ export async function debtsOf(customerIds: string[]): Promise<Map<string, Debt>>
     const mine = rentals.filter((r) => r.customerId === id);
     const held = mine.reduce((n, r) => {
       if (!r.deposit) return n;
+      // Closed by a transfer decision: the company is not holding it (§3.7).
+      if (r.deposit.migrationDecision) return n;
       const paidOut = r.deposit.paidOutBeforeTetri + r.deposit.payouts.reduce((m, p) => m + p.grossTetri, 0);
       return n + Math.max(0, r.deposit.paidTetri - r.deposit.withheldTetri - paidOut);
     }, 0);
