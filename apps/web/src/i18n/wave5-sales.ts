@@ -18,6 +18,8 @@ export const wave5salesEn = {
     save: 'Correct',
   },
   merge: {
+    archived: 'This card is in the archive: it was merged into another one.',
+    openKept: (name: string) => `Open “${name}”`,
     title: 'Merge with…',
     which: 'Which card is the same person',
     into: (name: string) => `Everything will move to “${name}”.`,
@@ -139,6 +141,8 @@ export const wave5salesRu: Wave5sales = {
     save: 'Исправить',
   },
   merge: {
+    archived: 'Эта карточка в архиве: она объединена с другой.',
+    openKept: (name) => `Открыть «${name}»`,
     title: 'Объединить с…',
     which: 'Какая карточка — тот же человек',
     into: (name) => `Всё переедет в «${name}».`,
@@ -258,6 +262,8 @@ export const wave5salesKa: Wave5sales = {
     save: 'გასწორება',
   },
   merge: {
+    archived: 'ეს ბარათი არქივშია: ის გაერთიანდა სხვასთან.',
+    openKept: (name) => `„${name}“-ის გახსნა`,
     title: 'გაერთიანება…',
     which: 'რომელი ბარათია იგივე ადამიანი',
     into: (name) => `ყველაფერი გადავა „${name}“-ში.`,

@@ -346,6 +346,14 @@ describe.skipIf(!HAS_DB)('wave 5 · the shelf and the records', () => {
     expect(json<{ moved: { rentals: number } }>(merged).moved.rentals).toBe(1);
     const gone = await prisma.customer.findUniqueOrThrow({ where: { id: drop.id }, select: { archived: true, mergedIntoId: true } });
     expect(gone).toMatchObject({ archived: true, mergedIntoId: keep.id });
+
+    // And the card itself says so: an archive that opens like a live card,
+    // with "Новая выдача" on it, is not an archive (crit. 33, QA-W5-03).
+    const archived = json<{ customer: { archived: boolean; mergedInto: { id: string } | null } }>(
+      await call(owner, 'GET', `/api/customers/${drop.id}`),
+    );
+    expect(archived.customer.archived).toBe(true);
+    expect(archived.customer.mergedInto?.id).toBe(keep.id);
   });
 
   it('lets a manager report a breakdown and an owner take it up (crit. 21)', async () => {

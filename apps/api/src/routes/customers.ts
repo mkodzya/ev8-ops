@@ -151,6 +151,11 @@ export function customerRoutes(app: FastifyInstance): void {
         address: c.address,
         notes: c.notes,
         source: c.source,
+        // A card merged away is in the archive, and an archive that looks
+        // like a live card is not one: the screen needs to know (crit. 33,
+        // QA-W5-03).
+        archived: c.archived,
+        mergedInto: c.mergedIntoId ? await prisma.customer.findUnique({ where: { id: c.mergedIntoId }, select: { id: true, name: true, nameKa: true, nameLat: true } }) : null,
       },
       documents: c.documents.map((d) => ({ id: d.id, docKind: d.docKind, label: d.label, sizeBytes: d.sizeBytes, mimeType: d.mimeType, createdAt: d.createdAt.toISOString() })),
       canOpenDocuments: identity,

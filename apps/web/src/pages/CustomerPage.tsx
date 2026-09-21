@@ -16,13 +16,29 @@ import { BlockHead, Empty, Loading, PageHead, RentalBadge, Vin } from '../compon
 import { Row } from '../components/Wizard.js';
 import { fmtDate, formatGel } from '../format.js';
 import { useLocale, useT } from '../i18n/index.js';
-import { primaryName, secondName } from '../lib/names.js';
+import { nameMatches, primaryName, secondName } from '../lib/names.js';
 import { useLoad } from '../lib/use.js';
 import { fmtDate as fmtDay } from '../format.js';
 import { useSession } from '../session.js';
 
 interface Card {
-  customer: { id: string; name: string; nameKa: string | null; nameLat: string | null; personalId: string | null; phone: string | null; email: string | null; address: string | null; kind: CustomerKind; tags: string[]; notes: string | null; source: string | null };
+  customer: {
+    id: string;
+    name: string;
+    nameKa: string | null;
+    nameLat: string | null;
+    personalId: string | null;
+    phone: string | null;
+    email: string | null;
+    address: string | null;
+    kind: CustomerKind;
+    tags: string[];
+    notes: string | null;
+    source: string | null;
+    /** Merged away: the card is a record now, not a person to work with. */
+    archived: boolean;
+    mergedInto: { id: string; name: string; nameKa: string | null; nameLat: string | null } | null;
+  };
   documents: { id: string; docKind: 'id_card' | 'driver_licence' | 'other'; label: string; sizeBytes: number; mimeType: string; createdAt: string }[];
   sales: { id: string; number: string; status: string; soldOn: string | null; priceTetri: number; instalments: number; instalmentsPaid: number }[];
   feed: { at: string; kind: 'payment' | 'document' | 'log'; text: string; number: string | null; amountTetri: number | null; by: string | null; note: string | null }[];
@@ -76,29 +92,42 @@ export function CustomerPage() {
   return (
     <>
       <PageHead wrap title={primaryName(c, locale)} sub={secondName(c, locale)}>
-        {c.phone && (
+        {/* A card merged away is a record, not a person to work with: it
+            keeps its history and loses its actions (crit. 33, QA-W5-03). */}
+        {!c.archived && c.phone && (
           <a className="pill pill-sm" href={`tel:${c.phone}`}>
             {t.today.call}
           </a>
         )}
-        {c.phone && (
+        {!c.archived && c.phone && (
           // The ready text in the customer's language (wave 4 §3.2, В6).
           <button type="button" className="pill pill-sm" onClick={() => setWa(true)}>
             {t.customer.whatsapp}
           </button>
         )}
-        {can('customer.create') && (
+        {!c.archived && can('customer.create') && (
           <button type="button" className="pill pill-sm" onClick={() => setEditing(true)}>
             {t.customerW4.edit}
           </button>
         )}
-        {can('rental.create') && (
+        {!c.archived && can('rental.create') && (
           <Link className="pill pill-sm pill-accent" to={`/rentals/new?customer=${c.id}`}>
             {t.actions.newRental}
           </Link>
         )}
-        {can('settings.manage') && <RowMenu actions={[{ key: 'merge', label: t.merge.title, onPick: () => setMerging(true) }]} />}
+        {!c.archived && can('settings.manage') && <RowMenu actions={[{ key: 'merge', label: t.merge.title, onPick: () => setMerging(true) }]} />}
       </PageHead>
+
+      {c.archived && (
+        <section className="card">
+          <p className="warn-text">{t.merge.archived}</p>
+          {c.mergedInto && (
+            <Link className="pill" to={`/customers/${c.mergedInto.id}`}>
+              {t.merge.openKept(primaryName(c.mergedInto, locale))}
+            </Link>
+          )}
+        </section>
+      )}
 
       {merging && (
         <MergeSheet
@@ -383,7 +412,8 @@ function MergeSheet({ keepId, keepName, onClose, onDone }: { keepId: string; kee
       const needle = q.trim().toLowerCase();
       if (!needle) return false;
       const digits = needle.replace(/\D/g, '');
-      return primaryName(c, locale).toLowerCase().includes(needle) || (digits.length >= 3 && (c.phone ?? '').replace(/\D/g, '').includes(digits));
+      // Every spelling, not just the one this language leads with (QA-W5-08).
+      return nameMatches(c, needle) || (digits.length >= 3 && (c.phone ?? '').replace(/\D/g, '').includes(digits));
     })
     .slice(0, 6);
   const chosen = (list.data?.customers ?? []).find((c) => c.id === f.fromId) ?? null;
