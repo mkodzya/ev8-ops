@@ -163,3 +163,25 @@ export function weekIncome(payments: readonly WeekPayment[], period: Period): We
 
 /** The rows of the breakdown, for the check against `totalTetri`. */
 export const incomeRows = (i: WeekIncome): Tetri => i.rentTetri + i.saleTetri + i.depositsInTetri + i.serviceTetri;
+
+/**
+ * Which of a screen's filters travel to the server when the list of payments
+ * is asked for.
+ *
+ * It lives here, as a rule rather than as a line inside a component, because
+ * of the way it failed: the server learned to answer about one row of the
+ * week, the link learned to ask, and the screen in between kept its own list
+ * of parameters and quietly dropped the new one (QA-W6-05). Nothing caught
+ * it — there are no tests of the screens — so the rule moved to where a test
+ * can reach it.
+ */
+export const PAYMENT_FILTERS = ['from', 'to', 'channel', 'direction', 'kind', 'row', 'by', 'customerId', 'rentalId', 'saleId'] as const;
+
+export function paymentsQuery(read: (key: string) => string | null | undefined): string {
+  const q = new URLSearchParams();
+  for (const key of PAYMENT_FILTERS) {
+    const v = (read(key) ?? '').trim();
+    if (v) q.set(key, v);
+  }
+  return q.toString();
+}

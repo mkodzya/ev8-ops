@@ -1,4 +1,4 @@
-import { addDays, paymentMatches, todayISO } from '@ev8/shared';
+import { INCOME_ROWS, addDays, paymentMatches, paymentsQuery, todayISO } from '@ev8/shared';
 import { useSearchParams } from 'react-router-dom';
 import { LoadError } from '../../components/LoadError.js';
 import { PageHead } from '../../components/ui.js';
@@ -85,16 +85,16 @@ export function PaymentsList({ mine = false }: { mine?: boolean }) {
   const channel = params.get('channel') ?? '';
   const direction = params.get('direction') ?? '';
   const kind = params.get('kind') ?? '';
+  // A figure of the week's report links here asking for its own row, and the
+  // list has to pass the question on: without it the server answers about
+  // whole payments and the total disagrees with the figure (QA-W6-05).
+  const row = (INCOME_ROWS as readonly string[]).includes(params.get('row') ?? '') ? params.get('row')! : '';
   const by = params.get('by') ?? '';
-  const q = new URLSearchParams();
+  // One list of filters, shared with the test that checks it: a screen that
+  // keeps its own copy is how `row` went missing (QA-W6-05).
   const r = exact ?? range(period, today);
-  if (r.from) q.set('from', r.from);
-  if (r.to) q.set('to', r.to);
-  if (channel) q.set('channel', channel);
-  if (direction) q.set('direction', direction);
-  if (kind) q.set('kind', kind);
-  if (by) q.set('by', by);
-  const { data, failure, reload } = useLoad<Answer>(`/api/payments?${q.toString()}`);
+  const asked: Record<string, string> = { from: r.from ?? '', to: r.to ?? '', channel, direction, kind, row, by };
+  const { data, failure, reload } = useLoad<Answer>(`/api/payments?${paymentsQuery((k) => asked[k] ?? params.get(k))}`);
 
   const setParam = (key: string, value: string) => {
     const next = new URLSearchParams(params);
