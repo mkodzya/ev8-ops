@@ -169,3 +169,107 @@ export function utilisationByModel(u: Utilisation): { modelId: string; rentedDay
 
 /** Days in a period, both ends included — for a screen that shows the basis. */
 export const periodDays = (from: ISODate, to: ISODate): number => Math.max(0, daysBetween(from, to) + 1);
+
+/**
+ * How many mopeds a model had standing in the rental park — the prototype's
+ * middle column (§3.2). Counted from the rows, so it can never disagree with
+ * the days beside it.
+ */
+export function utilisationModelVehicles(u: Utilisation): Map<string, number> {
+  const by = new Map<string, number>();
+  for (const r of u.rows) {
+    if (r.modelId == null) continue;
+    by.set(r.modelId, (by.get(r.modelId) ?? 0) + 1);
+  }
+  return by;
+}
+
+/** A moped free this long is capacity nobody is selling (§3.2, "что мешает"). */
+export const FREE_TOO_LONG_DAYS = 14;
+
+export interface BlockerRow {
+  id: string;
+  modelId: string | null;
+  /** Days in repair over the period, or days free — whichever line it is on. */
+  days: number;
+}
+
+export interface FleetBlockers {
+  /** In the rental park and in repair every single day of the period. */
+  inRepairAllPeriod: BlockerRow[];
+  /** Free in the rental park, and standing longer than FREE_TOO_LONG_DAYS. */
+  freeTooLong: BlockerRow[];
+  /**
+   * "Не выходят из ремонта из-за батарей" (§3.2, D16). Nothing in the data
+   * ties a repair to a missing battery: batteries carry no numbers and a
+   * service job has no such reason (`batteries.md`). `null` — no record is
+   * kept — and the screen says that, because a 0 here would be invented
+   * (CLAUDE.md rule 1).
+   */
+  batteriesHolding: null;
+}
+
+/**
+ * What kept the figure down, over the same period and from the same events
+ * (§3.2). Not a second utilisation: these are counts of mopeds, and they
+ * explain the percentage rather than restate it.
+ */
+export function fleetBlockers(input: { vehicles: readonly UtilisationVehicle[]; from: ISODate; to: ISODate }): FleetBlockers {
+  const span = periodDays(input.from, input.to);
+  const inRepairAllPeriod: BlockerRow[] = [];
+  const freeTooLong: BlockerRow[] = [];
+
+  for (const v of input.vehicles) {
+    const sorted = [...v.events].sort((a, b) => a.occurredOn.localeCompare(b.occurredOn));
+    const states = sorted.map((e) => ({ occurredOn: e.occurredOn, value: e.toState }));
+    const pools = sorted.map((e) => ({ occurredOn: e.occurredOn, value: e.toPool }));
+    const born = sorted.find((e) => e.toState != null)?.occurredOn ?? null;
+
+    let repairDays = 0;
+    for (let day = input.from; day <= input.to; day = addDays(day, 1)) {
+      if (born == null || day < born) continue;
+      const state = at(states, day, null);
+      if (state !== 'service') continue;
+      if (at(pools, day, v.initialPool) !== 'rent') continue;
+      repairDays++;
+    }
+    // Every day of the period, so a moped that came back on the Tuesday is
+    // not counted as stuck for the month.
+    if (span > 0 && repairDays === span) inRepairAllPeriod.push({ id: v.id, modelId: v.modelId ?? null, days: repairDays });
+
+    const now = vehicleOn(v, input.to);
+    if (now && now.state === 'available' && now.pool === 'rent') {
+      const days = daysBetween(now.since, input.to);
+      if (days > FREE_TOO_LONG_DAYS) freeTooLong.push({ id: v.id, modelId: v.modelId ?? null, days });
+    }
+  }
+
+  freeTooLong.sort((a, b) => b.days - a.days);
+  return { inRepairAllPeriod, freeTooLong, batteriesHolding: null };
+}
+
+/**
+ * Which of the screen's controls travel to the server when the utilisation
+ * is asked for — the same rule, and for the same reason, as PAYMENT_FILTERS
+ * in `week.ts`: a link learned to carry a period, the screen in between kept
+ * its own list of keys and dropped it (QA-W6-05). Link and request are built
+ * from this one list, and a test holds them together.
+ */
+export const UTILISATION_FILTERS = ['from', 'to'] as const;
+
+export function utilisationQuery(read: (key: string) => string | null | undefined): string {
+  const q = new URLSearchParams();
+  for (const key of UTILISATION_FILTERS) {
+    const v = (read(key) ?? '').trim();
+    if (v) q.set(key, v);
+  }
+  return q.toString();
+}
+
+export const UTILISATION_PATH = '/reports/utilisation';
+
+/** The address of the utilisation screen for a period — for every figure that leads to it (ux №10). */
+export function utilisationPath(period: { from: ISODate; to: ISODate }): string {
+  const q = utilisationQuery((key) => (period as Record<string, string>)[key]);
+  return q ? `${UTILISATION_PATH}?${q}` : UTILISATION_PATH;
+}

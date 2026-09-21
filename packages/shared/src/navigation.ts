@@ -1,4 +1,5 @@
 import { ROLE_PERMISSIONS, type Permission } from './permissions.js';
+import { UTILISATION_PATH } from './utilisation.js';
 import type { Role } from './types.js';
 
 /**
@@ -80,7 +81,22 @@ export function menuSectionsFor(permissions: readonly Permission[]): SectionId[]
   return [...rest.filter((id) => id === 'customers'), ...rest.filter((id) => id !== 'customers')];
 }
 
-export type TabId = 'vehicles' | 'models' | 'points' | 'batteries' | 'jobs' | 'stock' | 'sort' | 'payments' | 'till' | 'statements' | 'deposits' | 'mine' | 'week' | 'economics';
+export type TabId =
+  | 'vehicles'
+  | 'models'
+  | 'points'
+  | 'batteries'
+  | 'jobs'
+  | 'stock'
+  | 'sort'
+  | 'payments'
+  | 'till'
+  | 'statements'
+  | 'deposits'
+  | 'mine'
+  | 'week'
+  | 'utilisation'
+  | 'economics';
 
 /** Tabs inside a section, in the address (wave 1 §3.2). */
 export const SECTION_TABS: Partial<Record<SectionId, readonly { id: TabId; path: string; anyOf: readonly Permission[] }[]>> = {
@@ -111,6 +127,7 @@ export const SECTION_TABS: Partial<Record<SectionId, readonly { id: TabId; path:
   // The week first: it is what an owner opens Reports for (wave 6 §3.1).
   reports: [
     { id: 'week', path: '/reports/week', anyOf: ['reports.view'] },
+    { id: 'utilisation', path: UTILISATION_PATH, anyOf: ['reports.view'] },
     { id: 'economics', path: '/reports/economics', anyOf: ['reports.view'] },
   ],
 };
