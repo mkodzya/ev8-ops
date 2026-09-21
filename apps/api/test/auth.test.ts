@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { HAS_DB, PASSWORD, call, json, login, makeUser } from './helpers.js';
+import { HAS_DB, PASSWORD, call, json, login, loginAs, makeUser } from './helpers.js';
 
 describe.skipIf(!HAS_DB)('sign-in', () => {
   it('health answers without a session', async () => {
@@ -42,6 +42,85 @@ describe.skipIf(!HAS_DB)('sign-in', () => {
     const { prisma } = await import('../src/lib/db.js');
     await prisma.user.update({ where: { id: u.id }, data: { active: false } });
     expect((await call(cookie, 'GET', '/api/me')).statusCode).toBe(401);
+  });
+});
+
+// Wave 6 §3.9. The rules that used to live in a Map and in nobody's test.
+describe.skipIf(!HAS_DB)('sign-in, the rules around it', () => {
+  it('counts failures in the database, so a restart of the API does not forgive them (crit. 22)', async () => {
+    const u = await makeUser('manager');
+    const { prisma } = await import('../src/lib/db.js');
+    for (let i = 0; i < 9; i++) await call(null, 'POST', '/api/auth/login', { email: u.email, password: 'nope' });
+    expect(await prisma.loginAttempt.count({ where: { email: u.email } })).toBe(9);
+
+    // What a restart does to the counter: nothing. The rows are the counter,
+    // and the module holds no state a new process would start empty.
+    const { loginFailures, MAX_ATTEMPTS } = await import('../src/lib/auth.js');
+    expect(await loginFailures(u.email)).toBe(9);
+    expect(MAX_ATTEMPTS).toBe(10);
+
+    const tenth = await call(null, 'POST', '/api/auth/login', { email: u.email, password: 'nope' });
+    expect(tenth.statusCode).toBe(401);
+    // The eleventh is refused before the password is looked at — and the
+    // right password is refused too, which is the point of a lock-out.
+    const locked = await call(null, 'POST', '/api/auth/login', { email: u.email, password: PASSWORD });
+    expect(locked.statusCode).toBe(429);
+  });
+
+  it('a failed attempt reaches the journal with the address, the IP and the try — never the password (crit. 18)', async () => {
+    const u = await makeUser('manager');
+    const { prisma } = await import('../src/lib/db.js');
+    await call(null, 'POST', '/api/auth/login', { email: u.email, password: 'hunter2' });
+    const row = await prisma.auditLog.findFirst({ where: { action: 'auth.login.failed' }, orderBy: { createdAt: 'desc' } });
+    expect(row).not.toBeNull();
+    const after = row?.after as { email: string; ip: string | null; attempt: number };
+    expect(after.email).toBe(u.email);
+    expect(after.attempt).toBe(1);
+    expect(JSON.stringify(row)).not.toContain('hunter2');
+  });
+
+  it('a signing in that works clears what the failures counted', async () => {
+    const u = await makeUser('manager');
+    const { prisma } = await import('../src/lib/db.js');
+    await call(null, 'POST', '/api/auth/login', { email: u.email, password: 'nope' });
+    await login(u.email);
+    expect(await prisma.loginAttempt.count({ where: { email: u.email } })).toBe(0);
+  });
+
+  it('a session untouched for more than a week signs in again (Q30)', async () => {
+    const u = await makeUser('manager');
+    const cookie = await login(u.email);
+    const { prisma } = await import('../src/lib/db.js');
+    const { SESSION_IDLE_MS } = await import('../src/lib/auth.js');
+    const token = cookie.split('=')[1];
+    // Six days: still open. Eight: over, and the row is gone with it.
+    await prisma.session.update({ where: { token }, data: { lastSeenAt: new Date(Date.now() - SESSION_IDLE_MS + 24 * 3600_000) } });
+    expect((await call(cookie, 'GET', '/api/me')).statusCode).toBe(200);
+    await prisma.session.update({ where: { token }, data: { lastSeenAt: new Date(Date.now() - SESSION_IDLE_MS - 24 * 3600_000) } });
+    expect((await call(cookie, 'GET', '/api/me')).statusCode).toBe(401);
+    expect(await prisma.session.findUnique({ where: { token } })).toBeNull();
+  });
+
+  it('an owner closes every login somebody has (crit. 14)', async () => {
+    const owner = await loginAs('owner');
+    const u = await makeUser('manager');
+    const phone = await login(u.email);
+    const laptop = await login(u.email);
+    const res = await call(owner, 'POST', `/api/users/${u.id}/sessions/close`);
+    expect(res.statusCode).toBe(200);
+    expect(json<{ closed: number }>(res).closed).toBe(2);
+    expect((await call(phone, 'GET', '/api/me')).statusCode).toBe(401);
+    expect((await call(laptop, 'GET', '/api/me')).statusCode).toBe(401);
+  });
+
+  it('the people screen says when each of them was last seen', async () => {
+    const owner = await loginAs('owner');
+    const u = await makeUser('manager');
+    await login(u.email);
+    const rows = json<{ users: { id: string; sessions: number; lastSeenAt: string | null }[] }>(await call(owner, 'GET', '/api/users')).users;
+    const mine = rows.find((r) => r.id === u.id);
+    expect(mine?.sessions).toBe(1);
+    expect(mine?.lastSeenAt).not.toBeNull();
   });
 });
 
