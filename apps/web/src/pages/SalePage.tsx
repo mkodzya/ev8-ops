@@ -191,7 +191,9 @@ export function SalePage() {
         ) : (
           <ul className="timeline">
             {data.feed.map((row, i) => {
-              const word = t.saleCard.words[row.text] ?? t.feedWords[row.text] ?? row.text;
+              // A payment's line names the way the money came in; everything
+              // else is an action the journal already has words for.
+              const word = row.kind === 'payment' ? (t.payments.channels[row.text] ?? t.saleCard.words[row.text] ?? row.text) : (t.saleCard.words[row.text] ?? t.feedWords[row.text] ?? row.text);
               return (
                 <li key={`${row.at}-${i}`}>
                   <span className="mono muted">{fmtDate(row.at)}</span>
