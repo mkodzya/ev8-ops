@@ -22,3 +22,4 @@ export * from './sales.js';
 export * from './service.js';
 export * from './vin.js';
 export * from './utilisation.js';
+export * from './week.js';

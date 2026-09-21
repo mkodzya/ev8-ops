@@ -75,13 +75,17 @@ export function PaymentsList({ mine = false }: { mine?: boolean }) {
   const t = useT();
   const [params, setParams] = useSearchParams();
   const today = todayISO();
+  // A figure on "Отчёты → Неделя" links here with its own two dates: the list
+  // it opens must be the rows that figure was made of, not the week the list
+  // happens to default to (wave 6 §3.1, ux №10).
+  const exact = params.get('from') && params.get('to') ? { from: params.get('from')!, to: params.get('to')! } : null;
   const period = (PERIODS as readonly string[]).includes(params.get('period') ?? '') ? (params.get('period') as Period) : 'thisWeek';
   const channel = params.get('channel') ?? '';
   const direction = params.get('direction') ?? '';
   const kind = params.get('kind') ?? '';
   const by = params.get('by') ?? '';
   const q = new URLSearchParams();
-  const r = range(period, today);
+  const r = exact ?? range(period, today);
   if (r.from) q.set('from', r.from);
   if (r.to) q.set('to', r.to);
   if (channel) q.set('channel', channel);
@@ -114,7 +118,25 @@ export function PaymentsList({ mine = false }: { mine?: boolean }) {
     <>
       <PageHead title={mine ? t.payList.mine : t.payments.title} />
       <div className="money-filters">
-        <select className="input" value={period} onChange={(e) => setParam('period', e.target.value === 'thisWeek' ? '' : e.target.value)} aria-label={t.payList.thisWeek}>
+        <select
+          className="input"
+          value={exact ? '' : period}
+          onChange={(e) => {
+            // Picking a period by hand drops the exact dates a link carried.
+            const next = new URLSearchParams(params);
+            next.delete('from');
+            next.delete('to');
+            if (e.target.value === 'thisWeek') next.delete('period');
+            else next.set('period', e.target.value);
+            setParams(next, { replace: true });
+          }}
+          aria-label={t.payList.thisWeek}
+        >
+          {exact && (
+            <option value="">
+              {fmtDate(exact.from)} — {fmtDate(exact.to)}
+            </option>
+          )}
           {PERIODS.map((p) => (
             <option key={p} value={p}>
               {t.payList[p]}

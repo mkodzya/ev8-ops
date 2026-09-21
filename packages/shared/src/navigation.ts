@@ -45,7 +45,7 @@ export const SECTIONS: readonly Section[] = [
   { id: 'cash', path: '/money/cash', group: 'money', anyOf: ['cash.record'], noneOf: ['payments.view'] },
   { id: 'sales', path: '/sales', group: 'money', anyOf: ['fleet.view'] },
   { id: 'purchases', path: '/purchases', group: 'money', anyOf: ['purchases.view'] },
-  { id: 'reports', path: '/reports/economics', group: 'manage', anyOf: ['reports.view'] },
+  { id: 'reports', path: '/reports/week', group: 'manage', anyOf: ['reports.view'] },
   { id: 'settings', path: '/settings', group: 'manage', anyOf: ['users.manage'] },
   { id: 'customers', path: '/customers', group: null, anyOf: ['fleet.view'] },
 ];
@@ -80,7 +80,7 @@ export function menuSectionsFor(permissions: readonly Permission[]): SectionId[]
   return [...rest.filter((id) => id === 'customers'), ...rest.filter((id) => id !== 'customers')];
 }
 
-export type TabId = 'vehicles' | 'models' | 'points' | 'batteries' | 'jobs' | 'stock' | 'sort' | 'payments' | 'till' | 'statements' | 'deposits' | 'mine' | 'economics';
+export type TabId = 'vehicles' | 'models' | 'points' | 'batteries' | 'jobs' | 'stock' | 'sort' | 'payments' | 'till' | 'statements' | 'deposits' | 'mine' | 'week' | 'economics';
 
 /** Tabs inside a section, in the address (wave 1 §3.2). */
 export const SECTION_TABS: Partial<Record<SectionId, readonly { id: TabId; path: string; anyOf: readonly Permission[] }[]>> = {
@@ -108,7 +108,11 @@ export const SECTION_TABS: Partial<Record<SectionId, readonly { id: TabId; path:
     { id: 'till', path: '/money/cash', anyOf: ['cash.record'] },
     { id: 'mine', path: '/money/mine', anyOf: ['cash.record'] },
   ],
-  reports: [{ id: 'economics', path: '/reports/economics', anyOf: ['reports.view'] }],
+  // The week first: it is what an owner opens Reports for (wave 6 §3.1).
+  reports: [
+    { id: 'week', path: '/reports/week', anyOf: ['reports.view'] },
+    { id: 'economics', path: '/reports/economics', anyOf: ['reports.view'] },
+  ],
 };
 
 export function tabsFor(section: SectionId, permissions: readonly Permission[]) {

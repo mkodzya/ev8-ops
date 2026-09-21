@@ -18,7 +18,12 @@ export interface UtilisationAnswer extends Utilisation {
   byModel: { modelId: string; model: string; rentedDays: number; poolDays: number; percent: number | null }[];
 }
 
-export async function utilisationOf(from: string, to: string): Promise<UtilisationAnswer> {
+/**
+ * Every moped with the events it needs, in the shape the arithmetic takes.
+ * The week's report reads the same rows for its own fleet counts, so the two
+ * screens can never disagree about where a VIN stood on Tuesday.
+ */
+export async function utilisationVehicles(): Promise<{ input: UtilisationVehicle[]; names: Map<string, string> }> {
   const vehicles = await prisma.vehicle.findMany({
     where: { archived: false },
     select: {
@@ -49,8 +54,12 @@ export async function utilisationOf(from: string, to: string): Promise<Utilisati
     };
   });
 
+  return { input, names: new Map(vehicles.map((v) => [v.modelId, `${v.model.brand} ${v.model.name}`])) };
+}
+
+export async function utilisationOf(from: string, to: string): Promise<UtilisationAnswer> {
+  const { input, names } = await utilisationVehicles();
   const u = fleetUtilisation({ vehicles: input, from, to });
-  const names = new Map(vehicles.map((v) => [v.modelId, `${v.model.brand} ${v.model.name}`]));
   return {
     ...u,
     from,
