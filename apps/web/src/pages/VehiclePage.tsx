@@ -187,6 +187,11 @@ export function VehiclePage() {
 
       <div className="two-col">
         <section className="card">
+          {/* The model was only ever in the header's subtitle, and on a phone
+              that line gives way to the VIN — so the card could not answer
+              "what is this moped" at all (QA-W5-27). It is the second thing
+              anybody asks after the VIN, so it belongs in the card itself. */}
+          <Row k={t.fleet.model} v={<Link to={`/fleet/models/${v.model.id}`}>{`${v.model.brand} ${v.model.name}`}</Link>} />
           <Row k={t.fleet.color} v={v.color ? <ColorText of={v.color} named /> : t.common.dash} />
           <Row k={t.fleet.year} v={<span className="mono">{v.year ?? t.common.dash}</span>} />
           <Row k={t.fleet.arrived} v={<span className="mono">{fmtDate(v.arrivedOn)}</span>} />
