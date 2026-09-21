@@ -109,26 +109,40 @@ export function WeekPage() {
     // and the till, and the rows under it answer the other question — what the
     // money came in for (designer, 22.09.2026).
     { key: 'total', label: t.weekReport.inTotal, text: money(w.money.totalTetri), to: `/money/payments${list}&direction=in`, strong: true },
-    { key: 'rent', label: t.weekReport.inRent, text: money(w.money.rentTetri), to: `/money/payments${list}&kind=rent` },
-    { key: 'sales', label: t.weekReport.inSales, text: money(w.money.saleTetri), to: `/money/payments${list}&kind=sale` },
-    { key: 'depIn', label: t.weekReport.depositsIn, text: money(w.money.depositsInTetri), to: '/money/deposits' },
-    { key: 'repairs', label: t.weekReport.inRepairs, text: money(w.money.serviceTetri), to: `/money/payments${list}&kind=service` },
+    // By row, not by kind of payment: one hand-over is rent and a deposit at
+    // once, and a list filtered by kind would show the whole 330 ₾ under rent
+    // and disagree with the figure it came from (QA-W6-01, ux №10).
+    { key: 'rent', label: t.weekReport.inRent, text: money(w.money.rentTetri), to: `/money/payments${list}&row=rent` },
+    { key: 'sales', label: t.weekReport.inSales, text: money(w.money.saleTetri), to: `/money/payments${list}&row=sale` },
+    { key: 'depIn', label: t.weekReport.depositsIn, text: money(w.money.depositsInTetri), to: `/money/payments${list}&row=deposits` },
+    { key: 'repairs', label: t.weekReport.inRepairs, text: money(w.money.serviceTetri), to: `/money/payments${list}&row=service` },
     {
       key: 'fee',
       label: t.weekReport.acquiringFee,
-      text: `−${money(w.money.acquiringFeeTetri)}`,
+      // Nothing taken is nothing, not minus nothing (QA-W6-04).
+      text: w.money.acquiringFeeTetri === 0 ? money(0) : `−${money(w.money.acquiringFeeTetri)}`,
       to: `/money/payments${list}&channel=acquiring`,
       negative: true,
     },
     {
       key: 'depOut',
       label: t.weekReport.depositsOut,
-      text: `−${money(w.money.depositsOutTetri)}`,
+      text: w.money.depositsOutTetri === 0 ? money(0) : `−${money(w.money.depositsOutTetri)}`,
       to: `/money/payments${list}&kind=deposit_payout`,
       negative: true,
     },
     { key: 'withheld', label: t.weekReport.withheld, text: money(w.money.withheldTetri), to: '/money/deposits' },
-    { key: 'held', label: t.weekReport.held, text: money(w.money.heldTetri), to: '/money/deposits' },
+    {
+      key: 'held',
+      label: t.weekReport.held,
+      text: money(w.money.heldTetri),
+      // Deposits still with us is a figure of today, not of the week that
+      // ended: what a deposit became is worked out from the deposit itself,
+      // which keeps no history of its own (QA-W6-03). Said out loud here
+      // rather than left to be read as the week's.
+      note: w.asOf !== w.today ? t.weekReport.heldToday : undefined,
+      to: '/money/deposits',
+    },
     {
       key: 'util',
       label: t.weekReport.utilisation,

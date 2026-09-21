@@ -11,6 +11,12 @@ const ruPlural = (n: number, one: string, few: string, many: string): string => 
 
 export const wave6weekEn = {
   weekReport: {
+    rowTotals: {
+      rent: 'Of these, rent for the week',
+      sale: 'Of these, sales for the week',
+      deposits: 'Of these, deposits for the week',
+      service: 'Of these, repairs for the week',
+    } as Record<string, string>,
     title: 'The week',
     subtitle: 'The figures of the book, for the week that starts on Monday. Every one of them leads to the list it is made of.',
     thisWeek: 'This week',
@@ -45,6 +51,7 @@ export const wave6weekEn = {
 
     batteries: 'Batteries: showroom · couriers · repair',
     batteriesToday: 'The battery count is today’s, not the week’s.',
+    heldToday: 'Deposits still with us: today’s figure, not the end of that week.',
     unmatched: 'Statement lines not sorted',
     swaps: 'Battery swaps',
     noRecord: 'no data — no record is kept',
@@ -63,6 +70,12 @@ export const wave6weekEn = {
 
 export const wave6weekRu: typeof wave6weekEn = {
   weekReport: {
+    rowTotals: {
+      rent: 'Из них в «аренду» за неделю',
+      sale: 'Из них в «продажи» за неделю',
+      deposits: 'Из них в «залоги» за неделю',
+      service: 'Из них в «ремонт» за неделю',
+    },
     title: 'Неделя',
     subtitle: 'Цифры книги за неделю с понедельника. Каждая ведёт в список, из которого сложена.',
     thisWeek: 'Эта неделя',
@@ -97,6 +110,7 @@ export const wave6weekRu: typeof wave6weekEn = {
 
     batteries: 'Батареи: шоурум · курьеры · ремонт',
     batteriesToday: 'Количество батарей — на сегодня, а не на конец недели.',
+    heldToday: 'Залоги на руках — на сегодня, а не на конец той недели.',
     unmatched: 'Неразобранные строки выписок',
     swaps: 'Замены батарей',
     noRecord: 'нет данных — учёта нет',
@@ -115,6 +129,12 @@ export const wave6weekRu: typeof wave6weekEn = {
 
 export const wave6weekKa: typeof wave6weekEn = {
   weekReport: {
+    rowTotals: {
+      rent: 'აქედან „ქირაში“ კვირის განმავლობაში',
+      sale: 'აქედან „გაყიდვებში“ კვირის განმავლობაში',
+      deposits: 'აქედან „გირაოში“ კვირის განმავლობაში',
+      service: 'აქედან „რემონტში“ კვირის განმავლობაში',
+    },
     title: 'კვირა',
     subtitle: 'წიგნის ციფრები ორშაბათიდან დაწყებულ კვირაზე. თითოეული მიგიყვანთ იმ სიასთან, რისგანაც შედგება.',
     thisWeek: 'ეს კვირა',
@@ -149,6 +169,7 @@ export const wave6weekKa: typeof wave6weekEn = {
 
     batteries: 'ბატარეები: შოურუმი · კურიერები · რემონტი',
     batteriesToday: 'ბატარეების რაოდენობა დღევანდელი მდგომარეობითაა, არა კვირის ბოლოს.',
+    heldToday: 'გირაოები ხელზე — დღევანდელი ციფრი, და არა იმ კვირის ბოლოს.',
     unmatched: 'ამონაწერის დაუხარისხებელი ხაზები',
     swaps: 'ბატარეის შეცვლა',
     noRecord: 'მონაცემები არ არის — აღრიცხვა არ იწარმოება',

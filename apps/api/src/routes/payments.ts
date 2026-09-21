@@ -1,4 +1,4 @@
-import { acquiringGross, todayISO } from '@ev8/shared';
+import { INCOME_ROWS, acquiringGross, paymentInRow, todayISO, type IncomeRow, type WeekAllocationTarget, type WeekPaymentKind } from '@ev8/shared';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { hasPerm } from '../lib/auth.js';
 import { dateFromISO, isoDate } from '../lib/dates.js';
@@ -83,13 +83,36 @@ export function paymentRoutes(app: FastifyInstance): void {
         purchase: { select: { id: true, number: true } },
         serviceJob: { select: { id: true, number: true } },
         createdBy: { select: { id: true, name: true } },
-        allocations: { select: { amountTetri: true } },
+        allocations: { select: { amountTetri: true, target: true } },
       },
     });
+
+    // A figure on the week's report links here, and ux №10 asks that the
+    // list add up to the figure it came from. The week splits one payment
+    // between rows — a hand-over is rent and a deposit at once — so the list
+    // has to answer the same question: how much of each payment belongs to
+    // this row. Same function, `paymentInRow` (QA-W6-01).
+    const row = (INCOME_ROWS as readonly string[]).includes(req.query.row ?? '') ? (req.query.row as IncomeRow) : null;
+    const inRow = (p: (typeof payments)[number]): number =>
+      paymentInRow(
+        {
+          occurredOn: isoDate(p.occurredOn) as string,
+          direction: p.direction as 'in' | 'out',
+          channel: p.channel as 'cash' | 'acquiring' | 'transfer' | 'deposit',
+          kind: p.kind as WeekPaymentKind,
+          grossTetri: p.grossTetri,
+          feeTetri: p.feeTetri,
+          allocations: p.allocations.map((a) => ({ target: a.target as WeekAllocationTarget, amountTetri: a.amountTetri })),
+        },
+        row ?? 'rent',
+      );
     // The total over the filter (§3.3): what came in, what went out, what the
     // acquirer kept. A voided payment is shown, not counted.
-    const live = payments.filter((p) => !p.voidedAt);
+    const live = payments.filter((p) => !p.voidedAt).filter((p) => (row ? inRow(p) > 0 : true));
     const totals = {
+      // When a row of the week asked, the total is what belongs to that row —
+      // not the whole of every payment that touches it.
+      rowTetri: row ? live.reduce((n, p) => n + inRow(p), 0) : null,
       // Money kept from a deposit came in once already, as the deposit: it is not counted twice.
       inTetri: live.filter((p) => p.direction === 'in' && p.channel !== 'deposit').reduce((n, p) => n + p.grossTetri, 0),
       outTetri: live.filter((p) => p.direction === 'out').reduce((n, p) => n + p.grossTetri, 0),
@@ -101,7 +124,8 @@ export function paymentRoutes(app: FastifyInstance): void {
     return {
       totals,
       people,
-      payments: payments.map((p) => ({
+      row,
+      payments: (row ? payments.filter((p) => p.voidedAt || inRow(p) > 0) : payments).map((p) => ({
         id: p.id,
         occurredOn: isoDate(p.occurredOn),
         direction: p.direction,

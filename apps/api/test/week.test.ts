@@ -255,3 +255,31 @@ describe.skipIf(!HAS_DB)('wave 6 · the week', () => {
     expect((await call(manager, 'GET', '/api/reports/week.pdf')).statusCode).toBe(403);
   });
 });
+
+describe.skipIf(!HAS_DB)('a figure of the week leads to a list that adds up to it (QA-W6-01)', () => {
+  it('filters the payments by the row, and totals what belongs to it', async () => {
+    const owner = await loginAs('owner');
+    const week = json<{ from: string; to: string; money: { rentTetri: number; depositsInTetri: number } }>(
+      await call(owner, 'GET', '/api/reports/week'),
+    );
+    const period = `from=${week.from}&to=${week.to}`;
+
+    for (const [row, figure] of [
+      ['rent', week.money.rentTetri],
+      ['deposits', week.money.depositsInTetri],
+    ] as const) {
+      const list = json<{ totals: { rowTetri: number | null }; row: string | null }>(
+        await call(owner, 'GET', `/api/payments?${period}&row=${row}`),
+      );
+      expect(list.row).toBe(row);
+      // The whole point: the list behind a figure adds up to the figure.
+      expect(list.totals.rowTetri).toBe(figure);
+    }
+
+    // Without the parameter nothing changes for the screens that were here
+    // before: the total is still every payment in full.
+    const plain = json<{ totals: { rowTetri: number | null }; row: string | null }>(await call(owner, 'GET', `/api/payments?${period}`));
+    expect(plain.row).toBeNull();
+    expect(plain.totals.rowTetri).toBeNull();
+  });
+});
