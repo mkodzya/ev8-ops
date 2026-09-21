@@ -115,7 +115,7 @@ export function tabsFor(section: SectionId, permissions: readonly Permission[]) 
   return (SECTION_TABS[section] ?? []).filter((t) => allowed(t, permissions));
 }
 
-export type ActionId = 'pickup' | 'return' | 'takeMoney' | 'takeCash' | 'newCustomer' | 'openRepair' | 'sell';
+export type ActionId = 'pickup' | 'return' | 'takeMoney' | 'takeCash' | 'newCustomer' | 'openRepair' | 'reportBreak' | 'sell';
 
 /** What the "+" offers, most frequent first (wave 1 §3.2). */
 export const ACTIONS: readonly { id: ActionId; path: string; anyOf: readonly Permission[]; noneOf?: readonly Permission[] }[] = [
@@ -126,7 +126,10 @@ export const ACTIONS: readonly { id: ActionId; path: string; anyOf: readonly Per
   { id: 'takeCash', path: '/money/cash?take=1', anyOf: ['cash.record'], noneOf: ['payments.reconcile'] },
   { id: 'newCustomer', path: '/customers/new', anyOf: ['customer.create'] },
   { id: 'openRepair', path: '/service?new=1', anyOf: ['service.manage'] },
-  { id: 'sell', path: '/sales?new=1', anyOf: ['sales.manage'] },
+  // A manager says a moped is broken and no more than that (wave 5 §3.7);
+  // an owner opens the repair itself, so they see the other one.
+  { id: 'reportBreak', path: '/service?report=1', anyOf: ['service.report'], noneOf: ['service.manage'] },
+  { id: 'sell', path: '/sales/new', anyOf: ['sales.manage'] },
 ];
 
 export function actionsFor(permissions: readonly Permission[]) {

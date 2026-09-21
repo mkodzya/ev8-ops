@@ -39,7 +39,9 @@ export function customerRoutes(app: FastifyInstance): void {
   app.get('/api/customers', { config: { scope: 'fleet.view' } }, async (req) => {
     const identity = mayView(req, 'customer.documents.view');
     const customers = await prisma.customer.findMany({
-      where: { archived: false },
+      // Clients only (B3-06, wave 5 §3.9): a factory has a card of its own,
+      // and neither the hand-over nor the sale should have to step over it.
+      where: { archived: false, recordKind: { not: 'supplier' } },
       orderBy: { name: 'asc' },
       include: {
         // Every rental: the list counts them and sums the debt with the rule
@@ -61,7 +63,7 @@ export function customerRoutes(app: FastifyInstance): void {
         phone: c.phone,
         email: c.email,
         kind: c.kind,
-        isSupplier: c.isSupplier,
+        recordKind: c.recordKind,
         tags: c.tags,
         openRentals: c.rentals
           .filter((r) => OPEN_RENTAL.includes(r.status))
@@ -144,11 +146,16 @@ export function customerRoutes(app: FastifyInstance): void {
         phone: c.phone,
         email: c.email,
         kind: c.kind,
-        isSupplier: c.isSupplier,
+        recordKind: c.recordKind,
         tags: c.tags,
         address: c.address,
         notes: c.notes,
         source: c.source,
+        // A card merged away is in the archive, and an archive that looks
+        // like a live card is not one: the screen needs to know (crit. 33,
+        // QA-W5-03).
+        archived: c.archived,
+        mergedInto: c.mergedIntoId ? await prisma.customer.findUnique({ where: { id: c.mergedIntoId }, select: { id: true, name: true, nameKa: true, nameLat: true } }) : null,
       },
       documents: c.documents.map((d) => ({ id: d.id, docKind: d.docKind, label: d.label, sizeBytes: d.sizeBytes, mimeType: d.mimeType, createdAt: d.createdAt.toISOString() })),
       canOpenDocuments: identity,

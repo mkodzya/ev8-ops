@@ -49,7 +49,7 @@ describe.skipIf(!HAS_DB)('a shipment lands on the shelf', () => {
     const { prisma } = await import('../src/lib/db.js');
     const { id: partId } = await part();
     const owner = await loginAs('owner');
-    const supplier = await prisma.customer.create({ data: { name: `Supplier ${uniq()}`, isSupplier: true } });
+    const supplier = await prisma.customer.create({ data: { name: `Supplier ${uniq()}`, recordKind: 'supplier' } });
 
     const { id: poId } = json<{ id: string }>(
       await call(owner, 'POST', '/api/purchases', { supplierId: supplier.id, currency: 'CNY', orderedOn: '2026-04-01', extrasTetri: 0 }),
@@ -91,6 +91,20 @@ describe.skipIf(!HAS_DB)('a repair takes parts off the shelf', () => {
     return { prisma, partId, owner, vehicle };
   }
 
+  /** A moped out with somebody: the only kind whose repair a customer pays for. */
+  async function rentedVehicle(): Promise<{ vehicleId: string }> {
+    const { prisma } = await import('../src/lib/db.js');
+    const owner = await loginAs('owner');
+    const model = await prisma.vehicleModel.create({ data: { brand: 'Test', name: `Rented ${uniq()}`, weeklyRateTetri: 15000 } });
+    const vehicle = await prisma.vehicle.create({
+      data: { vin: `TESTR${uniq().replace(/\D/g, '').slice(-12).padStart(12, '0')}`, modelId: model.id, pool: 'rent' },
+    });
+    const customer = await prisma.customer.create({ data: { name: `ТЕСТ Repair ${uniq()}` } });
+    const res = await call(owner, 'POST', '/api/rentals', { customerId: customer.id, vehicleId: vehicle.id, weeklyRateTetri: 15000 });
+    if (res.statusCode !== 201) throw new Error(res.body);
+    return { vehicleId: vehicle.id };
+  }
+
   it('takes them when the line is added and puts them back when it is removed', async () => {
     const { partId, owner, vehicle } = await stocked(10, 1200);
     const { id: jobId } = json<{ id: string }>(
@@ -112,16 +126,63 @@ describe.skipIf(!HAS_DB)('a repair takes parts off the shelf', () => {
     expect(card.moves.filter((m) => m.kind === 'issue')).toHaveLength(0);
   });
 
-  it('takes the catalogue price when the line does not name one', async () => {
+  it('prices a part by who is paying for the repair (B8-04, wave 5 crit. 22, 23)', async () => {
     const { prisma, partId, owner, vehicle } = await stocked(10, 1200);
     await prisma.part.update({ where: { id: partId }, data: { salePriceTetri: 2500 } });
+    // The company's own repair costs the company what the shelf paid.
     const { id: jobId } = json<{ id: string }>(
       await call(owner, 'POST', '/api/service', { vehicleId: vehicle.id, reason: 'pads', openedOn: '2026-05-10' }),
     );
     const added = await call(owner, 'POST', `/api/service/${jobId}/parts`, { partId, qty: 2 });
     expect(added.statusCode, added.body).toBe(201);
     const job = json<{ job: { parts: { unitPriceTetri: number }[] } }>(await call(owner, 'GET', `/api/service/${jobId}`));
-    expect(job.job.parts[0].unitPriceTetri).toBe(2500);
+    expect(job.job.parts[0].unitPriceTetri).toBe(1200);
+
+    // The same part on a repair the customer pays for goes on at its price.
+    const rented = await rentedVehicle();
+    const { id: mine } = json<{ id: string }>(
+      await call(owner, 'POST', '/api/service', { vehicleId: rented.vehicleId, reason: 'pads', payer: 'customer', openedOn: '2026-05-10' }),
+    );
+    expect((await call(owner, 'POST', `/api/service/${mine}/parts`, { partId, qty: 1 })).statusCode).toBe(201);
+    const theirs = json<{ job: { parts: { unitPriceTetri: number }[] } }>(await call(owner, 'GET', `/api/service/${mine}`));
+    expect(theirs.job.parts[0].unitPriceTetri).toBe(2500);
+  });
+
+  /**
+   * QA-W5-13: the price was picked when the line was added and never looked
+   * at again, so switching "who pays" to the customer relabelled the line
+   * and billed them what the shelf paid.
+   */
+  it('prices the lines again when the payer changes, and leaves a typed price alone (wave 5 crit. 23)', async () => {
+    const { prisma, partId, owner } = await stocked(10, 1200);
+    await prisma.part.update({ where: { id: partId }, data: { salePriceTetri: 3000 } });
+    const rented = await rentedVehicle();
+    const { id: jobId } = json<{ id: string }>(
+      await call(owner, 'POST', '/api/service', { vehicleId: rented.vehicleId, reason: 'pads', openedOn: '2026-05-10' }),
+    );
+    // By the rule for a company job: what the shelf paid.
+    expect((await call(owner, 'POST', `/api/service/${jobId}/parts`, { partId, qty: 2 })).statusCode).toBe(201);
+    // And one line an owner priced by hand, which is nobody's rule but theirs.
+    expect((await call(owner, 'POST', `/api/service/${jobId}/parts`, { partId, qty: 1, unitPriceTetri: '19' })).statusCode).toBe(201);
+
+    const switched = await call(owner, 'PATCH', `/api/service/${jobId}`, { payer: 'customer' });
+    expect(switched.statusCode, switched.body).toBe(200);
+    expect(json<{ repriced: number }>(switched).repriced).toBe(1);
+
+    const job = json<{ job: { payer: string; parts: { qty: number; unitPriceTetri: number }[]; partsTetri: number } }>(
+      await call(owner, 'GET', `/api/service/${jobId}`),
+    );
+    expect(job.job.payer).toBe('customer');
+    expect(job.job.parts.find((l) => l.qty === 2)!.unitPriceTetri).toBe(3000);
+    expect(job.job.parts.find((l) => l.qty === 1)!.unitPriceTetri).toBe(1900);
+    expect(job.job.partsTetri).toBe(2 * 3000 + 1900);
+
+    // And back again: the rule line follows, the typed one still does not.
+    const backToUs = await call(owner, 'PATCH', `/api/service/${jobId}`, { payer: 'company' });
+    expect(json<{ repriced: number }>(backToUs).repriced).toBe(1);
+    const again = json<{ job: { parts: { qty: number; unitPriceTetri: number }[] } }>(await call(owner, 'GET', `/api/service/${jobId}`));
+    expect(again.job.parts.find((l) => l.qty === 2)!.unitPriceTetri).toBe(1200);
+    expect(again.job.parts.find((l) => l.qty === 1)!.unitPriceTetri).toBe(1900);
   });
 
   it('records a repair even when the shelf is short, and says so out loud', async () => {
@@ -138,6 +199,32 @@ describe.skipIf(!HAS_DB)('a repair takes parts off the shelf', () => {
 
     const list = json<{ totals: { negative: number } }>(await call(owner, 'GET', '/api/parts'));
     expect(list.totals.negative).toBeGreaterThanOrEqual(1);
+  });
+
+  /**
+   * QA-W5-14: cancelling a repair that had parts on it wrote a `return`
+   * movement the table's check constraint did not know, and the whole
+   * cancellation came back a 500 with the parts still off the shelf.
+   */
+  it('gives the parts back when the whole repair is cancelled (wave 5 crit. 27)', async () => {
+    const { partId, owner, vehicle } = await stocked(10, 1200);
+    const { id: jobId } = json<{ id: string }>(
+      await call(owner, 'POST', '/api/service', { vehicleId: vehicle.id, reason: 'pads', openedOn: '2026-05-10' }),
+    );
+    expect((await call(owner, 'POST', `/api/service/${jobId}/parts`, { partId, qty: 2 })).statusCode).toBe(201);
+    expect((await cardOf(owner, partId)).part.onHand).toBe(8);
+
+    const cancelled = await call(owner, 'POST', `/api/service/${jobId}/cancel`, { reason: 'ТЕСТ opened on the wrong VIN' });
+    expect(cancelled.statusCode, cancelled.body).toBe(200);
+
+    const card = await cardOf(owner, partId);
+    expect(card.part.onHand).toBe(10);
+    // Back at what it left at, so the shelf's average is where it was.
+    expect(card.part.valueTetri).toBe(12000);
+    const back = card.moves.find((m) => m.kind === 'return');
+    expect(back).toMatchObject({ kind: 'return', qty: 2 });
+    // The reason carries the job it came off, so the shelf can explain itself.
+    expect(back!.reason).toContain('ТЕСТ opened on the wrong VIN');
   });
 });
 
@@ -169,32 +256,5 @@ describe.skipIf(!HAS_DB)('a stock-take', () => {
     const { id: partId } = await part();
     const manager = await loginAs('manager');
     expect((await call(manager, 'POST', `/api/parts/${partId}/count`, { countedQty: 3, reason: 'found some' })).statusCode).toBe(403);
-  });
-});
-
-describe.skipIf(!HAS_DB)('mopeds by model', () => {
-  it('counts what stands here, what is ours, and what has been ordered but has not arrived', async () => {
-    const { prisma } = await import('../src/lib/db.js');
-    const owner = await loginAs('owner');
-    const model = await prisma.vehicleModel.create({ data: { brand: 'Test', name: `Stock ${uniq()}` } });
-    await prisma.vehicle.create({
-      data: { vin: `TESTV${uniq().replace(/\D/g, '').slice(-12).padStart(12, '0')}`, modelId: model.id, costTetri: 150000 },
-    });
-    await prisma.vehicle.create({
-      data: { vin: `TESTW${uniq().replace(/\D/g, '').slice(-12).padStart(12, '0')}`, modelId: model.id, costTetri: 150000, state: 'sold' },
-    });
-    const supplier = await prisma.customer.create({ data: { name: `Supplier ${uniq()}`, isSupplier: true } });
-    const { id: poId } = json<{ id: string }>(
-      await call(owner, 'POST', '/api/purchases', { supplierId: supplier.id, currency: 'CNY', orderedOn: '2026-04-01' }),
-    );
-    await call(owner, 'POST', `/api/purchases/${poId}/lines`, { modelId: model.id, qty: 5, unitPrice: '4000' });
-
-    const rows = json<{ rows: { id: string; inStock: number; ours: number; onOrder: number; valueTetri: number }[] }>(
-      await call(owner, 'GET', '/api/stock/vehicles'),
-    ).rows;
-    const row = rows.find((r) => r.id === model.id)!;
-    expect(row).toMatchObject({ inStock: 1, ours: 1, onOrder: 5 });
-    // A moped already sold is not stock and is not worth anything on a shelf.
-    expect(row.valueTetri).toBe(150000);
   });
 });

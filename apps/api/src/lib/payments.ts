@@ -4,17 +4,31 @@ import { dateFromISO, isoDate } from './dates.js';
 import { rentalOwed, spreadRental, writeAllocations } from './rentalMoney.js';
 import { prisma } from './db.js';
 import { conflict, notFound } from './errors.js';
+import { recostPurchase } from './purchases.js';
 
 type Tx = Prisma.TransactionClient;
 
-/** The same, for a sale: each instalment's paid amount and status. */
+/**
+ * The same, for a sale: each instalment's paid amount and status.
+ *
+ * A sale carried over from the paper way of working says in one figure what
+ * had been paid by the day of the move (B3-03, wave 5 §3.1а). Those GEL went
+ * through somebody else's books, so there is no payment to allocate — the
+ * figure closes instalments oldest first, exactly as a payment would, and it
+ * is applied here so that a later payment cannot undo it.
+ */
 export async function recomputeSale(tx: Tx, saleId: string): Promise<void> {
+  const sale = await tx.sale.findUnique({ where: { id: saleId }, select: { paidBeforeTetri: true } });
   const instalments = await tx.saleInstalment.findMany({
     where: { saleId },
+    orderBy: { seq: 'asc' },
     include: { allocations: { where: { payment: { voidedAt: null } }, select: { amountTetri: true } } },
   });
+  let before = sale?.paidBeforeTetri ?? 0;
   for (const i of instalments) {
-    const paid = i.allocations.reduce((n, a) => n + a.amountTetri, 0);
+    const carried = Math.min(before, i.amountTetri);
+    before -= carried;
+    const paid = carried + i.allocations.reduce((n, a) => n + a.amountTetri, 0);
     const payStatus: PeriodPayStatus = paid <= 0 ? 'unpaid' : paid >= i.amountTetri ? 'paid' : 'partial';
     if (paid !== i.paidTetri || payStatus !== i.payStatus) {
       await tx.saleInstalment.update({ where: { id: i.id }, data: { paidTetri: paid, payStatus, updatedAt: new Date() } });
@@ -245,6 +259,9 @@ export async function voidPayment(input: { actorId: string; paymentId: string; r
     }
     for (const rentalId of touched) await recomputeRental(tx, rentalId);
     for (const saleId of saleIds) await recomputeSale(tx, saleId);
+    // Money taken back off a shipment moves its mopeds' cost the same way
+    // paying did (§7, QA-W5-10).
+    if (p.purchaseId) await recostPurchase(tx, p.purchaseId, input.actorId, 'supplier payment voided');
 
     await tx.auditLog.create({
       data: {

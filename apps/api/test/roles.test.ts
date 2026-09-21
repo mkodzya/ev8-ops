@@ -39,11 +39,13 @@ describe.skipIf(!HAS_DB)('what a manager does not see', () => {
     expect(await moped(manager)).toBeNull();
     expect(await moped(owner)).toBe(168929);
 
-    const stock = json<{ rows: { id: string; costTetri: number | null; valueTetri: number | null }[]; totals: { valueTetri: number | null } }>(
-      await call(manager, 'GET', '/api/stock/vehicles'),
+    // The shelf says the same: a manager sees what is on it, not what it is
+    // worth. (The table of mopeds by model went with wave 5 §8.)
+    const shelf = json<{ parts: { avgCostTetri: number | null; valueTetri: number | null }[]; totals: { valueTetri: number | null } }>(
+      await call(manager, 'GET', '/api/parts'),
     );
-    expect(stock.totals.valueTetri).toBeNull();
-    expect(stock.rows.every((r) => r.costTetri === null && r.valueTetri === null)).toBe(true);
+    expect(shelf.totals.valueTetri).toBeNull();
+    expect(shelf.parts.every((p) => p.avgCostTetri === null && p.valueTetri === null)).toBe(true);
   });
 
   it('no stock value or average cost of a part', async () => {

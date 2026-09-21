@@ -19,6 +19,18 @@ async function rentedVehicle() {
   return { prisma, vehicle, customer, otherOwner, rentalId: id };
 }
 
+/**
+ * Closing a repair says what the odometer read and where the moped stands
+ * (B5-06, wave 5 crit. 26), so every closing here names a point.
+ */
+async function point(): Promise<string> {
+  const { prisma } = await import('../src/lib/db.js');
+  const row = await prisma.location.findFirst({ where: { archived: false }, select: { id: true } });
+  return (row ?? (await prisma.location.create({ data: { name: `ТЕСТ point ${uniq()}` }, select: { id: true } }))).id;
+}
+
+const CLOSED = async () => ({ odometerKm: 1312, locationId: await point() });
+
 describe.skipIf(!HAS_DB)('opening a repair', () => {
   it('takes a moped standing in the yard into service and gives it back on closing (SRV-01, FLT-03)', async () => {
     const { prisma, vehicle } = await freeVehicle();
@@ -36,7 +48,7 @@ describe.skipIf(!HAS_DB)('opening a repair', () => {
       (await call(manager, 'POST', '/api/rentals', { customerId: customer.id, vehicleId: vehicle.id, weeklyRateTetri: 15000 })).statusCode,
     ).toBe(409);
 
-    const closed = await call(otherOwner, 'POST', `/api/service/${id}/close`, { closedOn: '2026-09-12' });
+    const closed = await call(otherOwner, 'POST', `/api/service/${id}/close`, { closedOn: '2026-09-12', ...(await CLOSED()) });
     expect(closed.statusCode, closed.body).toBe(200);
     expect((await prisma.vehicle.findUniqueOrThrow({ where: { id: vehicle.id } })).state).toBe('available');
 
@@ -58,7 +70,7 @@ describe.skipIf(!HAS_DB)('opening a repair', () => {
     expect(job.payer).toBe('customer');
     expect(job.movedVehicle).toBe(false);
 
-    await call(otherOwner, 'POST', `/api/service/${id}/close`, {});
+    await call(otherOwner, 'POST', `/api/service/${id}/close`, await CLOSED());
     // Closing did not take it out of the rental, because opening did not.
     expect((await prisma.vehicle.findUniqueOrThrow({ where: { id: vehicle.id } })).state).toBe('rented');
   });
@@ -113,7 +125,7 @@ describe.skipIf(!HAS_DB)('what a repair costs', () => {
     expect(job.partsTetri).toBe(2 * 1750 + 800);
     expect(job.totalTetri).toBe(3000 + 4300);
 
-    await call(otherOwner, 'POST', `/api/service/${id}/close`, {});
+    await call(otherOwner, 'POST', `/api/service/${id}/close`, await CLOSED());
     const late = await call(otherOwner, 'POST', `/api/service/${id}/parts`, { name: 'Late', unitPriceTetri: '5' });
     expect(late.statusCode).toBe(409);
     expect(json<{ error: string }>(late).error).toBe('job_closed');
@@ -131,7 +143,7 @@ describe.skipIf(!HAS_DB)('charging the renter (SRV-02)', () => {
     );
     await call(otherOwner, 'POST', `/api/service/${id}/parts`, { name: 'Mirror', unitPriceTetri: '35' });
 
-    const closed = await call(otherOwner, 'POST', `/api/service/${id}/close`, { withheldTetri: '55' });
+    const closed = await call(otherOwner, 'POST', `/api/service/${id}/close`, { withheldTetri: '55', ...(await CLOSED()) });
     expect(closed.statusCode, closed.body).toBe(200);
     expect(json<{ totalTetri: number; withheldTetri: number }>(closed)).toEqual({ ok: true, totalTetri: 5500, withheldTetri: 5500 });
 
@@ -156,31 +168,41 @@ describe.skipIf(!HAS_DB)('charging the renter (SRV-02)', () => {
       await call(otherOwner, 'POST', '/api/service', { vehicleId: vehicle.id, reason: 'dent', payer: 'customer', labourTetri: '40' }),
     );
 
-    const overRepair = await call(otherOwner, 'POST', `/api/service/${id}/close`, { withheldTetri: '60' });
+    const overRepair = await call(otherOwner, 'POST', `/api/service/${id}/close`, { withheldTetri: '60', ...(await CLOSED()) });
     expect(json<{ error: string }>(overRepair).error).toBe('withheld_over_total');
 
     // A manager neither closes repairs nor decides deposits.
     const manager = await loginAs('manager');
-    const notAllowed = await call(manager, 'POST', `/api/service/${id}/close`, { withheldTetri: '10' });
+    const notAllowed = await call(manager, 'POST', `/api/service/${id}/close`, { withheldTetri: '10', ...(await CLOSED()) });
     expect(notAllowed.statusCode).toBe(403);
 
     // A repair dearer than the deposit: only what the deposit holds can go.
     const big = await call(otherOwner, 'PATCH', `/api/service/${id}`, { labourTetri: '400' });
     expect(big.statusCode).toBe(200);
-    const overDeposit = await call(otherOwner, 'POST', `/api/service/${id}/close`, { withheldTetri: '300' });
+    const overDeposit = await call(otherOwner, 'POST', `/api/service/${id}/close`, { withheldTetri: '300', ...(await CLOSED()) });
     expect(json<{ error: string; freeTetri: number }>(overDeposit).error).toBe('deposit_too_small');
     expect(json<{ freeTetri: number }>(overDeposit).freeTetri).toBe(18000);
 
     // Closing without keeping anything still works; the charge stands elsewhere.
-    expect((await call(otherOwner, 'POST', `/api/service/${id}/close`, {})).statusCode).toBe(200);
+    expect((await call(otherOwner, 'POST', `/api/service/${id}/close`, await CLOSED())).statusCode).toBe(200);
   });
 });
 
 describe.skipIf(!HAS_DB)('who may do what', () => {
-  it('an owner opens and closes repairs; a manager only looks', async () => {
+  it('a manager reports a breakdown and it waits as a draft; closing is an owner’s (wave 5 §3.7)', async () => {
     const { vehicle } = await freeVehicle();
     const manager = await loginAs('manager');
-    expect((await call(manager, 'POST', '/api/service', { vehicleId: vehicle.id, reason: 'x' })).statusCode).toBe(403);
+    const reported = await call(manager, 'POST', '/api/service', { vehicleId: vehicle.id, reason: 'ТЕСТ does not start' });
+    expect(reported.statusCode, reported.body).toBe(201);
+    const { id } = json<{ id: string }>(reported);
+    const owner = await loginAs('owner');
+    const card = json<{ job: { status: string } }>(await call(owner, 'GET', `/api/service/${id}`));
+    expect(card.job.status).toBe('draft');
+    // A manager may say what broke, and no more than that.
+    expect((await call(manager, 'POST', `/api/service/${id}/close`, await CLOSED())).statusCode).toBe(403);
     expect((await call(manager, 'GET', '/api/service')).statusCode).toBe(200);
+    // The owner picks it up and it is a repair.
+    expect((await call(owner, 'PATCH', `/api/service/${id}`, { open: true })).statusCode).toBe(200);
+    expect(json<{ job: { status: string } }>(await call(owner, 'GET', `/api/service/${id}`)).job.status).toBe('open');
   });
 });

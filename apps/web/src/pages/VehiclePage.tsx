@@ -7,9 +7,11 @@ import { FormSheet } from '../ds/form/Form.js';
 import { useOperation } from '../ds/form/operation.js';
 import { useToast } from '../ds/feedback/Toast.js';
 import { BlockHead, ColorText, Empty, Loading, PageHead, PlaceText, RentalBadge, StateBadge, Vin } from '../components/ui.js';
+import { RowMenu } from '../components/RowMenu.js';
 import { Field, Row } from '../components/Wizard.js';
 import { fmtDate } from '../format.js';
 import { useT } from '../i18n/index.js';
+import { ChangedFromTo, noteWords } from '../lib/journal.js';
 import { useLoad } from '../lib/use.js';
 import { useSession } from '../session.js';
 import { VehicleEconomics } from './EconomicsPage.js';
@@ -29,12 +31,16 @@ interface Card {
     location: { id: string; name: string } | null;
     odometerKm: number | null;
     costTetri: number | null;
+    costPreliminary: boolean;
+    costPaidPercent: number | null;
     notes: string | null;
     currentRentalId: string | null;
   };
   events: { id: string; kind: VehicleEventKind; occurredOn: string; fromState: VehicleState | null; toState: VehicleState; fromPool: VehiclePool | null; toPool: VehiclePool | null; rentalId: string | null; reason: string | null; actor: string | null }[];
   serviceJobs: { id: string; number: string; status: 'open' | 'done' | 'cancelled'; payer: 'company' | 'customer'; reason: string; openedOn: string; closedOn: string | null; totalTetri: number; withheldTetri: number }[];
   rentals: { id: string; number: string; status: RentalStatus; customer: { id: string; name: string }; pickedUpOn: string | null; returnedOn: string | null; paidThrough: string | null; weeklyRateTetri: number }[];
+  /** Corrections: what was changed by hand, from what to what, and why. */
+  journal: { id: string; at: string; occurredOn: string | null; action: string; by: string | null; note: string | null; before: unknown; after: unknown }[];
 }
 
 export function VehiclePage() {
@@ -46,6 +52,7 @@ export function VehiclePage() {
   const [move, setMove] = useState<{ toState: VehicleState; reason: string }>({ toState: 'service', reason: '' });
   // Writing a moped off is the one state change that is confirmed as well as explained (crit. 26).
   const [writeOff, setWriteOff] = useState(false);
+  const [fixing, setFixing] = useState(false);
 
   if (failure) return <LoadError failure={failure} onRetry={reload} />;
   if (!data) return <Loading />;
@@ -82,9 +89,16 @@ export function VehiclePage() {
             {t.actions.changeState}
           </button>
         )}
-        {can('service.manage') && v.state !== 'sold' && v.state !== 'out' && !data.serviceJobs.some((j) => j.status === 'open') && (
+        {can('service.report') && v.state !== 'sold' && v.state !== 'out' && !data.serviceJobs.some((j) => j.status === 'open') && (
           <NewJob vehicleId={v.id} onDone={reload} />
         )}
+        {/* Selling starts from the moped as often as from the "+" (§3.1). */}
+        {v.state === 'available' && can('sales.manage') && (
+          <Link className="pill pill-sm" to={`/sales/new?vehicle=${v.id}`}>
+            {t.sell.title}
+          </Link>
+        )}
+        {can('settings.manage') && <RowMenu actions={[{ key: 'vin', label: t.vinFix.title, onPick: () => setFixing(true) }]} />}
         {primary &&
           (primary.to ? (
             <Link className="pill pill-sm pill-accent head-primary" to={primary.to}>
@@ -96,6 +110,18 @@ export function VehiclePage() {
             </button>
           ))}
       </PageHead>
+
+      {fixing && (
+        <VinSheet
+          id={v.id}
+          vin={v.vin}
+          onClose={() => setFixing(false)}
+          onDone={() => {
+            setFixing(false);
+            reload();
+          }}
+        />
+      )}
 
       {open && (
         <FormSheet
@@ -161,13 +187,34 @@ export function VehiclePage() {
 
       <div className="two-col">
         <section className="card">
+          {/* The model was only ever in the header's subtitle, and on a phone
+              that line gives way to the VIN — so the card could not answer
+              "what is this moped" at all (QA-W5-27). It is the second thing
+              anybody asks after the VIN, so it belongs in the card itself. */}
+          <Row k={t.fleet.model} v={<Link to={`/fleet/models/${v.model.id}`}>{`${v.model.brand} ${v.model.name}`}</Link>} />
           <Row k={t.fleet.color} v={v.color ? <ColorText of={v.color} named /> : t.common.dash} />
           <Row k={t.fleet.year} v={<span className="mono">{v.year ?? t.common.dash}</span>} />
           <Row k={t.fleet.arrived} v={<span className="mono">{fmtDate(v.arrivedOn)}</span>} />
           <Row k={t.fleet.pool} v={<PoolRow v={v} onDone={reload} />} />
           <Row k={t.points.place} v={<PlaceRow v={v} onDone={reload} />} />
           <Row k={t.vehicle.odometer} v={<span className="mono">{v.odometerKm ?? t.common.dash}</span>} />
-          {v.costTetri != null && <Row k={t.purchases.cost} v={<span className="mono">{formatGel(v.costTetri)}</span>} />}
+          {v.costTetri != null && (
+            <Row
+              k={t.purchases.cost}
+              v={
+                <>
+                  <span className="mono">
+                    {v.costPreliminary && <span className="muted">≈ </span>}
+                    {formatGel(v.costTetri)}
+                  </span>
+                  {/* A figure worked out at a share of an unpaid invoice says so (§7). */}
+                  {v.costPreliminary && v.costPaidPercent != null && (
+                    <span className="hint warn-text">{t.receipt.costPreliminary(v.costPaidPercent)}</span>
+                  )}
+                </>
+              }
+            />
+          )}
           <Row
             k={t.fleet.renter}
             v={current ? <Link to={`/customers/${current.customer.id}`}>{current.customer.name}</Link> : t.common.dash}
@@ -177,11 +224,24 @@ export function VehiclePage() {
         </section>
 
         <section className="card">
-          <BlockHead title={t.vehicle.history} sub={t.vehicle.eventsCount(data.events.length)} />
-          {data.events.length === 0 ? (
+          <BlockHead title={t.vehicle.history} sub={t.vehicle.eventsCount(data.events.length + data.journal.length)} />
+          {data.events.length === 0 && data.journal.length === 0 ? (
             <Empty text={t.common.dash} />
           ) : (
             <ul className="timeline">
+              {/* What was corrected by hand belongs in the same history as
+                  what happened to the moped (crit. 32, QA-W5-01). */}
+              {data.journal.map((l) => (
+                <li key={l.id}>
+                  <span className="mono muted">{fmtDate(l.occurredOn)}</span>
+                  <span>
+                    {t.feedWords[l.action] ?? l.action}
+                    <ChangedFromTo before={l.before} after={l.after} />
+                    {noteWords(t, l.note) && <span className="muted"> · {noteWords(t, l.note)}</span>}
+                    {l.by && <span className="muted"> · {l.by}</span>}
+                  </span>
+                </li>
+              ))}
               {data.events.map((e) => (
                 <li key={e.id}>
                   <span className="mono muted">{fmtDate(e.occurredOn)}</span>
@@ -358,5 +418,37 @@ function PoolRow({ v, onDone }: { v: Card['vehicle']; onDone: () => void }) {
       {op.failure && <div className="field-err">{op.failure.text}</div>}
       {v.state === 'rented' && <div className="hint">{t.pools.rentedNote}</div>}
     </>
+  );
+}
+
+/**
+ * A VIN typed wrong (wave 5 §3.9, crit. 32). Only an owner, always with a
+ * reason; the moped is the same moped and its history does not move.
+ */
+function VinSheet({ id, vin, onClose, onDone }: { id: string; vin: string; onClose: () => void; onDone: () => void }) {
+  const t = useT();
+  const initial = { vin, reason: '' };
+  const [f, setF] = useState(initial);
+  return (
+    <FormSheet
+      title={t.vinFix.title}
+      onClose={onClose}
+      value={f}
+      initial={initial}
+      onRestore={setF}
+      label={t.vinFix.save}
+      submit={async (key) => {
+        await api.patch(`/api/fleet/${id}/vin`, { vin: f.vin.trim(), reason: f.reason.trim() }, { key });
+        return { toast: { text: t.form.changesSaved } };
+      }}
+      onDone={onDone}
+    >
+      <Field label={t.vinFix.vin} hint={t.vinFix.hint} name="vin">
+        <input className="input mono" value={f.vin} onChange={(e) => setF({ ...f, vin: e.target.value.toUpperCase() })} />
+      </Field>
+      <Field label={t.vinFix.reason} name="reason">
+        <input className="input" value={f.reason} onChange={(e) => setF({ ...f, reason: e.target.value })} />
+      </Field>
+    </FormSheet>
   );
 }

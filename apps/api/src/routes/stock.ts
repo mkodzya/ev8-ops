@@ -9,7 +9,7 @@ import { dateFromISO, isoDate } from '../lib/dates.js';
 import { prisma } from '../lib/db.js';
 import { env } from '../lib/env.js';
 import { conflict, isUniqueViolation, notFound } from '../lib/errors.js';
-import { partRows } from '../lib/stock.js';
+import { initialStock, partRows } from '../lib/stock.js';
 import { todayISO } from '@ev8/shared';
 import { date, int, oneOf, str, tetri } from '../lib/validate.js';
 
@@ -158,66 +158,47 @@ export function stockRoutes(app: FastifyInstance): void {
   });
 
   /**
-   * Mopeds by model: what stands here, what is out, and what has been paid
-   * for but has not arrived. No table of its own — a moped is a VIN with a
-   * state, and an order that has not landed is a line on that order.
+   * The first count of a part nobody has moved yet (B3-05, crit. 29): how
+   * many are on the shelf and what one cost. Once — after that the shelf has
+   * a history, and history is added to, not restarted.
    */
-  app.get('/api/stock/vehicles', { config: { scope: 'fleet.view' } }, async (req) => {
-    const seeCost = mayView(req, 'cost.view');
-    const models = await prisma.vehicleModel.findMany({
-      where: { archived: false },
-      orderBy: [{ brand: 'asc' }, { name: 'asc' }],
-      select: {
-        id: true,
-        brand: true,
-        name: true,
-        costTetri: true,
-        salePriceTetri: true,
-        vehicles: { where: { archived: false }, select: { state: true, costTetri: true } },
-      },
+  app.post<{ Params: { id: string }; Body: Body }>('/api/parts/:id/initial', { config: { scope: 'stock.count' } }, async (req, reply) => {
+    const b = req.body ?? {};
+    const actor = actorOf(req);
+    const part = await prisma.part.findUnique({ where: { id: req.params.id }, select: { id: true, name: true } });
+    if (!part) throw notFound('part_not_found', 'No such part.');
+    const qty = int(b, 'qty', { required: true, min: 1 })!;
+    const unitCostTetri = tetri(b, 'unitCostTetri', { required: true, min: 0 })!;
+    const occurredOn = date(b, 'occurredOn') ?? todayISO(new Date(), env.TZ);
+    await prisma.$transaction(async (tx) => {
+      await initialStock(tx, { partId: part.id, qty, unitCostTetri, occurredOn, actorId: actor.id });
+      await tx.auditLog.create({
+        data: { actorId: actor.id, action: 'part.initial', entityType: 'part', entityId: part.id, after: { qty, unitCostTetri, occurredOn } },
+      });
     });
-    const onOrder = await prisma.purchaseLine.groupBy({
-      by: ['modelId'],
-      where: { modelId: { not: null }, purchase: { status: 'ordered' } },
-      _sum: { qty: true },
-    });
-    const ordered = new Map(onOrder.map((o) => [o.modelId as string, o._sum.qty ?? 0]));
+    return reply.code(201).send({ ok: true, onHand: qty, valueTetri: qty * unitCostTetri });
+  });
 
-    const rows = models.map((m) => {
-      const byState = { available: 0, rented: 0, service: 0, out: 0, sold: 0 } as Record<string, number>;
-      let valueTetri = 0;
-      let unpriced = 0;
-      for (const v of m.vehicles) {
-        byState[v.state]++;
-        // Sold and written off are gone; only what is still ours is worth
-        // anything on a shelf.
-        if (v.state === 'sold' || v.state === 'out') continue;
-        if (v.costTetri == null) unpriced++;
-        else valueTetri += v.costTetri;
-      }
-      return {
-        id: m.id,
-        name: `${m.brand} ${m.name}`,
-        costTetri: seeCost ? m.costTetri : null,
-        salePriceTetri: m.salePriceTetri,
-        byState,
-        inStock: byState.available,
-        ours: byState.available + byState.rented + byState.service,
-        onOrder: ordered.get(m.id) ?? 0,
-        valueTetri: seeCost ? valueTetri : null,
-        unpriced: seeCost ? unpriced : null,
-      };
+  /**
+   * Parts that arrived without an order behind them (B3-05, §3.8): bought in
+   * a shop down the road, brought back from a workshop. The cost is stated
+   * and so is the reason, because nothing else says where they came from.
+   */
+  app.post<{ Params: { id: string }; Body: Body }>('/api/parts/:id/receipt', { config: { scope: 'stock.count' } }, async (req, reply) => {
+    const b = req.body ?? {};
+    const actor = actorOf(req);
+    const part = await prisma.part.findUnique({ where: { id: req.params.id }, select: { id: true } });
+    if (!part) throw notFound('part_not_found', 'No such part.');
+    const qty = int(b, 'qty', { required: true, min: 1 })!;
+    const unitCostTetri = tetri(b, 'unitCostTetri', { required: true, min: 0 })!;
+    const reason = str(b, 'reason', { required: true, max: 1000 })!;
+    const occurredOn = date(b, 'occurredOn') ?? todayISO(new Date(), env.TZ);
+    const move = await prisma.stockMove.create({
+      data: { partId: part.id, kind: 'receipt', qty, unitCostTetri, occurredOn: dateFromISO(occurredOn)!, reason, createdById: actor.id },
+      select: { id: true },
     });
-    return {
-      rows,
-      totals: {
-        inStock: rows.reduce((n, r) => n + r.inStock, 0),
-        ours: rows.reduce((n, r) => n + r.ours, 0),
-        onOrder: rows.reduce((n, r) => n + r.onOrder, 0),
-        valueTetri: seeCost ? rows.reduce((n, r) => n + (r.valueTetri ?? 0), 0) : null,
-        unpriced: seeCost ? rows.reduce((n, r) => n + (r.unpriced ?? 0), 0) : null,
-      },
-    };
+    await audit({ actorId: actor.id, action: 'part.receipt', entityType: 'part', entityId: part.id, after: { qty, unitCostTetri, reason, moveId: move.id } });
+    return reply.code(201).send({ ok: true });
   });
 }
 

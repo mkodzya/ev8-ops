@@ -193,6 +193,8 @@ enum FileKind {
 }
 
 enum ServiceStatus {
+  /// A breakdown a manager reported: an owner turns it into a repair (wave 5 §3.7).
+  draft
   open
   done
   cancelled
@@ -238,6 +240,7 @@ model User {
   parts             Part[]
   stockMoves        StockMove[]
   locations         Location[]    @relation("location_author")
+  workshops         Workshop[]
   handoversFrom     CashHandover[] @relation("handover_from")
   handoversDecided  CashHandover[] @relation("handover_decided_by")
   bankDeposits      BankCashDeposit[]
@@ -312,6 +315,7 @@ model Location {
 
   createdBy User?     @relation("location_author", fields: [createdById], references: [id])
   vehicles  Vehicle[]
+  closedJobs ServiceJob[]
 
   @@map("locations")
 }
@@ -358,9 +362,12 @@ model Customer {
   phone         String?
   email         String?
   kind          CustomerKind @default(person)
+  /// What this record is: a client, a supplier, an employee or something else (B3-06).
+  recordKind    String       @default("client") @map("record_kind")
+  /// A duplicate merged into another record keeps the way home (wave 5 §3.9).
+  mergedIntoId  String?      @map("merged_into") @db.Uuid
   /// Where they came from: myauto, friends, social, site, other (wave 4 §3.5).
   source        String?
-  isSupplier    Boolean      @default(false) @map("is_supplier")
   tags          String[]     @default([])
   address       String?
   notes         String?
@@ -375,6 +382,8 @@ model Customer {
   serviceJobs ServiceJob[]
   sales       Sale[]
   supplied    Purchase[]
+  mergedInto  Customer?    @relation("customer_merge", fields: [mergedIntoId], references: [id])
+  mergedFrom  Customer[]   @relation("customer_merge")
 
   @@map("customers")
 }
@@ -508,6 +517,7 @@ model StoredFile {
   actId        String?  @map("act_id") @db.Uuid
   customerId   String?  @map("customer_id") @db.Uuid
   rentalId     String?  @map("rental_id") @db.Uuid
+  saleId       String?  @map("sale_id") @db.Uuid
   serviceJobId String?  @map("service_job_id") @db.Uuid
   label        String   @default("")
   docKind      String?  @map("doc_kind")
@@ -524,6 +534,7 @@ model StoredFile {
   act        Act?      @relation(fields: [actId], references: [id], onDelete: Cascade)
   customer   Customer? @relation(fields: [customerId], references: [id], onDelete: Cascade)
   rental     Rental?     @relation(fields: [rentalId], references: [id], onDelete: Cascade)
+  sale       Sale?       @relation(fields: [saleId], references: [id], onDelete: Cascade)
   serviceJob ServiceJob? @relation(fields: [serviceJobId], references: [id], onDelete: Cascade)
   uploadedBy User?     @relation(fields: [uploadedById], references: [id])
 
@@ -687,7 +698,14 @@ model ServiceJob {
   status        ServiceStatus @default(open)
   payer         ServicePayer  @default(company)
   labourTetri   Int           @default(0) @map("labour_tetri")
-  doneBy        String?       @map("done_by")
+  /// Work as it was entered: minutes at a rate (`service.md`, 50 ₾/hour).
+  labourMinutes Int           @default(0) @map("labour_minutes")
+  labourRateTetri Int         @default(5000) @map("labour_rate_tetri")
+  workshopId    String?       @map("workshop_id") @db.Uuid
+  closedLocationId String?    @map("closed_location_id") @db.Uuid
+  odometerKm    Int?          @map("odometer_km")
+  /// What the customer owes for this repair after the deposit was drawn on (Q26).
+  chargedTetri  Int           @default(0) @map("charged_tetri")
   notes         String?
   movedVehicle  Boolean       @default(false) @map("moved_vehicle")
   withheldTetri Int           @default(0) @map("withheld_tetri")
@@ -700,6 +718,8 @@ model ServiceJob {
   rental    Rental?       @relation(fields: [rentalId], references: [id])
   customer  Customer?     @relation(fields: [customerId], references: [id])
   createdBy User?         @relation(fields: [createdById], references: [id])
+  workshop  Workshop?     @relation(fields: [workshopId], references: [id])
+  closedAt  Location?     @relation(fields: [closedLocationId], references: [id])
   parts     ServicePart[]
   photos    StoredFile[]
   payments  Payment[]
@@ -714,6 +734,8 @@ model ServicePart {
   name           String
   qty            Int      @default(1)
   unitPriceTetri Int      @map("unit_price_tetri")
+  /// What it cost the shelf, beside what it went on the line at (B8-04).
+  unitCostTetri  Int?     @map("unit_cost_tetri")
   partId         String?  @map("part_id") @db.Uuid
   createdAt      DateTime @default(now()) @map("created_at")
 
@@ -739,6 +761,9 @@ model Sale {
   warrantyUntil DateTime?  @map("warranty_until") @db.Date
   status        SaleStatus @default(active)
   boughtBackOn  DateTime?  @map("bought_back_on") @db.Date
+  /// Carried over from the paper contract: what had been paid by the day of the move (B3-03).
+  paidBeforeTetri Int      @default(0) @map("paid_before_tetri")
+  transferred   Boolean    @default(false)
   notes         String?
   odooOrderId   Int?       @unique @map("odoo_order_id")
   createdById   String?    @map("created_by") @db.Uuid
@@ -750,6 +775,7 @@ model Sale {
   createdBy   User?            @relation(fields: [createdById], references: [id])
   instalments SaleInstalment[]
   payments    Payment[]
+  documents   StoredFile[]
 
   @@map("sales")
 }
@@ -787,6 +813,12 @@ model Purchase {
   status       PurchaseStatus @default(ordered)
   extrasTetri  Int            @default(0) @map("extras_tetri")
   extrasNote   String?        @map("extras_note")
+  /// Paid before this system existed: GEL that left, what it bought, and when (B3-04).
+  paidBeforeTetri Int         @default(0) @map("paid_before_tetri")
+  paidBeforeMinor BigInt      @default(0) @map("paid_before_minor")
+  paidBeforeOn DateTime?      @map("paid_before_on") @db.Date
+  /// When the shipment's costs were last worked out from its payments (§7).
+  costedAt     DateTime?      @map("costed_at")
   notes        String?
   odooOrderId  Int?           @unique @map("odoo_order_id")
   createdById  String?        @map("created_by") @db.Uuid
@@ -822,6 +854,25 @@ model PurchaseLine {
 
 /// A part the company keeps on the shelf. How many are there is never
 /// stored — it is the sum of `StockMove`.
+/// Who does the repairs (`service.md`, wave 5 §3.7). The owner keeps the list;
+/// a repair points at one instead of spelling its name again.
+model Workshop {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String
+  phone       String?
+  note        String?
+  sortOrder   Int      @default(0) @map("sort_order")
+  archived    Boolean  @default(false)
+  createdById String?  @map("created_by") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @default(now()) @map("updated_at")
+
+  createdBy User?        @relation(fields: [createdById], references: [id])
+  jobs      ServiceJob[]
+
+  @@map("workshops")
+}
+
 model Part {
   id             String   @id @default(uuid()) @db.Uuid
   sku            String?  @unique
@@ -870,6 +921,8 @@ enum StockMoveKind {
   receipt
   issue
   adjust
+  /// Parts of a cancelled repair going back on the shelf (wave 5 §3.7).
+  return
 
   @@map("stock_move_kind")
 }

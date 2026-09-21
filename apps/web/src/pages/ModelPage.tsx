@@ -88,7 +88,13 @@ export function ModelPage() {
                 <span className="muted">{t.models.noCost}</span>
               ) : (
                 <span>
-                  <span className="mono">{formatGel(m.costTetri)}</span>
+                  <span className="mono">
+                    {/* The figure of an unsettled shipment is still moving,
+                        and the model's card is where a sale price is set from
+                        it (§7, QA-W5-29). */}
+                    {m.costSource?.kind === 'purchase' && m.costSource.preliminary && <span className="muted">≈ </span>}
+                    {formatGel(m.costTetri)}
+                  </span>
                   {m.costSource?.kind === 'purchase' ? (
                     <span className="muted">
                       {' · '}
@@ -96,6 +102,9 @@ export function ModelPage() {
                     </span>
                   ) : (
                     <CostFrom source={m.costSource} />
+                  )}
+                  {m.costSource?.kind === 'purchase' && m.costSource.preliminary && (
+                    <span className="hint warn-text">{t.receipt.costPreliminary(m.costSource.paidPercent)}</span>
                   )}
                 </span>
               )

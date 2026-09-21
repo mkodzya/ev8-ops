@@ -112,7 +112,23 @@ function GapFill({ customerId, gaps, onSaved }: { customerId: string; gaps: stri
  * field to sign with a finger, "Clear", "I agree", "Sign". The drawing goes
  * into the PDF with the time and who took it (D17).
  */
-export function SignScreen({ rentalId, kind, onClose, onSigned }: { rentalId: string; kind: DocKind; onClose: () => void; onSigned: () => void }) {
+export function SignScreen({
+  rentalId,
+  kind,
+  title,
+  base,
+  onClose,
+  onSigned,
+}: {
+  rentalId: string;
+  kind: DocKind;
+  /** What the header calls it; the rental's two documents name themselves. */
+  title?: string;
+  /** The record the document belongs to: rentals by default, a sale in wave 5. */
+  base?: 'rentals' | 'sales';
+  onClose: () => void;
+  onSigned: () => void;
+}) {
   const t = useT();
   const canvas = useRef<HTMLCanvasElement>(null);
   const drawing = useRef(false);
@@ -172,19 +188,23 @@ export function SignScreen({ rentalId, kind, onClose, onSigned }: { rentalId: st
   };
   const sign = async () => {
     const png = canvas.current?.toDataURL('image/png') ?? '';
-    const res = await op.run((key) => api.post(`/api/rentals/${rentalId}/${kind}/sign`, { agree: true, signaturePng: png }, { key }));
+    const res = await op.run((key) => api.post(`/api/${base ?? 'rentals'}/${rentalId}/${kind}/sign`, { agree: true, signaturePng: png }, { key }));
     if (res.ok) onSigned();
   };
 
   return createPortal(
     <div className="sign-screen" role="dialog" aria-modal="true" aria-label={t.sign.title}>
       <header className="sign-head">
-        <b>{kind === 'contract' ? t.sign.contract : t.sign.returnAct}</b>
+        <b>{title ?? (kind === 'contract' ? t.sign.contract : t.sign.returnAct)}</b>
         <button type="button" className="pill pill-sm" onClick={onClose}>
           {t.sign.close}
         </button>
       </header>
-      <iframe className="sign-doc" src={`/api/rentals/${rentalId}/${kind}.pdf#navpanes=0&view=FitH`} title={kind === 'contract' ? t.sign.contract : t.sign.returnAct} />
+      <iframe
+        className="sign-doc"
+        src={`/api/${base ?? 'rentals'}/${rentalId}/${kind}.pdf#navpanes=0&view=FitH`}
+        title={title ?? (kind === 'contract' ? t.sign.contract : t.sign.returnAct)}
+      />
       <p className="hint muted">{t.sign.scroll}</p>
       <div className="sign-pad">
         <span className="lbl">{t.sign.field}</span>

@@ -7,6 +7,7 @@
 import { type VehicleEconomics, type VehicleState, todayISO, vehicleEconomics } from '@ev8/shared';
 import { isoDate } from './dates.js';
 import { prisma } from './db.js';
+import { preliminaryOf } from './purchases.js';
 
 export interface VehicleRow extends VehicleEconomics {
   id: string;
@@ -14,6 +15,10 @@ export interface VehicleRow extends VehicleEconomics {
   model: string;
   state: VehicleState;
   arrivedOn: string | null;
+  /** The shipment is not settled yet, so the cost is still moving (§7). */
+  costPreliminary: boolean;
+  /** What share of that invoice is paid, the figure the note quotes. */
+  costPaidPercent: number | null;
 }
 
 /** Money and days for every live moped, or just the ones asked for. */
@@ -89,14 +94,21 @@ export async function fleetEconomics(opts: { vehicleIds?: string[]; until?: stri
     eventsOf.set(e.vehicleId, list);
   }
 
+  // A cost worked out at 17 % of an invoice is not the cost; the screens
+  // that quote it say so (§7, QA-W5-11).
+  const preliminary = await preliminaryOf(vehicles.map((v) => v.purchaseId).filter((id): id is string => !!id));
+
   return vehicles.map((v) => {
     const a = acc.get(v.id) ?? zero();
+    const order = v.purchaseId ? preliminary.get(v.purchaseId) ?? null : null;
     return {
       id: v.id,
       vin: v.vin,
       model: `${v.model.brand} ${v.model.name}`,
       state: v.state as VehicleState,
       arrivedOn: isoDate(v.arrivedOn),
+      costPreliminary: v.costTetri != null && (order?.preliminary ?? false),
+      costPaidPercent: order?.paidPercent ?? null,
       ...vehicleEconomics({
         costTetri: v.costTetri,
         rentalRevenueTetri: a.rent,

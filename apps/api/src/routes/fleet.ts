@@ -4,6 +4,7 @@ import { isoDate } from '../lib/dates.js';
 import { prisma } from '../lib/db.js';
 import { notFound } from '../lib/errors.js';
 import { mayView } from '../lib/guard.js';
+import { preliminaryOf } from '../lib/purchases.js';
 
 // Read side of the fleet (FLT-01, FLT-02). Writes arrive with the hand-over
 // and return wizards in step 4 of stage 1; state changes go through events.
@@ -89,6 +90,17 @@ export function fleetRoutes(app: FastifyInstance): void {
       },
     });
     if (!v) throw notFound('vehicle_not_found', 'No such vehicle.');
+    // What it cost is still moving while its shipment is unpaid (§7, QA-W5-11).
+    const order = v.purchaseId ? (await preliminaryOf([v.purchaseId])).get(v.purchaseId) ?? null : null;
+    // Corrections live in the journal and nowhere else, so until now a VIN
+    // put right, a park changed or a cost rewritten left no trace anybody
+    // could see (crit. 13, 19, 32 — QA-W5-01).
+    const journal = await prisma.auditLog.findMany({
+      where: { entityType: 'vehicle', entityId: v.id },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+      include: { actor: { select: { name: true } } },
+    });
     return {
       vehicle: {
         id: v.id,
@@ -103,6 +115,8 @@ export function fleetRoutes(app: FastifyInstance): void {
         odometerKm: v.odometerKm,
         notes: v.notes,
         costTetri: mayView(req, 'cost.view') ? v.costTetri : null,
+        costPreliminary: mayView(req, 'cost.view') && v.costTetri != null && (order?.preliminary ?? false),
+        costPaidPercent: mayView(req, 'cost.view') ? order?.paidPercent ?? null : null,
         currentRentalId: v.currentRentalId,
       },
       events: v.events.map((e) => ({
@@ -137,6 +151,16 @@ export function fleetRoutes(app: FastifyInstance): void {
         returnedOn: isoDate(r.returnedOn),
         paidThrough: isoDate(r.paidThrough),
         weeklyRateTetri: r.weeklyRateTetri,
+      })),
+      journal: journal.map((l) => ({
+        id: l.id,
+        at: l.createdAt.toISOString(),
+        occurredOn: isoDate(l.createdAt),
+        action: l.action,
+        by: l.actor?.name ?? null,
+        note: l.note,
+        before: l.before,
+        after: l.after,
       })),
     };
   });

@@ -11,17 +11,34 @@ import { FormSheet } from '../ds/form/Form.js';
 import { Field } from '../components/Wizard.js';
 import { WhatsappSheet } from '../components/Whatsapp.js';
 import { LoadError } from '../components/LoadError.js';
+import { RowMenu } from '../components/RowMenu.js';
 import { BlockHead, Empty, Loading, PageHead, RentalBadge, Vin } from '../components/ui.js';
 import { Row } from '../components/Wizard.js';
 import { fmtDate, formatGel } from '../format.js';
 import { useLocale, useT } from '../i18n/index.js';
-import { primaryName, secondName } from '../lib/names.js';
+import { nameMatches, primaryName, secondName } from '../lib/names.js';
 import { useLoad } from '../lib/use.js';
 import { fmtDate as fmtDay } from '../format.js';
 import { useSession } from '../session.js';
 
 interface Card {
-  customer: { id: string; name: string; nameKa: string | null; nameLat: string | null; personalId: string | null; phone: string | null; email: string | null; address: string | null; kind: CustomerKind; tags: string[]; notes: string | null; source: string | null };
+  customer: {
+    id: string;
+    name: string;
+    nameKa: string | null;
+    nameLat: string | null;
+    personalId: string | null;
+    phone: string | null;
+    email: string | null;
+    address: string | null;
+    kind: CustomerKind;
+    tags: string[];
+    notes: string | null;
+    source: string | null;
+    /** Merged away: the card is a record now, not a person to work with. */
+    archived: boolean;
+    mergedInto: { id: string; name: string; nameKa: string | null; nameLat: string | null } | null;
+  };
   documents: { id: string; docKind: 'id_card' | 'driver_licence' | 'other'; label: string; sizeBytes: number; mimeType: string; createdAt: string }[];
   sales: { id: string; number: string; status: string; soldOn: string | null; priceTetri: number; instalments: number; instalmentsPaid: number }[];
   feed: { at: string; kind: 'payment' | 'document' | 'log'; text: string; number: string | null; amountTetri: number | null; by: string | null; note: string | null }[];
@@ -51,6 +68,7 @@ export function CustomerPage() {
   const fileRef = useRef<HTMLInputElement>(null);
   const [editing, setEditing] = useState(false);
   const [wa, setWa] = useState(false);
+  const [merging, setMerging] = useState(false);
   const [feedFilter, setFeedFilter] = useState<'all' | 'payment' | 'document' | 'log'>('all');
   if (failure) return <LoadError failure={failure} onRetry={reload} />;
   if (!data) return <Loading />;
@@ -74,28 +92,54 @@ export function CustomerPage() {
   return (
     <>
       <PageHead wrap title={primaryName(c, locale)} sub={secondName(c, locale)}>
-        {c.phone && (
+        {/* A card merged away is a record, not a person to work with: it
+            keeps its history and loses its actions (crit. 33, QA-W5-03). */}
+        {!c.archived && c.phone && (
           <a className="pill pill-sm" href={`tel:${c.phone}`}>
             {t.today.call}
           </a>
         )}
-        {c.phone && (
+        {!c.archived && c.phone && (
           // The ready text in the customer's language (wave 4 §3.2, В6).
           <button type="button" className="pill pill-sm" onClick={() => setWa(true)}>
             {t.customer.whatsapp}
           </button>
         )}
-        {can('customer.create') && (
+        {!c.archived && can('customer.create') && (
           <button type="button" className="pill pill-sm" onClick={() => setEditing(true)}>
             {t.customerW4.edit}
           </button>
         )}
-        {can('rental.create') && (
+        {!c.archived && can('rental.create') && (
           <Link className="pill pill-sm pill-accent" to={`/rentals/new?customer=${c.id}`}>
             {t.actions.newRental}
           </Link>
         )}
+        {!c.archived && can('settings.manage') && <RowMenu actions={[{ key: 'merge', label: t.merge.title, onPick: () => setMerging(true) }]} />}
       </PageHead>
+
+      {c.archived && (
+        <section className="card">
+          <p className="warn-text">{t.merge.archived}</p>
+          {c.mergedInto && (
+            <Link className="pill" to={`/customers/${c.mergedInto.id}`}>
+              {t.merge.openKept(primaryName(c.mergedInto, locale))}
+            </Link>
+          )}
+        </section>
+      )}
+
+      {merging && (
+        <MergeSheet
+          keepId={c.id}
+          keepName={primaryName(c, locale)}
+          onClose={() => setMerging(false)}
+          onDone={() => {
+            setMerging(false);
+            reload();
+          }}
+        />
+      )}
 
       {/* The one debt figure (wave 2 §3.7, B7-02): what is owed, big; what it is
           made of by record; the schedule ahead and the deposit quietly below —
@@ -114,7 +158,9 @@ export function CustomerPage() {
           ))}
           {balance.data.aheadTetri > 0 && <Row k={t.money.ahead} v={<span className="mono muted">{formatGel(balance.data.aheadTetri)}</span>} />}
           {balance.data.depositHeldTetri > 0 && <Row k={t.money.depositHeld} v={<span className="mono muted">{formatGel(balance.data.depositHeldTetri)}</span>} />}
-          {can('cash.record') && (
+          {/* Money goes to the card the person actually has; an archived
+              duplicate takes none (crit. 33, QA-W5-03). */}
+          {!c.archived && can('cash.record') && (
             <div className="row-actions">
               <button type="button" className="pill pill-sm pill-accent" onClick={() => openMoney({ target: { kind: 'on_account', customerId: c.id, customer: c.name } })}>
                 {can('payments.reconcile') ? t.money.take : t.money.takeCash}
@@ -159,7 +205,7 @@ export function CustomerPage() {
             </ul>
           )}
           {!data.canOpenDocuments && data.documents.length > 0 && <p className="hint muted">{t.documents.restricted}</p>}
-          {can('customer.create') && (
+          {!c.archived && can('customer.create') && (
             <div className="row-actions">
               <select className="input input-amount" value={docKind} onChange={(e) => setDocKind(e.target.value as typeof docKind)}>
                 {(['id_card', 'driver_licence', 'other'] as const).map((k) => (
@@ -346,5 +392,67 @@ function CustomerSales({ customerId }: { customerId: string }) {
         </li>
       ))}
     </ul>
+  );
+}
+
+/**
+ * Two cards for one person (wave 5 §3.9, crit. 33). Everything the duplicate
+ * holds moves here; the duplicate goes to the archive pointing at this card,
+ * so an old link still leads somewhere true. Only an owner, always with a
+ * reason, and the journal keeps both names.
+ */
+function MergeSheet({ keepId, keepName, onClose, onDone }: { keepId: string; keepName: string; onClose: () => void; onDone: () => void }) {
+  const t = useT();
+  const { locale } = useLocale();
+  const list = useLoad<{ customers: { id: string; name: string; nameKa: string | null; nameLat: string | null; phone: string | null }[] }>('/api/customers');
+  const initial = { fromId: '', reason: '' };
+  const [f, setF] = useState(initial);
+  const [q, setQ] = useState('');
+  const found = (list.data?.customers ?? [])
+    .filter((c) => c.id !== keepId)
+    .filter((c) => {
+      const needle = q.trim().toLowerCase();
+      if (!needle) return false;
+      const digits = needle.replace(/\D/g, '');
+      // Every spelling, not just the one this language leads with (QA-W5-08).
+      return nameMatches(c, needle) || (digits.length >= 3 && (c.phone ?? '').replace(/\D/g, '').includes(digits));
+    })
+    .slice(0, 6);
+  const chosen = (list.data?.customers ?? []).find((c) => c.id === f.fromId) ?? null;
+  return (
+    <FormSheet
+      title={t.merge.title}
+      onClose={onClose}
+      value={f}
+      initial={initial}
+      onRestore={setF}
+      label={t.merge.save}
+      submit={async (key) => {
+        await api.post(`/api/customers/${keepId}/merge`, { fromId: f.fromId, reason: f.reason.trim() }, { key });
+        return { toast: { text: t.form.changesSaved } };
+      }}
+      onDone={onDone}
+    >
+      <p className="hint muted">{t.merge.into(keepName)}</p>
+      <Field label={t.merge.which} name="fromId">
+        <input className="input" value={q} onChange={(e) => setQ(e.target.value)} />
+      </Field>
+      <ul className="pick-list">
+        {found.map((c) => (
+          <li key={c.id}>
+            <button type="button" className={c.id === f.fromId ? 'on' : ''} onClick={() => setF({ ...f, fromId: c.id })}>
+              <span className="pick-main">
+                <span>{primaryName(c, locale)}</span>
+                <span className="muted mono">{c.phone ?? ''}</span>
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
+      {chosen && <p className="warn-text">{t.merge.moves(primaryName(chosen, locale), keepName)}</p>}
+      <Field label={t.merge.reason} name="reason">
+        <input className="input" value={f.reason} onChange={(e) => setF({ ...f, reason: e.target.value })} />
+      </Field>
+    </FormSheet>
   );
 }

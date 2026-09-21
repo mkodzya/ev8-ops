@@ -23,6 +23,8 @@ export type TaskAction =
   | 'upload_statement'
   | 'take_instalment'
   | 'open_service'
+  | 'open_report'
+  | 'order_parts'
   | 'open_purchase'
   | 'set_pool'
   | 'sign'
@@ -79,6 +81,10 @@ export interface QueueInput {
   staleBanks: { bank: string; days: number }[];
   instalments: { id: string; saleId: string; number: string; who: string; phone: string | null; days: number; amountTetri: Tetri }[];
   service: { open: number; longerThanWeek: number; longestDays: number };
+  /** Breakdowns a manager reported and nobody has picked up yet (wave 5 §3.10). */
+  reports: { id: string; number: string; vin: string | null; who: string | null; note: string; photos: number }[];
+  /** Parts below the level somebody set: one row, and "В заказ" on it (B8-05). */
+  lowParts: { count: number; note: string };
   purchases: { id: string; number: string; who: string; note: string }[];
   vehiclesWithoutPool: number;
   vehiclesWithoutPoint: number;
@@ -200,7 +206,25 @@ export function dayQueue(input: QueueInput): TaskGroupRows[] {
     }
   }
 
-  // 7. Service — one line for all of it (В8).
+  // 7. Service — a breakdown somebody reported comes first: it is the one
+  // line here that nobody has looked at yet (wave 5 §3.10).
+  if (input.owner) {
+    for (const r of input.reports) {
+      rows.push({
+        id: `report:${r.id}`,
+        group: 'service',
+        action: 'open_report',
+        who: r.who,
+        number: r.number,
+        vin: r.vin,
+        days: null,
+        amountTetri: null,
+        href: `/service/${r.id}`,
+        phone: null,
+        note: r.note,
+      });
+    }
+  }
   if (input.service.open > 0) {
     rows.push({
       id: 'service',
@@ -214,6 +238,27 @@ export function dayQueue(input: QueueInput): TaskGroupRows[] {
       href: '/service',
       phone: null,
       note: `${input.service.open}/${input.service.longerThanWeek}`,
+    });
+  }
+
+  // Parts that have run low: one line, and the order it turns into (B8-05).
+  if (input.owner && input.lowParts.count > 0) {
+    // The note carries the count and then the worst offenders, so the screen
+    // can say "5 parts below their level · Controller: −1 · Pads: 4 of 10".
+    rows.push({
+      id: 'low-parts',
+      group: 'service',
+      action: 'order_parts',
+      who: null,
+      number: null,
+      vin: null,
+      days: null,
+      amountTetri: null,
+      // The chip on the shelf is `short`; `low` matched nothing and the list
+      // opened on «Все» with the part to find by eye (QA-W5-16).
+      href: '/service/stock?f=short',
+      phone: null,
+      note: `${input.lowParts.count}|${input.lowParts.note}`,
     });
   }
 

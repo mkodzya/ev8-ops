@@ -18,9 +18,10 @@ describe('the structure each role sees (wave 1 §3.2)', () => {
     expect(sectionsForRole('owner').map((s) => s.id)).not.toContain('cash');
   });
 
-  it('offers the owner six actions under + and the manager four', () => {
+  it('offers the owner six actions under + and the manager five (wave 5 §3.7)', () => {
     expect(actionsForRole('owner').map((a) => a.id)).toEqual(['pickup', 'return', 'takeMoney', 'newCustomer', 'openRepair', 'sell']);
-    expect(actionsForRole('manager').map((a) => a.id)).toEqual(['pickup', 'return', 'takeCash', 'newCustomer']);
+    // A manager reports a breakdown; opening the repair itself is an owner's.
+    expect(actionsForRole('manager').map((a) => a.id)).toEqual(['pickup', 'return', 'takeCash', 'newCustomer', 'reportBreak']);
   });
 
   it('shows the points tab and statements only to the owner', () => {

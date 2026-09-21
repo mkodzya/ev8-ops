@@ -1,11 +1,11 @@
-import { CUSTOMER_KINDS, CUSTOMER_SOURCES, DEFAULT_DEPOSIT_TETRI, VEHICLE_POOLS, VEHICLE_STATES, todayISO } from '@ev8/shared';
+import { CONTACT_KINDS, CUSTOMER_KINDS, CUSTOMER_SOURCES, DEFAULT_DEPOSIT_TETRI, VEHICLE_POOLS, VEHICLE_STATES, normalizeVin, todayISO, vinFault } from '@ev8/shared';
 import type { FastifyInstance } from 'fastify';
 import { audit } from '../lib/audit.js';
 import { hasPerm } from '../lib/auth.js';
 import { dateFromISO } from '../lib/dates.js';
 import { prisma } from '../lib/db.js';
 import { env } from '../lib/env.js';
-import { conflict, forbidden, isUniqueViolation, notFound } from '../lib/errors.js';
+import { badRequest, conflict, forbidden, isUniqueViolation, notFound } from '../lib/errors.js';
 import { actorOf } from '../lib/guard.js';
 import { date, int, oneOf, str, strList, tetri } from '../lib/validate.js';
 import { movePool, moveVehicle } from '../lib/vehicles.js';
@@ -49,7 +49,9 @@ export function opsRoutes(app: FastifyInstance): void {
           email: str(b, 'email', { max: 200 }),
           address: str(b, 'address', { max: 300 }),
           kind: oneOf(b, 'kind', CUSTOMER_KINDS) ?? 'person',
-          isSupplier: Boolean(b.isSupplier),
+          // What this record is (B3-06): a client by default, because that is
+          // what all but a handful of them are.
+          recordKind: oneOf(b, 'recordKind', CONTACT_KINDS) ?? 'client',
           tags: strList(b, 'tags'),
           notes: str(b, 'notes', { max: 4000 }),
         },
@@ -88,9 +90,11 @@ export function opsRoutes(app: FastifyInstance): void {
       if (k in b) data[k] = str(b, k, { max: k === 'notes' ? 4000 : 300, required: k === 'name' });
     }
     if ('kind' in b) data.kind = oneOf(b, 'kind', CUSTOMER_KINDS, { required: true });
+    if ('recordKind' in b) {
+      data.recordKind = oneOf(b, 'recordKind', CONTACT_KINDS, { required: true })!;
+    }
     if ('tags' in b) data.tags = strList(b, 'tags');
     if ('archived' in b) data.archived = Boolean(b.archived);
-    if ('isSupplier' in b) data.isSupplier = Boolean(b.isSupplier);
     try {
       await prisma.customer.update({ where: { id: before.id }, data: { ...data, updatedAt: new Date() } });
     } catch (e) {
@@ -166,7 +170,7 @@ export function opsRoutes(app: FastifyInstance): void {
     const occurredOn = date(b, 'occurredOn') ?? todayISO(new Date(), env.TZ);
     const v = await prisma.vehicle.findUnique({ where: { id: req.params.id } });
     if (!v) throw notFound('vehicle_not_found', 'No such moped.');
-    if (v.state === 'rented' && v.currentRentalId) throw conflict('vehicle_rented', 'Close the rental first; a rented moped does not move by hand.');
+    if (v.state === 'rented' && v.currentRentalId) throw conflict('vehicle_rented_move', 'Close the rental first; a rented moped does not move by hand.');
     // Sold is what a sale says, not what a hand says; a buy-back brings it
     // back. Writing one off is an owner's (Q22, §3.6).
     if (toState === 'sold' || v.state === 'sold') throw conflict('sold_by_sale', 'A moped is sold by a sale and comes back by a buy-back.');
@@ -249,7 +253,7 @@ export function opsRoutes(app: FastifyInstance): void {
     if ('modelId' in b) data.modelId = str(b, 'modelId', { required: true });
     if ('archived' in b) {
       // A moped out on rent is not something to hide from the fleet.
-      if (Boolean(b.archived) && before.state === 'rented') throw conflict('vehicle_rented', 'Close the rental first.');
+      if (Boolean(b.archived) && before.state === 'rented') throw conflict('vehicle_rented_move', 'Close the rental first.');
       data.archived = Boolean(b.archived);
     }
     await prisma.vehicle.update({ where: { id: before.id }, data: { ...data, updatedAt: new Date() } });
@@ -260,7 +264,11 @@ export function opsRoutes(app: FastifyInstance): void {
   app.post<{ Body: Body }>('/api/fleet', { config: { scope: 'settings.manage' } }, async (req, reply) => {
     const b = req.body ?? {};
     const actor = actorOf(req);
-    const vin = str(b, 'vin', { required: true, max: 17 })!.toUpperCase();
+    // Seventeen characters without I, O or Q (B3-06, crit. 31): a VIN typed
+    // with a letter that is not in one is a VIN nobody will find again.
+    const vin = normalizeVin(str(b, 'vin', { required: true, max: 40 })!);
+    const fault = vinFault(vin);
+    if (fault) throw badRequest('bad_vin', 'A VIN is 17 characters and has no I, O or Q.', { field: 'vin', fault });
     const arrivedOn = date(b, 'arrivedOn');
     try {
       const v = await prisma.$transaction(async (tx) => {

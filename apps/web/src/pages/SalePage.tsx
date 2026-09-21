@@ -1,124 +1,151 @@
+import { parseGel, type ISODate } from '@ev8/shared';
 import { useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
-import { useMoneyForm } from '../ds/money/MoneyForm.js';
 import { LoadError } from '../components/LoadError.js';
-import { FormSheet } from '../ds/form/Form.js';
-import { BlockHead, Empty, Loading, PageHead, Vin } from '../components/ui.js';
+import { RowMenu } from '../components/RowMenu.js';
+import { SignScreen, signedAtText } from '../components/Documents.js';
+import { Empty, Loading, PageHead, Vin } from '../components/ui.js';
 import { Field, Row } from '../components/Wizard.js';
+import { FormSheet } from '../ds/form/Form.js';
+import { useMoneyForm } from '../ds/money/MoneyForm.js';
 import { fmtDate, formatGel } from '../format.js';
 import { useT } from '../i18n/index.js';
 import { useLoad } from '../lib/use.js';
 import { useSession } from '../session.js';
 import type { Sale } from './SalesPage.js';
 
+// One sale (wave 5 §3.2): what is owed now and what is still ahead, the
+// schedule with its marks, the paper, and one timeline of everything that
+// happened to it. The two money figures never mix — an instalment that has
+// not fallen due is not a debt (Q21).
+
+interface FeedRow {
+  at: string;
+  kind: 'payment' | 'document' | 'log';
+  by: string | null;
+  text: string;
+  amountTetri: number | null;
+  note: string | null;
+}
+
 interface SaleCard {
-  sale: Sale;
+  sale: Sale & { aheadTetri: number; lateDays: number; transferred: boolean; paidBeforeTetri: number };
+  documents: { id: string; docKind: string | null; signedAt: string | null; signedBy: string | null }[];
+  feed: FeedRow[];
   payments: { id: string; occurredOn: string; channel: 'transfer' | 'acquiring' | 'cash'; direction: 'in' | 'out'; grossTetri: number }[];
 }
 
-/** One sale: the schedule, what has come in, and how it ended. */
 export function SalePage() {
   const { id } = useParams();
   const t = useT();
   const { can } = useSession();
+  const [params, setParams] = useSearchParams();
   const { data, failure, reload } = useLoad<SaleCard>(id ? `/api/sales/${id}` : null);
-  const [panel, setPanel] = useState<'cancel' | null>(null);
+  const [sheet, setSheet] = useState<'cancel' | 'schedule' | null>(null);
+  const [signing, setSigning] = useState(params.get('sign') === '1');
   const openMoney = useMoneyForm();
-  const [cancelReason, setCancelReason] = useState('');
 
   if (failure) return <LoadError failure={failure} onRetry={reload} />;
   if (!data) return <Loading />;
   const s = data.sale;
   const live = s.status === 'active';
+  const owner = can('deposit.decide');
+  const doc = data.documents.find((d) => d.docKind === 'sale') ?? null;
+  const late = live && s.overdueTetri > 0;
+  const badge = late ? t.saleCard.lateBy(s.lateDays) : t.sales.statuses[s.status];
+
+  const menu = [
+    ...(live && can('sales.manage') && s.vehicle
+      ? [
+          {
+            key: 'buyback',
+            label: t.saleCard.menu.buyback,
+            onPick: () => openMoney({ target: { kind: 'buyback', saleId: s.id, number: s.number, customerId: s.customer.id, customer: s.customer.name } }),
+          },
+        ]
+      : []),
+    ...(live && owner ? [{ key: 'schedule', label: t.saleCard.menu.schedule, onPick: () => setSheet('schedule') }] : []),
+    ...(live && can('sales.manage') ? [{ key: 'cancel', label: t.saleCard.menu.cancel, onPick: () => setSheet('cancel') }] : []),
+  ];
+
+  const closeSign = () => {
+    setSigning(false);
+    if (params.get('sign')) setParams({}, { replace: true });
+  };
 
   return (
     <>
-      <PageHead wrap title={s.number} sub={t.sales.statuses[s.status]}>
+      <PageHead wrap title={s.number} sub={`${s.customer.name} · ${fmtDate(s.soldOn)}`} badge={<span className={late ? 'crit-text' : 'muted'}>{badge}</span>}>
         {live && can('cash.record') && (
-          <button type="button" className="pill pill-sm pill-accent" onClick={() => openMoney({ target: { kind: 'sale', saleId: s.id, number: s.number, customerId: s.customer.id, customer: s.customer.name } })}>
-            {t.sales.addPayment}
+          <button
+            type="button"
+            className="pill pill-sm pill-accent"
+            onClick={() => openMoney({ target: { kind: 'sale', saleId: s.id, number: s.number, customerId: s.customer.id, customer: s.customer.name } })}
+          >
+            {t.saleCard.takeInstalment}
           </button>
         )}
-        {live && can('sales.manage') && s.vehicle && (
-          <button type="button" className="pill pill-sm" onClick={() => openMoney({ target: { kind: 'buyback', saleId: s.id, number: s.number, customerId: s.customer.id, customer: s.customer.name } })}>
-            {t.sales.buyBack}
-          </button>
+        {s.customer.phone && (
+          <a className="pill pill-sm" href={`tel:${s.customer.phone}`} aria-label={t.today.call}>
+            ☎
+          </a>
         )}
-        {live && can('sales.manage') && (
-          <button type="button" className="pill pill-sm" onClick={() => setPanel('cancel')}>
-            {t.sales.cancel}
-          </button>
-        )}
+        <RowMenu actions={menu} />
       </PageHead>
 
-      {panel === 'cancel' && (
-        <FormSheet
-          title={t.sales.cancel}
-          onClose={() => setPanel(null)}
-          value={cancelReason}
-          initial=""
-          draft={`sale-cancel:${s.id}`}
-          onRestore={setCancelReason}
-          summary={(v) => v}
-          label={t.sales.cancelCta}
-          submit={async (key) => {
-            await api.post(`/api/sales/${s.id}/cancel`, { reason: cancelReason }, { key });
-            return { toast: { text: t.sales.cancelled } };
-          }}
-          onDone={() => {
-            setCancelReason('');
-            reload();
-          }}
-        >
-          <Field label={t.sales.cancelReason} name="reason">
-            <input className="input" value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} autoFocus />
-          </Field>
-        </FormSheet>
-      )}
-
-      <div className="two-col">
-        <section className="card">
-          <Row k={t.sales.buyer} v={<Link to={`/customers/${s.customer.id}`}>{s.customer.name}</Link>} />
-          <Row
-            k={t.sales.vehicle}
-            v={
-              s.vehicle ? (
-                <Link to={`/fleet/${s.vehicle.id}`}>
-                  <Vin vin={s.vehicle.vin} /> <span className="muted">{s.vehicle.model}</span>
-                </Link>
-              ) : (
-                <span className="muted">{s.vinNote}</span>
-              )
-            }
-          />
-          <Row k={t.sales.soldOn} v={<span className="mono">{fmtDate(s.soldOn)}</span>} />
-          <Row k={t.sales.warranty} v={<span className="mono">{fmtDate(s.warrantyUntil)}</span>} />
-          {s.extras && <Row k={t.sales.extras} v={s.extras} />}
-          {s.boughtBackOn && <Row k={t.sales.buyBack} v={<span className="mono">{fmtDate(s.boughtBackOn)}</span>} />}
-          {s.notes && <Row k={t.rental.notes} v={<span className="pre">{s.notes}</span>} />}
-        </section>
-        <section className="card">
-          <Row k={t.sales.price} v={<span className="mono">{formatGel(s.priceTetri)}</span>} />
-          <Row k={t.sales.paid} v={<span className="mono">{formatGel(s.paidTetri)}</span>} />
-          <Row k={t.sales.outstanding} v={<span className="mono">{formatGel(s.outstandingTetri)}</span>} />
-          <Row
-            k={t.sales.overdue}
-            v={<span className={`mono ${s.overdueTetri > 0 ? 'crit-text' : ''}`}>{formatGel(s.overdueTetri)}</span>}
-          />
-        </section>
+      <div className="num-strip">
+        <span className={`num ${late ? 'num-crit' : ''}`}>
+          <span className="num-v">{formatGel(s.overdueTetri, { decimals: false })}</span>
+          <span className="num-l">{t.saleCard.debt}</span>
+        </span>
+        <span className="num">
+          <span className="num-v">{formatGel(s.aheadTetri, { decimals: false })}</span>
+          <span className="num-l">{t.saleCard.ahead}</span>
+        </span>
+        <span className="num">
+          <span className="num-v">{formatGel(s.priceTetri, { decimals: false })}</span>
+          <span className="num-l">{t.saleCard.price}</span>
+        </span>
+        <span className="num">
+          <span className="num-v">{formatGel(s.paidTetri, { decimals: false })}</span>
+          <span className="num-l">{t.saleCard.paid}</span>
+        </span>
       </div>
 
       <section className="card">
-        <BlockHead title={t.sales.schedule} sub={t.sales.instalmentsCount(s.instalments.length)} />
+        <Row
+          k={t.sell.moped}
+          v={
+            s.vehicle ? (
+              <Link to={`/fleet/${s.vehicle.id}`}>
+                <Vin vin={s.vehicle.vin} /> <span className="muted">{s.vehicle.model}</span>
+              </Link>
+            ) : (
+              <span className="muted">{s.vinNote}</span>
+            )
+          }
+        />
+        <Row k={t.sell.buyer} v={<Link to={`/customers/${s.customer.id}`}>{s.customer.name}</Link>} />
+        {s.extras && <Row k={t.sell.extras} v={s.extras} />}
+        <Row k={t.saleCard.warranty} v={<span className="mono">{fmtDate(s.warrantyUntil)}</span>} />
+        {s.transferred && <Row k={t.saleCard.transferred} v={t.saleCard.paidBefore(formatGel(s.paidBeforeTetri))} />}
+        {s.boughtBackOn && <Row k={t.saleCard.menu.buyback} v={<span className="mono">{fmtDate(s.boughtBackOn)}</span>} />}
+      </section>
+
+      <section className="card">
+        <div className="queue-head">
+          <h2>{t.saleCard.schedule}</h2>
+          <span className="muted">{s.instalments.length}</span>
+        </div>
         <div className="table-wrap table-flat">
           <table className="table">
             <thead>
               <tr>
-                <th>{t.sales.instalment}</th>
-                <th>{t.sales.dueOn}</th>
-                <th className="num">{t.sales.amount}</th>
-                <th className="num">{t.sales.paid}</th>
+                <th>{t.sell.seq}</th>
+                <th>{t.sell.dueOn}</th>
+                <th className="num">{t.sell.amount}</th>
+                <th className="num">{t.saleCard.paid}</th>
                 <th>{t.fleet.state}</th>
               </tr>
             </thead>
@@ -129,9 +156,7 @@ export function SalePage() {
                   <td className="mono">{fmtDate(i.dueOn)}</td>
                   <td className="num mono">{formatGel(i.amountTetri)}</td>
                   <td className="num mono">{formatGel(i.paidTetri)}</td>
-                  <td className={i.payStatus === 'paid' ? 'state-available' : i.overdue ? 'crit-text' : 'muted'}>
-                    {t.sales.payStatus[i.payStatus]}
-                  </td>
+                  <td className={i.state === 'overdue' ? 'crit-text' : 'muted'}>{i.state === 'overdue' ? t.saleCard.lateBy(i.days) : t.saleCard.states[i.state]}</td>
                 </tr>
               ))}
             </tbody>
@@ -140,26 +165,148 @@ export function SalePage() {
       </section>
 
       <section className="card">
-        <BlockHead title={t.payments.title} sub={t.payments.count(data.payments.length)} />
-        {data.payments.length === 0 ? (
-          <Empty text={t.payments.none} />
+        <div className="queue-head">
+          <h2>{t.saleCard.documents}</h2>
+          <span className={doc?.signedAt ? 'ok-text' : 'warn-text'}>{doc?.signedAt ? t.saleCard.signedOn(signedAtText(doc.signedAt)) : t.sell.unsigned}</span>
+        </div>
+        <div className="row-actions">
+          <a className="pill pill-sm" href={`/api/sales/${s.id}/contract.pdf`} target="_blank" rel="noreferrer">
+            {t.sell.document}
+          </a>
+          {!doc?.signedAt && can('sales.manage') && (
+            <button type="button" className="pill pill-sm" onClick={() => setSigning(true)}>
+              {t.sell.sign}
+            </button>
+          )}
+        </div>
+        <p className="hint muted">{t.sell.documentSub}</p>
+      </section>
+
+      <section className="card">
+        <div className="queue-head">
+          <h2>{t.saleCard.feed}</h2>
+        </div>
+        {data.feed.length === 0 ? (
+          <Empty text={t.common.dash} />
         ) : (
           <ul className="timeline">
-            {data.payments.map((p) => (
-              <li key={p.id}>
-                <span className="mono muted">{fmtDate(p.occurredOn)}</span>
-                <span>
-                  <span className={`mono ${p.direction === 'out' ? 'crit-text' : ''}`}>
-                    {p.direction === 'out' ? '-' : ''}
-                    {formatGel(p.grossTetri)}
-                  </span>{' '}
-                  <span className="muted">{t.payments.channels[p.channel]}</span>
-                </span>
-              </li>
-            ))}
+            {data.feed.map((row, i) => {
+              // A payment's line names the way the money came in; everything
+              // else is an action the journal already has words for.
+              const channels: Record<string, string> = t.payments.channels;
+              const word = row.kind === 'payment' ? (channels[row.text] ?? t.saleCard.words[row.text] ?? row.text) : (t.saleCard.words[row.text] ?? t.feedWords[row.text] ?? row.text);
+              return (
+                <li key={`${row.at}-${i}`}>
+                  <span className="mono muted">{fmtDate(row.at)}</span>
+                  <span>
+                    <span>{word}</span>
+                    {row.amountTetri != null && <span className="mono"> · {formatGel(row.amountTetri)}</span>}
+                    {row.note && <span className="muted"> · {row.note}</span>}
+                    {row.by && <span className="muted"> · {row.by}</span>}
+                  </span>
+                </li>
+              );
+            })}
           </ul>
         )}
       </section>
+
+      {sheet === 'cancel' && (
+        <CancelSheet
+          id={s.id}
+          onClose={() => setSheet(null)}
+          onDone={() => {
+            setSheet(null);
+            reload();
+          }}
+        />
+      )}
+      {sheet === 'schedule' && (
+        <ScheduleSheet
+          id={s.id}
+          rows={s.instalments.map((i) => ({ dueOn: i.dueOn, amount: String(i.amountTetri / 100) }))}
+          onClose={() => setSheet(null)}
+          onDone={() => {
+            setSheet(null);
+            reload();
+          }}
+        />
+      )}
+      {signing && (
+        <SignScreen
+          rentalId={s.id}
+          base="sales"
+          kind="contract"
+          title={t.sell.document}
+          onClose={closeSign}
+          onSigned={() => {
+            closeSign();
+            reload();
+          }}
+        />
+      )}
     </>
+  );
+}
+
+/** A sale that never happened: only while no money has touched it (`sales.md`). */
+function CancelSheet({ id, onClose, onDone }: { id: string; onClose: () => void; onDone: () => void }) {
+  const t = useT();
+  const [reason, setReason] = useState('');
+  return (
+    <FormSheet
+      title={t.saleCard.cancelTitle}
+      onClose={onClose}
+      value={reason}
+      initial=""
+      onRestore={setReason}
+      label={t.saleCard.cancelTitle}
+      submit={async (key) => {
+        await api.post(`/api/sales/${id}/cancel`, { reason: reason.trim() }, { key });
+        return { toast: { text: t.form.changesSaved } };
+      }}
+      onDone={onDone}
+    >
+      <Field label={t.saleCard.cancelReason} name="reason">
+        <input className="input" value={reason} onChange={(e) => setReason(e.target.value)} />
+      </Field>
+      <p className="hint muted">{t.saleCard.cancelNote}</p>
+    </FormSheet>
+  );
+}
+
+/** The dates moved, or the amounts did: an owner's change, with a reason (§3.2). */
+function ScheduleSheet({ id, rows, onClose, onDone }: { id: string; rows: { dueOn: ISODate; amount: string }[]; onClose: () => void; onDone: () => void }) {
+  const t = useT();
+  const initial = { rows, reason: '' };
+  const [f, setF] = useState(initial);
+  const edit = (i: number, patch: Partial<{ dueOn: ISODate; amount: string }>) => setF({ ...f, rows: f.rows.map((r, k) => (k === i ? { ...r, ...patch } : r)) });
+  return (
+    <FormSheet
+      title={t.saleCard.scheduleTitle}
+      onClose={onClose}
+      value={f}
+      initial={initial}
+      onRestore={setF}
+      label={t.saleCard.scheduleSave}
+      submit={async (key) => {
+        await api.post(`/api/sales/${id}/schedule`, { reason: f.reason.trim(), schedule: f.rows.map((r) => ({ dueOn: r.dueOn, amountTetri: parseGel(r.amount) ?? 0 })) }, { key });
+        return { toast: { text: t.form.changesSaved } };
+      }}
+      onDone={onDone}
+    >
+      {f.rows.map((r, i) => (
+        <div className="two-col two-col-tight" key={i}>
+          <input className="input mono" type="date" aria-label={t.sell.dueOn} value={r.dueOn} onChange={(e) => edit(i, { dueOn: e.target.value })} />
+          <input className="input input-amount mono" inputMode="decimal" aria-label={t.sell.amount} value={r.amount} onChange={(e) => edit(i, { amount: e.target.value })} />
+        </div>
+      ))}
+      <button type="button" className="pill pill-sm" onClick={() => setF({ ...f, rows: [...f.rows, { dueOn: f.rows[f.rows.length - 1]?.dueOn ?? '', amount: '' }] })}>
+        {t.saleCard.addRow}
+      </button>
+      <Field label={t.saleCard.scheduleReason} name="reason">
+        <input className="input" value={f.reason} onChange={(e) => setF({ ...f, reason: e.target.value })} />
+      </Field>
+    </FormSheet>
   );
 }

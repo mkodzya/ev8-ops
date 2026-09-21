@@ -19,6 +19,8 @@ export const PERMISSIONS = [
   'payments.reconcile', // statements, unmatched queue (PAY-01..03)
   'cost.view', // unit cost, stock value, landed cost: the owners' numbers (redesign §2.1)
   'purchases.view', // orders and suppliers
+  'purchases.manage', // place an order, pay a factory, receive a shipment (wave 5 §3.4–3.6)
+  'service.report', // report a breakdown: a manager may say a moped is broken (wave 5 §3.7)
   'service.manage', // repair jobs (SRV-01), and the parts catalogue
   'stock.count', // correct a count by hand — a stock-take
   'sales.manage', // sales and buy-backs (SAL-01..03)
@@ -36,7 +38,7 @@ export type Permission = (typeof PERMISSIONS)[number];
  * beyond their own cash, cost, purchases, reports and settings are the
  * owners' (redesign blueprint §2.1, Mika 17.09.2026).
  */
-const MANAGER: Permission[] = ['fleet.view', 'fleet.location.set', 'fleet.state.manual', 'rental.create', 'rental.return', 'customer.create', 'cash.record'];
+const MANAGER: Permission[] = ['fleet.view', 'fleet.location.set', 'fleet.state.manual', 'rental.create', 'rental.return', 'customer.create', 'cash.record', 'service.report'];
 
 export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
   owner: PERMISSIONS,

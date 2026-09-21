@@ -31,6 +31,8 @@ const input = (over: Partial<QueueInput> = {}): QueueInput => ({
   staleBanks: [],
   instalments: [],
   service: { open: 0, longerThanWeek: 0, longestDays: 0 },
+  reports: [],
+  lowParts: { count: 0, note: '' },
   purchases: [],
   vehiclesWithoutPool: 0,
   vehiclesWithoutPoint: 0,

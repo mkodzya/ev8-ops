@@ -61,6 +61,14 @@ export type ActKind = (typeof ACT_KINDS)[number];
 export const CUSTOMER_KINDS = ['person', 'sole_trader', 'company'] as const;
 export type CustomerKind = (typeof CUSTOMER_KINDS)[number];
 
+/**
+ * What a contact record is (B3-06, wave 5 §3.9). A supplier is not a client
+ * with a tick on it: a hand-over and a sale look for clients, an order looks
+ * for suppliers, and neither should have to step over the other.
+ */
+export const CONTACT_KINDS = ['client', 'supplier', 'employee', 'other'] as const;
+export type ContactKind = (typeof CONTACT_KINDS)[number];
+
 /** Interface languages. Georgian first: it is the team's language (spec §8). */
 export const LOCALES = ['ka', 'ru', 'en'] as const;
 export type Locale = (typeof LOCALES)[number];

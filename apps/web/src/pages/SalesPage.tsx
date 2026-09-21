@@ -30,7 +30,9 @@ export interface Sale {
   customer: { id: string; name: string; phone?: string | null };
   vehicle: { id: string; vin: string; model: string } | null;
   vinNote: string | null;
-  instalments: { id: string; seq: number; dueOn: string; amountTetri: number; paidTetri: number; payStatus: 'unpaid' | 'partial' | 'paid'; overdue: boolean }[];
+  aheadTetri: number;
+  lateDays: number;
+  instalments: { id: string; seq: number; dueOn: string; amountTetri: number; paidTetri: number; payStatus: 'unpaid' | 'partial' | 'paid'; overdue: boolean; state: 'paid' | 'overdue' | 'ahead'; days: number }[];
 }
 
 interface FleetVehicle {
@@ -56,7 +58,11 @@ export function SalesPage() {
             {t.sales.overdue}: {formatGel(data.overdueTetri, { decimals: false })}
           </span>
         )}
-        {can('sales.manage') && <NewSale onDone={reload} />}
+        {can('sales.manage') && (
+          <Link className="pill pill-sm pill-accent" to="/sales/new">
+            {t.sales.newSale}
+          </Link>
+        )}
       </PageHead>
       <DataList
         rows={data.sales}
@@ -133,117 +139,6 @@ export function SalesPage() {
           { key: 'status', label: t.fleet.state, cell: (s) => <span className="muted">{t.sales.statuses[s.status]}</span>, sort: { value: (s) => s.status } },
         ]}
       />
-    </>
-  );
-}
-
-/** Selling: a buyer, a moped, a price, and how it will be paid for. */
-const blankSale = () => ({ customerId: '', vehicleId: '', vinNote: '', price: '', down: '', months: '0', soldOn: todayISO(), extras: '' });
-
-function NewSale({ onDone }: { onDone: () => void }) {
-  const t = useT();
-  // "Open a repair" / "Sell a moped" from the "+" arrive with ?new=1 (wave 1 §3.2).
-  const [params, setParams] = useSearchParams();
-  const [open, setOpenState] = useState(params.get('new') === '1');
-  const setOpen = (v: boolean) => {
-    setOpenState(v);
-    if (!v && params.has('new')) {
-      params.delete('new');
-      setParams(params, { replace: true });
-    }
-  };
-  const fleet = useLoad<{ vehicles: FleetVehicle[] }>(open ? '/api/fleet' : null);
-  const customers = useLoad<{ customers: { id: string; name: string; phone: string | null }[] }>(open ? '/api/customers' : null);
-  const models = useLoad<{ models: { id: string; salePriceTetri: number | null }[] }>(open ? '/api/models' : null);
-  const [f, setF] = useState(blankSale);
-
-  const free = useMemo(() => (fleet.data?.vehicles ?? []).filter((v) => v.state === 'available'), [fleet.data]);
-
-
-  return (
-    <>
-      <button type="button" className="pill pill-sm pill-accent" onClick={() => setOpen(true)}>
-        + {t.sales.newSale}
-      </button>
-      {open && (
-        <FormSheet
-          title={t.sales.newSale}
-          onClose={() => setOpen(false)}
-          value={f}
-          initial={blankSale()}
-          draft="sale-new"
-          onRestore={setF}
-          summary={(v) => (customers.data?.customers ?? []).find((c) => c.id === v.customerId)?.name}
-          label={t.sales.recordSale}
-          submit={async (key) => {
-            const sale = await api.post<{ id: string }>(
-              '/api/sales',
-              {
-                customerId: f.customerId,
-                vehicleId: f.vehicleId || null,
-                vinNote: f.vehicleId ? null : f.vinNote || null,
-                priceTetri: parseGel(f.price),
-                downPaymentTetri: f.down ? parseGel(f.down) : 0,
-                months: Number(f.months) || 0,
-                soldOn: f.soldOn,
-                extras: f.extras || null,
-              },
-              { key },
-            );
-            return { created: sale.id, toast: { text: t.sales.saleRecorded, open: `/sales/${sale.id}` } };
-          }}
-          onDone={() => {
-            setF(blankSale());
-            onDone();
-          }}
-        >
-      <div className="two-col">
-        <Field label={t.sales.buyer} name="customerId">
-          <select className="input" value={f.customerId} onChange={(e) => setF({ ...f, customerId: e.target.value })} required>
-            <option value="">{t.common.dash}</option>
-            {(customers.data?.customers ?? []).map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <Field label={t.sales.vehicle} name="vehicleId">
-          <select className="input" value={f.vehicleId} onChange={(e) => setF({ ...f, vehicleId: e.target.value })}>
-            <option value="">{t.common.dash}</option>
-            {free.map((v) => (
-              <option key={v.id} value={v.id}>
-                {v.vin} · {v.model}
-              </option>
-            ))}
-          </select>
-        </Field>
-      </div>
-      {!f.vehicleId && (
-        <Field label={t.sales.noVehicle} name="vinNote">
-          <input className="input" value={f.vinNote} onChange={(e) => setF({ ...f, vinNote: e.target.value })} />
-        </Field>
-      )}
-      <div className="two-col">
-        <Field label={t.sales.price} name="priceTetri">
-          <input className="input input-amount mono" value={f.price} onChange={(e) => setF({ ...f, price: e.target.value })} inputMode="decimal" required />
-        </Field>
-        <Field label={t.sales.soldOn} name="soldOn">
-          <input className="input mono" type="date" value={f.soldOn} onChange={(e) => setF({ ...f, soldOn: e.target.value })} />
-        </Field>
-        <Field label={t.sales.downPayment} name="downPaymentTetri">
-          <input className="input input-amount mono" value={f.down} onChange={(e) => setF({ ...f, down: e.target.value })} inputMode="decimal" />
-        </Field>
-        <Field label={t.sales.months} hint={t.sales.monthsHint} name="months">
-          <input className="input input-amount mono" value={f.months} onChange={(e) => setF({ ...f, months: e.target.value })} inputMode="numeric" />
-        </Field>
-      </div>
-      <Field label={t.sales.extras} name="extras">
-        <input className="input" value={f.extras} onChange={(e) => setF({ ...f, extras: e.target.value })} />
-      </Field>
-      {models.data && free.length === 0 && <p className="hint muted">{t.pickup.noAvailable}</p>}
-        </FormSheet>
-      )}
     </>
   );
 }

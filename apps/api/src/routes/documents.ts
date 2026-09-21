@@ -11,6 +11,7 @@ import { renderContract } from '../lib/pdf/contract.js';
 import type { DrawnSignature } from '../lib/pdf/layout.js';
 import { contractGaps } from './rentals.js';
 import { badRequest } from '../lib/errors.js';
+import { renderSaleDoc } from '../lib/pdf/saleDoc.js';
 import {
   renderReturnAct,
   type ItemState,
@@ -109,7 +110,80 @@ async function render(kind: DocKind, r: Rental, signature: DrawnSignature | null
   });
 }
 
+async function loadSale(id: string) {
+  const sale = await prisma.sale.findUnique({
+    where: { id },
+    include: {
+      customer: true,
+      vehicle: { include: { model: true } },
+      instalments: { orderBy: { seq: 'asc' } },
+    },
+  });
+  if (!sale) throw notFound('sale_not_found', 'No such sale.');
+  return sale;
+}
+
+type Sale = Awaited<ReturnType<typeof loadSale>>;
+
+/** The sale's paper: the schedule when there is credit, the invoice when there is not. */
+async function renderSale(sale: Sale, signature: DrawnSignature | null = null): Promise<Buffer> {
+  return renderSaleDoc({
+    number: sale.number,
+    soldOn: isoDate(sale.soldOn)!,
+    customer: {
+      name: sale.customer.name,
+      personalId: sale.customer.personalId,
+      phone: sale.customer.phone,
+      email: sale.customer.email,
+      address: sale.customer.address,
+    },
+    vehicle: sale.vehicle ? { brand: sale.vehicle.model.brand, model: sale.vehicle.model.name, vin: sale.vehicle.vin, color: sale.vehicle.color } : null,
+    vinNote: sale.vinNote,
+    priceTetri: sale.priceTetri,
+    extras: sale.extras,
+    warrantyUntil: isoDate(sale.warrantyUntil),
+    schedule: sale.instalments.map((i) => ({ seq: i.seq, dueOn: isoDate(i.dueOn)!, amountTetri: i.amountTetri, paidTetri: i.paidTetri })),
+    instalments: sale.instalments.length > 1,
+    signature,
+  });
+}
+
 export function documentRoutes(app: FastifyInstance): void {
+  /**
+   * The sale's document (§3.1). It follows the sale until it is signed, and
+   * from then on it is what the buyer signed and does not change (B4-06).
+   */
+  app.get<{ Params: { id: string } }>('/api/sales/:id/contract.pdf', { config: { scope: 'sales.manage' } }, async (req, reply) => {
+    const actor = actorOf(req);
+    const existing = await prisma.storedFile.findFirst({
+      where: { saleId: req.params.id, kind: 'pdf', docKind: 'sale', archived: false },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true, label: true, signedAt: true },
+    });
+    if (existing?.signedAt) {
+      const row = await prisma.storedFile.findUniqueOrThrow({ where: { id: existing.id }, select: { bytes: true } });
+      return sendPdf(reply, existing.label, Buffer.from(row.bytes));
+    }
+    const sale = await loadSale(req.params.id);
+    const bytes = await renderSale(sale);
+    const label = `${sale.number}-sale.pdf`;
+    if (existing) await prisma.storedFile.update({ where: { id: existing.id }, data: { archived: true } });
+    await prisma.storedFile.create({
+      data: {
+        kind: 'pdf',
+        docKind: 'sale',
+        saleId: sale.id,
+        label,
+        mimeType: 'application/pdf',
+        sizeBytes: bytes.length,
+        sha256: createHash('sha256').update(bytes).digest('hex'),
+        bytes: new Uint8Array(bytes),
+        uploadedById: actor.id,
+      },
+    });
+    return sendPdf(reply, label, bytes);
+  });
+
   for (const [path, kind, scope] of [
     ['contract', 'contract', 'rental.create'],
     ['return-act', 'return_act', 'rental.return'],
@@ -183,6 +257,43 @@ export function documentRoutes(app: FastifyInstance): void {
  * not change; a new version takes a new signature.
  */
 export function signRoutes(app: FastifyInstance): void {
+  /** The buyer signs the sale on the screen, schedule and all (D17, crit. 9). */
+  app.post<{ Params: { id: string }; Body: Record<string, unknown> }>(
+    '/api/sales/:id/contract/sign',
+    { config: { scope: 'sales.manage' }, bodyLimit: 4 * 1024 * 1024 },
+    async (req, reply) => {
+      const actor = actorOf(req);
+      const b = req.body ?? {};
+      if (b.agree !== true) throw badRequest('missing_field', 'The buyer agrees to the terms first.', { field: 'agree' });
+      const raw = typeof b.signaturePng === 'string' ? b.signaturePng.replace(/^data:image\/png;base64,/, '') : '';
+      const png = Buffer.from(raw, 'base64');
+      if (png.length < 60 || png.subarray(1, 4).toString('latin1') !== 'PNG') throw badRequest('missing_field', 'Draw the signature.', { field: 'signaturePng' });
+      const sale = await loadSale(req.params.id);
+      const at = new Date();
+      const local = localDateTime(at);
+      const bytes = await renderSale(sale, { png, note: `${local.date} ${local.time} · ${actor.name}` });
+      await prisma.storedFile.updateMany({ where: { saleId: sale.id, kind: 'pdf', docKind: 'sale', archived: false }, data: { archived: true } });
+      const file = await prisma.storedFile.create({
+        data: {
+          kind: 'pdf',
+          docKind: 'sale',
+          saleId: sale.id,
+          label: `${sale.number}-sale-signed.pdf`,
+          mimeType: 'application/pdf',
+          sizeBytes: bytes.length,
+          sha256: createHash('sha256').update(bytes).digest('hex'),
+          bytes: new Uint8Array(bytes),
+          uploadedById: actor.id,
+          signedAt: at,
+          signedBy: sale.customer.name,
+        },
+        select: { id: true, sha256: true },
+      });
+      await audit({ actorId: actor.id, action: 'document.sign', entityType: 'sale', entityId: sale.id, after: { docKind: 'sale', fileId: file.id, sha256: file.sha256, signedBy: sale.customer.name } });
+      return reply.code(201).send({ signedAt: at.toISOString() });
+    },
+  );
+
   for (const [path, kind, scope] of [
     ['contract', 'contract', 'rental.create'],
     ['return-act', 'return_act', 'rental.return'],

@@ -5,6 +5,7 @@
 // signed stock-take with a reason. There is no fourth way.
 import { type StockMoveKind, shortfall, stockState } from '@ev8/shared';
 import type { Prisma } from '../generated/prisma/client.js';
+import { conflict } from './errors.js';
 import { dateFromISO, isoDate } from './dates.js';
 import { prisma } from './db.js';
 
@@ -107,7 +108,63 @@ export async function issueForServicePart(
   });
 }
 
-/** A repair line removed puts its parts back. */
+/** A repair line removed while the job is open puts its parts back. */
 export async function unissueForServicePart(tx: Tx, servicePartId: string): Promise<void> {
   await tx.stockMove.deleteMany({ where: { servicePartId } });
+}
+
+/**
+ * A repair cancelled gives its parts back (B8-04, wave 5 §3.7).
+ *
+ * This is a movement of its own rather than the removal of the old one: the
+ * parts did leave the shelf, somebody carried them to the workshop, and a
+ * ledger that rubs that out cannot explain where they were on Tuesday.
+ */
+export async function returnServiceParts(
+  tx: Tx,
+  input: { jobId: string; occurredOn: string; actorId: string; reason: string },
+): Promise<number> {
+  const lines = await tx.servicePart.findMany({ where: { jobId: input.jobId, partId: { not: null } }, select: { id: true, partId: true, qty: true, unitCostTetri: true } });
+  let back = 0;
+  for (const l of lines) {
+    await tx.stockMove.create({
+      data: {
+        partId: l.partId!,
+        kind: 'return',
+        qty: Math.abs(l.qty),
+        // Back at what it left at, so the shelf's average is where it was.
+        unitCostTetri: l.unitCostTetri,
+        occurredOn: dateFromISO(input.occurredOn)!,
+        servicePartId: l.id,
+        reason: input.reason,
+        createdById: input.actorId,
+      },
+    });
+    back += l.qty;
+  }
+  return back;
+}
+
+/**
+ * The first count of a part that has never moved (B3-05): how many are on the
+ * shelf and what one cost. It may happen once — after that the shelf has a
+ * history and is corrected by a receipt or a stocktake, not by a new start.
+ */
+export async function initialStock(
+  tx: Tx,
+  input: { partId: string; qty: number; unitCostTetri: number; occurredOn: string; actorId: string },
+): Promise<void> {
+  const already = await tx.stockMove.findFirst({ where: { partId: input.partId }, select: { id: true } });
+  if (already) throw conflict('stock_started', 'This part has movements already; its opening balance is history.', { field: 'qty' });
+  await tx.stockMove.create({
+    data: {
+      partId: input.partId,
+      kind: 'receipt',
+      qty: input.qty,
+      unitCostTetri: input.unitCostTetri,
+      occurredOn: dateFromISO(input.occurredOn)!,
+      reason: 'initial',
+      createdById: input.actorId,
+    },
+  });
 }
