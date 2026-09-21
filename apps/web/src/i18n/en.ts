@@ -1175,6 +1175,7 @@ export const en = {
       vehicle_rented_sale: 'The moped is out on rent. It cannot be sold until it comes back.',
       customer_archived: 'This card was merged into another one. Work on the card it went into.',
       duplicate_rate: 'That rate is already one of the buttons.',
+      bad_period: 'The period starts after it ends. Check the dates.',
       rate_not_found: 'No such rate — it may have been taken off already.',
       vehicle_rented_move: 'The moped is with a customer. Close the rental first.',
       vin_or_note: 'Pick a moped from the fleet, or write why the VIN is not confirmed.',

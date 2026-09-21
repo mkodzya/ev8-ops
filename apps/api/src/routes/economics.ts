@@ -1,9 +1,26 @@
-// Per-moped economics (DSH-03).
+// Per-moped economics (DSH-03) and how busy the rental fleet was (M-10).
+import { todayISO } from '@ev8/shared';
 import type { FastifyInstance } from 'fastify';
+import { isoDate } from '../lib/dates.js';
 import { fleetEconomics } from '../lib/economics.js';
-import { notFound } from '../lib/errors.js';
+import { env } from '../lib/env.js';
+import { badRequest, notFound } from '../lib/errors.js';
+import { utilisationOf } from '../lib/utilisation.js';
+import { date } from '../lib/validate.js';
 
 export function economicsRoutes(app: FastifyInstance): void {
+  /**
+   * M-10 over a period (wave 6 §3.2). Both ends are days, both included;
+   * without them it answers for the last 30 days, which is what the screen
+   * opens on.
+   */
+  app.get<{ Querystring: { from?: string; to?: string } }>('/api/reports/utilisation', { config: { scope: 'reports.view' } }, async (req) => {
+    const to = date(req.query, 'to') ?? todayISO(new Date(), env.TZ);
+    const from = date(req.query, 'from') ?? isoDate(new Date(Date.parse(`${to}T00:00:00Z`) - 29 * 86_400_000))!;
+    if (from > to) throw badRequest('bad_period', 'The period starts after it ends.', { field: 'from' });
+    return utilisationOf(from, to);
+  });
+
   app.get('/api/economics', { config: { scope: 'reports.view' } }, async () => {
     const rows = await fleetEconomics();
     // Mopeds nobody priced are counted apart rather than folded in at zero,
