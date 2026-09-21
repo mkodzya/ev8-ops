@@ -25,6 +25,8 @@ type Tx = Prisma.TransactionClient;
 
 export interface NewCustomer {
   name: string;
+  /** Where they came from (wave 4 §3.5); optional. */
+  source?: string | null;
   phone: string;
   personalId: string;
   nameKa: string | null;
@@ -153,7 +155,7 @@ export async function pickUp(input: PickupInput): Promise<PickupResult> {
     if (input.newCustomer) {
       const c = input.newCustomer;
       const made = await tx.customer.create({
-        data: { name: c.name.trim(), phone: c.phone.trim(), personalId: c.personalId.trim(), nameKa: c.nameKa, nameLat: c.nameLat, kind: 'person' },
+        data: { name: c.name.trim(), phone: c.phone.trim(), personalId: c.personalId.trim(), nameKa: c.nameKa, nameLat: c.nameLat, kind: 'person', source: c.source ?? null },
       });
       customerId = made.id;
       for (const [doc, kind] of [
@@ -416,6 +418,20 @@ export async function returnRental(input: ReturnInput): Promise<{ actId: string;
     await tx.rental.update({ where: { id: r.id }, data: { status: 'returned', returnedOn: dateFromISO(input.returnedOn)!, updatedAt: new Date() } });
     const applied = await applyCharges(tx, input.actor.id, r.id, settlement);
 
+    const lostBatteries = Object.entries(input.items).filter(([k, v]) => k.startsWith('battery_') && v.state === 'missing').length;
+    if (lostBatteries > 0) {
+      await tx.batteryMove.create({
+        data: {
+          kind: 'lost',
+          qty: lostBatteries,
+          // The note if the act carried one; otherwise the act itself says it (QA-W4-07).
+          reason: Object.entries(input.items).find(([k, v]) => k.startsWith('battery_') && v.state === 'missing')?.[1].note?.trim() || null,
+          rentalId: r.id,
+          occurredOn: dateFromISO(input.returnedOn)!,
+          createdById: input.actor.id,
+        },
+      });
+    }
     const damaged = Object.entries(input.items).filter(([, v]) => v.state === 'damaged');
     let serviceJobId: string | null = null;
     const toService = input.toService || damaged.length > 0;

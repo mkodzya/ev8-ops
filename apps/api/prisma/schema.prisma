@@ -228,6 +228,8 @@ model User {
   auditEntries      AuditLog[]
   filesUploaded     StoredFile[]
   paymentsCreated   Payment[]     @relation("payment_created_by")
+  batteryCounts     BatteryInventory[]
+  batteryMoves      BatteryMove[]
   paymentsVoided    Payment[]     @relation("payment_voided_by")
   statements        Statement[]
   serviceJobs       ServiceJob[]
@@ -356,6 +358,8 @@ model Customer {
   phone         String?
   email         String?
   kind          CustomerKind @default(person)
+  /// Where they came from: myauto, friends, social, site, other (wave 4 §3.5).
+  source        String?
   isSupplier    Boolean      @default(false) @map("is_supplier")
   tags          String[]     @default([])
   address       String?
@@ -416,6 +420,7 @@ model Rental {
   serviceJobs ServiceJob[]
   currentOf   Vehicle[]      @relation("vehicle_current_rental")
   charges     RentalCharge[]
+  batteryMoves BatteryMove[]
   withholdings DepositWithholding[]
 
   @@map("rentals")
@@ -490,6 +495,7 @@ model Act {
   rental    Rental       @relation(fields: [rentalId], references: [id], onDelete: Cascade)
   createdBy User?        @relation(fields: [createdById], references: [id])
   photos    StoredFile[]
+  batteryMoves BatteryMove[]
 
   @@map("acts")
 }
@@ -965,4 +971,41 @@ model DepositWithholding {
   serviceJob ServiceJob? @relation(fields: [serviceJobId], references: [id], onDelete: SetNull)
 
   @@map("deposit_withholdings")
+}
+
+/// An owner's stocktake of the batteries (wave 4 §3.8): the truth of that day.
+model BatteryInventory {
+  id          String   @id @default(uuid()) @db.Uuid
+  countedOn   DateTime @map("counted_on") @db.Date
+  showroomQty Int      @map("showroom_qty")
+  repairQty   Int      @map("repair_qty")
+  couriersQty Int      @map("couriers_qty")
+  totalQty    Int      @map("total_qty")
+  reason      String?
+  createdById String?  @map("created_by") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  createdBy User? @relation(fields: [createdById], references: [id])
+
+  @@map("battery_inventories")
+}
+
+/// What happened to the count since: to repair and back, lost on a return.
+model BatteryMove {
+  id          String   @id @default(uuid()) @db.Uuid
+  kind        String
+  qty         Int
+  reason      String?
+  rentalId    String?  @map("rental_id") @db.Uuid
+  actId       String?  @map("act_id") @db.Uuid
+  occurredOn  DateTime @map("occurred_on") @db.Date
+  createdById String?  @map("created_by") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  rental    Rental? @relation(fields: [rentalId], references: [id])
+  act       Act?    @relation(fields: [actId], references: [id])
+  createdBy User?   @relation(fields: [createdById], references: [id])
+
+  @@index([occurredOn, createdAt])
+  @@map("battery_moves")
 }

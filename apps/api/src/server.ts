@@ -27,6 +27,8 @@ import { handoverRoutes } from './routes/handover.js';
 import { signRoutes } from './routes/documents.js';
 import { depositRoutes } from './routes/deposits.js';
 import { summaryRoutes } from './routes/summary.js';
+import { todayRoutes } from './routes/today.js';
+import { batteryRoutes } from './routes/batteries.js';
 import { userRoutes } from './routes/users.js';
 
 export function buildApp(): FastifyInstance {
@@ -64,6 +66,8 @@ export function buildApp(): FastifyInstance {
 
   authRoutes(app);
   summaryRoutes(app);
+  todayRoutes(app);
+  batteryRoutes(app);
   fleetRoutes(app);
   modelRoutes(app);
   locationRoutes(app);

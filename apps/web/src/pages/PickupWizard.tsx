@@ -1,4 +1,4 @@
-import { acquiringFee, acquiringNet, addDays, DEFAULT_DEPOSIT_TETRI, gelFromTetri, parseGel, todayISO, type VehiclePool, type VehicleState } from '@ev8/shared';
+import { acquiringFee, acquiringNet, addDays, CUSTOMER_SOURCES, DEFAULT_DEPOSIT_TETRI, gelFromTetri, parseGel, todayISO, type VehiclePool, type VehicleState } from '@ev8/shared';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api, ApiError } from '../api.js';
@@ -83,6 +83,7 @@ export function PickupWizard() {
   const customers = useLoad<{ customers: CustomerRow[] }>('/api/customers');
   const fleet = useLoad<{ vehicles: FleetRow[] }>('/api/fleet');
   const recentRentals = useLoad<{ rentals: { customer: { id: string } }[] }>('/api/rentals');
+  const batteries = useLoad<{ showroom: number }>('/api/batteries');
 
   const today = todayISO();
   const start = {
@@ -91,6 +92,7 @@ export function PickupWizard() {
     creating: false,
     ncPhone: '+995 ',
     ncName: '',
+    ncSource: '',
     why: '',
     vehicleId: presetVehicle,
     noVin: false,
@@ -259,7 +261,7 @@ export function PickupWizard() {
       const body = {
         customerId: f.creating ? undefined : f.customerId,
         newCustomer: f.creating
-          ? { name: f.ncName.trim(), phone: formatPhone(f.ncPhone), personalId: ncPersonalId.trim(), idPhoto: await photoBody(idPhoto[0] ?? null), licencePhoto: await photoBody(licencePhoto[0] ?? null) }
+          ? { name: f.ncName.trim(), phone: formatPhone(f.ncPhone), personalId: ncPersonalId.trim(), source: f.ncSource || null, idPhoto: await photoBody(idPhoto[0] ?? null), licencePhoto: await photoBody(licencePhoto[0] ?? null) }
           : undefined,
         vehicleId: f.noVin ? null : f.vehicleId,
         vinNote: f.noVin ? f.vinNote.trim() : null,
@@ -447,10 +449,19 @@ export function PickupWizard() {
               <Field label={t.hand.personalId} hint={t.hand.personalIdHint} name="personalId">
                 <input className="input mono" inputMode="numeric" value={ncPersonalId} onChange={(e) => setNcPersonalId(e.target.value)} />
               </Field>
+              <Field label={t.customerW4.source} name="source">
+                <div className="chips">
+                  {CUSTOMER_SOURCES.map((s) => (
+                    <button key={s} type="button" className={`pill pill-sm ${f.ncSource === s ? 'on' : ''}`} onClick={() => set({ ncSource: f.ncSource === s ? '' : s })}>
+                      {t.customerW4.sources[s]}
+                    </button>
+                  ))}
+                </div>
+              </Field>
               <p className="hint muted">{t.hand.docs}</p>
               <div className="two-col two-col-tight">
-                <PhotoPicker photos={idPhoto} onChange={(p) => setIdPhoto(p.slice(-1))} label={t.hand.idPhoto} />
-                <PhotoPicker photos={licencePhoto} onChange={(p) => setLicencePhoto(p.slice(-1))} label={t.hand.licencePhoto} />
+                <PhotoPicker photos={idPhoto} onChange={(p) => setIdPhoto(p.slice(-1))} label={t.hand.idPhoto} hint={t.hand.docsHint} />
+                <PhotoPicker photos={licencePhoto} onChange={(p) => setLicencePhoto(p.slice(-1))} label={t.hand.licencePhoto} hint={t.hand.docsHint} />
               </div>
               {idPhoto.length === 0 && (
                 <span className="hint warn-text" data-field="idPhoto">
@@ -555,6 +566,12 @@ export function PickupWizard() {
             <Stepper label={t.hand.batteries} value={f.batteries} onChange={(n) => set({ batteries: n })} />
             <Stepper label={t.hand.chargers} value={f.chargers} onChange={(n) => set({ chargers: n })} />
           </div>
+          {batteries.data && (
+            <p className={`hint ${batteries.data.showroom < f.batteries ? 'warn-text' : 'muted'}`}>
+              {t.bat.shortInPickup(batteries.data.showroom)} · {t.bat.afterPickup(batteries.data.showroom - f.batteries)}
+              {batteries.data.showroom < f.batteries ? ` · ${t.bat.tooFew}` : ''}
+            </p>
+          )}
           <Field label={t.hand.expectedReturn} hint={t.hand.expectedReturnHint} name="expectedReturnOn" error={f.expectedReturnOn && f.expectedReturnOn < f.pickedUpOn ? t.hand.notBeforePickup : null}>
             <input className="input mono" type="date" min={f.pickedUpOn} value={f.expectedReturnOn} onChange={(e) => set({ expectedReturnOn: e.target.value })} />
           </Field>
@@ -642,6 +659,7 @@ export function PickupWizard() {
                   <Field label={t.hand.paid} hint={t.hand.partialHint} name="amountTetri">
                     <input className="input input-amount mono" value={f.amount || gel(dueTetri)} onChange={(e) => set({ amount: e.target.value })} inputMode="decimal" />
                   </Field>
+                  {amountTetri != null && amountTetri > dueTetri && <p className="hint">{t.hand.overpay(formatGel(amountTetri - dueTetri))}</p>}
                   {amountTetri != null && amountTetri > 0 && amountTetri < dueTetri && (
                     <p className="hint">{t.hand.closes(formatGel(closesDeposit), formatGel(depositDue), formatGel(closesWeeks), formatGel(weeksDue))}</p>
                   )}

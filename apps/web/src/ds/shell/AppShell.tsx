@@ -15,7 +15,7 @@ import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-do
 import { api } from '../../api.js';
 import { Drawer } from '../../components/Drawer.js';
 import { LanguageToggle, LOCALES, useLocale, useT, type Locale } from '../../i18n/index.js';
-import { dayTaskCount, dayTasks, type DayTaskSource } from '../../lib/tasks.js';
+
 import { useLoad } from '../../lib/use.js';
 import { useSession } from '../../session.js';
 import { SearchOverlay } from '../search/SearchOverlay.js';
@@ -62,10 +62,11 @@ function Frame() {
   const current = sectionOfPath(pathname, permissions);
   const label = (id: SectionId) => t.nav[id];
 
-  // The badge reads the same cached summary "Today" reads: one request, and
-  // it moves the moment a write marks the summary stale.
-  const summary = useLoad<DayTaskSource>(me ? '/api/summary' : null);
-  const badge = summary.data ? dayTaskCount(dayTasks(summary.data, t, can)) : 0;
+  // The badge counts the rows "Today" lists, from the same request it reads
+  // (wave 4 §3.1): one queue, one number, and it moves as soon as a write
+  // marks that request stale.
+  const queue = useLoad<{ count: number }>(me ? '/api/today' : null);
+  const badge = queue.data?.count ?? 0;
 
   useEffect(() => {
     setSheet(null);

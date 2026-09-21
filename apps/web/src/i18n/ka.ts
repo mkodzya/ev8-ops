@@ -1,4 +1,5 @@
 import { wave3Ka } from './wave3.js';
+import { wave4Ka } from './wave4.js';
 import type { Dict } from './en.js';
 
 // Typed as Dict: a missing or misspelled key fails the build.
@@ -76,6 +77,7 @@ export const ka: Dict = {
       vehicles: 'მოპედები',
       models: 'მოდელები',
       points: 'წერტილები',
+      batteries: 'ბატარეები',
       jobs: 'რემონტები',
       stock: 'საწყობი',
       payments: 'გადახდები',
@@ -205,30 +207,6 @@ export const ka: Dict = {
     disputed: 'სადავო',
   },
 
-  today: {
-    title: 'დღეს',
-    fleet: 'პარკი მდგომარეობის მიხედვით',
-    activeRentals: 'აქტიური ქირაობა',
-    overdue: 'ვადაგადაცილება',
-    salesOverdue: 'გრაფიკიდან ჩამორჩენა',
-    openService: 'ღია შეკეთებები',
-    unmatched: 'დაუკავშირებელი ჩანაწერები',
-    withoutVin: 'დაუდასტურებელი VIN-ით',
-    customers: 'კლიენტები',
-    pickedUp: 'დღეს გაცემული',
-    dueBack: 'დღეს დასაბრუნებელი',
-    overdueList: 'ვადაგადაცილებული, ღრმა ზემოთ',
-    daysOverdue: (n: number) => `გადაცილება ${n} დღე`,
-    remind: 'შეხსენება',
-    markPaid: 'გადახდის აღრიცხვა',
-    goOpen: 'გახსნა',
-    goReturn: 'დაბრუნების გაფორმება',
-    goSort: 'დახარისხება',
-    clear: 'არაფერი არ ელოდება.',
-    clearNote: 'დღეს არც დაბრუნება, არც გაცემა, ვადაგადაცილებული არ არის, ბანკის დაუხარისხებელი სტრიქონიც არა.',
-    depositsHeld: 'დეპოზიტები ხელზე',
-    empty: 'მონაცემები ჯერ არ არის. გაუშვით იმპორტი Odoo-დან (tools/migrate_stage1.py), რომ შეივსოს პარკი, კლიენტები და ქირაობა.',
-  },
 
   fleet: {
     vehicleAdded: 'მოპედი დაემატა',
@@ -245,16 +223,12 @@ export const ka: Dict = {
     where: 'სად',
     pool: 'პარკი',
     quiet: 'სიჩუმე',
-    noPoint: 'წერტილის გარეშე',
     addTip: 'შესყიდვიდან მოსული მოპედები პარკში თავად გამოჩნდებიან, როცა პარტია მიიღება — თარიღით და თვითღირებულებით. აქ — მხოლოდ ის, რაც შესყიდვის გარეშე მოვიდა.',
     addTipLink: 'შესყიდვების გახსნა',
     rowActions: 'მოქმედებები',
     quietDays: (n: number) => `${n} დღე`,
     searchHint: 'VIN-ის ბოლო 4 სიმბოლო',
-    searchShort: 'VIN-ის ბოლო 4',
     empty: 'პარკი ცარიელია.',
-    nothingFound: 'ვერაფერი მოიძებნა.',
-    showAll: (n: number) => `ყველას ჩვენება (${n})`,
     count: (n: number) => `${n} მოპედი`,
   },
 
@@ -280,7 +254,6 @@ export const ka: Dict = {
     returnRental: 'დაბრუნება',
     newCustomer: 'ახალი კლიენტი',
     changeState: 'მდგომარეობის შეცვლა',
-    assignVehicle: 'მოპედის მიბმა',
     back: 'უკან',
     next: 'შემდეგი',
     confirm: 'დადასტურება',
@@ -333,8 +306,6 @@ export const ka: Dict = {
     payStatus: { unpaid: 'გადაუხდელი', partial: 'ნაწილობრივ', paid: 'გადახდილი' },
     acts: 'აქტები',
     actKind: { pickup: 'გაცემის აქტი', return: 'დაბრუნების აქტი' },
-    depositStatus: { held: 'ხელზე', returned: 'დაბრუნებული', withheld: 'დაკავებული', partial: 'ნაწილობრივ დაკავებული' },
-    withheldReason: 'დაკავების მიზეზი',
     returnedTo: 'ვის დაუბრუნდა',
     buyout: 'გამოსყიდვა',
     buyoutProgress: (target: string, per: string) => `თითო გადახდიდან ${per} ${target}-ის ანგარიშში`,
@@ -404,7 +375,6 @@ export const ka: Dict = {
 
   handover: {
     nightParking: 'ღამის პარკირების მისამართი',
-    nightParkingHint: 'ხელშეკრულებით მოპედი ღამით მხოლოდ ამ მისამართზე ჩერდება.',
     batteries: 'გადაცემული ბატარეა',
     chargers: 'გადაცემული დამტენი',
   },
@@ -1199,6 +1169,8 @@ export const ka: Dict = {
       documents_restricted: 'კლიენტის დოკუმენტებს ხედავენ მხოლოდ მფლობელები.',
       down_payment_too_big: 'პირველი შენატანი აღემატება ფასს.',
       duplicate_customer: 'ამ პირადი ნომრით ან ტელეფონით კლიენტი უკვე არსებობს.',
+      duplicate_phone: 'ეს ნომერი უკვე სხვა ბარათზეა.',
+      sold_by_sale: 'მოპედი იყიდება გაყიდვით და ბრუნდება უკან გამოსყიდვით.',
       duplicate_email: 'ამ ელფოსტით უკვე ვიღაც შედის.',
       duplicate_location: 'ამ დასახელებით წერტილი უკვე არსებობს.',
       duplicate_model: 'ეს მოდელი უკვე არსებობს.',
@@ -1277,4 +1249,5 @@ export const ka: Dict = {
     },
   },
   ...wave3Ka,
+  ...wave4Ka,
 };

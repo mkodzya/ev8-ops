@@ -162,7 +162,11 @@ describe.skipIf(!HAS_DB)('fleet by hand', () => {
   it('a manual move needs a reason, never targets rented, and is refused while a moped is out', async () => {
     const { vehicle, customer } = await fixtures();
     const otherOwner = await loginAs('owner');
-    expect((await call(await loginAs('manager'), 'POST', `/api/fleet/${vehicle.id}/state`, { toState: 'service', reason: 'x' })).statusCode).toBe(403);
+    // A manager moves a moped between free and service (wave 4 §3.6); writing
+    // one off stays an owner's.
+    const managerMove = await call(await loginAs('manager'), 'POST', `/api/fleet/${vehicle.id}/state`, { toState: 'service', reason: 'ТЕСТ: не заводится' });
+    expect(managerMove.statusCode, managerMove.body).toBe(200);
+    await call(otherOwner, 'POST', `/api/fleet/${vehicle.id}/state`, { toState: 'available', reason: 'back' });
     expect((await call(otherOwner, 'POST', `/api/fleet/${vehicle.id}/state`, { toState: 'service' })).statusCode).toBe(400);
     expect((await call(otherOwner, 'POST', `/api/fleet/${vehicle.id}/state`, { toState: 'rented', reason: 'x' })).statusCode).toBe(409);
     const ok = await call(otherOwner, 'POST', `/api/fleet/${vehicle.id}/state`, { toState: 'service', reason: 'flat tyre' });
@@ -178,7 +182,7 @@ describe.skipIf(!HAS_DB)('fleet by hand', () => {
 
     const card = json<{ events: { kind: string; toState: string; reason: string | null }[] }>(await call(otherOwner, 'GET', `/api/fleet/${vehicle.id}`));
     // A park move repeats the state it found, because it changes no state.
-    expect(card.events.map((e) => `${e.kind}:${e.toState}`)).toEqual(['manual:service', 'manual:available', 'to_rent:available', 'pickup:rented']);
+    expect(card.events.map((e) => `${e.kind}:${e.toState}`)).toEqual(['manual:service', 'manual:available', 'manual:service', 'manual:available', 'to_rent:available', 'pickup:rented']);
   });
 });
 

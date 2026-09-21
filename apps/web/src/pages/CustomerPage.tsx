@@ -1,4 +1,4 @@
-import type { CustomerKind, DepositStatus, RentalStatus } from '@ev8/shared';
+import { CUSTOMER_SOURCES, type CustomerKind, type DepositStatus, type RentalStatus } from '@ev8/shared';
 import { useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { preparePhoto, uploadFile } from '../lib/photos.js';
@@ -6,6 +6,10 @@ import { useOperation } from '../ds/form/operation.js';
 import { useMoneyForm } from '../ds/money/MoneyForm.js';
 import { useToast } from '../ds/feedback/Toast.js';
 import '../ds/form/form.css';
+import { api, ApiError } from '../api.js';
+import { FormSheet } from '../ds/form/Form.js';
+import { Field } from '../components/Wizard.js';
+import { WhatsappSheet } from '../components/Whatsapp.js';
 import { LoadError } from '../components/LoadError.js';
 import { BlockHead, Empty, Loading, PageHead, RentalBadge, Vin } from '../components/ui.js';
 import { Row } from '../components/Wizard.js';
@@ -17,8 +21,10 @@ import { fmtDate as fmtDay } from '../format.js';
 import { useSession } from '../session.js';
 
 interface Card {
-  customer: { id: string; name: string; nameKa: string | null; nameLat: string | null; personalId: string | null; phone: string | null; email: string | null; address: string | null; kind: CustomerKind; tags: string[]; notes: string | null };
+  customer: { id: string; name: string; nameKa: string | null; nameLat: string | null; personalId: string | null; phone: string | null; email: string | null; address: string | null; kind: CustomerKind; tags: string[]; notes: string | null; source: string | null };
   documents: { id: string; docKind: 'id_card' | 'driver_licence' | 'other'; label: string; sizeBytes: number; mimeType: string; createdAt: string }[];
+  sales: { id: string; number: string; status: string; soldOn: string | null; priceTetri: number; instalments: number; instalmentsPaid: number }[];
+  feed: { at: string; kind: 'payment' | 'document' | 'log'; text: string; number: string | null; amountTetri: number | null; by: string | null; note: string | null }[];
   canOpenDocuments: boolean;
   rentals: { id: string; number: string; status: RentalStatus; vehicle: { id: string; vin: string } | null; vinUnconfirmed: boolean; pickedUpOn: string | null; returnedOn: string | null; paidThrough: string | null; weeklyRateTetri: number; deposit: { amountTetri: number; status: DepositStatus } | null }[];
 }
@@ -43,6 +49,9 @@ export function CustomerPage() {
   const upload = useOperation();
   const toast = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
+  const [editing, setEditing] = useState(false);
+  const [wa, setWa] = useState(false);
+  const [feedFilter, setFeedFilter] = useState<'all' | 'payment' | 'document' | 'log'>('all');
   if (failure) return <LoadError failure={failure} onRetry={reload} />;
   if (!data) return <Loading />;
   const c = data.customer;
@@ -66,11 +75,20 @@ export function CustomerPage() {
     <>
       <PageHead wrap title={primaryName(c, locale)} sub={secondName(c, locale)}>
         {c.phone && (
-          // The number the company actually reaches people on. A link, not an
-          // integration: WhatsApp templates are MSG-01 and wait on a Meta token.
-          <a className="pill pill-sm" href={`https://wa.me/${c.phone.replace(/\D/g, '')}`} target="_blank" rel="noreferrer">
-            {t.customer.whatsapp}
+          <a className="pill pill-sm" href={`tel:${c.phone}`}>
+            {t.today.call}
           </a>
+        )}
+        {c.phone && (
+          // The ready text in the customer's language (wave 4 §3.2, В6).
+          <button type="button" className="pill pill-sm" onClick={() => setWa(true)}>
+            {t.customer.whatsapp}
+          </button>
+        )}
+        {can('customer.create') && (
+          <button type="button" className="pill pill-sm" onClick={() => setEditing(true)}>
+            {t.customerW4.edit}
+          </button>
         )}
         {can('rental.create') && (
           <Link className="pill pill-sm pill-accent" to={`/rentals/new?customer=${c.id}`}>
@@ -113,6 +131,7 @@ export function CustomerPage() {
           <Row k={t.customer.email} v={c.email ?? t.common.dash} />
           <Row k={t.customer.address} v={c.address ?? t.common.dash} />
           <Row k={t.customer.kind} v={t.customer.kinds[c.kind]} />
+          <Row k={t.customerW4.source} v={c.source ? t.customerW4.sources[c.source] ?? c.source : t.common.dash} />
           <Row k={t.customers.tags} v={c.tags.length ? c.tags.map((x) => <span key={x} className="chip">{x}</span>) : t.common.dash} />
           {c.notes && <Row k={t.customer.notes} v={<span className="pre">{c.notes}</span>} />}
         </section>
@@ -182,7 +201,116 @@ export function CustomerPage() {
           )}
         </section>
       </div>
+
+      {/* One timeline with a filter (B7-04, ux №7): money, documents, changes. */}
+      <section className="card">
+        <div className="queue-head">
+          <h2>{t.customerW4.feed}</h2>
+          <div className="chips">
+            {(['all', 'payment', 'document', 'log'] as const).map((f) => (
+              <button key={f} type="button" className={`pill pill-sm ${feedFilter === f ? 'on' : ''}`} onClick={() => setFeedFilter(f)}>
+                {t.customerW4.feedFilters[f]}
+              </button>
+            ))}
+          </div>
+        </div>
+        {data.feed.filter((e) => feedFilter === 'all' || e.kind === feedFilter).length === 0 ? (
+          <Empty text={t.common.dash} />
+        ) : (
+          <ul className="timeline">
+            {data.feed
+              .filter((e) => feedFilter === 'all' || e.kind === feedFilter)
+              .slice(0, 50)
+              .map((e, i) => (
+                <li key={`${e.at}-${i}`}>
+                  <span className="mono muted">{fmtDate(e.at)}</span>
+                  <span>
+                    {e.kind === 'payment' && (
+                      <>
+                        <span className="mono">{formatGel(e.amountTetri ?? 0)}</span> <span className="muted">{t.payments.channels[e.text as 'cash'] ?? e.text}</span>
+                        {e.number && <span className="muted"> · {e.number}</span>}
+                      </>
+                    )}
+                    {e.kind === 'document' && <span>{t.documents.kinds[e.text as 'id_card'] ?? e.text}</span>}
+                    {e.kind === 'log' && <span>{t.feedWords[e.text] ?? e.text}{e.note ? <span className="muted"> · {e.note}</span> : null}</span>}
+                    {e.by && <span className="muted"> · {e.by}</span>}
+                  </span>
+                </li>
+              ))}
+          </ul>
+        )}
+      </section>
+
+      {editing && <CustomerEdit customer={c} onClose={() => setEditing(false)} onSaved={() => { setEditing(false); reload(); }} />}
+      {wa && c.phone && (
+        <WhatsappSheet
+          target={{ rentalId: data.rentals.find((r) => r.status !== 'returned')?.id ?? null, number: data.rentals[0]?.number ?? '', name: c.name, phone: c.phone, paidThrough: data.rentals[0]?.paidThrough ?? null, debtTetri: balance.data?.owesTetri ?? 0 }}
+          onClose={() => setWa(false)}
+        />
+      )}
     </>
+  );
+}
+
+/** "⋯ → Изменить" (§3.5): a manager edits the contacts, a duplicate number is caught (crit. 21). */
+function CustomerEdit({ customer, onClose, onSaved }: { customer: Card['customer']; onClose: () => void; onSaved: () => void }) {
+  const t = useT();
+  const { can } = useSession();
+  const initial = { name: customer.name, nameKa: customer.nameKa ?? '', nameLat: customer.nameLat ?? '', phone: customer.phone ?? '', source: customer.source ?? '' };
+  const [f, setF] = useState(initial);
+  const [twin, setTwin] = useState<{ id: string; name: string } | null>(null);
+  return (
+    <FormSheet
+      title={t.customerW4.editTitle(customer.name)}
+      onClose={onClose}
+      value={f}
+      initial={initial}
+      onRestore={setF}
+      label={t.actions.save}
+      fieldOf={{ duplicate_phone: 'phone' }}
+      submit={async (key) => {
+        setTwin(null);
+        try {
+          await api.patch(`/api/customers/${customer.id}`, { name: f.name.trim(), nameKa: f.nameKa || null, nameLat: f.nameLat || null, phone: f.phone || null, source: f.source || null }, { key });
+        } catch (e) {
+          if (e instanceof ApiError && e.code === 'duplicate_phone') setTwin(e.extra.existing as { id: string; name: string });
+          throw e;
+        }
+        return { toast: { text: t.form.changesSaved } };
+      }}
+      onDone={onSaved}
+    >
+      <Field label={t.customer.phone} name="phone">
+        <input className="input mono" inputMode="tel" value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} />
+      </Field>
+      {twin && (
+        <p className="warn-text">
+          {t.customerW4.phoneTaken(twin.name)}{' '}
+          <Link className="pill pill-sm" to={`/customers/${twin.id}`} onClick={onClose}>
+            {t.hand.openExisting}
+          </Link>
+        </p>
+      )}
+      <Field label={t.customer.name} name="name">
+        <input className="input" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />
+      </Field>
+      <Field label={t.customer.nameKa} name="nameKa">
+        <input className="input" value={f.nameKa} onChange={(e) => setF({ ...f, nameKa: e.target.value })} />
+      </Field>
+      <Field label={t.customer.nameLat} name="nameLat">
+        <input className="input" value={f.nameLat} onChange={(e) => setF({ ...f, nameLat: e.target.value })} />
+      </Field>
+      <Field label={t.customerW4.source} name="source">
+        <div className="chips">
+          {CUSTOMER_SOURCES.map((s) => (
+            <button key={s} type="button" className={`pill pill-sm ${f.source === s ? 'on' : ''}`} onClick={() => setF({ ...f, source: f.source === s ? '' : s })}>
+              {t.customerW4.sources[s]}
+            </button>
+          ))}
+        </div>
+      </Field>
+      {!can('customer.documents.view') && <p className="hint muted">{t.customer.personalId}: {t.common.dash}</p>}
+    </FormSheet>
   );
 }
 

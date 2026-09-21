@@ -24,8 +24,8 @@ describe('the structure each role sees (wave 1 §3.2)', () => {
   });
 
   it('shows the points tab and statements only to the owner', () => {
-    expect(tabsForRole('fleet', 'owner').map((t) => t.id)).toEqual(['vehicles', 'models', 'points']);
-    expect(tabsForRole('fleet', 'manager').map((t) => t.id)).toEqual(['vehicles', 'models']);
+    expect(tabsForRole('fleet', 'owner').map((t) => t.id)).toEqual(['vehicles', 'models', 'points', 'batteries']);
+    expect(tabsForRole('fleet', 'manager').map((t) => t.id)).toEqual(['vehicles', 'models', 'batteries']);
     expect(tabsForRole('money', 'owner').map((t) => t.id)).toEqual(['sort', 'payments', 'till', 'statements', 'deposits']);
     expect(tabsForRole('cash', 'manager').map((t) => t.id)).toEqual(['till', 'mine']);
   });

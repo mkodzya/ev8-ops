@@ -10,6 +10,10 @@ export const ROLES = ['owner', 'manager'] as const;
 export type Role = (typeof ROLES)[number];
 
 /** Vehicle state, derived from events (spec FLT-03); brand.md fixes colour + label per state. */
+/** Where a customer came from (`customer-journey.md`, wave 4 §3.5). */
+export const CUSTOMER_SOURCES = ['myauto', 'friends', 'social', 'site', 'other'] as const;
+export type CustomerSource = (typeof CUSTOMER_SOURCES)[number];
+
 export const VEHICLE_STATES = ['available', 'rented', 'service', 'out', 'sold'] as const;
 export type VehicleState = (typeof VEHICLE_STATES)[number];
 

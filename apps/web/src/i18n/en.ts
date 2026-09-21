@@ -8,6 +8,7 @@
 //
 // Money keeps ONE format in every language (formatGel in @ev8/shared).
 import { wave3En } from './wave3.js';
+import { wave4En } from './wave4.js';
 export const en = {
   lang: { label: 'Language', ka: 'ქართული', ru: 'Русский', en: 'English' },
 
@@ -83,6 +84,7 @@ export const en = {
       vehicles: 'Mopeds',
       models: 'Models',
       points: 'Points',
+      batteries: 'Batteries',
       jobs: 'Repairs',
       stock: 'Stock',
       payments: 'Payments',
@@ -213,30 +215,6 @@ export const en = {
     disputed: 'Disputed',
   },
 
-  today: {
-    title: 'Today',
-    fleet: 'Fleet by state',
-    activeRentals: 'Active rentals',
-    overdue: 'Overdue',
-    salesOverdue: 'Behind on instalments',
-    openService: 'Open repairs',
-    unmatched: 'Unmatched bank lines',
-    withoutVin: 'Without a confirmed VIN',
-    customers: 'Customers',
-    pickedUp: 'Handed over today',
-    dueBack: 'Due back today',
-    overdueList: 'Overdue, deepest first',
-    daysOverdue: (n: number) => `${n} ${n === 1 ? 'day' : 'days'} late`,
-    remind: 'Remind',
-    markPaid: 'Record a payment',
-    goOpen: 'Open',
-    goReturn: 'Take back',
-    goSort: 'Sort out',
-    clear: 'Nothing is waiting.',
-    clearNote: 'No returns or hand-overs today, nothing overdue, no bank line unsorted.',
-    depositsHeld: 'Deposits held',
-    empty: 'No data yet. Run the Odoo import (tools/migrate_stage1.py) to fill the fleet, customers and rentals.',
-  },
 
   fleet: {
     vehicleAdded: 'Moped added',
@@ -253,16 +231,12 @@ export const en = {
     where: 'Where',
     pool: 'Park',
     quiet: 'Silence',
-    noPoint: 'No point',
     addTip: 'Mopeds from a purchase appear in the fleet on their own once the shipment is received, with the date and the landed cost. Only what came some other way belongs here.',
     addTipLink: 'Open purchases',
     rowActions: 'Actions',
     quietDays: (n: number) => `${n} day${n === 1 ? '' : 's'}`,
     searchHint: 'Last 4 of VIN',
-    searchShort: 'Last 4 of VIN',
     empty: 'The fleet is empty.',
-    nothingFound: 'Nothing matches.',
-    showAll: (n: number) => `Show all ${n}`,
     count: (n: number) => `${n} moped${n === 1 ? '' : 's'}`,
   },
 
@@ -288,7 +262,6 @@ export const en = {
     returnRental: 'Return',
     newCustomer: 'New customer',
     changeState: 'Change state',
-    assignVehicle: 'Assign a moped',
     back: 'Back',
     next: 'Next',
     confirm: 'Confirm',
@@ -341,8 +314,6 @@ export const en = {
     payStatus: { unpaid: 'Unpaid', partial: 'Partial', paid: 'Paid' },
     acts: 'Acts',
     actKind: { pickup: 'Hand-over act', return: 'Return act' },
-    depositStatus: { held: 'Held', returned: 'Returned', withheld: 'Withheld', partial: 'Partly withheld' },
-    withheldReason: 'Reason withheld',
     returnedTo: 'Returned to',
     buyout: 'Buy-out',
     buyoutProgress: (target: string, per: string) => `${per} of each payment towards ${target}`,
@@ -412,7 +383,6 @@ export const en = {
 
   handover: {
     nightParking: 'Night parking address',
-    nightParkingHint: 'The contract allows the moped to spend the night at this address only.',
     batteries: 'Batteries handed over',
     chargers: 'Chargers handed over',
   },
@@ -1207,6 +1177,8 @@ export const en = {
       documents_restricted: 'Customer documents are for the owners only.',
       down_payment_too_big: 'The down payment is more than the price.',
       duplicate_customer: 'A customer with this personal number or phone already exists.',
+      duplicate_phone: 'This number is already on another card.',
+      sold_by_sale: 'A moped is sold by a sale, and comes back by a buy-back.',
       duplicate_email: 'Somebody already signs in with this email.',
       duplicate_location: 'A point with this name already exists.',
       duplicate_model: 'This model already exists.',
@@ -1285,6 +1257,7 @@ export const en = {
     },
   },
   ...wave3En,
+  ...wave4En,
 };
 
 export type Dict = typeof en;

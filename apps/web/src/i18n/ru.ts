@@ -1,4 +1,5 @@
 import { wave3Ru } from './wave3.js';
+import { wave4Ru } from './wave4.js';
 import type { Dict } from './en.js';
 
 // Typed as Dict: a missing or misspelled key fails the build.
@@ -87,6 +88,7 @@ export const ru: Dict = {
       vehicles: 'Мопеды',
       models: 'Модели',
       points: 'Точки',
+      batteries: 'Батареи',
       jobs: 'Ремонты',
       stock: 'Склад',
       payments: 'Платежи',
@@ -216,30 +218,6 @@ export const ru: Dict = {
     disputed: 'Спорная',
   },
 
-  today: {
-    title: 'Сегодня',
-    fleet: 'Парк по состояниям',
-    activeRentals: 'Активные аренды',
-    overdue: 'Просрочки',
-    salesOverdue: 'Просрочка по рассрочке',
-    openService: 'Открытые ремонты',
-    unmatched: 'Неразобранные строки',
-    withoutVin: 'Без подтверждённого VIN',
-    customers: 'Клиенты',
-    pickedUp: 'Выдачи сегодня',
-    dueBack: 'Возвраты сегодня',
-    overdueList: 'Просрочки, глубокие сверху',
-    daysOverdue: (n: number) => `${n} ${days(n)} просрочки`,
-    remind: 'Напомнить',
-    markPaid: 'Отметить оплату',
-    goOpen: 'Открыть',
-    goReturn: 'Оформить возврат',
-    goSort: 'Разобрать',
-    clear: 'Ничего не ждёт.',
-    clearNote: 'Ни возвратов, ни выдач сегодня, просрочек нет, неразобранных строк банка нет.',
-    depositsHeld: 'Залоги на руках',
-    empty: 'Данных пока нет. Запустите импорт из Odoo (tools/migrate_stage1.py), чтобы заполнить парк, клиентов и аренды.',
-  },
 
   fleet: {
     vehicleAdded: 'Мопед добавлен',
@@ -256,16 +234,12 @@ export const ru: Dict = {
     where: 'Где',
     pool: 'Парк',
     quiet: 'Тишина',
-    noPoint: 'Без точки',
     addTip: 'Мопеды из закупки сами появятся в парке, когда партия будет принята, — с датой и себестоимостью. Здесь — только то, что пришло не через закупку.',
     addTipLink: 'Открыть закупки',
     rowActions: 'Действия',
     quietDays: (n: number) => `${n} ${days(n)}`,
     searchHint: 'Последние 4 знака VIN',
-    searchShort: '4 знака VIN',
     empty: 'Парк пуст.',
-    nothingFound: 'Ничего не нашлось.',
-    showAll: (n: number) => `Показать все ${n}`,
     count: counted('мопед', 'мопеда', 'мопедов'),
   },
 
@@ -291,7 +265,6 @@ export const ru: Dict = {
     returnRental: 'Возврат',
     newCustomer: 'Новый клиент',
     changeState: 'Изменить состояние',
-    assignVehicle: 'Привязать мопед',
     back: 'Назад',
     next: 'Дальше',
     confirm: 'Подтвердить',
@@ -344,8 +317,6 @@ export const ru: Dict = {
     payStatus: { unpaid: 'Не оплачен', partial: 'Частично', paid: 'Оплачен' },
     acts: 'Акты',
     actKind: { pickup: 'Акт выдачи', return: 'Акт возврата' },
-    depositStatus: { held: 'На руках', returned: 'Возвращён', withheld: 'Удержан', partial: 'Удержан частично' },
-    withheldReason: 'Причина удержания',
     returnedTo: 'Кому возвращён',
     buyout: 'Выкуп',
     buyoutProgress: (target: string, per: string) => `${per} с каждого платежа в счёт ${target}`,
@@ -415,7 +386,6 @@ export const ru: Dict = {
 
   handover: {
     nightParking: 'Адрес ночной парковки',
-    nightParkingHint: 'По договору мопед ночует только по этому адресу.',
     batteries: 'Выдано батарей',
     chargers: 'Выдано зарядных',
   },
@@ -1210,6 +1180,8 @@ export const ru: Dict = {
       documents_restricted: 'Документы клиента видят только владельцы.',
       down_payment_too_big: 'Первый взнос больше цены.',
       duplicate_customer: 'Клиент с таким личным номером или телефоном уже есть.',
+      duplicate_phone: 'Этот номер уже на другой карточке.',
+      sold_by_sale: 'Мопед продаётся продажей, а возвращается выкупом.',
       duplicate_email: 'С этой почтой уже кто-то входит.',
       duplicate_location: 'Точка с таким названием уже есть.',
       duplicate_model: 'Такая модель уже есть.',
@@ -1288,4 +1260,5 @@ export const ru: Dict = {
     },
   },
   ...wave3Ru,
+  ...wave4Ru,
 };
