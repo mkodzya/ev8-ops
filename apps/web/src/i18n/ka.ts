@@ -1,5 +1,8 @@
 import { wave3Ka } from './wave3.js';
 import { wave4Ka } from './wave4.js';
+import { wave5salesKa } from './wave5-sales.js';
+import { wave5purchasesKa } from './wave5-purchases.js';
+import { wave5serviceKa } from './wave5-service.js';
 import type { Dict } from './en.js';
 
 // Typed as Dict: a missing or misspelled key fails the build.
@@ -67,6 +70,7 @@ export const ka: Dict = {
       return: 'დაბრუნების მიღება',
       newCustomer: 'ახალი კლიენტი',
       openRepair: 'რემონტის გახსნა',
+      reportBreak: 'გაუმართაობის შეტყობინება',
       sell: 'მოპედის გაყიდვა',
     },
     tabs: {
@@ -1263,4 +1267,7 @@ export const ka: Dict = {
   },
   ...wave3Ka,
   ...wave4Ka,
+  ...wave5salesKa,
+  ...wave5purchasesKa,
+  ...wave5serviceKa,
 };

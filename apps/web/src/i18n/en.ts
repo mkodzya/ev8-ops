@@ -9,6 +9,9 @@
 // Money keeps ONE format in every language (formatGel in @ev8/shared).
 import { wave3En } from './wave3.js';
 import { wave4En } from './wave4.js';
+import { wave5salesEn } from './wave5-sales.js';
+import { wave5purchasesEn } from './wave5-purchases.js';
+import { wave5serviceEn } from './wave5-service.js';
 export const en = {
   lang: { label: 'Language', ka: 'ქართული', ru: 'Русский', en: 'English' },
 
@@ -74,6 +77,7 @@ export const en = {
       return: 'Take a moped back',
       newCustomer: 'New customer',
       openRepair: 'Open a repair',
+      reportBreak: 'Report a breakdown',
       sell: 'Sell a moped',
     },
     tabs: {
@@ -1271,6 +1275,9 @@ export const en = {
   },
   ...wave3En,
   ...wave4En,
+  ...wave5salesEn,
+  ...wave5purchasesEn,
+  ...wave5serviceEn,
 };
 
 export type Dict = typeof en;

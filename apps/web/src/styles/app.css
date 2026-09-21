@@ -1283,3 +1283,13 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
   .q-row { grid-template-columns: 1fr auto auto; }
   .q-acts { grid-column: auto; }
 }
+
+/* ---- wave 5: the repair and the shelf ----------------------------------- */
+/* The line a card ends on: the sum of everything named above it. */
+.kv-total { border-top: 1px solid var(--line); font-weight: 600; }
+/* A unit beside a count is a label, not part of the number. */
+.num-v .muted { font: var(--text-body-sm); }
+/* The dots belong to a row; in a page head they sit level with the buttons. */
+.page-head .row-dots { padding: 2px 10px; }
+/* A refusal beside «В заказ» must not stretch the column it stands in. */
+.list-table .field-err { max-width: 24ch; }

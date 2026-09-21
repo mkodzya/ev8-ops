@@ -243,7 +243,21 @@ export function dayQueue(input: QueueInput): TaskGroupRows[] {
 
   // Parts that have run low: one line, and the order it turns into (B8-05).
   if (input.owner && input.lowParts.count > 0) {
-    rows.push({ id: 'low-parts', group: 'service', action: 'order_parts', who: null, number: null, vin: null, days: null, amountTetri: null, href: '/service/stock?f=low', phone: null, note: input.lowParts.note });
+    // The note carries the count and then the worst offenders, so the screen
+    // can say "5 parts below their level · Controller: −1 · Pads: 4 of 10".
+    rows.push({
+      id: 'low-parts',
+      group: 'service',
+      action: 'order_parts',
+      who: null,
+      number: null,
+      vin: null,
+      days: null,
+      amountTetri: null,
+      href: '/service/stock?f=low',
+      phone: null,
+      note: `${input.lowParts.count}|${input.lowParts.note}`,
+    });
   }
 
   if (input.owner) {

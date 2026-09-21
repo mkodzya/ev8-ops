@@ -29,6 +29,7 @@ import { PurchasePage } from './pages/PurchasePage.js';
 import { PurchasesPage } from './pages/PurchasesPage.js';
 import { SalePage } from './pages/SalePage.js';
 import { SalesPage } from './pages/SalesPage.js';
+import { SaleWizard } from './pages/SaleWizard.js';
 import { ServiceJobPage } from './pages/ServiceJobPage.js';
 import { ServicePage } from './pages/ServicePage.js';
 import { StatementsPage } from './pages/money/StatementsPage.js';
@@ -140,6 +141,7 @@ export function App() {
         <Route path="money/deposits" element={<Require perm="payments.view"><DepositsPage /></Require>} />
 
         <Route path="sales" element={<SalesPage />} />
+        <Route path="sales/new" element={<Require perm="sales.manage"><SaleWizard /></Require>} />
         <Route path="sales/:id" element={<SalePage />} />
         <Route path="purchases" element={<Require perm="purchases.view"><PurchasesPage /></Require>} />
         <Route path="purchases/:id" element={<Require perm="purchases.view"><PurchasePage /></Require>} />
