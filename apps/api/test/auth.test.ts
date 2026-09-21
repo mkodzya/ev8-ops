@@ -113,14 +113,37 @@ describe.skipIf(!HAS_DB)('sign-in, the rules around it', () => {
     expect((await call(laptop, 'GET', '/api/me')).statusCode).toBe(401);
   });
 
-  it('the people screen says when each of them was last seen', async () => {
+  it('the people screen says when each of them last signed in, and on how many devices', async () => {
     const owner = await loginAs('owner');
     const u = await makeUser('manager');
     await login(u.email);
-    const rows = json<{ users: { id: string; sessions: number; lastSeenAt: string | null }[] }>(await call(owner, 'GET', '/api/users')).users;
+    const rows = json<{ users: { id: string; sessions: number; lastLoginAt: string | null }[] }>(await call(owner, 'GET', '/api/users')).users;
     const mine = rows.find((r) => r.id === u.id);
     expect(mine?.sessions).toBe(1);
-    expect(mine?.lastSeenAt).not.toBeNull();
+    expect(mine?.lastLoginAt).not.toBeNull();
+  });
+
+  // QA-W6-14. The column used to read the live sessions, so closing a session
+  // took the answer with it: somebody who signed in twice this morning was
+  // shown as "не входил".
+  it('remembers a sign-in after every session of that person is closed', async () => {
+    const owner = await loginAs('owner');
+    const u = await makeUser('manager');
+    await login(u.email);
+    await call(owner, 'POST', `/api/users/${u.id}/sessions/close`);
+
+    const rows = json<{ users: { id: string; sessions: number; lastLoginAt: string | null; lastSeenAt: string | null }[] }>(await call(owner, 'GET', '/api/users')).users;
+    const mine = rows.find((r) => r.id === u.id);
+    expect(mine?.sessions).toBe(0);
+    expect(mine?.lastSeenAt).toBeNull(); // nothing is open
+    expect(mine?.lastLoginAt).not.toBeNull(); // but the journal remembers
+  });
+
+  it('says nothing rather than "never" about somebody who has not signed in since the journal began', async () => {
+    const owner = await loginAs('owner');
+    const u = await makeUser('manager');
+    const rows = json<{ users: { id: string; lastLoginAt: string | null }[] }>(await call(owner, 'GET', '/api/users')).users;
+    expect(rows.find((r) => r.id === u.id)?.lastLoginAt).toBeNull();
   });
 });
 

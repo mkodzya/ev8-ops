@@ -31,6 +31,11 @@ describe('the schedule of a sale', () => {
     ];
     expect(scheduleGap(300000, rows)).toBe(-50000);
     expect(scheduleGap(200000, rows)).toBe(50000);
+    // QA-W6-13: four lari over the price after a last instalment was rounded
+    // by hand. Allowed, but the screens have to say it — the card and the
+    // sheet both read this rule.
+    expect(scheduleGap(518800, [{ amountTetri: 389400 }, { amountTetri: 140000 }])).toBe(10600);
+    expect(scheduleGap(518800, [{ amountTetri: 378800 }, { amountTetri: 140000 }])).toBe(0);
   });
 });
 

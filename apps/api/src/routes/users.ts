@@ -29,23 +29,41 @@ export function userRoutes(app: FastifyInstance): void {
   app.get('/api/users', { config: { scope: 'users.manage' } }, async () => {
     const users = await prisma.user.findMany({
       orderBy: [{ active: 'desc' }, { name: 'asc' }],
-      // When each of them was last seen, and on how many devices: the two
-      // numbers "Закрыть все входы" is decided by (§3.4).
+      // On how many devices this person is signed in right now: the number
+      // "Закрыть все входы" is decided by (§3.4).
       include: { sessions: { select: { lastSeenAt: true } } },
     });
+    // When each of them last signed in. Live sessions cannot answer this:
+    // closing a session takes its history with it, and the column then says
+    // "не входил" about somebody who signed in twice this morning
+    // (QA-W6-14). The journal remembers; where it does not — because the
+    // sign-in predates the journal — the answer is "нет данных", not "нет".
+    const logins = await prisma.auditLog.groupBy({
+      by: ['actorId'],
+      where: { action: 'auth.login', actorId: { in: users.map((u) => u.id) } },
+      _max: { createdAt: true },
+    });
+    const lastLogin = new Map(logins.map((r) => [r.actorId, r._max.createdAt]));
     return {
       roles: ROLES,
-      users: users.map((u) => ({
-        id: u.id,
-        name: u.name,
-        email: u.email,
-        role: u.role,
-        locale: u.locale,
-        active: u.active,
-        sessions: u.sessions.length,
-        lastSeenAt: u.sessions.reduce<Date | null>((last, s) => (!last || s.lastSeenAt > last ? s.lastSeenAt : last), null)?.toISOString() ?? null,
-        createdAt: u.createdAt.toISOString(),
-      })),
+      users: users.map((u) => {
+        const live = u.sessions.reduce<Date | null>((last, s) => (!last || s.lastSeenAt > last ? s.lastSeenAt : last), null);
+        const signedIn = lastLogin.get(u.id) ?? null;
+        return {
+          id: u.id,
+          name: u.name,
+          email: u.email,
+          role: u.role,
+          locale: u.locale,
+          active: u.active,
+          sessions: u.sessions.length,
+          /** The last sign-in the journal knows of; null means nothing is known. */
+          lastLoginAt: signedIn?.toISOString() ?? null,
+          /** The last request of a session still open, for "сейчас на N устройствах". */
+          lastSeenAt: live?.toISOString() ?? null,
+          createdAt: u.createdAt.toISOString(),
+        };
+      }),
     };
   });
 

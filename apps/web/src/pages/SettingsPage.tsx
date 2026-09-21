@@ -14,7 +14,7 @@ import { useSession } from '../session.js';
 import { LoadError } from '../components/LoadError.js';
 
 interface Users {
-  users: { id: string; name: string; email: string; role: Role; active: boolean; sessions: number; lastSeenAt: string | null; createdAt: string }[];
+  users: { id: string; name: string; email: string; role: Role; active: boolean; sessions: number; lastLoginAt: string | null; lastSeenAt: string | null; createdAt: string }[];
 }
 interface Points {
   locations: { id: string; name: string; kind: LocationKind; note: string | null; sortOrder: number; archived: boolean; vehicles: number }[];
@@ -192,8 +192,11 @@ function UserRow({ user: u, onRole, onDone }: { user: Users['users'][number]; on
         {/* When this person was last seen, and on how many devices: the two
             things "Закрыть все входы" is decided by. */}
         <div className="hint muted">
-          {u.lastSeenAt ? t.peopleW6.lastSeen(lastSeenWords(t, u.lastSeenAt)) : t.peopleW6.neverSeen}
-          {u.sessions > 0 && ` · ${t.peopleW6.devices(u.sessions)}`}
+          {/* When they last signed in, from the journal — a closed session
+              takes its own history with it (QA-W6-14). "Нет данных" where
+              the sign-in is older than the journal, never "не входил". */}
+          {u.lastLoginAt ? t.peopleW6.lastSeen(lastSeenWords(t, u.lastLoginAt)) : t.peopleW6.neverSeen}
+          {u.sessions > 0 && ` · ${t.peopleW6.signedInNow(u.sessions)}`}
         </div>
       </td>
       <td>

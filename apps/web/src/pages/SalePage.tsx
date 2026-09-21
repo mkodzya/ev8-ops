@@ -1,4 +1,4 @@
-import { parseGel, type ISODate } from '@ev8/shared';
+import { parseGel, scheduleGap, type ISODate } from '@ev8/shared';
 import { useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
@@ -50,6 +50,7 @@ export function SalePage() {
   if (failure) return <LoadError failure={failure} onRetry={reload} />;
   if (!data) return <Loading />;
   const s = data.sale;
+  const gap = scheduleGap(s.priceTetri, s.instalments);
   const live = s.status === 'active';
   const owner = can('deposit.decide');
   const doc = data.documents.find((d) => d.docKind === 'sale') ?? null;
@@ -141,6 +142,11 @@ export function SalePage() {
           <h2>{t.saleCard.schedule}</h2>
           <span className="muted">{s.instalments.length}</span>
         </div>
+        {/* A schedule that does not come to the price is allowed — somebody
+            may be rounding a last instalment on purpose — but it is never
+            allowed to be a surprise (crit. 4 of wave 5, QA-W6-13). The wizard
+            says so before the sale is made; the card says so ever after. */}
+        {gap !== 0 && <p className="warn-text">{gap > 0 ? t.sell.gapOver(formatGel(gap)) : t.sell.gapUnder(formatGel(-gap))}</p>}
         <div className="table-wrap table-flat">
           <table className="table">
             <thead>
@@ -227,6 +233,7 @@ export function SalePage() {
       {sheet === 'schedule' && (
         <ScheduleSheet
           id={s.id}
+          priceTetri={s.priceTetri}
           rows={s.instalments.map((i) => ({ dueOn: i.dueOn, amount: String(i.amountTetri / 100) }))}
           onClose={() => setSheet(null)}
           onDone={() => {
@@ -279,11 +286,21 @@ function CancelSheet({ id, onClose, onDone }: { id: string; onClose: () => void;
 }
 
 /** The dates moved, or the amounts did: an owner's change, with a reason (§3.2). */
-function ScheduleSheet({ id, rows, onClose, onDone }: { id: string; rows: { dueOn: ISODate; amount: string }[]; onClose: () => void; onDone: () => void }) {
+function ScheduleSheet({
+  id,
+  priceTetri,
+  rows,
+  onClose,
+  onDone,
+}: { id: string; priceTetri: number; rows: { dueOn: ISODate; amount: string }[]; onClose: () => void; onDone: () => void }) {
   const t = useT();
   const initial = { rows, reason: '' };
   const [f, setF] = useState(initial);
   const edit = (i: number, patch: Partial<{ dueOn: ISODate; amount: string }>) => setF({ ...f, rows: f.rows.map((r, k) => (k === i ? { ...r, ...patch } : r)) });
+  // The same line the wizard shows before a sale is made (crit. 4 of wave 5):
+  // a schedule may come to something other than the price, but not by
+  // accident (QA-W6-13).
+  const gap = scheduleGap(priceTetri, f.rows.map((r) => ({ amountTetri: parseGel(r.amount) ?? 0 })));
   return (
     <FormSheet
       title={t.saleCard.scheduleTitle}
@@ -304,6 +321,7 @@ function ScheduleSheet({ id, rows, onClose, onDone }: { id: string; rows: { dueO
           <input className="input input-amount mono" inputMode="decimal" aria-label={t.sell.amount} value={r.amount} onChange={(e) => edit(i, { amount: e.target.value })} />
         </div>
       ))}
+      {gap !== 0 && <p className="warn-text">{gap > 0 ? t.sell.gapOver(formatGel(gap)) : t.sell.gapUnder(formatGel(-gap))}</p>}
       <button type="button" className="pill pill-sm" onClick={() => setF({ ...f, rows: [...f.rows, { dueOn: f.rows[f.rows.length - 1]?.dueOn ?? '', amount: '' }] })}>
         {t.saleCard.addRow}
       </button>

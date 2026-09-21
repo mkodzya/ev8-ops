@@ -61,7 +61,10 @@ export function JournalPage() {
   const suffix = query.toString() ? `?${query}` : '';
   const journal = useLoad<{ rows: Line[] }>(`/api/journal${suffix}`);
 
-  const words = (l: Line) => t.journalPage.actions[l.action] ?? l.action;
+  // One dictionary for the feed on a card and for the journal, so the same
+  // event does not read two ways (QA-W6-09). `actions-guard` fails the build
+  // when the API writes an action nobody has words for.
+  const words = (l: Line) => t.feedWords[l.action] ?? l.action;
 
   return (
     <>
