@@ -20,17 +20,21 @@ describe('route table', () => {
     expect(ownerOnly.map((r) => `${r.method} ${r.url}`).sort()).toEqual([
       // Wave 5 moved the orders onto a purchases scope of their own; what is
       // left here is the settings and the people.
+      'DELETE /api/settings/rates/:id',
       'GET /api/users',
       'PATCH /api/fleet/:id',
       'PATCH /api/fleet/:id/vin',
       'PATCH /api/locations/:id',
       'PATCH /api/models/:id',
+      // Wave 6: the deposit and the weekly rates are an owner's to set (R5).
+      'PATCH /api/settings/rental',
       'PATCH /api/users/:id',
       'PATCH /api/workshops/:id',
       'POST /api/customers/:id/merge',
       'POST /api/fleet',
       'POST /api/locations',
       'POST /api/models',
+      'POST /api/settings/rates',
       'POST /api/users',
       'POST /api/users/:id/password',
       'POST /api/workshops',

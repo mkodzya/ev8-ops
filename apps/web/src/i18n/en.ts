@@ -476,6 +476,7 @@ export const en = {
     addVehicle: 'Add a moped',
     points: 'Points',
     addPoint: 'Add a point',
+    rental: 'Rental',
   },
 
   pools: {
@@ -510,7 +511,20 @@ export const en = {
     rentedNote: 'This moped is out on rent. Moving it to the sale park is allowed — that is what a renter buying it looks like.',
   },
 
+  rentalSettings: {
+    hint: 'The model’s own rate still goes in first; these are the buttons beside it.',
+    rates: 'Weekly rates',
+    ratesHint: 'Buttons in the hand-over. A rate taken off is archived: the rentals carrying it keep it.',
+    addRate: 'add',
+    removeRate: 'Take the rate off',
+    deposit: 'Deposit by default',
+    depositHint: 'Proposed at hand-over; it can be changed there.',
+    depositSaved: (sum: string) => `Deposit by default — ${sum}`,
+  },
   points: {
+    kind: 'Kind',
+    kindHint: 'Nothing behaves differently by kind yet — it is here so the swap network needs no rebuild.',
+    kinds: { showroom: 'Showroom', store: 'Store', workshop: 'Workshop', swap: 'Swap station' } as Record<string, string>,
     restored: (name: string) => `«${name}» back in the list`,
     archived: (name: string) => `«${name}» removed from the list`,
     created: (name: string) => `Point «${name}» added`,
@@ -1160,6 +1174,8 @@ export const en = {
       vehicle_rented: 'The moped is with a customer. It gets a point back on return.',
       vehicle_rented_sale: 'The moped is out on rent. It cannot be sold until it comes back.',
       customer_archived: 'This card was merged into another one. Work on the card it went into.',
+      duplicate_rate: 'That rate is already one of the buttons.',
+      rate_not_found: 'No such rate — it may have been taken off already.',
       vehicle_rented_move: 'The moped is with a customer. Close the rental first.',
       vin_or_note: 'Pick a moped from the fleet, or write why the VIN is not confirmed.',
       vins_count: 'The number of VINs in a line does not match the quantity ordered. Check each line.',
