@@ -154,6 +154,7 @@ export function customerRoutes(app: FastifyInstance): void {
         address: c.address,
         notes: c.notes,
         source: c.source,
+        kommoRef: c.kommoRef,
         // A card merged away is in the archive, and an archive that looks
         // like a live card is not one: the screen needs to know (crit. 33,
         // QA-W5-03).

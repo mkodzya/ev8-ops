@@ -36,10 +36,32 @@ const input = (over: Partial<QueueInput> = {}): QueueInput => ({
   purchases: [],
   vehiclesWithoutPool: 0,
   vehiclesWithoutPoint: 0,
+  odooDeposits: { count: 0, amountTetri: 0 },
   ...over,
 });
 
 const group = (g: ReturnType<typeof dayQueue>, name: string) => g.find((x) => x.group === name);
+
+// Wave 6 §3.7 — the answer to the tester's question of wave 3.
+describe('deposits the transfer brought over', () => {
+  it('stand in one row with their count and their money, not one row each (crit. 26)', () => {
+    const q = dayQueue(input({ odooDeposits: { count: 23, amountTetri: 409000 } }));
+    const decide = group(q, 'decide')!;
+    expect(decide.rows).toHaveLength(1);
+    expect(decide.rows[0]).toMatchObject({ action: 'sort_odoo_deposits', days: 23, amountTetri: 409000, href: '/settings/migration' });
+  });
+
+  it('leave the queue entirely once they are sorted', () => {
+    expect(group(dayQueue(input({ odooDeposits: { count: 0, amountTetri: 0 } })), 'decide')).toBeUndefined();
+  });
+
+  it('stand before the deposits this week\'s own returns left, and a manager sees neither', () => {
+    const left = rental({ depositUndecided: true });
+    const q = dayQueue(input({ rentals: [left], odooDeposits: { count: 23, amountTetri: 409000 } }));
+    expect(group(q, 'decide')!.rows.map((r) => r.action)).toEqual(['sort_odoo_deposits', 'decide_deposit']);
+    expect(group(dayQueue(input({ owner: false, odooDeposits: { count: 23, amountTetri: 409000 } })), 'decide')).toBeUndefined();
+  });
+});
 
 describe('the queue of “Today”', () => {
   it('puts an overdue rental in its group with the days and the debt, longest first (crit. 1)', () => {

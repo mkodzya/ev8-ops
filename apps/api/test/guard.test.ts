@@ -24,6 +24,8 @@ describe('route table', () => {
       // Wave 6: the journal and its export are an owner's (§3.8).
       'GET /api/journal',
       'GET /api/journal.csv',
+      // Wave 6: what the transfer left, and the batch that sorts it (§3.6).
+      'GET /api/migration',
       'GET /api/users',
       'PATCH /api/fleet/:id',
       'PATCH /api/fleet/:id/vin',
