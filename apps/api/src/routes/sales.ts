@@ -1,7 +1,7 @@
 import { applyPaidBefore, instalmentSchedule, saleState, todayISO, warrantyUntil as warrantyFrom } from '@ev8/shared';
 import type { FastifyInstance } from 'fastify';
 import { audit } from '../lib/audit.js';
-import { dateFromISO, isoDate } from '../lib/dates.js';
+import { dateFromISO, dayOf, isoDate } from '../lib/dates.js';
 import { prisma } from '../lib/db.js';
 import { env } from '../lib/env.js';
 import { conflict, forbidden, notFound } from '../lib/errors.js';
@@ -129,8 +129,8 @@ export function saleRoutes(app: FastifyInstance): void {
     });
     const feed = [
       ...payments.map((p) => ({ at: isoDate(p.occurredOn)!, kind: 'payment' as const, by: null as string | null, text: p.direction === 'out' ? 'buyback' : p.channel, amountTetri: p.grossTetri, note: null as string | null })),
-      ...documents.filter((d) => d.signedAt).map((d) => ({ at: d.signedAt!.toISOString().slice(0, 10), kind: 'document' as const, by: d.signedBy, text: d.docKind ?? '', amountTetri: null, note: null })),
-      ...log.map((l) => ({ at: l.createdAt.toISOString().slice(0, 10), kind: 'log' as const, by: l.actor?.name ?? null, text: l.action, amountTetri: null, note: l.note })),
+      ...documents.filter((d) => d.signedAt).map((d) => ({ at: dayOf(d.signedAt)!, kind: 'document' as const, by: d.signedBy, text: d.docKind ?? '', amountTetri: null, note: null })),
+      ...log.map((l) => ({ at: dayOf(l.createdAt)!, kind: 'log' as const, by: l.actor?.name ?? null, text: l.action, amountTetri: null, note: l.note })),
     ].sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
     return {
       sale: serialize(sale, todayISO(new Date(), env.TZ)),

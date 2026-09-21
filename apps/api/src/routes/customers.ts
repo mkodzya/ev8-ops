@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { audit } from '../lib/audit.js';
-import { isoDate } from '../lib/dates.js';
+import { dayOf, isoDate } from '../lib/dates.js';
 import { debtOf, debtsOf } from '../lib/debt.js';
 import { prisma } from '../lib/db.js';
 import { notFound } from '../lib/errors.js';
@@ -123,8 +123,8 @@ export function customerRoutes(app: FastifyInstance): void {
         by: null as string | null,
         note: null as string | null,
       })),
-      ...c.documents.map((d) => ({ at: d.createdAt.toISOString().slice(0, 10), kind: 'document' as const, text: d.docKind ?? '', number: null, amountTetri: null, by: null, note: d.label })),
-      ...log.map((l) => ({ at: l.createdAt.toISOString().slice(0, 10), kind: 'log' as const, text: l.action, number: null, amountTetri: null, by: l.actor?.name ?? null, note: l.note })),
+      ...c.documents.map((d) => ({ at: dayOf(d.createdAt)!, kind: 'document' as const, text: d.docKind ?? '', number: null, amountTetri: null, by: null, note: d.label })),
+      ...log.map((l) => ({ at: dayOf(l.createdAt)!, kind: 'log' as const, text: l.action, number: null, amountTetri: null, by: l.actor?.name ?? null, note: l.note })),
     ].sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
     return {
       debt: { owesTetri: debt.owesTetri, creditTetri: debt.creditTetri, depositHeldTetri: debt.depositHeldTetri, aheadTetri: debt.aheadTetri, parts: debt.parts },
