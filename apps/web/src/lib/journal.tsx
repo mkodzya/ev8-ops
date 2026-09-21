@@ -9,11 +9,16 @@ import { formatGel } from '../format.js';
 
 type Bag = Record<string, unknown> | null | undefined;
 
-const MONEY = new Set(['costTetri', 'extrasTetri', 'paidBeforeTetri']);
+/**
+ * Money is money by its name, not by a list somebody keeps up to date: every
+ * amount in the product is stored in tetri and named `…Tetri`. A list was
+ * three fields long and said nothing about the fourth (QA-W6-15).
+ */
+const isMoney = (field: string) => field.endsWith('Tetri');
 
 function value(field: string, raw: unknown): string | null {
   if (raw == null) return null;
-  if (MONEY.has(field)) return typeof raw === 'number' ? formatGel(raw) : String(raw);
+  if (isMoney(field)) return typeof raw === 'number' ? formatGel(raw) : String(raw);
   if (typeof raw === 'string' || typeof raw === 'number' || typeof raw === 'boolean') return String(raw);
   return null;
 }
@@ -22,9 +27,15 @@ function value(field: string, raw: unknown): string | null {
  * The words of a journal note. What the code writes for itself — the reasons
  * a recost carries — is translated; what a person typed is shown as they
  * typed it (QA-W5-21).
+ *
+ * Some rows carry the reason inside what was written rather than in the note
+ * beside it: a deposit decided keeps `after.reason`, and a person who came to
+ * the journal asking "почему вернули не всё" saw an empty column
+ * (QA-W6-15). The reason is read from either place.
  */
-export function noteWords(t: { feedNotes: Record<string, string> }, note: string | null | undefined): string | null {
-  const own = (note ?? '').trim();
+export function noteWords(t: { feedNotes: Record<string, string> }, note: string | null | undefined, after?: unknown): string | null {
+  const inside = (after as { reason?: unknown } | null | undefined)?.reason;
+  const own = ((note ?? (typeof inside === 'string' ? inside : '')) || '').trim();
   if (!own) return null;
   return t.feedNotes[own] ?? own;
 }
