@@ -8,15 +8,18 @@
 //     the account divided by what the invoice said — not a reference rate,
 //     because the reference rate is not what the company paid;
 //   * logistics and customs are paid once for a whole shipment and are
-//     split evenly over its units, there being nothing in an invoice to
-//     split them by;
+//     split evenly over the mopeds it brought (wave 5, умолчание Q24): the
+//     container was paid for to move them, and a spare part in the same box
+//     did not double the freight;
 //   * import VAT is not a cost: it came back through the VAT return, so it
 //     is subtracted from the shipment's costs before they are split.
 //
-// No intermediate rate is computed and rounded here. The GEL that was paid
-// is shared out over the lines in proportion to their invoice value, so the
-// costs of a shipment add up to exactly what left the bank — a rounded rate
-// multiplied line by line does not.
+// A shipment may be received before it is paid for (Mika, Q23), so the goods
+// are costed at the rate of the payments made so far and every further
+// payment recomputes them. What the invoice comes to at that rate is shared
+// out over the lines in proportion to their value rather than multiplied line
+// by line: a rounded rate multiplied four times does not add up to the money
+// that left the bank, and a shipment's costs have to.
 import type { Tetri } from './money.js';
 
 export interface PurchaseLineInput {
@@ -75,6 +78,13 @@ export interface PaidSummary {
   percent: number;
   /** GEL for one unit of the invoice currency, to six places; null until something is paid. */
   rate: number | null;
+  /**
+   * What the whole invoice comes to at that rate, in tetri — the figure the
+   * costs are shared out of. Kept beside the rate rather than derived from
+   * it: a rate rounded to six places and multiplied out again loses tetri,
+   * and a shipment's costs have to add up to the money that left the bank.
+   */
+  basisTetri: Tetri;
   /** Still owed to the factory, in its own currency (B3-04). */
   debtMinor: number;
   /** Nothing is owed any more: costs stop being preliminary. */
@@ -85,16 +95,23 @@ export function paidSummary(input: { payments: readonly { paidTetri: Tetri; paid
   const paidTetri = input.payments.reduce((n, p) => n + p.paidTetri, 0);
   const paidMinor = input.payments.reduce((n, p) => n + p.paidMinor, 0);
   const invoice = Math.max(0, input.invoiceMinor);
-  // A payment entered without its currency amount still says something: fall
-  // back to the invoice, or a whole shipment would read as unpaid.
-  const covered = paidMinor > 0 ? paidMinor : 0;
+  if (paidTetri <= 0) return { paidTetri: 0, paidMinor: 0, percent: 0, rate: null, basisTetri: 0, debtMinor: invoice, settled: false };
+  // A payment that says what it bought gives the rate straight. One entered
+  // without its currency amount — every payment made before wave 5 asked for
+  // one — is read the way it was read then: as paying the invoice, at the
+  // rate those GEL work out to. It is the only reading that leaves the old
+  // shipments' costs where they were.
+  const known = paidMinor > 0;
+  const rate = known ? paidTetri / paidMinor : invoice > 0 ? paidTetri / invoice : null;
+  const covered = known ? paidMinor : invoice;
   return {
     paidTetri,
     paidMinor,
-    percent: invoice > 0 ? Math.min(100, Math.round((covered / invoice) * 100)) : paidTetri > 0 ? 100 : 0,
-    rate: paidMinor > 0 && paidTetri > 0 ? Math.round((paidTetri / paidMinor) * 1e6) / 1e6 : null,
+    percent: invoice > 0 ? Math.min(100, Math.round((covered / invoice) * 100)) : 100,
+    rate: rate == null ? null : Math.round(rate * 1e6) / 1e6,
+    basisTetri: rate == null ? 0 : Math.round(invoice * rate),
     debtMinor: Math.max(0, invoice - covered),
-    settled: invoice > 0 && covered >= invoice,
+    settled: invoice > 0 ? covered >= invoice : true,
   };
 }
 
@@ -112,12 +129,15 @@ export function paidSummary(input: { payments: readonly { paidTetri: Tetri; paid
  */
 export function landedCosts(input: {
   lines: PurchaseLineInput[];
-  /** GEL per one minor unit of the invoice currency, from `paidSummary`. */
-  rate: number | null;
+  /** What the goods come to at the rate paid so far, from `paidSummary`. */
+  basisTetri: Tetri;
   extrasTetri: Tetri;
 }): LandedCost[] {
-  const rate = input.rate ?? 0;
-  const fob = input.lines.map((l) => Math.round(l.qty * l.unitPriceMinor * rate));
+  const values = input.lines.map((l) => l.qty * l.unitPriceMinor);
+  // Shared out over the lines by what they are worth, rather than multiplied
+  // line by line: four rounded multiplications do not add up to the money
+  // that left the bank, and a shipment's costs have to.
+  const fob = shareOut(input.basisTetri, values);
   // Only the mopeds carry the freight; when a shipment holds none, the parts
   // do, because the money was still spent on this shipment.
   const carriers = input.lines.some((l) => l.isVehicle) ? input.lines.map((l) => (l.isVehicle ? l.qty : 0)) : input.lines.map((l) => l.qty);

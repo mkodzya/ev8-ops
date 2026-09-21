@@ -3,7 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import { audit } from '../lib/audit.js';
 import { recordMoney } from '../lib/money.js';
 import { purchaseCosts, purchaseMoney, recost, recostPurchase } from '../lib/purchases.js';
-import { receivePartLine } from '../lib/stock.js';
+import { partRows, receivePartLine } from '../lib/stock.js';
 import { dateFromISO, isoDate } from '../lib/dates.js';
 import { prisma } from '../lib/db.js';
 import { env } from '../lib/env.js';
@@ -360,6 +360,9 @@ export function purchaseRoutes(app: FastifyInstance): void {
       // them already in the fleet (crit. 14, 15).
       const checked = checkVinList(rows.map((r) => r.vin).join('\n'), known.map((v) => v.vin));
       const bad = checked.find((c) => c.fault);
+      if (bad?.fault === 'known') {
+        throw conflict('duplicate_vin', `Line ${bad.line}: ${bad.vin} is already in the fleet.`, { line: bad.line, vin: bad.vin, lineId: line.id, field: 'vins' });
+      }
       if (bad) {
         throw conflict('bad_vin_line', `Line ${bad.line}: ${bad.vin} is not a VIN this shipment can take.`, { line: bad.line, vin: bad.vin, fault: bad.fault, lineId: line.id, field: 'vins' });
       }
@@ -439,6 +442,49 @@ export function purchaseRoutes(app: FastifyInstance): void {
       throw e;
     }
     return { ok: true, vehicles: created, parts: receivedParts, preliminary: !money.settled, paidPercent: money.percent };
+  });
+
+  /**
+   * "В заказ" from a part that has run low (B8-05, crit. 28): a draft order
+   * to whoever supplied it last, with one line for what is missing. It is a
+   * draft in the sense that nothing has been sent — the order is real, and
+   * an owner edits it before anybody writes to the factory.
+   */
+  app.post<{ Body: Body }>('/api/purchases/from-part', { config: { scope: 'purchases.manage' } }, async (req, reply) => {
+    const b = req.body ?? {};
+    const actor = actorOf(req);
+    const partId = str(b, 'partId', { required: true })!;
+    const part = (await partRows({ includeArchived: true })).find((r) => r.id === partId);
+    if (!part) throw notFound('part_not_found', 'No such part.');
+    const qty = int(b, 'qty', { min: 1 }) ?? Math.max(1, part.minQty - part.onHand);
+    // Whoever sold it last sells it again, unless somebody says otherwise.
+    const last = await prisma.purchaseLine.findFirst({
+      where: { partId, purchase: { status: { not: 'cancelled' } } },
+      orderBy: { createdAt: 'desc' },
+      select: { unitPriceMinor: true, purchase: { select: { supplierId: true, currency: true } } },
+    });
+    const supplierId = str(b, 'supplierId') ?? last?.purchase.supplierId ?? null;
+    if (!supplierId) throw conflict('no_supplier', 'Nobody has supplied this part yet; pick a supplier.', { field: 'supplierId' });
+    const order = await prisma.$transaction(async (tx) => {
+      const created = await tx.purchase.create({
+        data: {
+          supplierId,
+          currency: last?.purchase.currency ?? 'CNY',
+          orderedOn: dateFromISO(todayISO(new Date(), env.TZ))!,
+          notes: null,
+          createdById: actor.id,
+        },
+        select: { id: true, number: true },
+      });
+      await tx.purchaseLine.create({
+        data: { purchaseId: created.id, partId, partName: part.name, qty, unitPriceMinor: last?.unitPriceMinor ?? 0 },
+      });
+      await tx.auditLog.create({
+        data: { actorId: actor.id, action: 'purchase.create', entityType: 'purchase', entityId: created.id, after: { number: created.number, fromPart: part.name, qty } },
+      });
+      return created;
+    });
+    return reply.code(201).send(order);
   });
 
   app.post<{ Params: { id: string }; Body: Body }>('/api/purchases/:id/cancel', { config: { scope: 'purchases.manage' } }, async (req) => {

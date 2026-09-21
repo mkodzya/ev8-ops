@@ -9,7 +9,7 @@ import { dateFromISO, isoDate } from '../lib/dates.js';
 import { prisma } from '../lib/db.js';
 import { env } from '../lib/env.js';
 import { conflict, isUniqueViolation, notFound } from '../lib/errors.js';
-import { partRows } from '../lib/stock.js';
+import { initialStock, partRows } from '../lib/stock.js';
 import { todayISO } from '@ev8/shared';
 import { date, int, oneOf, str, tetri } from '../lib/validate.js';
 
@@ -155,6 +155,50 @@ export function stockRoutes(app: FastifyInstance): void {
       after: { countedQty: counted, delta, reason, moveId: move.id },
     });
     return { ok: true, delta, onHand: counted };
+  });
+
+  /**
+   * The first count of a part nobody has moved yet (B3-05, crit. 29): how
+   * many are on the shelf and what one cost. Once — after that the shelf has
+   * a history, and history is added to, not restarted.
+   */
+  app.post<{ Params: { id: string }; Body: Body }>('/api/parts/:id/initial', { config: { scope: 'stock.count' } }, async (req, reply) => {
+    const b = req.body ?? {};
+    const actor = actorOf(req);
+    const part = await prisma.part.findUnique({ where: { id: req.params.id }, select: { id: true, name: true } });
+    if (!part) throw notFound('part_not_found', 'No such part.');
+    const qty = int(b, 'qty', { required: true, min: 1 })!;
+    const unitCostTetri = tetri(b, 'unitCostTetri', { required: true, min: 0 })!;
+    const occurredOn = date(b, 'occurredOn') ?? todayISO(new Date(), env.TZ);
+    await prisma.$transaction(async (tx) => {
+      await initialStock(tx, { partId: part.id, qty, unitCostTetri, occurredOn, actorId: actor.id });
+      await tx.auditLog.create({
+        data: { actorId: actor.id, action: 'part.initial', entityType: 'part', entityId: part.id, after: { qty, unitCostTetri, occurredOn } },
+      });
+    });
+    return reply.code(201).send({ ok: true, onHand: qty, valueTetri: qty * unitCostTetri });
+  });
+
+  /**
+   * Parts that arrived without an order behind them (B3-05, §3.8): bought in
+   * a shop down the road, brought back from a workshop. The cost is stated
+   * and so is the reason, because nothing else says where they came from.
+   */
+  app.post<{ Params: { id: string }; Body: Body }>('/api/parts/:id/receipt', { config: { scope: 'stock.count' } }, async (req, reply) => {
+    const b = req.body ?? {};
+    const actor = actorOf(req);
+    const part = await prisma.part.findUnique({ where: { id: req.params.id }, select: { id: true } });
+    if (!part) throw notFound('part_not_found', 'No such part.');
+    const qty = int(b, 'qty', { required: true, min: 1 })!;
+    const unitCostTetri = tetri(b, 'unitCostTetri', { required: true, min: 0 })!;
+    const reason = str(b, 'reason', { required: true, max: 1000 })!;
+    const occurredOn = date(b, 'occurredOn') ?? todayISO(new Date(), env.TZ);
+    const move = await prisma.stockMove.create({
+      data: { partId: part.id, kind: 'receipt', qty, unitCostTetri, occurredOn: dateFromISO(occurredOn)!, reason, createdById: actor.id },
+      select: { id: true },
+    });
+    await audit({ actorId: actor.id, action: 'part.receipt', entityType: 'part', entityId: part.id, after: { qty, unitCostTetri, reason, moveId: move.id } });
+    return reply.code(201).send({ ok: true });
   });
 
   /**

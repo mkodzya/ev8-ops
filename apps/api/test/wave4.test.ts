@@ -24,6 +24,11 @@ interface Count {
 describe.skipIf(!HAS_DB)('wave 4 · batteries', () => {
   it('counts nothing until an owner counts, then follows the acts (crit. 29, 30)', async () => {
     const owner = await loginAs('owner');
+    const { prisma } = await import('../src/lib/db.js');
+    // "Before anybody counted" is a state, not an accident of test order: a
+    // stocktake another suite left behind would answer this question for us.
+    await prisma.batteryMove.deleteMany({});
+    await prisma.batteryInventory.deleteMany({});
     const { customer, vehicle } = await fixtures();
     // A rental with two batteries: that is what the couriers hold.
     const made = await call(owner, 'POST', '/api/rentals', { customerId: customer.id, vehicleId: vehicle.id, weeklyRateTetri: 15000, batteries: 2, chargers: 2, pickedUpOn: addDays(todayISO(), -3) });

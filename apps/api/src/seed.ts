@@ -338,8 +338,8 @@ async function seedDemo(ownerId: string): Promise<void> {
   const costs = new Map(
     landedCosts({
       lines: createdLines.map((l) => ({ id: l.id, qty: l.qty, unitPriceMinor: l.unitPriceMinor, isVehicle: true })),
-      // The shipment was paid in full, so its rate is what it went through at.
-      rate: invoiceMinor > 0 ? paidTetri / invoiceMinor : null,
+      // The shipment was paid in full: what it cost is what left the bank.
+      basisTetri: paidTetri,
       extrasTetri: 10 * 23834,
     }).map((c) => [c.lineId, c]),
   );

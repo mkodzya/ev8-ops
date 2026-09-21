@@ -18,22 +18,22 @@ describe('route table', () => {
     // Owner-only routes are listed here on purpose: a new one that lands at
     // the default scope by accident shows up in this list and is questioned.
     expect(ownerOnly.map((r) => `${r.method} ${r.url}`).sort()).toEqual([
-      'DELETE /api/purchases/:id/lines/:lineId',
+      // Wave 5 moved the orders onto a purchases scope of their own; what is
+      // left here is the settings and the people.
       'GET /api/users',
       'PATCH /api/fleet/:id',
+      'PATCH /api/fleet/:id/vin',
       'PATCH /api/locations/:id',
       'PATCH /api/models/:id',
-      'PATCH /api/purchases/:id',
       'PATCH /api/users/:id',
+      'PATCH /api/workshops/:id',
+      'POST /api/customers/:id/merge',
       'POST /api/fleet',
       'POST /api/locations',
       'POST /api/models',
-      'POST /api/purchases',
-      'POST /api/purchases/:id/cancel',
-      'POST /api/purchases/:id/lines',
-      'POST /api/purchases/:id/receive',
       'POST /api/users',
       'POST /api/users/:id/password',
+      'POST /api/workshops',
     ]);
     const publicOnes = app.routeTable.filter((r) => r.scope === 'public').map((r) => r.url).sort();
     expect(publicOnes).toEqual(['/api/auth/login', '/api/health', '/api/jobs/roll-periods']);

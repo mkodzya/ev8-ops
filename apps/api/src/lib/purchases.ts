@@ -46,7 +46,7 @@ export function purchaseCosts(p: Omit<MoneyRow, 'lines'> & { extrasTetri: number
     money,
     costs: landedCosts({
       lines: p.lines.map((l) => ({ id: l.id, qty: l.qty, unitPriceMinor: l.unitPriceMinor, isVehicle: l.modelId != null })),
-      rate: money.rate,
+      basisTetri: money.basisTetri,
       extrasTetri: p.extrasTetri,
     }),
   };

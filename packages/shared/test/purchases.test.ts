@@ -17,7 +17,7 @@ describe('what a moped cost to land', () => {
   it('shares the money that actually left the bank, so the parts add up to it exactly', () => {
     const paidTetri = 6_839_419; // 68 394.19 GEL for these goods
     const extrasTetri = 39 * 23834; // 238.34 GEL a unit, VAT already taken out
-    const costs = landedCosts({ lines: FLYBROTHER, paidTetri, extrasTetri });
+    const costs = landedCosts({ lines: FLYBROTHER, basisTetri: paidTetri, extrasTetri });
 
     expect(costs.reduce((n, c) => n + c.fobTetri, 0)).toBe(paidTetri);
     expect(costs.reduce((n, c) => n + c.extrasTetri, 0)).toBe(extrasTetri);
@@ -27,7 +27,7 @@ describe('what a moped cost to land', () => {
   it('reproduces the figure the company calculated for the XL1200 (PUR-02)', () => {
     // The acceptance for PUR-02: 1 689.29 GEL, worked out by hand on
     // 13.08.2026 as 1 450.95 of goods plus 238.34 of logistics and customs.
-    const costs = landedCosts({ lines: FLYBROTHER, paidTetri: 6_839_419, extrasTetri: 39 * 23834 });
+    const costs = landedCosts({ lines: FLYBROTHER, basisTetri: 6_839_419, extrasTetri: 39 * 23834 });
     const xl = costs.find((c) => c.lineId === 'xl1200')!;
     expect(xl.unitCostTetri).toBe(168929);
     expect(xl.extrasTetri / 12).toBe(23834);
@@ -39,7 +39,7 @@ describe('what a moped cost to land', () => {
         { id: 'cheap', qty: 2, unitPriceMinor: 100 },
         { id: 'dear', qty: 2, unitPriceMinor: 900 },
       ],
-      paidTetri: 100000,
+      basisTetri: 100000,
       extrasTetri: 40000,
     });
     expect(costs.map((c) => c.extrasTetri)).toEqual([20000, 20000]);
@@ -54,7 +54,7 @@ describe('what a moped cost to land', () => {
         { id: 'b', qty: 1, unitPriceMinor: 100 },
         { id: 'c', qty: 1, unitPriceMinor: 100 },
       ],
-      paidTetri: 100,
+      basisTetri: 100,
       extrasTetri: 0,
     });
     expect(costs.map((c) => c.fobTetri).sort((x, y) => y - x)).toEqual([34, 33, 33]);
@@ -62,7 +62,7 @@ describe('what a moped cost to land', () => {
   });
 
   it('costs nothing before anything is paid', () => {
-    const costs = landedCosts({ lines: FLYBROTHER, paidTetri: 0, extrasTetri: 0 });
+    const costs = landedCosts({ lines: FLYBROTHER, basisTetri: 0, extrasTetri: 0 });
     expect(costs.every((c) => c.totalTetri === 0)).toBe(true);
   });
 });
