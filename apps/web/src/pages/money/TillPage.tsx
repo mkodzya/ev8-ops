@@ -1,4 +1,4 @@
-import { addDays, formatGel, parseGel, todayISO } from '@ev8/shared';
+import { addDays, formatGel, localDateTime, parseGel, todayISO } from '@ev8/shared';
 import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { api } from '../../api.js';
@@ -40,7 +40,9 @@ interface Till {
   mine: { id: string; direction: 'in' | 'out'; grossTetri: number; at: string; kind: string; customer: string | null; number: string | null }[];
 }
 
-const hhmm = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+// The company's clock: a hand-over happened when Tbilisi says it did, not
+// when the laptop reading about it says (QA-W6-18).
+const hhmm = (iso: string) => localDateTime(iso).time;
 
 /** Money → Касса (wave 2 §3.4): by person for an owner, one's own for a manager. */
 export function TillPage() {

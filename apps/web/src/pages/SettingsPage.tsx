@@ -1,9 +1,8 @@
-import { ROLES, formatGel, gelFromTetri, parseGel, type Role } from '@ev8/shared';
+import { ROLES, addDays, formatGel, gelFromTetri, localDateTime, parseGel, todayISO, type Role } from '@ev8/shared';
 import { useState } from 'react';
 import { api } from '../api.js';
 import { BlockHead, Empty, Loading, PageHead } from '../components/ui.js';
 import { Field } from '../components/Wizard.js';
-import { fmtDate } from '../format.js';
 import { FormSheet, SubmitButton } from '../ds/form/Form.js';
 import { useOperation } from '../ds/form/operation.js';
 import { useToast } from '../ds/feedback/Toast.js';
@@ -237,16 +236,19 @@ function UserRow({ user: u, onRole, onDone }: { user: Users['users'][number]; on
   );
 }
 
-/** "вход сегодня 09:12" / "вход вчера" / a date, as the prototype says it. */
+/**
+ * "вход сегодня 09:12" / "вход вчера" / a date, as the prototype says it —
+ * and all of it on the company's clock, not the reader's (QA-W6-18). For an
+ * owner in London, "сегодня" means the day it is in Tbilisi, because that is
+ * the day the business had.
+ */
 function lastSeenWords(t: Dict, at: string): string {
-  const seen = new Date(at);
-  const day = seen.toISOString().slice(0, 10);
-  const today = new Date().toISOString().slice(0, 10);
-  const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
-  const hhmm = seen.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
-  if (day === today) return `${t.peopleW6.today} ${hhmm}`;
-  if (day === yesterday) return t.peopleW6.yesterday;
-  return fmtDate(day);
+  const seen = localDateTime(at);
+  const day = seen.date.split('.').reverse().join('-');
+  const today = todayISO();
+  if (day === today) return `${t.peopleW6.today} ${seen.time}`;
+  if (day === addDays(today, -1)) return t.peopleW6.yesterday;
+  return seen.date;
 }
 
 /**

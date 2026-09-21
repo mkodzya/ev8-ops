@@ -51,6 +51,17 @@ const USED = /var\(\s*(--[a-z0-9-]+)/g;
 const HEX = /#[0-9a-fA-F]{3,8}\b/g;
 const RGB = /\brgba?\(/g;
 const UNSAFE_SQL = /\$(?:query|execute)RawUnsafe\b/g;
+/**
+ * A date or a time drawn from the reader's own clock. Everything the product
+ * records happened on the company's day (CLAUDE.md, Asia/Tbilisi), and
+ * `localDateTime`/`todayISO` are how you say so. For an owner in London the
+ * two differ after midnight: the journal printed a UTC date beside a London
+ * time and named a day that never existed (QA-W6-18). Nobody testing from
+ * Tbilisi can see this, which is exactly why it is checked here.
+ */
+const READER_CLOCK = /\.toLocale(?:Date|Time|)String\s*\(|toISOString\(\)\.slice\(0, ?10\)/g;
+/** The one place the reader's own clock is the right answer: "данные на HH:MM". */
+const READER_CLOCK_OK = new Set(['apps/web/src/ds/state/SyncBar.tsx', 'packages/shared/src/time.ts']);
 
 const problems = [];
 
@@ -83,6 +94,11 @@ for (const root of ROOTS) {
       for (const m of line.matchAll(UNSAFE_SQL)) {
         problems.push(`${where}  ${m[0]} builds SQL from a string — use the tagged $queryRaw\`…\` or the Prisma client`);
       }
+      if (path.startsWith('apps/web/src') && !READER_CLOCK_OK.has(path)) {
+        for (const m of line.matchAll(READER_CLOCK)) {
+          problems.push(`${where}  ${m[0].trim()} reads the device's clock — say the company's day with localDateTime() or todayISO()`);
+        }
+      }
     });
   }
 }
@@ -100,5 +116,5 @@ if (problems.length) {
 }
 console.log(
   `guard-code: clean — no colour literals outside the token files, ` +
-    `${uses.length} var() uses all resolve, no unsafe raw SQL`,
+    `${uses.length} var() uses all resolve, no unsafe raw SQL, no screen on the reader's clock`,
 );
