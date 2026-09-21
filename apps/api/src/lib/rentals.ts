@@ -618,7 +618,20 @@ export async function applyDecision(tx: Tx, actor: Actor, rentalId: string, deci
   // The return act says what was decided: the copy made before is archived (B5-07).
   await tx.storedFile.updateMany({ where: { rentalId, kind: 'pdf', docKind: 'return_act', archived: false }, data: { archived: true } });
   await tx.auditLog.create({
-    data: { actorId: actor.id, action: 'deposit.decide', entityType: 'deposit', entityId: d.id, after: { ...decision, heldTetri: held, keptTetri: keep, backTetri: back } as object },
+    data: {
+      actorId: actor.id,
+      action: 'deposit.decide',
+      entityType: 'deposit',
+      entityId: d.id,
+      // What the deposit held before the decision and what it holds after,
+      // so the journal can say "180.00 ₾ → 0.00 ₾" instead of nothing
+      // (QA-W6-15). The rest of the decision stays beside it for the record.
+      before: { heldTetri: held },
+      after: { ...decision, heldTetri: 0, keptTetri: keep, backTetri: back },
+      // A reason belongs in the note, where every other action puts it and
+      // where the journal's own column looks for it.
+      note: decision.reason?.trim() || null,
+    },
   });
 }
 

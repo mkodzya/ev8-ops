@@ -130,7 +130,7 @@ export function JournalPage() {
                         missing value (§3.8). */}
                     {l.kind === 'event' ? <span className="muted">{t.common.dash}</span> : <ChangedFromTo before={l.before} after={l.after} />}
                   </td>
-                  <td>{noteWords(t, l.note) ?? <span className="muted">{t.common.dash}</span>}</td>
+                  <td>{noteWords(t, l.note, l.after) ?? <span className="muted">{t.common.dash}</span>}</td>
                 </tr>
               ))}
             </tbody>

@@ -109,6 +109,44 @@ describe.skipIf(!HAS_DB)('the journal on its own screen (wave 6 §3.8)', () => {
     expect(found.every((r) => r.number === rental.number)).toBe(true);
   });
 
+  // QA-W6-15. The decision carried its reason inside what was written, and
+  // the journal's own column looked only beside it — so a person asking
+  // "почему клиенту вернули не всё" saw that a decision happened and not
+  // which one.
+  it('a deposit decided says how much it held, how much went back, and why', async () => {
+    const owner = await loginAs('owner');
+    const { prisma } = await import('../src/lib/db.js');
+    const { applyDecision } = await import('../src/lib/rentals.js');
+    const model = await prisma.vehicleModel.create({ data: { brand: 'Test', name: `Reason ${uniq()}`, weeklyRateTetri: 15000, forRent: true } });
+    const vehicle = await prisma.vehicle.create({ data: { vin: `TESTREASON${uniq().replace(/\D/g, '').slice(-6)}`, modelId: model.id, pool: 'rent' } });
+    const customer = await prisma.customer.create({ data: { name: `ТЕСТ Причина ${uniq()}` } });
+    const rental = await prisma.rental.create({
+      data: { customerId: customer.id, vehicleId: vehicle.id, weeklyRateTetri: 15000, status: 'returned', returnedOn: new Date(), pickedUpOn: new Date() },
+    });
+    await prisma.deposit.create({ data: { rentalId: rental.id, amountTetri: 18000, paidTetri: 18000 } });
+    const me = json<{ id: string; role: string }>(await call(owner, 'GET', '/api/me'));
+
+    await prisma.$transaction(async (tx) => {
+      await applyDecision(tx, { id: me.id, email: '', name: '', role: 'owner', locale: 'ru' }, rental.id, {
+        action: 'withhold',
+        withheldTetri: 5000,
+        grounds: ['damage'],
+        reason: 'ТЕСТ царапина на щитке',
+        returnedTo: null,
+        returnedToReason: null,
+      }, '2026-09-22');
+    });
+
+    const found = await rows(owner, `?q=${rental.number}`);
+    const line = found.find((r) => r.action === 'deposit.decide');
+    expect(line).toBeDefined();
+    expect(line?.note).toBe('ТЕСТ царапина на щитке');
+    expect((line?.before as { heldTetri: number }).heldTetri).toBe(18000);
+    expect((line?.after as { heldTetri: number; keptTetri: number; backTetri: number }).heldTetri).toBe(0);
+    expect((line?.after as { keptTetri: number }).keptTetri).toBe(5000);
+    expect((line?.after as { backTetri: number }).backTetri).toBe(13000);
+  });
+
   it('the filters keep a line where it belongs, and "всё" keeps them all', async () => {
     const owner = await loginAs('owner');
     const { prisma } = await import('../src/lib/db.js');
