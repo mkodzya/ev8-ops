@@ -163,6 +163,32 @@ describe.skipIf(!HAS_DB)('a repair takes parts off the shelf', () => {
     const list = json<{ totals: { negative: number } }>(await call(owner, 'GET', '/api/parts'));
     expect(list.totals.negative).toBeGreaterThanOrEqual(1);
   });
+
+  /**
+   * QA-W5-14: cancelling a repair that had parts on it wrote a `return`
+   * movement the table's check constraint did not know, and the whole
+   * cancellation came back a 500 with the parts still off the shelf.
+   */
+  it('gives the parts back when the whole repair is cancelled (wave 5 crit. 27)', async () => {
+    const { partId, owner, vehicle } = await stocked(10, 1200);
+    const { id: jobId } = json<{ id: string }>(
+      await call(owner, 'POST', '/api/service', { vehicleId: vehicle.id, reason: 'pads', openedOn: '2026-05-10' }),
+    );
+    expect((await call(owner, 'POST', `/api/service/${jobId}/parts`, { partId, qty: 2 })).statusCode).toBe(201);
+    expect((await cardOf(owner, partId)).part.onHand).toBe(8);
+
+    const cancelled = await call(owner, 'POST', `/api/service/${jobId}/cancel`, { reason: 'ТЕСТ opened on the wrong VIN' });
+    expect(cancelled.statusCode, cancelled.body).toBe(200);
+
+    const card = await cardOf(owner, partId);
+    expect(card.part.onHand).toBe(10);
+    // Back at what it left at, so the shelf's average is where it was.
+    expect(card.part.valueTetri).toBe(12000);
+    const back = card.moves.find((m) => m.kind === 'return');
+    expect(back).toMatchObject({ kind: 'return', qty: 2 });
+    // The reason carries the job it came off, so the shelf can explain itself.
+    expect(back!.reason).toContain('ТЕСТ opened on the wrong VIN');
+  });
 });
 
 describe.skipIf(!HAS_DB)('a stock-take', () => {
