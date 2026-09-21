@@ -1,5 +1,6 @@
 import { numberMatches, parseGel, spellingMatches, todayISO } from '@ev8/shared';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ApiError, api } from '../api.js';
 import { LoadError } from '../components/LoadError.js';
 import { ModelDrawer, NEW_MODEL } from '../components/ModelDrawer.js';
@@ -262,6 +263,9 @@ export function NewPurchase({ supplier, onDone }: { supplier?: { id: string; nam
   const parts = useLoad<{ parts: { id: string; name: string }[] }>(open ? '/api/parts' : null);
   const [f, setF] = useState(() => blankPurchase(supplier?.id));
   const [addingSupplier, setAddingSupplier] = useState(false);
+  const navigate = useNavigate();
+  /** The order just written, to open once the sheet has closed itself. */
+  const made = useRef<string | null>(null);
   // Which line asked for a model that is not in the catalogue yet (ADR-0011).
   const [addingModel, setAddingModel] = useState<string | null>(null);
 
@@ -318,11 +322,16 @@ export function NewPurchase({ supplier, onDone }: { supplier?: { id: string; nam
               },
               { key },
             );
-            return { created: purchase.id, toast: { text: t.buy.created, open: `/purchases/${purchase.id}` } };
+            made.current = purchase.id;
+            return { toast: { text: t.buy.created } };
           }}
           onDone={() => {
             setF(blankPurchase(supplier?.id));
             onDone();
+            // Creating opens the record (crit. 10, UX 4): the point of an
+            // order is what happens on it next — pay, receive, correct the
+            // logistics — and none of that is in the list it was made from.
+            if (made.current) navigate(`/purchases/${made.current}`);
           }}
         >
           <Field label={t.buy.supplier} name="supplierId">
