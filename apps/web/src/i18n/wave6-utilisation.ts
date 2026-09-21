@@ -72,7 +72,7 @@ export const wave6utilRu: typeof wave6utilEn = {
 
 export const wave6utilKa: typeof wave6utilEn = {
   utilisationReport: {
-    title: 'საქირავო პარკის დატვირთვა',
+    title: 'პარკის დატვირთვა',
     subtitle: 'დღეები, როცა მოპედები ქირაში იყო, იმ დღეებთან შედარებით, როცა საქირავო პარკში იდგა.',
     week: 'კვირა',
     month: 'თვე',

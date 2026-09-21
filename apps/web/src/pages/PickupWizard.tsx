@@ -45,6 +45,8 @@ interface FleetRow {
   pool: VehiclePool | null;
   location: { id: string; name: string } | null;
   odometerKm: number | null;
+  /** For a moped carried over this means "the day we wrote it down". */
+  arrivedOn: string | null;
 }
 type Channel = 'cash' | 'acquiring' | 'transfer' | 'later';
 
@@ -570,6 +572,13 @@ export function PickupWizard() {
               />
             </Field>
           </div>
+          {/* A rental brought over can be older than the day the moped was
+              written down as arrived — normal for a moped that worked while
+              the paperwork caught up. The arrival date moves back to match,
+              and the screen says so before it happens (designer, 21.09.2026). */}
+          {transfer && vehicle?.arrivedOn && f.pickedUpOn < vehicle.arrivedOn && (
+            <p className="hint warn-text">{t.hand.arrivedAfterPickup(fmtDate(vehicle.arrivedOn), fmtDate(f.pickedUpOn))}</p>
+          )}
           <Field label={t.hand.pickedUpOn} hint={!transfer ? t.hand.firstWeek(short(f.pickedUpOn), short(addDays(f.pickedUpOn, 6))) : undefined} name="pickedUpOn" error={pickedUpError}>
             <input className="input mono" type="date" max={transfer ? addDays(today, -1) : today} value={f.pickedUpOn} onChange={(e) => set({ pickedUpOn: e.target.value, paidThrough: '' })} />
           </Field>

@@ -163,7 +163,7 @@ export const wave6weekKa: typeof wave6weekEn = {
     withheld: 'დეპოზიტიდან დაკავებული',
     held: 'დეპოზიტები ხელზე',
 
-    utilisation: 'საქირავო პარკის დატვირთვა',
+    utilisation: 'პარკის დატვირთვა',
     basis: (rented: number, pool: number) => `${rented} დღე ქირაში ${pool}-დან`,
     unassigned: (n: number) => `${n} მოპედი პარკის გარეშე — ანგარიშში არ შედის`,
 
