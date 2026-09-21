@@ -27,6 +27,7 @@ import { RentalPage } from './pages/RentalPage.js';
 import { ReturnWizard } from './pages/ReturnWizard.js';
 import { PurchasePage } from './pages/PurchasePage.js';
 import { PurchasesPage } from './pages/PurchasesPage.js';
+import { SupplierPage } from './pages/SupplierPage.js';
 import { SalePage } from './pages/SalePage.js';
 import { SalesPage } from './pages/SalesPage.js';
 import { SaleWizard } from './pages/SaleWizard.js';
@@ -144,6 +145,7 @@ export function App() {
         <Route path="sales/new" element={<Require perm="sales.manage"><SaleWizard /></Require>} />
         <Route path="sales/:id" element={<SalePage />} />
         <Route path="purchases" element={<Require perm="purchases.view"><PurchasesPage /></Require>} />
+        <Route path="purchases/suppliers/:id" element={<Require perm="purchases.view"><SupplierPage /></Require>} />
         <Route path="purchases/:id" element={<Require perm="purchases.view"><PurchasePage /></Require>} />
 
         <Route path="reports" element={<Navigate to="/reports/economics" replace />} />

@@ -1293,3 +1293,21 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
 .page-head .row-dots { padding: 2px 10px; }
 /* A refusal beside «В заказ» must not stretch the column it stands in. */
 .list-table .field-err { max-width: 24ch; }
+
+/* ---- wave 5: buying from a factory -------------------------------------- */
+/* An invoice line as it is typed: what it is on one row, the numbers on the
+   next, so the panel reads the same at 375 px as it does on a laptop. */
+.buy-lines { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
+.buy-line { display: flex; flex-direction: column; gap: 6px; padding: 10px 0; border-top: 1px solid var(--line-soft); }
+.buy-line:first-child { border-top: 0; padding-top: 0; }
+.buy-line-what { display: flex; flex-wrap: wrap; gap: 6px; }
+.buy-line-what > .input { flex: 1 1 140px; min-width: 0; }
+.buy-line-nums { display: flex; align-items: center; gap: 6px; }
+.buy-line-nums > .input { flex: 1 1 0; min-width: 0; }
+.buy-line-sum { flex: 1 1 auto; text-align: right; font: var(--text-body-sm); color: var(--muted); }
+/* The line that will reach no shelf says so in the colour of a refusal. */
+.buy-note { margin: 0; font: var(--text-body-sm); color: var(--crit); }
+.buy-note-inline { font: var(--text-body-sm); color: var(--crit); }
+.buy-extras-v { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+/* The receipt's summary sits inside the form, so it is quieter than a card. */
+.card-quiet { background: var(--surface-2); border-color: var(--line-soft); }
