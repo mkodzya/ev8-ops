@@ -21,3 +21,4 @@ export * from './returns.js';
 export * from './sales.js';
 export * from './service.js';
 export * from './vin.js';
+export * from './utilisation.js';
