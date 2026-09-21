@@ -9,9 +9,12 @@ import { audit } from '../lib/audit.js';
 import { prisma } from '../lib/db.js';
 import { conflict, isUniqueViolation, notFound } from '../lib/errors.js';
 import { actorOf } from '../lib/guard.js';
-import { int, str } from '../lib/validate.js';
+import { int, oneOf, str } from '../lib/validate.js';
 
 type Body = Record<string, unknown>;
+
+/** What a point is (B10-02). Nothing behaves differently by it yet. */
+const LOCATION_KINDS = ['showroom', 'store', 'workshop', 'swap'] as const;
 
 export function locationRoutes(app: FastifyInstance): void {
   app.get<{ Querystring: { all?: string } }>('/api/locations', { config: { scope: 'fleet.view' } }, async (req) => {
@@ -24,6 +27,7 @@ export function locationRoutes(app: FastifyInstance): void {
       locations: rows.map((l) => ({
         id: l.id,
         name: l.name,
+        kind: l.kind,
         note: l.note,
         sortOrder: l.sortOrder,
         archived: l.archived,
@@ -40,6 +44,7 @@ export function locationRoutes(app: FastifyInstance): void {
       const l = await prisma.location.create({
         data: {
           name,
+          kind: oneOf(b, 'kind', LOCATION_KINDS) ?? 'showroom',
           note: str(b, 'note', { max: 1000 }),
           sortOrder: int(b, 'sortOrder', { min: 0, max: 999 }) ?? 0,
           createdById: actor.id,
@@ -60,6 +65,7 @@ export function locationRoutes(app: FastifyInstance): void {
     if (!before) throw notFound('location_not_found', 'No such point.');
     const data: Record<string, unknown> = {};
     if ('name' in b) data.name = str(b, 'name', { required: true, max: 120 });
+    if ('kind' in b) data.kind = oneOf(b, 'kind', LOCATION_KINDS, { required: true })!;
     if ('note' in b) data.note = str(b, 'note', { max: 1000 });
     if ('sortOrder' in b) data.sortOrder = int(b, 'sortOrder', { min: 0, max: 999 }) ?? 0;
     if ('archived' in b) {
