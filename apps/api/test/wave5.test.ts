@@ -140,6 +140,7 @@ describe.skipIf(!HAS_DB)('wave 5 · shipments', () => {
 
   interface Card {
     purchase: {
+      number: string;
       paidPercent: number;
       rate: number | null;
       debtMinor: number;
@@ -225,6 +226,65 @@ describe.skipIf(!HAS_DB)('wave 5 · shipments', () => {
       await call(owner, 'GET', `/api/fleet/${after.vehicles[0].id}`),
     );
     expect(card.vehicle).toMatchObject({ costPreliminary: false, costPaidPercent: 100 });
+  });
+
+  /**
+   * QA-W5-29: a shipment received before anybody paid for it wrote 0.00 ₾
+   * onto its mopeds and over the model's own figure, which is what a sale
+   * price is set from. Unknown is empty here, not nought.
+   */
+  it('writes no cost at all for a shipment nobody has paid for, and leaves the model alone (§7)', async () => {
+    const owner = await loginAs('owner');
+    const { prisma } = await import('../src/lib/db.js');
+    const supplier = json<{ id: string }>(await call(owner, 'POST', '/api/suppliers', { name: `ТЕСТ Factory ${uniq()}`, country: 'China' }));
+    // No freight on this one: with freight a unit cost is partly known even
+    // before the invoice is paid, and this is about the case where it is not
+    // known at all.
+    const model = await prisma.vehicleModel.create({ data: { brand: 'Test', name: `Unpaid ${uniq()}`, costTetri: 140222 } });
+    const made = await call(owner, 'POST', '/api/purchases', {
+      supplierId: supplier.id,
+      currency: 'CNY',
+      orderedOn: '2026-09-01',
+      lines: [{ modelId: model.id, qty: 2, unitPrice: '2600' }],
+    });
+    expect(made.statusCode, made.body).toBe(201);
+    const id = json<{ id: string }>(made).id;
+
+    const lineId = json<{ purchase: { lines: { id: string }[] } }>(await call(owner, 'GET', `/api/purchases/${id}`)).purchase.lines[0].id;
+    const tag = uniq();
+    const received = await call(owner, 'POST', `/api/purchases/${id}/receive`, {
+      receivedOn: '2026-09-10',
+      pool: 'rent',
+      vins: { [lineId]: [vin('NPA', tag, 1), vin('NPB', tag, 2)] },
+    });
+    expect(received.statusCode, received.body).toBe(200);
+
+    const card = json<Card>(await call(owner, 'GET', `/api/purchases/${id}`));
+    expect(card.purchase.paidPercent).toBe(0);
+    expect(card.vehicles.every((v) => v.costTetri === null)).toBe(true);
+    // The model keeps the figure a paid shipment taught it.
+    expect((await prisma.vehicleModel.findUniqueOrThrow({ where: { id: model.id } })).costTetri).toBe(140222);
+
+    // And the model's card does not name this shipment as the source.
+    const models = json<{ models: { id: string; costTetri: number | null; costSource: { kind: string; number?: string } | null }[] }>(
+      await call(owner, 'GET', '/api/models'),
+    );
+    const row = models.models.find((m) => m.id === model.id)!;
+    expect(row.costTetri).toBe(140222);
+    expect(row.costSource?.number).not.toBe(card.purchase.number);
+
+    // Money moves, and the figure arrives — preliminary, and saying so.
+    expect((await call(owner, 'POST', `/api/purchases/${id}/payments`, { grossTetri: '423.57', foreignAmount: '1000', channel: 'transfer' })).statusCode).toBe(201);
+    const after = json<Card>(await call(owner, 'GET', `/api/purchases/${id}`));
+    // 2 600 CNY at 0,42357, and no freight to add.
+    expect(after.vehicles.every((v) => v.costTetri === 110128)).toBe(true);
+    const back = json<{ models: { id: string; costTetri: number | null; costSource: { kind: string; preliminary?: boolean; paidPercent?: number } | null }[] }>(
+      await call(owner, 'GET', '/api/models'),
+    );
+    const now = back.models.find((m) => m.id === model.id)!;
+    expect(now.costTetri).toBe(110128);
+    // 1 000 CNY of an invoice of 5 200: this order carries no parts line.
+    expect(now.costSource).toMatchObject({ kind: 'purchase', preliminary: true, paidPercent: 19 });
   });
 
   it('takes the cost back off the mopeds when a supplier payment is annulled (§7)', async () => {

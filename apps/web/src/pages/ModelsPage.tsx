@@ -11,7 +11,7 @@ import { useSession } from '../session.js';
 import { LoadError } from '../components/LoadError.js';
 
 export type CostSource =
-  | { kind: 'purchase'; purchaseId: string; number: string; receivedOn: string | null }
+  | { kind: 'purchase'; purchaseId: string; number: string; receivedOn: string | null; preliminary: boolean; paidPercent: number }
   | { kind: 'odoo' }
   | { kind: 'manual' }
   | null;
