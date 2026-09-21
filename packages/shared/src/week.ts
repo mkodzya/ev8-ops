@@ -104,6 +104,42 @@ export interface WeekIncome {
  * over. One function, because if the designer changes the rule again this is
  * the only place that should change.
  */
+export const INCOME_ROWS = ['rent', 'sale', 'deposits', 'service'] as const;
+export type IncomeRow = (typeof INCOME_ROWS)[number];
+
+/**
+ * How much of one payment belongs to one row of the week — the mixed rule
+ * applied to a single payment.
+ *
+ * This is the piece the list of payments needs: a figure on the week links
+ * to the rows it is made of, and "сумма списка = цифре, из которой пришёл"
+ * (ux №10) only holds if both sides count the same way. A hand-over of
+ * 330 ₾ contributes 150 to "аренда" and 180 to "залоги"; before this
+ * existed, the list showed its whole 330 under rent and disagreed with the
+ * week by the deposits inside it (QA-W6-01).
+ */
+export function paymentInRow(p: WeekPayment, row: IncomeRow): Tetri {
+  // Money kept out of a deposit came in once already, as the deposit.
+  if (p.channel === 'deposit' || p.direction !== 'in') return 0;
+  let out = 0;
+  let placed = 0;
+  for (const a of p.allocations) {
+    placed += a.amountTetri;
+    const its: IncomeRow = a.target === 'deposit' ? 'deposits' : a.target === 'instalment' ? 'sale' : a.target === 'charge' ? 'service' : 'rent';
+    if (its === row) out += a.amountTetri;
+  }
+  // The rest is named by what the payment was for. A kind that lands in no
+  // row is left out on purpose: the total will then disagree with the rows,
+  // and the test that compares them is what says so out loud.
+  const left = Math.max(0, p.grossTetri - placed);
+  if (left > 0) {
+    const its: IncomeRow | null =
+      p.kind === 'rent' || p.kind === 'on_account' ? 'rent' : p.kind === 'sale' ? 'sale' : p.kind === 'service' ? 'service' : null;
+    if (its === row) out += left;
+  }
+  return out;
+}
+
 export function weekIncome(payments: readonly WeekPayment[], period: Period): WeekIncome {
   const out: WeekIncome = { totalTetri: 0, rentTetri: 0, saleTetri: 0, depositsInTetri: 0, serviceTetri: 0, acquiringFeeTetri: 0, depositsOutTetri: 0 };
   for (const p of payments) {
@@ -117,25 +153,10 @@ export function weekIncome(payments: readonly WeekPayment[], period: Period): We
     }
     if (p.channel === 'acquiring') out.acquiringFeeTetri += p.feeTetri;
     out.totalTetri += p.grossTetri;
-
-    let placed = 0;
-    for (const a of p.allocations) {
-      placed += a.amountTetri;
-      if (a.target === 'deposit') out.depositsInTetri += a.amountTetri;
-      else if (a.target === 'instalment') out.saleTetri += a.amountTetri;
-      // What a return charged beyond the weeks — a key, days of delay, a
-      // repair the renter pays for — reads as a repair, not as rent.
-      else if (a.target === 'charge') out.serviceTetri += a.amountTetri;
-      else out.rentTetri += a.amountTetri;
-    }
-    // The rest is named by what the payment was for. A kind that lands in no
-    // row is left out on purpose: the total will then disagree with the rows,
-    // and the test that compares them is what says so out loud.
-    const left = Math.max(0, p.grossTetri - placed);
-    if (left === 0) continue;
-    if (p.kind === 'rent' || p.kind === 'on_account') out.rentTetri += left;
-    else if (p.kind === 'sale') out.saleTetri += left;
-    else if (p.kind === 'service') out.serviceTetri += left;
+    out.rentTetri += paymentInRow(p, 'rent');
+    out.saleTetri += paymentInRow(p, 'sale');
+    out.depositsInTetri += paymentInRow(p, 'deposits');
+    out.serviceTetri += paymentInRow(p, 'service');
   }
   return out;
 }

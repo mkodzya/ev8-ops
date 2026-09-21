@@ -1,7 +1,7 @@
 // The week of the book (wave 6 §3.1, criteria 1а, 1б, 3).
 import { describe, expect, it } from 'vitest';
 import { vehicleOn } from '../src/utilisation.js';
-import { incomeRows, previousWeek, weekIncome, weekOf, type WeekPayment } from '../src/week.js';
+import { incomeRows, paymentInRow, previousWeek, weekIncome, weekOf, type WeekPayment } from '../src/week.js';
 
 const pay = (p: Partial<WeekPayment> & { occurredOn: string; grossTetri: number }): WeekPayment => ({
   direction: 'in',
@@ -142,5 +142,56 @@ describe('where a moped stood on a given day', () => {
     expect(vehicleOn(v, '2026-09-09')).toEqual({ state: 'available', pool: 'rent', since: '2026-08-01' });
     // Before its first event it was not ours: not free, not anything.
     expect(vehicleOn(v, '2026-07-31')).toBeNull();
+  });
+});
+
+describe('a figure of the week leads to the rows it is made of (QA-W6-01)', () => {
+  const handOver = {
+    occurredOn: '2026-09-22' as const,
+    direction: 'in' as const,
+    channel: 'cash' as const,
+    kind: 'rent' as const,
+    grossTetri: 33000,
+    feeTetri: 0,
+    allocations: [
+      { target: 'period' as const, amountTetri: 15000 },
+      { target: 'deposit' as const, amountTetri: 18000 },
+    ],
+  };
+  const ahead = {
+    occurredOn: '2026-09-23' as const,
+    direction: 'in' as const,
+    channel: 'cash' as const,
+    kind: 'rent' as const,
+    grossTetri: 60000,
+    feeTetri: 0,
+    allocations: [],
+  };
+
+  it('splits one payment between the rows it belongs to', () => {
+    // The hand-over is rent and a deposit at once; a list filtered by the
+    // kind of payment would put all 330 ₾ under rent and disagree with the
+    // week by the 180 ₾ of deposit inside it.
+    expect(paymentInRow(handOver, 'rent')).toBe(15000);
+    expect(paymentInRow(handOver, 'deposits')).toBe(18000);
+    expect(paymentInRow(handOver, 'sale')).toBe(0);
+    expect(paymentInRow(handOver, 'service')).toBe(0);
+  });
+
+  it('gives money paid ahead to the row its payment was for', () => {
+    expect(paymentInRow(ahead, 'rent')).toBe(60000);
+    expect(paymentInRow(ahead, 'deposits')).toBe(0);
+  });
+
+  it('adds up, row by row, to exactly what the week shows', () => {
+    const period = { from: '2026-09-21' as const, to: '2026-09-27' as const };
+    const income = weekIncome([handOver, ahead], period);
+    const payments = [handOver, ahead];
+    // This is the property the screen relies on: the figure on the week and
+    // the total of the list behind it are the same arithmetic.
+    expect(payments.reduce((n, p) => n + paymentInRow(p, 'rent'), 0)).toBe(income.rentTetri);
+    expect(payments.reduce((n, p) => n + paymentInRow(p, 'deposits'), 0)).toBe(income.depositsInTetri);
+    expect(payments.reduce((n, p) => n + paymentInRow(p, 'sale'), 0)).toBe(income.saleTetri);
+    expect(payments.reduce((n, p) => n + paymentInRow(p, 'service'), 0)).toBe(income.serviceTetri);
   });
 });

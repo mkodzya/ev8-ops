@@ -1323,7 +1323,11 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
 .figure:first-child { border-top: 0; }
 .figure > dt { min-width: 0; color: var(--muted); }
 .figure > dt > .hint { display: block; margin: 2px 0 0; }
-.figure > dd { margin: 0; justify-self: end; text-align: right; white-space: nowrap; }
+/* A sum must not break mid-number, but a word standing where a sum would be
+   — "нет данных: учёта нет", longest of all in Georgian — has to wrap, or it
+   pushes the page sideways at 375 px (QA-W6-02). */
+.figure > dd { margin: 0; justify-self: end; text-align: right; white-space: nowrap; min-width: 0; }
+.figure > dd.muted { white-space: normal; }
 /* Money that belongs to no week at all stands away from the ones that do. */
 .figure-apart { border-top: 1px solid var(--line); margin-top: 6px; }
 /* "Поступило всего" is the figure a person checks against the statement; the

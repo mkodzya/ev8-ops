@@ -35,7 +35,9 @@ export interface PaymentRow {
 }
 
 interface Answer {
-  totals: { inTetri: number; outTetri: number; acquiringFeeTetri: number };
+  totals: { inTetri: number; outTetri: number; acquiringFeeTetri: number; rowTetri: number | null };
+  /** Set when a figure of the week's report asked for its own rows (QA-W6-01). */
+  row: 'rent' | 'sale' | 'deposits' | 'service' | null;
   people: { id: string; name: string }[];
   payments: PaymentRow[];
 }
@@ -185,6 +187,14 @@ export function PaymentsList({ mine = false }: { mine?: boolean }) {
       {data && (
         <>
           <dl className="money-totals">
+            {/* What belongs to the row of the week that linked here — the
+                figure this list has to add up to (ux №10). */}
+            {data.row && data.totals.rowTetri != null && (
+              <div>
+                <dt>{t.weekReport.rowTotals[data.row]}</dt>
+                <dd className="amt-in">{formatGel(data.totals.rowTetri)}</dd>
+              </div>
+            )}
             <div>
               <dt>{t.payList.totalIn}</dt>
               <dd className="amt-in">{data.totals.inTetri > 0 ? '+' : ''}{formatGel(data.totals.inTetri)}</dd>
