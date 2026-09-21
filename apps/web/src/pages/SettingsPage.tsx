@@ -90,17 +90,6 @@ export function SettingsPage() {
   );
 }
 
-/** Settings → Points (wave 6 §3.5). The same list Fleet → Points shows. */
-export function PointsSettingsPage() {
-  const t = useT();
-  return (
-    <>
-      <PageHead title={t.settings.title} />
-      <PointsBlock />
-    </>
-  );
-}
-
 /**
  * Settings → Rental (wave 6 §3.5, R5): the figures a hand-over proposes, an
  * owner's to set rather than a developer's.
