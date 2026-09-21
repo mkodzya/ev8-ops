@@ -1,6 +1,7 @@
 import { type JournalFilter, type JournalRow, collapseViews, inJournalFilter, looksLikeNumber } from '@ev8/shared';
 import type { FastifyInstance } from 'fastify';
 import { audit } from '../lib/audit.js';
+import { dayOf } from '../lib/dates.js';
 import { prisma } from '../lib/db.js';
 import { actorOf } from '../lib/guard.js';
 
@@ -185,7 +186,7 @@ export function journalRoutes(app: FastifyInstance): void {
       // unless the file says otherwise: the BOM is what says otherwise.
       return reply
         .header('content-type', 'text/csv; charset=utf-8')
-        .header('content-disposition', `attachment; filename="ev8-journal-${new Date().toISOString().slice(0, 10)}.csv"`)
+        .header('content-disposition', `attachment; filename="ev8-journal-${dayOf(new Date())}.csv"`)
         .send(`﻿${[head.join(','), ...body].join('\n')}\n`);
     },
   );
