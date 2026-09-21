@@ -1,7 +1,7 @@
 // The week of the book (wave 6 §3.1, criteria 1а, 1б, 3).
 import { describe, expect, it } from 'vitest';
 import { vehicleOn } from '../src/utilisation.js';
-import { incomeRows, paymentInRow, previousWeek, weekIncome, weekOf, type WeekPayment } from '../src/week.js';
+import { PAYMENT_FILTERS, incomeRows, paymentInRow, paymentsQuery, previousWeek, weekIncome, weekOf, type WeekPayment } from '../src/week.js';
 
 const pay = (p: Partial<WeekPayment> & { occurredOn: string; grossTetri: number }): WeekPayment => ({
   direction: 'in',
@@ -193,5 +193,26 @@ describe('a figure of the week leads to the rows it is made of (QA-W6-01)', () =
     expect(payments.reduce((n, p) => n + paymentInRow(p, 'deposits'), 0)).toBe(income.depositsInTetri);
     expect(payments.reduce((n, p) => n + paymentInRow(p, 'sale'), 0)).toBe(income.saleTetri);
     expect(payments.reduce((n, p) => n + paymentInRow(p, 'service'), 0)).toBe(income.serviceTetri);
+  });
+});
+
+describe('the filters a screen sends when it asks for payments (QA-W6-05)', () => {
+  it('carries the row a figure of the week asked about', () => {
+    const asked: Record<string, string> = { from: '2026-09-21', to: '2026-09-27', row: 'rent' };
+    const q = new URLSearchParams(paymentsQuery((k) => asked[k]));
+    // The whole bug was this one parameter going missing between the link
+    // and the request: the server could answer, the link did ask, and the
+    // screen in the middle dropped it.
+    expect(q.get('row')).toBe('rent');
+    expect(q.get('from')).toBe('2026-09-21');
+    expect(q.get('to')).toBe('2026-09-27');
+  });
+
+  it('sends nothing it was not given, and knows every filter the list has', () => {
+    expect(paymentsQuery(() => '')).toBe('');
+    // A filter added to the screen and forgotten here would travel nowhere.
+    for (const key of ['from', 'to', 'channel', 'direction', 'kind', 'row', 'by', 'customerId', 'rentalId', 'saleId']) {
+      expect(PAYMENT_FILTERS).toContain(key);
+    }
   });
 });
