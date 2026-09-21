@@ -11,6 +11,7 @@ import { RowMenu } from '../components/RowMenu.js';
 import { Field, Row } from '../components/Wizard.js';
 import { fmtDate } from '../format.js';
 import { useT } from '../i18n/index.js';
+import { ChangedFromTo } from '../lib/journal.js';
 import { useLoad } from '../lib/use.js';
 import { useSession } from '../session.js';
 import { VehicleEconomics } from './EconomicsPage.js';
@@ -38,6 +39,8 @@ interface Card {
   events: { id: string; kind: VehicleEventKind; occurredOn: string; fromState: VehicleState | null; toState: VehicleState; fromPool: VehiclePool | null; toPool: VehiclePool | null; rentalId: string | null; reason: string | null; actor: string | null }[];
   serviceJobs: { id: string; number: string; status: 'open' | 'done' | 'cancelled'; payer: 'company' | 'customer'; reason: string; openedOn: string; closedOn: string | null; totalTetri: number; withheldTetri: number }[];
   rentals: { id: string; number: string; status: RentalStatus; customer: { id: string; name: string }; pickedUpOn: string | null; returnedOn: string | null; paidThrough: string | null; weeklyRateTetri: number }[];
+  /** Corrections: what was changed by hand, from what to what, and why. */
+  journal: { id: string; at: string; occurredOn: string | null; action: string; by: string | null; note: string | null; before: unknown; after: unknown }[];
 }
 
 export function VehiclePage() {
@@ -216,11 +219,24 @@ export function VehiclePage() {
         </section>
 
         <section className="card">
-          <BlockHead title={t.vehicle.history} sub={t.vehicle.eventsCount(data.events.length)} />
-          {data.events.length === 0 ? (
+          <BlockHead title={t.vehicle.history} sub={t.vehicle.eventsCount(data.events.length + data.journal.length)} />
+          {data.events.length === 0 && data.journal.length === 0 ? (
             <Empty text={t.common.dash} />
           ) : (
             <ul className="timeline">
+              {/* What was corrected by hand belongs in the same history as
+                  what happened to the moped (crit. 32, QA-W5-01). */}
+              {data.journal.map((l) => (
+                <li key={l.id}>
+                  <span className="mono muted">{fmtDate(l.occurredOn)}</span>
+                  <span>
+                    {t.feedWords[l.action] ?? l.action}
+                    <ChangedFromTo before={l.before} after={l.after} />
+                    {l.note && <span className="muted"> · {l.note}</span>}
+                    {l.by && <span className="muted"> · {l.by}</span>}
+                  </span>
+                </li>
+              ))}
               {data.events.map((e) => (
                 <li key={e.id}>
                   <span className="mono muted">{fmtDate(e.occurredOn)}</span>

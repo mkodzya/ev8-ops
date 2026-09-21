@@ -92,6 +92,15 @@ export function fleetRoutes(app: FastifyInstance): void {
     if (!v) throw notFound('vehicle_not_found', 'No such vehicle.');
     // What it cost is still moving while its shipment is unpaid (§7, QA-W5-11).
     const order = v.purchaseId ? (await preliminaryOf([v.purchaseId])).get(v.purchaseId) ?? null : null;
+    // Corrections live in the journal and nowhere else, so until now a VIN
+    // put right, a park changed or a cost rewritten left no trace anybody
+    // could see (crit. 13, 19, 32 — QA-W5-01).
+    const journal = await prisma.auditLog.findMany({
+      where: { entityType: 'vehicle', entityId: v.id },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+      include: { actor: { select: { name: true } } },
+    });
     return {
       vehicle: {
         id: v.id,
@@ -142,6 +151,16 @@ export function fleetRoutes(app: FastifyInstance): void {
         returnedOn: isoDate(r.returnedOn),
         paidThrough: isoDate(r.paidThrough),
         weeklyRateTetri: r.weeklyRateTetri,
+      })),
+      journal: journal.map((l) => ({
+        id: l.id,
+        at: l.createdAt.toISOString(),
+        occurredOn: isoDate(l.createdAt),
+        action: l.action,
+        by: l.actor?.name ?? null,
+        note: l.note,
+        before: l.before,
+        after: l.after,
       })),
     };
   });

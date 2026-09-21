@@ -205,6 +205,11 @@ describe.skipIf(!HAS_DB)('wave 5 · shipments', () => {
     expect(written).toHaveLength(2);
     expect(written.every((w) => w.note === 'paid the supplier')).toBe(true);
 
+    // The order's own feed carries the recost, which used to live only in
+    // audit_log where no screen read it (crit. 19, QA-W5-01).
+    const feed = json<{ journal: { action: string }[] }>(await call(owner, 'GET', `/api/purchases/${id}`));
+    expect(feed.journal.some((l) => l.action === 'purchase.recost')).toBe(true);
+
     // The shelf follows the same money: parts landed at the 17 % rate were
     // dragging the average down until the invoice was settled (QA-W5-17).
     const shelf = json<{ part: { onHand: number; avgCostTetri: number | null } }>(await call(owner, 'GET', `/api/parts/${part.id}`));
@@ -316,6 +321,17 @@ describe.skipIf(!HAS_DB)('wave 5 · the shelf and the records', () => {
     expect(fixed.statusCode, fixed.body).toBe(200);
     expect(json<{ vin: string }>(fixed).vin).toBe(better);
     expect((await call(owner, 'PATCH', `/api/fleet/${moped.id}/vin`, { vin: 'TEST-1', reason: 'ТЕСТ' })).statusCode).toBe(400);
+
+    // The correction has to be visible on the card, not only in audit_log:
+    // crit. 32 asks for a "было / стало" and the card showed none (QA-W5-01).
+    const card = json<{ journal: { action: string; note: string | null; before: unknown; after: unknown }[] }>(
+      await call(owner, 'GET', `/api/fleet/${moped.id}`),
+    );
+    const entry = card.journal.find((l) => l.action === 'vehicle.vin');
+    expect(entry).toBeDefined();
+    expect(entry!.note).toBe('ТЕСТ опечатка в CMR');
+    expect(entry!.before).toMatchObject({ vin: moped.vin });
+    expect(entry!.after).toMatchObject({ vin: better });
 
     const keep = await prisma.customer.create({ data: { name: `ТЕСТ Keep ${uniq()}` } });
     const drop = await prisma.customer.create({ data: { name: `ТЕСТ Drop ${uniq()}` } });

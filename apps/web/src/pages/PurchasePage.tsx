@@ -27,7 +27,11 @@ import { fmtForeign, fmtRate, statusOf, type Purchase, type PurchaseLine } from 
 interface Card {
   purchase: Purchase;
   vehicles: { id: string; vin: string; state: VehicleState; costTetri: number | null; model: string }[];
+  /** Corrections to the order: logistics, a recost, money stated as paid before. */
+  journal: { id: string; at: string; occurredOn: string | null; action: string; by: string | null; note: string | null; after: unknown }[];
 }
+
+type JournalRow = Card['journal'][number];
 
 type Sheet = 'receive' | 'extras' | 'paidBefore' | 'cancel';
 
@@ -339,7 +343,7 @@ export function PurchasePage() {
         </section>
       )}
 
-      <Feed purchase={p} vehicles={data.vehicles.length} />
+      <Feed purchase={p} vehicles={data.vehicles.length} journal={data.journal} />
 
       {sheet === 'receive' && mayEdit && <ReceiveSheet purchase={p} onClose={() => setSheet(null)} onDone={done} />}
       {sheet === 'extras' && <ExtrasSheet purchase={p} onClose={() => setSheet(null)} onDone={done} />}
@@ -374,14 +378,20 @@ function LineName({ line }: { line: PurchaseLine }) {
 }
 
 /**
- * Лента заказа (§3.5). There is no feed endpoint for an order, so this is
- * built from what the card already carries — the day it was placed, the
- * payments, the money carried over, and the day the shipment landed. It
- * claims nothing it cannot show.
+ * Лента заказа (§3.5). Built from what the card carries — the day it was
+ * placed, the payments, the money carried over, the day the shipment landed
+ * — plus the order's own journal, so a correction of the logistics or a cost
+ * worked out again is visible where it happened (crit. 13, 19 — QA-W5-01).
  */
-function Feed({ purchase: p, vehicles }: { purchase: Purchase; vehicles: number }) {
+function Feed({ purchase: p, vehicles, journal }: { purchase: Purchase; vehicles: number; journal: JournalRow[] }) {
   const t = useT();
   const rows: { at: string; text: string; amount?: string; note?: string }[] = [
+    ...journal.map((l) => ({
+      at: l.occurredOn ?? p.orderedOn,
+      text: t.feedWords[l.action] ?? l.action,
+      amount: recostUnits(l.after) ?? undefined,
+      note: [l.note, l.by].filter(Boolean).join(' · ') || undefined,
+    })),
     { at: p.orderedOn, text: t.orderCard.words.created, amount: fmtForeign(p.invoiceMinor, p.currency) },
     ...p.payments
       .filter((x) => x.direction === 'out')
@@ -420,6 +430,14 @@ function Feed({ purchase: p, vehicles }: { purchase: Purchase; vehicles: number 
       )}
     </section>
   );
+}
+
+/** "Пересчитана себестоимость" says how many mopeds and parts it moved. */
+function recostUnits(after: unknown): string | null {
+  if (!after || typeof after !== 'object') return null;
+  const a = after as { vehicles?: unknown; parts?: unknown };
+  const n = (typeof a.vehicles === 'number' ? a.vehicles : 0) + (typeof a.parts === 'number' ? a.parts : 0);
+  return n > 0 ? String(n) : null;
 }
 
 /** One VIN of the paste, as the screen has judged it. */

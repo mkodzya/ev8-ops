@@ -156,6 +156,15 @@ export function purchaseRoutes(app: FastifyInstance): void {
       orderBy: { vin: 'asc' },
       select: { id: true, vin: true, costTetri: true, state: true, model: { select: { brand: true, name: true } } },
     });
+    // Logistics corrected, a cost worked out again, money stated as paid
+    // before the move: all of it lives in the journal, and the order's feed
+    // was built from payments and the receipt alone (crit. 13, 19 — QA-W5-01).
+    const journal = await prisma.auditLog.findMany({
+      where: { entityType: 'purchase', entityId: p.id },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+      include: { actor: { select: { name: true } } },
+    });
     return {
       purchase: serializePurchase(p),
       vehicles: vehicles.map((v) => ({
@@ -164,6 +173,15 @@ export function purchaseRoutes(app: FastifyInstance): void {
         state: v.state,
         costTetri: v.costTetri,
         model: `${v.model.brand} ${v.model.name}`,
+      })),
+      journal: journal.map((l) => ({
+        id: l.id,
+        at: l.createdAt.toISOString(),
+        occurredOn: isoDate(l.createdAt),
+        action: l.action,
+        by: l.actor?.name ?? null,
+        note: l.note,
+        after: l.after,
       })),
     };
   });
