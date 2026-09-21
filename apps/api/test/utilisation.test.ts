@@ -97,3 +97,36 @@ describe.skipIf(!HAS_DB)('a moped carries its utilisation into the economics (§
     expect(list.rows.find((r) => r.id === v.id)?.utilisation).toBe(0);
   });
 });
+
+describe.skipIf(!HAS_DB)('a sale carried over from Odoo still takes the moped out (QA-W6-06)', () => {
+  it('stops counting it as idle capacity from the day it was sold, with no event to say so', async () => {
+    const { prisma } = await import('../src/lib/db.js');
+    const owner = await loginAs('owner');
+    const model = await prisma.vehicleModel.create({ data: { brand: 'Test', name: `Carried ${uniq()}` } });
+    const moped = await prisma.vehicle.create({ data: { vin: vin(uniq()), modelId: model.id, pool: 'rent', state: 'sold' } });
+    // It arrived, and that is the only event it has: the deal was written
+    // straight into `sales`, as the migration from Odoo did.
+    await prisma.vehicleEvent.create({ data: { vehicleId: moped.id, kind: 'arrived', occurredOn: new Date('2026-08-01'), toState: 'available' } });
+    const customer = await prisma.customer.create({ data: { name: `ТЕСТ Carried ${uniq()}` } });
+    const sale = await prisma.sale.create({
+      data: { number: `SL-T${uniq().replace(/\D/g, '').slice(-5)}`, customerId: customer.id, vehicleId: moped.id, soldOn: new Date('2026-09-10'), priceTetri: 500000 },
+    });
+
+    const mid = json<{ rows: { id: string; poolDays: number }[] }>(
+      await call(owner, 'GET', '/api/reports/utilisation?from=2026-09-01&to=2026-09-30'),
+    );
+    // Nine days of September, not thirty: sold on the tenth.
+    expect(mid.rows.find((r) => r.id === moped.id)?.poolDays).toBe(9);
+
+    const after = json<{ rows: { id: string }[] }>(await call(owner, 'GET', '/api/reports/utilisation?from=2026-10-01&to=2026-10-31'));
+    expect(after.rows.find((r) => r.id === moped.id)).toBeUndefined();
+
+    // Bought back, and it is capacity again from that day — the event the
+    // product writes wins by being later.
+    await prisma.sale.update({ where: { id: sale.id }, data: { status: 'bought_back', boughtBackOn: new Date('2026-10-15') } });
+    const back = json<{ rows: { id: string; poolDays: number }[] }>(
+      await call(owner, 'GET', '/api/reports/utilisation?from=2026-10-01&to=2026-10-31'),
+    );
+    expect(back.rows.find((r) => r.id === moped.id)?.poolDays).toBe(17);
+  });
+});

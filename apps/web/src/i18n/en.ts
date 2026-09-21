@@ -994,6 +994,7 @@ export const en = {
     payback: 'Paid back',
     perRentedDay: 'Per day out',
     unpriced: 'Mopeds with no cost written down',
+    somePreliminary: (n: number) => `${n} of them preliminary: their shipment is not paid in full`,
     unpricedHint: 'They are left out of the total: a cost nobody entered is not a zero.',
     noCost: 'No cost',
     totals: 'Fleet',
