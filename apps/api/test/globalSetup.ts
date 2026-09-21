@@ -61,6 +61,17 @@ export async function teardown(): Promise<void> {
     await prisma.stockMove.deleteMany({ where: { createdAt: since } });
     await prisma.part.deleteMany({ where: { createdAt: since } });
     await prisma.vehicleModel.deleteMany({ where: { createdAt: since } });
+    // Settings are singletons and quick rates outlive the run that made them,
+    // but both remember the person who touched them (wave 6 §3.5). A run that
+    // changed the deposit or added a rate therefore pins its own owner in
+    // place, and deleting that owner fails on the foreign key — which is what
+    // left the whole teardown half-done. The rows a run created go; the
+    // singleton only forgets who last touched it.
+    await prisma.quickRate.deleteMany({ where: { createdAt: since } });
+    await prisma.workshop.deleteMany({ where: { createdAt: since } });
+    await prisma.quickRate.updateMany({ where: { createdBy: { createdAt: since } }, data: { createdById: null } });
+    await prisma.workshop.updateMany({ where: { createdBy: { createdAt: since } }, data: { createdById: null } });
+    await prisma.rentalSettings.updateMany({ where: { updatedBy: { createdAt: since } }, data: { updatedById: null } });
     await prisma.customer.deleteMany({ where: { createdAt: since } });
     await prisma.user.deleteMany({ where: { createdAt: since } }); // sessions cascade
   } catch (err) {

@@ -9,16 +9,17 @@
 //     slides with the clock cannot be read out at a Monday meeting.
 //   * **Money is counted by the date it was paid**, not by the weeks it was
 //     spread over. Four weeks paid in advance on Monday belong to Monday's
-//     week entirely; the next three weeks show nothing for it. Which row a
-//     payment lands on comes from what it was paid for (`payment.kind`), and
-//     a card is counted at what the customer actually paid — the acquirer's
-//     1.5 % is a row of its own, because it is the company's expense and not
-//     the customer's debt (`money.md`).
+//     week entirely; the next three weeks show nothing for it. Which row it
+//     lands on is the mixed rule in `weekIncome` below — the reasoning is
+//     there, beside the code it governs. A card is counted at what the
+//     customer actually paid: the acquirer's 1.5 % is a row of its own,
+//     because it is the company's expense and not the customer's debt
+//     (`money.md`).
 //
 // What was "paid before the transfer" is not a payment at all: it is a fact
 // carried over from Odoo with no day and no money movement, so it is kept
 // apart and never joins a week's takings (default Q3, crit. 9).
-import { addDays, daysBetween } from './time.js';
+import { addDays } from './time.js';
 import type { Tetri } from './money.js';
 import type { ISODate } from './types.js';
 
@@ -42,10 +43,8 @@ export function previousWeek(p: Period): Period {
 
 export const inPeriod = (p: Period, day: ISODate): boolean => day >= p.from && day <= p.to;
 
-/** Days in the period, both ends counted. */
-export const lengthOf = (p: Period): number => Math.max(0, daysBetween(p.from, p.to) + 1);
-
 export type WeekPaymentKind = 'rent' | 'sale' | 'service' | 'on_account' | 'deposit_payout' | 'buyback' | 'supplier';
+export type WeekAllocationTarget = 'period' | 'deposit' | 'instalment' | 'charge';
 
 export interface WeekPayment {
   occurredOn: ISODate;
@@ -56,84 +55,90 @@ export interface WeekPayment {
   /** What the customer paid — a card at its face value, before the acquirer's cut. */
   grossTetri: Tetri;
   feeTetri: Tetri;
-  /** How much of this payment's gross went onto the deposit rather than the rent. */
-  toDepositTetri: Tetri;
+  /** What this payment closed. Empty when it closed nothing yet. */
+  allocations: { target: WeekAllocationTarget; amountTetri: Tetri }[];
 }
 
-export interface WeekMoney {
-  /** Rent that came in this week, the deposit part of it taken out. */
+export interface WeekIncome {
+  /**
+   * Everything that came through the door in the period, summed straight off
+   * the payments — not by adding the rows below up. It is the figure a person
+   * checks against the bank statement and the till, and it can only serve as
+   * that check while it is worked out independently of the breakdown.
+   */
+  totalTetri: Tetri;
   rentTetri: Tetri;
   saleTetri: Tetri;
-  /** Deposits received: the part of the week's payments that landed on a deposit. */
+  /** Deposits received. */
   depositsInTetri: Tetri;
+  /** Repairs the customer paid for, and what a return charged beyond the weeks. */
+  serviceTetri: Tetri;
   /** The acquirer's 1.5 % on the week's cards — a company expense, shown apart. */
   acquiringFeeTetri: Tetri;
-  /** Deposits handed back this week. */
+  /** Deposits handed back. */
   depositsOutTetri: Tetri;
 }
 
 /**
- * What came in and went out over the period, by the day each payment carries.
+ * What came in over the period, and what it came in for.
  *
- * A deposit has no payment kind of its own — it is taken with the rent and
- * the allocation says which part of that one payment it was. So the split of
- * a single payment into "rent" and "deposit" comes from the allocation, while
- * *which week the payment belongs to* stays the payment's own date. The rows
- * are disjoint: 330 ₾ taken as 180 deposit + 150 rent shows 150 and 180, and
- * never 330 twice.
+ * **The day is always the payment's own day.** Four weeks paid in advance on
+ * Monday belong to Monday's week entirely; the next three weeks show nothing
+ * for it. That part of the designer's rule (21.09.2026) is not in question.
+ *
+ * **The row is mixed, and deliberately so** (designer, 22.09.2026, after the
+ * tester counted the stand both pure ways). A payment's allocations name the
+ * row where they exist; the part of the payment nothing has taken yet is
+ * named by what the payment was for. Neither pure rule gives the table the
+ * book asks for:
+ *
+ *   * *by the payment's kind alone* — a deposit is taken inside the rent
+ *     payment at hand-over (330 ₾ = a week of 150 and a deposit of 180, one
+ *     row of kind `rent`), so "получено залогов" would be nought for ever;
+ *   * *by the allocations alone* — money paid ahead of the weeks it will pay
+ *     for is allocated to nothing yet, so 1 020 ₾ that physically arrived
+ *     landed in no row at all, the 600 ₾ of criterion 1а among them.
+ *
+ * The mixed rule keeps both: the hand-over splits into 150 rent and 180
+ * deposit, and the 600 ₾ paid ahead counts as rent on the day it was handed
+ * over. One function, because if the designer changes the rule again this is
+ * the only place that should change.
  */
-export function weekMoney(payments: readonly WeekPayment[], period: Period): WeekMoney {
-  const out: WeekMoney = { rentTetri: 0, saleTetri: 0, depositsInTetri: 0, acquiringFeeTetri: 0, depositsOutTetri: 0 };
+export function weekIncome(payments: readonly WeekPayment[], period: Period): WeekIncome {
+  const out: WeekIncome = { totalTetri: 0, rentTetri: 0, saleTetri: 0, depositsInTetri: 0, serviceTetri: 0, acquiringFeeTetri: 0, depositsOutTetri: 0 };
   for (const p of payments) {
     if (!inPeriod(period, p.occurredOn)) continue;
     // Money kept out of a deposit is written as a payment so the repair it
-    // paid for has one; no money came through the door for it.
+    // paid for has one; nothing came through the door for it.
     if (p.channel === 'deposit') continue;
-    if (p.direction === 'in') {
-      if (p.channel === 'acquiring') out.acquiringFeeTetri += p.feeTetri;
-      out.depositsInTetri += Math.min(p.toDepositTetri, p.grossTetri);
-      const rest = Math.max(0, p.grossTetri - p.toDepositTetri);
-      if (p.kind === 'rent' || p.kind === 'on_account') out.rentTetri += rest;
-      else if (p.kind === 'sale') out.saleTetri += rest;
-    } else if (p.kind === 'deposit_payout') {
-      out.depositsOutTetri += p.grossTetri;
+    if (p.direction === 'out') {
+      if (p.kind === 'deposit_payout') out.depositsOutTetri += p.grossTetri;
+      continue;
     }
+    if (p.channel === 'acquiring') out.acquiringFeeTetri += p.feeTetri;
+    out.totalTetri += p.grossTetri;
+
+    let placed = 0;
+    for (const a of p.allocations) {
+      placed += a.amountTetri;
+      if (a.target === 'deposit') out.depositsInTetri += a.amountTetri;
+      else if (a.target === 'instalment') out.saleTetri += a.amountTetri;
+      // What a return charged beyond the weeks — a key, days of delay, a
+      // repair the renter pays for — reads as a repair, not as rent.
+      else if (a.target === 'charge') out.serviceTetri += a.amountTetri;
+      else out.rentTetri += a.amountTetri;
+    }
+    // The rest is named by what the payment was for. A kind that lands in no
+    // row is left out on purpose: the total will then disagree with the rows,
+    // and the test that compares them is what says so out loud.
+    const left = Math.max(0, p.grossTetri - placed);
+    if (left === 0) continue;
+    if (p.kind === 'rent' || p.kind === 'on_account') out.rentTetri += left;
+    else if (p.kind === 'sale') out.saleTetri += left;
+    else if (p.kind === 'service') out.serviceTetri += left;
   }
   return out;
 }
 
-export interface ArrearsRental {
-  id: string;
-  /** Weeks of this rental, with what each had been paid **by the day asked about**. */
-  periods: { startsOn: ISODate; amountTetri: Tetri; paidTetri: Tetri }[];
-}
-
-export interface Arrears {
-  rentals: number;
-  tetri: Tetri;
-}
-
-/**
- * Rent that was due and unpaid on `day`. A week is owed from the day it
- * starts (the same rule the customer's debt follows), so a week that begins
- * on `day` already counts.
- */
-export function arrearsOn(rentals: readonly ArrearsRental[], day: ISODate): Arrears {
-  let count = 0;
-  let tetri = 0;
-  for (const r of rentals) {
-    const owed = r.periods
-      .filter((p) => p.startsOn <= day)
-      .reduce((n, p) => n + Math.max(0, p.amountTetri - p.paidTetri), 0);
-    if (owed > 0) {
-      count++;
-      tetri += owed;
-    }
-  }
-  return { rentals: count, tetri };
-}
-
-/** Deposit money we are still holding: taken in, less kept, less handed back. */
-export function depositsHeld(deposits: readonly { paidTetri: Tetri; withheldTetri: Tetri; paidOutTetri: Tetri }[]): Tetri {
-  return deposits.reduce((n, d) => n + Math.max(0, d.paidTetri - d.withheldTetri - d.paidOutTetri), 0);
-}
+/** The rows of the breakdown, for the check against `totalTetri`. */
+export const incomeRows = (i: WeekIncome): Tetri => i.rentTetri + i.saleTetri + i.depositsInTetri + i.serviceTetri;

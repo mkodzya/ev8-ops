@@ -48,9 +48,14 @@ function pdfRows(w: WeekAnswer): { groups: { title: { ka: string; en: string }; 
       value: `${money(w.rentals.overdueTetri)} · ${w.rentals.overdueCount}`,
       negative: w.rentals.overdueTetri > 0,
     },
+    // The total first, worked out straight off the payments: it is what the
+    // bank statement and the till say, and the rows under it answer the other
+    // question — what the money came in for (designer, 22.09.2026).
+    { label: { ka: 'სულ შემოსული', en: 'Received in all' }, value: money(w.money.totalTetri), strong: true },
     { label: { ka: 'შემოსული — ქირა', en: 'Received — rent' }, value: money(w.money.rentTetri) },
     { label: { ka: 'შემოსული — გაყიდვები', en: 'Received — sales' }, value: money(w.money.saleTetri) },
     { label: { ka: 'მიღებული დეპოზიტები', en: 'Deposits received' }, value: money(w.money.depositsInTetri) },
+    { label: { ka: 'შემოსული — შეკეთება', en: 'Received — repairs' }, value: money(w.money.serviceTetri) },
     { label: { ka: 'ექვაირინგის საკომისიო', en: 'Acquiring fee' }, value: money(w.money.acquiringFeeTetri, { negative: true }), negative: true },
     { label: { ka: 'დაბრუნებული დეპოზიტები', en: 'Deposits handed back' }, value: money(w.money.depositsOutTetri, { negative: true }), negative: true },
     { label: { ka: 'დეპოზიტიდან დაკავებული', en: 'Kept out of deposits' }, value: money(w.money.withheldTetri) },

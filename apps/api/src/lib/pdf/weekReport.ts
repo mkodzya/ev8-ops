@@ -21,6 +21,8 @@ export interface WeekRow {
   value: string;
   /** Money going out, printed in the critical ink. */
   negative?: boolean;
+  /** A figure the rows under it break down: it carries the weight. */
+  strong?: boolean;
   /** "нет данных" and the like: quiet, so a reader does not take it for a number. */
   absent?: boolean;
 }
@@ -45,7 +47,7 @@ function row(doc: Doc, r: WeekRow): void {
   const afterLabel = doc.pdf.y;
   write(doc, r.value, {
     bold: !r.absent,
-    size: r.absent ? 8.5 : 10.5,
+    size: r.absent ? 8.5 : r.strong ? 12 : 10.5,
     color: r.absent ? EN : r.negative ? tokens.crit : tokens.ink,
     align: 'right',
     x: valueX,

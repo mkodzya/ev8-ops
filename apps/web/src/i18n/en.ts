@@ -12,6 +12,7 @@ import { wave4En } from './wave4.js';
 import { wave5salesEn } from './wave5-sales.js';
 import { wave5purchasesEn } from './wave5-purchases.js';
 import { wave5serviceEn } from './wave5-service.js';
+import { wave6weekEn } from './wave6-week.js';
 export const en = {
   lang: { label: 'Language', ka: 'ქართული', ru: 'Русский', en: 'English' },
 
@@ -93,6 +94,7 @@ export const en = {
       stock: 'Stock',
       payments: 'Payments',
       statements: 'Statements',
+      week: 'The week',
       economics: 'Economics',
     },
   },
@@ -1190,6 +1192,7 @@ export const en = {
   ...wave5salesEn,
   ...wave5purchasesEn,
   ...wave5serviceEn,
+  ...wave6weekEn,
 };
 
 export type Dict = typeof en;

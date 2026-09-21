@@ -3,6 +3,7 @@ import { wave4Ru } from './wave4.js';
 import { wave5salesRu } from './wave5-sales.js';
 import { wave5purchasesRu } from './wave5-purchases.js';
 import { wave5serviceRu } from './wave5-service.js';
+import { wave6weekRu } from './wave6-week.js';
 import type { Dict } from './en.js';
 
 // Typed as Dict: a missing or misspelled key fails the build.
@@ -97,6 +98,7 @@ export const ru: Dict = {
       stock: 'Склад',
       payments: 'Платежи',
       statements: 'Выписки',
+      week: 'Неделя',
       economics: 'Экономика',
     },
   },
@@ -1193,4 +1195,5 @@ export const ru: Dict = {
   ...wave5salesRu,
   ...wave5purchasesRu,
   ...wave5serviceRu,
+  ...wave6weekRu,
 };

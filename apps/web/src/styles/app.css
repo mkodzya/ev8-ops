@@ -1311,3 +1311,22 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
 .buy-extras-v { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
 /* The receipt's summary sits inside the form, so it is quieter than a card. */
 .card-quiet { background: var(--surface-2); border-color: var(--line-soft); }
+
+/* ---- wave 6: the week (§3.1) -------------------------------------------- */
+/* The figures of the book: a label that may wrap to three lines in Georgian
+   and one number, hard right, so the column of numbers can be read down
+   without reading the labels at all. */
+.week-period { margin-bottom: 12px; }
+.chip-date { font: var(--text-label); }
+.figures { margin: 0; }
+.figure { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; align-items: baseline; padding: 8px 0; border-top: 1px solid var(--line-soft); }
+.figure:first-child { border-top: 0; }
+.figure > dt { min-width: 0; color: var(--muted); }
+.figure > dt > .hint { display: block; margin: 2px 0 0; }
+.figure > dd { margin: 0; justify-self: end; text-align: right; white-space: nowrap; }
+/* Money that belongs to no week at all stands away from the ones that do. */
+.figure-apart { border-top: 1px solid var(--line); margin-top: 6px; }
+/* "Поступило всего" is the figure a person checks against the statement; the
+   rows under it break the same money down by what it came in for. */
+.figure-total > dt { color: var(--ink); font-weight: 600; }
+.figure-total > dd { font: var(--text-h3); }

@@ -1,32 +1,38 @@
 import {
   addDays,
-  arrearsOn,
   daysBetween,
-  depositsHeld,
   fleetUtilisation,
   minDate,
   todayISO,
   vehicleOn,
-  weekMoney,
+  weekIncome,
   type Period,
-  type WeekMoney,
+  type WeekIncome,
   type WeekPayment,
 } from '@ev8/shared';
 import { batteriesNow } from '../routes/batteries.js';
 import { dateFromISO, isoDate } from './dates.js';
 import { prisma } from './db.js';
+import { depositsOverview } from './deposits.js';
 import { env } from './env.js';
+import { overdueTotals } from './overdue.js';
 import { utilisationVehicles } from './utilisation.js';
 
-// The data side of "Отчёты → Неделя" (wave 6 §3.1). The arithmetic is in
-// `packages/shared/src/week.ts`; here we only read the rows it needs.
+// The data side of "Отчёты → Неделя" (wave 6 §3.1). The arithmetic of the
+// money is in `packages/shared/src/week.ts`; here we only read the rows it
+// needs, and borrow the figures other screens already own.
 //
-// Everything that can be answered *as of a day* is answered as of the day the
-// period ends, not as of now — that is what makes "прошлая неделя" its own
-// week rather than a snapshot of this morning wearing last week's dates
-// (crit. 3). A figure the data cannot place in time says so instead of
-// pretending: the battery count is the count today, and it is labelled that
-// way on the screen.
+// Nothing here recomputes what another screen answers. Arrears come from the
+// scan "Today" uses (`overdue.ts`), deposit money held comes from the one
+// "Деньги → Залоги" uses (`deposits.ts`), utilisation comes from M-10. A week
+// that quietly disagreed with the screen beside it would be worse than no
+// week at all.
+//
+// What can be dated is read as of the day the period ends, so "прошлая
+// неделя" is its own week rather than this morning wearing older labels
+// (crit. 3). Two figures cannot be: arrears and deposit money held are what
+// they are now, because that is how "Сегодня" and "Залоги" report them and
+// the week must agree with those (crit. 1в).
 //
 // One figure has no data at all and never will until somebody starts keeping
 // it: battery swaps. It comes back `null`, and the screen writes "нет данных —
@@ -48,11 +54,12 @@ export interface WeekAnswer {
     /** The longest a moped in repair has been there, in days. */
     serviceLongestDays: number | null;
   };
+  /** `overdue*` is now, and is the same pair of figures "Today" shows (crit. 1в). */
   rentals: { started: number; returned: number; overdueCount: number; overdueTetri: number };
-  money: WeekMoney & {
+  money: WeekIncome & {
     /** Kept out of deposits this week: not money through the door, a deposit spent. */
     withheldTetri: number;
-    /** Deposit money still with us at the end of the period. */
+    /** Deposit money still with us — the figure "Деньги → Залоги" shows. */
     heldTetri: number;
     /**
      * Carried over from Odoo as already settled (default Q3): no day, no
@@ -74,32 +81,13 @@ export async function weekReport(from: string, to: string): Promise<WeekAnswer> 
   const asOf = minDate(to, today);
   const fromDate = dateFromISO(from)!;
   const toDate = dateFromISO(to)!;
-  const asOfDate = dateFromISO(asOf)!;
 
-  const [{ input: vehicles }, started, returned, rentalRows, payments, withheld, depositRows, transferPeriods, transferDeposits, unmatchedLines, batteries] =
+  const [{ input: vehicles }, started, returned, overdue, payments, withheld, deposits, transferPeriods, transferDeposits, unmatchedLines, batteries] =
     await Promise.all([
       utilisationVehicles(),
       prisma.rental.count({ where: { pickedUpOn: { gte: fromDate, lte: toDate } } }),
       prisma.rental.count({ where: { returnedOn: { gte: fromDate, lte: toDate } } }),
-      // Arrears as they stood on `asOf`: a week counts as paid only by money
-      // that had arrived by then, so last week's figure is last week's.
-      prisma.rental.findMany({
-        where: { pickedUpOn: { not: null, lte: asOfDate } },
-        select: {
-          id: true,
-          periods: {
-            select: {
-              startsOn: true,
-              amountTetri: true,
-              paidBeforeTransfer: true,
-              allocations: {
-                where: { payment: { voidedAt: null, occurredOn: { lte: asOfDate } } },
-                select: { amountTetri: true },
-              },
-            },
-          },
-        },
-      }),
+      overdueTotals(),
       prisma.payment.findMany({
         where: { voidedAt: null, occurredOn: { gte: fromDate, lte: toDate } },
         select: {
@@ -109,24 +97,14 @@ export async function weekReport(from: string, to: string): Promise<WeekAnswer> 
           kind: true,
           grossTetri: true,
           feeTetri: true,
-          allocations: { where: { target: 'deposit' }, select: { amountTetri: true } },
+          allocations: { select: { target: true, amountTetri: true } },
         },
       }),
       prisma.depositWithholding.aggregate({
         where: { voidedAt: null, createdAt: { gte: new Date(`${from}T00:00:00+04:00`), lt: endOfDay(to) } },
         _sum: { amountTetri: true },
       }),
-      // Every deposit, read as it stood on `asOf`: what had been paid onto it,
-      // kept out of it and handed back by that day.
-      prisma.deposit.findMany({
-        select: {
-          receivedBeforeTransferTetri: true,
-          paidOutBeforeTetri: true,
-          allocations: { where: { payment: { voidedAt: null, occurredOn: { lte: asOfDate } } }, select: { amountTetri: true } },
-          payouts: { where: { voidedAt: null, occurredOn: { lte: asOfDate } }, select: { grossTetri: true } },
-          withholdings: { where: { voidedAt: null, createdAt: { lt: endOfDay(asOf) } }, select: { amountTetri: true } },
-        },
-      }),
+      depositsOverview(),
       prisma.rentalPeriod.aggregate({ where: { paidBeforeTransfer: true }, _sum: { amountTetri: true } }),
       prisma.deposit.aggregate({ _sum: { receivedBeforeTransferTetri: true } }),
       prisma.statementLine.count({ where: { status: 'unmatched', occurredOn: { gte: fromDate, lte: toDate } } }),
@@ -146,7 +124,7 @@ export async function weekReport(from: string, to: string): Promise<WeekAnswer> 
   }
 
   const period: Period = { from, to };
-  const money = weekMoney(
+  const income = weekIncome(
     payments.map<WeekPayment>((p) => ({
       occurredOn: isoDate(p.occurredOn)!,
       direction: p.direction as WeekPayment['direction'],
@@ -154,23 +132,9 @@ export async function weekReport(from: string, to: string): Promise<WeekAnswer> 
       kind: p.kind as WeekPayment['kind'],
       grossTetri: p.grossTetri,
       feeTetri: p.feeTetri,
-      toDepositTetri: p.allocations.reduce((n, a) => n + a.amountTetri, 0),
+      allocations: p.allocations.map((a) => ({ target: a.target as WeekPayment['allocations'][number]['target'], amountTetri: a.amountTetri })),
     })),
     period,
-  );
-
-  const arrears = arrearsOn(
-    rentalRows.map((r) => ({
-      id: r.id,
-      periods: r.periods.map((p) => ({
-        startsOn: isoDate(p.startsOn)!,
-        amountTetri: p.amountTetri,
-        // A week settled before the transfer carries no payment and no day:
-        // it is paid, and it is not this week's takings (crit. 9).
-        paidTetri: p.paidBeforeTransfer ? p.amountTetri : p.allocations.reduce((n, a) => n + a.amountTetri, 0),
-      })),
-    })),
-    asOf,
   );
 
   // The same M-10 the utilisation screen shows, from the same function: the
@@ -183,17 +147,11 @@ export async function weekReport(from: string, to: string): Promise<WeekAnswer> 
     asOf,
     today,
     fleet,
-    rentals: { started, returned, overdueCount: arrears.rentals, overdueTetri: arrears.tetri },
+    rentals: { started, returned, overdueCount: overdue.rentals, overdueTetri: overdue.tetri },
     money: {
-      ...money,
+      ...income,
       withheldTetri: withheld._sum.amountTetri ?? 0,
-      heldTetri: depositsHeld(
-        depositRows.map((d) => ({
-          paidTetri: d.receivedBeforeTransferTetri + d.allocations.reduce((n, a) => n + a.amountTetri, 0),
-          withheldTetri: d.withholdings.reduce((n, w) => n + w.amountTetri, 0),
-          paidOutTetri: d.paidOutBeforeTetri + d.payouts.reduce((n, p) => n + p.grossTetri, 0),
-        })),
-      ),
+      heldTetri: deposits.totals.heldTetri,
       paidBeforeTransferTetri: (transferPeriods._sum.amountTetri ?? 0) + (transferDeposits._sum.receivedBeforeTransferTetri ?? 0),
     },
     utilisation: { percent: u.percent, rentedDays: u.rentedDays, poolDays: u.poolDays, unassigned: u.unassigned },
