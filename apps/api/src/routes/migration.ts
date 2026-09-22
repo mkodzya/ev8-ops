@@ -67,7 +67,14 @@ export function migrationRoutes(app: FastifyInstance): void {
             who: d.rental.customer.name,
             rentalStatus: d.rental.status,
             endedOn: isoDate(d.rental.returnedOn),
-            amountTetri: d.paidTetri,
+            // Two sums, and they are not the same question. What was
+            // received is what is being sorted out; what the contract asked
+            // for is what Odoo knows when it knows nothing else. Where they
+            // differ the screen says so, because the system cannot tell
+            // "нет данных о платеже" from "залог не брали" and must not
+            // pretend it can (designer, 22.09, §3.7 and crit. 25а).
+            receivedTetri: d.paidTetri,
+            contractTetri: d.amountTetri,
           })),
         },
         // Named, not hidden: an owner who reads "42 held" elsewhere has to

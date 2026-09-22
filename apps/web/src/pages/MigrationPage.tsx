@@ -29,7 +29,11 @@ const DECISIONS: Decision[] = ['returned_earlier', 'kept_earlier', 'unknown'];
 
 interface Migration {
   deposits: {
-    due: { count: number; amountTetri: number; rows: { id: string; rentalId: string; number: string; who: string; endedOn: string | null; amountTetri: number }[] };
+    due: {
+      count: number;
+      amountTetri: number;
+      rows: { id: string; rentalId: string; number: string; who: string; endedOn: string | null; receivedTetri: number; contractTetri: number }[];
+    };
     running: { count: number; amountTetri: number };
   };
   rentalsWithoutVin: { count: number; rows: { id: string; number: string; status: string; who: string; pickedUpOn: string | null; note: string | null }[] };
@@ -131,6 +135,12 @@ function Deposits({ data, onDone }: { data: Migration['deposits']; onDone: () =>
   const [missing, setMissing] = useState<'' | 'ids' | 'reason'>('');
 
   const rows = data.due.rows;
+  /**
+   * A chosen deposit whose contract and payment disagree: the screen asks
+   * whether it was taken at all rather than answering for the person
+   * (CLAUDE.md rule 1 — the system does not invent what it does not know).
+   */
+  const asksWhether = rows.some((r) => picked.has(r.id) && r.contractTetri !== r.receivedTetri);
   const toggle = (id: string) => {
     const next = new Set(picked);
     if (next.has(id)) next.delete(id);
@@ -184,7 +194,13 @@ function Deposits({ data, onDone }: { data: Migration['deposits']; onDone: () =>
                       <Link to={`/rentals/${r.rentalId}`}>{r.number}</Link>
                     </td>
                     <td className="muted">{r.endedOn ? t.migrationPage.endedOn(fmtDate(r.endedOn)) : ''}</td>
-                    <td className="num">{formatGel(r.amountTetri)}</td>
+                    <td className="num">
+                      {formatGel(r.receivedTetri)}
+                      {/* Only where the two disagree, and that is the point:
+                          a second line nobody sees on most rows is what makes
+                          the rare one visible (designer, 22.09). */}
+                      {r.contractTetri !== r.receivedTetri && <div className="hint muted">{t.migrationPage.byContract(formatGel(r.contractTetri))}</div>}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -214,7 +230,7 @@ function Deposits({ data, onDone }: { data: Migration['deposits']; onDone: () =>
                 setReason(e.target.value);
                 if (missing === 'reason') setMissing('');
               }}
-              placeholder={t.migrationPage.reasonHint}
+              placeholder={asksWhether ? t.migrationPage.reasonAsk : t.migrationPage.reasonHint}
             />
             {missing === 'reason' && <span className="field-err">{t.migrationPage.needReason}</span>}
           </label>
