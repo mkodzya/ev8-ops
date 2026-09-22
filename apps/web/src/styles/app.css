@@ -1275,6 +1275,21 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
 .num-strip > .num-crit .num-v { color: var(--crit); }
 .queue-card { padding-bottom: 8px; }
 .queue-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 6px; }
+/* A heading that opens the block under it (wave 6 §3.8). It is a button, so
+   it says so to a screen reader and answers the keyboard; it looks like the
+   heading it replaced, and it is as wide as the card — the counter beside it
+   was 34 px and got narrower the less there was to show (QA-W6-22, ux №13). */
+.history-head {
+  width: 100%;
+  min-height: 44px;
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
 .queue-head h2 { margin: 0; font: var(--text-h3); }
 .queue { list-style: none; margin: 0; padding: 0; }
 .q-row { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; align-items: center; padding: 10px 0; border-top: 1px solid var(--line-soft); }
