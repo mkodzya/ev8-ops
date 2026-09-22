@@ -49,12 +49,15 @@ export function RecordHistory({ kind, id, search }: { kind: 'rental' | 'sale' | 
 
   return (
     <section className="card">
-      <div className="queue-head">
+      {/* The whole heading opens it, not the count beside it. A counter is as
+          wide as its digits — 34 px for "4" and narrower for "2" — and
+          `ux.md` №13 asks for 44. A target that shrinks as a record has less
+          history is the wrong shape for the rule; the heading is always as
+          wide as the block (QA-W6-22). */}
+      <button type="button" className="queue-head history-head" onClick={() => setOpen(!open)} aria-expanded={open}>
         <h2>{t.recordHistory.title}</h2>
-        <button type="button" className="pill pill-sm" onClick={() => setOpen(!open)} aria-expanded={open}>
-          {rows.length}
-        </button>
-      </div>
+        <span className="pill pill-sm">{rows.length}</span>
+      </button>
       {open && (
         <>
           {rows.length === 0 ? (
