@@ -4,6 +4,7 @@ import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { LoadError } from '../components/LoadError.js';
 import { KommoField } from '../components/Kommo.js';
+import { RecordHistory } from '../components/RecordHistory.js';
 import { RowMenu } from '../components/RowMenu.js';
 import { SignScreen, signedAtText } from '../components/Documents.js';
 import { Empty, Loading, PageHead, Vin } from '../components/ui.js';
@@ -51,6 +52,9 @@ export function SalePage() {
   if (!data) return <Loading />;
   const s = data.sale;
   const gap = scheduleGap(s.priceTetri, s.instalments);
+  // The feed says what happened to the sale; who changed it is the block
+  // below it (§3.8, crit. 17а).
+  const feed = data.feed.filter((row) => row.kind !== 'log');
   const live = s.status === 'active';
   const owner = can('deposit.decide');
   const doc = data.documents.find((d) => d.docKind === 'sale') ?? null;
@@ -195,11 +199,11 @@ export function SalePage() {
         <div className="queue-head">
           <h2>{t.saleCard.feed}</h2>
         </div>
-        {data.feed.length === 0 ? (
+        {feed.length === 0 ? (
           <Empty text={t.common.dash} />
         ) : (
           <ul className="timeline">
-            {data.feed.map((row, i) => {
+            {feed.map((row, i) => {
               // A payment's line names the way the money came in; everything
               // else is an action the journal already has words for.
               const channels: Record<string, string> = t.payments.channels;
@@ -230,6 +234,8 @@ export function SalePage() {
           }}
         />
       )}
+      <RecordHistory kind="sale" id={s.id} search={s.number} />
+
       {sheet === 'schedule' && (
         <ScheduleSheet
           id={s.id}

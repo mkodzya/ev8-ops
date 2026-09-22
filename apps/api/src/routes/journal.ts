@@ -3,6 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import { audit } from '../lib/audit.js';
 import { dayOf } from '../lib/dates.js';
 import { prisma } from '../lib/db.js';
+import { badRequest } from '../lib/errors.js';
 import { actorOf } from '../lib/guard.js';
 
 // The journal on its own screen (wave 6 §3.8, B9-01, X3).
@@ -71,6 +72,40 @@ async function numbersFor(rows: { entityType: string; entityId: string | null }[
  * name, and the query then asks for lines about them — an email is matched
  * too, because a failed sign-in has no record at all, only an address.
  */
+/** The records a journal slice can be asked for by id. */
+export const RECORD_KINDS = ['rental', 'sale', 'purchase', 'service_job', 'vehicle', 'customer'] as const;
+export type RecordKind = (typeof RECORD_KINDS)[number];
+
+/**
+ * A record and the parts of it that carry their own id (§3.8, уточнено
+ * 22.09.2026).
+ *
+ * A deposit decision is written on the deposit, a week's correction on the
+ * period, a signature on the act, an allocation on the allocation — but the
+ * person did all of it inside the rental and looks for it there. A slice that
+ * loses those answers "кто это сделал" with an untruth: by `R-00509` the
+ * journal gave three lines and the card two.
+ */
+async function withParts(kind: RecordKind, id: string): Promise<string[]> {
+  const one = [id];
+  if (kind === 'rental') {
+    const [deposits, payments, acts] = await Promise.all([
+      prisma.deposit.findMany({ where: { rentalId: id }, select: { id: true } }),
+      prisma.payment.findMany({ where: { rentalId: id }, select: { id: true } }),
+      prisma.act.findMany({ where: { rentalId: id }, select: { id: true } }),
+    ]);
+    return [...one, ...deposits, ...payments, ...acts].map((x) => (typeof x === 'string' ? x : x.id));
+  }
+  if (kind === 'sale' || kind === 'purchase' || kind === 'service_job') {
+    const where = kind === 'sale' ? { saleId: id } : kind === 'purchase' ? { purchaseId: id } : { serviceJobId: id };
+    const payments = await prisma.payment.findMany({ where, select: { id: true } });
+    return [...one, ...payments.map((x) => x.id)];
+  }
+  // A moped and a customer are written on directly; their rentals and sales
+  // are records of their own and keep their own history.
+  return one;
+}
+
 async function idsMatching(query: string): Promise<{ ids: string[]; emails: string[] }> {
   const q = query.trim();
   if (!q) return { ids: [], emails: [] };
@@ -87,19 +122,16 @@ async function idsMatching(query: string): Promise<{ ids: string[]; emails: stri
     const saleIds = s.map((x) => x.id);
     const purchaseIds = p.map((x) => x.id);
     const jobIds = j.map((x) => x.id);
-    // What belongs to the record answers for it: "все её изменения, включая
-    // удержание залога и платежи" (crit. 20). A deposit and a payment are
-    // written under their own ids, so asking only about the rental's id
-    // finds the hand-over and nothing else (QA-W6-10).
-    const [deposits, payments, acts] = await Promise.all([
-      rentalIds.length ? prisma.deposit.findMany({ where: { rentalId: { in: rentalIds } }, select: { id: true } }) : [],
-      prisma.payment.findMany({
-        where: { OR: [{ rentalId: { in: rentalIds } }, { saleId: { in: saleIds } }, { purchaseId: { in: purchaseIds } }, { serviceJobId: { in: jobIds } }] },
-        select: { id: true },
-      }),
-      rentalIds.length ? prisma.act.findMany({ where: { rentalId: { in: rentalIds } }, select: { id: true } }) : [],
+    // What belongs to the record answers for it (crit. 20, QA-W6-10) — the
+    // same rule the card's own slice uses, so a number typed into the search
+    // and a card opened by hand cannot give different answers.
+    const parts = await Promise.all([
+      ...rentalIds.map((id) => withParts('rental', id)),
+      ...saleIds.map((id) => withParts('sale', id)),
+      ...purchaseIds.map((id) => withParts('purchase', id)),
+      ...jobIds.map((id) => withParts('service_job', id)),
     ]);
-    return { ids: [...rentalIds, ...saleIds, ...purchaseIds, ...jobIds, ...deposits, ...payments, ...acts].map((x) => (typeof x === 'string' ? x : x.id)), emails: [] };
+    return { ids: parts.flat(), emails: [] };
   }
   const [vehicles, customers, users] = await Promise.all([
     prisma.vehicle.findMany({ where: { vin: like }, select: { id: true } }),
@@ -109,7 +141,7 @@ async function idsMatching(query: string): Promise<{ ids: string[]; emails: stri
   return { ids: [...vehicles, ...customers, ...users].map((x) => x.id), emails: users.map((u) => u.email) };
 }
 
-async function read(query: { q?: string; filter?: string; from?: string; to?: string }): Promise<JournalRow[]> {
+async function read(query: { q?: string; filter?: string; from?: string; to?: string; record?: string }): Promise<JournalRow[]> {
   const filter = ((query.filter ?? 'all') as JournalFilter) ?? 'all';
   const where: Record<string, unknown> = {};
   if (query.from || query.to) {
@@ -117,6 +149,13 @@ async function read(query: { q?: string; filter?: string; from?: string; to?: st
       ...(query.from ? { gte: new Date(`${query.from}T00:00:00`) } : {}),
       ...(query.to ? { lt: new Date(`${query.to}T23:59:59.999`) } : {}),
     };
+  }
+  // A card asks by id, the search box by words. Both land on `withParts`.
+  const record = (query.record ?? '').trim();
+  if (record) {
+    const [kind, id] = record.split(':');
+    if (!(RECORD_KINDS as readonly string[]).includes(kind) || !id) throw badRequest('bad_field', 'record must be <kind>:<id>', { field: 'record' });
+    where.entityId = { in: await withParts(kind as RecordKind, id) };
   }
   const q = (query.q ?? '').trim();
   if (q) {
@@ -161,7 +200,7 @@ const csvCell = (v: unknown): string => {
 };
 
 export function journalRoutes(app: FastifyInstance): void {
-  app.get<{ Querystring: { q?: string; filter?: string; from?: string; to?: string } }>(
+  app.get<{ Querystring: { q?: string; filter?: string; from?: string; to?: string; record?: string } }>(
     '/api/journal',
     { config: { scope: 'users.manage' } },
     async (req) => ({ rows: collapseViews(await read(req.query)) }),
@@ -171,7 +210,7 @@ export function journalRoutes(app: FastifyInstance): void {
    * The same lines for somebody counting them, so the views are not folded
    * here: three looks are three rows (§3.8).
    */
-  app.get<{ Querystring: { q?: string; filter?: string; from?: string; to?: string } }>(
+  app.get<{ Querystring: { q?: string; filter?: string; from?: string; to?: string; record?: string } }>(
     '/api/journal.csv',
     { config: { scope: 'users.manage' } },
     async (req, reply) => {
