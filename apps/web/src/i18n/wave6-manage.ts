@@ -97,6 +97,8 @@ export const wave6manageEn = {
     reasonHint: 'Required — this is what somebody reads a year from now.',
     needReason: 'Write why: it is what a year from now will be read.',
     needPick: 'Choose at least one deposit.',
+    byContract: (sum: string) => `${sum} by the contract · no payment in Odoo`,
+    reasonAsk: 'Was a deposit taken at all? Odoo does not say.',
     done: (n: number) => `${n} ${n === 1 ? 'deposit' : 'deposits'} settled. Nothing was paid out: the journal says what was decided.`,
     notMoney: 'Nothing is paid out here. The money moved before the transfer, or nobody knows that it did; what is written down is the decision.',
 
@@ -211,6 +213,8 @@ export const wave6manageRu: typeof wave6manageEn = {
     reasonHint: 'Обязательна — это то, что читают через год.',
     needReason: 'Напишите причину — её и будут читать через год.',
     needPick: 'Выберите хотя бы один залог.',
+    byContract: (sum: string) => `по договору ${sum} · платежа в Odoo нет`,
+    reasonAsk: 'Брали ли залог? В Odoo этого нет.',
     done: (n: number) => `Закрыто ${n} ${ruPlural(n, 'залог', 'залога', 'залогов')}. Денег никто не выдавал: в журнале записано решение.`,
     notMoney: 'Здесь ничего не выдаётся. Деньги двигались до переноса или неизвестно, двигались ли; записывается решение.',
 
@@ -325,6 +329,8 @@ export const wave6manageKa: typeof wave6manageEn = {
     reasonHint: 'სავალდებულოა — ამას კითხულობენ წლის შემდეგ.',
     needReason: 'დაწერეთ მიზეზი — სწორედ მას წაიკითხავენ წლის შემდეგ.',
     needPick: 'აირჩიეთ სულ მცირე ერთი დეპოზიტი.',
+    byContract: (sum: string) => `ხელშეკრულებით ${sum} · გადახდა Odoo-ში არ არის`,
+    reasonAsk: 'აიღეს თუ არა დეპოზიტი? Odoo ამას არ ამბობს.',
     done: (n: number) => `დაიხურა ${n} დეპოზიტი. ფული არავის გაუცია: ჟურნალში ჩაწერილია გადაწყვეტილება.`,
     notMoney: 'აქ ფული არ გაიცემა. ფული გადმოტანამდე მოძრაობდა, ან უცნობია მოძრაობდა თუ არა; იწერება გადაწყვეტილება.',
 

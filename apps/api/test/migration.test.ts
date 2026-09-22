@@ -27,7 +27,10 @@ async function transferred(status: 'returned' | 'active' = 'returned') {
 }
 
 interface Migration {
-  deposits: { due: { count: number; amountTetri: number; rows: { id: string; number: string; amountTetri: number }[] }; running: { count: number; amountTetri: number } };
+  deposits: {
+    due: { count: number; amountTetri: number; rows: { id: string; number: string; receivedTetri: number; contractTetri: number }[] };
+    running: { count: number; amountTetri: number };
+  };
   rentalsWithoutVin: { count: number; rows: { id: string; number: string }[] };
   vehiclesInServiceWithoutJob: { count: number; rows: { id: string; vin: string }[] };
 }
@@ -75,6 +78,30 @@ describe.skipIf(!HAS_DB)('Settings → Transfer (wave 6 §3.6–3.7)', () => {
     const line = await prisma.auditLog.findFirst({ where: { action: 'deposit.migration.decided', entityId: a.rental.id } });
     expect(line?.note).toBe('по журналу Odoo выдали на руки');
     expect(line?.before).toEqual({ heldTetri: 18000 });
+  });
+
+  /**
+   * Crit. 25а (designer, 22.09). Odoo knows what the contract asked for and
+   * often not what was paid. The screen shows what was received — that is
+   * what is being sorted out — and says the other figure beside it only
+   * where the two disagree. Which of "нет данных о платеже" and "залог не
+   * брали" is true, only Kardu knows, and the system does not guess.
+   */
+  it('carries both sums, so a screen can say where Odoo knew only the contract', async () => {
+    const owner = await loginAs('owner');
+    const paid = await transferred();
+    const unpaid = await transferred();
+    await unpaid.prisma.deposit.update({ where: { id: unpaid.deposit.id }, data: { paidTetri: 0 } });
+
+    const rows = json<Migration>(await call(owner, 'GET', '/api/migration')).deposits.due.rows;
+    const a = rows.find((r) => r.id === paid.deposit.id);
+    const b = rows.find((r) => r.id === unpaid.deposit.id);
+    // Received and asked for agree: the screen shows one figure.
+    expect(a?.receivedTetri).toBe(18000);
+    expect(a?.contractTetri).toBe(18000);
+    // They disagree: both are there, and the screen has something to say.
+    expect(b?.receivedTetri).toBe(0);
+    expect(b?.contractTetri).toBe(18000);
   });
 
   it('"kept earlier" without a reason is refused (crit. 25)', async () => {
