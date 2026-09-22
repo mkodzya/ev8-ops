@@ -246,8 +246,12 @@ export function ServiceJobPage() {
             <button type="button" className="pill pill-sm" onClick={() => setSheet('part')}>
               + {t.repair.addPart}
             </button>
+            {/* No "+": there is one line of work on a repair and this button
+                edits it rather than adding another (wave 5 §3.7,
+                улучшение 2). A list of jobs waits for the time norms the
+                book does not have yet (register #33). */}
             <button type="button" className="pill pill-sm" onClick={() => setSheet('work')}>
-              + {t.repair.addWork}
+              {t.repair.addWork}
             </button>
           </div>
         )}
