@@ -70,7 +70,8 @@ interface State {
   direction: 'in' | 'out';
   target: MoneyTarget | null;
   amount: string;
-  channel: Channel;
+  /** Null on the way out: money leaving is said out loud, never assumed (wave 2 §3.2, расхождение 1). */
+  channel: Channel | null;
   occurredOn: string;
   backdateReason: string;
   toOther: boolean;
@@ -135,7 +136,13 @@ function MoneySheet({ opening, onClose }: { opening: Opening; onClose: () => voi
       direction: opening.target ? (OUT.includes(opening.target.kind) ? 'out' : 'in') : opening.direction ?? 'in',
       target: opening.target ?? null,
       amount: '',
-      channel: opening.target?.kind === 'supplier' ? 'transfer' : 'cash',
+      // Cash is the commonest way money comes in, so it is chosen in
+      // advance. Money going out leaves the till or the account, and which
+      // of the two is the thing a person must say — nothing is chosen for
+      // them (уточнено 21.09.2026, расхождение 1). A manager has cash and no
+      // field at all (wave 2 §3.2), so there is nothing for them to choose
+      // and nothing to leave empty.
+      channel: owner && opening.target && OUT.includes(opening.target.kind) ? null : 'cash',
       occurredOn: today,
       backdateReason: '',
       toOther: false,
@@ -184,6 +191,9 @@ function MoneySheet({ opening, onClose }: { opening: Opening; onClose: () => voi
       label={label}
       submit={async (key) => {
         if (!s.target) throw new Error('no target');
+        if (!s.channel) {
+          throw new ApiError(400, 'missing_field', 'Say where the money goes from.', { field: 'channel', fieldText: t.money.channelNeeded });
+        }
         if (s.target.kind === 'deposit_payout' && s.channel === 'cash' && tetri != null && tetri > (tillOnHand ?? Infinity) && !s.minusOk) {
           throw new ApiError(400, 'missing_field', 'Confirm the till going below zero.', { field: 'minusOk', fieldText: t.money.tillMinusNeed });
         }
@@ -226,7 +236,7 @@ function MoneySheet({ opening, onClose }: { opening: Opening; onClose: () => voi
               role="radio"
               aria-checked={s.direction === d}
               className={`seg ${s.direction === d ? 'on' : ''}`}
-              onClick={() => set({ direction: d, target: null, amount: '', channel: d === 'out' ? 'transfer' : 'cash' })}
+              onClick={() => set({ direction: d, target: null, amount: '', channel: owner && d === 'out' ? null : 'cash' })}
             >
               <span className="seg-lbl">{d === 'in' ? t.money.in : t.money.out}</span>
             </button>
@@ -235,7 +245,7 @@ function MoneySheet({ opening, onClose }: { opening: Opening; onClose: () => voi
       )}
 
       {!s.target ? (
-        <WhoPicker direction={s.direction} onPick={(target) => set({ target, channel: target.kind === 'supplier' ? 'transfer' : s.channel })} />
+        <WhoPicker direction={s.direction} onPick={(target) => set({ target, channel: owner && OUT.includes(target.kind) ? null : s.channel })} />
       ) : (
         <>
           <TargetHead s={s} fixed={fixed} onChange={() => set({ target: null, amount: '' })} onPick={(target) => set({ target, amount: '' })} />
