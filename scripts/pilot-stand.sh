@@ -2,8 +2,9 @@
 # The pilot stand: the one EV8 Ops on this Mac that may be shown to somebody
 # who is not sitting at it — Kardu on his phone, before there is a server.
 #
-#   scripts/pilot-stand.sh up      copy the images and the data, start it
-#   scripts/pilot-stand.sh down    stop it (its database volume stays)
+#   scripts/pilot-stand.sh up      empty database, the people, start it
+#   scripts/pilot-stand.sh tunnel  open a fresh public link to it, print the link
+#   scripts/pilot-stand.sh down    stop it and the tunnel (the database stays)
 #   scripts/pilot-stand.sh status  what is running
 #
 # **It is empty of content on purpose** (Mika, 22.09.2026): Mika and Kardu
@@ -122,6 +123,59 @@ rows_in() {
     ) t" | tr -d ' '
 }
 
+tunnel() {
+  # A quick tunnel: no account, no domain, a random hostname, and it lives
+  # only as long as this run. When the Mac sleeps the registration is lost
+  # and Cloudflare will not give the same hostname back — the container then
+  # retries for ever against a name that no longer exists
+  # ("Unauthorized: Tunnel not found"), which is what happened on 22.09. So
+  # the old one is torn down rather than restarted, and the link is new every
+  # time. A permanent address needs a Cloudflare account and a domain, which
+  # is Mika's to set up.
+  docker rm -f ev8-pilot-tunnel >/dev/null 2>&1 || true
+  docker run -d --rm --name ev8-pilot-tunnel --network "${PILOT_PROJECT}_default" \
+    cloudflare/cloudflared:latest tunnel --no-autoupdate --url http://web:5173 >/dev/null
+  echo -n "pilot: waiting for the tunnel"
+  for _ in $(seq 1 20); do
+    # `|| true`: until the hostname appears grep exits 1, and with
+    # `set -e pipefail` that would end the script on the first look.
+    url=$(docker logs ev8-pilot-tunnel 2>&1 | grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' | head -1 || true)
+    [ -n "${url:-}" ] && break
+    echo -n .
+    sleep 2
+  done
+  echo
+  [ -n "${url:-}" ] || { echo "pilot: the tunnel did not report a hostname; docker logs ev8-pilot-tunnel" >&2; exit 1; }
+  # `.trycloudflare.com` is already in ALLOWED_HOSTS, so a new hostname needs
+  # no restart of web — without that the screen would say only "Blocked request".
+  # Cloudflare prints the hostname before its edge is routing it; the first
+  # few seconds answer nothing, which is not a fault of the stand.
+  #
+  # The check asks a public resolver for the address and dials that, rather
+  # than trusting this Mac's own DNS. On 22.09 the resolver here (a VPN's,
+  # 100.65.0.1) would not resolve *.trycloudflare.com at all, so a tunnel
+  # that was serving the world perfectly well looked dead from the machine
+  # running it. A check that reports the local resolver's opinion as the
+  # tunnel's health is a check that lies.
+  local code=000 ip=""
+  for _ in $(seq 1 10); do
+    ip=$(dig +short @1.1.1.1 "${url#https://}" 2>/dev/null | grep -m1 -E '^[0-9.]+$' || true)
+    if [ -n "$ip" ]; then
+      code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 --resolve "${url#https://}:443:$ip" "$url/" || true)
+    fi
+    [ "$code" = "200" ] && break
+    sleep 3
+  done
+  echo "pilot: $url  (page $code)"
+  if [ "$code" = "200" ]; then
+    # Say it plainly when the link works everywhere except here.
+    curl -s -o /dev/null --max-time 10 "$url/" 2>/dev/null ||
+      echo "pilot: note — this Mac's own DNS does not resolve that name; the link works for others. Check with a phone." >&2
+  else
+    echo "pilot: the page did not answer 200 — check 'docker logs ev8-pilot-tunnel'" >&2
+  fi
+}
+
 case "${1:-}" in
   up)
     make_env
@@ -140,10 +194,14 @@ case "${1:-}" in
     echo "and restart web, or the screen says only 'Blocked request'."
     echo "Empty of content: Mika and Kardu fill it themselves. Demo logins refused."
     ;;
-  down) pilot stop ;;
+  tunnel) tunnel ;;
+  down)
+    docker rm -f ev8-pilot-tunnel >/dev/null 2>&1 || true
+    pilot stop
+    ;;
   status) pilot ps ;;
   *)
-    echo "usage: scripts/pilot-stand.sh up | down | status" >&2
+    echo "usage: scripts/pilot-stand.sh up | tunnel | down | status" >&2
     exit 2
     ;;
 esac
