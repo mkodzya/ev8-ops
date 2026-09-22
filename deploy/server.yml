@@ -1,0 +1,31 @@
+# EV8 Ops — what a stand adds when it runs on the server behind Traefik.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.stand.yml \
+#                  -f deploy/server.yml --env-file deploy/<stand>.env \
+#                  -p ev8-<stand> up -d
+#
+# docker-compose.stand.yml already withdrew every laptop affordance and left
+# the web container on loopback for "a reverse proxy on the host". This is that
+# proxy's half: the container joins `ev8-edge`, Traefik picks it up by label,
+# and the loopback port goes away — on a server even 127.0.0.1 is one ssh
+# tunnel away from being public.
+services:
+  web:
+    # Nothing on the host at all. The only way in is Traefik.
+    ports: !override []
+    networks: [default, ev8-edge]
+    labels:
+      # A list, not a map: a label key carrying `${VAR:?...}` puts a colon
+      # where YAML expects one only after a key, and the file stops parsing.
+      - "traefik.enable=true"
+      # The stand's name keeps the two routers apart on one Traefik.
+      - "traefik.http.routers.${STAND_NAME:?name this stand - ops or ops-test}.rule=Host(`${STAND_HOST:?the hostname this stand answers to}`)"
+      - "traefik.http.routers.${STAND_NAME}.entrypoints=websecure"
+      - "traefik.http.routers.${STAND_NAME}.tls.certresolver=le"
+      - "traefik.http.services.${STAND_NAME}.loadbalancer.server.port=5173"
+      # Traefik must reach it on the shared network, not the compose default.
+      - "traefik.docker.network=ev8-edge"
+
+networks:
+  ev8-edge:
+    external: true

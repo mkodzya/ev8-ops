@@ -1,0 +1,51 @@
+# EV8 Ops — the one door on the server (practices §2).
+#
+# One VM, one Traefik, compose projects on a shared docker network. Traefik is
+# the only thing with a port on a public interface: it terminates TLS and
+# forwards to the stands over `ev8-edge`, which nothing else exposes. The
+# stands themselves keep `ports: []` from docker-compose.stand.yml — a moped
+# rental's database has no business answering the internet.
+#
+#   docker network create ev8-edge     # once
+#   docker compose -p ev8-edge up -d   # from this directory
+#
+# Certificates are Let's Encrypt over the HTTP-01 challenge, which needs the
+# DNS records to point here first. The store is a file in a named volume: lose
+# it and Let's Encrypt rate-limits the re-issue, so it is in the backup.
+services:
+  traefik:
+    image: traefik:v3.2
+    restart: unless-stopped
+    command:
+      - --providers.docker=true
+      # Nothing is published unless it says so: a container without
+      # `traefik.enable=true` stays invisible even on this network.
+      - --providers.docker.exposedbydefault=false
+      - --providers.docker.network=ev8-edge
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+      # Plain http only ever redirects; the product sets Secure cookies and a
+      # session cookie that travels in the clear is a session anybody can take.
+      - --entrypoints.web.http.redirections.entryPoint.to=websecure
+      - --entrypoints.web.http.redirections.entryPoint.scheme=https
+      - --certificatesresolvers.le.acme.email=${ACME_EMAIL:?an address Let's Encrypt writes to}
+      - --certificatesresolvers.le.acme.storage=/letsencrypt/acme.json
+      - --certificatesresolvers.le.acme.httpchallenge=true
+      - --certificatesresolvers.le.acme.httpchallenge.entrypoint=web
+      - --accesslog=true
+      - --log.level=INFO
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      # Read-only: Traefik reads labels, it never needs to start a container.
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - letsencrypt:/letsencrypt
+    networks: [ev8-edge]
+
+volumes:
+  letsencrypt:
+
+networks:
+  ev8-edge:
+    external: true
