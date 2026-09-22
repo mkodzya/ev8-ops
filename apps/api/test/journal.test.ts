@@ -159,6 +159,48 @@ describe.skipIf(!HAS_DB)('the journal on its own screen (wave 6 §3.8)', () => {
     expect((await rows(owner, `?q=${v.vin}&filter=all`)).map((r) => r.action)).toContain('vehicle.state.manual');
   });
 
+  /**
+   * Crit. 17а and 17б (designer, 22.09). A card's "История изменений" is the
+   * journal sliced by the record **and its parts**: a deposit decision is
+   * written on the deposit, a signature on the act, and the person who made
+   * them inside a rental looks for them there.
+   */
+  it('a card asks by id and gets the record and its parts, the same rows as the number does (crit. 17а)', async () => {
+    const owner = await loginAs('owner');
+    const { prisma } = await import('../src/lib/db.js');
+    const model = await prisma.vehicleModel.create({ data: { brand: 'Test', name: `Slice ${uniq()}`, weeklyRateTetri: 15000, forRent: true } });
+    const vehicle = await prisma.vehicle.create({ data: { vin: `TESTSLICE${uniq().replace(/\D/g, '').slice(-7)}`, modelId: model.id, pool: 'rent' } });
+    const customer = await prisma.customer.create({ data: { name: `ТЕСТ Срез ${uniq()}` } });
+    const rental = await prisma.rental.create({ data: { customerId: customer.id, vehicleId: vehicle.id, weeklyRateTetri: 15000, status: 'returned', returnedOn: new Date() } });
+    const deposit = await prisma.deposit.create({ data: { rentalId: rental.id, amountTetri: 18000, paidTetri: 18000 } });
+    const act = await prisma.act.create({ data: { rentalId: rental.id, kind: 'return', occurredOn: new Date() } });
+    const payment = await prisma.payment.create({
+      data: { customerId: customer.id, rentalId: rental.id, occurredOn: new Date(), grossTetri: 15000, netTetri: 15000, channel: 'cash', direction: 'in', kind: 'rent', source: 'manual' },
+    });
+    // One line on the rental and three on its parts.
+    await prisma.auditLog.create({ data: { action: 'rental.return', entityType: 'rental', entityId: rental.id, before: { status: 'active' }, after: { status: 'returned' } } });
+    await prisma.auditLog.create({ data: { action: 'deposit.decide', entityType: 'deposit', entityId: deposit.id, before: { heldTetri: 18000 }, after: { heldTetri: 0 }, note: 'ТЕСТ' } });
+    await prisma.auditLog.create({ data: { action: 'document.sign', entityType: 'act', entityId: act.id, after: { signedBy: 'ТЕСТ' } } });
+    await prisma.auditLog.create({ data: { action: 'payment.record', entityType: 'payment', entityId: payment.id, after: { grossTetri: 15000 } } });
+
+    const byRecord = json<{ rows: Line[] }>(await call(owner, 'GET', `/api/journal?record=rental:${rental.id}`)).rows;
+    expect(byRecord.map((r) => r.action).sort()).toEqual(['deposit.decide', 'document.sign', 'payment.record', 'rental.return']);
+    // The card and the search box cannot give different answers.
+    const byNumber = await rows(owner, `?q=${rental.number}`);
+    expect(byRecord.map((r) => r.id).sort()).toEqual(byNumber.map((r) => r.id).sort());
+  });
+
+  it('a manager gets no history at all, not an empty one (crit. 17б)', async () => {
+    const manager = await loginAs('manager');
+    expect((await call(manager, 'GET', '/api/journal?record=rental:00000000-0000-0000-0000-000000000000')).statusCode).toBe(403);
+  });
+
+  it('refuses a record it does not know how to slice', async () => {
+    const owner = await loginAs('owner');
+    const res = await call(owner, 'GET', '/api/journal?record=teapot:00000000-0000-0000-0000-000000000000');
+    expect(res.statusCode).toBe(400);
+  });
+
   it('a query nobody answers to finds nothing rather than everything', async () => {
     const owner = await loginAs('owner');
     expect(await rows(owner, '?q=R-99999')).toEqual([]);

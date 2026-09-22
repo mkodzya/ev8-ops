@@ -31,6 +31,12 @@ export const wave6manageEn = {
     ip: (ip: string) => `IP ${ip}`,
   },
 
+  recordHistory: {
+    title: 'Changes',
+    none: 'Nobody has changed this record.',
+    openJournal: 'Open in the journal',
+  },
+
   peopleW6: {
     lastSeen: (when: string) => `last seen ${when}`,
     neverSeen: 'no record of a sign-in',
@@ -147,6 +153,12 @@ export const wave6manageRu: typeof wave6manageEn = {
     ip: (ip: string) => `IP ${ip}`,
   },
 
+  recordHistory: {
+    title: 'История изменений',
+    none: 'Эту запись никто не правил.',
+    openJournal: 'Открыть в журнале',
+  },
+
   peopleW6: {
     lastSeen: (when: string) => `вход ${when}`,
     neverSeen: 'о входах данных нет',
@@ -261,6 +273,12 @@ export const wave6manageKa: typeof wave6manageEn = {
     times: (n: number, at: string) => `${n}-ჯერ ნახა, ბოლოს ${at}`,
     attempt: (n: number) => `${n}-ე მცდელობა`,
     ip: (ip: string) => `IP ${ip}`,
+  },
+
+  recordHistory: {
+    title: 'ცვლილებების ისტორია',
+    none: 'ეს ჩანაწერი არავის შეუცვლია.',
+    openJournal: 'ჟურნალში გახსნა',
   },
 
   peopleW6: {

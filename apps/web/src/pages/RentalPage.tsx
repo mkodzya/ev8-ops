@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { parseGel, todayISO, type VehicleState } from '@ev8/shared';
 import { DocumentRow, signedAtText, type DocState } from '../components/Documents.js';
 import { KommoField } from '../components/Kommo.js';
+import { RecordHistory } from '../components/RecordHistory.js';
 import { LoadError } from '../components/LoadError.js';
 import { DecideSheet } from '../components/ReturnMoney.js';
 import { RowMenu } from '../components/RowMenu.js';
@@ -419,7 +420,9 @@ export function RentalPage() {
         <div className="queue-head">
           <h2>{t.customerW4.feed}</h2>
           <div className="chips">
-            {(['all', 'payment', 'act', 'document', 'log'] as const).map((f) => (
+            {/* No "Изменения" chip: the changes are a block of their own
+                under this one (§3.8, уточнено 22.09.2026). */}
+            {(['all', 'payment', 'act', 'document'] as const).map((f) => (
               <button key={f} type="button" className={`pill pill-sm ${feedFilter === f ? 'on' : ''}`} onClick={() => setFeedFilter(f)}>
                 {f === 'act' ? t.rental.acts : t.customerW4.feedFilters[f]}
               </button>
@@ -428,6 +431,9 @@ export function RentalPage() {
         </div>
         <ul className="timeline">
           {data.feed
+            // The feed says what happened to the rental; who changed it is
+            // the block below (crit. 17а).
+            .filter((e) => e.kind !== 'log')
             .filter((e) => feedFilter === 'all' || e.kind === feedFilter)
             .slice(0, 60)
             .map((e, i) => (
@@ -449,6 +455,8 @@ export function RentalPage() {
             ))}
         </ul>
       </section>
+
+      <RecordHistory kind="rental" id={r.id} search={r.number} />
 
       <section className="card">
         <BlockHead title={t.rental.acts} sub={t.rental.actsCount(data.acts.length)} />

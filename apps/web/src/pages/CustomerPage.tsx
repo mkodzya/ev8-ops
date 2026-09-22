@@ -21,6 +21,7 @@ import { useLoad } from '../lib/use.js';
 import { fmtDate as fmtDay } from '../format.js';
 import { useSession } from '../session.js';
 import { KommoField } from '../components/Kommo.js';
+import { RecordHistory } from '../components/RecordHistory.js';
 
 interface Card {
   customer: {
@@ -73,10 +74,13 @@ export function CustomerPage() {
   const [editing, setEditing] = useState(false);
   const [wa, setWa] = useState(false);
   const [merging, setMerging] = useState(false);
-  const [feedFilter, setFeedFilter] = useState<'all' | 'payment' | 'document' | 'log'>('all');
+  const [feedFilter, setFeedFilter] = useState<'all' | 'payment' | 'document'>('all');
   if (failure) return <LoadError failure={failure} onRetry={reload} />;
   if (!data) return <Loading />;
   const c = data.customer;
+  // The feed says what happened to this customer; who changed the card is
+  // the block below it (§3.8, crit. 17а).
+  const shownFeed = data.feed.filter((e) => e.kind !== 'log').filter((e) => feedFilter === 'all' || e.kind === feedFilter);
 
   const addDocument = async (list: FileList | null) => {
     const f = list?.[0];
@@ -259,19 +263,19 @@ export function CustomerPage() {
         <div className="queue-head">
           <h2>{t.customerW4.feed}</h2>
           <div className="chips">
-            {(['all', 'payment', 'document', 'log'] as const).map((f) => (
+            {/* No "Изменения" chip: the changes are a block of their own. */}
+            {(['all', 'payment', 'document'] as const).map((f) => (
               <button key={f} type="button" className={`pill pill-sm ${feedFilter === f ? 'on' : ''}`} onClick={() => setFeedFilter(f)}>
                 {t.customerW4.feedFilters[f]}
               </button>
             ))}
           </div>
         </div>
-        {data.feed.filter((e) => feedFilter === 'all' || e.kind === feedFilter).length === 0 ? (
+        {shownFeed.length === 0 ? (
           <Empty text={t.common.dash} />
         ) : (
           <ul className="timeline">
-            {data.feed
-              .filter((e) => feedFilter === 'all' || e.kind === feedFilter)
+            {shownFeed
               .slice(0, 50)
               .map((e, i) => (
                 <li key={`${e.at}-${i}`}>
@@ -292,6 +296,8 @@ export function CustomerPage() {
           </ul>
         )}
       </section>
+
+      <RecordHistory kind="customer" id={c.id} search={c.name} />
 
       {editing && <CustomerEdit customer={c} onClose={() => setEditing(false)} onSaved={() => { setEditing(false); reload(); }} />}
       {wa && c.phone && (
