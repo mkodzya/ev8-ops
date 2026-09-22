@@ -2,6 +2,7 @@ import { dayQueue, effectiveRentalStatus, queueCount, todayISO, VEHICLE_STATES, 
 import type { FastifyInstance } from 'fastify';
 import { dateFromISO, isoDate } from '../lib/dates.js';
 import { debtsOf } from '../lib/debt.js';
+import { depositsOverview } from '../lib/deposits.js';
 import { prisma } from '../lib/db.js';
 import { partRows } from '../lib/stock.js';
 import { env } from '../lib/env.js';
@@ -183,7 +184,13 @@ export function todayRoutes(app: FastifyInstance): void {
     const fleet = Object.fromEntries(VEHICLE_STATES.map((s) => [s, 0])) as Record<VehicleState, number>;
     for (const v of vehicles) fleet[v.state as VehicleState]++;
     const overdueTetri = rentals.filter((r) => r.status === 'overdue').reduce((n, r) => n + r.debtTetri, 0);
-    const heldDeposits = owner ? await prisma.deposit.aggregate({ where: { status: 'held' }, _sum: { paidTetri: true } }) : null;
+    // Deposit money held comes from the one function "Деньги → Залоги" and
+    // the week both read (`lib/deposits.ts`). This line used to count it
+    // itself — `status: 'held'` and nothing else — and a deposit closed by a
+    // transfer decision keeps that status, so "Сегодня" went on holding
+    // 3 160 ₾ that two other screens had already let go (QA-W6-21). Three
+    // readings of one figure is two too many; there is one now.
+    const depositsHeldTetri = owner ? (await depositsOverview()).totals.heldTetri : null;
     // Deposit money of the week is what payments put on deposits, not a kind of payment.
     const depositsIn = owner
       ? await prisma.paymentAllocation.aggregate({ where: { target: 'deposit', payment: { voidedAt: null, occurredOn: { gte: monday }, channel: { not: 'deposit' } } }, _sum: { amountTetri: true } })
@@ -216,7 +223,7 @@ export function todayRoutes(app: FastifyInstance): void {
       numbers: {
         fleet,
         overdueTetri: owner ? overdueTetri : null,
-        depositsHeldTetri: heldDeposits?._sum.paidTetri ?? null,
+        depositsHeldTetri,
         week: weekMoney,
         myTillTetri: owner ? null : myTill,
         batteries: await batteriesNow(),
