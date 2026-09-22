@@ -84,4 +84,34 @@ describe.skipIf(!HAS_DB)('a point has a kind', () => {
     expect((await call(owner, 'PATCH', `/api/locations/${id}`, { kind: 'workshop' })).statusCode).toBe(200);
     expect((await call(owner, 'PATCH', `/api/locations/${id}`, { kind: 'garage' })).statusCode).toBe(400);
   });
+
+  // §8 of wave 6: the figures live in the settings, and the code's old
+  // constant survives only as what migration 0029 wrote there. A hand-over
+  // that forgets to send the deposit must still get the owner's figure.
+  it('a hand-over with no deposit in it takes the one the owner set, not the one the code used to hold', async () => {
+    const owner = await loginAs('owner');
+    const { prisma } = await import('../src/lib/db.js');
+    const { DEFAULT_DEPOSIT_TETRI } = await import('@ev8/shared');
+    // Put it back whatever happens: a run that fails halfway used to leave
+    // 200 ₾ in the one settings row and fail the next run too — the shared
+    // database is the point of these suites and also their trap.
+    const before = json<{ depositTetri: number }>(await call(owner, 'GET', '/api/settings/rental')).depositTetri;
+    try {
+      const set = await call(owner, 'PATCH', '/api/settings/rental', { depositTetri: 20000 });
+      expect(set.statusCode).toBe(200);
+
+      const model = await prisma.vehicleModel.create({ data: { brand: 'Test', name: `Deposit ${uniq()}`, weeklyRateTetri: 15000, forRent: true } });
+      const vehicle = await prisma.vehicle.create({ data: { vin: `TESTDEP${uniq().replace(/\D/g, '').slice(-9)}`, modelId: model.id, pool: 'rent', state: 'available' } });
+      const customer = await prisma.customer.create({ data: { name: `ТЕСТ Залог ${uniq()}` } });
+
+      // `/api/rentals` is the plain hand-over: no payment, no deposit named.
+      const res = await call(owner, 'POST', '/api/rentals', { customerId: customer.id, vehicleId: vehicle.id, weeklyRateTetri: 15000 });
+      expect(res.statusCode, res.body).toBe(201);
+      const rental = await prisma.rental.findFirst({ where: { vehicleId: vehicle.id }, orderBy: { createdAt: 'desc' } });
+      expect(rental?.depositTetri).toBe(20000);
+      expect(rental?.depositTetri).not.toBe(DEFAULT_DEPOSIT_TETRI);
+    } finally {
+      await call(owner, 'PATCH', '/api/settings/rental', { depositTetri: before });
+    }
+  });
 });

@@ -9,9 +9,14 @@ export const VAT_RATE = 0.18;
 /** Acquiring fee the bank keeps: net = gross − 1.5 % (315.20 = 320, 325.05 = 330). */
 export const ACQUIRING_FEE_RATE = 0.015;
 /** Default deposit, GEL 180 (spec RNT-01). */
+/**
+ * What a deposit was before an owner could set one (wave 6 §3.5). It lives on
+ * only as the value migration `0029` wrote into `rental_settings` and as the
+ * demo data's figure; the product asks the settings. The three weekly rates
+ * that used to stand beside it are gone — nothing read them once the quick
+ * rates became a table (§8).
+ */
 export const DEFAULT_DEPOSIT_TETRI: Tetri = 180_00;
-/** Weekly tariffs offered by default, editable per rental (spec RNT-01). */
-export const DEFAULT_WEEKLY_RATES_TETRI: readonly Tetri[] = [140_00, 150_00, 170_00];
 
 export function tetriFromGel(gel: number): Tetri {
   if (!Number.isFinite(gel)) throw new Error(`not an amount: ${gel}`);

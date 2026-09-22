@@ -20,7 +20,7 @@ import { int, tetri } from '../lib/validate.js';
 type Body = Record<string, unknown>;
 
 /** The one row, made on the first read if the migration's row ever went missing. */
-async function settingsRow() {
+export async function settingsRow() {
   return (
     (await prisma.rentalSettings.findUnique({ where: { id: true } })) ??
     (await prisma.rentalSettings.create({ data: { id: true } }))

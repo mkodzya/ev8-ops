@@ -986,7 +986,6 @@ export const en = {
   economics: {
     count: (n: number) => `${n} moped${n === 1 ? '' : 's'}`,
     title: 'Economics',
-    nav: 'Economics',
     subtitle: 'What each moped has earned and what it has cost. Everything is added up from payments, repairs and events, so a correction changes it at once.',
     vin: 'VIN',
     model: 'Model',

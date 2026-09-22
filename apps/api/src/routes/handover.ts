@@ -1,10 +1,11 @@
-import { CUSTOMER_SOURCES, DEFAULT_DEPOSIT_TETRI, todayISO } from '@ev8/shared';
+import { CUSTOMER_SOURCES, todayISO } from '@ev8/shared';
 import type { FastifyInstance } from 'fastify';
 import { env } from '../lib/env.js';
 import { badRequest, notFound } from '../lib/errors.js';
 import { actorOf } from '../lib/guard.js';
 import { audit } from '../lib/audit.js';
 import { prisma } from '../lib/db.js';
+import { settingsRow } from './settings.js';
 import { decideDeposit, pickUp, returnPreview, returnRental, setRentalStatus, undoReturn, type DepositDecision, type NewCustomer, type PickupInput } from '../lib/rentals.js';
 import { WITHHOLD_GROUNDS } from '../lib/pdf/returnAct.js';
 import { date, int, oneOf, str, strList, tetri } from '../lib/validate.js';
@@ -28,7 +29,7 @@ function photo(b: unknown): { bytes: Buffer; mime: string } | null {
   return { bytes, mime };
 }
 
-function pickupInput(req: { body: Body }, actor: PickupInput['actor'], strict: boolean): PickupInput {
+async function pickupInput(req: { body: Body }, actor: PickupInput['actor'], strict: boolean): Promise<PickupInput> {
   const b = req.body ?? {};
   const today = todayISO(new Date(), env.TZ);
   const nc = b.newCustomer && typeof b.newCustomer === 'object' ? (b.newCustomer as Body) : null;
@@ -58,7 +59,10 @@ function pickupInput(req: { body: Body }, actor: PickupInput['actor'], strict: b
     vinNote,
     moveFromSale: b.moveFromSale === true,
     weeklyRateTetri: tetri(b, 'weeklyRateTetri', { required: true, min: 0 })!,
-    depositTetri: tetri(b, 'depositTetri', { min: 0 }) ?? DEFAULT_DEPOSIT_TETRI,
+    // What the owner set, not what the code once held (wave 6 §3.5, §8). A
+    // deposit changed in "Настройки → Аренда" to 200 ₾ has to be 200 ₾ here
+    // too, whoever forgot to send it.
+    depositTetri: tetri(b, 'depositTetri', { min: 0 }) ?? (await settingsRow()).depositTetri,
     pickedUpOn: date(b, 'pickedUpOn') ?? today,
     expectedReturnOn: date(b, 'expectedReturnOn'),
     odometerKm: int(b, 'odometerKm', { min: 0 }),
@@ -113,12 +117,12 @@ function itemsOf(b: Body): Record<string, { state: 'ok' | 'damaged' | 'missing';
 export function handoverRoutes(app: FastifyInstance): void {
   /** The hand-over wizard's one operation (wave 3 §3.1, step 6). */
   app.post<{ Body: Body }>('/api/pickups', { config: { scope: 'rental.create' }, bodyLimit: PICKUP_BODY_LIMIT }, async (req, reply) => {
-    return reply.code(201).send(await pickUp(pickupInput(req, actorOf(req), true)));
+    return reply.code(201).send(await pickUp(await pickupInput(req, actorOf(req), true)));
   });
 
   /** The earlier entry point, for what still posts to it: no payment step, fewer required fields. */
   app.post<{ Body: Body }>('/api/rentals', { config: { scope: 'rental.create' }, bodyLimit: PICKUP_BODY_LIMIT }, async (req, reply) => {
-    return reply.code(201).send(await pickUp(pickupInput(req, actorOf(req), false)));
+    return reply.code(201).send(await pickUp(await pickupInput(req, actorOf(req), false)));
   });
 
   /** What the return comes to, before it is written (§3.4 step 2). */
