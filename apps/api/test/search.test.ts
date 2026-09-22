@@ -67,7 +67,13 @@ describe.skipIf(!HAS_DB)('the header search', () => {
     const owner = await loginAs('owner');
     expect((await search(owner, 'a')).groups).toBeNull();
     const { prisma } = await import('../src/lib/db.js');
-    const family = `Fam${uniq().replace(/\D/g, '').slice(-5)}`;
+    // Letters only, and deliberately. The probe was `Fam` + five digits, and
+    // a query with three digits or more is also a phone search
+    // (`phoneMatches`): any customer another test had left with those five
+    // digits in their number joined the count. On this Mac the suite is small
+    // and it passed; on CI it failed nine times in a hundred, always after a
+    // busy day — the more customers with phones, the likelier the collision.
+    const family = `Fam${Math.random().toString(36).slice(2, 10).replace(/\d/g, 'x')}`;
     for (let i = 0; i < 4; i++) await prisma.customer.create({ data: { name: `${family} ${i}` } });
     const found = await search(owner, family);
     expect(found.groups!.customers.items).toHaveLength(3);
