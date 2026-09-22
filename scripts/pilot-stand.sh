@@ -6,18 +6,24 @@
 #   scripts/pilot-stand.sh down    stop it (its database volume stays)
 #   scripts/pilot-stand.sh status  what is running
 #
-# **Why this exists and the QA stand will not do.** Both stands on this Mac
-# run the laptop stack, where `ALLOW_DEV_SECRET=true`. That one flag accepts
-# the development session secret *and* lets the demo logins in — and the demo
+# **It is empty of content on purpose** (Mika, 22.09.2026): Mika and Kardu
+# fill it themselves — a model, a point, a moped, a customer, a hand-over —
+# which is both the pilot and the training. Nothing of the real business is
+# behind a public link: no customers, no rentals, no payments, no personal
+# numbers. The only rows carried over from the laptop stand are the **people
+# who sign in**, with the passwords they already use, so nobody has to invent
+# or be told a new one.
+#
+# **Why the QA stand would not do.** Both other stands on this Mac run the
+# laptop stack, where `ALLOW_DEV_SECRET=true`. That one flag accepts the
+# development session secret *and* lets the demo logins in — and the demo
 # dataset carries `demo.director@ev8.test`, an **owner**, whose password is
-# published in this repository. Reachable from the internet, over a database
-# holding 72 real customers' names, phones and personal numbers, that is not
-# a pilot, it is a leak.
+# published in this repository. Reachable from the internet over live data,
+# that is not a pilot, it is a leak.
 #
 # So the pilot runs the overlay a real stand runs (`docker-compose.stand.yml`):
-# no development secret, demo logins refused, nothing seeded. On top of that
-# the demo accounts are switched off in its own copy of the data — the flag
-# and the switch, because one of them alone is a single point of failure.
+# no development secret, demo logins refused, nothing seeded. The demo
+# accounts are not carried over at all.
 #
 # It listens on 127.0.0.1 only, like the QA stand — reachable from this Mac
 # and from nothing else. What carries it further is a tunnel, attached either
@@ -67,44 +73,72 @@ take_images() {
   done
 }
 
-copy_database() {
-  live exec -T db pg_isready -U "$DB_USER" -d "$DB_NAME" >/dev/null || {
-    echo "The laptop stand's database is not running: docker compose up -d db" >&2
-    exit 1
-  }
+empty_database() {
   pilot stop api worker web >/dev/null 2>&1 || true
   pilot up -d --wait db
   pilot exec -T db psql -U "$DB_USER" -d postgres -v ON_ERROR_STOP=1 \
     -c "DROP DATABASE IF EXISTS $DB_NAME WITH (FORCE)" -c "CREATE DATABASE $DB_NAME"
-  # Read-only on the live side: pg_dump takes a snapshot and writes nothing.
-  live exec -T db pg_dump -U "$DB_USER" -d "$DB_NAME" -Fc |
-    pilot exec -T db pg_restore -U "$DB_USER" -d "$DB_NAME" --no-owner --exit-on-error
+  # The API's own entrypoint runs the migrations on first boot, so the stand
+  # comes up with the tables, the settings migration 0029 wrote (deposit 180,
+  # one quick rate of 150) and nothing else.
 }
 
-lock_demo_accounts() {
-  # The second lock. `ALLOW_DEV_SECRET=false` already refuses a login on
-  # @ev8.test; this makes the accounts inactive as well, so a change to that
-  # flag cannot quietly open them.
-  local off
-  off=$(pilot exec -T db psql -U "$DB_USER" -d "$DB_NAME" -tAc \
-    "UPDATE users SET active = false WHERE email LIKE '%@ev8.test' RETURNING email" | tr '\n' ' ')
-  echo "pilot: demo accounts switched off in this copy: ${off:-none found}"
+copy_the_people() {
+  # The people who sign in, and only them: the row carries the password hash,
+  # so everybody uses the password they already have and nobody invents one.
+  # Demo logins are left behind — see the note at the top of this file.
+  live exec -T db pg_isready -U "$DB_USER" -d "$DB_NAME" >/dev/null || {
+    echo "The laptop stand's database is not running: docker compose up -d db" >&2
+    exit 1
+  }
+  local sql
+  sql=$(live exec -T db psql -U "$DB_USER" -d "$DB_NAME" -tAc "
+    SELECT 'INSERT INTO users (id, email, name, password_hash, role, locale, active) VALUES ('
+        || quote_literal(id::text) || '::uuid, '
+        || quote_literal(email) || ', '
+        || quote_literal(name) || ', '
+        || quote_literal(password_hash) || ', '
+        || quote_literal(role::text) || '::user_role, '
+        || quote_literal(locale) || ', true) ON CONFLICT (id) DO NOTHING;'
+    FROM users
+    WHERE active AND email NOT LIKE '%@ev8.test'")
+  [ -n "$sql" ] || { echo "pilot: no real accounts on the laptop stand to carry over" >&2; exit 1; }
+  printf '%s\n' "$sql" | pilot exec -T db psql -U "$DB_USER" -d "$DB_NAME" -v ON_ERROR_STOP=1 >/dev/null
+  # The seed makes a first owner on an empty database, from the address in
+  # deploy/pilot.env and a password nobody knows. Once the real people are in
+  # it has no reason to exist, and an owner account on a stand with a public
+  # link has every reason not to.
+  pilot exec -T db psql -U "$DB_USER" -d "$DB_NAME" -v ON_ERROR_STOP=1 -tAc \
+    "DELETE FROM users WHERE email = '$(grep '^OWNER_EMAIL=' "$ENV_FILE" | cut -d= -f2)'" >/dev/null
+  pilot exec -T db psql -U "$DB_USER" -d "$DB_NAME" -tAc "select '  ' || email || ' · ' || role from users order by email"
+}
+
+rows_in() {
+  pilot exec -T db psql -U "$DB_USER" -d "$DB_NAME" -tAc "
+    select coalesce(sum(n), 0) from (
+      select count(*) n from customers union all select count(*) from vehicles
+      union all select count(*) from rentals union all select count(*) from payments
+      union all select count(*) from sales  union all select count(*) from purchases
+    ) t" | tr -d ' '
 }
 
 case "${1:-}" in
   up)
     make_env
     take_images
-    copy_database
-    lock_demo_accounts
+    empty_database
+    # The API creates the tables on boot; the people go in after that.
     pilot up -d --no-build --force-recreate --wait api worker web
+    echo "pilot: the people who may sign in —"
+    copy_the_people
+    echo "pilot: business records in this database: $(rows_in)"
     echo
     echo "Pilot stand: http://127.0.0.1:5195 — this Mac only, nothing else can reach it."
     echo "To show it to somebody, point a tunnel at that port, or at the compose"
     echo "network '${PILOT_PROJECT}_default', service 'web', port 5173."
     echo "Then add the hostname the tunnel gives to ALLOWED_HOSTS in deploy/pilot.env"
     echo "and restart web, or the screen says only 'Blocked request'."
-    echo "Who may sign in: the real people in the copy. Demo accounts: refused and inactive."
+    echo "Empty of content: Mika and Kardu fill it themselves. Demo logins refused."
     ;;
   down) pilot stop ;;
   status) pilot ps ;;
