@@ -1,8 +1,10 @@
-import { parseGel, type ISODate } from '@ev8/shared';
+import { parseGel, scheduleGap, type ISODate } from '@ev8/shared';
 import { useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { LoadError } from '../components/LoadError.js';
+import { KommoField } from '../components/Kommo.js';
+import { RecordHistory } from '../components/RecordHistory.js';
 import { RowMenu } from '../components/RowMenu.js';
 import { SignScreen, signedAtText } from '../components/Documents.js';
 import { Empty, Loading, PageHead, Vin } from '../components/ui.js';
@@ -30,7 +32,7 @@ interface FeedRow {
 }
 
 interface SaleCard {
-  sale: Sale & { aheadTetri: number; lateDays: number; transferred: boolean; paidBeforeTetri: number };
+  sale: Sale & { aheadTetri: number; lateDays: number; transferred: boolean; paidBeforeTetri: number; kommoRef: string | null };
   documents: { id: string; docKind: string | null; signedAt: string | null; signedBy: string | null }[];
   feed: FeedRow[];
   payments: { id: string; occurredOn: string; channel: 'transfer' | 'acquiring' | 'cash'; direction: 'in' | 'out'; grossTetri: number }[];
@@ -49,6 +51,10 @@ export function SalePage() {
   if (failure) return <LoadError failure={failure} onRetry={reload} />;
   if (!data) return <Loading />;
   const s = data.sale;
+  const gap = scheduleGap(s.priceTetri, s.instalments);
+  // The feed says what happened to the sale; who changed it is the block
+  // below it (§3.8, crit. 17а).
+  const feed = data.feed.filter((row) => row.kind !== 'log');
   const live = s.status === 'active';
   const owner = can('deposit.decide');
   const doc = data.documents.find((d) => d.docKind === 'sale') ?? null;
@@ -131,6 +137,8 @@ export function SalePage() {
         <Row k={t.saleCard.warranty} v={<span className="mono">{fmtDate(s.warrantyUntil)}</span>} />
         {s.transferred && <Row k={t.saleCard.transferred} v={t.saleCard.paidBefore(formatGel(s.paidBeforeTetri))} />}
         {s.boughtBackOn && <Row k={t.saleCard.menu.buyback} v={<span className="mono">{fmtDate(s.boughtBackOn)}</span>} />}
+        {/* The front office's deal, one way only until the webhook tariff (B10-03). */}
+        <Row k={t.kommo.label} v={<KommoField url={`/api/sales/${s.id}`} value={s.kommoRef ?? null} onDone={reload} />} />
       </section>
 
       <section className="card">
@@ -138,6 +146,11 @@ export function SalePage() {
           <h2>{t.saleCard.schedule}</h2>
           <span className="muted">{s.instalments.length}</span>
         </div>
+        {/* A schedule that does not come to the price is allowed — somebody
+            may be rounding a last instalment on purpose — but it is never
+            allowed to be a surprise (crit. 4 of wave 5, QA-W6-13). The wizard
+            says so before the sale is made; the card says so ever after. */}
+        {gap !== 0 && <p className="warn-text">{gap > 0 ? t.sell.gapOver(formatGel(gap)) : t.sell.gapUnder(formatGel(-gap))}</p>}
         <div className="table-wrap table-flat">
           <table className="table">
             <thead>
@@ -186,11 +199,11 @@ export function SalePage() {
         <div className="queue-head">
           <h2>{t.saleCard.feed}</h2>
         </div>
-        {data.feed.length === 0 ? (
+        {feed.length === 0 ? (
           <Empty text={t.common.dash} />
         ) : (
           <ul className="timeline">
-            {data.feed.map((row, i) => {
+            {feed.map((row, i) => {
               // A payment's line names the way the money came in; everything
               // else is an action the journal already has words for.
               const channels: Record<string, string> = t.payments.channels;
@@ -221,9 +234,12 @@ export function SalePage() {
           }}
         />
       )}
+      <RecordHistory kind="sale" id={s.id} search={s.number} />
+
       {sheet === 'schedule' && (
         <ScheduleSheet
           id={s.id}
+          priceTetri={s.priceTetri}
           rows={s.instalments.map((i) => ({ dueOn: i.dueOn, amount: String(i.amountTetri / 100) }))}
           onClose={() => setSheet(null)}
           onDone={() => {
@@ -276,11 +292,21 @@ function CancelSheet({ id, onClose, onDone }: { id: string; onClose: () => void;
 }
 
 /** The dates moved, or the amounts did: an owner's change, with a reason (§3.2). */
-function ScheduleSheet({ id, rows, onClose, onDone }: { id: string; rows: { dueOn: ISODate; amount: string }[]; onClose: () => void; onDone: () => void }) {
+function ScheduleSheet({
+  id,
+  priceTetri,
+  rows,
+  onClose,
+  onDone,
+}: { id: string; priceTetri: number; rows: { dueOn: ISODate; amount: string }[]; onClose: () => void; onDone: () => void }) {
   const t = useT();
   const initial = { rows, reason: '' };
   const [f, setF] = useState(initial);
   const edit = (i: number, patch: Partial<{ dueOn: ISODate; amount: string }>) => setF({ ...f, rows: f.rows.map((r, k) => (k === i ? { ...r, ...patch } : r)) });
+  // The same line the wizard shows before a sale is made (crit. 4 of wave 5):
+  // a schedule may come to something other than the price, but not by
+  // accident (QA-W6-13).
+  const gap = scheduleGap(priceTetri, f.rows.map((r) => ({ amountTetri: parseGel(r.amount) ?? 0 })));
   return (
     <FormSheet
       title={t.saleCard.scheduleTitle}
@@ -301,6 +327,7 @@ function ScheduleSheet({ id, rows, onClose, onDone }: { id: string; rows: { dueO
           <input className="input input-amount mono" inputMode="decimal" aria-label={t.sell.amount} value={r.amount} onChange={(e) => edit(i, { amount: e.target.value })} />
         </div>
       ))}
+      {gap !== 0 && <p className="warn-text">{gap > 0 ? t.sell.gapOver(formatGel(gap)) : t.sell.gapUnder(formatGel(-gap))}</p>}
       <button type="button" className="pill pill-sm" onClick={() => setF({ ...f, rows: [...f.rows, { dueOn: f.rows[f.rows.length - 1]?.dueOn ?? '', amount: '' }] })}>
         {t.saleCard.addRow}
       </button>

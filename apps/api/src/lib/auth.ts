@@ -21,28 +21,48 @@ export function verifyPassword(password: string, stored: string): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// Login rate limit — in memory, per email.
+// Login rate limit — counted in rows, per email (wave 6 §3.9, crit. 22).
+//
+// It used to be a Map: a restart of the API forgave every attempt, so ten
+// tries were ten tries *per restart* and the limit protected nothing that
+// mattered. Rows survive a restart. The IP is kept beside the address
+// because the journal has to answer "from where" (§3.8); the password is
+// never written, here or anywhere.
 // ---------------------------------------------------------------------------
 
-const attempts = new Map<string, { count: number; resetAt: number }>();
 const WINDOW_MS = 15 * 60_000;
-const MAX_ATTEMPTS = 10;
+export const MAX_ATTEMPTS = 10;
 
-export function loginAllowed(email: string): boolean {
-  const rec = attempts.get(email);
-  if (!rec || rec.resetAt < Date.now()) return true;
-  return rec.count < MAX_ATTEMPTS;
+const since = () => new Date(Date.now() - WINDOW_MS);
+
+/** How many failures this address has collected in the window. */
+export async function loginFailures(email: string): Promise<number> {
+  return prisma.loginAttempt.count({ where: { email, createdAt: { gte: since() } } });
 }
 
-export function recordLoginFailure(email: string): void {
-  const now = Date.now();
-  const rec = attempts.get(email);
-  if (!rec || rec.resetAt < now) attempts.set(email, { count: 1, resetAt: now + WINDOW_MS });
-  else rec.count++;
+export async function loginAllowed(email: string): Promise<boolean> {
+  return (await loginFailures(email)) < MAX_ATTEMPTS;
 }
 
-export function clearLoginFailures(email: string): void {
-  attempts.delete(email);
+/** Writes the attempt and answers which one it was — the journal says "3rd try". */
+export async function recordLoginFailure(email: string, ip: string | null): Promise<number> {
+  await prisma.loginAttempt.create({ data: { email, ip } });
+  return loginFailures(email);
+}
+
+export async function clearLoginFailures(email: string): Promise<void> {
+  await prisma.loginAttempt.deleteMany({ where: { email } });
+}
+
+/**
+ * A password check to run when the address does not exist, so that answering
+ * "no such person" costs what answering "wrong password" costs
+ * (`practices.md` §4). Hashed once at startup from a value nobody types.
+ */
+const DECOY_HASH = hashPassword(randomBytes(32).toString('hex'));
+
+export function spendVerifyTime(password: string): void {
+  verifyPassword(password, DECOY_HASH);
 }
 
 // ---------------------------------------------------------------------------
@@ -50,7 +70,9 @@ export function clearLoginFailures(email: string): void {
 // ---------------------------------------------------------------------------
 
 export const SESSION_COOKIE = 'ev8_session';
-const SESSION_TTL_MS = 30 * 24 * 3600_000;
+/** How long a sign-in lasts, and how long it survives without use (Q30, §3.9). */
+export const SESSION_TTL_MS = 30 * 24 * 3600_000;
+export const SESSION_IDLE_MS = 7 * 24 * 3600_000;
 
 export interface Actor {
   id: string;
@@ -75,6 +97,12 @@ export async function loadActor(token: string | undefined): Promise<Actor | null
   if (!token) return null;
   const session = await prisma.session.findUnique({ where: { token }, include: { user: true } });
   if (!session || session.expiresAt < new Date()) return null;
+  // A phone left in a drawer for a week signs in again (Q30). The thirty days
+  // are the outer limit; this is the one that usually ends a session.
+  if (Date.now() - session.lastSeenAt.getTime() > SESSION_IDLE_MS) {
+    await prisma.session.deleteMany({ where: { token } });
+    return null;
+  }
   const u = session.user;
   if (!u.active) return null; // deactivation cuts access at once
 

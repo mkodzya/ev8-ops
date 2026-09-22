@@ -1,4 +1,4 @@
-import { addDays, paymentMatches, todayISO } from '@ev8/shared';
+import { INCOME_ROWS, addDays, paymentMatches, paymentsQuery, todayISO } from '@ev8/shared';
 import { useSearchParams } from 'react-router-dom';
 import { LoadError } from '../../components/LoadError.js';
 import { PageHead } from '../../components/ui.js';
@@ -35,7 +35,9 @@ export interface PaymentRow {
 }
 
 interface Answer {
-  totals: { inTetri: number; outTetri: number; acquiringFeeTetri: number };
+  totals: { inTetri: number; outTetri: number; acquiringFeeTetri: number; rowTetri: number | null };
+  /** Set when a figure of the week's report asked for its own rows (QA-W6-01). */
+  row: 'rent' | 'sale' | 'deposits' | 'service' | null;
   people: { id: string; name: string }[];
   payments: PaymentRow[];
 }
@@ -75,20 +77,24 @@ export function PaymentsList({ mine = false }: { mine?: boolean }) {
   const t = useT();
   const [params, setParams] = useSearchParams();
   const today = todayISO();
+  // A figure on "Отчёты → Неделя" links here with its own two dates: the list
+  // it opens must be the rows that figure was made of, not the week the list
+  // happens to default to (wave 6 §3.1, ux №10).
+  const exact = params.get('from') && params.get('to') ? { from: params.get('from')!, to: params.get('to')! } : null;
   const period = (PERIODS as readonly string[]).includes(params.get('period') ?? '') ? (params.get('period') as Period) : 'thisWeek';
   const channel = params.get('channel') ?? '';
   const direction = params.get('direction') ?? '';
   const kind = params.get('kind') ?? '';
+  // A figure of the week's report links here asking for its own row, and the
+  // list has to pass the question on: without it the server answers about
+  // whole payments and the total disagrees with the figure (QA-W6-05).
+  const row = (INCOME_ROWS as readonly string[]).includes(params.get('row') ?? '') ? params.get('row')! : '';
   const by = params.get('by') ?? '';
-  const q = new URLSearchParams();
-  const r = range(period, today);
-  if (r.from) q.set('from', r.from);
-  if (r.to) q.set('to', r.to);
-  if (channel) q.set('channel', channel);
-  if (direction) q.set('direction', direction);
-  if (kind) q.set('kind', kind);
-  if (by) q.set('by', by);
-  const { data, failure, reload } = useLoad<Answer>(`/api/payments?${q.toString()}`);
+  // One list of filters, shared with the test that checks it: a screen that
+  // keeps its own copy is how `row` went missing (QA-W6-05).
+  const r = exact ?? range(period, today);
+  const asked: Record<string, string> = { from: r.from ?? '', to: r.to ?? '', channel, direction, kind, row, by };
+  const { data, failure, reload } = useLoad<Answer>(`/api/payments?${paymentsQuery((k) => asked[k] ?? params.get(k))}`);
 
   const setParam = (key: string, value: string) => {
     const next = new URLSearchParams(params);
@@ -114,7 +120,25 @@ export function PaymentsList({ mine = false }: { mine?: boolean }) {
     <>
       <PageHead title={mine ? t.payList.mine : t.payments.title} />
       <div className="money-filters">
-        <select className="input" value={period} onChange={(e) => setParam('period', e.target.value === 'thisWeek' ? '' : e.target.value)} aria-label={t.payList.thisWeek}>
+        <select
+          className="input"
+          value={exact ? '' : period}
+          onChange={(e) => {
+            // Picking a period by hand drops the exact dates a link carried.
+            const next = new URLSearchParams(params);
+            next.delete('from');
+            next.delete('to');
+            if (e.target.value === 'thisWeek') next.delete('period');
+            else next.set('period', e.target.value);
+            setParams(next, { replace: true });
+          }}
+          aria-label={t.payList.thisWeek}
+        >
+          {exact && (
+            <option value="">
+              {fmtDate(exact.from)} — {fmtDate(exact.to)}
+            </option>
+          )}
           {PERIODS.map((p) => (
             <option key={p} value={p}>
               {t.payList[p]}
@@ -163,6 +187,14 @@ export function PaymentsList({ mine = false }: { mine?: boolean }) {
       {data && (
         <>
           <dl className="money-totals">
+            {/* What belongs to the row of the week that linked here — the
+                figure this list has to add up to (ux №10). */}
+            {data.row && data.totals.rowTetri != null && (
+              <div>
+                <dt>{t.weekReport.rowTotals[data.row]}</dt>
+                <dd className="amt-in">{formatGel(data.totals.rowTetri)}</dd>
+              </div>
+            )}
             <div>
               <dt>{t.payList.totalIn}</dt>
               <dd className="amt-in">{data.totals.inTetri > 0 ? '+' : ''}{formatGel(data.totals.inTetri)}</dd>

@@ -1,4 +1,4 @@
-import { gelFromTetri, parseGel } from '@ev8/shared';
+import { GROUNDS, NO_DECISION, decisionBody, decisionOk, gelFromTetri, keptOf, type DecisionState, type Ground } from '@ev8/shared';
 import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { Drawer } from './Drawer.js';
@@ -11,8 +11,9 @@ import { Field, Row } from './Wizard.js';
 // What a return comes to and what happens to the deposit (wave 3 §3.4 step 2,
 // §3.5): the same lines and the same choice in the wizard and in "Decide later".
 
-export const GROUNDS = ['rent_arrears', 'fines', 'moped_damage', 'incomplete_return', 'key_loss', 'charger_loss', 'cleaning', 'other'] as const;
-export type Ground = (typeof GROUNDS)[number];
+// The grounds, the decision and its rules live in `@ev8/shared`, where they
+// have tests: they decide money (QA-W6-16).
+export { GROUNDS, NO_DECISION, decisionBody, decisionOk, keptOf, needsConfirming, type DecisionState, type Ground } from '@ev8/shared';
 
 export interface ReturnPreview {
   batteries: number | null;
@@ -106,39 +107,6 @@ export function SettlementLines({
   );
 }
 
-export interface DecisionState {
-  action: null | 'return_all' | 'keep_part' | 'keep_all';
-  amount: string;
-  grounds: Ground[];
-  reason: string;
-  toOther: boolean;
-  toName: string;
-  toReason: string;
-}
-export const NO_DECISION: DecisionState = { action: null, amount: '', grounds: [], reason: '', toOther: false, toName: '', toReason: '' };
-
-export function keptOf(d: DecisionState, heldTetri: number): number | null {
-  if (d.action === 'return_all') return 0;
-  if (d.action === 'keep_all') return heldTetri;
-  if (d.action === 'keep_part') return parseGel(d.amount || '');
-  return null;
-}
-
-/** Ready to send: chosen, within what is held, grounds and a reason when keeping (B5-02). */
-export function decisionOk(d: DecisionState, heldTetri: number): boolean {
-  const kept = keptOf(d, heldTetri);
-  if (kept == null || kept < 0 || kept > heldTetri) return false;
-  if (d.action === 'keep_part' && kept <= 0) return false;
-  if (kept > 0 && (d.grounds.length === 0 || !d.reason.trim())) return false;
-  if (kept < heldTetri && d.toOther && (!d.toName.trim() || !d.toReason.trim())) return false;
-  return true;
-}
-
-export function decisionBody(d: DecisionState, heldTetri: number) {
-  const kept = keptOf(d, heldTetri) ?? 0;
-  const to = kept < heldTetri && d.toOther ? { returnedTo: d.toName.trim(), returnedToReason: d.toReason.trim() } : {};
-  return kept > 0 ? { action: 'withhold', withheldTetri: kept, grounds: d.grounds, reason: d.reason.trim(), ...to } : { action: 'return_all', ...to };
-}
 
 /** Return all · keep part · keep all — no default (B5-02); one owner decides (D18). */
 export function DepositDecision({ value, onChange, heldTetri, claimsTetri, suggest }: { value: DecisionState; onChange: (d: DecisionState) => void; heldTetri: number; claimsTetri: number; suggest: Ground[] }) {

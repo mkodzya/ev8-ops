@@ -105,7 +105,14 @@ describe.skipIf(!HAS_DB)('a repair takes parts off the shelf', () => {
     return { vehicleId: vehicle.id };
   }
 
-  it('takes them when the line is added and puts them back when it is removed', async () => {
+  /**
+   * QA-W5-18. Taking a line off a repair used to delete the movement that
+   * issued the parts. The tester and the designer both said the parts had
+   * physically left the shelf and a movement must be written; I argued it
+   * was a correction of an entry and I was wrong. The shelf ends where it
+   * started, and both movements are there to say how it got back.
+   */
+  it('takes them when the line is added and writes a return when it is removed, keeping both', async () => {
     const { partId, owner, vehicle } = await stocked(10, 1200);
     const { id: jobId } = json<{ id: string }>(
       await call(owner, 'POST', '/api/service', { vehicleId: vehicle.id, reason: 'brake pads', openedOn: '2026-05-10' }),
@@ -123,7 +130,15 @@ describe.skipIf(!HAS_DB)('a repair takes parts off the shelf', () => {
     expect((await call(owner, 'DELETE', `/api/service/${jobId}/parts/${lineId}`)).statusCode).toBe(200);
     card = await cardOf(owner, partId);
     expect(card.part.onHand).toBe(10);
-    expect(card.moves.filter((m) => m.kind === 'issue')).toHaveLength(0);
+    // The issue is still there: they did leave the shelf on the 10th.
+    expect(card.moves.filter((m) => m.kind === 'issue')).toHaveLength(1);
+    // And a return of its own says they came back, naming the repair.
+    const back = card.moves.filter((m) => m.kind === 'return');
+    expect(back).toHaveLength(1);
+    expect(back[0]).toMatchObject({ qty: 3 });
+    expect(back[0].reason).toMatch(/SV-/);
+    // The shelf's average is where it was: back at what it left at.
+    expect(card.part.valueTetri).toBe(12000);
   });
 
   it('prices a part by who is paying for the repair (B8-04, wave 5 crit. 22, 23)', async () => {

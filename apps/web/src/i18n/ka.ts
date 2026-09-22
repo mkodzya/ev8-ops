@@ -3,6 +3,9 @@ import { wave4Ka } from './wave4.js';
 import { wave5salesKa } from './wave5-sales.js';
 import { wave5purchasesKa } from './wave5-purchases.js';
 import { wave5serviceKa } from './wave5-service.js';
+import { wave6weekKa } from './wave6-week.js';
+import { wave6utilKa } from './wave6-utilisation.js';
+import { wave6manageKa } from './wave6-manage.js';
 import type { Dict } from './en.js';
 
 // Typed as Dict: a missing or misspelled key fails the build.
@@ -86,7 +89,14 @@ export const ka: Dict = {
       stock: 'საწყობი',
       payments: 'გადახდები',
       statements: 'ამონაწერები',
+      week: 'კვირა',
+      utilisation: 'დატვირთვა',
       economics: 'ეკონომიკა',
+      people: 'ხალხი',
+      rental: 'ქირავნობა',
+      journal: 'ჟურნალი',
+      migration: 'გადმოტანა',
+      login: 'შესვლა',
     },
   },
 
@@ -468,6 +478,7 @@ export const ka: Dict = {
     addVehicle: 'მოპედის დამატება',
     points: 'წერტილები',
     addPoint: 'წერტილის დამატება',
+    rental: 'ქირა',
   },
 
   pools: {
@@ -502,7 +513,20 @@ export const ka: Dict = {
     rentedNote: 'მოპედი ქირაშია. გასაყიდ პარკში გადატანა შეიძლება — ასე გამოიყურება, როცა მოქირავნე მას ყიდულობს.',
   },
 
+  rentalSettings: {
+    hint: 'გაცემისას ჯერ მოდელის ტარიფი ისმება; ესენი გვერდით ღილაკებია.',
+    rates: 'ქირის ტარიფები კვირაში',
+    ratesHint: 'ღილაკები გაცემის ოსტატში. მოხსნილი ტარიფი არქივში მიდის: ძველ ქირაობებს რჩება.',
+    addRate: 'დამატება',
+    removeRate: 'ტარიფის მოხსნა',
+    deposit: 'ნაგულისხმევი გირაო',
+    depositHint: 'ისმება გაცემისას; იქვე შეიძლება შეიცვალოს.',
+    depositSaved: (sum) => `ნაგულისხმევი გირაო — ${sum}`,
+  },
   points: {
+    kind: 'ტიპი',
+    kindHint: 'ტიპს ჯერ ლოგიკა არ აქვს — ის საჭიროა, რომ ბატარეის გაცვლის ქსელს გადაკეთება არ დასჭირდეს.',
+    kinds: { showroom: 'შოურუმი', store: 'საწყობი', workshop: 'სახელოსნო', swap: 'გაცვლის სადგური' },
     restored: (name: string) => `«${name}» ისევ სიაშია`,
     archived: (name: string) => `«${name}» სიიდან მოიშორა`,
     created: (name: string) => `წერტილი «${name}» დაემატა`,
@@ -620,6 +644,7 @@ export const ka: Dict = {
 
 
   money: {
+    channelNeeded: 'თქვით, საიდან გადის ფული — სალაროდან თუ ანგარიშიდან.',
     tillMinusNeed: 'მონიშნეთ, თუ სხვა ფულიდან აბრუნებთ.',
     tillMinus: (onHand: string, minus: string) => `სალაროში გაქვთ ${onHand} — მეტს აბრუნებთ, სალარო მინუსში წავა −${minus}`,
     tillMinusOk: 'დიახ, ვაბრუნებ — სალარო მინუსში წავა',
@@ -952,7 +977,6 @@ export const ka: Dict = {
   economics: {
     count: (n: number) => `${n} მოპედი`,
     title: 'ეკონომიკა',
-    nav: 'ეკონომიკა',
     subtitle: 'რა შემოიტანა მოპედმა და რა დაჯდა. ყველაფერი ითვლება გადახდებიდან, შეკეთებებიდან და მოვლენებიდან, ამიტომ შესწორება მაშინვე იცვლება.',
     vin: 'VIN',
     model: 'მოდელი',
@@ -968,6 +992,7 @@ export const ka: Dict = {
     payback: 'ამოღება',
     perRentedDay: 'ქირის დღეში',
     unpriced: 'მოპედი თვითღირებულების გარეშე',
+    somePreliminary: (n) => `მათგან ${n} წინასწარია: პარტია სრულად არ არის გადახდილი`,
     unpricedHint: 'ისინი ჯამში არ შედიან: შეუვსებელი თვითღირებულება ნული არ არის.',
     noCost: 'თვითღირებულება არ არის',
     totals: 'პარკი',
@@ -1152,6 +1177,9 @@ export const ka: Dict = {
       vehicle_rented: 'მოპედი კლიენტთანაა — წერტილი დაბრუნებისას მიენიჭება.',
       vehicle_rented_sale: 'მოპედი ქირაშია — გაყიდვა შეუძლებელია დაბრუნებამდე.',
       customer_archived: 'ეს ბარათი გაერთიანდა სხვასთან — იმუშავეთ იმ ბარათში.',
+      duplicate_rate: 'ასეთი ტარიფი ღილაკებში უკვე არის.',
+      bad_period: 'პერიოდი მთავრდება დაწყებამდე. შეამოწმეთ თარიღები.',
+      rate_not_found: 'ასეთი ტარიფი არ არის — შესაძლოა უკვე მოხსნილია.',
       vehicle_rented_move: 'მოპედი კლიენტთანაა — ჯერ დახურეთ ქირა.',
       vin_or_note: 'აირჩიეთ მოპედი პარკიდან ან დაწერეთ, რატომ არ არის VIN დადასტურებული.',
       vins_count: 'ხაზში VIN-ების რაოდენობა არ ემთხვევა შეკვეთილს. შეამოწმეთ ყოველი ხაზი.',
@@ -1165,4 +1193,7 @@ export const ka: Dict = {
   ...wave5salesKa,
   ...wave5purchasesKa,
   ...wave5serviceKa,
+  ...wave6weekKa,
+  ...wave6utilKa,
+  ...wave6manageKa,
 };

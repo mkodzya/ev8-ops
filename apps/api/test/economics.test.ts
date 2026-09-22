@@ -155,3 +155,49 @@ describe.skipIf(!HAS_DB)('the fleet as a whole', () => {
     expect((await call(owner, 'GET', '/api/economics')).statusCode).toBe(200);
   });
 });
+
+/**
+ * Wave 6 §3.3, criterion 8. The move of "Экономика" into "Отчёты" must not
+ * lose the note wave 5 put on a cost that is still moving: a moped out of a
+ * shipment nobody has settled is quoted with "себестоимость предварительная",
+ * and the economics answer is where the screen reads that from.
+ */
+describe.skipIf(!HAS_DB)('a cost that has not stopped moving', () => {
+  it('is marked preliminary in the economics of the moped, with the share paid', async () => {
+    const owner = await loginAs('owner');
+    const supplier = json<{ id: string }>(await call(owner, 'POST', '/api/suppliers', { name: `ТЕСТ Factory ${uniq()}`, country: 'China', contact: 'Alibaba' }));
+    const { prisma } = await import('../src/lib/db.js');
+    const model = await prisma.vehicleModel.create({ data: { brand: 'Test', name: `Prelim ${uniq()}` } });
+    const made = await call(owner, 'POST', '/api/purchases', {
+      supplierId: supplier.id,
+      currency: 'CNY',
+      orderedOn: '2026-09-01',
+      lines: [{ modelId: model.id, qty: 1, unitPrice: '2600' }],
+    });
+    expect(made.statusCode, made.body).toBe(201);
+    const id = json<{ id: string }>(made).id;
+
+    // Part paid, then received: the cost on the moped is worked out at the
+    // rate of that one payment and will be written again when the rest goes.
+    await call(owner, 'POST', `/api/purchases/${id}/payments`, { grossTetri: '423.57', foreignAmount: '1000', channel: 'transfer' });
+    const line = json<{ purchase: { lines: { id: string }[] } }>(await call(owner, 'GET', `/api/purchases/${id}`)).purchase.lines[0]!;
+    const received = await call(owner, 'POST', `/api/purchases/${id}/receive`, {
+      receivedOn: '2026-09-10',
+      color: 'red',
+      year: 2026,
+      pool: 'rent',
+      vins: { [line.id]: [`TESTP${uniq().replace(/\D/g, '').slice(-12).padStart(12, '0')}`] },
+    });
+    expect(received.statusCode, received.body).toBe(200);
+
+    const vehicleId = json<{ vehicles: { id: string }[] }>(await call(owner, 'GET', `/api/purchases/${id}`)).vehicles[0]!.id;
+    const econ = json<{ economics: { costPreliminary: boolean; costPaidPercent: number | null; utilisation: number | null } }>(
+      await call(owner, 'GET', `/api/fleet/${vehicleId}/economics`),
+    );
+    expect(econ.economics.costPreliminary).toBe(true);
+    // 1 000 CNY paid of an order of 2 600.
+    expect(econ.economics.costPaidPercent).toBe(38);
+    // And the moved screen carries M-10 for it as well (§3.3).
+    expect(econ.economics.utilisation).toBe(0);
+  });
+});

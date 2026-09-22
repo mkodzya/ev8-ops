@@ -9,6 +9,8 @@ import { ReturnPickPage } from './pages/ReturnPickPage.js';
 import { DesignPage } from './pages/DesignPage.js';
 import { DesignCatalog } from './pages/DesignCatalog.js';
 import { EconomicsPage } from './pages/EconomicsPage.js';
+import { WeekPage } from './pages/WeekPage.js';
+import { UtilisationPage } from './pages/UtilisationPage.js';
 import { PartPage } from './pages/PartPage.js';
 import { StockPage } from './pages/StockPage.js';
 import { CustomerForm } from './pages/CustomerForm.js';
@@ -22,7 +24,9 @@ import { RulesPage, SortPage } from './pages/money/SortPage.js';
 import { TillPage } from './pages/money/TillPage.js';
 import { PickupWizard } from './pages/PickupWizard.js';
 import { ProfilePage } from './pages/ProfilePage.js';
-import { SettingsPage } from './pages/SettingsPage.js';
+import { LoginSettingsPage, RentalSettingsPage, SettingsPage } from './pages/SettingsPage.js';
+import { JournalPage } from './pages/JournalPage.js';
+import { MigrationPage } from './pages/MigrationPage.js';
 import { RentalPage } from './pages/RentalPage.js';
 import { ReturnWizard } from './pages/ReturnWizard.js';
 import { PurchasePage } from './pages/PurchasePage.js';
@@ -148,14 +152,22 @@ export function App() {
         <Route path="purchases/suppliers/:id" element={<Require perm="purchases.view"><SupplierPage /></Require>} />
         <Route path="purchases/:id" element={<Require perm="purchases.view"><PurchasePage /></Require>} />
 
-        <Route path="reports" element={<Navigate to="/reports/economics" replace />} />
+        {/* Reports open on the week: it is what the Monday meeting reads (wave 6 §3.1). */}
+        <Route path="reports" element={<Navigate to="/reports/week" replace />} />
+        <Route path="reports/week" element={<Require perm="reports.view"><WeekPage /></Require>} />
+        <Route path="reports/utilisation" element={<Require perm="reports.view"><UtilisationPage /></Require>} />
         <Route path="reports/economics" element={<Require perm="reports.view"><EconomicsPage /></Require>} />
 
         <Route path="customers" element={<CustomersPage />} />
         <Route path="customers/new" element={<CustomerForm />} />
         <Route path="customers/:id" element={<CustomerPage />} />
         <Route path="me" element={<ProfilePage />} />
+        {/* Settings is six tabs since wave 6 (§3.4–3.9); the people are first. */}
         <Route path="settings" element={<Require perm="users.manage"><SettingsPage /></Require>} />
+        <Route path="settings/rental" element={<Require perm="settings.manage"><RentalSettingsPage /></Require>} />
+        <Route path="settings/journal" element={<Require perm="users.manage"><JournalPage /></Require>} />
+        <Route path="settings/migration" element={<Require perm="users.manage"><MigrationPage /></Require>} />
+        <Route path="settings/login" element={<Require perm="users.manage"><LoginSettingsPage /></Require>} />
         {/* The design catalogue is a review surface, not an operating screen:
             the owner reads it by address, it is in no menu. */}
         <Route path="design" element={<Require perm="users.manage"><DesignPage /></Require>} />

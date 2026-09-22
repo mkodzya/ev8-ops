@@ -134,7 +134,7 @@ export async function pickUp(input: PickupInput): Promise<PickupResult> {
   }
 
   return prisma.$transaction(async (tx) => {
-    let vehicle: { id: string; pool: string | null } | null = null;
+    let vehicle: { id: string; pool: string | null; arrivedOn: string | null } | null = null;
     if (input.vehicleId) {
       const v = await tx.vehicle.findUnique({ where: { id: input.vehicleId } });
       if (!v || v.archived) throw notFound('vehicle_not_found', 'No such moped.');
@@ -149,7 +149,7 @@ export async function pickUp(input: PickupInput): Promise<PickupResult> {
       if (input.odometerKm != null && v.odometerKm != null && input.odometerKm < v.odometerKm && !input.odometerReason?.trim()) {
         throw badRequest('odometer_below', 'The mileage is below the last act; say why.', { field: 'odometerReason', lastKm: v.odometerKm });
       }
-      vehicle = { id: v.id, pool: v.pool };
+      vehicle = { id: v.id, pool: v.pool, arrivedOn: isoDate(v.arrivedOn) };
     }
 
     if (input.newCustomer) {
@@ -240,6 +240,26 @@ export async function pickUp(input: PickupInput): Promise<PickupResult> {
       },
     });
     if (vehicle) {
+      // A rental carried over can be older than the day we wrote the moped
+      // down as arrived: it worked for months while the paperwork caught up
+      // (designer, 21.09.2026). The rental is not the wrong part — the
+      // arrival date is, because for a carried-over moped it means "the day
+      // we recorded it". So it moves back to the day the moped actually went
+      // out, and the correction says so in the journal (QA-W6-06 neighbour).
+      if (input.transfer && vehicle.arrivedOn && input.pickedUpOn < vehicle.arrivedOn) {
+        await tx.vehicle.update({ where: { id: vehicle.id }, data: { arrivedOn: dateFromISO(input.pickedUpOn)!, updatedAt: new Date() } });
+        await tx.auditLog.create({
+          data: {
+            actorId: input.actor.id,
+            action: 'vehicle.arrived.aligned',
+            entityType: 'vehicle',
+            entityId: vehicle.id,
+            before: { arrivedOn: vehicle.arrivedOn },
+            after: { arrivedOn: input.pickedUpOn, rental: rental.number },
+            note: `rental ${rental.number} brought over from ${input.pickedUpOn}`,
+          },
+        });
+      }
       // Handing a moped to a renter is the decision that it is a rental moped (ADR-0005, Q9).
       await movePool(tx, { vehicleId: vehicle.id, pool: 'rent', occurredOn: input.pickedUpOn, actorId: input.actor.id, reason: `hand-over ${rental.number}` });
       await moveVehicle(tx, { vehicleId: vehicle.id, kind: 'pickup', occurredOn: input.pickedUpOn, actorId: input.actor.id, rentalId: rental.id });
@@ -598,7 +618,20 @@ export async function applyDecision(tx: Tx, actor: Actor, rentalId: string, deci
   // The return act says what was decided: the copy made before is archived (B5-07).
   await tx.storedFile.updateMany({ where: { rentalId, kind: 'pdf', docKind: 'return_act', archived: false }, data: { archived: true } });
   await tx.auditLog.create({
-    data: { actorId: actor.id, action: 'deposit.decide', entityType: 'deposit', entityId: d.id, after: { ...decision, heldTetri: held, keptTetri: keep, backTetri: back } as object },
+    data: {
+      actorId: actor.id,
+      action: 'deposit.decide',
+      entityType: 'deposit',
+      entityId: d.id,
+      // What the deposit held before the decision and what it holds after,
+      // so the journal can say "180.00 ₾ → 0.00 ₾" instead of nothing
+      // (QA-W6-15). The rest of the decision stays beside it for the record.
+      before: { heldTetri: held },
+      after: { ...decision, heldTetri: 0, keptTetri: keep, backTetri: back },
+      // A reason belongs in the note, where every other action puts it and
+      // where the journal's own column looks for it.
+      note: decision.reason?.trim() || null,
+    },
   });
 }
 

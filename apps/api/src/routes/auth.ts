@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import { audit } from '../lib/audit.js';
 import {
   SESSION_COOKIE,
   clearLoginFailures,
@@ -7,6 +8,7 @@ import {
   loginAllowed,
   permissionsOf,
   recordLoginFailure,
+  spendVerifyTime,
   verifyPassword,
 } from '../lib/auth.js';
 import { prisma } from '../lib/db.js';
@@ -49,17 +51,31 @@ export function authRoutes(app: FastifyInstance): void {
     async (req, reply) => {
       const email = (req.body?.email ?? '').trim().toLowerCase();
       const password = req.body?.password ?? '';
+      const ip = req.ip ?? null;
       if (!email || !password) return reply.code(400).send({ error: 'missing_credentials' });
-      if (!loginAllowed(email)) return reply.code(429).send({ error: 'too_many_attempts' });
+      if (!(await loginAllowed(email))) return reply.code(429).send({ error: 'too_many_attempts' });
       // The demo dataset's logins share the laptop's default password. On a
       // stand on the server they must not open anything (B1-04).
       if (demoLoginRefused(email)) return reply.code(403).send({ error: 'demo_login_off' });
       const user = await prisma.user.findUnique({ where: { email } });
+      // An address nobody has must cost the same as a wrong password, or the
+      // difference in timing answers "does this person work here"
+      // (`practices.md` §4).
+      if (!user) spendVerifyTime(password);
       if (!user || !user.active || !verifyPassword(password, user.passwordHash)) {
-        recordLoginFailure(email);
+        const attempt = await recordLoginFailure(email, ip);
+        // The journal says who tried, from where, and which try it was —
+        // never what they typed (§3.8, crit. 18).
+        await audit({
+          actorId: user?.id ?? null,
+          action: 'auth.login.failed',
+          entityType: 'login',
+          entityId: user?.id ?? null,
+          after: { email, ip, attempt },
+        });
         return reply.code(401).send({ error: 'invalid_credentials' });
       }
-      clearLoginFailures(email);
+      await clearLoginFailures(email);
       // A phone that signed out without a connection forgot its session but
       // could not tell the server (QA-1-01). Whatever session this device still
       // carries ends here, before the new one replaces its cookie.
@@ -73,6 +89,7 @@ export function authRoutes(app: FastifyInstance): void {
         secure: isSecureRequest(req),
         expires: expiresAt,
       });
+      await audit({ actorId: user.id, action: 'auth.login', entityType: 'login', entityId: user.id, after: { email, ip } });
       return { me: me(user) };
     },
   );
@@ -80,6 +97,7 @@ export function authRoutes(app: FastifyInstance): void {
   app.post('/api/auth/logout', { config: { scope: 'session' } }, async (req, reply) => {
     const token = req.cookies?.[SESSION_COOKIE];
     if (token) await destroySession(token);
+    await audit({ actorId: actorOf(req).id, action: 'auth.logout', entityType: 'login', entityId: actorOf(req).id });
     reply.clearCookie(SESSION_COOKIE, { path: '/', httpOnly: true, sameSite: 'lax', secure: isSecureRequest(req) });
     return { ok: true };
   });

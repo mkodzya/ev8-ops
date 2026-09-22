@@ -184,6 +184,7 @@ export function SubmitButton({
   onClick,
   small = false,
   className = '',
+  disabled = false,
 }: {
   state: SubmitState;
   label: string;
@@ -191,15 +192,17 @@ export function SubmitButton({
   onClick?: () => void;
   small?: boolean;
   className?: string;
+  /** Nothing to send yet: a batch with nothing chosen, a reason not written (wave 6 §3.7). */
+  disabled?: boolean;
 }) {
   const t = useT();
-  const busy = state === 'busy';
+  const busy = state === 'busy' || disabled;
   return (
     <button
       type={type}
       className={`pill ${small ? 'pill-sm' : ''} submit submit-${state} ${state === 'failed' ? '' : 'pill-accent'} ${className}`}
       aria-disabled={busy || undefined}
-      aria-busy={busy || undefined}
+      aria-busy={state === 'busy' || undefined}
       onClick={(e) => {
         if (busy) {
           e.preventDefault();

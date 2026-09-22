@@ -1,7 +1,7 @@
 import { applyPaidBefore, instalmentSchedule, saleState, todayISO, warrantyUntil as warrantyFrom } from '@ev8/shared';
 import type { FastifyInstance } from 'fastify';
 import { audit } from '../lib/audit.js';
-import { dateFromISO, isoDate } from '../lib/dates.js';
+import { dateFromISO, dayOf, isoDate } from '../lib/dates.js';
 import { prisma } from '../lib/db.js';
 import { env } from '../lib/env.js';
 import { conflict, forbidden, notFound } from '../lib/errors.js';
@@ -40,6 +40,7 @@ type SaleRow = {
   boughtBackOn: Date | null;
   vinNote: string | null;
   notes: string | null;
+  kommoRef?: string | null;
   customer: { id: string; name: string; phone?: string | null };
   vehicle: { id: string; vin: string; model: { brand: string; name: string } } | null;
   instalments: { id: string; seq: number; dueOn: Date; amountTetri: number; paidTetri: number; payStatus: string }[];
@@ -77,6 +78,7 @@ function serialize(s: SaleRow, today: string) {
     status: s.status,
     boughtBackOn: isoDate(s.boughtBackOn),
     notes: s.notes,
+    kommoRef: s.kommoRef ?? null,
     customer: s.customer,
     vehicle: s.vehicle ? { id: s.vehicle.id, vin: s.vehicle.vin, model: `${s.vehicle.model.brand} ${s.vehicle.model.name}` } : null,
     vinNote: s.vinNote,
@@ -127,8 +129,8 @@ export function saleRoutes(app: FastifyInstance): void {
     });
     const feed = [
       ...payments.map((p) => ({ at: isoDate(p.occurredOn)!, kind: 'payment' as const, by: null as string | null, text: p.direction === 'out' ? 'buyback' : p.channel, amountTetri: p.grossTetri, note: null as string | null })),
-      ...documents.filter((d) => d.signedAt).map((d) => ({ at: d.signedAt!.toISOString().slice(0, 10), kind: 'document' as const, by: d.signedBy, text: d.docKind ?? '', amountTetri: null, note: null })),
-      ...log.map((l) => ({ at: l.createdAt.toISOString().slice(0, 10), kind: 'log' as const, by: l.actor?.name ?? null, text: l.action, amountTetri: null, note: l.note })),
+      ...documents.filter((d) => d.signedAt).map((d) => ({ at: dayOf(d.signedAt)!, kind: 'document' as const, by: d.signedBy, text: d.docKind ?? '', amountTetri: null, note: null })),
+      ...log.map((l) => ({ at: dayOf(l.createdAt)!, kind: 'log' as const, by: l.actor?.name ?? null, text: l.action, amountTetri: null, note: l.note })),
     ].sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
     return {
       sale: serialize(sale, todayISO(new Date(), env.TZ)),
@@ -258,6 +260,9 @@ export function saleRoutes(app: FastifyInstance): void {
     if ('extras' in b) data.extras = str(b, 'extras', { max: 1000 });
     if ('notes' in b) data.notes = str(b, 'notes', { max: 4000 });
     if ('warrantyUntil' in b) data.warrantyUntil = dateFromISO(date(b, 'warrantyUntil'));
+    // The front office's deal, one way only until the webhook tariff
+    // (B10-03, register #5): a link or an id, kept as typed.
+    if ('kommoRef' in b) data.kommoRef = str(b, 'kommoRef', { max: 300 });
     await prisma.sale.update({ where: { id: sale.id }, data: { ...data, updatedAt: new Date() } });
     await audit({ actorId: actor.id, action: 'sale.update', entityType: 'sale', entityId: sale.id, after: data as object });
     return { ok: true };

@@ -1,5 +1,5 @@
-import { todayISO } from '@ev8/shared';
-import { useEffect, useState } from 'react';
+import { needsConfirming, todayISO } from '@ev8/shared';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { DocumentRow } from '../components/Documents.js';
@@ -72,6 +72,17 @@ export function ReturnWizard() {
   const [result, setResult] = useState<{ serviceJobId: string | null; point: string | null } | null>(null);
   const op = useOperation();
   const drafts = useDraft({ id: id ? `return:${id}` : undefined, value: f, initial, hold: result != null });
+  // The button that asks the question is pinned to the bottom of the screen;
+  // the question itself appears in the page. On a phone the summary is longer
+  // than the screen, so a person pressed "Оформить возврат", saw nothing
+  // move, and pressed again (QA-W6-16). The question comes to the eye and
+  // takes the focus.
+  const confirmRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!confirming) return;
+    confirmRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    confirmRef.current?.focus();
+  }, [confirming]);
 
   const { preview } = useReturnPreview(id, { returnedOn: f.returnedOn, keyMissing: f.items.key?.state === 'missing', lateChoice: f.lateChoice });
 
@@ -162,7 +173,8 @@ export function ReturnWizard() {
     if (res.ok) setResult({ serviceJobId: res.value.serviceJobId, point: toService ? null : locations.find((l) => l.id === locationId)?.name ?? null });
   };
   // Keeping money is not undone by a tap: the sum and what stays owed, in words, first.
-  const onFinish = () => (kept > 0 ? setConfirming(true) : void submit());
+  const onFinish = () => (decides && !nothingHeld && needsConfirming(f.decision, held) ? setConfirming(true) : void submit());
+
 
   const kitProblems = itemKeys.filter((k) => item(k).state !== 'ok').map((k) => `${itemName(k)} — ${t.returnItems.states[item(k).state]}`);
 
@@ -278,7 +290,7 @@ export function ReturnWizard() {
           <SumRow k={t.back.sumWhere} v={toService ? t.back.toService : `${t.back.free} · ${locations.find((l) => l.id === locationId)?.name ?? '—'}`} go={() => set({ step: 2 })} />
           {progress && <p className="hint muted">{progress}</p>}
           {confirming && (
-            <div className="form-banner form-banner-warn" role="alertdialog">
+            <div className="form-banner form-banner-warn" role="alertdialog" aria-label={t.back.confirmKeep(formatGel(kept))} tabIndex={-1} ref={confirmRef}>
               <div>
                 <b>{t.back.confirmKeep(formatGel(kept))}</b>
                 <br />

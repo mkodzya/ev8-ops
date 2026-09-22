@@ -2,6 +2,7 @@ import { dayQueue, effectiveRentalStatus, queueCount, todayISO, VEHICLE_STATES, 
 import type { FastifyInstance } from 'fastify';
 import { dateFromISO, isoDate } from '../lib/dates.js';
 import { debtsOf } from '../lib/debt.js';
+import { depositsOverview } from '../lib/deposits.js';
 import { prisma } from '../lib/db.js';
 import { partRows } from '../lib/stock.js';
 import { env } from '../lib/env.js';
@@ -36,7 +37,7 @@ export function todayRoutes(app: FastifyInstance): void {
 
     const [rentalRows, tills, unmatchedLines, lastLines, instalmentRows, serviceJobs, reportRows, parts, purchaseRows, vehicles, week, myTill] = await Promise.all([
       prisma.rental.findMany({
-        where: { OR: [{ status: { not: 'returned' } }, { status: 'returned', deposit: { status: 'held', decidedById: null, paidTetri: { gt: 0 } } }] },
+        where: { OR: [{ status: { not: 'returned' } }, { status: 'returned', deposit: { status: 'held', decidedById: null, migrationDecision: null, paidTetri: { gt: 0 } } }] },
         select: {
           id: true,
           number: true,
@@ -45,9 +46,10 @@ export function todayRoutes(app: FastifyInstance): void {
           expectedReturnOn: true,
           paidThrough: true,
           vinUnconfirmed: true,
+          odooOrderId: true,
           customer: { select: { id: true, name: true, nameKa: true, nameLat: true, phone: true } },
           vehicle: { select: { vin: true } },
-          deposit: { select: { paidTetri: true, status: true, decidedById: true } },
+          deposit: { select: { paidTetri: true, status: true, decidedById: true, migrationDecision: true } },
           periods: { select: { paidTetri: true } },
           documents: { where: { kind: 'pdf', docKind: 'contract', archived: false }, select: { signedAt: true } },
         },
@@ -104,11 +106,27 @@ export function todayRoutes(app: FastifyInstance): void {
         status,
         debtTetri: debtOfRental(r.customer.id, r.id),
         awaitingPayment: status === 'awaiting_payment',
-        depositUndecided: r.status === 'returned' && r.deposit?.status === 'held' && !r.deposit.decidedById,
+        // A deposit the transfer brought over is not this week's decision: it
+        // stands in one row of its own (§3.7), and the rows here are the
+        // returns the company itself made.
+        depositUndecided: r.status === 'returned' && r.deposit?.status === 'held' && !r.deposit.decidedById && !r.deposit.migrationDecision && r.odooOrderId == null,
         vinUnconfirmed: r.vinUnconfirmed,
         contractUnsigned: !signed && handedOverAgo >= 1 && r.status !== 'returned',
       };
     });
+
+    // What the transfer left undecided, as one number (§3.7). Only an owner
+    // ever sees it, so only an owner's request pays for the query.
+    const odooDeposits = owner
+      ? await (async () => {
+          const agg = await prisma.deposit.aggregate({
+            where: { status: 'held', decidedById: null, migrationDecision: null, rental: { odooOrderId: { not: null }, status: { in: ['returned', 'disputed'] } } },
+            _count: { _all: true },
+            _sum: { paidTetri: true },
+          });
+          return { count: agg._count._all, amountTetri: agg._sum.paidTetri ?? 0 };
+        })()
+      : { count: 0, amountTetri: 0 };
 
     const staleBanks = owner
       ? BANKS.map((bank) => {
@@ -160,12 +178,19 @@ export function todayRoutes(app: FastifyInstance): void {
       purchases: purchaseRows.map((p) => ({ id: p.id, number: p.number, who: p.supplier.name, note: 'ordered' })),
       vehiclesWithoutPool: vehicles.filter((v) => v.pool == null && v.state !== 'sold' && v.state !== 'out').length,
       vehiclesWithoutPoint: vehicles.filter((v) => v.locationId == null && v.state === 'available').length,
+      odooDeposits,
     });
 
     const fleet = Object.fromEntries(VEHICLE_STATES.map((s) => [s, 0])) as Record<VehicleState, number>;
     for (const v of vehicles) fleet[v.state as VehicleState]++;
     const overdueTetri = rentals.filter((r) => r.status === 'overdue').reduce((n, r) => n + r.debtTetri, 0);
-    const heldDeposits = owner ? await prisma.deposit.aggregate({ where: { status: 'held' }, _sum: { paidTetri: true } }) : null;
+    // Deposit money held comes from the one function "Деньги → Залоги" and
+    // the week both read (`lib/deposits.ts`). This line used to count it
+    // itself — `status: 'held'` and nothing else — and a deposit closed by a
+    // transfer decision keeps that status, so "Сегодня" went on holding
+    // 3 160 ₾ that two other screens had already let go (QA-W6-21). Three
+    // readings of one figure is two too many; there is one now.
+    const depositsHeldTetri = owner ? (await depositsOverview()).totals.heldTetri : null;
     // Deposit money of the week is what payments put on deposits, not a kind of payment.
     const depositsIn = owner
       ? await prisma.paymentAllocation.aggregate({ where: { target: 'deposit', payment: { voidedAt: null, occurredOn: { gte: monday }, channel: { not: 'deposit' } } }, _sum: { amountTetri: true } })
@@ -198,7 +223,7 @@ export function todayRoutes(app: FastifyInstance): void {
       numbers: {
         fleet,
         overdueTetri: owner ? overdueTetri : null,
-        depositsHeldTetri: heldDeposits?._sum.paidTetri ?? null,
+        depositsHeldTetri,
         week: weekMoney,
         myTillTetri: owner ? null : myTill,
         batteries: await batteriesNow(),

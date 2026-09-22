@@ -37,6 +37,11 @@ wave5 = [
  ('wave-5-purchases.html', 'Волна 5 · Закупка и приёмка', 'Новый поставщик в заказе, курс и долг, приёмка вставкой VIN, пересчёт после доплаты; ноутбук', 'wave-5.md §3.4–3.6'),
  ('wave-5-service-stock.html', 'Волна 5 · Сервис и склад', 'Сообщить о поломке, ремонт с работой по часам, долг клиента, склад с нехваткой и начальным остатком', 'wave-5.md §3.7–3.10'),
 ]
+wave6 = [
+ ('wave-6-reports.html', 'Волна 6 · Отчёты', 'Неделя по книге с печатью, загрузка парка (M-10) по моделям, экономика мопеда; ноутбук', 'wave-6.md §3.1–3.3'),
+ ('wave-6-settings.html', 'Волна 6 · Настройки, журнал, перенос', 'Люди, точки с типом, тарифы, журнал «было / стало», перенос и разбор залогов из Odoo, Kommo', 'wave-6.md §3.4–3.10'),
+]
+rows6 = ''.join(f'<tr><td><a class="ok" href="{f}"><b>{t}</b></a></td><td>{d}</td><td class="small muted">{i}</td></tr>' for f, t, d, i in wave6)
 rows5 = ''.join(f'<tr><td><a class="ok" href="{f}"><b>{t}</b></a></td><td>{d}</td><td class="small muted">{i}</td></tr>' for f, t, d, i in wave5)
 rows4 = ''.join(f'<tr><td><a class="ok" href="{f}"><b>{t}</b></a></td><td>{d}</td><td class="small muted">{i}</td></tr>' for f, t, d, i in wave4)
 rows3 = ''.join(f'<tr><td><a class="ok" href="{f}"><b>{t}</b></a></td><td>{d}</td><td class="small muted">{i}</td></tr>' for f, t, d, i in wave3)
@@ -50,6 +55,7 @@ html = (f'<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name=
  '<dt>Роли</dt><dd>Владелец (Mika, Kardu) и менеджер — решение Mika 17.09.2026</dd>'
  '<dt>Дата</dt><dd>17.09.2026</dd></dl></header>'
  '<section class="notes"><h2>Схема (утверждена 17.09.2026)</h2><table style="width:100%"><tr><th>Прототип</th><th>Что внутри</th><th>Схема · ТЗ v2</th></tr>' + rows + '</table>'
+ '<h2>Волна 6 — утверждена</h2><table style="width:100%"><tr><th>Прототип</th><th>Что внутри</th><th>Где описано</th></tr>' + rows6 + '</table>'
  '<h2>Волна 5 — утверждена</h2><table style="width:100%"><tr><th>Прототип</th><th>Что внутри</th><th>Где описано</th></tr>' + rows5 + '</table>'
  '<h2>Волна 4 — утверждена</h2><table style="width:100%"><tr><th>Прототип</th><th>Что внутри</th><th>Где описано</th></tr>' + rows4 + '</table>'
  '<h2>Волна 3 — утверждена</h2><table style="width:100%"><tr><th>Прототип</th><th>Что внутри</th><th>Где описано</th></tr>' + rows3 + '</table>'
@@ -57,7 +63,7 @@ html = (f'<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name=
  '<h2>Волна 1 — принята</h2><table style="width:100%"><tr><th>Прототип</th><th>Что внутри</th><th>Где описано</th></tr>' + rows1 + '</table>'
  '<h2>Как смотреть</h2><ul><li>Каждый кадр телефона прокручивается внутри рамки.</li><li>Подпись под кадром объясняет решение и называет пункт аудита или ТЗ.</li><li>Грузинский текст — из словаря интерфейса (носителем не вычитан, register #15) или помечен как предложение.</li></ul>'
  '<h2>Решения Mika после А4</h2><ul><li><b>В1.</b> Удержание из залога решает один владелец (D18).</li><li><b>В9.</b> Договор и акт — из EV8 Ops, на подпись без повторного ввода: Signify API или подпись на экране (D17).</li><li><b>В10.</b> Батареи считаются без номеров: шоурум, курьеры, ремонт (D16).</li></ul>'
- '<h2>Будет в следующих волнах</h2><ul><li>Продажа с рассрочкой, закупка и приёмка, ремонт и склад — волна 5.</li><li>Отчёт недели и загрузка парка, настройки, журнал — волна 6.</li><li>Перенос действующих аренд и остатков — волны 3 и 5.</li></ul>'
+ '<h2>После волны 6</h2><ul><li>Блок 11 ТЗ v2 — ждут внешнего: WhatsApp по расписанию, BOG API, Kommo в обе стороны, Signify API, стенды на сервере.</li><li>После раунда: батареи по номерам, станции замены, партия 50 S70.</li></ul>'
  '</section></body></html>')
 assert '<script' not in html
 (OUT / 'index.html').write_text(html)

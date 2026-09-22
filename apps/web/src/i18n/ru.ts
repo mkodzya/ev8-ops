@@ -3,6 +3,9 @@ import { wave4Ru } from './wave4.js';
 import { wave5salesRu } from './wave5-sales.js';
 import { wave5purchasesRu } from './wave5-purchases.js';
 import { wave5serviceRu } from './wave5-service.js';
+import { wave6weekRu } from './wave6-week.js';
+import { wave6utilRu } from './wave6-utilisation.js';
+import { wave6manageRu } from './wave6-manage.js';
 import type { Dict } from './en.js';
 
 // Typed as Dict: a missing or misspelled key fails the build.
@@ -97,7 +100,14 @@ export const ru: Dict = {
       stock: 'Склад',
       payments: 'Платежи',
       statements: 'Выписки',
+      week: 'Неделя',
+      utilisation: 'Загрузка парка',
       economics: 'Экономика',
+      people: 'Люди',
+      rental: 'Аренда',
+      journal: 'Журнал',
+      migration: 'Перенос',
+      login: 'Вход',
     },
   },
 
@@ -479,6 +489,7 @@ export const ru: Dict = {
     addVehicle: 'Добавить мопед',
     points: 'Точки',
     addPoint: 'Добавить точку',
+    rental: 'Аренда',
   },
 
   pools: {
@@ -513,7 +524,20 @@ export const ru: Dict = {
     rentedNote: 'Мопед в аренде. Перевести в продажу можно — это бывает, когда арендатор его выкупает.',
   },
 
+  rentalSettings: {
+    hint: 'Тариф модели всё равно подставляется в выдаче первым; это кнопки рядом с ним.',
+    rates: 'Тарифы аренды в неделю',
+    ratesHint: 'Кнопки в мастере выдачи. Снятый тариф уходит в архив: у старых аренд он остаётся.',
+    addRate: 'добавить',
+    removeRate: 'Убрать тариф',
+    deposit: 'Залог по умолчанию',
+    depositHint: 'Подставляется в выдаче; в самой выдаче его можно изменить.',
+    depositSaved: (sum: string) => `Залог по умолчанию — ${sum}`,
+  },
   points: {
+    kind: 'Тип',
+    kindHint: 'Логики у типа пока нет — он нужен, чтобы сеть замены не потребовала переделки.',
+    kinds: { showroom: 'Шоурум', store: 'Склад', workshop: 'Мастерская', swap: 'Станция замены' } as Record<string, string>,
     restored: (name: string) => `«${name}» снова в списке`,
     archived: (name: string) => `«${name}» убрана из списка`,
     created: (name: string) => `Точка «${name}» добавлена`,
@@ -631,6 +655,7 @@ export const ru: Dict = {
 
 
   money: {
+    channelNeeded: 'Скажите, откуда уходят деньги: из кассы или со счёта.',
     tillMinusNeed: 'Отметьте, если выдаёте из своих.',
     tillMinus: (onHand: string, minus: string) => `В кассе у вас ${onHand} — выдаёте больше, касса уйдёт в минус −${minus}`,
     tillMinusOk: 'Да, выдаю — касса уйдёт в минус',
@@ -963,7 +988,6 @@ export const ru: Dict = {
   economics: {
     count: counted('мопед', 'мопеда', 'мопедов'),
     title: 'Экономика',
-    nav: 'Экономика',
     subtitle: 'Что мопед заработал и во что обошёлся. Всё складывается из платежей, ремонтов и событий, поэтому правка меняет цифру сразу.',
     vin: 'VIN',
     model: 'Модель',
@@ -979,6 +1003,7 @@ export const ru: Dict = {
     payback: 'Окупаемость',
     perRentedDay: 'За день аренды',
     unpriced: 'Мопедов без себестоимости',
+    somePreliminary: (n) => `Из них ${n} предварительных: партия оплачена не полностью`,
     unpricedHint: 'Они не входят в итог: незаполненная себестоимость — это не ноль.',
     noCost: 'Нет себестоимости',
     totals: 'Парк',
@@ -1163,6 +1188,9 @@ export const ru: Dict = {
       vehicle_rented: 'Мопед у клиента — точка появится при возврате.',
       vehicle_rented_sale: 'Мопед в аренде — продать нельзя, пока не вернут.',
       customer_archived: 'Эта карточка объединена с другой — работайте в той, в которую она вошла.',
+      duplicate_rate: 'Такой тариф среди кнопок уже есть.',
+      bad_period: 'Период начинается позже, чем кончается. Проверьте даты.',
+      rate_not_found: 'Такого тарифа нет — возможно, его уже убрали.',
       vehicle_rented_move: 'Мопед у клиента — сначала закройте аренду.',
       vin_or_note: 'Выберите мопед из парка или напишите, почему VIN не подтверждён.',
       vins_count: 'Число VIN в строке не совпадает с заказанным. Проверьте каждую строку.',
@@ -1176,4 +1204,7 @@ export const ru: Dict = {
   ...wave5salesRu,
   ...wave5purchasesRu,
   ...wave5serviceRu,
+  ...wave6weekRu,
+  ...wave6utilRu,
+  ...wave6manageRu,
 };

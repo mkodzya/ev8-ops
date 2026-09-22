@@ -1,6 +1,6 @@
 import { effectiveRentalStatus, overdueDays, todayISO } from '@ev8/shared';
 import type { FastifyInstance } from 'fastify';
-import { isoDate } from '../lib/dates.js';
+import { dayOf, isoDate } from '../lib/dates.js';
 import { debtsOf } from '../lib/debt.js';
 import { UNDO_RETURN_MS } from '../lib/rentals.js';
 import { prisma } from '../lib/db.js';
@@ -96,8 +96,8 @@ export function rentalRoutes(app: FastifyInstance): void {
     const feed = [
       ...r.payments.map((p) => ({ at: isoDate(p.occurredOn)!, kind: 'payment' as const, by: null as string | null, text: p.channel, amountTetri: p.grossTetri, note: null as string | null })),
       ...r.acts.map((a) => ({ at: isoDate(a.occurredOn)!, kind: 'act' as const, by: null, text: a.kind, amountTetri: null, note: a.condition })),
-      ...r.documents.filter((d) => d.signedAt).map((d) => ({ at: d.signedAt!.toISOString().slice(0, 10), kind: 'document' as const, by: d.signedBy, text: d.docKind ?? '', amountTetri: null, note: null })),
-      ...log.map((l) => ({ at: l.createdAt.toISOString().slice(0, 10), kind: 'log' as const, by: l.actor?.name ?? null, text: l.action, amountTetri: null, note: l.note })),
+      ...r.documents.filter((d) => d.signedAt).map((d) => ({ at: dayOf(d.signedAt)!, kind: 'document' as const, by: d.signedBy, text: d.docKind ?? '', amountTetri: null, note: null })),
+      ...log.map((l) => ({ at: dayOf(l.createdAt)!, kind: 'log' as const, by: l.actor?.name ?? null, text: l.action, amountTetri: null, note: l.note })),
     ].sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
     const today = todayISO(new Date(), env.TZ);
     const pickedUpOn = isoDate(r.pickedUpOn);
@@ -126,6 +126,7 @@ export function rentalRoutes(app: FastifyInstance): void {
         buyoutTargetTetri: r.buyoutTargetTetri,
         buyoutPerPaymentTetri: r.buyoutPerPaymentTetri,
         nightParkingAddress: r.nightParkingAddress,
+        kommoRef: r.kommoRef,
         batteries: r.batteries,
         chargers: r.chargers,
         notes: r.notes,

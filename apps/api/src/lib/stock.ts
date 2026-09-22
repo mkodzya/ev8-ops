@@ -109,8 +109,34 @@ export async function issueForServicePart(
 }
 
 /** A repair line removed while the job is open puts its parts back. */
-export async function unissueForServicePart(tx: Tx, servicePartId: string): Promise<void> {
-  await tx.stockMove.deleteMany({ where: { servicePartId } });
+/**
+ * One line taken off a repair gives its parts back (QA-W5-18, wave 5 §3.7).
+ *
+ * It used to delete the movement that issued them, and that was wrong for
+ * the same reason a cancelled repair writes a return instead of an erasure:
+ * the parts did leave the shelf, somebody carried them to the workshop, and
+ * a ledger that rubs that out cannot say where they were on Tuesday. The
+ * tester and the designer both said so; I argued it was a correction of an
+ * entry rather than a movement, and I was wrong.
+ */
+export async function returnServicePart(tx: Tx, input: { servicePartId: string; occurredOn: string; actorId: string; reason: string }): Promise<number> {
+  const line = await tx.servicePart.findUnique({ where: { id: input.servicePartId }, select: { id: true, partId: true, qty: true, unitCostTetri: true } });
+  if (!line?.partId) return 0; // a line typed by hand never touched the shelf
+  await tx.stockMove.create({
+    data: {
+      partId: line.partId,
+      kind: 'return',
+      qty: Math.abs(line.qty),
+      // Back at what it left at, so the shelf's average is where it was.
+      unitCostTetri: line.unitCostTetri,
+      occurredOn: dateFromISO(input.occurredOn)!,
+      // The issuing movement keeps this line's id; the return cannot, because
+      // the line is about to go. It names the repair in words instead.
+      reason: input.reason,
+      createdById: input.actorId,
+    },
+  });
+  return line.qty;
 }
 
 /**

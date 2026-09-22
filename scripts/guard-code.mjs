@@ -51,6 +51,34 @@ const USED = /var\(\s*(--[a-z0-9-]+)/g;
 const HEX = /#[0-9a-fA-F]{3,8}\b/g;
 const RGB = /\brgba?\(/g;
 const UNSAFE_SQL = /\$(?:query|execute)RawUnsafe\b/g;
+/**
+ * A date or a time drawn from the reader's own clock. Everything the product
+ * records happened on the company's day (CLAUDE.md, Asia/Tbilisi), and
+ * `localDateTime`/`todayISO` are how you say so. For an owner in London the
+ * two differ after midnight: the journal printed a UTC date beside a London
+ * time and named a day that never existed (QA-W6-18). Nobody testing from
+ * Tbilisi can see this, which is exactly why it is checked here.
+ */
+const READER_CLOCK = /\.toLocale(?:Date|Time|)String\s*\(/g;
+/**
+ * A calendar day cut out of an instant's ISO string, which names the UTC day.
+ * Between 20:00 UTC and midnight that is yesterday in Tbilisi, so a card's
+ * feed put a return on the 21st beside the act it produced on the 22nd
+ * (QA-W6-19). `dayOf()` in the API, `localDateTime()` on a screen.
+ */
+const UTC_DAY = /toISOString\(\)\.slice\(0, ?10\)/g;
+/**
+ * Where a UTC day is the answer: `isoDate` reads `date` columns, which Prisma
+ * hands back at UTC midnight and which carry no time to get wrong, and the
+ * shared modules do calendar arithmetic on date-only values in UTC on purpose.
+ */
+const UTC_DAY_OK = new Set([
+  'apps/api/src/lib/dates.ts',
+  'apps/api/src/routes/today.ts',
+  'packages/shared/src/time.ts',
+  'packages/shared/src/week.ts',
+  'packages/shared/src/payments.ts',
+]);
 
 const problems = [];
 
@@ -83,6 +111,16 @@ for (const root of ROOTS) {
       for (const m of line.matchAll(UNSAFE_SQL)) {
         problems.push(`${where}  ${m[0]} builds SQL from a string — use the tagged $queryRaw\`…\` or the Prisma client`);
       }
+      if (path.startsWith('apps/web/src')) {
+        for (const m of line.matchAll(READER_CLOCK)) {
+          problems.push(`${where}  ${m[0].trim()} reads the device's clock — say the company's day with localDateTime() or todayISO()`);
+        }
+      }
+      if (!UTC_DAY_OK.has(path)) {
+        for (const m of line.matchAll(UTC_DAY)) {
+          problems.push(`${where}  ${m[0]} names the UTC day, not the company's — dayOf() in the API, localDateTime() on a screen`);
+        }
+      }
     });
   }
 }
@@ -100,5 +138,5 @@ if (problems.length) {
 }
 console.log(
   `guard-code: clean — no colour literals outside the token files, ` +
-    `${uses.length} var() uses all resolve, no unsafe raw SQL`,
+    `${uses.length} var() uses all resolve, no unsafe raw SQL, every day the company's`,
 );

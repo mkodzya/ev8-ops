@@ -9,7 +9,9 @@ import { customerRoutes } from './routes/customers.js';
 import { documentRoutes } from './routes/documents.js';
 import { fileRoutes } from './routes/files.js';
 import { economicsRoutes } from './routes/economics.js';
+import { reportRoutes } from './routes/reports.js';
 import { stockRoutes } from './routes/stock.js';
+import { settingsRoutes } from './routes/settings.js';
 import { fleetRoutes } from './routes/fleet.js';
 import { modelRoutes } from './routes/models.js';
 import { jobRoutes } from './routes/jobs.js';
@@ -30,6 +32,8 @@ import { depositRoutes } from './routes/deposits.js';
 import { summaryRoutes } from './routes/summary.js';
 import { todayRoutes } from './routes/today.js';
 import { batteryRoutes } from './routes/batteries.js';
+import { journalRoutes } from './routes/journal.js';
+import { migrationRoutes } from './routes/migration.js';
 import { userRoutes } from './routes/users.js';
 
 export function buildApp(): FastifyInstance {
@@ -72,7 +76,9 @@ export function buildApp(): FastifyInstance {
   fleetRoutes(app);
   modelRoutes(app);
   locationRoutes(app);
+  settingsRoutes(app);
   economicsRoutes(app);
+  reportRoutes(app);
   stockRoutes(app);
   customerRoutes(app);
   rentalRoutes(app);
@@ -80,6 +86,8 @@ export function buildApp(): FastifyInstance {
   fileRoutes(app);
   documentRoutes(app);
   userRoutes(app);
+  journalRoutes(app);
+  migrationRoutes(app);
   paymentRoutes(app);
   statementRoutes(app);
   tillRoutes(app);

@@ -318,7 +318,12 @@ a { color: var(--accent); text-decoration: none; }
 .block-head { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; row-gap: 6px; margin-bottom: 10px; }
 .block-head .head-text { gap: 8px; }
 .block-head h2 { margin: 0; }
-.block-sub { font: var(--text-label); color: var(--muted); white-space: nowrap; }
+/* A block's quiet line is usually a count — "12 мопедов" — but sometimes a
+   sentence: "20 числятся на руках по завершённым арендам · 3 160 ₾". Held on
+   one line it pushed the page sideways at 375 px (QA-W6-11). It wraps; the
+   sums inside it hold together on their own, because `formatGel` writes them
+   with no-break spaces. */
+.block-sub { font: var(--text-label); color: var(--muted); min-width: 0; }
 .block-note { font: var(--text-label); color: var(--muted); margin: -4px 0 10px; max-width: 80ch; }
 /* A title is the display face even when it is a code. A rental number or a VIN
    in the mono face is a different weight of heading from "Парк" beside it in
@@ -1256,15 +1261,35 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
 .day-head h1 { margin: 0; font: var(--text-h1-phone); }
 .num-strip { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 6px; margin-bottom: 16px; scrollbar-width: none; }
 .num-strip::-webkit-scrollbar { display: none; }
-.num {
+/* Scoped to the strip on purpose. `.num` also means "a cell of numbers, hard
+   right" (top of this file), and an unscoped tile turned every `<td class=
+   "num">` in the system into a bordered box stacked under its neighbour —
+   the economics table had been drawn that way for three waves. Every tile is
+   a direct child of the strip, so the collision costs nothing to end. */
+.num-strip > .num {
   flex: none; min-width: 104px; display: flex; flex-direction: column; gap: 2px; padding: 10px 14px;
   border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--surface); color: inherit;
 }
 .num-v { font: var(--text-money); }
 .num-l { font: var(--text-label); color: var(--muted); }
-.num-crit .num-v { color: var(--crit); }
+.num-strip > .num-crit .num-v { color: var(--crit); }
 .queue-card { padding-bottom: 8px; }
 .queue-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 6px; }
+/* A heading that opens the block under it (wave 6 §3.8). It is a button, so
+   it says so to a screen reader and answers the keyboard; it looks like the
+   heading it replaced, and it is as wide as the card — the counter beside it
+   was 34 px and got narrower the less there was to show (QA-W6-22, ux №13). */
+.history-head {
+  width: 100%;
+  min-height: 44px;
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
 .queue-head h2 { margin: 0; font: var(--text-h3); }
 .queue { list-style: none; margin: 0; padding: 0; }
 .q-row { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; align-items: center; padding: 10px 0; border-top: 1px solid var(--line-soft); }
@@ -1311,3 +1336,46 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
 .buy-extras-v { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
 /* The receipt's summary sits inside the form, so it is quieter than a card. */
 .card-quiet { background: var(--surface-2); border-color: var(--line-soft); }
+
+/* ---- wave 6: the week (§3.1) -------------------------------------------- */
+/* The figures of the book: a label that may wrap to three lines in Georgian
+   and one number, hard right, so the column of numbers can be read down
+   without reading the labels at all. */
+.week-period { margin-bottom: 12px; }
+.chip-date { font: var(--text-label); }
+.figures { margin: 0; }
+.figure { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; align-items: baseline; padding: 8px 0; border-top: 1px solid var(--line-soft); }
+.figure:first-child { border-top: 0; }
+.figure > dt { min-width: 0; color: var(--muted); }
+.figure > dt > .hint { display: block; margin: 2px 0 0; }
+/* A sum must not break mid-number, but a word standing where a sum would be
+   — "нет данных: учёта нет", longest of all in Georgian — has to wrap, or it
+   pushes the page sideways at 375 px (QA-W6-02). */
+.figure > dd { margin: 0; justify-self: end; text-align: right; white-space: nowrap; min-width: 0; }
+.figure > dd.muted { white-space: normal; }
+/* Money that belongs to no week at all stands away from the ones that do. */
+.figure-apart { border-top: 1px solid var(--line); margin-top: 6px; }
+/* "Поступило всего" is the figure a person checks against the statement; the
+   rows under it break the same money down by what it came in for. */
+.figure-total > dt { color: var(--ink); font-weight: 600; }
+.figure-total > dd { font: var(--text-h3); }
+
+/* ---- wave 6: the utilisation of the rental fleet (§3.2) ----------------- */
+/* One figure the screen is about, and under it the days it is made of. No
+   colour for "low": the book has no threshold, so nothing here paints one. */
+.util-total { text-align: center; }
+.util-hero { font: var(--text-display); font-family: var(--mono); font-variant-numeric: tabular-nums; margin: 0 0 4px; }
+.util-total .hint { margin-bottom: 0; }
+/* What the percentage left out, kept quiet but never hidden. */
+.util-aside { margin-top: 10px; }
+/* A line whose value is a sentence, not a number: "нет данных — связи
+   ремонта с батареями не ведётся" stands beside a label just as long, and at
+   375 px the two columns cannot both have their way. The row stacks instead
+   of letting the words run through each other (the phone half of QA-W6-02). */
+@media (max-width: 560px) {
+  .figure-stack { grid-template-columns: 1fr; }
+  .figure-stack > dd { justify-self: start; text-align: left; }
+}
+/* The mopeds behind a line of "что мешает" — short lists, named in place. */
+.util-list { list-style: none; margin: 0 0 10px; padding: 0 0 0 2px; font: var(--text-body-sm); }
+.util-list li { padding: 4px 0; }

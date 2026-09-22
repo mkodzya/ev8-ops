@@ -23,6 +23,8 @@ export interface EconomicsRow {
   serviceChargedTetri: number;
   marginTetri: number | null;
   idleDays: number;
+  /** M-10 over the moped's whole life, from the one metric (§3.3). */
+  utilisation: number | null;
   days: Record<'available' | 'rented' | 'service' | 'out' | 'sold', number>;
 }
 
@@ -57,6 +59,9 @@ export function EconomicsPage() {
   if (failure) return <LoadError failure={failure} onRetry={reload} />;
   if (!data) return <Loading />;
   const { rows, totals } = data;
+  // Mopeds whose landed cost has not settled: the total above them is that
+  // much less firm, and saying so is cheaper than explaining it later.
+  const preliminaryCount = rows.filter((r) => r.costPreliminary).length;
 
   return (
     <>
@@ -65,7 +70,16 @@ export function EconomicsPage() {
       <div className="two-col">
         <section className="card">
           <BlockHead title={t.economics.totals} />
-          <Row k={t.economics.cost} v={<span className="mono">{formatGel(totals.costTetri, { decimals: false })}</span>} />
+          <Row
+            k={t.economics.cost}
+            v={
+              <>
+                <span className="mono">{formatGel(totals.costTetri, { decimals: false })}</span>
+                {/* How much of this total is a figure that has not settled. */}
+                {preliminaryCount > 0 && <span className="hint warn-text">{t.economics.somePreliminary(preliminaryCount)}</span>}
+              </>
+            }
+          />
           <Row k={t.economics.rentalRevenue} v={<span className="mono">{formatGel(totals.rentalRevenueTetri, { decimals: false })}</span>} />
           <Row k={t.economics.serviceCompany} v={<span className="mono">{formatGel(totals.serviceCompanyTetri, { decimals: false })}</span>} />
           <Row
@@ -103,6 +117,7 @@ export function EconomicsPage() {
                 <th className="num">{t.economics.payback}</th>
                 <th className="num">{t.economics.rentedDays}</th>
                 <th className="num">{t.economics.idleDays}</th>
+                <th className="num">{t.utilisationReport.load}</th>
               </tr>
             </thead>
             <tbody>
@@ -116,7 +131,19 @@ export function EconomicsPage() {
                       </Link>
                     </td>
                     <td className="muted">{r.model}</td>
-                    <td className="num mono">{r.costTetri == null ? <span className="muted">{t.economics.noCost}</span> : formatGel(r.costTetri, { decimals: false })}</td>
+                    {/* A cost still moving says so here too: the card of a
+                        moped says it already, and two screens about one figure must
+                        not disagree (crit. 8, QA-W6-07). */}
+                    <td className="num mono" title={r.costPreliminary && r.costPaidPercent != null ? t.receipt.costPreliminary(r.costPaidPercent) : undefined}>
+                      {r.costTetri == null ? (
+                        <span className="muted">{t.economics.noCost}</span>
+                      ) : (
+                        <>
+                          {r.costPreliminary && <span className="muted">≈ </span>}
+                          {formatGel(r.costTetri, { decimals: false })}
+                        </>
+                      )}
+                    </td>
                     <td className="num mono">{formatGel(r.rentalRevenueTetri, { decimals: false })}</td>
                     <td className="num mono">{formatGel(r.serviceCompanyTetri, { decimals: false })}</td>
                     <td className="num mono">
@@ -130,6 +157,8 @@ export function EconomicsPage() {
                     <td className="num mono">{back == null ? t.common.dash : `${back}%`}</td>
                     <td className="num mono">{r.days.rented}</td>
                     <td className="num mono">{r.idleDays}</td>
+                    {/* The same M-10 the utilisation report shows (§3.3). */}
+                    <td className="num mono">{r.utilisation == null ? t.common.dash : `${r.utilisation} %`}</td>
                   </tr>
                 );
               })}
@@ -191,6 +220,11 @@ export function VehicleEconomics({ vehicleId }: { vehicleId: string }) {
       {back != null && <Row k={t.economics.payback} v={<span className="mono">{back}%</span>} />}
       <Row k={t.economics.rentedDays} v={<span className="mono">{r.days.rented}</span>} />
       <Row k={t.economics.idleDays} v={<span className="mono">{r.idleDays}</span>} />
+      {/* How busy this one was, by M-10 and nothing else (§3.3). */}
+      <Row
+        k={t.utilisationReport.load}
+        v={r.utilisation == null ? <span className="muted">{t.common.dash}</span> : <span className="mono">{r.utilisation} %</span>}
+      />
       {perDay != null && <Row k={t.economics.perRentedDay} v={<span className="mono">{formatGel(perDay)}</span>} />}
     </section>
   );

@@ -27,18 +27,43 @@ function readPassword(b: Body, field = 'password'): string {
 
 export function userRoutes(app: FastifyInstance): void {
   app.get('/api/users', { config: { scope: 'users.manage' } }, async () => {
-    const users = await prisma.user.findMany({ orderBy: [{ active: 'desc' }, { name: 'asc' }] });
+    const users = await prisma.user.findMany({
+      orderBy: [{ active: 'desc' }, { name: 'asc' }],
+      // On how many devices this person is signed in right now: the number
+      // "Закрыть все входы" is decided by (§3.4).
+      include: { sessions: { select: { lastSeenAt: true } } },
+    });
+    // When each of them last signed in. Live sessions cannot answer this:
+    // closing a session takes its history with it, and the column then says
+    // "не входил" about somebody who signed in twice this morning
+    // (QA-W6-14). The journal remembers; where it does not — because the
+    // sign-in predates the journal — the answer is "нет данных", not "нет".
+    const logins = await prisma.auditLog.groupBy({
+      by: ['actorId'],
+      where: { action: 'auth.login', actorId: { in: users.map((u) => u.id) } },
+      _max: { createdAt: true },
+    });
+    const lastLogin = new Map(logins.map((r) => [r.actorId, r._max.createdAt]));
     return {
       roles: ROLES,
-      users: users.map((u) => ({
-        id: u.id,
-        name: u.name,
-        email: u.email,
-        role: u.role,
-        locale: u.locale,
-        active: u.active,
-        createdAt: u.createdAt.toISOString(),
-      })),
+      users: users.map((u) => {
+        const live = u.sessions.reduce<Date | null>((last, s) => (!last || s.lastSeenAt > last ? s.lastSeenAt : last), null);
+        const signedIn = lastLogin.get(u.id) ?? null;
+        return {
+          id: u.id,
+          name: u.name,
+          email: u.email,
+          role: u.role,
+          locale: u.locale,
+          active: u.active,
+          sessions: u.sessions.length,
+          /** The last sign-in the journal knows of; null means nothing is known. */
+          lastLoginAt: signedIn?.toISOString() ?? null,
+          /** The last request of a session still open, for "сейчас на N устройствах". */
+          lastSeenAt: live?.toISOString() ?? null,
+          createdAt: u.createdAt.toISOString(),
+        };
+      }),
     };
   });
 
@@ -104,6 +129,21 @@ export function userRoutes(app: FastifyInstance): void {
     await prisma.session.deleteMany({ where: { userId: user.id } }); // every old session is now stale
     await audit({ actorId: actor.id, action: 'user.password.reset', entityType: 'user', entityId: user.id });
     return { ok: true };
+  });
+
+  /**
+   * Every device this person is signed in on signs in again (§3.4). The
+   * answer to a phone left in a taxi: the password is still theirs, but the
+   * sessions it opened are over — including, deliberately, their own if an
+   * owner does this to themselves.
+   */
+  app.post<{ Params: { id: string } }>('/api/users/:id/sessions/close', { config: { scope: 'users.manage' } }, async (req) => {
+    const actor = actorOf(req);
+    const user = await prisma.user.findUnique({ where: { id: req.params.id }, select: { id: true, name: true } });
+    if (!user) throw notFound('user_not_found', 'No such user.');
+    const { count } = await prisma.session.deleteMany({ where: { userId: user.id } });
+    await audit({ actorId: actor.id, action: 'user.sessions.closed', entityType: 'user', entityId: user.id, after: { sessions: count } });
+    return { ok: true, closed: count };
   });
 
   /** Changing your own password needs the current one, even for the owner. */

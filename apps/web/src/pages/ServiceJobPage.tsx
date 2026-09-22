@@ -205,9 +205,13 @@ export function ServiceJobPage() {
                           className="pill pill-sm"
                           aria-label={t.repair.removeLine}
                           onClick={async () => {
+                            // The parts go back on the shelf, and that is a
+                            // movement, not an undo: a person is told what
+                            // will be written before it is (QA-W5-18).
+                            if (p.partId && !window.confirm(t.repair.returnToStock(p.qty))) return;
                             const res = await lineOp.run((key) => api.del(`/api/service/${j.id}/parts/${p.id}`, { key }), `del:${p.id}`);
                             if (!res.ok) return;
-                            toast({ text: t.repair.partRemoved });
+                            toast({ text: p.partId ? t.repair.partReturned(p.qty) : t.repair.partRemoved });
                             reload();
                           }}
                         >
@@ -242,8 +246,12 @@ export function ServiceJobPage() {
             <button type="button" className="pill pill-sm" onClick={() => setSheet('part')}>
               + {t.repair.addPart}
             </button>
+            {/* No "+": there is one line of work on a repair and this button
+                edits it rather than adding another (wave 5 §3.7,
+                улучшение 2). A list of jobs waits for the time norms the
+                book does not have yet (register #33). */}
             <button type="button" className="pill pill-sm" onClick={() => setSheet('work')}>
-              + {t.repair.addWork}
+              {t.repair.addWork}
             </button>
           </div>
         )}

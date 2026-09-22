@@ -1,3 +1,4 @@
+import { localDateTime } from '@ev8/shared';
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../../api.js';
@@ -48,7 +49,9 @@ interface Card {
 }
 
 const dm = (iso: string | null) => (iso ? `${iso.slice(8, 10)}.${iso.slice(5, 7)}` : '');
-const hhmm = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+// The company's clock: a payment happened when Tbilisi says it did, not
+// when the laptop reading about it says (QA-W6-18).
+const hhmm = (iso: string) => localDateTime(iso).time;
 
 /** A payment's own page (wave 2 §3.3): what it closed, its bank line, who and when; "⋯ → annul" for an owner. */
 export function PaymentPage() {
