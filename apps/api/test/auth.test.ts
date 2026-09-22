@@ -36,6 +36,35 @@ describe.skipIf(!HAS_DB)('sign-in', () => {
     expect((await call(cookie, 'GET', '/api/me')).statusCode).toBe(401);
   });
 
+  /**
+   * Crit. 15. Cutting an open session is half the rule; the other half is
+   * that the right password stops opening a new one. It held on one line of
+   * `auth.ts` and nothing tested it — the tester's own note, round 12. With
+   * this the criterion is closed here and does not need Mika and a second
+   * device.
+   */
+  it('a switched-off person cannot sign in again, right password and all (crit. 15)', async () => {
+    const owner = await loginAs('owner');
+    const u = await makeUser('manager');
+    await login(u.email); // works while they are on
+
+    const off = await call(owner, 'PATCH', `/api/users/${u.id}`, { active: false });
+    expect(off.statusCode).toBe(200);
+
+    const refused = await call(null, 'POST', '/api/auth/login', { email: u.email, password: PASSWORD });
+    expect(refused.statusCode).toBe(401);
+    expect(refused.cookies.find((c) => c.name === 'ev8_session')?.value ?? '').toBe('');
+
+    // Their records and their journal stay: switching off is not deleting.
+    const { prisma } = await import('../src/lib/db.js');
+    expect(await prisma.user.findUnique({ where: { id: u.id } })).not.toBeNull();
+    expect(await prisma.auditLog.count({ where: { entityId: u.id, action: 'user.update' } })).toBeGreaterThan(0);
+
+    // And back on, the same password opens a session again.
+    await call(owner, 'PATCH', `/api/users/${u.id}`, { active: true });
+    expect((await call(null, 'POST', '/api/auth/login', { email: u.email, password: PASSWORD })).statusCode).toBe(200);
+  });
+
   it('a deactivated user is cut off at once', async () => {
     const u = await makeUser('manager');
     const cookie = await login(u.email);

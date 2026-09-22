@@ -1,6 +1,7 @@
 import { VEHICLE_STATES, todayISO, type VehicleState } from '@ev8/shared';
 import type { FastifyInstance } from 'fastify';
 import { dateFromISO } from '../lib/dates.js';
+import { depositsOverview } from '../lib/deposits.js';
 import { prisma } from '../lib/db.js';
 import { env } from '../lib/env.js';
 import { mayView } from '../lib/guard.js';
@@ -13,12 +14,11 @@ export function summaryRoutes(app: FastifyInstance): void {
   app.get('/api/summary', { config: { scope: 'session' } }, async (req) => {
     const today = todayISO(new Date(), env.TZ);
     const day = dateFromISO(today)!;
-    const [vehicles, rentals, customers, depositsHeld, pickedUpToday, unmatchedLines, openServiceJobs, overdueInstalments, dueBackToday] = await Promise.all([
+    const [vehicles, rentals, customers, pickedUpToday, unmatchedLines, openServiceJobs, overdueInstalments, dueBackToday] = await Promise.all([
       prisma.vehicle.groupBy({ by: ['state'], where: { archived: false }, _count: { _all: true } }),
       // Who is behind and by how much: the one scan the week's report reads too.
       rentalsNow(),
       prisma.customer.count({ where: { archived: false } }),
-      prisma.deposit.aggregate({ where: { status: 'held' }, _sum: { amountTetri: true }, _count: { _all: true } }),
       prisma.rental.findMany({
         where: { pickedUpOn: day },
         select: { id: true, number: true, customer: { select: { name: true } } },
@@ -39,6 +39,8 @@ export function summaryRoutes(app: FastifyInstance): void {
     const fleet = Object.fromEntries(VEHICLE_STATES.map((s) => [s, 0])) as Record<VehicleState, number>;
     for (const g of vehicles) fleet[g.state as VehicleState] = g._count._all;
     const { awaitingPayment, overdue: overdueList, active, withoutVin } = rentals;
+
+    const deposits = mayView(req, 'deposit.decide') ? await depositsOverview() : null;
 
     // Returns a manager closed: the deposit waits for an owner (wave 3 §3.5, D8).
     const undecided = mayView(req, 'deposit.decide')
@@ -62,7 +64,10 @@ export function summaryRoutes(app: FastifyInstance): void {
       overdueList,
       customers,
       // How much deposit money is held is the owners' number (redesign §2.1).
-      deposits: { held: depositsHeld._count._all, heldTetri: mayView(req, 'deposit.decide') ? (depositsHeld._sum.amountTetri ?? 0) : null },
+      // The same one function every other screen reads (`lib/deposits.ts`).
+      // A second count of this figure is how "Сегодня" came to disagree with
+      // "Деньги → Залоги" by 3 160 ₾ (QA-W6-21).
+      deposits: { held: deposits?.totals.rentals ?? 0, heldTetri: deposits?.totals.heldTetri ?? null },
       // What today asks a person to do, not only what it counts (DSH-01).
       unmatchedLines,
       openServiceJobs,

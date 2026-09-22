@@ -124,6 +124,44 @@ describe.skipIf(!HAS_DB)('Settings → Transfer (wave 6 §3.6–3.7)', () => {
     expect(event?.reason).toBe('ТЕСТ ремонта не было');
   });
 
+  /**
+   * QA-W6-21. "Сегодня" counted deposit money itself — `status: 'held'` and
+   * nothing more — and a deposit closed by a transfer decision keeps that
+   * status. Three screens showed one figure and one of them was 3 160 ₾ out.
+   * It went eleven rounds unseen because the five deposits sorted in round 5
+   * all had `paid_tetri` 0, so "it went down by their sum" came to nothing.
+   * This test uses money.
+   */
+  it('one figure, one function: Today, the week and Deposits agree after a batch (crit. 24)', async () => {
+    const owner = await loginAs('owner');
+    const a = await transferred();
+    const b = await transferred();
+
+    const readAll = async () => {
+      const [deposits, today, week] = await Promise.all([
+        call(owner, 'GET', '/api/deposits'),
+        call(owner, 'GET', '/api/today'),
+        call(owner, 'GET', '/api/reports/week'),
+      ]);
+      return {
+        deposits: json<{ totals: { heldTetri: number } }>(deposits).totals.heldTetri,
+        today: json<{ numbers: { depositsHeldTetri: number } }>(today).numbers.depositsHeldTetri,
+        week: json<{ money: { heldTetri: number } }>(week).money.heldTetri,
+      };
+    };
+    const before = await readAll();
+    expect(before.today).toBe(before.deposits);
+    expect(before.week).toBe(before.deposits);
+
+    await call(owner, 'POST', '/api/migration/deposits', { ids: [a.deposit.id, b.deposit.id], decision: 'unknown', reason: 'ТЕСТ разбор переноса' });
+
+    const after = await readAll();
+    // Two deposits of 180 ₾ each leave "held" — and all three screens say so.
+    expect(after.deposits).toBe(before.deposits - 36000);
+    expect(after.today).toBe(after.deposits);
+    expect(after.week).toBe(after.deposits);
+  });
+
   it('a manager sees none of it', async () => {
     const manager = await loginAs('manager');
     expect((await call(manager, 'GET', '/api/migration')).statusCode).toBe(403);
