@@ -205,9 +205,13 @@ export function ServiceJobPage() {
                           className="pill pill-sm"
                           aria-label={t.repair.removeLine}
                           onClick={async () => {
+                            // The parts go back on the shelf, and that is a
+                            // movement, not an undo: a person is told what
+                            // will be written before it is (QA-W5-18).
+                            if (p.partId && !window.confirm(t.repair.returnToStock(p.qty))) return;
                             const res = await lineOp.run((key) => api.del(`/api/service/${j.id}/parts/${p.id}`, { key }), `del:${p.id}`);
                             if (!res.ok) return;
-                            toast({ text: t.repair.partRemoved });
+                            toast({ text: p.partId ? t.repair.partReturned(p.qty) : t.repair.partRemoved });
                             reload();
                           }}
                         >

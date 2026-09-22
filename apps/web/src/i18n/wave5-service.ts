@@ -97,6 +97,9 @@ export const wave5serviceEn = {
     partAdd: 'Add to the repair',
     partAdded: 'The part is on the repair',
     partRemoved: 'The line is off the repair',
+    /** The shelf gets them back, and the person is told so first (QA-W5-18). */
+    returnToStock: (qty: number) => `Put ${qty} back on the shelf?`,
+    partReturned: (qty: number) => `The line is off the repair · ${qty} back on the shelf`,
 
     workTitle: 'Work',
     workHours: 'Hours',
@@ -254,6 +257,8 @@ export const wave5serviceRu: Wave5service = {
     partAdd: 'Добавить в ремонт',
     partAdded: 'Запчасть в ремонте',
     partRemoved: 'Строка убрана из ремонта',
+    returnToStock: (qty: number) => `Вернуть ${qty} шт на склад?`,
+    partReturned: (qty: number) => `Строка убрана из ремонта · ${qty} шт вернулись на склад`,
 
     workTitle: 'Работа',
     workHours: 'Часов',
@@ -409,6 +414,8 @@ export const wave5serviceKa: Wave5service = {
     partAdd: 'შეკეთებაში დამატება',
     partAdded: 'ნაწილი შეკეთებაშია',
     partRemoved: 'სტრიქონი მოხსნილია შეკეთებიდან',
+    returnToStock: (qty: number) => `დაბრუნდეს ${qty} ცალი საწყობში?`,
+    partReturned: (qty: number) => `სტრიქონი მოხსნილია · ${qty} ცალი დაბრუნდა საწყობში`,
 
     workTitle: 'სამუშაო',
     workHours: 'საათი',

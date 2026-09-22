@@ -644,6 +644,7 @@ export const ka: Dict = {
 
 
   money: {
+    channelNeeded: 'თქვით, საიდან გადის ფული — სალაროდან თუ ანგარიშიდან.',
     tillMinusNeed: 'მონიშნეთ, თუ სხვა ფულიდან აბრუნებთ.',
     tillMinus: (onHand: string, minus: string) => `სალაროში გაქვთ ${onHand} — მეტს აბრუნებთ, სალარო მინუსში წავა −${minus}`,
     tillMinusOk: 'დიახ, ვაბრუნებ — სალარო მინუსში წავა',

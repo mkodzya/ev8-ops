@@ -652,6 +652,8 @@ export const en = {
 
 
   money: {
+    /** Money going out names its way: nothing is chosen in advance (расхождение 1). */
+    channelNeeded: 'Say where the money goes from: the till or the account.',
     tillMinusNeed: 'Tick this if you hand it back from other money.',
     tillMinus: (onHand: string, minus: string) => `You have ${onHand} in the till — handing back more takes it to −${minus}`,
     tillMinusOk: 'Yes, hand it back — the till goes below zero',

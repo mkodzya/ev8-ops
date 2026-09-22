@@ -6,7 +6,7 @@ import { dateFromISO, isoDate } from '../lib/dates.js';
 import { prisma } from '../lib/db.js';
 import { env } from '../lib/env.js';
 import { badRequest, conflict, isUniqueViolation, notFound } from '../lib/errors.js';
-import { issueForServicePart, partRows, returnServiceParts, unissueForServicePart } from '../lib/stock.js';
+import { issueForServicePart, partRows, returnServiceParts, returnServicePart } from '../lib/stock.js';
 import { actorOf } from '../lib/guard.js';
 import { date, int, oneOf, str, tetri } from '../lib/validate.js';
 import { syncDeposit } from '../lib/rentalMoney.js';
@@ -360,12 +360,20 @@ export function serviceRoutes(app: FastifyInstance): void {
     { config: { scope: 'service.manage' } },
     async (req) => {
       const actor = actorOf(req);
-      const part = await prisma.servicePart.findUnique({ where: { id: req.params.partId }, include: { job: { select: { id: true, status: true } } } });
+      const part = await prisma.servicePart.findUnique({ where: { id: req.params.partId }, include: { job: { select: { id: true, status: true, number: true } } } });
       if (!part || part.job.id !== req.params.id) throw notFound('part_not_found', 'No such part on this job.');
       if (part.job.status !== 'open') throw conflict('job_closed', 'A closed job is a record; it is not edited.');
-      // Taking the line off the job puts the parts back on the shelf.
+      // Taking the line off the job puts the parts back on the shelf — as a
+      // movement of its own, not by rubbing out the one that issued them
+      // (QA-W5-18). In "Движения" of that part both are visible: that they
+      // were taken, and that they came back.
       await prisma.$transaction(async (tx) => {
-        await unissueForServicePart(tx, part.id);
+        await returnServicePart(tx, {
+          servicePartId: part.id,
+          occurredOn: todayISO(new Date(), env.TZ),
+          actorId: actor.id,
+          reason: `возврат из ремонта ${part.job.number}`,
+        });
         await tx.servicePart.delete({ where: { id: part.id } });
       });
       await audit({ actorId: actor.id, action: 'service.part.remove', entityType: 'service_job', entityId: part.job.id, before: { name: part.name, qty: part.qty } });

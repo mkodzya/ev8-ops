@@ -655,6 +655,7 @@ export const ru: Dict = {
 
 
   money: {
+    channelNeeded: 'Скажите, откуда уходят деньги: из кассы или со счёта.',
     tillMinusNeed: 'Отметьте, если выдаёте из своих.',
     tillMinus: (onHand: string, minus: string) => `В кассе у вас ${onHand} — выдаёте больше, касса уйдёт в минус −${minus}`,
     tillMinusOk: 'Да, выдаю — касса уйдёт в минус',
