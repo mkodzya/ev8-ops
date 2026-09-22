@@ -9,6 +9,7 @@ dist/
 # deploy/qa.env is this Mac's QA stand and holds no secret, so it stays.
 deploy/prod.env
 deploy/test.env
+deploy/pilot.env
 *.log
 apps/api/src/generated/
 .pgdata/
