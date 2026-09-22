@@ -1,4 +1,4 @@
-import { CONTACT_KINDS, CUSTOMER_KINDS, CUSTOMER_SOURCES, DEFAULT_DEPOSIT_TETRI, VEHICLE_POOLS, VEHICLE_STATES, normalizeVin, todayISO, vinFault } from '@ev8/shared';
+import { CONTACT_KINDS, CUSTOMER_KINDS, CUSTOMER_SOURCES, VEHICLE_POOLS, VEHICLE_STATES, normalizeVin, todayISO, vinFault } from '@ev8/shared';
 import type { FastifyInstance } from 'fastify';
 import { audit } from '../lib/audit.js';
 import { hasPerm } from '../lib/auth.js';
