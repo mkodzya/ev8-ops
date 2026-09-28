@@ -245,6 +245,27 @@ def import_vehicles(o: Odoo, cur, rep: Report, fleet_model_ids: dict[int, str]) 
     return by_vin
 
 
+def supplier_card(comment: str | None) -> dict[str, str | None]:
+    """A supplier's Odoo note laid out in the card's fields — only what is labelled.
+
+    "Контакт: X." and "Банк: Y." become the contact person and the bank and
+    leave the note; "(Alibaba.com)" says where we agree and stays in it, since
+    the sentence around it still reads. Nothing is guessed: an unlabelled note
+    stays whole in the notes."""
+    text = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", comment or "")).strip()
+    out: dict[str, str | None] = {"contact_person": None, "channel": None, "goods": None, "bank": None}
+    for label, key in (("Контакт", "contact_person"), ("Банк", "bank")):
+        # The value runs to the full stop before the next "Label:", or to the end.
+        m = re.search(label + r":\s*(.+?)(?:\.\s+(?=[^\s.:]+:)|\.?$)", text)
+        if m:
+            out[key] = m.group(1).strip()
+            text = (text[: m.start()] + text[m.end():]).strip()
+    if "(Alibaba.com)" in text:
+        out["channel"] = "Alibaba.com"
+    out["notes"] = re.sub(r"\s{2,}", " ", text).strip() or None
+    return out
+
+
 def import_customers(o: Odoo, cur, rep: Report, suppliers_only: bool = False) -> dict[int, str]:
     """Клиенты. Карточка самой компании не переносится: это не клиент.
 
@@ -274,14 +295,17 @@ def import_customers(o: Odoo, cur, rep: Report, suppliers_only: bool = False) ->
         pid = (p.get("vat") or "").strip() or None
         note = MOVED
         supplier = bool(p.get("supplier_rank"))
+        card = {"country": None, "contact_person": None, "channel": None, "goods": None, "bank": None}
         if supplier:
-            # A supplier's card has three fields — country, contact, phone
-            # (wave 5 §3.4) — kept in `address` and `notes`. So the country
-            # goes where the card reads a country, and the contact gets what
-            # Odoo knows about talking to them: its notes and the street.
-            comment = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", p.get("comment") or "")).strip()
-            note = "\n".join(x for x in [comment, addr] if x) or None
-            addr = p["country_id"][1] if p.get("country_id") else None
+            # A supplier's card is in fields since migration 0031 (Mika,
+            # 28.09.2026, option 2). Odoo keeps the country and the street as
+            # fields, and the rest as one note — out of which only what is
+            # labelled is lifted: "Контакт:", "Банк:", and "(Alibaba.com)" as
+            # where we agree. What they supply is written as a sentence, not a
+            # label, so it stays in the notes for a person to move.
+            card = supplier_card(p.get("comment"))
+            card["country"] = p["country_id"][1] if p.get("country_id") else None
+            note = card.pop("notes")
         if pid and pid in seen_pid:
             rep.note(f"контакт Odoo #{p['id']}: личный номер совпал с контактом #{seen_pid[pid]} — "
                      f"номер не записан, карточка заведена с пометкой; решать, один это человек или два, человеку")
@@ -292,14 +316,24 @@ def import_customers(o: Odoo, cur, rep: Report, suppliers_only: bool = False) ->
         cur.execute(
             """
             insert into customers (name, personal_id, phone, email, kind, record_kind, tags, address,
-                                   odoo_partner_id, archived, notes)
-            values (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                                   odoo_partner_id, archived, notes,
+                                   country, contact_person, channel, goods, bank)
+            values (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s, %s,%s,%s,%s,%s)
             on conflict (odoo_partner_id) do update set
               name = excluded.name, phone = excluded.phone, email = excluded.email,
               kind = excluded.kind, record_kind = excluded.record_kind, tags = excluded.tags,
-              address = excluded.address, archived = excluded.archived, updated_at = now(),
-              -- A supplier's notes are its contact. Refresh them only while
-              -- nobody has written there: empty, or still the carry-over note.
+              archived = excluded.archived, updated_at = now(),
+              -- A supplier's card is corrected by hand in the product: a re-run
+              -- fills what is empty and leaves what a person wrote.
+              address = case when excluded.record_kind = 'supplier'
+                             then coalesce(customers.address, excluded.address) else excluded.address end,
+              country = coalesce(customers.country, excluded.country),
+              contact_person = coalesce(customers.contact_person, excluded.contact_person),
+              channel = coalesce(customers.channel, excluded.channel),
+              goods = coalesce(customers.goods, excluded.goods),
+              bank = coalesce(customers.bank, excluded.bank),
+              -- A supplier's notes, likewise: refreshed only while nobody has
+              -- written there — empty, or still the carry-over note.
               notes = case when excluded.record_kind = 'supplier'
                             and (customers.notes is null or customers.notes like 'Перенесено из Odoo%%')
                            then excluded.notes else customers.notes end
@@ -312,7 +346,8 @@ def import_customers(o: Odoo, cur, rep: Report, suppliers_only: bool = False) ->
              # the two kinds a client can be.
              ("supplier" if supplier else "client"),
              [tags.get(t, "") for t in (p.get("category_id") or [])],
-             addr, p["id"], not p.get("active", True), note),
+             addr, p["id"], not p.get("active", True), note,
+             card["country"], card["contact_person"], card["channel"], card["goods"], card["bank"]),
         )
         ids[p["id"]] = cur.fetchone()[0]
         rep.did("поставщики" if suppliers_only else "клиенты")

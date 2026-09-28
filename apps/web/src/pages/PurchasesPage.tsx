@@ -82,8 +82,13 @@ export interface Supplier {
   id: string;
   name: string;
   country: string | null;
-  contact: string | null;
+  contactPerson: string | null;
   phone: string | null;
+  channel: string | null;
+  goods: string | null;
+  address: string | null;
+  bank: string | null;
+  notes: string | null;
   orders: number;
   lastOrderedOn: string | null;
   debt: { currency: string; minor: number }[];
@@ -488,10 +493,14 @@ export function NewPurchase({ supplier, onDone }: { supplier?: { id: string; nam
   );
 }
 
+/** A supplier's card in fields (migration 0031, Mika 28.09.2026, option 2), in the order they are filled in. */
+export const SUPPLIER_FIELDS = ['country', 'phone', 'contactPerson', 'channel', 'goods', 'address', 'bank', 'notes'] as const;
+export type SupplierField = (typeof SUPPLIER_FIELDS)[number];
+
 /**
- * «+ Новый поставщик» (§3.4, B3-04, S1). Three things — the name, the country
- * and whoever answers there — because that is all an order needs and all the
- * card has room for. A name already on the books is said out loud rather than
+ * «+ Новый поставщик» (§3.4, B3-04, S1). Only the name is required — an order
+ * needs no more — and the rest of the card's fields sit below it, to be filled
+ * now or later. A name already on the books is said out loud rather than
  * refused: two factories really can share one, and only a person knows.
  *
  * Given a `supplier`, the same sheet corrects its card (Mika, 28.09.2026) —
@@ -509,11 +518,9 @@ export function SupplierDrawer({
   const t = useT();
   const initial = {
     name: supplier?.name ?? '',
-    country: supplier?.country ?? '',
-    contact: supplier?.contact ?? '',
-    phone: supplier?.phone ?? '',
+    ...Object.fromEntries(SUPPLIER_FIELDS.map((k) => [k, supplier?.[k] ?? ''])),
     force: false,
-  };
+  } as { name: string; force: boolean } & Record<SupplierField, string>;
   const [f, setF] = useState(initial);
   const [twin, setTwin] = useState<string | null>(null);
 
@@ -523,14 +530,15 @@ export function SupplierDrawer({
       onClose={onClose}
       value={f}
       initial={initial}
-      draft={supplier ? undefined : 'supplier-new'}
+      // A new key for the new shape: a draft saved with the old three fields must not come back into eight.
+      draft={supplier ? undefined : 'supplier-new-2'}
       onRestore={setF}
       summary={(v) => v.name}
       label={supplier ? t.supplierCard.editSave : t.buy.newSupplier}
       fieldOf={{ duplicate_supplier: 'name' }}
       submit={async (key) => {
         setTwin(null);
-        const body = { name: f.name.trim(), country: f.country.trim() || null, contact: f.contact.trim() || null, phone: f.phone.trim() || null, force: f.force };
+        const body = { name: f.name.trim(), ...Object.fromEntries(SUPPLIER_FIELDS.map((k) => [k, f[k].trim() || null])), force: f.force };
         try {
           if (supplier) {
             await api.patch(`/api/suppliers/${supplier.id}`, body, { key });
@@ -568,10 +576,24 @@ export function SupplierDrawer({
         <Field label={t.buy.supplierPhone} name="phone">
           <input className="input mono" value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} maxLength={40} inputMode="tel" />
         </Field>
+        <Field label={t.supplierCard.contactPerson} name="contactPerson">
+          <input className="input" value={f.contactPerson} onChange={(e) => setF({ ...f, contactPerson: e.target.value })} maxLength={200} />
+        </Field>
+        <Field label={t.supplierCard.channel} hint={t.supplierCard.channelHint} name="channel">
+          <input className="input" value={f.channel} onChange={(e) => setF({ ...f, channel: e.target.value })} maxLength={200} />
+        </Field>
       </div>
-      {/* Several lines: an address, a person, a bank — what a factory's card carries. */}
-      <Field label={t.buy.supplierContact} hint={t.buy.supplierContactHint} name="contact">
-        <textarea className="input textarea" rows={4} value={f.contact} onChange={(e) => setF({ ...f, contact: e.target.value })} maxLength={supplier ? 4000 : 1000} />
+      <Field label={t.supplierCard.goods} name="goods">
+        <input className="input" value={f.goods} onChange={(e) => setF({ ...f, goods: e.target.value })} maxLength={1000} />
+      </Field>
+      <Field label={t.supplierCard.address} name="address">
+        <input className="input" value={f.address} onChange={(e) => setF({ ...f, address: e.target.value })} maxLength={500} />
+      </Field>
+      <Field label={t.supplierCard.bank} name="bank">
+        <textarea className="input textarea" rows={2} value={f.bank} onChange={(e) => setF({ ...f, bank: e.target.value })} maxLength={1000} />
+      </Field>
+      <Field label={t.supplierCard.notes} name="notes">
+        <textarea className="input textarea" rows={3} value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })} maxLength={4000} />
       </Field>
     </FormSheet>
   );

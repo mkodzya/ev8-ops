@@ -47,13 +47,13 @@ export function SuppliersPage() {
         fallback={(a, b) => a.name.localeCompare(b.name)}
         search={{
           placeholder: t.buy.suppliersSearch,
-          match: (s, q) => spellingMatches(q, [s.name, s.country, s.contact, s.phone]),
+          match: (s, q) => spellingMatches(q, [s.name, s.country, s.goods, s.contactPerson, s.channel, s.phone]),
         }}
         chips={[{ key: 'debt', label: t.buy.suppliersWithDebt, test: (s) => debt(s).length > 0 }]}
         empty={{ text: t.buy.suppliersNone }}
         card={(s) => ({
           title: s.name,
-          sub: [s.country, t.supplierCard.ordersCount(s.orders)].filter(Boolean).join(' · '),
+          sub: [s.country, s.goods, t.supplierCard.ordersCount(s.orders)].filter(Boolean).join(' · '),
           right: debtCell(s, null),
           rightSub: s.lastOrderedOn ? <span className="muted">{fmtDate(s.lastOrderedOn)}</span> : undefined,
         })}
