@@ -8,6 +8,16 @@ Business rules, glossary, decisions and open questions live in the project book
 (`~/Developer/ev8/handbook`, GitHub `mkodzya/ev8-handbook`, ADR-0002 there):
 @~/Developer/ev8/handbook/CLAUDE.md
 
+## Who runs sessions (since 28.09.2026)
+Two people drive development, each with their own Claude on their own machine:
+**Mika** and **Kardu** (GitHub `Kardu89`). Both work in `feature/*` branches and
+merge into `develop`; the test stand follows `develop` by itself. **Releases —
+`main`, tags, the prod server — are Mika's only**: in a session run by Kardu,
+never push `main` or a tag, never touch the server (`.githooks/pre-push` refuses
+it too). Product decisions stay with Mika; Kardu proposes. Setup and his
+workflow: `docs/onboarding.md`. Talk to whoever runs the session in the language
+they write in.
+
 ## Non-negotiable rules (from the owner)
 1. **Never invent data.** Only data confirmed in Odoo, Google Drive, files Mika
    uploads, or the live site ev8.ge. Missing data is reported as missing, never
@@ -37,7 +47,8 @@ Georgian in every font stack (Be Vietnam Pro and Inter have no Georgian glyphs).
 - No step narration between tool calls. Work, then a short Russian summary of what
   changed and what was verified.
 - Verify by doing: run it, open it in the browser, measure before fixing.
-- Once an option is chosen: implement, commit, push to main, deploy to both stands.
+- Once an option is chosen: implement, commit, merge into `develop` (the test stand
+  follows it); a release to prod goes out when Mika says.
 - Visual options go to Mika as HTML files; his in-app viewer runs **no JavaScript**,
   so static markup only (CSS-only interaction is fine).
 - Report failures faithfully (red tests, skipped steps).

@@ -20,8 +20,10 @@
    `register.md`, `knowledge.md`. Правило бизнеса живёт в книге, код его исполняет (ADR-0002 книги).
 4. Стенды: сервер — §2а; ноутбук — `docker compose ps`, если лежит — `docker compose up -d` (тяжёлая
    задача, одна за раз).
-5. Следующий шаг — в §2а, внизу. План перехода бизнеса целиком — `docs/cutover.md`.
-6. Редизайн тремя ролями (дизайнер, разработчик, тестировщик) закрыт с 1.0.0. Если Mika снова зовёт роли —
+5. **Сессии ведут двое** — Mika и Kardu, каждый своим Claude (с 28.09.2026). Оба вливают в `develop`,
+   релизы — только Mika. Как устроено у Kardu — `docs/onboarding.md`.
+6. Следующий шаг — в §2а, внизу. План перехода бизнеса целиком — `docs/cutover.md`.
+7. Редизайн тремя ролями (дизайнер, разработчик, тестировщик) закрыт с 1.0.0. Если Mika снова зовёт роли —
    `docs/agents/README.md`, роль задаётся первой строкой («Прочитай docs/agents/<роль>.md»).
 
 ## 2. Где продукт сейчас
@@ -320,7 +322,8 @@ Self Platform; устройство и команды — `deploy/README.md`, з
   `.env.*` очищен — он нужен только для первой учётки в пустой базе.
 - **Копии** — каждую ночь в 04:10 `deploy/backup.sh ev8-prod` в `/srv/ev8-backups`, с проверкой
   восстановления; лог `/var/log/ev8-backup.log`.
-- **Выкатка**: тест — `git pull` в `/srv/ev8-ops` и `up -d --build`; прод — только тегом: релиз на `main`,
+- **Выкатка**: тест — сам, `deploy/follow-develop.sh` из cron каждые три минуты подтягивает `develop` и
+  пересобирает стек (лог `/var/log/ev8-follow.log`; если cron ещё не заведён — `git pull` и `up -d --build` руками); прод — только тегом: релиз на `main`,
   `git checkout <тег>` в `/srv/ev8-prod`, `up -d --build`. Команды целиком — `deploy/README.md`.
 - **Пилотный стенд с туннелем** (`scripts/pilot-stand.sh`) был временной мерой до сервера; больше не нужен.
 
@@ -380,7 +383,8 @@ nice -n 10 docker run --rm -m 3g --network ev8-ops-platform_default \
 
 ## 4. Протокол
 
-Задача — `git worktree add ../_worktrees/ev8-ops-<topic> -b feature/<topic> develop`; коммит и push по
+Задачи ведут Mika и Kardu, оба вливают в `develop`; `main`, теги и сервер — только Mika
+(`docs/onboarding.md`, у Kardu это держит `.githooks/pre-push`). Задача — `git worktree add ../_worktrees/ev8-ops-<topic> -b feature/<topic> develop`; коммит и push по
 ходу; `merge --no-ff` в develop; `git worktree remove`; ветка удалена локально и на origin (Claude
 удаляет `feature/*` и `hotfix/*` на origin сам — разрешение в `.claude/settings.local.json`, он в
 `.git/info/exclude`; `main` и `develop` запрещены). Релиз —

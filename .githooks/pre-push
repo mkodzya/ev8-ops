@@ -1,0 +1,21 @@
+#!/bin/sh
+# Only Mika releases. A push that moves main or creates a tag is refused for
+# anyone else — the guard GitHub itself would give on a paid plan.
+#
+# It checks the git identity, so it stops an accident, not a determined
+# person. Enabled per clone by `git config core.hooksPath .githooks`
+# (docs/onboarding.md); Mika's own clone does not need it.
+
+OWNER=mika@selfstudio.se
+[ "$(git config user.email)" = "$OWNER" ] && exit 0
+
+while read -r local_ref local_sha remote_ref remote_sha; do
+  case "$remote_ref" in
+    refs/heads/main | refs/tags/*)
+      echo "pre-push: $remote_ref is released by Mika only." >&2
+      echo "pre-push: merge into develop; the release goes out when Mika says." >&2
+      exit 1
+      ;;
+  esac
+done
+exit 0
