@@ -60,10 +60,13 @@ services:
       DEFAULT_LOCALE: ${DEFAULT_LOCALE:-ka}
       # The first owner login, and only while the database is empty. Mika
       # chooses this password and nobody else sees it; once he has signed in
-      # and changed it in "Мой вход", the line can be emptied.
+      # the line is emptied, so this one is deliberately not required — an
+      # empty value must not stop a stand that has had users for months. When
+      # it is genuinely needed, on an empty database, the seed says so and
+      # refuses to invent a default.
       OWNER_EMAIL: ${OWNER_EMAIL:?set OWNER_EMAIL in .env.prod}
       OWNER_NAME: ${OWNER_NAME:?set OWNER_NAME in .env.prod}
-      OWNER_PASSWORD: ${OWNER_PASSWORD:?set OWNER_PASSWORD in .env.prod — this is the first login, choose it yourself}
+      OWNER_PASSWORD: ${OWNER_PASSWORD-}
       # Blank, always. The demo dataset's logins share a password that is in
       # this repository, and `demo.director@ev8.test` is an owner.
       SEED_MODE: ""
