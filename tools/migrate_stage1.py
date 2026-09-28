@@ -266,7 +266,42 @@ def supplier_card(comment: str | None) -> dict[str, str | None]:
     return out
 
 
-def import_customers(o: Odoo, cur, rep: Report, suppliers_only: bool = False) -> dict[int, str]:
+# A supplier's card as a person laid it out from Odoo's note — what they
+# supply named in its own field, the rest in short lines (Mika, 28.09.2026).
+# The file lives with the business data, outside the repository, because it
+# holds suppliers' contacts and banks: {"<odoo partner id>": {"goods": ...,
+# "notes": ..., ...}}. Every value restates what Odoo says; nothing is added.
+CARDS = os.path.expanduser("~/Desktop/claude-mika/EV8-ops/supplier-cards.json")
+CARD_FIELDS = ("country", "address", "contact_person", "channel", "goods", "bank")
+
+
+def load_cards(path: str | None) -> dict[int, dict[str, str]]:
+    if not path or not os.path.exists(path):
+        return {}
+    import json
+    with open(path, encoding="utf-8") as f:
+        return {int(k): v for k, v in json.load(f).items()}
+
+
+def apply_card(cur, rep: Report, partner_id: int, raw_notes: str | None, card: dict[str, str]) -> None:
+    """Lay a tidied card over a carried-over supplier — never over a person's hand.
+
+    A field is filled only while it is empty; the notes are replaced only
+    while they are still exactly what Odoo gave, so a note anybody has
+    written or corrected stays."""
+    for key in CARD_FIELDS:
+        if card.get(key):
+            cur.execute(f"update customers set {key} = %s, updated_at = now() "
+                        f"where odoo_partner_id = %s and {key} is null", (card[key], partner_id))
+    if "notes" in card:
+        cur.execute("update customers set notes = %s, updated_at = now() "
+                    "where odoo_partner_id = %s and (notes is null or notes = %s)",
+                    (card["notes"] or None, partner_id, raw_notes))
+    rep.did("поставщики: карточка разложена")
+
+
+def import_customers(o: Odoo, cur, rep: Report, suppliers_only: bool = False,
+                     cards: dict[int, dict[str, str]] | None = None) -> dict[int, str]:
     """Клиенты. Карточка самой компании не переносится: это не клиент.
 
     suppliers_only — только те, у кого в Odoo есть supplier_rank: так
@@ -351,6 +386,8 @@ def import_customers(o: Odoo, cur, rep: Report, suppliers_only: bool = False) ->
         )
         ids[p["id"]] = cur.fetchone()[0]
         rep.did("поставщики" if suppliers_only else "клиенты")
+        if supplier and cards and p["id"] in cards:
+            apply_card(cur, rep, p["id"], note, cards[p["id"]])
     return ids
 
 
@@ -800,6 +837,8 @@ def main() -> int:
     ap.add_argument("--db", default=os.environ.get("DATABASE_URL", DEFAULT_DB))
     ap.add_argument("--only", choices=["suppliers"],
                     help="перенести только это (сейчас — только поставщиков)")
+    ap.add_argument("--cards", default=CARDS,
+                    help="разложенные карточки поставщиков (JSON вне репозитория; нет файла — без них)")
     ap.add_argument("--sql", action="store_true",
                     help="не подключаться к базе, а напечатать SQL для psql на стенде (только с --only)")
     args = ap.parse_args()
@@ -811,7 +850,7 @@ def main() -> int:
             print("--sql только вместе с --only: полный перенос читает записанное обратно.", file=sys.stderr)
             return 2
         o, rep, cur = Odoo(), Report(), SqlOut()
-        import_customers(o, cur, rep, suppliers_only=True)
+        import_customers(o, cur, rep, suppliers_only=True, cards=load_cards(args.cards))
         print("begin;")
         print("\n".join(cur.lines))
         print("commit;")
@@ -847,13 +886,14 @@ def main() -> int:
                     restart identity cascade
                 """)
                 rep.note("операционные таблицы очищены перед импортом; логины и журнал изменений сохранены")
+            cards = load_cards(args.cards)
             if args.only == "suppliers":
-                import_customers(o, cur, rep, suppliers_only=True)
+                import_customers(o, cur, rep, suppliers_only=True, cards=cards)
             else:
                 today = date.today()
                 model_ids = import_models(o, cur, rep)
                 vehicle_ids = import_vehicles(o, cur, rep, model_ids)
-                customer_ids = import_customers(o, cur, rep)
+                customer_ids = import_customers(o, cur, rep, cards=cards)
                 rentals = import_rentals(o, cur, rep, customer_ids, vehicle_ids, today)
                 sales = import_sales(o, cur, rep, customer_ids, vehicle_ids)
                 purchases = import_purchases(o, cur, rep, customer_ids)
