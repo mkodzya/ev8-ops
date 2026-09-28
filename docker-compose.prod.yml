@@ -1,0 +1,114 @@
+# The server stack. Not the laptop one.
+#
+# `docker-compose.yml` is the laptop stack: it publishes Postgres and the API
+# so you can reach them with psql and curl, it accepts the development session
+# secret, and it can seed a demo dataset. Every one of those is wrong on a
+# machine facing the internet, and none of them announce themselves — which is
+# why this is a separate file rather than a few overrides. The shape is Self
+# Platform's, so one server is operated one way (practices §2).
+#
+# What is different here, and why:
+#   · Postgres and the API publish NOTHING. On a laptop `ports: 5432` reaches
+#     your own machine; on a VPS it reaches the internet, and the laptop's
+#     credentials are ev8ops/ev8ops in a file in this repository.
+#   · The web tier is Caddy serving a built bundle, not `vite preview`.
+#   · Nothing has a fallback that could be wrong. Compose refuses to start if
+#     a required value is missing, and says which one.
+#   · SEED_MODE is blank and ALLOW_DEV_SECRET is absent: a weak secret stops
+#     the boot, and the demo dataset — which carries logins whose password is
+#     published in this repository — cannot run at all.
+#
+# Run it with an explicit project name so prod and test share one machine:
+#   docker compose -p ev8-prod --env-file .env.prod -f docker-compose.prod.yml up -d --build
+#
+# The web port is published on 127.0.0.1 only: the edge proxy that terminates
+# TLS reaches it over the loopback, and nothing else can.
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER in .env.prod}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env.prod}
+      POSTGRES_DB: ${POSTGRES_DB:?set POSTGRES_DB in .env.prod}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    # No ports. The API reaches it over the compose network by name; psql and
+    # the backup go through `docker compose exec`.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      # No ALLOW_DEV_SECRET here at all: a weak secret stops the boot instead
+      # of quietly signing sessions with a string published in this
+      # repository. Generate both with `openssl rand -base64 48`.
+      SESSION_SECRET: ${SESSION_SECRET:?set SESSION_SECRET in .env.prod — openssl rand -base64 48}
+      WORKER_TOKEN: ${WORKER_TOKEN:?set WORKER_TOKEN in .env.prod — openssl rand -base64 48}
+      NODE_ENV: production
+      API_PORT: "8080"
+      TZ: ${TZ:-Asia/Tbilisi}
+      DEFAULT_LOCALE: ${DEFAULT_LOCALE:-ka}
+      # The first owner login, and only while the database is empty. Mika
+      # chooses this password and nobody else sees it; once he has signed in
+      # and changed it in "Мой вход", the line can be emptied.
+      OWNER_EMAIL: ${OWNER_EMAIL:?set OWNER_EMAIL in .env.prod}
+      OWNER_NAME: ${OWNER_NAME:?set OWNER_NAME in .env.prod}
+      OWNER_PASSWORD: ${OWNER_PASSWORD:?set OWNER_PASSWORD in .env.prod — this is the first login, choose it yourself}
+      # Blank, always. The demo dataset's logins share a password that is in
+      # this repository, and `demo.director@ev8.test` is an owner.
+      SEED_MODE: ""
+    # No ports either. The browser reaches /api through the web container,
+    # which is the same origin the page came from.
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/api/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  worker:
+    build:
+      context: .
+      dockerfile: apps/worker/Dockerfile
+    restart: unless-stopped
+    environment:
+      API_URL: http://api:8080
+      WORKER_TOKEN: ${WORKER_TOKEN}
+      # Rental weeks are rolled just after midnight, in the company's zone.
+      PERIODS_CRON: ${PERIODS_CRON:-10 0 * * *}
+      TZ: ${TZ:-Asia/Tbilisi}
+    depends_on:
+      api:
+        condition: service_healthy
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile.prod
+    restart: unless-stopped
+    environment:
+      API_PROXY_TARGET: http://api:8080
+    ports:
+      # Loopback only. TLS and the hostname belong to the edge proxy; this
+      # port is how it reaches this stack, and it is not reachable from
+      # outside the machine. Two stacks on one host differ only by this number.
+      - "127.0.0.1:${WEB_PORT:-5173}:5173"
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  pgdata:
