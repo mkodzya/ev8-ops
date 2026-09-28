@@ -48,7 +48,7 @@ Georgian in every font stack (Be Vietnam Pro and Inter have no Georgian glyphs).
   changed and what was verified.
 - Verify by doing: run it, open it in the browser, measure before fixing.
 - Once an option is chosen: implement, commit, merge into `develop` (the test stand
-  follows it). **Mika releases to prod herself** (28.09.2026): Claude does not cut
+  follows it). **Mika does the releases to prod** (28.09.2026): Claude does not cut
   a release, tag, or deploy prod — it says what is in `develop` since the last tag.
 - Visual options go to Mika as HTML files; his in-app viewer runs **no JavaScript**,
   so static markup only (CSS-only interaction is fine).
