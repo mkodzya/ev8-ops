@@ -51,6 +51,7 @@ export const wave5purchasesEn = {
     suppliers: 'Suppliers',
     suppliersCount: (n: number) => `${n} supplier${n === 1 ? '' : 's'}`,
     suppliersSearch: 'Name, country, contact',
+    suppliersWithDebt: 'With a debt',
 
     invoiceNo: 'Invoice no.',
     invoiceDate: 'Invoice date',
@@ -191,6 +192,8 @@ export const wave5purchasesEn = {
     edit: 'Edit',
     editTitle: (name: string) => `Edit · ${name}`,
     editSave: 'Save',
+    lastOrder: 'Last order',
+    reach: 'How to reach them',
   },
 };
 
@@ -252,6 +255,7 @@ export const wave5purchasesRu: Wave5purchases = {
     suppliers: 'Поставщики',
     suppliersCount: (n) => `${n} ${plural(n, 'поставщик', 'поставщика', 'поставщиков')}`,
     suppliersSearch: 'Название, страна, контакт',
+    suppliersWithDebt: 'С долгом',
 
     invoiceNo: 'Инвойс №',
     invoiceDate: 'Дата инвойса',
@@ -391,6 +395,8 @@ export const wave5purchasesRu: Wave5purchases = {
     edit: 'Изменить',
     editTitle: (name) => `Изменить · ${name}`,
     editSave: 'Сохранить',
+    lastOrder: 'Последний заказ',
+    reach: 'Как связаться',
   },
 };
 
@@ -441,6 +447,7 @@ export const wave5purchasesKa: Wave5purchases = {
     suppliers: 'მომწოდებლები',
     suppliersCount: (n) => `${n} მომწოდებელი`,
     suppliersSearch: 'დასახელება, ქვეყანა, კონტაქტი',
+    suppliersWithDebt: 'ვალით',
 
     invoiceNo: 'ინვოისი №',
     invoiceDate: 'ინვოისის თარიღი',
@@ -580,5 +587,7 @@ export const wave5purchasesKa: Wave5purchases = {
     edit: 'შეცვლა',
     editTitle: (name) => `შეცვლა · ${name}`,
     editSave: 'შენახვა',
+    lastOrder: 'ბოლო შეკვეთა',
+    reach: 'როგორ დავუკავშირდეთ',
   },
 };

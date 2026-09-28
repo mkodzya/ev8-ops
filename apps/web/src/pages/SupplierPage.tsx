@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { LoadError } from '../components/LoadError.js';
+import { RecordHistory } from '../components/RecordHistory.js';
 import { BlockHead, Empty, Loading, PageHead } from '../components/ui.js';
 import { Row } from '../components/Wizard.js';
 import { fmtDate } from '../format.js';
@@ -13,6 +14,11 @@ import { NewPurchase, SupplierDrawer, fmtForeign, statusOf, type Purchase, type 
 // factory is not looked for among customers, and a customer is not looked for
 // here (B3-06). What the card is for is one question — what do we still owe
 // them — and it is answered in their currency, not ours.
+//
+// Its shape since 28.09.2026 (Mika, option 1): what we owe and how much we
+// order, then how to reach them — the phone and one free text of several
+// lines, which is where Odoo's notes on the partner land — then the orders
+// and the card's history.
 
 export function SupplierPage() {
   const { id } = useParams();
@@ -34,6 +40,11 @@ export function SupplierPage() {
   return (
     <>
       <PageHead wrap title={s.name} sub={s.country ?? undefined}>
+        {s.phone && (
+          <a className="pill pill-sm" href={`tel:${s.phone}`}>
+            {t.today.call}
+          </a>
+        )}
         {can('purchases.manage') && (
           <>
             <button type="button" className="pill pill-sm" onClick={() => setEditing(true)}>
@@ -65,15 +76,21 @@ export function SupplierPage() {
           <span className="num-v">{s.orders}</span>
           <span className="num-l">{t.supplierCard.orders}</span>
         </span>
+        <span className="num">
+          <span className="num-v mono">{s.lastOrderedOn ? fmtDate(s.lastOrderedOn) : t.common.dash}</span>
+          <span className="num-l">{t.supplierCard.lastOrder}</span>
+        </span>
       </div>
 
       <section className="card">
-        <Row k={t.supplierCard.country} v={s.country ?? t.common.dash} />
-        <Row k={t.supplierCard.contact} v={s.contact ? <span className="pre">{s.contact}</span> : t.common.dash} />
+        <BlockHead title={t.supplierCard.reach} />
         <Row
           k={t.supplierCard.phone}
           v={s.phone ? <a className="mono" href={`tel:${s.phone}`}>{s.phone}</a> : t.common.dash}
         />
+        {/* Who answers, where we agree, the address, the bank: one text of
+            several lines, as it is kept — the whole width, not a narrow column. */}
+        {s.contact && <p className="supplier-contact">{s.contact}</p>}
       </section>
 
       <section className="card">
@@ -117,6 +134,8 @@ export function SupplierPage() {
           </div>
         )}
       </section>
+
+      <RecordHistory kind="customer" id={s.id} search={s.name} />
     </>
   );
 }

@@ -111,7 +111,7 @@ function Frame() {
 
   // A section root or one of its tabs has no way back — it is where you go
   // back to. Anything deeper gets the arrow.
-  const roots = new Set<string>(['/', '/me', '/customers', ...SECTIONS.map((s) => s.path), ...(['fleet', 'service', 'money', 'reports'] as const).flatMap((s) => tabsFor(s, permissions).map((tab) => tab.path))]);
+  const roots = new Set<string>(['/', '/me', '/customers', ...SECTIONS.map((s) => s.path), ...(['fleet', 'service', 'money', 'reports', 'purchases'] as const).flatMap((s) => tabsFor(s, permissions).map((tab) => tab.path))]);
   const isRoot = roots.has(pathname);
   const goBack = () => {
     if (window.history.length > 1) navigate(-1);

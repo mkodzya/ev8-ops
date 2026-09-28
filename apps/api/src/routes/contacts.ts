@@ -1,6 +1,7 @@
 import { CONTACT_KINDS, normalizeVin, vinFault } from '@ev8/shared';
 import type { FastifyInstance } from 'fastify';
 import { audit } from '../lib/audit.js';
+import { isoDate } from '../lib/dates.js';
 import { prisma } from '../lib/db.js';
 import { badRequest, conflict, notFound } from '../lib/errors.js';
 import { actorOf } from '../lib/guard.js';
@@ -30,6 +31,7 @@ export function contactRoutes(app: FastifyInstance): void {
         contact: r.notes,
         phone: r.phone,
         orders: debts.get(r.id)?.orders ?? 0,
+        lastOrderedOn: debts.get(r.id)?.lastOrderedOn ?? null,
         debt: debts.get(r.id)?.debt ?? [],
       })),
     };
@@ -56,6 +58,7 @@ export function contactRoutes(app: FastifyInstance): void {
         contact: row.notes,
         phone: row.phone,
         orders: orders.length,
+        lastOrderedOn: debts.get(row.id)?.lastOrderedOn ?? null,
         debt: debts.get(row.id)?.debt ?? [],
       },
       orders: orders.map(serializePurchase),
@@ -196,7 +199,9 @@ export function contactRoutes(app: FastifyInstance): void {
 }
 
 /** What is still owed to each factory, in its own currency (B3-04). */
-async function supplierDebts(ids: string[]): Promise<Map<string, { orders: number; debt: { currency: string; minor: number }[] }>> {
+type SupplierSums = { orders: number; lastOrderedOn: string | null; debt: { currency: string; minor: number }[] };
+
+async function supplierDebts(ids: string[]): Promise<Map<string, SupplierSums>> {
   if (ids.length === 0) return new Map();
   const orders = await prisma.purchase.findMany({
     where: { supplierId: { in: ids }, status: { not: 'cancelled' } },
@@ -204,18 +209,22 @@ async function supplierDebts(ids: string[]): Promise<Map<string, { orders: numbe
       id: true,
       supplierId: true,
       currency: true,
+      orderedOn: true,
       paidBeforeMinor: true,
       lines: { select: { qty: true, unitPriceMinor: true } },
       payments: { where: { voidedAt: null, direction: 'out' }, select: { foreignMinor: true } },
     },
   });
-  const out = new Map<string, { orders: number; debt: { currency: string; minor: number }[] }>();
+  const out = new Map<string, SupplierSums>();
   for (const o of orders) {
     const invoice = o.lines.reduce((n, l) => n + l.qty * l.unitPriceMinor, 0);
     const paid = o.payments.reduce((n, p) => n + Number(p.foreignMinor ?? 0), 0) + Number(o.paidBeforeMinor);
     const left = Math.max(0, invoice - paid);
-    const row = out.get(o.supplierId) ?? { orders: 0, debt: [] };
+    const row = out.get(o.supplierId) ?? { orders: 0, lastOrderedOn: null, debt: [] };
     row.orders += 1;
+    // The last order the card and the list name: when this factory last sold to us.
+    const on = isoDate(o.orderedOn);
+    if (on && (!row.lastOrderedOn || on > row.lastOrderedOn)) row.lastOrderedOn = on;
     if (left > 0) {
       const line = row.debt.find((d) => d.currency === o.currency);
       if (line) line.minor += left;

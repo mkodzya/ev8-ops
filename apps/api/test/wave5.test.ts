@@ -135,6 +135,9 @@ describe.skipIf(!HAS_DB)('wave 5 · shipments', () => {
       ],
     });
     expect(made.statusCode, made.body).toBe(201);
+    // The card and the suppliers tab name the last order (Mika, 28.09.2026).
+    const card = json<{ supplier: { lastOrderedOn: string | null } }>(await call(owner, 'GET', `/api/suppliers/${supplier.id}`));
+    expect(card.supplier.lastOrderedOn).toBe('2026-09-01');
     return { owner, supplier, model, part, id: json<{ id: string }>(made).id };
   }
 

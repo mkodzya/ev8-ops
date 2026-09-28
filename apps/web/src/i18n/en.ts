@@ -84,6 +84,8 @@ export const en = {
       sell: 'Sell a moped',
     },
     tabs: {
+      orders: 'Orders',
+      suppliers: 'Suppliers',
       sort: 'Sort',
       till: 'Till',
       deposits: 'Deposits',

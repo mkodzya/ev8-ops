@@ -77,6 +77,8 @@ export const ka: Dict = {
       sell: 'მოპედის გაყიდვა',
     },
     tabs: {
+      orders: 'შეკვეთები',
+      suppliers: 'მომწოდებლები',
       sort: 'დასახარისხებელი',
       till: 'სალარო',
       deposits: 'დეპოზიტები',

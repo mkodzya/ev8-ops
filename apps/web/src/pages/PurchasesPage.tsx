@@ -1,6 +1,6 @@
 import { numberMatches, parseGel, spellingMatches, todayISO } from '@ev8/shared';
 import { useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { ApiError, api } from '../api.js';
 import { LoadError } from '../components/LoadError.js';
 import { ModelDrawer, NEW_MODEL } from '../components/ModelDrawer.js';
@@ -85,6 +85,7 @@ export interface Supplier {
   contact: string | null;
   phone: string | null;
   orders: number;
+  lastOrderedOn: string | null;
   debt: { currency: string; minor: number }[];
 }
 
@@ -128,9 +129,6 @@ export function PurchasesPage() {
   return (
     <>
       <PageHead wrap title={t.buy.title} sub={t.buy.count(data.purchases.length)}>
-        <Link className="pill pill-sm" to="/purchases/suppliers">
-          {t.buy.suppliers}
-        </Link>
         {can('purchases.manage') && <NewPurchase onDone={reload} />}
       </PageHead>
       <DataList
