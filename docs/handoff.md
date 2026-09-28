@@ -317,7 +317,8 @@ Self Platform; устройство и команды — `deploy/README.md`, з
 | Edge | — | `/srv/ev8-ops` | Caddy, сертификаты, 80/443 | `docker-compose.edge.yml` |
 
 - **DNS** — cPanel хостинга hostnodes.ge (домен ev8.ge там), две A-записи на `204.168.149.105`.
-- **Базы пустые на обоих стендах**, в каждой одна учётка — `mika@selfstudio.se`, владелец. Пароль Mika
+- **Прод пустой; на тесте — только 8 поставщиков из Odoo** (28.09.2026, `tools/migrate_stage1.py --only
+  suppliers --sql`, команда — `tools/README.md`; полный перенос их обновит, а не задвоит). В каждой базе одна учётка — `mika@selfstudio.se`, владелец. Пароль Mika
   задал сам 28.09 (`deploy/set-password.sh`); разработчик его не знает и не должен. `OWNER_PASSWORD` в
   `.env.*` очищен — он нужен только для первой учётки в пустой базе.
 - **Копии** — каждую ночь в 04:10 `deploy/backup.sh ev8-prod` в `/srv/ev8-backups`, с проверкой
