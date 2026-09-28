@@ -11,10 +11,11 @@ Business rules, glossary, decisions and open questions live in the project book
 ## Who runs sessions (since 28.09.2026)
 Two people drive development, each with their own Claude on their own machine:
 **Mika** and **Kardu** (GitHub `Kardu89`). Both work in `feature/*` branches and
-merge into `develop`; the test stand follows `develop` by itself. **Releases —
+merge into `develop`. **The test stand moves on Mika's word** ("на тест": Claude runs
+`deploy/follow-develop.sh --now` over ssh, the one server command it is allowed). **Releases —
 `main`, tags, the prod server — are Mika's only**: in a session run by Kardu,
 never push `main` or a tag, never touch the server (`.githooks/pre-push` refuses
-it too). Product decisions stay with Mika; Kardu proposes. Setup and his
+it too). Product decisions stay with Mika; Kardu proposes. Kardu's setup and
 workflow: `docs/onboarding.md`. Talk to whoever runs the session in the language
 they write in.
 
@@ -47,8 +48,8 @@ Georgian in every font stack (Be Vietnam Pro and Inter have no Georgian glyphs).
 - No step narration between tool calls. Work, then a short Russian summary of what
   changed and what was verified.
 - Verify by doing: run it, open it in the browser, measure before fixing.
-- Once an option is chosen: implement, commit, merge into `develop` (the test stand
-  follows it). **Mika does the releases to prod** (28.09.2026): Claude does not cut
+- Once an option is chosen: implement, commit, merge into `develop`, and say it is ready
+  for the test stand; it goes there when Mika writes "на тест". **Mika does the releases to prod** (28.09.2026): Claude does not cut
   a release, tag, or deploy prod — it says what is in `develop` since the last tag.
 - Visual options go to Mika as HTML files; his in-app viewer runs **no JavaScript**,
   so static markup only (CSS-only interaction is fine).

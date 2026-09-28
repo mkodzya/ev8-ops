@@ -323,8 +323,9 @@ Self Platform; устройство и команды — `deploy/README.md`, з
   `.env.*` очищен — он нужен только для первой учётки в пустой базе.
 - **Копии** — каждую ночь в 04:10 `deploy/backup.sh ev8-prod` в `/srv/ev8-backups`, с проверкой
   восстановления; лог `/var/log/ev8-backup.log`.
-- **Выкатка**: тест — сам, `deploy/follow-develop.sh` из cron каждые три минуты подтягивает `develop` и
-  пересобирает стек (лог `/var/log/ev8-follow.log`; если cron ещё не заведён — `git pull` и `up -d --build` руками); прод — только тегом: релиз на `main`,
+- **Выкатка**: тест — по слову Mika «на тест»: Claude запускает `ssh root@204.168.149.105
+  /srv/ev8-ops/deploy/follow-develop.sh --now` (единственная разрешённая ему команда на сервере; лог
+  `/var/log/ev8-follow.log`); прод — только Mika и только тегом: релиз на `main`,
   `git checkout <тег>` в `/srv/ev8-prod`, `up -d --build`. Команды целиком — `deploy/README.md`.
 - **Пилотный стенд с туннелем** (`scripts/pilot-stand.sh`) был временной мерой до сервера; больше не нужен.
 
