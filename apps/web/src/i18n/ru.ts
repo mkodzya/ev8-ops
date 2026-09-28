@@ -88,6 +88,8 @@ export const ru: Dict = {
       sell: 'Продать мопед',
     },
     tabs: {
+      orders: 'Заказы',
+      suppliers: 'Поставщики',
       sort: 'Разобрать',
       till: 'Касса',
       deposits: 'Залоги',

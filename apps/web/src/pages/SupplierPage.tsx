@@ -1,17 +1,24 @@
+import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { LoadError } from '../components/LoadError.js';
+import { RecordHistory } from '../components/RecordHistory.js';
 import { BlockHead, Empty, Loading, PageHead } from '../components/ui.js';
 import { Row } from '../components/Wizard.js';
 import { fmtDate } from '../format.js';
 import { useT } from '../i18n/index.js';
 import { useLoad } from '../lib/use.js';
 import { useSession } from '../session.js';
-import { NewPurchase, fmtForeign, statusOf, type Purchase, type Supplier } from './PurchasesPage.js';
+import { NewPurchase, SupplierDrawer, fmtForeign, statusOf, type Purchase, type Supplier } from './PurchasesPage.js';
 
 // Поставщик (wave 5 §3.4, §3.9, crit. 20). A record kind of its own: a
 // factory is not looked for among customers, and a customer is not looked for
 // here (B3-06). What the card is for is one question — what do we still owe
 // them — and it is answered in their currency, not ours.
+//
+// Its shape since 28.09.2026 (Mika, option 2 — one text of several lines read
+// as "a towel"): what we owe and how much we order; how to reach them — the
+// person, the phone, where we agree; about them — what they supply, the
+// address, the bank; the notes folded; then the orders and the history.
 
 export function SupplierPage() {
   const { id } = useParams();
@@ -20,6 +27,7 @@ export function SupplierPage() {
   // The factory and its orders in one answer: the section's list is capped at
   // the newest two hundred, and a factory's own card must show all of its own.
   const card = useLoad<{ supplier: Supplier; orders: Purchase[] }>(id ? `/api/suppliers/${id}` : null);
+  const [editing, setEditing] = useState(false);
 
   const reload = () => card.reload();
 
@@ -32,8 +40,21 @@ export function SupplierPage() {
   return (
     <>
       <PageHead wrap title={s.name} sub={s.country ?? undefined}>
-        {can('purchases.manage') && <NewPurchase supplier={{ id: s.id, name: s.name }} onDone={reload} />}
+        {s.phone && (
+          <a className="pill pill-sm" href={`tel:${s.phone}`}>
+            {t.today.call}
+          </a>
+        )}
+        {can('purchases.manage') && (
+          <>
+            <button type="button" className="pill pill-sm" onClick={() => setEditing(true)}>
+              {t.supplierCard.edit}
+            </button>
+            <NewPurchase supplier={{ id: s.id, name: s.name }} onDone={reload} />
+          </>
+        )}
       </PageHead>
+      {editing && <SupplierDrawer supplier={s} onClose={() => setEditing(false)} onSaved={reload} />}
 
       <div className="num-strip">
         {debt.length === 0 ? (
@@ -55,15 +76,39 @@ export function SupplierPage() {
           <span className="num-v">{s.orders}</span>
           <span className="num-l">{t.supplierCard.orders}</span>
         </span>
+        <span className="num">
+          <span className="num-v mono">{s.lastOrderedOn ? fmtDate(s.lastOrderedOn) : t.common.dash}</span>
+          <span className="num-l">{t.supplierCard.lastOrder}</span>
+        </span>
       </div>
 
+      {/* Each thing its own line (option 2): an empty one shows a dash, so it
+          is plain what is still to be filled in. */}
       <section className="card">
-        <Row k={t.supplierCard.country} v={s.country ?? t.common.dash} />
-        <Row k={t.supplierCard.contact} v={s.contact ? <span className="pre">{s.contact}</span> : t.common.dash} />
-        <Row
-          k={t.supplierCard.phone}
-          v={s.phone ? <a className="mono" href={`tel:${s.phone}`}>{s.phone}</a> : t.common.dash}
-        />
+        <BlockHead title={t.supplierCard.reach} />
+        <Row k={t.supplierCard.contactPerson} v={s.contactPerson ?? t.common.dash} />
+        <Row k={t.supplierCard.phone} v={s.phone ? <a className="mono" href={`tel:${s.phone}`}>{s.phone}</a> : t.common.dash} />
+        <Row k={t.supplierCard.channel} v={s.channel ?? t.common.dash} />
+      </section>
+
+      <section className="card">
+        <BlockHead title={t.supplierCard.about} />
+        <Row k={t.supplierCard.goods} v={s.goods ?? t.common.dash} />
+        <Row k={t.supplierCard.address} v={s.address ?? t.common.dash} />
+        <Row k={t.supplierCard.bank} v={s.bank ? <span className="pre">{s.bank}</span> : t.common.dash} />
+        {/* What is left over — from Odoo, mostly — folded behind a button that
+            looks like one (Mika, option A of supplier-notes-options.html): the
+            card reads as fields, and it is plain there is more. */}
+        {s.notes && (
+          <details className="supplier-notes">
+            <summary className="pill pill-sm">
+              <span className="when-closed">{t.supplierCard.notesShow}</span>
+              <span className="when-open">{t.supplierCard.notesHide}</span>
+              <span className="chev" aria-hidden="true">▾</span>
+            </summary>
+            <p className="pre">{s.notes}</p>
+          </details>
+        )}
       </section>
 
       <section className="card">
@@ -107,6 +152,8 @@ export function SupplierPage() {
           </div>
         )}
       </section>
+
+      <RecordHistory kind="customer" id={s.id} search={s.name} />
     </>
   );
 }

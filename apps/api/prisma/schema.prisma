@@ -399,6 +399,12 @@ model Customer {
   tags          String[]     @default([])
   address       String?
   notes         String?
+  /// A supplier's card in fields (migration 0031, Mika 28.09.2026); a client leaves them empty.
+  country       String?
+  contactPerson String?      @map("contact_person")
+  channel       String?
+  goods         String?
+  bank          String?
   /// The front office's deal: a link or an id, one way only (B10-03).
   kommoRef      String?      @map("kommo_ref")
   odooPartnerId Int?         @unique @map("odoo_partner_id")

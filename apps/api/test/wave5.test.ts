@@ -118,7 +118,7 @@ describe.skipIf(!HAS_DB)('wave 5 · selling', () => {
 describe.skipIf(!HAS_DB)('wave 5 · shipments', () => {
   async function order() {
     const owner = await loginAs('owner');
-    const supplier = json<{ id: string }>(await call(owner, 'POST', '/api/suppliers', { name: `ТЕСТ Factory ${uniq()}`, country: 'China', contact: 'Alibaba' }));
+    const supplier = json<{ id: string }>(await call(owner, 'POST', '/api/suppliers', { name: `ТЕСТ Factory ${uniq()}`, country: 'China', channel: 'Alibaba' }));
     const { prisma } = await import('../src/lib/db.js');
     const model = await prisma.vehicleModel.create({ data: { brand: 'Test', name: `Batch ${uniq()}` } });
     const part = json<{ id: string }>(await call(owner, 'POST', '/api/parts', { name: `ТЕСТ Sensor ${uniq()}` }));
@@ -135,6 +135,9 @@ describe.skipIf(!HAS_DB)('wave 5 · shipments', () => {
       ],
     });
     expect(made.statusCode, made.body).toBe(201);
+    // The card and the suppliers tab name the last order (Mika, 28.09.2026).
+    const card = json<{ supplier: { lastOrderedOn: string | null } }>(await call(owner, 'GET', `/api/suppliers/${supplier.id}`));
+    expect(card.supplier.lastOrderedOn).toBe('2026-09-01');
     return { owner, supplier, model, part, id: json<{ id: string }>(made).id };
   }
 
@@ -340,6 +343,34 @@ describe.skipIf(!HAS_DB)('wave 5 · shipments', () => {
     expect(suppliers.suppliers.some((s) => s.name === name)).toBe(true);
     const customers = json<{ customers: { name: string }[] }>(await call(owner, 'GET', '/api/customers'));
     expect(customers.customers.some((c) => c.name === name)).toBe(false);
+  });
+
+  it('corrects a factory’s card field by field and keeps what it was (Mika, 28.09.2026)', async () => {
+    const owner = await loginAs('owner');
+    const manager = await loginAs('manager');
+    const made = json<{ id: string }>(await call(owner, 'POST', '/api/suppliers', { name: `ТЕСТ Factory ${uniq()}`, country: 'China', channel: 'Alibaba' }));
+    const fixed = await call(owner, 'PATCH', `/api/suppliers/${made.id}`, {
+      contactPerson: 'Jack Primer', phone: '+86 100', goods: 'chargers', bank: 'Primer Bank, SWIFT DEMOCNXX', address: 'Room 1, Primer Road', notes: 'ТЕСТ',
+    });
+    expect(fixed.statusCode, fixed.body).toBe(200);
+    const card = json<{ supplier: Record<string, string | null> }>(await call(owner, 'GET', `/api/suppliers/${made.id}`));
+    expect(card.supplier).toMatchObject({
+      country: 'China', channel: 'Alibaba', contactPerson: 'Jack Primer', phone: '+86 100', goods: 'chargers', bank: 'Primer Bank, SWIFT DEMOCNXX', address: 'Room 1, Primer Road', notes: 'ТЕСТ',
+    });
+    // The journal holds the was / became of what moved, and only of that.
+    const { prisma } = await import('../src/lib/db.js');
+    const line = await prisma.auditLog.findFirst({ where: { entityId: made.id, action: 'supplier.update' } });
+    expect(line?.before).toEqual({ contactPerson: null, phone: null, goods: null, address: null, bank: null, notes: null });
+    expect(line?.after).toEqual({ contactPerson: 'Jack Primer', phone: '+86 100', goods: 'chargers', address: 'Room 1, Primer Road', bank: 'Primer Bank, SWIFT DEMOCNXX', notes: 'ТЕСТ' });
+    // Another record's name is said, as at creation; `force` means it.
+    const other = `ТЕСТ Factory ${uniq()}`;
+    await call(owner, 'POST', '/api/suppliers', { name: other });
+    expect(json<{ error: string }>(await call(owner, 'PATCH', `/api/suppliers/${made.id}`, { name: other })).error).toBe('duplicate_supplier');
+    expect((await call(owner, 'PATCH', `/api/suppliers/${made.id}`, { name: other, force: true })).statusCode).toBe(200);
+    // A client is not a supplier, and a manager does not run purchases.
+    const client = await prisma.customer.create({ data: { name: `ТЕСТ Client ${uniq()}` } });
+    expect((await call(owner, 'PATCH', `/api/suppliers/${client.id}`, { country: 'China' })).statusCode).toBe(404);
+    expect((await call(manager, 'PATCH', `/api/suppliers/${made.id}`, { country: 'Georgia' })).statusCode).toBe(403);
   });
 });
 
