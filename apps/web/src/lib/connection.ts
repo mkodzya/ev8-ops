@@ -32,6 +32,27 @@ function set(next: ConnectionState) {
 const PROBE_MS = 5000;
 let probe: number | null = null;
 
+/**
+ * How often a return of the connection may set every screen refetching
+ * (QA-W6-23).
+ *
+ * One broken route is enough to make the app chase its own tail: the route
+ * answers 5xx without JSON, which by our rule means "not our API" and marks
+ * the connection down; the next request that works marks it up; coming up
+ * refetches everything, which asks the broken route again. The tester
+ * measured 300–450 requests a second on a phone that looked idle. A server
+ * that is properly down does not do this — nothing succeeds, so nothing
+ * announces a return — which is why the storm only appears in the mixed
+ * state, and why the answer is a floor rather than a flag.
+ *
+ * The connection's own state still flips freely: the sync bar must tell the
+ * truth the moment it changes. It is the refetching of everything that is
+ * rationed.
+ */
+const RECONNECT_FLOOR_MS = 10_000;
+/** Never announced yet: the first return of the connection always counts. */
+let announcedAt: number | null = null;
+
 function probing(on: boolean) {
   if (typeof window === 'undefined') return;
   if (on && probe == null) {
@@ -54,10 +75,15 @@ export function markDown(): void {
 
 export function markUp(): void {
   probing(false);
-  if (!state.online) {
-    set({ online: true, backAt: Date.now() });
-    for (const h of reconnectHandlers) h();
-  }
+  if (state.online) return;
+  const now = Date.now();
+  set({ online: true, backAt: now });
+  // Say so at most once in the floor. A blip that is really a broken route
+  // goes on flapping; the screens simply stop refetching for every flap, and
+  // `staleTime` and a return to the tab pick the data up soon enough.
+  if (announcedAt != null && now - announcedAt < RECONNECT_FLOOR_MS) return;
+  announcedAt = now;
+  for (const h of reconnectHandlers) h();
 }
 
 /** Run something when the connection comes back — the data layer refetches. */

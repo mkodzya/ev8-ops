@@ -1,0 +1,42 @@
+# The web tier for a server, as opposed to a laptop.
+#
+# `apps/web/Dockerfile` runs `vite preview`: a development server, kept alive
+# to hand out files that never change, refusing any Host it was not told
+# about. That last part is why the stands need ALLOWED_HOSTS at all. None of
+# it belongs on a machine facing the internet.
+#
+# Here the bundle is built once and handed to Caddy, which serves it as static
+# files and proxies /api to the api container, so the browser still talks to
+# one origin and there is no CORS anywhere. The runtime image carries no Node,
+# no sources and no node_modules — only the built assets.
+#
+# The shape is Self Platform's (docs/practices.md §2: one stack, not two sets
+# of tools), down to the cache headers.
+
+# ---- build ----------------------------------------------------------------
+FROM node:22-alpine AS build
+WORKDIR /app
+
+COPY package.json package-lock.json tsconfig.base.json ./
+COPY packages/shared/package.json packages/shared/
+COPY apps/api/package.json apps/api/
+COPY apps/worker/package.json apps/worker/
+COPY apps/web/package.json apps/web/
+RUN npm ci --no-audit --no-fund
+
+# The web bundle imports @ev8/shared, whose entry is TypeScript source — vite
+# compiles it in, so the source must be here.
+COPY packages/shared packages/shared
+COPY apps/web apps/web
+
+WORKDIR /app/apps/web
+# Types are checked before the bundle is written: `vite build` alone will
+# happily ship a bundle with type errors in it, which would make the
+# production artefact the least-checked thing in the repository.
+RUN npx tsc --noEmit && npm run build
+
+# ---- serve ----------------------------------------------------------------
+FROM caddy:2-alpine
+COPY apps/web/Caddyfile.static /etc/caddy/Caddyfile
+COPY --from=build /app/apps/web/dist /srv
+EXPOSE 5173
