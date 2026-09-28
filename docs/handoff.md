@@ -323,10 +323,12 @@ Self Platform; устройство и команды — `deploy/README.md`, з
   `.env.*` очищен — он нужен только для первой учётки в пустой базе.
 - **Копии** — каждую ночь в 04:10 `deploy/backup.sh ev8-prod` в `/srv/ev8-backups`, с проверкой
   восстановления; лог `/var/log/ev8-backup.log`.
-- **Выкатка**: тест — по слову Mika «на тест»: Claude запускает `ssh root@204.168.149.105
-  /srv/ev8-ops/deploy/follow-develop.sh --now` (единственная разрешённая ему команда на сервере; лог
-  `/var/log/ev8-follow.log`); прод — только Mika и только тегом: релиз на `main`,
-  `git checkout <тег>` в `/srv/ev8-prod`, `up -d --build`. Команды целиком — `deploy/README.md`.
+- **Выкатка — как в Self Platform** (Mika, 28.09.2026): после слияния в `develop` сессия Mika сразу
+  выкатывает на тест — `ssh root@204.168.149.105 /srv/ev8-ops/deploy/follow-develop.sh --now` (лог
+  `/var/log/ev8-follow.log`); прод — **только по слову Mika**: релиз (`release/X.Y.Z` → `main` + тег →
+  `develop`), затем `ssh root@204.168.149.105 /srv/ev8-ops/deploy/deploy-prod.sh X.Y.Z` (копия базы,
+  тег, сборка; лог `/var/log/ev8-release.log`), и запись о релизе в таблицу §2. Сам не выкатывай на
+  прод. Эти две команды — всё, что сессии разрешено на сервере. Подробно — `deploy/README.md` §6.
 - **Пилотный стенд с туннелем** (`scripts/pilot-stand.sh`) был временной мерой до сервера; больше не нужен.
 
 **Следующий шаг** (порядок жёсткий, `docs/cutover.md` §2):
@@ -385,8 +387,8 @@ nice -n 10 docker run --rm -m 3g --network ev8-ops-platform_default \
 
 ## 4. Протокол
 
-Задачи ведут Mika и Kardu, оба вливают в `develop`; `main`, теги и сервер — только Mika
-(`docs/onboarding.md`, у Kardu это держит `.githooks/pre-push`). Задача — `git worktree add ../_worktrees/ev8-ops-<topic> -b feature/<topic> develop`; коммит и push по
+Задачи ведут Mika и Kardu, оба вливают в `develop`; тест и релизы — из сессии Mika, прод только по
+слову Mika (`docs/onboarding.md`; у Kardu `main` и теги держит `.githooks/pre-push`). Задача — `git worktree add ../_worktrees/ev8-ops-<topic> -b feature/<topic> develop`; коммит и push по
 ходу; `merge --no-ff` в develop; `git worktree remove`; ветка удалена локально и на origin (Claude
 удаляет `feature/*` и `hotfix/*` на origin сам — разрешение в `.claude/settings.local.json`, он в
 `.git/info/exclude`; `main` и `develop` запрещены). Релиз —
