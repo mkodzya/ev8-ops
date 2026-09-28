@@ -11,11 +11,15 @@ Business rules, glossary, decisions and open questions live in the project book
 ## Who runs sessions (since 28.09.2026)
 Two people drive development, each with their own Claude on their own machine:
 **Mika** and **Kardu** (GitHub `Kardu89`). Both work in `feature/*` branches and
-merge into `develop`. **The test stand moves on Mika's word** ("на тест": Claude runs
-`deploy/follow-develop.sh --now` over ssh, the one server command it is allowed). **Releases —
-`main`, tags, the prod server — are Mika's only**: in a session run by Kardu,
-never push `main` or a tag, never touch the server (`.githooks/pre-push` refuses
-it too). Product decisions stay with Mika; Kardu proposes. Kardu's setup and
+merge into `develop`. The way of working is Self Platform's (Mika, 28.09.2026):
+**after a merge into `develop`, Mika's session puts it on the test stand at once**
+(`ssh root@204.168.149.105 /srv/ev8-ops/deploy/follow-develop.sh --now`);
+**a release reaches prod only on Mika's word**, and then Mika's session cuts it —
+`release/X.Y.Z`, versions, `main` with an annotated tag, back into `develop` — and
+runs `ssh root@204.168.149.105 /srv/ev8-ops/deploy/deploy-prod.sh X.Y.Z`. Never on its
+own. In a session run by Kardu: never push `main` or a tag, never touch the server
+(`.githooks/pre-push` refuses it too); a merge of Kardu's reaches the test stand
+with Mika's session's next deploy, or when Kardu asks Mika. Product decisions stay with Mika; Kardu proposes. Kardu's setup and
 workflow: `docs/onboarding.md`. Talk to whoever runs the session in the language
 they write in.
 
@@ -48,9 +52,9 @@ Georgian in every font stack (Be Vietnam Pro and Inter have no Georgian glyphs).
 - No step narration between tool calls. Work, then a short Russian summary of what
   changed and what was verified.
 - Verify by doing: run it, open it in the browser, measure before fixing.
-- Once an option is chosen: implement, commit, merge into `develop`, and say it is ready
-  for the test stand; it goes there when Mika writes "на тест". **Mika does the releases to prod** (28.09.2026): Claude does not cut
-  a release, tag, or deploy prod — it says what is in `develop` since the last tag.
+- Once an option is chosen: implement, commit, merge into `develop`, put it on the test
+  stand, check it there. Prod — only when Mika says so; then release and deploy, and
+  record the release in `docs/handoff.md`.
 - Visual options go to Mika as HTML files; his in-app viewer runs **no JavaScript**,
   so static markup only (CSS-only interaction is fine).
 - Report failures faithfully (red tests, skipped steps).
