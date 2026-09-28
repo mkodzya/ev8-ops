@@ -1,6 +1,6 @@
 import { numberMatches, parseGel, spellingMatches, todayISO } from '@ev8/shared';
 import { useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { ApiError, api } from '../api.js';
 import { LoadError } from '../components/LoadError.js';
 import { ModelDrawer, NEW_MODEL } from '../components/ModelDrawer.js';
@@ -128,6 +128,9 @@ export function PurchasesPage() {
   return (
     <>
       <PageHead wrap title={t.buy.title} sub={t.buy.count(data.purchases.length)}>
+        <Link className="pill pill-sm" to="/purchases/suppliers">
+          {t.buy.suppliers}
+        </Link>
         {can('purchases.manage') && <NewPurchase onDone={reload} />}
       </PageHead>
       <DataList
@@ -492,32 +495,51 @@ export function NewPurchase({ supplier, onDone }: { supplier?: { id: string; nam
  * and whoever answers there — because that is all an order needs and all the
  * card has room for. A name already on the books is said out loud rather than
  * refused: two factories really can share one, and only a person knows.
+ *
+ * Given a `supplier`, the same sheet corrects its card (Mika, 28.09.2026) —
+ * one set of fields for a factory, whether it is being made or mended.
  */
-export function SupplierDrawer({ onClose, onSaved }: { onClose: () => void; onSaved: (s: { id: string; name: string }) => void }) {
+export function SupplierDrawer({
+  supplier,
+  onClose,
+  onSaved,
+}: {
+  supplier?: Supplier;
+  onClose: () => void;
+  onSaved: (s: { id: string; name: string }) => void;
+}) {
   const t = useT();
-  const initial = { name: '', country: '', contact: '', phone: '', force: false };
+  const initial = {
+    name: supplier?.name ?? '',
+    country: supplier?.country ?? '',
+    contact: supplier?.contact ?? '',
+    phone: supplier?.phone ?? '',
+    force: false,
+  };
   const [f, setF] = useState(initial);
   const [twin, setTwin] = useState<string | null>(null);
 
   return (
     <FormSheet
-      title={t.buy.supplierTitle}
+      title={supplier ? t.supplierCard.editTitle(supplier.name) : t.buy.supplierTitle}
       onClose={onClose}
       value={f}
       initial={initial}
-      draft="supplier-new"
+      draft={supplier ? undefined : 'supplier-new'}
       onRestore={setF}
       summary={(v) => v.name}
-      label={t.buy.newSupplier}
+      label={supplier ? t.supplierCard.editSave : t.buy.newSupplier}
       fieldOf={{ duplicate_supplier: 'name' }}
       submit={async (key) => {
         setTwin(null);
+        const body = { name: f.name.trim(), country: f.country.trim() || null, contact: f.contact.trim() || null, phone: f.phone.trim() || null, force: f.force };
         try {
-          const made = await api.post<{ id: string; name: string }>(
-            '/api/suppliers',
-            { name: f.name.trim(), country: f.country.trim() || null, contact: f.contact.trim() || null, phone: f.phone.trim() || null, force: f.force },
-            { key },
-          );
+          if (supplier) {
+            await api.patch(`/api/suppliers/${supplier.id}`, body, { key });
+            onSaved({ id: supplier.id, name: body.name });
+            return { toast: { text: t.form.changesSaved } };
+          }
+          const made = await api.post<{ id: string; name: string }>('/api/suppliers', body, { key });
           onSaved(made);
           return { toast: { text: t.buy.supplierSaved } };
         } catch (e) {
@@ -549,8 +571,9 @@ export function SupplierDrawer({ onClose, onSaved }: { onClose: () => void; onSa
           <input className="input mono" value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} maxLength={40} inputMode="tel" />
         </Field>
       </div>
+      {/* Several lines: an address, a person, a bank — what a factory's card carries. */}
       <Field label={t.buy.supplierContact} hint={t.buy.supplierContactHint} name="contact">
-        <input className="input" value={f.contact} onChange={(e) => setF({ ...f, contact: e.target.value })} maxLength={1000} />
+        <textarea className="input textarea" rows={4} value={f.contact} onChange={(e) => setF({ ...f, contact: e.target.value })} maxLength={supplier ? 4000 : 1000} />
       </Field>
     </FormSheet>
   );

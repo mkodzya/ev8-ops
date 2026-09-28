@@ -264,7 +264,7 @@ def import_customers(o: Odoo, cur, rep: Report, suppliers_only: bool = False) ->
     for p in o.search_read(
         "res.partner", domain,
         ["name", "vat", "phone", "email", "is_company", "category_id", "street", "city",
-         "supplier_rank", "active"],
+         "supplier_rank", "active", "country_id", "comment"],
         limit=2000,
     ):
         name = (p.get("name") or "").strip()
@@ -273,10 +273,19 @@ def import_customers(o: Odoo, cur, rep: Report, suppliers_only: bool = False) ->
         addr = ", ".join(x for x in [(p.get("street") or "").strip(), (p.get("city") or "").strip()] if x) or None
         pid = (p.get("vat") or "").strip() or None
         note = MOVED
+        supplier = bool(p.get("supplier_rank"))
+        if supplier:
+            # A supplier's card has three fields — country, contact, phone
+            # (wave 5 §3.4) — kept in `address` and `notes`. So the country
+            # goes where the card reads a country, and the contact gets what
+            # Odoo knows about talking to them: its notes and the street.
+            comment = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", p.get("comment") or "")).strip()
+            note = "\n".join(x for x in [comment, addr] if x) or None
+            addr = p["country_id"][1] if p.get("country_id") else None
         if pid and pid in seen_pid:
             rep.note(f"контакт Odoo #{p['id']}: личный номер совпал с контактом #{seen_pid[pid]} — "
                      f"номер не записан, карточка заведена с пометкой; решать, один это человек или два, человеку")
-            note += ". Личный номер совпал с другой карточкой в Odoo и не перенесён."
+            note = (note + ". " if note else "") + "Личный номер совпал с другой карточкой в Odoo и не перенесён."
             pid = None
         elif pid:
             seen_pid[pid] = p["id"]
@@ -288,7 +297,12 @@ def import_customers(o: Odoo, cur, rep: Report, suppliers_only: bool = False) ->
             on conflict (odoo_partner_id) do update set
               name = excluded.name, phone = excluded.phone, email = excluded.email,
               kind = excluded.kind, record_kind = excluded.record_kind, tags = excluded.tags,
-              address = excluded.address, archived = excluded.archived, updated_at = now()
+              address = excluded.address, archived = excluded.archived, updated_at = now(),
+              -- A supplier's notes are its contact. Refresh them only while
+              -- nobody has written there: empty, or still the carry-over note.
+              notes = case when excluded.record_kind = 'supplier'
+                            and (customers.notes is null or customers.notes like 'Перенесено из Odoo%%')
+                           then excluded.notes else customers.notes end
             returning id
             """,
             (name, pid, (p.get("phone") or None), (p.get("email") or None),
@@ -296,7 +310,7 @@ def import_customers(o: Odoo, cur, rep: Report, suppliers_only: bool = False) ->
              # What this record is (wave 5 §3.9): Odoo's supplier rank is the
              # only thing the source says about it, and it says nothing about
              # the two kinds a client can be.
-             ("supplier" if p.get("supplier_rank") else "client"),
+             ("supplier" if supplier else "client"),
              [tags.get(t, "") for t in (p.get("category_id") or [])],
              addr, p["id"], not p.get("active", True), note),
         )
@@ -733,9 +747,9 @@ class SqlOut:
     def execute(self, query: str, params=()) -> None:
         parts = query.split("%s")
         assert len(parts) == len(params) + 1, "placeholders and values disagree"
-        out = parts[0]
+        out = parts[0].replace("%%", "%")
         for value, tail in zip(params, parts[1:]):
-            out += psql.Literal(value).as_string(None) + tail
+            out += psql.Literal(value).as_string(None) + tail.replace("%%", "%")
         self.lines.append(out.strip() + ";")
 
     def fetchone(self):
