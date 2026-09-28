@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { LoadError } from '../components/LoadError.js';
 import { BlockHead, Empty, Loading, PageHead } from '../components/ui.js';
@@ -6,7 +7,7 @@ import { fmtDate } from '../format.js';
 import { useT } from '../i18n/index.js';
 import { useLoad } from '../lib/use.js';
 import { useSession } from '../session.js';
-import { NewPurchase, fmtForeign, statusOf, type Purchase, type Supplier } from './PurchasesPage.js';
+import { NewPurchase, SupplierDrawer, fmtForeign, statusOf, type Purchase, type Supplier } from './PurchasesPage.js';
 
 // Поставщик (wave 5 §3.4, §3.9, crit. 20). A record kind of its own: a
 // factory is not looked for among customers, and a customer is not looked for
@@ -20,6 +21,7 @@ export function SupplierPage() {
   // The factory and its orders in one answer: the section's list is capped at
   // the newest two hundred, and a factory's own card must show all of its own.
   const card = useLoad<{ supplier: Supplier; orders: Purchase[] }>(id ? `/api/suppliers/${id}` : null);
+  const [editing, setEditing] = useState(false);
 
   const reload = () => card.reload();
 
@@ -32,8 +34,16 @@ export function SupplierPage() {
   return (
     <>
       <PageHead wrap title={s.name} sub={s.country ?? undefined}>
-        {can('purchases.manage') && <NewPurchase supplier={{ id: s.id, name: s.name }} onDone={reload} />}
+        {can('purchases.manage') && (
+          <>
+            <button type="button" className="pill pill-sm" onClick={() => setEditing(true)}>
+              {t.supplierCard.edit}
+            </button>
+            <NewPurchase supplier={{ id: s.id, name: s.name }} onDone={reload} />
+          </>
+        )}
       </PageHead>
+      {editing && <SupplierDrawer supplier={s} onClose={() => setEditing(false)} onSaved={reload} />}
 
       <div className="num-strip">
         {debt.length === 0 ? (

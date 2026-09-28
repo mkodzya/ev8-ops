@@ -341,6 +341,30 @@ describe.skipIf(!HAS_DB)('wave 5 · shipments', () => {
     const customers = json<{ customers: { name: string }[] }>(await call(owner, 'GET', '/api/customers'));
     expect(customers.customers.some((c) => c.name === name)).toBe(false);
   });
+
+  it('corrects a factory’s card and keeps what it was (Mika, 28.09.2026)', async () => {
+    const owner = await loginAs('owner');
+    const manager = await loginAs('manager');
+    const made = json<{ id: string }>(await call(owner, 'POST', '/api/suppliers', { name: `ТЕСТ Factory ${uniq()}`, country: 'Room 101, a street, Hefei' }));
+    const fixed = await call(owner, 'PATCH', `/api/suppliers/${made.id}`, { country: 'China', contact: 'Jack Wang\nAlibaba', phone: '+86 100' });
+    expect(fixed.statusCode, fixed.body).toBe(200);
+    const card = json<{ supplier: { country: string; contact: string; phone: string } }>(await call(owner, 'GET', `/api/suppliers/${made.id}`));
+    expect(card.supplier).toMatchObject({ country: 'China', contact: 'Jack Wang\nAlibaba', phone: '+86 100' });
+    // The journal holds the was / became of what moved, and only of that.
+    const { prisma } = await import('../src/lib/db.js');
+    const line = await prisma.auditLog.findFirst({ where: { entityId: made.id, action: 'supplier.update' } });
+    expect(line?.before).toEqual({ country: 'Room 101, a street, Hefei', contact: null, phone: null });
+    expect(line?.after).toEqual({ country: 'China', contact: 'Jack Wang\nAlibaba', phone: '+86 100' });
+    // Another record's name is said, as at creation; `force` means it.
+    const other = `ТЕСТ Factory ${uniq()}`;
+    await call(owner, 'POST', '/api/suppliers', { name: other });
+    expect(json<{ error: string }>(await call(owner, 'PATCH', `/api/suppliers/${made.id}`, { name: other })).error).toBe('duplicate_supplier');
+    expect((await call(owner, 'PATCH', `/api/suppliers/${made.id}`, { name: other, force: true })).statusCode).toBe(200);
+    // A client is not a supplier, and a manager does not run purchases.
+    const client = await prisma.customer.create({ data: { name: `ТЕСТ Client ${uniq()}` } });
+    expect((await call(owner, 'PATCH', `/api/suppliers/${client.id}`, { country: 'China' })).statusCode).toBe(404);
+    expect((await call(manager, 'PATCH', `/api/suppliers/${made.id}`, { country: 'Georgia' })).statusCode).toBe(403);
+  });
 });
 
 describe.skipIf(!HAS_DB)('wave 5 · the shelf and the records', () => {

@@ -48,6 +48,9 @@ export const wave5purchasesEn = {
     supplierTwin: (name: string) => `“${name}” is already on the books.`,
     supplierForce: 'Add it anyway',
     suppliersNone: 'No suppliers yet — add the first one.',
+    suppliers: 'Suppliers',
+    suppliersCount: (n: number) => `${n} supplier${n === 1 ? '' : 's'}`,
+    suppliersSearch: 'Name, country, contact',
 
     invoiceNo: 'Invoice no.',
     invoiceDate: 'Invoice date',
@@ -185,6 +188,9 @@ export const wave5purchasesEn = {
     none: 'No orders from this supplier yet.',
     newOrder: 'New order',
     notFound: 'No such supplier.',
+    edit: 'Edit',
+    editTitle: (name: string) => `Edit · ${name}`,
+    editSave: 'Save',
   },
 };
 
@@ -243,6 +249,9 @@ export const wave5purchasesRu: Wave5purchases = {
     supplierTwin: (name) => `«${name}» уже есть в записях.`,
     supplierForce: 'Всё равно завести',
     suppliersNone: 'Поставщиков пока нет — заведите первого.',
+    suppliers: 'Поставщики',
+    suppliersCount: (n) => `${n} ${plural(n, 'поставщик', 'поставщика', 'поставщиков')}`,
+    suppliersSearch: 'Название, страна, контакт',
 
     invoiceNo: 'Инвойс №',
     invoiceDate: 'Дата инвойса',
@@ -379,6 +388,9 @@ export const wave5purchasesRu: Wave5purchases = {
     none: 'Заказов у этого поставщика пока нет.',
     newOrder: 'Новый заказ',
     notFound: 'Такого поставщика нет.',
+    edit: 'Изменить',
+    editTitle: (name) => `Изменить · ${name}`,
+    editSave: 'Сохранить',
   },
 };
 
@@ -426,6 +438,9 @@ export const wave5purchasesKa: Wave5purchases = {
     supplierTwin: (name) => `„${name}“ უკვე არის ჩანაწერებში.`,
     supplierForce: 'მაინც დამატება',
     suppliersNone: 'მომწოდებლები ჯერ არ არის — დაამატეთ პირველი.',
+    suppliers: 'მომწოდებლები',
+    suppliersCount: (n) => `${n} მომწოდებელი`,
+    suppliersSearch: 'დასახელება, ქვეყანა, კონტაქტი',
 
     invoiceNo: 'ინვოისი №',
     invoiceDate: 'ინვოისის თარიღი',
@@ -562,5 +577,8 @@ export const wave5purchasesKa: Wave5purchases = {
     none: 'ამ მომწოდებლისგან შეკვეთები ჯერ არ არის.',
     newOrder: 'ახალი შეკვეთა',
     notFound: 'ასეთი მომწოდებელი არ არის.',
+    edit: 'შეცვლა',
+    editTitle: (name) => `შეცვლა · ${name}`,
+    editSave: 'შენახვა',
   },
 };

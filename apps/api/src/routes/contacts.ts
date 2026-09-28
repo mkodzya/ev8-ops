@@ -87,6 +87,52 @@ export function contactRoutes(app: FastifyInstance): void {
   });
 
   /**
+   * The card's four fields, corrected where they are read (Mika, 28.09.2026).
+   * Only the fields sent are touched; the journal keeps each one's was / became.
+   * A name another record already carries is said, not refused — as at
+   * creation, two factories can share one — unless `force` says it is meant.
+   */
+  app.patch<{ Params: { id: string }; Body: Body }>('/api/suppliers/:id', { config: { scope: 'purchases.manage' } }, async (req) => {
+    const b = req.body ?? {};
+    const actor = actorOf(req);
+    const row = await prisma.customer.findUnique({
+      where: { id: req.params.id },
+      select: { id: true, name: true, address: true, notes: true, phone: true, recordKind: true },
+    });
+    if (!row || row.recordKind !== 'supplier') throw notFound('supplier_not_found', 'No such supplier.');
+    // The card's words, not the table's: a factory's country lives in
+    // `address` and whoever answers there in `notes` (see the create above).
+    const was = { name: row.name, country: row.address, contact: row.notes, phone: row.phone };
+    const now: Partial<typeof was> = {};
+    if ('name' in b) now.name = str(b, 'name', { required: true, max: 200 })!;
+    if ('country' in b) now.country = str(b, 'country', { max: 200 });
+    if ('contact' in b) now.contact = str(b, 'contact', { max: 4000 });
+    if ('phone' in b) now.phone = str(b, 'phone', { max: 40 });
+    const keys = (Object.keys(now) as (keyof typeof was)[]).filter((k) => now[k] !== was[k]);
+    if (keys.length === 0) return { ok: true };
+    if (keys.includes('name') && !b.force) {
+      const twin = await prisma.customer.findFirst({
+        where: { id: { not: row.id }, archived: false, name: { equals: now.name!, mode: 'insensitive' } },
+        select: { id: true, name: true },
+      });
+      if (twin) throw conflict('duplicate_supplier', 'A record with this name exists.', { existing: twin, field: 'name' });
+    }
+    await prisma.customer.update({
+      where: { id: row.id },
+      data: { name: now.name, address: now.country, notes: now.contact, phone: now.phone, updatedAt: new Date() },
+    });
+    await audit({
+      actorId: actor.id,
+      action: 'supplier.update',
+      entityType: 'customer',
+      entityId: row.id,
+      before: Object.fromEntries(keys.map((k) => [k, was[k]])),
+      after: Object.fromEntries(keys.map((k) => [k, now[k]])),
+    });
+    return { ok: true };
+  });
+
+  /**
    * Two cards, one person (§3.9). Everything the duplicate holds moves to the
    * card that stays; the duplicate goes to the archive pointing at it, so a
    * link somebody saved a month ago still leads somewhere true.
