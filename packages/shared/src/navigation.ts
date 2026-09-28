@@ -101,7 +101,9 @@ export type TabId =
   | 'rental'
   | 'journal'
   | 'migration'
-  | 'login';
+  | 'login'
+  | 'orders'
+  | 'suppliers';
 
 /** Tabs inside a section, in the address (wave 1 §3.2). */
 export const SECTION_TABS: Partial<Record<SectionId, readonly { id: TabId; path: string; anyOf: readonly Permission[] }[]>> = {
@@ -142,6 +144,12 @@ export const SECTION_TABS: Partial<Record<SectionId, readonly { id: TabId; path:
     { id: 'journal', path: '/settings/journal', anyOf: ['users.manage'] },
     { id: 'migration', path: '/settings/migration', anyOf: ['users.manage'] },
     { id: 'login', path: '/settings/login', anyOf: ['users.manage'] },
+  ],
+  // The orders, and the factories they go to (Mika, 28.09.2026): a supplier
+  // is looked up where it is ordered from and paid, not in a menu of its own.
+  purchases: [
+    { id: 'orders', path: '/purchases', anyOf: ['purchases.view'] },
+    { id: 'suppliers', path: '/purchases/suppliers', anyOf: ['purchases.view'] },
   ],
   // The week first: it is what an owner opens Reports for (wave 6 §3.1).
   reports: [

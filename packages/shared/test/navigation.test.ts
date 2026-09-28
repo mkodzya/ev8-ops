@@ -31,6 +31,13 @@ describe('the structure each role sees (wave 1 §3.2)', () => {
     expect(tabsForRole('cash', 'manager').map((t) => t.id)).toEqual(['till', 'mine']);
   });
 
+  // Mika, 28.09.2026: the suppliers are a tab of Purchases, not a section.
+  it('gives purchases two tabs, the orders and the suppliers, to the owner only', () => {
+    expect(tabsForRole('purchases', 'owner').map((t) => t.path)).toEqual(['/purchases', '/purchases/suppliers']);
+    expect(tabsForRole('purchases', 'manager')).toEqual([]);
+    expect(sectionOfPath('/purchases/suppliers')).toBe('purchases');
+  });
+
   // Wave 6 §3.4–3.9. Settings grew into tabs; the points did not move with
   // them — one list, one address (designer, 21.09.2026).
   it('gives settings six tabs, and its points row leads to the fleet', () => {
