@@ -42,11 +42,16 @@ from odoo_rpc import Odoo  # noqa: E402
 
 try:
     import psycopg
+    from psycopg import sql as psql
 except ImportError:  # pragma: no cover
     raise SystemExit("нужен psycopg: python3 -m pip install 'psycopg[binary]'")
 
 PERIOD_DAYS = 7
 DEFAULT_DB = "postgresql://ev8ops:ev8ops@localhost:5433/ev8ops"
+
+# The note every carried-over row gets: the day of *this* run. A row first
+# written on the test stand in September 2026 must not claim 15.09.
+MOVED = f"Перенесено из Odoo {date.today():%d.%m.%Y}"
 
 # Тестовый заказ со звонка консультанта: в Odoo он есть, к нам не едет.
 SKIP_ORDERS = {"S00060"}
@@ -162,7 +167,7 @@ def import_models(o: Odoo, cur, rep: Report) -> dict[int, str]:
             """,
             (brand, slot["name"], tetri(slot["sale_price"]), tetri(slot["weekly"]), tetri(slot["cost"]),
              True, slot["rental_id"] is not None, slot["sale_id"], slot["rental_id"],
-             fm["id"] if fm else None, "Перенесено из Odoo 15.09.2026"),
+             fm["id"] if fm else None, MOVED),
         )
         row_id = cur.fetchone()[0]
         rep.did("модели")
@@ -203,7 +208,7 @@ def import_vehicles(o: Odoo, cur, rep: Report, fleet_model_ids: dict[int, str]) 
             """,
             (vin, model_id, (v.get("color") or None), None, as_date(v.get("acquisition_date")),
              state, int(v["odometer"]) if v.get("odometer") else None, v["id"],
-             "Перенесено из Odoo 15.09.2026"),
+             MOVED),
         )
         by_vin[vin] = cur.fetchone()[0]
         rep.did("мопеды из Fleet")
@@ -233,16 +238,22 @@ def import_vehicles(o: Odoo, cur, rep: Report, fleet_model_ids: dict[int, str]) 
               odoo_lot_id = coalesce(excluded.odoo_lot_id, vehicles.odoo_lot_id), updated_at = now()
             returning id
             """,
-            (vin, model_id, l["id"], "Перенесено из Odoo 15.09.2026, серийный номер склада"),
+            (vin, model_id, l["id"], f"{MOVED}, серийный номер склада"),
         )
         by_vin[vin] = cur.fetchone()[0]
         rep.did("мопеды по серийным номерам склада")
     return by_vin
 
 
-def import_customers(o: Odoo, cur, rep: Report) -> dict[int, str]:
-    """Клиенты. Карточка самой компании не переносится: это не клиент."""
+def import_customers(o: Odoo, cur, rep: Report, suppliers_only: bool = False) -> dict[int, str]:
+    """Клиенты. Карточка самой компании не переносится: это не клиент.
+
+    suppliers_only — только те, у кого в Odoo есть supplier_rank: так
+    поставщики попадают на стенд раньше остального (Mika, 28.09.2026)."""
     own = {c["partner_id"][0] for c in o.search_read("res.company", [], ["partner_id"]) if c.get("partner_id")}
+    domain = [("id", "not in", list(own))] if own else []
+    if suppliers_only:
+        domain.append(("supplier_rank", ">", 0))
     ids: dict[int, str] = {}
     # Личный номер у нас уникален (CST-02). В Odoo это не так, и совпадение —
     # находка, а не помеха: вторая карточка заводится без номера и с пометкой,
@@ -251,7 +262,7 @@ def import_customers(o: Odoo, cur, rep: Report) -> dict[int, str]:
     tags = {t["id"]: t["name"] for t in o.search_read("res.partner.category", [], ["name"])}
 
     for p in o.search_read(
-        "res.partner", [("id", "not in", list(own))] if own else [],
+        "res.partner", domain,
         ["name", "vat", "phone", "email", "is_company", "category_id", "street", "city",
          "supplier_rank", "active"],
         limit=2000,
@@ -261,7 +272,7 @@ def import_customers(o: Odoo, cur, rep: Report) -> dict[int, str]:
             continue
         addr = ", ".join(x for x in [(p.get("street") or "").strip(), (p.get("city") or "").strip()] if x) or None
         pid = (p.get("vat") or "").strip() or None
-        note = "Перенесено из Odoo 15.09.2026"
+        note = MOVED
         if pid and pid in seen_pid:
             rep.note(f"контакт Odoo #{p['id']}: личный номер совпал с контактом #{seen_pid[pid]} — "
                      f"номер не записан, карточка заведена с пометкой; решать, один это человек или два, человеку")
@@ -290,7 +301,7 @@ def import_customers(o: Odoo, cur, rep: Report) -> dict[int, str]:
              addr, p["id"], not p.get("active", True), note),
         )
         ids[p["id"]] = cur.fetchone()[0]
-        rep.did("клиенты")
+        rep.did("поставщики" if suppliers_only else "клиенты")
     return ids
 
 
@@ -404,7 +415,7 @@ def import_rentals(o: Odoo, cur, rep: Report, customers: dict[int, str],
              None if vehicle_id else "VIN не подтверждён в Odoo",
              tetri(weekly) or 0, tetri(deposit) or 0, picked, returned, status,
              r["id"], r["name"],
-             ("Перенесено из Odoo 15.09.2026." + (f" {note_text}" if note_text else ""))[:4000]),
+             (f"{MOVED}." + (f" {note_text}" if note_text else ""))[:4000]),
         )
         rental_id = cur.fetchone()[0]
         out[r["name"]] = rental_id
@@ -417,7 +428,7 @@ def import_rentals(o: Odoo, cur, rep: Report, customers: dict[int, str],
                 values (%s,%s,'held',%s)
                 on conflict (rental_id) do update set amount_tetri = excluded.amount_tetri, updated_at = now()
                 """,
-                (rental_id, tetri(deposit), "Перенесено из Odoo 15.09.2026; решение по залогу в Odoo не структурировано"),
+                (rental_id, tetri(deposit), f"{MOVED}; решение по залогу в Odoo не структурировано"),
             )
             rep.did("залоги")
 
@@ -505,7 +516,7 @@ def import_sales(o: Odoo, cur, rep: Report, customers: dict[int, str],
             returning id
             """,
             (cust, vehicle_id, vin_note, sold, tetri(r["amount_total"]), r["id"],
-             ("Перенесено из Odoo 15.09.2026. " + re.sub(r"<[^>]+>", " ", r.get("note") or "").strip())[:4000]),
+             (f"{MOVED}. " + re.sub(r"<[^>]+>", " ", r.get("note") or "").strip())[:4000]),
         )
         out[r["name"]] = cur.fetchone()[0]
         rep.did("продажи")
@@ -554,7 +565,7 @@ def import_purchases(o: Odoo, cur, rep: Report, customers: dict[int, str]) -> di
             (sup, (r.get("partner_ref") or None), as_date(r.get("date_order")),
              (r["currency_id"][1] if r.get("currency_id") else "GEL"),
              as_date(r.get("date_order")) or date.today(), status, r["id"],
-             "Перенесено из Odoo 15.09.2026. Приход в Odoo не проводился, поэтому статус «заказана»"
+             f"{MOVED}. Приход в Odoo не проводился, поэтому статус «заказана»"
              + (". Черновик: сумма не подтверждена" if r["state"] == "draft" else "")),
         )
         pid = cur.fetchone()[0]
@@ -609,7 +620,7 @@ def import_payments(o: Odoo, cur, rep: Report, customers: dict[int, str],
             """,
             (as_date(p["date"]), "in" if p["payment_type"] == "inbound" else "out", channel,
              amount, amount, cust, rental_id, sale_id, purchase_id,
-             "Перенесено из Odoo 15.09.2026" + (f". {p['memo']}" if p.get("memo") else ""), p["id"]),
+             MOVED + (f". {p['memo']}" if p.get("memo") else ""), p["id"]),
         )
         rep.did("платежи")
         if not (rental_id or sale_id or purchase_id):
@@ -706,6 +717,31 @@ def allocate_and_recompute(cur, rep: Report) -> None:
     """)
 
 
+class SqlOut:
+    """A cursor that writes SQL instead of running it.
+
+    For a stand whose database is not reachable from this Mac: Odoo is read
+    here, where its key lives, and the statements go over ssh straight into
+    psql inside the stand's db container. No file between them, no Odoo key
+    and no database password on the other side. Only for the steps that do not
+    read back what they wrote beyond the returned id.
+    """
+
+    def __init__(self) -> None:
+        self.lines: list[str] = []
+
+    def execute(self, query: str, params=()) -> None:
+        parts = query.split("%s")
+        assert len(parts) == len(params) + 1, "placeholders and values disagree"
+        out = parts[0]
+        for value, tail in zip(params, parts[1:]):
+            out += psql.Literal(value).as_string(None) + tail
+        self.lines.append(out.strip() + ";")
+
+    def fetchone(self):
+        return (None,)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="Odoo → EV8 Ops, read-only against Odoo.")
     ap.add_argument("--apply", action="store_true", help="записать (иначе только прочитать и показать)")
@@ -713,7 +749,28 @@ def main() -> int:
     ap.add_argument("--wipe", action="store_true",
                     help="очистить операционные таблицы перед импортом (логины и журнал не трогаются)")
     ap.add_argument("--db", default=os.environ.get("DATABASE_URL", DEFAULT_DB))
+    ap.add_argument("--only", choices=["suppliers"],
+                    help="перенести только это (сейчас — только поставщиков)")
+    ap.add_argument("--sql", action="store_true",
+                    help="не подключаться к базе, а напечатать SQL для psql на стенде (только с --only)")
     args = ap.parse_args()
+    if args.only and args.wipe:
+        print("--wipe и --only вместе нельзя: очистка стёрла бы то, что --only не вернёт.", file=sys.stderr)
+        return 2
+    if args.sql:
+        if not args.only:
+            print("--sql только вместе с --only: полный перенос читает записанное обратно.", file=sys.stderr)
+            return 2
+        o, rep, cur = Odoo(), Report(), SqlOut()
+        import_customers(o, cur, rep, suppliers_only=True)
+        print("begin;")
+        print("\n".join(cur.lines))
+        print("commit;")
+        sys.stdout.flush()
+        sys.stdout = sys.stderr
+        rep.print()
+        print("\nSQL напечатан; записано будет тем psql, который его примет.")
+        return 0
     # Очистка — только на ноутбучном стеке, тем же признаком, по которому API
     # принимает dev-секрет и сид заливает демо (B1-04, B3-01). На стенде на
     # сервере этой переменной нет, и --wipe отказывает до подключения к базе.
@@ -741,16 +798,19 @@ def main() -> int:
                     restart identity cascade
                 """)
                 rep.note("операционные таблицы очищены перед импортом; логины и журнал изменений сохранены")
-            today = date.today()
-            model_ids = import_models(o, cur, rep)
-            vehicle_ids = import_vehicles(o, cur, rep, model_ids)
-            customer_ids = import_customers(o, cur, rep)
-            rentals = import_rentals(o, cur, rep, customer_ids, vehicle_ids, today)
-            sales = import_sales(o, cur, rep, customer_ids, vehicle_ids)
-            purchases = import_purchases(o, cur, rep, customer_ids)
-            import_payments(o, cur, rep, customer_ids, rentals, sales, purchases)
-            derive_vehicle_state(cur, rep)
-            allocate_and_recompute(cur, rep)
+            if args.only == "suppliers":
+                import_customers(o, cur, rep, suppliers_only=True)
+            else:
+                today = date.today()
+                model_ids = import_models(o, cur, rep)
+                vehicle_ids = import_vehicles(o, cur, rep, model_ids)
+                customer_ids = import_customers(o, cur, rep)
+                rentals = import_rentals(o, cur, rep, customer_ids, vehicle_ids, today)
+                sales = import_sales(o, cur, rep, customer_ids, vehicle_ids)
+                purchases = import_purchases(o, cur, rep, customer_ids)
+                import_payments(o, cur, rep, customer_ids, rentals, sales, purchases)
+                derive_vehicle_state(cur, rep)
+                allocate_and_recompute(cur, rep)
             if args.apply:
                 conn.commit()
             else:
