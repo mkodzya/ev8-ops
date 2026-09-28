@@ -71,12 +71,38 @@ b2 = ph('<b>Б, открыто.</b>', b_block(True))
 c1 = ph('<b>В. Строка «Заметки · 3 строки ›».</b> Как строка списка: нажал — лист снизу с текстом и «Изменить». Карточка самая короткая, но текст уходит в отдельное окно.', c_block())
 c2 = ph('<b>В, открыто.</b> Лист снизу.', c_block(), overlay=C_SHEET)
 
+# ---- laptop: the card as on the test stand — orders on the left, the
+# fields on the right, the notes in the right-hand column.
+REACH = card('Как связаться', dl([('Контактное лицо', '—'), ('Телефон', '—'), ('Где договариваемся', 'Alibaba.com')]))
+ORDERS = ('<table class="table"><tr><th>Заказ</th><th>Инвойс</th><th>Дата ↓</th><th class="r">Сумма</th><th class="r">Оплачено</th></tr>'
+          '<tr><td class="mono">PO-00121</td><td>DEMO-21</td><td>25.06</td><td class="r money">113 USD</td><td class="r">100 %</td></tr></table>')
+def dcard(right, extra=''):
+    main = ('<div class="d-head"><h2>Anhui Primer Co.</h2><span class="sub">Китай · поставщик</span>'
+            '<div class="acts"><a class="btn btn-sm" href="#">Изменить</a><a class="btn btn-sm btn-primary" href="#">Новый заказ</a></div></div>'
+            '<div class="d-body"><div class="cols" style="grid-template-columns:1.4fr 1fr"><div>' + STRIP + ORDERS + '</div>'
+            f'<div>{REACH}{right}</div></div></div>')
+    return rail('purchases', 'owner', 14), main, extra
+def dk(caption, right, extra=''):
+    r, m, e = dcard(right, extra)
+    return desk(caption, r, m, e)
+C_PANEL = (f'<div class="panel"><div style="display:flex;justify-content:space-between;align-items:center">'
+           f'<div class="h3" style="margin:0">Заметки · Anhui Primer Co.</div><a class="icon-btn" href="#">{ic("x")}</a></div>'
+           f'<div class="nt-text">{NOTE}</div><a class="btn" href="#" style="margin-top:16px">Изменить</a></div>')
+da1 = dk('<b>А на ноутбуке.</b> Кнопка под полями в правой колонке; текст раскрывается там же.', a_block())
+da2 = dk('<b>А на ноутбуке, открыто.</b>', a_block(True))
+db1 = dk('<b>Б на ноутбуке.</b> Начало заметки в своём блоке под «О поставщике».', b_block())
+db2 = dk('<b>Б на ноутбуке, открыто.</b>', b_block(True))
+dc1 = dk('<b>В на ноутбуке.</b> Строка «Заметки ›» в правой колонке.', c_block())
+dc2 = dk('<b>В на ноутбуке, открыто.</b> Вместо листа снизу — панель справа.', c_block(), C_PANEL)
+
 page('supplier-notes-options.html', 'Заметки поставщика · как показать',
- 'Заметки в карточке поставщика свёрнуты, но этого не видно. Три способа показать, что там есть текст, — каждый закрытым и открытым. На телефоне закрытые рамки раскрываются нажатием.',
+ 'Заметки в карточке поставщика свёрнуты, но этого не видно. Три способа показать, что там есть текст, — каждый на телефоне и на ноутбуке, закрытым и открытым. Закрытые рамки А и Б раскрываются нажатием.',
  [('Запрос', 'Mika, 28.09.2026: «не видно, что заметки свёрнуты — надо добавить кнопку»'),
   ('Где', 'Закупки → Поставщики → карточка, блок «О поставщике»'),
   ('Данные', 'Пример')],
- [('А. Кнопка', a1 + a2), ('Б. Начало текста', b1 + b2), ('В. Отдельная строка', c1 + c2)],
+ [('А. Кнопка — телефон', a1 + a2), ('А. Кнопка — ноутбук', da1 + da2),
+  ('Б. Начало текста — телефон', b1 + b2), ('Б. Начало текста — ноутбук', db1 + db2),
+  ('В. Отдельная строка — телефон', c1 + c2), ('В. Отдельная строка — ноутбук', dc1 + dc2)],
  '<h2>Что выбрать</h2><p><b>А</b> — обычная кнопка, какие уже есть в продукте: видно сразу, места почти не занимает, текст раскрывается там же, где читали. '
  '<b>Б</b> — если важно видеть начало заметки не нажимая. <b>В</b> — если заметки станут длинными (больше экрана).</p>')
 
