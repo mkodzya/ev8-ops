@@ -96,11 +96,16 @@ export function SupplierPage() {
         <Row k={t.supplierCard.goods} v={s.goods ?? t.common.dash} />
         <Row k={t.supplierCard.address} v={s.address ?? t.common.dash} />
         <Row k={t.supplierCard.bank} v={s.bank ? <span className="pre">{s.bank}</span> : t.common.dash} />
-        {/* What is left over — from Odoo, mostly — folded, so the card reads
-            as fields and the long text is one tap away. */}
+        {/* What is left over — from Odoo, mostly — folded behind a button that
+            looks like one (Mika, option A of supplier-notes-options.html): the
+            card reads as fields, and it is plain there is more. */}
         {s.notes && (
           <details className="supplier-notes">
-            <summary>{t.supplierCard.notes}</summary>
+            <summary className="pill pill-sm">
+              <span className="when-closed">{t.supplierCard.notesShow}</span>
+              <span className="when-open">{t.supplierCard.notesHide}</span>
+              <span className="chev" aria-hidden="true">▾</span>
+            </summary>
             <p className="pre">{s.notes}</p>
           </details>
         )}
