@@ -237,18 +237,34 @@
 .act-danger .act-ico { background: var(--crit-soft); color: var(--crit-ink); }
 .menu-role { margin: -8px 0 14px; font: var(--text-label); color: var(--muted); }
 
-/* ---- section tabs ---- */
-.section-tabs { display: flex; gap: 4px; margin: -4px 0 14px; border-bottom: 1px solid var(--line-soft); overflow-x: auto; }
+/* ---- section tabs ----
+   One strip in the shell (SectionTabs): the words, and one mark under the
+   open one that slides when another is opened — a line on a laptop, a pill
+   behind the word on a phone. Words and mark change with the product's one
+   easing (Mika, 28.09.2026: smooth, with a light animation). */
+.section-tabs { position: relative; display: flex; gap: 4px; margin: 0 0 16px; border-bottom: 1px solid var(--line-soft); overflow-x: auto; scrollbar-width: none; }
+.section-tabs::-webkit-scrollbar { display: none; }
 .section-tab {
+  position: relative;
+  z-index: 1;
   padding: 10px 12px;
   font: var(--text-button);
   color: var(--muted);
-  border-bottom: 2px solid transparent;
   white-space: nowrap;
+  transition: color var(--ease), border-color var(--ease);
 }
-.section-tab.on { color: var(--ink); border-color: var(--ink); }
-@media (min-width: 900px) { .section-tabs-phone { display: none; } }
-@media (max-width: 899px) { .section-tabs-laptop { display: none; } }
+.section-tab:hover { color: var(--ink); }
+.section-tab.on { color: var(--ink); }
+.section-tab-mark {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 0;
+  height: 2px;
+  background: var(--ink);
+  transition: transform var(--ease), width var(--ease);
+  pointer-events: none;
+}
 @media (max-width: 899px) {
   .section-tabs { border-bottom: 0; gap: 8px; margin: 0 calc(-1 * var(--space4)) var(--space3); padding: 0 var(--space4) 4px; }
   .section-tab {
@@ -258,12 +274,21 @@
     padding: 0 12px;
     border: 1px solid var(--line-control);
     border-radius: var(--radius-pill);
-    background: var(--surface);
     font: var(--text-button-sm);
     color: var(--ink);
   }
-  .section-tab.on { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+  .section-tab.on { color: var(--surface); border-color: var(--ink); }
+  /* The pill behind the open chip: the chips stay see-through so it shows. */
+  .section-tab-mark { top: 0; bottom: auto; height: var(--control-dense); border-radius: var(--radius-pill); }
 }
+
+/* The page under the strip comes in from the side of the tab that was
+   opened — a short fade and a few pixels of travel, not a slide of the whole
+   screen. Only a move between tabs of one section does this (AppShell). */
+.tab-stage[data-dir] { animation: tab-in 0.3s cubic-bezier(0.2, 0, 0, 1); }
+.tab-stage[data-dir='1'] { --tab-from: 14px; }
+.tab-stage[data-dir='-1'] { --tab-from: -14px; }
+@keyframes tab-in { from { opacity: 0; transform: translateX(var(--tab-from, 0)); } }
 
 .section-tab-n { margin-left: 6px; font-size: 12px; color: var(--muted); }
 .section-tab.on .section-tab-n { color: inherit; }

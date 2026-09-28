@@ -2,7 +2,6 @@ import { colorOf, type RentalStatus, type VehicleState } from '@ev8/shared';
 import type { ReactNode } from 'react';
 import { useLocale, useT } from '../i18n/index.js';
 import { useAnnounceHeader } from '../ds/shell/header.js';
-import { SectionTabs } from '../ds/shell/SectionTabs.js';
 import { Skeleton } from '../ds/state/Skeleton.js';
 import { vinParts } from '../format.js';
 import { primaryName, secondName, type Named } from '../lib/names.js';
@@ -132,7 +131,6 @@ export function PageHead({
   useAnnounceHeader(title, sub);
   return (
     <>
-      <SectionTabs on="phone" />
       <header className={`page-head ${wrap ? 'page-head-wrap' : ''}`}>
         {/* The words share a baseline with each other; the group they make is
             what the buttons centre on. Baseline and centre on one flex line
@@ -150,7 +148,6 @@ export function PageHead({
         )}
       </header>
       {note != null && <p className="page-note">{note}</p>}
-      <SectionTabs on="laptop" />
     </>
   );
 }
