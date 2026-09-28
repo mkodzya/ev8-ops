@@ -118,7 +118,7 @@ describe.skipIf(!HAS_DB)('wave 5 · selling', () => {
 describe.skipIf(!HAS_DB)('wave 5 · shipments', () => {
   async function order() {
     const owner = await loginAs('owner');
-    const supplier = json<{ id: string }>(await call(owner, 'POST', '/api/suppliers', { name: `ТЕСТ Factory ${uniq()}`, country: 'China', contact: 'Alibaba' }));
+    const supplier = json<{ id: string }>(await call(owner, 'POST', '/api/suppliers', { name: `ТЕСТ Factory ${uniq()}`, country: 'China', channel: 'Alibaba' }));
     const { prisma } = await import('../src/lib/db.js');
     const model = await prisma.vehicleModel.create({ data: { brand: 'Test', name: `Batch ${uniq()}` } });
     const part = json<{ id: string }>(await call(owner, 'POST', '/api/parts', { name: `ТЕСТ Sensor ${uniq()}` }));
@@ -345,19 +345,23 @@ describe.skipIf(!HAS_DB)('wave 5 · shipments', () => {
     expect(customers.customers.some((c) => c.name === name)).toBe(false);
   });
 
-  it('corrects a factory’s card and keeps what it was (Mika, 28.09.2026)', async () => {
+  it('corrects a factory’s card field by field and keeps what it was (Mika, 28.09.2026)', async () => {
     const owner = await loginAs('owner');
     const manager = await loginAs('manager');
-    const made = json<{ id: string }>(await call(owner, 'POST', '/api/suppliers', { name: `ТЕСТ Factory ${uniq()}`, country: 'Room 101, a street, Hefei' }));
-    const fixed = await call(owner, 'PATCH', `/api/suppliers/${made.id}`, { country: 'China', contact: 'Jack Wang\nAlibaba', phone: '+86 100' });
+    const made = json<{ id: string }>(await call(owner, 'POST', '/api/suppliers', { name: `ТЕСТ Factory ${uniq()}`, country: 'China', channel: 'Alibaba' }));
+    const fixed = await call(owner, 'PATCH', `/api/suppliers/${made.id}`, {
+      contactPerson: 'Jack Primer', phone: '+86 100', goods: 'chargers', bank: 'Primer Bank, SWIFT DEMOCNXX', address: 'Room 1, Primer Road', notes: 'ТЕСТ',
+    });
     expect(fixed.statusCode, fixed.body).toBe(200);
-    const card = json<{ supplier: { country: string; contact: string; phone: string } }>(await call(owner, 'GET', `/api/suppliers/${made.id}`));
-    expect(card.supplier).toMatchObject({ country: 'China', contact: 'Jack Wang\nAlibaba', phone: '+86 100' });
+    const card = json<{ supplier: Record<string, string | null> }>(await call(owner, 'GET', `/api/suppliers/${made.id}`));
+    expect(card.supplier).toMatchObject({
+      country: 'China', channel: 'Alibaba', contactPerson: 'Jack Primer', phone: '+86 100', goods: 'chargers', bank: 'Primer Bank, SWIFT DEMOCNXX', address: 'Room 1, Primer Road', notes: 'ТЕСТ',
+    });
     // The journal holds the was / became of what moved, and only of that.
     const { prisma } = await import('../src/lib/db.js');
     const line = await prisma.auditLog.findFirst({ where: { entityId: made.id, action: 'supplier.update' } });
-    expect(line?.before).toEqual({ country: 'Room 101, a street, Hefei', contact: null, phone: null });
-    expect(line?.after).toEqual({ country: 'China', contact: 'Jack Wang\nAlibaba', phone: '+86 100' });
+    expect(line?.before).toEqual({ contactPerson: null, phone: null, goods: null, address: null, bank: null, notes: null });
+    expect(line?.after).toEqual({ contactPerson: 'Jack Primer', phone: '+86 100', goods: 'chargers', address: 'Room 1, Primer Road', bank: 'Primer Bank, SWIFT DEMOCNXX', notes: 'ТЕСТ' });
     // Another record's name is said, as at creation; `force` means it.
     const other = `ТЕСТ Factory ${uniq()}`;
     await call(owner, 'POST', '/api/suppliers', { name: other });

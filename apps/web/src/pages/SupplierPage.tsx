@@ -15,10 +15,10 @@ import { NewPurchase, SupplierDrawer, fmtForeign, statusOf, type Purchase, type 
 // here (B3-06). What the card is for is one question — what do we still owe
 // them — and it is answered in their currency, not ours.
 //
-// Its shape since 28.09.2026 (Mika, option 1): what we owe and how much we
-// order, then how to reach them — the phone and one free text of several
-// lines, which is where Odoo's notes on the partner land — then the orders
-// and the card's history.
+// Its shape since 28.09.2026 (Mika, option 2 — one text of several lines read
+// as "a towel"): what we owe and how much we order; how to reach them — the
+// person, the phone, where we agree; about them — what they supply, the
+// address, the bank; the notes folded; then the orders and the history.
 
 export function SupplierPage() {
   const { id } = useParams();
@@ -82,15 +82,28 @@ export function SupplierPage() {
         </span>
       </div>
 
+      {/* Each thing its own line (option 2): an empty one shows a dash, so it
+          is plain what is still to be filled in. */}
       <section className="card">
         <BlockHead title={t.supplierCard.reach} />
-        <Row
-          k={t.supplierCard.phone}
-          v={s.phone ? <a className="mono" href={`tel:${s.phone}`}>{s.phone}</a> : t.common.dash}
-        />
-        {/* Who answers, where we agree, the address, the bank: one text of
-            several lines, as it is kept — the whole width, not a narrow column. */}
-        {s.contact && <p className="supplier-contact">{s.contact}</p>}
+        <Row k={t.supplierCard.contactPerson} v={s.contactPerson ?? t.common.dash} />
+        <Row k={t.supplierCard.phone} v={s.phone ? <a className="mono" href={`tel:${s.phone}`}>{s.phone}</a> : t.common.dash} />
+        <Row k={t.supplierCard.channel} v={s.channel ?? t.common.dash} />
+      </section>
+
+      <section className="card">
+        <BlockHead title={t.supplierCard.about} />
+        <Row k={t.supplierCard.goods} v={s.goods ?? t.common.dash} />
+        <Row k={t.supplierCard.address} v={s.address ?? t.common.dash} />
+        <Row k={t.supplierCard.bank} v={s.bank ? <span className="pre">{s.bank}</span> : t.common.dash} />
+        {/* What is left over — from Odoo, mostly — folded, so the card reads
+            as fields and the long text is one tap away. */}
+        {s.notes && (
+          <details className="supplier-notes">
+            <summary>{t.supplierCard.notes}</summary>
+            <p className="pre">{s.notes}</p>
+          </details>
+        )}
       </section>
 
       <section className="card">
