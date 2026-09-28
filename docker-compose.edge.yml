@@ -1,0 +1,28 @@
+# The edge proxy: one Caddy in front of both stacks.
+#
+# Its own compose project on purpose. Prod and test are rebuilt, restarted and
+# occasionally torn down; the thing holding the certificates should not go
+# down with either of them.
+#
+#   docker compose -p ev8-edge -f docker-compose.edge.yml up -d
+#
+# Host networking, because this container has two jobs that both want the
+# host's own network: bind 80 and 443 on the public interface, and reach two
+# stacks that publish to 127.0.0.1 and refuse to publish anywhere else.
+
+services:
+  edge:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - ./Caddyfile.edge:/etc/caddy/Caddyfile:ro
+      # Certificates and account keys. A named volume rather than a bind
+      # mount: losing this directory means asking Let's Encrypt for everything
+      # again, against a rate limit that counts.
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:

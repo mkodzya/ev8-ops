@@ -5,6 +5,10 @@ dist/
 .env
 .env.*
 !.env.example
+# The shapes are committed, the filled files never are: .env.prod.example and
+# .env.test.example say which values a server needs, .env.prod and .env.test
+# hold them and stay on the server.
+!.env.*.example
 # The server stands' own files, filled on the server and never here.
 # deploy/qa.env is this Mac's QA stand and holds no secret, so it stays.
 deploy/prod.env

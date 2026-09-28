@@ -1,0 +1,38 @@
+# The edge. The only thing on this machine that faces the internet.
+#
+# Both stacks publish to 127.0.0.1 and nothing else, so this file is the whole
+# public surface of EV8 Ops: two names, two ports, one certificate authority.
+# Everything else on the host is unreachable from outside.
+#
+#   docker compose -p ev8-edge -f docker-compose.edge.yml up -d
+{
+	# Where Let's Encrypt writes if a certificate is about to expire and
+	# renewal keeps failing. Without it the first anybody hears of it is a
+	# browser warning on Kardu's phone.
+	email info@ev8.ge
+}
+
+ops.ev8.ge {
+	# The API reads X-Forwarded-Proto to decide whether the session cookie
+	# gets Secure. Caddy sets it here by default.
+	reverse_proxy 127.0.0.1:5173
+	# A year, this host only. Not includeSubDomains and not preload: those are
+	# the parts that are hard to take back, and ev8.ge is the company's site.
+	header Strict-Transport-Security "max-age=31536000"
+	log {
+		output stdout
+		format console
+	}
+}
+
+test.ops.ev8.ge {
+	reverse_proxy 127.0.0.1:5174
+	header Strict-Transport-Security "max-age=31536000"
+	# A test stack has no business in a search index — least of all one that
+	# will hold a copy of the real rentals.
+	header X-Robots-Tag "noindex, nofollow"
+	log {
+		output stdout
+		format console
+	}
+}

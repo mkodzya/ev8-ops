@@ -1,0 +1,54 @@
+# The web container's own server. TLS and hostnames belong to the edge proxy in
+# front of this; here we only answer on the container port, so this block is
+# deliberately http:// on a port and not a site address — Caddy would otherwise
+# try to get a certificate for a name this container does not own.
+{
+	servers {
+		# The edge proxy on the host reaches this container from a private
+		# address. Trusting those keeps the X-Forwarded-For it wrote — the
+		# person's own address — instead of replacing it with the edge's, which
+		# is the same for everybody. The API limits sign-in attempts per address
+		# and needs the real one (QA 18 Sep). The edge itself trusts nobody, so
+		# a header a browser invents never gets this far.
+		trusted_proxies static private_ranges
+	}
+}
+
+:5173 {
+	# One origin for the browser: the API is reached at /api on the same host
+	# the page came from, so there is no CORS anywhere in the product.
+	handle /api/* {
+		reverse_proxy {$API_PROXY_TARGET:http://api:8080}
+	}
+
+	handle {
+		root * /srv
+		# Hashed assets never change under their name; the page must not be
+		# cached, or a deploy leaves people on the previous bundle until they
+		# hard-refresh.
+		#
+		# "The page" is every path that is not an asset, not /index.html alone.
+		# `header` runs before `try_files`, so it sees the path the browser
+		# asked for — /tracker/board — and a matcher on /index.html never
+		# matched the page anybody actually opens. Sona's board stayed empty on
+		# 25 Sep until a hard refresh, on a project she had been PM of since
+		# the day before — the same lesson, borrowed from Self Platform rather
+		# than learned again here.
+		@immutable path /assets/*
+		header @immutable Cache-Control "public, max-age=31536000, immutable"
+		@page not path /assets/*
+		header @page Cache-Control "no-cache"
+
+		encode gzip zstd
+		# A client-side router owns every path: anything that is not a real file
+		# is the application, not a 404.
+		try_files {path} /index.html
+		file_server
+	}
+
+	# The access log goes to stdout so `docker compose logs` is the whole story.
+	log {
+		output stdout
+		format console
+	}
+}
