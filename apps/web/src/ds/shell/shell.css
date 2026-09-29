@@ -282,13 +282,35 @@
   .section-tab-mark { top: 0; bottom: auto; height: var(--control-dense); border-radius: var(--radius-pill); }
 }
 
-/* The page under the strip comes in from the side of the tab that was
-   opened — a short fade and a few pixels of travel, not a slide of the whole
-   screen. Only a move between tabs of one section does this (AppShell). */
-.tab-stage[data-dir] { animation: tab-in 0.3s cubic-bezier(0.2, 0, 0, 1); }
-.tab-stage[data-dir='1'] { --tab-from: 14px; }
-.tab-stage[data-dir='-1'] { --tab-from: -14px; }
-@keyframes tab-in { from { opacity: 0; transform: translateX(var(--tab-from, 0)); } }
+/* The head's slot keeps its head's margin inside it, so the height it holds
+   between two pages is the whole height the head took (PageHeadSlot). */
+.page-head-slot { display: flow-root; }
+/* And every head is one height on a laptop — the height of a button — so a
+   title stands on the same line whether its page has buttons or not, and
+   whether they have arrived yet. */
+@media (min-width: 900px) {
+  .page-head-slot .page-head { min-height: var(--control-dense); }
+}
+
+/* The order of the top of a page. A laptop reads the head, then the
+   section's tabs; a phone has its title in the header already, so the tabs
+   come first and the head's buttons after them (PageHeadSlot). */
+@media (max-width: 899px) {
+  .app-page { display: flex; flex-direction: column; }
+  .app-page > .section-tabs { order: -1; }
+  .app-page > .syncbar { order: -2; }
+}
+
+/* What a page draws fades in as it arrives — the head in its slot, the rest
+   in the stage — so a section changing is a soft swap, not a blink. Between
+   two tabs of one section the page also travels a few pixels from the side
+   of the tab (AppShell's tabStep). Reduced motion makes it a cut, as
+   everywhere. */
+.page-head-slot > *, .tab-stage > :not(.skeleton-wait) { animation: page-in 0.24s cubic-bezier(0.2, 0, 0, 1) both; }
+.tab-stage[data-dir] > :not(.skeleton-wait) { animation-duration: 0.3s; }
+.tab-stage[data-dir='1'] { --page-from: 14px; }
+.tab-stage[data-dir='-1'] { --page-from: -14px; }
+@keyframes page-in { from { opacity: 0; transform: translateX(var(--page-from, 0)); } }
 
 .section-tab-n { margin-left: 6px; font-size: 12px; color: var(--muted); }
 .section-tab.on .section-tab-n { color: inherit; }

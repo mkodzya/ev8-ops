@@ -104,7 +104,9 @@ export function FleetPage() {
   return (
     <>
       <PageHead title={t.fleet.title} sub={t.fleet.count(rows.length)}>
-        {can('settings.manage') && models.data && <NewVehicle models={models.data.models} onModels={models.reload} onDone={fleet.reload} />}
+        {/* Drawn at once, not when the models arrive: a button that turns up a
+            beat after the page pushed everything under it down (29.09.2026). */}
+        {can('settings.manage') && <NewVehicle models={models.data?.models ?? []} onModels={models.reload} onDone={fleet.reload} />}
       </PageHead>
       <DataList
         rows={rows}
