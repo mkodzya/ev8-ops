@@ -20,7 +20,7 @@ import { useLoad } from '../../lib/use.js';
 import { useSession } from '../../session.js';
 import { SearchOverlay } from '../search/SearchOverlay.js';
 import { SyncBar } from '../state/SyncBar.js';
-import { HeaderProvider, useHeader } from './header.js';
+import { HeaderProvider, PageHeadSlot, useHeader } from './header.js';
 import { MoneyProvider } from '../money/MoneyForm.js';
 import { SessionEnded } from '../../LoginPage.js';
 import { ACTION_ICON, ICON, SECTION_ICON } from './icons.js';
@@ -210,13 +210,16 @@ function Frame() {
 
       <main className="app-page">
         <SyncBar />
-        <SectionTabs />
-        {/* A move between two tabs of one section gives the page a new key, so
-            it comes in from the side of the tab (.tab-stage); anything else —
-            another section, a record — keeps the key and simply appears. */}
-        <div className="tab-stage" key={move.n} data-dir={move.dir || undefined}>
-          <Outlet />
-        </div>
+        <PageHeadSlot>
+          <SectionTabs />
+          {/* A move between two tabs of one section gives the page a new key, so
+              it comes in from the side of the tab; anything else — another
+              section, a record — keeps the key, and what the page draws simply
+              fades in as it arrives (.tab-stage > *). */}
+          <div className="tab-stage" key={move.n} data-dir={move.dir || undefined}>
+            <Outlet />
+          </div>
+        </PageHeadSlot>
       </main>
       <SessionEnded />
 

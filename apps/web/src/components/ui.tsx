@@ -1,7 +1,8 @@
 import { colorOf, type RentalStatus, type VehicleState } from '@ev8/shared';
 import type { ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { useLocale, useT } from '../i18n/index.js';
-import { useAnnounceHeader } from '../ds/shell/header.js';
+import { useAnnounceHeader, usePageHeadSlot } from '../ds/shell/header.js';
 import { Skeleton } from '../ds/state/Skeleton.js';
 import { vinParts } from '../format.js';
 import { primaryName, secondName, type Named } from '../lib/names.js';
@@ -129,7 +130,10 @@ export function PageHead({
 }) {
   // On a phone the title and its count move up into the 56 px header (wave 1 §3.2).
   useAnnounceHeader(title, sub);
-  return (
+  // Drawn in the shell's slot, so it keeps its line while pages change
+  // (PageHeadSlot); inline only outside the shell.
+  const slot = usePageHeadSlot();
+  const head = (
     <>
       <header className={`page-head ${wrap ? 'page-head-wrap' : ''}`}>
         {/* The words share a baseline with each other; the group they make is
@@ -150,6 +154,7 @@ export function PageHead({
       {note != null && <p className="page-note">{note}</p>}
     </>
   );
+  return slot ? createPortal(head, slot) : head;
 }
 
 /**
