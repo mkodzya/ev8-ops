@@ -10,7 +10,7 @@ import {
   type SectionId,
 } from '@ev8/shared';
 import { ChevronLeft, KeyRound, LogOut, Plus, Search } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../../api.js';
 import { Drawer } from '../../components/Drawer.js';
@@ -24,6 +24,7 @@ import { HeaderProvider, useHeader } from './header.js';
 import { MoneyProvider } from '../money/MoneyForm.js';
 import { SessionEnded } from '../../LoginPage.js';
 import { ACTION_ICON, ICON, SECTION_ICON } from './icons.js';
+import { SectionTabs, tabStep } from './SectionTabs.js';
 import './shell.css';
 
 const STORAGE_KEY = 'ev8-lang';
@@ -60,6 +61,16 @@ function Frame() {
   const permissions = me?.permissions ?? [];
   const sections = sectionsFor(permissions);
   const current = sectionOfPath(pathname, permissions);
+  // Derived from the address during render: the previous one is remembered,
+  // and a tab-to-tab move counts once (a second render sees nothing new).
+  const lastPath = useRef(pathname);
+  const lastMove = useRef({ n: 0, dir: 0 });
+  if (lastPath.current !== pathname) {
+    const dir = tabStep(lastPath.current, pathname, permissions);
+    if (dir !== 0) lastMove.current = { n: lastMove.current.n + 1, dir };
+    lastPath.current = pathname;
+  }
+  const move = lastMove.current;
   const label = (id: SectionId) => t.nav[id];
 
   // The badge counts the rows "Today" lists, from the same request it reads
@@ -199,7 +210,13 @@ function Frame() {
 
       <main className="app-page">
         <SyncBar />
-        <Outlet />
+        <SectionTabs />
+        {/* A move between two tabs of one section gives the page a new key, so
+            it comes in from the side of the tab (.tab-stage); anything else —
+            another section, a record — keeps the key and simply appears. */}
+        <div className="tab-stage" key={move.n} data-dir={move.dir || undefined}>
+          <Outlet />
+        </div>
       </main>
       <SessionEnded />
 
