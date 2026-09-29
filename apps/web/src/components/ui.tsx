@@ -151,10 +151,23 @@ export function PageHead({
           </>
         )}
       </header>
-      {note != null && <p className="page-note">{note}</p>}
     </>
   );
-  return slot ? createPortal(head, slot) : head;
+  // The note stays with the page, under the section's tabs: in the slot it
+  // pushed the tabs down on the pages that have one (Выписки, Неделя, Модели),
+  // and the tabs moved as you went through them (Mika, 29.09.2026).
+  const aside = note != null ? <p className="page-note">{note}</p> : null;
+  return slot ? (
+    <>
+      {createPortal(head, slot)}
+      {aside}
+    </>
+  ) : (
+    <>
+      {head}
+      {aside}
+    </>
+  );
 }
 
 /**
