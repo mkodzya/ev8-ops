@@ -285,6 +285,8 @@
 /* The head's slot keeps its head's margin inside it, so the height it holds
    between two pages is the whole height the head took (PageHeadSlot). */
 .page-head-slot { display: flow-root; }
+/* A page's note opens the page under the tabs, on the line its content would. */
+.tab-stage > .page-note:first-child { margin-top: 0; }
 /* And every head is one height on a laptop — the height of a button — so a
    title stands on the same line whether its page has buttons or not, and
    whether they have arrived yet. */
