@@ -22,6 +22,9 @@ services:
       # again, against a rate limit that counts.
       - caddy_data:/data
       - caddy_config:/config
+      # Previews of the new site and the digest of their login. Read-only:
+      # the edge serves these files and never writes them.
+      - /srv/ev8-site-preview:/srv/site-preview:ro
 
 volumes:
   caddy_data:

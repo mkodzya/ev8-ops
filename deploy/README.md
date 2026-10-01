@@ -74,6 +74,19 @@ docker compose -p ev8-edge -f docker-compose.edge.yml up -d
 Проверка: `curl -I http://ops.ev8.ge` отвечает перенаправлением на https. Если
 нет — A-запись ещё не разошлась; сначала DNS, потом всё остальное.
 
+Через тот же вход отдаются макеты нового сайта ev8.ge:
+`https://test.ops.ev8.ge/garage/` — статичные страницы из
+`/srv/ev8-site-preview/www/` на сервере, вне этого репозитория (Mika,
+01.10.2026). Вход по логину `ev8`; пароль задаёт Mika:
+
+```bash
+ssh -t root@204.168.149.105 /srv/ev8-ops/deploy/set-site-password.sh
+```
+
+`--lock` ставит пароль, которого никто не знает. Перезапуск входа
+(`docker compose -p ev8-edge -f docker-compose.edge.yml up -d`) на несколько
+секунд закрывает и прод — только по слову Mika.
+
 ### 3. Тестовый стенд (`develop`)
 
 ```bash
