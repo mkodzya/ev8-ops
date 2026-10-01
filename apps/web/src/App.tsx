@@ -128,6 +128,7 @@ export function App() {
         <Route path="fleet/models/:id" element={<ModelPage />} />
         <Route path="fleet/batteries" element={<BatteriesPage />} />
         <Route path="fleet/points" element={<Require perm="settings.manage"><PointsPage /></Require>} />
+        <Route path="settings/points" element={<Require perm="settings.manage"><PointsPage /></Require>} />
         <Route path="fleet/:id" element={<VehiclePage />} />
 
         <Route path="service" element={<ServicePage />} />

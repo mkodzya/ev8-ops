@@ -68,9 +68,9 @@ export const tokens = {
   toastInk: '#ffffff', // text on the toast, 19.7:1
   toastAction: '#e0ffa2', // Undo and Open on the toast — lime on ink, 17.8:1
 
-  /** type — Neither Be Vietnam Pro nor Inter has Georgian glyphs, so Noto Sans Georgian is in every text stack. A face without the glyphs falls back to the system font silently — that is why it is checked on real names in acceptance. */
-  display: "'Be Vietnam Pro', 'Noto Sans Georgian', system-ui, -apple-system, 'Segoe UI', sans-serif", // headings, buttons, navigation
-  body: "'Be Vietnam Pro', 'Noto Sans Georgian', system-ui, -apple-system, 'Segoe UI', sans-serif", // body text and tables. The site sets body to --main-font, so Be Vietnam Pro leads here too; Inter is the second family
+  /** type — Be Vietnam Pro has neither Cyrillic nor Georgian glyphs. Inter follows it in every text stack and sets the Russian (Mika, 01.10.2026); Noto Sans Georgian follows Inter, which has no Georgian either. A face without the glyphs falls back to the system font silently — that is why it is checked on real names in acceptance. */
+  display: "'Be Vietnam Pro', 'Inter', 'Noto Sans Georgian', system-ui, -apple-system, 'Segoe UI', sans-serif", // headings, buttons, navigation
+  body: "'Be Vietnam Pro', 'Inter', 'Noto Sans Georgian', system-ui, -apple-system, 'Segoe UI', sans-serif", // body text and tables. The site sets body to --main-font, so Be Vietnam Pro leads here too; Inter, the site's second family, carries the Cyrillic
   mono: "'IBM Plex Mono', 'Noto Sans Georgian', ui-monospace, SFMono-Regular, Menlo, monospace", // VIN and money
 
   /** text — Named text styles. Fourteen of them, because the interface uses fourteen — the point is that they are named and counted, not that a component reaches for a size of its own. Each is a CSS `font` shorthand, so a rule says `font: var(--text-body)` and nothing else. The shorthand resets font-variant, so tabular figures are set by the .t-* class next to it, never by the token. */
@@ -470,19 +470,19 @@ export const tokenGroups: TokenGroup[] = [
   },
   {
     "name": "type",
-    "note": "Neither Be Vietnam Pro nor Inter has Georgian glyphs, so Noto Sans Georgian is in every text stack. A face without the glyphs falls back to the system font silently — that is why it is checked on real names in acceptance.",
+    "note": "Be Vietnam Pro has neither Cyrillic nor Georgian glyphs. Inter follows it in every text stack and sets the Russian (Mika, 01.10.2026); Noto Sans Georgian follows Inter, which has no Georgian either. A face without the glyphs falls back to the system font silently — that is why it is checked on real names in acceptance.",
     "tokens": [
       {
         "name": "display",
         "cssVar": "--display",
-        "value": "'Be Vietnam Pro', 'Noto Sans Georgian', system-ui, -apple-system, 'Segoe UI', sans-serif",
+        "value": "'Be Vietnam Pro', 'Inter', 'Noto Sans Georgian', system-ui, -apple-system, 'Segoe UI', sans-serif",
         "note": "headings, buttons, navigation"
       },
       {
         "name": "body",
         "cssVar": "--body",
-        "value": "'Be Vietnam Pro', 'Noto Sans Georgian', system-ui, -apple-system, 'Segoe UI', sans-serif",
-        "note": "body text and tables. The site sets body to --main-font, so Be Vietnam Pro leads here too; Inter is the second family"
+        "value": "'Be Vietnam Pro', 'Inter', 'Noto Sans Georgian', system-ui, -apple-system, 'Segoe UI', sans-serif",
+        "note": "body text and tables. The site sets body to --main-font, so Be Vietnam Pro leads here too; Inter, the site's second family, carries the Cyrillic"
       },
       {
         "name": "mono",
