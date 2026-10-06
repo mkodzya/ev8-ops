@@ -16,8 +16,11 @@ import { join } from 'node:path';
 const API = 'apps/api/src';
 const DICTS = ['en', 'ru', 'ka'].map((l) => [l, `apps/web/src/i18n/${l}.ts`]);
 
-/** Codes a person never meets: the worker's own door. */
-const INTERNAL = new Set(['bad_worker_token']);
+/**
+ * Codes a person never meets in EV8 Ops: the worker's own door, and the public
+ * site's (`/api/site/*`), whose answers the site turns into its own words.
+ */
+const INTERNAL = new Set(['bad_worker_token', 'bad_site_request', 'site_mail_off', 'site_too_many', 'site_mail_failed']);
 
 function walk(dir) {
   return readdirSync(dir).flatMap((name) => {
