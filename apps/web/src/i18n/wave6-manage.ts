@@ -66,7 +66,7 @@ export const wave6manageEn = {
 
   migrationPage: {
     title: 'Transfer',
-    subtitle: 'Everything the move from Odoo left half-said, in one place.',
+    subtitle: 'Everything the move left half-said, in one place.',
     starting: 'Starting state',
     startingNote: 'Entered through the wizards, each in its own place.',
     rows: {
@@ -91,7 +91,7 @@ export const wave6manageEn = {
     fill: 'Fill in',
     nothing: 'Nothing left here.',
 
-    batchTitle: 'Deposits from Odoo',
+    batchTitle: 'Carried-over deposits',
     batchLead: (count: number, money: string) => `${count} held on paper on rentals that ended · ${money}`,
     pick: { all: 'All', amount: (money: string) => `${money} each`, rest: 'The rest' },
     selectAll: 'Select all',
@@ -103,8 +103,8 @@ export const wave6manageEn = {
     reasonHint: 'Required — this is what somebody reads a year from now.',
     needReason: 'Write why: it is what a year from now will be read.',
     needPick: 'Choose at least one deposit.',
-    byContract: (sum: string) => `${sum} by the contract · no payment in Odoo`,
-    reasonAsk: 'Was a deposit taken at all? Odoo does not say.',
+    byContract: (sum: string) => `${sum} by the contract · no payment on record`,
+    reasonAsk: 'Was a deposit taken at all? There is no record.',
     done: (n: number) => `${n} ${n === 1 ? 'deposit' : 'deposits'} settled. Nothing was paid out: the journal says what was decided.`,
     notMoney: 'Nothing is paid out here. The money moved before the transfer, or nobody knows that it did; what is written down is the decision.',
 
@@ -188,7 +188,7 @@ export const wave6manageRu: typeof wave6manageEn = {
 
   migrationPage: {
     title: 'Перенос',
-    subtitle: 'Всё, что перенос из Odoo оставил недосказанным, в одном месте.',
+    subtitle: 'Всё, что перенос оставил недосказанным, в одном месте.',
     starting: 'Начальное состояние',
     startingNote: 'Вводится мастерами, каждое на своём месте.',
     rows: {
@@ -213,7 +213,7 @@ export const wave6manageRu: typeof wave6manageEn = {
     fill: 'Дозаполнить',
     nothing: 'Здесь больше ничего нет.',
 
-    batchTitle: 'Залоги из Odoo',
+    batchTitle: 'Залоги после переноса',
     batchLead: (count: number, money: string) => `${count} числятся на руках по завершённым арендам · ${money}`,
     pick: { all: 'Все', amount: (money: string) => `С суммой ${money}`, rest: 'Прочие' },
     selectAll: 'Выбрать все',
@@ -225,8 +225,8 @@ export const wave6manageRu: typeof wave6manageEn = {
     reasonHint: 'Обязательна — это то, что читают через год.',
     needReason: 'Напишите причину — её и будут читать через год.',
     needPick: 'Выберите хотя бы один залог.',
-    byContract: (sum: string) => `по договору ${sum} · платежа в Odoo нет`,
-    reasonAsk: 'Брали ли залог? В Odoo этого нет.',
+    byContract: (sum: string) => `по договору ${sum} · записи о платеже нет`,
+    reasonAsk: 'Брали ли залог? Записи об этом нет.',
     done: (n: number) => `Закрыто ${n} ${ruPlural(n, 'залог', 'залога', 'залогов')}. Денег никто не выдавал: в журнале записано решение.`,
     notMoney: 'Здесь ничего не выдаётся. Деньги двигались до переноса или неизвестно, двигались ли; записывается решение.',
 
@@ -310,7 +310,7 @@ export const wave6manageKa: typeof wave6manageEn = {
 
   migrationPage: {
     title: 'გადმოტანა',
-    subtitle: 'ყველაფერი, რაც Odoo-დან გადმოტანამ ბოლომდე არ თქვა, ერთ ადგილას.',
+    subtitle: 'ყველაფერი, რაც გადმოტანამ ბოლომდე არ თქვა, ერთ ადგილას.',
     starting: 'საწყისი მდგომარეობა',
     startingNote: 'შეიტანება ოსტატებით, თითოეული თავის ადგილას.',
     rows: {
@@ -335,7 +335,7 @@ export const wave6manageKa: typeof wave6manageEn = {
     fill: 'შევსება',
     nothing: 'აქ სხვა აღარაფერია.',
 
-    batchTitle: 'დეპოზიტები Odoo-დან',
+    batchTitle: 'გადმოტანილი დეპოზიტები',
     batchLead: (count: number, money: string) => `${count} ირიცხება ხელზე დასრულებულ ქირავნობებზე · ${money}`,
     pick: { all: 'ყველა', amount: (money: string) => `თანხით ${money}`, rest: 'დანარჩენი' },
     selectAll: 'ყველას მონიშვნა',
@@ -347,8 +347,8 @@ export const wave6manageKa: typeof wave6manageEn = {
     reasonHint: 'სავალდებულოა — ამას კითხულობენ წლის შემდეგ.',
     needReason: 'დაწერეთ მიზეზი — სწორედ მას წაიკითხავენ წლის შემდეგ.',
     needPick: 'აირჩიეთ სულ მცირე ერთი დეპოზიტი.',
-    byContract: (sum: string) => `ხელშეკრულებით ${sum} · გადახდა Odoo-ში არ არის`,
-    reasonAsk: 'აიღეს თუ არა დეპოზიტი? Odoo ამას არ ამბობს.',
+    byContract: (sum: string) => `ხელშეკრულებით ${sum} · გადახდის ჩანაწერი არ არის`,
+    reasonAsk: 'აიღეს თუ არა დეპოზიტი? ჩანაწერი არ არის.',
     done: (n: number) => `დაიხურა ${n} დეპოზიტი. ფული არავის გაუცია: ჟურნალში ჩაწერილია გადაწყვეტილება.`,
     notMoney: 'აქ ფული არ გაიცემა. ფული გადმოტანამდე მოძრაობდა, ან უცნობია მოძრაობდა თუ არა; იწერება გადაწყვეტილება.',
 

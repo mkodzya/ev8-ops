@@ -615,7 +615,7 @@ export const ka: Dict = {
     costShort: 'თვითღირებულება',
     inFleet: 'პარკში',
     onOrder: 'შეკვეთილი',
-    fromOdoo: 'Odoo-დან',
+    fromOdoo: 'გადმოტანილი',
     byHand: 'ხელით ჩაწერილი',
     prices: 'ფასები',
     notRented: 'არ ქირავდება',
