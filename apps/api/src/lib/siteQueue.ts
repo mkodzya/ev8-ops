@@ -116,10 +116,18 @@ export class QueueLimiter {
 export type SendMail = (cfg: SiteMailConfig, mail: { subject: string; text: string }) => Promise<void>;
 
 export const smtpSend: SendMail = async (cfg, mail) => {
+  // 465 speaks TLS from the first byte; any other port (587) must upgrade to
+  // TLS before the password goes out. The timeouts matter: a port the hosting
+  // provider blocks does not refuse, it stays silent, and the site waits only
+  // 15 seconds before it opens WhatsApp instead.
   const transport = nodemailer.createTransport({
     host: cfg.host,
     port: cfg.port,
     secure: cfg.port === 465,
+    requireTLS: cfg.port !== 465,
+    connectionTimeout: 8000,
+    greetingTimeout: 8000,
+    socketTimeout: 12000,
     auth: { user: cfg.user, pass: cfg.password },
   });
   await transport.sendMail({ from: `EV8 site <${cfg.user}>`, to: cfg.to, subject: mail.subject, text: mail.text });
