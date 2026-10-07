@@ -6,6 +6,7 @@ import { depositsOverview } from '../lib/deposits.js';
 import { prisma } from '../lib/db.js';
 import { partRows } from '../lib/stock.js';
 import { env } from '../lib/env.js';
+import { kommoReconciliation } from '../lib/kommo.js';
 import { actorOf, mayView } from '../lib/guard.js';
 import { onHandOf } from '../lib/till.js';
 import { UNDO_RETURN_MS } from '../lib/rentals.js';
@@ -128,6 +129,15 @@ export function todayRoutes(app: FastifyInstance): void {
         })()
       : { count: 0, amountTetri: 0 };
 
+    // Kommo against the rentals here, as one row (ADR-0012). An owner's, and
+    // only with the link on; before Kommo has answered once there is nothing
+    // to compare and nothing is said.
+    const kommoNow = owner ? await kommoReconciliation() : null;
+    const kommo =
+      kommoNow && kommoNow.freshness !== 'waiting'
+        ? { rentedThere: kommoNow.rentedThere.length, rentedHere: kommoNow.rentedHere.length, silent: kommoNow.freshness === 'silent', lastOkAt: kommoNow.lastOkAt?.toISOString() ?? null }
+        : null;
+
     const staleBanks = owner
       ? BANKS.map((bank) => {
           const through = isoDate(lastLines.find((l) => l.bank === bank)?._max.occurredOn ?? null);
@@ -179,6 +189,7 @@ export function todayRoutes(app: FastifyInstance): void {
       vehiclesWithoutPool: vehicles.filter((v) => v.pool == null && v.state !== 'sold' && v.state !== 'out').length,
       vehiclesWithoutPoint: vehicles.filter((v) => v.locationId == null && v.state === 'available').length,
       odooDeposits,
+      kommo,
     });
 
     const fleet = Object.fromEntries(VEHICLE_STATES.map((s) => [s, 0])) as Record<VehicleState, number>;

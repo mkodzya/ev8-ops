@@ -24,6 +24,8 @@ describe('route table', () => {
       // Wave 6: the journal and its export are an owner's (§3.8).
       'GET /api/journal',
       'GET /api/journal.csv',
+      // Where Kommo and the rentals here disagree (ADR-0012): an owner's list.
+      'GET /api/kommo/reconciliation',
       // Wave 6: what the transfer left, and the batch that sorts it (§3.6).
       'GET /api/migration',
       'GET /api/settings/login',
@@ -47,7 +49,7 @@ describe('route table', () => {
       'POST /api/workshops',
     ]);
     const publicOnes = app.routeTable.filter((r) => r.scope === 'public').map((r) => r.url).sort();
-    expect(publicOnes).toEqual(['/api/auth/login', '/api/health', '/api/jobs/roll-periods', '/api/site/queue']);
+    expect(publicOnes).toEqual(['/api/auth/login', '/api/health', '/api/jobs/kommo-sync', '/api/jobs/roll-periods', '/api/site/queue']);
   });
 });
 

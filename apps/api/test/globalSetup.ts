@@ -32,6 +32,9 @@ export async function teardown(): Promise<void> {
   const since = { gte: startedAt };
   try {
     await prisma.auditLog.deleteMany({ where: { createdAt: since } });
+    // What a stand-in for Kommo left behind, should a suite have died before
+    // its own cleanup. The one row of `kommo_sync` is a singleton and stays.
+    await prisma.kommoLead.deleteMany({ where: { firstSeenAt: since } });
     await prisma.storedFile.deleteMany({ where: { createdAt: since } });
     // A payment and its statement line cross-reference each other; both
     // sides drop to NULL on delete (migration 0006), so the order here is

@@ -80,6 +80,19 @@ services:
       SITE_MAIL_USER: ${SITE_MAIL_USER-}
       SITE_MAIL_PASSWORD: ${SITE_MAIL_PASSWORD-}
       SITE_MAIL_TO: ${SITE_MAIL_TO-}
+      # The Kommo link (ADR-0012): the API asks Kommo who is renting and says
+      # where that differs from the rentals here. Optional on purpose: with
+      # no token the link is off and no screen mentions it. The token is a
+      # long-lived one of a private integration; only Mika issues it, and it
+      # reaches this file's env through deploy/set-kommo-token.sh — never
+      # through a session, a commit or a log. The other three are blank
+      # unless the account changes: the address and the ids of the rental
+      # pipeline and its "rented" stage have their defaults in one place,
+      # apps/api/src/lib/kommo.ts.
+      KOMMO_TOKEN: ${KOMMO_TOKEN-}
+      KOMMO_BASE_URL: ${KOMMO_BASE_URL-}
+      KOMMO_RENTAL_PIPELINE_ID: ${KOMMO_RENTAL_PIPELINE_ID-}
+      KOMMO_RENTED_STATUS_ID: ${KOMMO_RENTED_STATUS_ID-}
     # No ports either. The browser reaches /api through the web container,
     # which is the same origin the page came from.
     depends_on:
@@ -102,6 +115,8 @@ services:
       WORKER_TOKEN: ${WORKER_TOKEN}
       # Rental weeks are rolled just after midnight, in the company's zone.
       PERIODS_CRON: ${PERIODS_CRON:-10 0 * * *}
+      # Kommo is asked every five minutes; the account's plan has no webhooks.
+      KOMMO_CRON: ${KOMMO_CRON:-*/5 * * * *}
       TZ: ${TZ:-Asia/Tbilisi}
     depends_on:
       api:
