@@ -33,6 +33,10 @@ they write in.
    data from here on. `tools/migrate_stage1.py` is idempotent and can be re-run
    after every schema change; the cost of that was named and accepted. The DEMO
    dataset stays for an empty database and is still refused on a stand.
+   **Corrected by Mika on 07.10.2026:** Odoo holds no live data — it was an
+   unfinished attempt and is no longer kept. What it gave is a draft, not the
+   state of the business; the running rentals are entered anew (Kommo and the
+   contracts in Drive are where they are written today). `docs/handoff.md` §2а.
 2. **Never delete anything in Google Drive.** Suspected junk is moved to
    `_Мусор` inside `EV8 main`.
 3. **Never handle bank credentials.** Bank logins, client secrets, Meta tokens:
