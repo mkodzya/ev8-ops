@@ -9,7 +9,10 @@
 #
 # The mailbox is a Google one: smtp.gmail.com, port 465. The password is an
 # "app password" (myaccount.google.com/apppasswords), made for this alone —
-# never the mailbox's own password, which also opens Drive and all the mail.
+# never the mailbox's own password. An app password is revoked on its own and
+# cannot sign in through a browser, but it is NOT limited to sending: a mail
+# program can read that mailbox with it. A mailbox kept only for sending is
+# the safer sender.
 # With --off the settings are removed and the route answers 503 again.
 #
 # Production is not touched: its settings go into .env.prod with the launch
