@@ -80,7 +80,7 @@ export function KommoPage() {
                   const words = (
                     <>
                       <span className="q-name">{x.leadName || k.unnamed}</span>
-                      <span className="q-sub muted">{[x.contactName && x.contactName !== x.leadName ? k.contact(x.contactName) : '', x.customer ? x.customer.name : k.noCard].filter(Boolean).join(' · ')}</span>
+                      <span className="q-sub muted">{[x.contactName && x.contactName !== x.leadName ? k.contact(x.contactName) : '', x.customer ? k.card(x.customer.name) : k.noCard].filter(Boolean).join(' · ')}</span>
                     </>
                   );
                   return (
