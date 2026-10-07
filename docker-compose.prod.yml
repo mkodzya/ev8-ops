@@ -70,6 +70,16 @@ services:
       # Blank, always. The demo dataset's logins share a password that is in
       # this repository, and `demo.director@ev8.test` is an owner.
       SEED_MODE: ""
+      # The public site's queue request goes to this mailbox by email
+      # (/api/site/queue). Optional on purpose: with any of the first three
+      # blank the route answers 503 and the site keeps its WhatsApp button.
+      # The password is an app password made for this alone — never the
+      # mailbox's own — and only Mika writes it into .env.prod / .env.test.
+      SITE_MAIL_HOST: ${SITE_MAIL_HOST-}
+      SITE_MAIL_PORT: ${SITE_MAIL_PORT:-465}
+      SITE_MAIL_USER: ${SITE_MAIL_USER-}
+      SITE_MAIL_PASSWORD: ${SITE_MAIL_PASSWORD-}
+      SITE_MAIL_TO: ${SITE_MAIL_TO-}
     # No ports either. The browser reaches /api through the web container,
     # which is the same origin the page came from.
     depends_on:

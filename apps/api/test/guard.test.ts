@@ -47,7 +47,7 @@ describe('route table', () => {
       'POST /api/workshops',
     ]);
     const publicOnes = app.routeTable.filter((r) => r.scope === 'public').map((r) => r.url).sort();
-    expect(publicOnes).toEqual(['/api/auth/login', '/api/health', '/api/jobs/roll-periods']);
+    expect(publicOnes).toEqual(['/api/auth/login', '/api/health', '/api/jobs/roll-periods', '/api/site/queue']);
   });
 });
 

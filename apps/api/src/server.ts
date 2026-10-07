@@ -35,6 +35,7 @@ import { batteryRoutes } from './routes/batteries.js';
 import { journalRoutes } from './routes/journal.js';
 import { migrationRoutes } from './routes/migration.js';
 import { userRoutes } from './routes/users.js';
+import { siteRoutes } from './routes/site.js';
 
 export function buildApp(): FastifyInstance {
   const app = Fastify({
@@ -100,6 +101,7 @@ export function buildApp(): FastifyInstance {
   purchaseRoutes(app);
   contactRoutes(app);
   searchRoutes(app);
+  siteRoutes(app);
 
   return app;
 }

@@ -26,7 +26,22 @@ ops.ev8.ge {
 }
 
 test.ops.ev8.ge {
-	reverse_proxy 127.0.0.1:5174
+	# Previews of the new ev8.ge site: static pages Mika opens from his phone,
+	# kept under /srv/ev8-site-preview on the host and outside this repository.
+	# The login lives in auth/*.caddy next to them, written by
+	# deploy/set-site-password.sh; Caddy sees only the one-way digest. No such
+	# file means no login is asked, so the script is run before the first page
+	# is copied in.
+	redir /garage /garage/
+	handle_path /garage/* {
+		import /srv/site-preview/auth/*.caddy
+		root * /srv/site-preview/www/garage
+		header Cache-Control "no-cache"
+		file_server
+	}
+	handle {
+		reverse_proxy 127.0.0.1:5174
+	}
 	header Strict-Transport-Security "max-age=31536000"
 	# A test stack has no business in a search index — least of all one that
 	# will hold a copy of the real rentals.
