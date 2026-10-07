@@ -7,7 +7,9 @@
 #
 #   ssh -t root@204.168.149.105 /srv/ev8-ops/deploy/set-site-mail.sh
 #
-# The mailbox is a Google one: smtp.gmail.com, port 465. The password is an
+# The mailbox is a Google one: smtp.gmail.com, port 587 (STARTTLS). Not 465:
+# this server's hosting provider blocks outgoing 465 and 25 — the connection
+# gets no answer (found 07.10.2026). The password is an
 # "app password" (myaccount.google.com/apppasswords), made for this alone —
 # never the mailbox's own password. An app password is revoked on its own and
 # cannot sign in through a browser, but it is NOT limited to sending: a mail
@@ -48,7 +50,7 @@ case "$BOX$TO" in *[[:space:]]*) echo "В адресе не должно быт�
 
 write_env <<EOT
 SITE_MAIL_HOST=smtp.gmail.com
-SITE_MAIL_PORT=465
+SITE_MAIL_PORT=587
 SITE_MAIL_USER=$BOX
 SITE_MAIL_PASSWORD=$P
 SITE_MAIL_TO=$TO
@@ -67,7 +69,7 @@ done
 if "${COMPOSE[@]}" exec -T api node --input-type=module -e '
   import nodemailer from "nodemailer";
   const e = process.env;
-  const t = nodemailer.createTransport({ host: e.SITE_MAIL_HOST, port: +e.SITE_MAIL_PORT, secure: +e.SITE_MAIL_PORT === 465, auth: { user: e.SITE_MAIL_USER, pass: e.SITE_MAIL_PASSWORD } });
+  const t = nodemailer.createTransport({ host: e.SITE_MAIL_HOST, port: +e.SITE_MAIL_PORT, secure: +e.SITE_MAIL_PORT === 465, requireTLS: +e.SITE_MAIL_PORT !== 465, connectionTimeout: 10000, greetingTimeout: 10000, auth: { user: e.SITE_MAIL_USER, pass: e.SITE_MAIL_PASSWORD } });
   t.verify().then(() => process.exit(0)).catch((err) => { console.log(String(err && err.message).slice(0, 200)); process.exit(1); });
 '; then
   echo "Готово: ящик $BOX принял вход. Заявки с тестового адреса сайта теперь приходят на $TO."
