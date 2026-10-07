@@ -37,6 +37,7 @@ export const wave4En = {
     actions: {
       decide_deposit: 'Decide the deposit',
       sort_odoo_deposits: 'Sort them out',
+      reconcile_kommo: 'Compare',
       accept_till: 'Accept the till',
       hand_over_till: 'Hand the cash over',
       return: 'Take the moped back',
@@ -57,6 +58,11 @@ export const wave4En = {
     deposit: 'Deposit',
     /** The deposits the move from Odoo left undecided, as one row (wave 6 §3.7). */
     odooDeposits: (n: number) => `Carried-over deposits with no decision — ${n}`,
+    // Kommo against the rentals here, as one row (ADR-0012).
+    kommoMismatch: (n: number) => `Kommo and the rentals here disagree — ${n}`,
+    kommoSilent: 'Kommo is not answering',
+    kommoAt: (date: string, time: string) => `Kommo as of ${date}, ${time}`,
+    kommoNeverAnswered: 'it has not answered once yet',
     till: 'Till',
     duesToday: 'planned today',
     lateBy: (n: number) => `${n} days late`,
@@ -332,6 +338,7 @@ export const wave4Ru: Wave4 = {
     actions: {
       decide_deposit: 'Решить залог',
       sort_odoo_deposits: 'Разобрать',
+      reconcile_kommo: 'Сверить',
       accept_till: 'Принять кассу',
       hand_over_till: 'Сдать наличные',
       return: 'Принять возврат',
@@ -351,6 +358,10 @@ export const wave4Ru: Wave4 = {
     },
     deposit: 'Залог',
     odooDeposits: (n: number) => `Залоги после переноса без решения — ${n}`,
+    kommoMismatch: (n: number) => `Расхождения с Kommo — ${n}`,
+    kommoSilent: 'Kommo не отвечает',
+    kommoAt: (date: string, time: string) => `данные Kommo на ${date}, ${time}`,
+    kommoNeverAnswered: 'ответа ещё не было ни разу',
     till: 'Касса',
     duesToday: 'план сегодня',
     lateBy: (n) => `опаздывает ${n} ${ruPlural(n, 'день', 'дня', 'дней')}`,
@@ -594,6 +605,7 @@ export const wave4Ka: Wave4 = {
     actions: {
       decide_deposit: 'დეპოზიტის გადაწყვეტა',
       sort_odoo_deposits: 'გარჩევა',
+      reconcile_kommo: 'შედარება',
       accept_till: 'სალაროს მიღება',
       hand_over_till: 'ნაღდის ჩაბარება',
       return: 'დაბრუნების მიღება',
@@ -613,6 +625,10 @@ export const wave4Ka: Wave4 = {
     },
     deposit: 'დეპოზიტი',
     odooDeposits: (n: number) => `გადმოტანილი დეპოზიტები გადაწყვეტილების გარეშე — ${n}`,
+    kommoMismatch: (n: number) => `შეუსაბამობა Kommo-სთან — ${n}`,
+    kommoSilent: 'Kommo არ პასუხობს',
+    kommoAt: (date: string, time: string) => `Kommo-ს მონაცემები: ${date}, ${time}`,
+    kommoNeverAnswered: 'ჯერ ერთხელაც არ უპასუხია',
     till: 'სალარო',
     duesToday: 'გეგმით დღეს',
     lateBy: (n) => `აგვიანებს ${n} დღით`,

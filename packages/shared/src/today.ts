@@ -30,7 +30,8 @@ export type TaskAction =
   | 'sign'
   | 'set_vin'
   | 'set_point'
-  | 'sort_odoo_deposits';
+  | 'sort_odoo_deposits'
+  | 'reconcile_kommo';
 
 export interface TaskRow {
   /** Stable across reloads: the record it is about plus what it asks for. */
@@ -96,6 +97,13 @@ export interface QueueInput {
    * this morning.
    */
   odooDeposits: { count: number; amountTetri: Tetri };
+  /**
+   * Where Kommo and EV8 Ops disagree about who rents (ADR-0012), as one row.
+   * Null when the link is off or has not been asked yet — then there is
+   * nothing to say. `silent` is a row of its own kind: Kommo has stopped
+   * answering, and an owner who is not told reads "no row" as "all agree".
+   */
+  kommo: { rentedThere: number; rentedHere: number; silent: boolean; lastOkAt: string | null } | null;
 }
 
 export interface TaskGroupRows {
@@ -107,6 +115,9 @@ export interface TaskGroupRows {
 }
 
 const SHOWN = 3;
+
+/** The list the Kommo row opens. It is in no menu: with the link off there is nothing on it. */
+export const KOMMO_PATH = '/settings/kommo';
 
 const daysBetween = (a: ISODate, b: ISODate) => Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000);
 
@@ -294,6 +305,25 @@ export function dayQueue(input: QueueInput): TaskGroupRows[] {
     // 9. Decisions — mopeds nobody has put in a park yet (register #14).
     if (input.vehiclesWithoutPool > 0) {
       rows.push({ id: 'pool', group: 'decisions', action: 'set_pool', who: null, number: null, vin: null, days: null, amountTetri: null, href: '/fleet?f=nopool', phone: null, note: String(input.vehiclesWithoutPool) });
+    }
+    // Kommo says one thing and the rentals here another: one row for all of
+    // it, like the deposits above. The note carries the count, whether Kommo
+    // still answers, and the time of its last answer.
+    const k = input.kommo;
+    if (k && (k.rentedThere + k.rentedHere > 0 || k.silent)) {
+      rows.push({
+        id: 'kommo',
+        group: 'decisions',
+        action: 'reconcile_kommo',
+        who: null,
+        number: null,
+        vin: null,
+        days: null,
+        amountTetri: null,
+        href: KOMMO_PATH,
+        phone: null,
+        note: `${k.rentedThere + k.rentedHere}|${k.silent ? 'silent' : 'ok'}|${k.lastOkAt ?? ''}`,
+      });
     }
   }
 

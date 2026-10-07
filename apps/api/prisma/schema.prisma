@@ -1130,3 +1130,28 @@ model BatteryMove {
   @@index([occurredOn, createdAt])
   @@map("battery_moves")
 }
+
+/// A deal standing in Kommo's "rented" stage at the last poll that worked
+/// (migration 0032, ADR-0012). The id is Kommo's, kept as text.
+model KommoLead {
+  leadId      String   @id @map("lead_id")
+  name        String
+  contactName String?  @map("contact_name")
+  statusId    BigInt   @map("status_id")
+  firstSeenAt DateTime @default(now()) @map("first_seen_at")
+  seenAt      DateTime @default(now()) @map("seen_at")
+
+  @@map("kommo_leads")
+}
+
+/// One row: when Kommo last answered and why the last asking failed.
+model KommoSync {
+  id             Boolean   @id @default(true)
+  lastOkAt       DateTime? @map("last_ok_at")
+  lastTryAt      DateTime? @map("last_try_at")
+  lastFailure    String?   @map("last_failure")
+  lastHttpStatus Int?      @map("last_http_status")
+  leads          Int       @default(0)
+
+  @@map("kommo_sync")
+}

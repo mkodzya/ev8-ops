@@ -1,4 +1,4 @@
-import { type TaskGroupRows, type TaskRow, type VehicleState } from '@ev8/shared';
+import { localDateTime, type TaskGroupRows, type TaskRow, type VehicleState } from '@ev8/shared';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { LoadError } from '../components/LoadError.js';
@@ -84,6 +84,14 @@ export function TodayPage() {
     // A reported breakdown says what broke; the shelf row names the parts.
     else if (r.action === 'open_report') bits.push(r.note ?? '');
     else if (r.action === 'order_parts') return (r.note ?? '').split('|')[1] ?? '';
+    // Kommo's row says how old its answer is; when Kommo has gone silent the
+    // title already says so, and this is the time of its last word.
+    else if (r.action === 'reconcile_kommo') {
+      const [count, state, lastOkAt] = (r.note ?? '0|ok|').split('|');
+      if (state === 'silent' && Number(count) > 0) bits.push(t.today.kommoSilent);
+      const at = lastOkAt ? localDateTime(lastOkAt) : null;
+      bits.push(at ? t.today.kommoAt(at.date, at.time) : t.today.kommoNeverAnswered);
+    }
     return bits.join(' · ');
   };
 
@@ -95,6 +103,12 @@ export function TodayPage() {
       // the count is in `days`, the money in `amountTetri`.
       case 'sort_odoo_deposits':
         return t.today.odooDeposits(r.days ?? 0);
+      // Kommo against the rentals here, one row (ADR-0012). With nothing
+      // disagreeing the row is there for one reason only: Kommo is silent.
+      case 'reconcile_kommo': {
+        const n = Number((r.note ?? '0').split('|')[0]);
+        return n > 0 ? t.today.kommoMismatch(n) : t.today.kommoSilent;
+      }
       case 'accept_till':
         return `${t.today.till} · ${r.who ?? ''}`;
       case 'hand_over_till':
