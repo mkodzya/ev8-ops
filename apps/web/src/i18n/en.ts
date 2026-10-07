@@ -623,7 +623,7 @@ export const en = {
     costShort: 'Cost',
     inFleet: 'In the fleet',
     onOrder: 'On order',
-    fromOdoo: 'from Odoo',
+    fromOdoo: 'carried over',
     byHand: 'typed by hand',
     prices: 'Prices',
     notRented: 'not rented out',

@@ -52,7 +52,9 @@ DEFAULT_DB = "postgresql://ev8ops:ev8ops@localhost:5433/ev8ops"
 
 # The note every carried-over row gets: the day of *this* run. A row first
 # written on the test stand in September 2026 must not claim 15.09.
-MOVED = f"Перенесено из Odoo {date.today():%d.%m.%Y}"
+# No source named: the people reading the card do not work with Odoo, and its
+# name on every card read as if the system still depended on it (Mika, 07.10.2026).
+MOVED = f"Перенесено {date.today():%d.%m.%Y}"
 
 # Тестовый заказ со звонка консультанта: в Odoo он есть, к нам не едет.
 SKIP_ORDERS = {"S00060"}
@@ -380,7 +382,7 @@ def import_customers(o: Odoo, cur, rep: Report, suppliers_only: bool = False,
         if pid and pid in seen_pid:
             rep.note(f"контакт Odoo #{p['id']}: личный номер совпал с контактом #{seen_pid[pid]} — "
                      f"номер не записан, карточка заведена с пометкой; решать, один это человек или два, человеку")
-            note = (note + ". " if note else "") + "Личный номер совпал с другой карточкой в Odoo и не перенесён."
+            note = (note + ". " if note else "") + "Личный номер совпал с другой карточкой и не перенесён."
             pid = None
         elif pid:
             seen_pid[pid] = p["id"]
@@ -406,7 +408,8 @@ def import_customers(o: Odoo, cur, rep: Report, suppliers_only: bool = False,
               -- A supplier's notes, likewise: refreshed only while nobody has
               -- written there — empty, or still the carry-over note.
               notes = case when excluded.record_kind = 'supplier'
-                            and (customers.notes is null or customers.notes like 'Перенесено из Odoo%%')
+                            and (customers.notes is null
+                                 or customers.notes ~ '^Перенесено (из Odoo )?[0-9]{2}[.][0-9]{2}[.][0-9]{4}')
                            then excluded.notes else customers.notes end
             returning id
             """,

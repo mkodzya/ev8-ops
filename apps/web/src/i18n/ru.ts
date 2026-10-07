@@ -626,7 +626,7 @@ export const ru: Dict = {
     costShort: 'Себестоимость',
     inFleet: 'В парке',
     onOrder: 'В заказе',
-    fromOdoo: 'из Odoo',
+    fromOdoo: 'при переносе',
     byHand: 'вписана вручную',
     prices: 'Цены',
     notRented: 'не сдаётся',
