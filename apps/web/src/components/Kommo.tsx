@@ -8,8 +8,8 @@ import { useT } from '../i18n/index.js';
 // The Kommo field on a customer, a rental and a sale (wave 6 §3.10, B10-03).
 //
 // A link or a deal id, kept as typed, opening in Kommo. The link is one way
-// only: Kommo cannot yet call back, because that needs the tariff with
-// webhooks (register #5). A moped has no tracker field — no moped has a
+// by decision: Kommo is the CRM, EV8 Ops reads it and writes nothing there
+// (ADR-0014). The comparison with Kommo's rented stage matches by this field. A moped has no tracker field — no moped has a
 // tracker (Kardu, `incidents.md`, Q31).
 
 const looksLikeUrl = (s: string) => /^https?:\/\//i.test(s.trim());
