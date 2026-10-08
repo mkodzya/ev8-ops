@@ -2,8 +2,9 @@
 // "rented" stage beside the rentals running here. The row in "Today" that
 // opens it has its words with the other rows, in wave4.ts.
 //
-// The Georgian here and in the four `kommo…` lines of wave4.ts was written
-// by a non-native and has not been read by one yet.
+// The Georgian here and in the `kommo…` lines of wave4.ts was written by a
+// non-native and has not been read by one yet. The `notes…` keys came with
+// step 2 (ADR-0013): payment notes EV8 Ops writes into the deal.
 
 export const kommoLinkEn = {
   kommoLink: {
@@ -26,6 +27,15 @@ export const kommoLinkEn = {
     notRented: 'the deal is not in the rented stage',
     noLink: 'no Kommo link',
     nothing: 'Nothing disagrees.',
+    notesTitle: 'Payment notes in Kommo',
+    notesOff: 'This stand writes nothing to Kommo. Payments taken here stay here.',
+    notesAll: 'A rental payment taken here is written as a note into its Kommo deal within five minutes.',
+    notesOnly: 'This stand writes to test deals only. Payments of other rentals stay here.',
+    notesCounts: (sent: number, waiting: number) => `Sent: ${sent}. Waiting to be sent: ${waiting}.`,
+    notesStuck: 'Did not go, and will not by themselves',
+    notesRefused: (status: string) => `Kommo refused it${status}`,
+    notesNoDeal: 'the rental has no Kommo link',
+    notesOpenPayment: 'Open the payment',
   },
 };
 
@@ -50,6 +60,15 @@ export const kommoLinkRu: typeof kommoLinkEn = {
     notRented: 'сделка не на этапе аренды',
     noLink: 'нет ссылки на Kommo',
     nothing: 'Расхождений нет.',
+    notesTitle: 'Заметки об оплатах в Kommo',
+    notesOff: 'Этот стенд ничего не пишет в Kommo. Оплаты, принятые здесь, остаются здесь.',
+    notesAll: 'Оплата аренды, принятая здесь, в течение пяти минут появляется заметкой в сделке Kommo.',
+    notesOnly: 'Этот стенд пишет только в тестовые сделки. Оплаты остальных аренд остаются здесь.',
+    notesCounts: (sent, waiting) => `Отправлено: ${sent}. Ждут отправки: ${waiting}.`,
+    notesStuck: 'Не ушли и сами не уйдут',
+    notesRefused: (status) => `Kommo не принял${status}`,
+    notesNoDeal: 'у аренды нет ссылки на Kommo',
+    notesOpenPayment: 'Открыть оплату',
   },
 };
 
@@ -74,5 +93,14 @@ export const kommoLinkKa: typeof kommoLinkEn = {
     notRented: 'გარიგება გაქირავების ეტაპზე არ არის',
     noLink: 'Kommo-ს ბმული არ არის',
     nothing: 'შეუსაბამობა არ არის.',
+    notesTitle: 'გადახდის ჩანაწერები Kommo-ში',
+    notesOff: 'ეს სტენდი Kommo-ში არაფერს წერს. აქ მიღებული გადახდები აქ რჩება.',
+    notesAll: 'აქ მიღებული ქირის გადახდა ხუთ წუთში ჩანაწერად ჩნდება Kommo-ს გარიგებაში.',
+    notesOnly: 'ეს სტენდი მხოლოდ სატესტო გარიგებებში წერს. სხვა ქირაობების გადახდები აქ რჩება.',
+    notesCounts: (sent, waiting) => `გაგზავნილია: ${sent}. გაგზავნას ელოდება: ${waiting}.`,
+    notesStuck: 'არ წავიდა და თავისით არ წავა',
+    notesRefused: (status) => `Kommo-მ არ მიიღო${status}`,
+    notesNoDeal: 'ქირაობას Kommo-ს ბმული არ აქვს',
+    notesOpenPayment: 'გადახდის გახსნა',
   },
 };
