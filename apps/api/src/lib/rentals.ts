@@ -76,7 +76,11 @@ export interface PickupResult {
   paymentId: string | null;
 }
 
-export async function pickUp(input: PickupInput): Promise<PickupResult> {
+/**
+ * `within`: a transaction to write in instead of one of its own — for a caller
+ * that brings several rentals over and wants all of them or none (the loader).
+ */
+export async function pickUp(input: PickupInput, within?: Tx): Promise<PickupResult> {
   const owner = hasPerm(input.actor, 'payments.reconcile');
   if (input.pickedUpOn > input.today) throw badRequest('future_date', 'A moped is not handed over tomorrow.', { field: 'pickedUpOn' });
   if (input.expectedReturnOn && input.expectedReturnOn < input.pickedUpOn) {
@@ -133,7 +137,7 @@ export async function pickUp(input: PickupInput): Promise<PickupResult> {
     }
   }
 
-  return prisma.$transaction(async (tx) => {
+  const write = async (tx: Tx): Promise<PickupResult> => {
     let vehicle: { id: string; pool: string | null; arrivedOn: string | null } | null = null;
     if (input.vehicleId) {
       const v = await tx.vehicle.findUnique({ where: { id: input.vehicleId } });
@@ -308,7 +312,8 @@ export async function pickUp(input: PickupInput): Promise<PickupResult> {
       },
     });
     return { id: rental.id, number: rental.number, actId: act.id, customerId: customerId!, paymentId };
-  });
+  };
+  return within ? write(within) : prisma.$transaction(write);
 }
 
 // ---------------------------------------------------------------------------
