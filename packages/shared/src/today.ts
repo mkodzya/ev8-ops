@@ -67,7 +67,7 @@ export interface QueueRental {
   awaitingPayment: boolean;
   depositUndecided: boolean;
   vinUnconfirmed: boolean;
-  /** Handed over more than a day ago and the contract is still unsigned (D17). */
+  /** Handed over more than a day ago and the contract is still unsigned (D17). Never a rental brought over. */
   contractUnsigned: boolean;
 }
 

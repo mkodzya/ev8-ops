@@ -59,7 +59,9 @@ export function rentalRoutes(app: FastifyInstance): void {
           periods: r._count.periods,
           buyoutTargetTetri: r.buyoutTargetTetri,
           buyoutPerPaymentTetri: r.buyoutPerPaymentTetri,
-          contractSigned: r.documents.length > 0,
+          // Null: not asked. A rental brought over keeps its contract from before
+          // EV8 Ops, so it is neither signed here nor waiting to be (Mika, 08.10.2026).
+          contractSigned: r.transferredAt ? null : r.documents.length > 0,
         };
       }),
     };
