@@ -285,7 +285,7 @@ export function soleOwner<T extends { email: string }>(owners: readonly T[]): { 
 }
 
 /** The owner the rentals are written in the name of, or why there is none: the one named by e-mail, else the stand's only one. */
-async function ownerBy(email: string | null): Promise<{ actor: Actor | null; refused: string | null }> {
+export async function ownerBy(email: string | null): Promise<{ actor: Actor | null; refused: string | null }> {
   const actorOf = (u: OwnerRow): Actor => ({ id: u.id, email: u.email, name: u.name, role: 'owner', locale: u.locale });
   const address = (email ?? '').trim().toLowerCase();
   if (!address) {
