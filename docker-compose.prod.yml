@@ -93,6 +93,9 @@ services:
       KOMMO_BASE_URL: ${KOMMO_BASE_URL-}
       KOMMO_RENTAL_PIPELINE_ID: ${KOMMO_RENTAL_PIPELINE_ID-}
       KOMMO_RENTED_STATUS_ID: ${KOMMO_RENTED_STATUS_ID-}
+      # A deal closed as won in the sales pipeline comes in as a task too
+      # (ADR-0015); blank unless the pipeline is re-made in Kommo.
+      KOMMO_SALES_PIPELINE_ID: ${KOMMO_SALES_PIPELINE_ID-}
     # No ports either. The browser reaches /api through the web container,
     # which is the same origin the page came from.
     depends_on:

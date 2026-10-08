@@ -66,6 +66,8 @@ export interface PickupInput {
   debtOverrideReason: string | null;
   /** The wizard asks for everything the contract needs; older clients do not. */
   strict: boolean;
+  /** The Kommo deal the hand-over was started from, when it was (ADR-0015). */
+  kommoRef?: string | null;
 }
 
 export interface PickupResult {
@@ -205,6 +207,7 @@ export async function pickUp(input: PickupInput, within?: Tx): Promise<PickupRes
         chargers: input.chargers,
         createdById: input.actor.id,
         debtOverrideReason: input.debtOverrideReason?.trim() || null,
+        kommoRef: input.kommoRef?.trim() || null,
         transferredAt: input.transfer ? new Date() : null,
         transferredById: input.transfer ? input.actor.id : null,
       },

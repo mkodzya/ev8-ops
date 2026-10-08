@@ -81,6 +81,9 @@ export function TodayPage() {
     else if (r.group === 'awaiting') bits.push(t.today.handedToday);
     else if (r.action === 'take_instalment' && r.days) bits.push(t.today.overdueDays(r.days));
     else if (r.action === 'open_purchase') bits.push(t.today.ordered);
+    // A deal Kommo has won and nobody has entered here yet (ADR-0015).
+    else if (r.action === 'hand_over_from_kommo') bits.push(t.today.kommoRented);
+    else if (r.action === 'sell_from_kommo') bits.push(t.today.kommoWon);
     // A reported breakdown says what broke; the shelf row names the parts.
     else if (r.action === 'open_report') bits.push(r.note ?? '');
     else if (r.action === 'order_parts') return (r.note ?? '').split('|')[1] ?? '';

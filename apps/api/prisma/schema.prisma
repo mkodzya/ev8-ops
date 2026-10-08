@@ -419,6 +419,7 @@ model Customer {
   sales       Sale[]
   supplied    Purchase[]
   mergedInto  Customer?    @relation("customer_merge", fields: [mergedIntoId], references: [id])
+  kommoLeads  KommoLead[]
   mergedFrom  Customer[]   @relation("customer_merge")
 
   @@map("customers")
@@ -1134,12 +1135,21 @@ model BatteryMove {
 /// A deal standing in Kommo's "rented" stage at the last poll that worked
 /// (migration 0032, ADR-0012). The id is Kommo's, kept as text.
 model KommoLead {
-  leadId      String   @id @map("lead_id")
-  name        String
-  contactName String?  @map("contact_name")
-  statusId    BigInt   @map("status_id")
-  firstSeenAt DateTime @default(now()) @map("first_seen_at")
-  seenAt      DateTime @default(now()) @map("seen_at")
+  leadId       String    @id @map("lead_id")
+  name         String
+  contactName  String?   @map("contact_name")
+  statusId     BigInt    @map("status_id")
+  /// rent — standing in the rented stage; sale — closed as won in the sales pipeline (migration 0035).
+  kind         String    @default("rent")
+  contactPhone String?   @map("contact_phone")
+  /// When Kommo closed a won deal; a deal in the rented stage has none.
+  closedAt     DateTime? @map("closed_at")
+  /// The card the deal was tied to: found by its Kommo link or its phone, or made from the contact.
+  customerId   String?   @map("customer_id") @db.Uuid
+  firstSeenAt  DateTime  @default(now()) @map("first_seen_at")
+  seenAt       DateTime  @default(now()) @map("seen_at")
+
+  customer Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
 
   @@map("kommo_leads")
 }
@@ -1152,6 +1162,8 @@ model KommoSync {
   lastFailure    String?   @map("last_failure")
   lastHttpStatus Int?      @map("last_http_status")
   leads          Int       @default(0)
+  /// When this stand began taking deals in: a sale closed before it is history, not a task (migration 0035).
+  intakeFrom     DateTime? @map("intake_from")
 
   @@map("kommo_sync")
 }

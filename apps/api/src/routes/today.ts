@@ -7,6 +7,7 @@ import { prisma } from '../lib/db.js';
 import { partRows } from '../lib/stock.js';
 import { env } from '../lib/env.js';
 import { kommoReconciliation } from '../lib/kommo.js';
+import { hasPerm } from '../lib/auth.js';
 import { actorOf, mayView } from '../lib/guard.js';
 import { onHandOf } from '../lib/till.js';
 import { UNDO_RETURN_MS } from '../lib/rentals.js';
@@ -135,9 +136,13 @@ export function todayRoutes(app: FastifyInstance): void {
     // Kommo against the rentals here, as one row (ADR-0012). An owner's, and
     // only with the link on; before Kommo has answered once there is nothing
     // to compare and nothing is said.
-    const kommoNow = owner ? await kommoReconciliation() : null;
+    // The comparison is an owner's; the deals to enter are for whoever enters
+    // them — a hand-over is a manager's too, a sale is for those who may sell.
+    const kommoNow = await kommoReconciliation();
+    const maySell = hasPerm(actor, 'sales.manage');
+    const kommoDeals = kommoNow && kommoNow.freshness !== 'waiting' ? kommoNow.deals.filter((d) => d.kind === 'rent' || maySell) : [];
     const kommo =
-      kommoNow && kommoNow.freshness !== 'waiting'
+      owner && kommoNow && kommoNow.freshness !== 'waiting'
         ? { rentedThere: kommoNow.rentedThere.length, rentedHere: kommoNow.rentedHere.length, silent: kommoNow.freshness === 'silent', lastOkAt: kommoNow.lastOkAt?.toISOString() ?? null }
         : null;
 
@@ -193,6 +198,7 @@ export function todayRoutes(app: FastifyInstance): void {
       vehiclesWithoutPoint: vehicles.filter((v) => v.locationId == null && v.state === 'available').length,
       odooDeposits,
       kommo,
+      kommoDeals,
     });
 
     const fleet = Object.fromEntries(VEHICLE_STATES.map((s) => [s, 0])) as Record<VehicleState, number>;
