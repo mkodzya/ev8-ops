@@ -87,8 +87,10 @@ export function TodayPage() {
     // Kommo's row says how old its answer is; when Kommo has gone silent the
     // title already says so, and this is the time of its last word.
     else if (r.action === 'reconcile_kommo') {
-      const [count, state, lastOkAt] = (r.note ?? '0|ok|').split('|');
+      const [count, state, lastOkAt, refused] = (r.note ?? '0|ok|').split('|');
       if (state === 'silent' && Number(count) > 0) bits.push(t.today.kommoSilent);
+      // Notes Kommo refused are said under the mismatches; alone, they are the title.
+      if (Number(refused ?? 0) > 0 && (Number(count) > 0 || state === 'silent')) bits.push(t.today.kommoNotesRefusedSub(Number(refused)));
       const at = lastOkAt ? localDateTime(lastOkAt) : null;
       bits.push(at ? t.today.kommoAt(at.date, at.time) : t.today.kommoNeverAnswered);
     }
@@ -106,8 +108,10 @@ export function TodayPage() {
       // Kommo against the rentals here, one row (ADR-0012). With nothing
       // disagreeing the row is there for one reason only: Kommo is silent.
       case 'reconcile_kommo': {
-        const n = Number((r.note ?? '0').split('|')[0]);
-        return n > 0 ? t.today.kommoMismatch(n) : t.today.kommoSilent;
+        const [count, state, , refused] = (r.note ?? '0|ok|').split('|');
+        const n = Number(count);
+        if (n > 0) return t.today.kommoMismatch(n);
+        return state === 'silent' ? t.today.kommoSilent : t.today.kommoNotesRefused(Number(refused ?? 0));
       }
       case 'accept_till':
         return `${t.today.till} · ${r.who ?? ''}`;

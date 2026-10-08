@@ -21,6 +21,13 @@ interface Reconciliation {
   matched: number;
   rentedThere: { leadId: string; leadName: string; contactName: string | null; customer: { id: string; name: string } | null; leadUrl: string }[];
   rentedHere: { rentalId: string; number: string; vin: string | null; customer: { id: string; name: string }; leadId: string | null; reason: 'not_rented' | 'no_link'; leadUrl: string | null }[];
+  /** Step 2 (ADR-0013): the payment notes this stand writes into deals. */
+  notes?: {
+    mode: 'off' | 'all' | 'only';
+    sent: number;
+    waiting: number;
+    stuck: { id: string; paymentId: string; rentalId: string | null; rentalNumber: string | null; customer: string | null; why: 'refused' | 'no_deal'; httpStatus: number | null }[];
+  } | null;
 }
 
 export function KommoPage() {
@@ -131,6 +138,45 @@ export function KommoPage() {
           </section>
         </>
       )}
+
+      {d.notes && <Notes notes={d.notes} />}
     </>
+  );
+}
+
+/**
+ * What goes the other way: a rental payment taken here, written into the
+ * deal as a note. The first line says whether this stand writes at all — a
+ * stand that is being tried out does not, and somebody who took a trial
+ * payment should not go looking for it in Kommo.
+ */
+function Notes({ notes }: { notes: NonNullable<Reconciliation['notes']> }) {
+  const t = useT();
+  const k = t.kommoLink;
+  return (
+    <section className="card queue-card">
+      <BlockHead title={k.notesTitle} note={notes.mode === 'off' ? k.notesOff : notes.mode === 'only' ? k.notesOnly : k.notesAll} />
+      {notes.mode !== 'off' && <p className="muted">{k.notesCounts(notes.sent, notes.waiting)}</p>}
+      {notes.stuck.length > 0 && (
+        <>
+          <p className="warn-text">{k.notesStuck}</p>
+          <ul className="queue">
+            {notes.stuck.map((x) => (
+              <li key={x.id} className="q-row">
+                <Link to={x.rentalId ? `/rentals/${x.rentalId}` : `/money/payments/${x.paymentId}`} className="q-who">
+                  <span className="q-name">{x.customer ?? x.rentalNumber ?? ''}</span>
+                  <span className="q-sub muted">{[x.rentalNumber ?? '', x.why === 'no_deal' ? k.notesNoDeal : k.notesRefused(x.httpStatus ? ` (${x.httpStatus})` : '')].filter(Boolean).join(' · ')}</span>
+                </Link>
+                <span className="q-acts">
+                  <Link className="pill pill-sm" to={`/money/payments/${x.paymentId}`}>
+                    {k.notesOpenPayment}
+                  </Link>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </section>
   );
 }
