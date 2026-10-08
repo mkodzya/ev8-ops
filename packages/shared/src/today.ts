@@ -103,14 +103,7 @@ export interface QueueInput {
    * nothing to say. `silent` is a row of its own kind: Kommo has stopped
    * answering, and an owner who is not told reads "no row" as "all agree".
    */
-  kommo: {
-    rentedThere: number;
-    rentedHere: number;
-    silent: boolean;
-    lastOkAt: string | null;
-    /** Payment notes Kommo would not take (ADR-0013): somebody has to look, the system will not send them again. */
-    notesRefused?: number;
-  } | null;
+  kommo: { rentedThere: number; rentedHere: number; silent: boolean; lastOkAt: string | null } | null;
 }
 
 export interface TaskGroupRows {
@@ -317,8 +310,7 @@ export function dayQueue(input: QueueInput): TaskGroupRows[] {
     // it, like the deposits above. The note carries the count, whether Kommo
     // still answers, and the time of its last answer.
     const k = input.kommo;
-    const refused = k?.notesRefused ?? 0;
-    if (k && (k.rentedThere + k.rentedHere > 0 || k.silent || refused > 0)) {
+    if (k && (k.rentedThere + k.rentedHere > 0 || k.silent)) {
       rows.push({
         id: 'kommo',
         group: 'decisions',
@@ -330,8 +322,7 @@ export function dayQueue(input: QueueInput): TaskGroupRows[] {
         amountTetri: null,
         href: KOMMO_PATH,
         phone: null,
-        // The fourth part came with step 2: notes Kommo refused.
-        note: `${k.rentedThere + k.rentedHere}|${k.silent ? 'silent' : 'ok'}|${k.lastOkAt ?? ''}${refused > 0 ? `|${refused}` : ''}`,
+        note: `${k.rentedThere + k.rentedHere}|${k.silent ? 'silent' : 'ok'}|${k.lastOkAt ?? ''}`,
       });
     }
   }

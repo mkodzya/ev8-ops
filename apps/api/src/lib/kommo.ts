@@ -1,9 +1,15 @@
-// The Kommo link, step 1: read, keep, compare (Mika, 07.10.2026; ADR-0012).
+// The Kommo link: read, keep, compare (Mika, 07.10.2026; ADR-0012).
 //
-// Kommo is where the front office writes the day down. This file asks it who
-// is renting — the deals standing in the rental pipeline's "rented" stage —
-// keeps the last list it gave, and lays that list beside the rentals running
-// here. Nothing is written to Kommo in this step.
+// Kommo is the company's CRM: enquiries, conversations, the pipeline. This
+// file asks it who is renting — the deals standing in the rental pipeline's
+// "rented" stage — keeps the last list it gave, and lays that list beside
+// the rentals running here.
+//
+// Nothing is written to Kommo, and that is a decision, not a step not yet
+// taken (Mika, 08.10.2026; ADR-0014): everything but the CRM itself lives in
+// EV8 Ops, and what lives here is not copied there. A payment note written
+// into the deal was built, checked against Kommo and taken out again the
+// same day (ADR-0013).
 //
 // The token is a server secret (CLAUDE.md rule 3): Mika issues it and puts
 // it on the stand himself (`deploy/set-kommo-token.sh`). It is read from the
@@ -12,7 +18,7 @@
 // our own words and a status code. Without the token the whole link is off,
 // quietly — the same way the site's mail is off without its password.
 
-import { kommoFreshness, kommoWriteMode, reconcileKommo, type KommoFreshness, type KommoLead, type KommoMismatches, type KommoNoteLocale, type KommoWriteMode } from '@ev8/shared';
+import { kommoFreshness, reconcileKommo, type KommoFreshness, type KommoLead, type KommoMismatches } from '@ev8/shared';
 import { prisma } from './db.js';
 
 export interface KommoConfig {
@@ -23,10 +29,6 @@ export interface KommoConfig {
   rentedStatusId: number;
   /** Kommo has gone silent when it has not answered for this long. */
   staleMs: number;
-  /** Whether this stand writes payment notes into deals, and into which (step 2, ADR-0013). Off unless switched on. */
-  write: KommoWriteMode;
-  /** The language the notes are written in: the one the staff read Kommo in. */
-  noteLocale: KommoNoteLocale;
 }
 
 // The account's own numbers, read in Kommo on 07.10.2026. They are defaults:
@@ -57,12 +59,8 @@ export function kommoConfig(e: NodeJS.ProcessEnv = process.env): KommoConfig | n
     pipelineId: positiveInt(e.KOMMO_RENTAL_PIPELINE_ID, DEFAULTS.pipelineId),
     rentedStatusId: positiveInt(e.KOMMO_RENTED_STATUS_ID, DEFAULTS.rentedStatusId),
     staleMs: positiveInt(e.KOMMO_STALE_MINUTES, DEFAULTS.staleMinutes) * 60_000,
-    write: kommoWriteMode(e.KOMMO_WRITE),
-    noteLocale: noteLocaleOf(e.KOMMO_NOTE_LOCALE || e.DEFAULT_LOCALE),
   };
 }
-
-const noteLocaleOf = (raw: string | undefined): KommoNoteLocale => (raw === 'ru' || raw === 'en' ? raw : 'ka');
 
 /** Where a deal opens in Kommo. */
 export const kommoLeadUrl = (baseUrl: string, leadId: string): string => `${baseUrl}/leads/detail/${leadId}`;
@@ -82,7 +80,7 @@ export class KommoError extends Error {
 }
 
 /** The part of `fetch` this needs, so a test can stand in for Kommo. */
-export type KommoFetch = (url: string, init: { method: string; headers: Record<string, string>; signal: AbortSignal; body?: string }) => Promise<{ status: number; json: () => Promise<unknown> }>;
+export type KommoFetch = (url: string, init: { method: string; headers: Record<string, string>; signal: AbortSignal }) => Promise<{ status: number; json: () => Promise<unknown> }>;
 
 // Kommo allows 7 requests a second for the account as a whole. One request
 // at a time with this gap between starts stays under it with room to spare.
@@ -124,12 +122,11 @@ export class KommoClient {
 
   /**
    * The one door to Kommo: the token goes on here, the rate limit is kept
-   * here, and a refusal becomes one of our words here. Step 1 reads through
-   * it, step 2 writes a payment note through it; moving a deal to another
-   * stage is a later step and gets a method of its own beside these.
+   * here, and a refusal becomes one of our words here. It only reads — the
+   * method is `GET` and nothing else on purpose (ADR-0014).
    * Null is Kommo's 204 — "nothing matches", which it says with no body.
    */
-  private request(method: 'GET' | 'POST', path: string, query: [string, string][] = [], body?: unknown): Promise<unknown | null> {
+  private request(method: 'GET', path: string, query: [string, string][] = []): Promise<unknown | null> {
     const run = async (): Promise<unknown | null> => {
       const wait = this.lastStart + this.gapMs - this.now();
       if (wait > 0) await this.sleep(wait);
@@ -140,9 +137,8 @@ export class KommoClient {
       try {
         res = await this.fetchFn(url, {
           method,
-          headers: { authorization: `Bearer ${this.cfg.token}`, accept: 'application/json', ...(body === undefined ? {} : { 'content-type': 'application/json' }) },
+          headers: { authorization: `Bearer ${this.cfg.token}`, accept: 'application/json' },
           signal: AbortSignal.timeout(TIMEOUT_MS),
-          ...(body === undefined ? {} : { body: JSON.stringify(body) }),
         });
       } catch {
         // The cause is dropped on purpose: a fetch error can quote the request.
@@ -221,18 +217,6 @@ export class KommoClient {
       contactsRead,
     };
   }
-
-  /**
-   * Write one plain note into a deal's feed — what the staff used to type
-   * there after taking a payment. Returns Kommo's id of the note, or null
-   * when Kommo took it and named none.
-   */
-  async addLeadNote(leadId: string, text: string): Promise<{ noteId: string | null }> {
-    if (!/^\d+$/.test(leadId)) throw new KommoError('bad_answer');
-    const body = await this.request('POST', `/api/v4/leads/${leadId}/notes`, [], [{ note_type: 'common', params: { text } }]);
-    const first = obj(list(obj(obj(body)._embedded).notes)[0]);
-    return { noteId: idOf(first.id) };
-  }
 }
 
 // ── The poll ────────────────────────────────────────────────────────────
@@ -270,13 +254,8 @@ export function syncKommo(now: Date = new Date()): Promise<KommoSyncOutcome> {
   return running;
 }
 
-/** A client for this stand's Kommo — or for a test's stand-in, when one is set. */
-export function kommoClient(cfg: KommoConfig): KommoClient {
-  return new KommoClient(cfg, { ...clientOptsForTests, ...(fetchForTests ? { fetch: fetchForTests } : {}) });
-}
-
 async function pollOnce(cfg: KommoConfig, now: Date): Promise<KommoSyncOutcome> {
-  const client = kommoClient(cfg);
+  const client = new KommoClient(cfg, { ...clientOptsForTests, ...(fetchForTests ? { fetch: fetchForTests } : {}) });
   let seen: Awaited<ReturnType<KommoClient['rentedLeads']>>;
   try {
     seen = await client.rentedLeads();

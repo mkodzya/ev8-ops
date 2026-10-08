@@ -36,9 +36,7 @@ async function rollPeriods(): Promise<RollResult> {
   return (await res.json()) as RollResult;
 }
 
-/** Payment notes sent on the same knock, when this stand writes to Kommo (ADR-0013). */
-type KommoNotes = { status: 'busy' } | { status: 'ok' | 'failed'; sent: number; refused: number; waiting: number; failure?: string };
-type KommoOutcome = ({ status: 'off' } | { status: 'busy' } | { status: 'ok'; leads: number; contactsRead: boolean } | { status: 'failed'; failure: string; httpStatus: number | null }) & { notes?: KommoNotes };
+type KommoOutcome = { status: 'off' } | { status: 'busy' } | { status: 'ok'; leads: number; contactsRead: boolean } | { status: 'failed'; failure: string; httpStatus: number | null };
 
 // What the last poll said, so the log gets a line when something changes and
 // not 288 identical ones a day. With no token the API answers `off`, and that
@@ -58,10 +56,6 @@ async function pollKommo(): Promise<void> {
         : r.status === 'ok'
           ? `Kommo answered — ${r.leads} deal(s) in the rented stage${r.contactsRead ? '' : ', contact names not read'}`
           : `Kommo did not answer — ${r.failure}${r.httpStatus ? ` (${r.httpStatus})` : ''}`;
-    const n = r.notes;
-    if (n && n.status !== 'busy' && (n.sent > 0 || n.refused > 0 || n.waiting > 0 || n.status === 'failed')) {
-      line += `; payment notes: ${n.sent} sent, ${n.refused} refused, ${n.waiting} waiting${n.status === 'failed' ? ` (${n.failure})` : ''}`;
-    }
   } catch (err) {
     line = `the Kommo poll did not reach the API — ${(err as Error).message}`;
   }

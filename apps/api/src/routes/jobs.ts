@@ -2,7 +2,6 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { todayISO } from '@ev8/shared';
 import { env } from '../lib/env.js';
 import { syncKommo } from '../lib/kommo.js';
-import { deliverKommoNotes } from '../lib/kommoNotes.js';
 import { rollPeriods } from '../lib/periods.js';
 
 // The worker is the clock; this is where it knocks.
@@ -38,12 +37,6 @@ export function jobRoutes(app: FastifyInstance): void {
     if (!workerOnly(req, reply)) return reply;
     const outcome = await syncKommo();
     if (outcome.status === 'failed') app.log.warn(outcome, 'kommo did not answer');
-    // The same knock sends the payment notes this stand owes Kommo (step 2,
-    // ADR-0013). Off unless the stand writes to Kommo; then the answer gains
-    // a `notes` part — counts again, never a note's text.
-    const notes = await deliverKommoNotes();
-    if (notes.status === 'off') return outcome;
-    if (notes.status === 'failed') app.log.warn(notes, 'kommo did not take the notes');
-    return { ...outcome, notes };
+    return outcome;
   });
 }

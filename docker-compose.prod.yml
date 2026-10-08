@@ -93,15 +93,6 @@ services:
       KOMMO_BASE_URL: ${KOMMO_BASE_URL-}
       KOMMO_RENTAL_PIPELINE_ID: ${KOMMO_RENTAL_PIPELINE_ID-}
       KOMMO_RENTED_STATUS_ID: ${KOMMO_RENTED_STATUS_ID-}
-      # Step 2 (ADR-0013): a rental payment taken here becomes a note in the
-      # Kommo deal. Blank — nothing is written, which is right for a stand
-      # that is only being tried out: it talks to the real Kommo account.
-      # `on` — every deal (the stand the business runs on, and no other);
-      # `only:<deal>,<deal>` — those deals alone, for checking the link on a
-      # test deal. deploy/set-kommo-write.sh sets it on the test stand.
-      KOMMO_WRITE: ${KOMMO_WRITE-}
-      # The language of the notes; blank — the stand's DEFAULT_LOCALE.
-      KOMMO_NOTE_LOCALE: ${KOMMO_NOTE_LOCALE-}
     # No ports either. The browser reaches /api through the web container,
     # which is the same origin the page came from.
     depends_on:
