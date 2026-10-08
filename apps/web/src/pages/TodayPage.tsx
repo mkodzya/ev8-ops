@@ -81,16 +81,17 @@ export function TodayPage() {
     else if (r.group === 'awaiting') bits.push(t.today.handedToday);
     else if (r.action === 'take_instalment' && r.days) bits.push(t.today.overdueDays(r.days));
     else if (r.action === 'open_purchase') bits.push(t.today.ordered);
+    // A deal Kommo has won and nobody has entered here yet (ADR-0015).
+    else if (r.action === 'hand_over_from_kommo') bits.push(t.today.kommoRented);
+    else if (r.action === 'sell_from_kommo') bits.push(t.today.kommoWon);
     // A reported breakdown says what broke; the shelf row names the parts.
     else if (r.action === 'open_report') bits.push(r.note ?? '');
     else if (r.action === 'order_parts') return (r.note ?? '').split('|')[1] ?? '';
     // Kommo's row says how old its answer is; when Kommo has gone silent the
     // title already says so, and this is the time of its last word.
     else if (r.action === 'reconcile_kommo') {
-      const [count, state, lastOkAt, refused] = (r.note ?? '0|ok|').split('|');
+      const [count, state, lastOkAt] = (r.note ?? '0|ok|').split('|');
       if (state === 'silent' && Number(count) > 0) bits.push(t.today.kommoSilent);
-      // Notes Kommo refused are said under the mismatches; alone, they are the title.
-      if (Number(refused ?? 0) > 0 && (Number(count) > 0 || state === 'silent')) bits.push(t.today.kommoNotesRefusedSub(Number(refused)));
       const at = lastOkAt ? localDateTime(lastOkAt) : null;
       bits.push(at ? t.today.kommoAt(at.date, at.time) : t.today.kommoNeverAnswered);
     }
@@ -108,10 +109,8 @@ export function TodayPage() {
       // Kommo against the rentals here, one row (ADR-0012). With nothing
       // disagreeing the row is there for one reason only: Kommo is silent.
       case 'reconcile_kommo': {
-        const [count, state, , refused] = (r.note ?? '0|ok|').split('|');
-        const n = Number(count);
-        if (n > 0) return t.today.kommoMismatch(n);
-        return state === 'silent' ? t.today.kommoSilent : t.today.kommoNotesRefused(Number(refused ?? 0));
+        const n = Number((r.note ?? '0').split('|')[0]);
+        return n > 0 ? t.today.kommoMismatch(n) : t.today.kommoSilent;
       }
       case 'accept_till':
         return `${t.today.till} · ${r.who ?? ''}`;

@@ -84,7 +84,9 @@ export function SaleWizard() {
 
   const fleet = useLoad<{ vehicles: FleetRow[] }>('/api/fleet');
   const customers = useLoad<{ customers: CustomerRow[] }>('/api/customers');
-  const [f, setF] = useState(() => blank(params.get('vehicle') ?? ''));
+  // Started from a deal in "Today" (ADR-0015): the buyer is already chosen, and the sale keeps the deal's link.
+  const fromLead = params.get('lead');
+  const [f, setF] = useState(() => ({ ...blank(params.get('vehicle') ?? ''), customerId: params.get('customer') ?? '' }));
   const [initial] = useState(f);
   const set = (patch: Partial<typeof f>) => setF((prev) => ({ ...prev, ...patch }));
   const [vq, setVq] = useState('');
@@ -222,6 +224,7 @@ export function SaleWizard() {
         transferred: f.transfer,
         paidBeforeTetri: f.transfer ? paidBeforeTetri : 0,
         movePool: f.movePool,
+        kommoRef: fromLead ?? undefined,
         notes: f.channel === 'later' && f.why.trim() ? f.why.trim() : undefined,
       };
       const sale = await api.post<{ id: string; number: string }>('/api/sales', body, { key });

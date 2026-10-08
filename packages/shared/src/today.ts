@@ -8,7 +8,10 @@ import type { Tetri } from './money.js';
 // "till" is a manager's last group (§3.1): their own cash, handed over at the
 // end of the day. An owner has no such group — a till handed to them is a
 // decision, and it stands in "decide".
-export const TASK_GROUPS = ['decide', 'returns', 'overdue', 'awaiting', 'money', 'instalments', 'service', 'purchases', 'decisions', 'fill', 'till'] as const;
+// "intake" — what Kommo has won and nobody has entered here yet (ADR-0015):
+// it stands right after the rentals' own groups, because it is a rental or a
+// sale waiting to be one.
+export const TASK_GROUPS = ['decide', 'returns', 'overdue', 'awaiting', 'intake', 'money', 'instalments', 'service', 'purchases', 'decisions', 'fill', 'till'] as const;
 export type TaskGroup = (typeof TASK_GROUPS)[number];
 
 /** What the row's button does; the screen turns it into words and a link. */
@@ -31,7 +34,9 @@ export type TaskAction =
   | 'set_vin'
   | 'set_point'
   | 'sort_odoo_deposits'
-  | 'reconcile_kommo';
+  | 'reconcile_kommo'
+  | 'hand_over_from_kommo'
+  | 'sell_from_kommo';
 
 export interface TaskRow {
   /** Stable across reloads: the record it is about plus what it asks for. */
@@ -103,14 +108,14 @@ export interface QueueInput {
    * nothing to say. `silent` is a row of its own kind: Kommo has stopped
    * answering, and an owner who is not told reads "no row" as "all agree".
    */
-  kommo: {
-    rentedThere: number;
-    rentedHere: number;
-    silent: boolean;
-    lastOkAt: string | null;
-    /** Payment notes Kommo would not take (ADR-0013): somebody has to look, the system will not send them again. */
-    notesRefused?: number;
-  } | null;
+  kommo: { rentedThere: number; rentedHere: number; silent: boolean; lastOkAt: string | null } | null;
+  /**
+   * Deals Kommo has won that nothing here answers to yet (ADR-0015): a deal
+   * in the rented stage with no rental, a sale closed as won with no sale.
+   * Each is a task of its own, for whoever hands the moped over — a manager
+   * sees them too. `customerId` is the card the hand-over starts from.
+   */
+  kommoDeals: { leadId: string; kind: 'rent' | 'sale'; who: string; customerId: string | null; phone: string | null }[];
 }
 
 export interface TaskGroupRows {
@@ -122,6 +127,8 @@ export interface TaskGroupRows {
 }
 
 const SHOWN = 3;
+/** Deals from Kommo are shown one by one: each is somebody waiting, and there is no list to open them in. */
+const SHOWN_INTAKE = 20;
 
 /** The list the Kommo row opens. It is in no menu: with the link off there is nothing on it. */
 export const KOMMO_PATH = '/settings/kommo';
@@ -313,12 +320,12 @@ export function dayQueue(input: QueueInput): TaskGroupRows[] {
     if (input.vehiclesWithoutPool > 0) {
       rows.push({ id: 'pool', group: 'decisions', action: 'set_pool', who: null, number: null, vin: null, days: null, amountTetri: null, href: '/fleet?f=nopool', phone: null, note: String(input.vehiclesWithoutPool) });
     }
-    // Kommo says one thing and the rentals here another: one row for all of
-    // it, like the deposits above. The note carries the count, whether Kommo
-    // still answers, and the time of its last answer.
+    // Rented here and not in Kommo: one row for all of it, like the deposits
+    // above. The other half — rented there and not here — is the "intake"
+    // group, a task each (ADR-0015). The note carries the count, whether
+    // Kommo still answers, and the time of its last answer.
     const k = input.kommo;
-    const refused = k?.notesRefused ?? 0;
-    if (k && (k.rentedThere + k.rentedHere > 0 || k.silent || refused > 0)) {
+    if (k && (k.rentedHere > 0 || k.silent)) {
       rows.push({
         id: 'kommo',
         group: 'decisions',
@@ -330,10 +337,28 @@ export function dayQueue(input: QueueInput): TaskGroupRows[] {
         amountTetri: null,
         href: KOMMO_PATH,
         phone: null,
-        // The fourth part came with step 2: notes Kommo refused.
-        note: `${k.rentedThere + k.rentedHere}|${k.silent ? 'silent' : 'ok'}|${k.lastOkAt ?? ''}${refused > 0 ? `|${refused}` : ''}`,
+        note: `${k.rentedHere}|${k.silent ? 'silent' : 'ok'}|${k.lastOkAt ?? ''}`,
       });
     }
+  }
+
+  // What Kommo has won and nobody has entered: the hand-over or the sale,
+  // started from the customer's card and carrying the deal's link.
+  for (const d of input.kommoDeals) {
+    const query = [d.customerId ? `customer=${d.customerId}` : null, `lead=${d.leadId}`].filter(Boolean).join('&');
+    rows.push({
+      id: `kommo-${d.kind}:${d.leadId}`,
+      group: 'intake',
+      action: d.kind === 'sale' ? 'sell_from_kommo' : 'hand_over_from_kommo',
+      who: d.who,
+      number: null,
+      vin: null,
+      days: null,
+      amountTetri: null,
+      href: `${d.kind === 'sale' ? '/sales/new' : '/rentals/new'}?${query}`,
+      phone: d.phone,
+      note: d.leadId,
+    });
   }
 
   // 10. Fill in — an unsigned contract, a rental without a VIN, a moped without a point.
@@ -356,7 +381,7 @@ export function dayQueue(input: QueueInput): TaskGroupRows[] {
 
   return TASK_GROUPS.map((group) => {
     const all = rows.filter((r) => r.group === group);
-    return { group, rows: all.slice(0, SHOWN), total: all.length, totalTetri: all.reduce((n, r) => n + (r.amountTetri ?? 0), 0) };
+    return { group, rows: all.slice(0, group === 'intake' ? SHOWN_INTAKE : SHOWN), total: all.length, totalTetri: all.reduce((n, r) => n + (r.amountTetri ?? 0), 0) };
   }).filter((g) => g.total > 0);
 }
 

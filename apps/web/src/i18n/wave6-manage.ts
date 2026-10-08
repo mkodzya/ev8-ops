@@ -116,7 +116,7 @@ export const wave6manageEn = {
 
   kommo: {
     label: 'Kommo',
-    hint: 'A link or a deal id. It opens in Kommo; the link is one way until the webhook tariff.',
+    hint: 'A link or a deal id. It opens in Kommo.',
     open: 'Open in Kommo',
     saved: 'Kommo link saved.',
     cleared: 'Kommo link removed.',
@@ -238,7 +238,7 @@ export const wave6manageRu: typeof wave6manageEn = {
 
   kommo: {
     label: 'Kommo',
-    hint: 'Ссылка или id сделки. Открывается в Kommo; связь односторонняя до тарифа с вебхуками.',
+    hint: 'Ссылка или id сделки. Открывается в Kommo.',
     open: 'Открыть в Kommo',
     saved: 'Ссылка Kommo сохранена.',
     cleared: 'Ссылка Kommo убрана.',
@@ -360,7 +360,7 @@ export const wave6manageKa: typeof wave6manageEn = {
 
   kommo: {
     label: 'Kommo',
-    hint: 'ბმული ან გარიგების id. იხსნება Kommo-ში; კავშირი ცალმხრივია ვებჰუკების ტარიფამდე.',
+    hint: 'ბმული ან გარიგების id. იხსნება Kommo-ში.',
     open: 'გახსნა Kommo-ში',
     saved: 'Kommo-ს ბმული შენახულია.',
     cleared: 'Kommo-ს ბმული მოხსნილია.',

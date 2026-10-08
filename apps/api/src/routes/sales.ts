@@ -4,6 +4,7 @@ import { audit } from '../lib/audit.js';
 import { dateFromISO, dayOf, isoDate } from '../lib/dates.js';
 import { prisma } from '../lib/db.js';
 import { env } from '../lib/env.js';
+import { kommoRefToKeep } from '../lib/kommo.js';
 import { conflict, forbidden, notFound } from '../lib/errors.js';
 import { hasPerm } from '../lib/auth.js';
 import { actorOf } from '../lib/guard.js';
@@ -214,6 +215,8 @@ export function saleRoutes(app: FastifyInstance): void {
           extras: extraLines.length > 0 ? extraLines.map((l) => `${str(l, 'name', { max: 200 }) ?? ''} · ${(tetri(l, 'amountTetri', { min: 0 }) ?? 0) / 100}`).join('; ') : str(b, 'extras', { max: 1000 }),
           warrantyUntil: dateFromISO(warranty),
           notes: str(b, 'notes', { max: 4000 }),
+          // The Kommo deal the sale was started from, when it was (ADR-0015).
+          kommoRef: kommoRefToKeep(str(b, 'kommoRef', { max: 300 })),
           createdById: actor.id,
         },
         select: { id: true, number: true },

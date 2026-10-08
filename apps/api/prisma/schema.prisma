@@ -419,6 +419,7 @@ model Customer {
   sales       Sale[]
   supplied    Purchase[]
   mergedInto  Customer?    @relation("customer_merge", fields: [mergedIntoId], references: [id])
+  kommoLeads  KommoLead[]
   mergedFrom  Customer[]   @relation("customer_merge")
 
   @@map("customers")
@@ -647,7 +648,6 @@ model Payment {
   createdBy   User?               @relation("payment_created_by", fields: [createdById], references: [id])
   voidedBy    User?               @relation("payment_voided_by", fields: [voidedById], references: [id])
   allocations PaymentAllocation[]
-  kommoNotes  KommoNote[]
 
   @@map("payments")
 }
@@ -1135,12 +1135,21 @@ model BatteryMove {
 /// A deal standing in Kommo's "rented" stage at the last poll that worked
 /// (migration 0032, ADR-0012). The id is Kommo's, kept as text.
 model KommoLead {
-  leadId      String   @id @map("lead_id")
-  name        String
-  contactName String?  @map("contact_name")
-  statusId    BigInt   @map("status_id")
-  firstSeenAt DateTime @default(now()) @map("first_seen_at")
-  seenAt      DateTime @default(now()) @map("seen_at")
+  leadId       String    @id @map("lead_id")
+  name         String
+  contactName  String?   @map("contact_name")
+  statusId     BigInt    @map("status_id")
+  /// rent — standing in the rented stage; sale — closed as won in the sales pipeline (migration 0035).
+  kind         String    @default("rent")
+  contactPhone String?   @map("contact_phone")
+  /// When Kommo closed a won deal; a deal in the rented stage has none.
+  closedAt     DateTime? @map("closed_at")
+  /// The card the deal was tied to: found by its Kommo link or its phone, or made from the contact.
+  customerId   String?   @map("customer_id") @db.Uuid
+  firstSeenAt  DateTime  @default(now()) @map("first_seen_at")
+  seenAt       DateTime  @default(now()) @map("seen_at")
+
+  customer Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
 
   @@map("kommo_leads")
 }
@@ -1153,36 +1162,8 @@ model KommoSync {
   lastFailure    String?   @map("last_failure")
   lastHttpStatus Int?      @map("last_http_status")
   leads          Int       @default(0)
-  /// When writing to Kommo last came on here; earlier payments are never written (migration 0033).
-  notesFrom      DateTime? @map("notes_from")
-  /// What the stand's switch said at the last knock: off | on | only:<deals>. A change moves `notesFrom`.
-  notesMode      String?   @map("notes_mode")
+  /// When this stand began taking deals in: a sale closed before it is history, not a task (migration 0035).
+  intakeFrom     DateTime? @map("intake_from")
 
   @@map("kommo_sync")
-}
-
-/// What EV8 Ops owes Kommo and what Kommo has taken: one note per payment
-/// and kind (migration 0033, ADR-0013).
-model KommoNote {
-  id          String    @id @default(uuid()) @db.Uuid
-  /// `payment` — the note for a payment; `payment_void` — the note that it was voided.
-  kind        String
-  paymentId   String    @map("payment_id") @db.Uuid
-  rentalId    String?   @map("rental_id") @db.Uuid
-  leadId      String?   @map("lead_id")
-  body        String?
-  /// pending | sent | skipped | refused | cancelled
-  state       String
-  reason      String?
-  httpStatus  Int?      @map("http_status")
-  attempts    Int       @default(0)
-  kommoNoteId String?   @map("kommo_note_id")
-  createdAt   DateTime  @default(now()) @map("created_at")
-  sentAt      DateTime? @map("sent_at")
-
-  payment Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
-
-  @@unique([kind, paymentId])
-  @@index([state, createdAt], map: "kommo_notes_state_idx")
-  @@map("kommo_notes")
 }

@@ -1,7 +1,7 @@
 // Kommo against the rentals here (ADR-0012): the comparison, without a
 // network or a database around it.
 import { describe, expect, it } from 'vitest';
-import { dayQueue, kommoFreshness, kommoLeadId, kommoMayWriteTo, kommoWriteMode, paymentNoteText, paymentVoidNoteText, reconcileKommo, type KommoRunningRental, type QueueInput } from '../src/index.js';
+import { dayQueue, kommoFreshness, kommoLeadId, phoneAsOnCard, phoneKey, reconcileKommo, unenteredSales, type KommoRunningRental, type QueueInput } from '../src/index.js';
 
 const rental = (over: Partial<KommoRunningRental> & { customerRef?: string | null } = {}): KommoRunningRental => {
   const { customerRef = null, ...rest } = over;
@@ -102,20 +102,23 @@ describe('the Kommo row in “Today”', () => {
     vehiclesWithoutPoint: 0,
     odooDeposits: { count: 0, amountTetri: 0 },
     kommo: null,
+    kommoDeals: [],
     ...over,
   });
   const at = '2026-10-07T08:40:00.000Z';
 
-  it('is one row for every disagreement, with the time of Kommo’s answer', () => {
+  it('is one row for every rental Kommo does not call rented, with the time of Kommo’s answer', () => {
+    // The other half — rented there, nothing here — is a task each, not this row (ADR-0015).
     const q = dayQueue(input({ kommo: { rentedThere: 17, rentedHere: 2, silent: false, lastOkAt: at } }));
     expect(q).toHaveLength(1);
-    expect(q[0]!.rows).toEqual([expect.objectContaining({ id: 'kommo', group: 'decisions', action: 'reconcile_kommo', href: '/settings/kommo', note: `19|ok|${at}` })]);
+    expect(q[0]!.rows).toEqual([expect.objectContaining({ id: 'kommo', group: 'decisions', action: 'reconcile_kommo', href: '/settings/kommo', note: `2|ok|${at}` })]);
   });
 
-  it('is not there when nothing disagrees, when the link is off, or for a manager', () => {
+  it('is not there when nothing here disagrees, when the link is off, or for a manager', () => {
     expect(dayQueue(input({ kommo: { rentedThere: 0, rentedHere: 0, silent: false, lastOkAt: at } }))).toEqual([]);
+    expect(dayQueue(input({ kommo: { rentedThere: 17, rentedHere: 0, silent: false, lastOkAt: at } }))).toEqual([]);
     expect(dayQueue(input({ kommo: null }))).toEqual([]);
-    expect(dayQueue(input({ owner: false, kommo: { rentedThere: 17, rentedHere: 0, silent: false, lastOkAt: at } }))).toEqual([]);
+    expect(dayQueue(input({ owner: false, kommo: { rentedThere: 0, rentedHere: 3, silent: false, lastOkAt: at } }))).toEqual([]);
   });
 
   it('is there when Kommo has gone silent, even with nothing disagreeing: no row must not read as “all agree”', () => {
@@ -124,60 +127,58 @@ describe('the Kommo row in “Today”', () => {
   });
 });
 
-// Step 2 (ADR-0013): the note a payment leaves in the deal, and the switch.
-describe('whether a stand writes to Kommo', () => {
-  it('is off unless told, and off again for anything it does not understand', () => {
-    expect(kommoWriteMode(undefined)).toEqual({ kind: 'off' });
-    expect(kommoWriteMode('')).toEqual({ kind: 'off' });
-    expect(kommoWriteMode('off')).toEqual({ kind: 'off' });
-    expect(kommoWriteMode('yes')).toEqual({ kind: 'off' });
-    expect(kommoWriteMode('only:')).toEqual({ kind: 'off' });
-    expect(kommoWriteMode('only:abc')).toEqual({ kind: 'off' });
+// ADR-0015: what Kommo has won comes in as a card and a task.
+describe('a phone, to find a card by', () => {
+  it('is the same key however the number is written', () => {
+    const key = phoneKey('+995 595 12 34 56');
+    expect(key).toBe('995595123456');
+    for (const written of ['595123456', '995595123456', '00995 595 12-34-56', '+995(595)123456', ' 595 12 34 56 ']) expect(phoneKey(written)).toBe(key);
+    expect(phoneKey('+971 50 123 4567')).toBe('971501234567');
   });
 
-  it('writes to every deal when on, and to the named deals alone when told which', () => {
-    expect(kommoWriteMode(' ON ')).toEqual({ kind: 'all' });
-    const only = kommoWriteMode('only:101, 202');
-    expect(only).toEqual({ kind: 'only', leads: ['101', '202'] });
-    expect(kommoMayWriteTo(only, '202')).toBe(true);
-    expect(kommoMayWriteTo(only, '303')).toBe(false);
-    expect(kommoMayWriteTo({ kind: 'all' }, '303')).toBe(true);
-    expect(kommoMayWriteTo({ kind: 'off' }, '101')).toBe(false);
-  });
-});
-
-describe('the note a payment leaves in the deal', () => {
-  const facts = { rentalNumber: 'R-00012', occurredOn: '2026-10-08', channel: 'cash' as const, grossTetri: 15000, rentTetri: 15000, depositTetri: 0, chargesTetri: 0, paidThrough: '2026-10-14', takenBy: 'ТЕСТ Менеджер' };
-
-  it('says what came, when, how, what it closed and where the rental stands — on one line', () => {
-    expect(paymentNoteText(facts, 'ru')).toBe('EV8 Ops · оплата 150 ₾ · 08.10.2026 · наличные · аренда · оплачено по 14.10.2026 · R-00012 · принял(а) ТЕСТ Менеджер');
+  it('is nothing for what is not a number', () => {
+    expect(phoneKey(null)).toBeNull();
+    expect(phoneKey('')).toBeNull();
+    expect(phoneKey('no phone')).toBeNull();
+    expect(phoneKey('12345')).toBeNull();
   });
 
-  it('splits a first payment into the week and the deposit, and names what stayed as credit', () => {
-    expect(paymentNoteText({ ...facts, grossTetri: 33000, rentTetri: 15000, depositTetri: 18000, channel: 'acquiring' }, 'ru')).toContain('карта · аренда 150 ₾, залог 180 ₾ · оплачено по');
-    expect(paymentNoteText({ ...facts, grossTetri: 20050, rentTetri: 15000 }, 'ru')).toContain('оплата 200.50 ₾ · 08.10.2026 · наличные · аренда 150 ₾, на счёт клиента 50.50 ₾');
-  });
-
-  it('says so when no whole week is paid, and leaves out a name nobody gave', () => {
-    const text = paymentNoteText({ ...facts, grossTetri: 5000, rentTetri: 5000, paidThrough: null, takenBy: null }, 'ru');
-    expect(text).toBe('EV8 Ops · оплата 50 ₾ · 08.10.2026 · наличные · аренда · оплаченных недель нет · R-00012');
-  });
-
-  it('is written in the language the staff read Kommo in', () => {
-    expect(paymentNoteText(facts, 'en')).toBe('EV8 Ops · payment 150 ₾ · 08.10.2026 · cash · rent · paid through 14.10.2026 · R-00012 · taken by ТЕСТ Менеджер');
-    expect(paymentNoteText(facts, 'ka')).toContain('გადახდა 150 ₾ · 08.10.2026 · ნაღდი · ქირა · გადახდილია 14.10.2026-მდე · R-00012');
-  });
-
-  it('takes a note back when the payment is voided, with the reason on one line', () => {
-    const text = paymentVoidNoteText({ rentalNumber: 'R-00012', occurredOn: '2026-10-08', grossTetri: 15000, reason: 'не тот\nклиент', paidThrough: '2026-10-07', voidedBy: 'ТЕСТ Владелец' }, 'ru');
-    expect(text).toBe('EV8 Ops · ОТМЕНЕНА оплата 150 ₾ от 08.10.2026 · причина: не тот клиент · оплачено по 07.10.2026 · R-00012 · отменил(а) ТЕСТ Владелец');
+  it('goes onto a card the way the hand-over writes it, and a foreign number as it came', () => {
+    expect(phoneAsOnCard('995595123456')).toBe('+995 595 12 34 56');
+    expect(phoneAsOnCard('595 123456')).toBe('+995 595 12 34 56');
+    expect(phoneAsOnCard(' +971 50 123 4567 ')).toBe('+971 50 123 4567');
   });
 });
 
-describe('the Kommo row in “Today”, once notes are written', () => {
-  const base: QueueInput = {
+describe('a deal and its card', () => {
+  it('is the card that names the deal, and failing that the card the deal was tied to by its phone', () => {
+    const named = { id: 'c1', name: 'ТЕСТ По ссылке', kommoRef: '301' };
+    const tied = { id: 'c2', name: 'ТЕСТ По телефону', kommoRef: 'https://ev8mopeds.kommo.com/leads/detail/999' };
+    const r = reconcileKommo([lead('301'), { ...lead('302'), customerId: 'c2' }, { ...lead('303'), customerId: 'gone' }, lead('304')], [], [named, tied]);
+    expect(r.rentedThere.map((x) => x.customer)).toEqual([{ id: 'c1', name: 'ТЕСТ По ссылке' }, { id: 'c2', name: 'ТЕСТ По телефону' }, null, null]);
+  });
+});
+
+describe('sales Kommo has won beside the sales here', () => {
+  const sale = (kommoRef: string | null, customerRef: string | null = null) => ({ kommoRef, customer: { kommoRef: customerRef } });
+
+  it('asks for a sale that nothing here answers to, with the card to start from', () => {
+    const cards = [{ id: 'c1', name: 'ТЕСТ Покупатель', kommoRef: '401' }];
+    expect(unenteredSales([lead('401')], [], cards)).toEqual([{ leadId: '401', leadName: 'ТЕСТ Сделка 401', contactName: null, customer: { id: 'c1', name: 'ТЕСТ Покупатель' } }]);
+  });
+
+  it('is answered by a sale’s own link, and failing that by its buyer’s — as a rental is', () => {
+    expect(unenteredSales([lead('402')], [sale('https://ev8mopeds.kommo.com/leads/detail/402')], [])).toEqual([]);
+    expect(unenteredSales([lead('403')], [sale(null, '403')], [])).toEqual([]);
+    // The sale's own link wins: this one is for another deal, whatever its buyer's card says.
+    expect(unenteredSales([lead('404')], [sale('405', '404')], []).map((x) => x.leadId)).toEqual(['404']);
+  });
+});
+
+describe('deals from Kommo in “Today”', () => {
+  const input = (over: Partial<QueueInput> = {}): QueueInput => ({
     today: '2026-10-08',
-    owner: true,
+    owner: false,
     rentals: [],
     tills: [],
     myTillTetri: 0,
@@ -192,17 +193,36 @@ describe('the Kommo row in “Today”, once notes are written', () => {
     vehiclesWithoutPoint: 0,
     odooDeposits: { count: 0, amountTetri: 0 },
     kommo: null,
-  };
-  const at = '2026-10-08T08:40:00.000Z';
-
-  it('appears for a note Kommo refused even when nothing else disagrees, and carries the count', () => {
-    const q = dayQueue({ ...base, kommo: { rentedThere: 0, rentedHere: 0, silent: false, lastOkAt: at, notesRefused: 2 } });
-    expect(q[0]!.rows[0]).toMatchObject({ id: 'kommo', note: `0|ok|${at}|2` });
+    kommoDeals: [],
+    ...over,
   });
 
-  it('keeps its old shape while no note is refused', () => {
-    const q = dayQueue({ ...base, kommo: { rentedThere: 7, rentedHere: 0, silent: false, lastOkAt: at, notesRefused: 0 } });
-    expect(q[0]!.rows[0]!.note).toBe(`7|ok|${at}`);
-    expect(dayQueue({ ...base, kommo: { rentedThere: 0, rentedHere: 0, silent: false, lastOkAt: at, notesRefused: 0 } })).toEqual([]);
+  it('are a task each, for a manager too: the hand-over opens on the customer’s card and carries the deal', () => {
+    const q = dayQueue(input({ kommoDeals: [{ leadId: '501', kind: 'rent', who: 'ТЕСТ Арендатор', customerId: 'c1', phone: '+995 595 12 34 56' }] }));
+    expect(q.map((g) => g.group)).toEqual(['intake']);
+    expect(q[0]!.rows).toEqual([
+      { id: 'kommo-rent:501', group: 'intake', action: 'hand_over_from_kommo', who: 'ТЕСТ Арендатор', number: null, vin: null, days: null, amountTetri: null, href: '/rentals/new?customer=c1&lead=501', phone: '+995 595 12 34 56', note: '501' },
+    ]);
+  });
+
+  it('open the sale for a won sale, and the wizard without a card when no card could be told', () => {
+    const q = dayQueue(input({ owner: true, kommoDeals: [{ leadId: '502', kind: 'sale', who: 'ТЕСТ Покупатель', customerId: 'c2', phone: null }, { leadId: '503', kind: 'rent', who: 'ТЕСТ Сделка 503', customerId: null, phone: null }] }));
+    expect(q[0]!.rows.map((r) => [r.action, r.href])).toEqual([
+      ['sell_from_kommo', '/sales/new?customer=c2&lead=502'],
+      ['hand_over_from_kommo', '/rentals/new?lead=503'],
+    ]);
+  });
+
+  it('are all shown, not three and “more”: there is no list to open the rest in', () => {
+    const many = Array.from({ length: 7 }, (_, i) => ({ leadId: String(600 + i), kind: 'rent' as const, who: `ТЕСТ ${i}`, customerId: `c${i}`, phone: null }));
+    const g = dayQueue(input({ kommoDeals: many }))[0]!;
+    expect(g.rows).toHaveLength(7);
+    expect(g.total).toBe(7);
+  });
+
+  it('stand after the rentals’ own groups and before the money', () => {
+    const r = { id: 'r1', number: 'R-00001', customer: { id: 'c1', name: 'ТЕСТ', phone: null }, vin: null, pickedUpOn: '2026-09-01', expectedReturnOn: null, paidThrough: '2026-09-07', status: 'overdue', debtTetri: 15000, awaitingPayment: false, depositUndecided: false, vinUnconfirmed: false, contractUnsigned: false };
+    const q = dayQueue(input({ owner: true, rentals: [r], unmatchedLines: 2, kommoDeals: [{ leadId: '701', kind: 'rent', who: 'ТЕСТ', customerId: null, phone: null }] }));
+    expect(q.map((g) => g.group)).toEqual(['overdue', 'intake', 'money']);
   });
 });
