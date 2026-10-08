@@ -64,6 +64,29 @@ describe.skipIf(!HAS_DB)('“Today” (wave 4)', () => {
     expect(managerSees.queue.some((g) => g.group === 'decide' && g.rows.some((r) => r.action === 'decide_deposit'))).toBe(false);
   });
 
+  it('asks for a signature on a contract made here, never on a rental brought over (Mika, 08.10.2026)', async () => {
+    const { prisma } = await import('../src/lib/db.js');
+    const owner = await loginAs('owner');
+    const fill = async () => json<Today>(await call(owner, 'GET', '/api/today')).queue.find((g) => g.group === 'fill')?.total ?? 0;
+    const listed = async (id: string) => json<{ rentals: { id: string; contractSigned: boolean | null }[] }>(await call(owner, 'GET', '/api/rentals')).rentals.find((r) => r.id === id)!;
+    const before = await fill();
+
+    // Brought over: handed over three weeks ago, its contract from before EV8 Ops.
+    const model = await prisma.vehicleModel.create({ data: { brand: 'Test', name: `Today ${uniq()}`, weeklyRateTetri: 15000, forRent: true } });
+    const vehicle = await prisma.vehicle.create({ data: { vin: `TESTT${uniq().replace(/\D/g, '').slice(-12).padStart(12, '0')}`, modelId: model.id, pool: 'rent' } });
+    const customer = await prisma.customer.create({ data: { name: `ТЕСТ Сегодня ${uniq()}`, phone: `+9955${uniq().replace(/\D/g, '').slice(-8)}` } });
+    const res = await call(owner, 'POST', '/api/rentals', { customerId: customer.id, vehicleId: vehicle.id, weeklyRateTetri: 15000, pickedUpOn: addDays(todayISO(), -21), transfer: { paidThrough: null, depositReceivedTetri: 0 } });
+    expect(res.statusCode, res.body).toBe(201);
+    const over = json<{ id: string }>(res).id;
+    expect(await fill()).toBe(before);
+    expect((await listed(over)).contractSigned).toBeNull();
+
+    // Handed over here three weeks ago and still unsigned: that one is asked for.
+    const { id } = await overdueRental();
+    expect(await fill()).toBe(before + 1);
+    expect((await listed(id)).contractSigned).toBe(false);
+  });
+
   it('asks an owner to take a till in before the deposits, and names a manager’s own cash for what it is (crit. 4)', async () => {
     const { id } = await overdueRental();
     const manager = await loginAs('manager');

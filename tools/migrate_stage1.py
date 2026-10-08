@@ -5,6 +5,7 @@
     python3 tools/migrate_stage1.py --dry-run      прочитать и показать, что будет
     python3 tools/migrate_stage1.py --apply        записать в нашу базу
     python3 tools/migrate_stage1.py --apply --wipe-demo   сначала убрать демо-строки
+    python3 tools/migrate_stage1.py --only fleet --apply  только модели и мопеды
 
 Решение Мики 15.09.2026: импорт делается сейчас, а не в самом конце, чтобы
 дорабатывать продукт на боевых данных. Цена названа и принята — денежный слой
@@ -51,10 +52,21 @@ DEFAULT_DB = "postgresql://ev8ops:ev8ops@localhost:5433/ev8ops"
 
 # The note every carried-over row gets: the day of *this* run. A row first
 # written on the test stand in September 2026 must not claim 15.09.
-MOVED = f"Перенесено из Odoo {date.today():%d.%m.%Y}"
+# No source named: the people reading the card do not work with Odoo, and its
+# name on every card read as if the system still depended on it (Mika, 07.10.2026).
+MOVED = f"Перенесено {date.today():%d.%m.%Y}"
 
 # Тестовый заказ со звонка консультанта: в Odoo он есть, к нам не едет.
 SKIP_ORDERS = {"S00060"}
+
+
+# A model is addressed by the table's own unique key, not by a row id: the id
+# is only known after the row is written, and `--sql` never reads anything back.
+ModelKey = tuple[str, str]
+MODEL_ID = "(select id from vehicle_models where brand = %s and name = %s)"
+
+# The same rule as packages/shared/src/vin.ts: 17 characters, no I, O or Q.
+VIN_RE = re.compile(r"[A-HJ-NPR-Z0-9]{17}")
 
 
 def tetri(x: float | None) -> int | None:
@@ -101,7 +113,7 @@ class Report:
 # Справочники: модели, мопеды, клиенты
 # --------------------------------------------------------------------------
 
-def import_models(o: Odoo, cur, rep: Report) -> dict[int, str]:
+def import_models(o: Odoo, cur, rep: Report) -> tuple[dict[int, ModelKey], dict[int, ModelKey]]:
     """Модели мопедов.
 
     Что такое модель, решает не название, а учёт: **товар с серийным учётом**
@@ -111,6 +123,9 @@ def import_models(o: Odoo, cur, rep: Report) -> dict[int, str]:
     моделями не являются; депозит, сбор за бронь и недельные тарифы — услуги.
 
     Цены в Odoo без НДС, у нас цена продажи хранится с НДС (ТЗ §8): × 1.18.
+
+    Возвращает, под каким ключом модель легла у нас: по модели Fleet и по
+    товару «Sale» — так мопед находит свою модель и из Fleet, и со склада.
     """
     VAT = 1.18
     fleet_models = {
@@ -141,7 +156,8 @@ def import_models(o: Odoo, cur, rep: Report) -> dict[int, str]:
             slot["rental_id"] = p["id"]
             slot["weekly"] = p["list_price"] * VAT
 
-    ids: dict[int, str] = {}
+    by_fleet: dict[int, ModelKey] = {}
+    by_sale: dict[int, ModelKey] = {}
     for key, slot in sorted(by_key.items()):
         fm = fleet_models.get(key)
         brand = (fm["brand_id"][1] if fm and fm.get("brand_id") else "Luyuan")
@@ -163,23 +179,33 @@ def import_models(o: Odoo, cur, rep: Report) -> dict[int, str]:
               odoo_rental_product_id = coalesce(excluded.odoo_rental_product_id, vehicle_models.odoo_rental_product_id),
               odoo_fleet_model_id = coalesce(excluded.odoo_fleet_model_id, vehicle_models.odoo_fleet_model_id),
               updated_at = now()
-            returning id
             """,
             (brand, slot["name"], tetri(slot["sale_price"]), tetri(slot["weekly"]), tetri(slot["cost"]),
              True, slot["rental_id"] is not None, slot["sale_id"], slot["rental_id"],
              fm["id"] if fm else None, MOVED),
         )
-        row_id = cur.fetchone()[0]
         rep.did("модели")
         if fm:
-            ids[fm["id"]] = row_id
+            by_fleet[fm["id"]] = (brand, slot["name"])
+        if slot["sale_id"]:
+            by_sale[slot["sale_id"]] = (brand, slot["name"])
         if not slot["cost"]:
             rep.note(f"модель «{slot['name']}»: себестоимость в Odoo пуста — у нас тоже пуста, это не ноль")
-    return ids
+    return by_fleet, by_sale
 
 
-def import_vehicles(o: Odoo, cur, rep: Report, fleet_model_ids: dict[int, str]) -> dict[str, str]:
-    """Мопеды. Fleet — источник состояния; серийники Luyuan приходят как склад."""
+def import_vehicles(o: Odoo, cur, rep: Report,
+                    models: tuple[dict[int, ModelKey], dict[int, ModelKey]],
+                    as_found: bool = False) -> dict[str, str]:
+    """Мопеды. Fleet — источник состояния; серийники Luyuan приходят как склад.
+
+    as_found — мопеды без аренд и продаж (`--only fleet`, Mika, 07.10.2026):
+    Odoo перестали вести, и что с мопедом сейчас, он не знает. Поэтому
+    состояние из Fleet не берётся, мопед, который у нас уже есть, не трогается,
+    а серийник, который не является VIN, не переносится.
+    """
+    by_fleet, by_sale = models
+    moved = f"{MOVED}. Состояние и место не подтверждены" if as_found else MOVED
     by_vin: dict[str, str] = {}
     states = {s["id"]: s["name"] for s in o.search_read("fleet.vehicle.state", [], ["name"])}
     ours = {"ready": "available", "in service": "service", "out of service": "out", "rented": "rented", "sold": "sold"}
@@ -189,34 +215,43 @@ def import_vehicles(o: Odoo, cur, rep: Report, fleet_model_ids: dict[int, str]) 
         if not vin:
             rep.note(f"мопед Fleet #{v['id']}: VIN пуст в Odoo — не переносится, выдумывать нечего")
             continue
-        model_id = fleet_model_ids.get(v["model_id"][0]) if v.get("model_id") else None
-        if not model_id:
+        if as_found and not VIN_RE.fullmatch(vin):
+            rep.note(f"мопед Fleet #{v['id']}: «…{vin[-4:]}» не VIN (17 знаков без I, O, Q) — не переносится")
+            continue
+        model = by_fleet.get(v["model_id"][0]) if v.get("model_id") else None
+        if not model:
             rep.note(f"мопед {vin[-4:]}: модель Fleet не нашлась среди наших — пропущен")
             continue
-        state = ours.get((states.get(v["state_id"][0], "") if v.get("state_id") else "").strip().lower(), "available")
-        cur.execute(
-            """
-            insert into vehicles (vin, model_id, color, year, arrived_on, state, odometer_km, odoo_fleet_id, notes)
-            values (%s,%s,%s,%s,%s,%s,%s,%s,%s)
-            on conflict (vin) do update set
-              model_id = excluded.model_id, color = excluded.color,
+        state = "available" if as_found else ours.get(
+            (states.get(v["state_id"][0], "") if v.get("state_id") else "").strip().lower(), "available")
+        # A moped already here keeps what was done to it here: only the full
+        # carry-over, which rebuilds rentals and sales with it, rewrites it.
+        on_conflict = (
+            "odoo_fleet_id = coalesce(vehicles.odoo_fleet_id, excluded.odoo_fleet_id)"
+            if as_found else
+            """model_id = excluded.model_id, color = excluded.color,
               arrived_on = excluded.arrived_on, state = excluded.state,
               odometer_km = excluded.odometer_km,
               odoo_fleet_id = coalesce(excluded.odoo_fleet_id, vehicles.odoo_fleet_id),
-              updated_at = now()
+              updated_at = now()"""
+        )
+        cur.execute(
+            f"""
+            insert into vehicles (vin, model_id, color, year, arrived_on, state, odometer_km, odoo_fleet_id, notes)
+            values (%s,{MODEL_ID},%s,%s,%s,%s,%s,%s,%s)
+            on conflict (vin) do update set
+              {on_conflict}
             returning id
             """,
-            (vin, model_id, (v.get("color") or None), None, as_date(v.get("acquisition_date")),
+            (vin, *model, (v.get("color") or None), None, as_date(v.get("acquisition_date")),
              state, int(v["odometer"]) if v.get("odometer") else None, v["id"],
-             MOVED),
+             moved),
         )
         by_vin[vin] = cur.fetchone()[0]
         rep.did("мопеды из Fleet")
 
     # Мопеды «только на продажу» во Fleet не заводились: они живут серийными
     # номерами на складе. Без них продажа не найдёт свой VIN (handoff §7).
-    cur.execute("select odoo_sale_product_id, id from vehicle_models where odoo_sale_product_id is not null")
-    model_by_tmpl = dict(cur.fetchall())
     lots = o.search_read("stock.lot", [], ["name", "product_id"], limit=1000)
     tmpl = {pp["id"]: (pp["product_tmpl_id"][0] if pp.get("product_tmpl_id") else None)
             for pp in o.search_read("product.product",
@@ -226,19 +261,22 @@ def import_vehicles(o: Odoo, cur, rep: Report, fleet_model_ids: dict[int, str]) 
         vin = (l.get("name") or "").strip().upper()
         if not vin or vin in by_vin:
             continue
-        model_id = model_by_tmpl.get(tmpl.get(l["product_id"][0])) if l.get("product_id") else None
-        if not model_id:
+        if as_found and not VIN_RE.fullmatch(vin):
+            rep.note(f"серийник «…{vin[-4:]}» не VIN (17 знаков без I, O, Q) — не переносится")
+            continue
+        model = by_sale.get(tmpl.get(l["product_id"][0])) if l.get("product_id") else None
+        if not model:
             rep.note(f"серийник {vin[-4:]}: модель не определяется — не переносится")
             continue
         cur.execute(
-            """
+            f"""
             insert into vehicles (vin, model_id, state, odoo_lot_id, notes)
-            values (%s,%s,'available',%s,%s)
+            values (%s,{MODEL_ID},'available',%s,%s)
             on conflict (vin) do update set
               odoo_lot_id = coalesce(excluded.odoo_lot_id, vehicles.odoo_lot_id), updated_at = now()
             returning id
             """,
-            (vin, model_id, l["id"], f"{MOVED}, серийный номер склада"),
+            (vin, *model, l["id"], f"{moved}, серийный номер склада"),
         )
         by_vin[vin] = cur.fetchone()[0]
         rep.did("мопеды по серийным номерам склада")
@@ -344,7 +382,7 @@ def import_customers(o: Odoo, cur, rep: Report, suppliers_only: bool = False,
         if pid and pid in seen_pid:
             rep.note(f"контакт Odoo #{p['id']}: личный номер совпал с контактом #{seen_pid[pid]} — "
                      f"номер не записан, карточка заведена с пометкой; решать, один это человек или два, человеку")
-            note = (note + ". " if note else "") + "Личный номер совпал с другой карточкой в Odoo и не перенесён."
+            note = (note + ". " if note else "") + "Личный номер совпал с другой карточкой и не перенесён."
             pid = None
         elif pid:
             seen_pid[pid] = p["id"]
@@ -370,7 +408,8 @@ def import_customers(o: Odoo, cur, rep: Report, suppliers_only: bool = False,
               -- A supplier's notes, likewise: refreshed only while nobody has
               -- written there — empty, or still the carry-over note.
               notes = case when excluded.record_kind = 'supplier'
-                            and (customers.notes is null or customers.notes like 'Перенесено из Odoo%%')
+                            and (customers.notes is null
+                                 or customers.notes ~ '^Перенесено (из Odoo )?[0-9]{2}[.][0-9]{2}[.][0-9]{4}')
                            then excluded.notes else customers.notes end
             returning id
             """,
@@ -828,6 +867,15 @@ class SqlOut:
         return (None,)
 
 
+def import_only(what: str, o: Odoo, cur, rep: Report, cards: dict[int, dict[str, str]]) -> None:
+    """One layer on its own. Each of these writes without reading back, so it
+    also runs as `--sql` against a stand this Mac cannot reach."""
+    if what == "suppliers":
+        import_customers(o, cur, rep, suppliers_only=True, cards=cards)
+    elif what == "fleet":
+        import_vehicles(o, cur, rep, import_models(o, cur, rep), as_found=True)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="Odoo → EV8 Ops, read-only against Odoo.")
     ap.add_argument("--apply", action="store_true", help="записать (иначе только прочитать и показать)")
@@ -835,8 +883,8 @@ def main() -> int:
     ap.add_argument("--wipe", action="store_true",
                     help="очистить операционные таблицы перед импортом (логины и журнал не трогаются)")
     ap.add_argument("--db", default=os.environ.get("DATABASE_URL", DEFAULT_DB))
-    ap.add_argument("--only", choices=["suppliers"],
-                    help="перенести только это (сейчас — только поставщиков)")
+    ap.add_argument("--only", choices=["suppliers", "fleet"],
+                    help="перенести только это: поставщиков или модели с мопедами (без аренд и продаж)")
     ap.add_argument("--cards", default=CARDS,
                     help="разложенные карточки поставщиков (JSON вне репозитория; нет файла — без них)")
     ap.add_argument("--sql", action="store_true",
@@ -850,7 +898,7 @@ def main() -> int:
             print("--sql только вместе с --only: полный перенос читает записанное обратно.", file=sys.stderr)
             return 2
         o, rep, cur = Odoo(), Report(), SqlOut()
-        import_customers(o, cur, rep, suppliers_only=True, cards=load_cards(args.cards))
+        import_only(args.only, o, cur, rep, load_cards(args.cards))
         print("begin;")
         print("\n".join(cur.lines))
         print("commit;")
@@ -887,8 +935,8 @@ def main() -> int:
                 """)
                 rep.note("операционные таблицы очищены перед импортом; логины и журнал изменений сохранены")
             cards = load_cards(args.cards)
-            if args.only == "suppliers":
-                import_customers(o, cur, rep, suppliers_only=True, cards=cards)
+            if args.only:
+                import_only(args.only, o, cur, rep, cards)
             else:
                 today = date.today()
                 model_ids = import_models(o, cur, rep)

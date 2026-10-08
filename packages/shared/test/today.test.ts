@@ -37,6 +37,7 @@ const input = (over: Partial<QueueInput> = {}): QueueInput => ({
   vehiclesWithoutPool: 0,
   vehiclesWithoutPoint: 0,
   odooDeposits: { count: 0, amountTetri: 0 },
+  kommo: null,
   ...over,
 });
 

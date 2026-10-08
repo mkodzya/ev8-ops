@@ -6,6 +6,8 @@ import { depositsOverview } from '../lib/deposits.js';
 import { prisma } from '../lib/db.js';
 import { partRows } from '../lib/stock.js';
 import { env } from '../lib/env.js';
+import { kommoReconciliation } from '../lib/kommo.js';
+import { kommoNotesRefused } from '../lib/kommoNotes.js';
 import { actorOf, mayView } from '../lib/guard.js';
 import { onHandOf } from '../lib/till.js';
 import { UNDO_RETURN_MS } from '../lib/rentals.js';
@@ -47,6 +49,7 @@ export function todayRoutes(app: FastifyInstance): void {
           paidThrough: true,
           vinUnconfirmed: true,
           odooOrderId: true,
+          transferredAt: true,
           customer: { select: { id: true, name: true, nameKa: true, nameLat: true, phone: true } },
           vehicle: { select: { vin: true } },
           deposit: { select: { paidTetri: true, status: true, decidedById: true, migrationDecision: true } },
@@ -111,7 +114,9 @@ export function todayRoutes(app: FastifyInstance): void {
         // returns the company itself made.
         depositUndecided: r.status === 'returned' && r.deposit?.status === 'held' && !r.deposit.decidedById && !r.deposit.migrationDecision && r.odooOrderId == null,
         vinUnconfirmed: r.vinUnconfirmed,
-        contractUnsigned: !signed && handedOverAgo >= 1 && r.status !== 'returned',
+        // A rental brought over has its contract from before EV8 Ops, kept outside
+        // it: nobody is asked to sign that one here (Mika, 08.10.2026).
+        contractUnsigned: !signed && !r.transferredAt && handedOverAgo >= 1 && r.status !== 'returned',
       };
     });
 
@@ -127,6 +132,23 @@ export function todayRoutes(app: FastifyInstance): void {
           return { count: agg._count._all, amountTetri: agg._sum.paidTetri ?? 0 };
         })()
       : { count: 0, amountTetri: 0 };
+
+    // Kommo against the rentals here, as one row (ADR-0012). An owner's, and
+    // only with the link on; before Kommo has answered once there is nothing
+    // to compare and nothing is said.
+    const kommoNow = owner ? await kommoReconciliation() : null;
+    const notesRefused = kommoNow ? await kommoNotesRefused() : 0;
+    const kommo =
+      kommoNow && (kommoNow.freshness !== 'waiting' || notesRefused > 0)
+        ? {
+            rentedThere: kommoNow.rentedThere.length,
+            rentedHere: kommoNow.rentedHere.length,
+            silent: kommoNow.freshness === 'silent',
+            lastOkAt: kommoNow.lastOkAt?.toISOString() ?? null,
+            // Payment notes Kommo refused (step 2): the owner's to look at.
+            notesRefused,
+          }
+        : null;
 
     const staleBanks = owner
       ? BANKS.map((bank) => {
@@ -179,6 +201,7 @@ export function todayRoutes(app: FastifyInstance): void {
       vehiclesWithoutPool: vehicles.filter((v) => v.pool == null && v.state !== 'sold' && v.state !== 'out').length,
       vehiclesWithoutPoint: vehicles.filter((v) => v.locationId == null && v.state === 'available').length,
       odooDeposits,
+      kommo,
     });
 
     const fleet = Object.fromEntries(VEHICLE_STATES.map((s) => [s, 0])) as Record<VehicleState, number>;

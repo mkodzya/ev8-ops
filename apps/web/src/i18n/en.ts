@@ -15,6 +15,7 @@ import { wave5serviceEn } from './wave5-service.js';
 import { wave6weekEn } from './wave6-week.js';
 import { wave6utilEn } from './wave6-utilisation.js';
 import { wave6manageEn } from './wave6-manage.js';
+import { kommoLinkEn } from './kommo-link.js';
 export const en = {
   lang: { label: 'Language', ka: 'ქართული', ru: 'Русский', en: 'English' },
 
@@ -623,7 +624,7 @@ export const en = {
     costShort: 'Cost',
     inFleet: 'In the fleet',
     onOrder: 'On order',
-    fromOdoo: 'from Odoo',
+    fromOdoo: 'carried over',
     byHand: 'typed by hand',
     prices: 'Prices',
     notRented: 'not rented out',
@@ -1207,6 +1208,7 @@ export const en = {
   ...wave6weekEn,
   ...wave6utilEn,
   ...wave6manageEn,
+  ...kommoLinkEn,
 };
 
 export type Dict = typeof en;
