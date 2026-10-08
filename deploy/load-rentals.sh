@@ -17,8 +17,11 @@
 # comes back is a report with the row's label, the end of the VIN and the
 # customer's name as the stand has it — no phone, personal number or address.
 #
-# The rentals are written in the name of this stand's own owner (OWNER_EMAIL
-# in .env.test), through the same function the hand-over wizard calls.
+# The rentals are written in the name of the stand's owner, through the same
+# function the hand-over wizard calls. While the stand has one owner nobody
+# needs naming; once it has several, `--owner <e-mail>` says which. The env
+# file's OWNER_EMAIL is not asked: it only seeds the first login of an empty
+# database, and on this stand it holds a placeholder.
 #
 # A Claude session does not run this script: it prepares the list, the owner
 # brings the rentals over. Production is not touched: its rentals come over
@@ -31,12 +34,20 @@ COMPOSE=(docker compose -p ev8-test --env-file "$ENV" -f docker-compose.prod.yml
 [ -f "$ENV" ] || { echo "Нет файла $ENV."; exit 1; }
 
 COMMIT=""
-case "${1:-}" in
-  "") ;;
-  --commit) COMMIT=--commit ;;
-  *) echo "Не понимаю «$1». Без добавок — проверка списка, с --commit — запись. Ничего не сделано."; exit 2 ;;
-esac
-[ $# -le 1 ] || { echo "Лишние слова после «$1». Ничего не сделано."; exit 2; }
+OWNER=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --commit) COMMIT=--commit ;;
+    --owner)
+      [ $# -ge 2 ] || { echo "После --owner нужен e-mail владельца. Ничего не сделано."; exit 2; }
+      OWNER=$2; shift
+      # An address and nothing else: it becomes an argument of a command.
+      case "$OWNER" in ""|-*|*[!A-Za-z0-9@._+-]*) echo "«$OWNER» не похоже на e-mail. Ничего не сделано."; exit 2;; esac
+      ;;
+    *) echo "Не понимаю «$1». Без добавок — проверка списка, с --commit — запись. Ничего не сделано."; exit 2 ;;
+  esac
+  shift
+done
 
 # The list is whatever comes on standard input; a terminal there means no list.
 if [ -t 0 ]; then
@@ -44,9 +55,6 @@ if [ -t 0 ]; then
   echo "  ssh root@204.168.149.105 /srv/ev8-ops/deploy/load-rentals.sh < путь/к/списку.json"
   exit 2
 fi
-
-OWNER=$(sed -n 's/^OWNER_EMAIL=//p' "$ENV" | tail -n 1 | tr -d "\"'[:space:]")
-[ -n "$OWNER" ] || { echo "В $ENV нет OWNER_EMAIL: не от чьего имени писать. Ничего не сделано."; exit 1; }
 
 # Every command before the loader reads from /dev/null: anything that read
 # standard input here would swallow the list.
@@ -58,7 +66,7 @@ OWNER=$(sed -n 's/^OWNER_EMAIL=//p' "$ENV" | tail -n 1 | tr -d "\"'[:space:]")
 echo "Тестовый стенд https://test.ops.ev8.ge"
 set +e
 # shellcheck disable=SC2086 — one word or none, on purpose
-"${COMPOSE[@]}" exec -T api npx tsx src/loadRentals.ts --owner "$OWNER" $COMMIT
+"${COMPOSE[@]}" exec -T api npx tsx src/loadRentals.ts $COMMIT ${OWNER:+--owner "$OWNER"}
 CODE=$?
 set -e
 

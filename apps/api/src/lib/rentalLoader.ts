@@ -271,21 +271,39 @@ function pickupOf(r: Row, actor: Actor, today: ISODate): PickupInput {
   };
 }
 
-/** The owner the rentals are written in the name of, or why this login is not one. */
-async function ownerBy(email: string): Promise<{ actor: Actor | null; refused: string | null }> {
-  const address = email.trim().toLowerCase();
-  if (!address) return { actor: null, refused: 'Не сказано, от чьего имени писать: нужен e-mail владельца.' };
+type OwnerRow = { id: string; email: string; name: string; locale: string };
+
+/**
+ * Nobody was named: the stand's one owner, if it has one. The env file's
+ * OWNER_EMAIL is no answer — it only seeds the first login of an empty
+ * database, and on the test stand it holds a placeholder (08.10.2026).
+ */
+export function soleOwner<T extends { email: string }>(owners: readonly T[]): { owner: T | null; refused: string | null } {
+  if (owners.length === 1) return { owner: owners[0]!, refused: null };
+  if (owners.length === 0) return { owner: null, refused: 'На стенде нет ни одного действующего владельца: писать не от чьего имени.' };
+  return { owner: null, refused: `На стенде несколько владельцев: ${owners.map((o) => o.email).join(', ')}. Назовите, от чьего имени писать: добавьте к команде --owner и e-mail.` };
+}
+
+/** The owner the rentals are written in the name of, or why there is none: the one named by e-mail, else the stand's only one. */
+async function ownerBy(email: string | null): Promise<{ actor: Actor | null; refused: string | null }> {
+  const actorOf = (u: OwnerRow): Actor => ({ id: u.id, email: u.email, name: u.name, role: 'owner', locale: u.locale });
+  const address = (email ?? '').trim().toLowerCase();
+  if (!address) {
+    const { owner, refused } = soleOwner(await prisma.user.findMany({ where: { role: 'owner', active: true }, orderBy: { createdAt: 'asc' } }));
+    return { actor: owner ? actorOf(owner) : null, refused };
+  }
   const u = await prisma.user.findUnique({ where: { email: address } });
   if (!u) return { actor: null, refused: `Учётки ${address} на стенде нет.` };
   if (!u.active) return { actor: null, refused: `Учётка ${address} отключена.` };
   if (u.role !== 'owner') return { actor: null, refused: `${address} — не владелец. Действующие аренды переносит только владелец.` };
-  return { actor: { id: u.id, email: u.email, name: u.name, role: 'owner', locale: u.locale }, refused: null };
+  return { actor: actorOf(u), refused: null };
 }
 
 export interface LoadInput {
   /** The list as it arrived: JSON, an array of rows. */
   text: string;
-  ownerEmail: string;
+  /** In whose name the rentals are written. Null: the stand's only owner. */
+  ownerEmail: string | null;
   /** Write. Without it the list is only checked. */
   commit: boolean;
   today?: ISODate;
