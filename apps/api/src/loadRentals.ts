@@ -1,7 +1,10 @@
 // Bring running rentals over from a list (lib/rentalLoader.ts).
 //
-//   tsx src/loadRentals.ts --owner <email> < list.json             check only: nothing is written
-//   tsx src/loadRentals.ts --owner <email> --commit < list.json    write
+//   tsx src/loadRentals.ts < list.json             check only: nothing is written
+//   tsx src/loadRentals.ts --commit < list.json    write
+//
+// The rentals are written in the name of the stand's only owner; where there
+// are several, `--owner <email>` names one.
 //
 // The list comes on standard input and goes nowhere else: no file is written,
 // and the report names no phone, personal number or address. On a stand it is
@@ -9,10 +12,10 @@
 import { closeDb } from './lib/db.js';
 import { brief, exitCodeOf, formatLoadReport, loadRentals } from './lib/rentalLoader.js';
 
-const USAGE = 'Запуск: tsx src/loadRentals.ts --owner <e-mail владельца> [--commit] < список.json';
+const USAGE = 'Запуск: tsx src/loadRentals.ts [--commit] [--owner <e-mail владельца>] < список.json';
 
-function args(argv: string[]): { owner: string; commit: boolean } | null {
-  let owner = process.env.OWNER_EMAIL ?? '';
+function args(argv: string[]): { owner: string | null; commit: boolean } | null {
+  let owner: string | null = null;
   let commit = false;
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--commit') commit = true;

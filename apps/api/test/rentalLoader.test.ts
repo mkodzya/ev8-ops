@@ -5,7 +5,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { addDays, todayISO } from '@ev8/shared';
 import { describe, expect, it } from 'vitest';
-import { exitCodeOf, formatLoadReport, loadRentals, type LoadReport } from '../src/lib/rentalLoader.js';
+import { exitCodeOf, formatLoadReport, loadRentals, soleOwner, type LoadReport } from '../src/lib/rentalLoader.js';
 import { HAS_DB, call, loginAs, makeUser, uniq } from './helpers.js';
 
 const today = () => todayISO();
@@ -53,7 +53,7 @@ function row(p: Pair, label: string, over: Record<string, unknown> = {}) {
   };
 }
 
-const run = (rows: unknown, ownerEmail: string, commit: boolean) => loadRentals({ text: JSON.stringify(rows), ownerEmail, commit });
+const run = (rows: unknown, ownerEmail: string | null, commit: boolean) => loadRentals({ text: JSON.stringify(rows), ownerEmail, commit });
 
 async function rentalsOf(...pairs: Pair[]) {
   const { prisma } = await import('../src/lib/db.js');
@@ -250,8 +250,33 @@ describe.skipIf(!HAS_DB)('rentals brought over from a list', () => {
       expect(exitCodeOf(report)).toBe(2);
     }
     expect((await run([row(p, '№1')], `nobody.${uniq()}@test.ev8`, true)).refused).toMatch(/на стенде нет/);
-    expect((await run([row(p, '№1')], '', true)).refused).toMatch(/e-mail владельца/);
     await expectUntouched(manager.id, p);
+  });
+
+  it('with nobody named, writes in the name of the stand’s only owner — and asks which when there are several', async () => {
+    const { prisma } = await import('../src/lib/db.js');
+    expect(soleOwner([{ email: 'a@test.ev8' }])).toEqual({ owner: { email: 'a@test.ev8' }, refused: null });
+    expect(soleOwner([]).refused).toMatch(/нет ни одного действующего владельца/);
+    expect(soleOwner([{ email: 'a@test.ev8' }, { email: 'b@test.ev8' }]).refused).toMatch(/несколько владельцев: a@test\.ev8, b@test\.ev8\..*--owner/);
+
+    const [owner, other] = [await makeUser('owner'), await makeUser('owner')];
+    const p = await pair();
+    const asked = await run([row(p, '№1')], null, true);
+    expect(asked.refused).toMatch(/несколько владельцев/);
+    expect(asked.refused).toContain(other.email);
+    expect(exitCodeOf(asked)).toBe(2);
+    await expectUntouched(owner.id, p);
+
+    // A stand with one owner: every other owner of the test database steps aside for the length of this run.
+    const others = (await prisma.user.findMany({ where: { role: 'owner', active: true, id: { not: owner.id } }, select: { id: true } })).map((u) => u.id);
+    await prisma.user.updateMany({ where: { id: { in: others } }, data: { active: false } });
+    try {
+      const report = await run([row(p, '№1')], null, true);
+      expect(report).toMatchObject({ refused: null, ownerName: 'Test owner', written: 1 });
+      expect((await rentalsOf(p))[0]).toMatchObject({ createdById: owner.id, transferredById: owner.id });
+    } finally {
+      await prisma.user.updateMany({ where: { id: { in: others } }, data: { active: true } });
+    }
   });
 
   it('refuses a list it cannot read', async () => {
@@ -306,6 +331,11 @@ describe.skipIf(!HAS_DB)('rentals brought over from a list', () => {
     expect(check.stdout).toContain(`${p.customer.name} — готова: `);
     await expectUntouched(owner.id, p);
 
+    // Nobody named, and this database has more owners than one: the run does not start.
+    await makeUser('owner');
+    const unnamed = cli([], list);
+    expect(unnamed.status).toBe(2);
+    expect(unnamed.stdout).toMatch(/несколько владельцев/);
     // A mistyped flag is refused, not read as a check; nor is a bad list written.
     expect(cli(['--owner', owner.email, '--comit'], list).status).toBe(2);
     expect(cli(['--owner', owner.email, '--commit'], JSON.stringify([row(p, '№1', { nightParkingAddress: '' })])).status).toBe(1);
