@@ -48,6 +48,7 @@ export function todayRoutes(app: FastifyInstance): void {
           paidThrough: true,
           vinUnconfirmed: true,
           odooOrderId: true,
+          transferredAt: true,
           customer: { select: { id: true, name: true, nameKa: true, nameLat: true, phone: true } },
           vehicle: { select: { vin: true } },
           deposit: { select: { paidTetri: true, status: true, decidedById: true, migrationDecision: true } },
@@ -112,7 +113,9 @@ export function todayRoutes(app: FastifyInstance): void {
         // returns the company itself made.
         depositUndecided: r.status === 'returned' && r.deposit?.status === 'held' && !r.deposit.decidedById && !r.deposit.migrationDecision && r.odooOrderId == null,
         vinUnconfirmed: r.vinUnconfirmed,
-        contractUnsigned: !signed && handedOverAgo >= 1 && r.status !== 'returned',
+        // A rental brought over has its contract from before EV8 Ops, kept outside
+        // it: nobody is asked to sign that one here (Mika, 08.10.2026).
+        contractUnsigned: !signed && !r.transferredAt && handedOverAgo >= 1 && r.status !== 'returned',
       };
     });
 

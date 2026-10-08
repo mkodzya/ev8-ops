@@ -26,8 +26,8 @@ interface Rental {
   paidThrough: string | null;
   overdueDays: number;
   debtTetri: number;
-  /** Signed on the screen (wave 3 §3.2). */
-  contractSigned?: boolean;
+  /** Signed on the screen (wave 3 §3.2). Null: a rental brought over, which is not asked to. */
+  contractSigned?: boolean | null;
 }
 
 export function RentalsPage() {
