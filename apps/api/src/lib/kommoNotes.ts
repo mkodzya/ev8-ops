@@ -27,8 +27,11 @@
 //
 // Writing is off unless the stand says otherwise (`KOMMO_WRITE`): a stand
 // that is being tried out talks to the real Kommo account, and a trial
-// payment must not land in a real customer's deal. Payments made before
-// writing was first switched on are never written at all.
+// payment must not land in a real customer's deal. And a payment made while
+// the stand was not writing is never written, however the switch is turned
+// afterwards: every change of the switch starts the writing from that
+// moment. Otherwise the day production is switched on would send Kommo
+// every payment the staff had already typed there by hand.
 //
 // A note carries a sum and a staff member's name, so its text is never
 // logged; what is logged and returned is counts and our own words.
@@ -55,20 +58,29 @@ let running: Promise<KommoNotesOutcome> | null = null;
  * for Kommo's sake.
  */
 export function deliverKommoNotes(now: Date = new Date()): Promise<KommoNotesOutcome> {
-  const cfg = kommoConfig();
-  if (!cfg || cfg.write.kind === 'off') return Promise.resolve({ status: 'off' });
   if (running) return Promise.resolve({ status: 'busy' });
-  running = walk(cfg, now).finally(() => {
+  running = walk(kommoConfig(), now).finally(() => {
     running = null;
   });
   return running;
 }
 
-async function walk(cfg: KommoConfig, now: Date): Promise<KommoNotesOutcome> {
-  // The moment writing first came on here. Nothing older is ever written.
+/** The stand's switch as one word, so a change of it can be seen from one knock to the next. */
+const switchOf = (cfg: KommoConfig | null): string =>
+  !cfg || cfg.write.kind === 'off' ? 'off' : cfg.write.kind === 'all' ? 'on' : `only:${[...cfg.write.leads].sort().join(',')}`;
+
+async function walk(cfg: KommoConfig | null, now: Date): Promise<KommoNotesOutcome> {
+  // Every knock notes what the switch says, an `off` included: that is how
+  // the next `on` knows there was a time when nothing was being written.
   const sync = await prisma.kommoSync.upsert({ where: { id: true }, update: {}, create: { id: true } });
-  const from = sync.notesFrom ?? now;
-  if (!sync.notesFrom) await prisma.kommoSync.update({ where: { id: true }, data: { notesFrom: from } });
+  const said = switchOf(cfg);
+  let from = sync.notesFrom ?? now;
+  if (sync.notesMode !== said) {
+    // The switch changed: writing starts now. Nothing older is ever written.
+    from = now;
+    await prisma.kommoSync.update({ where: { id: true }, data: { notesMode: said, ...(said === 'off' ? {} : { notesFrom: now }) } });
+  }
+  if (!cfg || cfg.write.kind === 'off') return { status: 'off' };
 
   const queued = (await queuePayments(cfg, from)) + (await queueVoids(cfg));
 

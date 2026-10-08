@@ -1153,8 +1153,10 @@ model KommoSync {
   lastFailure    String?   @map("last_failure")
   lastHttpStatus Int?      @map("last_http_status")
   leads          Int       @default(0)
-  /// When writing to Kommo was first switched on here; earlier payments are never written (migration 0033).
+  /// When writing to Kommo last came on here; earlier payments are never written (migration 0033).
   notesFrom      DateTime? @map("notes_from")
+  /// What the stand's switch said at the last knock: off | on | only:<deals>. A change moves `notesFrom`.
+  notesMode      String?   @map("notes_mode")
 
   @@map("kommo_sync")
 }

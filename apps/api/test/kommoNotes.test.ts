@@ -79,7 +79,7 @@ describe.skipIf(!HAS_DB)('a payment becomes a note', () => {
     const { prisma } = await import('../src/lib/db.js');
     await prisma.kommoNote.deleteMany({});
     await prisma.kommoLead.deleteMany({});
-    await prisma.kommoSync.update({ where: { id: true }, data: { notesFrom: null, lastOkAt: null, lastTryAt: null, lastFailure: null, lastHttpStatus: null, leads: 0 } });
+    await prisma.kommoSync.update({ where: { id: true }, data: { notesFrom: null, notesMode: null, lastOkAt: null, lastTryAt: null, lastFailure: null, lastHttpStatus: null, leads: 0 } });
   }
 
   /** A rental that is out, whose customer card points at a Kommo deal (or at none). */
@@ -141,6 +141,35 @@ describe.skipIf(!HAS_DB)('a payment becomes a note', () => {
     expect(await deliverKommoNotes()).toMatchObject({ status: 'ok', queued: 0, sent: 0 });
     expect(await noteOf(before)).toBeNull();
     expect(k.posted).toHaveLength(0);
+  });
+
+  it('never writes what was paid while the stand was not writing, whichever way the switch is turned afterwards', async () => {
+    const k = fakeKommo();
+    setKommoFetchForTests(k.fetchFn, { gapMs: 0 });
+    const [testDeal, realDeal] = [lead(), lead()];
+    const test = await runningRental(testDeal);
+    const real = await runningRental(realDeal);
+
+    // The link is checked on a test deal…
+    process.env.KOMMO_WRITE = `only:${testDeal}`;
+    await deliverKommoNotes();
+    await pay(test.id, 18000);
+    expect(await deliverKommoNotes()).toMatchObject({ status: 'ok', sent: 1 });
+
+    // …then switched off, and the staff go on taking payments and typing them into Kommo by hand…
+    delete process.env.KOMMO_WRITE;
+    expect(await deliverKommoNotes()).toEqual({ status: 'off' });
+    const whileOff = await pay(real.id, 18000);
+
+    // …and on the day the work starts here, writing comes on for every deal.
+    process.env.KOMMO_WRITE = 'on';
+    expect(await deliverKommoNotes()).toMatchObject({ status: 'ok', queued: 0, sent: 0 });
+    expect(await noteOf(whileOff)).toBeNull();
+
+    const after = await pay(real.id, 15000);
+    expect(await deliverKommoNotes()).toMatchObject({ status: 'ok', queued: 1, sent: 1 });
+    expect(k.posted.map((p) => p.leadId)).toEqual([testDeal, realDeal]);
+    expect(await noteOf(after)).toMatchObject({ state: 'sent', leadId: realDeal });
   });
 
   it('sends one note for a payment into the rental’s deal, once', async () => {

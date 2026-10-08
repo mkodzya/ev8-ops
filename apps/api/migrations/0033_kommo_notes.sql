@@ -17,9 +17,13 @@
 --   * `reason` is one of our own words (`no_deal`, `unauthorized`), never
 --     Kommo's answer.
 --
--- `kommo_sync.notes_from` is the moment writing was first switched on on
--- this stand. A payment made before it is never written to Kommo: what was
--- entered while trying the system out stays here.
+-- `kommo_sync.notes_from` is the moment writing last came on on this stand,
+-- and `notes_mode` is what the stand's switch said at the last knock — `off`,
+-- `on`, or `only:` and its deals. When the switch changes, writing starts
+-- from that moment. So a payment made while the stand was not writing is
+-- never written to Kommo, however the switch is turned afterwards: what was
+-- entered while trying the system out stays here, and so does what the staff
+-- still typed into Kommo by hand.
 
 CREATE TABLE kommo_notes (
   id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -41,3 +45,4 @@ CREATE TABLE kommo_notes (
 CREATE INDEX kommo_notes_state_idx ON kommo_notes (state, created_at);
 
 ALTER TABLE kommo_sync ADD COLUMN notes_from timestamptz;
+ALTER TABLE kommo_sync ADD COLUMN notes_mode text;
