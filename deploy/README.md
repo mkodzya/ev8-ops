@@ -308,6 +308,9 @@ ssh root@204.168.149.105 /srv/ev8-ops/deploy/load-rentals.sh < ~/Desktop/claude-
 ssh root@204.168.149.105 /srv/ev8-ops/deploy/load-rentals.sh --commit < ~/Desktop/claude-mika/EV8-ops/rentals-to-load.json
 ```
 
+На тестовом стенде владельцев двое, поэтому там обе команды идут с `--owner e-mail`
+сразу после `load-rentals.sh` (или после `--commit`) — см. ниже «Пишется от имени».
+
 Сессия Claude этот скрипт не запускает — ни с `--commit`, ни без: она готовит список,
 аренды на стенд переносит владелец.
 

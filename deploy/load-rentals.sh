@@ -77,7 +77,7 @@ case "$CODE" in
       echo "Проверка: https://test.ops.ev8.ge → «Аренды». В «Сегодня» строка «Расхождения с Kommo» уменьшается на число записанных аренд, чьи сделки стоят в Kommo в этапе аренды."
     else
       echo "Чтобы записать — та же команда с --commit:"
-      echo "  ssh root@204.168.149.105 /srv/ev8-ops/deploy/load-rentals.sh --commit < тот же файл"
+      echo "  ssh root@204.168.149.105 /srv/ev8-ops/deploy/load-rentals.sh --commit${OWNER:+ --owner $OWNER} < тот же файл"
     fi
     ;;
   1) echo "Поправьте список и запустите проверку ещё раз." ;;
