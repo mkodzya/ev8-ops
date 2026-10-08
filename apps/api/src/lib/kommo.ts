@@ -11,6 +11,14 @@
 // into the deal was built, checked against Kommo and taken out again the
 // same day (ADR-0013).
 //
+// What Kommo has won comes in (Mika, 08.10.2026; ADR-0015): a deal that
+// reaches the rented stage, or is closed as won in the sales pipeline, brings
+// its contact — the card is made here from the name and the phone, or the
+// deal is tied to the card that already has that phone — and "Today" asks
+// for the hand-over or the sale to be entered. The rental and the sale
+// themselves are not taken from Kommo: it holds neither the moped, nor the
+// dates, nor the money, and what it does not hold is not made up.
+//
 // The token is a server secret (CLAUDE.md rule 3): Mika issues it and puts
 // it on the stand himself (`deploy/set-kommo-token.sh`). It is read from the
 // environment and never logged, returned or written anywhere. Kommo's
@@ -18,7 +26,7 @@
 // our own words and a status code. Without the token the whole link is off,
 // quietly — the same way the site's mail is off without its password.
 
-import { kommoFreshness, reconcileKommo, type KommoFreshness, type KommoLead, type KommoMismatches } from '@ev8/shared';
+import { kommoFreshness, kommoLeadId, phoneAsOnCard, phoneKey, reconcileKommo, unenteredSales, type KommoFreshness, type KommoLead, type KommoMismatches, type KommoRentedThere } from '@ev8/shared';
 import { prisma } from './db.js';
 
 export interface KommoConfig {
@@ -27,6 +35,9 @@ export interface KommoConfig {
   /** The rental pipeline ("Gaqiraveba") and its "rented" stage ("გაქირავებული"). */
   pipelineId: number;
   rentedStatusId: number;
+  /** The sales pipeline ("Gayidvebi") and Kommo's own status for a deal closed as won. */
+  salesPipelineId: number;
+  wonStatusId: number;
   /** Kommo has gone silent when it has not answered for this long. */
   staleMs: number;
 }
@@ -38,6 +49,9 @@ const DEFAULTS = {
   baseUrl: 'https://ev8mopeds.kommo.com',
   pipelineId: 13427775,
   rentedStatusId: 103582579,
+  // Read in Kommo on 08.10.2026; 142 is Kommo's own "closed as won" in every pipeline.
+  salesPipelineId: 11266343,
+  wonStatusId: 142,
   staleMinutes: 20,
 } as const;
 
@@ -58,12 +72,30 @@ export function kommoConfig(e: NodeJS.ProcessEnv = process.env): KommoConfig | n
     token,
     pipelineId: positiveInt(e.KOMMO_RENTAL_PIPELINE_ID, DEFAULTS.pipelineId),
     rentedStatusId: positiveInt(e.KOMMO_RENTED_STATUS_ID, DEFAULTS.rentedStatusId),
+    salesPipelineId: positiveInt(e.KOMMO_SALES_PIPELINE_ID, DEFAULTS.salesPipelineId),
+    wonStatusId: positiveInt(e.KOMMO_WON_STATUS_ID, DEFAULTS.wonStatusId),
     staleMs: positiveInt(e.KOMMO_STALE_MINUTES, DEFAULTS.staleMinutes) * 60_000,
   };
 }
 
 /** Where a deal opens in Kommo. */
 export const kommoLeadUrl = (baseUrl: string, leadId: string): string => `${baseUrl}/leads/detail/${leadId}`;
+
+/**
+ * A Kommo field as it is kept: a bare deal number becomes the deal's address,
+ * so the field opens in Kommo. A hand-over started from a deal in "Today"
+ * carries only the number.
+ */
+export function kommoRefToKeep(raw: string | null): string | null {
+  const cfg = kommoConfig();
+  return raw && cfg && /^\d+$/.test(raw.trim()) ? kommoLeadUrl(cfg.baseUrl, raw.trim()) : raw;
+}
+
+/** A deal as the poll reads it: who it is with, and when it was won. */
+export interface KommoDeal extends KommoLead {
+  contactPhone: string | null;
+  closedAt: Date | null;
+}
 
 // ── The client ──────────────────────────────────────────────────────────
 
@@ -160,19 +192,16 @@ export class KommoClient {
     return next;
   }
 
-  /**
-   * The deals in the "rented" stage, with the name of each one's main
-   * contact. `contactsRead` is false when the deals came and the names did
-   * not: who rents is still known then, only less readably.
-   */
-  async rentedLeads(): Promise<{ leads: KommoLead[]; contactsRead: boolean }> {
-    const found: { id: string; name: string; contactId: string | null }[] = [];
+  /** One stage of one pipeline, page by page: each deal with its main contact's id. */
+  private async stage(pipelineId: number, statusId: number, more: [string, string][] = []): Promise<{ id: string; name: string; contactId: string | null; closedAt: Date | null }[]> {
+    const found: { id: string; name: string; contactId: string | null; closedAt: Date | null }[] = [];
     for (let page = 1; ; page++) {
       if (page > MAX_PAGES) throw new KommoError('bad_answer');
       const body = await this.request('GET', '/api/v4/leads', [
         ['with', 'contacts'],
-        ['filter[statuses][0][pipeline_id]', String(this.cfg.pipelineId)],
-        ['filter[statuses][0][status_id]', String(this.cfg.rentedStatusId)],
+        ['filter[statuses][0][pipeline_id]', String(pipelineId)],
+        ['filter[statuses][0][status_id]', String(statusId)],
+        ...more,
         ['limit', String(PAGE)],
         ['page', String(page)],
       ]);
@@ -185,16 +214,25 @@ export class KommoClient {
         if (!id) throw new KommoError('bad_answer');
         // Kept even though the request already filters: a filter Kommo did
         // not understand is ignored, not refused, and every deal of the
-        // account would then read as "rented".
-        if (lead.status_id !== this.cfg.rentedStatusId || lead.pipeline_id !== this.cfg.pipelineId) continue;
+        // account would then read as standing in this stage.
+        if (lead.status_id !== statusId || lead.pipeline_id !== pipelineId) continue;
         const contacts = list(obj(lead._embedded).contacts).map(obj);
         const main = contacts.find((c) => c.is_main === true) ?? contacts[0];
-        found.push({ id, name: typeof lead.name === 'string' ? lead.name.trim() : '', contactId: main ? idOf(main.id) : null });
+        const closed = typeof lead.closed_at === 'number' && lead.closed_at > 0 ? new Date(lead.closed_at * 1000) : null;
+        found.push({ id, name: typeof lead.name === 'string' ? lead.name.trim() : '', contactId: main ? idOf(main.id) : null, closedAt: closed });
       }
       if (!obj(obj(body)._links).next || rows.length === 0) break;
     }
+    return found;
+  }
 
-    const names = new Map<string, string>();
+  /**
+   * Those deals with the name and the phone of each one's main contact.
+   * `contactsRead` is false when the deals came and the contacts did not:
+   * who it is about is still known then, only less readably.
+   */
+  private async withContacts(found: { id: string; name: string; contactId: string | null; closedAt: Date | null }[]): Promise<{ leads: KommoDeal[]; contactsRead: boolean }> {
+    const people = new Map<string, { name: string | null; phone: string | null }>();
     let contactsRead = true;
     const ids = [...new Set(found.map((l) => l.contactId).filter((x): x is string => x != null))];
     try {
@@ -204,18 +242,40 @@ export class KommoClient {
         for (const row of list(obj(obj(body)._embedded).contacts)) {
           const c = obj(row);
           const id = idOf(c.id);
-          if (id && typeof c.name === 'string' && c.name.trim()) names.set(id, c.name.trim());
+          if (!id) continue;
+          // The first phone on the contact: Kommo keeps them in one field of several values.
+          const phones = list(c.custom_fields_values).map(obj).filter((f) => f.field_code === 'PHONE').flatMap((f) => list(f.values).map((v) => obj(v).value));
+          const phone = phones.find((v): v is string => typeof v === 'string' && v.trim() !== '') ?? null;
+          people.set(id, { name: typeof c.name === 'string' && c.name.trim() ? c.name.trim() : null, phone: phone ? phone.trim() : null });
         }
       }
     } catch (err) {
       if (!(err instanceof KommoError)) throw err;
       contactsRead = false;
     }
-
     return {
-      leads: found.map((l) => ({ id: l.id, name: l.name, contactName: l.contactId ? (names.get(l.contactId) ?? null) : null })),
+      leads: found.map((l) => {
+        const person = l.contactId ? people.get(l.contactId) : undefined;
+        return { id: l.id, name: l.name, contactName: person?.name ?? null, contactPhone: person?.phone ?? null, closedAt: l.closedAt };
+      }),
       contactsRead,
     };
+  }
+
+  /** The deals in the "rented" stage of the rental pipeline. */
+  async rentedLeads(): Promise<{ leads: KommoDeal[]; contactsRead: boolean }> {
+    return this.withContacts(await this.stage(this.cfg.pipelineId, this.cfg.rentedStatusId));
+  }
+
+  /**
+   * The deals of the sales pipeline closed as won on or after `since`. The
+   * date is asked of Kommo and checked again here, for the same reason the
+   * stage is: a filter it did not understand is ignored, and every sale of
+   * the past years would come in as today's.
+   */
+  async wonSales(since: Date): Promise<{ leads: KommoDeal[]; contactsRead: boolean }> {
+    const found = await this.stage(this.cfg.salesPipelineId, this.cfg.wonStatusId, [['filter[closed_at][from]', String(Math.floor(since.getTime() / 1000))]]);
+    return this.withContacts(found.filter((l) => l.closedAt != null && l.closedAt.getTime() >= since.getTime()));
   }
 }
 
@@ -256,9 +316,13 @@ export function syncKommo(now: Date = new Date()): Promise<KommoSyncOutcome> {
 
 async function pollOnce(cfg: KommoConfig, now: Date): Promise<KommoSyncOutcome> {
   const client = new KommoClient(cfg, { ...clientOptsForTests, ...(fetchForTests ? { fetch: fetchForTests } : {}) });
-  let seen: Awaited<ReturnType<KommoClient['rentedLeads']>>;
+  // The moment this stand began taking deals in: a sale won before it is not a task.
+  const intakeFrom = (await prisma.kommoSync.findUnique({ where: { id: true }, select: { intakeFrom: true } }))?.intakeFrom ?? now;
+  let rented: Awaited<ReturnType<KommoClient['rentedLeads']>>;
+  let won: Awaited<ReturnType<KommoClient['wonSales']>>;
   try {
-    seen = await client.rentedLeads();
+    rented = await client.rentedLeads();
+    won = await client.wonSales(intakeFrom);
   } catch (err) {
     if (!(err instanceof KommoError)) throw err;
     const failed = { lastTryAt: now, lastFailure: err.failure, lastHttpStatus: err.httpStatus };
@@ -266,22 +330,92 @@ async function pollOnce(cfg: KommoConfig, now: Date): Promise<KommoSyncOutcome> 
     return { status: 'failed', failure: err.failure, httpStatus: err.httpStatus };
   }
 
-  const statusId = BigInt(cfg.rentedStatusId);
-  const ok = { lastOkAt: now, lastTryAt: now, lastFailure: null, lastHttpStatus: null, leads: seen.leads.length };
+  const seen = [
+    ...rented.leads.map((l) => ({ ...l, kind: 'rent' as const, statusId: BigInt(cfg.rentedStatusId), contacts: rented.contactsRead })),
+    ...won.leads.map((l) => ({ ...l, kind: 'sale' as const, statusId: BigInt(cfg.wonStatusId), contacts: won.contactsRead })),
+  ];
+  const ok = { lastOkAt: now, lastTryAt: now, lastFailure: null, lastHttpStatus: null, leads: rented.leads.length, intakeFrom };
   await prisma.$transaction(async (tx) => {
-    for (const l of seen.leads) {
+    for (const l of seen) {
       await tx.kommoLead.upsert({
         where: { leadId: l.id },
-        // Names that did not come this time are not wiped by it.
-        update: { name: l.name, statusId, seenAt: now, ...(seen.contactsRead ? { contactName: l.contactName } : {}) },
-        create: { leadId: l.id, name: l.name, contactName: l.contactName, statusId, firstSeenAt: now, seenAt: now },
+        // A name and a phone that did not come this time are not wiped by it.
+        update: { name: l.name, statusId: l.statusId, kind: l.kind, closedAt: l.closedAt, seenAt: now, ...(l.contacts ? { contactName: l.contactName, contactPhone: l.contactPhone } : {}) },
+        create: { leadId: l.id, name: l.name, contactName: l.contactName, contactPhone: l.contactPhone, statusId: l.statusId, kind: l.kind, closedAt: l.closedAt, firstSeenAt: now, seenAt: now },
       });
     }
-    // A deal that has left the stage leaves the list.
-    await tx.kommoLead.deleteMany({ where: { leadId: { notIn: seen.leads.map((l) => l.id) } } });
+    // A deal that has left its stage leaves the list.
+    await tx.kommoLead.deleteMany({ where: { leadId: { notIn: seen.map((l) => l.id) } } });
     await tx.kommoSync.upsert({ where: { id: true }, update: ok, create: { id: true, ...ok } });
   });
-  return { status: 'ok', leads: seen.leads.length, contactsRead: seen.contactsRead };
+  // Cards only from contacts that were read: a deal whose contact did not
+  // come this time waits for the next poll rather than becoming a nameless card.
+  await takeIn(cfg, new Set(seen.filter((l) => l.contacts).map((l) => l.id)));
+  return { status: 'ok', leads: rented.leads.length, contactsRead: rented.contactsRead && won.contactsRead };
+}
+
+// ── What comes in ───────────────────────────────────────────────────────
+
+const NOT_GONE = { archived: false, mergedIntoId: null } as const;
+
+/**
+ * Each deal of the list gets its card (ADR-0015): the one whose Kommo field
+ * names the deal; failing that, the one card with the contact's phone, which
+ * takes the deal's link if it has none; failing that, a new card made from
+ * the contact. Two cards with that phone is a question for a person, and the
+ * deal waits without a card. A deal with neither a name nor a phone of a
+ * contact makes no card: there would be nothing true to write on it.
+ */
+async function takeIn(cfg: KommoConfig, readNow: Set<string>): Promise<void> {
+  const waiting = (await prisma.kommoLead.findMany({ where: { OR: [{ customerId: null }, { customer: { OR: [{ archived: true }, { mergedIntoId: { not: null } }] } }] }, orderBy: { firstSeenAt: 'asc' } })).filter((l) =>
+    readNow.has(l.leadId),
+  );
+  if (waiting.length === 0) return;
+
+  const cards = await prisma.customer.findMany({ where: NOT_GONE, select: { id: true, phone: true, kommoRef: true, recordKind: true }, orderBy: { createdAt: 'asc' } });
+  const byLead = new Map<string, string>();
+  const byPhone = new Map<string, string[]>();
+  const refOf = new Map<string, string | null>();
+  for (const c of cards) {
+    refOf.set(c.id, c.kommoRef);
+    const lead = kommoLeadId(c.kommoRef);
+    if (lead && !byLead.has(lead)) byLead.set(lead, c.id);
+    const key = phoneKey(c.phone);
+    // A supplier's switchboard is not a renter's phone.
+    if (key && c.recordKind !== 'supplier') byPhone.set(key, [...(byPhone.get(key) ?? []), c.id]);
+  }
+
+  for (const l of waiting) {
+    const url = kommoLeadUrl(cfg.baseUrl, l.leadId);
+    const key = phoneKey(l.contactPhone);
+    const samePhone = key ? (byPhone.get(key) ?? []) : [];
+    let customerId = byLead.get(l.leadId) ?? null;
+
+    if (!customerId && samePhone.length === 1) {
+      customerId = samePhone[0]!;
+      if (!refOf.get(customerId)?.trim()) {
+        await prisma.$transaction(async (tx) => {
+          await tx.customer.update({ where: { id: customerId! }, data: { kommoRef: url, updatedAt: new Date() } });
+          await tx.auditLog.create({ data: { actorId: null, action: 'customer.update', entityType: 'customer', entityId: customerId!, before: { kommoRef: null }, after: { kommoRef: url }, note: `Kommo deal ${l.leadId}: the same phone` } });
+        });
+        refOf.set(customerId, url);
+        byLead.set(l.leadId, customerId);
+      }
+    } else if (!customerId && samePhone.length === 0 && (l.contactName || key)) {
+      const name = l.contactName ?? l.name;
+      const phone = l.contactPhone ? phoneAsOnCard(l.contactPhone) : null;
+      customerId = await prisma.$transaction(async (tx) => {
+        const made = await tx.customer.create({ data: { name, phone, kind: 'person', recordKind: 'client', kommoRef: url } });
+        await tx.auditLog.create({ data: { actorId: null, action: 'customer.create', entityType: 'customer', entityId: made.id, after: { name, fromKommoDeal: l.leadId }, note: `from Kommo deal ${l.leadId}` } });
+        return made.id;
+      });
+      refOf.set(customerId, url);
+      byLead.set(l.leadId, customerId);
+      if (key) byPhone.set(key, [customerId]);
+    }
+
+    if (customerId && customerId !== l.customerId) await prisma.kommoLead.update({ where: { leadId: l.leadId }, data: { customerId } });
+  }
 }
 
 // ── The comparison ──────────────────────────────────────────────────────
@@ -292,6 +426,10 @@ export interface KommoReconciliation extends KommoMismatches {
   lastOkAt: Date | null;
   /** Deals in the list the comparison was made from. */
   leads: number;
+  /** Closed as won in Kommo's sales pipeline since this stand began taking deals in, with no sale here. */
+  wonThere: KommoRentedThere[];
+  /** Both halves as tasks: what to enter, for whom, from which card. */
+  deals: { leadId: string; kind: 'rent' | 'sale'; who: string; customerId: string | null; phone: string | null }[];
 }
 
 /**
@@ -306,23 +444,32 @@ export async function kommoReconciliation(now: Date = new Date()): Promise<Kommo
   const sync = await prisma.kommoSync.findUnique({ where: { id: true } });
   const lastOkAt = sync?.lastOkAt ?? null;
   const freshness = kommoFreshness(lastOkAt, sync?.lastTryAt ?? null, now, cfg.staleMs);
-  if (!lastOkAt) return { baseUrl: cfg.baseUrl, freshness, lastOkAt, leads: 0, rentedThere: [], rentedHere: [], matched: 0 };
+  if (!lastOkAt) return { baseUrl: cfg.baseUrl, freshness, lastOkAt, leads: 0, rentedThere: [], rentedHere: [], matched: 0, wonThere: [], deals: [] };
 
-  const [leadRows, rentalRows, customerRows] = await Promise.all([
-    prisma.kommoLead.findMany({ select: { leadId: true, name: true, contactName: true } }),
+  const leadRows = await prisma.kommoLead.findMany({ select: { leadId: true, name: true, contactName: true, contactPhone: true, kind: true, customerId: true } });
+  const tied = leadRows.map((l) => l.customerId).filter((x): x is string => x != null);
+  const [rentalRows, saleRows, customerRows] = await Promise.all([
     prisma.rental.findMany({
       // Out with a customer: picked up and not returned. A booking is not a
       // rental yet — Kommo has a stage of its own for those.
       where: { status: { in: ['active', 'overdue', 'paused', 'disputed'] }, pickedUpOn: { not: null } },
       select: { id: true, number: true, kommoRef: true, vehicle: { select: { vin: true } }, customer: { select: { id: true, name: true, kommoRef: true } } },
     }),
-    prisma.customer.findMany({ where: { kommoRef: { not: null }, archived: false, mergedIntoId: null }, select: { id: true, name: true, kommoRef: true }, orderBy: { createdAt: 'asc' } }),
+    prisma.sale.findMany({ where: { status: { not: 'cancelled' } }, select: { kommoRef: true, customer: { select: { kommoRef: true } } } }),
+    // The cards a deal can belong to: those naming a deal, and those a deal was tied to by its phone.
+    prisma.customer.findMany({ where: { ...NOT_GONE, OR: [{ kommoRef: { not: null } }, { id: { in: tied } }] }, select: { id: true, name: true, kommoRef: true }, orderBy: { createdAt: 'asc' } }),
   ]);
 
+  const asLead = (l: (typeof leadRows)[number]): KommoLead => ({ id: l.leadId, name: l.name, contactName: l.contactName, customerId: l.customerId });
+  const rentLeads = leadRows.filter((l) => l.kind === 'rent');
   const result = reconcileKommo(
-    leadRows.map((l) => ({ id: l.leadId, name: l.name, contactName: l.contactName })),
+    rentLeads.map(asLead),
     rentalRows.map((r) => ({ id: r.id, number: r.number, kommoRef: r.kommoRef, vin: r.vehicle?.vin ?? null, customer: r.customer })),
     customerRows,
   );
-  return { baseUrl: cfg.baseUrl, freshness, lastOkAt, leads: leadRows.length, ...result };
+  const wonThere = unenteredSales(leadRows.filter((l) => l.kind === 'sale').map(asLead), saleRows, customerRows);
+  const phoneOf = new Map(leadRows.map((l) => [l.leadId, l.contactPhone]));
+  const task = (kind: 'rent' | 'sale') => (x: KommoRentedThere) => ({ leadId: x.leadId, kind, who: x.customer?.name ?? x.contactName ?? x.leadName, customerId: x.customer?.id ?? null, phone: phoneOf.get(x.leadId) ?? null });
+  const deals = [...result.rentedThere.map(task('rent')), ...wonThere.map(task('sale'))];
+  return { baseUrl: cfg.baseUrl, freshness, lastOkAt, leads: rentLeads.length, ...result, wonThere, deals };
 }

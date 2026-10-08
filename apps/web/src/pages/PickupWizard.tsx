@@ -81,6 +81,8 @@ export function PickupWizard() {
   const steps = [t.hand.steps.customer, t.hand.steps.vehicle, t.hand.steps.terms, t.hand.steps.act, t.hand.steps.payment, t.hand.steps.summary];
   const presetVehicle = params.get('vehicle');
   const presetCustomer = params.get('customer');
+  // Started from a deal in "Today" (ADR-0015): the rental keeps the deal's link.
+  const fromLead = params.get('lead');
 
   const customers = useLoad<{ customers: CustomerRow[] }>('/api/customers');
   const fleet = useLoad<{ vehicles: FleetRow[] }>('/api/fleet');
@@ -292,6 +294,7 @@ export function PickupWizard() {
         condition: f.condition.trim() || null,
         payment: !paymentNeeded ? undefined : f.channel === 'later' ? { later: true } : { later: false, channel: f.channel, amountTetri },
         transfer: transferBody,
+        kommoRef: fromLead ?? undefined,
         debtOverrideReason: debt && owner ? f.why.trim() : undefined,
       };
       let r: { id: string; number: string; actId: string };

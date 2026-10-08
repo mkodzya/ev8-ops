@@ -17,6 +17,7 @@ export function kommoRoutes(app: FastifyInstance): void {
       matched: r.matched,
       rentedThere: r.rentedThere.map((x) => ({ ...x, leadUrl: kommoLeadUrl(r.baseUrl, x.leadId) })),
       rentedHere: r.rentedHere.map((x) => ({ ...x, leadUrl: x.leadId ? kommoLeadUrl(r.baseUrl, x.leadId) : null })),
+      wonThere: r.wonThere.map((x) => ({ ...x, leadUrl: kommoLeadUrl(r.baseUrl, x.leadId) })),
     };
   });
 }

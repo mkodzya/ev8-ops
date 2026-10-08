@@ -1,6 +1,7 @@
 import { CUSTOMER_SOURCES, todayISO } from '@ev8/shared';
 import type { FastifyInstance } from 'fastify';
 import { env } from '../lib/env.js';
+import { kommoRefToKeep } from '../lib/kommo.js';
 import { badRequest, notFound } from '../lib/errors.js';
 import { actorOf } from '../lib/guard.js';
 import { audit } from '../lib/audit.js';
@@ -82,6 +83,7 @@ async function pickupInput(req: { body: Body }, actor: PickupInput['actor'], str
     transfer: tr ? { paidThrough: date(tr, 'paidThrough'), depositReceivedTetri: tetri(tr, 'depositReceivedTetri', { min: 0 }) ?? 0 } : null,
     debtOverrideReason: str(b, 'debtOverrideReason', { max: 1000 }),
     strict,
+    kommoRef: kommoRefToKeep(str(b, 'kommoRef', { max: 300 })),
   };
 }
 

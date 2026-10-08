@@ -10,6 +10,8 @@ const TOKEN = 'test-kommo-token-that-opens-nothing';
 const PIPELINE = 13427775;
 const RENTED = 103582579;
 const BOOKING = 107998668;
+const SALES = 11266343;
+const WON = 142;
 
 interface FakeLead {
   id: number;
@@ -17,10 +19,13 @@ interface FakeLead {
   contactId?: number;
   status_id?: number;
   pipeline_id?: number;
+  /** Unix seconds, as Kommo gives it for a closed deal. */
+  closed_at?: number;
 }
+type FakeContact = string | { name: string; phone?: string };
 
 /** Kommo as far as this link knows it: two addresses, pages of 250, 204 for "nothing". */
-function fakeKommo(state: { leads: FakeLead[]; contacts?: Record<number, string>; status?: number; contactsStatus?: number }) {
+function fakeKommo(state: { leads: FakeLead[]; contacts?: Record<number, FakeContact>; status?: number; contactsStatus?: number }) {
   const calls: { url: URL; auth: string }[] = [];
   const nothing = { status: 204, json: async () => Promise.reject(new Error('a 204 has no body')) };
   const fetchFn: KommoFetch = async (url, init) => {
@@ -44,6 +49,7 @@ function fakeKommo(state: { leads: FakeLead[]; contacts?: Record<number, string>
               name: l.name,
               status_id: l.status_id ?? RENTED,
               pipeline_id: l.pipeline_id ?? PIPELINE,
+              closed_at: l.closed_at ?? null,
               _embedded: { contacts: l.contactId ? [{ id: l.contactId, is_main: true }] : [] },
             })),
           },
@@ -53,7 +59,18 @@ function fakeKommo(state: { leads: FakeLead[]; contacts?: Record<number, string>
     if (u.pathname === '/api/v4/contacts') {
       if (state.contactsStatus) return { status: state.contactsStatus, json: async () => ({}) };
       const ids = [...u.searchParams.entries()].filter(([k]) => k.startsWith('filter[id]')).map(([, v]) => Number(v));
-      const rows = ids.filter((id) => state.contacts?.[id]).map((id) => ({ id, name: state.contacts![id] }));
+      const rows = ids
+        .filter((id) => state.contacts?.[id])
+        .map((id) => {
+          const c = state.contacts![id]!;
+          const phone = typeof c === 'string' ? undefined : c.phone;
+          return {
+            id,
+            name: typeof c === 'string' ? c : c.name,
+            // The way Kommo gives a phone: one field of several values, among other fields.
+            custom_fields_values: phone ? [{ field_code: 'EMAIL', values: [{ value: 'test@ev8.test' }] }, { field_code: 'PHONE', values: [{ value: phone, enum_code: 'WORK' }, { value: '+995 599 00 00 00', enum_code: 'MOB' }] }] : null,
+          };
+        });
       return rows.length ? { status: 200, json: async () => ({ _embedded: { contacts: rows } }) } : nothing;
     }
     return { status: 404, json: async () => ({}) };
@@ -121,14 +138,14 @@ describe('reading the rented stage', () => {
         { id: 2, name: 'ТЕСТ Сделка 2', contactId: 12 },
         { id: 3, name: 'ТЕСТ Сделка 3' },
       ],
-      contacts: { 11: 'ТЕСТ Контакт А', 12: 'ТЕСТ Контакт Б' },
+      contacts: { 11: 'ТЕСТ Контакт А', 12: { name: 'ТЕСТ Контакт Б', phone: ' 595 11 22 33 ' } },
     });
     const seen = await client(k).rentedLeads();
     expect(seen).toEqual({
       leads: [
-        { id: '1', name: 'ТЕСТ Сделка 1', contactName: 'ТЕСТ Контакт А' },
-        { id: '2', name: 'ТЕСТ Сделка 2', contactName: 'ТЕСТ Контакт Б' },
-        { id: '3', name: 'ТЕСТ Сделка 3', contactName: null },
+        { id: '1', name: 'ТЕСТ Сделка 1', contactName: 'ТЕСТ Контакт А', contactPhone: null, closedAt: null },
+        { id: '2', name: 'ТЕСТ Сделка 2', contactName: 'ТЕСТ Контакт Б', contactPhone: '595 11 22 33', closedAt: null },
+        { id: '3', name: 'ТЕСТ Сделка 3', contactName: null, contactPhone: null, closedAt: null },
       ],
       contactsRead: true,
     });
@@ -137,7 +154,7 @@ describe('reading the rented stage', () => {
 
   it('keeps the deals when the names do not come, and says so', async () => {
     const k = fakeKommo({ leads: [{ id: 1, name: 'ТЕСТ Сделка 1', contactId: 11 }], contactsStatus: 400 });
-    expect(await client(k).rentedLeads()).toEqual({ leads: [{ id: '1', name: 'ТЕСТ Сделка 1', contactName: null }], contactsRead: false });
+    expect(await client(k).rentedLeads()).toEqual({ leads: [{ id: '1', name: 'ТЕСТ Сделка 1', contactName: null, contactPhone: null, closedAt: null }], contactsRead: false });
   });
 
   it('drops a deal of another stage, should Kommo ignore the filter', async () => {
@@ -149,6 +166,27 @@ describe('reading the rented stage', () => {
       ],
     });
     expect((await client(k).rentedLeads()).leads.map((l) => l.id)).toEqual(['1']);
+  });
+
+  it('reads the sales won since a moment: asked of Kommo by the closing date, and checked again here', async () => {
+    const since = new Date('2026-10-08T06:00:00Z');
+    const unix = (iso: string) => Math.floor(Date.parse(iso) / 1000);
+    const k = fakeKommo({
+      leads: [
+        { id: 1, name: 'ТЕСТ Продано сегодня', status_id: WON, pipeline_id: SALES, closed_at: unix('2026-10-08T09:00:00Z'), contactId: 21 },
+        // Kommo ignoring the date filter must not bring last year's sales in as today's.
+        { id: 2, name: 'ТЕСТ Продано в прошлом году', status_id: WON, pipeline_id: SALES, closed_at: unix('2025-06-22T09:00:00Z') },
+        { id: 3, name: 'ТЕСТ Закрыта аренда', status_id: WON, pipeline_id: PIPELINE, closed_at: unix('2026-10-08T09:00:00Z') },
+        { id: 4, name: 'ТЕСТ Ещё думает', status_id: 87657659, pipeline_id: SALES },
+      ],
+      contacts: { 21: { name: 'ТЕСТ Покупатель', phone: '+995 595 44 55 66' } },
+    });
+    const seen = await client(k).wonSales(since);
+    expect(seen).toEqual({ leads: [{ id: '1', name: 'ТЕСТ Продано сегодня', contactName: 'ТЕСТ Покупатель', contactPhone: '+995 595 44 55 66', closedAt: new Date('2026-10-08T09:00:00Z') }], contactsRead: true });
+    const asked = k.calls[0]!.url.searchParams;
+    expect(asked.get('filter[statuses][0][pipeline_id]')).toBe(String(SALES));
+    expect(asked.get('filter[statuses][0][status_id]')).toBe(String(WON));
+    expect(asked.get('filter[closed_at][from]')).toBe(String(unix('2026-10-08T06:00:00Z')));
   });
 
   it('turns an expired token into “unauthorized”, with nothing of Kommo’s answer or of the token in it', async () => {
@@ -200,7 +238,7 @@ describe.skipIf(!HAS_DB)('the poll and what it keeps', () => {
   async function reset() {
     const { prisma } = await import('../src/lib/db.js');
     await prisma.kommoLead.deleteMany({});
-    await prisma.kommoSync.update({ where: { id: true }, data: { lastOkAt: null, lastTryAt: null, lastFailure: null, lastHttpStatus: null, leads: 0 } });
+    await prisma.kommoSync.update({ where: { id: true }, data: { lastOkAt: null, lastTryAt: null, lastFailure: null, lastHttpStatus: null, leads: 0, intakeFrom: null } });
   }
 
   /** A rental that is out with a customer, with whatever Kommo links the case needs. */
@@ -326,12 +364,166 @@ describe.skipIf(!HAS_DB)('the poll and what it keeps', () => {
       .queue.find((g) => g.group === 'decisions')
       ?.rows.find((x) => x.id === 'kommo');
     expect(row).toMatchObject({ href: '/settings/kommo' });
-    expect(row!.note).toMatch(new RegExp(`^${1 + r.rentedHere.length}\\|ok\\|\\d{4}-`));
+    expect(row!.note).toMatch(new RegExp(`^${r.rentedHere.length}\\|ok\\|\\d{4}-`));
 
     const manager = await loginAs('manager');
     expect((await call(manager, 'GET', '/api/kommo/reconciliation')).statusCode).toBe(403);
     const managerToday = json<{ queue: { rows: { id: string }[] }[] }>(await call(manager, 'GET', '/api/today'));
     expect(managerToday.queue.flatMap((g) => g.rows).some((x) => x.id === 'kommo')).toBe(false);
+  });
+
+  // ADR-0015: a deal Kommo has won comes in as a card and a task.
+  const digits = () => uniq().replace(/\D/g, '');
+  const link = (id: number) => `https://ev8mopeds.kommo.com/leads/detail/${id}`;
+  const poll = async (state: Parameters<typeof fakeKommo>[0], at: Date = new Date()) => {
+    setKommoFetchForTests(fakeKommo(state).fetchFn, { gapMs: 0 });
+    return syncKommo(at);
+  };
+  type TodayRow = { id: string; group: string; action: string; who: string | null; href: string; phone: string | null };
+  const dealRows = async (cookie: string) => json<{ queue: { group: string; rows: TodayRow[] }[] }>(await call(cookie, 'GET', '/api/today')).queue.find((g) => g.group === 'intake')?.rows ?? [];
+
+  it('makes a card from the contact of a deal nobody here knows — once — and asks a manager for the hand-over', async () => {
+    const { prisma } = await import('../src/lib/db.js');
+    const deal = n();
+    const local = digits().slice(-6);
+    const state = { leads: [{ id: deal, name: 'ТЕСТ Сделка новая', contactId: 31 }], contacts: { 31: { name: `ТЕСТ Новый ${uniq()}`, phone: `995595${local}` } } };
+    await poll(state);
+
+    const lead = await prisma.kommoLead.findUniqueOrThrow({ where: { leadId: String(deal) }, include: { customer: true } });
+    expect(lead).toMatchObject({ kind: 'rent', contactPhone: `995595${local}` });
+    expect(lead.customer).toMatchObject({ name: state.contacts[31].name, phone: `+995 595 ${local.slice(0, 2)} ${local.slice(2, 4)} ${local.slice(4)}`, kommoRef: link(deal), kind: 'person', recordKind: 'client', archived: false });
+    const entry = await prisma.auditLog.findFirstOrThrow({ where: { action: 'customer.create', entityId: lead.customerId! } });
+    expect(entry).toMatchObject({ actorId: null, note: `from Kommo deal ${deal}` });
+
+    // The next poll finds the card it made.
+    await poll(state);
+    expect(await prisma.customer.count({ where: { kommoRef: link(deal) } })).toBe(1);
+
+    const row = (await dealRows(await loginAs('manager'))).find((r) => r.id === `kommo-rent:${deal}`);
+    expect(row).toMatchObject({ group: 'intake', action: 'hand_over_from_kommo', who: lead.customer!.name, href: `/rentals/new?customer=${lead.customerId}&lead=${deal}`, phone: `995595${local}` });
+  });
+
+  it('ties the deal to the card that already has that phone, however it is written, and gives the card the deal’s link', async () => {
+    const { prisma } = await import('../src/lib/db.js');
+    // `first`: a deal of its own number — a card naming deal 1 would be found by other suites.
+    const [fresh, again, first] = [n(), n(), n()];
+    const [a, b] = [digits().slice(-6), `${digits().slice(-5)}7`];
+    const known = await prisma.customer.create({ data: { name: `ТЕСТ Уже есть ${uniq()}`, phone: `+995 595 ${a.slice(0, 2)} ${a.slice(2, 4)} ${a.slice(4)}` } });
+    // A customer who rents a second time: the card keeps the first deal's link.
+    const returning = await prisma.customer.create({ data: { name: `ТЕСТ Второй раз ${uniq()}`, phone: `595${b}`, kommoRef: link(first) } });
+    const customers = await prisma.customer.count();
+
+    await poll({
+      leads: [{ id: fresh, name: 'ТЕСТ Сделка 1', contactId: 41 }, { id: again, name: 'ТЕСТ Сделка 2', contactId: 42 }],
+      contacts: { 41: { name: 'ТЕСТ Как в Kommo', phone: `00995 595 ${a}` }, 42: { name: 'ТЕСТ Как в Kommo 2', phone: `+995595${b}` } },
+    });
+
+    expect(await prisma.customer.count()).toBe(customers);
+    expect(await prisma.kommoLead.findMany({ where: { leadId: { in: [String(fresh), String(again)] } }, select: { leadId: true, customerId: true }, orderBy: { firstSeenAt: 'asc' } })).toEqual(
+      expect.arrayContaining([{ leadId: String(fresh), customerId: known.id }, { leadId: String(again), customerId: returning.id }]),
+    );
+    expect((await prisma.customer.findUniqueOrThrow({ where: { id: known.id } })).kommoRef).toBe(link(fresh));
+    expect(await prisma.auditLog.findFirstOrThrow({ where: { action: 'customer.update', entityId: known.id } })).toMatchObject({ actorId: null, after: { kommoRef: link(fresh) } });
+    // The first deal's link stays on the card; the task still opens on it, by the tie.
+    expect((await prisma.customer.findUniqueOrThrow({ where: { id: returning.id } })).kommoRef).toBe(link(first));
+    const rows = await dealRows(await loginAs('manager'));
+    expect(rows.find((r) => r.id === `kommo-rent:${again}`)).toMatchObject({ who: returning.name, href: `/rentals/new?customer=${returning.id}&lead=${again}` });
+  });
+
+  it('makes no card when it cannot tell whose the deal is: two cards with that phone, no contact, or a contact that did not come', async () => {
+    const { prisma } = await import('../src/lib/db.js');
+    const [twins, nobody, unread, pair1, pair2] = [n(), n(), n(), n(), n()];
+    const [a, b] = [digits().slice(-6), `${digits().slice(-5)}3`];
+    await prisma.customer.create({ data: { name: `ТЕСТ Отец ${uniq()}`, phone: `+995 595 ${a}` } });
+    await prisma.customer.create({ data: { name: `ТЕСТ Сын ${uniq()}`, phone: `595${a}` } });
+    const customers = await prisma.customer.count();
+
+    await poll({ leads: [{ id: twins, name: 'ТЕСТ Чья?', contactId: 51 }, { id: nobody, name: 'ТЕСТ Без контакта' }], contacts: { 51: { name: 'ТЕСТ Кто-то из двоих', phone: `995595${a}` } } });
+    expect(await prisma.customer.count()).toBe(customers);
+    expect((await prisma.kommoLead.findMany({ where: { leadId: { in: [String(twins), String(nobody)] } } })).map((l) => l.customerId)).toEqual([null, null]);
+    // The task is still there, named by the contact or the deal, and opens the wizard with nobody chosen.
+    const rows = await dealRows(await loginAs('owner'));
+    expect(rows.find((r) => r.id === `kommo-rent:${twins}`)).toMatchObject({ who: 'ТЕСТ Кто-то из двоих', href: `/rentals/new?lead=${twins}` });
+    expect(rows.find((r) => r.id === `kommo-rent:${nobody}`)).toMatchObject({ who: 'ТЕСТ Без контакта', href: `/rentals/new?lead=${nobody}` });
+
+    // The contacts did not come this time: the deal waits for a poll that reads them.
+    await poll({ leads: [{ id: unread, name: 'ТЕСТ Контакт не пришёл', contactId: 52 }], contactsStatus: 400 });
+    expect(await prisma.customer.count()).toBe(customers);
+    expect((await prisma.kommoLead.findUniqueOrThrow({ where: { leadId: String(unread) } })).customerId).toBeNull();
+
+    // Two deals of one new person in one poll are one card.
+    await poll({ leads: [{ id: pair1, name: 'ТЕСТ Сделка А', contactId: 53 }, { id: pair2, name: 'ТЕСТ Сделка Б', contactId: 54 }], contacts: { 53: { name: 'ТЕСТ Один человек', phone: `595${b}` }, 54: { name: 'ТЕСТ Один человек', phone: `+995 595 ${b}` } } });
+    expect(await prisma.customer.count()).toBe(customers + 1);
+    const tied = await prisma.kommoLead.findMany({ where: { leadId: { in: [String(pair1), String(pair2)] } } });
+    expect(new Set(tied.map((l) => l.customerId)).size).toBe(1);
+    expect(tied[0]!.customerId).not.toBeNull();
+  });
+
+  it('the hand-over started from the deal keeps the deal’s link, and the task is done', async () => {
+    const { prisma } = await import('../src/lib/db.js');
+    const deal = n();
+    const state = { leads: [{ id: deal, name: 'ТЕСТ Сделка к выдаче', contactId: 61 }], contacts: { 61: { name: `ТЕСТ К выдаче ${uniq()}`, phone: `595${digits().slice(-6)}` } } };
+    await poll(state);
+    const manager = await loginAs('manager');
+    const row = (await dealRows(manager)).find((r) => r.id === `kommo-rent:${deal}`)!;
+    const customerId = new URLSearchParams(row.href.split('?')[1]).get('customer')!;
+
+    const model = await prisma.vehicleModel.create({ data: { brand: 'Test', name: `Kommo ${uniq()}`, weeklyRateTetri: 15000, forRent: true } });
+    const vehicle = await prisma.vehicle.create({ data: { vin: `TESTK${digits().slice(-12).padStart(12, '0')}`, modelId: model.id, pool: 'rent' } });
+    const res = await call(manager, 'POST', '/api/pickups', {
+      customerId,
+      vehicleId: vehicle.id,
+      weeklyRateTetri: 15000,
+      depositTetri: 18000,
+      nightParkingAddress: 'ТЕСТ улица 1',
+      batteries: 2,
+      chargers: 2,
+      odometerKm: 10,
+      payment: { later: true },
+      // What the wizard sends when it was opened from the task: the deal's number.
+      kommoRef: String(deal),
+    });
+    expect(res.statusCode, res.body).toBe(201);
+    expect((await prisma.rental.findUniqueOrThrow({ where: { id: json<{ id: string }>(res).id } })).kommoRef).toBe(link(deal));
+    expect((await dealRows(manager)).some((r) => r.id === `kommo-rent:${deal}`)).toBe(false);
+  });
+
+  it('brings in a sale won after this stand began taking deals in — for those who may sell — and never an older one', async () => {
+    const { prisma } = await import('../src/lib/db.js');
+    const began = new Date('2026-10-08T06:00:00Z');
+    const unix = (iso: string) => Math.floor(Date.parse(iso) / 1000);
+    const [old, sold] = [n(), n()];
+    const sale = (id: number, name: string, closed: string, contactId: number): FakeLead => ({ id, name, status_id: WON, pipeline_id: SALES, closed_at: unix(closed), contactId });
+    const contacts = { 71: { name: `ТЕСТ Давний ${uniq()}`, phone: `595${digits().slice(-6)}` }, 72: { name: `ТЕСТ Купил ${uniq()}`, phone: `595${digits().slice(-6)}` } };
+
+    // The first poll is the beginning: nineteen sales of the past years are not nineteen tasks.
+    expect(await poll({ leads: [sale(old, 'ТЕСТ Продано давно', '2026-08-06T10:00:00Z', 71)], contacts }, began)).toMatchObject({ status: 'ok', leads: 0 });
+    expect((await prisma.kommoSync.findUniqueOrThrow({ where: { id: true } })).intakeFrom).toEqual(began);
+    expect(await prisma.kommoLead.count()).toBe(0);
+    expect(await prisma.customer.count({ where: { name: contacts[71].name } })).toBe(0);
+
+    await poll({ leads: [sale(old, 'ТЕСТ Продано давно', '2026-08-06T10:00:00Z', 71), sale(sold, 'ТЕСТ Продано сегодня', '2026-10-08T09:00:00Z', 72)], contacts }, new Date('2026-10-08T09:05:00Z'));
+    // The beginning does not move with later polls.
+    expect((await prisma.kommoSync.findUniqueOrThrow({ where: { id: true } })).intakeFrom).toEqual(began);
+    const lead = await prisma.kommoLead.findUniqueOrThrow({ where: { leadId: String(sold) }, include: { customer: true } });
+    expect(lead).toMatchObject({ kind: 'sale', closedAt: new Date('2026-10-08T09:00:00Z') });
+    expect(lead.customer).toMatchObject({ name: contacts[72].name, kommoRef: link(sold) });
+
+    const owner = await loginAs('owner');
+    expect((await dealRows(owner)).find((r) => r.id === `kommo-sale:${sold}`)).toMatchObject({ action: 'sell_from_kommo', who: contacts[72].name, href: `/sales/new?customer=${lead.customerId}&lead=${sold}` });
+    // A manager does not sell, and is not asked to.
+    expect((await dealRows(await loginAs('manager'))).some((r) => r.id === `kommo-sale:${sold}`)).toBe(false);
+    // The owner's list names it too, with its way into Kommo.
+    const page = json<{ wonThere: { leadId: string; leadUrl: string; customer: { id: string } | null }[] }>(await call(owner, 'GET', '/api/kommo/reconciliation'));
+    expect(page.wonThere).toEqual([expect.objectContaining({ leadId: String(sold), leadUrl: link(sold), customer: { id: lead.customerId, name: contacts[72].name } })]);
+
+    // Entered: the sale started from the task carries the deal, and the task is done.
+    const model = await prisma.vehicleModel.create({ data: { brand: 'Test', name: `Kommo ${uniq()}`, salePriceTetri: 290000 } });
+    const vehicle = await prisma.vehicle.create({ data: { vin: `TESTK${digits().slice(-12).padStart(12, '0')}`, modelId: model.id, pool: 'sale' } });
+    const res = await call(owner, 'POST', '/api/sales', { customerId: lead.customerId, vehicleId: vehicle.id, priceTetri: '2900', kommoRef: String(sold) });
+    expect(res.statusCode, res.body).toBe(201);
+    expect((await prisma.sale.findUniqueOrThrow({ where: { id: json<{ id: string }>(res).id } })).kommoRef).toBe(link(sold));
+    expect((await dealRows(owner)).some((r) => r.id === `kommo-sale:${sold}`)).toBe(false);
   });
 
   it('is off without a token: nothing is asked, nothing is shown, nothing fails', async () => {
