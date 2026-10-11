@@ -91,7 +91,7 @@ export const tokens = {
   textMonoSm: '400 12px/1.4 var(--mono)', // code quoted inside the interface — token names on /design
   textMoneyLg: '500 22px/1.2 var(--mono)', // the sum in a Today row and in the money sheet — what Kardu reads first outdoors; tabular figures via the class
   textTab: '500 12px/1.15 var(--display)', // the bottom bar label; wraps to two lines in Georgian rather than truncating
-  textCell: '500 11px/14px var(--body)', // inside a day cell of the payments calendar — the day's sum, «1 из 3», the word «сегодня» — and the small «долг» / «осталось» over a row's sum. The one style under 12 px: a 47 px cell holds «1 790 ₾» at no larger size
+  textCell: '500 11px/14px var(--body)', // inside a day cell of the payments calendar — the day's sum, «1 из 3», the word «сегодня», the count by a mark in the laptop's cell — and the small «долг» / «осталось» over a row's sum. The one style under 12 px: a 47 px cell holds «1 790 ₾» at no larger size
   textMonth: '500 18px/22px var(--display)', // the month's name over the payments calendar's grid («Октябрь 2026»)
 
   /** motion — Letter-spacing and the one transition, copied from the theme. The CSS `font` shorthand cannot carry tracking, so it lives beside the text styles rather than inside them. */
@@ -604,7 +604,7 @@ export const tokenGroups: TokenGroup[] = [
         "name": "textCell",
         "cssVar": "--text-cell",
         "value": "500 11px/14px var(--body)",
-        "note": "inside a day cell of the payments calendar — the day's sum, «1 из 3», the word «сегодня» — and the small «долг» / «осталось» over a row's sum. The one style under 12 px: a 47 px cell holds «1 790 ₾» at no larger size"
+        "note": "inside a day cell of the payments calendar — the day's sum, «1 из 3», the word «сегодня», the count by a mark in the laptop's cell — and the small «долг» / «осталось» over a row's sum. The one style under 12 px: a 47 px cell holds «1 790 ₾» at no larger size"
       },
       {
         "name": "textMonth",
