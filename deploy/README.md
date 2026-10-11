@@ -435,6 +435,84 @@ ssh root@204.168.149.105 /srv/ev8-ops/deploy/copy-static-to-prod.sh
 - **Оба стенда должны стоять на релизе, который знает эту команду** (1.3.0 и новее);
   иначе скрипт скажет об этом и остановится.
 
+## Сайт ev8.ge: выкладка через git и переезд с WordPress
+
+Решение: новый сайт (`mkodzya/ev8-site`) заменяет WordPress на ev8.ge; править его — через git
+(Kardu, 11.10.2026, со слов Kardu — добро Mika на переключение получено). Выкладка
+автоматическая: слияние в `develop` → https://test.ops.ev8.ge/garage/site/, слияние в `main` →
+https://ev8.ge. `main` сайта, как и здесь, — только Mika: слияние в него и есть выпуск сайта.
+
+```
+ GitHub Actions (ev8-site)          сервер 204.168.149.105
+ ─────────────────────────          ───────────────────────────────────────────
+ npm ci && npm run build ──tar.gz──▶ ssh ev8site@… test|prod
+                                      └ /usr/local/bin/ev8-site-receive (deploy/site-receive.sh)
+                                        /srv/ev8-site/<test|prod>/releases/<время UTC>
+                                        /srv/ev8-site/<test|prod>/current → последний релиз
+ Caddy (edge): ev8.ge → prod/current · test.ops.ev8.ge/garage/site/ → test/current
+```
+
+Ключ, который хранит GitHub, умеет одно: отдать архив сайта в `test` или `prod`, откатить
+(`rollback prod`), показать `status`. Ни оболочки, ни других папок. Сборка идёт на GitHub, сервер
+(3,8 ГБ) её не тянет. Релиз включается одной подменой ссылки — посетитель видит либо старый сайт,
+либо новый. Хранятся пять последних.
+
+Что на ev8.ge, кроме страниц сайта (`Caddyfile.edge`):
+- `/api/site/*` → прод EV8 Ops (заявка в очередь). Остальной API и всё `wp-*` — 410.
+- Переадресации 301 со всех страниц из карты старого сайта (sitemap ev8.ge на 11.10.2026) на их
+  замену. Политика конфиденциальности и «Приведи друга» — на главную, временно (302): таких
+  страниц на новом сайте пока нет.
+- Сжатие gzip/zstd, `www.ev8.ge` → `ev8.ge`.
+
+### DNS сейчас (11.10.2026, по dns.google)
+
+| Запись | Значение | При переезде |
+|---|---|---|
+| NS | ns1/ns2.hostnodes.ge | не трогать; зона живёт у hostnodes — **не закрывать там аккаунт**, пока DNS не перенесён |
+| A `ev8.ge` | 195.54.179.63 (WordPress) | → **204.168.149.105** |
+| CNAME `www`, `mail` | → ev8.ge | не трогать, пойдут за A |
+| MX | Google (ASPMX, ALT2–4) | **не трогать** — иначе встанет почта info@ev8.ge |
+| TXT | `v=spf1 include:_spf.google.com ~all`, `_dmarc` p=none | не трогать |
+| A `ops`, `test.ops` | 204.168.149.105 | не трогать |
+
+### Переключение, по шагам (Mika)
+
+1. Слить ветку `feature/site-cutover` в `develop`; `follow-develop.sh --now` — на сервере появятся
+   новый `Caddyfile.edge` и скрипты.
+2. Ключ для GitHub — с Mac, ключ сразу уходит в секреты сайта и не показывается:
+   ```bash
+   ssh root@204.168.149.105 /srv/ev8-ops/deploy/site-deploy-setup.sh \
+     | gh secret set SITE_DEPLOY_KEY -R mkodzya/ev8-site
+   ssh-keyscan -t ed25519 204.168.149.105 2>/dev/null \
+     | gh secret set SITE_DEPLOY_KNOWN_HOSTS -R mkodzya/ev8-site
+   ```
+   Сегодняшний предпросмотр становится первым тестовым релизом. С этого момента
+   `/garage/site/` берётся из `/srv/ev8-site/test`, а не из `/srv/ev8-site-preview` — руками туда
+   больше не копировать.
+3. Перезапуск входа (новая папка и блок ev8.ge; стенды недоступны несколько секунд):
+   `cd /srv/ev8-ops && docker compose -p ev8-edge -f docker-compose.edge.yml up -d`.
+   Пока A-запись ev8.ge смотрит на WordPress, Caddy не получит сертификат для ev8.ge и будет
+   повторять попытки в фоне. ops и test.ops это не задевает.
+4. В `mkodzya/ev8-site`: workflow (`deploy/site-github-workflow.yml`), `base` из `SITE_BASE`,
+   sitemap, `robots.txt` со строкой `Sitemap:`, страница 404. Слияние в `develop` → проверить
+   тестовый адрес. Потом слияние в `main` → в `/srv/ev8-site/prod` лежит боевая сборка
+   (`sudo -u ev8site ev8-site-receive status`).
+5. Почта заявок на проде: `SITE_MAIL_*` в `.env.prod` (раздел выше), перезапуск прода.
+6. За сутки — TTL A-записи ev8.ge в панели hostnodes.ge снизить до 300. В день переезда — A
+   `ev8.ge` → `204.168.149.105`, остальное как в таблице. Сразу после:
+   `docker exec ev8-edge-edge-1 caddy reload --config /etc/caddy/Caddyfile --force` —
+   Caddy пробует сертификат заново, не дожидаясь своей паузы.
+7. Проверка: `https://ev8.ge` и `/en/` открываются с телефона, `https://ev8.ge/catalog/` →
+   `/models/`, заявка с ev8.ge → письмо в ящике, `www.ev8.ge` → `ev8.ge`, почта на info@ev8.ge
+   приходит.
+8. Откат: A-запись обратно на `195.54.179.63` — WordPress там остаётся нетронутым. Хостинг
+   WordPress не закрывать хотя бы месяц.
+9. После: в Google Search Console отправить `https://ev8.ge/sitemap-index.xml`. Если владение
+   сайтом подтверждалось через WordPress (плагин или файл), подтвердить заново записью TXT в DNS.
+
+Откатить сам сайт на предыдущую сборку, не трогая DNS:
+`ssh root@204.168.149.105 "sudo -u ev8site ev8-site-receive rollback prod"`.
+
 ## Когда что-то не так
 
 - **Сертификат не выдаётся** — DNS не указывает на эту машину, или 80-й порт
