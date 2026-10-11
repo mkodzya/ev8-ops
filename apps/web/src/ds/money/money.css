@@ -66,3 +66,239 @@
 
 /* The "⋯" of a bank line is a target like any other on a phone. */
 @media (max-width: 899px) { .sort-line .row-dots { min-width: var(--control); min-height: var(--control); } }
+
+/* ---- The payments calendar (docs/redesign/payments-calendar.md) ------------
+   "Деньги → Календарь": page-local classes, all `cal-…`. The look is the
+   approved prototype's (`month_CSS`), rewritten onto the product's named text
+   styles and existing colour tokens; where the built screen departs from the
+   frame, §8 of the note says why. A phone and a laptop draw different trees
+   (lib/breakpoint.ts), so only the laptop's own columns need a media query.
+   Selectors on a pill carry `.pill` as well: this file may be read before
+   app.css, and a rule of equal weight would lose to the pill's own. */
+.cal { min-width: 0; }
+/* Links here are names and lines, not green words. */
+.cal a { color: inherit; }
+/* Said to a screen reader, not drawn. */
+.cal-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.cal-go { width: 16px; height: 16px; flex: none; color: var(--muted); }
+/* The one underline on the screen: a sum that is a list somewhere else. */
+.cal-link { text-decoration: underline; text-decoration-color: var(--line-control); text-underline-offset: 3px; }
+
+/* State marks: a tick in a disc is paid, a tick in a ring is paid ahead, a
+   dot is due today, a ring is expected, a square is overdue. The classes carry
+   the shared enum's own names, so no table maps one onto the other. */
+.cal-mark { width: 18px; height: 18px; flex: none; display: inline-grid; place-items: center; border-radius: 50%; }
+.cal-mark svg { width: 11px; height: 11px; display: block; stroke-width: 3.4; }
+.cal-mark::before { box-sizing: border-box; }
+.cal-mark-paid { background: var(--accent); color: var(--on-accent); }
+.cal-mark-paid_ahead { border: 1.5px solid var(--accent); color: var(--accent); }
+.cal-mark-paid_ahead svg { width: 10px; height: 10px; }
+.cal-mark-due_today::before { content: ""; width: 10px; height: 10px; border-radius: 50%; background: var(--ink); }
+.cal-mark-expected::before { content: ""; width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--grey); }
+.cal-mark-overdue::before { content: ""; width: 12px; height: 12px; background: var(--crit); }
+.cal-mark.sm { width: 12px; height: 12px; }
+.cal-mark.sm svg { width: 8px; height: 8px; stroke-width: 4; }
+.cal-mark-paid_ahead.sm svg { width: 7px; height: 7px; }
+.cal-mark-due_today.sm::before { width: 8px; height: 8px; }
+.cal-mark-expected.sm::before { width: 10px; height: 10px; }
+.cal-mark-overdue.sm::before { width: 9px; height: 9px; }
+/* The state's word. Grey is a shape colour, so "expected" is written in the grey ink. */
+.cal-st-overdue { color: var(--crit-ink); }
+.cal-st-due_today { color: var(--ink); }
+.cal-st-expected { color: var(--grey-ink); }
+.cal-st-paid, .cal-st-paid_ahead { color: var(--accent-ink); }
+
+/* A round outline button: 44 px under a thumb, 34 px under a pointer —
+   --control-dense is the thumb's measure below 900 px. */
+.pill.cal-round { width: var(--control-dense); padding: 0; justify-content: center; flex: none; }
+.cal-note { margin: 0; padding: 8px 14px 10px; border-top: 1px solid var(--line-soft); font: var(--text-overline); font-weight: 400; line-height: 16px; color: var(--muted); }
+.cal-none { margin: 0 2px; padding: 2px 0 10px; font: var(--text-label); color: var(--muted); }
+
+/* Phone: the week in one line and the late ones behind a plain button, one card. */
+.cal-sum-card { background: var(--surface); border-radius: var(--radius-card); margin: 0 0 6px; overflow: hidden; }
+.cal-week { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 5px 10px 5px 14px; }
+.cal-week-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.cal-over { font: var(--text-overline); line-height: 16px; color: var(--muted); }
+/* Two halves that never break inside; the second goes to the next line whole. */
+.cal-week-line { display: flex; flex-wrap: wrap; gap: 0 5px; font: var(--text-label); line-height: 18px; }
+.cal-week-line > span { white-space: nowrap; }
+.cal-week-line b { font-weight: 600; font-variant-numeric: tabular-nums; }
+.cal-late { border-top: 1px solid var(--line-soft); }
+.cal-late-in { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; column-gap: 8px; align-items: center; min-height: 44px; padding: 0 10px 0 14px; background: var(--crit-soft); }
+/* Georgian takes two lines here: the count and the debt each stay whole. */
+.cal-late-text { display: flex; flex-direction: column; min-width: 0; padding: 4px 0; }
+.cal-late-text b { font: var(--text-label); font-weight: 600; line-height: 18px; color: var(--crit-ink); }
+.cal-late-text b span { white-space: nowrap; }
+.cal-late-text > span { font: var(--text-overline); font-weight: 400; line-height: 16px; color: var(--crit-ink); }
+/* Nobody is late: the same height, no red and no button. */
+.cal-late.none .cal-late-in { background: none; }
+.cal-late.none .cal-late-text b { font-weight: 500; color: var(--accent-ink); }
+.pill.cal-toggle { gap: 2px; padding: 0 8px 0 12px; }
+
+/* The calendar's own controls: back, forward, today, and the month by a button. */
+.cal-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 4px; }
+.cal-bar .pill { flex: none; }
+.pill.cal-now { padding: 0 14px; }
+.pill.cal-all { margin-left: auto; gap: 2px; padding: 0 10px 0 14px; }
+.cal-title { font: var(--text-month); letter-spacing: var(--tracking-tight); white-space: nowrap; }
+.cal-title-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0 2px 2px; }
+.cal-title-row .cal-legend { margin: 0; }
+.cal-bar.dense { gap: 6px; margin: 0 0 8px; }
+.cal-bar.dense .cal-title { margin: 0 8px; }
+.cal-bar.dense .pill.cal-now { padding: 0 12px; }
+
+/* Weekday names and the grid. A 2 px gap, not the 8 px between touch targets:
+   with 8 px a cell on a 375 px phone would be 42 px wide (§8.12). */
+.cal-wd, .cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px; }
+.cal-wd { margin: 0 0 3px; }
+.cal-wd span { text-align: center; font: var(--text-overline); line-height: 16px; color: var(--muted); }
+.cal-cell { position: relative; min-width: 0; min-height: 44px; margin: 0; padding: 3px 1px; border: 0; border-radius: 10px; background: var(--surface); color: var(--ink); font: inherit; box-shadow: inset 0 0 0 1px var(--line-soft); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; }
+button.cal-cell { cursor: pointer; }
+.cal-cell.week { min-height: 54px; gap: 0; }
+.cal-cell.off, .cal-cell.none { background: transparent; box-shadow: none; }
+.cal-n { font: var(--text-h3); line-height: 18px; }
+.cal-cell.past .cal-n, .cal-cell.ahead .cal-n, .cal-cell.none .cal-n { color: var(--muted); }
+.cal-cell.late { background: var(--crit-soft); box-shadow: none; }
+/* The one lime in the page's content: today. The chosen day is a frame, over any ground. */
+.cal-cell.today { background: var(--lime); box-shadow: none; }
+.cal-cell.today .cal-n { font-weight: 600; }
+.cal-cell.on { box-shadow: inset 0 0 0 2px var(--ink); }
+.cal-cell-sum { font: var(--text-cell); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.cal-cell-count { font: var(--text-cell); font-weight: 400; color: var(--muted); white-space: nowrap; }
+.cal-cell-count.all { color: var(--accent-ink); font-weight: 600; }
+/* Outranks `.all` in colour only: today's «3 из 3» is ink and bold — there is no green text on lime (§8.14). */
+.cal-cell.today .cal-cell-count { color: var(--ink); }
+.cal-flag { position: absolute; top: 5px; right: 5px; width: 7px; height: 7px; background: var(--crit); }
+/* The product's focus ring is a shadow and so is the cell's frame: appended, not replaced. */
+.cal-cell:focus-visible { outline: none; z-index: 1; box-shadow: inset 0 0 0 1px var(--line-soft), var(--focus-ring); }
+.cal-cell.late:focus-visible, .cal-cell.today:focus-visible { box-shadow: var(--focus-ring); }
+.cal-cell.on:focus-visible { box-shadow: inset 0 0 0 2px var(--ink), var(--focus-ring); }
+
+/* Laptop: the same cells, larger, with the day's sum and its marks. The side
+   padding is 2 px where the frame draws 5 px: «1 790 ₾» in the 13 px mono
+   needs about 55 px of a 60.6 px cell (§8.16). */
+.cal-grid.big { gap: 4px; }
+.cal-grid.big .cal-cell { min-height: 40px; padding: 6px 2px; align-items: stretch; gap: 0; text-align: start; }
+.cal-grid.big .cal-cell.week { min-height: 100px; justify-content: flex-start; }
+.cal-cell-top { display: flex; align-items: center; justify-content: space-between; gap: 4px; min-width: 0; height: 18px; }
+.cal-cell-total { font: var(--text-label); font-family: var(--mono); font-weight: 500; line-height: 18px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.cal-cell.none .cal-cell-total { color: var(--muted); }
+.cal-cell-marks { display: flex; flex-wrap: wrap; gap: 3px 4px; margin-top: 4px; }
+.cal-cell-mark { display: inline-flex; align-items: center; gap: 2px; font: var(--text-mono-sm); font-weight: 500; line-height: 14px; white-space: nowrap; }
+.cal-cell-tag { margin-top: auto; font: var(--text-cell); font-family: var(--display); font-weight: 600; white-space: nowrap; }
+
+/* Legend. */
+.cal-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 12px; margin: 4px 2px 6px; font: var(--text-overline); font-weight: 400; line-height: 16px; color: var(--muted); }
+.cal-legend span { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.cal-legend p { margin: 0; }
+.cal-legend b { font-weight: 500; color: var(--ink); }
+.cal-swatch { display: inline-block; flex: none; width: 12px; height: 12px; border-radius: 4px; background: var(--lime); box-shadow: inset 0 0 0 1px var(--line-control); }
+.cal-legend.desk { display: block; margin: 10px 2px 0; }
+.cal-legend-marks { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 14px; margin: 4px 0; }
+
+/* Phone: the chosen day — a heading, then its payers in one card. The total
+   drops under the day's name when the two do not share a line. */
+.cal-day-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0 8px; min-height: 44px; margin: 0 2px; }
+.cal-day-title { display: flex; flex-direction: column; min-width: 0; }
+.cal-day-title h2 { margin: 0; font: var(--text-h2); line-height: 20px; letter-spacing: var(--tracking-tight); white-space: nowrap; }
+.cal-day-title h2 span { font: var(--text-label); letter-spacing: 0; color: var(--muted); }
+.cal-day-title small { font: var(--text-overline); font-weight: 400; line-height: 16px; color: var(--muted); }
+.cal-day-total { font: var(--text-label); color: var(--muted); white-space: nowrap; }
+.cal-list { background: var(--surface); border-radius: var(--radius-card); overflow: hidden; margin: 0 0 2px; }
+.cal-row { padding: 5px 14px 8px; border-top: 1px solid var(--line-soft); }
+.cal-list > :first-child { border-top: 0; }
+.cal-row-main { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; column-gap: 8px; align-content: center; align-items: center; min-height: 44px; }
+/* The name is data: one line, cut with an ellipsis. The words under it wrap. */
+.cal-who { min-width: 0; font: var(--text-body); font-weight: 500; line-height: 20px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cal-who span { font: var(--text-label); line-height: 20px; color: var(--muted); }
+.cal-who svg { vertical-align: -3px; }
+.cal-amt { font: var(--text-h2); font-family: var(--mono); line-height: 20px; font-variant-numeric: tabular-nums; white-space: nowrap; text-align: right; }
+.cal-amt small { display: block; font: var(--text-cell); font-weight: 400; line-height: 13px; }
+.cal-amt.late { color: var(--crit-ink); }
+.cal-words { grid-column: 2 / -1; min-width: 0; font: var(--text-label); font-weight: 500; line-height: 18px; }
+/* A sum with a small word over it — «долг», «осталось» — stands beside both lines. */
+.cal-row-main.debt .cal-amt, .cal-row-main.part .cal-amt { grid-column: 3; grid-row: 1 / span 2; }
+.cal-row-main.debt .cal-words, .cal-row-main.part .cal-words { grid-column: 2; }
+.cal-acts { display: flex; align-items: center; gap: 8px; margin: 4px 0 0; }
+.pill.cal-take { flex: 1; min-width: 0; justify-content: center; padding: 0 14px; }
+.pill.cal-remind { gap: 6px; padding: 0 14px; }
+/* «Оплачено · 8» — the paid rows of a long day, folded (§3.5.8). */
+.cal-fold { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; padding: 5px 14px; border-top: 1px solid var(--line-soft); }
+.cal-fold-title { display: inline-flex; align-items: center; gap: 8px; min-width: 0; font: var(--text-label); font-weight: 500; line-height: 18px; color: var(--accent-ink); }
+/* «Завтра …» and «Пришло денег …»: quiet lines that lead somewhere. */
+.cal-next, .cal-came { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; min-height: 44px; margin: 0; padding: 0 2px 0 16px; border: 0; background: none; font: var(--text-label); color: var(--muted); text-align: start; cursor: pointer; }
+/* A link here inherits its colour (`.cal a`), so the quiet one says its own again, louder. */
+.cal a.cal-came { color: var(--muted); }
+.cal-next > span, .cal-came > span { min-width: 0; }
+.cal-next b, .cal-came b, .cal-came-d b { font-weight: 500; color: var(--ink); }
+.cal-row-main:focus-visible, .cal-dwho:focus-visible, .cal-next:focus-visible, .cal-came:focus-visible, .cal-came-d:focus-visible { outline: none; box-shadow: var(--focus-ring); border-radius: 8px; }
+
+/* Laptop: the week in figures. A grid, so the red block can go under the
+   three figures instead of pushing the card wide. */
+.cal-card { background: var(--surface); border-radius: var(--radius-card); padding: 12px 16px; margin: 0 0 12px; }
+.cal-card-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px 16px; margin: 0 0 6px; font: var(--text-overline); color: var(--muted); }
+.cal-card-side { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 2px 16px; font: var(--text-label); }
+.cal-card-head b { font-weight: 600; color: var(--ink); }
+.cal-figs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px 44px; align-items: start; }
+.cal-figs > .cal-none { grid-column: 1 / 4; margin: 0; padding: 4px 0; }
+.cal-fig { display: flex; flex-direction: column; min-width: 0; }
+.cal-fig-v { font: var(--text-money-lg); font-variant-numeric: tabular-nums; white-space: nowrap; }
+/* The labels wrap — Georgian needs two lines here; the sums never do. */
+.cal-fig-l { display: flex; align-items: center; gap: 6px; font: var(--text-label); color: var(--muted); }
+.cal-fig-s { font: var(--text-overline); font-weight: 400; line-height: 16px; color: var(--muted); }
+.cal-fig.debt { grid-column: 1 / -1; padding-top: 10px; border-top: 1px solid var(--line-soft); }
+.cal-fig.debt .cal-fig-v, .cal-fig.debt .cal-fig-l { color: var(--crit-ink); }
+.cal-fig.debt.none .cal-fig-l { color: var(--accent-ink); }
+
+/* Laptop: a narrow month and the lists. One column until there is room for two. */
+.cal-desk { display: grid; gap: 24px; }
+.cal-left { min-width: 0; max-width: 448px; }
+.cal-side { min-width: 0; background: var(--surface); border-radius: var(--radius-card); padding: 4px 16px 8px; }
+.cal-sec + .cal-sec { margin-top: 8px; border-top: 1px solid var(--line); }
+.cal-sec-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 2px 12px; padding: 10px 0 6px; }
+.cal-sec-head h3 { margin: 0; display: inline-flex; align-items: center; gap: 8px; font: var(--text-h2); line-height: 20px; letter-spacing: var(--tracking-tight); white-space: nowrap; }
+.cal-sec-head h3 span { font: var(--text-label); letter-spacing: 0; color: var(--muted); }
+.cal-sec-total { font: var(--text-label); color: var(--muted); white-space: nowrap; }
+.cal-sec-head.late h3, .cal-sec-head.late .cal-sec-total { color: var(--crit-ink); }
+.cal-drow { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto 60px; column-gap: 10px; align-items: center; min-height: 46px; padding: 4px 0; border-top: 1px solid var(--line-soft); }
+.cal-dwho { display: flex; flex-direction: column; min-width: 0; }
+.cal-dwho.wide { grid-column: 2 / 4; }
+.cal-dname { font: var(--text-h3); line-height: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* The second line wraps and is not cut: a state's words are a sentence. */
+.cal-dsub { font: var(--text-overline); font-weight: 400; line-height: 16px; color: var(--muted); }
+.cal-dsub span { font-weight: 500; }
+.cal-dacts { display: flex; gap: 6px; }
+.cal-dacts .pill.cal-take { flex: none; padding: 0 12px; }
+.cal-dacts .pill.cal-remind { padding: 0 12px; }
+.cal-damt { text-align: right; font: var(--text-money); line-height: 18px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.cal-damt small { display: block; font: var(--text-cell); font-weight: 400; line-height: 13px; }
+.cal-damt.late { color: var(--crit-ink); }
+.cal-side .cal-note { padding: 8px 0 4px 28px; }
+.cal-side .cal-none { margin: 0; padding: 8px 0; border-top: 1px solid var(--line-soft); }
+.cal-side .cal-fold { min-height: 46px; padding: 4px 0; gap: 10px; }
+/* «Показать ещё (7)» under the first five debtors, «Свернуть» under all of them (§3.5.10). */
+.cal-more { padding: 8px 0 4px; border-top: 1px solid var(--line-soft); }
+@media (min-width: 1180px) {
+  .cal-desk { grid-template-columns: 448px minmax(0, 1fr); align-items: start; }
+  .cal-figs { grid-template-columns: repeat(3, minmax(0, max-content)) minmax(220px, 1fr); }
+  .cal-fig.debt { grid-column: auto; justify-self: end; padding: 0 0 0 24px; border-top: 0; border-left: 1px solid var(--line-soft); }
+}
+/* Two columns from 1180 px leave about 40 px for a name beside two buttons:
+   in that band the buttons go under it. */
+@media (min-width: 1180px) and (max-width: 1279px) {
+  .cal-drow { grid-template-columns: 18px minmax(0, 1fr) 60px; row-gap: 4px; }
+  .cal-dwho.wide { grid-column: 2; }
+  .cal-dacts { grid-column: 2 / -1; grid-row: 2; }
+}
+
+/* Loading: the screen's own shape in the product's grey blocks. */
+.cal-skel { display: grid; gap: 8px; align-content: start; }
+.skel.cal-skel-card { height: 88px; border-radius: var(--radius-card); }
+.skel.cal-skel-line { width: 62%; height: 14px; }
+.skel.cal-skel-figs { grid-column: 1 / 4; width: 62%; height: 44px; }
+.cal-skel-bar { display: flex; gap: 8px; }
+.skel.cal-skel-pill { width: 44px; height: 44px; border-radius: var(--radius-pill); }
+.skel.cal-skel-pill.wide { width: 96px; }
+.skel.cal-skel-cell { height: 54px; border-radius: 10px; }
+.cal-grid.big .skel.cal-skel-cell { height: 40px; }
+.skel.cal-skel-row { height: 56px; border-radius: var(--radius-card); }
