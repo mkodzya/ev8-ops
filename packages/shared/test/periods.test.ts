@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { overdueDays, paidThrough, periodBounds, periodPayStatus, periodSeqOf, periodsThrough } from '../src/index.js';
+import { overdueDays, paidThrough, periodBounds, periodPayStatus, periodSeqOf, periodsThrough, rentDueOn } from '../src/index.js';
 
 describe('weekly periods (RNT-02)', () => {
   it('a period is 7 calendar days from the pickup date', () => {
@@ -63,9 +63,20 @@ describe('paid through', () => {
     expect(paidThrough([row(1, '2026-07-24', 15000, 15000), row(2, '2026-07-31', 15000, 0), row(3, '2026-08-07', 0, 0)])).toBe('2026-07-24');
   });
 
-  it('counts days behind from the day after the covered one', () => {
+  it('names the due day: the day after "paid through", or the pickup day while no week is paid', () => {
+    expect(rentDueOn('2026-07-31', '2026-07-18')).toBe('2026-08-01');
+    expect(rentDueOn(null, '2026-07-18')).toBe('2026-07-18');
+  });
+
+  it('counts late days from the day after the due day (ADR-0017)', () => {
     expect(overdueDays('2026-07-31', '2026-07-18', '2026-07-31')).toBe(0);
-    expect(overdueDays('2026-07-31', '2026-07-18', '2026-08-03')).toBe(3);
-    expect(overdueDays(null, '2026-07-18', '2026-07-18')).toBe(1);
+    // The due day itself is not a late day.
+    expect(overdueDays('2026-07-31', '2026-07-18', '2026-08-01')).toBe(0);
+    expect(overdueDays('2026-07-31', '2026-07-18', '2026-08-02')).toBe(1);
+    expect(overdueDays('2026-07-31', '2026-07-18', '2026-08-03')).toBe(2);
+    // Nothing paid yet: the pickup day is the due day.
+    expect(overdueDays(null, '2026-07-18', '2026-07-18')).toBe(0);
+    expect(overdueDays(null, '2026-07-18', '2026-07-19')).toBe(1);
+    expect(overdueDays(null, '2026-07-18', '2026-07-21')).toBe(3);
   });
 });

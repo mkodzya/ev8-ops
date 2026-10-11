@@ -4,6 +4,7 @@
 // badge that counts something the screen does not list is worse than none.
 import type { ISODate } from './types.js';
 import type { Tetri } from './money.js';
+import { overdueDays } from './periods.js';
 
 // "till" is a manager's last group (§3.1): their own cash, handed over at the
 // end of the day. An owner has no such group — a till handed to them is a
@@ -205,10 +206,11 @@ export function dayQueue(input: QueueInput): TaskGroupRows[] {
     });
   }
 
-  // 3. Overdue — longest first; the sum is what the weeks owe (B7-02).
+  // 3. Overdue — longest first; the sum is what the weeks owe (B7-02). The
+  // days are the product's one count, from the due day (ADR-0017).
   const overdue = open
     .filter((r) => r.status === 'overdue' && r.debtTetri > 0)
-    .map((r) => ({ r, days: r.paidThrough ? daysBetween(r.paidThrough, input.today) : r.pickedUpOn ? daysBetween(r.pickedUpOn, input.today) : 0 }))
+    .map((r) => ({ r, days: r.pickedUpOn ? overdueDays(r.paidThrough, r.pickedUpOn, input.today) : 0 }))
     .sort((a, b) => b.days - a.days || b.r.debtTetri - a.r.debtTetri);
   for (const { r, days } of overdue) {
     rows.push({

@@ -114,7 +114,8 @@ describe.skipIf(!HAS_DB)('a week at nothing is a paid week (ADR-0017)', () => {
     ]);
     // Week 1 ended nine days ago, and that is as far as the money reaches.
     expect(c.rental).toMatchObject({ status: 'overdue', paidThrough: addDays(t, -9), debtTetri: 15000 });
-    expect(await listed(r.owner, r.id)).toMatchObject({ status: 'overdue', debtTetri: 15000, paidThrough: addDays(t, -9) });
+    // Week 2 was due eight days ago: today is its eighth late day, on the list and on the calendar.
+    expect(await listed(r.owner, r.id)).toMatchObject({ status: 'overdue', overdueDays: 8, debtTetri: 15000, paidThrough: addDays(t, -9) });
     expect(lateOf(await calendar(r.owner), r.id)).toEqual({ rentalId: r.id, debtTetri: 15000, overdueTetri: 15000, weeks: 1, sinceOn: addDays(t, -8), days: 8 });
   });
 

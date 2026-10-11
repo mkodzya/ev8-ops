@@ -70,7 +70,9 @@ describe('the queue of “Today”', () => {
     const q = dayQueue(input({ rentals: [rental(), rental({ id: 'r2', number: 'R-00002', paidThrough: '2026-09-10', debtTetri: 30000 })] }));
     const overdue = group(q, 'overdue')!;
     expect(overdue.rows.map((r) => r.number)).toEqual(['R-00002', 'R-00001']);
-    expect(overdue.rows[0]).toMatchObject({ days: 10, amountTetri: 30000, action: 'take_money' });
+    // Paid through 10.09: the week was due on the 11th, and the 20th is its ninth late day (ADR-0017).
+    expect(overdue.rows[0]).toMatchObject({ days: 9, amountTetri: 30000, action: 'take_money' });
+    expect(overdue.rows[1]).toMatchObject({ days: 2, amountTetri: 15000 });
     expect(overdue.totalTetri).toBe(45000);
   });
 
