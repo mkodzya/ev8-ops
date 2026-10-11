@@ -11,7 +11,6 @@ import { DesignCatalog } from './pages/DesignCatalog.js';
 import { EconomicsPage } from './pages/EconomicsPage.js';
 import { WeekPage } from './pages/WeekPage.js';
 import { UtilisationPage } from './pages/UtilisationPage.js';
-import { SiteReportPage } from './pages/SiteReportPage.js';
 import { PartPage } from './pages/PartPage.js';
 import { StockPage } from './pages/StockPage.js';
 import { CustomerForm } from './pages/CustomerForm.js';
@@ -162,7 +161,6 @@ export function App() {
         <Route path="reports/week" element={<Require perm="reports.view"><WeekPage /></Require>} />
         <Route path="reports/utilisation" element={<Require perm="reports.view"><UtilisationPage /></Require>} />
         <Route path="reports/economics" element={<Require perm="reports.view"><EconomicsPage /></Require>} />
-        <Route path="reports/site" element={<Require perm="reports.view"><SiteReportPage /></Require>} />
 
         <Route path="customers" element={<CustomersPage />} />
         <Route path="customers/new" element={<CustomerForm />} />

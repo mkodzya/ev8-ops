@@ -97,7 +97,6 @@ export type TabId =
   | 'week'
   | 'utilisation'
   | 'economics'
-  | 'site'
   | 'people'
   | 'rental'
   | 'journal'
@@ -157,9 +156,6 @@ export const SECTION_TABS: Partial<Record<SectionId, readonly { id: TabId; path:
     { id: 'week', path: '/reports/week', anyOf: ['reports.view'] },
     { id: 'utilisation', path: UTILISATION_PATH, anyOf: ['reports.view'] },
     { id: 'economics', path: '/reports/economics', anyOf: ['reports.view'] },
-    // ev8.ge's own anonymous counter (Kardu, 11.10.2026): how many came, what
-    // they opened, how many asked for a moped.
-    { id: 'site', path: '/reports/site', anyOf: ['reports.view'] },
   ],
 };
 
