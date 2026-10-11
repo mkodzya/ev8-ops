@@ -5,6 +5,7 @@ import { wave5purchasesRu } from './wave5-purchases.js';
 import { wave5serviceRu } from './wave5-service.js';
 import { wave6weekRu } from './wave6-week.js';
 import { wave6utilRu } from './wave6-utilisation.js';
+import { siteReportRu } from './site-report.js';
 import { wave6manageRu } from './wave6-manage.js';
 import { kommoLinkRu } from './kommo-link.js';
 import type { Dict } from './en.js';
@@ -106,6 +107,7 @@ export const ru: Dict = {
       week: 'Неделя',
       utilisation: 'Загрузка парка',
       economics: 'Экономика',
+      site: 'Сайт',
       people: 'Люди',
       rental: 'Аренда',
       journal: 'Журнал',
@@ -1209,6 +1211,7 @@ export const ru: Dict = {
   ...wave5serviceRu,
   ...wave6weekRu,
   ...wave6utilRu,
+  ...siteReportRu,
   ...wave6manageRu,
   ...kommoLinkRu,
 };
