@@ -20,6 +20,12 @@ export interface WaTarget {
   phone: string;
   paidThrough: string | null;
   debtTetri: number;
+  /**
+   * The day the week being reminded about begins, when the caller knows it —
+   * the payments calendar does. Without it "tomorrow" is the day after
+   * paid-through, which is another day behind an older unpaid week.
+   */
+  dueOn?: string | null;
 }
 
 /** What each template puts into the text: a template about the next week is not about the debt (QA-W4-02). */
@@ -29,9 +35,13 @@ interface Rental {
 
 const digits = (s: string) => s.replace(/\D/g, '');
 
-export function WhatsappSheet({ target, onClose }: { target: WaTarget; onClose: () => void }) {
+/**
+ * `kind` opens the sheet on a template the caller's button has already named
+ * ("remind: payment tomorrow"). Without it the debt chooses, as before.
+ */
+export function WhatsappSheet({ target, onClose, kind: opensOn }: { target: WaTarget; onClose: () => void; kind?: WaKind }) {
   const t = useT();
-  const [kind, setKind] = useState<WaKind>(target.debtTetri > 0 ? 'overdue' : 'tomorrow');
+  const [kind, setKind] = useState<WaKind>(opensOn ?? (target.debtTetri > 0 ? 'overdue' : 'tomorrow'));
   const [lang, setLang] = useState<WaLang>('ka');
   // The rental itself answers what the next week costs and when it starts;
   // the row that opened this sheet only knows the debt.
@@ -43,7 +53,7 @@ export function WhatsappSheet({ target, onClose }: { target: WaTarget; onClose: 
     name: target.name,
     number: target.number,
     // "Overdue" is about the day it was paid through; "tomorrow" about the day the new week starts.
-    date: fmtDate(kind === 'overdue' ? paidThrough : paidThrough ? addDays(paidThrough, 1) : null).slice(0, 5),
+    date: fmtDate(kind === 'overdue' ? paidThrough : (target.dueOn ?? (paidThrough ? addDays(paidThrough, 1) : null))).slice(0, 5),
     amount: formatGel(kind === 'overdue' ? debtTetri : weekTetri, { decimals: false }),
   });
 

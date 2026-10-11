@@ -24,6 +24,7 @@ export * from './vin.js';
 export * from './utilisation.js';
 export * from './week.js';
 export * from './calendar.js';
+export * from './calendar-view.js';
 export * from './journal.js';
 export * from './deposit-decision.js';
 export * from './kommo.js';
