@@ -11,6 +11,28 @@
 	# renewal keeps failing. Without it the first anybody hears of it is a
 	# browser warning on Kardu's phone.
 	email info@ev8.ge
+
+	# ev8.ge and www.ev8.ge get their certificate at the first visit, not at
+	# start (`tls { on_demand }` in their blocks). The day the name's DNS is
+	# pointed at this server is Kardu's to choose (Mika, 11.10.2026: "по сайту
+	# все задачи он должен без меня делать"), and a door that asked for the
+	# certificate at start tried once while the name still pointed at
+	# WordPress and did not try again for hours. Caddy issues on demand only
+	# for a name this address says yes to — the two below and no other.
+	on_demand_tls {
+		ask http://127.0.0.1:9123/may
+	}
+}
+
+# The answer to "may this name have a certificate on demand?": the site's two
+# names, nothing else. Heard only inside the door's own container.
+http://127.0.0.1:9123 {
+	bind 127.0.0.1
+	@site query domain=ev8.ge
+	@site_www query domain=www.ev8.ge
+	respond @site 200
+	respond @site_www 200
+	respond 403
 }
 
 # The built site (mkodzya/ev8-site) as GitHub Actions ships it: a release
@@ -97,10 +119,13 @@ ops.ev8.ge {
 	}
 }
 
-# The company's site. Until the A record of ev8.ge points at this server,
-# Let's Encrypt cannot issue its certificate and Caddy keeps retrying in the
-# background; ops.ev8.ge and test.ops.ev8.ge are not affected by that.
+# The company's site. Its certificate is issued at the first visit after the
+# A record of ev8.ge points at this server (on_demand, see the top): until
+# then nobody reaches this block and nothing is asked of Let's Encrypt.
 ev8.ge {
+	tls {
+		on_demand
+	}
 	encode zstd gzip
 
 	import wordpress_redirects
@@ -135,6 +160,9 @@ ev8.ge {
 }
 
 www.ev8.ge {
+	tls {
+		on_demand
+	}
 	redir https://ev8.ge{uri} permanent
 }
 
