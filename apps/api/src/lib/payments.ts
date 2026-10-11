@@ -1,4 +1,4 @@
-import { paidThrough, spreadOverOwed, type PeriodPayStatus } from '@ev8/shared';
+import { paidThrough, periodPayStatus, spreadOverOwed, type PeriodPayStatus } from '@ev8/shared';
 import type { Prisma } from '../generated/prisma/client.js';
 import { dateFromISO, isoDate } from './dates.js';
 import { rentalOwed, spreadRental, writeAllocations } from './rentalMoney.js';
@@ -54,7 +54,8 @@ export async function recomputeRental(tx: Tx, rentalId: string): Promise<void> {
   for (const p of periods) {
     // A week brought over as paid before the transfer is paid without a payment (B3-02, Q3).
     const paid = p.paidBeforeTransfer ? p.amountTetri : p.allocations.reduce((n, a) => n + a.amountTetri, 0);
-    const payStatus: PeriodPayStatus = paid <= 0 ? 'unpaid' : paid >= p.amountTetri ? 'paid' : 'partial';
+    // The shared rule: a week at nothing is paid, so "paid through" walks over it (ADR-0017).
+    const payStatus = periodPayStatus(p.amountTetri, paid);
     if (paid !== p.paidTetri || payStatus !== p.payStatus) {
       await tx.rentalPeriod.update({ where: { id: p.id }, data: { paidTetri: paid, payStatus, updatedAt: new Date() } });
     }

@@ -44,6 +44,10 @@ export function periodSeqOf(pickedUpOn: ISODate, date: ISODate): number {
 }
 
 export function periodPayStatus(amountTetri: number, paidTetri: number): PeriodPayStatus {
+  // A week at nothing — a pause or a dispute lifted, a rate of 0, a week a
+  // late return replaced — asks for nothing, so it is paid: "paid through"
+  // walks over it, as the calendar skips it (ADR-0017).
+  if (amountTetri <= 0) return 'paid';
   if (paidTetri <= 0) return 'unpaid';
   return paidTetri >= amountTetri ? 'paid' : 'partial';
 }

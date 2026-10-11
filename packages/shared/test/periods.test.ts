@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { overdueDays, paidThrough, periodBounds, periodSeqOf, periodsThrough } from '../src/index.js';
+import { overdueDays, paidThrough, periodBounds, periodPayStatus, periodSeqOf, periodsThrough } from '../src/index.js';
 
 describe('weekly periods (RNT-02)', () => {
   it('a period is 7 calendar days from the pickup date', () => {
@@ -48,6 +48,19 @@ describe('paid through', () => {
       '2026-07-24',
     );
     expect(paidThrough([p(1, '2026-07-24', 'partial')])).toBeNull();
+  });
+
+  it('calls a week at nothing paid, and a week with a price by what it got (ADR-0017)', () => {
+    expect(periodPayStatus(0, 0)).toBe('paid');
+    expect(periodPayStatus(15000, 0)).toBe('unpaid');
+    expect(periodPayStatus(15000, 5000)).toBe('partial');
+    expect(periodPayStatus(15000, 15000)).toBe('paid');
+  });
+
+  it('walks over a week at nothing, and still stops at an unpaid week before it', () => {
+    const row = (seq: number, endsOn: string, amountTetri: number, paidTetri: number) => ({ seq, endsOn, payStatus: periodPayStatus(amountTetri, paidTetri) });
+    expect(paidThrough([row(1, '2026-07-24', 15000, 15000), row(2, '2026-07-31', 0, 0), row(3, '2026-08-07', 15000, 0)])).toBe('2026-07-31');
+    expect(paidThrough([row(1, '2026-07-24', 15000, 15000), row(2, '2026-07-31', 15000, 0), row(3, '2026-08-07', 0, 0)])).toBe('2026-07-24');
   });
 
   it('counts days behind from the day after the covered one', () => {
