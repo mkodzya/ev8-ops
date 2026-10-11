@@ -1,4 +1,5 @@
 import type { FastifyBaseLogger, FastifyInstance } from 'fastify';
+import { currentFuelPrice } from '../lib/fuelPrice.js';
 import { HitLimiter, countHit, parseHit, type Hit } from '../lib/siteCounter.js';
 import {
   QueueLimiter,
@@ -79,5 +80,13 @@ export function siteRoutes(app: FastifyInstance): void {
     if (!hit) return reply.code(400).send({ error: 'bad_site_hit' });
     if (hits.allow()) await tally(hit, req.log);
     return reply.code(204).send();
+  });
+
+  // Today's petrol for the calculator's comparison, with the moment it was
+  // read. None read yet: 503, and the site keeps the figure it was built with.
+  app.get('/api/site/fuel', { config: { scope: 'public' } }, async (_req, reply) => {
+    const price = await currentFuelPrice();
+    if (!price) return reply.code(503).send({ error: 'fuel_price_unknown' });
+    return reply.header('cache-control', 'public, max-age=3600').send(price);
   });
 }

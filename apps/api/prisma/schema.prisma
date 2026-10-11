@@ -1179,3 +1179,17 @@ model SiteCount {
   @@id([day, metric, key])
   @@map("site_counts")
 }
+
+/// One row: the price of regular petrol for ev8.ge's calculator, read once a day (migration 0037).
+model FuelPrice {
+  id           Boolean   @id @default(true)
+  /// Median of the chains' regular (92/93), in tetri; kept from the last reading that worked.
+  perLitreTetri Int?     @map("per_litre_tetri")
+  chains       Int?
+  source       String?
+  asOf         DateTime? @map("as_of")
+  lastTryAt    DateTime? @map("last_try_at")
+  lastFailure  String?   @map("last_failure")
+
+  @@map("fuel_price")
+}

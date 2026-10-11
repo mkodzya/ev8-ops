@@ -18,6 +18,8 @@ const API = (process.env.API_URL ?? 'http://api:8080').replace(/\/+$/, '');
 const TOKEN = process.env.WORKER_TOKEN ?? 'dev-worker-token';
 const PERIODS_CRON = process.env.PERIODS_CRON ?? '10 0 * * *';
 const KOMMO_CRON = process.env.KOMMO_CRON ?? '*/5 * * * *';
+// The chains change prices in the morning, if at all; one reading a day is plenty.
+const FUEL_CRON = process.env.FUEL_CRON ?? '30 9 * * *';
 const TZ = process.env.TZ ?? ORG_TZ;
 
 interface RollResult {
@@ -63,6 +65,23 @@ async function pollKommo(): Promise<void> {
   kommoSaid = line;
 }
 
+// The price of petrol for ev8.ge's calculator (lib/fuelPrice.ts in the API).
+// One line in the log per reading: the price, or why there is none today.
+async function readFuel(): Promise<void> {
+  try {
+    const res = await fetch(`${API}/api/jobs/fuel-price`, { method: 'POST', headers: { 'x-worker-token': TOKEN } });
+    if (!res.ok) throw new Error(`fuel-price: ${res.status}`);
+    const r = (await res.json()) as { status: 'ok'; perLitreTetri: number; chains: number } | { status: 'failed'; failure: string };
+    console.log(
+      r.status === 'ok'
+        ? `worker: petrol ${(r.perLitreTetri / 100).toFixed(2)} GEL a litre, median of ${r.chains} chains`
+        : `worker: petrol price not read today, yesterday's stays — ${r.failure}`,
+    );
+  } catch (err) {
+    console.error('worker: the fuel reading did not reach the API', (err as Error).message);
+  }
+}
+
 async function waitForApi(): Promise<void> {
   for (let i = 0; i < 60; i++) {
     try {
@@ -94,7 +113,9 @@ async function main(): Promise<void> {
   cron.schedule(PERIODS_CRON, () => void run(todayISO(new Date(), TZ)), { timezone: TZ });
   await pollKommo();
   cron.schedule(KOMMO_CRON, () => void pollKommo(), { timezone: TZ });
-  console.log(`worker: up — weeks roll at "${PERIODS_CRON}" ${TZ}, Kommo is asked at "${KOMMO_CRON}"`);
+  await readFuel();
+  cron.schedule(FUEL_CRON, () => void readFuel(), { timezone: TZ });
+  console.log(`worker: up — weeks roll at "${PERIODS_CRON}" ${TZ}, Kommo is asked at "${KOMMO_CRON}", petrol is read at "${FUEL_CRON}"`);
 }
 
 main().catch((err) => {
