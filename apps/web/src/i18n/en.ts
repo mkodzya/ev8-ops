@@ -14,7 +14,6 @@ import { wave5purchasesEn } from './wave5-purchases.js';
 import { wave5serviceEn } from './wave5-service.js';
 import { wave6weekEn } from './wave6-week.js';
 import { wave6utilEn } from './wave6-utilisation.js';
-import { siteReportEn } from './site-report.js';
 import { wave6manageEn } from './wave6-manage.js';
 import { kommoLinkEn } from './kommo-link.js';
 export const en = {
@@ -103,7 +102,6 @@ export const en = {
       week: 'The week',
       utilisation: 'Utilisation',
       economics: 'Economics',
-      site: 'Site',
       people: 'People',
       rental: 'Rental',
       journal: 'Journal',
@@ -1209,7 +1207,6 @@ export const en = {
   ...wave5serviceEn,
   ...wave6weekEn,
   ...wave6utilEn,
-  ...siteReportEn,
   ...wave6manageEn,
   ...kommoLinkEn,
 };

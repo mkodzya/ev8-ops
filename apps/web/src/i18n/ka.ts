@@ -5,7 +5,6 @@ import { wave5purchasesKa } from './wave5-purchases.js';
 import { wave5serviceKa } from './wave5-service.js';
 import { wave6weekKa } from './wave6-week.js';
 import { wave6utilKa } from './wave6-utilisation.js';
-import { siteReportKa } from './site-report.js';
 import { wave6manageKa } from './wave6-manage.js';
 import { kommoLinkKa } from './kommo-link.js';
 import type { Dict } from './en.js';
@@ -96,7 +95,6 @@ export const ka: Dict = {
       week: 'კვირა',
       utilisation: 'დატვირთვა',
       economics: 'ეკონომიკა',
-      site: 'საიტი',
       people: 'ხალხი',
       rental: 'ქირავნობა',
       journal: 'ჟურნალი',
@@ -1200,7 +1198,6 @@ export const ka: Dict = {
   ...wave5serviceKa,
   ...wave6weekKa,
   ...wave6utilKa,
-  ...siteReportKa,
   ...wave6manageKa,
   ...kommoLinkKa,
 };

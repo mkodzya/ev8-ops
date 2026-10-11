@@ -3,7 +3,6 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { env } from '../lib/env.js';
 import { badRequest } from '../lib/errors.js';
 import { money, renderWeekReport, type WeekRow } from '../lib/pdf/weekReport.js';
-import { siteReport } from '../lib/siteCounter.js';
 import { date } from '../lib/validate.js';
 import { weekReport, type WeekAnswer } from '../lib/week.js';
 
@@ -101,12 +100,6 @@ export function reportRoutes(app: FastifyInstance): void {
     const { groups, notes } = pdfRows(w);
     const bytes = await renderWeekReport({ from, to, asOf: w.asOf === to ? null : w.asOf, groups, notes });
     return sendPdf(reply, `ev8-week-${from}.pdf`, bytes);
-  });
-
-  // "Отчёты → Сайт": the site's anonymous counter over a period (migration 0036).
-  app.get<{ Querystring: Query }>('/api/reports/site', { config: { scope: 'reports.view' } }, async (req) => {
-    const { from, to } = periodOf(req);
-    return siteReport(from, to);
   });
 }
 
