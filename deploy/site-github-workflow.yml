@@ -1,14 +1,15 @@
-# Reference copy of .github/workflows/deploy.yml for mkodzya/ev8-site — the
-# other half of deploy/site-receive.sh. It lives here until it is committed in
-# the site repository. Checked against that repository on 11.10.2026:
-# astro.config.mjs reads SITE_BASE (default "/"), scripts/build.sh sets
-# PREVIEW=1 for the preview build, and `npm run check` is its i18n guard.
+# Reference copy of .github/workflows/deploy.yml in mkodzya/ev8-site — the
+# other half of deploy/site-receive.sh. Committed there on 11.10.2026; the
+# copy in the site repository is the one that runs. Checked against that
+# repository the same day: astro.config.mjs reads SITE_BASE (default "/"),
+# scripts/build.sh sets PREVIEW=1 for the preview build, and `npm run check`
+# is its i18n guard.
 #
 # develop → test.ops.ev8.ge/garage/site/ (built with base /garage/site/)
 # main    → ev8.ge                       (built with base /)
 #
-# So a merge into main IS the release of the site: main stays Mika's, as the
-# site repository's CLAUDE.md already says.
+# So a merge into main IS the release of the site: made on Kardu's or Mika's
+# word (the site repository's CLAUDE.md, rule 2).
 #
 # Secrets in mkodzya/ev8-site, set by deploy/site-deploy-setup.sh:
 #   SITE_DEPLOY_KEY          private key of ev8site@204.168.149.105
