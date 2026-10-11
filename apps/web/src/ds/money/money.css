@@ -163,8 +163,10 @@ button.cal-cell { cursor: pointer; }
 .cal-n { font: var(--text-h3); line-height: 18px; }
 .cal-cell.past .cal-n, .cal-cell.ahead .cal-n, .cal-cell.none .cal-n { color: var(--muted); }
 /* What the box used to say — somebody pays on this day — the number says: a
-   day nobody pays on is lighter and thinner. Not today's: grey on lime is 3.9:1. */
-.cal-cell.none:not(.today) .cal-n { color: var(--grey); font-weight: 400; }
+   day nobody pays on is thinner and a shade lighter. The grey ink, not the
+   shape grey of the drawn variant: a number is text and keeps 4.5:1 (ux.md).
+   Not today's: grey on lime would fall below it. */
+.cal-cell.none:not(.today) .cal-n { color: var(--grey-ink); font-weight: 400; }
 .cal-cell.late { background: var(--crit-soft); }
 /* The one lime in the page's content: today. The chosen day is a frame, over
    any ground — the only outline on the grid. */
@@ -184,6 +186,8 @@ button.cal-cell { cursor: pointer; }
    colour; a day nobody pays on is a span and stays as it is. */
 @media (hover: hover) {
   button.cal-cell:not(.late):not(.today):hover { background: var(--surface-hover); }
+  /* The grey ink of "expected" drops under 4.5:1 on that ground. */
+  button.cal-cell:not(.late):not(.today):hover .cal-st-expected { color: var(--muted); }
 }
 
 /* Laptop: the same cells, larger, with the day's sum and its marks. Weekday
