@@ -1,0 +1,711 @@
+<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Календарь · легче и с воздухом — EV8 Ops, прототип</title><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=Noto+Sans+Georgian:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap"><style>:root {
+  --bg: #fbfbfb;
+  --surface: #ffffff;
+  --surface-2: #f3f3f3;
+  --surface-hover: #dbe4de;
+  --ink: #0b0b0b;
+  --muted: #5d5d5d;
+  --line: #dbe4de;
+  --line-soft: #ebebeb;
+  --line-control: #7a7a7a;
+  --brand: #819481;
+  --accent: #557553;
+  --accent-hover: #628767;
+  --accent-soft: #e3ebe3;
+  --on-accent: #ffffff;
+  --lime: #e0ffa2;
+  --rented: #598eeb;
+  --service: #fe5d02;
+  --service-ink: #e45e22;
+  --crit: #c8402f;
+  --crit-soft: #f9e3df;
+  --warn-soft: #fdeadf;
+  --info-soft: #e4ecfb;
+  --accent-ink: #4d6a4b;
+  --rented-ink: #2f63c0;
+  --service-deep: #b2450f;
+  --crit-ink: #b3392a;
+  --grey-ink: #666666;
+  --grey: #7a7a7a;
+  --paint-black: #1c1c1c;
+  --paint-white: #ffffff;
+  --paint-red: #d24b3a;
+  --paint-green: #4f8a4f;
+  --paint-grey: #9a9a9a;
+  --paint-purple: #7b5ea7;
+  --rail: #0b0b0b;
+  --rail-ink: #c9d3c9;
+  --rail-active: #1b211b;
+  --rail-accent: #e0ffa2;
+  --rail-line: #2a332b;
+  --shadow: 0 12px 40px rgba(11, 11, 11, 0.16);
+  --scrim: rgba(11, 11, 11, 0.7);
+  --scrim-soft: rgba(11, 11, 11, 0.32);
+  --on-scrim: #ffffff;
+  --focus-ring: 0 0 0 3px #e0ffa2, 0 0 0 5px #557553;
+  --toast: #0b0b0b;
+  --toast-ink: #ffffff;
+  --toast-action: #e0ffa2;
+  --display: 'Be Vietnam Pro', 'Inter', 'Noto Sans Georgian', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --body: 'Be Vietnam Pro', 'Inter', 'Noto Sans Georgian', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --mono: 'IBM Plex Mono', 'Noto Sans Georgian', ui-monospace, SFMono-Regular, Menlo, monospace;
+  --text-display: 500 28px/1.1 var(--display);
+  --text-h1: 500 24px/1.15 var(--display);
+  --text-h1-phone: 500 22px/1.15 var(--display);
+  --text-h2: 500 16px/1.25 var(--display);
+  --text-h3: 500 14px/1.3 var(--display);
+  --text-body: 400 15px/1.45 var(--body);
+  --text-body-sm: 400 14px/1.45 var(--body);
+  --text-label: 400 13px/1.4 var(--body);
+  --text-overline: 500 12px/1.3 var(--display);
+  --text-button: 500 14px/1 var(--display);
+  --text-cta: 500 19px/0.92 var(--display);
+  --text-button-sm: 500 13px/1 var(--display);
+  --text-mono: 400 14px/1.45 var(--mono);
+  --text-money: 500 14px/1.45 var(--mono);
+  --text-mono-sm: 400 12px/1.4 var(--mono);
+  --text-money-lg: 500 22px/1.2 var(--mono);
+  --text-tab: 500 12px/1.15 var(--display);
+  --text-cell: 500 11px/14px var(--body);
+  --text-month: 500 18px/22px var(--display);
+  --tracking-tight: -0.02em;
+  --tracking-button: -0.01em;
+  --ease: 0.36s cubic-bezier(0.2, 0, 0, 1);
+  --enter: 0.42s cubic-bezier(0.32, 0.72, 0, 1);
+  --undo-window: 10s;
+  --hairline: 0.82px;
+  --skeleton-delay: 300ms;
+  --toast-life: 5s;
+  --radius-card: 16px;
+  --radius-pill: 999px;
+  --control-dense: 34px;
+  --row-y: 8px;
+  --row-x: 10px;
+  --card-pad: 14px;
+  --control: 44px;
+  --rail-w: 220px;
+  --control-large: 52px;
+  --touch-gap: 8px;
+  --header-h: 56px;
+  --tabbar-h: 64px;
+  --action-bar-h: 76px;
+  --space1: 4px;
+  --space2: 8px;
+  --space3: 12px;
+  --space4: 16px;
+  --space5: 24px;
+  --space6: 32px;
+  --icon-size: 24px;
+  --icon-stroke: 1.75px;
+  --bp-tablet: 720px;
+  --bp-laptop: 900px;
+}
+
+/* ===== ПРЕДЛОЖЕНИЕ дизайнера — blueprint §3.4. Нет в packages/shared/tokens.json, пока А3 не утверждён ===== */
+:root {
+  --line-control: #7a7a7a;
+  --focus-ring: 0 0 0 3px #e0ffa2, 0 0 0 5px #557553;
+  --toast: #0b0b0b; --toast-ink: #ffffff; --toast-action: #e0ffa2;
+  --control-large: 52px; --touch-gap: 8px;
+  --header-h: 56px; --tabbar-h: 64px; --action-bar-h: 76px;
+  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 24px; --space-6: 32px;
+  --text-money-lg: 500 22px/1.2 var(--mono);
+  --text-tab: 500 12px/1.15 var(--display);
+  --icon-size: 24px; --icon-stroke: 1.75px;
+}
+
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { font: var(--text-body); color: var(--ink); background: #e9e9e9; }
+a { color: inherit; text-decoration: none; }
+.t-num { font-variant-numeric: tabular-nums; }
+.mono { font-family: var(--mono); }
+.muted { color: var(--muted); }
+.crit { color: var(--crit-ink); }
+.ok { color: var(--accent); }
+svg.i { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+svg.i.s { width: 18px; height: 18px; }
+
+/* ---- document chrome around the frames ---- */
+.doc { max-width: 1320px; margin: 0 auto; padding: 32px 32px 8px; }
+.doc .back { font: var(--text-label); color: var(--accent); }
+.doc h1 { font: 500 30px/1.15 var(--display); letter-spacing: var(--tracking-tight); margin: 10px 0 8px; }
+.doc .lead { max-width: 900px; margin: 0 0 14px; }
+.doc .demo { display: inline-block; background: var(--lime); padding: 2px 10px; border-radius: 999px; font: var(--text-overline); margin-right: 8px; }
+.meta { display: grid; grid-template-columns: 170px 1fr; gap: 4px 16px; max-width: 1000px; font: var(--text-body-sm); margin: 0 0 8px; }
+.meta dt { color: var(--muted); }
+.meta dd { margin: 0; }
+.band { max-width: 1320px; margin: 0 auto; padding: 16px 32px; }
+.band > h2 { font: 500 20px/1.2 var(--display); letter-spacing: var(--tracking-tight); margin: 18px 0 12px; }
+.frames { display: flex; flex-wrap: wrap; gap: 28px; align-items: flex-start; }
+figure.f { margin: 0; }
+figure.f > figcaption { font: var(--text-body-sm); max-width: 375px; margin: 10px 4px 0; }
+figure.f > figcaption b { font-weight: 600; }
+figure.wide > figcaption { max-width: 900px; }
+.notes { max-width: 1320px; margin: 0 auto; padding: 8px 32px 48px; }
+.notes h2 { font: 500 20px/1.2 var(--display); margin: 18px 0 8px; }
+.notes table { border-collapse: collapse; background: #fff; font: var(--text-body-sm); max-width: 1100px; }
+.notes th, .notes td { text-align: left; vertical-align: top; padding: 8px 12px; border-bottom: 1px solid var(--line-soft); }
+.notes th { font: var(--text-overline); color: var(--muted); }
+.notes ul { max-width: 1000px; }
+
+/* ---- phone ---- */
+.phone { width: 395px; height: 800px; border: 10px solid #0b0b0b; border-radius: 44px; overflow: hidden; position: relative; background: var(--bg); }
+.ph-head { position: absolute; top: 0; left: 0; right: 0; height: var(--header-h); display: flex; align-items: center; gap: 2px; padding: 0 8px 0 16px; background: var(--bg); border-bottom: 1px solid var(--line-soft); z-index: 3; }
+.ph-head .title { font: var(--text-h1-phone); letter-spacing: var(--tracking-tight); flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ph-head .sub { font: var(--text-label); color: var(--muted); margin-left: 8px; }
+.icon-btn { width: 44px; height: 44px; display: inline-grid; place-items: center; border-radius: 50%; color: var(--ink); flex: none; }
+.avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--ink); color: var(--lime); display: grid; place-items: center; font: 600 14px/1 var(--display); }
+.ph-body { position: absolute; top: var(--header-h); bottom: var(--tabbar-h); left: 0; right: 0; overflow-y: auto; padding: 12px 16px 24px; }
+.ph-body.no-tabs { bottom: 0; }
+.ph-body.with-bar { bottom: calc(var(--tabbar-h) + var(--action-bar-h)); }
+.ph-body.bar-only { bottom: var(--action-bar-h); }
+.tabbar { position: absolute; bottom: 0; left: 0; right: 0; height: var(--tabbar-h); display: grid; grid-template-columns: repeat(5, 1fr); background: var(--surface); border-top: 1px solid var(--line-soft); z-index: 3; }
+.tab { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; font: var(--text-tab); color: var(--muted); text-align: center; padding: 4px 2px; }
+.tab .ic { display: grid; place-items: center; width: 52px; height: 28px; border-radius: 999px; }
+.tab.on { color: var(--ink); }
+.tab.on .ic { background: var(--lime); }
+.tab .badge { position: absolute; top: 4px; left: calc(50% + 6px); }
+.tab-plus { display: grid; place-items: center; }
+.plus { width: var(--control-large); height: var(--control-large); border-radius: 50%; background: var(--accent); color: var(--on-accent); display: grid; place-items: center; margin-top: -20px; box-shadow: 0 6px 18px rgba(11,11,11,.22); border: 3px solid var(--surface); }
+.badge { min-width: 18px; height: 18px; border-radius: 9px; background: var(--crit); color: #fff; font: 600 11px/18px var(--body); padding: 0 5px; text-align: center; }
+.action-bar { position: absolute; left: 0; right: 0; bottom: var(--tabbar-h); height: var(--action-bar-h); padding: 12px 16px; background: var(--surface); border-top: 1px solid var(--line-soft); display: flex; gap: 8px; z-index: 2; }
+.action-bar.bottom { bottom: 0; }
+.action-bar .btn-lg + .btn-lg, .action-bar .btn-lg:has(+ .btn-lg) { font: var(--text-button); }
+.syncbar { position: absolute; top: var(--header-h); left: 0; right: 0; min-height: 36px; background: var(--surface-2); display: flex; align-items: center; gap: 8px; padding: 6px 16px; font: var(--text-label); z-index: 2; }
+.syncbar + .ph-body { top: calc(var(--header-h) + 36px); }
+
+/* ---- buttons ---- */
+.btn { min-height: var(--control); border-radius: var(--radius-pill); padding: 0 18px; font: var(--text-button); letter-spacing: var(--tracking-button); display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: var(--hairline) solid var(--ink); background: var(--surface); color: var(--ink); white-space: nowrap; }
+.btn-primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.btn-lg { min-height: var(--control-large); font: var(--text-cta); letter-spacing: var(--tracking-tight); flex: 1; }
+.btn-sm { min-height: var(--control-dense); padding: 0 12px; font: var(--text-button-sm); }
+.btn-quiet { border-color: transparent; background: transparent; }
+.btn-round { width: var(--control); padding: 0; }
+.btn[aria-disabled] { opacity: .55; }
+.btn.sending { background: var(--accent-hover); border-color: var(--accent-hover); }
+.btn.failed { background: var(--surface); color: var(--crit-ink); border-color: var(--crit); }
+
+/* ---- pills ---- */
+.st { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 10px; border-radius: 999px; font: 500 12px/1 var(--display); white-space: nowrap; }
+.mk { width: 8px; height: 8px; display: inline-block; background: currentColor; border-radius: 50%; flex: none; }
+.st-available, .st-active { background: var(--accent-soft); color: var(--accent-ink); }
+.st-rented, .st-booked { background: var(--info-soft); color: var(--rented-ink); }
+.st-rented .mk { border-radius: 2px; }
+.st-service, .st-paused { background: var(--warn-soft); color: var(--service-deep); }
+.st-service .mk { border-radius: 0; transform: rotate(45deg); width: 7px; height: 7px; }
+.st-out, .st-overdue, .st-disputed { background: var(--crit-soft); color: var(--crit-ink); }
+.st-out .mk, .st-overdue .mk { border-radius: 0; }
+.st-sold, .st-returned { background: var(--surface-2); color: var(--grey-ink); }
+.st-sold .mk { background: transparent; border: 2px solid currentColor; }
+.st-waiting { background: var(--surface); color: var(--ink); border: 1px solid var(--line-control); }
+.st-waiting .mk { background: transparent; border: 2px solid currentColor; }
+.chip { display: inline-flex; align-items: center; gap: 6px; min-height: var(--control-dense); padding: 0 12px; border: 1px solid var(--line-control); border-radius: 999px; background: var(--surface); font: var(--text-button-sm); white-space: nowrap; }
+.chip.on { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+.chip .n { font: 500 12px/1 var(--mono); color: var(--muted); }
+.chip.on .n { color: var(--lime); }
+.chips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; margin: 0 -16px 8px; padding-left: 16px; padding-right: 16px; }
+
+/* ---- blocks ---- */
+.card { background: var(--surface); border-radius: var(--radius-card); padding: var(--card-pad); margin-bottom: 8px; }
+.grp { display: flex; justify-content: space-between; align-items: baseline; margin: 18px 2px 8px; }
+.grp:first-child { margin-top: 4px; }
+.grp h3 { margin: 0; font: var(--text-overline); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.grp .cnt { font: var(--text-label); color: var(--muted); }
+.qrow { background: var(--surface); border-radius: var(--radius-card); padding: 12px 14px; margin-bottom: 8px; display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; }
+.qrow.t-crit { box-shadow: inset 3px 0 0 var(--crit); }
+.qrow.t-warn { box-shadow: inset 3px 0 0 var(--service); }
+.qrow.t-decide { box-shadow: inset 3px 0 0 var(--accent); }
+.q-who { font: 500 15px/1.3 var(--body); grid-column: 1; }
+.q-why { grid-column: 1; }
+.qrow.nosum { grid-template-columns: 1fr; }
+.q-why { font: var(--text-label); color: var(--muted); }
+.q-sum { font: var(--text-money-lg); font-variant-numeric: tabular-nums; text-align: right; grid-row: 1 / span 2; grid-column: 2; align-self: center; }
+.q-acts { grid-column: 1 / -1; display: flex; gap: 8px; margin-top: 10px; align-items: center; }
+.q-acts .btn-primary { flex: 1; }
+.q-more { display: block; text-align: center; font: var(--text-button-sm); color: var(--accent); padding: 10px; }
+.vin { font: var(--text-mono); letter-spacing: .02em; }
+.vin b { font-weight: 600; background: var(--lime); padding: 0 2px; border-radius: 3px; color: var(--ink); }
+.nums { display: flex; gap: 8px; overflow-x: auto; margin: 0 -16px; padding: 0 16px 4px; }
+.num { flex: none; min-width: 104px; background: var(--surface); border-radius: var(--radius-card); padding: 10px 12px; }
+.num .v { font: 500 20px/1.2 var(--mono); font-variant-numeric: tabular-nums; }
+.num .l { font: var(--text-label); color: var(--muted); white-space: nowrap; }
+.date { font: var(--text-label); color: var(--muted); margin: 0 2px 6px; }
+.kv { display: grid; grid-template-columns: auto 1fr; gap: 8px 16px; font: var(--text-body-sm); }
+.kv dt { color: var(--muted); }
+.kv dd { margin: 0; text-align: right; }
+.hero { font: var(--text-display); letter-spacing: var(--tracking-tight); font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.hr { height: 1px; background: var(--line-soft); margin: 12px 0; }
+.sheet-scrim { position: absolute; inset: 0; background: var(--scrim-soft); z-index: 5; }
+.sheet { position: absolute; left: 0; right: 0; bottom: 0; background: var(--surface); border-radius: 20px 20px 0 0; padding: 8px 16px 20px; z-index: 6; box-shadow: var(--shadow); }
+.sheet .grab { width: 40px; height: 4px; border-radius: 2px; background: var(--line-soft); margin: 0 auto 10px; }
+.sheet h4 { font: var(--text-h2); margin: 4px 0 12px; }
+.act-list a { display: flex; align-items: center; gap: 14px; min-height: 52px; border-bottom: 1px solid var(--line-soft); font: 500 16px/1.2 var(--display); }
+.act-list a:last-child { border-bottom: 0; }
+.act-list .ico { width: 40px; height: 40px; border-radius: 50%; background: var(--accent-soft); color: var(--accent-ink); display: grid; place-items: center; }
+.toast { position: absolute; left: 12px; right: 12px; bottom: calc(var(--tabbar-h) + 12px); background: var(--toast); color: var(--toast-ink); border-radius: 14px; padding: 12px 14px; display: flex; align-items: center; gap: 12px; font: var(--text-body-sm); z-index: 7; overflow: hidden; }
+.toast a { color: var(--toast-action); font-weight: 600; margin-left: auto; }
+.toast .drain { position: absolute; left: 0; bottom: 0; height: 3px; width: 64%; background: var(--toast-action); }
+.field { display: block; margin-bottom: 14px; }
+.field > .lbl { display: block; font: var(--text-label); color: var(--muted); margin: 0 2px 6px; }
+.input { min-height: var(--control); padding: 0 14px; border-radius: 12px; border: 1px solid var(--line-control); background: var(--surface); display: flex; align-items: center; gap: 8px; font: var(--text-body); }
+.input.focus { box-shadow: var(--focus-ring); border-color: var(--accent); }
+.input .ph { color: var(--muted); }
+.input.err { border-color: var(--crit); }
+.ferr { font: var(--text-label); color: var(--crit-ink); margin: 6px 2px 0; }
+.hint { font: var(--text-label); color: var(--muted); margin: 6px 2px 0; }
+.seg3 { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--line-control); border-radius: 12px; overflow: hidden; }
+.seg3 span { min-height: 44px; display: grid; place-items: center; font: var(--text-button-sm); border-right: 1px solid var(--line-soft); text-align: center; padding: 0 4px; }
+.seg3 span:last-child { border-right: 0; }
+.seg3 span.on { background: var(--accent-soft); color: var(--accent-ink); font-weight: 600; }
+.seg3 span.on.bad { background: var(--crit-soft); color: var(--crit-ink); }
+.seg3 span.on.warn { background: var(--warn-soft); color: var(--service-deep); }
+.steps { display: flex; gap: 6px; align-items: center; margin: 2px 2px 12px; font: var(--text-label); color: var(--muted); }
+.steps i { width: 22px; height: 4px; border-radius: 2px; background: var(--line-soft); }
+.steps i.done { background: var(--accent); }
+.steps i.cur { background: var(--ink); }
+.steps span { margin-left: auto; }
+.lcard { background: var(--surface); border-radius: var(--radius-card); padding: 12px 14px; margin-bottom: 8px; display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; }
+.lcard .a { font: 500 15px/1.3 var(--body); }
+.lcard .b { font: var(--text-label); color: var(--muted); }
+.lcard .r { text-align: right; }
+.money { font: var(--text-money); font-variant-numeric: tabular-nums; }
+.in { color: var(--accent-ink); }
+.out { color: var(--ink); }
+.banner { border-radius: 12px; padding: 10px 12px; font: var(--text-body-sm); display: flex; gap: 10px; align-items: flex-start; margin-bottom: 12px; }
+.banner.crit { background: var(--crit-soft); color: var(--crit-ink); }
+.banner.warn { background: var(--warn-soft); color: var(--service-deep); }
+.banner.info { background: var(--surface-2); color: var(--ink); }
+.banner.ok { background: var(--accent-soft); color: var(--accent-ink); }
+.skel { background: var(--surface-2); border-radius: 8px; height: 14px; margin: 6px 0; }
+.empty { text-align: center; padding: 48px 12px; }
+.empty .big { width: 56px; height: 56px; border-radius: 50%; background: var(--accent-soft); color: var(--accent-ink); display: grid; place-items: center; margin: 0 auto 12px; }
+.empty h4 { font: var(--text-h2); margin: 0 0 6px; }
+.empty p { font: var(--text-label); color: var(--muted); margin: 0 0 16px; }
+.photo { width: 72px; height: 72px; border-radius: 12px; background: repeating-linear-gradient(45deg, var(--surface-2), var(--surface-2) 6px, #e7e7e7 6px, #e7e7e7 12px); display: grid; place-items: center; color: var(--muted); font: var(--text-label); }
+.photo.add { background: var(--surface); border: 1px dashed var(--line-control); }
+.photos { display: flex; gap: 8px; flex-wrap: wrap; }
+.strip { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 3px; }
+.strip i { height: 26px; border-radius: 6px; display: grid; place-items: center; font: 500 11px/1 var(--mono); font-style: normal; }
+.s-paid { background: var(--accent); color: var(--on-accent); }
+.s-late { background: var(--crit); color: var(--on-accent); }
+.s-cur { background: var(--lime); border: 1px solid var(--accent); }
+.s-ahead { background: var(--surface-2); color: var(--muted); }
+.tl { list-style: none; margin: 0; padding: 0; }
+.tl li { display: grid; grid-template-columns: 12px 1fr; gap: 10px; padding: 0 0 14px; position: relative; font: var(--text-body-sm); }
+.tl li::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); margin-top: 6px; }
+.tl li::after { content: ""; position: absolute; left: 3.5px; top: 18px; bottom: 0; width: 1px; background: var(--line-soft); }
+.tl li:last-child::after { display: none; }
+.tl .when { font: var(--text-label); color: var(--muted); }
+.lang-row { display: flex; gap: 6px; }
+.lang-row span { min-width: 44px; min-height: 34px; border-radius: 999px; border: 1px solid var(--line-control); display: grid; place-items: center; font: var(--text-button-sm); }
+.lang-row span.on { background: var(--lime); border-color: var(--lime); }
+
+/* ---- laptop ---- */
+.desk { width: 1280px; height: 800px; border: 1px solid #cfcfcf; border-radius: 12px; overflow: hidden; background: var(--bg); display: grid; grid-template-columns: var(--rail-w) 1fr; box-shadow: 0 8px 30px rgba(0,0,0,.08); }
+.desk-wrap { max-width: 100%; overflow-x: auto; }
+.rail { background: var(--rail); color: var(--rail-ink); padding: 18px 12px; display: flex; flex-direction: column; gap: 4px; }
+.rail .logo { font: 700 22px/1 var(--display); color: #fff; letter-spacing: -.02em; padding: 0 8px 14px; }
+.rail .logo small { font: 500 11px/1 var(--display); background: var(--lime); color: var(--ink); padding: 2px 6px; border-radius: 999px; vertical-align: middle; margin-left: 4px; }
+.rail .cta { min-height: 40px; border-radius: 999px; background: var(--accent); color: #fff; display: flex; align-items: center; justify-content: center; gap: 6px; font: var(--text-button); margin: 0 0 8px; }
+.rail .search { min-height: 36px; border-radius: 999px; border: 1px solid var(--rail-line); display: flex; align-items: center; gap: 8px; padding: 0 12px; font: var(--text-label); color: #9aa39a; margin-bottom: 8px; }
+.rail .search kbd { margin-left: auto; font: 500 11px/1 var(--mono); border: 1px solid var(--rail-line); border-radius: 4px; padding: 2px 5px; }
+.rail .g { font: 500 11px/1 var(--display); letter-spacing: .08em; text-transform: uppercase; color: #7f887f; padding: 12px 10px 4px; }
+.rail a.it { display: flex; align-items: center; gap: 10px; min-height: 34px; padding: 0 10px; border-radius: 999px; font: var(--text-button); }
+.rail a.it svg { width: 18px; height: 18px; }
+.rail a.it.on { background: var(--rail-accent); color: var(--ink); }
+.rail a.it .badge { margin-left: auto; }
+.rail .foot { margin-top: auto; display: flex; align-items: center; gap: 10px; padding: 10px 6px 0; border-top: 1px solid var(--rail-line); font: var(--text-label); }
+.main { overflow: hidden; display: flex; flex-direction: column; }
+.d-head { display: flex; align-items: baseline; gap: 12px; padding: 22px 32px 8px; }
+.d-head h2 { font: var(--text-h1); letter-spacing: var(--tracking-tight); margin: 0; }
+.d-head .sub { font: var(--text-label); color: var(--muted); }
+.d-head .acts { margin-left: auto; display: flex; gap: 8px; align-self: center; }
+.d-tabs { display: flex; gap: 4px; padding: 0 32px; border-bottom: 1px solid var(--line-soft); }
+.d-tabs a { padding: 10px 12px; font: var(--text-button); color: var(--muted); border-bottom: 2px solid transparent; display: flex; gap: 6px; align-items: center; }
+.d-tabs a.on { color: var(--ink); border-color: var(--ink); }
+.d-tabs .n { font: 500 12px/1 var(--mono); background: var(--surface-2); padding: 3px 6px; border-radius: 999px; }
+.d-body { padding: 16px 32px 32px; overflow: auto; flex: 1; }
+.cols { display: grid; gap: 24px; }
+.table { width: 100%; border-collapse: collapse; background: var(--surface); border-radius: var(--radius-card); overflow: hidden; font: var(--text-body-sm); }
+.table th { text-align: left; font: var(--text-overline); letter-spacing: .04em; color: var(--muted); padding: 10px 12px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.table td { padding: 10px 12px; border-bottom: 1px solid var(--line-soft); vertical-align: middle; }
+.table tr:last-child td { border-bottom: 0; }
+.table td.r, .table th.r { text-align: right; }
+.table tr.sel td { background: var(--surface-2); }
+.toolbar { display: flex; gap: 8px; align-items: center; margin: 0 0 12px; flex-wrap: wrap; }
+.toolbar .input { min-height: var(--control-dense); min-width: 280px; }
+.panel { position: absolute; top: 0; right: 0; bottom: 0; width: 420px; background: var(--surface); box-shadow: var(--shadow); padding: 20px 24px; overflow: auto; }
+.rel { position: relative; }
+.h3 { font: var(--text-h2); margin: 0 0 10px; }
+.small { font: var(--text-label); }
+</style><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"><style>
+.desk:where(.cal-legend) { width: auto; height: auto; border: 0; border-radius: 0; overflow: visible; background: transparent; box-shadow: none; grid-template-columns: none; }
+
+/* ===== from apps/web/src/styles/app.css ===== */
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: var(--text-body);
+  -webkit-font-smoothing: antialiased;
+}
+h3, button, .app-rail { font-family: var(--display); }
+
+/* ---- controls ---- */
+/* app.css: @media (min-width: 900px). It stands BEFORE the plain .pill there as well, and so
+   loses to it; the calendar's laptop bar is all .pill-sm, which sets its own 34 px. */
+:where(.air-l) .pill, :where(.air-l) .input { min-height: var(--control-dense); }
+:where(.air-l) .pill { padding: 0 14px; }
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: var(--control);
+  padding: 0 18px;
+  border-radius: var(--radius-pill);
+  border: var(--hairline) solid var(--ink);
+  background: var(--surface);
+  color: var(--ink);
+  font: var(--text-button);
+  letter-spacing: var(--tracking-button);
+  transition: var(--ease);
+  cursor: pointer;
+}
+.pill:hover, .pill.is-hover { color: var(--service); border-color: var(--service); }
+.pill:active, .pill.is-pressed { background: var(--surface-2); }
+.pill:focus-visible, .pill.is-focus { outline: none; box-shadow: var(--focus-ring); }
+.pill:disabled, .pill.is-disabled { opacity: 0.5; cursor: default; }
+.pill-sm { min-height: 34px; padding: 0 12px; font: var(--text-button-sm); }
+/* app.css: @media (max-width: 899px) { :root { --control-dense: var(--control); } .pill-sm { min-height: var(--control); } } */
+:where(.air-p) { --control-dense: var(--control); }
+:where(.air-p) .pill-sm { min-height: var(--control); }
+
+/* ===== from apps/web/src/ds/money/money.css — "The payments calendar" ===== */
+.cal { min-width: 0; }
+/* Links here are names and lines, not green words. */
+.cal a { color: inherit; }
+/* Said to a screen reader, not drawn. */
+.cal-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+/* State marks: a tick in a disc is paid, a tick in a ring is paid ahead, a
+   dot is due today, a ring is expected, a square is overdue. */
+.cal-mark { width: 18px; height: 18px; flex: none; display: inline-grid; place-items: center; border-radius: 50%; }
+.cal-mark svg { width: 11px; height: 11px; display: block; stroke-width: 3.4; }
+.cal-mark::before { box-sizing: border-box; }
+.cal-mark-paid { background: var(--accent); color: var(--on-accent); }
+.cal-mark-paid_ahead { border: 1.5px solid var(--accent); color: var(--accent); }
+.cal-mark-paid_ahead svg { width: 10px; height: 10px; }
+.cal-mark-due_today::before { content: ""; width: 10px; height: 10px; border-radius: 50%; background: var(--ink); }
+.cal-mark-expected::before { content: ""; width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--grey); }
+.cal-mark-overdue::before { content: ""; width: 12px; height: 12px; background: var(--crit); }
+.cal-mark.sm { width: 12px; height: 12px; }
+.cal-mark.sm svg { width: 8px; height: 8px; stroke-width: 4; }
+.cal-mark-paid_ahead.sm svg { width: 7px; height: 7px; }
+.cal-mark-due_today.sm::before { width: 8px; height: 8px; }
+.cal-mark-expected.sm::before { width: 10px; height: 10px; }
+.cal-mark-overdue.sm::before { width: 9px; height: 9px; }
+/* The state's word. Grey is a shape colour, so "expected" is written in the grey ink. */
+.cal-st-overdue { color: var(--crit-ink); }
+.cal-st-due_today { color: var(--ink); }
+.cal-st-expected { color: var(--grey-ink); }
+.cal-st-paid, .cal-st-paid_ahead { color: var(--accent-ink); }
+
+/* A round outline button: 44 px under a thumb, 34 px under a pointer —
+   --control-dense is the thumb's measure below 900 px. */
+.pill.cal-round { width: var(--control-dense); padding: 0; justify-content: center; flex: none; }
+
+/* The calendar's own controls: back, forward, today, and the month by a button. */
+.cal-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 4px; }
+.cal-bar .pill { flex: none; }
+.pill.cal-now { padding: 0 14px; }
+.pill.cal-all { margin-left: auto; gap: 2px; padding: 0 10px 0 14px; }
+.cal-title { font: var(--text-month); letter-spacing: var(--tracking-tight); white-space: nowrap; }
+.cal-title-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0 2px 2px; }
+.cal-title-row .cal-legend { margin: 0; }
+.cal-bar.dense { gap: 6px; margin: 0 0 8px; }
+.cal-bar.dense .cal-title { margin: 0 8px; }
+.cal-bar.dense .pill.cal-now { padding: 0 12px; }
+
+/* Weekday names and the grid. A 2 px gap, not the 8 px between touch targets:
+   with 8 px a cell on a 375 px phone would be 42 px wide (§8.12). */
+.cal-wd, .cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px; }
+.cal-wd { margin: 0 0 3px; }
+.cal-wd span { text-align: center; font: var(--text-overline); line-height: 16px; color: var(--muted); }
+.cal-cell { position: relative; min-width: 0; min-height: 44px; margin: 0; padding: 3px 1px; border: 0; border-radius: 10px; background: var(--surface); color: var(--ink); font: inherit; box-shadow: inset 0 0 0 1px var(--line-soft); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; }
+button.cal-cell { cursor: pointer; }
+.cal-cell.week { min-height: 54px; gap: 0; }
+.cal-cell.off, .cal-cell.none { background: transparent; box-shadow: none; }
+.cal-n { font: var(--text-h3); line-height: 18px; }
+.cal-cell.past .cal-n, .cal-cell.ahead .cal-n, .cal-cell.none .cal-n { color: var(--muted); }
+.cal-cell.late { background: var(--crit-soft); box-shadow: none; }
+/* The one lime in the page's content: today. The chosen day is a frame, over any ground. */
+.cal-cell.today { background: var(--lime); box-shadow: none; }
+.cal-cell.today .cal-n { font-weight: 600; }
+.cal-cell.on { box-shadow: inset 0 0 0 2px var(--ink); }
+.cal-cell-sum { font: var(--text-cell); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.cal-cell-count { font: var(--text-cell); font-weight: 400; color: var(--muted); white-space: nowrap; }
+.cal-cell-count.all { color: var(--accent-ink); font-weight: 600; }
+/* Outranks `.all` in colour only: today's «3 из 3» is ink and bold — there is no green text on lime (§8.14). */
+.cal-cell.today .cal-cell-count { color: var(--ink); }
+.cal-flag { position: absolute; top: 5px; right: 5px; width: 7px; height: 7px; background: var(--crit); }
+/* The product's focus ring is a shadow and so is the cell's frame: appended, not replaced. */
+.cal-cell:focus-visible { outline: none; z-index: 1; box-shadow: inset 0 0 0 1px var(--line-soft), var(--focus-ring); }
+.cal-cell.late:focus-visible, .cal-cell.today:focus-visible { box-shadow: var(--focus-ring); }
+.cal-cell.on:focus-visible { box-shadow: inset 0 0 0 2px var(--ink), var(--focus-ring); }
+
+/* Laptop: the same cells, larger, with the day's sum and its marks. The side
+   padding is 2 px where the frame draws 5 px: «1 790 ₾» in the 13 px mono
+   needs about 55 px of a 60.6 px cell (§8.16). */
+.cal-grid.big { gap: 4px; }
+.cal-grid.big .cal-cell { min-height: 40px; padding: 6px 2px; align-items: stretch; gap: 0; text-align: start; }
+.cal-grid.big .cal-cell.week { min-height: 100px; justify-content: flex-start; }
+.cal-cell-top { display: flex; align-items: center; justify-content: space-between; gap: 4px; min-width: 0; height: 18px; }
+.cal-cell-total { font: var(--text-label); font-family: var(--mono); font-weight: 500; line-height: 18px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.cal-cell.none .cal-cell-total { color: var(--muted); }
+.cal-cell-marks { display: flex; flex-wrap: wrap; gap: 3px 4px; margin-top: 4px; }
+.cal-cell-mark { display: inline-flex; align-items: center; gap: 2px; font: var(--text-mono-sm); font-weight: 500; line-height: 14px; white-space: nowrap; }
+.cal-cell-tag { margin-top: auto; font: var(--text-cell); font-family: var(--display); font-weight: 600; white-space: nowrap; }
+
+/* Legend. */
+.cal-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 12px; margin: 4px 2px 6px; font: var(--text-overline); font-weight: 400; line-height: 16px; color: var(--muted); }
+.cal-legend span { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.cal-legend p { margin: 0; }
+.cal-legend b { font-weight: 500; color: var(--ink); }
+.cal-swatch { display: inline-block; flex: none; width: 12px; height: 12px; border-radius: 4px; background: var(--lime); box-shadow: inset 0 0 0 1px var(--line-control); }
+.cal-legend.desk { display: block; margin: 10px 2px 0; }
+.cal-legend-marks { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 14px; margin: 4px 0; }
+
+/* Laptop: a narrow month and the lists. */
+.cal-left { min-width: 0; max-width: 448px; }
+
+/* ===== Без рамок =====
+   Every selector is the product's own, scoped under .air-open. A rule marked «restated» changes nothing in
+   the product: it stands here only because the scope makes rule 1 outweigh the product's own line. */
+
+/* 1. The box goes — the hairline and the white tile, in every week. A ground stays only where it says
+      something: a debt (pink), today (lime). Order is the cascade, as in money.css: late < today. */
+.air-open .cal-cell { background: transparent; box-shadow: none; }
+.air-open .cal-cell.late { background: var(--crit-soft); }            /* restated */
+.air-open .cal-cell.today { background: var(--lime); }                /* restated */
+/* The chosen day keeps its 2 px ink frame — now the only outline on the grid. */
+.air-open .cal-cell.on { box-shadow: inset 0 0 0 2px var(--ink); }    /* restated */
+/* The focus ring no longer brings the hairline with it. */
+.air-open .cal-cell:focus-visible { box-shadow: var(--focus-ring); }
+.air-open .cal-cell.on:focus-visible { box-shadow: inset 0 0 0 2px var(--ink), var(--focus-ring); }   /* restated */
+
+/* 2. What the box used to say — «somebody pays on this day» — the number says now: a day nobody pays on
+      is lighter and thinner (both screens). Today is left as it is: grey on lime would be 3.9:1. */
+.air-open .cal-cell.none:not(.today) .cal-n { color: var(--grey); font-weight: 400; }
+/* A pointer finds the button a box used to show. */
+@media (hover: hover) {
+  .air-open button.cal-cell:not(.late):not(.today):hover { background: var(--surface-hover); }
+}
+
+/* 3. Air around the grid — both screens. The phone's grid keeps its columns, gaps and row heights. */
+.air-open .cal-bar { margin-bottom: 8px; }
+.air-open .cal-title-row { margin-bottom: 6px; }
+.air-open .cal-wd { margin-bottom: 6px; }
+.air-open .cal-grid + .cal-legend { margin-top: 8px; }
+
+/* 4. Laptop. Weekday names stand on the numbers' left edge (they were centred over left-set
+      numbers, and without a box that shows), on the grid's own 4 px gap. */
+.air-open .cal-bar.dense { margin-bottom: 14px; }
+.air-open .cal-left .cal-wd { gap: 4px; }
+.air-open .cal-left .cal-wd span { text-align: start; padding-left: 6px; }
+/* 6 px from the cell's edge instead of 2; an ordinary day's number sits in the middle of its row. */
+.air-open .cal-grid.big .cal-cell { padding: 6px 2px 6px 6px; justify-content: center; }
+/* The current week is as tall as what stands in it: 8 + 18 + 18 + 6 + 14 + 8 = 72 of 76 (it was 100).
+   On a day when today has payments its word is a fourth line and the row grows to 90 by itself. */
+.air-open .cal-grid.big .cal-cell.week { min-height: 76px; padding-top: 8px; padding-bottom: 8px; justify-content: flex-start; }
+/* A past day's tick or square stands beside its number, not at the far edge of a box that is gone. */
+.air-open .cal-grid.big .cal-cell-top { justify-content: flex-start; gap: 5px; }
+/* The sum in the text face, as the phone's cell sets it: «1 800 ₾» is 47 px instead of 57,
+   and that pays for the 6 px (the cell holds 52.6). */
+.air-open .cal-grid.big .cal-cell-total { font-family: var(--body); }
+/* The count by a mark in the phone cell's own style (11 px): two marks, one with a two-digit count, keep one line. */
+.air-open .cal-grid.big .cal-cell-marks { gap: 4px; margin-top: 6px; }
+.air-open .cal-grid.big .cal-cell-mark { font: var(--text-cell); }
+.air-open .cal-grid.big .cal-cell-tag { padding-top: 4px; }
+
+/* 5. The laptop's legend: the five marks in one line, then one sentence. */
+.air-open .cal-grid + .cal-legend.desk { margin-top: 14px; }
+.air-open .cal-legend.desk .cal-legend-marks { margin: 0; gap: 4px 8px; }
+.air-open .cal-legend.desk p { margin-top: 4px; }
+
+/* ===== Строки недель ===== */
+
+/* -- The bar: more air under it. The buttons themselves are not touched. -- */
+.air-rows .cal-bar { margin-bottom: 8px; }
+.air-rows .cal-bar.dense { margin-bottom: 14px; }
+.air-rows .cal-title-row { margin: 0 2px 8px; }
+
+/* -- Rows, not boxes. The columns join (no gap), so one line runs under the weekdays and over every week. -- */
+.air-rows .cal-wd,
+.air-rows .cal-grid,
+.air-rows .cal-grid.big { gap: 0; }
+.air-rows .cal-wd { margin-bottom: 6px; }
+
+/* The cell itself draws nothing but its week's line — in every state. */
+.air-rows .cal-cell,
+.air-rows .cal-cell.off,
+.air-rows .cal-cell.none,
+.air-rows .cal-cell.late,
+.air-rows .cal-cell.today,
+.air-rows .cal-cell.on,
+.air-rows .cal-cell:focus-visible,
+.air-rows .cal-cell.late:focus-visible,
+.air-rows .cal-cell.today:focus-visible,
+.air-rows .cal-cell.on:focus-visible {
+  background: transparent;
+  border-radius: 0;
+  box-shadow: inset 0 1px 0 var(--line);
+  isolation: isolate;
+}
+
+/* -- Today, the chosen day and the keyboard's ring keep the look they have now — a lime ground, a 2 px ink
+      frame, the product's ring, all the size of the cell with its 10 px corners — but stand 3 px clear of the
+      week's lines, so the lines run unbroken. Drawn under the cell's content, inside the cell. -- */
+.air-rows .cal-cell.today::before,
+.air-rows .cal-cell.on::before,
+.air-rows .cal-cell:focus-visible::before,
+.air-rows button.cal-cell:hover::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  top: 3px; right: 1px; bottom: 3px; left: 1px;
+  border-radius: 10px;
+}
+/* A day that opens says so under the pointer (in the product: inside @media (hover: hover)). */
+.air-rows button.cal-cell:hover::before { background: var(--surface-hover); }
+/* The one lime thing. */
+.air-rows .cal-cell.today::before,
+.air-rows button.cal-cell.today:hover::before { background: var(--lime); }
+.air-rows .cal-cell.on::before { box-shadow: inset 0 0 0 2px var(--ink); }
+.air-rows .cal-cell:focus-visible::before { box-shadow: var(--focus-ring); }
+.air-rows .cal-cell.on:focus-visible::before { box-shadow: inset 0 0 0 2px var(--ink), var(--focus-ring); }
+
+/* -- The number stands in a box of its own, so a day somebody owes on can lay a pink pill under it:
+      what is left of the pink cell. Today has no .late (as now) and stays lime. -- */
+.air-rows .cal-n {
+  display: grid;
+  place-items: center;
+  min-width: 28px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: var(--radius-pill);
+  line-height: 1;
+}
+.air-rows .cal-cell.late .cal-n { background: var(--crit-soft); }
+/* A day nobody pays on: lighter and thinner — it is not a button. Today's own number is left as it is. */
+.air-rows .cal-cell.none:not(.today) .cal-n { color: var(--grey); font-weight: 400; }
+
+/* -- Phone: seven columns of 49 px. A row is as tall as what stands in it: numbers only — 44 px,
+      a past week with its marks — 50 px, the current week — 64 px. Content stays centred, as now. -- */
+.air-rows .cal-cell { min-height: 44px; padding: 7px 1px; gap: 0; }
+/* In a row with something under the numbers the numbers share one line. */
+.air-rows .cal-cell.week,
+.air-rows .cal-cell.past { justify-content: flex-start; }
+.air-rows .cal-cell.week { min-height: 64px; }
+.air-rows .cal-cell.past .cal-mark { margin-top: 2px; }
+/* The red square keeps its corner; moved in so the chosen day's frame does not cut it. */
+.air-rows .cal-flag { top: 9px; right: 7px; }
+
+/* -- Laptop: seven columns of 64 px, content at the left edge of its column, as now — and the weekday's
+      name over it. 44 px for a row of numbers (past weeks too: the mark stands beside the number),
+      76 px for the current week. -- */
+.air-rows .cal-left .cal-wd span { padding-left: 11px; text-align: start; }
+.air-rows .cal-grid.big .cal-cell { min-height: 44px; padding: 8px 2px 8px 11px; }
+.air-rows .cal-grid.big .cal-cell.past { justify-content: center; }
+.air-rows .cal-grid.big .cal-cell.week { min-height: 76px; }
+/* The pill hangs 6 px to the left, so the number's digits stand on the same edge as the sum under them. */
+.air-rows .cal-grid.big .cal-n { min-width: 22px; margin-left: -6px; }
+.air-rows .cal-cell-top { justify-content: flex-start; gap: 3px; height: 22px; }
+/* The sum in the text face, the counts in the cell's own text style — what the phone's cell already uses for both. */
+.air-rows .cal-cell-total { margin-top: 2px; font-family: var(--body); }
+.air-rows .cal-cell-marks { gap: 3px 6px; }
+.air-rows .cal-cell-mark { font: var(--text-cell); }
+/* «сегодня» stays at the bottom of the cell; when the day's content reaches it, 4 px stay between them. */
+.air-rows .cal-cell-tag { padding-top: 4px; }
+
+/* -- The legend: under the line that closes the month. On a laptop — the keys alone. -- */
+.air-rows .cal-grid + .cal-legend { margin: 0 0 6px; padding: 8px 2px 0; border-top: 1px solid var(--line); }
+.air-rows .cal-grid + .cal-legend.desk { margin: 0; padding: 10px 2px 0; }
+.air-rows .cal-legend-marks { margin: 0; gap: 4px 14px; }
+
+/* -- Loading: the grey blocks keep their gaps (joined, they would fuse into one slab) and take the new heights. -- */
+.air-rows .cal-skel .cal-grid { gap: 2px; }
+.air-rows .cal-skel .cal-grid.big { gap: 4px; }
+.air-rows .skel.cal-skel-cell { height: 64px; }
+.air-rows .skel.cal-skel-cell.low { height: 44px; }
+.air-rows .cal-grid.big .skel.cal-skel-cell { height: 44px; }
+
+/* ===== variant «soft»: the same cells, the same sizes, without their hairlines ===== */
+
+/* ---- air around the grid. The bar's controls are the system's pills, untouched. ---- */
+.air-soft .cal-bar { margin-bottom: 8px; }
+.air-soft .cal-bar.dense { margin-bottom: 14px; }
+.air-soft .cal-title-row { margin-bottom: 6px; }
+.air-soft .cal-wd { margin-bottom: 6px; }
+.air-soft .cal-grid + .cal-legend { margin-top: 8px; }
+.air-soft .cal-grid + .cal-legend.desk { margin-top: 14px; }
+
+/* ---- the grid: the columns as built, on the phone 2 px more between the weeks ---- */
+/* Phone: 2 px between the columns stays — a cell is (343 - 12) / 7 = 47.29 px, the width the 11 px sum is
+   sized for (§8.12). Between the rows 2 -> 4 px. */
+.air-soft .cal-grid { gap: 4px 2px; }
+/* Laptop: 4 px both ways, as now — a cell is (448 - 24) / 7 = 60.57 px. Restated only because the rule
+   above outweighs the product's `.cal-grid.big`; in money.css that rule does not change. */
+.air-soft .cal-grid.big { gap: 4px; }
+/* Laptop: the weekday names stand on the grid's own columns (they had 2 px gaps over a 4 px grid) and over
+   the numbers — both 6 px from the cell's edge. */
+.air-soft .cal-left .cal-wd { gap: 4px; margin-bottom: 8px; }
+.air-soft .cal-left .cal-wd span { text-align: start; padding-left: 6px; }
+
+/* ---- the cell: the hairline goes, on every day ---- */
+/* The white ground stays (the product's own rule); the pink of a debt, the lime of today, the transparent
+   day nobody pays on and the empty neighbouring-month cell are the product's rules, untouched. */
+.air-soft .cal-cell { box-shadow: none; }
+/* The chosen day: the 2 px ink frame, over white, pink or lime — as now. */
+.air-soft .cal-cell.on { box-shadow: inset 0 0 0 2px var(--ink); }
+/* The focus ring no longer brings the hairline with it. */
+.air-soft .cal-cell:focus-visible { box-shadow: var(--focus-ring); }
+.air-soft .cal-cell.on:focus-visible { box-shadow: inset 0 0 0 2px var(--ink), var(--focus-ring); }
+/* A day that opens something lights up under a pointer, the way a row does: the frame no longer says it
+   can be pressed. Pink and lime keep their colour. Touch screens are not asked. */
+@media (hover: hover) {
+  .air-soft button.cal-cell { transition: background-color var(--ease); }
+  .air-soft button.cal-cell:not(.late):not(.today):hover { background: var(--surface-2); }
+}
+/* A day nobody pays on steps back: a lighter and thinner number. Today is left out of the rule, so today
+   without payments stays exactly as it is now, whatever the order of the rules. */
+.air-soft .cal-cell.none:not(.today) .cal-n { color: var(--grey); font-weight: 400; }
+
+/* ---- laptop: what stands in a cell ---- */
+/* 6 px of air on the left instead of 2 px. The right side keeps the product's 2 px (§8.16): the inner
+   width is 60.57 - 8 = 52.57 px, and the row of marks wraps at it — clear of the 2 px frame of a chosen day.
+   Heights are not touched: 40 px, the current week 100 px. */
+.air-soft .cal-grid.big .cal-cell { padding: 6px 2px 6px 6px; }
+/* A past day has no frame to hold its mark by the far edge: the mark stands right after the number. */
+.air-soft .cal-grid.big .cal-cell.past .cal-cell-top { justify-content: flex-start; gap: 6px; }
+/* The day's sum: the label style as it is named — 13 px, regular, the text face (the phone's cell sets its
+   sum in the text face too). «300 ₾» is 38.5 px, «2 400 ₾» 50.7 px, in 52.57 px. */
+.air-soft .cal-cell-total { font: var(--text-label); line-height: 18px; font-variant-numeric: tabular-nums; }
+/* The count beside a mark: the cell's own 11 px style. The marks themselves stay 12 px, as in the legend. */
+.air-soft .cal-cell-mark { font: var(--text-cell); }
+
+/* ---- the laptop's legend: the marks, then the one sentence about the figures ---- */
+.air-soft .cal-legend-marks { gap: 4px 14px; margin: 0 0 4px; }
+
+/* ===== the page around the blocks — not the product ===== */
+body { background: #e9e9e9; }
+/* A frame is as wide as its block and does not stretch. The block stands on the product's page ground
+   (--bg: the cells are --surface on it, as on the stand), with the product's card radius. */
+.air { padding: 24px; border-radius: var(--radius-card); background: var(--bg); }
+.air-l { width: 496px; }                                            /* the laptop's 448 px column + 24 + 24 */
+.air-p { width: 375px; padding-left: 16px; padding-right: 16px; }   /* the phone's 343 px + its 16 px gutters: a 375 px screen */
+figure.f > .air-l + figcaption { max-width: 488px; }
+figure.f > .air-p + figcaption { max-width: 367px; }
+</style></head><body><header class="doc"><a class="back" href="index.html">← Все прототипы</a><h1>Календарь · легче и с воздухом</h1><p class="lead"><span class="demo">ПРИМЕР</span>Три способа сделать сетку месяца в «Деньги → Календарь» легче; что показано в клетках и что происходит по нажатию, остаётся как есть. Рекомендую А, «Без рамок»: с экрана уходит больше всего линий, а долг, «сегодня» и выбранный день видны как раньше.</p><dl class="meta"><dt>Запрос</dt><dd>Mika, 11.10.2026, по экрану на тестовом стенде: «давай чуть облегчим, воздуха добавим. предложи варианты»</dd><dt>Что меняется</dt><dd>Только вид сетки месяца, строки с месяцем и подписи под сеткой — на ноутбуке и на телефоне. Что показано в клетке и что происходит по нажатию, остаётся как есть.</dd><dt>Данные</dt><dd>Суммы и число оплат — как на тестовом стенде 11.10.2026: октябрь, сегодня воскресенье 11.10, выбрана суббота 17.10. Имён нет.</dd></dl></header><section class="band"><h2>Сейчас — как на тесте</h2><div class="frames"><figure class="f"><div class="air air-l"><div class="cal"><div class="cal-left"><div class="cal-bar dense"><button type="button" class="pill pill-sm cal-round" aria-label="Сентябрь 2026"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-left" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></button><button type="button" class="pill pill-sm cal-round" aria-label="Ноябрь 2026"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-right" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button><div class="cal-title">Октябрь 2026</div><button type="button" class="pill pill-sm cal-now">Сегодня</button></div><div class="cal-wd" aria-hidden="true"><span>Пн</span><span>Вт</span><span>Ср</span><span>Чт</span><span>Пт</span><span>Сб</span><span>Вс</span></div><div class="cal-grid big" role="group" aria-label="Октябрь 2026"><span class="cal-cell off" aria-hidden="true"></span><span class="cal-cell off" aria-hidden="true"></span><span class="cal-cell off" aria-hidden="true"></span><button type="button" class="cal-cell past" aria-pressed="false" aria-label="01.10: всё оплачено"><span class="cal-cell-top"><span class="cal-n">1</span><i class="cal-mark cal-mark-paid sm" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></i></span></button><button type="button" class="cal-cell past" aria-pressed="false" aria-label="02.10: всё оплачено"><span class="cal-cell-top"><span class="cal-n">2</span><i class="cal-mark cal-mark-paid sm" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></i></span></button><button type="button" class="cal-cell past" aria-pressed="false" aria-label="03.10: всё оплачено"><span class="cal-cell-top"><span class="cal-n">3</span><i class="cal-mark cal-mark-paid sm" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></i></span></button><span class="cal-cell past none"><span class="cal-cell-top" aria-hidden="true"><span class="cal-n">4</span></span><span class="cal-sr">04.10: оплат нет</span></span><button type="button" class="cal-cell week" aria-pressed="false" aria-label="05.10: 150 ₾: оплачено 1"><span class="cal-cell-top"><span class="cal-n">5</span></span><span class="cal-cell-total">150 ₾</span><span class="cal-cell-marks"><span class="cal-cell-mark cal-st-paid"><i class="cal-mark cal-mark-paid sm" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></i>1</span></span></button><button type="button" class="cal-cell week" aria-pressed="false" aria-label="06.10: 300 ₾: оплачено 2"><span class="cal-cell-top"><span class="cal-n">6</span></span><span class="cal-cell-total">300 ₾</span><span class="cal-cell-marks"><span class="cal-cell-mark cal-st-paid"><i class="cal-mark cal-mark-paid sm" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></i>2</span></span></button><button type="button" class="cal-cell week" aria-pressed="false" aria-label="07.10: 300 ₾: оплачено 2"><span class="cal-cell-top"><span class="cal-n">7</span></span><span class="cal-cell-total">300 ₾</span><span class="cal-cell-marks"><span class="cal-cell-mark cal-st-paid"><i class="cal-mark cal-mark-paid sm" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></i>2</span></span></button><button type="button" class="cal-cell week late" aria-pressed="false" aria-label="08.10: 300 ₾: просрочено 1, оплачено 1"><span class="cal-cell-top"><span class="cal-n">8</span></span><span class="cal-cell-total">300 ₾</span><span class="cal-cell-marks"><span class="cal-cell-mark cal-st-overdue"><i class="cal-mark cal-mark-overdue sm" aria-hidden="true"></i>1</span><span class="cal-cell-mark cal-st-paid"><i class="cal-mark cal-mark-paid sm" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></i>1</span></span></button><button type="button" class="cal-cell week late" aria-pressed="false" aria-label="09.10: 300 ₾: просрочено 2"><span class="cal-cell-top"><span class="cal-n">9</span></span><span class="cal-cell-total">300 ₾</span><span class="cal-cell-marks"><span class="cal-cell-mark cal-st-overdue"><i class="cal-mark cal-mark-overdue sm" aria-hidden="true"></i>2</span></span></button><button type="button" class="cal-cell week late" aria-pressed="false" aria-label="10.10: 150 ₾: просрочено 1"><span class="cal-cell-top"><span class="cal-n">10</span></span><span class="cal-cell-total">150 ₾</span><span class="cal-cell-marks"><span class="cal-cell-mark cal-st-overdue"><i class="cal-mark cal-mark-overdue sm" aria-hidden="true"></i>1</span></span></button><span class="cal-cell week today none" aria-current="date"><span class="cal-cell-top" aria-hidden="true"><span class="cal-n">11</span></span><span class="cal-cell-total" aria-hidden="true">—</span><span class="cal-cell-tag">сегодня</span><span class="cal-sr">11.10: оплат нет</span></span><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-cell-top"><span class="cal-n">12</span></span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-cell-top"><span class="cal-n">13</span></span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-cell-top"><span class="cal-n">14</span></span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-cell-top"><span class="cal-n">15</span></span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-cell-top"><span class="cal-n">16</span></span></button><button type="button" class="cal-cell ahead on" aria-pressed="true"><span class="cal-cell-top"><span class="cal-n">17</span></span></button><span class="cal-cell ahead none"><span class="cal-cell-top" aria-hidden="true"><span class="cal-n">18</span></span><span class="cal-sr">18.10: оплат нет</span></span><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-cell-top"><span class="cal-n">19</span></span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-cell-top"><span class="cal-n">20</span></span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-cell-top"><span class="cal-n">21</span></span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-cell-top"><span class="cal-n">22</span></span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-cell-top"><span class="cal-n">23</span></span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-cell-top"><span class="cal-n">24</span></span></button><span class="cal-cell ahead none"><span class="cal-cell-top" aria-hidden="true"><span class="cal-n">25</span></span><span class="cal-sr">25.10: оплат нет</span></span><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-cell-top"><span class="cal-n">26</span></span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-cell-top"><span class="cal-n">27</span></span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-cell-top"><span class="cal-n">28</span></span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-cell-top"><span class="cal-n">29</span></span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-cell-top"><span class="cal-n">30</span></span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-cell-top"><span class="cal-n">31</span></span></button><span class="cal-cell off" aria-hidden="true"></span></div><div class="cal-legend desk"><p>Цифра у отметки — число оплат, сумма — сколько должно прийти за день.</p><div class="cal-legend-marks"><span><i class="cal-mark cal-mark-paid sm" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></i>Оплачено</span><span><i class="cal-mark cal-mark-paid_ahead sm" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></i>Оплачено заранее</span><span><i class="cal-mark cal-mark-due_today sm" aria-hidden="true"></i>Ждём сегодня</span><span><i class="cal-mark cal-mark-expected sm" aria-hidden="true"></i>Ожидается</span><span><i class="cal-mark cal-mark-overdue sm" aria-hidden="true"></i>Просрочено</span><span><i class="cal-swatch"></i>Сегодня</span></div><p>В прошлых неделях — только итог дня: всё оплачено или есть просрочка. Недели впереди — расчёт, пока аренда идёт: те же дни и суммы.</p></div></div></div></div><figcaption>Ноутбук, как сейчас.</figcaption></figure><figure class="f"><div class="air air-p"><div class="cal"><div class="cal-bar"><button type="button" class="pill cal-round" aria-label="Сентябрь 2026"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-left" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></button><button type="button" class="pill cal-round" aria-label="Ноябрь 2026"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-right" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button><button type="button" class="pill cal-now">Сегодня</button><button type="button" class="pill cal-all" aria-expanded="true">Свернуть<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-up" aria-hidden="true"><path d="m18 15-6-6-6 6"/></svg></button></div><div class="cal-title-row"><div class="cal-title">Октябрь 2026</div><div class="cal-legend"><span><i class="cal-swatch"></i>сегодня</span></div></div><div class="cal-wd" aria-hidden="true"><span>Пн</span><span>Вт</span><span>Ср</span><span>Чт</span><span>Пт</span><span>Сб</span><span>Вс</span></div><div class="cal-grid" role="group" aria-label="Октябрь 2026"><span class="cal-cell off" aria-hidden="true"></span><span class="cal-cell off" aria-hidden="true"></span><span class="cal-cell off" aria-hidden="true"></span><button type="button" class="cal-cell past" aria-pressed="false" aria-label="01.10: всё оплачено"><span class="cal-n">1</span><i class="cal-mark cal-mark-paid sm" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></i></button><button type="button" class="cal-cell past" aria-pressed="false" aria-label="02.10: всё оплачено"><span class="cal-n">2</span><i class="cal-mark cal-mark-paid sm" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></i></button><button type="button" class="cal-cell past" aria-pressed="false" aria-label="03.10: всё оплачено"><span class="cal-n">3</span><i class="cal-mark cal-mark-paid sm" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></i></button><span class="cal-cell past none"><span aria-hidden="true"><span class="cal-n">4</span></span><span class="cal-sr">04.10: оплат нет</span></span><button type="button" class="cal-cell week" aria-pressed="false" aria-label="05.10: 150 ₾, оплачено 1 из 1"><span class="cal-n">5</span><span class="cal-cell-sum">150 ₾</span><span class="cal-cell-count all">1 из 1</span></button><button type="button" class="cal-cell week" aria-pressed="false" aria-label="06.10: 300 ₾, оплачено 2 из 2"><span class="cal-n">6</span><span class="cal-cell-sum">300 ₾</span><span class="cal-cell-count all">2 из 2</span></button><button type="button" class="cal-cell week" aria-pressed="false" aria-label="07.10: 300 ₾, оплачено 2 из 2"><span class="cal-n">7</span><span class="cal-cell-sum">300 ₾</span><span class="cal-cell-count all">2 из 2</span></button><button type="button" class="cal-cell week late" aria-pressed="false" aria-label="08.10: 300 ₾, оплачено 1 из 2, просрочено 1"><span class="cal-n">8</span><span class="cal-cell-sum">300 ₾</span><span class="cal-cell-count">1 из 2</span><i class="cal-flag"></i></button><button type="button" class="cal-cell week late" aria-pressed="false" aria-label="09.10: 300 ₾, оплачено 0 из 2, просрочено 2"><span class="cal-n">9</span><span class="cal-cell-sum">300 ₾</span><span class="cal-cell-count">0 из 2</span><i class="cal-flag"></i></button><button type="button" class="cal-cell week late" aria-pressed="false" aria-label="10.10: 150 ₾, оплачено 0 из 1, просрочено 1"><span class="cal-n">10</span><span class="cal-cell-sum">150 ₾</span><span class="cal-cell-count">0 из 1</span><i class="cal-flag"></i></button><span class="cal-cell week today none" aria-current="date"><span aria-hidden="true"><span class="cal-n">11</span></span><span class="cal-cell-count" aria-hidden="true">—</span><span class="cal-sr">11.10: оплат нет</span></span><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-n">12</span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-n">13</span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-n">14</span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-n">15</span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-n">16</span></button><button type="button" class="cal-cell ahead on" aria-pressed="true"><span class="cal-n">17</span></button><span class="cal-cell ahead none"><span aria-hidden="true"><span class="cal-n">18</span></span><span class="cal-sr">18.10: оплат нет</span></span><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-n">19</span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-n">20</span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-n">21</span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-n">22</span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-n">23</span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-n">24</span></button><span class="cal-cell ahead none"><span aria-hidden="true"><span class="cal-n">25</span></span><span class="cal-sr">25.10: оплат нет</span></span><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-n">26</span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-n">27</span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-n">28</span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-n">29</span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-n">30</span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-n">31</span></button><span class="cal-cell off" aria-hidden="true"></span></div><div class="cal-legend"><span><b>1 из 3</b>— оплачено</span><span><i class="cal-mark cal-mark-paid sm" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></i>всё оплачено</span><span><i class="cal-mark cal-mark-overdue sm" aria-hidden="true"></i>просрочено</span></div></div></div><figcaption>Телефон, месяц раскрыт, как сейчас.</figcaption></figure></div></section><section class="band"><h2>А. Без рамок — рекомендую</h2><div class="frames"><figure class="f"><div class="air air-l air-open"><div class="cal"><div class="cal-left"><div class="cal-bar dense"><button type="button" class="pill pill-sm cal-round" aria-label="Сентябрь 2026"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-left" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></button><button type="button" class="pill pill-sm cal-round" aria-label="Ноябрь 2026"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-right" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button><div class="cal-title">Октябрь 2026</div><button type="button" class="pill pill-sm cal-now">Сегодня</button></div><div class="cal-wd" aria-hidden="true"><span>Пн</span><span>Вт</span><span>Ср</span><span>Чт</span><span>Пт</span><span>Сб</span><span>Вс</span></div><div class="cal-grid big" role="group" aria-label="Октябрь 2026"><span class="cal-cell off" aria-hidden="true"></span><span class="cal-cell off" aria-hidden="true"></span><span class="cal-cell off" aria-hidden="true"></span><button type="button" class="cal-cell past" aria-pressed="false" aria-label="01.10: всё оплачено"><span class="cal-cell-top"><span class="cal-n">1</span><i class="cal-mark cal-mark-paid sm" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></i></span></button><button type="button" class="cal-cell past" aria-pressed="false" aria-label="02.10: всё оплачено"><span class="cal-cell-top"><span class="cal-n">2</span><i class="cal-mark cal-mark-paid sm" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></i></span></button><button type="button" class="cal-cell past" aria-pressed="false" aria-label="03.10: всё оплачено"><span class="cal-cell-top"><span class="cal-n">3</span><i class="cal-mark cal-mark-paid sm" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></i></span></button><span class="cal-cell past none"><span class="cal-cell-top" aria-hidden="true"><span class="cal-n">4</span></span><span class="cal-sr">04.10: оплат нет</span></span><button type="button" class="cal-cell week" aria-pressed="false" aria-label="05.10: 150 ₾: оплачено 1"><span class="cal-cell-top"><span class="cal-n">5</span></span><span class="cal-cell-total">150 ₾</span><span class="cal-cell-marks"><span class="cal-cell-mark cal-st-paid"><i class="cal-mark cal-mark-paid sm" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></i>1</span></span></button><button type="button" class="cal-cell week" aria-pressed="false" aria-label="06.10: 300 ₾: оплачено 2"><span class="cal-cell-top"><span class="cal-n">6</span></span><span class="cal-cell-total">300 ₾</span><span class="cal-cell-marks"><span class="cal-cell-mark cal-st-paid"><i class="cal-mark cal-mark-paid sm" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></i>2</span></span></button><button type="button" class="cal-cell week" aria-pressed="false" aria-label="07.10: 300 ₾: оплачено 2"><span class="cal-cell-top"><span class="cal-n">7</span></span><span class="cal-cell-total">300 ₾</span><span class="cal-cell-marks"><span class="cal-cell-mark cal-st-paid"><i class="cal-mark cal-mark-paid sm" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></i>2</span></span></button><button type="button" class="cal-cell week late" aria-pressed="false" aria-label="08.10: 300 ₾: просрочено 1, оплачено 1"><span class="cal-cell-top"><span class="cal-n">8</span></span><span class="cal-cell-total">300 ₾</span><span class="cal-cell-marks"><span class="cal-cell-mark cal-st-overdue"><i class="cal-mark cal-mark-overdue sm" aria-hidden="true"></i>1</span><span class="cal-cell-mark cal-st-paid"><i class="cal-mark cal-mark-paid sm" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></i>1</span></span></button><button type="button" class="cal-cell week late" aria-pressed="false" aria-label="09.10: 300 ₾: просрочено 2"><span class="cal-cell-top"><span class="cal-n">9</span></span><span class="cal-cell-total">300 ₾</span><span class="cal-cell-marks"><span class="cal-cell-mark cal-st-overdue"><i class="cal-mark cal-mark-overdue sm" aria-hidden="true"></i>2</span></span></button><button type="button" class="cal-cell week late" aria-pressed="false" aria-label="10.10: 150 ₾: просрочено 1"><span class="cal-cell-top"><span class="cal-n">10</span></span><span class="cal-cell-total">150 ₾</span><span class="cal-cell-marks"><span class="cal-cell-mark cal-st-overdue"><i class="cal-mark cal-mark-overdue sm" aria-hidden="true"></i>1</span></span></button><span class="cal-cell week today none" aria-current="date"><span class="cal-cell-top" aria-hidden="true"><span class="cal-n">11</span></span><span class="cal-cell-total" aria-hidden="true">—</span><span class="cal-cell-tag">сегодня</span><span class="cal-sr">11.10: оплат нет</span></span><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-cell-top"><span class="cal-n">12</span></span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-cell-top"><span class="cal-n">13</span></span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-cell-top"><span class="cal-n">14</span></span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-cell-top"><span class="cal-n">15</span></span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-cell-top"><span class="cal-n">16</span></span></button><button type="button" class="cal-cell ahead on" aria-pressed="true"><span class="cal-cell-top"><span class="cal-n">17</span></span></button><span class="cal-cell ahead none"><span class="cal-cell-top" aria-hidden="true"><span class="cal-n">18</span></span><span class="cal-sr">18.10: оплат нет</span></span><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-cell-top"><span class="cal-n">19</span></span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-cell-top"><span class="cal-n">20</span></span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-cell-top"><span class="cal-n">21</span></span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-cell-top"><span class="cal-n">22</span></span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-cell-top"><span class="cal-n">23</span></span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-cell-top"><span class="cal-n">24</span></span></button><span class="cal-cell ahead none"><span class="cal-cell-top" aria-hidden="true"><span class="cal-n">25</span></span><span class="cal-sr">25.10: оплат нет</span></span><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-cell-top"><span class="cal-n">26</span></span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-cell-top"><span class="cal-n">27</span></span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-cell-top"><span class="cal-n">28</span></span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-cell-top"><span class="cal-n">29</span></span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-cell-top"><span class="cal-n">30</span></span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-cell-top"><span class="cal-n">31</span></span></button><span class="cal-cell off" aria-hidden="true"></span></div><div class="cal-legend desk"><div class="cal-legend-marks"><span><i class="cal-mark cal-mark-paid sm" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></i>оплачено</span><span><i class="cal-mark cal-mark-paid_ahead sm" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></i>заранее</span><span><i class="cal-mark cal-mark-due_today sm" aria-hidden="true"></i>ждём сегодня</span><span><i class="cal-mark cal-mark-expected sm" aria-hidden="true"></i>ожидается</span><span><i class="cal-mark cal-mark-overdue sm" aria-hidden="true"></i>просрочено</span></div><p>Цифра у отметки — число оплат, сумма — сколько должно прийти за день.</p></div></div></div></div><figcaption><b>А. Без рамок — рекомендую.</b> Рамок и белой заливки у дней нет, цвет — только у долга и у «сегодня»; подпись под сеткой — две строки. Цена: день с оплатами отличает от пустого только тёмное число.</figcaption></figure><figure class="f"><div class="air air-p air-open"><div class="cal"><div class="cal-bar"><button type="button" class="pill cal-round" aria-label="Сентябрь 2026"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-left" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></button><button type="button" class="pill cal-round" aria-label="Ноябрь 2026"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-right" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button><button type="button" class="pill cal-now">Сегодня</button><button type="button" class="pill cal-all" aria-expanded="true">Свернуть<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-up" aria-hidden="true"><path d="m18 15-6-6-6 6"/></svg></button></div><div class="cal-title-row"><div class="cal-title">Октябрь 2026</div><div class="cal-legend"><span><i class="cal-swatch"></i>сегодня</span></div></div><div class="cal-wd" aria-hidden="true"><span>Пн</span><span>Вт</span><span>Ср</span><span>Чт</span><span>Пт</span><span>Сб</span><span>Вс</span></div><div class="cal-grid" role="group" aria-label="Октябрь 2026"><span class="cal-cell off" aria-hidden="true"></span><span class="cal-cell off" aria-hidden="true"></span><span class="cal-cell off" aria-hidden="true"></span><button type="button" class="cal-cell past" aria-pressed="false" aria-label="01.10: всё оплачено"><span class="cal-n">1</span><i class="cal-mark cal-mark-paid sm" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></i></button><button type="button" class="cal-cell past" aria-pressed="false" aria-label="02.10: всё оплачено"><span class="cal-n">2</span><i class="cal-mark cal-mark-paid sm" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></i></button><button type="button" class="cal-cell past" aria-pressed="false" aria-label="03.10: всё оплачено"><span class="cal-n">3</span><i class="cal-mark cal-mark-paid sm" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></i></button><span class="cal-cell past none"><span aria-hidden="true"><span class="cal-n">4</span></span><span class="cal-sr">04.10: оплат нет</span></span><button type="button" class="cal-cell week" aria-pressed="false" aria-label="05.10: 150 ₾, оплачено 1 из 1"><span class="cal-n">5</span><span class="cal-cell-sum">150 ₾</span><span class="cal-cell-count all">1 из 1</span></button><button type="button" class="cal-cell week" aria-pressed="false" aria-label="06.10: 300 ₾, оплачено 2 из 2"><span class="cal-n">6</span><span class="cal-cell-sum">300 ₾</span><span class="cal-cell-count all">2 из 2</span></button><button type="button" class="cal-cell week" aria-pressed="false" aria-label="07.10: 300 ₾, оплачено 2 из 2"><span class="cal-n">7</span><span class="cal-cell-sum">300 ₾</span><span class="cal-cell-count all">2 из 2</span></button><button type="button" class="cal-cell week late" aria-pressed="false" aria-label="08.10: 300 ₾, оплачено 1 из 2, просрочено 1"><span class="cal-n">8</span><span class="cal-cell-sum">300 ₾</span><span class="cal-cell-count">1 из 2</span><i class="cal-flag"></i></button><button type="button" class="cal-cell week late" aria-pressed="false" aria-label="09.10: 300 ₾, оплачено 0 из 2, просрочено 2"><span class="cal-n">9</span><span class="cal-cell-sum">300 ₾</span><span class="cal-cell-count">0 из 2</span><i class="cal-flag"></i></button><button type="button" class="cal-cell week late" aria-pressed="false" aria-label="10.10: 150 ₾, оплачено 0 из 1, просрочено 1"><span class="cal-n">10</span><span class="cal-cell-sum">150 ₾</span><span class="cal-cell-count">0 из 1</span><i class="cal-flag"></i></button><span class="cal-cell week today none" aria-current="date"><span aria-hidden="true"><span class="cal-n">11</span></span><span class="cal-cell-count" aria-hidden="true">—</span><span class="cal-sr">11.10: оплат нет</span></span><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-n">12</span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-n">13</span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-n">14</span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-n">15</span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-n">16</span></button><button type="button" class="cal-cell ahead on" aria-pressed="true"><span class="cal-n">17</span></button><span class="cal-cell ahead none"><span aria-hidden="true"><span class="cal-n">18</span></span><span class="cal-sr">18.10: оплат нет</span></span><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-n">19</span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-n">20</span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-n">21</span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-n">22</span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-n">23</span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-n">24</span></button><span class="cal-cell ahead none"><span aria-hidden="true"><span class="cal-n">25</span></span><span class="cal-sr">25.10: оплат нет</span></span><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-n">26</span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-n">27</span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-n">28</span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-n">29</span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-n">30</span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-n">31</span></button><span class="cal-cell off" aria-hidden="true"></span></div><div class="cal-legend"><span><b>1 из 3</b>— оплачено</span><span><i class="cal-mark cal-mark-paid sm" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></i>всё оплачено</span><span><i class="cal-mark cal-mark-overdue sm" aria-hidden="true"></i>просрочено</span></div></div></div><figcaption><b>А на телефоне.</b> Те же клетки без рамок и заливки, размер прежний.</figcaption></figure></div></section><section class="band"><h2>Б. Строки недель</h2><div class="frames"><figure class="f"><div class="air air-l air-rows"><div class="cal"><div class="cal-left"><div class="cal-bar dense"><button type="button" class="pill pill-sm cal-round" aria-label="Сентябрь 2026"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-left" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></button><button type="button" class="pill pill-sm cal-round" aria-label="Ноябрь 2026"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-right" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button><div class="cal-title">Октябрь 2026</div><button type="button" class="pill pill-sm cal-now">Сегодня</button></div><div class="cal-wd" aria-hidden="true"><span>Пн</span><span>Вт</span><span>Ср</span><span>Чт</span><span>Пт</span><span>Сб</span><span>Вс</span></div><div class="cal-grid big" role="group" aria-label="Октябрь 2026"><span class="cal-cell off" aria-hidden="true"></span><span class="cal-cell off" aria-hidden="true"></span><span class="cal-cell off" aria-hidden="true"></span><button type="button" class="cal-cell past" aria-pressed="false" aria-label="01.10: всё оплачено"><span class="cal-cell-top"><span class="cal-n">1</span><i class="cal-mark cal-mark-paid sm" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></i></span></button><button type="button" class="cal-cell past" aria-pressed="false" aria-label="02.10: всё оплачено"><span class="cal-cell-top"><span class="cal-n">2</span><i class="cal-mark cal-mark-paid sm" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></i></span></button><button type="button" class="cal-cell past" aria-pressed="false" aria-label="03.10: всё оплачено"><span class="cal-cell-top"><span class="cal-n">3</span><i class="cal-mark cal-mark-paid sm" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></i></span></button><span class="cal-cell past none"><span class="cal-cell-top" aria-hidden="true"><span class="cal-n">4</span></span><span class="cal-sr">04.10: оплат нет</span></span><button type="button" class="cal-cell week" aria-pressed="false" aria-label="05.10: 150 ₾: оплачено 1"><span class="cal-cell-top"><span class="cal-n">5</span></span><span class="cal-cell-total">150 ₾</span><span class="cal-cell-marks"><span class="cal-cell-mark cal-st-paid"><i class="cal-mark cal-mark-paid sm" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></i>1</span></span></button><button type="button" class="cal-cell week" aria-pressed="false" aria-label="06.10: 300 ₾: оплачено 2"><span class="cal-cell-top"><span class="cal-n">6</span></span><span class="cal-cell-total">300 ₾</span><span class="cal-cell-marks"><span class="cal-cell-mark cal-st-paid"><i class="cal-mark cal-mark-paid sm" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></i>2</span></span></button><button type="button" class="cal-cell week" aria-pressed="false" aria-label="07.10: 300 ₾: оплачено 2"><span class="cal-cell-top"><span class="cal-n">7</span></span><span class="cal-cell-total">300 ₾</span><span class="cal-cell-marks"><span class="cal-cell-mark cal-st-paid"><i class="cal-mark cal-mark-paid sm" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></i>2</span></span></button><button type="button" class="cal-cell week late" aria-pressed="false" aria-label="08.10: 300 ₾: просрочено 1, оплачено 1"><span class="cal-cell-top"><span class="cal-n">8</span></span><span class="cal-cell-total">300 ₾</span><span class="cal-cell-marks"><span class="cal-cell-mark cal-st-overdue"><i class="cal-mark cal-mark-overdue sm" aria-hidden="true"></i>1</span><span class="cal-cell-mark cal-st-paid"><i class="cal-mark cal-mark-paid sm" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></i>1</span></span></button><button type="button" class="cal-cell week late" aria-pressed="false" aria-label="09.10: 300 ₾: просрочено 2"><span class="cal-cell-top"><span class="cal-n">9</span></span><span class="cal-cell-total">300 ₾</span><span class="cal-cell-marks"><span class="cal-cell-mark cal-st-overdue"><i class="cal-mark cal-mark-overdue sm" aria-hidden="true"></i>2</span></span></button><button type="button" class="cal-cell week late" aria-pressed="false" aria-label="10.10: 150 ₾: просрочено 1"><span class="cal-cell-top"><span class="cal-n">10</span></span><span class="cal-cell-total">150 ₾</span><span class="cal-cell-marks"><span class="cal-cell-mark cal-st-overdue"><i class="cal-mark cal-mark-overdue sm" aria-hidden="true"></i>1</span></span></button><span class="cal-cell week today none" aria-current="date"><span class="cal-cell-top" aria-hidden="true"><span class="cal-n">11</span></span><span class="cal-cell-total" aria-hidden="true">—</span><span class="cal-cell-tag">сегодня</span><span class="cal-sr">11.10: оплат нет</span></span><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-cell-top"><span class="cal-n">12</span></span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-cell-top"><span class="cal-n">13</span></span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-cell-top"><span class="cal-n">14</span></span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-cell-top"><span class="cal-n">15</span></span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-cell-top"><span class="cal-n">16</span></span></button><button type="button" class="cal-cell ahead on" aria-pressed="true"><span class="cal-cell-top"><span class="cal-n">17</span></span></button><span class="cal-cell ahead none"><span class="cal-cell-top" aria-hidden="true"><span class="cal-n">18</span></span><span class="cal-sr">18.10: оплат нет</span></span><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-cell-top"><span class="cal-n">19</span></span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-cell-top"><span class="cal-n">20</span></span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-cell-top"><span class="cal-n">21</span></span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-cell-top"><span class="cal-n">22</span></span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-cell-top"><span class="cal-n">23</span></span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-cell-top"><span class="cal-n">24</span></span></button><span class="cal-cell ahead none"><span class="cal-cell-top" aria-hidden="true"><span class="cal-n">25</span></span><span class="cal-sr">25.10: оплат нет</span></span><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-cell-top"><span class="cal-n">26</span></span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-cell-top"><span class="cal-n">27</span></span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-cell-top"><span class="cal-n">28</span></span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-cell-top"><span class="cal-n">29</span></span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-cell-top"><span class="cal-n">30</span></span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-cell-top"><span class="cal-n">31</span></span></button><span class="cal-cell off" aria-hidden="true"></span></div><div class="cal-legend desk"><div class="cal-legend-marks"><span><i class="cal-mark cal-mark-paid sm" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></i>Оплачено</span><span><i class="cal-mark cal-mark-paid_ahead sm" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></i>Оплачено заранее</span><span><i class="cal-mark cal-mark-due_today sm" aria-hidden="true"></i>Ждём сегодня</span><span><i class="cal-mark cal-mark-expected sm" aria-hidden="true"></i>Ожидается</span><span><i class="cal-mark cal-mark-overdue sm" aria-hidden="true"></i>Просрочено</span><span><i class="cal-swatch"></i>Сегодня</span></div></div></div></div></div><figcaption><b>Б. Строки недель.</b> Вместо рамок — тонкая линия над каждой неделей; у долга розовая только плашка с числом, а не вся клетка. Цена: долг издалека заметен слабее, день меньше похож на кнопку.</figcaption></figure><figure class="f"><div class="air air-p air-rows"><div class="cal"><div class="cal-bar"><button type="button" class="pill cal-round" aria-label="Сентябрь 2026"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-left" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></button><button type="button" class="pill cal-round" aria-label="Ноябрь 2026"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-right" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button><button type="button" class="pill cal-now">Сегодня</button><button type="button" class="pill cal-all" aria-expanded="true">Свернуть<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-up" aria-hidden="true"><path d="m18 15-6-6-6 6"/></svg></button></div><div class="cal-title-row"><div class="cal-title">Октябрь 2026</div><div class="cal-legend"><span><i class="cal-swatch"></i>сегодня</span></div></div><div class="cal-wd" aria-hidden="true"><span>Пн</span><span>Вт</span><span>Ср</span><span>Чт</span><span>Пт</span><span>Сб</span><span>Вс</span></div><div class="cal-grid" role="group" aria-label="Октябрь 2026"><span class="cal-cell off" aria-hidden="true"></span><span class="cal-cell off" aria-hidden="true"></span><span class="cal-cell off" aria-hidden="true"></span><button type="button" class="cal-cell past" aria-pressed="false" aria-label="01.10: всё оплачено"><span class="cal-n">1</span><i class="cal-mark cal-mark-paid sm" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></i></button><button type="button" class="cal-cell past" aria-pressed="false" aria-label="02.10: всё оплачено"><span class="cal-n">2</span><i class="cal-mark cal-mark-paid sm" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></i></button><button type="button" class="cal-cell past" aria-pressed="false" aria-label="03.10: всё оплачено"><span class="cal-n">3</span><i class="cal-mark cal-mark-paid sm" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></i></button><span class="cal-cell past none"><span aria-hidden="true"><span class="cal-n">4</span></span><span class="cal-sr">04.10: оплат нет</span></span><button type="button" class="cal-cell week" aria-pressed="false" aria-label="05.10: 150 ₾, оплачено 1 из 1"><span class="cal-n">5</span><span class="cal-cell-sum">150 ₾</span><span class="cal-cell-count all">1 из 1</span></button><button type="button" class="cal-cell week" aria-pressed="false" aria-label="06.10: 300 ₾, оплачено 2 из 2"><span class="cal-n">6</span><span class="cal-cell-sum">300 ₾</span><span class="cal-cell-count all">2 из 2</span></button><button type="button" class="cal-cell week" aria-pressed="false" aria-label="07.10: 300 ₾, оплачено 2 из 2"><span class="cal-n">7</span><span class="cal-cell-sum">300 ₾</span><span class="cal-cell-count all">2 из 2</span></button><button type="button" class="cal-cell week late" aria-pressed="false" aria-label="08.10: 300 ₾, оплачено 1 из 2, просрочено 1"><span class="cal-n">8</span><span class="cal-cell-sum">300 ₾</span><span class="cal-cell-count">1 из 2</span><i class="cal-flag"></i></button><button type="button" class="cal-cell week late" aria-pressed="false" aria-label="09.10: 300 ₾, оплачено 0 из 2, просрочено 2"><span class="cal-n">9</span><span class="cal-cell-sum">300 ₾</span><span class="cal-cell-count">0 из 2</span><i class="cal-flag"></i></button><button type="button" class="cal-cell week late" aria-pressed="false" aria-label="10.10: 150 ₾, оплачено 0 из 1, просрочено 1"><span class="cal-n">10</span><span class="cal-cell-sum">150 ₾</span><span class="cal-cell-count">0 из 1</span><i class="cal-flag"></i></button><span class="cal-cell week today none" aria-current="date"><span aria-hidden="true"><span class="cal-n">11</span></span><span class="cal-cell-count" aria-hidden="true">—</span><span class="cal-sr">11.10: оплат нет</span></span><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-n">12</span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-n">13</span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-n">14</span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-n">15</span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-n">16</span></button><button type="button" class="cal-cell ahead on" aria-pressed="true"><span class="cal-n">17</span></button><span class="cal-cell ahead none"><span aria-hidden="true"><span class="cal-n">18</span></span><span class="cal-sr">18.10: оплат нет</span></span><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-n">19</span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-n">20</span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-n">21</span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-n">22</span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-n">23</span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-n">24</span></button><span class="cal-cell ahead none"><span aria-hidden="true"><span class="cal-n">25</span></span><span class="cal-sr">25.10: оплат нет</span></span><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-n">26</span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-n">27</span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-n">28</span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-n">29</span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-n">30</span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-n">31</span></button><span class="cal-cell off" aria-hidden="true"></span></div><div class="cal-legend"><span><b>1 из 3</b>— оплачено</span><span><i class="cal-mark cal-mark-paid sm" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></i>всё оплачено</span><span><i class="cal-mark cal-mark-overdue sm" aria-hidden="true"></i>просрочено</span></div></div></div><figcaption><b>Б на телефоне.</b> То же; строка этой недели чуть выше.</figcaption></figure></div></section><section class="band"><h2>В. Мягкие клетки</h2><div class="frames"><figure class="f"><div class="air air-l air-soft"><div class="cal"><div class="cal-left"><div class="cal-bar dense"><button type="button" class="pill pill-sm cal-round" aria-label="Сентябрь 2026"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-left" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></button><button type="button" class="pill pill-sm cal-round" aria-label="Ноябрь 2026"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-right" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button><div class="cal-title">Октябрь 2026</div><button type="button" class="pill pill-sm cal-now">Сегодня</button></div><div class="cal-wd" aria-hidden="true"><span>Пн</span><span>Вт</span><span>Ср</span><span>Чт</span><span>Пт</span><span>Сб</span><span>Вс</span></div><div class="cal-grid big" role="group" aria-label="Октябрь 2026"><span class="cal-cell off" aria-hidden="true"></span><span class="cal-cell off" aria-hidden="true"></span><span class="cal-cell off" aria-hidden="true"></span><button type="button" class="cal-cell past" aria-pressed="false" aria-label="01.10: всё оплачено"><span class="cal-cell-top"><span class="cal-n">1</span><i class="cal-mark cal-mark-paid sm" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></i></span></button><button type="button" class="cal-cell past" aria-pressed="false" aria-label="02.10: всё оплачено"><span class="cal-cell-top"><span class="cal-n">2</span><i class="cal-mark cal-mark-paid sm" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></i></span></button><button type="button" class="cal-cell past" aria-pressed="false" aria-label="03.10: всё оплачено"><span class="cal-cell-top"><span class="cal-n">3</span><i class="cal-mark cal-mark-paid sm" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></i></span></button><span class="cal-cell past none"><span class="cal-cell-top" aria-hidden="true"><span class="cal-n">4</span></span><span class="cal-sr">04.10: оплат нет</span></span><button type="button" class="cal-cell week" aria-pressed="false" aria-label="05.10: 150 ₾: оплачено 1"><span class="cal-cell-top"><span class="cal-n">5</span></span><span class="cal-cell-total">150 ₾</span><span class="cal-cell-marks"><span class="cal-cell-mark cal-st-paid"><i class="cal-mark cal-mark-paid sm" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></i>1</span></span></button><button type="button" class="cal-cell week" aria-pressed="false" aria-label="06.10: 300 ₾: оплачено 2"><span class="cal-cell-top"><span class="cal-n">6</span></span><span class="cal-cell-total">300 ₾</span><span class="cal-cell-marks"><span class="cal-cell-mark cal-st-paid"><i class="cal-mark cal-mark-paid sm" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></i>2</span></span></button><button type="button" class="cal-cell week" aria-pressed="false" aria-label="07.10: 300 ₾: оплачено 2"><span class="cal-cell-top"><span class="cal-n">7</span></span><span class="cal-cell-total">300 ₾</span><span class="cal-cell-marks"><span class="cal-cell-mark cal-st-paid"><i class="cal-mark cal-mark-paid sm" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></i>2</span></span></button><button type="button" class="cal-cell week late" aria-pressed="false" aria-label="08.10: 300 ₾: просрочено 1, оплачено 1"><span class="cal-cell-top"><span class="cal-n">8</span></span><span class="cal-cell-total">300 ₾</span><span class="cal-cell-marks"><span class="cal-cell-mark cal-st-overdue"><i class="cal-mark cal-mark-overdue sm" aria-hidden="true"></i>1</span><span class="cal-cell-mark cal-st-paid"><i class="cal-mark cal-mark-paid sm" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></i>1</span></span></button><button type="button" class="cal-cell week late" aria-pressed="false" aria-label="09.10: 300 ₾: просрочено 2"><span class="cal-cell-top"><span class="cal-n">9</span></span><span class="cal-cell-total">300 ₾</span><span class="cal-cell-marks"><span class="cal-cell-mark cal-st-overdue"><i class="cal-mark cal-mark-overdue sm" aria-hidden="true"></i>2</span></span></button><button type="button" class="cal-cell week late" aria-pressed="false" aria-label="10.10: 150 ₾: просрочено 1"><span class="cal-cell-top"><span class="cal-n">10</span></span><span class="cal-cell-total">150 ₾</span><span class="cal-cell-marks"><span class="cal-cell-mark cal-st-overdue"><i class="cal-mark cal-mark-overdue sm" aria-hidden="true"></i>1</span></span></button><span class="cal-cell week today none" aria-current="date"><span class="cal-cell-top" aria-hidden="true"><span class="cal-n">11</span></span><span class="cal-cell-total" aria-hidden="true">—</span><span class="cal-cell-tag">сегодня</span><span class="cal-sr">11.10: оплат нет</span></span><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-cell-top"><span class="cal-n">12</span></span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-cell-top"><span class="cal-n">13</span></span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-cell-top"><span class="cal-n">14</span></span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-cell-top"><span class="cal-n">15</span></span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-cell-top"><span class="cal-n">16</span></span></button><button type="button" class="cal-cell ahead on" aria-pressed="true"><span class="cal-cell-top"><span class="cal-n">17</span></span></button><span class="cal-cell ahead none"><span class="cal-cell-top" aria-hidden="true"><span class="cal-n">18</span></span><span class="cal-sr">18.10: оплат нет</span></span><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-cell-top"><span class="cal-n">19</span></span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-cell-top"><span class="cal-n">20</span></span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-cell-top"><span class="cal-n">21</span></span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-cell-top"><span class="cal-n">22</span></span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-cell-top"><span class="cal-n">23</span></span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-cell-top"><span class="cal-n">24</span></span></button><span class="cal-cell ahead none"><span class="cal-cell-top" aria-hidden="true"><span class="cal-n">25</span></span><span class="cal-sr">25.10: оплат нет</span></span><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-cell-top"><span class="cal-n">26</span></span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-cell-top"><span class="cal-n">27</span></span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-cell-top"><span class="cal-n">28</span></span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-cell-top"><span class="cal-n">29</span></span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-cell-top"><span class="cal-n">30</span></span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-cell-top"><span class="cal-n">31</span></span></button><span class="cal-cell off" aria-hidden="true"></span></div><div class="cal-legend desk"><div class="cal-legend-marks"><span><i class="cal-mark cal-mark-paid sm" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></i>Оплачено</span><span><i class="cal-mark cal-mark-paid_ahead sm" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></i>Оплачено заранее</span><span><i class="cal-mark cal-mark-due_today sm" aria-hidden="true"></i>Ждём сегодня</span><span><i class="cal-mark cal-mark-expected sm" aria-hidden="true"></i>Ожидается</span><span><i class="cal-mark cal-mark-overdue sm" aria-hidden="true"></i>Просрочено</span><span><i class="cal-swatch"></i>Сегодня</span></div><p>Цифра у отметки — число оплат, сумма — сколько должно прийти за день.</p></div></div></div></div><figcaption><b>В. Мягкие клетки.</b> Клетки на своих местах и того же размера, но без тонкой рамки; суммы набраны светлее, вокруг сетки больше воздуха. Цена: белая клетка без рамки почти сливается с фоном страницы.</figcaption></figure><figure class="f"><div class="air air-p air-soft"><div class="cal"><div class="cal-bar"><button type="button" class="pill cal-round" aria-label="Сентябрь 2026"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-left" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></button><button type="button" class="pill cal-round" aria-label="Ноябрь 2026"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-right" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button><button type="button" class="pill cal-now">Сегодня</button><button type="button" class="pill cal-all" aria-expanded="true">Свернуть<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-up" aria-hidden="true"><path d="m18 15-6-6-6 6"/></svg></button></div><div class="cal-title-row"><div class="cal-title">Октябрь 2026</div><div class="cal-legend"><span><i class="cal-swatch"></i>сегодня</span></div></div><div class="cal-wd" aria-hidden="true"><span>Пн</span><span>Вт</span><span>Ср</span><span>Чт</span><span>Пт</span><span>Сб</span><span>Вс</span></div><div class="cal-grid" role="group" aria-label="Октябрь 2026"><span class="cal-cell off" aria-hidden="true"></span><span class="cal-cell off" aria-hidden="true"></span><span class="cal-cell off" aria-hidden="true"></span><button type="button" class="cal-cell past" aria-pressed="false" aria-label="01.10: всё оплачено"><span class="cal-n">1</span><i class="cal-mark cal-mark-paid sm" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></i></button><button type="button" class="cal-cell past" aria-pressed="false" aria-label="02.10: всё оплачено"><span class="cal-n">2</span><i class="cal-mark cal-mark-paid sm" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></i></button><button type="button" class="cal-cell past" aria-pressed="false" aria-label="03.10: всё оплачено"><span class="cal-n">3</span><i class="cal-mark cal-mark-paid sm" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></i></button><span class="cal-cell past none"><span aria-hidden="true"><span class="cal-n">4</span></span><span class="cal-sr">04.10: оплат нет</span></span><button type="button" class="cal-cell week" aria-pressed="false" aria-label="05.10: 150 ₾, оплачено 1 из 1"><span class="cal-n">5</span><span class="cal-cell-sum">150 ₾</span><span class="cal-cell-count all">1 из 1</span></button><button type="button" class="cal-cell week" aria-pressed="false" aria-label="06.10: 300 ₾, оплачено 2 из 2"><span class="cal-n">6</span><span class="cal-cell-sum">300 ₾</span><span class="cal-cell-count all">2 из 2</span></button><button type="button" class="cal-cell week" aria-pressed="false" aria-label="07.10: 300 ₾, оплачено 2 из 2"><span class="cal-n">7</span><span class="cal-cell-sum">300 ₾</span><span class="cal-cell-count all">2 из 2</span></button><button type="button" class="cal-cell week late" aria-pressed="false" aria-label="08.10: 300 ₾, оплачено 1 из 2, просрочено 1"><span class="cal-n">8</span><span class="cal-cell-sum">300 ₾</span><span class="cal-cell-count">1 из 2</span><i class="cal-flag"></i></button><button type="button" class="cal-cell week late" aria-pressed="false" aria-label="09.10: 300 ₾, оплачено 0 из 2, просрочено 2"><span class="cal-n">9</span><span class="cal-cell-sum">300 ₾</span><span class="cal-cell-count">0 из 2</span><i class="cal-flag"></i></button><button type="button" class="cal-cell week late" aria-pressed="false" aria-label="10.10: 150 ₾, оплачено 0 из 1, просрочено 1"><span class="cal-n">10</span><span class="cal-cell-sum">150 ₾</span><span class="cal-cell-count">0 из 1</span><i class="cal-flag"></i></button><span class="cal-cell week today none" aria-current="date"><span aria-hidden="true"><span class="cal-n">11</span></span><span class="cal-cell-count" aria-hidden="true">—</span><span class="cal-sr">11.10: оплат нет</span></span><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-n">12</span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-n">13</span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-n">14</span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-n">15</span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-n">16</span></button><button type="button" class="cal-cell ahead on" aria-pressed="true"><span class="cal-n">17</span></button><span class="cal-cell ahead none"><span aria-hidden="true"><span class="cal-n">18</span></span><span class="cal-sr">18.10: оплат нет</span></span><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-n">19</span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-n">20</span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-n">21</span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-n">22</span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-n">23</span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-n">24</span></button><span class="cal-cell ahead none"><span aria-hidden="true"><span class="cal-n">25</span></span><span class="cal-sr">25.10: оплат нет</span></span><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-n">26</span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-n">27</span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-n">28</span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-n">29</span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-n">30</span></button><button type="button" class="cal-cell ahead" aria-pressed="false"><span class="cal-n">31</span></button><span class="cal-cell off" aria-hidden="true"></span></div><div class="cal-legend"><span><b>1 из 3</b>— оплачено</span><span><i class="cal-mark cal-mark-paid sm" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></i>всё оплачено</span><span><i class="cal-mark cal-mark-overdue sm" aria-hidden="true"></i>просрочено</span></div></div></div><figcaption><b>В на телефоне.</b> Клетки без рамки, между неделями чуть больше места.</figcaption></figure></div></section><section class="notes"><h2>Что выбрать</h2><p style="max-width:1000px"><b>Рекомендую А, «Без рамок»</b>: линий и заливок на экране становится меньше всего, а долг, «сегодня» и выбранный день видны как раньше. <b>Б</b> — если хочется, чтобы месяц читался строками недель: это самый заметный шаг, и долг в нём виден слабее. <b>В</b> — если клетки лучше оставить как есть и только снять рамки: перемена самая малая.</p><h2>Что дальше</h2><p style="max-width:1000px">После выбора правка идёт на тестовый стенд, на боевой — по слову Mika вместе с календарём.</p></section></body></html>

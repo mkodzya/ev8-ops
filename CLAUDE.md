@@ -8,20 +8,34 @@ Business rules, glossary, decisions and open questions live in the project book
 (`~/Developer/ev8/handbook`, GitHub `mkodzya/ev8-handbook`, ADR-0002 there):
 @~/Developer/ev8/handbook/CLAUDE.md
 
-## Who runs sessions (since 28.09.2026)
-Two people drive development, each with their own Claude on their own machine:
-**Mika** and **Kardu** (GitHub `Kardu89`). Both work in `feature/*` branches and
-merge into `develop`. The way of working is Self Platform's (Mika, 28.09.2026):
+## Who runs sessions (since 28.09.2026; narrowed 11.10.2026)
+**Narrowed by Mika on 11.10.2026: Kardu changes the customer site only** —
+`mkodzya/ev8-site`, the site that moves to ev8.ge. EV8 Ops (this repository, the
+company's ERP) and its two stands, test and prod, are not his to change: in a
+session run by Kardu nothing is committed, merged or deployed here — such a
+session says so and passes the request to Mika. Everything else about the site is
+his to do himself — its pages, its releases, the DNS of ev8.ge (Mika, 11.10.2026:
+«пускай он всё сам делает; единственное ему нельзя менять ERP»). **What the site needs is built on
+the site's side, not here** (Mika, 11.10.2026: «это были правки для сайта»): the
+visit counter with its Reports → Site screen and the daily petrol price, which
+Kardu's session had merged here that day, were taken out again the same day
+(migration 0038) and are not to come back as EV8 Ops features. The one thing of
+the site's that lives here is the request form's `POST /api/site/queue` (accepted
+by Mika on 07.10.2026). Before that (28.09.2026): "two people drive development, both merge
+into `develop`" — `docs/onboarding.md` describes that arrangement and is kept for
+the record.
+
+Development here is driven by Mika's session, in `feature/*` branches merged into
+`develop`. The way of working is Self Platform's (Mika, 28.09.2026):
 **after a merge into `develop`, Mika's session puts it on the test stand at once**
 (`ssh root@204.168.149.105 /srv/ev8-ops/deploy/follow-develop.sh --now`);
 **a release reaches prod only on Mika's word**, and then Mika's session cuts it —
 `release/X.Y.Z`, versions, `main` with an annotated tag, back into `develop` — and
 runs `ssh root@204.168.149.105 /srv/ev8-ops/deploy/deploy-prod.sh X.Y.Z`. Never on its
-own. In a session run by Kardu: never push `main` or a tag, never touch the server
-(`.githooks/pre-push` refuses it too); a merge of Kardu's reaches the test stand
-with Mika's session's next deploy, or when Kardu asks Mika. Product decisions stay with Mika; Kardu proposes. Kardu's setup and
-workflow: `docs/onboarding.md`. Talk to whoever runs the session in the language
-they write in.
+own. `.githooks/pre-push` still refuses a push of `main` or a tag from anyone but
+Mika. Product decisions stay with Mika; Kardu (GitHub `Kardu89`), the director on
+site and the main daily user, proposes. Talk to whoever runs the session in the
+language they write in.
 
 ## Non-negotiable rules (from the owner)
 1. **Never invent data.** Only data confirmed in Odoo, Google Drive, files Mika

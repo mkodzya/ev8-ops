@@ -1,8 +1,9 @@
 # The edge. The only thing on this machine that faces the internet.
 #
 # Both stacks publish to 127.0.0.1 and nothing else, so this file is the whole
-# public surface of EV8 Ops: two names, two ports, one certificate authority.
-# Everything else on the host is unreachable from outside.
+# public surface of EV8 Ops — and, since the move off WordPress, of the
+# company's site ev8.ge: its static files, and one door into the API for the
+# site's request form. Everything else on the host is unreachable from outside.
 #
 #   docker compose -p ev8-edge -f docker-compose.edge.yml up -d
 {
@@ -10,6 +11,101 @@
 	# renewal keeps failing. Without it the first anybody hears of it is a
 	# browser warning on Kardu's phone.
 	email info@ev8.ge
+
+	# ev8.ge and www.ev8.ge get their certificate at the first visit, not at
+	# start (`tls { on_demand }` in their blocks). The day the name's DNS is
+	# pointed at this server is Kardu's to choose (Mika, 11.10.2026: "по сайту
+	# все задачи он должен без меня делать"), and a door that asked for the
+	# certificate at start tried once while the name still pointed at
+	# WordPress and did not try again for hours. Caddy issues on demand only
+	# for a name this address says yes to — the two below and no other.
+	on_demand_tls {
+		ask http://127.0.0.1:9123/may
+	}
+}
+
+# The answer to "may this name have a certificate on demand?": the site's two
+# names, nothing else. The door runs on the host's network, so this is the
+# server's own loopback: heard on the machine itself, never from outside
+# (checked from the internet on 12.10.2026 — the port does not answer).
+http://127.0.0.1:9123 {
+	bind 127.0.0.1
+	@site query domain=ev8.ge
+	@site_www query domain=www.ev8.ge
+	respond @site 200
+	respond @site_www 200
+	respond 403
+}
+
+# The built site (mkodzya/ev8-site) as GitHub Actions ships it: a release
+# directory per push, and `current` pointing at the live one
+# (deploy/site-receive.sh). {args[0]} is that `current`.
+(site_files) {
+	root * {args[0]}
+	# Astro puts a hash in every asset's name, so an asset never changes under
+	# its name. A page has no hash: it must not be cached, or a deploy leaves
+	# people on the previous text until they hard-refresh.
+	@hashed path /_astro/*
+	header @hashed Cache-Control "public, max-age=31536000, immutable"
+	# Pictures and video come from the site's public/ folder and keep their
+	# names between builds, so a week, not a year: a picture replaced under
+	# the same name reaches a returning visitor within seven days
+	# (Kardu, 11.10.2026).
+	@media path /img/* /video/*
+	header @media Cache-Control "public, max-age=604800"
+	@page not path /_astro/* /img/* /video/*
+	header @page Cache-Control "no-cache"
+	file_server
+}
+
+# Addresses of the WordPress site (sitemap of ev8.ge, 11.10.2026) that links,
+# bookmarks and search engines still hold, each sent to the page of the new
+# site that took its place. Permanent (301), so search engines move the page's
+# standing with it — except where the new site has no such page yet: those go
+# to the home page with a temporary redirect, to be pointed at the real page
+# once it exists. Brought in line with the site of 11.10.2026 (Kardu): the
+# calculator lives on rent/, the waiting list is queue/, the policy is privacy/.
+(wordpress_redirects) {
+	@wp_models path /catalog /catalog/ /product-card /product-card/*
+	redir @wp_models /models/ permanent
+	@wp_models_en path /en/catalog-en /en/catalog-en/ /en/product-card /en/product-card/*
+	redir @wp_models_en /en/models/ permanent
+
+	@wp_stations path /svap-sadgurebi /svap-sadgurebi/
+	redir @wp_stations /stations/ permanent
+	@wp_stations_en path /en/swap-stations /en/swap-stations/
+	redir @wp_stations_en /en/stations/ permanent
+
+	@wp_am path /am-kategoriis-migheba /am-kategoriis-migheba/
+	redir @wp_am /am-licence/ permanent
+	@wp_am_en path /en/am-category-license /en/am-category-license/
+	redir @wp_am_en /en/am-licence/ permanent
+
+	# The waiting list has its own page again, and the courier calculator is
+	# on the rent page ("subscription" became "rent" on the site; its own
+	# subscription/ still forwards, but an old address should not take two hops).
+	@wp_queue path /waitlist /waitlist/
+	redir @wp_queue /queue/ permanent
+	@wp_queue_en path /en/waiting-list /en/waiting-list/
+	redir @wp_queue_en /en/queue/ permanent
+	@wp_calc path /kurieris-ekonomiis-kalku /kurieris-ekonomiis-kalku/
+	redir @wp_calc /rent/ permanent
+	@wp_calc_en path /en/courier-savings-calculator /en/courier-savings-calculator/
+	redir @wp_calc_en /en/rent/ permanent
+
+	@wp_faq_en path /en/faq-en /en/faq-en/
+	redir @wp_faq_en /en/faq/ permanent
+	@wp_contacts_en path /en/where-to-find-us /en/where-to-find-us/
+	redir @wp_contacts_en /en/contacts/ permanent
+
+	@wp_privacy path /privacy-policy /privacy-policy/
+	redir @wp_privacy /privacy/ permanent
+	@wp_privacy_en path /en/privacy-policy-en /en/privacy-policy-en/
+	redir @wp_privacy_en /en/privacy/ permanent
+
+	# No page on the new site yet: "bring a friend". Temporary on purpose.
+	@wp_none_en path /en/bring-a-friend-en /en/bring-a-friend-en/
+	redir @wp_none_en /en/ temporary
 }
 
 ops.ev8.ge {
@@ -25,8 +121,66 @@ ops.ev8.ge {
 	}
 }
 
+# The company's site. Its certificate is issued at the first visit after the
+# A record of ev8.ge points at this server (on_demand, see the top): until
+# then nobody reaches this block and nothing is asked of Let's Encrypt.
+ev8.ge {
+	tls {
+		on_demand
+	}
+	encode zstd gzip
+
+	import wordpress_redirects
+
+	# The site's request form posts to /api/site/queue on its own host. That
+	# prefix, and nothing else of the API, reaches the production stack: the
+	# sign-in and every screen of EV8 Ops stay on ops.ev8.ge.
+	handle /api/site/* {
+		reverse_proxy 127.0.0.1:5173
+	}
+	# The rest of the API, and what WordPress answered and the new site never
+	# will. 410 tells the bots that keep asking for it to stop.
+	@wordpress path /api/* /wp-admin /wp-admin/* /wp-login.php /wp-content/* /wp-includes/* /wp-json /wp-json/* /xmlrpc.php /feed /feed/* /comments/feed/*
+	handle @wordpress {
+		respond 410
+	}
+	handle {
+		import site_files /srv/site/prod/current
+	}
+
+	handle_errors 404 {
+		root * /srv/site/prod/current
+		rewrite * /404.html
+		file_server
+	}
+
+	header Strict-Transport-Security "max-age=31536000"
+	log {
+		output stdout
+		format console
+	}
+}
+
+www.ev8.ge {
+	tls {
+		on_demand
+	}
+	redir https://ev8.ge{uri} permanent
+}
+
 test.ops.ev8.ge {
-	# Previews of the new ev8.ge site: static pages Mika opens from his phone,
+	encode zstd gzip
+
+	# The new site as GitHub Actions ships it from `develop`
+	# (deploy/site-receive.sh), built with base /garage/site/. Same login as
+	# the mock-ups below.
+	redir /garage/site /garage/site/
+	handle_path /garage/site/* {
+		import /srv/site-preview/auth/*.caddy
+		import site_files /srv/site/test/current
+	}
+
+	# Mock-ups of the new ev8.ge site: static pages Mika opens from his phone,
 	# kept under /srv/ev8-site-preview on the host and outside this repository.
 	# The login lives in auth/*.caddy next to them, written by
 	# deploy/set-site-password.sh; Caddy sees only the one-way digest. No such

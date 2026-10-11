@@ -27,8 +27,17 @@ describe('the structure each role sees (wave 1 §3.2)', () => {
   it('shows the points tab and statements only to the owner', () => {
     expect(tabsForRole('fleet', 'owner').map((t) => t.id)).toEqual(['vehicles', 'models', 'points', 'batteries']);
     expect(tabsForRole('fleet', 'manager').map((t) => t.id)).toEqual(['vehicles', 'models', 'batteries']);
-    expect(tabsForRole('money', 'owner').map((t) => t.id)).toEqual(['sort', 'payments', 'till', 'statements', 'deposits']);
+    expect(tabsForRole('money', 'owner').map((t) => t.id)).toEqual(['calendar', 'sort', 'payments', 'till', 'statements', 'deposits']);
     expect(tabsForRole('cash', 'manager').map((t) => t.id)).toEqual(['till', 'mine']);
+  });
+
+  // Mika, 11.10.2026: the payments calendar is the first tab of Money, and an
+  // owner's only (docs/redesign/payments-calendar.md §3.0, crit. 29, 32).
+  it('puts the payments calendar first in the owner\'s Money and nowhere for a manager', () => {
+    expect(tabsForRole('money', 'owner')[0]).toMatchObject({ id: 'calendar', path: '/money/calendar' });
+    expect(tabsForRole('money', 'manager')).toEqual([]);
+    expect(tabsForRole('cash', 'manager').map((t) => t.id)).not.toContain('calendar');
+    expect(sectionOfPath('/money/calendar', ['payments.view'])).toBe('money');
   });
 
   // Mika, 28.09.2026: the suppliers are a tab of Purchases, not a section.

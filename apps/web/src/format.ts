@@ -7,6 +7,13 @@ export function fmtDate(iso: string | null | undefined): string {
   return `${d}.${m}.${y}`;
 }
 
+/** 2026-10-14 → 14.10. Where the year is said once already — in the month's name over a calendar. */
+export function fmtDayMonth(iso: string | null | undefined): string {
+  if (!iso) return '—';
+  const [, m, d] = iso.split('-');
+  return `${d}.${m}`;
+}
+
 /** The last four characters of a VIN carry the eye (spec §9.2). */
 export function vinParts(vin: string): { head: string; tail: string } {
   return { head: vin.slice(0, -4), tail: vin.slice(-4) };

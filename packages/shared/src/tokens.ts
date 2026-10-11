@@ -73,7 +73,7 @@ export const tokens = {
   body: "'Be Vietnam Pro', 'Inter', 'Noto Sans Georgian', system-ui, -apple-system, 'Segoe UI', sans-serif", // body text and tables. The site sets body to --main-font, so Be Vietnam Pro leads here too; Inter, the site's second family, carries the Cyrillic
   mono: "'IBM Plex Mono', 'Noto Sans Georgian', ui-monospace, SFMono-Regular, Menlo, monospace", // VIN and money
 
-  /** text — Named text styles. Fourteen of them, because the interface uses fourteen — the point is that they are named and counted, not that a component reaches for a size of its own. Each is a CSS `font` shorthand, so a rule says `font: var(--text-body)` and nothing else. The shorthand resets font-variant, so tabular figures are set by the .t-* class next to it, never by the token. */
+  /** text — Named text styles. Nineteen of them, because the interface uses nineteen — the point is that they are named and counted, not that a component reaches for a size of its own. Each is a CSS `font` shorthand, so a rule says `font: var(--text-body)` and nothing else. The shorthand resets font-variant, so tabular figures are set by the .t-* class next to it, never by the token. */
   textDisplay: '500 28px/1.1 var(--display)', // the number on a tile, the one figure a screen is about
   textH1: '500 24px/1.15 var(--display)', // the page title
   textH1Phone: '500 22px/1.15 var(--display)', // the same title under 900 px
@@ -91,6 +91,8 @@ export const tokens = {
   textMonoSm: '400 12px/1.4 var(--mono)', // code quoted inside the interface — token names on /design
   textMoneyLg: '500 22px/1.2 var(--mono)', // the sum in a Today row and in the money sheet — what Kardu reads first outdoors; tabular figures via the class
   textTab: '500 12px/1.15 var(--display)', // the bottom bar label; wraps to two lines in Georgian rather than truncating
+  textCell: '500 11px/14px var(--body)', // inside a day cell of the payments calendar — the day's sum, «1 из 3», the word «сегодня», the count by a mark in the laptop's cell — and the small «долг» / «осталось» over a row's sum. The one style under 12 px: a 47 px cell holds «1 790 ₾» at no larger size
+  textMonth: '500 18px/22px var(--display)', // the month's name over the payments calendar's grid («Октябрь 2026»)
 
   /** motion — Letter-spacing and the one transition, copied from the theme. The CSS `font` shorthand cannot carry tracking, so it lives beside the text styles rather than inside them. */
   trackingTight: '-0.02em', // headings: the site sets -1px at 38px, -0.56px at 28px, -0.4px at 20px — all -0.02em
@@ -494,7 +496,7 @@ export const tokenGroups: TokenGroup[] = [
   },
   {
     "name": "text",
-    "note": "Named text styles. Fourteen of them, because the interface uses fourteen — the point is that they are named and counted, not that a component reaches for a size of its own. Each is a CSS `font` shorthand, so a rule says `font: var(--text-body)` and nothing else. The shorthand resets font-variant, so tabular figures are set by the .t-* class next to it, never by the token.",
+    "note": "Named text styles. Nineteen of them, because the interface uses nineteen — the point is that they are named and counted, not that a component reaches for a size of its own. Each is a CSS `font` shorthand, so a rule says `font: var(--text-body)` and nothing else. The shorthand resets font-variant, so tabular figures are set by the .t-* class next to it, never by the token.",
     "tokens": [
       {
         "name": "textDisplay",
@@ -597,6 +599,18 @@ export const tokenGroups: TokenGroup[] = [
         "cssVar": "--text-tab",
         "value": "500 12px/1.15 var(--display)",
         "note": "the bottom bar label; wraps to two lines in Georgian rather than truncating"
+      },
+      {
+        "name": "textCell",
+        "cssVar": "--text-cell",
+        "value": "500 11px/14px var(--body)",
+        "note": "inside a day cell of the payments calendar — the day's sum, «1 из 3», the word «сегодня», the count by a mark in the laptop's cell — and the small «долг» / «осталось» over a row's sum. The one style under 12 px: a 47 px cell holds «1 790 ₾» at no larger size"
+      },
+      {
+        "name": "textMonth",
+        "cssVar": "--text-month",
+        "value": "500 18px/22px var(--display)",
+        "note": "the month's name over the payments calendar's grid («Октябрь 2026»)"
       }
     ]
   },
