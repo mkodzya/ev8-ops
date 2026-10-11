@@ -25,7 +25,9 @@
 }
 
 # The answer to "may this name have a certificate on demand?": the site's two
-# names, nothing else. Heard only inside the door's own container.
+# names, nothing else. The door runs on the host's network, so this is the
+# server's own loopback: heard on the machine itself, never from outside
+# (checked from the internet on 12.10.2026 — the port does not answer).
 http://127.0.0.1:9123 {
 	bind 127.0.0.1
 	@site query domain=ev8.ge
