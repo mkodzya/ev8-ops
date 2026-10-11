@@ -25,6 +25,10 @@ services:
       # Previews of the new site and the digest of their login. Read-only:
       # the edge serves these files and never writes them.
       - /srv/ev8-site-preview:/srv/site-preview:ro
+      # The built site ev8.ge, as GitHub Actions ships it (deploy/site-receive.sh):
+      # prod/current from `main`, test/current from `develop`. The links in
+      # there are relative, so they resolve inside this mount too.
+      - /srv/ev8-site:/srv/site:ro
 
 volumes:
   caddy_data:
