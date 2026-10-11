@@ -1,3 +1,4 @@
+import { rentDueOn } from './periods.js';
 import type { RentalStatus, VehicleEventKind, VehiclePool, VehicleState } from './types.js';
 
 /** Moving a moped between parks is its own event, and changes no state. */
@@ -33,22 +34,20 @@ export function canPickUp(state: VehicleState): boolean {
 
 /**
  * The status a rental shows, from facts rather than a hand-set field.
- * `overdue` is a signal computed from "paid through" (RNT-03); `paused`,
- * `disputed`, `returned` and `booked` are decisions and stay as stored.
+ * `overdue` and `due_today` are signals computed from "paid through": the
+ * rent is due on the first day of the oldest week not fully paid, the rental
+ * is `due_today` on that day and `overdue` from the next (ADR-0017, which
+ * replaces RNT-03). `paused`, `disputed`, `returned` and `booked` are
+ * decisions and stay as stored.
  */
 export function effectiveRentalStatus(
   stored: RentalStatus,
   paidThrough: string | null,
   pickedUpOn: string | null,
   today: string,
-  /** Nothing at all paid on it yet — no week, no deposit. */
-  nothingPaid = false,
 ): RentalStatus {
   if (stored !== 'active' && stored !== 'overdue') return stored;
   if (!pickedUpOn) return 'booked';
-  // Handed over today and waiting for its first payment is not a debt yet —
-  // the false "overdue" of B4-01; from tomorrow it is (Q7).
-  if (nothingPaid && pickedUpOn >= today) return 'awaiting_payment';
-  const covered = paidThrough ?? '';
-  return covered < today ? 'overdue' : 'active';
+  const dueOn = rentDueOn(paidThrough, pickedUpOn);
+  return dueOn < today ? 'overdue' : dueOn === today ? 'due_today' : 'active';
 }

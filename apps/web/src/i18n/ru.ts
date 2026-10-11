@@ -229,7 +229,7 @@ export const ru: Dict = {
 
   rentalStatus: {
     booked: 'Бронь',
-    awaiting_payment: 'Ждёт оплаты',
+    due_today: 'Ждём сегодня',
     active: 'Активна',
     overdue: 'Просрочена',
     paused: 'Пауза',

@@ -190,17 +190,17 @@ export function RentalPage() {
         <div className="paid-head">
           <div>
             {/* The first line answers this rental's own question (§3.4). */}
-            <p className="t-label">{r.status === 'awaiting_payment' ? t.hand.dueToday : r.status === 'returned' ? t.rentals.returned : t.rentals.paidThrough}</p>
+            <p className="t-label">{r.status === 'due_today' ? t.hand.dueToday : r.status === 'returned' ? t.rentals.returned : t.rentals.paidThrough}</p>
             <p className="paid-date">
-              {r.status === 'awaiting_payment' ? formatGel(debtTetri, { decimals: false }) : r.status === 'returned' ? fmtDate(r.returnedOn) : fmtDate(r.paidThrough)}
+              {r.status === 'due_today' ? formatGel(debtTetri, { decimals: false }) : r.status === 'returned' ? fmtDate(r.returnedOn) : fmtDate(r.paidThrough)}
             </p>
-            {r.status === 'awaiting_payment' && d && (
+            {r.status === 'due_today' && d && (
               <p className="muted">
                 {t.rentals.deposit}: {t.rentalMoney.receivedOf(formatGel(d.paidTetri, { decimals: false }), formatGel(d.amountTetri, { decimals: false }))}
               </p>
             )}
           </div>
-          {debtTetri > 0 && r.status !== 'awaiting_payment' && (
+          {debtTetri > 0 && r.status !== 'due_today' && (
             <div className="paid-debt">
               <p className="t-label">{t.rental.owed}</p>
               <p className="t-money crit-text paid-sum">{formatGel(debtTetri)}</p>

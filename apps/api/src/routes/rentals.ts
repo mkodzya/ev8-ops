@@ -1,13 +1,15 @@
-import { effectiveRentalStatus, overdueDays, todayISO } from '@ev8/shared';
+import { todayISO } from '@ev8/shared';
 import type { FastifyInstance } from 'fastify';
 import { dayOf, isoDate } from '../lib/dates.js';
 import { debtsOf } from '../lib/debt.js';
 import { UNDO_RETURN_MS } from '../lib/rentals.js';
+import { rentStateOf } from '../lib/rentState.js';
 import { prisma } from '../lib/db.js';
 import { env } from '../lib/env.js';
 import { notFound } from '../lib/errors.js';
 
-// Rentals, read side (RNT-03 overdue as a signal, RNT-06 the no-VIN list).
+// Rentals, read side (overdue and due-today as signals — ADR-0017, which
+// replaces RNT-03; RNT-06 the no-VIN list).
 
 export function rentalRoutes(app: FastifyInstance): void {
   app.get('/api/rentals', { config: { scope: 'fleet.view' } }, async () => {
@@ -19,9 +21,6 @@ export function rentalRoutes(app: FastifyInstance): void {
         customer: { select: { id: true, name: true, nameKa: true, nameLat: true, phone: true } },
         vehicle: { select: { id: true, vin: true, model: { select: { brand: true, name: true } } } },
         deposit: { select: { amountTetri: true, status: true, paidTetri: true } },
-        // What is owed, from the periods that were not paid — the list shows
-        // the debt beside the status (U5) and must not invent a second rule.
-        periods: { where: { payStatus: { not: 'paid' } }, select: { amountTetri: true, paidTetri: true } },
         _count: { select: { periods: true } },
         // Signed on the screen or not: the "Не подписан" filter (wave 3 §3.2).
         documents: { where: { kind: 'pdf', archived: false, docKind: 'contract', signedAt: { not: null } }, select: { id: true } },
@@ -36,8 +35,8 @@ export function rentalRoutes(app: FastifyInstance): void {
       rentals: rentals.map((r) => {
         const pickedUpOn = isoDate(r.pickedUpOn);
         const paidThrough = isoDate(r.paidThrough);
-        const nothingPaid = !paidThrough && (r.deposit?.paidTetri ?? 0) === 0 && r.periods.every((p) => p.paidTetri === 0);
-        const status = effectiveRentalStatus(r.status, paidThrough, pickedUpOn, today, nothingPaid);
+        // What it is called today and how many days it is late: the one function every route asks.
+        const { status, overdueDays } = rentStateOf(r, today);
         return {
           id: r.id,
           number: r.number,
@@ -54,7 +53,7 @@ export function rentalRoutes(app: FastifyInstance): void {
           expectedReturnOn: isoDate(r.expectedReturnOn),
           returnedOn: isoDate(r.returnedOn),
           paidThrough,
-          overdueDays: status === 'overdue' && pickedUpOn ? overdueDays(paidThrough, pickedUpOn, today) : 0,
+          overdueDays,
           debtTetri: debtOfRental(r.customerId, r.id),
           periods: r._count.periods,
           buyoutTargetTetri: r.buyoutTargetTetri,
@@ -113,7 +112,7 @@ export function rentalRoutes(app: FastifyInstance): void {
         number: r.number,
         debtTetri,
         odooName: r.odooName,
-        status: effectiveRentalStatus(r.status, paidThrough, pickedUpOn, today, !paidThrough && (r.deposit?.paidTetri ?? 0) === 0 && r.periods.every((p) => p.paidTetri === 0)),
+        status: rentStateOf(r, today).status,
         storedStatus: r.status,
         customer: { id: r.customer.id, name: r.customer.name, phone: r.customer.phone },
         vehicle: r.vehicle ? { id: r.vehicle.id, vin: r.vehicle.vin, model: `${r.vehicle.model.brand} ${r.vehicle.model.name}` } : null,

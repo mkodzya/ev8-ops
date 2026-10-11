@@ -218,7 +218,7 @@ export const ka: Dict = {
 
   rentalStatus: {
     booked: 'დაჯავშნილი',
-    awaiting_payment: 'ელოდება გადახდას',
+    due_today: 'დღეს ველოდებით',
     active: 'აქტიური',
     overdue: 'ვადაგადაცილებული',
     paused: 'შეჩერებული',

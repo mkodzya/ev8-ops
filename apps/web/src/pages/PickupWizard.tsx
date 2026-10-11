@@ -838,7 +838,7 @@ function PickupDone({ id, number, photoTrouble }: { id: string; number: string; 
           )}
         </p>
         <p className="muted">
-          {r.status === 'awaiting_payment' ? t.hand.doneLater : t.hand.doneLine(fmtDate(r.paidThrough), formatGel(data.deposit?.paidTetri ?? 0, { decimals: false }))}
+          {r.status === 'due_today' ? t.hand.doneLater : t.hand.doneLine(fmtDate(r.paidThrough), formatGel(data.deposit?.paidTetri ?? 0, { decimals: false }))}
         </p>
         {photoTrouble && <p className="warn-text">{t.hand.photosFailed}</p>}
       </section>

@@ -226,7 +226,7 @@ export const en = {
 
   rentalStatus: {
     booked: 'Booked',
-    awaiting_payment: 'Awaiting payment',
+    due_today: 'Due today',
     active: 'Active',
     overdue: 'Overdue',
     paused: 'Paused',

@@ -45,7 +45,7 @@ export function RentalsPage() {
   const open = (r: Rental) => r.status !== 'returned';
   const SEGMENTS = {
     active: (r: Rental) => open(r) && r.status !== 'paused' && r.status !== 'disputed',
-    awaiting: (r: Rental) => r.status === 'awaiting_payment',
+    due_today: (r: Rental) => r.status === 'due_today',
     overdue: (r: Rental) => r.status === 'overdue',
     returns: (r: Rental) => open(r) && !!r.expectedReturnOn && r.expectedReturnOn <= today,
     unsigned: (r: Rental) => open(r) && r.contractSigned === false,

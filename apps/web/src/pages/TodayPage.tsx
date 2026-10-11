@@ -52,7 +52,7 @@ const SEGMENT: Record<string, string> = {
   decide: '/money/deposits',
   returns: '/rentals?s=returns',
   overdue: '/rentals?s=overdue',
-  awaiting: '/rentals?s=awaiting',
+  due_today: '/rentals?s=due_today',
   money: '/money/statements',
   service: '/service',
   instalments: '/sales',
@@ -78,7 +78,7 @@ export function TodayPage() {
     if (r.vin) bits.push(`···${r.vin.slice(-4)}`);
     if (r.group === 'returns') bits.push(r.days && r.days > 0 ? t.today.lateBy(r.days) : t.today.duesToday);
     else if (r.group === 'overdue' && r.days) bits.push(t.today.overdueDays(r.days));
-    else if (r.group === 'awaiting') bits.push(t.today.handedToday);
+    else if (r.group === 'due_today' && r.note === 'handed_today') bits.push(t.today.handedToday);
     else if (r.action === 'take_instalment' && r.days) bits.push(t.today.overdueDays(r.days));
     else if (r.action === 'open_purchase') bits.push(t.today.ordered);
     // A deal Kommo has won and nobody has entered here yet (ADR-0015).

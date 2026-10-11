@@ -44,9 +44,9 @@ export const VEHICLE_EVENT_KINDS = [
 ] as const;
 export type VehicleEventKind = (typeof VEHICLE_EVENT_KINDS)[number];
 
-// `awaiting_payment` is never stored: a rental handed over today with
-// nothing paid yet (wave 3 §3.3); tomorrow it is overdue (Q7).
-export const RENTAL_STATUSES = ['booked', 'awaiting_payment', 'active', 'overdue', 'paused', 'returned', 'disputed'] as const;
+// `due_today` is never stored: the rental's oldest unpaid week began today —
+// the hand-over day included. From tomorrow it is overdue (ADR-0017).
+export const RENTAL_STATUSES = ['booked', 'due_today', 'active', 'overdue', 'paused', 'returned', 'disputed'] as const;
 export type RentalStatus = (typeof RENTAL_STATUSES)[number];
 
 export const PERIOD_PAY_STATUSES = ['unpaid', 'partial', 'paid'] as const;

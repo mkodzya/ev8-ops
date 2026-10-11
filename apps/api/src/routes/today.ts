@@ -1,7 +1,7 @@
-import { dayQueue, effectiveRentalStatus, queueCount, todayISO, VEHICLE_STATES, type QueueRental, type VehicleState } from '@ev8/shared';
+import { dayQueue, queueCount, todayISO, VEHICLE_STATES, type QueueRental, type VehicleState } from '@ev8/shared';
 import type { FastifyInstance } from 'fastify';
 import { dateFromISO, isoDate } from '../lib/dates.js';
-import { debtsOf } from '../lib/debt.js';
+import { debtsOf, rentalDueToday } from '../lib/debt.js';
 import { depositsOverview } from '../lib/deposits.js';
 import { prisma } from '../lib/db.js';
 import { partRows } from '../lib/stock.js';
@@ -11,6 +11,7 @@ import { hasPerm } from '../lib/auth.js';
 import { actorOf, mayView } from '../lib/guard.js';
 import { onHandOf } from '../lib/till.js';
 import { UNDO_RETURN_MS } from '../lib/rentals.js';
+import { rentStateOf } from '../lib/rentState.js';
 import { BANKS } from './statements.js';
 import { batteriesNow } from './batteries.js';
 
@@ -53,7 +54,6 @@ export function todayRoutes(app: FastifyInstance): void {
           customer: { select: { id: true, name: true, nameKa: true, nameLat: true, phone: true } },
           vehicle: { select: { vin: true } },
           deposit: { select: { paidTetri: true, status: true, decidedById: true, migrationDecision: true } },
-          periods: { select: { paidTetri: true } },
           documents: { where: { kind: 'pdf', docKind: 'contract', archived: false }, select: { signedAt: true } },
         },
       }),
@@ -94,8 +94,7 @@ export function todayRoutes(app: FastifyInstance): void {
     const rentals: QueueRental[] = rentalRows.map((r) => {
       const paidThrough = isoDate(r.paidThrough);
       const pickedUpOn = isoDate(r.pickedUpOn);
-      const nothingPaid = !paidThrough && (r.deposit?.paidTetri ?? 0) === 0 && r.periods.every((p) => p.paidTetri === 0);
-      const status = effectiveRentalStatus(r.status, paidThrough, pickedUpOn, today, nothingPaid);
+      const { status } = rentStateOf(r, today);
       const signed = r.documents.some((d) => d.signedAt != null);
       const handedOverAgo = pickedUpOn ? daysBetween(pickedUpOn, today) : 0;
       return {
@@ -108,7 +107,8 @@ export function todayRoutes(app: FastifyInstance): void {
         paidThrough,
         status,
         debtTetri: debtOfRental(r.customer.id, r.id),
-        awaitingPayment: status === 'awaiting_payment',
+        // Of that debt: awaited today and not late — the row of "due today" carries it (ADR-0017).
+        dueTodayTetri: rentalDueToday(debts.get(r.customer.id), r.id),
         // A deposit the transfer brought over is not this week's decision: it
         // stands in one row of its own (§3.7), and the rows here are the
         // returns the company itself made.
@@ -203,6 +203,8 @@ export function todayRoutes(app: FastifyInstance): void {
 
     const fleet = Object.fromEntries(VEHICLE_STATES.map((s) => [s, 0])) as Record<VehicleState, number>;
     for (const v of vehicles) fleet[v.state as VehicleState]++;
+    // Late rentals only: a rental due today is not in it (ADR-0017). The same
+    // set and the same figures as the week's report and "Аренды → Просрочены".
     const overdueTetri = rentals.filter((r) => r.status === 'overdue').reduce((n, r) => n + r.debtTetri, 0);
     // Deposit money held comes from the one function "Деньги → Залоги" and
     // the week both read (`lib/deposits.ts`). This line used to count it
