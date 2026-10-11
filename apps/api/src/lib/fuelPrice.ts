@@ -19,9 +19,13 @@ export const FUEL_SOURCE = 'https://priceshub.ge/';
 const MIN_CHAINS = 3;
 const SANE_TETRI = { min: 200, max: 800 };
 
+// Who is reading the page and why, for its owner. Plain ASCII: fetch refuses
+// a header with a character above 255 before it sends anything, and a long
+// dash here made every reading fail on its first day (11.10.2026).
+export const FUEL_USER_AGENT = 'EV8 Ops (info@ev8.ge) - daily fuel price for ev8.ge';
+
 export type FuelFetch = (url: string) => Promise<{ ok: boolean; status: number; text: () => Promise<string> }>;
-let fetchPage: FuelFetch = (url) =>
-  fetch(url, { headers: { 'user-agent': 'EV8 Ops (info@ev8.ge) — daily fuel price for ev8.ge' }, signal: AbortSignal.timeout(15_000) });
+let fetchPage: FuelFetch = (url) => fetch(url, { headers: { 'user-agent': FUEL_USER_AGENT }, signal: AbortSignal.timeout(15_000) });
 
 /** Tests read a page they wrote themselves. */
 export function setFuelFetchForTests(fn: FuelFetch): void {

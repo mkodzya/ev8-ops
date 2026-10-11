@@ -3,7 +3,7 @@
 // The page below is written here in the shape of the source page (a table
 // per chain, the price in data-std beside the octane); no network is used.
 import { describe, expect, it } from 'vitest';
-import { median, regularPrices, setFuelFetchForTests } from '../src/lib/fuelPrice.js';
+import { FUEL_USER_AGENT, median, regularPrices, setFuelFetchForTests } from '../src/lib/fuelPrice.js';
 import { HAS_DB, getApp, json } from './helpers.js';
 
 const row = (name: string, octane: string, price: string) =>
@@ -32,6 +32,13 @@ describe('reading the boards', () => {
 
   it('finds nothing on a page of another shape', () => {
     expect(regularPrices('<html><body>maintenance</body></html>')).toEqual([]);
+  });
+
+  // The tests above never send a request, so this is the one place that
+  // would notice a name fetch cannot put in a header.
+  it('introduces itself in characters a request header can carry', () => {
+    expect(() => new Headers({ 'user-agent': FUEL_USER_AGENT })).not.toThrow();
+    expect(() => new Headers({ 'user-agent': 'EV8 Ops — daily fuel price' })).toThrow(TypeError);
   });
 });
 
