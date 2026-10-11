@@ -26,6 +26,13 @@ export interface WaTarget {
    * paid-through, which is another day behind an older unpaid week.
    */
   dueOn?: string | null;
+  /**
+   * What that week still asks for, when the caller's row shows it — the sum
+   * "tomorrow" names. Without it the sum is the rental's weekly rate: nought
+   * until the rental has loaded, and the whole week even when part of it is
+   * paid already.
+   */
+  amountTetri?: number | null;
 }
 
 /** What each template puts into the text: a template about the next week is not about the debt (QA-W4-02). */
@@ -54,7 +61,7 @@ export function WhatsappSheet({ target, onClose, kind: opensOn }: { target: WaTa
     number: target.number,
     // "Overdue" is about the day it was paid through; "tomorrow" about the day the new week starts.
     date: fmtDate(kind === 'overdue' ? paidThrough : (target.dueOn ?? (paidThrough ? addDays(paidThrough, 1) : null))).slice(0, 5),
-    amount: formatGel(kind === 'overdue' ? debtTetri : weekTetri, { decimals: false }),
+    amount: formatGel(kind === 'overdue' ? debtTetri : (target.amountTetri ?? weekTetri), { decimals: false }),
   });
 
   const open = () => {

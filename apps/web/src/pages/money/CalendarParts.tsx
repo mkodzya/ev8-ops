@@ -51,8 +51,12 @@ export const rangeText = (t: Dict, period: Period): string => t.calendar.range(f
 /** What a row can do. Both open something the product already has: the money form, the WhatsApp sheet. */
 export interface Actions {
   take: (card: CalendarRentalCard) => void;
-  remind: (card: CalendarRentalCard, kind: WaKind, dueOn: ISODate | null) => void;
+  /** `week` is the row being reminded about, when it is a week: the message names its day and what it has left. */
+  remind: (card: CalendarRentalCard, kind: WaKind, week: CalendarEntry | null) => void;
 }
+
+/** The prototype's `svg.i.s`: 18 px under a thumb and under a pointer alike, drawn with the product's 1.75 px line. */
+const ICON = { size: 18, strokeWidth: 1.75 } as const;
 
 /** The order the marks stand in inside a laptop cell (§3.3). */
 const MARKS: readonly CalendarState[] = ['overdue', 'due_today', 'expected', 'paid', 'paid_ahead'];
@@ -147,6 +151,8 @@ function DayCell({ date, day, today, selected, big, onPick }: { date: ISODate; d
             —
           </span>
         )}
+        {/* The laptop's today says so in a word, payments or none (§3.3). */}
+        {big && isToday && <span className="cal-cell-tag">{t.calendar.todayLow}</span>}
         <span className="cal-sr">{t.calendar.cell.none(ddmm)}</span>
       </span>
     );
@@ -272,7 +278,8 @@ function TodayKey({ word }: { word: string }) {
 
 /**
  * The legend names only what the cells on screen show (§3.5.6). The laptop's
- * is whole: its lists beside the grid use every mark whatever month is open.
+ * five marks are always there — its lists beside the grid use every one,
+ * whatever month is open; the lime key only while today is in the grid.
  */
 export function CalendarLegend({ variant, shows }: { variant: 'week' | 'month' | 'desk'; shows: { counts: boolean; allPaid: boolean; late: boolean; today: boolean; aheadOnly: boolean } }) {
   const t = useT();
@@ -287,7 +294,7 @@ export function CalendarLegend({ variant, shows }: { variant: 'week' | 'month' |
               {t.calendar.state[state]}
             </span>
           ))}
-          <TodayKey word={t.today.title} />
+          {shows.today && <TodayKey word={t.today.title} />}
         </div>
         <p>{t.calendar.legendWeeks}</p>
       </div>
@@ -358,15 +365,14 @@ export function PeriodBar({
 }) {
   const t = useT();
   const sm = dense ? ' pill-sm' : '';
-  const size = dense ? 16 : 18;
   return (
     <>
       <div className={`cal-bar${dense ? ' dense' : ''}`}>
         <button type="button" className={`pill${sm} cal-round`} aria-label={prev.label} disabled={prev.disabled} onClick={prev.go}>
-          <ChevronLeft size={size} aria-hidden="true" />
+          <ChevronLeft {...ICON} aria-hidden="true" />
         </button>
         <button type="button" className={`pill${sm} cal-round`} aria-label={next.label} disabled={next.disabled} onClick={next.go}>
-          <ChevronRight size={size} aria-hidden="true" />
+          <ChevronRight {...ICON} aria-hidden="true" />
         </button>
         {dense && <div className="cal-title">{title}</div>}
         <button type="button" className={`pill${sm} cal-now`} onClick={onToday}>
@@ -375,7 +381,7 @@ export function PeriodBar({
         {fold && (
           <button type="button" className="pill cal-all" aria-expanded={fold.open} onClick={fold.toggle}>
             {fold.open ? t.calendar.collapse : t.calendar.wholeMonth}
-            {fold.open ? <ChevronUp size={14} aria-hidden="true" /> : <ChevronDown size={14} aria-hidden="true" />}
+            {fold.open ? <ChevronUp {...ICON} size={14} aria-hidden="true" /> : <ChevronDown {...ICON} size={14} aria-hidden="true" />}
           </button>
         )}
       </div>
@@ -401,17 +407,29 @@ export function PeriodBar({
 const weekName = (t: Dict, week: CalendarWeek, isCurrent: boolean): string => (isCurrent ? t.calendar.weekThis(rangeText(t, week)) : t.calendar.weekOf(rangeText(t, week)));
 
 /**
+ * The week's totals while another month loads: nothing for the product's
+ * 300 ms, then a grey bar — a fast answer never flashes one. The bar's place
+ * is held from the first moment, so the card keeps its height.
+ */
+function WeekSkel({ shape }: { shape: 'line' | 'figs' }) {
+  const shown = useSkeletonDelay();
+  return <span className={`cal-skel-${shape}${shown ? ' skel' : ''}`} />;
+}
+
+/**
  * The phone's line of the week. Text, not a link: no list in "Платежи" adds
  * up to these sums — they count weeks by the day they are due, the list
  * counts money by the day it came (§8.1). `week` is null while another month
- * loads.
+ * loads, and after it failed to: then there is no line at all — the message
+ * under the bar speaks for the screen, and nothing here pretends to load.
  */
-export function WeekLine({ week, isCurrent }: { week: CalendarWeek | null; isCurrent: boolean }) {
+export function WeekLine({ week, isCurrent, failed }: { week: CalendarWeek | null; isCurrent: boolean; failed: boolean }) {
   const t = useT();
   if (!week) {
+    if (failed) return null;
     return (
       <div className="cal-week" aria-busy="true">
-        <span className="skel cal-skel-line" />
+        <WeekSkel shape="line" />
       </div>
     );
   }
@@ -467,15 +485,21 @@ export function LateLine({ late, open, onToggle, children }: { late: CalendarLat
       <div className="cal-late-in">
         <StateMark state="overdue" />
         <span className="cal-late-text">
+          {/* The space stands between the two pieces, not inside one: each is `nowrap`, and the line breaks only there. */}
           <b>
             <span>{t.calendar.late(late.count)}</span>
-            {debt && <span> · {debt}</span>}
+            {debt && (
+              <>
+                {' '}
+                <span>· {debt}</span>
+              </>
+            )}
           </b>
           {thisWeek && <span>{thisWeek}</span>}
         </span>
         <button type="button" className="pill pill-sm cal-toggle" aria-expanded={open} aria-controls="cal-late-list" onClick={onToggle}>
           {open ? t.calendar.hide : t.calendar.show}
-          {open ? <ChevronUp size={14} aria-hidden="true" /> : <ChevronDown size={14} aria-hidden="true" />}
+          {open ? <ChevronUp {...ICON} size={14} aria-hidden="true" /> : <ChevronDown {...ICON} size={14} aria-hidden="true" />}
         </button>
       </div>
       {open && <div id="cal-late-list">{children}</div>}
@@ -523,15 +547,18 @@ export function ReceivedLine({ period, tetri, dense }: { period: Period; tetri: 
  * The laptop's card of the week: three figures, the red figure, what came in,
  * the heaviest day. The three figures are the chosen day's week; the red block
  * is always about now. All of them text (§8.1) — the list the red figure is
- * made of stands on the same screen, to the right.
+ * made of stands on the same screen, to the right. With no week — another
+ * month is loading, or `failed` to — the red block stays: grey bars beside it
+ * while it loads, nothing beside it after a failure.
  */
-export function WeekCard({ week, isCurrent, late, received }: { week: CalendarWeek | null; isCurrent: boolean; late: CalendarLateList; received: Period | null }) {
+export function WeekCard({ week, isCurrent, late, received, failed }: { week: CalendarWeek | null; isCurrent: boolean; late: CalendarLateList; received: Period | null; failed: boolean }) {
   const t = useT();
   const heaviest = week?.heaviest ? gel(week.heaviest.tetri) : null;
   const split = t.calendar.lateSplit(late.thisWeekTetri !== 0 ? gel(late.thisWeekTetri) : null, late.earlierTetri !== 0 ? gel(late.earlierTetri) : null);
+  const pending = !week && !failed;
   return (
     <section className="cal-card">
-      {week ? (
+      {week && (
         <div className="cal-card-head">
           <span>{weekName(t, week, isCurrent)}</span>
           <span className="cal-card-side">
@@ -543,13 +570,14 @@ export function WeekCard({ week, isCurrent, late, received }: { week: CalendarWe
             )}
           </span>
         </div>
-      ) : (
+      )}
+      {pending && (
         <div className="cal-card-head" aria-busy="true">
-          <span className="skel cal-skel-line" />
+          <WeekSkel shape="line" />
         </div>
       )}
       <div className="cal-figs">
-        {!week && <span className="skel cal-skel-figs" />}
+        {pending && <WeekSkel shape="figs" />}
         {week && week.expected.count === 0 && <p className="cal-none">{t.calendar.noneThisWeek}</p>}
         {week && week.expected.count !== 0 && (
           <>
@@ -606,15 +634,14 @@ export function WeekCard({ week, isCurrent, late, received }: { week: CalendarWe
  * row of somebody who pays tomorrow, where it carries its word and the call
  * is left out, as the frame draws it. No phone — neither a call nor WhatsApp.
  */
-function RowActions({ card, remind, dueOn, dense, worded, actions }: { card: CalendarRentalCard; remind: WaKind | null; dueOn: ISODate | null; dense: boolean; worded: boolean; actions: Actions }) {
+function RowActions({ card, remind, week, dense, worded, actions }: { card: CalendarRentalCard; remind: WaKind | null; week: CalendarEntry | null; dense: boolean; worded: boolean; actions: Actions }) {
   const t = useT();
   const sm = dense ? ' pill-sm' : '';
-  const size = dense ? 16 : 18;
   const phone = card.customer.phone;
   const reminds = remind !== null && !!phone;
   const template = remind === 'overdue' ? t.wa.overdue : t.wa.tomorrow;
   const ask = () => {
-    if (remind !== null) actions.remind(card, remind, dueOn);
+    if (remind !== null) actions.remind(card, remind, week);
   };
   return (
     <>
@@ -623,18 +650,18 @@ function RowActions({ card, remind, dueOn, dense, worded, actions }: { card: Cal
       </button>
       {reminds && worded && (
         <button type="button" className={`pill${sm} cal-remind`} aria-label={t.calendar.remindAria(template)} onClick={ask}>
-          <MessageCircle size={size} aria-hidden="true" />
+          <MessageCircle {...ICON} aria-hidden="true" />
           {t.calendar.remind}
         </button>
       )}
       {reminds && !worded && (
         <button type="button" className={`pill${sm} cal-round`} aria-label={t.calendar.remindAria(template)} onClick={ask}>
-          <MessageCircle size={size} aria-hidden="true" />
+          <MessageCircle {...ICON} aria-hidden="true" />
         </button>
       )}
       {phone && !(reminds && worded) && (
         <a className={`pill${sm} cal-round`} href={`tel:${phone}`} aria-label={t.today.call}>
-          <Phone size={size} aria-hidden="true" />
+          <Phone {...ICON} aria-hidden="true" />
         </a>
       )}
     </>
@@ -689,7 +716,8 @@ export function PayerRow({
   const paysTomorrow = entry.state === 'expected' && entry.dueOn === addDays(today, 1);
   // «Просрочка» to the late, «Завтра оплата» to who pays tomorrow; there is no template for the day itself.
   const remind: WaKind | null = entry.state === 'overdue' ? 'overdue' : paysTomorrow ? 'tomorrow' : null;
-  const buttons = showActions ? <RowActions card={card} remind={remind} dueOn={paysTomorrow ? entry.dueOn : null} dense={dense} worded={dense && paysTomorrow} actions={actions} /> : null;
+  // Only «Завтра оплата» is about this week: its message carries the week's day and what the row says is left.
+  const buttons = showActions ? <RowActions card={card} remind={remind} week={paysTomorrow ? entry : null} dense={dense} worded={dense && paysTomorrow} actions={actions} /> : null;
 
   if (dense) {
     return (
@@ -739,7 +767,7 @@ export function DebtorRow({ late, card, dense, actions }: { late: CalendarLate; 
   // The count of weeks lives here whatever the debt is made of (§3.4).
   const words = late.weeks === 1 ? t.calendar.lateDueWas(late.days, since) : t.calendar.lateSince(late.days, late.weeks, since);
   const owes = late.debtTetri !== 0;
-  const buttons = <RowActions card={card} remind="overdue" dueOn={null} dense={dense} worded={false} actions={actions} />;
+  const buttons = <RowActions card={card} remind="overdue" week={null} dense={dense} worded={false} actions={actions} />;
 
   if (dense) {
     return (
@@ -965,12 +993,16 @@ const blocks = (n: number, className: string): ReactNode[] => Array.from({ lengt
  * The screen's own shape in grey, after the product's 300 ms of nothing.
  * 'all' is the first load; 'body' a phone changing month, when the totals and
  * the bar stay; 'grid' and 'rows' are the same for the laptop's two columns.
+ * `cells` is how many the grid it stands for has — a week's seven, or the
+ * 28, 35 or 42 of the month being opened — so the page below does not jump
+ * when the answer lands.
  */
-export function CalendarSkeleton({ dense, part }: { dense: boolean; part: 'all' | 'body' | 'grid' | 'rows' }) {
+export function CalendarSkeleton({ dense, part, cells }: { dense: boolean; part: 'all' | 'body' | 'grid' | 'rows'; cells: number }) {
   const shown = useSkeletonDelay();
   if (!shown) return <div className="skeleton-wait" aria-busy="true" />;
   const all = part === 'all';
-  const grid = <div className={`cal-grid${dense ? ' big' : ''}`}>{blocks(dense ? 35 : 7, 'cal-skel-cell')}</div>;
+  // A phone's week row stands at the height of the current week's cells; the rows of an open month at the plain one.
+  const grid = <div className={`cal-grid${dense ? ' big' : ''}`}>{blocks(cells, cells > 7 ? 'cal-skel-cell low' : 'cal-skel-cell')}</div>;
   const rows = blocks(dense ? 6 : 3, 'cal-skel-row');
   if (!dense) {
     return (

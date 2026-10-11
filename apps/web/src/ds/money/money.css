@@ -124,6 +124,8 @@
 .cal-week-line > span { white-space: nowrap; }
 .cal-week-line b { font-weight: 600; font-variant-numeric: tabular-nums; }
 .cal-late { border-top: 1px solid var(--line-soft); }
+/* A month that failed to load leaves no week line above it: nothing to be ruled off from. */
+.cal-sum-card > .cal-late:first-child { border-top: 0; }
 .cal-late-in { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; column-gap: 8px; align-items: center; min-height: 44px; padding: 0 10px 0 14px; background: var(--crit-soft); }
 /* Georgian takes two lines here: the count and the debt each stay whole. */
 .cal-late-text { display: flex; flex-direction: column; min-width: 0; padding: 4px 0; }
@@ -249,6 +251,8 @@ button.cal-cell { cursor: pointer; }
 .cal-fig.debt { grid-column: 1 / -1; padding-top: 10px; border-top: 1px solid var(--line-soft); }
 .cal-fig.debt .cal-fig-v, .cal-fig.debt .cal-fig-l { color: var(--crit-ink); }
 .cal-fig.debt.none .cal-fig-l { color: var(--accent-ink); }
+/* The same failure on a laptop: the red block stands alone, at the start of the card, with no rule beside it. */
+.cal-figs > .cal-fig.debt:only-child { grid-column: 1 / -1; justify-self: start; padding: 0; border: 0; }
 
 /* Laptop: a narrow month and the lists. One column until there is room for two. */
 .cal-desk { display: grid; gap: 24px; }
@@ -294,11 +298,17 @@ button.cal-cell { cursor: pointer; }
 /* Loading: the screen's own shape in the product's grey blocks. */
 .cal-skel { display: grid; gap: 8px; align-content: start; }
 .skel.cal-skel-card { height: 88px; border-radius: var(--radius-card); }
-.skel.cal-skel-line { width: 62%; height: 14px; }
-.skel.cal-skel-figs { grid-column: 1 / 4; width: 62%; height: 44px; }
+/* The week's totals while another month loads. Their place is held before the
+   grey comes (the product's delay), so each is sized with and without `.skel`.
+   The figures' block has a width of its own: from 1180 px its three columns
+   are as wide as their content, and a share of nothing is nothing. */
+.cal-skel-line, .skel.cal-skel-line { display: block; width: 62%; height: 14px; }
+.cal-skel-figs, .skel.cal-skel-figs { display: block; grid-column: 1 / 4; width: 320px; max-width: 100%; height: 44px; }
 .cal-skel-bar { display: flex; gap: 8px; }
 .skel.cal-skel-pill { width: 44px; height: 44px; border-radius: var(--radius-pill); }
 .skel.cal-skel-pill.wide { width: 96px; }
 .skel.cal-skel-cell { height: 54px; border-radius: 10px; }
+/* A phone's open month: the rows of weeks other than this one. */
+.skel.cal-skel-cell.low { height: 44px; }
 .cal-grid.big .skel.cal-skel-cell { height: 40px; }
 .skel.cal-skel-row { height: 56px; border-radius: var(--radius-card); }

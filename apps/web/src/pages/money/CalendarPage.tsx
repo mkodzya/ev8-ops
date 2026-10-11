@@ -6,6 +6,7 @@ import {
   calendarDayRows,
   calendarEntriesOn,
   calendarGrid,
+  calendarHoldsWeek,
   calendarLateShown,
   calendarLegend,
   calendarLimits,
@@ -76,31 +77,42 @@ export function CalendarPage() {
   const [params, setParams] = useSearchParams();
   // On a phone: the debtors' list is open. On a laptop it is always on screen, and this says "whole".
   const [lateOpen, setLateOpen] = useState(false);
-  // The day whose paid rows are unfolded.
-  const [paidOpen, setPaidOpen] = useState<ISODate | null>(null);
+  // The days whose paid rows are unfolded. A laptop shows two days' lists at once, and each folds on its own.
+  const [paidOpen, setPaidOpen] = useState<ReadonlySet<ISODate>>(() => new Set());
   const [wa, setWa] = useState<{ target: WaTarget; kind: WaKind } | null>(null);
+  // The server's day, once an answer has said it. State and not a ref: the
+  // request below is made from it, and a ref written while rendering would
+  // leave the request one render behind the cells — over a month's last
+  // midnight that is November's grid drawn from October's answer.
+  const [serverDay, setServerDay] = useState<ISODate | null>(null);
   // The last answer, whatever month it was for. Who is late, the earliest
   // hand-over and the unsorted lines are about now, so they stay on screen
   // while another month loads — `useLoad` keeps nothing across a new address.
   const kept = useRef<PaymentsCalendarAnswer | null>(null);
-  // The device says which month to ask for only until the first answer.
-  const clock = kept.current ? kept.current.today : todayISO();
+  // The device says which day it is only until the first answer.
+  const today = serverDay ?? todayISO();
   const read = (key: 'm' | 'd' | 'all') => params.get(key);
-  const asked = calendarViewOf(read, clock);
-  const grid = calendarGrid(asked.day);
+  const view = calendarViewOf(read, today);
+  const grid = calendarGrid(view.day);
   // `from` and `to` always, the current month too: one month is one cache key.
   const { data, failure, reload } = useLoad<PaymentsCalendarAnswer>(`/api/money/calendar?from=${grid.from}&to=${grid.to}`);
   if (data) kept.current = data;
+  // Set while rendering, so React runs this again before it paints and the
+  // request follows the day in the same pass. Only ever forward: two months in
+  // the cache can disagree about today just after midnight, and following
+  // each in turn would swing the request between them.
+  if (data && (serverDay === null || data.today > serverDay)) setServerDay(data.today);
 
   const now = kept.current;
-  const today = now ? now.today : clock;
+  const by = laptop || view.all ? 'month' : 'week';
+  const cells = calendarCells(view.day, by);
   const head = <PageHead title={t.shell.tabs.calendar} sub={t.calendar.todayIs(weekdayIn(t, today), fmtDayMonth(today))} />;
 
   if (!now) {
     return (
       <>
         {head}
-        {failure ? <LoadError failure={failure} onRetry={reload} /> : <CalendarSkeleton dense={laptop} part="all" />}
+        {failure ? <LoadError failure={failure} onRetry={reload} /> : <CalendarSkeleton dense={laptop} part="all" cells={cells.length} />}
       </>
     );
   }
@@ -124,12 +136,14 @@ export function CalendarPage() {
     );
   }
 
-  // Once the server has said what day it is, that is the day.
-  const view = today === clock ? asked : calendarViewOf(read, today);
   const tomorrow = addDays(today, 1);
-  const by = laptop || view.all ? 'month' : 'week';
-  const cells = calendarCells(view.day, by);
   const limits = calendarLimits(today, now.firstPickupOn);
+  // What the grid and the lists are drawn from: the answer for this month —
+  // or, on a phone showing one week, the answer already here when it holds
+  // that week whole. A week on the edge of two months is in both months'
+  // answers, so a tap across the edge changes the request and nothing else:
+  // the row just tapped does not blank and come back.
+  const body = data ?? (by === 'week' && calendarHoldsWeek(now, view.day) ? now : null);
 
   const go = (day: ISODate, all: boolean) => {
     const next = new URLSearchParams(params);
@@ -151,7 +165,7 @@ export function CalendarPage() {
 
   const cardOf = new Map<string, CalendarRentalCard>(now.rentals.map((card) => [card.id, card]));
   const lateOf = new Map<string, CalendarLate>(now.late.rentals.map((late) => [late.rentalId, late]));
-  const days = new Map<ISODate, CalendarDay>((data ? data.days : []).map((day) => [day.date, day]));
+  const days = new Map<ISODate, CalendarDay>((body ? body.days : []).map((day) => [day.date, day]));
   // The order of two rentals in a day: by the name on screen, as the product's lists sort names, then by number.
   const names = byName(locale);
   const compare = (a: string, b: string): number => {
@@ -160,10 +174,10 @@ export function CalendarPage() {
     if (!one || !two) return 0;
     return names(one.customer, two.customer) || (one.number === two.number ? 0 : one.number < two.number ? -1 : 1);
   };
-  const rowsOf = (day: ISODate) => (data ? calendarDayRows(calendarEntriesOn(data, day), data.late.rentals, compare) : []);
+  const rowsOf = (day: ISODate) => (body ? calendarDayRows(calendarEntriesOn(body, day), body.late.rentals, compare) : []);
 
   // The totals are the chosen day's Monday–Sunday; the red line is always about now.
-  const week = data ? calendarWeekOf(data, view.day) : null;
+  const week = body ? calendarWeekOf(body, view.day) : null;
   const isCurrent = week !== null && week.from === weekOf(today).from;
   const received = week ? calendarReceivedPeriod(week, today) : null;
   const heaviestDay = week && week.heaviest ? week.heaviest.date : null;
@@ -174,10 +188,12 @@ export function CalendarPage() {
   const actions: Actions = {
     // The form sets the date and offers the sum itself; the calendar hands it the rental and nothing else.
     take: (card) => openMoney({ target: { kind: 'rent', rentalId: card.id, number: card.number, customerId: card.customer.id, customer: card.customer.name } }),
-    remind: (card, kind, dueOn) => {
+    remind: (card, kind, entry) => {
       const phone = card.customer.phone;
       if (!phone) return;
-      setWa({ kind, target: { rentalId: card.id, number: card.number, name: primaryName(card.customer, locale), phone, paidThrough: card.paidThrough, debtTetri: card.debtTetri, dueOn } });
+      const target: WaTarget = { rentalId: card.id, number: card.number, name: primaryName(card.customer, locale), phone, paidThrough: card.paidThrough, debtTetri: card.debtTetri };
+      // The week the row is about: its day, and the sum the row itself shows as left.
+      setWa({ kind, target: entry ? { ...target, dueOn: entry.dueOn, amountTetri: entry.leftTetri } : target });
     },
   };
   // Drawn in the answer's order — the oldest debt first; nothing here sorts it.
@@ -187,9 +203,16 @@ export function CalendarPage() {
   };
   const pick = (day: ISODate) => go(day, view.all);
   const toToday = () => go(today, view.all);
-  const togglePaid = (day: ISODate) => () => setPaidOpen(paidOpen === day ? null : day);
+  const togglePaid = (day: ISODate) => () => {
+    const next = new Set(paidOpen);
+    if (!next.delete(day)) next.add(day);
+    setPaidOpen(next);
+  };
   const sheet = wa ? <WhatsappSheet target={wa.target} kind={wa.kind} onClose={() => setWa(null)} /> : null;
-  const failed = failure ? <LoadError failure={failure} onRetry={reload} /> : null;
+  // Nothing to draw the month from, and the request for it failed.
+  const failed = !body && failure ? <LoadError failure={failure} onRetry={reload} /> : null;
+  // The names of the weekdays are no answer's: they stay through a load, and go only when the error stands in the grid's place.
+  const weekdays = failed ? null : <Weekdays />;
 
   if (!laptop) {
     return (
@@ -197,16 +220,16 @@ export function CalendarPage() {
         {head}
         <div className="cal">
           <section className="cal-sum-card">
-            <WeekLine week={week} isCurrent={isCurrent} />
+            <WeekLine week={week} isCurrent={isCurrent} failed={failed !== null} />
             <LateLine late={now.late} open={lateOpen} onToggle={() => setLateOpen(!lateOpen)}>
               {now.late.rentals.map(debtor)}
               <UnsortedNote count={now.unsortedIn} />
             </LateLine>
           </section>
           <PeriodBar dense={false} title={title} prev={arrow(-1)} next={arrow(1)} onToday={toToday} fold={{ open: view.all, toggle: () => go(view.day, !view.all) }} todayKey={legend.today} />
-          {data && (
+          {weekdays}
+          {body && (
             <>
-              <Weekdays />
               <CalendarGrid cells={cells} days={days} today={today} selected={view.day} size="compact" onPick={pick} label={gridLabel} />
               <CalendarLegend variant={view.all ? 'month' : 'week'} shows={legend} />
               <DaySection
@@ -216,7 +239,7 @@ export function CalendarPage() {
                 today={today}
                 dense={false}
                 heaviest={heaviestDay === view.day}
-                paidOpen={paidOpen === view.day}
+                paidOpen={paidOpen.has(view.day)}
                 onPaidToggle={togglePaid(view.day)}
                 cardOf={cardOf}
                 lateOf={lateOf}
@@ -226,7 +249,7 @@ export function CalendarPage() {
               {week && received && <ReceivedLine period={received} tetri={week.receivedTetri} dense={false} />}
             </>
           )}
-          {!data && (failed ?? <CalendarSkeleton dense={false} part="body" />)}
+          {!body && (failed ?? <CalendarSkeleton dense={false} part="body" cells={cells.length} />)}
         </div>
         {sheet}
       </>
@@ -240,31 +263,31 @@ export function CalendarPage() {
     <>
       {head}
       <div className="cal">
-        <WeekCard week={week} isCurrent={isCurrent} late={now.late} received={received} />
+        <WeekCard week={week} isCurrent={isCurrent} late={now.late} received={received} failed={failed !== null} />
         <div className="cal-desk">
           <div className="cal-left">
             <PeriodBar dense title={title} prev={arrow(-1)} next={arrow(1)} onToday={toToday} />
-            {data && (
+            {weekdays}
+            {body && (
               <>
-                <Weekdays />
                 <CalendarGrid cells={cells} days={days} today={today} selected={view.day} size="big" onPick={pick} label={gridLabel} />
                 <CalendarLegend variant="desk" shows={legend} />
               </>
             )}
-            {!data && (failed ?? <CalendarSkeleton dense part="grid" />)}
+            {!body && (failed ?? <CalendarSkeleton dense part="grid" cells={cells.length} />)}
           </div>
           <aside className="cal-side">
             <LateSection late={now.late} hidden={lateRows.hidden} whole={wholeList} onToggle={() => setLateOpen(!lateOpen)} note={<UnsortedNote count={now.unsortedIn} />}>
               {lateRows.shown.map(debtor)}
             </LateSection>
-            {data && (
+            {body && (
               <DaySection
                 date={view.day}
                 day={days.get(view.day)}
                 rows={rowsOf(view.day)}
                 today={today}
                 dense
-                paidOpen={paidOpen === view.day}
+                paidOpen={paidOpen.has(view.day)}
                 onPaidToggle={togglePaid(view.day)}
                 cardOf={cardOf}
                 lateOf={lateOf}
@@ -272,7 +295,7 @@ export function CalendarPage() {
               />
             )}
             {/* The third list is always the real tomorrow; chosen itself, it is the second list already. */}
-            {data && view.day !== tomorrow && (
+            {body && view.day !== tomorrow && (
               <DaySection
                 date={tomorrow}
                 day={days.get(tomorrow)}
@@ -280,14 +303,14 @@ export function CalendarPage() {
                 today={today}
                 dense
                 asTomorrow
-                paidOpen={paidOpen === tomorrow}
+                paidOpen={paidOpen.has(tomorrow)}
                 onPaidToggle={togglePaid(tomorrow)}
                 cardOf={cardOf}
                 lateOf={lateOf}
                 actions={actions}
               />
             )}
-            {!data && !failure && <CalendarSkeleton dense part="rows" />}
+            {!body && !failed && <CalendarSkeleton dense part="rows" cells={cells.length} />}
           </aside>
         </div>
       </div>

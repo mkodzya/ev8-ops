@@ -23,7 +23,8 @@ const ruPlural = (n: number, one: string, few: string, many: string): string => 
   return many;
 };
 
-// A count of days keeps its word on its line (\u00a0), as a sum keeps its lari sign.
+// A count keeps its word on its line (\u00a0) — days, weeks, payments — as a sum
+// keeps its lari sign. «за 2 недели» goes to the next line whole, never as «за 2» / «недели».
 
 /** One date when the period is one day (§4.6). The same in every language, like the dates themselves. */
 const range = (from: string, to: string): string => (from === to ? from : `${from} – ${to}`);
@@ -57,7 +58,7 @@ export const calendarEn = {
     toCome: 'to come in',
     paidLabel: 'paid',
     leftLabel: 'left',
-    pays: (n: number) => `${n} ${n === 1 ? 'payment' : 'payments'}`,
+    pays: (n: number) => `${n}\u00a0${n === 1 ? 'payment' : 'payments'}`,
     dayTotal: (pays: string, sum: string) => `${pays} · ${sum}`,
     heaviest: (weekday: string, sum: string) => `The biggest day — ${weekday}, ${sum}`,
     heaviestOfWeek: 'the biggest day of the week',
@@ -72,7 +73,7 @@ export const calendarEn = {
     noLate: 'Nobody is overdue',
     show: 'Show',
     hide: 'Hide',
-    lateSince: (days: number, weeks: number, date: string) => `${days}\u00a0${days === 1 ? 'day' : 'days'} · ${weeks} ${weeks === 1 ? 'week' : 'weeks'}, since ${date}`,
+    lateSince: (days: number, weeks: number, date: string) => `${days}\u00a0${days === 1 ? 'day' : 'days'} · ${weeks}\u00a0${weeks === 1 ? 'week' : 'weeks'}, since ${date}`,
     lateDueWas: (days: number, date: string) => `${days}\u00a0${days === 1 ? 'day' : 'days'} · was due ${date}`,
     unsorted: (n: number) =>
       n === 1 ? '“Sort” holds 1 incoming line — it may be a rent payment.' : `“Sort” holds ${n} incoming lines — rent payments may be among them.`,
@@ -96,7 +97,7 @@ export const calendarEn = {
     /** `debt` is null when the rental's debt figure is nought: then it is not written at all (§3.5.10). */
     overdueLine: (days: string, debt: string | null) => `Overdue · ${days}${debt === null ? '' : ` · debt ${debt}`}`,
     daysShort: (n: number) => `${n}\u00a0${n === 1 ? 'day' : 'days'}`,
-    forWeeks: (n: number) => `for ${n} ${n === 1 ? 'week' : 'weeks'}`,
+    forWeeks: (n: number) => `for\u00a0${n}\u00a0${n === 1 ? 'week' : 'weeks'}`,
     partPaid: (paid: string, all: string) => `${paid} of ${all} paid in`,
     paidFold: (n: number) => `Paid · ${n}`,
     noneThisDay: 'No payments on this day.',
@@ -141,7 +142,7 @@ export const calendarRu: typeof calendarEn = {
     toCome: 'должно прийти',
     paidLabel: 'оплачено',
     leftLabel: 'осталось',
-    pays: (n) => `${n} ${ruPlural(n, 'оплата', 'оплаты', 'оплат')}`,
+    pays: (n) => `${n}\u00a0${ruPlural(n, 'оплата', 'оплаты', 'оплат')}`,
     dayTotal: (pays, sum) => `${pays} · ${sum}`,
     heaviest: (weekday, sum) => `Самый большой день — ${weekday}, ${sum}`,
     heaviestOfWeek: 'самый большой день недели',
@@ -157,7 +158,7 @@ export const calendarRu: typeof calendarEn = {
     show: 'Показать',
     hide: 'Скрыть',
     // Nominative after the number: «2 недели, с 07.10», «21 неделя».
-    lateSince: (days, weeks, date) => `${days}\u00a0дн. · ${weeks} ${ruPlural(weeks, 'неделя', 'недели', 'недель')}, с ${date}`,
+    lateSince: (days, weeks, date) => `${days}\u00a0дн. · ${weeks}\u00a0${ruPlural(weeks, 'неделя', 'недели', 'недель')}, с ${date}`,
     lateDueWas: (days, date) => `${days}\u00a0дн. · срок был ${date}`,
     // One line has a sentence of its own: «среди них» does not fit a single one.
     unsorted: (n) =>
@@ -183,7 +184,7 @@ export const calendarRu: typeof calendarEn = {
     overdueLine: (days, debt) => `Просрочено · ${days}${debt === null ? '' : ` · долг ${debt}`}`,
     daysShort: (n) => `${n}\u00a0дн.`,
     // Accusative after «за»: «за 2 недели», «за 5 недель», «за 21 неделю».
-    forWeeks: (n) => `за ${n} ${ruPlural(n, 'неделю', 'недели', 'недель')}`,
+    forWeeks: (n) => `за\u00a0${n}\u00a0${ruPlural(n, 'неделю', 'недели', 'недель')}`,
     partPaid: (paid, all) => `внесено ${paid} из ${all}`,
     paidFold: (n) => `Оплачено · ${n}`,
     noneThisDay: 'В этот день оплат нет.',
@@ -225,7 +226,7 @@ export const calendarKa: typeof calendarEn = {
     paidLabel: 'გადახდილია',
     leftLabel: 'დარჩა',
     // No plural after a number in Georgian.
-    pays: (n) => `${n} გადახდა`,
+    pays: (n) => `${n}\u00a0გადახდა`,
     dayTotal: (pays, sum) => `${pays} · ${sum}`,
     heaviest: (weekday, sum) => `ყველაზე დიდი დღე — ${weekday}, ${sum}`,
     heaviestOfWeek: 'კვირის ყველაზე დიდი დღე',
@@ -240,7 +241,7 @@ export const calendarKa: typeof calendarEn = {
     noLate: 'ვადაგადაცილება არ არის',
     show: 'ჩვენება',
     hide: 'დამალვა',
-    lateSince: (days, weeks, date) => `${days}\u00a0დღე · ${weeks} კვირა, ${date}-დან`,
+    lateSince: (days, weeks, date) => `${days}\u00a0დღე · ${weeks}\u00a0კვირა, ${date}-დან`,
     lateDueWas: (days, date) => `${days}\u00a0დღე · ვადა იყო ${date}`,
     unsorted: (n) =>
       n === 1
@@ -264,7 +265,7 @@ export const calendarKa: typeof calendarEn = {
     channels: { cash: 'ნაღდი', acquiring: 'ბარათი', transfer: 'გადარიცხვა', deposit: 'დეპოზიტიდან' },
     overdueLine: (days, debt) => `ვადაგადაცილებულია · ${days}${debt === null ? '' : ` · ვალი ${debt}`}`,
     daysShort: (n) => `${n}\u00a0დღე`,
-    forWeeks: (n) => `${n} კვირისთვის`,
+    forWeeks: (n) => `${n}\u00a0კვირისთვის`,
     partPaid: (paid, all) => `შეტანილია ${paid} / ${all}`,
     paidFold: (n) => `გადახდილია · ${n}`,
     noneThisDay: 'ამ დღეს გადახდები არ არის.',

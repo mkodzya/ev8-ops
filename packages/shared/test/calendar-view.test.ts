@@ -3,7 +3,7 @@
 // week is 12–18.10 and the grid of October is 28.09 – 01.11. Screens have no
 // tests, so the rules a screen would otherwise keep to itself are checked here.
 import { describe, expect, it } from 'vitest';
-import type { CalendarEntry, CalendarLate, CalendarState } from '../src/calendar.js';
+import { calendarEntriesOn, calendarGrid, calendarWeekOf, paymentsCalendar, type CalendarEntry, type CalendarLate, type CalendarState } from '../src/calendar.js';
 import {
   CALENDAR_LATE_SHOWN,
   calendarCanStep,
@@ -12,6 +12,7 @@ import {
   calendarDayRows,
   calendarDebtWeeks,
   calendarFold,
+  calendarHoldsWeek,
   calendarLateShown,
   calendarLegend,
   calendarLimits,
@@ -66,6 +67,18 @@ describe('the address of the calendar (§3.5.1)', () => {
     expect(view('d=2027-01-31').day).toBe('2027-01-31');
     expect(view('d=2027-02-01').day).toBe(TODAY);
     expect(view('m=2027-02').day).toBe(TODAY);
+  });
+
+  // The limit's own week runs on past it when the month ends mid-week
+  // (31.03.2027 is a Wednesday). A phone draws those days as cells, so `d`
+  // reads them; `m` alone still stops at the limit's month.
+  it('reads a day of the week the forward limit falls in, and no further', () => {
+    const at = (query: string) => calendarViewOf(address(query), '2026-12-14').day;
+    expect(at('d=2027-03-31')).toBe('2027-03-31');
+    expect(at('m=2027-04&d=2027-04-02')).toBe('2027-04-02');
+    expect(at('d=2027-04-04')).toBe('2027-04-04');
+    expect(at('d=2027-04-05')).toBe('2026-12-14');
+    expect(at('m=2027-04')).toBe('2026-12-14');
   });
 
   // The API's floor (CALENDAR_FIRST_DAY). January 2000 itself is out: its 1st
@@ -132,10 +145,52 @@ describe('the arrows (§3.5.2, §3.5.3, §3.5.13)', () => {
     expect(calendarCanStep('2026-12-14', 1, 'month', limits)).toBe(true);
     expect(calendarCanStep('2027-01-14', 1, 'month', limits)).toBe(false);
 
+    // 01.09.2026 is a Tuesday: its week, 31.08 – 06.09, holds the limit's first days.
     expect(calendarCanStep('2026-09-08', -1, 'week', limits)).toBe(true);
-    expect(calendarCanStep('2026-09-07', -1, 'week', limits)).toBe(false);
+    expect(calendarCanStep('2026-09-07', -1, 'week', limits)).toBe(true);
+    expect(calendarCanStep('2026-09-06', -1, 'week', limits)).toBe(false);
+    expect(calendarCanStep('2026-08-31', -1, 'week', limits)).toBe(false);
+    // 31.01.2027 is a Sunday: the limit ends with its week.
     expect(calendarCanStep('2027-01-24', 1, 'week', limits)).toBe(true);
     expect(calendarCanStep('2027-01-25', 1, 'week', limits)).toBe(false);
+  });
+
+  // A phone's row is a week, so the arrow is measured by the week it lands in:
+  // by the day, six weekdays of seven could not reach a month's first days
+  // when it begins late in a week.
+  it('reach the week a limit falls in from any weekday', () => {
+    const back = calendarLimits('2026-11-18', '2026-11-03');
+    expect(back.from).toBe('2026-11-01'); // a Sunday: the week is 26.10 – 01.11
+    for (const day of ['2026-11-02', '2026-11-03', '2026-11-05', '2026-11-08']) {
+      expect(calendarCanStep(day, -1, 'week', back)).toBe(true);
+    }
+    expect(calendarCanStep('2026-11-01', -1, 'week', back)).toBe(false);
+
+    // From December the forward limit is Wednesday 31.03.2027; its week is 29.03 – 04.04.
+    const ahead = calendarLimits('2026-12-14', '2026-12-01');
+    expect(ahead.to).toBe('2027-03-31');
+    for (const day of ['2027-03-22', '2027-03-25', '2027-03-28']) {
+      expect(calendarCanStep(day, 1, 'week', ahead)).toBe(true);
+    }
+    for (const day of ['2027-03-29', '2027-03-31', '2027-04-02', '2027-04-04']) {
+      expect(calendarCanStep(day, 1, 'week', ahead)).toBe(false);
+    }
+    // By the month the limit is the day itself, as before.
+    expect(calendarCanStep('2027-02-28', 1, 'month', ahead)).toBe(true);
+    expect(calendarCanStep('2027-03-31', 1, 'month', ahead)).toBe(false);
+  });
+
+  // Every day an arrow can land on, and every cell of the row it shows, is an
+  // address the page reads back — or a tap would throw the screen to today.
+  it('never lead to a day the address refuses', () => {
+    const today = '2026-12-14';
+    const limits = calendarLimits(today, '2026-12-01');
+    const at = (query: string) => calendarViewOf(address(query), today).day;
+    for (const from of ['2027-03-22', '2027-03-25', '2027-03-28']) {
+      const to = calendarStep(from, 1, 'week');
+      expect(calendarCanStep(from, 1, 'week', limits)).toBe(true);
+      for (const cell of calendarCells(to, 'week')) expect(at(`d=${cell}`)).toBe(cell);
+    }
   });
 
   // An address typed by hand (crit. 36): the month is shown, "‹" is off, and
@@ -197,6 +252,40 @@ describe('the cells of a grid (§3.3, crit. 17)', () => {
     // On a Sunday the week is still the one that began on Monday.
     expect(calendarCellKind('2026-10-12', '2026-10-18')).toBe('current');
     expect(calendarCellKind('2026-10-19', '2026-10-18')).toBe('ahead');
+  });
+});
+
+// A phone showing one week draws it from the answer it has while the month of
+// a newly chosen day loads — a tap inside the row must not blank the row.
+describe('the week an answer already holds (§3.5.14)', () => {
+  /** What the API answers for the month `day` is in, asked on `today`: nobody rents, the days are what matters. */
+  const answerFor = (day: string, today: string) => paymentsCalendar({ today, ...calendarGrid(day), rentals: [], credits: [], payments: [] });
+
+  it('a week on the edge of two months is in the answer for either month', () => {
+    const october = answerFor('2026-10-28', '2026-10-28');
+    const november = answerFor('2026-11-01', '2026-10-28');
+    // 26.10 – 01.11: chosen from its October side and from its November side.
+    for (const day of ['2026-10-26', '2026-10-28', '2026-11-01']) {
+      expect(calendarHoldsWeek(october, day)).toBe(true);
+      expect(calendarHoldsWeek(november, day)).toBe(true);
+    }
+    expect(calendarHoldsWeek(october, '2026-11-02')).toBe(false);
+    expect(calendarHoldsWeek(november, '2026-10-25')).toBe(false);
+  });
+
+  it('holds the week whole: its totals, each of its days, and the Monday after', () => {
+    const october = answerFor('2026-10-28', '2026-10-28');
+    expect(calendarWeekOf(october, '2026-11-01')).toMatchObject({ from: '2026-10-26', to: '2026-11-01' });
+    const days = new Set(october.days.map((d) => d.date));
+    for (const day of [...calendarCells('2026-11-01', 'week'), '2026-11-02']) expect(days.has(day!)).toBe(true);
+    expect(calendarEntriesOn(october, '2026-11-01')).toEqual([]);
+  });
+
+  it('the week of today is in an answer for any month', () => {
+    const august = answerFor('2026-08-10', TODAY);
+    expect(calendarHoldsWeek(august, TODAY)).toBe(true);
+    expect(calendarHoldsWeek(august, '2026-08-31')).toBe(true);
+    expect(calendarHoldsWeek(august, '2026-09-07')).toBe(false);
   });
 });
 

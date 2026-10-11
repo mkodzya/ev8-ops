@@ -33,9 +33,15 @@ export function calendarLimits(today: ISODate, firstPickupOn: ISODate | null): P
  * A day the API answers for. Past the forward limit it refuses the range; and
  * below its floor too — there the Monday of a month's first week can lie
  * before `CALENDAR_FIRST_DAY` although the day itself does not.
+ *
+ * `toWeekEnd`: a chosen day may also be one of the days the limit's own week
+ * runs on past it. A phone draws that week whole (§3.5.6), each of its days
+ * with a payment is a button, and what a button writes into the address has
+ * to read back.
  */
-function answered(day: ISODate, today: ISODate): boolean {
-  if (day < CALENDAR_FIRST_DAY || day > calendarLimits(today, null).to) return false;
+function answered(day: ISODate, today: ISODate, toWeekEnd = false): boolean {
+  const to = calendarLimits(today, null).to;
+  if (day < CALENDAR_FIRST_DAY || day > (toWeekEnd ? weekOf(to).to : to)) return false;
   return calendarGrid(day).from >= CALENDAR_FIRST_DAY;
 }
 
@@ -48,7 +54,7 @@ function answered(day: ISODate, today: ISODate): boolean {
 export function calendarViewOf(read: (key: 'm' | 'd' | 'all') => string | null, today: ISODate): CalendarView {
   const all = read('all') === '1';
   const d = read('d') ?? '';
-  if (isISODate(d) && answered(d, today)) return { day: d, all };
+  if (isISODate(d) && answered(d, today, true)) return { day: d, all };
   const first = `${read('m') ?? ''}-01`;
   if (isISODate(first) && first !== monthOf(today).from && answered(first, today)) return { day: first, all };
   return { day: today, all };
@@ -72,10 +78,27 @@ export function calendarStep(day: ISODate, dir: 1 | -1, by: 'week' | 'month'): I
  * Whether an arrow has somewhere to go. Each arrow answers to its own limit
  * only, so a day outside them — an address typed by hand — can still be
  * walked back in.
+ *
+ * A week's step is measured by the week it lands in, not by the day: the row
+ * on screen is seven days, and the week that holds a limit's first or last
+ * days is reached from whichever weekday is chosen.
  */
 export function calendarCanStep(day: ISODate, dir: 1 | -1, by: 'week' | 'month', limits: Period): boolean {
   const next = calendarStep(day, dir, by);
+  if (by === 'week') return dir < 0 ? weekOf(next).to >= limits.from : weekOf(next).from <= limits.to;
   return dir < 0 ? next >= limits.from : next <= limits.to;
+}
+
+/**
+ * Whether an answer already holds the week `day` is in — whole: its totals,
+ * its days, their rows and the Monday after. A week on the edge of two months
+ * is in both months' answers, and the week of today is in every answer, so a
+ * phone showing one week goes on drawing it from the answer it has while the
+ * month of the newly chosen day loads.
+ */
+export function calendarHoldsWeek(cal: { weeks: readonly Period[] }, day: ISODate): boolean {
+  const from = weekOf(day).from;
+  return cal.weeks.some((w) => w.from === from);
 }
 
 /**
