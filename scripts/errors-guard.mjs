@@ -20,7 +20,7 @@ const DICTS = ['en', 'ru', 'ka'].map((l) => [l, `apps/web/src/i18n/${l}.ts`]);
  * Codes a person never meets in EV8 Ops: the worker's own door, and the public
  * site's (`/api/site/*`), whose answers the site turns into its own words.
  */
-const INTERNAL = new Set(['bad_worker_token', 'bad_site_request', 'bad_site_hit', 'site_mail_off', 'site_too_many', 'site_mail_failed']);
+const INTERNAL = new Set(['bad_worker_token', 'bad_site_request', 'bad_site_hit', 'fuel_price_unknown', 'site_mail_off', 'site_too_many', 'site_mail_failed']);
 
 function walk(dir) {
   return readdirSync(dir).flatMap((name) => {
