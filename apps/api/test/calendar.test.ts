@@ -1,15 +1,15 @@
 // "Деньги → Календарь" on live rows (docs/redesign/payments-calendar.md §6, ADR-0016).
 //
 // The suites share one database and the real clock, so every date here is
-// counted from today, every request asks for the same five weeks around it,
-// and every assertion is about the suite's own rental or about a difference
-// before and after — never an absolute total.
+// counted from today, a request asks for the same five weeks around it unless
+// the test is about another range, and every assertion is about the suite's
+// own rental or about a difference before and after — never an absolute total.
 //
 // Which roll comes first (today's or tonight's) cannot be steered here: other
 // suites leave rentals with begun weeks and no rows. Both branches are proven
 // in the pure tests (`packages/shared/test/calendar.test.ts`); these use the
 // one they can force, a deleted row of today.
-import { addDays, calendarGrid, todayISO, weekOf, type PaymentsCalendarAnswer } from '@ev8/shared';
+import { CALENDAR_FIRST_DAY, addDays, calendarGrid, todayISO, weekOf, type PaymentsCalendarAnswer } from '@ev8/shared';
 import { describe, expect, it } from 'vitest';
 import { HAS_DB, call, json, loginAs, uniq } from './helpers.js';
 
@@ -119,6 +119,11 @@ describe.skipIf(!HAS_DB)('payments calendar · who may ask, and for what', () =>
     expect((await call(owner, 'GET', `/api/money/calendar?from=${t}&to=${addDays(t, 41)}`)).statusCode).toBe(200);
     expect(await ask(`from=${t}&to=${addDays(t, 42)}`)).toMatchObject({ error: 'bad_period', field: 'to' });
     expect(await ask(`from=${addDays(t, 360)}&to=${addDays(t, 367)}`)).toMatchObject({ error: 'bad_period', field: 'to' });
+    // Year 0000 reads as a date, and its first week has no Monday the day
+    // arithmetic can write: refused before anything is counted from it.
+    expect(await ask('from=0000-01-01&to=0000-01-07')).toMatchObject({ error: 'bad_period', field: 'from' });
+    expect(await ask(`from=${addDays(CALENDAR_FIRST_DAY, -1)}&to=${addDays(CALENDAR_FIRST_DAY, 5)}`)).toMatchObject({ error: 'bad_period', field: 'from' });
+    expect((await call(owner, 'GET', `/api/money/calendar?from=${CALENDAR_FIRST_DAY}&to=${addDays(CALENDAR_FIRST_DAY, 6)}`)).statusCode).toBe(200);
   });
 
   it('with no range answers the grid of this month, in the shape the screen reads', async () => {
@@ -135,8 +140,7 @@ describe.skipIf(!HAS_DB)('payments calendar · who may ask, and for what', () =>
 
     const sum = { count: expect.any(Number), tetri: expect.any(Number) };
     for (const w of c.weeks) {
-      // Exactly these keys: the two red-line sums live in `late`, not here.
-      expect(w).toEqual({
+      expect(w).toMatchObject({
         from: expect.any(String),
         to: expect.any(String),
         expected: sum,
@@ -150,6 +154,8 @@ describe.skipIf(!HAS_DB)('payments calendar · who may ask, and for what', () =>
         heaviest: w.heaviest === null ? null : { date: expect.any(String), tetri: expect.any(Number) },
         receivedTetri: expect.any(Number),
       });
+      // The two red-line sums live in `late`, not in a week.
+      expect(w).not.toHaveProperty('debtOutsideTetri');
     }
     expect(c.unsortedIn).toBeGreaterThanOrEqual(0);
     expect(Number.isInteger(c.unsortedIn)).toBe(true);
@@ -211,6 +217,31 @@ describe.skipIf(!HAS_DB)('payments calendar · the states of a week', () => {
     // The same money, dated after the first week began: paid, not ahead.
     expect(entryOn(c, id, addDays(t, -10))).toMatchObject({ seq: 1, state: 'paid', paidOn: addDays(t, -5) });
     expect(lateOf(c, id)).toBeUndefined();
+  });
+
+  it('a week paid in two goes is dated by the later payment, whichever was entered first (note §3.4)', async () => {
+    const t = today();
+    const pay = async (owner: string, body: Record<string, unknown>) => {
+      const res = await call(owner, 'POST', '/api/money', { kind: 'rent', ...body });
+      expect(res.statusCode, res.body).toBe(201);
+      return json<{ id: string }>(res).id;
+    };
+    const early = (rentalId: string) => ({ rentalId, amountTetri: 5000, channel: 'cash', occurredOn: addDays(t, -2), backdateReason: 'test: paid before the week began, entered later' });
+    const late = (rentalId: string) => ({ rentalId, amountTetri: 10000, channel: 'transfer' });
+
+    // Week 2 fell due yesterday. 50 in cash dated the day before it, then 100 by transfer today …
+    const a = await running(8);
+    await pay(a.owner, early(a.id));
+    const lastA = await pay(a.owner, late(a.id));
+    // … and the same two entered the other way round, so the order of the rows cannot decide.
+    const b = await running(8);
+    const lastB = await pay(b.owner, late(b.id));
+    await pay(b.owner, early(b.id));
+
+    const c = await calendar(a.owner);
+    // Read by the first payment, the week would be "paid ahead" — and it was paid a day late.
+    expect(entryOn(c, a.id, addDays(t, -1))).toMatchObject({ seq: 2, state: 'paid', paidOn: t, channel: 'transfer', paymentId: lastA, leftTetri: 0, creditTetri: 0 });
+    expect(entryOn(c, b.id, addDays(t, -1))).toMatchObject({ seq: 2, state: 'paid', paidOn: t, channel: 'transfer', paymentId: lastB, leftTetri: 0, creditTetri: 0 });
   });
 
   it('money paid ahead closes a week that has no row yet — and the night changes nothing the calendar said (crit. 9, 15)', async () => {
@@ -386,6 +417,41 @@ describe.skipIf(!HAS_DB)('payments calendar · the sums', () => {
     expect(await rowOf(week.from, week.to)).toBe(weekOn(c, t).receivedTetri);
     expect(report.money.rentTetri).toBe(weekOn(c, t).receivedTetri);
     expect(await rowOf(t, t)).toBe(dayOn(c, t).receivedTetri);
+
+    // Another month asked: the answer still carries the week of today, read
+    // as it is — its money and who paid its weeks — though it was not asked for.
+    const from = weekOf(addDays(t, 14)).from;
+    const ahead = await calendar(owner, { from, to: addDays(from, 34) });
+    expect(ahead.weeks.map((w) => w.from)).not.toContain(weekOf(addDays(t, 7)).from);
+    expect(weekOn(ahead, t).receivedTetri).toBe(weekOn(c, t).receivedTetri);
+    expect(entryOn(c, id, t)).toMatchObject({ state: 'paid', paidOn: t, channel: 'cash' });
+    expect(entryOn(ahead, id, t)).toEqual(entryOn(c, id, t));
+  });
+
+  it('a month far from today is read in a stretch of its own: who paid its weeks, and what came in on its days', async () => {
+    const { owner, id } = await running(28, { payment: { later: true } });
+    const t = today();
+    const dueOn = addDays(t, -28);
+    const q = weekOf(dueOn);
+    const before = dayOn(await calendar(owner, q), dueOn).receivedTetri;
+    const paid = await call(owner, 'POST', '/api/money', {
+      kind: 'rent',
+      rentalId: id,
+      amountTetri: 33000,
+      channel: 'transfer',
+      occurredOn: dueOn,
+      backdateReason: 'test: paid at the hand-over, entered later',
+    });
+    expect(paid.statusCode, paid.body).toBe(201);
+
+    const c = await calendar(owner, q);
+    // Three weeks lie between that week and this one, and none of them is in the answer.
+    expect(c.weeks.map((w) => w.from)).toEqual([q.from, weekOf(t).from]);
+    expect(entryOn(c, id, dueOn)).toMatchObject({ seq: 1, state: 'paid', paidOn: dueOn, channel: 'transfer', paymentId: json<{ id: string }>(paid).id });
+    // The week, not the deposit paid with it.
+    expect(dayOn(c, dueOn).receivedTetri - before).toBe(15000);
+    // Today's week is in the same answer, with the rental's week of today in it.
+    expect(entryOn(c, id, t)).toMatchObject({ seq: 5, state: 'overdue', leftTetri: 15000 });
   });
 
   it('every identity of the totals holds on live rows, other suites’ rows included (crit. 20)', async () => {
@@ -421,13 +487,16 @@ describe.skipIf(!HAS_DB)('payments calendar · the sums', () => {
     const u = (await calendar(owner)).unsortedIn;
     const statement = await prisma.statement.create({ data: { bank: 'bog', fileName: `calendar-${uniq()}.csv`, fileSha256: `test-${uniq()}` } });
     try {
-      const line = (direction: 'in' | 'out') =>
+      const line = (direction: 'in' | 'out', status: 'unmatched' | 'matched' | 'ignored' = 'unmatched') =>
         prisma.statementLine.create({
-          data: { statementId: statement.id, bank: 'bog', naturalKey: `calendar-${uniq()}`, occurredOn: date(today()), direction, amountTetri: 15000, raw: 'calendar test line' },
+          data: { statementId: statement.id, bank: 'bog', naturalKey: `calendar-${uniq()}`, occurredOn: date(today()), direction, status, amountTetri: 15000, raw: 'calendar test line' },
         });
       await line('in');
       expect((await calendar(owner)).unsortedIn).toBe(u + 1);
       await line('out');
+      // A line somebody has placed, or set aside, is not waiting to be sorted.
+      await line('in', 'matched');
+      await line('in', 'ignored');
       const c = await calendar(owner);
       expect(c.unsortedIn).toBe(u + 1);
       const queue = json<{ counts: { in: number; out: number } }>(await call(owner, 'GET', '/api/statement-lines?direction=in'));
@@ -514,28 +583,54 @@ describe.skipIf(!HAS_DB)('payments calendar · whose money it is', () => {
     expect(balance.owesTetri).toBe(0);
   });
 
-  it('two rentals of one customer: the rental the calendar gives the money to is the one the roll gives it to', async () => {
-    const r1 = await running(14, { payment: AHEAD });
-    // Week 3 of the first rental is due today and unpaid, so an owner says why.
-    const r2 = await second(r1.customer.id, 7, { debtOverrideReason: 'test: a second moped' });
+  it('money paid for a repair is not rent waiting for a week (B2-08)', async () => {
+    const { prisma, owner, id, customer } = await running(7);
     const t = today();
+    // What the money form writes for a repair: the customer named, no rental, nothing allocated.
+    await prisma.payment.create({
+      data: { kind: 'service', direction: 'in', channel: 'cash', customerId: customer.id, occurredOn: date(t), grossTetri: 15000, feeTetri: 0, netTetri: 15000 },
+    });
+    expect(entryOn(await calendar(owner), id, t)).toMatchObject({ seq: 2, state: 'due_today', creditTetri: 0, paidTetri: 0, leftTetri: 15000 });
+    // And the night will not put it there either.
+    const { settleCredit } = await import('../src/lib/periods.js');
+    expect(await settleCredit(id)).toBe(0);
+  });
+
+  it('a charge taken back with its return takes nothing from the week paid ahead', async () => {
+    const { prisma, owner, id } = await running(3, { payment: AHEAD });
+    // What a return leaves behind when it is taken back: its key charge, voided.
+    await prisma.rentalCharge.create({ data: { rentalId: id, kind: 'key', amountTetri: 25000, voidedAt: new Date() } });
+    expect(entryOn(await calendar(owner), id, addDays(today(), 4))).toMatchObject({ seq: 2, state: 'paid_ahead', creditTetri: 15000, leftTetri: 0 });
+  });
+
+  it('two rentals of one customer: the rental the calendar gives the money to is the one the roll gives it to', async () => {
+    // The rental handed over LATER is entered first: it has the lower number
+    // and the older row, so only the roll's own order — the day of hand-over —
+    // gives the money to the other one.
+    const later = await running(7);
+    // Week 2 of that rental is due today and unpaid, so an owner says why.
+    const earlier = await second(later.customer.id, 14, { payment: AHEAD, debtOverrideReason: 'test: a second moped' });
+    const t = today();
+    const numbers = await later.prisma.rental.findMany({ where: { id: { in: [later.id, earlier.id] } }, select: { id: true, number: true } });
+    const numberOf = (id: string) => numbers.find((r) => r.id === id)!.number;
+    expect(numberOf(later.id) < numberOf(earlier.id)).toBe(true);
     // Today's roll has not run for either: their weeks of today have no row.
-    await r1.prisma.rentalPeriod.deleteMany({ where: { rentalId: { in: [r1.id, r2.id] }, startsOn: date(t) } });
+    await later.prisma.rentalPeriod.deleteMany({ where: { rentalId: { in: [later.id, earlier.id] }, startsOn: date(t) } });
     // Nothing is open, so this stays as money tied to no rental.
-    const money = await call(r1.owner, 'POST', '/api/payments', { customerId: r1.customer.id, channel: 'cash', grossTetri: 15000 });
+    const money = await call(later.owner, 'POST', '/api/payments', { customerId: later.customer.id, channel: 'cash', grossTetri: 15000 });
     expect(money.statusCode, money.body).toBe(201);
     const { id: paymentId, leftover } = json<{ id: string; leftover: number }>(money);
     expect(leftover).toBe(15000);
 
-    const before = await calendar(r1.owner);
-    expect(entryOn(before, r1.id, t)).toMatchObject({ seq: 3, state: 'paid', projected: true, creditTetri: 15000, leftTetri: 0, paymentId });
-    expect(entryOn(before, r2.id, t)).toMatchObject({ seq: 2, state: 'due_today', projected: true, creditTetri: 0, leftTetri: 15000 });
+    const before = await calendar(later.owner);
+    expect(entryOn(before, earlier.id, t)).toMatchObject({ seq: 3, state: 'paid', projected: true, creditTetri: 15000, leftTetri: 0, paymentId });
+    expect(entryOn(before, later.id, t)).toMatchObject({ seq: 2, state: 'due_today', projected: true, creditTetri: 0, leftTetri: 15000 });
 
     const { rollPeriods } = await import('../src/lib/periods.js');
     await rollPeriods(t);
 
-    const after = await calendar(r1.owner);
-    expect(entryOn(after, r1.id, t)).toMatchObject({ seq: 3, state: 'paid', projected: false, creditTetri: 0, leftTetri: 0, paymentId });
-    expect(entryOn(after, r2.id, t)).toMatchObject({ seq: 2, state: 'due_today', projected: false, creditTetri: 0, leftTetri: 15000 });
+    const after = await calendar(later.owner);
+    expect(entryOn(after, earlier.id, t)).toMatchObject({ seq: 3, state: 'paid', projected: false, creditTetri: 0, leftTetri: 0, paymentId });
+    expect(entryOn(after, later.id, t)).toMatchObject({ seq: 2, state: 'due_today', projected: false, creditTetri: 0, leftTetri: 15000 });
   });
 });

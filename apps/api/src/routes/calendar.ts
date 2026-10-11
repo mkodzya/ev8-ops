@@ -1,4 +1,4 @@
-import { CALENDAR_HORIZON_DAYS, CALENDAR_MAX_DAYS, addDays, calendarGrid, daysBetween, todayISO, type Period } from '@ev8/shared';
+import { CALENDAR_FIRST_DAY, CALENDAR_HORIZON_DAYS, CALENDAR_MAX_DAYS, addDays, calendarGrid, daysBetween, todayISO, type Period } from '@ev8/shared';
 import type { FastifyInstance } from 'fastify';
 import { calendarAnswer } from '../lib/calendar.js';
 import { env } from '../lib/env.js';
@@ -23,6 +23,9 @@ function rangeOf(query: Query, today: string): Period {
   if (from == null && to == null) return calendarGrid(today);
   if (from == null) throw badRequest('missing_field', 'from is required', { field: 'from' });
   if (to == null) throw badRequest('missing_field', 'to is required', { field: 'to' });
+  // Before anything is counted from it: `0000-01-01` reads as a date, and the
+  // walk over its weeks would never end.
+  if (from < CALENDAR_FIRST_DAY) throw badRequest('bad_period', 'The calendar does not reach that far back.', { field: 'from' });
   if (from > to) throw badRequest('bad_period', 'The period starts after it ends.', { field: 'from' });
   if (daysBetween(from, to) + 1 > CALENDAR_MAX_DAYS) {
     throw badRequest('bad_period', `The calendar shows at most ${CALENDAR_MAX_DAYS} days at once.`, { field: 'to' });
@@ -30,9 +33,8 @@ function rangeOf(query: Query, today: string): Period {
   if (to > addDays(today, CALENDAR_HORIZON_DAYS)) {
     throw badRequest('bad_period', 'The calendar does not reach that far ahead.', { field: 'to' });
   }
-  // No lower bound: the schedule starts at each rental's hand-over whatever
-  // `from` is. The days need not be a Monday and a Sunday — the answer widens
-  // to whole weeks.
+  // The schedule starts at each rental's hand-over whatever `from` is. The
+  // days need not be a Monday and a Sunday — the answer widens to whole weeks.
   return { from, to };
 }
 

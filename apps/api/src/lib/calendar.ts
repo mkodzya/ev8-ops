@@ -1,5 +1,5 @@
 import {
-  calendarSpan,
+  calendarSpans,
   paymentsCalendar,
   todayISO,
   type CalendarChannel,
@@ -36,10 +36,12 @@ const later = (a: CalendarPayment, b: CalendarPayment): boolean =>
   a.occurredOn > b.occurredOn || (a.occurredOn === b.occurredOn && a.createdAt > b.createdAt);
 
 export async function calendarAnswer(range: Period, today: string = todayISO(new Date(), env.TZ)): Promise<PaymentsCalendarAnswer> {
-  // The first and last day the answer covers: whole weeks, the week of today, a day after.
-  const { from: lo, to: hi } = calendarSpan(range.from, range.to, today);
+  // The days the answer covers: whole weeks, the week of today, a day after
+  // each. Two stretches when the month asked for stands apart from today —
+  // nothing between them is shown, so nothing between them is read.
+  const spans = calendarSpans(range.from, range.to, today);
 
-  const [rows, payments, unsortedIn] = await Promise.all([
+  const [rows, received, unsortedIn] = await Promise.all([
     // Literally the roll's filter and the roll's order (`periods.ts`), with
     // every week row of each rental: a missing seq is a week by calculation.
     prisma.rental.findMany({
@@ -61,10 +63,11 @@ export async function calendarAnswer(range: Period, today: string = todayISO(new
         periods: { orderBy: { seq: 'asc' }, select: { id: true, seq: true, startsOn: true, endsOn: true, amountTetri: true, paidTetri: true, paidBeforeTransfer: true } },
       },
     }),
-    paymentsOfPeriod(lo, hi),
+    Promise.all(spans.map((s) => paymentsOfPeriod(s.from, s.to))),
     // Incoming only: an unsorted line going out cannot be somebody's rent.
     prisma.statementLine.count({ where: { status: 'unmatched', direction: 'in' } }),
   ]);
+  const payments = received.flat();
   const rentalIds = rows.map((r) => r.id);
   const customerIds = [...new Set(rows.map((r) => r.customerId))];
 
@@ -74,7 +77,7 @@ export async function calendarAnswer(range: Period, today: string = todayISO(new
       where: {
         target: 'period',
         payment: { voidedAt: null },
-        period: { rentalId: { in: rentalIds }, startsOn: { gte: dateFromISO(lo)!, lte: dateFromISO(hi)! } },
+        period: { rentalId: { in: rentalIds }, OR: spans.map((s) => ({ startsOn: { gte: dateFromISO(s.from)!, lte: dateFromISO(s.to)! } })) },
       },
       select: { periodId: true, payment: { select: { id: true, occurredOn: true, createdAt: true, channel: true } } },
     }),

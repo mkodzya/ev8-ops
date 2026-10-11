@@ -10,6 +10,7 @@ import {
   calendarEntriesOn,
   calendarGrid,
   calendarSpan,
+  calendarSpans,
   calendarWeekOf,
   paymentsCalendar,
   type CalendarChannel,
@@ -69,6 +70,7 @@ const rental = (r: {
   rate?: number;
   rows?: CalendarPeriodRow[];
   depositShortTetri?: number;
+  chargesOpenTetri?: number;
   debtTetri?: number;
 }): CalendarRental => ({
   id: r.id,
@@ -80,11 +82,11 @@ const rental = (r: {
   weeklyRateTetri: r.rate ?? RATE,
   periods: r.rows ?? [],
   depositShortTetri: r.depositShortTetri ?? 0,
-  chargesOpenTetri: 0,
+  chargesOpenTetri: r.chargesOpenTetri ?? 0,
   debtTetri: r.debtTetri ?? 0,
 });
 
-const credit = (c: { paymentId: string; occurredOn: string; creditTetri: number; customerId: string; rentalId?: string | null; channel?: CalendarChannel }): CalendarCredit => ({
+const credit = (c: { paymentId: string; occurredOn: string; creditTetri: number; customerId: string; rentalId?: string | null; channel?: CalendarChannel; createdAt?: string }): CalendarCredit => ({
   createdAt: `${c.occurredOn}T08:00:00.000Z`,
   channel: 'cash',
   rentalId: null,
@@ -160,7 +162,8 @@ const example = (): CalendarInput => ({
       rows: [paidRow(1, '2026-10-06', '2026-10-06', 'cash', 140_00), paidRow(2, '2026-10-13', '2026-10-13', 'transfer', 140_00)],
     }),
     rental({ id: 'G', number: 'R-00004', pickedUpOn: '2026-10-06', debtTetri: 150_00, rows: [paidRow(1, '2026-10-06'), row(2, '2026-10-13')] }),
-    rental({ id: 'D', number: 'R-00005', pickedUpOn: '2026-10-07', rows: [paidRow(1, '2026-10-07'), row(2, '2026-10-14')] }),
+    // Д's week began today, so the one figure already holds it — and Д is not late.
+    rental({ id: 'D', number: 'R-00005', pickedUpOn: '2026-10-07', debtTetri: 150_00, rows: [paidRow(1, '2026-10-07'), row(2, '2026-10-14')] }),
     rental({ id: 'E', number: 'R-00006', pickedUpOn: '2026-10-07', rows: [paidRow(1, '2026-10-07'), paidRow(2, '2026-10-14', '2026-10-14', 'acquiring')] }),
     rental({ id: 'M', number: 'R-00007', pickedUpOn: '2026-09-30', debtTetri: 300_00, rows: [paidRow(1, '2026-09-30'), row(2, '2026-10-07'), row(3, '2026-10-14')] }),
     rental({ id: 'Zh', number: 'R-00008', pickedUpOn: '2026-10-08', rows: [paidRow(1, '2026-10-08')] }),
@@ -279,14 +282,16 @@ describe('the five states of a week (design note §4.3)', () => {
     expect(entryOf(cal, 'r', '2026-10-23')).toMatchObject({ state: 'expected', creditTetri: 0, leftTetri: RATE });
   });
 
-  it('due today — its first day is today, nothing older is unpaid', () => {
-    const cal = calendar({ rentals: [rental({ id: 'r', pickedUpOn: '2026-10-07', rows: [paidRow(1, '2026-10-07'), row(2, '2026-10-14')] })] });
+  it('due today — its first day is today, nothing older is unpaid; its debt is not in the red figure', () => {
+    // The one figure counts the week from the morning it begins; the calendar waits a day.
+    const cal = calendar({ rentals: [rental({ id: 'r', pickedUpOn: '2026-10-07', debtTetri: RATE, rows: [paidRow(1, '2026-10-07'), row(2, '2026-10-14')] })] });
     expect(entryOf(cal, 'r', '2026-10-14')).toMatchObject({ state: 'due_today', leftTetri: RATE, paidOn: null, channel: null, paymentId: null });
-    expect(cal.late.count).toBe(0);
+    expect(cal.late).toEqual({ count: 0, debtTetri: 0, thisWeekTetri: 0, earlierTetri: 0, rentals: [] });
   });
 
   it('overdue — its first day was before today and it is not closed', () => {
-    const cal = calendar({ rentals: [rental({ id: 'r', pickedUpOn: '2026-10-06', debtTetri: RATE, rows: [paidRow(1, '2026-10-06'), row(2, '2026-10-13')] })] });
+    // Stored as overdue — a status the roll's filter takes as well as active.
+    const cal = calendar({ rentals: [rental({ id: 'r', status: 'overdue', pickedUpOn: '2026-10-06', debtTetri: RATE, rows: [paidRow(1, '2026-10-06'), row(2, '2026-10-13')] })] });
     expect(entryOf(cal, 'r', '2026-10-13')).toMatchObject({ state: 'overdue', leftTetri: RATE, paidOn: null });
     expect(lateOf(cal, 'r')).toEqual({ rentalId: 'r', debtTetri: RATE, overdueTetri: RATE, weeks: 1, sinceOn: '2026-10-13', days: 1 });
   });
@@ -339,6 +344,22 @@ describe('a partly paid week', () => {
     expect(entryOf(cal, 'r', '2026-10-07')).toMatchObject({ state: 'overdue', leftTetri: 100_00 });
     expect(entryOf(cal, 'r', '2026-10-14')).toMatchObject({ state: 'paid', paidOn: '2026-10-14' });
     expect(lateOf(cal, 'r')).toEqual({ rentalId: 'r', debtTetri: 100_00, overdueTetri: 100_00, weeks: 1, sinceOn: '2026-10-07', days: 7 });
+  });
+
+  it('in front of today’s unpaid week makes it overdue, as a wholly unpaid one would: 2 weeks, 100 and 150 left', () => {
+    const cal = calendar({
+      rentals: [
+        rental({
+          id: 'r',
+          pickedUpOn: '2026-09-30',
+          debtTetri: 250_00,
+          rows: [paidRow(1, '2026-09-30'), row(2, '2026-10-07', RATE, 50_00, by('2026-10-07')), row(3, '2026-10-14')],
+        }),
+      ],
+    });
+    expect(entryOf(cal, 'r', '2026-10-07')).toMatchObject({ state: 'overdue', leftTetri: 100_00 });
+    expect(entryOf(cal, 'r', '2026-10-14')).toMatchObject({ state: 'overdue', leftTetri: RATE });
+    expect(lateOf(cal, 'r')).toMatchObject({ weeks: 2, sinceOn: '2026-10-07', days: 7, overdueTetri: 250_00 });
   });
 });
 
@@ -402,6 +423,40 @@ describe('money nothing has taken yet (design note §4.3, "Оплачено за
     expect(entryOf(cal, 'r', '2026-10-14')).toMatchObject({ state: 'paid_ahead', paidTetri: RATE, creditTetri: 75_00, paidOn: '2026-10-12', channel: 'cash', paymentId: 'half' });
   });
 
+  it('completing a half-paid row with later money moves its date forward: several payments, the last one dates it (§3.4)', () => {
+    // 75 in cash on 07.10 for the week of 10.10 — ahead of it; the rest by transfer on 12.10.
+    const cal = calendar({
+      rentals: [rental({ id: 'r', pickedUpOn: '2026-10-03', rows: [paidRow(1, '2026-10-03'), row(2, '2026-10-10', RATE, 75_00, by('2026-10-07', 'cash', 'half'))] })],
+      credits: [credit({ paymentId: 'rest', occurredOn: '2026-10-12', creditTetri: 75_00, customerId: 'c-r', rentalId: 'r', channel: 'transfer' })],
+    });
+    expect(entryOf(cal, 'r', '2026-10-10')).toMatchObject({ state: 'paid', paidTetri: RATE, creditTetri: 75_00, paidOn: '2026-10-12', channel: 'transfer', paymentId: 'rest' });
+  });
+
+  it('of one day is spent in the order it was entered, whatever the ids say', () => {
+    const cal = calendar({
+      rentals: [rental({ id: 'r', pickedUpOn: '2026-10-08', rows: [paidRow(1, '2026-10-08')] })],
+      credits: [
+        // The ids sort the other way round: only the hour tells which came first.
+        credit({ paymentId: 'a-afternoon', occurredOn: '2026-10-12', createdAt: '2026-10-12T15:00:00.000Z', creditTetri: 100_00, customerId: 'c-r', rentalId: 'r', channel: 'transfer' }),
+        credit({ paymentId: 'b-morning', occurredOn: '2026-10-12', createdAt: '2026-10-12T09:00:00.000Z', creditTetri: 100_00, customerId: 'c-r', rentalId: 'r' }),
+      ],
+    });
+    // 100 of the morning's and 50 of the afternoon's: the afternoon's completed the week.
+    expect(entryOf(cal, 'r', '2026-10-15')).toMatchObject({ state: 'paid_ahead', creditTetri: RATE, paidOn: '2026-10-12', channel: 'transfer', paymentId: 'a-afternoon' });
+    expect(entryOf(cal, 'r', '2026-10-22')).toMatchObject({ state: 'expected', creditTetri: 50_00, leftTetri: 100_00 });
+  });
+
+  it('goes to an open return charge after the weeks that exist, and before a week still to come', () => {
+    const cal = calendar({
+      rentals: [rental({ id: 'r', pickedUpOn: '2026-10-09', chargesOpenTetri: 50_00, rows: [paidRow(1, '2026-10-09')] })],
+      credits: [credit({ paymentId: 'money', occurredOn: '2026-10-12', creditTetri: 200_00, customerId: 'c-r', rentalId: 'r' })],
+    });
+    // Tonight no week is open, so 50 go to the charge; 150 are left for the week of 16.10 …
+    expect(entryOf(cal, 'r', '2026-10-16')).toMatchObject({ state: 'paid_ahead', creditTetri: RATE, leftTetri: 0 });
+    // … and nothing for the one after it.
+    expect(entryOf(cal, 'r', '2026-10-23')).toMatchObject({ state: 'expected', creditTetri: 0, leftTetri: RATE });
+  });
+
   it('tied to no rental is spent once, by the customer’s rental handed over first', () => {
     const cal = calendar({
       rentals: [
@@ -425,6 +480,27 @@ describe('money nothing has taken yet (design note §4.3, "Оплачено за
     });
     expect(entryOf(cal, 'B', '2026-10-14')).toMatchObject({ state: 'due_today', creditTetri: 0, leftTetri: RATE });
     expect(entryOf(cal, 'A', '2026-10-15')).toMatchObject({ state: 'paid_ahead', creditTetri: RATE });
+  });
+
+  it('a rental’s own money and the customer’s untied money are one purse for it, oldest first', () => {
+    const cal = calendar({
+      rentals: [
+        // First in the roll: nothing owed, a week falling due tomorrow, 150 of its own from 12.10.
+        rental({ id: 'R1', number: 'R-00001', customerId: 'c1', pickedUpOn: '2026-10-01', rows: [paidRow(1, '2026-10-01'), paidRow(2, '2026-10-08')] }),
+        // Second: an unpaid week of today.
+        rental({ id: 'R2', number: 'R-00002', customerId: 'c1', pickedUpOn: '2026-10-07', debtTetri: RATE, rows: [paidRow(1, '2026-10-07'), row(2, '2026-10-14')] }),
+      ],
+      credits: [
+        credit({ paymentId: 'own', occurredOn: '2026-10-12', creditTetri: RATE, customerId: 'c1', rentalId: 'R1' }),
+        credit({ paymentId: 'untied', occurredOn: '2026-10-05', creditTetri: RATE, customerId: 'c1' }),
+      ],
+    });
+    // The older money goes first although it names no rental: the first rental's
+    // next week takes it, its own 150 wait for the week after, and nothing is
+    // left for the second rental — the night will pay it nothing either.
+    expect(entryOf(cal, 'R1', '2026-10-15')).toMatchObject({ state: 'paid_ahead', creditTetri: RATE, paidOn: '2026-10-05', paymentId: 'untied' });
+    expect(entryOf(cal, 'R1', '2026-10-22')).toMatchObject({ state: 'paid_ahead', creditTetri: RATE, paidOn: '2026-10-12', paymentId: 'own' });
+    expect(entryOf(cal, 'R2', '2026-10-14')).toMatchObject({ state: 'due_today', creditTetri: 0, leftTetri: RATE });
   });
 });
 
@@ -458,6 +534,44 @@ describe('the replay of the rolls (ADR-0016)', () => {
     const notYet = calendar({ rentals: [r1, unrolled], credits });
     expect(mine(notYet)).toEqual(mine(rolled));
     expect(entryOf(rolled, 'R1', '2026-10-15').state).toBe('paid_ahead');
+  });
+
+  it('takes a customer’s rentals by the day of hand-over, not by rental number', () => {
+    // The older rental was entered later, as a transfer: the higher number, the earlier hand-over.
+    const cal = calendar({
+      rentals: [
+        rental({ id: 'entered-first', number: 'R-00002', customerId: 'c1', pickedUpOn: '2026-10-07', debtTetri: RATE, rows: [paidRow(1, '2026-10-07'), row(2, '2026-10-14')] }),
+        rental({ id: 'handed-first', number: 'R-00009', customerId: 'c1', pickedUpOn: '2026-09-30', debtTetri: RATE, rows: [paidRow(1, '2026-09-30'), paidRow(2, '2026-10-07'), row(3, '2026-10-14')] }),
+      ],
+      credits: [credit({ paymentId: 'money', occurredOn: TODAY, creditTetri: RATE, customerId: 'c1' })],
+    });
+    expect(entryOf(cal, 'handed-first', '2026-10-14')).toMatchObject({ state: 'paid', creditTetri: RATE, leftTetri: 0, paymentId: 'money' });
+    expect(entryOf(cal, 'entered-first', '2026-10-14')).toMatchObject({ state: 'due_today', creditTetri: 0, leftTetri: RATE });
+  });
+
+  it('a stored week beyond the days shown still takes the money in its turn', () => {
+    // A roll run by hand for 06.11 left the first rental a fifth week, unpaid.
+    // It is there every night, so it is paid before the second rental's week
+    // of 17.10 comes into being.
+    const ahead = (seq: number, startsOn: string) => paidRow(seq, startsOn, '2026-10-12');
+    const cal = calendar({
+      rentals: [
+        rental({
+          id: 'R1',
+          number: 'R-00001',
+          customerId: 'c1',
+          pickedUpOn: '2026-10-09',
+          rows: [paidRow(1, '2026-10-09'), ahead(2, '2026-10-16'), ahead(3, '2026-10-23'), ahead(4, '2026-10-30'), row(5, '2026-11-06')],
+        }),
+        rental({ id: 'R2', number: 'R-00002', customerId: 'c1', pickedUpOn: '2026-10-10', rows: [paidRow(1, '2026-10-10')] }),
+      ],
+      credits: [credit({ paymentId: 'money', occurredOn: '2026-10-13', creditTetri: RATE, customerId: 'c1' })],
+    });
+    expect(cal.days[cal.days.length - 1].date).toBe('2026-11-02');
+    expect(cal.entries.map((e) => e.dueOn)).not.toContain('2026-11-06');
+    expect(entryOf(cal, 'R2', '2026-10-17')).toMatchObject({ state: 'expected', creditTetri: 0, leftTetri: RATE });
+    // The 150 are on a week that is not shown.
+    expect(cal.entries.reduce((n, e) => n + e.creditTetri, 0)).toBe(0);
   });
 });
 
@@ -530,8 +644,29 @@ describe('weeks with no row yet (design note §4.2)', () => {
     expect(entryOf(cal, 'r', '2026-10-14')).toMatchObject({ state: 'overdue', projected: true });
     // Two weeks overdue, and a debt that does not count the second yet.
     expect(lateOf(cal, 'r')).toEqual({ rentalId: 'r', debtTetri: 150_00, overdueTetri: 300_00, weeks: 2, sinceOn: '2026-10-07', days: 7 });
-    expect(cal.late).toMatchObject({ debtTetri: 150_00, thisWeekTetri: 150_00, earlierTetri: 0 });
+    // The 150 of the debt are the week of 07.10 — last week's. Today's is not in the debt yet.
+    expect(cal.late).toMatchObject({ debtTetri: 150_00, thisWeekTetri: 0, earlierTetri: 150_00 });
     identities(cal);
+  });
+
+  it('"this week" of the debt counts only weeks that have a row, however large the debt is', () => {
+    // The same rental with its deposit unpaid: the debt is above a week, and still none of it is this week's.
+    const one = calendar({
+      rentals: [rental({ id: 'r', pickedUpOn: '2026-09-30', depositShortTetri: 180_00, debtTetri: 330_00, rows: [paidRow(1, '2026-09-30'), row(2, '2026-10-07')] })],
+    });
+    expect(one.late).toMatchObject({ count: 1, debtTetri: 330_00, thisWeekTetri: 0, earlierTetri: 330_00 });
+
+    // And not across rentals: X owes 480 from before this Monday; Y's only
+    // overdue week is one the roll never opened, so Y's debt is nought.
+    const two = calendar({
+      rentals: [
+        rental({ id: 'X', pickedUpOn: '2026-09-25', depositShortTetri: 180_00, debtTetri: 480_00, rows: [paidRow(1, '2026-09-25'), row(2, '2026-10-02'), row(3, '2026-10-09')] }),
+        rental({ id: 'Y', pickedUpOn: '2026-10-06', debtTetri: 0, rows: [paidRow(1, '2026-10-06')] }),
+      ],
+    });
+    expect(entryOf(two, 'Y', '2026-10-13')).toMatchObject({ state: 'overdue', projected: true });
+    expect(two.late).toMatchObject({ count: 2, debtTetri: 480_00, thisWeekTetri: 0, earlierTetri: 480_00 });
+    identities(two);
   });
 
   it('a begun week the roll never opened is overdue, and "this week" is never more than the whole debt', () => {
@@ -701,6 +836,30 @@ describe('the days an answer covers', () => {
     expect(cal.entries.map((e) => e.dueOn)).not.toContain('2026-10-21');
   });
 
+  it('the days are read as one stretch, or as two when the month asked for stands apart from today', () => {
+    const november = calendarGrid('2026-11-15');
+    expect(calendarSpans('2026-09-28', '2026-11-01', TODAY)).toEqual([{ from: '2026-09-28', to: '2026-11-02' }]);
+    // The week of 19–25.10 is in neither stretch.
+    expect(calendarSpans(november.from, november.to, TODAY)).toEqual([
+      { from: '2026-10-12', to: '2026-10-19' },
+      { from: '2026-10-26', to: '2026-12-07' },
+    ]);
+    // A year back: thirty-six days and eight, not the fifty weeks between.
+    expect(calendarSpans('2025-10-27', '2025-11-30', TODAY)).toEqual([
+      { from: '2025-10-27', to: '2025-12-01' },
+      { from: '2026-10-12', to: '2026-10-19' },
+    ]);
+    // The week of today right before the weeks asked for, and right after: they share a Monday, so one stretch.
+    expect(calendarSpans(november.from, november.to, '2026-10-21')).toEqual([{ from: '2026-10-19', to: '2026-12-07' }]);
+    expect(calendarSpans(november.from, november.to, '2026-12-09')).toEqual([{ from: '2026-10-26', to: '2026-12-14' }]);
+    // No day twice, whatever is asked.
+    for (const today of [TODAY, '2026-10-21', '2026-11-18', '2026-12-09']) {
+      const spans = calendarSpans(november.from, november.to, today);
+      const days = spans.flatMap((s) => Array.from({ length: daysBetween(s.from, s.to) + 1 }, (_, i) => addDays(s.from, i)));
+      expect(days).toEqual(calendar({ ...november, today }).days.map((d) => d.date));
+    }
+  });
+
   it('a range that starts mid-week widens to whole weeks', () => {
     const cal = calendar({ from: '2026-10-14', to: '2026-10-14' });
     expect(cal.weeks.map((w) => [w.from, w.to])).toEqual([['2026-10-12', '2026-10-18']]);
@@ -741,6 +900,19 @@ describe('the sums of a day and of a week (design note §4.5, §4.6)', () => {
       states: { paid: 0, paid_ahead: 0, due_today: 0, overdue: 0, expected: 0 },
       receivedTetri: 0,
     });
+  });
+
+  it('inside a day the paid weeks stand in the order the money came, and a week with no payment last', () => {
+    const due = (id: string, number: string, second: CalendarPeriodRow) => rental({ id, number, pickedUpOn: '2026-10-06', rows: [paidRow(1, '2026-10-06'), second] });
+    const order = calendar({
+      rentals: [
+        due('on-the-day', 'R-00001', paidRow(2, '2026-10-13')),
+        due('ahead', 'R-00002', paidRow(2, '2026-10-13', '2026-10-10')),
+        due('before-the-transfer', 'R-00003', { ...row(2, '2026-10-13', RATE, RATE), paidBeforeTransfer: true }),
+      ],
+    });
+    // By rental number it would be 1, 2, 3.
+    expect(calendarEntriesOn(order, '2026-10-13').map((e) => e.rentalId)).toEqual(['ahead', 'on-the-day', 'before-the-transfer']);
   });
 
   it('the heaviest day of a tie is the earlier one, and a week with nothing due has none', () => {

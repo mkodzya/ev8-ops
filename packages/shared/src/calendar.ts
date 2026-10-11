@@ -33,6 +33,13 @@ export type CalendarChannel = 'cash' | 'acquiring' | 'transfer' | 'deposit';
 export const CALENDAR_MAX_DAYS = 42;
 /** How far ahead a schedule is drawn. */
 export const CALENDAR_HORIZON_DAYS = 366;
+/**
+ * The earliest day a range may start. Not a date of the business — a floor
+ * for the day arithmetic: year 0000 passes for a date, the Monday of its first
+ * week lies in the year before, which `addDays` cannot write, and the walk
+ * over the weeks would then never end.
+ */
+export const CALENDAR_FIRST_DAY: ISODate = '2000-01-01';
 
 // ---------------------------------------------------------------------------
 // Input
@@ -189,8 +196,9 @@ export interface CalendarLateList {
   /** Σ rentals[].debtTetri. */
   debtTetri: Tetri;
   /**
-   * Of debtTetri: what sits on overdue weeks that began in the Monday–Sunday
-   * week of TODAY — min(debtTetri, their Σ leftTetri).
+   * Of debtTetri: what sits on overdue weeks that have a row and began in the
+   * Monday–Sunday week of TODAY — min(debtTetri, their Σ leftTetri). A week by
+   * calculation is not counted: the debt does not hold it either.
    */
   thisWeekTetri: Tetri;
   /** debtTetri − thisWeekTetri: older weeks, an unpaid deposit, charges. */
@@ -272,10 +280,26 @@ function daysShown(weeks: Period[]): ISODate[] {
   return [...days].sort(cmp);
 }
 
-/** The first and last day an answer for from…to covers — the API reads payments for exactly these days. */
+/** The first and last day an answer for from…to covers. */
 export function calendarSpan(from: ISODate, to: ISODate, today: ISODate): Period {
   const days = daysShown(weeksShown(from, to, today));
   return { from: days[0], to: days[days.length - 1] };
+}
+
+/**
+ * The same days as unbroken stretches — the API reads payments for exactly
+ * these. One as a rule; two when the weeks asked for stand apart from the
+ * week of today, so that a month paged far back does not read every payment
+ * between it and now.
+ */
+export function calendarSpans(from: ISODate, to: ISODate, today: ISODate): Period[] {
+  const out: Period[] = [];
+  for (const day of daysShown(weeksShown(from, to, today))) {
+    const last = out[out.length - 1];
+    if (last && addDays(last.to, 1) === day) last.to = day;
+    else out.push({ from: day, to: day });
+  }
+  return out;
 }
 
 /** The totals a screen shows for a chosen day: its week, or the week of today when that day is outside the answer. */
@@ -530,11 +554,13 @@ export function paymentsCalendar(input: CalendarInput): PaymentsCalendar {
 
   const cur = weekOf(today);
   const debtTetri = late.reduce((n, l) => n + l.debtTetri, 0);
-  // Clamped for the minutes when a projected week is among the overdue weeks
-  // and not yet in the debt: the red line never says "of 150, 300 is this week".
+  // Only weeks that have a row: a week by calculation is overdue here and not
+  // yet in the debt (`customerDebt` reads rows), so counting it would name
+  // older debt, or an unpaid deposit, "this week". What a stored overdue week
+  // has left is always inside its rental's debt; the clamp is a guard.
   const thisWeekTetri = Math.min(
     debtTetri,
-    all.filter((e) => e.state === 'overdue' && inPeriod(cur, e.dueOn)).reduce((n, e) => n + e.leftTetri, 0),
+    all.filter((e) => e.state === 'overdue' && !e.projected && inPeriod(cur, e.dueOn)).reduce((n, e) => n + e.leftTetri, 0),
   );
 
   const inShown = new Set(shown);
