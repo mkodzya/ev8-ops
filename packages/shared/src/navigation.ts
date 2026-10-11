@@ -120,9 +120,10 @@ export const SECTION_TABS: Partial<Record<SectionId, readonly { id: TabId; path:
   ],
   // Money in one place (wave 2 §3.0): sort the bank lines, the payments,
   // the till by person, the statements, the deposits. The payments calendar
-  // stands first in the row (Mika, 11.10.2026) — who pays today is what an
-  // owner opens Money for in the morning; `/money` itself still lands on
-  // "sort" or "payments" (MoneyHome).
+  // stands first in the row — who pays today is what an owner opens Money
+  // for in the morning. The place is the options page's recommendation of
+  // 11.10.2026; Mika chose the variant and has not answered about the place.
+  // `/money` itself still lands on "sort" or "payments" (MoneyHome).
   money: [
     { id: 'calendar', path: '/money/calendar', anyOf: ['payments.view'] },
     { id: 'sort', path: '/money/sort', anyOf: ['payments.reconcile'] },
