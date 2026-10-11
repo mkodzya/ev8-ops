@@ -208,8 +208,14 @@ ssh root@204.168.149.105 /srv/ev8-ops/deploy/deploy-prod.sh X.Y.Z
 ssh -t root@204.168.149.105 /srv/ev8-ops/deploy/set-site-mail.sh
 ```
 
-Выключить: тот же скрипт с `--off`. То, что он записывает (на проде — вручную в `.env.prod`,
-вместе с запуском сайта):
+На боевом стенде — то же с `--prod` (перезапускается только API прода, несколько секунд). Без этого
+заявки с ev8.ge никуда не приходят: WhatsApp с сайта убран 11.10.2026, запасного пути нет.
+
+```
+ssh -t root@204.168.149.105 /srv/ev8-ops/deploy/set-site-mail.sh --prod
+```
+
+Выключить: тот же скрипт с `--off`. То, что он записывает в `.env` стенда:
 
 ```
 SITE_MAIL_HOST=…              # сервер исходящей почты ящика
@@ -507,7 +513,8 @@ https://ev8.ge. Слияние в `main` сайта и есть его выпу�
    sitemap, `robots.txt` со строкой `Sitemap:`, страница 404. Слияние в `develop` → проверить
    тестовый адрес. Потом слияние в `main` → в `/srv/ev8-site/prod` лежит боевая сборка
    (`sudo -u ev8site ev8-site-receive status`).
-5. Почта заявок на проде: `SITE_MAIL_*` в `.env.prod` (раздел выше), перезапуск прода.
+5. Почта заявок на проде: `deploy/set-site-mail.sh --prod` (раздел выше). До переключения DNS,
+   иначе заявки с ev8.ge не дойдут.
 6. За сутки — TTL A-записи ev8.ge в панели hostnodes.ge снизить до 300. В день переезда — A
    `ev8.ge` → `204.168.149.105`, остальное как в таблице. Сразу после:
    `docker exec ev8-edge-edge-1 caddy reload --config /etc/caddy/Caddyfile --force` —
