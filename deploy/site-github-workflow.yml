@@ -36,8 +36,11 @@ jobs:
     env:
       TARGET: ${{ github.ref_name == 'main' && 'prod' || 'test' }}
       SITE_BASE: ${{ github.ref_name == 'main' && '/' || '/garage/site/' }}
-      # The preview build is marked noindex by the site itself.
-      PREVIEW: ${{ github.ref_name == 'main' && '' || '1' }}
+      # The preview build is marked noindex by the site itself. Written from
+      # develop's side on purpose: `== 'main' && '' || '1'` gives '1' on main
+      # too (an empty string is false to &&), and ev8.ge would ask search
+      # engines not to index it.
+      PREVIEW: ${{ github.ref_name != 'main' && '1' || '' }}
       ASTRO_TELEMETRY_DISABLED: '1'
       CHECK_URL: ${{ github.ref_name == 'main' && 'https://ev8.ge/' || 'https://test.ops.ev8.ge/garage/site/' }}
     steps:
@@ -49,6 +52,13 @@ jobs:
       - run: npm ci
       - run: npm run check
       - run: npm run build
+      - name: A production build must be indexable
+        if: github.ref_name == 'main'
+        run: |
+          if grep -q 'content="noindex' dist/index.html; then
+            echo "The production build says noindex: PREVIEW leaked into it."
+            exit 1
+          fi
       - name: Ship to the server
         env:
           KEY: ${{ secrets.SITE_DEPLOY_KEY }}
