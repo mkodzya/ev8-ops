@@ -15,11 +15,19 @@ services:
     image: caddy:2-alpine
     restart: unless-stopped
     network_mode: host
+    # Caddy, and beside it a look every fifteen seconds at the settings the
+    # site ships for its own address (edge/entry.sh says what and why).
+    entrypoint: ["/bin/sh", "/etc/caddy/entry.sh"]
     volumes:
-      - ./Caddyfile.edge:/etc/caddy/Caddyfile:ro
+      # The door's config and its start script, as a folder and not file by
+      # file: a container that has one file mounted keeps seeing the old one
+      # after `git pull` replaces it, and a change then needed the door
+      # recreated. With the folder, `caddy reload` is enough.
+      - ./edge:/etc/caddy:ro
       # Certificates and account keys. A named volume rather than a bind
       # mount: losing this directory means asking Let's Encrypt for everything
-      # again, against a rate limit that counts.
+      # again, against a rate limit that counts. Also the door's own copy of
+      # the site's settings that last validated (/data/site-edge).
       - caddy_data:/data
       - caddy_config:/config
       # Previews of the new site and the digest of their login. Read-only:
