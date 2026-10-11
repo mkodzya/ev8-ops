@@ -440,7 +440,9 @@ ssh root@204.168.149.105 /srv/ev8-ops/deploy/copy-static-to-prod.sh
 Решение: новый сайт (`mkodzya/ev8-site`) заменяет WordPress на ev8.ge; править его — через git
 (Kardu, 11.10.2026; переезд подтверждён Mika в тот же день, день смены DNS — по слову Mika). Выкладка
 автоматическая: слияние в `develop` → https://test.ops.ev8.ge/garage/site/, слияние в `main` →
-https://ev8.ge. `main` сайта, как и здесь, — только Mika: слияние в него и есть выпуск сайта.
+https://ev8.ge. Слияние в `main` сайта и есть его выпуск; выпускает Kardu, когда решит, или Mika
+(Mika, 11.10.2026: «Карду может выпустить сайт когда захочет»). `main` здесь, в EV8 Ops, сервер,
+секреты и DNS ev8.ge — по-прежнему только Mika.
 
 ```
  GitHub Actions (ev8-site)          сервер 204.168.149.105
