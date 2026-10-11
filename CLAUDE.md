@@ -13,7 +13,9 @@ Business rules, glossary, decisions and open questions live in the project book
 `mkodzya/ev8-site`, the site that moves to ev8.ge. EV8 Ops (this repository, the
 company's ERP) and its two stands, test and prod, are not his to change: in a
 session run by Kardu nothing is committed, merged or deployed here — such a
-session says so and passes the request to Mika. **What the site needs is built on
+session says so and passes the request to Mika. Everything else about the site is
+his to do himself — its pages, its releases, the DNS of ev8.ge (Mika, 11.10.2026:
+«пускай он всё сам делает; единственное ему нельзя менять ERP»). **What the site needs is built on
 the site's side, not here** (Mika, 11.10.2026: «это были правки для сайта»): the
 visit counter with its Reports → Site screen and the daily petrol price, which
 Kardu's session had merged here that day, were taken out again the same day
