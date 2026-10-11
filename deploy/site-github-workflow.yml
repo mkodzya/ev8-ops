@@ -1,7 +1,8 @@
 # Reference copy of .github/workflows/deploy.yml for mkodzya/ev8-site — the
 # other half of deploy/site-receive.sh. It lives here until it is committed in
-# the site repository; the build steps are to be checked against that
-# repository's package.json and astro.config before it goes in.
+# the site repository. Checked against that repository on 11.10.2026:
+# astro.config.mjs reads SITE_BASE (default "/"), scripts/build.sh sets
+# PREVIEW=1 for the preview build, and `npm run check` is its i18n guard.
 #
 # develop → test.ops.ev8.ge/garage/site/ (built with base /garage/site/)
 # main    → ev8.ge                       (built with base /)
@@ -35,6 +36,9 @@ jobs:
     env:
       TARGET: ${{ github.ref_name == 'main' && 'prod' || 'test' }}
       SITE_BASE: ${{ github.ref_name == 'main' && '/' || '/garage/site/' }}
+      # The preview build is marked noindex by the site itself.
+      PREVIEW: ${{ github.ref_name == 'main' && '' || '1' }}
+      ASTRO_TELEMETRY_DISABLED: '1'
       CHECK_URL: ${{ github.ref_name == 'main' && 'https://ev8.ge/' || 'https://test.ops.ev8.ge/garage/site/' }}
     steps:
       - uses: actions/checkout@v4
@@ -43,7 +47,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      # astro.config reads SITE_BASE: base: process.env.SITE_BASE ?? '/garage/site/'
+      - run: npm run check
       - run: npm run build
       - name: Ship to the server
         env:
