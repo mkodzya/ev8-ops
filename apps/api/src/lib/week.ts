@@ -75,6 +75,35 @@ export interface WeekAnswer {
   batterySwaps: null;
 }
 
+/**
+ * Live payments dated from…to, as the week's arithmetic reads them. One
+ * reader for "money by the date it was paid": the payments calendar asks it
+ * for «Пришло денег», so that figure cannot drift from this report's.
+ */
+export async function paymentsOfPeriod(from: string, to: string): Promise<WeekPayment[]> {
+  const payments = await prisma.payment.findMany({
+    where: { voidedAt: null, occurredOn: { gte: dateFromISO(from)!, lte: dateFromISO(to)! } },
+    select: {
+      occurredOn: true,
+      direction: true,
+      channel: true,
+      kind: true,
+      grossTetri: true,
+      feeTetri: true,
+      allocations: { select: { target: true, amountTetri: true } },
+    },
+  });
+  return payments.map<WeekPayment>((p) => ({
+    occurredOn: isoDate(p.occurredOn)!,
+    direction: p.direction as WeekPayment['direction'],
+    channel: p.channel as WeekPayment['channel'],
+    kind: p.kind as WeekPayment['kind'],
+    grossTetri: p.grossTetri,
+    feeTetri: p.feeTetri,
+    allocations: p.allocations.map((a) => ({ target: a.target as WeekPayment['allocations'][number]['target'], amountTetri: a.amountTetri })),
+  }));
+}
+
 export async function weekReport(from: string, to: string): Promise<WeekAnswer> {
   const today = todayISO(new Date(), env.TZ);
   // A week that has not finished is read as far as it has got.
@@ -88,18 +117,7 @@ export async function weekReport(from: string, to: string): Promise<WeekAnswer> 
       prisma.rental.count({ where: { pickedUpOn: { gte: fromDate, lte: toDate } } }),
       prisma.rental.count({ where: { returnedOn: { gte: fromDate, lte: toDate } } }),
       overdueTotals(),
-      prisma.payment.findMany({
-        where: { voidedAt: null, occurredOn: { gte: fromDate, lte: toDate } },
-        select: {
-          occurredOn: true,
-          direction: true,
-          channel: true,
-          kind: true,
-          grossTetri: true,
-          feeTetri: true,
-          allocations: { select: { target: true, amountTetri: true } },
-        },
-      }),
+      paymentsOfPeriod(from, to),
       prisma.depositWithholding.aggregate({
         where: { voidedAt: null, createdAt: { gte: new Date(`${from}T00:00:00+04:00`), lt: endOfDay(to) } },
         _sum: { amountTetri: true },
@@ -124,18 +142,7 @@ export async function weekReport(from: string, to: string): Promise<WeekAnswer> 
   }
 
   const period: Period = { from, to };
-  const income = weekIncome(
-    payments.map<WeekPayment>((p) => ({
-      occurredOn: isoDate(p.occurredOn)!,
-      direction: p.direction as WeekPayment['direction'],
-      channel: p.channel as WeekPayment['channel'],
-      kind: p.kind as WeekPayment['kind'],
-      grossTetri: p.grossTetri,
-      feeTetri: p.feeTetri,
-      allocations: p.allocations.map((a) => ({ target: a.target as WeekPayment['allocations'][number]['target'], amountTetri: a.amountTetri })),
-    })),
-    period,
-  );
+  const income = weekIncome(payments, period);
 
   // The same M-10 the utilisation screen shows, from the same function: the
   // week and the report disagreeing about one per cent would be a defect.

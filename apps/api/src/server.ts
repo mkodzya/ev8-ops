@@ -18,6 +18,7 @@ import { jobRoutes } from './routes/jobs.js';
 import { locationRoutes } from './routes/locations.js';
 import { opsRoutes } from './routes/ops.js';
 import { paymentRoutes } from './routes/payments.js';
+import { calendarRoutes } from './routes/calendar.js';
 import { rentalRoutes } from './routes/rentals.js';
 import { contactRoutes } from './routes/contacts.js';
 import { purchaseRoutes } from './routes/purchases.js';
@@ -91,6 +92,7 @@ export function buildApp(): FastifyInstance {
   journalRoutes(app);
   migrationRoutes(app);
   paymentRoutes(app);
+  calendarRoutes(app);
   statementRoutes(app);
   tillRoutes(app);
   handoverRoutes(app);

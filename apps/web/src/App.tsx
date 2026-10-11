@@ -16,6 +16,7 @@ import { StockPage } from './pages/StockPage.js';
 import { CustomerForm } from './pages/CustomerForm.js';
 import { CustomerPage } from './pages/CustomerPage.js';
 import { CustomersPage } from './pages/CustomersPage.js';
+import { CalendarPage } from './pages/money/CalendarPage.js';
 import { DepositsPage } from './pages/money/DepositsPage.js';
 import { MoneyHome } from './pages/money/MoneyHome.js';
 import { PaymentPage } from './pages/money/PaymentPage.js';
@@ -139,6 +140,8 @@ export function App() {
 
         {/* Money in one place (wave 2 §3.0). */}
         <Route path="money" element={<Require perm="payments.view"><MoneyHome /></Require>} />
+        {/* The first tab of the row; `/money` itself still opens on "sort" or the payments (MoneyHome). */}
+        <Route path="money/calendar" element={<Require perm="payments.view"><CalendarPage /></Require>} />
         <Route path="money/sort" element={<Require perm="payments.reconcile"><SortPage /></Require>} />
         <Route path="money/sort/rules" element={<Require perm="payments.reconcile"><RulesPage /></Require>} />
         <Route path="money/payments" element={<Require perm="payments.view"><PaymentsList /></Require>} />

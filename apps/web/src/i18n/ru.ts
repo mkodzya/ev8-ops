@@ -7,6 +7,7 @@ import { wave6weekRu } from './wave6-week.js';
 import { wave6utilRu } from './wave6-utilisation.js';
 import { wave6manageRu } from './wave6-manage.js';
 import { kommoLinkRu } from './kommo-link.js';
+import { calendarRu } from './payments-calendar.js';
 import type { Dict } from './en.js';
 
 // Typed as Dict: a missing or misspelled key fails the build.
@@ -89,6 +90,7 @@ export const ru: Dict = {
       sell: 'Продать мопед',
     },
     tabs: {
+      calendar: 'Календарь',
       orders: 'Заказы',
       suppliers: 'Поставщики',
       sort: 'Разобрать',
@@ -1211,4 +1213,5 @@ export const ru: Dict = {
   ...wave6utilRu,
   ...wave6manageRu,
   ...kommoLinkRu,
+  ...calendarRu,
 };

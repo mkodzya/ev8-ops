@@ -90,6 +90,10 @@ async function repairDerived(): Promise<number> {
 export async function rollPeriods(asOf: string = todayISO(new Date(), env.TZ)): Promise<RollResult> {
   const open = await prisma.rental.findMany({
     where: { status: { in: ['active', 'overdue'] }, pickedUpOn: { not: null }, returnedOn: null },
+    // A fixed order (ADR-0016): which of a customer's two rentals gets money
+    // tied to neither must not depend on how Postgres returns the rows — the
+    // payments calendar shows beforehand what this night will do.
+    orderBy: [{ pickedUpOn: 'asc' }, { number: 'asc' }],
     select: { id: true, pickedUpOn: true, weeklyRateTetri: true, periods: { select: { seq: true } } },
   });
 
