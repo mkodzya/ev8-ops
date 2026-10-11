@@ -10,11 +10,10 @@ import { env } from './env.js';
 
 const OPEN = new Set(['booked', 'active', 'overdue', 'paused', 'disputed']);
 
-export async function debtsOf(customerIds: string[]): Promise<Map<string, Debt>> {
+export async function debtsOf(customerIds: string[], today: string = todayISO(new Date(), env.TZ)): Promise<Map<string, Debt>> {
   const out = new Map<string, Debt>();
   if (customerIds.length === 0) return out;
   const ids = [...new Set(customerIds)];
-  const today = todayISO(new Date(), env.TZ);
 
   const [rentals, sales, jobs, payments] = await Promise.all([
     prisma.rental.findMany({
@@ -93,6 +92,16 @@ export async function debtsOf(customerIds: string[]): Promise<Map<string, Debt>>
     );
   }
   return out;
+}
+
+/**
+ * A rental's part of its customer's one figure: its unpaid weeks, an unpaid
+ * deposit and what its return charged — before the customer's credit.
+ */
+export function rentalDebt(debt: Debt | undefined, rentalId: string): number {
+  return (debt?.parts ?? [])
+    .filter((p) => p.id === rentalId && (p.kind === 'rent' || p.kind === 'deposit' || p.kind === 'charge'))
+    .reduce((n, p) => n + p.owesTetri, 0);
 }
 
 export async function debtOf(customerId: string): Promise<Debt> {
