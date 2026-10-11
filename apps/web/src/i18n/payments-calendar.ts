@@ -86,8 +86,11 @@ export const calendarEn = {
     legendLate: 'overdue',
     legendAhead: 'Weeks ahead are a calculation while the rental runs',
     legendHow: 'The figure by a mark is the number of payments; the sum is what should come in that day.',
-    /** «Paid ahead» among the laptop legend's keys, where it stands right after «paid»: the one word, so the five keep one line. */
-    legendPaidAhead: 'ahead',
+    /**
+     * «Paid ahead» among the laptop legend's keys, where it stands right after «paid»: short, so the five keep one line.
+     * Not «ahead» alone — on this screen that word is the weeks to come (`legendAhead`).
+     */
+    legendPaidAhead: 'in advance',
 
     state: stateEn,
     /** The same words inside a sentence read aloud — and the keys of the laptop's legend. */
