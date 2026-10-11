@@ -70,8 +70,9 @@
 /* ---- The payments calendar (docs/redesign/payments-calendar.md) ------------
    "Деньги → Календарь": page-local classes, all `cal-…`. The look is the
    approved prototype's (`month_CSS`), rewritten onto the product's named text
-   styles and existing colour tokens; where the built screen departs from the
-   frame, §8 of the note says why. A phone and a laptop draw different trees
+   styles and existing colour tokens; the month grid is the later «Без рамок»
+   (`open_CSS`): a day has no box. Where the built screen departs from the
+   frames, §8 of the note says why. A phone and a laptop draw different trees
    (lib/breakpoint.ts), so only the laptop's own columns need a media query.
    Selectors on a pill carry `.pill` as well: this file may be read before
    app.css, and a rule of equal weight would lose to the pill's own. */
@@ -138,31 +139,36 @@
 .pill.cal-toggle { gap: 2px; padding: 0 8px 0 12px; }
 
 /* The calendar's own controls: back, forward, today, and the month by a button. */
-.cal-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 4px; }
+.cal-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 8px; }
 .cal-bar .pill { flex: none; }
 .pill.cal-now { padding: 0 14px; }
 .pill.cal-all { margin-left: auto; gap: 2px; padding: 0 10px 0 14px; }
 .cal-title { font: var(--text-month); letter-spacing: var(--tracking-tight); white-space: nowrap; }
-.cal-title-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0 2px 2px; }
+.cal-title-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0 2px 6px; }
 .cal-title-row .cal-legend { margin: 0; }
-.cal-bar.dense { gap: 6px; margin: 0 0 8px; }
+.cal-bar.dense { gap: 6px; margin: 0 0 14px; }
 .cal-bar.dense .cal-title { margin: 0 8px; }
 .cal-bar.dense .pill.cal-now { padding: 0 12px; }
 
 /* Weekday names and the grid. A 2 px gap, not the 8 px between touch targets:
    with 8 px a cell on a 375 px phone would be 42 px wide (§8.12). */
 .cal-wd, .cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px; }
-.cal-wd { margin: 0 0 3px; }
+.cal-wd { margin: 0 0 6px; }
 .cal-wd span { text-align: center; font: var(--text-overline); line-height: 16px; color: var(--muted); }
-.cal-cell { position: relative; min-width: 0; min-height: 44px; margin: 0; padding: 3px 1px; border: 0; border-radius: 10px; background: var(--surface); color: var(--ink); font: inherit; box-shadow: inset 0 0 0 1px var(--line-soft); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; }
+/* A day is its number on the page's ground: no hairline and no white tile, in
+   any week (§8.18). A ground stays only where it says something. */
+.cal-cell { position: relative; min-width: 0; min-height: 44px; margin: 0; padding: 3px 1px; border: 0; border-radius: 10px; background: transparent; color: var(--ink); font: inherit; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; }
 button.cal-cell { cursor: pointer; }
 .cal-cell.week { min-height: 54px; gap: 0; }
-.cal-cell.off, .cal-cell.none { background: transparent; box-shadow: none; }
 .cal-n { font: var(--text-h3); line-height: 18px; }
 .cal-cell.past .cal-n, .cal-cell.ahead .cal-n, .cal-cell.none .cal-n { color: var(--muted); }
-.cal-cell.late { background: var(--crit-soft); box-shadow: none; }
-/* The one lime in the page's content: today. The chosen day is a frame, over any ground. */
-.cal-cell.today { background: var(--lime); box-shadow: none; }
+/* What the box used to say — somebody pays on this day — the number says: a
+   day nobody pays on is lighter and thinner. Not today's: grey on lime is 3.9:1. */
+.cal-cell.none:not(.today) .cal-n { color: var(--grey); font-weight: 400; }
+.cal-cell.late { background: var(--crit-soft); }
+/* The one lime in the page's content: today. The chosen day is a frame, over
+   any ground — the only outline on the grid. */
+.cal-cell.today { background: var(--lime); }
 .cal-cell.today .cal-n { font-weight: 600; }
 .cal-cell.on { box-shadow: inset 0 0 0 2px var(--ink); }
 .cal-cell-sum { font: var(--text-cell); font-variant-numeric: tabular-nums; white-space: nowrap; }
@@ -171,32 +177,46 @@ button.cal-cell { cursor: pointer; }
 /* Outranks `.all` in colour only: today's «3 из 3» is ink and bold — there is no green text on lime (§8.14). */
 .cal-cell.today .cal-cell-count { color: var(--ink); }
 .cal-flag { position: absolute; top: 5px; right: 5px; width: 7px; height: 7px; background: var(--crit); }
-/* The product's focus ring is a shadow and so is the cell's frame: appended, not replaced. */
-.cal-cell:focus-visible { outline: none; z-index: 1; box-shadow: inset 0 0 0 1px var(--line-soft), var(--focus-ring); }
-.cal-cell.late:focus-visible, .cal-cell.today:focus-visible { box-shadow: var(--focus-ring); }
+/* The product's focus ring is a shadow and so is the chosen day's frame: there it is appended, not replaced. */
+.cal-cell:focus-visible { outline: none; z-index: 1; box-shadow: var(--focus-ring); }
 .cal-cell.on:focus-visible { box-shadow: inset 0 0 0 2px var(--ink), var(--focus-ring); }
+/* A pointer finds the button a box used to show. Pink and lime keep their
+   colour; a day nobody pays on is a span and stays as it is. */
+@media (hover: hover) {
+  button.cal-cell:not(.late):not(.today):hover { background: var(--surface-hover); }
+}
 
-/* Laptop: the same cells, larger, with the day's sum and its marks. The side
-   padding is 2 px where the frame draws 5 px: «1 790 ₾» in the 13 px mono
-   needs about 55 px of a 60.6 px cell (§8.16). */
+/* Laptop: the same cells, larger, with the day's sum and its marks. Weekday
+   names stand on the numbers' left edge, on the grid's own gap. A cell keeps
+   6 px on the left and 2 px on the right: «1 800 ₾» in the 13 px text face is
+   about 47 px of the 52.6 px left inside a 60.6 px cell (§8.16). */
+.cal-left .cal-wd { gap: 4px; }
+.cal-left .cal-wd span { text-align: start; padding-left: 6px; }
 .cal-grid.big { gap: 4px; }
-.cal-grid.big .cal-cell { min-height: 40px; padding: 6px 2px; align-items: stretch; gap: 0; text-align: start; }
-.cal-grid.big .cal-cell.week { min-height: 100px; justify-content: flex-start; }
-.cal-cell-top { display: flex; align-items: center; justify-content: space-between; gap: 4px; min-width: 0; height: 18px; }
-.cal-cell-total { font: var(--text-label); font-family: var(--mono); font-weight: 500; line-height: 18px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.cal-grid.big .cal-cell { min-height: 40px; padding: 6px 2px 6px 6px; align-items: stretch; gap: 0; text-align: start; }
+/* The current week is as tall as what stands in it: 8 + 18 + 18 + 6 + 14 + 8
+   is 72 of the 76. Today's word under its marks, or marks in two lines, grow
+   the whole row. */
+.cal-grid.big .cal-cell.week { min-height: 76px; padding-top: 8px; padding-bottom: 8px; justify-content: flex-start; }
+/* A past day's tick or square stands right after its number. */
+.cal-cell-top { display: flex; align-items: center; gap: 5px; min-width: 0; height: 18px; }
+.cal-cell-total { font: var(--text-label); font-weight: 500; line-height: 18px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .cal-cell.none .cal-cell-total { color: var(--muted); }
-.cal-cell-marks { display: flex; flex-wrap: wrap; gap: 3px 4px; margin-top: 4px; }
-.cal-cell-mark { display: inline-flex; align-items: center; gap: 2px; font: var(--text-mono-sm); font-weight: 500; line-height: 14px; white-space: nowrap; }
-.cal-cell-tag { margin-top: auto; font: var(--text-cell); font-family: var(--display); font-weight: 600; white-space: nowrap; }
+.cal-cell-marks { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+/* The count by a mark in the phone cell's own style: two marks, one of them
+   with a two-digit count, keep one line. */
+.cal-cell-mark { display: inline-flex; align-items: center; gap: 2px; font: var(--text-cell); white-space: nowrap; }
+.cal-cell-tag { margin-top: auto; padding-top: 4px; font: var(--text-cell); font-family: var(--display); font-weight: 600; white-space: nowrap; }
 
-/* Legend. */
-.cal-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 12px; margin: 4px 2px 6px; font: var(--text-overline); font-weight: 400; line-height: 16px; color: var(--muted); }
+/* Legend. The laptop's is the five marks in a line, then one sentence. */
+.cal-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 12px; margin: 8px 2px 6px; font: var(--text-overline); font-weight: 400; line-height: 16px; color: var(--muted); }
 .cal-legend span { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
 .cal-legend p { margin: 0; }
 .cal-legend b { font-weight: 500; color: var(--ink); }
 .cal-swatch { display: inline-block; flex: none; width: 12px; height: 12px; border-radius: 4px; background: var(--lime); box-shadow: inset 0 0 0 1px var(--line-control); }
-.cal-legend.desk { display: block; margin: 10px 2px 0; }
-.cal-legend-marks { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 14px; margin: 4px 0; }
+.cal-legend.desk { display: block; margin: 14px 2px 0; }
+.cal-legend-marks { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.cal-legend.desk p { margin-top: 4px; }
 
 /* Phone: the chosen day — a heading, then its payers in one card. The total
    drops under the day's name when the two do not share a line. */

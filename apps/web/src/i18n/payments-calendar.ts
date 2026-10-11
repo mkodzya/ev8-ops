@@ -86,11 +86,11 @@ export const calendarEn = {
     legendLate: 'overdue',
     legendAhead: 'Weeks ahead are a calculation while the rental runs',
     legendHow: 'The figure by a mark is the number of payments; the sum is what should come in that day.',
-    legendWeeks:
-      'Past weeks show only how the day ended: all paid or something still overdue. Weeks ahead are a calculation while the rental runs: the same days and sums.',
+    /** «Paid ahead» among the laptop legend's keys, where it stands right after «paid»: the one word, so the five keep one line. */
+    legendPaidAhead: 'ahead',
 
     state: stateEn,
-    /** The same words inside a sentence read aloud. */
+    /** The same words inside a sentence read aloud — and the keys of the laptop's legend. */
     said: saidEn,
     withPayment: (word: string, when: string, how: string) => `${word} · ${when}, ${how}`,
     channels: channelsEn,
@@ -174,8 +174,7 @@ export const calendarRu: typeof calendarEn = {
     legendLate: 'просрочено',
     legendAhead: 'Недели впереди — расчёт, пока аренда идёт',
     legendHow: 'Цифра у отметки — число оплат, сумма — сколько должно прийти за день.',
-    legendWeeks:
-      'В прошлых неделях — только итог дня: всё оплачено или есть просрочка. Недели впереди — расчёт, пока аренда идёт: те же дни и суммы.',
+    legendPaidAhead: 'заранее',
 
     state: { paid: 'Оплачено', paid_ahead: 'Оплачено заранее', due_today: 'Ждём сегодня', expected: 'Ожидается', overdue: 'Просрочено' },
     said: { paid: 'оплачено', paid_ahead: 'оплачено заранее', due_today: 'ждём сегодня', expected: 'ожидается', overdue: 'просрочено' },
@@ -256,8 +255,8 @@ export const calendarKa: typeof calendarEn = {
     legendLate: 'ვადაგადაცილებულია',
     legendAhead: 'მომდევნო კვირები — გათვლაა, სანამ ქირაობა გრძელდება',
     legendHow: 'ნიშანთან ციფრი — გადახდების რაოდენობაა, თანხა — რამდენი უნდა შემოვიდეს ამ დღეს.',
-    legendWeeks:
-      'წინა კვირებში — მხოლოდ დღის შედეგი: ყველაფერი გადახდილია ან არის ვადაგადაცილება. მომდევნო კვირები — გათვლაა, სანამ ქირაობა გრძელდება: იგივე დღეები და თანხები.',
+    // The first word of `said.paid_ahead`.
+    legendPaidAhead: 'წინასწარ',
 
     state: { paid: 'გადახდილია', paid_ahead: 'წინასწარ გადახდილია', due_today: 'დღეს ველოდებით', expected: 'მოსალოდნელია', overdue: 'ვადაგადაცილებულია' },
     said: { paid: 'გადახდილია', paid_ahead: 'წინასწარ გადახდილია', due_today: 'დღეს ველოდებით', expected: 'მოსალოდნელია', overdue: 'ვადაგადაცილებულია' },

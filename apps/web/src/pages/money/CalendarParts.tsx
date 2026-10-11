@@ -279,24 +279,26 @@ function TodayKey({ word }: { word: string }) {
 /**
  * The legend names only what the cells on screen show (§3.5.6). The laptop's
  * five marks are always there — its lists beside the grid use every one,
- * whatever month is open; the lime key only while today is in the grid.
+ * whatever month is open — in the states' short words, so they keep one line:
+ * «заранее» alone, it stands right after «оплачено». No lime key there: the
+ * laptop's cell says «сегодня» in a word. The sentence about the figures only
+ * while the current week, which has them, is in the grid.
  */
 export function CalendarLegend({ variant, shows }: { variant: 'week' | 'month' | 'desk'; shows: { counts: boolean; allPaid: boolean; late: boolean; today: boolean; aheadOnly: boolean } }) {
   const t = useT();
   if (variant === 'desk') {
     return (
       <div className="cal-legend desk">
-        <p>{t.calendar.legendHow}</p>
         <div className="cal-legend-marks">
           {LEGEND.map((state) => (
             <span key={state}>
               <StateMark state={state} small />
-              {t.calendar.state[state]}
+              {state === 'paid_ahead' ? t.calendar.legendPaidAhead : t.calendar.said[state]}
             </span>
           ))}
-          {shows.today && <TodayKey word={t.today.title} />}
         </div>
-        <p>{t.calendar.legendWeeks}</p>
+        {shows.counts && <p>{t.calendar.legendHow}</p>}
+        {shows.aheadOnly && <p>{t.calendar.legendAhead}</p>}
       </div>
     );
   }
