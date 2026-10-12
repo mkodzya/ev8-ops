@@ -1,7 +1,7 @@
 import { todayISO } from '@ev8/shared';
 import type { FastifyInstance } from 'fastify';
 import { dayOf, isoDate } from '../lib/dates.js';
-import { debtsOf } from '../lib/debt.js';
+import { debtsOf, rentalDueToday } from '../lib/debt.js';
 import { UNDO_RETURN_MS } from '../lib/rentals.js';
 import { rentStateOf } from '../lib/rentState.js';
 import { prisma } from '../lib/db.js';
@@ -55,6 +55,8 @@ export function rentalRoutes(app: FastifyInstance): void {
           paidThrough,
           overdueDays,
           debtTetri: debtOfRental(r.customerId, r.id),
+          // Of that debt: awaited today and not late. The figure is ink only when the two are equal (ADR-0017).
+          dueTodayTetri: rentalDueToday(debts.get(r.customerId), r.id),
           periods: r._count.periods,
           buyoutTargetTetri: r.buyoutTargetTetri,
           buyoutPerPaymentTetri: r.buyoutPerPaymentTetri,
@@ -111,6 +113,7 @@ export function rentalRoutes(app: FastifyInstance): void {
         id: r.id,
         number: r.number,
         debtTetri,
+        dueTodayTetri: rentalDueToday(debt, r.id),
         odooName: r.odooName,
         status: rentStateOf(r, today).status,
         storedStatus: r.status,

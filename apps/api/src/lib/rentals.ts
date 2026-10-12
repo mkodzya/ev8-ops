@@ -1,4 +1,4 @@
-import { acquiringFee, canPickUp, periodsThrough, returnSettlement, type Settlement, type VehicleState } from '@ev8/shared';
+import { acquiringFee, canPickUp, handOverBlockTetri, periodsThrough, returnSettlement, type Settlement, type VehicleState } from '@ev8/shared';
 import { createHash } from 'node:crypto';
 import type { Prisma } from '../generated/prisma/client.js';
 import { audit } from './audit.js';
@@ -130,8 +130,10 @@ export async function pickUp(input: PickupInput, within?: Tx): Promise<PickupRes
     const c = await prisma.customer.findUnique({ where: { id: customerId! } });
     if (!c || c.archived) throw notFound('customer_not_found', 'No such customer.');
     // A customer who owes: a manager stops, an owner may go on with a reason (В2).
+    // What "owes" means here is one function with the wizard (ADR-0017): the
+    // whole figure, money awaited today included, until the owner says otherwise.
     const debt = await debtOf(c.id);
-    if (debt.owesTetri > 0) {
+    if (handOverBlockTetri(debt.owesTetri, debt.dueTodayRentTetri) > 0) {
       if (!owner) throw forbidden('customer_in_debt', 'A customer who owes gets a new rental from an owner only.', { owesTetri: debt.owesTetri });
       if (!input.debtOverrideReason?.trim()) {
         throw badRequest('missing_field', 'Say why a customer who owes gets a moped.', { field: 'debtOverrideReason', owesTetri: debt.owesTetri });

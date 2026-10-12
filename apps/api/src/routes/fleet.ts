@@ -1,10 +1,12 @@
-import { POOL_EVENT, VEHICLE_POOLS, VEHICLE_STATES, type VehiclePool, type VehicleState } from '@ev8/shared';
+import { POOL_EVENT, VEHICLE_POOLS, VEHICLE_STATES, todayISO, type VehiclePool, type VehicleState } from '@ev8/shared';
 import type { FastifyInstance } from 'fastify';
 import { isoDate } from '../lib/dates.js';
 import { prisma } from '../lib/db.js';
+import { env } from '../lib/env.js';
 import { notFound } from '../lib/errors.js';
 import { mayView } from '../lib/guard.js';
 import { preliminaryOf } from '../lib/purchases.js';
+import { rentStateOf } from '../lib/rentState.js';
 
 // Read side of the fleet (FLT-01, FLT-02). Writes arrive with the hand-over
 // and return wizards in step 4 of stage 1; state changes go through events.
@@ -101,6 +103,7 @@ export function fleetRoutes(app: FastifyInstance): void {
       take: 50,
       include: { actor: { select: { name: true } } },
     });
+    const today = todayISO(new Date(), env.TZ);
     return {
       vehicle: {
         id: v.id,
@@ -145,7 +148,8 @@ export function fleetRoutes(app: FastifyInstance): void {
       rentals: v.rentals.map((r) => ({
         id: r.id,
         number: r.number,
-        status: r.status,
+        // As the rentals list calls it — never the stored status (ADR-0017).
+        status: rentStateOf(r, today).status,
         customer: r.customer,
         pickedUpOn: isoDate(r.pickedUpOn),
         returnedOn: isoDate(r.returnedOn),
