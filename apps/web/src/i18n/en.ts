@@ -788,6 +788,8 @@ export const en = {
       amount: (n: string, debt: string) => `The amount matches ${debt} owed on ${n}.`,
       recorded: (n: string) => `Linked to a payment entered by hand${n}.`,
       bank_deposit: 'Cash paid in matched “Taken to the bank”.',
+      /** After a hint for a rental carried over on or after the line's day: the money may be counted already. */
+      beforeTransfer: (day: string) => `The rental was carried over on ${day}: this payment may already be inside “Paid through”. Check before attaching.`,
     },
   },
 

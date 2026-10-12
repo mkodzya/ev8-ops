@@ -14,7 +14,9 @@ import { env } from '../env.js';
 //      the payer's name is one customer with one record this amount fits, or
 //      the amount fits a rental and the date is its pick-up day or falls in
 //      the week the amount would close. Disputed, paused and booked rentals
-//      take part in no rule (Q25);
+//      take part in no rule (Q25), and neither does a rental carried over
+//      with its paid weeks for a line dated on or before the day it was
+//      carried over: that money may already be inside its «paid through»;
 //   4. otherwise a person decides.
 
 export const WINDOW_DAYS = 3;
@@ -41,6 +43,8 @@ interface RentalCand {
   names: (string | null)[];
   status: string;
   pickedUpOn: string | null;
+  /** The day a running rental was carried over with its paid weeks (the transfer wizard, the loader); null for one handed over here. */
+  transferredOn: string | null;
   weeklyRateTetri: number;
   openDepositTetri: number;
   openFirstPeriodTetri: number;
@@ -140,6 +144,7 @@ export async function loadCtx(): Promise<Ctx> {
         names: [r.customer.name, r.customer.nameKa, r.customer.nameLat],
         status: r.status,
         pickedUpOn: isoDate(r.pickedUpOn),
+        transferredOn: r.transferredAt ? todayISO(r.transferredAt, env.TZ) : null,
         weeklyRateTetri: r.weeklyRateTetri,
         openDepositTetri: openDeposit,
         openFirstPeriodTetri: first ? first.amountTetri - first.paidTetri : 0,
@@ -188,6 +193,17 @@ const CASH_DEPOSIT = /(cash\s*deposit|naRdi\s*fulis\s*Setana|ნაღდი\s*�
 export const isCashDeposit = (line: Line) => line.direction === 'in' && CASH_DEPOSIT.test(`${line.purpose ?? ''} ${line.raw}`);
 
 const near = (a: string, b: string) => Math.abs(daysBetween(a, b)) <= WINDOW_DAYS;
+
+/**
+ * Is this line older than what the system knows of this rental? A rental
+ * carried over arrives with «paid through» and no payments: every payment up
+ * to that day is inside the date already. A bank line of that day or earlier
+ * may be one of them, and nothing in the line says whether it is — so no rule
+ * attaches it, whatever the name and the sum; a person looks, with the hint
+ * saying why (Mika, 12.10.2026: statements are loaded from the day "that
+ * does not start a muddle" — with this the day stops mattering).
+ */
+export const beforeTransfer = (r: { transferredOn: string | null }, occurredOn: string): boolean => r.transferredOn != null && occurredOn <= r.transferredOn;
 
 /**
  * Payments entered by hand this line may already be (B2-03): the amount,
@@ -248,6 +264,8 @@ export type Decision =
 /** A reason, in data; the screen says it in its language (§3.2 "причина словами"). */
 export interface Reason {
   code: 'name' | 'card_pickup' | 'amount_week' | 'amount' | 'recorded' | 'bank_deposit';
+  /** On a hint for a rental carried over after this line's day: the day it was carried over. The money may be counted already. */
+  transferredOn?: string;
   name?: string;
   number?: string;
   debtTetri?: number;
@@ -273,7 +291,7 @@ export function decide(line: Line, ctx: Ctx): Decision {
   }
 
   const gross = lineGross(line);
-  const eligible = ctx.rentals.filter((r) => RULE_RENTALS.has(r.status));
+  const eligible = ctx.rentals.filter((r) => RULE_RENTALS.has(r.status) && !beforeTransfer(r, line.occurredOn));
   const text = [line.payer, line.purpose].filter(Boolean).join(' ');
 
   // 1. The name, and one record of that customer's that this amount fits.
@@ -390,6 +408,9 @@ export function suggest(line: Line, ctx: Ctx): { group: 'recorded' | 'suggested'
       out.push({ kind: 'sale', id: s.id, number: s.number, customer: s.customer, customerId: s.customerId, reason: { code: 'amount', number: s.number, debtTetri: s.dueOpenTetri || s.nextOpenTetri } });
     }
   }
-  const suggestions = out.slice(0, 8);
+  // A hint for a rental carried over after this line's day says so: the screen
+  // adds that the money may already be inside «paid through».
+  const carried = new Map(ctx.rentals.filter((r) => beforeTransfer(r, line.occurredOn)).map((r) => [r.id, r.transferredOn!]));
+  const suggestions = out.slice(0, 8).map((s) => (s.kind === 'rental' && carried.has(s.id) ? { ...s, reason: { ...s.reason, transferredOn: carried.get(s.id)! } } : s));
   return { group: suggestions.length > 0 ? 'suggested' : 'none', recorded: [], suggestions };
 }
