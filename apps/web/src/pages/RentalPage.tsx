@@ -1,13 +1,13 @@
 import type { ActKind, DepositStatus, PeriodPayStatus, RentalStatus, WeekDue } from '@ev8/shared';
 import { useState } from 'react';
-import { parseGel, todayISO, weekDue, type VehicleState } from '@ev8/shared';
+import { parseGel, todayISO, waOffered, weekDue, type VehicleState } from '@ev8/shared';
 import { DocumentRow, signedAtText, type DocState } from '../components/Documents.js';
 import { KommoField } from '../components/Kommo.js';
 import { RecordHistory } from '../components/RecordHistory.js';
 import { LoadError } from '../components/LoadError.js';
 import { DecideSheet } from '../components/ReturnMoney.js';
 import { RowMenu } from '../components/RowMenu.js';
-import { waOffered, WhatsappSheet } from '../components/Whatsapp.js';
+import { WhatsappSheet } from '../components/Whatsapp.js';
 import { Field } from '../components/Wizard.js';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';

@@ -64,8 +64,9 @@ export function RentalsPage() {
   const count = (s: Segment) => all.filter(SEGMENTS[s]).length;
   // One figure, two names (ADR-0017): red and "debt" when anything in it is
   // older than what is awaited today; ink and "due today" when all of it is
-  // awaited. Never split: a mixed figure is red as a whole.
-  const isDebt = (r: Rental) => r.debtTetri > r.dueTodayTetri;
+  // awaited. Never split: a mixed figure is red as a whole. An answer
+  // without the field reads as a debt, never as calm.
+  const isDebt = (r: Rental) => r.debtTetri > (r.dueTodayTetri ?? 0);
   const sumOf = (list: Rental[]) => list.reduce((n, r) => n + r.debtTetri, 0);
   const red = sumOf(rows.filter(isDebt));
   const ink = sumOf(rows.filter((r) => !isDebt(r)));

@@ -104,15 +104,27 @@ export function SearchOverlay({ onClose }: { onClose: () => void }) {
   };
 
   // The one debt figure in words (ADR-0017): «due today» in ink when all of it
-  // is awaited today, «owes» when anything in it is older.
-  const awaited = (x: { debtTetri: number; dueTodayTetri: number }) => x.debtTetri > 0 && x.dueTodayTetri >= x.debtTetri;
+  // is awaited today, «owes» when anything in it is older. The second line of
+  // a row is grey, so the ink is said by a class: awaited money is a figure,
+  // not a footnote.
+  const awaited = (x: { debtTetri: number; dueTodayTetri: number }) => x.debtTetri > 0 && (x.dueTodayTetri ?? 0) >= x.debtTetri;
   const rows: Partial<Record<Kind, Row[]>> = {};
   if (groups) {
     rows.customers = groups.customers.items.map((c) => ({
       key: `c-${c.id}`,
       title: c.name,
       // The one debt figure, as on the card (wave 2 §3.7).
-      sub: [c.nameKa !== c.name ? c.nameKa : c.nameLat, c.phone, awaited(c) ? t.money.dueToday(formatGel(c.debtTetri)) : c.debtTetri > 0 ? t.money.owes(formatGel(c.debtTetri)) : null].filter(Boolean).join(' · '),
+      sub: awaited(c) ? (
+        <>
+          {[c.nameKa !== c.name ? c.nameKa : c.nameLat, c.phone]
+            .filter(Boolean)
+            .map((x) => `${x} · `)
+            .join('')}
+          <span className="search-due">{t.money.dueToday(formatGel(c.debtTetri))}</span>
+        </>
+      ) : (
+        [c.nameKa !== c.name ? c.nameKa : c.nameLat, c.phone, c.debtTetri > 0 ? t.money.owes(formatGel(c.debtTetri)) : null].filter(Boolean).join(' · ')
+      ),
       href: `/customers/${c.id}`,
       recent: { href: `/customers/${c.id}`, title: c.name, sub: c.phone ?? '' },
     }));
@@ -133,7 +145,7 @@ export function SearchOverlay({ onClose }: { onClose: () => void }) {
       sub: (
         <>
           {r.vin ? <Tail vin={r.vin} /> : null}
-          {awaited(r) ? <span> {t.money.dueToday(formatGel(r.debtTetri))}</span> : r.debtTetri > 0 && <span className="crit-text"> {t.money.owes(formatGel(r.debtTetri))}</span>}
+          {awaited(r) ? <span className="search-due"> {t.money.dueToday(formatGel(r.debtTetri))}</span> : r.debtTetri > 0 && <span className="crit-text"> {t.money.owes(formatGel(r.debtTetri))}</span>}
         </>
       ),
       href: `/rentals/${r.id}`,

@@ -408,16 +408,23 @@ function usePlan(s: State, tetri: number | null) {
 }
 
 /**
- * Of the rental this money is for: how much of its debt is awaited today and
- * not late (ADR-0017) — nought for any other target. The same two addresses
- * the amount chips read, so it costs no request of its own.
+ * Of what this money is for: how much of the debt is awaited today and not
+ * late (ADR-0017). For a rental — its own awaited part. For money "on
+ * account" — everything, when the customer's whole figure is awaited: the
+ * head of the sheet says «due today» then, and what stays after a part
+ * payment must say the same; a mixed figure is a debt as a whole. Nought for
+ * any other target. The same two addresses the head and the amount chips
+ * read, so it costs no request of its own.
  */
 function useAwaitedTetri(target: MoneyTarget | null): number {
   const rentalId = target?.kind === 'rent' ? target.rentalId ?? null : null;
+  const onAccount = target?.kind === 'on_account';
   const rental = useLoad<{ rental: { customer: { id: string } } }>(rentalId ? `/api/rentals/${rentalId}` : null);
   const cid = target?.customerId ?? rental.data?.rental.customer.id ?? null;
-  const targets = useLoad<Targets>(rentalId && cid ? `/api/customers/${cid}/money-targets` : null);
-  return rentalId ? targets.data?.debt.dueTodayBy?.[rentalId] ?? 0 : 0;
+  const targets = useLoad<Targets>((rentalId || onAccount) && cid ? `/api/customers/${cid}/money-targets` : null);
+  const debt = targets.data?.debt;
+  if (onAccount) return debt && debt.owesTetri > 0 && (debt.dueTodayTetri ?? 0) >= debt.owesTetri ? Number.POSITIVE_INFINITY : 0;
+  return rentalId ? debt?.dueTodayBy?.[rentalId] ?? 0 : 0;
 }
 
 /**
@@ -576,7 +583,7 @@ function TargetHead({ s, fixed, onChange, onPick }: { s: State; fixed: boolean; 
   const targets = useLoad<Targets>(cid && s.direction === 'in' ? `/api/customers/${cid}/money-targets` : null);
   const debt = targets.data?.debt ?? null;
   // The whole figure is awaited today: «К оплате сегодня» in ink, not «Должен» in red (ADR-0017).
-  const awaited = !!debt && debt.owesTetri > 0 && debt.dueTodayTetri >= debt.owesTetri;
+  const awaited = !!debt && debt.owesTetri > 0 && (debt.dueTodayTetri ?? 0) >= debt.owesTetri;
   const name = target.customer ?? rental.data?.rental.customer.name ?? '';
   return (
     <section className="money-who-head">

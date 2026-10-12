@@ -28,7 +28,9 @@ interface Customer {
 // One figure, two names (ADR-0017). A debtor has something in it older than
 // what is awaited today — red, under the chip «owing». A figure that is all
 // awaited today is ink, with the calendar's word under it: never colour alone.
-const isDebtor = (c: Customer) => c.debtTetri - c.dueTodayTetri > 0;
+// An answer without the field (an older API in the seconds of a deploy) reads
+// as a debt: nobody turns calm because a number did not arrive.
+const isDebtor = (c: Customer) => c.debtTetri - (c.dueTodayTetri ?? 0) > 0;
 const isAwaited = (c: Customer) => c.debtTetri > 0 && !isDebtor(c);
 
 export function CustomersPage() {

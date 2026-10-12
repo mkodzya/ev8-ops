@@ -227,8 +227,9 @@ export function TodayPage() {
                         <a className="pill pill-sm" href={`tel:${r.phone}`} aria-label={t.today.call}>
                           ☎
                         </a>
-                        {/* No ready message for a rental due today (ADR-0017): the call and the action stay. */}
-                        {r.group !== 'due_today' && (
+                        {/* No ready message for a rental due today (ADR-0017): the row says so itself, in
+                            whichever group it stands — "returns" and "fill in" too. The call and the action stay. */}
+                        {r.whatsapp !== false && (
                           <button
                             type="button"
                             className="pill pill-sm"

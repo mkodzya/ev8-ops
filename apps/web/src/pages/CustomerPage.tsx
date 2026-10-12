@@ -1,4 +1,4 @@
-import { CUSTOMER_SOURCES, todayISO, type CustomerKind, type DepositStatus, type RentalStatus } from '@ev8/shared';
+import { CUSTOMER_SOURCES, todayISO, waRentalOf, type CustomerKind, type DepositStatus, type RentalStatus } from '@ev8/shared';
 import { useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { preparePhoto, uploadFile } from '../lib/photos.js';
@@ -9,7 +9,7 @@ import '../ds/form/form.css';
 import { api, ApiError } from '../api.js';
 import { FormSheet } from '../ds/form/Form.js';
 import { Field } from '../components/Wizard.js';
-import { waOffered, WhatsappSheet } from '../components/Whatsapp.js';
+import { WhatsappSheet } from '../components/Whatsapp.js';
 import { LoadError } from '../components/LoadError.js';
 import { RowMenu } from '../components/RowMenu.js';
 import { BlockHead, Empty, Loading, PageHead, RentalBadge, Vin } from '../components/ui.js';
@@ -90,10 +90,13 @@ export function CustomerPage() {
   // A message from this card is about ONE rental, the most urgent: an overdue
   // one, then one due today, then any not returned. Its id, its number and its
   // «paid through» go together — they used to come from two different rentals.
-  const live = data.rentals.find((r) => r.status === 'overdue') ?? data.rentals.find((r) => r.status === 'due_today') ?? data.rentals.find((r) => r.status !== 'returned') ?? null;
-  const waAbout = live ?? data.rentals[0] ?? null;
-  // No button while there is no ready message for that rental — on its due day.
-  const waHere = !live || waOffered(live.status, live.pickedUpOn, todayISO());
+  // On its due day that rental has no ready message; a debtor keeps the door
+  // all the same when another rental of theirs holds a part of the figure —
+  // the message is then about that one. The shared rule chooses (ADR-0017).
+  const waPick = waRentalOf(data.rentals, (rentalId) => (bal?.parts ?? []).some((p) => p.id === rentalId), todayISO());
+  const waAbout = waPick.rental ?? data.rentals[0] ?? null;
+  // No button while there is no rental to write about today.
+  const waHere = waPick.offered;
 
   const addDocument = async (list: FileList | null) => {
     const f = list?.[0];
@@ -317,7 +320,7 @@ export function CustomerPage() {
       {editing && <CustomerEdit customer={c} onClose={() => setEditing(false)} onSaved={() => { setEditing(false); reload(); }} />}
       {wa && c.phone && (
         <WhatsappSheet
-          target={{ rentalId: live?.id ?? null, number: waAbout?.number ?? '', name: c.name, phone: c.phone, paidThrough: waAbout?.paidThrough ?? null, debtTetri: balance.data?.owesTetri ?? 0 }}
+          target={{ rentalId: waPick.rental?.id ?? null, number: waAbout?.number ?? '', name: c.name, phone: c.phone, paidThrough: waAbout?.paidThrough ?? null, debtTetri: balance.data?.owesTetri ?? 0 }}
           onClose={() => setWa(false)}
         />
       )}

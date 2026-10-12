@@ -1,4 +1,4 @@
-import { addDays, todayISO } from '@ev8/shared';
+import { addDays, todayISO, waOffered } from '@ev8/shared';
 import { useState } from 'react';
 import { api } from '../api.js';
 import { Skeleton } from '../ds/state/Skeleton.js';
@@ -45,20 +45,6 @@ interface Rental {
 const digits = (s: string) => s.replace(/\D/g, '');
 
 /**
- * Is there a ready message for a rental in this state today (ADR-0017)? For
- * one that is due today there is none: «Просрочка» calls a week that began
- * this morning a debt, «Завтра оплата» says "tomorrow" with today's date, and
- * a text for the due day itself goes to a customer only after the owner has
- * read it. So the buttons that open this sheet are not drawn for such a
- * rental, and the sheet says so when it is reached by another door.
- * The pickup day and today are asked for already: with the owner's text the
- * rule narrows to the hand-over day, and no caller changes.
- */
-export function waOffered(status: string, pickedUpOn: string | null, today: string): boolean {
-  return status !== 'due_today';
-}
-
-/**
  * `kind` opens the sheet on a template the caller's button has already named
  * ("remind: payment tomorrow"). Without it the rental's state chooses.
  */
@@ -73,9 +59,15 @@ export function WhatsappSheet({ target, onClose, kind: opensOn }: { target: WaTa
   const card = useLoad<Rental>(target.rentalId ? `/api/rentals/${target.rentalId}` : null);
   // The sheet waits for the rental (ADR-0017). Until it has loaded there is
   // nothing to choose and nothing to send: on a slow connection the text used
-  // to go out with «оплачено по —» or a week at 0 ₾.
+  // to go out with a week at 0 ₾, or with «оплачено по —» for a rental that
+  // does have a paid week. (A rental never paid has no such day at all: its
+  // «Просрочка» still reads «оплачено по —», as before — a wording for it is
+  // the owner's to approve, note §7.)
   const ready = !target.rentalId || card.data != null;
   const rental = card.data?.rental ?? null;
+  // Is there a ready message for this rental today — the shared rule, the one
+  // the buttons that open this sheet are drawn by. Reached by another door
+  // (a stale list), the sheet says there is none.
   const offered = !rental || waOffered(rental.status, rental.pickedUpOn, todayISO());
   // The state answers only when it is a state of the rent: a late rental opens
   // on «Просрочка». For every other rental the debt chooses, as before — a

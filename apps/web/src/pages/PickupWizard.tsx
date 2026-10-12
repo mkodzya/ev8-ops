@@ -231,7 +231,7 @@ export function PickupWizard() {
   // `held` — does it make this hand-over an owner's decision: the server's own
   // function, so the screen and the answer cannot part. The right is В2 as it
   // was: every open figure holds, only the words are calm on a due day.
-  const debtor = !!debt && debt.debtTetri - debt.dueTodayTetri > 0;
+  const debtor = !!debt && debt.debtTetri - (debt.dueTodayTetri ?? 0) > 0;
   const held = !!debt && handOverBlockTetri(debt.debtTetri, debt.dueTodayRentTetri) > 0;
   const customerOk = f.creating ? ncOk : !!customer && (!held || (owner && f.why.trim().length > 0));
   const vehicleOk = f.noVin ? f.vinNote.trim().length > 0 : !!vehicle && (!inSale || (owner && f.moveFromSale));
@@ -389,7 +389,7 @@ export function PickupWizard() {
                         <CustomerName of={c} />
                         <span className="mono muted">{c.phone ?? ''}</span>
                       </span>
-                      {c.debtTetri - c.dueTodayTetri > 0 ? (
+                      {c.debtTetri - (c.dueTodayTetri ?? 0) > 0 ? (
                         <span className="crit-text">{t.hand.debt(formatGel(c.debtTetri, { decimals: false }))}</span>
                       ) : c.debtTetri > 0 ? (
                         <span>{t.hand.dueRow(formatGel(c.debtTetri, { decimals: false }))}</span>
