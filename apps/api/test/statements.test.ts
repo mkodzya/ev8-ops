@@ -167,6 +167,79 @@ describe.skipIf(!HAS_DB)('reading a TBC export', () => {
   });
 });
 
+describe.skipIf(!HAS_DB)('a TBC terminal settlement is a card payment (12.10.2026)', () => {
+  // The first TBC statement on production carried two such lines; both came in
+  // as transfers of 197 and 98.50. The wording below is theirs.
+  const PARTNER = 'Wallet/domestic/საერთაშორისო ბარათებით თიბისის სავაჭრო ობიექტებში შესრ';
+  const desc = (paid: string, tag: string) => `08/10/2026_ის ტრანზაქციის თანხები 281000111 E MOTION MOTORS LLC, TBC BANK, Visa, ${paid}, SH074829,,V ${tag}`;
+  const txnId = () => `1599${uniq().replace(/\D/g, '').slice(-10)}.20`;
+
+  it('what was paid by card is read from the line, and the fee is the bank’s', async () => {
+    const who = tagged({ ru: 'Нино Терминалова', ka: 'ნინო ტერმინალოვა' });
+    const { prisma, owner, rentalId } = await rentalFor(who);
+    const text = [TBC_HEADER, tbcRow('08/10/2026', '197.0', PARTNER, txnId(), desc('200.00', who.tag))].join('\n');
+    const res = json<{ matched: number; unmatched: number }>(await call(owner, 'POST', '/api/statements', { fileName: 'transactions_history.csv', text }));
+    expect([res.matched, res.unmatched]).toEqual([0, 1]);
+
+    const row = await prisma.statementLine.findFirstOrThrow({ where: { raw: { contains: who.tag } } });
+    expect(row).toMatchObject({ amountTetri: 19700, grossTetri: 20000, feeTetri: 300 });
+    const shown = json<{ line: { channel: string; grossTetri: number | null } }>(await call(owner, 'GET', `/api/statement-lines/${row.id}`));
+    expect(shown.line).toMatchObject({ channel: 'acquiring', grossTetri: 20000 });
+
+    // Attached by hand, the customer is credited what they paid; the fee is the company's.
+    expect((await call(owner, 'POST', `/api/statement-lines/${row.id}/assign`, { rentalId })).statusCode).toBe(200);
+    expect(await prisma.payment.findFirstOrThrow({ where: { statementLineId: row.id } })).toMatchObject({ channel: 'acquiring', grossTetri: 20000, feeTetri: 300, netTetri: 19700 });
+  });
+
+  it('a line stored before the wording was known is read the same way', async () => {
+    const who = tagged({ ru: 'Лия Прежняя', ka: 'ლია ძველაძე' });
+    const { prisma, owner, rentalId } = await rentalFor(who);
+    // As the parser wrote it until today: a transfer, no gross, no fee.
+    await call(owner, 'POST', '/api/statements', { fileName: 't.csv', text: [TBC_HEADER, tbcRow('08/10/2026', '10.0', `სხვა ვინმე ${who.tag}`, txnId())].join('\n') });
+    const sibling = await prisma.statementLine.findFirstOrThrow({ where: { raw: { contains: who.tag } } });
+    const old = await prisma.statementLine.create({
+      data: {
+        statementId: sibling.statementId,
+        bank: 'tbc',
+        naturalKey: `txn:${txnId()}`,
+        occurredOn: new Date('2026-10-08T00:00:00Z'),
+        direction: 'in',
+        amountTetri: 9850,
+        grossTetri: null,
+        feeTetri: null,
+        payer: PARTNER,
+        purpose: desc('100.00', who.tag).replace('Visa', 'MasterCard'),
+        raw: ['08/10/2026', desc('100.00', who.tag).replace('Visa', 'MasterCard'), '98.5', PARTNER, 'x'].join(' | '),
+        status: 'unmatched',
+      },
+    });
+    const shown = json<{ line: { channel: string; grossTetri: number | null } }>(await call(owner, 'GET', `/api/statement-lines/${old.id}`));
+    expect(shown.line).toMatchObject({ channel: 'acquiring', grossTetri: 10000 });
+    expect((await call(owner, 'POST', `/api/statement-lines/${old.id}/assign`, { rentalId })).statusCode).toBe(200);
+    expect(await prisma.payment.findFirstOrThrow({ where: { statementLineId: old.id } })).toMatchObject({ channel: 'acquiring', grossTetri: 10000, feeTetri: 150, netTetri: 9850 });
+  });
+
+  it('a stated sum that is not the credited sum plus a fee is not believed: the net and 1.5 % decide', async () => {
+    const who = tagged({ ru: 'Тея Странная', ka: 'თეა უცნაურიძე' });
+    const { prisma, owner } = await rentalFor(who);
+    // 985.00 credited is 1 000 paid; the line "states" 20.00 — some other number, not the gross.
+    await call(owner, 'POST', '/api/statements', { fileName: 't.csv', text: [TBC_HEADER, tbcRow('08/10/2026', '985.0', PARTNER, txnId(), desc('20.00', who.tag))].join('\n') });
+    const row = await prisma.statementLine.findFirstOrThrow({ where: { raw: { contains: who.tag } } });
+    expect(row).toMatchObject({ amountTetri: 98500, grossTetri: null, feeTetri: null });
+    const shown = json<{ line: { channel: string } }>(await call(owner, 'GET', `/api/statement-lines/${row.id}`));
+    expect(shown.line.channel).toBe('acquiring');
+  });
+
+  it('an ordinary TBC transfer stays a transfer', async () => {
+    const who = tagged({ ru: 'Гия Переводов', ka: 'გია გადარიცხვაძე' });
+    const { prisma, owner } = await rentalFor(who, { rate: 15000, pickedUpOn: '2026-08-02' });
+    await call(owner, 'POST', '/api/statements', { fileName: 't.csv', text: [TBC_HEADER, tbcRow('08/10/2026', '77.0', `ვიღაც სხვა ${who.tag}`, txnId())].join('\n') });
+    const row = await prisma.statementLine.findFirstOrThrow({ where: { raw: { contains: who.tag } } });
+    expect(row).toMatchObject({ grossTetri: null, feeTetri: null });
+    expect(json<{ line: { channel: string } }>(await call(owner, 'GET', `/api/statement-lines/${row.id}`)).line.channel).toBe('transfer');
+  });
+});
+
 describe.skipIf(!HAS_DB)('the queue of lines nobody could place (PAY-03)', () => {
   it('holds a line with no name and no matching amount, and offers hints', async () => {
     const { owner } = await rentalFor({ ru: 'Тамара Безымянная', ka: 'თამარ უსახელოძე' }, { rate: 15000, pickedUpOn: '2026-08-02' });

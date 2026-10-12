@@ -72,6 +72,38 @@ export function parseCsv(text: string): string[][] {
   return rows;
 }
 
+// ---------------------------------------------------------------------------
+// A card payment, as either bank writes it into a line
+// ---------------------------------------------------------------------------
+//
+// Bank of Georgia states the customer's sum and the commission (below), or
+// writes only `Wallet/domestic MC cards` and credits the net.
+//
+// TBC settles its terminal as a transfer from the bank itself. The partner is
+// a phrase, not a person — «Wallet/domestic/საერთაშორისო … ბარათებით თიბისის
+// სავაჭრო ობიექტებში …» — and the description states what was paid by card:
+//   `08/10/2026_ის ტრანზაქციის თანხები … E MOTION MOTORS LLC, TBC BANK, Visa, 200.00, SH074829,,V`
+// with 197.00 credited. Read off the first TBC statement loaded on production
+// (12.10.2026), where both such lines came in as transfers of 197 and 98.50.
+//
+// One function reads it for a parsed line and for a stored one alike: lines
+// already in the database keep their raw text, and are read the same way.
+
+const BOG_WALLET = /Wallet\/domestic MC cards/i;
+const TBC_SETTLEMENT = /Wallet\/domestic\//i;
+const TBC_STATED = /TBC BANK,\s*[A-Za-z ]+?,\s*(\d[\d.,]*)\s*,/i;
+
+/** Is this incoming line a card payment — and what the bank says the customer paid, when it says. */
+export function cardOf(l: { amountTetri: number; grossTetri: number | null; feeTetri: number | null; raw: string }): { grossTetri: number | null; feeTetri: number | null } | null {
+  if (l.grossTetri != null) return { grossTetri: l.grossTetri, feeTetri: l.feeTetri };
+  if (BOG_WALLET.test(l.raw)) return { grossTetri: null, feeTetri: null };
+  if (!TBC_SETTLEMENT.test(l.raw)) return null;
+  const stated = parseBankAmount(TBC_STATED.exec(l.raw)?.[1] ?? '');
+  // The stated sum is what was paid only when it is the credited sum plus a fee a bank could have kept.
+  const sound = stated != null && stated > l.amountTetri && stated - l.amountTetri <= stated / 10;
+  return sound ? { grossTetri: stated, feeTetri: stated - l.amountTetri } : { grossTetri: null, feeTetri: null };
+}
+
 const DMY_DOT = /^(\d{2})\.(\d{2})\.(\d{4})$/; // BOG
 const DMY_SLASH = /^(\d{2})\/(\d{2})\/(\d{4})/; // TBC, sometimes with a time after it
 
@@ -182,7 +214,8 @@ export function parseBog(text: string, opts: { fileName: string }): ParsedStatem
 // Two header rows — Georgian, then English — and then the data. The English
 // row is the one to read. The amount is signed, the payer is a column of its
 // own ("Partner's Name", in Georgian script), and every row carries a
-// Transaction ID, which is exactly the natural key this needs.
+// Transaction ID, which is exactly the natural key this needs. A day's card
+// payments come as one line per card scheme (`cardOf` above).
 
 export function parseTbc(text: string, opts: { fileName: string }): ParsedStatement {
   const rows = parseCsv(text);
@@ -215,17 +248,20 @@ export function parseTbc(text: string, opts: { fileName: string }): ParsedStatem
     if (!to || occurredOn > to) to = occurredOn;
 
     const txn = (r[iTxn] ?? '').trim();
+    const raw = [r[iDate], r[iDesc], r[iAmount], r[iPartner], txn].join(' | ');
+    // The terminal's settlement is a card payment, with the customer's sum stated in it.
+    const card = signed > 0 ? cardOf({ amountTetri: signed, grossTetri: null, feeTetri: null, raw }) : null;
     lines.push({
       naturalKey: txn ? `txn:${txn}` : hashKey('tbc', [occurredOn, r[iAmount] ?? '', r[iDesc] ?? ''], seen),
       occurredOn,
       direction: signed > 0 ? 'in' : 'out',
       amountTetri: Math.abs(signed),
-      grossTetri: null,
-      feeTetri: null,
+      grossTetri: card?.grossTetri ?? null,
+      feeTetri: card?.feeTetri ?? null,
       payer: (r[iPartner] ?? '').trim() || null,
       purpose: (r[iDesc] ?? '').replace(/\s+/g, ' ').trim().slice(0, 300) || null,
-      raw: [r[iDate], r[iDesc], r[iAmount], r[iPartner], txn].join(' | '),
-      channel: 'transfer',
+      raw,
+      channel: card ? 'acquiring' : 'transfer',
     });
   }
   if (lines.length === 0) throw new ParseError(`No transactions found in ${opts.fileName}.`);
