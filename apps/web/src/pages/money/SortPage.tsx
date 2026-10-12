@@ -17,6 +17,8 @@ import { useLoad } from '../../lib/use.js';
 
 interface Reason {
   code: 'name' | 'card_pickup' | 'amount_week' | 'amount' | 'recorded' | 'bank_deposit';
+  /** The rental under this hint was carried over on or after the line's day: its money may be counted already. */
+  transferredOn?: string;
   name?: string;
   number?: string;
   debtTetri?: number;
@@ -60,7 +62,7 @@ interface Queue {
 /** The reason under a hint, in words (§3.2 "причина словами"). */
 export function useReasonText() {
   const t = useT();
-  return (r: Reason, line?: { amountTetri: number }): string => {
+  const words = (r: Reason, line?: { amountTetri: number }): string => {
     const g = (n?: number) => formatGel(n ?? 0);
     switch (r.code) {
       case 'name':
@@ -77,6 +79,8 @@ export function useReasonText() {
         return t.sort.reason.bank_deposit;
     }
   };
+  // A line no later than the day the rental was carried over: the reason, and why a person is asked.
+  return (r: Reason, line?: { amountTetri: number }): string => (r.transferredOn ? `${words(r, line)} ${t.sort.reason.beforeTransfer(fmtDate(r.transferredOn))}` : words(r, line));
 }
 
 /**
