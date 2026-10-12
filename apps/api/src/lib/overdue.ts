@@ -67,7 +67,7 @@ export async function rentalsNow(): Promise<RentalsNow> {
   }
 
   // The same figure as everywhere else (B7-02), not a second sum over the weeks.
-  const debts = await debtsOf(out.overdue.map((o) => o.customer.id));
+  const debts = await debtsOf(out.overdue.map((o) => o.customer.id), today);
   for (const o of out.overdue) {
     o.debtTetri = (debts.get(o.customer.id)?.parts ?? []).filter((p) => p.id === o.id).reduce((n, p) => n + p.owesTetri, 0);
   }

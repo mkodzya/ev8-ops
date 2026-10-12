@@ -1,7 +1,8 @@
 import { dayQueue, queueCount, todayISO, VEHICLE_STATES, type QueueRental, type VehicleState } from '@ev8/shared';
 import type { FastifyInstance } from 'fastify';
+import type { Prisma } from '../generated/prisma/client.js';
 import { dateFromISO, isoDate } from '../lib/dates.js';
-import { debtsOf, rentalDueToday } from '../lib/debt.js';
+import { debtsOf, rentalDebt, rentalDueToday, type CustomerDebt } from '../lib/debt.js';
 import { depositsOverview } from '../lib/deposits.js';
 import { prisma } from '../lib/db.js';
 import { partRows } from '../lib/stock.js';
@@ -22,6 +23,59 @@ import { batteriesNow } from './batteries.js';
 const STALE_DAYS = 7;
 const daysBetween = (a: string, b: string) => Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000);
 
+/** What the queue reads of a rental: one select, so the route and the mapper below cannot part. */
+export const QUEUE_RENTAL = {
+  id: true,
+  number: true,
+  status: true,
+  pickedUpOn: true,
+  expectedReturnOn: true,
+  paidThrough: true,
+  vinUnconfirmed: true,
+  odooOrderId: true,
+  transferredAt: true,
+  customer: { select: { id: true, name: true, nameKa: true, nameLat: true, phone: true } },
+  vehicle: { select: { vin: true } },
+  deposit: { select: { paidTetri: true, status: true, decidedById: true, migrationDecision: true } },
+  documents: { where: { kind: 'pdf', docKind: 'contract', archived: false }, select: { signedAt: true } },
+} satisfies Prisma.RentalSelect;
+
+/**
+ * A rental as the queue of "Today" reads it: what it is called today, its
+ * part of the one debt figure and how much of that is awaited. `today` is the
+ * day the debts were asked for — one clock for the status and for the figure.
+ * Exported with its select so that a test can hold the mapping for ONE
+ * rental: a group shows three rows, and the rule is for every one.
+ */
+export function queueRental(r: Prisma.RentalGetPayload<{ select: typeof QUEUE_RENTAL }>, today: string, debts: Map<string, CustomerDebt>): QueueRental {
+  const paidThrough = isoDate(r.paidThrough);
+  const pickedUpOn = isoDate(r.pickedUpOn);
+  const { status } = rentStateOf(r, today);
+  const signed = r.documents.some((d) => d.signedAt != null);
+  const handedOverAgo = pickedUpOn ? daysBetween(pickedUpOn, today) : 0;
+  return {
+    id: r.id,
+    number: r.number,
+    customer: { id: r.customer.id, name: r.customer.name, phone: r.customer.phone },
+    vin: r.vehicle?.vin ?? null,
+    pickedUpOn,
+    expectedReturnOn: isoDate(r.expectedReturnOn),
+    paidThrough,
+    status,
+    debtTetri: rentalDebt(debts.get(r.customer.id), r.id),
+    // Of that debt: awaited today and not late — the row of "due today" carries it (ADR-0017).
+    dueTodayTetri: rentalDueToday(debts.get(r.customer.id), r.id),
+    // A deposit the transfer brought over is not this week's decision: it
+    // stands in one row of its own (§3.7), and the rows here are the
+    // returns the company itself made.
+    depositUndecided: r.status === 'returned' && r.deposit?.status === 'held' && !r.deposit.decidedById && !r.deposit.migrationDecision && r.odooOrderId == null,
+    vinUnconfirmed: r.vinUnconfirmed,
+    // A rental brought over has its contract from before EV8 Ops, kept outside
+    // it: nobody is asked to sign that one here (Mika, 08.10.2026).
+    contractUnsigned: !signed && !r.transferredAt && handedOverAgo >= 1 && r.status !== 'returned',
+  };
+}
+
 /** Monday of the week `today` falls in — the week the numbers are about (`weekly.md`). */
 export function weekStart(today: string): string {
   const d = new Date(`${today}T00:00:00Z`);
@@ -41,21 +95,7 @@ export function todayRoutes(app: FastifyInstance): void {
     const [rentalRows, tills, unmatchedLines, lastLines, instalmentRows, serviceJobs, reportRows, parts, purchaseRows, vehicles, week, myTill] = await Promise.all([
       prisma.rental.findMany({
         where: { OR: [{ status: { not: 'returned' } }, { status: 'returned', deposit: { status: 'held', decidedById: null, migrationDecision: null, paidTetri: { gt: 0 } } }] },
-        select: {
-          id: true,
-          number: true,
-          status: true,
-          pickedUpOn: true,
-          expectedReturnOn: true,
-          paidThrough: true,
-          vinUnconfirmed: true,
-          odooOrderId: true,
-          transferredAt: true,
-          customer: { select: { id: true, name: true, nameKa: true, nameLat: true, phone: true } },
-          vehicle: { select: { vin: true } },
-          deposit: { select: { paidTetri: true, status: true, decidedById: true, migrationDecision: true } },
-          documents: { where: { kind: 'pdf', docKind: 'contract', archived: false }, select: { signedAt: true } },
-        },
+        select: QUEUE_RENTAL,
       }),
       owner ? prisma.cashHandover.findMany({ where: { status: 'pending' }, select: { id: true, amountTetri: true, fromUser: { select: { name: true } } }, orderBy: { handedAt: 'asc' } }) : [],
       owner ? prisma.statementLine.count({ where: { status: 'unmatched' } }) : 0,
@@ -87,38 +127,9 @@ export function todayRoutes(app: FastifyInstance): void {
       owner ? 0 : onHandOf(actor.id),
     ]);
 
-    const debts = await debtsOf([...new Set(rentalRows.map((r) => r.customer.id))]);
-    const debtOfRental = (customerId: string, rentalId: string) =>
-      (debts.get(customerId)?.parts ?? []).filter((p) => p.id === rentalId && (p.kind === 'rent' || p.kind === 'deposit' || p.kind === 'charge')).reduce((n, p) => n + p.owesTetri, 0);
-
-    const rentals: QueueRental[] = rentalRows.map((r) => {
-      const paidThrough = isoDate(r.paidThrough);
-      const pickedUpOn = isoDate(r.pickedUpOn);
-      const { status } = rentStateOf(r, today);
-      const signed = r.documents.some((d) => d.signedAt != null);
-      const handedOverAgo = pickedUpOn ? daysBetween(pickedUpOn, today) : 0;
-      return {
-        id: r.id,
-        number: r.number,
-        customer: { id: r.customer.id, name: r.customer.name, phone: r.customer.phone },
-        vin: r.vehicle?.vin ?? null,
-        pickedUpOn,
-        expectedReturnOn: isoDate(r.expectedReturnOn),
-        paidThrough,
-        status,
-        debtTetri: debtOfRental(r.customer.id, r.id),
-        // Of that debt: awaited today and not late — the row of "due today" carries it (ADR-0017).
-        dueTodayTetri: rentalDueToday(debts.get(r.customer.id), r.id),
-        // A deposit the transfer brought over is not this week's decision: it
-        // stands in one row of its own (§3.7), and the rows here are the
-        // returns the company itself made.
-        depositUndecided: r.status === 'returned' && r.deposit?.status === 'held' && !r.deposit.decidedById && !r.deposit.migrationDecision && r.odooOrderId == null,
-        vinUnconfirmed: r.vinUnconfirmed,
-        // A rental brought over has its contract from before EV8 Ops, kept outside
-        // it: nobody is asked to sign that one here (Mika, 08.10.2026).
-        contractUnsigned: !signed && !r.transferredAt && handedOverAgo >= 1 && r.status !== 'returned',
-      };
-    });
+    // The debts for the same day the statuses are read for: one clock for one answer.
+    const debts = await debtsOf([...new Set(rentalRows.map((r) => r.customer.id))], today);
+    const rentals: QueueRental[] = rentalRows.map((r) => queueRental(r, today, debts));
 
     // What the transfer left undecided, as one number (§3.7). Only an owner
     // ever sees it, so only an owner's request pays for the query.

@@ -4,6 +4,7 @@
 // badge that counts something the screen does not list is worse than none.
 import type { ISODate, RentalStatus } from './types.js';
 import type { Tetri } from './money.js';
+import { waOffered } from './due.js';
 import { overdueDays } from './periods.js';
 
 // "till" is a manager's last group (§3.1): their own cash, handed over at the
@@ -64,6 +65,12 @@ export interface TaskRow {
    * The screen paints the sum red when `amountTetri` is above it.
    */
   dueTodayTetri?: Tetri;
+  /**
+   * False on a row about a rental that has no ready WhatsApp message today
+   * (`waOffered`): the screen draws no WhatsApp button on it, in whichever
+   * group the row stands. Absent on every other row.
+   */
+  whatsapp?: false;
 }
 
 export interface QueueRental {
@@ -152,6 +159,9 @@ const daysBetween = (a: ISODate, b: ISODate) => Math.round((Date.parse(`${b}T00:
 export function dayQueue(input: QueueInput): TaskGroupRows[] {
   const rows: TaskRow[] = [];
   const open = input.rentals.filter((r) => r.status !== 'returned');
+  // A rental is one customer in several groups — a return, a week to take, a
+  // contract to sign. Each of its rows says when there is no message to send.
+  const wa = (r: QueueRental): { whatsapp?: false } => (waOffered(r.status, r.pickedUpOn, input.today) ? {} : { whatsapp: false });
 
   // 1. Decide — an owner's: a till handed over today, a deposit a manager's
   // return left. The till comes first: it is money on somebody's hands right
@@ -191,6 +201,7 @@ export function dayQueue(input: QueueInput): TaskGroupRows[] {
         href: `/rentals/${r.id}?decide=1`,
         phone: r.customer.phone,
         note: null,
+        ...wa(r),
       });
     }
   }
@@ -211,6 +222,7 @@ export function dayQueue(input: QueueInput): TaskGroupRows[] {
       href: `/rentals/${r.id}/return`,
       phone: r.customer.phone,
       note: null,
+      ...wa(r),
     });
   }
 
@@ -233,6 +245,7 @@ export function dayQueue(input: QueueInput): TaskGroupRows[] {
       href: `/rentals/${r.id}`,
       phone: r.customer.phone,
       note: null,
+      ...wa(r),
     });
   }
 
@@ -255,6 +268,7 @@ export function dayQueue(input: QueueInput): TaskGroupRows[] {
       phone: r.customer.phone,
       // The one fact that sets a hand-over day apart: the screen says "handed over today".
       note: r.pickedUpOn === input.today ? 'handed_today' : null,
+      ...wa(r),
     });
   }
 
@@ -378,10 +392,10 @@ export function dayQueue(input: QueueInput): TaskGroupRows[] {
 
   // 10. Fill in — an unsigned contract, a rental without a VIN, a moped without a point.
   for (const r of open.filter((x) => x.contractUnsigned)) {
-    rows.push({ id: `sign:${r.id}`, group: 'fill', action: 'sign', who: r.customer.name, number: r.number, vin: r.vin, days: null, amountTetri: null, href: `/rentals/${r.id}`, phone: r.customer.phone, note: null });
+    rows.push({ id: `sign:${r.id}`, group: 'fill', action: 'sign', who: r.customer.name, number: r.number, vin: r.vin, days: null, amountTetri: null, href: `/rentals/${r.id}`, phone: r.customer.phone, note: null, ...wa(r) });
   }
   for (const r of open.filter((x) => x.vinUnconfirmed)) {
-    rows.push({ id: `vin:${r.id}`, group: 'fill', action: 'set_vin', who: r.customer.name, number: r.number, vin: null, days: null, amountTetri: null, href: `/rentals/${r.id}`, phone: r.customer.phone, note: null });
+    rows.push({ id: `vin:${r.id}`, group: 'fill', action: 'set_vin', who: r.customer.name, number: r.number, vin: null, days: null, amountTetri: null, href: `/rentals/${r.id}`, phone: r.customer.phone, note: null, ...wa(r) });
   }
   if (input.vehiclesWithoutPoint > 0) {
     rows.push({ id: 'point', group: 'fill', action: 'set_point', who: null, number: null, vin: null, days: null, amountTetri: null, href: '/fleet?f=nopoint', phone: null, note: String(input.vehiclesWithoutPoint) });

@@ -136,6 +136,7 @@ export function rentalDueToday(debt: CustomerDebt | undefined, rentalId: string)
   return debt?.dueTodayBy[rentalId] ?? 0;
 }
 
-export async function debtOf(customerId: string): Promise<CustomerDebt> {
-  return (await debtsOf([customerId])).get(customerId)!;
+/** One customer's figure. `today` — the day the caller reads its statuses for, so the two halves of an answer cannot part at midnight. */
+export async function debtOf(customerId: string, today?: string): Promise<CustomerDebt> {
+  return (await debtsOf([customerId], today)).get(customerId)!;
 }

@@ -61,7 +61,14 @@ async function stoodThrough(r: Awaited<ReturnType<typeof running>>, seq: number,
 interface Card {
   rental: { status: string; paidThrough: string | null; debtTetri: number };
   periods: { seq: number; amountTetri: number; paidTetri: number; payStatus: string }[];
+  charges: { kind: string; amountTetri: number }[];
 }
+interface Plan {
+  closes: { target: string; seq?: number; amountTetri: number }[];
+  paidThroughBefore: string | null;
+  paidThroughAfter: string | null;
+}
+const items = () => ({ moped: { state: 'ok' }, key: { state: 'ok' }, battery_1: { state: 'ok' }, battery_2: { state: 'ok' }, charger_1: { state: 'ok' }, charger_2: { state: 'ok' } });
 interface Row {
   id: string;
   status: string;
@@ -134,6 +141,82 @@ describe.skipIf(!HAS_DB)('a week at nothing is a paid week (ADR-0017)', () => {
     const cal = await calendar(r.owner);
     expect(entriesOf(cal, r.id)).toEqual([]);
     expect(lateOf(cal, r.id)).toBeUndefined();
+  });
+
+  /**
+   * The release day itself. A week at nothing written before this rule is
+   * stored as "unpaid" with "paid through" stopped before it — that is how the
+   * rows of a working stand lie today. Nothing migrates them: the roll's own
+   * repair of the two stored derived facts does, at the worker's first run
+   * after the deploy. Held here so that narrowing that repair goes red.
+   */
+  it('a week at nothing stored the old way is put right by the roll, and no figure moves', async () => {
+    const r = await running(8);
+    const t = today();
+    await stoodThrough(r, 2, 'paused');
+    // The stored state the old rule left: the week "unpaid", "paid through" at the end of week 1.
+    const { dateFromISO } = await import('../src/lib/dates.js');
+    await r.prisma.rentalPeriod.updateMany({ where: { rentalId: r.id, seq: 2 }, data: { payStatus: 'unpaid' } });
+    await r.prisma.rental.update({ where: { id: r.id }, data: { paidThrough: dateFromISO(addDays(t, -2)) } });
+
+    const money = async () => {
+      const c = await card(r.owner, r.id);
+      return { cardDebtTetri: c.rental.debtTetri, weeks: c.periods.map((p) => [p.seq, p.amountTetri, p.paidTetri]), owesTetri: (await balance(r.owner, r.customer.id)).owesTetri };
+    };
+    // Overdue with nothing owed: the false state this rule would have put on three more screens.
+    expect(await listed(r.owner, r.id)).toMatchObject({ status: 'overdue', overdueDays: 1, debtTetri: 0, paidThrough: addDays(t, -2) });
+    const before = await money();
+    expect(before).toEqual({
+      cardDebtTetri: 0,
+      weeks: [
+        [1, 15000, 15000],
+        [2, 0, 0],
+      ],
+      owesTetri: 0,
+    });
+
+    const { rollPeriods } = await import('../src/lib/periods.js');
+    await rollPeriods(t);
+
+    const c = await card(r.owner, r.id);
+    expect(c.periods[1]).toMatchObject({ seq: 2, amountTetri: 0, paidTetri: 0, payStatus: 'paid' });
+    expect(c.rental).toMatchObject({ status: 'active', paidThrough: addDays(t, 5), debtTetri: 0 });
+    expect(await listed(r.owner, r.id)).toMatchObject({ status: 'active', overdueDays: 0, debtTetri: 0, paidThrough: addDays(t, 5) });
+    expect(await money()).toEqual(before);
+  });
+
+  it('the money form promises "paid through" over a week at nothing, and the payment keeps the promise', async () => {
+    const r = await running(15);
+    const t = today();
+    await stoodThrough(r, 3, 'paused');
+
+    // Week 2 is owed; week 3 stood at nothing. Paying week 2 carries "paid through" to the end of week 3.
+    const plan = json<Plan>(await call(r.owner, 'POST', '/api/money/preview', { kind: 'rent', rentalId: r.id, amountTetri: '150', channel: 'cash' }));
+    expect(plan.closes.map((x) => [x.target, x.seq, x.amountTetri])).toEqual([['period', 2, 15000]]);
+    expect(plan).toMatchObject({ paidThroughBefore: addDays(t, -9), paidThroughAfter: addDays(t, 5) });
+
+    const paid = await call(r.owner, 'POST', '/api/payments', { rentalId: r.id, channel: 'cash', grossTetri: 15000 });
+    expect(paid.statusCode, paid.body).toBe(201);
+    expect((await card(r.owner, r.id)).rental).toMatchObject({ status: 'active', paidThrough: addDays(t, 5), debtTetri: 0 });
+    expect(await listed(r.owner, r.id)).toMatchObject({ status: 'active', overdueDays: 0, debtTetri: 0, paidThrough: addDays(t, 5) });
+  });
+
+  it('a week a late return replaced is a week at nothing: it reads paid, and the debt is the days of delay alone', async () => {
+    // Paid through yesterday, planned back two days ago: the started week gives way to two days of delay.
+    const r = await running(7, { expectedReturnOn: addDays(today(), -2) });
+    const t = today();
+    const back = await call(r.owner, 'POST', `/api/rentals/${r.id}/return`, { odometerKm: 150, items: items() });
+    expect(back.statusCode, back.body).toBe(200);
+
+    const c = await card(r.owner, r.id);
+    expect(c.periods.map((p) => [p.seq, p.amountTetri, p.paidTetri, p.payStatus])).toEqual([
+      [1, 15000, 15000, 'paid'],
+      [2, 0, 0, 'paid'],
+    ]);
+    expect(c.charges.map((x) => [x.kind, x.amountTetri])).toEqual([['late', 6000]]);
+    expect(c.rental).toMatchObject({ status: 'returned', paidThrough: addDays(t, 6), debtTetri: 6000 });
+    expect(await listed(r.owner, r.id)).toMatchObject({ status: 'returned', overdueDays: 0, debtTetri: 6000 });
+    expect((await balance(r.owner, r.customer.id)).owesTetri).toBe(6000);
   });
 
   it('moves no money: a rental with no week at nothing reads the same before and after the roll', async () => {

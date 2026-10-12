@@ -304,7 +304,7 @@ export function paymentRoutes(app: FastifyInstance): void {
     const id = req.params.id;
     const today = todayISO(new Date(), env.TZ);
     const [debt, rentals, sales, jobs] = await Promise.all([
-      debtOf(id),
+      debtOf(id, today),
       prisma.rental.findMany({
         where: { customerId: id },
         orderBy: { pickedUpOn: 'desc' },

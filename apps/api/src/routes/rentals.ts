@@ -27,7 +27,8 @@ export function rentalRoutes(app: FastifyInstance): void {
       },
     });
     // A rental's debt is its part of its customer's one figure: its unpaid weeks and deposit.
-    const debts = await debtsOf(rentals.map((r) => r.customerId));
+    // Asked for the same day the statuses below are read for: one clock for one answer.
+    const debts = await debtsOf(rentals.map((r) => r.customerId), today);
     const debtOfRental = (customerId: string, rentalId: string) =>
       (debts.get(customerId)?.parts ?? []).filter((p) => p.id === rentalId && (p.kind === 'rent' || p.kind === 'deposit' || p.kind === 'charge')).reduce((n, p) => n + p.owesTetri, 0);
     return {
@@ -106,7 +107,7 @@ export function rentalRoutes(app: FastifyInstance): void {
     const pickedUpOn = isoDate(r.pickedUpOn);
     const paidThrough = isoDate(r.paidThrough);
     // This rental's part of its customer's one debt figure (B7-02): weeks and an unpaid deposit (QA-W2-01).
-    const debt = (await debtsOf([r.customerId])).get(r.customerId);
+    const debt = (await debtsOf([r.customerId], today)).get(r.customerId);
     const debtTetri = (debt?.parts ?? []).filter((p) => p.id === r.id && (p.kind === 'rent' || p.kind === 'deposit' || p.kind === 'charge')).reduce((n, p) => n + p.owesTetri, 0);
     return {
       rental: {

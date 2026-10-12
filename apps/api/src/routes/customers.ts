@@ -105,8 +105,9 @@ export function customerRoutes(app: FastifyInstance): void {
     if (!c) throw notFound('customer_not_found', 'No such customer.');
     // The one debt figure and what it is made of (B7-04, wave 2), the sales,
     // and one timeline: money, documents, changes of the card.
-    const debt = await debtOf(c.id);
+    // One clock for the figure and for the statuses of the rentals below.
     const today = todayISO(new Date(), env.TZ);
+    const debt = await debtOf(c.id, today);
     const [sales, payments, log] = await Promise.all([
       prisma.sale.findMany({
         where: { customerId: c.id, status: { not: 'cancelled' } },
