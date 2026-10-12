@@ -1,6 +1,6 @@
 {
   "name": "@ev8/shared",
-  "version": "1.5.1",
+  "version": "1.5.2",
   "private": true,
   "type": "module",
   "description": "Pure, DB-free domain rules shared by api, worker and web: money in tetri, VAT, acquiring, weekly periods, roles and permissions, vehicle and rental states.",
