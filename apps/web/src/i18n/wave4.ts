@@ -117,30 +117,35 @@ export const wave4En = {
     template: 'Template',
     overdue: 'Overdue',
     tomorrow: 'Payment tomorrow',
+    /** The due day itself (ADR-0017): the text the owner read on 12.10.2026. */
+    today: 'Payment today',
     lang: 'Message language',
     note: 'WhatsApp opens with this text; you send it from your own phone.',
     open: 'Open WhatsApp',
     logged: 'Written into the rental’s feed',
-    /** The sheet opened on a rental with no ready message today — one due today (ADR-0017). */
+    /** The sheet opened on a rental with no ready message today — one handed over today (ADR-0017). */
     noneToday: 'There is no ready message for this rental today.',
     /** The texts themselves are the same in every interface language: they go to the customer. */
     text: (
       lang: 'ka' | 'ru' | 'en',
-      kind: 'overdue' | 'tomorrow',
+      kind: 'overdue' | 'tomorrow' | 'today',
       v: { name: string; number: string; date: string; amount: string },
     ) => {
+      // «Сегодня оплата» is «Завтра оплата» with one word changed — the owner
+      // approved it as that, so the two share the sentence and cannot part.
+      const day = kind === 'today' ? { ka: 'დღეს', ru: 'Сегодня', en: 'Today' } : { ka: 'ხვალ', ru: 'Завтра', en: 'Tomorrow' };
       const ka =
         kind === 'overdue'
           ? `გამარჯობა, ${v.name}! წერს EV8. ქირაობა ${v.number}: გადახდილია ${v.date}-მდე, დავალიანება ${v.amount}. გადახდა შეგიძლიათ შოურუმში (ნუცუბიძე 65) ან გადარიცხვით. კითხვები: ${EV8_PHONE}`
-          : `გამარჯობა, ${v.name}! წერს EV8. ხვალ, ${v.date}, იწყება ახალი კვირა ქირაობაზე ${v.number} — ${v.amount}. კითხვები: ${EV8_PHONE}`;
+          : `გამარჯობა, ${v.name}! წერს EV8. ${day.ka}, ${v.date}, იწყება ახალი კვირა ქირაობაზე ${v.number} — ${v.amount}. კითხვები: ${EV8_PHONE}`;
       const ru =
         kind === 'overdue'
           ? `Здравствуйте, ${v.name}! Это EV8. Аренда ${v.number}: оплачено по ${v.date}, долг ${v.amount}. Оплатить можно в шоуруме (Нуцубидзе, 65) или переводом. Вопросы: ${EV8_PHONE}`
-          : `Здравствуйте, ${v.name}! Это EV8. Завтра, ${v.date}, начинается новая неделя аренды ${v.number} — ${v.amount}. Вопросы: ${EV8_PHONE}`;
+          : `Здравствуйте, ${v.name}! Это EV8. ${day.ru}, ${v.date}, начинается новая неделя аренды ${v.number} — ${v.amount}. Вопросы: ${EV8_PHONE}`;
       const en =
         kind === 'overdue'
           ? `Hello ${v.name}, this is EV8. Rental ${v.number}: paid through ${v.date}, ${v.amount} due. You can pay at the showroom (65 Nutsubidze St.) or by bank transfer. Questions: ${EV8_PHONE}`
-          : `Hello ${v.name}, this is EV8. Tomorrow, ${v.date}, a new rental week starts for ${v.number} — ${v.amount}. Questions: ${EV8_PHONE}`;
+          : `Hello ${v.name}, this is EV8. ${day.en}, ${v.date}, a new rental week starts for ${v.number} — ${v.amount}. Questions: ${EV8_PHONE}`;
       return lang === 'ka' ? ka : lang === 'ru' ? ru : en;
     },
   },
@@ -427,6 +432,7 @@ export const wave4Ru: Wave4 = {
     template: 'Шаблон',
     overdue: 'Просрочка',
     tomorrow: 'Завтра оплата',
+    today: 'Сегодня оплата',
     lang: 'Язык сообщения',
     note: 'Откроется WhatsApp с этим текстом; отправляете вы со своего телефона.',
     open: 'Открыть WhatsApp',
@@ -700,6 +706,7 @@ export const wave4Ka: Wave4 = {
     template: 'შაბლონი',
     overdue: 'ვადაგადაცილება',
     tomorrow: 'ხვალ გადახდა',
+    today: 'დღეს გადახდა',
     lang: 'შეტყობინების ენა',
     note: 'გაიხსნება WhatsApp ამ ტექსტით; აგზავნით თქვენი ტელეფონიდან.',
     open: 'WhatsApp-ის გახსნა',

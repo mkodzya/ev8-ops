@@ -388,6 +388,7 @@ describe.skipIf(!HAS_DB)('payments calendar · what is not on it', () => {
       customer: { id: customer.id, name: customer.name, nameKa: null, nameLat: null, phone: customer.phone },
       vehicle: { id: vehicle.id, vin: vehicle.vin, model: `Test ${model.name}` },
       weeklyRateTetri: 15000,
+      pickedUpOn: addDays(today(), -8),
       paidThrough: addDays(today(), -2),
       debtTetri: 15000,
     });

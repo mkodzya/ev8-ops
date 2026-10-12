@@ -138,7 +138,7 @@ export function RentalPage() {
             {t.docs.returnAct}
           </button>
         )}
-        {/* No button while there is no ready message for this rental — on its due day (ADR-0017). */}
+        {/* No button while there is no ready message for this rental — on the day it was handed over (ADR-0017). */}
         {r.customer.phone && waOffered(r.status, r.pickedUpOn, today) && (
           <button type="button" className="pill pill-sm" onClick={() => setWa(true)}>
             {t.customer.whatsapp}

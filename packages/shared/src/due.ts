@@ -74,18 +74,37 @@ export function handOverBlockTetri(owesTetri: Tetri, dueTodayRentTetri: Tetri): 
 }
 
 /**
+ * The WhatsApp texts the owner has read and approved: «Просрочка» and «Завтра
+ * оплата» (18.09.2026), «Сегодня оплата» (12.10.2026) — the second with one
+ * word changed. The server takes these codes and no other.
+ */
+export const WA_TEMPLATES = ['overdue', 'tomorrow', 'today'] as const;
+export type WaTemplate = (typeof WA_TEMPLATES)[number];
+
+/**
  * Is there a ready WhatsApp message for a rental in this state today
- * (ADR-0017)? For one that is due today there is none: «Просрочка» calls a
- * week that began this morning a debt, «Завтра оплата» says "tomorrow" with
- * today's date, and a text for the due day itself goes to a customer only
- * after the owner has read it. So the buttons that open the sheet are not
- * drawn for such a rental, and the sheet says so when it is reached by
- * another door.
- * The pickup day and today are asked for already: with the owner's text the
- * rule narrows to the hand-over day, and no caller changes.
+ * (ADR-0017)? For every rental but one handed over today and not
+ * paid yet: the customer has just stood at the desk, and «Сегодня оплата»
+ * would call their first week a "new" one and name the week's rent where the
+ * deposit is awaited too. So the buttons that open the sheet are not drawn
+ * for such a rental, and the sheet says so when it is reached by another door.
  */
 export function waOffered(status: string, pickedUpOn: ISODate | null, today: ISODate): boolean {
-  return status !== 'due_today';
+  return !(status === 'due_today' && pickedUpOn === today);
+}
+
+/**
+ * The templates the sheet offers for a rental in this state, and the one it
+ * opens on (ADR-0017). Due today: «Сегодня оплата» alone — the other two are
+ * untrue that day. Any other rental: the two older ones, as before — «Просрочка»
+ * for a late rental and for any that owes (returned, paused or disputed with a
+ * debt, a deposit short), «Завтра оплата» otherwise; «Сегодня оплата» is not
+ * offered. `status` is the EFFECTIVE one; null — the message is about no
+ * rental in particular.
+ */
+export function waTemplatesOf(status: string | null, owesTetri: Tetri): { all: readonly WaTemplate[]; first: WaTemplate } {
+  if (status === 'due_today') return { all: ['today'], first: 'today' };
+  return { all: ['overdue', 'tomorrow'], first: status === 'overdue' || owesTetri > 0 ? 'overdue' : 'tomorrow' };
 }
 
 /** A customer's rental as the choice of a message needs it: its EFFECTIVE status and its pickup day. */
@@ -98,13 +117,13 @@ export interface WaRental {
 /**
  * The ONE rental a message from a customer's card is about, and whether the
  * card offers a message at all (ADR-0017). The most urgent: an overdue one,
- * then one due today, then any not returned. While that one has no ready
- * message — on its due day — a debtor is not left without the door: another
- * rental of the customer's that holds a part of the figure (`owes`) and has a
- * message takes its place — returned, paused, disputed, or running with a
- * deposit short; «Просрочка» is true of it. `rental: null` with `offered`:
- * nothing is running, and the card writes about no rental in particular, as
- * it did.
+ * then one due today, then any not returned. When that one has no ready
+ * message — it was handed over today — a debtor is not left without the door:
+ * another rental of the customer's that holds a part of the figure (`owes`)
+ * and has a message takes its place — returned, paused, disputed, or running
+ * with a deposit short; «Просрочка» is true of it. `rental: null` with
+ * `offered`: nothing is running, and the card writes about no rental in
+ * particular, as it did.
  */
 export function waRentalOf<R extends WaRental>(rentals: readonly R[], owes: (rentalId: string) => boolean, today: ISODate): { rental: R | null; offered: boolean } {
   const live = rentals.find((r) => r.status === 'overdue') ?? rentals.find((r) => r.status === 'due_today') ?? rentals.find((r) => r.status !== 'returned') ?? null;

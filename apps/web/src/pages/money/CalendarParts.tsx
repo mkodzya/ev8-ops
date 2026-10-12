@@ -6,6 +6,7 @@ import {
   calendarWeekday,
   formatGel,
   paymentsQuery,
+  waOffered,
   type CalendarDay,
   type CalendarEntry,
   type CalendarLate,
@@ -641,7 +642,7 @@ function RowActions({ card, remind, week, dense, worded, actions }: { card: Cale
   const sm = dense ? ' pill-sm' : '';
   const phone = card.customer.phone;
   const reminds = remind !== null && !!phone;
-  const template = remind === 'overdue' ? t.wa.overdue : t.wa.tomorrow;
+  const template = remind === 'overdue' ? t.wa.overdue : remind === 'today' ? t.wa.today : t.wa.tomorrow;
   const ask = () => {
     if (remind !== null) actions.remind(card, remind, week);
   };
@@ -716,10 +717,12 @@ export function PayerRow({
   const part = entry.leftTetri !== 0 && entry.paidTetri !== 0;
   const sum = gel(part ? entry.leftTetri : entry.amountTetri);
   const paysTomorrow = entry.state === 'expected' && entry.dueOn === addDays(today, 1);
-  // «Просрочка» to the late, «Завтра оплата» to who pays tomorrow; there is no template for the day itself.
-  const remind: WaKind | null = entry.state === 'overdue' ? 'overdue' : paysTomorrow ? 'tomorrow' : null;
-  // Only «Завтра оплата» is about this week: its message carries the week's day and what the row says is left.
-  const buttons = showActions ? <RowActions card={card} remind={remind} week={paysTomorrow ? entry : null} dense={dense} worded={dense && paysTomorrow} actions={actions} /> : null;
+  // «Сегодня оплата» to who pays today — but not on the day the moped was handed over: the shared rule (ADR-0017).
+  const paysToday = entry.state === 'due_today' && waOffered('due_today', card.pickedUpOn, today);
+  // «Просрочка» to the late, «Сегодня оплата» and «Завтра оплата» to who pays today and tomorrow.
+  const remind: WaKind | null = entry.state === 'overdue' ? 'overdue' : paysToday ? 'today' : paysTomorrow ? 'tomorrow' : null;
+  // The last two are about this week: their message carries what the row says is left of it, «Завтра оплата» its day too.
+  const buttons = showActions ? <RowActions card={card} remind={remind} week={paysToday || paysTomorrow ? entry : null} dense={dense} worded={dense && paysTomorrow} actions={actions} /> : null;
 
   if (dense) {
     return (
