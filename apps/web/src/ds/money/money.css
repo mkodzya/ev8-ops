@@ -39,6 +39,7 @@
 .sort-line-meta { flex: 1; min-width: 0; }
 .sort-line-meta { font: var(--text-label); color: var(--muted); }
 .sort-line-text { font: var(--text-mono-sm); color: var(--muted); overflow-wrap: anywhere; margin: 0; }
+.sort-line-card { font: var(--text-label); color: var(--ink); margin: 0; }
 .sort-reason { margin: 0; font: var(--text-body-sm); }
 .sort-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .sort-foot { margin: 16px 0; font: var(--text-body-sm); }
