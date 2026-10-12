@@ -1,4 +1,4 @@
-import { acquiringFee, acquiringNet, addDays, CUSTOMER_SOURCES, DEFAULT_DEPOSIT_TETRI, gelFromTetri, parseGel, todayISO, type VehiclePool, type VehicleState } from '@ev8/shared';
+import { acquiringFee, acquiringNet, addDays, CUSTOMER_SOURCES, DEFAULT_DEPOSIT_TETRI, gelFromTetri, handOverBlockTetri, parseGel, todayISO, type VehiclePool, type VehicleState } from '@ev8/shared';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api, ApiError } from '../api.js';
@@ -33,6 +33,10 @@ interface CustomerRow {
   recordKind: string;
   rentals: number;
   debtTetri: number;
+  /** Of debtTetri: awaited today and not late (ADR-0017). */
+  dueTodayTetri: number;
+  /** Of dueTodayTetri: the rent alone — what the hand-over guard reads. */
+  dueTodayRentTetri: number;
   debtIn: DebtPart[];
 }
 interface FleetRow {
@@ -222,7 +226,14 @@ export function PickupWizard() {
   const ncPhoneOk = phoneKey(f.ncPhone).length === 9;
   const ncOk = ncPhoneOk && f.ncName.trim().length > 0 && ncPersonalId.trim().length > 0 && idPhoto.length > 0 && !twin;
   const debt = !f.creating && customer && customer.debtTetri > 0 ? customer : null;
-  const customerOk = f.creating ? ncOk : !!customer && (!debt || (owner && f.why.trim().length > 0));
+  // Two questions about one figure (ADR-0017). `debtor` — is anything in it
+  // older than what is awaited today: that chooses the words and the colour.
+  // `held` — does it make this hand-over an owner's decision: the server's own
+  // function, so the screen and the answer cannot part. The right is В2 as it
+  // was: every open figure holds, only the words are calm on a due day.
+  const debtor = !!debt && debt.debtTetri - (debt.dueTodayTetri ?? 0) > 0;
+  const held = !!debt && handOverBlockTetri(debt.debtTetri, debt.dueTodayRentTetri) > 0;
+  const customerOk = f.creating ? ncOk : !!customer && (!held || (owner && f.why.trim().length > 0));
   const vehicleOk = f.noVin ? f.vinNote.trim().length > 0 : !!vehicle && (!inSale || (owner && f.moveFromSale));
   const termsOk =
     rateTetri >= 0 &&
@@ -295,7 +306,7 @@ export function PickupWizard() {
         payment: !paymentNeeded ? undefined : f.channel === 'later' ? { later: true } : { later: false, channel: f.channel, amountTetri },
         transfer: transferBody,
         kommoRef: fromLead ?? undefined,
-        debtOverrideReason: debt && owner ? f.why.trim() : undefined,
+        debtOverrideReason: held && owner ? f.why.trim() : undefined,
       };
       let r: { id: string; number: string; actId: string };
       try {
@@ -378,21 +389,35 @@ export function PickupWizard() {
                         <CustomerName of={c} />
                         <span className="mono muted">{c.phone ?? ''}</span>
                       </span>
-                      <span className={c.debtTetri > 0 ? 'crit-text' : 'muted'}>{c.debtTetri > 0 ? t.hand.debt(formatGel(c.debtTetri, { decimals: false })) : t.hand.noDebt}</span>
+                      {c.debtTetri - (c.dueTodayTetri ?? 0) > 0 ? (
+                        <span className="crit-text">{t.hand.debt(formatGel(c.debtTetri, { decimals: false }))}</span>
+                      ) : c.debtTetri > 0 ? (
+                        <span>{t.hand.dueRow(formatGel(c.debtTetri, { decimals: false }))}</span>
+                      ) : (
+                        <span className="muted">{t.hand.noDebt}</span>
+                      )}
                     </button>
                   </li>
                 ))}
               </ul>
+              {/* A debtor gets the warning card, as before. A customer whose whole
+                  figure is awaited today gets the same facts in calm words:
+                  a plain card, «due today», and the money button named by
+                  role and filled only when it is the one way forward. */}
               {debt && (
-                <section className="card card-warn">
+                <section className={debtor ? 'card card-warn' : 'card'}>
                   <p>
-                    <b>{t.hand.debtLine(formatGel(debt.debtTetri, { decimals: false }), [...new Set(debt.debtIn.map((p) => p.number))].join(', '))}</b>
-                    {!owner && <> {t.hand.ownerOnly}</>}
+                    {debtor ? (
+                      <b>{t.hand.debtLine(formatGel(debt.debtTetri, { decimals: false }), [...new Set(debt.debtIn.map((p) => p.number))].join(', '))}</b>
+                    ) : (
+                      t.hand.dueLine(formatGel(debt.debtTetri, { decimals: false }), [...new Set(debt.debtIn.map((p) => p.number))].join(', '))
+                    )}
+                    {held && !owner && <> {t.hand.ownerOnly}</>}
                   </p>
-                  {!owner && can('cash.record') && firstDebt && (
+                  {(debtor ? !owner : true) && can('cash.record') && firstDebt && (
                     <button
                       type="button"
-                      className="pill pill-sm pill-accent"
+                      className={`pill pill-sm ${held && !owner ? 'pill-accent' : ''}`}
                       onClick={() =>
                         openMoney({
                           target: {
@@ -407,10 +432,10 @@ export function PickupWizard() {
                         })
                       }
                     >
-                      {t.hand.takeCash(formatGel(debt.debtTetri, { decimals: false }))}
+                      {debtor ? t.hand.takeCash(formatGel(debt.debtTetri, { decimals: false })) : t.today.actions[owner ? 'take_money' : 'take_cash']}
                     </button>
                   )}
-                  {owner && (
+                  {held && owner && (
                     <Field label={t.hand.why} hint={t.hand.whyHint} name="debtOverrideReason">
                       <input className="input" value={f.why} onChange={(e) => set({ why: e.target.value })} />
                     </Field>
@@ -838,7 +863,7 @@ function PickupDone({ id, number, photoTrouble }: { id: string; number: string; 
           )}
         </p>
         <p className="muted">
-          {r.status === 'awaiting_payment' ? t.hand.doneLater : t.hand.doneLine(fmtDate(r.paidThrough), formatGel(data.deposit?.paidTetri ?? 0, { decimals: false }))}
+          {r.status === 'due_today' ? t.hand.doneLater : t.hand.doneLine(fmtDate(r.paidThrough), formatGel(data.deposit?.paidTetri ?? 0, { decimals: false }))}
         </p>
         {photoTrouble && <p className="warn-text">{t.hand.photosFailed}</p>}
       </section>

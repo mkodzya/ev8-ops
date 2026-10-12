@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { effectiveRentalStatus, localDateTime, returnSettlement } from '../src/index.js';
+import { localDateTime, returnSettlement } from '../src/index.js';
 
 const week = (seq: number, startsOn: string, endsOn: string, paid = 0) => ({ id: `p${seq}`, seq, startsOn, endsOn, amountTetri: 15000, paidTetri: paid });
 
@@ -21,14 +21,6 @@ describe('a return’s settlement (wave 3 §3.4)', () => {
   it('adds 250 for a key not brought back (contract §6, crit. 20)', () => {
     const s = returnSettlement({ returnedOn: '2026-09-17', expectedReturnOn: null, periods: [week(1, '2026-09-11', '2026-09-17', 15000)], keyMissing: true });
     expect(s).toMatchObject({ keyTetri: 25000, claimsTetri: 25000 });
-  });
-});
-
-describe('waiting for the first payment (wave 3 §3.3, Q7)', () => {
-  it('is "awaiting payment" on the day of the hand-over and overdue from the next', () => {
-    expect(effectiveRentalStatus('active', null, '2026-09-18', '2026-09-18', true)).toBe('awaiting_payment');
-    expect(effectiveRentalStatus('active', null, '2026-09-17', '2026-09-18', true)).toBe('overdue');
-    expect(effectiveRentalStatus('active', '2026-09-24', '2026-09-18', '2026-09-18', false)).toBe('active');
   });
 });
 

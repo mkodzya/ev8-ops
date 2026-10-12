@@ -122,15 +122,16 @@ describe.skipIf(!HAS_DB)('wave 3 · hand-over', () => {
     expect(ok.statusCode, ok.body).toBe(201);
   });
 
-  it('"later": awaiting payment today, listed on Today (crit. 12)', async () => {
+  it('"later": due today, listed on Today (crit. 12; ADR-0017)', async () => {
     const { vehicle, customer } = await fixtures();
     const manager = await loginAs('manager');
     const res = await call(manager, 'POST', '/api/pickups', pickup(customer.id, vehicle.id, { payment: { later: true } }));
     expect(res.statusCode, res.body).toBe(201);
     const { id } = json<{ id: string }>(res);
-    expect((await card(manager, id)).rental.status).toBe('awaiting_payment');
-    const summary = json<{ awaitingPayment: { id: string }[] }>(await call(manager, 'GET', '/api/summary'));
-    expect(summary.awaitingPayment.map((r) => r.id)).toContain(id);
+    // The hand-over day is a due day like any other: the same status, the week and the deposit still owed.
+    expect((await card(manager, id)).rental).toMatchObject({ status: 'due_today', debtTetri: 33000 });
+    const summary = json<{ dueToday: { id: string }[] }>(await call(manager, 'GET', '/api/summary'));
+    expect(summary.dueToday.map((r) => r.id)).toContain(id);
     // A manager takes no bank transfers.
     const { vehicle: v2, customer: c2 } = await fixtures();
     expect(err(await call(manager, 'POST', '/api/pickups', pickup(c2.id, v2.id, { payment: { later: false, channel: 'transfer', amountTetri: 33000 } }))).error).toBe('reconcile_required');

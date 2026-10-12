@@ -43,6 +43,8 @@ interface CustomerRow {
   name: string;
   phone: string | null;
   debtTetri: number;
+  /** Of debtTetri: awaited today and not late (ADR-0017). */
+  dueTodayTetri: number;
 }
 
 interface Row {
@@ -342,12 +344,13 @@ export function SaleWizard() {
                     <span>{c.name}</span>
                     <span className="muted mono">{c.phone ?? ''}</span>
                   </span>
-                  {c.debtTetri > 0 && <span className="crit-text mono">{formatGel(c.debtTetri, { decimals: false })}</span>}
+                  {/* A debtor only: a figure that is all awaited today is not a debt, and an ink number with no word says nothing (ADR-0017). */}
+                  {c.debtTetri - (c.dueTodayTetri ?? 0) > 0 && <span className="crit-text mono">{formatGel(c.debtTetri, { decimals: false })}</span>}
                 </button>
               </li>
             ))}
           </ul>
-          {customer && customer.debtTetri > 0 && <p className="warn-text">{t.sell.debtor(formatGel(customer.debtTetri, { decimals: false }))}</p>}
+          {customer && customer.debtTetri - (customer.dueTodayTetri ?? 0) > 0 && <p className="warn-text">{t.sell.debtor(formatGel(customer.debtTetri, { decimals: false }))}</p>}
           {/* A buyer nobody has a card for yet, made here rather than in
               another screen the wizard would have to be left for (§3.1). */}
           {!f.creating && (

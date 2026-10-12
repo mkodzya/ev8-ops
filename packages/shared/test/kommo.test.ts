@@ -1,7 +1,7 @@
 // Kommo against the rentals here (ADR-0012): the comparison, without a
 // network or a database around it.
 import { describe, expect, it } from 'vitest';
-import { dayQueue, kommoFreshness, kommoLeadId, phoneAsOnCard, phoneKey, reconcileKommo, unenteredSales, type KommoRunningRental, type QueueInput } from '../src/index.js';
+import { dayQueue, kommoFreshness, kommoLeadId, phoneAsOnCard, phoneKey, reconcileKommo, unenteredSales, type KommoRunningRental, type QueueInput, type QueueRental } from '../src/index.js';
 
 const rental = (over: Partial<KommoRunningRental> & { customerRef?: string | null } = {}): KommoRunningRental => {
   const { customerRef = null, ...rest } = over;
@@ -221,7 +221,7 @@ describe('deals from Kommo in “Today”', () => {
   });
 
   it('stand after the rentals’ own groups and before the money', () => {
-    const r = { id: 'r1', number: 'R-00001', customer: { id: 'c1', name: 'ТЕСТ', phone: null }, vin: null, pickedUpOn: '2026-09-01', expectedReturnOn: null, paidThrough: '2026-09-07', status: 'overdue', debtTetri: 15000, awaitingPayment: false, depositUndecided: false, vinUnconfirmed: false, contractUnsigned: false };
+    const r: QueueRental = { id: 'r1', number: 'R-00001', customer: { id: 'c1', name: 'ТЕСТ', phone: null }, vin: null, pickedUpOn: '2026-09-01', expectedReturnOn: null, paidThrough: '2026-09-07', status: 'overdue', debtTetri: 15000, dueTodayTetri: 0, depositUndecided: false, vinUnconfirmed: false, contractUnsigned: false };
     const q = dayQueue(input({ owner: true, rentals: [r], unmatchedLines: 2, kommoDeals: [{ leadId: '701', kind: 'rent', who: 'ТЕСТ', customerId: null, phone: null }] }));
     expect(q.map((g) => g.group)).toEqual(['overdue', 'intake', 'money']);
   });

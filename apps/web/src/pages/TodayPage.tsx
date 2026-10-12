@@ -52,7 +52,7 @@ const SEGMENT: Record<string, string> = {
   decide: '/money/deposits',
   returns: '/rentals?s=returns',
   overdue: '/rentals?s=overdue',
-  awaiting: '/rentals?s=awaiting',
+  due_today: '/rentals?s=due_today',
   money: '/money/statements',
   service: '/service',
   instalments: '/sales',
@@ -78,7 +78,7 @@ export function TodayPage() {
     if (r.vin) bits.push(`···${r.vin.slice(-4)}`);
     if (r.group === 'returns') bits.push(r.days && r.days > 0 ? t.today.lateBy(r.days) : t.today.duesToday);
     else if (r.group === 'overdue' && r.days) bits.push(t.today.overdueDays(r.days));
-    else if (r.group === 'awaiting') bits.push(t.today.handedToday);
+    else if (r.group === 'due_today' && r.note === 'handed_today') bits.push(t.today.handedToday);
     else if (r.action === 'take_instalment' && r.days) bits.push(t.today.overdueDays(r.days));
     else if (r.action === 'open_purchase') bits.push(t.today.ordered);
     // A deal Kommo has won and nobody has entered here yet (ADR-0015).
@@ -140,6 +140,19 @@ export function TodayPage() {
     }
   };
 
+  // Red is for a debt: every sum of the overdue group, and in "due today" a
+  // figure that holds more than is awaited today (a deposit short since an
+  // earlier day). The whole figure is red then, never a part of it (ADR-0017).
+  const sumIsDebt = (r: TaskRow): boolean => r.group === 'overdue' || (r.group === 'due_today' && (r.amountTetri ?? 0) > (r.dueTodayTetri ?? 0));
+
+  // The rental a row is about, when it is about one: then the row's address
+  // is that rental's. An instalment or a deal from Kommo is not a rental, and
+  // the WhatsApp sheet must not wait for one that will never load.
+  const rentalOf = (r: TaskRow): string | null => {
+    const id = r.id.split(':')[1];
+    return id && r.href.startsWith(`/rentals/${id}`) ? id : null;
+  };
+
   const act = (r: TaskRow) => {
     const id = r.id.split(':')[1];
     if ((r.action === 'take_money' || r.action === 'take_cash') && r.number && id) {
@@ -189,6 +202,9 @@ export function TodayPage() {
         </section>
       ) : (
         data.queue.map((g) => (
+          // "Due today" is a calm group (ADR-0017): an ink heading, nothing red
+          // of its own. A sum in it turns red only when the figure holds
+          // something older than today's week — the rule of every screen.
           <section key={g.group} className="card queue-card">
             <div className="queue-head">
               <h2>{t.today.groups[g.group]}</h2>
@@ -204,30 +220,34 @@ export function TodayPage() {
                     <span className="q-name">{rowTitle(r)}</span>
                     <span className="q-sub muted">{r.action === 'open_service' ? t.today.inRepairSub(Number((r.note ?? '0/0').split('/')[1]), r.days ?? 0) : rowSub(r)}</span>
                   </Link>
-                  {r.amountTetri != null && r.amountTetri > 0 && <span className={`t-money q-sum ${g.group === 'overdue' ? 'crit-text' : ''}`}>{formatGel(r.amountTetri, { decimals: false })}</span>}
+                  {r.amountTetri != null && r.amountTetri > 0 && <span className={`t-money q-sum ${sumIsDebt(r) ? 'crit-text' : ''}`}>{formatGel(r.amountTetri, { decimals: false })}</span>}
                   <span className="q-acts">
                     {r.phone && (
                       <>
                         <a className="pill pill-sm" href={`tel:${r.phone}`} aria-label={t.today.call}>
                           ☎
                         </a>
-                        <button
-                          type="button"
-                          className="pill pill-sm"
-                          aria-label={t.today.whatsapp}
-                          onClick={() =>
-                            setWa({
-                              rentalId: r.id.split(':')[1] ?? null,
-                              number: r.number ?? '',
-                              name: r.who ?? '',
-                              phone: r.phone ?? '',
-                              paidThrough: null,
-                              debtTetri: r.amountTetri ?? 0,
-                            })
-                          }
-                        >
-                          WA
-                        </button>
+                        {/* No ready message for a rental due today (ADR-0017): the row says so itself, in
+                            whichever group it stands — "returns" and "fill in" too. The call and the action stay. */}
+                        {r.whatsapp !== false && (
+                          <button
+                            type="button"
+                            className="pill pill-sm"
+                            aria-label={t.today.whatsapp}
+                            onClick={() =>
+                              setWa({
+                                rentalId: rentalOf(r),
+                                number: r.number ?? '',
+                                name: r.who ?? '',
+                                phone: r.phone ?? '',
+                                paidThrough: null,
+                                debtTetri: r.amountTetri ?? 0,
+                              })
+                            }
+                          >
+                            WA
+                          </button>
+                        )}
                       </>
                     )}
                     <button type="button" className="pill pill-sm pill-accent" onClick={() => act(r)}>

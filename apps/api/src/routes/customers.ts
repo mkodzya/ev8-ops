@@ -1,10 +1,13 @@
+import { todayISO } from '@ev8/shared';
 import type { FastifyInstance } from 'fastify';
 import { audit } from '../lib/audit.js';
 import { dayOf, isoDate } from '../lib/dates.js';
 import { debtOf, debtsOf } from '../lib/debt.js';
 import { prisma } from '../lib/db.js';
+import { env } from '../lib/env.js';
 import { notFound } from '../lib/errors.js';
 import { actorOf, mayView } from '../lib/guard.js';
+import { rentStateOf } from '../lib/rentState.js';
 
 // Customers, read side (CST-01). Personal numbers are shown only to roles
 // that may see documents (CST-03): a manager sees the card, not the number.
@@ -45,15 +48,16 @@ export function customerRoutes(app: FastifyInstance): void {
       where: { archived: false, recordKind: { not: 'supplier' } },
       orderBy: { name: 'asc' },
       include: {
-        // Every rental: the list counts them and sums the debt with the rule
-        // the rentals list uses (periods not paid); only open ones are named.
+        // Every rental: the list counts them; only open ones are named, each
+        // by the status the rentals list gives it (ADR-0017).
         rentals: {
-          select: { id: true, number: true, status: true, paidThrough: true, periods: { where: { payStatus: { not: 'paid' } }, select: { amountTetri: true, paidTetri: true } } },
+          select: { id: true, number: true, status: true, paidThrough: true, pickedUpOn: true },
         },
         _count: { select: { sales: { where: { status: { not: 'cancelled' } } } } },
       },
     });
-    const debts = await debtsOf(customers.map((c) => c.id));
+    const today = todayISO(new Date(), env.TZ);
+    const debts = await debtsOf(customers.map((c) => c.id), today);
     return {
       customers: customers.map((c) => ({
         id: c.id,
@@ -68,10 +72,13 @@ export function customerRoutes(app: FastifyInstance): void {
         tags: c.tags,
         openRentals: c.rentals
           .filter((r) => OPEN_RENTAL.includes(r.status))
-          .map((r) => ({ id: r.id, number: r.number, status: r.status, paidThrough: isoDate(r.paidThrough) })),
+          .map((r) => ({ id: r.id, number: r.number, status: rentStateOf(r, today).status, paidThrough: isoDate(r.paidThrough) })),
         rentals: c.rentals.length,
         // The one debt figure (B7-02): the same the card, "Today" and the search show.
         debtTetri: debts.get(c.id)?.owesTetri ?? 0,
+        // Of that figure: awaited today and not late, and the rent alone of it (ADR-0017).
+        dueTodayTetri: debts.get(c.id)?.dueTodayTetri ?? 0,
+        dueTodayRentTetri: debts.get(c.id)?.dueTodayRentTetri ?? 0,
         creditTetri: debts.get(c.id)?.creditTetri ?? 0,
         // Where the debt sits: «Долг 300 по R-00488» in the hand-over (wave 3 §3.1).
         debtIn: (debts.get(c.id)?.parts ?? []).filter((p) => p.owesTetri > 0).map((p) => ({ kind: p.kind, id: p.id, number: p.number, owesTetri: p.owesTetri })),
@@ -98,7 +105,9 @@ export function customerRoutes(app: FastifyInstance): void {
     if (!c) throw notFound('customer_not_found', 'No such customer.');
     // The one debt figure and what it is made of (B7-04, wave 2), the sales,
     // and one timeline: money, documents, changes of the card.
-    const debt = await debtOf(c.id);
+    // One clock for the figure and for the statuses of the rentals below.
+    const today = todayISO(new Date(), env.TZ);
+    const debt = await debtOf(c.id, today);
     const [sales, payments, log] = await Promise.all([
       prisma.sale.findMany({
         where: { customerId: c.id, status: { not: 'cancelled' } },
@@ -127,7 +136,7 @@ export function customerRoutes(app: FastifyInstance): void {
       ...log.map((l) => ({ at: dayOf(l.createdAt)!, kind: 'log' as const, text: l.action, number: null, amountTetri: null, by: l.actor?.name ?? null, note: l.note })),
     ].sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
     return {
-      debt: { owesTetri: debt.owesTetri, creditTetri: debt.creditTetri, depositHeldTetri: debt.depositHeldTetri, aheadTetri: debt.aheadTetri, parts: debt.parts },
+      debt: { owesTetri: debt.owesTetri, dueTodayTetri: debt.dueTodayTetri, creditTetri: debt.creditTetri, depositHeldTetri: debt.depositHeldTetri, aheadTetri: debt.aheadTetri, parts: debt.parts },
       sales: sales.map((s2) => ({
         id: s2.id,
         number: s2.number,
@@ -168,7 +177,8 @@ export function customerRoutes(app: FastifyInstance): void {
       rentals: c.rentals.map((r) => ({
         id: r.id,
         number: r.number,
-        status: r.status,
+        // As the rentals list calls it — never the stored status, which does not know overdue (ADR-0017).
+        status: rentStateOf(r, today).status,
         vehicle: r.vehicle,
         vinUnconfirmed: r.vinUnconfirmed,
         pickedUpOn: isoDate(r.pickedUpOn),

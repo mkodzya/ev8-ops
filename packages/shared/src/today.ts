@@ -2,8 +2,10 @@
 // order they should do it. One function, because three places read it — the
 // screen, the badge on the bottom bar, and the "Today" group on a laptop. A
 // badge that counts something the screen does not list is worse than none.
-import type { ISODate } from './types.js';
+import type { ISODate, RentalStatus } from './types.js';
 import type { Tetri } from './money.js';
+import { waOffered } from './due.js';
+import { overdueDays } from './periods.js';
 
 // "till" is a manager's last group (§3.1): their own cash, handed over at the
 // end of the day. An owner has no such group — a till handed to them is a
@@ -11,7 +13,9 @@ import type { Tetri } from './money.js';
 // "intake" — what Kommo has won and nobody has entered here yet (ADR-0015):
 // it stands right after the rentals' own groups, because it is a rental or a
 // sale waiting to be one.
-export const TASK_GROUPS = ['decide', 'returns', 'overdue', 'awaiting', 'intake', 'money', 'instalments', 'service', 'purchases', 'decisions', 'fill', 'till'] as const;
+// "due_today" — the rentals whose week began today (ADR-0017): right after
+// the overdue ones, a calm group with the same actions.
+export const TASK_GROUPS = ['decide', 'returns', 'overdue', 'due_today', 'intake', 'money', 'instalments', 'service', 'purchases', 'decisions', 'fill', 'till'] as const;
 export type TaskGroup = (typeof TASK_GROUPS)[number];
 
 /** What the row's button does; the screen turns it into words and a link. */
@@ -56,6 +60,17 @@ export interface TaskRow {
   phone: string | null;
   /** Extra words the screen already knows how to say (kind of document, bank). */
   note: string | null;
+  /**
+   * On a row of group `due_today`: how much of `amountTetri` is awaited today.
+   * The screen paints the sum red when `amountTetri` is above it.
+   */
+  dueTodayTetri?: Tetri;
+  /**
+   * False on a row about a rental that has no ready WhatsApp message today
+   * (`waOffered`): the screen draws no WhatsApp button on it, in whichever
+   * group the row stands. Absent on every other row.
+   */
+  whatsapp?: false;
 }
 
 export interface QueueRental {
@@ -66,10 +81,11 @@ export interface QueueRental {
   pickedUpOn: ISODate | null;
   expectedReturnOn: ISODate | null;
   paidThrough: ISODate | null;
-  status: string;
+  /** The status as shown — `effectiveRentalStatus`, never the stored one. */
+  status: RentalStatus;
   debtTetri: Tetri;
-  /** Nothing paid at all: waiting for the first payment, not overdue (Q7). */
-  awaitingPayment: boolean;
+  /** Of debtTetri: awaited today, not late (shared `dueTodayOf`). */
+  dueTodayTetri: Tetri;
   depositUndecided: boolean;
   vinUnconfirmed: boolean;
   /** Handed over more than a day ago and the contract is still unsigned (D17). Never a rental brought over. */
@@ -143,6 +159,9 @@ const daysBetween = (a: ISODate, b: ISODate) => Math.round((Date.parse(`${b}T00:
 export function dayQueue(input: QueueInput): TaskGroupRows[] {
   const rows: TaskRow[] = [];
   const open = input.rentals.filter((r) => r.status !== 'returned');
+  // A rental is one customer in several groups — a return, a week to take, a
+  // contract to sign. Each of its rows says when there is no message to send.
+  const wa = (r: QueueRental): { whatsapp?: false } => (waOffered(r.status, r.pickedUpOn, input.today) ? {} : { whatsapp: false });
 
   // 1. Decide — an owner's: a till handed over today, a deposit a manager's
   // return left. The till comes first: it is money on somebody's hands right
@@ -182,6 +201,7 @@ export function dayQueue(input: QueueInput): TaskGroupRows[] {
         href: `/rentals/${r.id}?decide=1`,
         phone: r.customer.phone,
         note: null,
+        ...wa(r),
       });
     }
   }
@@ -202,13 +222,15 @@ export function dayQueue(input: QueueInput): TaskGroupRows[] {
       href: `/rentals/${r.id}/return`,
       phone: r.customer.phone,
       note: null,
+      ...wa(r),
     });
   }
 
-  // 3. Overdue — longest first; the sum is what the weeks owe (B7-02).
+  // 3. Overdue — longest first; the sum is what the weeks owe (B7-02). The
+  // days are the product's one count, from the due day (ADR-0017).
   const overdue = open
     .filter((r) => r.status === 'overdue' && r.debtTetri > 0)
-    .map((r) => ({ r, days: r.paidThrough ? daysBetween(r.paidThrough, input.today) : r.pickedUpOn ? daysBetween(r.pickedUpOn, input.today) : 0 }))
+    .map((r) => ({ r, days: r.pickedUpOn ? overdueDays(r.paidThrough, r.pickedUpOn, input.today) : 0 }))
     .sort((a, b) => b.days - a.days || b.r.debtTetri - a.r.debtTetri);
   for (const { r, days } of overdue) {
     rows.push({
@@ -223,23 +245,30 @@ export function dayQueue(input: QueueInput): TaskGroupRows[] {
       href: `/rentals/${r.id}`,
       phone: r.customer.phone,
       note: null,
+      ...wa(r),
     });
   }
 
-  // 4. Waiting for the first payment — handed over, nothing paid yet (Q7).
-  for (const r of open.filter((x) => x.awaitingPayment)) {
+  // 4. Due today — the week began today and nothing older is unpaid: a calm
+  // group with the same actions, so the morning call is not lost (ADR-0017).
+  // By rental number: on the due day nobody is "longest".
+  const byNumber = (a: QueueRental, b: QueueRental) => (a.number < b.number ? -1 : a.number > b.number ? 1 : 0);
+  for (const r of open.filter((x) => x.status === 'due_today' && x.debtTetri > 0).sort(byNumber)) {
     rows.push({
-      id: `awaiting:${r.id}`,
-      group: 'awaiting',
+      id: `due_today:${r.id}`,
+      group: 'due_today',
       action: input.owner ? 'take_money' : 'take_cash',
       who: r.customer.name,
       number: r.number,
       vin: r.vin,
       days: null,
       amountTetri: r.debtTetri,
+      dueTodayTetri: r.dueTodayTetri,
       href: `/rentals/${r.id}`,
       phone: r.customer.phone,
-      note: null,
+      // The one fact that sets a hand-over day apart: the screen says "handed over today".
+      note: r.pickedUpOn === input.today ? 'handed_today' : null,
+      ...wa(r),
     });
   }
 
@@ -363,10 +392,10 @@ export function dayQueue(input: QueueInput): TaskGroupRows[] {
 
   // 10. Fill in — an unsigned contract, a rental without a VIN, a moped without a point.
   for (const r of open.filter((x) => x.contractUnsigned)) {
-    rows.push({ id: `sign:${r.id}`, group: 'fill', action: 'sign', who: r.customer.name, number: r.number, vin: r.vin, days: null, amountTetri: null, href: `/rentals/${r.id}`, phone: r.customer.phone, note: null });
+    rows.push({ id: `sign:${r.id}`, group: 'fill', action: 'sign', who: r.customer.name, number: r.number, vin: r.vin, days: null, amountTetri: null, href: `/rentals/${r.id}`, phone: r.customer.phone, note: null, ...wa(r) });
   }
   for (const r of open.filter((x) => x.vinUnconfirmed)) {
-    rows.push({ id: `vin:${r.id}`, group: 'fill', action: 'set_vin', who: r.customer.name, number: r.number, vin: null, days: null, amountTetri: null, href: `/rentals/${r.id}`, phone: r.customer.phone, note: null });
+    rows.push({ id: `vin:${r.id}`, group: 'fill', action: 'set_vin', who: r.customer.name, number: r.number, vin: null, days: null, amountTetri: null, href: `/rentals/${r.id}`, phone: r.customer.phone, note: null, ...wa(r) });
   }
   if (input.vehiclesWithoutPoint > 0) {
     rows.push({ id: 'point', group: 'fill', action: 'set_point', who: null, number: null, vin: null, days: null, amountTetri: null, href: '/fleet?f=nopoint', phone: null, note: String(input.vehiclesWithoutPoint) });

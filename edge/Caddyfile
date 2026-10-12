@@ -1,0 +1,173 @@
+# The edge. The only thing on this machine that faces the internet.
+#
+# Both stacks publish to 127.0.0.1 and nothing else, so this file is the whole
+# public surface of EV8 Ops — and, since the move off WordPress, of the
+# company's site ev8.ge: its static files, and one door into the API for the
+# site's request form. Everything else on the host is unreachable from outside.
+#
+#   docker compose -p ev8-edge -f docker-compose.edge.yml up -d
+{
+	# Where Let's Encrypt writes if a certificate is about to expire and
+	# renewal keeps failing. Without it the first anybody hears of it is a
+	# browser warning on Kardu's phone.
+	email info@ev8.ge
+
+	# ev8.ge and www.ev8.ge get their certificate at the first visit, not at
+	# start (`tls { on_demand }` in their blocks). The day the name's DNS is
+	# pointed at this server is Kardu's to choose (Mika, 11.10.2026: "по сайту
+	# все задачи он должен без меня делать"), and a door that asked for the
+	# certificate at start tried once while the name still pointed at
+	# WordPress and did not try again for hours. Caddy issues on demand only
+	# for a name this address says yes to — the two below and no other.
+	on_demand_tls {
+		ask http://127.0.0.1:9123/may
+	}
+}
+
+# The answer to "may this name have a certificate on demand?": the site's two
+# names, nothing else. The door runs on the host's network, so this is the
+# server's own loopback: heard on the machine itself, never from outside
+# (checked from the internet on 12.10.2026 — the port does not answer).
+http://127.0.0.1:9123 {
+	bind 127.0.0.1
+	@site query domain=ev8.ge
+	@site_www query domain=www.ev8.ge
+	respond @site 200
+	respond @site_www 200
+	respond 403
+}
+
+# The built site (mkodzya/ev8-site) as GitHub Actions ships it: a release
+# directory per push, and `current` pointing at the live one
+# (deploy/site-receive.sh). {args[0]} is that `current`. Used by the preview
+# on the test host only: ev8.ge takes its cache rules from the site itself.
+(site_files) {
+	root * {args[0]}
+	# Astro puts a hash in every asset's name, so an asset never changes under
+	# its name. A page has no hash: it must not be cached, or a deploy leaves
+	# people on the previous text until they hard-refresh.
+	@hashed path /_astro/*
+	header @hashed Cache-Control "public, max-age=31536000, immutable"
+	# Pictures and video come from the site's public/ folder and keep their
+	# names between builds, so a week, not a year: a picture replaced under
+	# the same name reaches a returning visitor within seven days
+	# (Kardu, 11.10.2026).
+	@media path /img/* /video/*
+	header @media Cache-Control "public, max-age=604800"
+	@page not path /_astro/* /img/* /video/*
+	header @page Cache-Control "no-cache"
+	file_server
+}
+
+ops.ev8.ge {
+	# The API reads X-Forwarded-Proto to decide whether the session cookie
+	# gets Secure. Caddy sets it here by default.
+	reverse_proxy 127.0.0.1:5173
+	# A year, this host only. Not includeSubDomains and not preload: those are
+	# the parts that are hard to take back, and ev8.ge is the company's site.
+	header Strict-Transport-Security "max-age=31536000"
+	log {
+		output stdout
+		format console
+	}
+}
+
+# The company's site. Its certificate is issued at the first visit after the
+# A record of ev8.ge points at this server (on_demand, see the top).
+#
+# What is the site's own business at its door — where an old address leads,
+# how long a browser keeps a picture — is not written here. It comes with the
+# site: /_edge/*.caddy of every release (edge/site.caddy in mkodzya/ev8-site),
+# imported below from the door's own copy of the last settings that validated
+# (entry.sh beside this file keeps that copy and says why it is a copy). What is
+# written here is what guards EV8 Ops, and the plumbing.
+ev8.ge {
+	tls {
+		on_demand
+	}
+	encode zstd gzip
+	root * /srv/site/prod/current
+
+	# SITE_EDGE_DIR is set only by entry.sh, and only to try settings
+	# that have just arrived before they replace the ones in force.
+	import {$SITE_EDGE_DIR:/data/site-edge/current}/*.caddy
+
+	# The site's request form posts to /api/site/queue on its own host. That
+	# prefix, and nothing else of the API, reaches the production stack: the
+	# sign-in and every screen of EV8 Ops stay on ops.ev8.ge.
+	handle /api/site/* {
+		reverse_proxy 127.0.0.1:5173
+	}
+	# The rest of the API, and what WordPress answered and the new site never
+	# will. 410 tells the bots that keep asking for it to stop.
+	@closed path /api/* /wp-admin /wp-admin/* /wp-login.php /wp-content/* /wp-includes/* /wp-json /wp-json/* /xmlrpc.php /feed /feed/* /comments/feed/*
+	handle @closed {
+		respond 410
+	}
+	# The settings imported above travel inside the release as plain files:
+	# the door's to read, not the visitor's.
+	@door_files path /_edge /_edge/*
+	handle @door_files {
+		respond 404
+	}
+	handle {
+		file_server
+	}
+
+	handle_errors 404 {
+		root * /srv/site/prod/current
+		rewrite * /404.html
+		file_server
+	}
+
+	header Strict-Transport-Security "max-age=31536000"
+	log {
+		output stdout
+		format console
+	}
+}
+
+www.ev8.ge {
+	tls {
+		on_demand
+	}
+	redir https://ev8.ge{uri} permanent
+}
+
+test.ops.ev8.ge {
+	encode zstd gzip
+
+	# The new site as GitHub Actions ships it from `develop`
+	# (deploy/site-receive.sh), built with base /garage/site/. Same login as
+	# the mock-ups below.
+	redir /garage/site /garage/site/
+	handle_path /garage/site/* {
+		import /srv/site-preview/auth/*.caddy
+		import site_files /srv/site/test/current
+	}
+
+	# Mock-ups of the new ev8.ge site: static pages Mika opens from his phone,
+	# kept under /srv/ev8-site-preview on the host and outside this repository.
+	# The login lives in auth/*.caddy next to them, written by
+	# deploy/set-site-password.sh; Caddy sees only the one-way digest. No such
+	# file means no login is asked, so the script is run before the first page
+	# is copied in.
+	redir /garage /garage/
+	handle_path /garage/* {
+		import /srv/site-preview/auth/*.caddy
+		root * /srv/site-preview/www/garage
+		header Cache-Control "no-cache"
+		file_server
+	}
+	handle {
+		reverse_proxy 127.0.0.1:5174
+	}
+	header Strict-Transport-Security "max-age=31536000"
+	# A test stack has no business in a search index — least of all one that
+	# will hold a copy of the real rentals.
+	header X-Robots-Tag "noindex, nofollow"
+	log {
+		output stdout
+		format console
+	}
+}

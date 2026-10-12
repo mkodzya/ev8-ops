@@ -751,14 +751,14 @@ describe('who is late (design note §4.4)', () => {
     expect(november.late).toEqual(october.late);
   });
 
-  it('counts days from the first day of the oldest unpaid week — one fewer than the rest of the product counts', () => {
+  it('counts days from the first day of the oldest unpaid week — the count the rest of the product makes too (ADR-0017)', () => {
     const cal = calendar({
       rentals: [rental({ id: 'r', pickedUpOn: '2026-09-30', debtTetri: 300_00, rows: [paidRow(1, '2026-09-30'), row(2, '2026-10-07'), row(3, '2026-10-14')] })],
     });
     const late = lateOf(cal, 'r')!;
     expect(late.days).toBe(daysBetween(late.sinceOn, TODAY));
-    // Paid through 06.10: "Аренды" counts from that day, the calendar from the 7th.
-    expect(late.days).toBe(overdueDays('2026-10-06', '2026-09-30', TODAY) - 1);
+    // Paid through 06.10: the week is due on the 7th, and "Аренды" counts from that day as the calendar does.
+    expect(late.days).toBe(overdueDays('2026-10-06', '2026-09-30', TODAY));
   });
 
   it('orders the list by days, then by debt, then by rental number', () => {

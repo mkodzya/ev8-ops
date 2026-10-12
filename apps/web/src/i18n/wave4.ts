@@ -20,7 +20,7 @@ export const wave4En = {
       decide: 'To decide',
       returns: 'Returns',
       overdue: 'Overdue',
-      awaiting: 'Waiting for the first payment',
+      due_today: 'Due today',
       intake: 'To enter from Kommo',
       money: 'Money',
       instalments: 'Instalments',
@@ -70,8 +70,8 @@ export const wave4En = {
     kommoNeverAnswered: 'it has not answered once yet',
     till: 'Till',
     duesToday: 'planned today',
-    lateBy: (n: number) => `${n} days late`,
-    overdueDays: (n: number) => `${n} days`,
+    lateBy: (n: number) => `${n} day${n === 1 ? '' : 's'} late`,
+    overdueDays: (n: number) => `${n} day${n === 1 ? '' : 's'}`,
     handedToday: 'handed over today',
     unsignedContract: (n: string) => `The contract of ${n} is not signed`,
     noVin: 'the VIN is not confirmed',
@@ -121,6 +121,8 @@ export const wave4En = {
     note: 'WhatsApp opens with this text; you send it from your own phone.',
     open: 'Open WhatsApp',
     logged: 'Written into the rental’s feed',
+    /** The sheet opened on a rental with no ready message today — one due today (ADR-0017). */
+    noneToday: 'There is no ready message for this rental today.',
     /** The texts themselves are the same in every interface language: they go to the customer. */
     text: (
       lang: 'ka' | 'ru' | 'en',
@@ -307,14 +309,18 @@ export const wave4En = {
   batWords: { handed_out: 'Handed out', came_back: 'Came back' } as Record<string, string>,
   seg: {
     active: 'Running',
-    awaiting: 'Waiting for payment',
     overdue: 'Overdue',
+    due_today: 'Due today',
     returns: 'Return and late',
     unsigned: 'Not signed',
     novin: 'Without VIN',
     paused: 'Paused and disputed',
     done: 'Closed',
-    totals: (n: number, sum: string) => `${n} rentals · debt ${sum}`,
+    /**
+     * The line over the list (ADR-0017): `debt` — the red figures, `due` — the
+     * ink ones awaited today. Each is written only when the caller passes it.
+     */
+    totals: (n: number, debt: string | null, due: string | null) => `${n} rental${n === 1 ? '' : 's'}${debt ? ` · debt ${debt}` : ''}${due ? ` · due today ${due}` : ''}`,
   },
 };
 
@@ -327,7 +333,7 @@ export const wave4Ru: Wave4 = {
       decide: 'Решить',
       returns: 'Возвраты',
       overdue: 'Просрочены',
-      awaiting: 'Ждут первой оплаты',
+      due_today: 'Ждём сегодня',
       intake: 'Оформить из Kommo',
       money: 'Деньги',
       instalments: 'Рассрочки',
@@ -425,6 +431,7 @@ export const wave4Ru: Wave4 = {
     note: 'Откроется WhatsApp с этим текстом; отправляете вы со своего телефона.',
     open: 'Открыть WhatsApp',
     logged: 'Записано в ленту аренды',
+    noneToday: 'Для этой аренды сегодня готового сообщения нет.',
     text: wave4En.wa.text,
   },
   vehicleW4: {
@@ -581,14 +588,14 @@ export const wave4Ru: Wave4 = {
   batWords: { handed_out: 'Выдано', came_back: 'Вернулось' },
   seg: {
     active: 'Действуют',
-    awaiting: 'Ждут оплаты',
     overdue: 'Просрочены',
+    due_today: 'Ждём сегодня',
     returns: 'Возврат и опаздывают',
     unsigned: 'Не подписан',
     novin: 'Без VIN',
     paused: 'Пауза и спорные',
     done: 'Завершены',
-    totals: (n, sum) => `${n} ${ruPlural(n, 'аренда', 'аренды', 'аренд')} · долг ${sum}`,
+    totals: (n, debt, due) => `${n} ${ruPlural(n, 'аренда', 'аренды', 'аренд')}${debt ? ` · долг ${debt}` : ''}${due ? ` · к оплате сегодня ${due}` : ''}`,
   },
 };
 
@@ -599,7 +606,7 @@ export const wave4Ka: Wave4 = {
       decide: 'გადასაწყვეტი',
       returns: 'დაბრუნებები',
       overdue: 'ვადაგადაცილებული',
-      awaiting: 'პირველი გადახდის მოლოდინში',
+      due_today: 'დღეს ველოდებით',
       intake: 'Kommo-დან გასაფორმებელი',
       money: 'ფული',
       instalments: 'განვადებები',
@@ -697,6 +704,7 @@ export const wave4Ka: Wave4 = {
     note: 'გაიხსნება WhatsApp ამ ტექსტით; აგზავნით თქვენი ტელეფონიდან.',
     open: 'WhatsApp-ის გახსნა',
     logged: 'ჩაიწერა ქირის ლენტაში',
+    noneToday: 'ამ ქირაობისთვის დღეს მზა შეტყობინება არ არის.',
     text: wave4En.wa.text,
   },
   vehicleW4: {
@@ -853,13 +861,13 @@ export const wave4Ka: Wave4 = {
   batWords: { handed_out: 'გაიცა', came_back: 'დაბრუნდა' },
   seg: {
     active: 'მოქმედი',
-    awaiting: 'გადახდის მოლოდინში',
     overdue: 'ვადაგადაცილებული',
+    due_today: 'დღეს ველოდებით',
     returns: 'დაბრუნება და აგვიანებს',
     unsigned: 'ხელმოუწერელი',
     novin: 'VIN-ის გარეშე',
     paused: 'შეჩერებული და სადავო',
     done: 'დასრულებული',
-    totals: (n, sum) => `${n} ქირაობა · ვალი ${sum}`,
+    totals: (n, debt, due) => `${n} ქირაობა${debt ? ` · ვალი ${debt}` : ''}${due ? ` · დღეს გადასახდელი ${due}` : ''}`,
   },
 };
