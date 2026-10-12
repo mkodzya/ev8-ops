@@ -771,6 +771,9 @@ export const en = {
     bankDeposit: 'Looks like cash paid in — record “Taken to the bank”?',
     bankDepositYes: 'Yes, cash paid in',
     whereTo: (n: string) => `Where does ${n} go`,
+    /** On a card line: the sum on the card is what the bank credited; this is what the customer paid and what the bank kept. */
+    byCard: (paid: string, fee: string) => `Card payment: the customer paid ${paid}, the bank kept ${fee}.`,
+    byCardPlain: 'Card payment.',
     whereHint: 'Search by record number, name, phone. Records with a debt, and “on account”.',
     empty: 'All sorted',
     byRules: (n: number) => `Sorted by the rules this week: ${n}`,
