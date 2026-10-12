@@ -1,4 +1,4 @@
-import { CUSTOMER_SOURCES, todayISO } from '@ev8/shared';
+import { CUSTOMER_SOURCES, WA_TEMPLATES, todayISO } from '@ev8/shared';
 import type { FastifyInstance } from 'fastify';
 import { env } from '../lib/env.js';
 import { kommoRefToKeep } from '../lib/kommo.js';
@@ -175,7 +175,7 @@ export function handoverRoutes(app: FastifyInstance): void {
   app.post<{ Params: { id: string }; Body: Body }>('/api/rentals/:id/whatsapp', { config: { scope: 'fleet.view' } }, async (req) => {
     const b = req.body ?? {};
     const actor = actorOf(req);
-    const template = oneOf(b, 'template', ['overdue', 'tomorrow'] as const, { required: true })!;
+    const template = oneOf(b, 'template', WA_TEMPLATES, { required: true })!;
     const lang = oneOf(b, 'lang', ['ka', 'ru', 'en'] as const, { required: true })!;
     const r = await prisma.rental.findUnique({ where: { id: req.params.id }, select: { id: true } });
     if (!r) throw notFound('rental_not_found', 'No such rental.');

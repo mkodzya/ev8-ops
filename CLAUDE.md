@@ -29,11 +29,15 @@ Development here is driven by Mika's session, in `feature/*` branches merged int
 `develop`. The way of working is Self Platform's (Mika, 28.09.2026):
 **after a merge into `develop`, Mika's session puts it on the test stand at once**
 (`ssh root@204.168.149.105 /srv/ev8-ops/deploy/follow-develop.sh --now`);
-**a release reaches prod only on Mika's word**, and then Mika's session cuts it —
-`release/X.Y.Z`, versions, `main` with an annotated tag, back into `develop` — and
-runs `ssh root@204.168.149.105 /srv/ev8-ops/deploy/deploy-prod.sh X.Y.Z`. Never on its
-own. `.githooks/pre-push` still refuses a push of `main` or a tag from anyone but
-Mika. Product decisions stay with Mika; Kardu (GitHub `Kardu89`), the director on
+**a release reaches prod only on Mika's word**, and **since 12.10.2026 Mika runs it
+himself with one line the session gives him** — `deploy/release.sh X.Y.Z "what it is"`
+(`release/X.Y.Z`, versions, `main` with an annotated tag, back into `develop`, then
+`deploy-prod.sh X.Y.Z` on the server and the test stand). That day the session's
+permission system refused the release steps as a production deploy, and Mika chose
+the command over lifting the guard; a session does not look for a way around it. The
+session audits what `develop` holds beyond the last tag, reads production before and
+after, and records the release in `docs/handoff.md`. `.githooks/pre-push` still
+refuses a push of `main` or a tag from anyone but Mika. Product decisions stay with Mika; Kardu (GitHub `Kardu89`), the director on
 site and the main daily user, proposes. Talk to whoever runs the session in the
 language they write in.
 

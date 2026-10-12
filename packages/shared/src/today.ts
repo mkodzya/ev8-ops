@@ -67,8 +67,9 @@ export interface TaskRow {
   dueTodayTetri?: Tetri;
   /**
    * False on a row about a rental that has no ready WhatsApp message today
-   * (`waOffered`): the screen draws no WhatsApp button on it, in whichever
-   * group the row stands. Absent on every other row.
+   * (`waOffered` — one handed over today and not paid yet): the screen draws
+   * no WhatsApp button on it, in whichever group the row stands. Absent on
+   * every other row.
    */
   whatsapp?: false;
 }

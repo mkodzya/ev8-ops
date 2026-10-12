@@ -339,6 +339,10 @@ describe.skipIf(!HAS_DB)('the due day · the four cases on every answer', () => 
     expect(entryOn(c, f.id, t)).toMatchObject({ seq: 2, state: 'due_today', amountTetri: 15000, leftTetri: 15000 });
     expect(lateOf(c, f.id)).toBeUndefined();
     expect(c.rentals.find((r) => r.id === f.id)?.debtTetri).toBe(15000);
+    // «Сегодня оплата» is for this day: the row of "Today" carries no mark against WhatsApp,
+    // and the calendar's card names the pickup day its own button is drawn by.
+    expect(await todayRowOf(f.id)).not.toHaveProperty('whatsapp');
+    expect(c.rentals.find((r) => r.id === f.id)).toMatchObject({ pickedUpOn: addDays(t, -7) });
 
     const after = await totals(owner);
     expect(moved(before, after)).toEqual({ ...NOT_LATE, dueTodayGroup: [1, 15000], active: 1 });
@@ -408,6 +412,8 @@ describe.skipIf(!HAS_DB)('the due day · the four cases on every answer', () => 
     const c = await calendar(owner);
     expect(entryOn(c, f.id, t)).toMatchObject({ seq: 1, state: 'due_today', amountTetri: 15000, leftTetri: 15000 });
     expect(lateOf(c, f.id)).toBeUndefined();
+    // Handed over today: the calendar's card says so, and its row draws no WhatsApp button either.
+    expect(c.rentals.find((r) => r.id === f.id)).toMatchObject({ pickedUpOn: t });
 
     const after = await totals(owner);
     expect(moved(before, after)).toEqual({ ...NOT_LATE, dueTodayGroup: [1, 33000], active: 1 });
@@ -729,15 +735,16 @@ describe.skipIf(!HAS_DB)('the due day · who sees what', () => {
     expect(pdf.rawPayload.subarray(0, 5).toString('latin1')).toBe('%PDF-');
   });
 
-  it('no third WhatsApp text is taken: the approved two, and nothing for "today" until the owner has read it', async () => {
+  it('the three WhatsApp texts the owner approved are taken — "today" since 12.10.2026 — and no other', async () => {
     const f = await running(7);
     const said = (template: string) => call(f.owner, 'POST', `/api/rentals/${f.id}/whatsapp`, { template, lang: 'ka' });
-    const refusedText = await said('today');
+    const refusedText = await said('yesterday');
     expect(refusedText.statusCode).toBe(400);
     expect(err(refusedText)).toMatchObject({ error: 'bad_field', field: 'template' });
     expect((await said('overdue')).statusCode).toBe(200);
     expect((await said('tomorrow')).statusCode).toBe(200);
+    expect((await said('today')).statusCode).toBe(200);
     const logged = await f.prisma.auditLog.findMany({ where: { entityId: f.id, action: 'rental.whatsapp' } });
-    expect(logged.map((l) => (l.after as { template: string }).template).sort()).toEqual(['overdue', 'tomorrow']);
+    expect(logged.map((l) => (l.after as { template: string }).template).sort()).toEqual(['overdue', 'today', 'tomorrow']);
   });
 });

@@ -1,4 +1,4 @@
-import { addDays, todayISO, waOffered } from '@ev8/shared';
+import { addDays, todayISO, waOffered, waTemplatesOf, type WaTemplate } from '@ev8/shared';
 import { useState } from 'react';
 import { api } from '../api.js';
 import { Skeleton } from '../ds/state/Skeleton.js';
@@ -12,7 +12,7 @@ import { useLoad } from '../lib/use.js';
 // customer's language, sent by a person from their own phone. When the Meta
 // token arrives (B11-01) the same templates go out on a schedule.
 
-export type WaKind = 'overdue' | 'tomorrow';
+export type WaKind = WaTemplate;
 export type WaLang = 'ka' | 'ru' | 'en';
 
 export interface WaTarget {
@@ -25,21 +25,23 @@ export interface WaTarget {
   /**
    * The day the week being reminded about begins, when the caller knows it —
    * the payments calendar does. Without it "tomorrow" is the day after
-   * paid-through, which is another day behind an older unpaid week.
+   * paid-through, which is another day behind an older unpaid week. "Today"
+   * does not read it: its day is today.
    */
   dueOn?: string | null;
   /**
    * What that week still asks for, when the caller's row shows it — the sum
-   * "tomorrow" names. Without it the sum is the rental's weekly rate, read
-   * from the rental itself — the sheet waits for it — and the whole week even
-   * when part of it is paid already.
+   * "tomorrow" and "today" name. Without it "tomorrow" names the rental's
+   * weekly rate — the whole week even when part of it is paid already — and
+   * "today" what the rental itself says is awaited today; both are read from
+   * the rental, and the sheet waits for it.
    */
   amountTetri?: number | null;
 }
 
 /** What each template puts into the text: a template about the next week is not about the debt (QA-W4-02). */
 interface Rental {
-  rental: { status: string; pickedUpOn: string | null; paidThrough: string | null; weeklyRateTetri: number; debtTetri: number };
+  rental: { status: string; pickedUpOn: string | null; paidThrough: string | null; weeklyRateTetri: number; debtTetri: number; dueTodayTetri: number };
 }
 
 const digits = (s: string) => s.replace(/\D/g, '');
@@ -65,24 +67,32 @@ export function WhatsappSheet({ target, onClose, kind: opensOn }: { target: WaTa
   // the owner's to approve, note §7.)
   const ready = !target.rentalId || card.data != null;
   const rental = card.data?.rental ?? null;
+  const today = todayISO();
   // Is there a ready message for this rental today — the shared rule, the one
-  // the buttons that open this sheet are drawn by. Reached by another door
-  // (a stale list), the sheet says there is none.
-  const offered = !rental || waOffered(rental.status, rental.pickedUpOn, todayISO());
-  // The state answers only when it is a state of the rent: a late rental opens
-  // on «Просрочка». For every other rental the debt chooses, as before — a
-  // returned, paused or disputed one with a debt, or a deposit not paid in.
-  const byRule: WaKind = rental?.status === 'overdue' || target.debtTetri > 0 ? 'overdue' : 'tomorrow';
-  const kind = picked ?? opensOn ?? byRule;
+  // the buttons that open this sheet are drawn by: none on the day it was
+  // handed over. Reached by another door (a stale list), the sheet says so.
+  const offered = !rental || waOffered(rental.status, rental.pickedUpOn, today);
+  // The state answers only when it is a state of the rent: a rental due today
+  // has «Сегодня оплата» and nothing else, a late one opens on «Просрочка».
+  // For every other rental the debt chooses, as before — a returned, paused or
+  // disputed one with a debt, or a deposit not paid in. The shared rule.
+  const templates = waTemplatesOf(rental?.status ?? null, target.debtTetri);
+  // A chip pressed, then the template the caller's button named, then the
+  // rule — and never one the rental's state does not offer today.
+  const kind = [picked, opensOn].find((k): k is WaKind => !!k && templates.all.includes(k)) ?? templates.first;
+  const names: Record<WaKind, string> = { overdue: t.wa.overdue, tomorrow: t.wa.tomorrow, today: t.wa.today };
   const paidThrough = rental?.paidThrough ?? target.paidThrough;
   const debtTetri = rental?.debtTetri ?? target.debtTetri;
   const weekTetri = rental?.weeklyRateTetri ?? 0;
+  // "Today": what is left of the week that began today — the rent awaited
+  // today, without the deposit, as «Завтра оплата» names the week alone.
+  const todayTetri = rental && rental.dueTodayTetri > 0 ? rental.dueTodayTetri : weekTetri;
   const text = t.wa.text(lang, kind, {
     name: target.name,
     number: target.number,
-    // "Overdue" is about the day it was paid through; "tomorrow" about the day the new week starts.
-    date: fmtDate(kind === 'overdue' ? paidThrough : (target.dueOn ?? (paidThrough ? addDays(paidThrough, 1) : null))).slice(0, 5),
-    amount: formatGel(kind === 'overdue' ? debtTetri : (target.amountTetri ?? weekTetri), { decimals: false }),
+    // "Overdue" is about the day it was paid through; "tomorrow" about the day the new week starts; "today" about today.
+    date: fmtDate(kind === 'overdue' ? paidThrough : kind === 'today' ? today : (target.dueOn ?? (paidThrough ? addDays(paidThrough, 1) : null))).slice(0, 5),
+    amount: formatGel(kind === 'overdue' ? debtTetri : (target.amountTetri ?? (kind === 'today' ? todayTetri : weekTetri)), { decimals: false }),
   });
 
   const open = () => {
@@ -116,9 +126,9 @@ export function WhatsappSheet({ target, onClose, kind: opensOn }: { target: WaTa
         <>
           <span className="lbl">{t.wa.template}</span>
           <div className="chips">
-            {(['overdue', 'tomorrow'] as WaKind[]).map((k) => (
+            {templates.all.map((k) => (
               <button key={k} type="button" className={`pill pill-sm ${kind === k ? 'on' : ''}`} onClick={() => setPicked(k)}>
-                {k === 'overdue' ? t.wa.overdue : t.wa.tomorrow}
+                {names[k]}
               </button>
             ))}
           </div>

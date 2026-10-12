@@ -19,6 +19,7 @@ import {
   rentDueOn,
   waOffered,
   waRentalOf,
+  waTemplatesOf,
   weekDue,
   type DebtInput,
   type DebtRental,
@@ -288,18 +289,45 @@ describe('what stops a new hand-over (В2, unchanged)', () => {
 });
 
 describe('is there a ready WhatsApp message for a rental today', () => {
-  it('none on the due day — the hand-over day or an ordinary one: no approved text is true of it', () => {
-    // Case 4: handed over today.
+  it('none on the hand-over day: the customer has just stood at the desk, and no approved text is true of it', () => {
+    // Case 4: handed over today, nothing paid.
     expect(waOffered('due_today', T, T)).toBe(false);
-    // Case 1: an ordinary due day.
-    expect(waOffered('due_today', d(-7), T)).toBe(false);
-    expect(waOffered('due_today', null, T)).toBe(false);
+  });
+
+  it('an ordinary due day has one — «Сегодня оплата», read by the owner on 12.10.2026', () => {
+    // Case 1.
+    expect(waOffered('due_today', d(-7), T)).toBe(true);
+    // A rental brought over with its weeks: the pickup day is long past or not known.
+    expect(waOffered('due_today', d(-70), T)).toBe(true);
+    expect(waOffered('due_today', null, T)).toBe(true);
   });
 
   it('every other state has one, as before', () => {
     for (const status of ['overdue', 'active', 'returned', 'paused', 'disputed', 'booked'] as const) {
       expect(waOffered(status, d(-7), T)).toBe(true);
       expect(waOffered(status, T, T)).toBe(true);
+    }
+  });
+});
+
+describe('the templates the sheet offers, and the one it opens on', () => {
+  it('due today: «Сегодня оплата» alone, whatever else the figure holds', () => {
+    expect(waTemplatesOf('due_today', 15000)).toEqual({ all: ['today'], first: 'today' });
+    // A deposit short since an earlier day is in the figure; the week is still the one that began today.
+    expect(waTemplatesOf('due_today', 33000)).toEqual({ all: ['today'], first: 'today' });
+    expect(waTemplatesOf('due_today', 0)).toEqual({ all: ['today'], first: 'today' });
+  });
+
+  it('late: the two older ones, open on «Просрочка»', () => {
+    expect(waTemplatesOf('overdue', 15000)).toEqual({ all: ['overdue', 'tomorrow'], first: 'overdue' });
+    // Late with nothing in the figure (the roll stood still): the state answers.
+    expect(waTemplatesOf('overdue', 0)).toEqual({ all: ['overdue', 'tomorrow'], first: 'overdue' });
+  });
+
+  it('any other rental: the debt chooses, as before, and «Сегодня оплата» is never offered', () => {
+    for (const status of ['active', 'returned', 'paused', 'disputed', 'booked', null] as const) {
+      expect(waTemplatesOf(status, 30000)).toEqual({ all: ['overdue', 'tomorrow'], first: 'overdue' });
+      expect(waTemplatesOf(status, 0)).toEqual({ all: ['overdue', 'tomorrow'], first: 'tomorrow' });
     }
   });
 });
@@ -317,6 +345,7 @@ describe('the one rental a message from a customer’s card is about', () => {
     const fine = r('fine', 'active');
     const back = r('back', 'returned');
     expect(waRentalOf([back, fine, today, late], owes(), T)).toEqual({ rental: late, offered: true });
+    expect(waRentalOf([back, fine, today], owes('today'), T)).toEqual({ rental: today, offered: true });
     expect(waRentalOf([back, fine], owes(), T)).toEqual({ rental: fine, offered: true });
     expect(waRentalOf([back, r('p', 'paused')], owes(), T)).toMatchObject({ rental: { id: 'p' }, offered: true });
   });
@@ -326,29 +355,34 @@ describe('the one rental a message from a customer’s card is about', () => {
     expect(waRentalOf([r('back', 'returned')], owes('back'), T)).toEqual({ rental: null, offered: true });
   });
 
-  it('the most urgent is due today and nothing else owes: no message today', () => {
+  it('due today on an ordinary day: the message is about that rental, older debt on another or not', () => {
     const today = r('today', 'due_today');
-    expect(waRentalOf([today], owes('today'), T)).toEqual({ rental: today, offered: false });
-    // Another rental that runs and owes nothing is not a reason to write.
-    expect(waRentalOf([today, r('fine', 'active')], owes('today'), T)).toEqual({ rental: today, offered: false });
-    // Handed over today: the same.
-    expect(waRentalOf([r('new', 'due_today', T)], owes('new'), T)).toMatchObject({ offered: false });
-    // Its own older part (a deposit short since an earlier day) has no text either: it is the same rental.
-    expect(waRentalOf([today, r('back', 'returned')], owes('today'), T)).toEqual({ rental: today, offered: false });
+    expect(waRentalOf([today], owes('today'), T)).toEqual({ rental: today, offered: true });
+    // A returned rental with a debt does not take its place: the running one is the more urgent.
+    expect(waRentalOf([today, r('back', 'returned')], owes('today', 'back'), T)).toEqual({ rental: today, offered: true });
   });
 
-  it('due today beside an older debt on another rental: the message is about the one that owes', () => {
-    const today = r('today', 'due_today');
+  it('the most urgent was handed over today and nothing else owes: no message today', () => {
+    const fresh = r('new', 'due_today', T);
+    expect(waRentalOf([fresh], owes('new'), T)).toEqual({ rental: fresh, offered: false });
+    // Another rental that runs and owes nothing is not a reason to write.
+    expect(waRentalOf([fresh, r('fine', 'active')], owes('new'), T)).toEqual({ rental: fresh, offered: false });
+    // Its own older part has no text either: it is the same rental.
+    expect(waRentalOf([fresh, r('back', 'returned')], owes('new'), T)).toEqual({ rental: fresh, offered: false });
+    // Two handed over today: neither has a text.
+    expect(waRentalOf([fresh, r('too', 'due_today', T)], owes('new', 'too'), T)).toMatchObject({ rental: fresh, offered: false });
+  });
+
+  it('handed over today beside an older debt on another rental: the message is about the one that owes', () => {
+    const fresh = r('new', 'due_today', T);
     // Returned with unpaid weeks or charges.
     const back = r('back', 'returned');
-    expect(waRentalOf([today, back], owes('today', 'back'), T)).toEqual({ rental: back, offered: true });
+    expect(waRentalOf([fresh, back], owes('new', 'back'), T)).toEqual({ rental: back, offered: true });
     // Running with a deposit short; paused or disputed with a week unpaid.
     for (const status of ['active', 'paused', 'disputed'] as const) {
       const other = r('other', status);
-      expect(waRentalOf([today, other], owes('today', 'other'), T)).toEqual({ rental: other, offered: true });
+      expect(waRentalOf([fresh, other], owes('new', 'other'), T)).toEqual({ rental: other, offered: true });
     }
-    // Two rentals due today: neither has a text.
-    expect(waRentalOf([today, r('too', 'due_today')], owes('today', 'too'), T)).toMatchObject({ rental: today, offered: false });
   });
 });
 
@@ -400,7 +434,7 @@ describe('the four cases in the queue of “Today”', () => {
     const q = dayQueue(input({ rentals: [case1] }));
     expect(q.map((g) => g.group)).toEqual(['due_today']);
     expect(q[0]!.rows).toEqual([
-      { id: 'due_today:r1', group: 'due_today', action: 'take_money', who: 'ТЕСТ Клиент', number: 'R-00001', vin: 'TEST0000000000001', days: null, amountTetri: 15000, dueTodayTetri: 15000, href: '/rentals/r1', phone: '+995555000001', note: null, whatsapp: false },
+      { id: 'due_today:r1', group: 'due_today', action: 'take_money', who: 'ТЕСТ Клиент', number: 'R-00001', vin: 'TEST0000000000001', days: null, amountTetri: 15000, dueTodayTetri: 15000, href: '/rentals/r1', phone: '+995555000001', note: null },
     ]);
   });
 
@@ -417,7 +451,7 @@ describe('the four cases in the queue of “Today”', () => {
   it('case 4: the same group, and the row says it was handed over today', () => {
     const q = dayQueue(input({ rentals: [case4] }));
     expect(group(q, 'overdue')).toBeUndefined();
-    expect(group(q, 'due_today')!.rows[0]).toMatchObject({ number: 'R-00004', days: null, amountTetri: 33000, dueTodayTetri: 33000, note: 'handed_today', action: 'take_money' });
+    expect(group(q, 'due_today')!.rows[0]).toMatchObject({ number: 'R-00004', days: null, amountTetri: 33000, dueTodayTetri: 33000, note: 'handed_today', action: 'take_money', whatsapp: false });
   });
 
   it('all four together: overdue first, then due today by rental number; the badge counts both', () => {
@@ -449,18 +483,21 @@ describe('the four cases in the queue of “Today”', () => {
     expect(group(q, 'overdue')!.rows[0]).toMatchObject({ days: 3, amountTetri: 33000 });
   });
 
-  it('every row of a rental due today says there is no ready WhatsApp message — in “returns” and “fill in” too', () => {
-    // The usual weekly case: the planned return is the day the paid week ends.
-    const due = rental({ expectedReturnOn: T, contractUnsigned: true, vinUnconfirmed: true });
-    // (A group shows three rows: the late one is left unsigned-free so that "fill in" holds all of both.)
-    const late = rental({ id: 'r2', number: 'R-00002', status: 'overdue', pickedUpOn: d(-8), paidThrough: d(-2), dueTodayTetri: 0, expectedReturnOn: d(-1), vinUnconfirmed: true });
-    const rows = dayQueue(input({ rentals: [due, late] })).flatMap((g) => g.rows);
+  it('every row of a rental handed over today says there is no ready WhatsApp message — in “returns” and “fill in” too', () => {
+    const fresh = rental({ pickedUpOn: T, paidThrough: null, debtTetri: 33000, dueTodayTetri: 33000, expectedReturnOn: T, contractUnsigned: true, vinUnconfirmed: true });
+    // The usual weekly case: the planned return is the day the paid week ends. It has «Сегодня оплата».
+    const due = rental({ id: 'r2', number: 'R-00002', expectedReturnOn: T, vinUnconfirmed: true });
+    // (A group shows three rows: the other two are left unsigned-free so that "fill in" holds all of the three.)
+    const late = rental({ id: 'r3', number: 'R-00003', status: 'overdue', pickedUpOn: d(-8), paidThrough: d(-2), dueTodayTetri: 0, expectedReturnOn: d(-1) });
+    const rows = dayQueue(input({ rentals: [fresh, due, late] })).flatMap((g) => g.rows);
     const of = (id: string) => rows.filter((x) => x.id.endsWith(`:${id}`));
     expect(of('r1').map((x) => x.id).sort()).toEqual(['due_today:r1', 'return:r1', 'sign:r1', 'vin:r1']);
     expect(of('r1').every((x) => x.whatsapp === false)).toBe(true);
-    // A late rental has «Просрочка»: its rows carry no such mark.
-    expect(of('r2').map((x) => x.id).sort()).toEqual(['overdue:r2', 'return:r2', 'vin:r2']);
+    // Due today on an ordinary day, and late: their rows carry no such mark.
+    expect(of('r2').map((x) => x.id).sort()).toEqual(['due_today:r2', 'return:r2', 'vin:r2']);
     expect(of('r2').every((x) => !('whatsapp' in x))).toBe(true);
+    expect(of('r3').map((x) => x.id).sort()).toEqual(['overdue:r3', 'return:r3']);
+    expect(of('r3').every((x) => !('whatsapp' in x))).toBe(true);
   });
 
   it('a returned, paused or disputed rental is in neither group', () => {

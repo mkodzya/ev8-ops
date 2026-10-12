@@ -232,6 +232,8 @@ export interface CalendarRentalCard {
   /** As GET /api/rentals returns it: the full VIN, model = `${brand} ${name}`. */
   vehicle: { id: string; vin: string; model: string } | null;
   weeklyRateTetri: Tetri;
+  /** The pickup day: a rental handed over today has no WhatsApp message that day (`waOffered`). */
+  pickedUpOn: ISODate | null;
   /** Stored paid-through, for the WhatsApp sheet. */
   paidThrough: ISODate | null;
   /** The one figure — the same number as GET /api/rentals `debtTetri`. */
