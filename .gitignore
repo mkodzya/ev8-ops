@@ -30,5 +30,6 @@ odoo_snapshot.json
 *.pdf
 # The one PDF that is ours to keep: the brandbook holds no client data.
 !docs/design/ev8-brandbook.pdf
+!docs/design/ev8-brandbook-marketing.pdf
 # macOS Finder litter.
 .DS_Store
