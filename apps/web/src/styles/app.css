@@ -272,9 +272,12 @@ a { color: var(--accent); text-decoration: none; }
 .rstatus-booked .state-mark { background: transparent; border: 2px solid currentColor; width: 8px; height: 8px; }
 .rstatus-paused .state-mark { border-radius: 2px; }
 .rstatus-disputed .state-mark { border-radius: 0; transform: rotate(45deg); width: 7px; height: 7px; }
-/* Due today — the week began today, the hand-over day included (ADR-0017): an outline pill with an empty circle. */
-.rstatus-due_today { background: transparent; color: var(--service-deep); box-shadow: inset 0 0 0 1px currentColor; }
-.rstatus-due_today .state-mark { background: transparent; border: 2px solid currentColor; width: 8px; height: 8px; }
+/* Late is a square, as the calendar and brand.md draw it: "active" and "overdue" used to differ by colour and word only. */
+.rstatus-overdue .state-mark { border-radius: 0; }
+/* Due today — the week began today, the hand-over day included (ADR-0017):
+   the calendar's mark as a pill. No tint, a thin outline, the word in ink and
+   a round ink dot (the default mark). Calm on purpose: it is not lateness. */
+.rstatus-due_today { background: transparent; color: var(--ink); box-shadow: inset 0 0 0 1px var(--line-control); }
 
 /* ---- login ---------------------------------------------------------- */
 .login-wrap { min-height: 100%; display: grid; place-items: center; padding: 24px; }
@@ -1061,6 +1064,10 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
 /* ---- Rentals list: the status column of the laptop table ---- */
 .r-status { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; }
 .r-days { font: var(--text-label); }
+/* Customers list, the debt column: an ink sum never stands without its word
+   («due today») — the word goes under the figure, both to the right (ADR-0017). */
+.debt-awaited { display: inline-flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+.debt-awaited .muted { font: var(--text-label); }
 
 /* ---- the rental card: paid through, and the weeks as a strip (U6) ---- */
 .paid-hero { margin-bottom: 18px; }

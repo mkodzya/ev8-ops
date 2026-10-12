@@ -70,8 +70,8 @@ export const wave4En = {
     kommoNeverAnswered: 'it has not answered once yet',
     till: 'Till',
     duesToday: 'planned today',
-    lateBy: (n: number) => `${n} days late`,
-    overdueDays: (n: number) => `${n} days`,
+    lateBy: (n: number) => `${n} day${n === 1 ? '' : 's'} late`,
+    overdueDays: (n: number) => `${n} day${n === 1 ? '' : 's'}`,
     handedToday: 'handed over today',
     unsignedContract: (n: string) => `The contract of ${n} is not signed`,
     noVin: 'the VIN is not confirmed',
@@ -307,14 +307,18 @@ export const wave4En = {
   batWords: { handed_out: 'Handed out', came_back: 'Came back' } as Record<string, string>,
   seg: {
     active: 'Running',
-    due_today: 'Due today',
     overdue: 'Overdue',
+    due_today: 'Due today',
     returns: 'Return and late',
     unsigned: 'Not signed',
     novin: 'Without VIN',
     paused: 'Paused and disputed',
     done: 'Closed',
-    totals: (n: number, sum: string) => `${n} rentals · debt ${sum}`,
+    /**
+     * The line over the list (ADR-0017): `debt` — the red figures, `due` — the
+     * ink ones awaited today. Each is written only when the caller passes it.
+     */
+    totals: (n: number, debt: string | null, due: string | null) => `${n} rental${n === 1 ? '' : 's'}${debt ? ` · debt ${debt}` : ''}${due ? ` · due today ${due}` : ''}`,
   },
 };
 
@@ -581,14 +585,14 @@ export const wave4Ru: Wave4 = {
   batWords: { handed_out: 'Выдано', came_back: 'Вернулось' },
   seg: {
     active: 'Действуют',
-    due_today: 'Ждём сегодня',
     overdue: 'Просрочены',
+    due_today: 'Ждём сегодня',
     returns: 'Возврат и опаздывают',
     unsigned: 'Не подписан',
     novin: 'Без VIN',
     paused: 'Пауза и спорные',
     done: 'Завершены',
-    totals: (n, sum) => `${n} ${ruPlural(n, 'аренда', 'аренды', 'аренд')} · долг ${sum}`,
+    totals: (n, debt, due) => `${n} ${ruPlural(n, 'аренда', 'аренды', 'аренд')}${debt ? ` · долг ${debt}` : ''}${due ? ` · к оплате сегодня ${due}` : ''}`,
   },
 };
 
@@ -853,13 +857,13 @@ export const wave4Ka: Wave4 = {
   batWords: { handed_out: 'გაიცა', came_back: 'დაბრუნდა' },
   seg: {
     active: 'მოქმედი',
-    due_today: 'დღეს ველოდებით',
     overdue: 'ვადაგადაცილებული',
+    due_today: 'დღეს ველოდებით',
     returns: 'დაბრუნება და აგვიანებს',
     unsigned: 'ხელმოუწერელი',
     novin: 'VIN-ის გარეშე',
     paused: 'შეჩერებული და სადავო',
     done: 'დასრულებული',
-    totals: (n, sum) => `${n} ქირაობა · ვალი ${sum}`,
+    totals: (n, debt, due) => `${n} ქირაობა${debt ? ` · ვალი ${debt}` : ''}${due ? ` · დღეს გადასახდელი ${due}` : ''}`,
   },
 };

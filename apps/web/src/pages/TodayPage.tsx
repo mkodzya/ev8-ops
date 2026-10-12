@@ -140,6 +140,11 @@ export function TodayPage() {
     }
   };
 
+  // Red is for a debt: every sum of the overdue group, and in "due today" a
+  // figure that holds more than is awaited today (a deposit short since an
+  // earlier day). The whole figure is red then, never a part of it (ADR-0017).
+  const sumIsDebt = (r: TaskRow): boolean => r.group === 'overdue' || (r.group === 'due_today' && (r.amountTetri ?? 0) > (r.dueTodayTetri ?? 0));
+
   const act = (r: TaskRow) => {
     const id = r.id.split(':')[1];
     if ((r.action === 'take_money' || r.action === 'take_cash') && r.number && id) {
@@ -189,6 +194,9 @@ export function TodayPage() {
         </section>
       ) : (
         data.queue.map((g) => (
+          // "Due today" is a calm group (ADR-0017): an ink heading, nothing red
+          // of its own. A sum in it turns red only when the figure holds
+          // something older than today's week — the rule of every screen.
           <section key={g.group} className="card queue-card">
             <div className="queue-head">
               <h2>{t.today.groups[g.group]}</h2>
@@ -204,7 +212,7 @@ export function TodayPage() {
                     <span className="q-name">{rowTitle(r)}</span>
                     <span className="q-sub muted">{r.action === 'open_service' ? t.today.inRepairSub(Number((r.note ?? '0/0').split('/')[1]), r.days ?? 0) : rowSub(r)}</span>
                   </Link>
-                  {r.amountTetri != null && r.amountTetri > 0 && <span className={`t-money q-sum ${g.group === 'overdue' ? 'crit-text' : ''}`}>{formatGel(r.amountTetri, { decimals: false })}</span>}
+                  {r.amountTetri != null && r.amountTetri > 0 && <span className={`t-money q-sum ${sumIsDebt(r) ? 'crit-text' : ''}`}>{formatGel(r.amountTetri, { decimals: false })}</span>}
                   <span className="q-acts">
                     {r.phone && (
                       <>

@@ -21,9 +21,10 @@ interface Group<T> {
 interface Answer {
   q: string | null;
   groups: {
-    customers: Group<{ id: string; name: string; nameKa: string | null; nameLat: string | null; phone: string | null; debtTetri: number }>;
+    /** `dueTodayTetri` — of the debt figure: awaited today and not late (ADR-0017). */
+    customers: Group<{ id: string; name: string; nameKa: string | null; nameLat: string | null; phone: string | null; debtTetri: number; dueTodayTetri: number }>;
     vehicles: Group<{ id: string; vin: string; state: string; model: string }>;
-    rentals: Group<{ id: string; number: string; status: string; customer: string; vin: string | null; debtTetri: number }>;
+    rentals: Group<{ id: string; number: string; status: string; customer: string; vin: string | null; debtTetri: number; dueTodayTetri: number }>;
     sales: Group<{ id: string; number: string; status: string; customer: string; vin: string | null }>;
     payments: Group<{ id: string; grossTetri: number; occurredOn: string; channel: string; voided: boolean; customer: string | null; rental: { id: string; number: string } | null; sale: { id: string; number: string } | null }>;
     purchases: Group<{ id: string; number: string; status: string; supplier: string; invoiceNo: string | null }> | null;
@@ -102,13 +103,16 @@ export function SearchOverlay({ onClose }: { onClose: () => void }) {
     jobs: '/service',
   };
 
+  // The one debt figure in words (ADR-0017): «due today» in ink when all of it
+  // is awaited today, «owes» when anything in it is older.
+  const awaited = (x: { debtTetri: number; dueTodayTetri: number }) => x.debtTetri > 0 && x.dueTodayTetri >= x.debtTetri;
   const rows: Partial<Record<Kind, Row[]>> = {};
   if (groups) {
     rows.customers = groups.customers.items.map((c) => ({
       key: `c-${c.id}`,
       title: c.name,
       // The one debt figure, as on the card (wave 2 §3.7).
-      sub: [c.nameKa !== c.name ? c.nameKa : c.nameLat, c.phone, c.debtTetri > 0 ? t.money.owes(formatGel(c.debtTetri)) : null].filter(Boolean).join(' · '),
+      sub: [c.nameKa !== c.name ? c.nameKa : c.nameLat, c.phone, awaited(c) ? t.money.dueToday(formatGel(c.debtTetri)) : c.debtTetri > 0 ? t.money.owes(formatGel(c.debtTetri)) : null].filter(Boolean).join(' · '),
       href: `/customers/${c.id}`,
       recent: { href: `/customers/${c.id}`, title: c.name, sub: c.phone ?? '' },
     }));
@@ -129,7 +133,7 @@ export function SearchOverlay({ onClose }: { onClose: () => void }) {
       sub: (
         <>
           {r.vin ? <Tail vin={r.vin} /> : null}
-          {r.debtTetri > 0 && <span className="crit-text"> {t.money.owes(formatGel(r.debtTetri))}</span>}
+          {awaited(r) ? <span> {t.money.dueToday(formatGel(r.debtTetri))}</span> : r.debtTetri > 0 && <span className="crit-text"> {t.money.owes(formatGel(r.debtTetri))}</span>}
         </>
       ),
       href: `/rentals/${r.id}`,

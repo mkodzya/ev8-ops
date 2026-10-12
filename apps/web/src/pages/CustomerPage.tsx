@@ -53,6 +53,8 @@ interface Card {
 
 interface Balance {
   owesTetri: number;
+  /** Of owesTetri: awaited today and not late (ADR-0017). */
+  dueTodayTetri: number;
   creditTetri: number;
   aheadTetri: number;
   depositHeldTetri: number;
@@ -81,6 +83,10 @@ export function CustomerPage() {
   // The feed says what happened to this customer; who changed the card is
   // the block below it (§3.8, crit. 17а).
   const shownFeed = data.feed.filter((e) => e.kind !== 'log').filter((e) => feedFilter === 'all' || e.kind === feedFilter);
+  // The whole figure is awaited today and nothing in it is late: «К оплате
+  // сегодня» in ink. Anything older in it — «Должен» in red, as before (ADR-0017).
+  const bal = balance.data;
+  const awaited = !!bal && bal.owesTetri > 0 && bal.dueTodayTetri >= bal.owesTetri;
 
   const addDocument = async (list: FileList | null) => {
     const f = list?.[0];
@@ -154,12 +160,14 @@ export function CustomerPage() {
           neither is a debt. The same figure "Today", the rental and the search show. */}
       {balance.data && (
         <section className="card debt-card">
-          <p className={`bal-line ${balance.data.owesTetri > 0 ? 'crit-text' : balance.data.creditTetri > 0 ? 'state-available' : 'muted'}`}>
-            {balance.data.owesTetri > 0
-              ? t.money.owes(formatGel(balance.data.owesTetri))
-              : balance.data.creditTetri > 0
-                ? t.money.onAccount(formatGel(balance.data.creditTetri))
-                : `${t.money.noDebt} · ${formatGel(0)}`}
+          <p className={`bal-line ${awaited ? '' : balance.data.owesTetri > 0 ? 'crit-text' : balance.data.creditTetri > 0 ? 'state-available' : 'muted'}`}>
+            {awaited
+              ? t.money.dueToday(formatGel(balance.data.owesTetri))
+              : balance.data.owesTetri > 0
+                ? t.money.owes(formatGel(balance.data.owesTetri))
+                : balance.data.creditTetri > 0
+                  ? t.money.onAccount(formatGel(balance.data.creditTetri))
+                  : `${t.money.noDebt} · ${formatGel(0)}`}
           </p>
           {balance.data.parts.map((p) => (
             <Row key={`${p.kind}-${p.id}`} k={`${p.kind === 'deposit' ? t.money.closeDeposit : t.money.kinds[p.kind === 'service' ? 'service' : p.kind === 'sale' ? 'sale' : 'rent']} · ${p.number}`} v={<span className="mono">{formatGel(p.owesTetri)}</span>} />

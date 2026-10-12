@@ -26,6 +26,8 @@ interface Rental {
   paidThrough: string | null;
   overdueDays: number;
   debtTetri: number;
+  /** Of debtTetri: awaited today and not late — nought unless the rental is due today (ADR-0017). */
+  dueTodayTetri: number;
   /** Signed on the screen (wave 3 §3.2). Null: a rental brought over, which is not asked to. */
   contractSigned?: boolean | null;
 }
@@ -45,8 +47,9 @@ export function RentalsPage() {
   const open = (r: Rental) => r.status !== 'returned';
   const SEGMENTS = {
     active: (r: Rental) => open(r) && r.status !== 'paused' && r.status !== 'disputed',
-    due_today: (r: Rental) => r.status === 'due_today',
     overdue: (r: Rental) => r.status === 'overdue',
+    // Right after the overdue ones, as on "Today" and in the calendar (ADR-0017).
+    due_today: (r: Rental) => r.status === 'due_today',
     returns: (r: Rental) => open(r) && !!r.expectedReturnOn && r.expectedReturnOn <= today,
     unsigned: (r: Rental) => open(r) && r.contractSigned === false,
     novin: (r: Rental) => open(r) && r.vinUnconfirmed,
@@ -54,16 +57,25 @@ export function RentalsPage() {
     done: (r: Rental) => r.status === 'returned',
   } as const;
   type Segment = keyof typeof SEGMENTS;
-  const segment = (Object.keys(SEGMENTS) as Segment[]).find((s) => s === params.get('s')) ?? null;
+  // A link sent before the segment was renamed still opens it.
+  const asked = params.get('s') === 'awaiting' ? 'due_today' : params.get('s');
+  const segment = (Object.keys(SEGMENTS) as Segment[]).find((s) => s === asked) ?? null;
   const rows = segment ? all.filter(SEGMENTS[segment]) : all;
   const count = (s: Segment) => all.filter(SEGMENTS[s]).length;
-  const debtOf = (list: Rental[]) => list.reduce((n, r) => n + r.debtTetri, 0);
+  // One figure, two names (ADR-0017): red and "debt" when anything in it is
+  // older than what is awaited today; ink and "due today" when all of it is
+  // awaited. Never split: a mixed figure is red as a whole.
+  const isDebt = (r: Rental) => r.debtTetri > r.dueTodayTetri;
+  const sumOf = (list: Rental[]) => list.reduce((n, r) => n + r.debtTetri, 0);
+  const red = sumOf(rows.filter(isDebt));
+  const ink = sumOf(rows.filter((r) => !isDebt(r)));
 
   // What the right of a row says: the debt when there is one, otherwise how
-  // far it is paid — one figure, as on the card (U5).
+  // far it is paid — one figure, as on the card (U5). An ink sum always has
+  // the pill «due today» beside it.
   const owed = (r: Rental) =>
     r.debtTetri > 0 ? (
-      <span className="t-money crit-text">{formatGel(r.debtTetri)}</span>
+      <span className={`t-money ${isDebt(r) ? 'crit-text' : ''}`}>{formatGel(r.debtTetri)}</span>
     ) : (
       <span className="mono">{r.returnedOn ? fmtDate(r.returnedOn) : fmtDate(r.paidThrough)}</span>
     );
@@ -86,7 +98,8 @@ export function RentalsPage() {
             </button>
           ))}
       </div>
-      <p className="hint muted">{t.seg.totals(rows.length, formatGel(debtOf(rows), { decimals: false }))}</p>
+      {/* Each sum only when it is above nought; with neither — «debt 0», as before. */}
+      <p className="hint muted">{t.seg.totals(rows.length, red > 0 || ink === 0 ? formatGel(red, { decimals: false }) : null, ink > 0 ? formatGel(ink, { decimals: false }) : null)}</p>
       <DataList
         rows={rows}
         rowKey={(r) => r.id}
@@ -165,7 +178,7 @@ export function RentalsPage() {
               <span className="r-status">
                 <RentalBadge status={r.status} />
                 {r.overdueDays > 0 && <span className="crit-text r-days">{t.rentals.overdueDays(r.overdueDays)}</span>}
-                {r.debtTetri > 0 && <span className="t-money crit-text r-debt">{formatGel(r.debtTetri)}</span>}
+                {r.debtTetri > 0 && <span className={`t-money r-debt ${isDebt(r) ? 'crit-text' : ''}`}>{formatGel(r.debtTetri)}</span>}
               </span>
             ),
             sort: { value: (r) => r.debtTetri, first: 'desc' },

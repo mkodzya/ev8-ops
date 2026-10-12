@@ -110,6 +110,10 @@ interface Plan {
 
 interface Debt {
   owesTetri: number;
+  /** Of owesTetri: awaited today and not late (ADR-0017). */
+  dueTodayTetri: number;
+  /** The same by rental id, before the customer's credit: a part of that rental's debt. */
+  dueTodayBy: Record<string, number>;
   creditTetri: number;
   aheadTetri: number;
   depositHeldTetri: number;
@@ -162,6 +166,7 @@ function MoneySheet({ opening, onClose }: { opening: Opening; onClose: () => voi
   const kind = s.target?.kind ?? null;
   const tetri = parseGel(s.amount);
   const plan = usePlan(s, tetri);
+  const awaitedTetri = useAwaitedTetri(s.target);
   const till = useLoad<{ me: string; rows: { userId: string; onHandTetri: number }[] }>(kind === 'deposit_payout' && owner ? '/api/till' : null);
   const tillOnHand = till.data?.rows.find((r) => r.userId === till.data!.me)?.onHandTetri ?? null;
   const amountText = tetri ? formatGel(tetri) : '';
@@ -338,7 +343,7 @@ function MoneySheet({ opening, onClose }: { opening: Opening; onClose: () => voi
             <p className="hint muted">{t.money.managerDay(fmtDate(today))}</p>
           )}
 
-          <Closing plan={plan.data} />
+          <Closing plan={plan.data} awaitedTetri={awaitedTetri} />
         </>
       )}
     </FormSheet>
@@ -402,8 +407,26 @@ function usePlan(s: State, tetri: number | null) {
   return { data, purchase: purchase.data?.purchase ?? null };
 }
 
-/** "Закроет": what the payment takes, and the new "paid through" (§3.1). */
-function Closing({ plan }: { plan: Plan | null }) {
+/**
+ * Of the rental this money is for: how much of its debt is awaited today and
+ * not late (ADR-0017) — nought for any other target. The same two addresses
+ * the amount chips read, so it costs no request of its own.
+ */
+function useAwaitedTetri(target: MoneyTarget | null): number {
+  const rentalId = target?.kind === 'rent' ? target.rentalId ?? null : null;
+  const rental = useLoad<{ rental: { customer: { id: string } } }>(rentalId ? `/api/rentals/${rentalId}` : null);
+  const cid = target?.customerId ?? rental.data?.rental.customer.id ?? null;
+  const targets = useLoad<Targets>(rentalId && cid ? `/api/customers/${cid}/money-targets` : null);
+  return rentalId ? targets.data?.debt.dueTodayBy?.[rentalId] ?? 0 : 0;
+}
+
+/**
+ * "Закроет": what the payment takes, and the new "paid through" (§3.1).
+ * What stays after a part payment is still «due today», in ink, while all of
+ * it is money awaited today (`awaitedTetri`); anything older in it — a debt,
+ * in red, as before.
+ */
+function Closing({ plan, awaitedTetri }: { plan: Plan | null; awaitedTetri: number }) {
   const t = useT();
   if (!plan || plan.closes.length === 0) return null;
   const owed = plan.closes.reduce((n, c) => n + Math.max(0, c.openTetri - c.amountTetri), 0);
@@ -422,7 +445,10 @@ function Closing({ plan }: { plan: Plan | null }) {
       </ul>
       {plan.paidThroughAfter && plan.paidThroughAfter !== plan.paidThroughBefore && <p className="money-after">{t.money.paidThroughAfter(fmtDate(plan.paidThroughAfter))}</p>}
       {plan.leftoverTetri > 0 && <p className="money-after">{t.money.leftover(formatGel(plan.leftoverTetri))}</p>}
-      {owed > 0 && plan.direction === 'in' && plan.closes.some((c) => c.target !== 'purchase') && <p className="money-after crit-text">{t.money.leftDebt(formatGel(owed))}</p>}
+      {owed > 0 &&
+        plan.direction === 'in' &&
+        plan.closes.some((c) => c.target !== 'purchase') &&
+        (owed <= awaitedTetri ? <p className="money-after">{t.money.leftDueToday(formatGel(owed))}</p> : <p className="money-after crit-text">{t.money.leftDebt(formatGel(owed))}</p>)}
     </section>
   );
 }
@@ -549,6 +575,8 @@ function TargetHead({ s, fixed, onChange, onPick }: { s: State; fixed: boolean; 
   const cid = customerId ?? rental.data?.rental.customer.id ?? null;
   const targets = useLoad<Targets>(cid && s.direction === 'in' ? `/api/customers/${cid}/money-targets` : null);
   const debt = targets.data?.debt ?? null;
+  // The whole figure is awaited today: «К оплате сегодня» in ink, not «Должен» in red (ADR-0017).
+  const awaited = !!debt && debt.owesTetri > 0 && debt.dueTodayTetri >= debt.owesTetri;
   const name = target.customer ?? rental.data?.rental.customer.name ?? '';
   return (
     <section className="money-who-head">
@@ -556,8 +584,8 @@ function TargetHead({ s, fixed, onChange, onPick }: { s: State; fixed: boolean; 
         <div>
           <p className="t-h3">{name || target.number}</p>
           {debt && (
-            <p className={debt.owesTetri > 0 ? 'crit-text' : 'muted'}>
-              {debt.owesTetri > 0 ? t.money.owes(formatGel(debt.owesTetri)) : debt.creditTetri > 0 ? t.money.onAccount(formatGel(debt.creditTetri)) : t.money.noDebt}
+            <p className={awaited ? undefined : debt.owesTetri > 0 ? 'crit-text' : 'muted'}>
+              {awaited ? t.money.dueToday(formatGel(debt.owesTetri)) : debt.owesTetri > 0 ? t.money.owes(formatGel(debt.owesTetri)) : debt.creditTetri > 0 ? t.money.onAccount(formatGel(debt.creditTetri)) : t.money.noDebt}
               {debt.parts.length > 0 && <span className="muted"> · {debt.parts.map((p) => `${p.number}${p.kind === 'deposit' ? ` ${t.money.closeDeposit.toLowerCase()}` : ''} ${formatGel(p.owesTetri, { decimals: false })}`).join(', ')}</span>}
             </p>
           )}
@@ -642,7 +670,9 @@ function AmountChips({ s, onPick }: { s: State; onPick: (v: string) => void }) {
     // Never more than the customer's one figure: money on their account comes off it.
     const owed = Math.min(owedOn(target.rentalId), targets.data?.debt.owesTetri ?? Infinity);
     const week = rental.data?.rental.weeklyRateTetri ?? 0;
-    if (owed > 0) chips.push({ tetri: owed, label: t.money.chipDebt });
+    // «due today» when all this rental asks for is awaited today; «owed» when anything in it is older (ADR-0017).
+    const awaited = (targets.data?.debt.dueTodayBy?.[target.rentalId] ?? 0) >= owedOn(target.rentalId);
+    if (owed > 0) chips.push({ tetri: owed, label: awaited ? t.money.chipDueToday : t.money.chipDebt });
     // A returned rental has no next week to pay ahead for (QA-W3-10).
     if (week > 0 && rental.data?.rental.storedStatus !== 'returned') chips.push({ tetri: owed + week, label: t.money.chipWeek });
   }

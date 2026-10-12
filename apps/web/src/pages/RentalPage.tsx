@@ -1,6 +1,6 @@
-import type { ActKind, DepositStatus, PeriodPayStatus, RentalStatus } from '@ev8/shared';
+import type { ActKind, DepositStatus, PeriodPayStatus, RentalStatus, WeekDue } from '@ev8/shared';
 import { useState } from 'react';
-import { parseGel, todayISO, type VehicleState } from '@ev8/shared';
+import { parseGel, todayISO, weekDue, type VehicleState } from '@ev8/shared';
 import { DocumentRow, signedAtText, type DocState } from '../components/Documents.js';
 import { KommoField } from '../components/Kommo.js';
 import { RecordHistory } from '../components/RecordHistory.js';
@@ -20,12 +20,17 @@ import { useT } from '../i18n/index.js';
 import { useLoad } from '../lib/use.js';
 import { useSession } from '../session.js';
 
-/** Paid, part-paid, the week we are in, late, or not yet started. */
-function periodTone(p: { startsOn: string; endsOn: string; payStatus: PeriodPayStatus }, today: string): string {
-  if (p.payStatus === 'paid') return 'paid';
-  if (p.payStatus === 'partial') return 'partial';
-  if (p.endsOn < today) return 'late';
-  if (p.startsOn <= today) return 'current';
+/**
+ * The colour of a week in the strip, by the due-day rule (ADR-0017): paid;
+ * late — red from the day after its first day, part-paid or not; the week
+ * awaited today — lime, orange once something is in; ahead and a week at
+ * nothing — grey. It used to turn red only after the week's LAST day.
+ */
+function periodTone(kind: WeekDue, paidTetri: number): string {
+  if (kind === 'paid') return 'paid';
+  if (kind === 'late') return 'late';
+  if (kind === 'due_today') return paidTetri > 0 ? 'partial' : 'current';
+  if (kind === 'ahead') return paidTetri > 0 ? 'partial' : 'ahead';
   return 'ahead';
 }
 
@@ -35,6 +40,8 @@ export interface RentalCard {
     number: string;
     /** This rental's part of the customer's one debt figure. */
     debtTetri: number;
+    /** Of debtTetri: awaited today and not late — nought unless the rental is due today (ADR-0017). */
+    dueTodayTetri: number;
     nightParkingAddress?: string | null;
     kommoRef?: string | null;
     batteries?: number | null;
@@ -100,6 +107,16 @@ export function RentalPage() {
   // Owed is the unpaid part of the weeks, the same arithmetic the list and
   // "Today" use. Nothing here is stored.
   const debtTetri = r.debtTetri;
+  // The whole figure is awaited today and nothing in it is late: «К оплате
+  // сегодня» in ink. Anything older in it — «Долг» in red, as before (ADR-0017).
+  const awaited = debtTetri > 0 && r.dueTodayTetri >= debtTetri;
+  // A week by the due-day rule. «Due today» is said only on a rental that IS
+  // due today: on one returned, paused or disputed the week that began today
+  // is plainly unpaid.
+  const weekKind = (p: RentalCard['periods'][number]): WeekDue => {
+    const due = weekDue(p, data.periods, today);
+    return due === 'due_today' && r.status !== 'due_today' ? 'late' : due;
+  };
   const d = data.deposit;
   const open = r.status !== 'returned';
   const owner = can('deposit.decide');
@@ -189,18 +206,21 @@ export function RentalPage() {
       <section className="card paid-hero">
         <div className="paid-head">
           <div>
-            {/* The first line answers this rental's own question (§3.4). */}
-            <p className="t-label">{r.status === 'due_today' ? t.hand.dueToday : r.status === 'returned' ? t.rentals.returned : t.rentals.paidThrough}</p>
+            {/* The first line answers this rental's own question (§3.4). On
+                the due day that is the sum awaited, in ink; how far it is
+                paid goes under it as one phrase. */}
+            <p className="t-label">{awaited ? t.hand.dueToday : r.status === 'returned' ? t.rentals.returned : t.rentals.paidThrough}</p>
             <p className="paid-date">
-              {r.status === 'due_today' ? formatGel(debtTetri, { decimals: false }) : r.status === 'returned' ? fmtDate(r.returnedOn) : fmtDate(r.paidThrough)}
+              {awaited ? formatGel(debtTetri, { decimals: false }) : r.status === 'returned' ? fmtDate(r.returnedOn) : fmtDate(r.paidThrough)}
             </p>
-            {r.status === 'due_today' && d && (
+            {awaited && r.paidThrough && <p className="muted">{t.back.paidThrough(fmtDate(r.paidThrough))}</p>}
+            {awaited && d && d.paidTetri < d.amountTetri && (
               <p className="muted">
                 {t.rentals.deposit}: {t.rentalMoney.receivedOf(formatGel(d.paidTetri, { decimals: false }), formatGel(d.amountTetri, { decimals: false }))}
               </p>
             )}
           </div>
-          {debtTetri > 0 && r.status !== 'due_today' && (
+          {debtTetri > 0 && !awaited && (
             <div className="paid-debt">
               <p className="t-label">{t.rental.owed}</p>
               <p className="t-money crit-text paid-sum">{formatGel(debtTetri)}</p>
@@ -211,7 +231,7 @@ export function RentalPage() {
           <>
             <ol className="strip">
               {data.periods.map((p) => (
-                <li key={p.seq} className={`strip-seg strip-${periodTone(p, today)}`} title={`${fmtDate(p.startsOn)} — ${fmtDate(p.endsOn)}`}>
+                <li key={p.seq} className={`strip-seg strip-${periodTone(weekKind(p), p.paidTetri)}`} title={`${fmtDate(p.startsOn)} — ${fmtDate(p.endsOn)}`}>
                   <span className="strip-seq">{p.seq}</span>
                 </li>
               ))}
@@ -365,7 +385,7 @@ export function RentalPage() {
                     <td className="mono">{fmtDate(p.endsOn)}</td>
                     <td className="num mono">{formatGel(p.amountTetri, { decimals: false })}</td>
                     <td className="num mono">{formatGel(p.paidTetri, { decimals: false })}</td>
-                    <td className={p.payStatus === 'paid' ? 'state-available' : p.payStatus === 'partial' ? 'warn-text' : 'crit-text'}>{t.rental.payStatus[p.payStatus]}</td>
+                    <WeekState kind={weekKind(p)} partPaid={p.paidTetri > 0} overdue={r.status === 'overdue'} />
                   </tr>
                 ))}
               </tbody>
@@ -497,6 +517,31 @@ export function RentalPage() {
   );
 }
 
+
+/**
+ * The state of a week in the table, by the due-day rule (ADR-0017). Every
+ * colour has its word: the three part-paid weeks — awaited today, late, ahead
+ * — read differently in black and white too.
+ */
+function WeekState({ kind, partPaid, overdue }: { kind: WeekDue; partPaid: boolean; overdue: boolean }) {
+  const t = useT();
+  const word = t.rental.payStatus[partPaid ? 'partial' : 'unpaid'];
+  switch (kind) {
+    case 'paid':
+      return <td className="state-available">{t.rental.payStatus.paid}</td>;
+    // «· late» only on a rental that is overdue: one returned, paused or
+    // disputed keeps the plain red word, as before.
+    case 'late':
+      return <td className="crit-text">{overdue ? `${word} · ${t.rental.weekLate}` : word}</td>;
+    case 'due_today':
+      return partPaid ? <td className="warn-text">{`${word} · ${t.calendar.said.due_today}`}</td> : <td>{t.rentalStatus.due_today}</td>;
+    case 'ahead':
+      return <td>{word}</td>;
+    // A week at nothing — a pause lifted, a rate of 0 — asks for nothing.
+    case 'none':
+      return <td className="muted">{t.common.dash}</td>;
+  }
+}
 
 interface FreeVehicles {
   vehicles: { id: string; vin: string; model: string; state: VehicleState }[];
