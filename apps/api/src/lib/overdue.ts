@@ -1,8 +1,8 @@
-import { effectiveRentalStatus, overdueDays, todayISO } from '@ev8/shared';
-import { isoDate } from './dates.js';
+import { todayISO } from '@ev8/shared';
 import { prisma } from './db.js';
 import { debtsOf } from './debt.js';
 import { env } from './env.js';
+import { rentStateOf } from './rentState.js';
 
 // Which rentals are behind, and by how much (M-02, M-03). One scan, read by
 // "Today" and by the week's report.
@@ -23,11 +23,11 @@ export interface OverdueRental {
 }
 
 export interface RentalsNow {
-  /** Handed over, nothing paid yet (wave 3 §3.3): a task, not a debt. */
-  awaitingPayment: { id: string; number: string; customer: string }[];
-  /** Behind on the rent, deepest first. */
+  /** The week began today, the hand-over day included: a task, not a debt (ADR-0017). */
+  dueToday: { id: string; number: string; customer: string }[];
+  /** Behind on the rent — late from the day after the due day — deepest first. */
   overdue: OverdueRental[];
-  /** Running and not behind, the awaiting ones included. */
+  /** Running and not behind, the due-today ones included. */
   active: number;
   withoutVin: number;
 }
@@ -44,28 +44,22 @@ export async function rentalsNow(): Promise<RentalsNow> {
       paidThrough: true,
       vinUnconfirmed: true,
       customer: { select: { id: true, name: true, nameKa: true, nameLat: true, phone: true } },
-      // What is owed comes from the periods that were not paid, like
-      // everywhere else — there is no stored debt to disagree with them.
-      periods: { where: { payStatus: { not: 'paid' } }, select: { amountTetri: true, paidTetri: true } },
-      deposit: { select: { paidTetri: true } },
     },
   });
 
-  const out: RentalsNow = { awaitingPayment: [], overdue: [], active: 0, withoutVin: 0 };
+  const out: RentalsNow = { dueToday: [], overdue: [], active: 0, withoutVin: 0 };
   for (const r of rentals) {
-    const pickedUpOn = isoDate(r.pickedUpOn);
-    const paidThroughDate = isoDate(r.paidThrough);
-    const nothingPaid = !paidThroughDate && (r.deposit?.paidTetri ?? 0) === 0 && r.periods.every((p) => p.paidTetri === 0);
-    const status = effectiveRentalStatus(r.status, paidThroughDate, pickedUpOn, today, nothingPaid);
-    if (status === 'awaiting_payment') {
-      out.awaitingPayment.push({ id: r.id, number: r.number, customer: r.customer.name });
+    // The same answer the list, the card and "Today" give (ADR-0017).
+    const { status, overdueDays: days } = rentStateOf(r, today);
+    if (status === 'due_today') {
+      out.dueToday.push({ id: r.id, number: r.number, customer: r.customer.name });
       out.active++;
     } else if (status === 'overdue') {
       out.overdue.push({
         id: r.id,
         number: r.number,
         customer: r.customer,
-        days: pickedUpOn ? overdueDays(paidThroughDate, pickedUpOn, today) : 0,
+        days,
         debtTetri: 0,
       });
     } else out.active++;
@@ -73,7 +67,7 @@ export async function rentalsNow(): Promise<RentalsNow> {
   }
 
   // The same figure as everywhere else (B7-02), not a second sum over the weeks.
-  const debts = await debtsOf(out.overdue.map((o) => o.customer.id));
+  const debts = await debtsOf(out.overdue.map((o) => o.customer.id), today);
   for (const o of out.overdue) {
     o.debtTetri = (debts.get(o.customer.id)?.parts ?? []).filter((p) => p.id === o.id).reduce((n, p) => n + p.owesTetri, 0);
   }

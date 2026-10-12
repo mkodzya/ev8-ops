@@ -1,13 +1,15 @@
-import { effectiveRentalStatus, overdueDays, todayISO } from '@ev8/shared';
+import { todayISO } from '@ev8/shared';
 import type { FastifyInstance } from 'fastify';
 import { dayOf, isoDate } from '../lib/dates.js';
-import { debtsOf } from '../lib/debt.js';
+import { debtsOf, rentalDueToday } from '../lib/debt.js';
 import { UNDO_RETURN_MS } from '../lib/rentals.js';
+import { rentStateOf } from '../lib/rentState.js';
 import { prisma } from '../lib/db.js';
 import { env } from '../lib/env.js';
 import { notFound } from '../lib/errors.js';
 
-// Rentals, read side (RNT-03 overdue as a signal, RNT-06 the no-VIN list).
+// Rentals, read side (overdue and due-today as signals — ADR-0017, which
+// replaces RNT-03; RNT-06 the no-VIN list).
 
 export function rentalRoutes(app: FastifyInstance): void {
   app.get('/api/rentals', { config: { scope: 'fleet.view' } }, async () => {
@@ -19,16 +21,14 @@ export function rentalRoutes(app: FastifyInstance): void {
         customer: { select: { id: true, name: true, nameKa: true, nameLat: true, phone: true } },
         vehicle: { select: { id: true, vin: true, model: { select: { brand: true, name: true } } } },
         deposit: { select: { amountTetri: true, status: true, paidTetri: true } },
-        // What is owed, from the periods that were not paid — the list shows
-        // the debt beside the status (U5) and must not invent a second rule.
-        periods: { where: { payStatus: { not: 'paid' } }, select: { amountTetri: true, paidTetri: true } },
         _count: { select: { periods: true } },
         // Signed on the screen or not: the "Не подписан" filter (wave 3 §3.2).
         documents: { where: { kind: 'pdf', archived: false, docKind: 'contract', signedAt: { not: null } }, select: { id: true } },
       },
     });
     // A rental's debt is its part of its customer's one figure: its unpaid weeks and deposit.
-    const debts = await debtsOf(rentals.map((r) => r.customerId));
+    // Asked for the same day the statuses below are read for: one clock for one answer.
+    const debts = await debtsOf(rentals.map((r) => r.customerId), today);
     const debtOfRental = (customerId: string, rentalId: string) =>
       (debts.get(customerId)?.parts ?? []).filter((p) => p.id === rentalId && (p.kind === 'rent' || p.kind === 'deposit' || p.kind === 'charge')).reduce((n, p) => n + p.owesTetri, 0);
     return {
@@ -36,8 +36,8 @@ export function rentalRoutes(app: FastifyInstance): void {
       rentals: rentals.map((r) => {
         const pickedUpOn = isoDate(r.pickedUpOn);
         const paidThrough = isoDate(r.paidThrough);
-        const nothingPaid = !paidThrough && (r.deposit?.paidTetri ?? 0) === 0 && r.periods.every((p) => p.paidTetri === 0);
-        const status = effectiveRentalStatus(r.status, paidThrough, pickedUpOn, today, nothingPaid);
+        // What it is called today and how many days it is late: the one function every route asks.
+        const { status, overdueDays } = rentStateOf(r, today);
         return {
           id: r.id,
           number: r.number,
@@ -54,8 +54,10 @@ export function rentalRoutes(app: FastifyInstance): void {
           expectedReturnOn: isoDate(r.expectedReturnOn),
           returnedOn: isoDate(r.returnedOn),
           paidThrough,
-          overdueDays: status === 'overdue' && pickedUpOn ? overdueDays(paidThrough, pickedUpOn, today) : 0,
+          overdueDays,
           debtTetri: debtOfRental(r.customerId, r.id),
+          // Of that debt: awaited today and not late. The figure is ink only when the two are equal (ADR-0017).
+          dueTodayTetri: rentalDueToday(debts.get(r.customerId), r.id),
           periods: r._count.periods,
           buyoutTargetTetri: r.buyoutTargetTetri,
           buyoutPerPaymentTetri: r.buyoutPerPaymentTetri,
@@ -105,15 +107,16 @@ export function rentalRoutes(app: FastifyInstance): void {
     const pickedUpOn = isoDate(r.pickedUpOn);
     const paidThrough = isoDate(r.paidThrough);
     // This rental's part of its customer's one debt figure (B7-02): weeks and an unpaid deposit (QA-W2-01).
-    const debt = (await debtsOf([r.customerId])).get(r.customerId);
+    const debt = (await debtsOf([r.customerId], today)).get(r.customerId);
     const debtTetri = (debt?.parts ?? []).filter((p) => p.id === r.id && (p.kind === 'rent' || p.kind === 'deposit' || p.kind === 'charge')).reduce((n, p) => n + p.owesTetri, 0);
     return {
       rental: {
         id: r.id,
         number: r.number,
         debtTetri,
+        dueTodayTetri: rentalDueToday(debt, r.id),
         odooName: r.odooName,
-        status: effectiveRentalStatus(r.status, paidThrough, pickedUpOn, today, !paidThrough && (r.deposit?.paidTetri ?? 0) === 0 && r.periods.every((p) => p.paidTetri === 0)),
+        status: rentStateOf(r, today).status,
         storedStatus: r.status,
         customer: { id: r.customer.id, name: r.customer.name, phone: r.customer.phone },
         vehicle: r.vehicle ? { id: r.vehicle.id, vin: r.vehicle.vin, model: `${r.vehicle.model.brand} ${r.vehicle.model.name}` } : null,

@@ -1,7 +1,7 @@
 import { SEARCH_GROUP_LIMIT, spellingMatches, numberMatches, paymentMatches, phoneMatches, readQuery, vinMatches, type Query } from '@ev8/shared';
 import type { FastifyInstance } from 'fastify';
 import { isoDate } from '../lib/dates.js';
-import { debtsOf } from '../lib/debt.js';
+import { debtsOf, rentalDueToday } from '../lib/debt.js';
 import { prisma } from '../lib/db.js';
 import { actorOf, mayView } from '../lib/guard.js';
 
@@ -156,12 +156,14 @@ export function searchRoutes(app: FastifyInstance): void {
       rentalId
         ? (debts.get(customerId)?.parts ?? []).filter((p) => p.id === rentalId && (p.kind === 'rent' || p.kind === 'deposit' || p.kind === 'charge')).reduce((n, p) => n + p.owesTetri, 0)
         : debts.get(customerId)?.owesTetri ?? 0;
+    // Of each figure: awaited today and not late — the word beside it follows (ADR-0017).
+    const dueToday = (customerId: string, rentalId?: string) => (rentalId ? rentalDueToday(debts.get(customerId), rentalId) : debts.get(customerId)?.dueTodayTetri ?? 0);
     return {
       q: req.query.q,
       groups: {
         ...groups,
-        customers: { ...groups.customers, items: groups.customers.items.map((c) => ({ ...c, debtTetri: owes(c.id) })) },
-        rentals: { ...groups.rentals, items: groups.rentals.items.map((r) => ({ ...r, debtTetri: owes(r.customerId, r.id) })) },
+        customers: { ...groups.customers, items: groups.customers.items.map((c) => ({ ...c, debtTetri: owes(c.id), dueTodayTetri: dueToday(c.id) })) },
+        rentals: { ...groups.rentals, items: groups.rentals.items.map((r) => ({ ...r, debtTetri: owes(r.customerId, r.id), dueTodayTetri: dueToday(r.customerId, r.id) })) },
       },
     };
   });

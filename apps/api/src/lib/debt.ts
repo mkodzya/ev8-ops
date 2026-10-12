@@ -1,7 +1,8 @@
-import { customerDebt, todayISO, type Debt } from '@ev8/shared';
+import { customerDebt, dueTodayOf, todayISO, type Debt } from '@ev8/shared';
 import { isoDate } from './dates.js';
 import { prisma } from './db.js';
 import { env } from './env.js';
+import { rentStateOf } from './rentState.js';
 
 // The database side of the one debt figure (B7-02): read what a customer's
 // records ask for and what their money has taken, and hand it to the one
@@ -10,9 +11,23 @@ import { env } from './env.js';
 
 const OPEN = new Set(['booked', 'active', 'overdue', 'paused', 'disputed']);
 
-export async function debtsOf(customerIds: string[], today: string = todayISO(new Date(), env.TZ)): Promise<Map<string, Debt>> {
+/**
+ * The one figure, and beside it what it is made of on a due day (ADR-0017).
+ * Nothing here changes the figure: a week is owed from its first day, and
+ * these three only say how much of `owesTetri` is awaited today and not late.
+ */
+export type CustomerDebt = Debt & {
+  /** Of owesTetri: awaited today, not late (shared `dueTodayOf`). */
+  dueTodayTetri: number;
+  /** Of dueTodayTetri: the rent alone — what `handOverBlockTetri` reads. */
+  dueTodayRentTetri: number;
+  /** dueTodayTetri by rental id, before credit. */
+  dueTodayBy: Record<string, number>;
+};
+
+export async function debtsOf(customerIds: string[], today: string = todayISO(new Date(), env.TZ)): Promise<Map<string, CustomerDebt>> {
   const out = new Map<string, Debt>();
-  if (customerIds.length === 0) return out;
+  if (customerIds.length === 0) return new Map();
   const ids = [...new Set(customerIds)];
 
   const [rentals, sales, jobs, payments] = await Promise.all([
@@ -23,6 +38,9 @@ export async function debtsOf(customerIds: string[], today: string = todayISO(ne
         number: true,
         status: true,
         customerId: true,
+        // The two facts a rental's state is read from: for the due day only, never for the figure.
+        paidThrough: true,
+        pickedUpOn: true,
         periods: { select: { startsOn: true, amountTetri: true, paidTetri: true } },
         charges: { where: { voidedAt: null }, select: { amountTetri: true, allocations: { where: { payment: { voidedAt: null } }, select: { amountTetri: true } } } },
         deposit: {
@@ -91,7 +109,16 @@ export async function debtsOf(customerIds: string[], today: string = todayISO(ne
       }),
     );
   }
-  return out;
+
+  // Beside each figure, how much of it is awaited today. The figure is the
+  // one worked out above, passed through as it is.
+  const withDue = new Map<string, CustomerDebt>();
+  for (const [id, debt] of out) {
+    const mine = rentals.filter((r) => r.customerId === id).map((r) => ({ id: r.id, status: rentStateOf(r, today).status, pickedUpOn: isoDate(r.pickedUpOn) }));
+    const due = dueTodayOf(debt, mine, today);
+    withDue.set(id, { ...debt, dueTodayTetri: due.tetri, dueTodayRentTetri: due.rentTetri, dueTodayBy: due.byRental });
+  }
+  return withDue;
 }
 
 /**
@@ -104,6 +131,12 @@ export function rentalDebt(debt: Debt | undefined, rentalId: string): number {
     .reduce((n, p) => n + p.owesTetri, 0);
 }
 
-export async function debtOf(customerId: string): Promise<Debt> {
-  return (await debtsOf([customerId])).get(customerId)!;
+/** Of a rental's debt: what is awaited today and not late — nought for a rental that is not due today. */
+export function rentalDueToday(debt: CustomerDebt | undefined, rentalId: string): number {
+  return debt?.dueTodayBy[rentalId] ?? 0;
+}
+
+/** One customer's figure. `today` — the day the caller reads its statuses for, so the two halves of an answer cannot part at midnight. */
+export async function debtOf(customerId: string, today?: string): Promise<CustomerDebt> {
+  return (await debtsOf([customerId], today)).get(customerId)!;
 }

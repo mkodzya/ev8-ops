@@ -161,6 +161,9 @@ describe.skipIf(!HAS_DB)('wave 6 · the week', () => {
     const summary = json<{ rentals: { overdue: number }; overdueList: { debtTetri: number }[] }>(await call(owner, 'GET', '/api/summary'));
     expect(w.rentals.overdueCount).toBe(summary.rentals.overdue);
     expect(w.rentals.overdueTetri).toBe(summary.overdueList.reduce((n, o) => n + o.debtTetri, 0));
+    // …and the tile "Сегодня" really shows: it is counted in its own route, not by the summary (ADR-0017).
+    const tile = json<{ numbers: { overdueTetri: number | null } }>(await call(owner, 'GET', '/api/today'));
+    expect(tile.numbers.overdueTetri).toBe(w.rentals.overdueTetri);
   });
 
   it('agrees with "Деньги → Залоги" about how much deposit money is held', async () => {

@@ -14,7 +14,7 @@ const rental = (over: Partial<QueueRental> = {}): QueueRental => ({
   paidThrough: '2026-09-17',
   status: 'overdue',
   debtTetri: 15000,
-  awaitingPayment: false,
+  dueTodayTetri: 0,
   depositUndecided: false,
   vinUnconfirmed: false,
   contractUnsigned: false,
@@ -70,14 +70,17 @@ describe('the queue of “Today”', () => {
     const q = dayQueue(input({ rentals: [rental(), rental({ id: 'r2', number: 'R-00002', paidThrough: '2026-09-10', debtTetri: 30000 })] }));
     const overdue = group(q, 'overdue')!;
     expect(overdue.rows.map((r) => r.number)).toEqual(['R-00002', 'R-00001']);
-    expect(overdue.rows[0]).toMatchObject({ days: 10, amountTetri: 30000, action: 'take_money' });
+    // Paid through 10.09: the week was due on the 11th, and the 20th is its ninth late day (ADR-0017).
+    expect(overdue.rows[0]).toMatchObject({ days: 9, amountTetri: 30000, action: 'take_money' });
+    expect(overdue.rows[1]).toMatchObject({ days: 2, amountTetri: 15000 });
     expect(overdue.totalTetri).toBe(45000);
   });
 
-  it('keeps a rental waiting for its first payment out of “overdue” (crit. 2)', () => {
-    const q = dayQueue(input({ rentals: [rental({ status: 'awaiting_payment', awaitingPayment: true, paidThrough: null, pickedUpOn: TODAY, debtTetri: 33000 })] }));
+  it('a rental due today stands in its own group, not in “overdue” (crit. 2; ADR-0017)', () => {
+    const q = dayQueue(input({ rentals: [rental({ status: 'due_today', paidThrough: null, pickedUpOn: TODAY, debtTetri: 33000, dueTodayTetri: 33000 })] }));
     expect(group(q, 'overdue')).toBeUndefined();
-    expect(group(q, 'awaiting')!.rows[0]).toMatchObject({ number: 'R-00001', amountTetri: 33000 });
+    // Handed over today with nothing paid: the week and the deposit, awaited whole.
+    expect(group(q, 'due_today')!.rows[0]).toMatchObject({ number: 'R-00001', amountTetri: 33000, dueTodayTetri: 33000, days: null, note: 'handed_today', action: 'take_money' });
   });
 
   it('gives an owner the deposit a manager’s return left, and a manager nothing of it (crit. 3)', () => {

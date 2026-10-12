@@ -20,8 +20,18 @@ interface Customer {
   openRentals: { id: string; number: string; status: RentalStatus }[];
   rentals: number;
   debtTetri: number;
+  /** Of debtTetri: awaited today and not late (ADR-0017). */
+  dueTodayTetri: number;
   buyer: boolean;
 }
+
+// One figure, two names (ADR-0017). A debtor has something in it older than
+// what is awaited today — red, under the chip «owing». A figure that is all
+// awaited today is ink, with the calendar's word under it: never colour alone.
+// An answer without the field (an older API in the seconds of a deploy) reads
+// as a debt: nobody turns calm because a number did not arrive.
+const isDebtor = (c: Customer) => c.debtTetri - (c.dueTodayTetri ?? 0) > 0;
+const isAwaited = (c: Customer) => c.debtTetri > 0 && !isDebtor(c);
 
 export function CustomersPage() {
   const t = useT();
@@ -55,7 +65,7 @@ export function CustomersPage() {
         }}
         chips={[
           { key: 'renting', label: t.lists.chips.withRental, test: (c) => c.openRentals.length > 0 },
-          { key: 'owing', label: t.lists.chips.owing, test: (c) => c.debtTetri > 0 },
+          { key: 'owing', label: t.lists.chips.owing, test: isDebtor },
           { key: 'buyers', label: t.lists.chips.buyers, test: (c) => c.buyer },
         ]}
         empty={{
@@ -77,8 +87,8 @@ export function CustomersPage() {
                 {other}
               </>
             ),
-            right: c.debtTetri > 0 ? <span className="t-money crit-text">{formatGel(c.debtTetri, { decimals: false })}</span> : undefined,
-            rightSub: c.rentals > 0 ? t.lists.rentalsCount(c.rentals) : undefined,
+            right: c.debtTetri > 0 ? <span className={`t-money ${isDebtor(c) ? 'crit-text' : ''}`}>{formatGel(c.debtTetri, { decimals: false })}</span> : undefined,
+            rightSub: isAwaited(c) ? t.calendar.said.due_today : c.rentals > 0 ? t.lists.rentalsCount(c.rentals) : undefined,
           };
         }}
         columns={[
@@ -114,7 +124,15 @@ export function CustomersPage() {
             key: 'debt',
             label: t.lists.debt,
             num: true,
-            cell: (c) => <span className={`mono ${c.debtTetri > 0 ? 'crit-text' : 'muted'}`}>{c.debtTetri > 0 ? formatGel(c.debtTetri, { decimals: false }) : t.common.dash}</span>,
+            cell: (c) =>
+              isAwaited(c) ? (
+                <span className="debt-awaited">
+                  <span className="mono">{formatGel(c.debtTetri, { decimals: false })}</span>
+                  <span className="muted">{t.calendar.said.due_today}</span>
+                </span>
+              ) : (
+                <span className={`mono ${c.debtTetri > 0 ? 'crit-text' : 'muted'}`}>{c.debtTetri > 0 ? formatGel(c.debtTetri, { decimals: false }) : t.common.dash}</span>
+              ),
             sort: { value: (c) => c.debtTetri, first: 'desc' },
           },
         ]}

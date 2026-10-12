@@ -38,7 +38,7 @@ export function summaryRoutes(app: FastifyInstance): void {
     ]);
     const fleet = Object.fromEntries(VEHICLE_STATES.map((s) => [s, 0])) as Record<VehicleState, number>;
     for (const g of vehicles) fleet[g.state as VehicleState] = g._count._all;
-    const { awaitingPayment, overdue: overdueList, active, withoutVin } = rentals;
+    const { dueToday, overdue: overdueList, active, withoutVin } = rentals;
 
     const deposits = mayView(req, 'deposit.decide') ? await depositsOverview() : null;
 
@@ -51,7 +51,8 @@ export function summaryRoutes(app: FastifyInstance): void {
         })
       : [];
     return {
-      awaitingPayment,
+      // Every rental whose week began today (ADR-0017) — the hand-over day was its only case before.
+      dueToday,
       depositsUndecided: undecided.map((r) => ({
         id: r.id,
         number: r.number,

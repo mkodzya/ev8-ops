@@ -44,6 +44,10 @@ export function periodSeqOf(pickedUpOn: ISODate, date: ISODate): number {
 }
 
 export function periodPayStatus(amountTetri: number, paidTetri: number): PeriodPayStatus {
+  // A week at nothing — a pause or a dispute lifted, a rate of 0, a week a
+  // late return replaced — asks for nothing, so it is paid: "paid through"
+  // walks over it, as the calendar skips it (ADR-0017).
+  if (amountTetri <= 0) return 'paid';
   if (paidTetri <= 0) return 'unpaid';
   return paidTetri >= amountTetri ? 'paid' : 'partial';
 }
@@ -66,9 +70,16 @@ export function paidThrough(periods: { seq: number; endsOn: ISODate; payStatus: 
   return through;
 }
 
-/** Days a rental is behind: 0 when paid through today or later. */
+/**
+ * The day a running rental's rent is due: the first day of its oldest week not
+ * fully paid — the day after "paid through", or the pickup day while no week
+ * is paid. The week may have a row or not yet (today's before the 00:10 roll).
+ */
+export function rentDueOn(paidThroughDate: ISODate | null, pickedUpOn: ISODate): ISODate {
+  return paidThroughDate ? addDays(paidThroughDate, 1) : pickedUpOn;
+}
+
+/** Days a rental is late: 0 on its due day and before it, 1 the day after (ADR-0017). */
 export function overdueDays(paidThroughDate: ISODate | null, pickedUpOn: ISODate, today: ISODate): number {
-  // Nothing paid yet: behind from the pickup day itself.
-  const covered = paidThroughDate ?? addDays(pickedUpOn, -1);
-  return Math.max(0, daysBetween(covered, today));
+  return Math.max(0, daysBetween(rentDueOn(paidThroughDate, pickedUpOn), today));
 }
