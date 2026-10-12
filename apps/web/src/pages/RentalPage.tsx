@@ -7,7 +7,7 @@ import { RecordHistory } from '../components/RecordHistory.js';
 import { LoadError } from '../components/LoadError.js';
 import { DecideSheet } from '../components/ReturnMoney.js';
 import { RowMenu } from '../components/RowMenu.js';
-import { WhatsappSheet } from '../components/Whatsapp.js';
+import { waOffered, WhatsappSheet } from '../components/Whatsapp.js';
 import { Field } from '../components/Wizard.js';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
@@ -138,7 +138,8 @@ export function RentalPage() {
             {t.docs.returnAct}
           </button>
         )}
-        {r.customer.phone && (
+        {/* No button while there is no ready message for this rental — on its due day (ADR-0017). */}
+        {r.customer.phone && waOffered(r.status, r.pickedUpOn, today) && (
           <button type="button" className="pill pill-sm" onClick={() => setWa(true)}>
             {t.customer.whatsapp}
           </button>

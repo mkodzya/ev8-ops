@@ -145,6 +145,14 @@ export function TodayPage() {
   // earlier day). The whole figure is red then, never a part of it (ADR-0017).
   const sumIsDebt = (r: TaskRow): boolean => r.group === 'overdue' || (r.group === 'due_today' && (r.amountTetri ?? 0) > (r.dueTodayTetri ?? 0));
 
+  // The rental a row is about, when it is about one: then the row's address
+  // is that rental's. An instalment or a deal from Kommo is not a rental, and
+  // the WhatsApp sheet must not wait for one that will never load.
+  const rentalOf = (r: TaskRow): string | null => {
+    const id = r.id.split(':')[1];
+    return id && r.href.startsWith(`/rentals/${id}`) ? id : null;
+  };
+
   const act = (r: TaskRow) => {
     const id = r.id.split(':')[1];
     if ((r.action === 'take_money' || r.action === 'take_cash') && r.number && id) {
@@ -219,23 +227,26 @@ export function TodayPage() {
                         <a className="pill pill-sm" href={`tel:${r.phone}`} aria-label={t.today.call}>
                           ☎
                         </a>
-                        <button
-                          type="button"
-                          className="pill pill-sm"
-                          aria-label={t.today.whatsapp}
-                          onClick={() =>
-                            setWa({
-                              rentalId: r.id.split(':')[1] ?? null,
-                              number: r.number ?? '',
-                              name: r.who ?? '',
-                              phone: r.phone ?? '',
-                              paidThrough: null,
-                              debtTetri: r.amountTetri ?? 0,
-                            })
-                          }
-                        >
-                          WA
-                        </button>
+                        {/* No ready message for a rental due today (ADR-0017): the call and the action stay. */}
+                        {r.group !== 'due_today' && (
+                          <button
+                            type="button"
+                            className="pill pill-sm"
+                            aria-label={t.today.whatsapp}
+                            onClick={() =>
+                              setWa({
+                                rentalId: rentalOf(r),
+                                number: r.number ?? '',
+                                name: r.who ?? '',
+                                phone: r.phone ?? '',
+                                paidThrough: null,
+                                debtTetri: r.amountTetri ?? 0,
+                              })
+                            }
+                          >
+                            WA
+                          </button>
+                        )}
                       </>
                     )}
                     <button type="button" className="pill pill-sm pill-accent" onClick={() => act(r)}>

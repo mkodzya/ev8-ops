@@ -1,4 +1,4 @@
-import { CUSTOMER_SOURCES, type CustomerKind, type DepositStatus, type RentalStatus } from '@ev8/shared';
+import { CUSTOMER_SOURCES, todayISO, type CustomerKind, type DepositStatus, type RentalStatus } from '@ev8/shared';
 import { useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { preparePhoto, uploadFile } from '../lib/photos.js';
@@ -9,7 +9,7 @@ import '../ds/form/form.css';
 import { api, ApiError } from '../api.js';
 import { FormSheet } from '../ds/form/Form.js';
 import { Field } from '../components/Wizard.js';
-import { WhatsappSheet } from '../components/Whatsapp.js';
+import { waOffered, WhatsappSheet } from '../components/Whatsapp.js';
 import { LoadError } from '../components/LoadError.js';
 import { RowMenu } from '../components/RowMenu.js';
 import { BlockHead, Empty, Loading, PageHead, RentalBadge, Vin } from '../components/ui.js';
@@ -87,6 +87,13 @@ export function CustomerPage() {
   // сегодня» in ink. Anything older in it — «Должен» in red, as before (ADR-0017).
   const bal = balance.data;
   const awaited = !!bal && bal.owesTetri > 0 && bal.dueTodayTetri >= bal.owesTetri;
+  // A message from this card is about ONE rental, the most urgent: an overdue
+  // one, then one due today, then any not returned. Its id, its number and its
+  // «paid through» go together — they used to come from two different rentals.
+  const live = data.rentals.find((r) => r.status === 'overdue') ?? data.rentals.find((r) => r.status === 'due_today') ?? data.rentals.find((r) => r.status !== 'returned') ?? null;
+  const waAbout = live ?? data.rentals[0] ?? null;
+  // No button while there is no ready message for that rental — on its due day.
+  const waHere = !live || waOffered(live.status, live.pickedUpOn, todayISO());
 
   const addDocument = async (list: FileList | null) => {
     const f = list?.[0];
@@ -113,7 +120,7 @@ export function CustomerPage() {
             {t.today.call}
           </a>
         )}
-        {!c.archived && c.phone && (
+        {!c.archived && c.phone && waHere && (
           // The ready text in the customer's language (wave 4 §3.2, В6).
           <button type="button" className="pill pill-sm" onClick={() => setWa(true)}>
             {t.customer.whatsapp}
@@ -310,7 +317,7 @@ export function CustomerPage() {
       {editing && <CustomerEdit customer={c} onClose={() => setEditing(false)} onSaved={() => { setEditing(false); reload(); }} />}
       {wa && c.phone && (
         <WhatsappSheet
-          target={{ rentalId: data.rentals.find((r) => r.status !== 'returned')?.id ?? null, number: data.rentals[0]?.number ?? '', name: c.name, phone: c.phone, paidThrough: data.rentals[0]?.paidThrough ?? null, debtTetri: balance.data?.owesTetri ?? 0 }}
+          target={{ rentalId: live?.id ?? null, number: waAbout?.number ?? '', name: c.name, phone: c.phone, paidThrough: waAbout?.paidThrough ?? null, debtTetri: balance.data?.owesTetri ?? 0 }}
           onClose={() => setWa(false)}
         />
       )}

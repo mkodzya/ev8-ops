@@ -121,6 +121,8 @@ export const wave4En = {
     note: 'WhatsApp opens with this text; you send it from your own phone.',
     open: 'Open WhatsApp',
     logged: 'Written into the rental’s feed',
+    /** The sheet opened on a rental with no ready message today — one due today (ADR-0017). */
+    noneToday: 'There is no ready message for this rental today.',
     /** The texts themselves are the same in every interface language: they go to the customer. */
     text: (
       lang: 'ka' | 'ru' | 'en',
@@ -429,6 +431,7 @@ export const wave4Ru: Wave4 = {
     note: 'Откроется WhatsApp с этим текстом; отправляете вы со своего телефона.',
     open: 'Открыть WhatsApp',
     logged: 'Записано в ленту аренды',
+    noneToday: 'Для этой аренды сегодня готового сообщения нет.',
     text: wave4En.wa.text,
   },
   vehicleW4: {
@@ -701,6 +704,7 @@ export const wave4Ka: Wave4 = {
     note: 'გაიხსნება WhatsApp ამ ტექსტით; აგზავნით თქვენი ტელეფონიდან.',
     open: 'WhatsApp-ის გახსნა',
     logged: 'ჩაიწერა ქირის ლენტაში',
+    noneToday: 'ამ ქირაობისთვის დღეს მზა შეტყობინება არ არის.',
     text: wave4En.wa.text,
   },
   vehicleW4: {
