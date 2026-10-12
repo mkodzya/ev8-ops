@@ -5,7 +5,7 @@ import { dateFromISO, isoDate } from '../dates.js';
 import { prisma } from '../db.js';
 import { recordPaymentTx } from '../payments.js';
 import { serviceOwed } from '../money.js';
-import { parseStatement, type ParsedLine } from './parse.js';
+import { cardOf, parseStatement, type ParsedLine } from './parse.js';
 import { decide, lineGross, loadCtx, type Ctx, type Decision, type Line } from './reconcile.js';
 
 // Loading a statement and letting it settle what it can (PAY-01, PAY-02,
@@ -221,13 +221,15 @@ export async function attach(
   if (line.direction === 'out') throw conflict('outgoing_line', 'Money leaving the account is not a customer payment.');
   await claim(tx, line.id, input.rule);
 
-  const channel: 'transfer' | 'acquiring' = line.grossTetri != null || /Wallet\/domestic MC cards/i.test(line.raw) ? 'acquiring' : 'transfer';
+  // Read from the line as it is stored: a card line loaded before its wording was known says so in its raw text.
+  const card = cardOf(line);
+  const channel: 'transfer' | 'acquiring' = card ? 'acquiring' : 'transfer';
   const asOne: Line = {
     occurredOn: isoDate(line.occurredOn)!,
     direction: 'in',
     amountTetri: line.amountTetri,
-    grossTetri: line.grossTetri,
-    feeTetri: line.feeTetri,
+    grossTetri: card?.grossTetri ?? null,
+    feeTetri: card?.feeTetri ?? null,
     payer: line.payer,
     purpose: line.purpose,
     raw: line.raw,
@@ -235,7 +237,7 @@ export async function attach(
     bank: line.bank,
   };
   const gross = lineGross(asOne);
-  const fee = channel === 'acquiring' ? line.feeTetri ?? Math.max(0, gross - line.amountTetri) : 0;
+  const fee = channel === 'acquiring' ? asOne.feeTetri ?? Math.max(0, gross - line.amountTetri) : 0;
 
   let paymentId: string;
   if (input.serviceJobId) {
