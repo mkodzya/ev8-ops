@@ -44,6 +44,7 @@ export interface SortLine {
   occurredOn: string;
   amountTetri: number;
   grossTetri: number | null;
+  feeTetri?: number | null;
   channel: 'transfer' | 'acquiring';
   payer: string | null;
   purpose: string | null;
@@ -206,6 +207,13 @@ function LineCard({ line, onOther, onNotOurs }: { line: SortLine; onOther: () =>
         </span>
         <RowMenu actions={[{ key: 'not', label: t.sort.notOurs, onPick: onNotOurs }]} />
       </div>
+      {/* The sum above is what the bank credited. A card line says what the customer paid — that is what
+          attaching it writes — and what the bank kept. */}
+      {line.direction === 'in' && line.channel === 'acquiring' && (
+        <p className="sort-line-card">
+          {line.grossTetri != null ? t.sort.byCard(formatGel(line.grossTetri), formatGel(line.feeTetri ?? line.grossTetri - line.amountTetri)) : t.sort.byCardPlain}
+        </p>
+      )}
       <p className="sort-line-text">{[line.payer, line.purpose].filter(Boolean).join(' · ') || line.raw}</p>
 
       {line.group === 'recorded' &&
@@ -326,7 +334,7 @@ function OtherSheet({ line, onClose }: { line: SortLine; onClose: () => void }) 
     : [];
   return (
     <FormSheet
-      title={t.sort.whereTo(formatGel(line.amountTetri))}
+      title={t.sort.whereTo(formatGel(line.channel === 'acquiring' && line.grossTetri != null ? line.grossTetri : line.amountTetri))}
       onClose={onClose}
       value={pick}
       initial={null}

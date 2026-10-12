@@ -268,3 +268,5 @@
 | Ключ | RU | EN | KA | Чтение |
 |---|---|---|---|---|
 | `sort.reason.beforeTransfer(день)` | Аренда перенесена 11.10.2026: эта оплата могла уже войти в «Оплачено по». Проверьте, прежде чем привязывать. | The rental was carried over on 11.10.2026: this payment may already be inside “Paid through”. Check before attaching. | ქირაობა გადმოტანილია 11.10.2026: ეს გადახდა შეიძლება უკვე ჩათვლილია „გადახდილია“-ში. მიბმამდე შეამოწმეთ. | kiraoba gadmotanilia …: es gadakhda sheidzleba ukve chatvlilia „gadakhdilia“-shi. mibmamde sheamotsmet. |
+| `sort.byCard(сумма, комиссия)` | Оплата картой: клиент заплатил 200.00 ₾, комиссия банка 3.00 ₾. | Card payment: the customer paid 200.00 ₾, the bank kept 3.00 ₾. | ბარათით გადახდა: კლიენტმა გადაიხადა 200.00 ₾, ბანკის საკომისიო 3.00 ₾. | baratit gadakhda: klientma gadaikhada …, bankis sakomisio …. |
+| `sort.byCardPlain` | Оплата картой. | Card payment. | ბარათით გადახდა. | baratit gadakhda. |
