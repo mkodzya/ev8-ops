@@ -37,13 +37,13 @@ function tag(): string {
   return `t${uniq().replace(/\D/g, '').slice(-9)}`;
 }
 
-async function rental(opts: { rate?: number; pickedUpOn?: string; name?: string } = {}) {
+async function rental(opts: { rate?: number; pickedUpOn?: string; name?: string; nameKa?: null } = {}) {
   const { prisma } = await import('../src/lib/db.js');
   const t = tag();
   const model = await prisma.vehicleModel.create({ data: { brand: 'Test', name: `Reco ${uniq()}`, forRent: true } });
   const vehicle = await prisma.vehicle.create({ data: { vin: `TESTR${uniq().replace(/\D/g, '').slice(-12).padStart(12, '0')}`, modelId: model.id } });
   // The bank writes a Georgian name in its own transliteration ("testaZe gela"); the card holds the Georgian spelling.
-  const customer = await prisma.customer.create({ data: { name: opts.name ?? `Гела Тестадзе ${t}`, nameKa: `გელა ტესტაძე ${t}` } });
+  const customer = await prisma.customer.create({ data: { name: opts.name ?? `Гела Тестадзе ${t}`, nameKa: opts.nameKa === null ? null : `გელა ტესტაძე ${t}` } });
   const owner = await loginAs('owner');
   const { id } = json<{ id: string }>(
     await call(owner, 'POST', '/api/rentals', { customerId: customer.id, vehicleId: vehicle.id, weeklyRateTetri: opts.rate ?? 15000, pickedUpOn: opts.pickedUpOn ?? today() }),
@@ -286,5 +286,40 @@ describe.skipIf(!HAS_DB)('round 1 of wave 2 (QA-W2-04, designer’s answer 3)', 
     const line = await queued(entered.owner, t);
     expect(line?.group).toBe('recorded');
     expect(line?.suggestions.map((s) => s.id)).toContain(fresh.rentalId);
+  });
+});
+
+describe.skipIf(!HAS_DB)('a rental carried over, and a bank line no later than that day (Mika, 12.10.2026)', () => {
+  // A rental carried over arrives with «paid through» and no payments: a line
+  // of that day or earlier may be money that is inside the date already.
+  it('no rule attaches such a line, whatever the name and the sum; the hint says the rental was carried over', async () => {
+    const { prisma, owner, rentalId, tag: t } = await rental({ pickedUpOn: addDays(today(), -3) });
+    await prisma.rental.update({ where: { id: rentalId }, data: { transferredAt: new Date() } });
+    // The payer is this customer and 330 is exactly what the rental owes — the two signs of the name rule.
+    for (const day of [addDays(today(), -2), today()]) {
+      const res = json<{ matched: number }>(await call(owner, 'POST', '/api/statements', { fileName: 's.csv', text: file(inRow(day, '330.00', `gadmomricxavi: testaZe gela ${t}`)) }));
+      expect(res.matched).toBe(0);
+    }
+    expect(await prisma.payment.count({ where: { rentalId } })).toBe(0);
+    const line = await queued(owner, t);
+    expect(line?.group).toBe('suggested');
+    expect(line?.suggestions.find((s) => s.id === rentalId)?.reason).toMatchObject({ code: 'name', transferredOn: today() });
+  });
+
+  it('a line of a later day attaches by the same two signs, and its hint carries no such mark', async () => {
+    const { prisma, owner, rentalId, tag: t } = await rental({ pickedUpOn: addDays(today(), -3) });
+    await prisma.rental.update({ where: { id: rentalId }, data: { transferredAt: new Date(Date.now() - 2 * 86_400_000) } });
+    const res = json<{ matched: number }>(await call(owner, 'POST', '/api/statements', { fileName: 's.csv', text: file(inRow(today(), '330.00', `gadmomricxavi: testaZe gela ${t}`)) }));
+    expect(res.matched).toBe(1);
+    expect(await prisma.payment.findFirstOrThrow({ where: { rentalId } })).toMatchObject({ source: 'statement', grossTetri: 33000 });
+  });
+
+  it('a card typed in Latin letters only is found by the bank’s spelling of the name', async () => {
+    // Kommo's spelling on the card, no Georgian beside it; the bank writes «testaZe gela».
+    const t = tag();
+    const { prisma, owner, rentalId } = await rental({ pickedUpOn: addDays(today(), -3), name: `Gela Testadze ${t}`, nameKa: null });
+    const res = json<{ matched: number }>(await call(owner, 'POST', '/api/statements', { fileName: 's.csv', text: file(inRow(today(), '330.00', `gadmomricxavi: testaZe gela ${t}`)) }));
+    expect(res.matched).toBe(1);
+    expect(await prisma.payment.count({ where: { rentalId, source: 'statement' } })).toBe(1);
   });
 });

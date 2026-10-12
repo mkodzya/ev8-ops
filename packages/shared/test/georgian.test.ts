@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { nameMatches, normaliseName, parseBankAmount, transliterateGeorgian } from '../src/index.js';
+import { looseNames, nameMatches, normaliseName, parseBankAmount, transliterateGeorgian } from '../src/index.js';
 
 describe('the transliteration Georgian banks use', () => {
   // Every pair below is lifted from a real Bank of Georgia statement export.
@@ -48,6 +48,49 @@ describe('matching a payer to a customer', () => {
   it('says no when there is nothing to go on', () => {
     expect(nameMatches('', kardu)).toBe(false);
     expect(nameMatches('Wallet/domestic MC cards', kardu)).toBe(false);
+  });
+});
+
+describe('a card that holds only the typed Latin name (12.10.2026)', () => {
+  // Kommo holds names the way people type Georgian in Latin letters, and the
+  // cards were made from Kommo. The names below are examples, nobody's.
+  const typed = ['Khachapuridze Shota'];
+
+  it('one loose form for the three spellings of a name', () => {
+    expect(looseNames('ხაჭაპურიძე შოთა')).toEqual([['khachapuridze', 'shota']]);
+    // Typed Latin gives its own reading first; read as a bank's letters it is something else.
+    expect(looseNames('Khachapuridze Shota')[0]).toEqual(['khachapuridze', 'shota']);
+    // A Bank of Georgia line: x is ხ, W is ჭ, Z is ძ, S is შ, T is თ.
+    expect(looseNames('xaWapuriZe SoTa')).toContainEqual(['khachapuridze', 'shota']);
+    // Sounds typed Latin cannot tell apart are one sound: თ and ტ, ქ კ and ყ, ფ and პ, ც and წ, ჩ and ჭ.
+    expect(looseNames('თა ტა ქა კა ყა ფა პა ცა წა ჩა ჭა')).toEqual([['ta', 'ta', 'ka', 'ka', 'ka', 'pa', 'pa', 'tsa', 'tsa', 'cha', 'cha']]);
+    expect(looseNames('Qeti Tsereteli')[0]).toEqual(looseNames('ქეთი წერეთელი')[0]);
+    expect(looseNames('Vazha Japaridze')[0]).toEqual(looseNames('ვაჟა ჯაფარიძე')[0]);
+  });
+
+  it('is found in a line of either bank', () => {
+    // TBC writes Georgian, surname first as often as not.
+    expect(nameMatches('ხაჭაპურიძე შოთა', typed)).toBe(true);
+    expect(nameMatches('შოთა ხაჭაპურიძე', typed)).toBe(true);
+    // Bank of Georgia writes its own transliteration inside the free text.
+    expect(nameMatches('Private Transfer: gadmomricxavi: xaWapuriZe SoTa; angariSi: GE32', typed)).toBe(true);
+    // And the other way round: a card typed in the bank's letters, a line in Georgian.
+    expect(nameMatches('ჯაფარიძე ვაჟა', ['vaJa jafariZe'])).toBe(true);
+    expect(nameMatches('gadmomricxavi: jafariZe vaJa', ['Vazha Japaridze'])).toBe(true);
+  });
+
+  it('still needs the whole name: one shared word, or a near name, is nobody', () => {
+    expect(nameMatches('gadmomricxavi: xaWapuriZe giorgi', typed)).toBe(false);
+    expect(nameMatches('შოთა ბერიძე', typed)).toBe(false);
+    expect(nameMatches('ხაჭაპური შოთა', typed)).toBe(false);
+    expect(nameMatches('gadmomricxavi: xaWapuriZe', typed)).toBe(false);
+    // A single-word name is matched by that word alone and by nothing longer.
+    expect(nameMatches('gadmomricxavi: SoTa xaWapuriZe', ['Shota'])).toBe(false);
+  });
+
+  it('a name with no Georgian sounds in it is compared as it stands', () => {
+    expect(nameMatches('AHMED YUSUF', ['Yusuf Ahmed'])).toBe(true);
+    expect(nameMatches('AHMED YOUSEF', ['Yusuf Ahmed'])).toBe(false);
   });
 });
 
