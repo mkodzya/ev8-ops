@@ -8,7 +8,7 @@ import { badRequest, conflict, notFound } from '../lib/errors.js';
 import { actorOf } from '../lib/guard.js';
 import { voidPayment } from '../lib/payments.js';
 import { attach, importStatement, linkBankDeposit, linkPayment, previewStatement } from '../lib/statements/import.js';
-import { ParseError } from '../lib/statements/parse.js';
+import { ParseError, cardOf } from '../lib/statements/parse.js';
 import { isCashDeposit, loadCtx, suggest, type Line } from '../lib/statements/reconcile.js';
 import { str } from '../lib/validate.js';
 
@@ -49,16 +49,19 @@ function asLine(l: {
   raw: string;
   bank: 'bog' | 'tbc' | 'credo';
 }): Line {
+  // A card line is told by its text as well as by its stored sums: one loaded
+  // before a bank's wording was known is read here as it would be read today.
+  const card = l.direction === 'in' ? cardOf(l) : null;
   return {
     occurredOn: isoDate(l.occurredOn)!,
     direction: l.direction,
     amountTetri: l.amountTetri,
-    grossTetri: l.grossTetri,
-    feeTetri: l.feeTetri,
+    grossTetri: card?.grossTetri ?? null,
+    feeTetri: card?.feeTetri ?? null,
     payer: l.payer,
     purpose: l.purpose,
     raw: l.raw,
-    channel: l.grossTetri != null || /Wallet\/domestic MC cards/i.test(l.raw) ? 'acquiring' : 'transfer',
+    channel: card ? 'acquiring' : 'transfer',
     bank: l.bank,
   };
 }
@@ -151,8 +154,8 @@ export function statementRoutes(app: FastifyInstance): void {
           direction: l.direction,
           occurredOn: isoDate(l.occurredOn),
           amountTetri: l.amountTetri,
-          grossTetri: l.grossTetri,
-          feeTetri: l.feeTetri,
+          grossTetri: line.grossTetri,
+          feeTetri: line.feeTetri,
           channel: line.channel,
           payer: l.payer,
           purpose: l.purpose,
@@ -212,7 +215,7 @@ export function statementRoutes(app: FastifyInstance): void {
     const line = asLine(l);
     const s = suggest(line, await loadCtx());
     return {
-      line: { id: l.id, occurredOn: isoDate(l.occurredOn), direction: l.direction, amountTetri: l.amountTetri, grossTetri: l.grossTetri, payer: l.payer, purpose: l.purpose, raw: l.raw, channel: line.channel, status: l.status },
+      line: { id: l.id, occurredOn: isoDate(l.occurredOn), direction: l.direction, amountTetri: l.amountTetri, grossTetri: line.grossTetri, payer: l.payer, purpose: l.purpose, raw: l.raw, channel: line.channel, status: l.status },
       // The earlier shape, kept for what still reads it.
       hints: s.suggestions.filter((x) => x.kind === 'rental').map((x) => ({ rentalId: x.id, number: x.number, customer: x.customer, why: x.reason.code })),
       ...s,
