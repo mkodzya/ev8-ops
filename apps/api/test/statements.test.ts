@@ -147,6 +147,45 @@ describe.skipIf(!HAS_DB)('reading a Bank of Georgia export', () => {
   });
 });
 
+describe.skipIf(!HAS_DB)('a Bank of Georgia export as the bank words it since autumn 2026', () => {
+  // The first statement loaded on production (12.10.2026): the same headers, lines worded in English, and an
+  // opening balance that is not nought.
+  const NEW_HEADER = [
+    ',,,"angariSis mflobeli: Sps e-mouSen moTors",,,,',
+    ',,,"angariSis #:GE41BG0000000600217157GEL (600217157)",,,,',
+    '"TariRi","sabuTis #","mokorespondento angariSi","debeti","krediti","kursi","eqv.lari","operaciis Sinaarsi"',
+    '"05.10.2026","sawyisi naSTi","","GEL","352.05","1","352.05",""',
+  ].join('\n');
+  const incoming = (who: string, sum: string) =>
+    `tankhis gadaritskhva: \r\n\t  Incoming Transfer - Amount: GEL${sum}; Sender: ${who}; Account: GE38BG0000000000000001GEL; Bank: JSC Bank of Georgia BAGAGE22; Details: tankhis gadaritskhva`;
+  const outgoing = (who: string, sum: string) =>
+    `FOUNDER'S EQUITY: \r\n\t  Outgoing Transfer - Amount: GEL${sum}; Beneficiary: ${who}; Account: GE38BG0000000000000002GEL; Bank: JSC Bank of Georgia BAGAGE22; Details: FOUNDER'S EQUITY`;
+
+  it('the opening balance is not money received; the payer and the purpose are read from the English wording', async () => {
+    const who = tagged({ ru: 'Гела Новиков', ka: 'გელა ნოვიკაძე' });
+    const { prisma, owner, rentalId } = await rentalFor(who);
+    const text = [
+      NEW_HEADER,
+      // The sender as people type Georgian in Latin letters: the card holds the Georgian spelling.
+      bogRow('08.10.2026', '320', incoming(`novikadze gela ${who.tag}`, '320.00'), '110000001'),
+      `"09.10.2026","0362","GE38BG0000000000000002GEL","350.0","","1","350.0","${outgoing(`SOMEBODY ELSE ${who.tag}`, '350.00')}"`,
+      BOG_SUMMARY,
+    ].join('\n');
+    const res = json<{ lineCount: number; incoming: number; outgoing: number; matched: number }>(await call(owner, 'POST', '/api/statements', { fileName: 'StatementExport.csv', text }));
+    expect([res.lineCount, res.incoming, res.outgoing]).toEqual([2, 1, 1]);
+    expect(await prisma.statementLine.count({ where: { raw: { contains: 'sawyisi naSTi' }, amountTetri: 35205 } })).toBe(0);
+
+    const lines = await prisma.statementLine.findMany({ where: { raw: { contains: who.tag } }, orderBy: { occurredOn: 'asc' } });
+    expect(lines.map((l) => [l.direction, l.payer, l.purpose])).toEqual([
+      ['in', `novikadze gela ${who.tag}`, 'tankhis gadaritskhva'],
+      ['out', `SOMEBODY ELSE ${who.tag}`, "FOUNDER'S EQUITY"],
+    ]);
+    // Name and debt agree: the rule attaches it, as it does for the older wording.
+    expect(res.matched).toBe(1);
+    expect(await prisma.payment.count({ where: { rentalId, source: 'statement' } })).toBe(1);
+  });
+});
+
 describe.skipIf(!HAS_DB)('reading a TBC export', () => {
   it('matches a payer written in Georgian and keeps the bank’s own transaction id', async () => {
     const who = tagged({ ru: 'Георгий Тбисиев', ka: 'გიორგი თბისიძე' });
