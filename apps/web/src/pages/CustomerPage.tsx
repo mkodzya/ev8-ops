@@ -90,9 +90,9 @@ export function CustomerPage() {
   // A message from this card is about ONE rental, the most urgent: an overdue
   // one, then one due today, then any not returned. Its id, its number and its
   // «paid through» go together — they used to come from two different rentals.
-  // On its due day that rental has no ready message; a debtor keeps the door
-  // all the same when another rental of theirs holds a part of the figure —
-  // the message is then about that one. The shared rule chooses (ADR-0017).
+  // Handed over today, that rental has no ready message; a debtor keeps the
+  // door all the same when another rental of theirs holds a part of the figure
+  // — the message is then about that one. The shared rule chooses (ADR-0017).
   const waPick = waRentalOf(data.rentals, (rentalId) => (bal?.parts ?? []).some((p) => p.id === rentalId), todayISO());
   const waAbout = waPick.rental ?? data.rentals[0] ?? null;
   // No button while there is no rental to write about today.

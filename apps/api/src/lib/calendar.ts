@@ -163,6 +163,7 @@ export async function calendarAnswer(range: Period, today: string = todayISO(new
       customer: r.customer,
       vehicle: r.vehicle ? { id: r.vehicle.id, vin: r.vehicle.vin, model: `${r.vehicle.model.brand} ${r.vehicle.model.name}` } : null,
       weeklyRateTetri: r.weeklyRateTetri,
+      pickedUpOn: isoDate(r.pickedUpOn),
       paidThrough: isoDate(r.paidThrough),
       debtTetri: debtOf(r),
     }));
