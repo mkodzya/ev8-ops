@@ -15,7 +15,7 @@ describe('the transliteration Georgian banks use', () => {
   });
 
   it('leaves text that is already Latin alone', () => {
-    expect(transliterateGeorgian('Vaja Jafaridze')).toBe('Vaja Jafaridze');
+    expect(transliterateGeorgian('Zhuzhuna Japaradze')).toBe('Zhuzhuna Japaradze');
   });
 
   it('folds a name to comparable words and drops one-letter noise', () => {
@@ -65,7 +65,7 @@ describe('a card that holds only the typed Latin name (12.10.2026)', () => {
     // Sounds typed Latin cannot tell apart are one sound: თ and ტ, ქ კ and ყ, ფ and პ, ც and წ, ჩ and ჭ.
     expect(looseNames('თა ტა ქა კა ყა ფა პა ცა წა ჩა ჭა')).toEqual([['ta', 'ta', 'ka', 'ka', 'ka', 'pa', 'pa', 'tsa', 'tsa', 'cha', 'cha']]);
     expect(looseNames('Qeti Tsereteli')[0]).toEqual(looseNames('ქეთი წერეთელი')[0]);
-    expect(looseNames('Vazha Japaridze')[0]).toEqual(looseNames('ვაჟა ჯაფარიძე')[0]);
+    expect(looseNames('Zhuzhuna Japaradze')[0]).toEqual(looseNames('ჟუჟუნა ჯაფარაძე')[0]);
   });
 
   it('is found in a line of either bank', () => {
@@ -75,8 +75,8 @@ describe('a card that holds only the typed Latin name (12.10.2026)', () => {
     // Bank of Georgia writes its own transliteration inside the free text.
     expect(nameMatches('Private Transfer: gadmomricxavi: xaWapuriZe SoTa; angariSi: GE32', typed)).toBe(true);
     // And the other way round: a card typed in the bank's letters, a line in Georgian.
-    expect(nameMatches('ჯაფარიძე ვაჟა', ['vaJa jafariZe'])).toBe(true);
-    expect(nameMatches('gadmomricxavi: jafariZe vaJa', ['Vazha Japaridze'])).toBe(true);
+    expect(nameMatches('ჯაფარაძე ჟუჟუნა', ['JuJuna jafaraZe'])).toBe(true);
+    expect(nameMatches('gadmomricxavi: jafaraZe JuJuna', ['Zhuzhuna Japaradze'])).toBe(true);
   });
 
   it('still needs the whole name: one shared word, or a near name, is nobody', () => {

@@ -65,9 +65,9 @@ function TokenTable({ tokens }: { tokens: TokenEntry[] }) {
 // font silently. Every text style is shown on all three alphabets so the
 // fallback is visible here instead of on a contract.
 const SPECIMEN = {
-  ka: 'ვაჟა ჯაფარიძე · გიორგი სუთიძე',
-  ru: 'Вахтанг Джапаридзе · 1 240,50 ₾',
-  en: 'Vazha Japaridze · HH8LWFCA3N0002016',
+  ka: 'ჟუჟუნა ჯაფარაძე · ნინო თუშიძე',
+  ru: 'Жужуна Джапарадзе · 1 240,50 ₾',
+  en: 'Zhuzhuna Japaradze · HH8LWFCA0N0000000',
 };
 
 const TEXT_STYLES = [

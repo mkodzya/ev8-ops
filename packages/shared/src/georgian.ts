@@ -1,7 +1,8 @@
 // Georgian names, written the way each source writes them.
 //
-// A customer is ვაჟა ჯაფარიძე on their card. Bank of Georgia writes the same
-// person into a statement line as `vaJa jafariZe` — the transliteration
+// A customer is ჟუჟუნა ჯაფარაძე on their card (an invented name, as every name
+// in this file and its tests). Bank of Georgia writes the same person into a
+// statement line as `JuJuna jafaraZe` — the transliteration
 // Georgian banks use, where თ is T, შ is S, ძ is Z and ხ is x. TBC writes
 // them in Georgian. Odoo held both spellings in one string.
 //
