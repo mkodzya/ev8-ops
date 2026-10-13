@@ -270,3 +270,23 @@
 | `sort.reason.beforeTransfer(день)` | Аренда перенесена 11.10.2026: эта оплата могла уже войти в «Оплачено по». Проверьте, прежде чем привязывать. | The rental was carried over on 11.10.2026: this payment may already be inside “Paid through”. Check before attaching. | ქირაობა გადმოტანილია 11.10.2026: ეს გადახდა შეიძლება უკვე ჩათვლილია „გადახდილია“-ში. მიბმამდე შეამოწმეთ. | kiraoba gadmotanilia …: es gadakhda sheidzleba ukve chatvlilia „gadakhdilia“-shi. mibmamde sheamotsmet. |
 | `sort.byCard(сумма, комиссия)` | Оплата картой: клиент заплатил 200.00 ₾, комиссия банка 3.00 ₾. | Card payment: the customer paid 200.00 ₾, the bank kept 3.00 ₾. | ბარათით გადახდა: კლიენტმა გადაიხადა 200.00 ₾, ბანკის საკომისიო 3.00 ₾. | baratit gadakhda: klientma gadaikhada …, bankis sakomisio …. |
 | `sort.byCardPlain` | Оплата картой. | Card payment. | ბარათით გადახდა. | baratit gadakhda. |
+
+## 13.10.2026 — «Отложено» в «Разобрать»: список и «Вернуть в очередь»
+
+Написано не носителем языка. «გადადებული» [gadadebuli] — от «ხაზი გადაიდო» [khazi gadaido], которым журнал уже
+называет отложенную строку.
+
+| Ключ | RU | EN | KA | Чтение |
+|---|---|---|---|---|
+| `sort.aside(n)` | Отложено за месяц: 3 | Set aside this month: 3 | გადადებული თვეში: 3 | gadadebuli tveshi |
+| `sort.show` | показать | show | ჩვენება | chveneba |
+| `sort.asideTitle` | Отложенные строки | Set aside | გადადებული ხაზები | gadadebuli khazebi |
+| `sort.asideSub(n)` | За месяц · 3 | This month · 3 | თვეში · 3 | tveshi |
+| `sort.asideEmpty` | За месяц ничего не отложено. | Nothing has been set aside this month. | ამ თვეში არაფერი გადადებულა. | am tveshi araperi gadadebula |
+| `sort.asideNotOurs(причина)` | Это не наше: учтено при переносе | Not ours: counted at the carry-over | ეს ჩვენი არ არის: … | es chveni ar aris |
+| `sort.asideExpense` | Расход компании. | Company expense. | კომპანიის ხარჯი. | kompaniis kharji |
+| `sort.restore` | Вернуть в очередь | Back to the queue | რიგში დაბრუნება | rigshi dabruneba |
+| `sort.restored` | Строка вернулась в «Разобрать» | The line is back in “Sort” | ხაზი დაბრუნდა «დასახარისხებელში» | khazi dabrunda «dasakharisskhebelshi» |
+| `errors.codes.not_set_aside` | Эта строка не отложена. Обновите список. | This line is not set aside. Refresh the list. | ეს ხაზი გადადებული არ არის. განაახლეთ სია. | es khazi gadadebuli ar aris. ganaakhlet sia |
+| журнал `statement.line.restore` | Строка возвращена в очередь | A line was put back into the queue | ხაზი რიგში დაბრუნდა | khazi rigshi dabrunda |
+

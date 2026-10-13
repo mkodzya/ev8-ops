@@ -57,6 +57,8 @@ export interface SortLine {
 interface Queue {
   counts: { in: number; out: number };
   byRulesWeek: number;
+  /** Lines set aside in the last month — absent while an older API answers. */
+  asideMonth?: number;
   lines: SortLine[];
 }
 
@@ -120,7 +122,7 @@ export function SortPage() {
 
       {!data && failure && <LoadError failure={failure} onRetry={reload} />}
       {!data && !failure && <Skeleton rows={4} />}
-      {data && data.lines.length === 0 && <AllSorted byRules={data.byRulesWeek} />}
+      {data && data.lines.length === 0 && <AllSorted byRules={data.byRulesWeek} aside={data.asideMonth ?? 0} />}
       {data &&
         groups.map(
           ({ g, lines }) =>
@@ -138,6 +140,8 @@ export function SortPage() {
       {data && data.lines.length > 0 && (
         <p className="sort-foot">
           {t.sort.byRules(data.byRulesWeek)} · <Link to="/money/sort/rules">{t.sort.check}</Link>
+          <br />
+          {t.sort.aside(data.asideMonth ?? 0)} · <Link to="/money/sort/aside">{t.sort.show}</Link>
         </p>
       )}
       {other && <OtherSheet line={other} onClose={() => setOther(null)} />}
@@ -146,7 +150,7 @@ export function SortPage() {
   );
 }
 
-function AllSorted({ byRules }: { byRules: number }) {
+function AllSorted({ byRules, aside }: { byRules: number; aside: number }) {
   const t = useT();
   const statements = useLoad<{ banks: { bank: 'bog' | 'tbc' | 'credo'; throughOn: string | null; never: boolean }[] }>('/api/statements');
   return (
@@ -165,6 +169,8 @@ function AllSorted({ byRules }: { byRules: number }) {
       </Link>
       <p className="sort-foot">
         {t.sort.byRules(byRules)} · <Link to="/money/sort/rules">{t.sort.check}</Link>
+        <br />
+        {t.sort.aside(aside)} · <Link to="/money/sort/aside">{t.sort.show}</Link>
       </p>
     </div>
   );
@@ -400,6 +406,74 @@ interface RuleLine {
   rule: string | null;
   reason: Reason | null;
   payment: { id: string; grossTetri: number; number: string | null; rentalId: string | null; saleId: string | null; customer: string | null } | null;
+}
+
+interface AsideLine {
+  id: string;
+  bank: 'bog' | 'tbc' | 'credo';
+  direction: 'in' | 'out';
+  occurredOn: string;
+  amountTetri: number;
+  payer: string | null;
+  purpose: string | null;
+  raw: string;
+  resolution: 'not_ours' | 'company_expense' | string | null;
+  reason: string | null;
+  by: string | null;
+  on: string | null;
+}
+
+/** "Отложено": the lines taken out of the queue, each with why and by whom; "Вернуть в очередь" puts one back. */
+export function AsidePage() {
+  const t = useT();
+  const { data, failure, reload } = useLoad<{ days: number; lines: AsideLine[] }>('/api/statement-lines/aside');
+  if (failure) return <LoadError failure={failure} onRetry={reload} />;
+  return (
+    <>
+      <PageHead title={t.sort.asideTitle} sub={data ? t.sort.asideSub(data.lines.length) : undefined} />
+      {!data && <Skeleton rows={4} />}
+      {data && data.lines.length === 0 && <p className="muted">{t.sort.asideEmpty}</p>}
+      {data?.lines.map((l) => <AsideCard key={l.id} line={l} />)}
+    </>
+  );
+}
+
+function AsideCard({ line }: { line: AsideLine }) {
+  const t = useT();
+  const toast = useToast();
+  const op = useOperation();
+  const why = line.resolution === 'company_expense' ? t.sort.asideExpense : t.sort.asideNotOurs(line.reason ?? '');
+  return (
+    <article className="sort-line">
+      <div className="sort-line-head">
+        <span className={`t-money ${line.direction === 'out' ? 'amt-out' : 'amt-in'}`}>
+          {line.direction === 'out' ? '−' : '+'}
+          {formatGel(line.amountTetri)}
+        </span>
+        <span className="sort-line-meta">
+          {fmtDate(line.occurredOn)} · {t.statements.banks[line.bank]}
+        </span>
+      </div>
+      <p className="sort-line-text">{[line.payer, line.purpose].filter(Boolean).join(' · ') || line.raw}</p>
+      <p className="sort-reason">
+        {why}
+        {line.by && line.on && <span className="muted"> · {t.sort.asideBy(line.by, fmtDate(line.on))}</span>}
+      </p>
+      <div className="sort-actions">
+        <button
+          type="button"
+          className="pill pill-sm"
+          disabled={op.state === 'busy'}
+          onClick={async () => {
+            const res = await op.run((key) => api.post(`/api/statement-lines/${line.id}/restore`, {}, { key }));
+            if (res.ok) toast({ text: t.sort.restored });
+          }}
+        >
+          {t.sort.restore}
+        </button>
+      </div>
+    </article>
+  );
 }
 
 /** "Разобрано правилами": what the rules attached, with why; "Отвязать" puts it back (§3.2, B2-07). */
