@@ -31,6 +31,63 @@ export function transliterateGeorgian(text: string): string {
   return out;
 }
 
+// ---------------------------------------------------------------------------
+// One form of a name on a card: Georgian, and its Latin transcript beside it
+// ---------------------------------------------------------------------------
+//
+// Mika, 13.10.2026: every renter's card carries the Georgian name and an
+// English transcript. The transcript is not a second fact to be typed: it is
+// the Georgian name letter by letter, in the national system as a passport
+// prints it (no apostrophes: კ and ქ are both k, წ and ც both ts). So a card
+// that has a Georgian name and no Latin one gets its transcript by itself.
+
+const TRANSCRIPT: Record<string, string> = {
+  ა: 'a', ბ: 'b', გ: 'g', დ: 'd', ე: 'e', ვ: 'v', ზ: 'z', თ: 't', ი: 'i',
+  კ: 'k', ლ: 'l', მ: 'm', ნ: 'n', ო: 'o', პ: 'p', ჟ: 'zh', რ: 'r', ს: 's',
+  ტ: 't', უ: 'u', ფ: 'p', ქ: 'k', ღ: 'gh', ყ: 'q', შ: 'sh', ჩ: 'ch', ც: 'ts',
+  ძ: 'dz', წ: 'ts', ჭ: 'ch', ხ: 'kh', ჯ: 'j', ჰ: 'h',
+};
+
+const GEORGIAN_LETTER = /[\u10D0-\u10FF]/;
+
+/** Is there Georgian script in this text? */
+export const hasGeorgian = (text: string | null | undefined): boolean => GEORGIAN_LETTER.test(text ?? '');
+
+/**
+ * A Georgian name in Latin letters, each word capitalised: შოთა კაპანაძე →
+ * Shota Kapanadze. What is not a Georgian letter — a space, a hyphen, a Latin
+ * word — stays as it is.
+ */
+export function latinTranscript(georgian: string): string {
+  let out = '';
+  let wordStart = true;
+  for (const ch of georgian) {
+    const latin = TRANSCRIPT[ch];
+    if (latin === undefined) {
+      out += ch;
+      wordStart = !/[A-Za-z0-9]/.test(ch);
+      continue;
+    }
+    out += wordStart ? latin[0]!.toUpperCase() + latin.slice(1) : latin;
+    wordStart = false;
+  }
+  return out;
+}
+
+/**
+ * The two spellings a card ends up with, from what was typed. A name typed in
+ * Georgian is the Georgian spelling when that field is empty; a Georgian
+ * spelling with no Latin one beside it gets its transcript. A spelling that
+ * was typed is never replaced.
+ */
+export function nameSpellings(c: { name: string; nameKa?: string | null; nameLat?: string | null }): { nameKa: string | null; nameLat: string | null } {
+  const typedKa = (c.nameKa ?? '').trim();
+  const typedLat = (c.nameLat ?? '').trim();
+  const nameKa = typedKa || (hasGeorgian(c.name) ? c.name.trim() : '');
+  const nameLat = typedLat || (hasGeorgian(nameKa) ? latinTranscript(nameKa) : '');
+  return { nameKa: nameKa || null, nameLat: nameLat || null };
+}
+
 /** One comparable form: transliterated, lower-case, letters and digits only. */
 export function normaliseName(text: string): string[] {
   return transliterateGeorgian(text)

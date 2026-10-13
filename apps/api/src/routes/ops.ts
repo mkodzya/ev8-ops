@@ -1,4 +1,4 @@
-import { CONTACT_KINDS, CUSTOMER_KINDS, CUSTOMER_SOURCES, VEHICLE_POOLS, VEHICLE_STATES, normalizeVin, todayISO, vinFault } from '@ev8/shared';
+import { CONTACT_KINDS, CUSTOMER_KINDS, CUSTOMER_SOURCES, VEHICLE_POOLS, VEHICLE_STATES, nameSpellings, normalizeVin, todayISO, vinFault } from '@ev8/shared';
 import type { FastifyInstance } from 'fastify';
 import { audit } from '../lib/audit.js';
 import { hasPerm } from '../lib/auth.js';
@@ -38,12 +38,14 @@ export function opsRoutes(app: FastifyInstance): void {
       const samePid = await prisma.customer.findFirst({ where: { personalId }, select: { id: true } });
       if (samePid) throw conflict('duplicate_personal_id', 'That personal number is already on a card.', { existing: samePid });
     }
+    // One form of a name (Mika, 13.10.2026): a Georgian name gets its Latin transcript beside it.
+    const spelt = nameSpellings({ name, nameKa: str(b, 'nameKa', { max: 200 }), nameLat: str(b, 'nameLat', { max: 200 }) });
     try {
       const c = await prisma.customer.create({
         data: {
           name,
-          nameKa: str(b, 'nameKa', { max: 200 }),
-          nameLat: str(b, 'nameLat', { max: 200 }),
+          nameKa: spelt.nameKa,
+          nameLat: spelt.nameLat,
           personalId,
           phone,
           email: str(b, 'email', { max: 200 }),
@@ -88,6 +90,18 @@ export function opsRoutes(app: FastifyInstance): void {
     }
     for (const k of ['name', 'nameKa', 'nameLat', 'personalId', 'phone', 'email', 'address', 'notes'] as const) {
       if (k in b) data[k] = str(b, k, { max: k === 'notes' ? 4000 : 300, required: k === 'name' });
+    }
+    // A change of any spelling leaves the card in one form: the Georgian name
+    // where the name is Georgian, and its Latin transcript where none was typed.
+    if ('name' in data || 'nameKa' in data || 'nameLat' in data) {
+      const typed = {
+        name: (data.name as string | undefined) ?? before.name,
+        nameKa: 'nameKa' in data ? (data.nameKa as string | null) : before.nameKa,
+        nameLat: 'nameLat' in data ? (data.nameLat as string | null) : before.nameLat,
+      };
+      const spelt = nameSpellings(typed);
+      if (spelt.nameKa !== (typed.nameKa ?? null)) data.nameKa = spelt.nameKa;
+      if (spelt.nameLat !== (typed.nameLat ?? null)) data.nameLat = spelt.nameLat;
     }
     // The front office's deal, one way only until the webhook tariff
     // (B10-03, register #5): a link or an id, kept as typed.

@@ -26,7 +26,7 @@
 // our own words and a status code. Without the token the whole link is off,
 // quietly — the same way the site's mail is off without its password.
 
-import { kommoFreshness, kommoLeadId, phoneAsOnCard, phoneKey, reconcileKommo, unenteredSales, type KommoFreshness, type KommoLead, type KommoMismatches, type KommoRentedThere } from '@ev8/shared';
+import { kommoFreshness, kommoLeadId, nameSpellings, phoneAsOnCard, phoneKey, reconcileKommo, unenteredSales, type KommoFreshness, type KommoLead, type KommoMismatches, type KommoRentedThere } from '@ev8/shared';
 import { prisma } from './db.js';
 
 export interface KommoConfig {
@@ -405,7 +405,7 @@ async function takeIn(cfg: KommoConfig, readNow: Set<string>): Promise<void> {
       const name = l.contactName ?? l.name;
       const phone = l.contactPhone ? phoneAsOnCard(l.contactPhone) : null;
       customerId = await prisma.$transaction(async (tx) => {
-        const made = await tx.customer.create({ data: { name, phone, kind: 'person', recordKind: 'client', kommoRef: url } });
+        const made = await tx.customer.create({ data: { name, ...nameSpellings({ name }), phone, kind: 'person', recordKind: 'client', kommoRef: url } });
         await tx.auditLog.create({ data: { actorId: null, action: 'customer.create', entityType: 'customer', entityId: made.id, after: { name, fromKommoDeal: l.leadId }, note: `from Kommo deal ${l.leadId}` } });
         return made.id;
       });

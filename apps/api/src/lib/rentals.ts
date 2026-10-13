@@ -1,4 +1,4 @@
-import { acquiringFee, canPickUp, handOverBlockTetri, periodsThrough, returnSettlement, type Settlement, type VehicleState } from '@ev8/shared';
+import { acquiringFee, canPickUp, handOverBlockTetri, nameSpellings, periodsThrough, returnSettlement, type Settlement, type VehicleState } from '@ev8/shared';
 import { createHash } from 'node:crypto';
 import type { Prisma } from '../generated/prisma/client.js';
 import { audit } from './audit.js';
@@ -163,7 +163,7 @@ export async function pickUp(input: PickupInput, within?: Tx): Promise<PickupRes
     if (input.newCustomer) {
       const c = input.newCustomer;
       const made = await tx.customer.create({
-        data: { name: c.name.trim(), phone: c.phone.trim(), personalId: c.personalId.trim(), nameKa: c.nameKa, nameLat: c.nameLat, kind: 'person', source: c.source ?? null },
+        data: { name: c.name.trim(), phone: c.phone.trim(), personalId: c.personalId.trim(), ...nameSpellings({ name: c.name, nameKa: c.nameKa, nameLat: c.nameLat }), kind: 'person', source: c.source ?? null },
       });
       customerId = made.id;
       for (const [doc, kind] of [
