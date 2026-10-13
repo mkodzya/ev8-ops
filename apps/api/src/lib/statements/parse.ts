@@ -132,19 +132,29 @@ function hashKey(bank: string, parts: (string | number)[], seen: Map<string, num
 //   eqv.lari | operaciis Sinaarsi
 // Rows whose first cell is a date are transactions; `brunva` (turnover),
 // `naSTi` (balance) and `sawyisi naSTi` (opening balance) are summaries and
-// are skipped.
+// are skipped — by their name, which stands where a transaction has its
+// document number: the opening balance carries a date and a sum like any
+// other row (the first statement loaded on production, 12.10.2026, came in
+// with its opening balance of 352.05 as money received).
 //
 // The payer of an incoming transfer sits inside the free text after
 // `gadmomricxavi:`; the recipient of an outgoing one after `mimRebi:`; the
-// purpose after `daniSnuleba:`.
+// purpose after `daniSnuleba:`. That is the export of January 2026. By
+// October the same file words a line in English, under the same headers:
+//   `tankhis gadaritskhva: Incoming Transfer - Amount: GEL150.00; Sender: …;
+//    Account: GE…; Bank: JSC Bank of Georgia BAGAGE22; Details: tankhis gadaritskhva`
+// with `Beneficiary:` in an outgoing transfer and `Merchant:` in a payment by
+// the company's own card. Both wordings are read.
 //
 // A card payment states both figures, which is better than we assumed:
 //   `Tanxa:GEL 3200; sakomisio: GEL 48` — the customer paid 3200, the
 //   acquirer kept 48, the account was credited 3152.
 
-const BOG_PAYER = /gadmomricxavi:\s*([^;]+)/i;
-const BOG_RECIPIENT = /mimRebi:\s*([^;]+)/i;
-const BOG_PURPOSE = /daniSnuleba:\s*([^;]+)/i;
+const BOG_PAYER = /(?:gadmomricxavi|Sender):\s*([^;]+)/i;
+const BOG_RECIPIENT = /(?:mimRebi|Beneficiary|Merchant):\s*([^;]+)/i;
+const BOG_PURPOSE = /(?:daniSnuleba|Details):\s*([^;]+)/i;
+/** A summary row names itself where a transaction has its document number. */
+const BOG_SUMMARY_ROW = /^(sawyisi\s+naSTi|naSTi|brunva|opening balance|closing balance|turnover)$/i;
 const BOG_CARD_GROSS = /Tanxa:\s*GEL\s*([\d.,]+)/i;
 const BOG_CARD_FEE = /sakomisio:\s*GEL\s*([\d.,]+)/i;
 
@@ -167,13 +177,14 @@ export function parseBog(text: string, opts: { fileName: string }): ParsedStatem
   const lines: ParsedLine[] = [];
   for (const r of rows.slice(headerAt + 1)) {
     const occurredOn = isoFrom(r[0] ?? '');
-    if (!occurredOn) continue; // brunva, naSTi, sawyisi naSTi, blank rows
+    if (!occurredOn) continue; // brunva, naSTi, blank rows
+    if (BOG_SUMMARY_ROW.test((r[1] ?? '').trim())) continue; // the opening balance: a date and a sum, and not a transaction
     const debit = parseBankAmount(r[3] ?? '');
     const credit = parseBankAmount(r[4] ?? '');
     const content = (r[7] ?? '').replace(/\s+/g, ' ').trim();
     const direction: 'in' | 'out' = credit && credit > 0 ? 'in' : 'out';
     const amountTetri = Math.abs((direction === 'in' ? credit : debit) ?? 0);
-    if (amountTetri === 0) continue; // the opening-balance row and its kin
+    if (amountTetri === 0) continue; // nothing moved
 
     const grossText = BOG_CARD_GROSS.exec(content)?.[1];
     const feeText = BOG_CARD_FEE.exec(content)?.[1];

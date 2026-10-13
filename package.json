@@ -1,6 +1,6 @@
 {
   "name": "ev8-ops",
-  "version": "1.5.5",
+  "version": "1.5.6",
   "private": true,
   "description": "EV8 Ops — operational system of E-Motion Motors LLC: fleet, rentals, payments, sales, service, WhatsApp",
   "workspaces": [
