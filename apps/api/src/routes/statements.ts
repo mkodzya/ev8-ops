@@ -19,6 +19,8 @@ import { str } from '../lib/validate.js';
 
 /** The largest statement read (QA-1-05). The screen checks it before sending. */
 export const MAX_STATEMENT_BYTES = 8 * 1024 * 1024;
+/** How far back "Отложено" looks, and what its count on the queue counts. */
+const ASIDE_DAYS = 30;
 const BODY_LIMIT = Math.ceil(MAX_STATEMENT_BYTES * 1.2);
 /** Older than this, a bank's statements are stale (§3.5; the threshold is a proposal). */
 const STALE_DAYS = 7;
@@ -143,9 +145,11 @@ export function statementRoutes(app: FastifyInstance): void {
       prisma.statementLine.count({ where: { status: 'matched', matchedRule: { in: BY_RULES }, createdAt: { gte: new Date(Date.now() - 7 * 24 * 3600_000) } } }),
       loadCtx(),
     ]);
+    const aside = await prisma.statementLine.count({ where: { status: 'ignored', resolvedAt: { gte: new Date(Date.now() - ASIDE_DAYS * 24 * 3600_000) } } });
     return {
       counts: { in: counts.find((c) => c.direction === 'in')?._count._all ?? 0, out: counts.find((c) => c.direction === 'out')?._count._all ?? 0 },
       byRulesWeek: byRules,
+      asideMonth: aside,
       lines: lines.map((l) => {
         const line = asLine(l);
         return {
@@ -203,6 +207,46 @@ export function statementRoutes(app: FastifyInstance): void {
           payment: p
             ? { id: p.id, grossTetri: p.grossTetri, number: p.rental?.number ?? p.sale?.number ?? null, rentalId: p.rental?.id ?? null, saleId: p.sale?.id ?? null, customer: p.customer?.name ?? null }
             : null,
+        };
+      }),
+    };
+  });
+
+  /**
+   * "Отложено": the lines people took out of the queue — "not ours" with its
+   * reason, or the company's own spending — so that one taken out by mistake
+   * can be seen and put back (Mika, 13.10.2026: nothing in the product
+   * returned such a line).
+   */
+  app.get<{ Querystring: { days?: string } }>('/api/statement-lines/aside', { config: { scope: 'payments.reconcile' } }, async (req) => {
+    const days = Math.min(90, Math.max(1, Number(req.query.days) || ASIDE_DAYS));
+    const lines = await prisma.statementLine.findMany({
+      where: { status: 'ignored', resolvedAt: { gte: new Date(Date.now() - days * 24 * 3600_000) } },
+      orderBy: [{ resolvedAt: 'desc' }],
+      take: 300,
+    });
+    const people = await prisma.user.findMany({ where: { id: { in: [...new Set(lines.map((l) => l.resolvedById).filter((x): x is string => x != null))] } }, select: { id: true, name: true } });
+    const who = new Map(people.map((u) => [u.id, u.name]));
+    return {
+      days,
+      lines: lines.map((l) => {
+        const line = asLine(l);
+        return {
+          id: l.id,
+          bank: l.bank,
+          direction: l.direction,
+          occurredOn: isoDate(l.occurredOn),
+          amountTetri: l.amountTetri,
+          grossTetri: line.grossTetri,
+          feeTetri: line.feeTetri,
+          channel: line.channel,
+          payer: l.payer,
+          purpose: l.purpose,
+          raw: l.raw,
+          resolution: l.resolution,
+          reason: l.resolutionReason,
+          by: l.resolvedById ? (who.get(l.resolvedById) ?? null) : null,
+          on: l.resolvedAt ? todayISO(l.resolvedAt, env.TZ) : null,
         };
       }),
     };
@@ -277,6 +321,23 @@ export function statementRoutes(app: FastifyInstance): void {
     if (line.direction !== 'out') throw conflict('incoming_line', 'Money coming in is not a company expense.');
     await setAside(req.params.id, actor.id, 'company_expense', null);
     await audit({ actorId: actor.id, action: 'statement.line.expense', entityType: 'statement_line', entityId: req.params.id });
+    return { ok: true };
+  });
+
+  /**
+   * "Вернуть в очередь": a line set aside waits for a person again. Setting a
+   * line aside wrote nothing but the decision, so nothing else is undone.
+   */
+  app.post<{ Params: { id: string } }>('/api/statement-lines/:id/restore', { config: { scope: 'payments.reconcile' } }, async (req) => {
+    const actor = actorOf(req);
+    const line = await prisma.statementLine.findUnique({ where: { id: req.params.id }, select: { id: true, resolution: true, resolutionReason: true } });
+    if (!line) throw notFound('line_not_found', 'No such statement line.');
+    const done = await prisma.statementLine.updateMany({
+      where: { id: line.id, status: 'ignored' },
+      data: { status: 'unmatched', matchedRule: null, resolution: null, resolutionReason: null, resolvedById: null, resolvedAt: null },
+    });
+    if (done.count === 0) throw conflict('not_set_aside', 'This line is not set aside.');
+    await audit({ actorId: actor.id, action: 'statement.line.restore', entityType: 'statement_line', entityId: line.id, before: { resolution: line.resolution, reason: line.resolutionReason } });
     return { ok: true };
   });
 

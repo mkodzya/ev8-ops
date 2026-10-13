@@ -21,7 +21,7 @@ import { DepositsPage } from './pages/money/DepositsPage.js';
 import { MoneyHome } from './pages/money/MoneyHome.js';
 import { PaymentPage } from './pages/money/PaymentPage.js';
 import { PaymentsList } from './pages/money/PaymentsList.js';
-import { RulesPage, SortPage } from './pages/money/SortPage.js';
+import { AsidePage, RulesPage, SortPage } from './pages/money/SortPage.js';
 import { TillPage } from './pages/money/TillPage.js';
 import { PickupWizard } from './pages/PickupWizard.js';
 import { ProfilePage } from './pages/ProfilePage.js';
@@ -144,6 +144,7 @@ export function App() {
         <Route path="money/calendar" element={<Require perm="payments.view"><CalendarPage /></Require>} />
         <Route path="money/sort" element={<Require perm="payments.reconcile"><SortPage /></Require>} />
         <Route path="money/sort/rules" element={<Require perm="payments.reconcile"><RulesPage /></Require>} />
+        <Route path="money/sort/aside" element={<Require perm="payments.reconcile"><AsidePage /></Require>} />
         <Route path="money/payments" element={<Require perm="payments.view"><PaymentsList /></Require>} />
         <Route path="money/payments/:id" element={<Require perm="cash.record"><PaymentPage /></Require>} />
         <Route path="money/mine" element={<Require perm="cash.record"><PaymentsList mine /></Require>} />

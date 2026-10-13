@@ -198,6 +198,42 @@ describe.skipIf(!HAS_DB)('"Разобрать" (§3.2)', () => {
     expect((await call(owner, 'POST', `/api/statement-lines/${line.id}/ignore`, { reason: 'bank interest' })).statusCode).toBe(200);
   });
 
+  it('a line set aside is listed with its reason and can be put back into the queue (Mika, 13.10.2026)', async () => {
+    const { prisma, owner, rentalId, tag: t } = await rental({ pickedUpOn: addDays(today(), -3) });
+    await call(owner, 'POST', '/api/statements', { fileName: 's.csv', text: file(inRow(today(), '77.00', `something ${t}`), outRow(today(), '12.00', `bank fee ${t}`)) });
+    const income = (await queued(owner, t))!;
+    const fee = (await queued(owner, t, 'out'))!;
+    const before = json<{ asideMonth: number }>(await call(owner, 'GET', '/api/statement-lines')).asideMonth;
+
+    expect((await call(owner, 'POST', `/api/statement-lines/${income.id}/ignore`, { reason: 'counted at the carry-over' })).statusCode).toBe(200);
+    expect((await call(owner, 'POST', `/api/statement-lines/${fee.id}/expense`)).statusCode).toBe(200);
+    expect(await queued(owner, t)).toBeUndefined();
+    expect(json<{ asideMonth: number }>(await call(owner, 'GET', '/api/statement-lines')).asideMonth).toBe(before + 2);
+
+    type Aside = { lines: { id: string; direction: string; resolution: string; reason: string | null; by: string | null; on: string | null }[] };
+    const aside = json<Aside>(await call(owner, 'GET', '/api/statement-lines/aside'));
+    expect(aside.lines.find((l) => l.id === income.id)).toMatchObject({ direction: 'in', resolution: 'not_ours', reason: 'counted at the carry-over', on: today() });
+    expect(aside.lines.find((l) => l.id === income.id)?.by).toBeTruthy();
+    expect(aside.lines.find((l) => l.id === fee.id)).toMatchObject({ direction: 'out', resolution: 'company_expense', reason: null });
+
+    // Back into the queue: the decision is gone, the line waits for a person and can be attached.
+    expect((await call(owner, 'POST', `/api/statement-lines/${income.id}/restore`)).statusCode).toBe(200);
+    expect((await queued(owner, t))?.id).toBe(income.id);
+    expect(await prisma.statementLine.findUniqueOrThrow({ where: { id: income.id } })).toMatchObject({ status: 'unmatched', resolution: null, resolutionReason: null, resolvedById: null, resolvedAt: null, matchedRule: null });
+    expect(json<Aside>(await call(owner, 'GET', '/api/statement-lines/aside')).lines.map((l) => l.id)).not.toContain(income.id);
+    expect((await call(owner, 'POST', `/api/statement-lines/${income.id}/assign`, { rentalId })).statusCode).toBe(200);
+
+    // Only a line that is set aside: one in the queue, or one attached, is refused in words.
+    const again = await call(owner, 'POST', `/api/statement-lines/${income.id}/restore`);
+    expect(again.statusCode).toBe(409);
+    expect(json<{ error: string }>(again).error).toBe('not_set_aside');
+    expect(await prisma.auditLog.count({ where: { entityId: income.id, action: 'statement.line.restore' } })).toBe(1);
+    // A manager does not see the list and cannot put a line back.
+    const manager = await loginAs('manager');
+    expect((await call(manager, 'GET', '/api/statement-lines/aside')).statusCode).toBe(403);
+    expect((await call(manager, 'POST', `/api/statement-lines/${fee.id}/restore`)).statusCode).toBe(403);
+  });
+
   it('a file over the limit is refused with the limit, not a code (crit. 25)', async () => {
     const owner = await loginAs('owner');
     const big = 'x'.repeat(8 * 1024 * 1024 + 10);
