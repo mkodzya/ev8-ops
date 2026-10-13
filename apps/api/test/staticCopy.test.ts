@@ -123,8 +123,18 @@ describe.skipIf(!HAS_DB)('static rows carried from one stand to another', () => 
 
   afterAll(async () => {
     await other?.end();
-    await admin?.query(`DROP DATABASE IF EXISTS "${OTHER}" WITH (FORCE)`);
-    await admin?.end();
+    if (!admin) return;
+    // DROP … WITH (FORCE) cuts whatever is still connected to the database, and a pg socket the server cuts raises an
+    // error nobody listens for: on 12.10.2026 two CI runs passed every test and failed on exactly that (FATAL 57P01,
+    // "originated in staticCopy.test.ts"). A pool that has ended may still have a backend closing on the server's
+    // side, so wait until the database has no connection left; FORCE stays as the last resort.
+    for (let i = 0; i < 60; i++) {
+      const left = Number((await admin.query('select count(*)::int as n from pg_stat_activity where datname = $1', [OTHER])).rows[0].n);
+      if (left === 0) break;
+      await new Promise((r) => setTimeout(r, 50));
+    }
+    await admin.query(`DROP DATABASE IF EXISTS "${OTHER}" WITH (FORCE)`);
+    await admin.end();
   });
 
   it('writes out a stand’s static rows: no archived or merged card, no state and no rental of a moped', async () => {

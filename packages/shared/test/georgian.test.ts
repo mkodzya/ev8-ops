@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { looseNames, nameMatches, normaliseName, parseBankAmount, transliterateGeorgian } from '../src/index.js';
+import { hasGeorgian, latinTranscript, looseNames, nameMatches, nameSpellings, normaliseName, parseBankAmount, transliterateGeorgian } from '../src/index.js';
 
 describe('the transliteration Georgian banks use', () => {
   // Every pair below is lifted from a real Bank of Georgia statement export.
@@ -15,7 +15,7 @@ describe('the transliteration Georgian banks use', () => {
   });
 
   it('leaves text that is already Latin alone', () => {
-    expect(transliterateGeorgian('Vaja Jafaridze')).toBe('Vaja Jafaridze');
+    expect(transliterateGeorgian('Zhuzhuna Japaradze')).toBe('Zhuzhuna Japaradze');
   });
 
   it('folds a name to comparable words and drops one-letter noise', () => {
@@ -65,7 +65,7 @@ describe('a card that holds only the typed Latin name (12.10.2026)', () => {
     // Sounds typed Latin cannot tell apart are one sound: თ and ტ, ქ კ and ყ, ფ and პ, ც and წ, ჩ and ჭ.
     expect(looseNames('თა ტა ქა კა ყა ფა პა ცა წა ჩა ჭა')).toEqual([['ta', 'ta', 'ka', 'ka', 'ka', 'pa', 'pa', 'tsa', 'tsa', 'cha', 'cha']]);
     expect(looseNames('Qeti Tsereteli')[0]).toEqual(looseNames('ქეთი წერეთელი')[0]);
-    expect(looseNames('Vazha Japaridze')[0]).toEqual(looseNames('ვაჟა ჯაფარიძე')[0]);
+    expect(looseNames('Zhuzhuna Japaradze')[0]).toEqual(looseNames('ჟუჟუნა ჯაფარაძე')[0]);
   });
 
   it('is found in a line of either bank', () => {
@@ -75,8 +75,8 @@ describe('a card that holds only the typed Latin name (12.10.2026)', () => {
     // Bank of Georgia writes its own transliteration inside the free text.
     expect(nameMatches('Private Transfer: gadmomricxavi: xaWapuriZe SoTa; angariSi: GE32', typed)).toBe(true);
     // And the other way round: a card typed in the bank's letters, a line in Georgian.
-    expect(nameMatches('ჯაფარიძე ვაჟა', ['vaJa jafariZe'])).toBe(true);
-    expect(nameMatches('gadmomricxavi: jafariZe vaJa', ['Vazha Japaridze'])).toBe(true);
+    expect(nameMatches('ჯაფარაძე ჟუჟუნა', ['JuJuna jafaraZe'])).toBe(true);
+    expect(nameMatches('gadmomricxavi: jafaraZe JuJuna', ['Zhuzhuna Japaradze'])).toBe(true);
   });
 
   it('still needs the whole name: one shared word, or a near name, is nobody', () => {
@@ -91,6 +91,45 @@ describe('a card that holds only the typed Latin name (12.10.2026)', () => {
   it('a name with no Georgian sounds in it is compared as it stands', () => {
     expect(nameMatches('AHMED YUSUF', ['Yusuf Ahmed'])).toBe(true);
     expect(nameMatches('AHMED YOUSEF', ['Yusuf Ahmed'])).toBe(false);
+  });
+});
+
+describe('one form of a name on a card: Georgian, and its Latin transcript (Mika, 13.10.2026)', () => {
+  // Every name here is invented.
+  it('writes a Georgian name in Latin letters as a passport does, each word capitalised', () => {
+    expect(latinTranscript('ნინო თუშიძე')).toBe('Nino Tushidze');
+    expect(latinTranscript('ჟუჟუნა ჯაფარაძე')).toBe('Zhuzhuna Japaradze');
+    // No apostrophes: the pairs a passport does not tell apart come out as one letter.
+    expect(latinTranscript('ქეთი წერეთელი')).toBe('Keti Tsereteli');
+    expect(latinTranscript('ჭაბუკა ხარაძე')).toBe('Chabuka Kharadze');
+    expect(latinTranscript('ღვთისო ყაზბეგი')).toBe('Ghvtiso Qazbegi');
+    // A double surname keeps its hyphen, and each half its capital.
+    expect(latinTranscript('ანა ხარაზიშვილი-თუშიძე')).toBe('Ana Kharazishvili-Tushidze');
+  });
+
+  it('leaves what is not Georgian as it stands', () => {
+    expect(latinTranscript('Nino Tushidze')).toBe('Nino Tushidze');
+    expect(latinTranscript('შპს EV8 ჯგუფი 2')).toBe('Shps EV8 Jgupi 2');
+    expect(latinTranscript('')).toBe('');
+    expect([hasGeorgian('ნინო'), hasGeorgian('Nino'), hasGeorgian(null)]).toEqual([true, false, false]);
+  });
+
+  it('a card gets the spelling it lacks, and keeps the one that was typed', () => {
+    // Typed in Georgian only: that is the Georgian spelling, and the transcript follows.
+    expect(nameSpellings({ name: 'ნინო თუშიძე' })).toEqual({ nameKa: 'ნინო თუშიძე', nameLat: 'Nino Tushidze' });
+    // A Georgian spelling beside a Latin name: only the missing field is filled.
+    expect(nameSpellings({ name: 'Tushidze Nino', nameKa: 'ნინო თუშიძე' })).toEqual({ nameKa: 'ნინო თუშიძე', nameLat: 'Nino Tushidze' });
+    // What a person typed stays, even when the transcript would say it differently.
+    expect(nameSpellings({ name: 'ნინო თუშიძე', nameKa: 'ნინო თუშიძე', nameLat: 'Nino Tushidse' })).toEqual({ nameKa: 'ნინო თუშიძე', nameLat: 'Nino Tushidse' });
+    // Latin only: there is nothing to transcribe, and no Georgian is made up.
+    expect(nameSpellings({ name: 'Nino Tushidze' })).toEqual({ nameKa: null, nameLat: null });
+    expect(nameSpellings({ name: 'Nino Tushidze', nameKa: '  ', nameLat: ' ' })).toEqual({ nameKa: null, nameLat: null });
+  });
+
+  it('the transcript and the Georgian name are one name to the loose form', () => {
+    for (const ka of ['ნინო თუშიძე', 'ჟუჟუნა ჯაფარაძე', 'ქეთი წერეთელი', 'ღვთისო ყაზბეგი']) {
+      expect(looseNames(latinTranscript(ka))[0]).toEqual(looseNames(ka)[0]);
+    }
   });
 });
 

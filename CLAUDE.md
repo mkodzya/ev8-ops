@@ -41,6 +41,20 @@ refuses a push of `main` or a tag from anyone but Mika. Product decisions stay w
 site and the main daily user, proposes. Talk to whoever runs the session in the
 language they write in.
 
+## The repository is public (since 13.10.2026)
+Mika made `mkodzya/ev8-ops` public on 13.10.2026 so that CI runs («пока оставим публичным»; the
+project book and the site stay private). Everything pushed here — files, commit messages, branch
+names — is read by anybody, at once and for good: the history cannot be taken back.
+- **No real person's name, phone, personal number, address or account anywhere in it** — not in a
+  comment, a test, a fixture, a type specimen, a QA report or a commit message. Every example is
+  invented and says so. A customer is a row number of the reconciliation or a rental number.
+- **No secret and nothing that opens a door**: no password, key or token; no value from a
+  server's `.env`. The laptop's defaults in `.env.example` are public knowledge and must never
+  be a stand's values.
+- What is already in the history and cannot be removed: three customers' names (a type specimen
+  since September, a QA report, a comment of 12.10.2026), the server's address with its deploy
+  commands, the Kommo account's address, debts by rental number. `docs/handoff.md` item 16.
+
 ## Non-negotiable rules (from the owner)
 1. **Never invent data.** Only data confirmed in Odoo, Google Drive, files Mika
    uploads, or the live site ev8.ge. Missing data is reported as missing, never
