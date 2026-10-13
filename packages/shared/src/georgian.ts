@@ -45,10 +45,10 @@ export function normaliseName(text: string): string[] {
 // ---------------------------------------------------------------------------
 //
 // The cards of this company's customers came from Kommo, and Kommo holds a
-// name the way people type Georgian in Latin letters: `Khachidze`, `Shota`,
-// `Japaridze`. A bank never writes that. TBC writes ხაჩიძე; Bank of Georgia
-// writes `xaCiZe` — its own scheme, where ხ is x and not kh, შ is S and not
-// sh. So a customer whose card has only the typed Latin name was a stranger
+// name the way people type Georgian in Latin letters — `Khachapuridze`,
+// `Shota` (an invented name, as every example here). A bank never writes
+// that. TBC writes ხაჭაპურიძე; Bank of Georgia writes `xaWapuriZe` — its own
+// scheme, where ხ is x and not kh, ჭ is W and not ch, შ is S and not sh. So a customer whose card has only the typed Latin name was a stranger
 // to every statement line (12.10.2026: ten of the twelve renters on
 // production).
 //
@@ -122,8 +122,8 @@ const allIn = (name: readonly string[], text: ReadonlySet<string>): boolean =>
  * matches on that word alone, which is the whole name there is.
  *
  * First letter for letter, in the bank's own transliteration; then in the
- * loose form, which is what finds a card typed `Khachidze Luka` in a line
- * that says `xaCiZe luka` or ხაჩიძე ლუკა.
+ * loose form, which is what finds a card typed `Khachapuridze Shota` in a
+ * line that says `xaWapuriZe SoTa` or ხაჭაპურიძე შოთა.
  */
 export function nameMatches(bankText: string, customerNames: (string | null | undefined)[]): boolean {
   const haystack = new Set(normaliseName(bankText));
