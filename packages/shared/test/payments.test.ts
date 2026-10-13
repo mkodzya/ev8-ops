@@ -56,7 +56,7 @@ describe('spreading a payment (PAY-02)', () => {
 
 describe('a sale’s schedule (SAL-02)', () => {
   it('builds the real one: 900 down and nine of 300', () => {
-    // Vaja Jafaridze's sale, as the company wrote it: 3 600 in all.
+    // A sale of 2025, as the company wrote it: 3 600 in all.
     const plan = instalmentSchedule({ soldOn: '2025-05-27', priceTetri: 360000, downPaymentTetri: 90000, months: 9 });
     expect(plan).toHaveLength(10);
     expect(plan[0]).toEqual({ seq: 1, dueOn: '2025-05-27', amountTetri: 90000 });
