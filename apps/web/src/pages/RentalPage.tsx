@@ -346,7 +346,8 @@ export function RentalPage() {
                 <span>
                   {t.payDay.days[(r.payWeekday ?? isoWeekday(r.pickedUpOn)) - 1]}
                   <span className="muted"> · {r.payWeekday ? t.payDay.agreed : t.payDay.asPickup}</span>
-                  {r.dueOn && <span className="muted"> · {t.payDay.next(fmtDate(r.dueOn))}</span>}
+                  {/* The next pay day only while it is ahead or today: a late rental already says so in red above. */}
+                  {r.dueOn && r.dueOn >= today && <span className="muted"> · {t.payDay.next(fmtDate(r.dueOn))}</span>}
                 </span>
               }
             />
