@@ -1,6 +1,6 @@
 import type { ActKind, DepositStatus, PeriodPayStatus, RentalStatus, WeekDue } from '@ev8/shared';
 import { useState } from 'react';
-import { parseGel, todayISO, waOffered, weekDue, type VehicleState } from '@ev8/shared';
+import { isoWeekday, parseGel, todayISO, waOffered, weekDue, type VehicleState } from '@ev8/shared';
 import { DocumentRow, signedAtText, type DocState } from '../components/Documents.js';
 import { KommoField } from '../components/Kommo.js';
 import { RecordHistory } from '../components/RecordHistory.js';
@@ -59,6 +59,11 @@ export interface RentalCard {
     expectedReturnOn: string | null;
     returnedOn: string | null;
     paidThrough: string | null;
+    /** The weekday the rent is due on, ISO 1–7; null — the pickup's weekday (ADR-0020). */
+    payWeekday: number | null;
+    payOffsetDays: number;
+    /** The day the next rent is due, for a running rental. */
+    dueOn: string | null;
     buyoutTargetTetri: number | null;
     buyoutPerPaymentTetri: number | null;
     notes: string | null;
@@ -114,7 +119,7 @@ export function RentalPage() {
   // due today: on one returned, paused or disputed the week that began today
   // is plainly unpaid.
   const weekKind = (p: RentalCard['periods'][number]): WeekDue => {
-    const due = weekDue(p, data.periods, today);
+    const due = weekDue(p, data.periods, today, r.payOffsetDays);
     return due === 'due_today' && r.status !== 'due_today' ? 'late' : due;
   };
   const d = data.deposit;
@@ -163,6 +168,7 @@ export function RentalPage() {
       {sheet === 'edit' && (
         <RentalEdit
           rental={r}
+          owner={owner}
           onClose={closeSheet}
           onSaved={() => {
             closeSheet();
@@ -309,6 +315,19 @@ export function RentalPage() {
           <Row k={t.pickup.expectedReturnOn} v={<span className="mono">{fmtDate(r.expectedReturnOn)}</span>} />
           <Row k={t.rentals.returned} v={<span className="mono">{fmtDate(r.returnedOn)}</span>} />
           <Row k={t.rentals.paidThrough} v={<span className="mono">{fmtDate(r.paidThrough)}</span>} />
+          {r.pickedUpOn && (
+            // The weekday a week's rent is due on, and the next such day (ADR-0020).
+            <Row
+              k={t.payDay.label}
+              v={
+                <span>
+                  {t.payDay.days[(r.payWeekday ?? isoWeekday(r.pickedUpOn)) - 1]}
+                  <span className="muted"> · {r.payWeekday ? t.payDay.agreed : t.payDay.asPickup}</span>
+                  {r.dueOn && <span className="muted"> · {t.payDay.next(fmtDate(r.dueOn))}</span>}
+                </span>
+              }
+            />
+          )}
           {r.buyoutTargetTetri && (
             <Row k={t.rental.buyout} v={t.rental.buyoutProgress(formatGel(r.buyoutTargetTetri, { decimals: false }), formatGel(r.buyoutPerPaymentTetri ?? 0, { decimals: false }))} />
           )}
@@ -510,7 +529,7 @@ export function RentalPage() {
 
       {wa && r.customer.phone && (
         <WhatsappSheet
-          target={{ rentalId: r.id, number: r.number, name: r.customer.name, phone: r.customer.phone, paidThrough: r.paidThrough, debtTetri }}
+          target={{ rentalId: r.id, number: r.number, name: r.customer.name, phone: r.customer.phone, paidThrough: r.paidThrough, dueOn: r.dueOn, debtTetri }}
           onClose={() => setWa(false)}
         />
       )}
@@ -554,10 +573,14 @@ interface FreeVehicles {
  * rate of a running rental does not change (Q12). Also here: giving a rental
  * its moped once the VIN is confirmed (RNT-06), the buy-out terms (RNT-07), notes.
  */
-function RentalEdit({ rental, onClose, onSaved }: { rental: RentalCard['rental']; onClose: () => void; onSaved: () => void }) {
+function RentalEdit({ rental, owner, onClose, onSaved }: { rental: RentalCard['rental']; owner: boolean; onClose: () => void; onSaved: () => void }) {
   const t = useT();
   const fleet = useLoad<FreeVehicles>(rental.vinUnconfirmed ? '/api/fleet' : null);
+  // The pay day (ADR-0020): the pickup's weekday unless agreed otherwise. An owner's, with a reason.
+  const pickupDay = rental.pickedUpOn ? isoWeekday(rental.pickedUpOn) : null;
   const initial = {
+    payDay: String(rental.payWeekday ?? pickupDay ?? ''),
+    payReason: '',
     nightParking: rental.nightParkingAddress ?? '',
     batteries: rental.batteries != null ? String(rental.batteries) : '',
     chargers: rental.chargers != null ? String(rental.chargers) : '',
@@ -587,6 +610,10 @@ function RentalEdit({ rental, onClose, onSaved }: { rental: RentalCard['rental']
         if (f.expectedReturnOn !== initial.expectedReturnOn) body.expectedReturnOn = f.expectedReturnOn || null;
         if (f.notes !== initial.notes) body.notes = f.notes || null;
         if (f.vehicleId) body.vehicleId = f.vehicleId;
+        if (f.payDay !== initial.payDay) {
+          body.payWeekday = Number(f.payDay);
+          body.reason = f.payReason.trim();
+        }
         if (f.target !== initial.target || f.per !== initial.per) {
           body.buyoutTargetTetri = f.target ? parseGel(f.target) : null;
           body.buyoutPerPaymentTetri = f.per ? parseGel(f.per) : null;
@@ -611,6 +638,22 @@ function RentalEdit({ rental, onClose, onSaved }: { rental: RentalCard['rental']
       <Field label={t.hand.expectedReturn} hint={t.hand.expectedReturnHint} name="expectedReturnOn">
         <input className="input mono" type="date" min={rental.pickedUpOn ?? undefined} value={f.expectedReturnOn} onChange={(e) => setF({ ...f, expectedReturnOn: e.target.value })} />
       </Field>
+      {owner && pickupDay && (
+        <Field label={t.payDay.label} hint={t.payDay.hint} name="payWeekday">
+          <select className="input" value={f.payDay} onChange={(e) => setF({ ...f, payDay: e.target.value })}>
+            {t.payDay.days.map((day, i) => (
+              <option key={day} value={String(i + 1)}>
+                {i + 1 === pickupDay ? t.payDay.pickupMark(day) : day}
+              </option>
+            ))}
+          </select>
+        </Field>
+      )}
+      {f.payDay !== initial.payDay && (
+        <Field label={t.payDay.reason} hint={t.payDay.reasonHint} name="reason">
+          <input className="input" value={f.payReason} onChange={(e) => setF({ ...f, payReason: e.target.value })} />
+        </Field>
+      )}
       {rental.vinUnconfirmed && (
         <Field label={t.rentalEdit.assignVehicle} hint={t.rentalEdit.assignHint} name="vehicleId">
           <select className="input" value={f.vehicleId} onChange={(e) => setF({ ...f, vehicleId: e.target.value })}>

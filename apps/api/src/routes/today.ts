@@ -12,7 +12,7 @@ import { hasPerm } from '../lib/auth.js';
 import { actorOf, mayView } from '../lib/guard.js';
 import { onHandOf } from '../lib/till.js';
 import { UNDO_RETURN_MS } from '../lib/rentals.js';
-import { rentStateOf } from '../lib/rentState.js';
+import { payOffsetOf, rentStateOf } from '../lib/rentState.js';
 import { BANKS } from './statements.js';
 import { batteriesNow } from './batteries.js';
 
@@ -31,6 +31,7 @@ export const QUEUE_RENTAL = {
   pickedUpOn: true,
   expectedReturnOn: true,
   paidThrough: true,
+  payWeekday: true,
   vinUnconfirmed: true,
   odooOrderId: true,
   transferredAt: true,
@@ -61,6 +62,7 @@ export function queueRental(r: Prisma.RentalGetPayload<{ select: typeof QUEUE_RE
     pickedUpOn,
     expectedReturnOn: isoDate(r.expectedReturnOn),
     paidThrough,
+    payOffsetDays: payOffsetOf(r),
     status,
     debtTetri: rentalDebt(debts.get(r.customer.id), r.id),
     // Of that debt: awaited today and not late — the row of "due today" carries it (ADR-0017).

@@ -221,7 +221,7 @@ describe('deals from Kommo in “Today”', () => {
   });
 
   it('stand after the rentals’ own groups and before the money', () => {
-    const r: QueueRental = { id: 'r1', number: 'R-00001', customer: { id: 'c1', name: 'ТЕСТ', phone: null }, vin: null, pickedUpOn: '2026-09-01', expectedReturnOn: null, paidThrough: '2026-09-07', status: 'overdue', debtTetri: 15000, dueTodayTetri: 0, depositUndecided: false, vinUnconfirmed: false, contractUnsigned: false };
+    const r: QueueRental = { id: 'r1', number: 'R-00001', customer: { id: 'c1', name: 'ТЕСТ', phone: null }, vin: null, pickedUpOn: '2026-09-01', expectedReturnOn: null, paidThrough: '2026-09-07', payOffsetDays: 0, status: 'overdue', debtTetri: 15000, dueTodayTetri: 0, depositUndecided: false, vinUnconfirmed: false, contractUnsigned: false };
     const q = dayQueue(input({ owner: true, rentals: [r], unmatchedLines: 2, kommoDeals: [{ leadId: '701', kind: 'rent', who: 'ТЕСТ', customerId: null, phone: null }] }));
     expect(q.map((g) => g.group)).toEqual(['overdue', 'intake', 'money']);
   });

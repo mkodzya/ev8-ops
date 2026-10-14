@@ -17,6 +17,7 @@ import { wave6utilEn } from './wave6-utilisation.js';
 import { wave6manageEn } from './wave6-manage.js';
 import { kommoLinkEn } from './kommo-link.js';
 import { calendarEn } from './payments-calendar.js';
+import { payDayEn } from './pay-day.js';
 export const en = {
   lang: { label: 'Language', ka: 'ქართული', ru: 'Русский', en: 'English' },
 
@@ -1252,6 +1253,7 @@ export const en = {
   ...wave6manageEn,
   ...kommoLinkEn,
   ...calendarEn,
+  ...payDayEn,
 };
 
 export type Dict = typeof en;

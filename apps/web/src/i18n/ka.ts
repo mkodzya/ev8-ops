@@ -8,6 +8,7 @@ import { wave6utilKa } from './wave6-utilisation.js';
 import { wave6manageKa } from './wave6-manage.js';
 import { kommoLinkKa } from './kommo-link.js';
 import { calendarKa } from './payments-calendar.js';
+import { payDayKa } from './pay-day.js';
 import type { Dict } from './en.js';
 
 // Typed as Dict: a missing or misspelled key fails the build.
@@ -1238,4 +1239,5 @@ export const ka: Dict = {
   ...wave6manageKa,
   ...kommoLinkKa,
   ...calendarKa,
+  ...payDayKa,
 };
