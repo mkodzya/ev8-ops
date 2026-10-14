@@ -100,3 +100,14 @@ describe.skipIf(!HAS_DB)('documents', () => {
     expect(ret.items).toMatchObject({ key: { state: 'damaged', note: 'bent' }, battery_1: { state: 'missing', note: null } });
   });
 });
+
+describe('the odometer on paper (meeting of 14.10.2026)', () => {
+  it('is written in thousands with a space, and left for a pen when nobody read it', async () => {
+    const { km } = await import('../src/lib/pdf/company.js');
+    expect(km(7500)).toBe('7 500 km');
+    expect(km(150)).toBe('150 km');
+    expect(km(1234567)).toBe('1 234 567 km');
+    expect(km(0)).toBe('0 km');
+    expect(km(null)).toBe('');
+  });
+});

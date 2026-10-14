@@ -1,6 +1,6 @@
 import { colorOnPaper, tokens } from '@ev8/shared';
 import { finish, gap, newDoc, write } from './doc.js';
-import { COMPANY, DISCLAIMER, LESSEE, LESSOR, TERMS, dmy, gel } from './company.js';
+import { COMPANY, DISCLAIMER, LESSEE, LESSOR, TERMS, dmy, gel, km } from './company.js';
 import { bullet, check, field, h1, h2, para, rule, signatures, stampPages, type DrawnSignature } from './layout.js';
 
 // The rental contract with annex 1 (the hand-over act), set from the
@@ -21,6 +21,8 @@ export interface ContractData {
   nightParkingAddress: string | null;
   pickedUpOn: string | null;
   condition: string | null;
+  /** The odometer read at hand-over; none for a rental carried over without it. */
+  odometerKm: number | null;
   hasPhotos: boolean;
   /** Signed on the screen (D17); none — the lines stay empty for a pen. */
   signature?: DrawnSignature | null;
@@ -166,6 +168,7 @@ export async function renderContract(d: ContractData): Promise<Buffer> {
   check(doc, (d.chargers ?? 0) > 0, { ka: 'დამტენი', en: 'Charger' }, `${d.chargers ?? 0} ცალი / pcs`);
 
   h2(doc, { ka: '2. ვიზუალური და ტექნიკური მდგომარეობა', en: '2. Visual and technical condition' });
+  field(doc, { ka: 'გარბენი გადაცემისას', en: 'Mileage at hand-over' }, km(d.odometerKm));
   const clean = !d.condition;
   check(doc, clean, { ka: 'კარგ მდგომარეობაში (ხილული დაზიანებების გარეშე)', en: 'In good condition (no visible damage)' });
   check(doc, !clean, { ka: 'დაფიქსირებულია შემდეგი შენიშვნები/დაზიანებები', en: 'The following remarks / damage are recorded' });
