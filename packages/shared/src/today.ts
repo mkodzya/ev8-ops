@@ -82,7 +82,7 @@ export interface QueueRental {
   pickedUpOn: ISODate | null;
   expectedReturnOn: ISODate | null;
   paidThrough: ISODate | null;
-  /** Days after a week's first day its rent is due — the rental's pay day (ADR-0020). */
+  /** Days after a week's first day its rent is due — the rental's pay day (ADR-0021). */
   payOffsetDays: number;
   /** The status as shown — `effectiveRentalStatus`, never the stored one. */
   status: RentalStatus;

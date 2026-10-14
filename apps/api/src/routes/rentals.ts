@@ -128,7 +128,7 @@ export function rentalRoutes(app: FastifyInstance): void {
         expectedReturnOn: isoDate(r.expectedReturnOn),
         returnedOn: isoDate(r.returnedOn),
         paidThrough,
-        // The weekday its rent is due on (ISO 1–7); null — the pickup's weekday (ADR-0020).
+        // The weekday its rent is due on (ISO 1–7); null — the pickup's weekday (ADR-0021).
         payWeekday: r.payWeekday,
         payOffsetDays: payOffsetOf(r),
         // The day the next rent is due, for a running rental: the WhatsApp text names it.

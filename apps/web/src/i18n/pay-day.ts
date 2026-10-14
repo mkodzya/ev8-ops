@@ -1,4 +1,4 @@
-// The day of the week a rental's rent is due (ADR-0020). One file, so the
+// The day of the week a rental's rent is due (ADR-0021). One file, so the
 // Georgian goes to proofreading as one list (docs/qa/pay-day-ka-strings.md).
 
 export const payDayEn = {

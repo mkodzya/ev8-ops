@@ -36,7 +36,7 @@ export function canPickUp(state: VehicleState): boolean {
  * The status a rental shows, from facts rather than a hand-set field.
  * `overdue` and `due_today` are signals computed from "paid through": the
  * rent is due on the first day of the oldest week not fully paid — or on the
- * rental's pay day within that week (ADR-0020) — the rental is `due_today` on
+ * rental's pay day within that week (ADR-0021) — the rental is `due_today` on
  * that day and `overdue` from the next (ADR-0017, which replaces RNT-03).
  * `paused`, `disputed`, `returned` and `booked` are decisions and stay as
  * stored.

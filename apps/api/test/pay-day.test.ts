@@ -1,4 +1,4 @@
-// The pay day of a rental through the API (ADR-0020): an owner's, with a
+// The pay day of a rental through the API (ADR-0021): an owner's, with a
 // reason, in the journal; it moves the day the rental is called due and late.
 // Needs a *_test database. Every name is made up.
 import { addDays, isoWeekday, todayISO } from '@ev8/shared';
@@ -20,7 +20,7 @@ async function rentalPickedUp(pickedUpOn: string) {
 
 type Card = { rental: { status: string; payWeekday: number | null; payOffsetDays: number; dueOn: string | null } };
 
-describe.skipIf(!HAS_DB)('the pay day of a rental (ADR-0020)', () => {
+describe.skipIf(!HAS_DB)('the pay day of a rental (ADR-0021)', () => {
   it('is an owner’s decision with a reason, and goes to the journal', async () => {
     const today = todayISO(new Date(), TZ);
     const { prisma, id } = await rentalPickedUp(addDays(today, -1));

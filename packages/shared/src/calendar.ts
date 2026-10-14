@@ -78,7 +78,7 @@ export interface CalendarRental {
   pickedUpOn: ISODate | null;
   returnedOn: ISODate | null;
   weeklyRateTetri: Tetri;
-  /** Days after a week's first day its rent is due — the rental's pay day (ADR-0020). 0 when absent. */
+  /** Days after a week's first day its rent is due — the rental's pay day (ADR-0021). 0 when absent. */
   payOffsetDays?: number;
   /** EVERY row of the rental, not a window: a missing seq means "no row", i.e. projected. */
   periods: CalendarPeriodRow[];
@@ -325,7 +325,7 @@ interface Slot {
   seq: number;
   /** The week's first day: the night its row comes into being and can take credit. */
   startsOn: ISODate;
-  /** The day its rent is due: the first day, or the pay day within the week (ADR-0020). */
+  /** The day its rent is due: the first day, or the pay day within the week (ADR-0021). */
   dueOn: ISODate;
   endsOn: ISODate;
   amount: Tetri;

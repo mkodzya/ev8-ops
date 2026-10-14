@@ -147,7 +147,7 @@ export interface DueWeek {
  * week at nothing; paid: nothing left; ahead: due after today; late: was due
  * before today, or is due today while an older week of the same rental is not
  * fully paid; due_today: due today, nothing older open. A week is due on its
- * first day, or on the rental's pay day within it (`payOffsetDays`, ADR-0020).
+ * first day, or on the rental's pay day within it (`payOffsetDays`, ADR-0021).
  * It does not know the rental's status: a screen prints `due_today` only for
  * a rental that IS due today.
  */

@@ -184,7 +184,7 @@ export function customerRoutes(app: FastifyInstance): void {
         pickedUpOn: isoDate(r.pickedUpOn),
         returnedOn: isoDate(r.returnedOn),
         paidThrough: isoDate(r.paidThrough),
-        // The day the next rent is due — on the rental's pay day (ADR-0020); the WhatsApp text names it.
+        // The day the next rent is due — on the rental's pay day (ADR-0021); the WhatsApp text names it.
         dueOn: r.pickedUpOn && (r.status === 'active' || r.status === 'overdue') ? rentDueOn(isoDate(r.paidThrough), isoDate(r.pickedUpOn)!, payOffsetOf(r)) : null,
         weeklyRateTetri: r.weeklyRateTetri,
         deposit: r.deposit ? { amountTetri: r.deposit.amountTetri, status: r.deposit.status } : null,

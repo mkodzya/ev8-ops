@@ -7,7 +7,7 @@ import { isoDate } from './dates.js';
  * vehicle card and the overdue totals used to work this out four times over,
  * and three more screens printed the stored status, which never says overdue.
  * The rental's pay day moves the day its rent is due within the week
- * (ADR-0020), so every query that asks here reads `payWeekday` too.
+ * (ADR-0021), so every query that asks here reads `payWeekday` too.
  */
 export function rentStateOf(
   r: { status: string; paidThrough: Date | null; pickedUpOn: Date | null; payWeekday: number | null },
@@ -20,7 +20,7 @@ export function rentStateOf(
   return { status, overdueDays: status === 'overdue' && pickedUpOn ? overdueDays(paidThrough, pickedUpOn, today, offset) : 0 };
 }
 
-/** Days after a week's first day its rent is due, for a rental as stored (ADR-0020). */
+/** Days after a week's first day its rent is due, for a rental as stored (ADR-0021). */
 export function payOffsetOf(r: { pickedUpOn: Date | null; payWeekday: number | null }): number {
   return payOffsetDays(isoDate(r.pickedUpOn), r.payWeekday);
 }
