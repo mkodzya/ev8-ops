@@ -482,6 +482,11 @@ model RentalPeriod {
   amountTetri Int             @map("amount_tetri")
   paidBeforeTransfer Boolean @default(false) @map("paid_before_transfer")
   paidTetri   Int             @default(0) @map("paid_tetri")
+  /// Taken off the week by an owner, with a reason; amountTetri is the price after it (migration 0040).
+  discountTetri  Int       @default(0) @map("discount_tetri")
+  discountReason String?   @map("discount_reason")
+  discountedById String?   @map("discounted_by") @db.Uuid
+  discountedAt   DateTime? @map("discounted_at")
   payStatus   PeriodPayStatus @default(unpaid) @map("pay_status")
   createdAt   DateTime        @default(now()) @map("created_at")
   updatedAt   DateTime        @default(now()) @map("updated_at")

@@ -9,6 +9,7 @@ import { prisma } from '../lib/db.js';
 import { settingsRow } from './settings.js';
 import { decideDeposit, pickUp, returnPreview, returnRental, setRentalStatus, undoReturn, type DepositDecision, type NewCustomer, type PickupInput } from '../lib/rentals.js';
 import { WITHHOLD_GROUNDS } from '../lib/pdf/returnAct.js';
+import { discountWeek } from '../lib/discount.js';
 import { date, int, oneOf, str, strList, tetri } from '../lib/validate.js';
 
 // Hand-over and return, as the wave 3 wizards send them (wave 3 §3.1, §3.4–§3.7).
@@ -184,6 +185,21 @@ export function handoverRoutes(app: FastifyInstance): void {
   });
 
   /** Pause · Disputed · Running again — an owner, with a reason (§3.7, Q11). */
+  /** A discount on one week, an owner's, with a reason (migration 0040); nought takes it away. */
+  app.post<{ Params: { id: string; seq: string }; Body: Body }>('/api/rentals/:id/weeks/:seq/discount', { config: { scope: 'deposit.decide' } }, async (req) => {
+    const b = req.body ?? {};
+    const seq = Number(req.params.seq);
+    if (!Number.isInteger(seq) || seq < 1) throw notFound('week_not_found', 'No such week in this rental.');
+    const r = await discountWeek({
+      actorId: actorOf(req).id,
+      rentalId: req.params.id,
+      seq,
+      discountTetri: tetri(b, 'discountTetri', { required: true, min: 0 })!,
+      reason: str(b, 'reason', { max: 500 }),
+    });
+    return { ok: true, amountTetri: r.amountTetri };
+  });
+
   app.post<{ Params: { id: string }; Body: Body }>('/api/rentals/:id/status', { config: { scope: 'deposit.decide' } }, async (req) => {
     const b = req.body ?? {};
     await setRentalStatus({
