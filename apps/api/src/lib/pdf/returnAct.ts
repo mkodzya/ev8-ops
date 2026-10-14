@@ -1,6 +1,6 @@
 import { colorOnPaper, tokens } from '@ev8/shared';
 import { finish, gap, newDoc, write } from './doc.js';
-import { COMPANY, DISCLAIMER, LESSEE, LESSOR, dmy, gel } from './company.js';
+import { COMPANY, DISCLAIMER, LESSEE, LESSOR, dmy, gel, km } from './company.js';
 import { check, field, h1, h2, para, rule, signatures, stampPages, type DrawnSignature } from './layout.js';
 
 // The return and final settlement act, set from the company's own template
@@ -54,6 +54,9 @@ export interface ReturnActData {
   customer: { name: string; personalId: string | null; phone: string | null; email: string | null; address: string | null };
   vehicle: { brand: string; model: string; vin: string; color: string | null } | null;
   vinNote: string | null;
+  /** The odometer at hand-over and at return (meeting of 14.10.2026: the act must carry what was read). */
+  odometerAtPickupKm: number | null;
+  odometerKm: number | null;
   /** By what was handed over: moped, key, battery_1…N, charger_1…N (B5-07). */
   items: Record<string, { state: ItemState; note?: string | null }>;
   hasPhotos: boolean;
@@ -113,6 +116,8 @@ export async function renderReturnAct(d: ReturnActData): Promise<Buffer> {
   field(doc, { ka: 'მოდელი', en: 'Model' }, d.vehicle ? `${d.vehicle.brand} ${d.vehicle.model}` : '—');
   field(doc, { ka: 'VIN', en: 'VIN' }, d.vehicle?.vin ?? d.vinNote ?? '—');
   field(doc, { ka: 'ფერი', en: 'Colour' }, colorOnPaper(d.vehicle?.color));
+  field(doc, { ka: 'გარბენი გადაცემისას', en: 'Mileage at hand-over' }, km(d.odometerAtPickupKm));
+  field(doc, { ka: 'გარბენი დაბრუნებისას', en: 'Mileage at return' }, km(d.odometerKm));
 
   h2(doc, { ka: '4. დაბრუნებული ქონების მდგომარეობა', en: '4. Condition of the returned property' });
   for (const item of Object.keys(d.items).sort((a, b) => ITEM_ORDER(a) - ITEM_ORDER(b))) {
