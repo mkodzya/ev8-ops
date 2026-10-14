@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { addDays } from '@ev8/shared';
 import type { Prisma } from '../../generated/prisma/client.js';
 import { badRequest, conflict, notFound } from '../errors.js';
 import { dateFromISO, isoDate } from '../dates.js';
@@ -7,6 +8,7 @@ import { recordPaymentTx } from '../payments.js';
 import { serviceOwed } from '../money.js';
 import { cardOf, parseStatement, type ParsedLine } from './parse.js';
 import { decide, lineGross, loadCtx, type Ctx, type Decision, type Line } from './reconcile.js';
+import { alreadyIn, type AlreadyIn } from './sameLine.js';
 
 // Loading a statement and letting it settle what it can (PAY-01, PAY-02,
 // wave 2 §3.2, §3.5). Two properties it has to have, and both are about not
@@ -45,16 +47,29 @@ function asLine(bank: 'bog' | 'tbc', l: ParsedLine): Line {
   return { ...l, bank };
 }
 
-async function freshLines(parsed: { bank: 'bog' | 'tbc'; lines: ParsedLine[] }): Promise<ParsedLine[]> {
-  const known = new Set(
-    (
-      await prisma.statementLine.findMany({
-        where: { bank: parsed.bank, naturalKey: { in: parsed.lines.map((l) => l.naturalKey) } },
-        select: { naturalKey: true },
-      })
-    ).map((l) => l.naturalKey),
-  );
-  return parsed.lines.filter((l) => !known.has(l.naturalKey));
+/**
+ * Which lines are in already. A line is in when its key is; a Bank of
+ * Georgia line is in, too, when the same operation came from its other
+ * source — a file against the API, or the day's pull against the nightly
+ * statement (`sameLine.ts`, ADR-0020).
+ */
+export async function knownLines<T extends ParsedLine>(parsed: { bank: 'bog' | 'tbc'; lines: T[] }): Promise<AlreadyIn<T>> {
+  const select = { naturalKey: true, docNo: true, occurredOn: true, direction: true, amountTetri: true } as const;
+  const byKey = await prisma.statementLine.findMany({ where: { bank: parsed.bank, naturalKey: { in: parsed.lines.map((l) => l.naturalKey) } }, select });
+  let near: typeof byKey = [];
+  if (parsed.bank === 'bog' && parsed.lines.length > 0) {
+    const days = parsed.lines.map((l) => l.occurredOn).sort();
+    near = await prisma.statementLine.findMany({
+      where: { bank: 'bog', occurredOn: { gte: dateFromISO(addDays(days[0]!, -1))!, lte: dateFromISO(addDays(days[days.length - 1]!, 1))! } },
+      select,
+    });
+  }
+  const stored = new Map([...byKey, ...near].map((l) => [l.naturalKey, { ...l, occurredOn: isoDate(l.occurredOn)! }]));
+  return alreadyIn(parsed.lines, [...stored.values()]);
+}
+
+async function freshLines<T extends ParsedLine>(parsed: { bank: 'bog' | 'tbc'; lines: T[] }): Promise<T[]> {
+  return (await knownLines(parsed)).fresh;
 }
 
 /** Take what a decision used off the table, so the next line does not reuse it. */
@@ -118,17 +133,53 @@ export async function importStatement(input: { actorId: string; fileName: string
     select: { id: true },
   });
 
+  const { recorded, matched } = await ingest({ statementId: statement.id, bank: parsed.bank, actorId: input.actorId, lines: fresh });
+
+  await prisma.statement.update({ where: { id: statement.id }, data: { newLines: fresh.length, matched: matched + recorded } });
+  await prisma.auditLog.create({
+    data: {
+      actorId: input.actorId,
+      action: 'statement.import',
+      entityType: 'statement',
+      entityId: statement.id,
+      after: { bank: parsed.bank, fileName: input.fileName, sha256: sha, lineCount: parsed.lines.length, newLines: fresh.length, recorded, matched },
+    },
+  });
+
+  return {
+    statementId: statement.id,
+    bank: parsed.bank,
+    lineCount: parsed.lines.length,
+    newLines: fresh.length,
+    recorded,
+    matched,
+    unmatched: fresh.length - recorded - matched,
+    incoming: fresh.filter((l) => l.direction === 'in').length,
+    outgoing: fresh.filter((l) => l.direction === 'out').length,
+  };
+}
+
+/**
+ * Put new lines into the queue under a statement, and let each settle what
+ * it can — the same for a file and for the bank's API. A line that is money
+ * entered by hand is linked to it (B2-03), cash taken to the bank to its
+ * deposit, a line two signs agree on is attached by its rule; the rest wait
+ * in "Разобрать" for a person. `actorId` is the person who uploaded the file,
+ * or null when the bank was asked by the stand itself.
+ */
+export async function ingest(input: { statementId: string; bank: 'bog' | 'tbc'; actorId: string | null; lines: ParsedLine[] }): Promise<{ recorded: number; matched: number }> {
   let recorded = 0;
   let matched = 0;
   let ctx = await loadCtx();
-  for (const line of fresh) {
-    const d = decide(asLine(parsed.bank, line), ctx);
+  for (const line of input.lines) {
+    const d = decide(asLine(input.bank, line), ctx);
     await prisma.$transaction(async (tx) => {
       const row = await tx.statementLine.create({
         data: {
-          statementId: statement.id,
-          bank: parsed.bank,
+          statementId: input.statementId,
+          bank: input.bank,
           naturalKey: line.naturalKey,
+          docNo: line.docNo ?? null,
           occurredOn: dateFromISO(line.occurredOn)!,
           direction: line.direction,
           amountTetri: line.amountTetri,
@@ -156,29 +207,7 @@ export async function importStatement(input: { actorId: string; fileName: string
     if (d.type === 'rule') ctx = await loadCtx();
     else spend(ctx, d);
   }
-
-  await prisma.statement.update({ where: { id: statement.id }, data: { newLines: fresh.length, matched: matched + recorded } });
-  await prisma.auditLog.create({
-    data: {
-      actorId: input.actorId,
-      action: 'statement.import',
-      entityType: 'statement',
-      entityId: statement.id,
-      after: { bank: parsed.bank, fileName: input.fileName, sha256: sha, lineCount: parsed.lines.length, newLines: fresh.length, recorded, matched },
-    },
-  });
-
-  return {
-    statementId: statement.id,
-    bank: parsed.bank,
-    lineCount: parsed.lines.length,
-    newLines: fresh.length,
-    recorded,
-    matched,
-    unmatched: fresh.length - recorded - matched,
-    incoming: fresh.filter((l) => l.direction === 'in').length,
-    outgoing: fresh.filter((l) => l.direction === 'out').length,
-  };
+  return { recorded, matched };
 }
 
 /**
@@ -204,7 +233,7 @@ export async function linkPayment(tx: Tx, lineId: string, paymentId: string, rul
 }
 
 /** The line is cash an owner took to the bank. */
-export async function linkBankDeposit(tx: Tx, actorId: string, lineId: string, bankDepositId: string): Promise<void> {
+export async function linkBankDeposit(tx: Tx, actorId: string | null, lineId: string, bankDepositId: string): Promise<void> {
   await claim(tx, lineId, 'bank_deposit');
   const done = await tx.bankCashDeposit.updateMany({ where: { id: bankDepositId, statementLineId: null, voidedAt: null }, data: { statementLineId: lineId } });
   if (done.count === 0) throw conflict('deposit_has_line', 'That bank deposit already has its line.');
@@ -246,7 +275,7 @@ function moneyOf(line: StoredLine): { channel: 'transfer' | 'acquiring'; grossTe
 /** One payment made of a line, or of one part of it. */
 async function paymentOf(
   tx: Tx,
-  actorId: string,
+  actorId: string | null,
   line: StoredLine,
   money: { channel: 'transfer' | 'acquiring'; grossTetri: number; feeTetri: number },
   target: LineTarget,
@@ -303,7 +332,7 @@ async function incomingLine(tx: Tx, lineId: string): Promise<StoredLine> {
 /** A customer's payment made of this line: a rental, a sale, a repair, or the customer's account. */
 export async function attach(
   tx: Tx,
-  input: { actorId: string; lineId: string; rule: string; reason?: unknown } & LineTarget,
+  input: { actorId: string | null; lineId: string; rule: string; reason?: unknown } & LineTarget,
 ): Promise<{ paymentId: string }> {
   const line = await incomingLine(tx, input.lineId);
   await claim(tx, line.id, input.rule);

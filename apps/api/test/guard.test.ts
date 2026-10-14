@@ -49,7 +49,8 @@ describe('route table', () => {
       'POST /api/workshops',
     ]);
     const publicOnes = app.routeTable.filter((r) => r.scope === 'public').map((r) => r.url).sort();
-    expect(publicOnes).toEqual(['/api/auth/login', '/api/health', '/api/jobs/kommo-sync', '/api/jobs/roll-periods', '/api/site/queue']);
+    // The jobs are public to the session guard and closed by the worker token (routes/jobs.ts).
+    expect(publicOnes).toEqual(['/api/auth/login', '/api/health', '/api/jobs/bog-night', '/api/jobs/bog-today', '/api/jobs/kommo-sync', '/api/jobs/roll-periods', '/api/site/queue']);
   });
 });
 

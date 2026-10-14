@@ -7,6 +7,7 @@ import { wave6weekRu } from './wave6-week.js';
 import { wave6utilRu } from './wave6-utilisation.js';
 import { wave6manageRu } from './wave6-manage.js';
 import { kommoLinkRu } from './kommo-link.js';
+import { bogApiRu } from './bog-api.js';
 import { calendarRu } from './payments-calendar.js';
 import type { Dict } from './en.js';
 
@@ -1248,5 +1249,6 @@ export const ru: Dict = {
   ...wave6utilRu,
   ...wave6manageRu,
   ...kommoLinkRu,
+  ...bogApiRu,
   ...calendarRu,
 };

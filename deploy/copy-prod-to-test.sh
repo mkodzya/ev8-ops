@@ -21,7 +21,7 @@
 # production's password; a login only on the test stand is not carried.
 #
 # Nothing is sent to anyone afterwards: the test stand's worker only rolls
-# rental weeks and reads Kommo. A Claude session does not run this script on
+# rental weeks and reads Kommo and Bank of Georgia. A Claude session does not run this script on
 # the server: the owner does.
 set -euo pipefail
 

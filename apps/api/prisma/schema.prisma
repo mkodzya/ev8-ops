@@ -688,6 +688,8 @@ model Statement {
   newLines    Int       @default(0) @map("new_lines")
   matched     Int       @default(0)
   uploadedById String?  @map("uploaded_by") @db.Uuid
+  /// 'file' for an upload; 'api' for a day Bank of Georgia was asked about, one per account and day (migration 0040).
+  source      String    @default("file")
   createdAt   DateTime  @default(now()) @map("created_at")
 
   uploadedBy User?           @relation(fields: [uploadedById], references: [id])
@@ -703,6 +705,8 @@ model StatementLine {
   statementId String              @map("statement_id") @db.Uuid
   bank        BankName
   naturalKey  String              @map("natural_key")
+  /// The bank's document number: how one operation is known in a file and in the API alike (migration 0040).
+  docNo       String?             @map("doc_no")
   occurredOn  DateTime            @map("occurred_on") @db.Date
   direction   PaymentDirection
   amountTetri Int                 @map("amount_tetri")
@@ -1168,4 +1172,22 @@ model KommoSync {
   intakeFrom     DateTime? @map("intake_from")
 
   @@map("kommo_sync")
+}
+
+/// The Bank of Georgia API (B11-03, migration 0040): when it last answered,
+/// why it last failed, and which day the nightly reading has reached.
+model BogSync {
+  id              Boolean   @id @default(true)
+  lastOkAt        DateTime? @map("last_ok_at")
+  lastTryAt       DateTime? @map("last_try_at")
+  lastFailure     String?   @map("last_failure")
+  lastHttpStatus  Int?      @map("last_http_status")
+  todayCount      Int       @default(0) @map("today_count")
+  nightThrough    DateTime? @map("night_through") @db.Date
+  nightAt         DateTime? @map("night_at")
+  nightFailure    String?   @map("night_failure")
+  nightHttpStatus Int?      @map("night_http_status")
+  nightAdded      Int       @default(0) @map("night_added")
+
+  @@map("bog_sync")
 }

@@ -76,7 +76,8 @@ export async function recomputeRental(tx: Tx, rentalId: string): Promise<void> {
 }
 
 export interface RecordPaymentInput {
-  actorId: string;
+  /** Null when the stand wrote it by itself: a Bank of Georgia line its rule attached (B11-03). */
+  actorId: string | null;
   occurredOn: string;
   channel: 'transfer' | 'acquiring' | 'cash';
   /** What the customer handed over. One of gross or net is given; see the route. */

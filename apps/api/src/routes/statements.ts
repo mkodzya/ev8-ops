@@ -1,6 +1,7 @@
 import { daysBetween, todayISO } from '@ev8/shared';
 import type { FastifyInstance } from 'fastify';
 import { audit } from '../lib/audit.js';
+import { bogApiStatus } from '../lib/bog.js';
 import { isoDate } from '../lib/dates.js';
 import { prisma } from '../lib/db.js';
 import { env } from '../lib/env.js';
@@ -75,6 +76,8 @@ export function statementRoutes(app: FastifyInstance): void {
     const statements = await prisma.statement.findMany({ orderBy: { createdAt: 'desc' }, take: 100, include: { uploadedBy: { select: { name: true } } } });
     const lastLines = await prisma.statementLine.groupBy({ by: ['bank'], _max: { occurredOn: true } });
     const queue = await prisma.statementLine.count({ where: { status: 'unmatched' } });
+    // Bank of Georgia comes by itself once its keys are on the stand (B11-03).
+    const bogApi = await bogApiStatus();
     const banks = BANKS.map((bank) => {
       const last = statements.find((s) => s.bank === bank) ?? null;
       const through = isoDate(lastLines.find((l) => l.bank === bank)?._max.occurredOn ?? null);
@@ -87,6 +90,7 @@ export function statementRoutes(app: FastifyInstance): void {
         daysOld: upTo ? Math.max(0, daysBetween(upTo, today)) : null,
         stale: upTo ? daysBetween(upTo, today) > STALE_DAYS : false,
         never: !last,
+        api: bank === 'bog' ? bogApi : null,
       };
     });
     return {
@@ -105,6 +109,7 @@ export function statementRoutes(app: FastifyInstance): void {
         newLines: s.newLines,
         matched: s.matched,
         uploadedBy: s.uploadedBy?.name ?? null,
+        source: s.source,
         createdAt: s.createdAt.toISOString(),
       })),
     };
