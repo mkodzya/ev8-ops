@@ -15,6 +15,7 @@ import { dateFromISO, isoDate } from './dates.js';
 import { prisma } from './db.js';
 import { debtsOf, rentalDebt } from './debt.js';
 import { env } from './env.js';
+import { payOffsetOf } from './rentState.js';
 import { paymentsOfPeriod } from './week.js';
 
 // The data side of "Деньги → Календарь" (docs/redesign/payments-calendar.md,
@@ -56,6 +57,7 @@ export async function calendarAnswer(range: Period, today: string = todayISO(new
         returnedOn: true,
         weeklyRateTetri: true,
         paidThrough: true,
+        payWeekday: true,
         customer: { select: { id: true, name: true, nameKa: true, nameLat: true, phone: true } },
         vehicle: { select: { id: true, vin: true, model: { select: { brand: true, name: true } } } },
         deposit: { select: { amountTetri: true, paidTetri: true } },
@@ -137,6 +139,7 @@ export async function calendarAnswer(range: Period, today: string = todayISO(new
     pickedUpOn: isoDate(r.pickedUpOn),
     returnedOn: isoDate(r.returnedOn),
     weeklyRateTetri: r.weeklyRateTetri,
+    payOffsetDays: payOffsetOf(r),
     periods: r.periods.map((p) => ({
       seq: p.seq,
       startsOn: isoDate(p.startsOn)!,

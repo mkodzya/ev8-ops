@@ -439,6 +439,9 @@ model Rental {
   returnedOn            DateTime?    @map("returned_on") @db.Date
   status                RentalStatus @default(booked)
   paidThrough           DateTime?    @map("paid_through") @db.Date
+  /// The weekday a week's rent is due on, ISO 1 = Monday … 7 = Sunday; null =
+  /// the pickup's weekday (ADR-0021). The weeks still run from the pickup.
+  payWeekday            Int?         @map("pay_weekday") @db.SmallInt
   buyoutTargetTetri     Int?         @map("buyout_target_tetri")
   buyoutPerPaymentTetri Int?         @map("buyout_per_payment_tetri")
   nightParkingAddress   String?      @map("night_parking_address")

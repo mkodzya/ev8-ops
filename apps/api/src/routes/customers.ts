@@ -1,4 +1,4 @@
-import { todayISO } from '@ev8/shared';
+import { rentDueOn, todayISO } from '@ev8/shared';
 import type { FastifyInstance } from 'fastify';
 import { audit } from '../lib/audit.js';
 import { dayOf, isoDate } from '../lib/dates.js';
@@ -7,7 +7,7 @@ import { prisma } from '../lib/db.js';
 import { env } from '../lib/env.js';
 import { notFound } from '../lib/errors.js';
 import { actorOf, mayView } from '../lib/guard.js';
-import { rentStateOf } from '../lib/rentState.js';
+import { payOffsetOf, rentStateOf } from '../lib/rentState.js';
 
 // Customers, read side (CST-01). Personal numbers are shown only to roles
 // that may see documents (CST-03): a manager sees the card, not the number.
@@ -51,7 +51,7 @@ export function customerRoutes(app: FastifyInstance): void {
         // Every rental: the list counts them; only open ones are named, each
         // by the status the rentals list gives it (ADR-0017).
         rentals: {
-          select: { id: true, number: true, status: true, paidThrough: true, pickedUpOn: true },
+          select: { id: true, number: true, status: true, paidThrough: true, pickedUpOn: true, payWeekday: true },
         },
         _count: { select: { sales: { where: { status: { not: 'cancelled' } } } } },
       },
@@ -184,6 +184,8 @@ export function customerRoutes(app: FastifyInstance): void {
         pickedUpOn: isoDate(r.pickedUpOn),
         returnedOn: isoDate(r.returnedOn),
         paidThrough: isoDate(r.paidThrough),
+        // The day the next rent is due — on the rental's pay day (ADR-0021); the WhatsApp text names it.
+        dueOn: r.pickedUpOn && (r.status === 'active' || r.status === 'overdue') ? rentDueOn(isoDate(r.paidThrough), isoDate(r.pickedUpOn)!, payOffsetOf(r)) : null,
         weeklyRateTetri: r.weeklyRateTetri,
         deposit: r.deposit ? { amountTetri: r.deposit.amountTetri, status: r.deposit.status } : null,
       })),

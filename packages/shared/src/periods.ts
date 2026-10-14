@@ -70,16 +70,48 @@ export function paidThrough(periods: { seq: number; endsOn: ISODate; payStatus: 
   return through;
 }
 
+// ---------------------------------------------------------------------------
+// The day of the week the rent is due (ADR-0021)
+// ---------------------------------------------------------------------------
+//
+// A week runs from the pickup's weekday, and its rent was due on its first
+// day. Some renters pay on another weekday by agreement (Mika, 14.10.2026:
+// one on Wednesday for a week from Tuesday, one on Thursday for a week from
+// Monday). The weeks do not move — what was paid stays paid, "paid through"
+// is still the end of a week — only the day each week's rent is due does:
+// the first day of the week that is that weekday, 0–6 days after its start.
+
+/** ISO weekday of a date: 1 = Monday … 7 = Sunday. */
+export function isoWeekday(date: ISODate): number {
+  const d = new Date(`${date}T00:00:00Z`).getUTCDay();
+  return d === 0 ? 7 : d;
+}
+
 /**
- * The day a running rental's rent is due: the first day of its oldest week not
- * fully paid — the day after "paid through", or the pickup day while no week
- * is paid. The week may have a row or not yet (today's before the 00:10 roll).
+ * How many days after its first day a week's rent is due: 0 when the rental
+ * names no pay day or names the pickup's own weekday.
  */
-export function rentDueOn(paidThroughDate: ISODate | null, pickedUpOn: ISODate): ISODate {
-  return paidThroughDate ? addDays(paidThroughDate, 1) : pickedUpOn;
+export function payOffsetDays(pickedUpOn: ISODate | null, payWeekday: number | null | undefined): number {
+  if (!pickedUpOn || payWeekday == null) return 0;
+  return (((payWeekday - isoWeekday(pickedUpOn)) % 7) + 7) % 7;
+}
+
+/** The day a week's rent is due: its first day, or the pay day within it. */
+export function weekDueOn(startsOn: ISODate, offsetDays = 0): ISODate {
+  return offsetDays > 0 ? addDays(startsOn, offsetDays) : startsOn;
+}
+
+/**
+ * The day a running rental's rent is due: in its oldest week not fully paid —
+ * the week after "paid through", or the first week while none is paid — the
+ * first day, or the pay day within it (ADR-0021). The week may have a row or
+ * not yet (today's before the 00:10 roll).
+ */
+export function rentDueOn(paidThroughDate: ISODate | null, pickedUpOn: ISODate, offsetDays = 0): ISODate {
+  return weekDueOn(paidThroughDate ? addDays(paidThroughDate, 1) : pickedUpOn, offsetDays);
 }
 
 /** Days a rental is late: 0 on its due day and before it, 1 the day after (ADR-0017). */
-export function overdueDays(paidThroughDate: ISODate | null, pickedUpOn: ISODate, today: ISODate): number {
-  return Math.max(0, daysBetween(rentDueOn(paidThroughDate, pickedUpOn), today));
+export function overdueDays(paidThroughDate: ISODate | null, pickedUpOn: ISODate, today: ISODate, offsetDays = 0): number {
+  return Math.max(0, daysBetween(rentDueOn(paidThroughDate, pickedUpOn, offsetDays), today));
 }

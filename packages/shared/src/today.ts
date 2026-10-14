@@ -82,6 +82,8 @@ export interface QueueRental {
   pickedUpOn: ISODate | null;
   expectedReturnOn: ISODate | null;
   paidThrough: ISODate | null;
+  /** Days after a week's first day its rent is due — the rental's pay day (ADR-0021). */
+  payOffsetDays: number;
   /** The status as shown — `effectiveRentalStatus`, never the stored one. */
   status: RentalStatus;
   debtTetri: Tetri;
@@ -231,7 +233,7 @@ export function dayQueue(input: QueueInput): TaskGroupRows[] {
   // days are the product's one count, from the due day (ADR-0017).
   const overdue = open
     .filter((r) => r.status === 'overdue' && r.debtTetri > 0)
-    .map((r) => ({ r, days: r.pickedUpOn ? overdueDays(r.paidThrough, r.pickedUpOn, input.today) : 0 }))
+    .map((r) => ({ r, days: r.pickedUpOn ? overdueDays(r.paidThrough, r.pickedUpOn, input.today, r.payOffsetDays) : 0 }))
     .sort((a, b) => b.days - a.days || b.r.debtTetri - a.r.debtTetri);
   for (const { r, days } of overdue) {
     rows.push({

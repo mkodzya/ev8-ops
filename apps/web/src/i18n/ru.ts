@@ -9,6 +9,7 @@ import { wave6manageRu } from './wave6-manage.js';
 import { kommoLinkRu } from './kommo-link.js';
 import { bogApiRu } from './bog-api.js';
 import { calendarRu } from './payments-calendar.js';
+import { payDayRu } from './pay-day.js';
 import type { Dict } from './en.js';
 
 // Typed as Dict: a missing or misspelled key fails the build.
@@ -1263,4 +1264,5 @@ export const ru: Dict = {
   ...kommoLinkRu,
   ...bogApiRu,
   ...calendarRu,
+  ...payDayRu,
 };

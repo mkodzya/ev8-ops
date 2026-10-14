@@ -19,7 +19,7 @@
 //
 // The debt beside a late rental is not worked out here: it is the product's
 // one figure (`debt.ts`), passed in and passed through.
-import { periodBounds, periodSeqOf } from './periods.js';
+import { periodBounds, periodSeqOf, weekDueOn } from './periods.js';
 import { addDays, daysBetween } from './time.js';
 import { inPeriod, monthOf, paymentInRow, weekOf, type Period, type WeekPayment } from './week.js';
 import type { Tetri } from './money.js';
@@ -78,6 +78,8 @@ export interface CalendarRental {
   pickedUpOn: ISODate | null;
   returnedOn: ISODate | null;
   weeklyRateTetri: Tetri;
+  /** Days after a week's first day its rent is due — the rental's pay day (ADR-0021). 0 when absent. */
+  payOffsetDays?: number;
   /** EVERY row of the rental, not a window: a missing seq means "no row", i.e. projected. */
   periods: CalendarPeriodRow[];
   /** max(0, deposit.amount − deposit.paid): credit goes here first while the rental runs. */
@@ -321,6 +323,9 @@ export function calendarEntriesOn(cal: PaymentsCalendar, day: ISODate): Calendar
 /** One week of one rental, as the walk sees it. */
 interface Slot {
   seq: number;
+  /** The week's first day: the night its row comes into being and can take credit. */
+  startsOn: ISODate;
+  /** The day its rent is due: the first day, or the pay day within the week (ADR-0021). */
   dueOn: ISODate;
   endsOn: ISODate;
   amount: Tetri;
@@ -353,9 +358,10 @@ const older = (a: CalendarPayment, b: CalendarPayment): number =>
 const rollOrder = (a: Walk, b: Walk): number =>
   cmp(a.pickedUpOn, b.pickedUpOn) || cmp(a.rental.number, b.rental.number) || cmp(a.rental.id, b.rental.id);
 
-const fromRow = (row: CalendarPeriodRow): Slot => ({
+const fromRow = (row: CalendarPeriodRow, offsetDays: number): Slot => ({
   seq: row.seq,
-  dueOn: row.startsOn,
+  startsOn: row.startsOn,
+  dueOn: weekDueOn(row.startsOn, offsetDays),
   endsOn: row.endsOn,
   amount: row.amountTetri,
   paid: row.paidTetri,
@@ -372,19 +378,20 @@ const fromRow = (row: CalendarPeriodRow): Slot => ({
  */
 function walkOf(rental: CalendarRental, pickedUpOn: ISODate, horizon: ISODate): Walk {
   const rows = new Map(rental.periods.map((p) => [p.seq, p]));
+  const offset = rental.payOffsetDays ?? 0;
   const last = periodSeqOf(pickedUpOn, horizon);
   const slots: Slot[] = [];
   for (let seq = 1; seq <= last; seq++) {
     const row = rows.get(seq);
-    if (row) slots.push(fromRow(row));
+    if (row) slots.push(fromRow(row, offset));
     else {
       const b = periodBounds(pickedUpOn, seq);
-      slots.push({ seq, dueOn: b.startsOn, endsOn: b.endsOn, amount: rental.weeklyRateTetri, paid: 0, row: null, credit: 0, purse: null });
+      slots.push({ seq, startsOn: b.startsOn, dueOn: weekDueOn(b.startsOn, offset), endsOn: b.endsOn, amount: rental.weeklyRateTetri, paid: 0, row: null, credit: 0, purse: null });
     }
   }
   // A row past the horizon — only a roll run by hand for a later day makes
   // one — is not shown, but it exists every night and takes credit in its turn.
-  for (const row of rental.periods) if (row.seq > last) slots.push(fromRow(row));
+  for (const row of rental.periods) if (row.seq > last) slots.push(fromRow(row, offset));
   slots.sort((a, b) => a.seq - b.seq);
   return { rental, pickedUpOn, slots, depositLeft: Math.max(0, rental.depositShortTetri), chargesLeft: Math.max(0, rental.chargesOpenTetri) };
 }
@@ -435,7 +442,7 @@ function replay(walks: Walk[], credits: readonly CalendarCredit[], today: ISODat
   // A begun week with no row says today's roll has not run yet (00:00–00:10,
   // or the worker is down): it is the next one. Otherwise the next is tonight's.
   // The roll is one pass over every rental, so any customer's week tells.
-  const first = walks.some((w) => w.slots.some((s) => s.row === null && s.dueOn <= today)) ? today : addDays(today, 1);
+  const first = walks.some((w) => w.slots.some((s) => s.row === null && s.startsOn <= today)) ? today : addDays(today, 1);
 
   const byCustomer = new Map<string, Walk[]>();
   for (const w of walks) byCustomer.set(w.rental.customerId, [...(byCustomer.get(w.rental.customerId) ?? []), w]);
@@ -449,14 +456,14 @@ function replay(walks: Walk[], credits: readonly CalendarCredit[], today: ISODat
     // The first roll, then every later night on which one of the customer's
     // weeks comes into being.
     const nights = new Set<ISODate>([first]);
-    for (const w of mine) for (const s of w.slots) if (s.row === null && s.dueOn > first) nights.add(s.dueOn);
+    for (const w of mine) for (const s of w.slots) if (s.row === null && s.startsOn > first) nights.add(s.startsOn);
 
     for (const night of [...nights].sort(cmp)) {
       for (const w of mine) {
         const take = (need: Tetri) => draw(own(w), shared, need);
         w.depositLeft -= take(w.depositLeft).took;
         for (const s of w.slots) {
-          if (s.row === null && s.dueOn > night) continue;
+          if (s.row === null && s.startsOn > night) continue;
           // Never negative: a row may hold more than its amount.
           const need = Math.max(0, s.amount - s.paid - s.credit);
           if (need === 0) continue;

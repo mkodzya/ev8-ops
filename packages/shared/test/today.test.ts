@@ -12,6 +12,7 @@ const rental = (over: Partial<QueueRental> = {}): QueueRental => ({
   pickedUpOn: '2026-09-01',
   expectedReturnOn: null,
   paidThrough: '2026-09-17',
+  payOffsetDays: 0,
   status: 'overdue',
   debtTetri: 15000,
   dueTodayTetri: 0,
