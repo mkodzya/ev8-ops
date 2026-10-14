@@ -96,6 +96,17 @@ services:
       # A deal closed as won in the sales pipeline comes in as a task too
       # (ADR-0015); blank unless the pipeline is re-made in Kommo.
       KOMMO_SALES_PIPELINE_ID: ${KOMMO_SALES_PIPELINE_ID-}
+      # Bank of Georgia statements by its Business Online API (B11-03). Optional
+      # on purpose: with no keys the link is off and statements come only as
+      # uploaded files. The keys are issued by the company in Business Online,
+      # answer only this server's address and reach this file's env through
+      # deploy/set-bog-keys.sh — never through a session, a commit or a log.
+      # BOG_ACCOUNT is the account in lari (GE…BG…); blank, the account named
+      # in the last Bank of Georgia statement uploaded here is asked about.
+      # The number is not written in this repository.
+      BOG_CLIENT_ID: ${BOG_CLIENT_ID-}
+      BOG_CLIENT_SECRET: ${BOG_CLIENT_SECRET-}
+      BOG_ACCOUNT: ${BOG_ACCOUNT-}
     # No ports either. The browser reaches /api through the web container,
     # which is the same origin the page came from.
     depends_on:
@@ -120,6 +131,10 @@ services:
       PERIODS_CRON: ${PERIODS_CRON:-10 0 * * *}
       # Kommo is asked every five minutes; the account's plan has no webhooks.
       KOMMO_CRON: ${KOMMO_CRON:-*/5 * * * *}
+      # Bank of Georgia: the day's operations every five minutes (288 of the
+      # 800 requests a day the bank allows), the full statement once a night.
+      BOG_CRON: ${BOG_CRON:-*/5 * * * *}
+      BOG_NIGHT_CRON: ${BOG_NIGHT_CRON:-17 1 * * *}
       TZ: ${TZ:-Asia/Tbilisi}
     depends_on:
       api:

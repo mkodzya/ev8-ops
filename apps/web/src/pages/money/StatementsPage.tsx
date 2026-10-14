@@ -1,3 +1,4 @@
+import { localDateTime } from '@ev8/shared';
 import { useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, ApiError } from '../../api.js';
@@ -13,12 +14,22 @@ import { useT } from '../../i18n/index.js';
 import { errorText, useLoad } from '../../lib/use.js';
 
 type Bank = 'bog' | 'tbc' | 'credo';
+type Why = 'unauthorized' | 'forbidden' | 'not_found' | 'rate_limited' | 'http' | 'network' | 'bad_answer' | 'no_account';
+
+/** Bank of Georgia read through its API (B11-03): how the link stands. */
+interface BankApi {
+  freshness: 'ok' | 'silent' | 'waiting';
+  lastOkAt: string | null;
+  failure: Why | null;
+  nightThrough: string | null;
+  nightFailure: Why | null;
+}
 
 interface Statements {
   queue: number;
   staleDays: number;
   limitBytes: number;
-  banks: { bank: Bank; lastUploadAt: string | null; throughOn: string | null; daysOld: number | null; stale: boolean; never: boolean }[];
+  banks: { bank: Bank; lastUploadAt: string | null; throughOn: string | null; daysOld: number | null; stale: boolean; never: boolean; api: BankApi | null }[];
   statements: { id: string; bank: Bank; fileName: string; periodFrom: string | null; periodTo: string | null; lineCount: number; newLines: number; matched: number; uploadedBy: string | null; createdAt: string }[];
 }
 interface Preview {
@@ -42,6 +53,22 @@ interface Result {
 }
 
 const mb = (bytes: number) => `${(bytes / 1024 / 1024).toFixed(1).replace('.', ',')} MB`;
+
+/** The line under a bank that comes by itself: when it last answered, or why it does not. */
+function ApiLine({ api }: { api: BankApi }) {
+  const t = useT();
+  const w = t.bogApi;
+  const why = (f: Why | null) => w.why[f ?? 'http'];
+  const at = api.lastOkAt ? localDateTime(api.lastOkAt) : null;
+  return (
+    <>
+      {api.freshness === 'waiting' && <span className="muted">{w.waiting}</span>}
+      {api.freshness === 'ok' && at && <span className="muted">{w.freshAt(at.date, at.time)}</span>}
+      {api.freshness === 'silent' && <span className="warn-text">{at ? w.silentSince(why(api.failure), at.date, at.time) : w.silentNever(why(api.failure))}</span>}
+      {api.nightFailure && <span className="warn-text">{w.nightFailed(why(api.nightFailure))}</span>}
+    </>
+  );
+}
 
 /** Money → Выписки (wave 2 §3.5): how fresh each bank is, and loading a file with a look first. */
 export function StatementsPage() {
@@ -118,6 +145,7 @@ export function StatementsPage() {
                   {b.stale && <span className="warn-text">{t.statements.staleNote(data.staleDays)}</span>}
                 </>
               )}
+              {b.api && <ApiLine api={b.api} />}
             </div>
           ))}
         </div>
