@@ -92,6 +92,8 @@ export interface RecordPaymentInput {
   kind?: 'rent' | 'sale' | 'on_account';
   /** The statement line this payment is, set in the same transaction (B2-02). */
   statementLineId?: string | null;
+  /** Which part of that line, when the line is split (migration 0039). */
+  statementPart?: number;
   backdateReason?: string | null;
 }
 
@@ -139,6 +141,7 @@ export async function recordPaymentTx(tx: Tx, input: RecordPaymentInput): Promis
       createdById: input.actorId,
       kind: input.kind ?? (input.saleId ? 'sale' : input.rentalId ? 'rent' : 'on_account'),
       statementLineId: input.statementLineId ?? null,
+      statementPart: input.statementPart ?? 1,
       backdateReason: input.backdateReason ?? null,
     },
   });
@@ -211,83 +214,108 @@ export async function recordPaymentTx(tx: Tx, input: RecordPaymentInput): Promis
   return { id: payment.id, allocated: input.grossTetri - left, leftover: left };
 }
 
-/** A payment entered by mistake. Nothing is deleted: it is voided with a reason. */
-export async function voidPayment(input: { actorId: string; paymentId: string; reason: string; kind?: 'void' | 'undo' }): Promise<void> {
+type VoidInput = { actorId: string; paymentId: string; reason: string; kind?: 'void' | 'undo' };
+
+/**
+ * A payment entered by mistake. Nothing is deleted: it is voided with a reason.
+ *
+ * The parts of a split bank line live and die together (migration 0039): a
+ * part voided alone would send the line back to the queue while the other
+ * parts still spend its money. So voiding one voids them all, and the line
+ * waits for a person whole.
+ */
+export async function voidPayment(input: VoidInput): Promise<void> {
   await prisma.$transaction(async (tx) => {
-    const p = await tx.payment.findUnique({
-      where: { id: input.paymentId },
-      include: {
-        allocations: {
-          select: { target: true, amountTetri: true, periodId: true, instalmentId: true, deposit: { select: { rentalId: true } }, period: { select: { seq: true, startsOn: true, endsOn: true } }, instalment: { select: { seq: true } } },
-        },
-      },
-    });
-    if (!p) throw notFound('payment_not_found', 'No such payment.');
-    if (p.voidedAt) throw conflict('already_voided', 'This payment is already void.');
-
-    const touched = new Set<string>();
-    for (const a of p.allocations) {
-      if (a.deposit?.rentalId) touched.add(a.deposit.rentalId);
-    }
-    const saleIds = new Set<string>();
-    if (p.saleId) saleIds.add(p.saleId);
-    const instalmentIds = p.allocations.map((a) => a.instalmentId).filter((id): id is string => !!id);
-    if (instalmentIds.length > 0) {
-      for (const i of await tx.saleInstalment.findMany({ where: { id: { in: instalmentIds } }, select: { saleId: true } })) {
-        saleIds.add(i.saleId);
-      }
-    }
-    const periodIds = p.allocations.map((a) => a.periodId).filter((id): id is string => !!id);
-    if (periodIds.length > 0) {
-      for (const r of await tx.rentalPeriod.findMany({ where: { id: { in: periodIds } }, select: { rentalId: true } })) {
-        touched.add(r.rentalId);
-      }
-    }
-    if (p.rentalId) touched.add(p.rentalId);
-
-    await tx.paymentAllocation.deleteMany({ where: { paymentId: p.id } });
-    await tx.payment.update({
-      where: { id: p.id },
-      data: { voidedAt: new Date(), voidReason: input.reason, voidedById: input.actorId, voidKind: input.kind ?? 'void' },
-    });
-    // The bank line this payment was goes back to the queue, to be attached
-    // to the right record (B2-07).
-    if (p.statementLineId) {
-      await tx.statementLine.update({
-        where: { id: p.statementLineId },
-        data: { status: 'unmatched', matchedRule: null, paymentId: null, resolution: null, resolutionReason: null },
+    const first = await tx.payment.findUnique({ where: { id: input.paymentId }, select: { id: true, voidedAt: true, statementLineId: true, source: true } });
+    if (!first) throw notFound('payment_not_found', 'No such payment.');
+    if (first.voidedAt) throw conflict('already_voided', 'This payment is already void.');
+    const ids = [first.id];
+    if (first.statementLineId && first.source === 'statement') {
+      const parts = await tx.payment.findMany({
+        where: { statementLineId: first.statementLineId, source: 'statement', voidedAt: null, id: { not: first.id } },
+        orderBy: { statementPart: 'asc' },
+        select: { id: true },
       });
+      ids.push(...parts.map((x) => x.id));
     }
-    for (const rentalId of touched) await recomputeRental(tx, rentalId);
-    for (const saleId of saleIds) await recomputeSale(tx, saleId);
-    // Money taken back off a shipment moves its mopeds' cost the same way
-    // paying did (§7, QA-W5-10).
-    if (p.purchaseId) await recostPurchase(tx, p.purchaseId, input.actorId, 'supplier payment voided');
+    for (const id of ids) await voidOne(tx, { ...input, paymentId: id });
+  });
+}
 
-    await tx.auditLog.create({
-      data: {
-        actorId: input.actorId,
-        action: input.kind === 'undo' ? 'payment.undo' : 'payment.void',
-        entityType: 'payment',
-        entityId: p.id,
-        // What it closed stays in the journal after the allocations are gone.
-        before: {
-          grossTetri: p.grossTetri,
-          channel: p.channel,
-          kind: p.kind,
-          rentalId: p.rentalId,
-          saleId: p.saleId,
-          statementLineId: p.statementLineId,
-          closed: p.allocations.map((a) => ({
-            target: a.target,
-            amountTetri: a.amountTetri,
-            seq: a.period?.seq ?? a.instalment?.seq ?? null,
-            startsOn: a.period ? isoDate(a.period.startsOn) : null,
-            endsOn: a.period ? isoDate(a.period.endsOn) : null,
-          })),
-        },
-        note: input.reason,
+async function voidOne(tx: Tx, input: VoidInput): Promise<void> {
+  const p = await tx.payment.findUnique({
+    where: { id: input.paymentId },
+    include: {
+      allocations: {
+        select: { target: true, amountTetri: true, periodId: true, instalmentId: true, deposit: { select: { rentalId: true } }, period: { select: { seq: true, startsOn: true, endsOn: true } }, instalment: { select: { seq: true } } },
       },
+    },
+  });
+  if (!p) throw notFound('payment_not_found', 'No such payment.');
+  if (p.voidedAt) throw conflict('already_voided', 'This payment is already void.');
+
+  const touched = new Set<string>();
+  for (const a of p.allocations) {
+    if (a.deposit?.rentalId) touched.add(a.deposit.rentalId);
+  }
+  const saleIds = new Set<string>();
+  if (p.saleId) saleIds.add(p.saleId);
+  const instalmentIds = p.allocations.map((a) => a.instalmentId).filter((id): id is string => !!id);
+  if (instalmentIds.length > 0) {
+    for (const i of await tx.saleInstalment.findMany({ where: { id: { in: instalmentIds } }, select: { saleId: true } })) {
+      saleIds.add(i.saleId);
+    }
+  }
+  const periodIds = p.allocations.map((a) => a.periodId).filter((id): id is string => !!id);
+  if (periodIds.length > 0) {
+    for (const r of await tx.rentalPeriod.findMany({ where: { id: { in: periodIds } }, select: { rentalId: true } })) {
+      touched.add(r.rentalId);
+    }
+  }
+  if (p.rentalId) touched.add(p.rentalId);
+
+  await tx.paymentAllocation.deleteMany({ where: { paymentId: p.id } });
+  await tx.payment.update({
+    where: { id: p.id },
+    data: { voidedAt: new Date(), voidReason: input.reason, voidedById: input.actorId, voidKind: input.kind ?? 'void' },
+  });
+  // The bank line this payment was goes back to the queue, to be attached
+  // to the right record (B2-07).
+  if (p.statementLineId) {
+    await tx.statementLine.update({
+      where: { id: p.statementLineId },
+      data: { status: 'unmatched', matchedRule: null, paymentId: null, resolution: null, resolutionReason: null },
     });
+  }
+  for (const rentalId of touched) await recomputeRental(tx, rentalId);
+  for (const saleId of saleIds) await recomputeSale(tx, saleId);
+  // Money taken back off a shipment moves its mopeds' cost the same way
+  // paying did (§7, QA-W5-10).
+  if (p.purchaseId) await recostPurchase(tx, p.purchaseId, input.actorId, 'supplier payment voided');
+
+  await tx.auditLog.create({
+    data: {
+      actorId: input.actorId,
+      action: input.kind === 'undo' ? 'payment.undo' : 'payment.void',
+      entityType: 'payment',
+      entityId: p.id,
+      // What it closed stays in the journal after the allocations are gone.
+      before: {
+        grossTetri: p.grossTetri,
+        channel: p.channel,
+        kind: p.kind,
+        rentalId: p.rentalId,
+        saleId: p.saleId,
+        statementLineId: p.statementLineId,
+        closed: p.allocations.map((a) => ({
+          target: a.target,
+          amountTetri: a.amountTetri,
+          seq: a.period?.seq ?? a.instalment?.seq ?? null,
+          startsOn: a.period ? isoDate(a.period.startsOn) : null,
+          endsOn: a.period ? isoDate(a.period.endsOn) : null,
+        })),
+      },
+      note: input.reason,
+    },
   });
 }

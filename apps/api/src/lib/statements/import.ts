@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import type { Prisma } from '../../generated/prisma/client.js';
-import { conflict, notFound } from '../errors.js';
+import { badRequest, conflict, notFound } from '../errors.js';
 import { dateFromISO, isoDate } from '../dates.js';
 import { prisma } from '../db.js';
 import { recordPaymentTx } from '../payments.js';
@@ -211,16 +211,18 @@ export async function linkBankDeposit(tx: Tx, actorId: string, lineId: string, b
   await tx.statementLine.update({ where: { id: lineId }, data: { resolution: 'bank_deposit', resolvedById: actorId, resolvedAt: new Date() } });
 }
 
-/** A customer's payment made of this line: a rental, a sale, a repair, or the customer's account. */
-export async function attach(
-  tx: Tx,
-  input: { actorId: string; lineId: string; rule: string; rentalId?: string | null; saleId?: string | null; serviceJobId?: string | null; customerId?: string | null; reason?: unknown },
-): Promise<{ paymentId: string }> {
-  const line = await tx.statementLine.findUnique({ where: { id: input.lineId } });
-  if (!line) throw notFound('line_not_found', 'No such statement line.');
-  if (line.direction === 'out') throw conflict('outgoing_line', 'Money leaving the account is not a customer payment.');
-  await claim(tx, line.id, input.rule);
+/** What a line, or a part of it, pays: a rental, a sale, a repair, or the customer's account. */
+export interface LineTarget {
+  rentalId?: string | null;
+  saleId?: string | null;
+  serviceJobId?: string | null;
+  customerId?: string | null;
+}
 
+type StoredLine = NonNullable<Awaited<ReturnType<Tx['statementLine']['findUnique']>>>;
+
+/** A line as money: a card line is what the customer paid less what the acquirer kept (PAY-04). */
+function moneyOf(line: StoredLine): { channel: 'transfer' | 'acquiring'; grossTetri: number; feeTetri: number } {
   // Read from the line as it is stored: a card line loaded before its wording was known says so in its raw text.
   const card = cardOf(line);
   const channel: 'transfer' | 'acquiring' = card ? 'acquiring' : 'transfer';
@@ -238,46 +240,74 @@ export async function attach(
   };
   const gross = lineGross(asOne);
   const fee = channel === 'acquiring' ? asOne.feeTetri ?? Math.max(0, gross - line.amountTetri) : 0;
+  return { channel, grossTetri: gross, feeTetri: fee };
+}
 
-  let paymentId: string;
-  if (input.serviceJobId) {
-    const job = await serviceOwed(tx, input.serviceJobId);
+/** One payment made of a line, or of one part of it. */
+async function paymentOf(
+  tx: Tx,
+  actorId: string,
+  line: StoredLine,
+  money: { channel: 'transfer' | 'acquiring'; grossTetri: number; feeTetri: number },
+  target: LineTarget,
+  part: number,
+): Promise<string> {
+  if (target.serviceJobId) {
+    const job = await serviceOwed(tx, target.serviceJobId);
     const p = await tx.payment.create({
       data: {
         occurredOn: line.occurredOn,
         direction: 'in',
-        channel,
-        grossTetri: gross,
-        feeTetri: fee,
-        netTetri: gross - fee,
+        channel: money.channel,
+        grossTetri: money.grossTetri,
+        feeTetri: money.feeTetri,
+        netTetri: money.grossTetri - money.feeTetri,
         customerId: job.customerId,
-        serviceJobId: input.serviceJobId,
+        serviceJobId: target.serviceJobId,
         kind: 'service',
         bankText: line.raw.slice(0, 500),
         source: 'statement',
-        createdById: input.actorId,
+        createdById: actorId,
         statementLineId: line.id,
+        statementPart: part,
       },
       select: { id: true },
     });
-    paymentId = p.id;
-  } else {
-    const r = await recordPaymentTx(tx, {
-      actorId: input.actorId,
-      occurredOn: isoDate(line.occurredOn)!,
-      channel,
-      grossTetri: gross,
-      feeTetri: fee,
-      customerId: input.customerId ?? null,
-      rentalId: input.rentalId ?? null,
-      saleId: input.saleId ?? null,
-      bankText: line.raw.slice(0, 500),
-      note: null,
-      source: 'statement',
-      statementLineId: line.id,
-    });
-    paymentId = r.id;
+    return p.id;
   }
+  const r = await recordPaymentTx(tx, {
+    actorId,
+    occurredOn: isoDate(line.occurredOn)!,
+    channel: money.channel,
+    grossTetri: money.grossTetri,
+    feeTetri: money.feeTetri,
+    customerId: target.customerId ?? null,
+    rentalId: target.rentalId ?? null,
+    saleId: target.saleId ?? null,
+    bankText: line.raw.slice(0, 500),
+    note: null,
+    source: 'statement',
+    statementLineId: line.id,
+    statementPart: part,
+  });
+  return r.id;
+}
+
+async function incomingLine(tx: Tx, lineId: string): Promise<StoredLine> {
+  const line = await tx.statementLine.findUnique({ where: { id: lineId } });
+  if (!line) throw notFound('line_not_found', 'No such statement line.');
+  if (line.direction === 'out') throw conflict('outgoing_line', 'Money leaving the account is not a customer payment.');
+  return line;
+}
+
+/** A customer's payment made of this line: a rental, a sale, a repair, or the customer's account. */
+export async function attach(
+  tx: Tx,
+  input: { actorId: string; lineId: string; rule: string; reason?: unknown } & LineTarget,
+): Promise<{ paymentId: string }> {
+  const line = await incomingLine(tx, input.lineId);
+  await claim(tx, line.id, input.rule);
+  const paymentId = await paymentOf(tx, input.actorId, line, moneyOf(line), input, 1);
   await tx.statementLine.update({ where: { id: line.id }, data: { paymentId } });
   await tx.auditLog.create({
     data: {
@@ -297,4 +327,74 @@ export async function attach(
     },
   });
   return { paymentId };
+}
+
+export const SPLIT_MAX = 9;
+
+/**
+ * One line, several records (meeting of 14.10.2026: one transfer for a rental
+ * week and a repair). The parts are what the customer paid and add up to the
+ * line's whole; on a card line the acquirer's fee is shared in proportion, the
+ * last part taking the tetri the division leaves. Each part is its own
+ * payment, so each record closes as if it had been paid apart. The parts live
+ * and die together: voiding one voids them all and the line goes back to the
+ * queue (payments.ts, voidPayment).
+ */
+export async function split(
+  tx: Tx,
+  input: { actorId: string; lineId: string; parts: (LineTarget & { grossTetri: number })[] },
+): Promise<{ paymentIds: string[] }> {
+  const line = await incomingLine(tx, input.lineId);
+  const parts = input.parts;
+  if (parts.length < 2) throw badRequest('split_needs_two', 'A split has at least two parts.');
+  if (parts.length > SPLIT_MAX) throw badRequest('split_too_many', `A split has at most ${SPLIT_MAX} parts.`);
+  const keys = new Set<string>();
+  for (const p of parts) {
+    if (!Number.isInteger(p.grossTetri) || p.grossTetri <= 0) throw badRequest('split_bad_amount', 'Every part is a sum above zero.', { field: 'grossTetri' });
+    const named = [p.rentalId, p.saleId, p.serviceJobId, p.customerId].filter(Boolean);
+    if (named.length !== 1) throw badRequest('split_bad_target', 'Every part pays exactly one record.', { field: 'rentalId' });
+    const key = String(named[0]);
+    if (keys.has(key)) throw badRequest('split_same_target', 'Two parts pay the same record: make them one.');
+    keys.add(key);
+  }
+  const money = moneyOf(line);
+  const sum = parts.reduce((n, p) => n + p.grossTetri, 0);
+  if (sum !== money.grossTetri) {
+    throw badRequest('split_sum', 'The parts must add up to the whole line.', { lineTetri: money.grossTetri, partsTetri: sum });
+  }
+  for (const p of parts) {
+    if (!p.serviceJobId) continue;
+    const job = await serviceOwed(tx, p.serviceJobId);
+    if (p.grossTetri > job.openTetri) throw conflict('split_over_repair', 'That part is more than the repair still owes.', { number: job.number, openTetri: job.openTetri });
+  }
+
+  await claim(tx, line.id, 'split');
+  const paymentIds: string[] = [];
+  let feeLeft = money.feeTetri;
+  for (const [i, p] of parts.entries()) {
+    const last = i === parts.length - 1;
+    const fee = last ? feeLeft : Math.floor((money.feeTetri * p.grossTetri) / money.grossTetri);
+    feeLeft -= fee;
+    paymentIds.push(await paymentOf(tx, input.actorId, line, { channel: money.channel, grossTetri: p.grossTetri, feeTetri: fee }, p, i + 1));
+  }
+  await tx.statementLine.update({ where: { id: line.id }, data: { paymentId: paymentIds[0] } });
+  await tx.auditLog.create({
+    data: {
+      actorId: input.actorId,
+      action: 'statement.line.split',
+      entityType: 'statement_line',
+      entityId: line.id,
+      after: {
+        paymentIds,
+        parts: parts.map((p) => ({
+          grossTetri: p.grossTetri,
+          rentalId: p.rentalId ?? null,
+          saleId: p.saleId ?? null,
+          serviceJobId: p.serviceJobId ?? null,
+          customerId: p.customerId ?? null,
+        })),
+      },
+    },
+  });
+  return { paymentIds };
 }

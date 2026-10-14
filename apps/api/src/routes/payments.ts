@@ -179,6 +179,15 @@ export function paymentRoutes(app: FastifyInstance): void {
     });
     if (!p) throw notFound('payment_not_found', 'No such payment.');
     if (!hasPerm(actor, 'payments.view') && p.createdById !== actor.id) throw forbidden('forbidden', 'This payment is not yours.');
+    // The other parts of a split bank line: voiding this payment voids them too (migration 0039).
+    const splitWith =
+      p.statementLineId && p.source === 'statement'
+        ? await prisma.payment.findMany({
+            where: { statementLineId: p.statementLineId, source: 'statement', voidedAt: p.voidedAt ? undefined : null, id: { not: p.id } },
+            orderBy: { statementPart: 'asc' },
+            select: { id: true, grossTetri: true, rental: { select: { number: true } }, sale: { select: { number: true } }, serviceJob: { select: { number: true } }, customer: { select: { name: true } } },
+          })
+        : [];
     const journal = await prisma.auditLog.findMany({
       where: { entityType: 'payment', entityId: p.id },
       orderBy: { createdAt: 'asc' },
@@ -214,6 +223,7 @@ export function paymentRoutes(app: FastifyInstance): void {
         voidedBy: p.voidedBy?.name ?? null,
         voidedAt: p.voidedAt?.toISOString() ?? null,
         statementLine: p.statementLine ? { ...p.statementLine, occurredOn: isoDate(p.statementLine.occurredOn) } : null,
+        splitWith: splitWith.map((x) => ({ id: x.id, grossTetri: x.grossTetri, number: x.rental?.number ?? x.sale?.number ?? x.serviceJob?.number ?? null, customer: x.customer?.name ?? null })),
         closed: p.allocations.map((a) => ({
           target: a.target,
           amountTetri: a.amountTetri,

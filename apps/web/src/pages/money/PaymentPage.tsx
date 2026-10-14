@@ -42,6 +42,8 @@ interface Card {
     voidReason: string | null;
     voidedBy: string | null;
     statementLine: { id: string; bank: 'bog' | 'tbc' | 'credo'; occurredOn: string; amountTetri: number; payer: string | null; purpose: string | null; matchedRule: string | null } | null;
+    /** The other parts of a split bank line; absent while an older API answers. */
+    splitWith?: { id: string; grossTetri: number; number: string | null; customer: string | null }[];
     closed: { target: string; amountTetri: number; seq: number | null; startsOn: string | null; endsOn: string | null; dueOn: string | null }[];
   };
   journal: { at: string; action: string; who: string | null; note: string | null }[];
@@ -113,8 +115,28 @@ export function PaymentPage() {
             {formatGel(p.statementLine.amountTetri)}
           </p>
           <p className="hint muted">
-            {p.voided ? t.paymentPage.wasLinked : p.statementLine.matchedRule === 'by_hand' || p.statementLine.matchedRule === 'recorded_by_hand' ? t.paymentPage.byHand : t.paymentPage.byRule}
+            {p.voided
+              ? t.paymentPage.wasLinked
+              : ['by_hand', 'recorded_by_hand', 'split'].includes(p.statementLine.matchedRule ?? '')
+                ? t.paymentPage.byHand
+                : t.paymentPage.byRule}
           </p>
+          {(p.splitWith ?? []).length > 0 && (
+            <>
+              <p className="hint muted">{t.paymentPage.splitWith}</p>
+              {p.splitWith!.map((x) => (
+                <Row
+                  key={x.id}
+                  k={[x.number, x.customer].filter(Boolean).join(' · ') || t.common.dash}
+                  v={
+                    <Link className="mono" to={`/money/payments/${x.id}`}>
+                      {formatGel(x.grossTetri)}
+                    </Link>
+                  }
+                />
+              ))}
+            </>
+          )}
         </section>
       )}
 
@@ -127,7 +149,7 @@ export function PaymentPage() {
         </section>
       )}
 
-      {voiding && <VoidSheet id={p.id} amount={signed} onClose={() => setVoiding(false)} />}
+      {voiding && <VoidSheet id={p.id} amount={signed} parts={(p.splitWith ?? []).length + 1} onClose={() => setVoiding(false)} />}
     </>
   );
 }
@@ -149,7 +171,7 @@ function recordLink(p: Card['payment']): { to: string; n: string } | null {
 }
 
 /** "Аннулировать": an owner, with a reason it must have (§3.3). */
-function VoidSheet({ id, amount, onClose }: { id: string; amount: string; onClose: () => void }) {
+function VoidSheet({ id, amount, parts, onClose }: { id: string; amount: string; parts: number; onClose: () => void }) {
   const t = useT();
   const [reason, setReason] = useState('');
   return (
@@ -164,7 +186,7 @@ function VoidSheet({ id, amount, onClose }: { id: string; amount: string; onClos
         return { toast: { text: t.paymentPage.voidedToast } };
       }}
     >
-      <Field label={t.paymentPage.voidReason} hint={t.paymentPage.voidHint} name="reason">
+      <Field label={t.paymentPage.voidReason} hint={parts > 1 ? `${t.paymentPage.voidHint} ${t.paymentPage.voidSplit(parts)}` : t.paymentPage.voidHint} name="reason">
         <input className="input" value={reason} onChange={(e) => setReason(e.target.value)} autoFocus />
       </Field>
     </FormSheet>
