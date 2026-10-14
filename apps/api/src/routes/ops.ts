@@ -136,7 +136,7 @@ export function opsRoutes(app: FastifyInstance): void {
     if ('nightParkingAddress' in b) data.nightParkingAddress = str(b, 'nightParkingAddress', { max: 300 });
     if ('batteries' in b) data.batteries = int(b, 'batteries', { min: 0 });
     if ('chargers' in b) data.chargers = int(b, 'chargers', { min: 0 });
-    // The weekday the rent is due on (ADR-0021): an owner's, with a reason —
+    // The weekday the rent is due on (ADR-0022): an owner's, with a reason —
     // it decides the day a renter is called late. ISO 1–7; null, or the
     // pickup's own weekday, is the rule of every other rental, kept as null.
     if ('payWeekday' in b) {

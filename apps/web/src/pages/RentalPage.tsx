@@ -59,7 +59,7 @@ export interface RentalCard {
     expectedReturnOn: string | null;
     returnedOn: string | null;
     paidThrough: string | null;
-    /** The weekday the rent is due on, ISO 1–7; null — the pickup's weekday (ADR-0021). */
+    /** The weekday the rent is due on, ISO 1–7; null — the pickup's weekday (ADR-0022). */
     payWeekday: number | null;
     payOffsetDays: number;
     /** The day the next rent is due, for a running rental. */
@@ -339,7 +339,7 @@ export function RentalPage() {
           <Row k={t.rentals.returned} v={<span className="mono">{fmtDate(r.returnedOn)}</span>} />
           <Row k={t.rentals.paidThrough} v={<span className="mono">{fmtDate(r.paidThrough)}</span>} />
           {r.pickedUpOn && (
-            // The weekday a week's rent is due on, and the next such day (ADR-0021).
+            // The weekday a week's rent is due on, and the next such day (ADR-0022).
             <Row
               k={t.payDay.label}
               v={
@@ -610,7 +610,7 @@ interface FreeVehicles {
 function RentalEdit({ rental, owner, onClose, onSaved }: { rental: RentalCard['rental']; owner: boolean; onClose: () => void; onSaved: () => void }) {
   const t = useT();
   const fleet = useLoad<FreeVehicles>(rental.vinUnconfirmed ? '/api/fleet' : null);
-  // The pay day (ADR-0021): the pickup's weekday unless agreed otherwise. An owner's, with a reason.
+  // The pay day (ADR-0022): the pickup's weekday unless agreed otherwise. An owner's, with a reason.
   const pickupDay = rental.pickedUpOn ? isoWeekday(rental.pickedUpOn) : null;
   const initial = {
     payDay: String(rental.payWeekday ?? pickupDay ?? ''),
