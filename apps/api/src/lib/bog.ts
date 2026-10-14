@@ -1,4 +1,4 @@
-// Bank of Georgia, read through its Business Online API (B11-03; ADR-0020).
+// Bank of Georgia, read through its Business Online API (B11-03; ADR-0021).
 //
 // Mika, 14.10.2026 (book register, item 8): every five minutes the stand asks
 // the bank for the day's operations — the bank allows 800 such requests a day

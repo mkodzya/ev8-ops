@@ -171,6 +171,9 @@ export function rentalRoutes(app: FastifyInstance): void {
         amountTetri: p.amountTetri,
         paidTetri: p.paidTetri,
         payStatus: p.payStatus,
+        discountTetri: p.discountTetri,
+        discountReason: p.discountReason,
+        paidBeforeTransfer: p.paidBeforeTransfer,
       })),
       payments: r.payments.map((p) => ({
         id: p.id,

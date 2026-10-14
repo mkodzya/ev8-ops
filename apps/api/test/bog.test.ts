@@ -1,4 +1,4 @@
-// Bank of Georgia through its Business Online API (B11-03, ADR-0020). The
+// Bank of Georgia through its Business Online API (B11-03, ADR-0021). The
 // bank itself is never called from here — a function stands in for it, so
 // these run with no network and no key that opens anything. The bank answers
 // only the server's address anyway.

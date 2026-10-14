@@ -1,6 +1,6 @@
 import { daysBetween } from '@ev8/shared';
 
-// One operation, two sources (B11-03, ADR-0020).
+// One operation, two sources (B11-03, ADR-0021).
 //
 // A Bank of Georgia line can reach the queue three ways: from a CSV the owner
 // uploads, from the five-minute pull of the day's operations, and from the

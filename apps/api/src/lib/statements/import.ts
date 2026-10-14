@@ -51,7 +51,7 @@ function asLine(bank: 'bog' | 'tbc', l: ParsedLine): Line {
  * Which lines are in already. A line is in when its key is; a Bank of
  * Georgia line is in, too, when the same operation came from its other
  * source — a file against the API, or the day's pull against the nightly
- * statement (`sameLine.ts`, ADR-0020).
+ * statement (`sameLine.ts`, ADR-0021).
  */
 export async function knownLines<T extends ParsedLine>(parsed: { bank: 'bog' | 'tbc'; lines: T[] }): Promise<AlreadyIn<T>> {
   const select = { naturalKey: true, docNo: true, occurredOn: true, direction: true, amountTetri: true } as const;
