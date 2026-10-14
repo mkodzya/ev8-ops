@@ -41,6 +41,12 @@ export function dmy(iso: string | null | undefined): string {
 }
 
 /** Whole GEL as the paper form writes it: "150", not "150.00 ₾". */
+/** An odometer reading as it is written on paper: "7 500 km"; none — a dash for a pen. */
+export function km(n: number | null | undefined): string {
+  if (n == null) return '';
+  return `${String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} km`;
+}
+
 export function gel(tetri: number | null | undefined): string {
   if (tetri == null) return '—';
   const whole = Math.trunc(tetri / 100);
