@@ -628,6 +628,8 @@ model Payment {
   voidedById    String?          @map("voided_by") @db.Uuid
   odooPaymentId Int?             @unique @map("odoo_payment_id")
   statementLineId String?        @map("statement_line_id") @db.Uuid
+  /// Which part of a split bank line this payment is; a line paid whole is part 1 (migration 0039).
+  statementPart   Int            @default(1) @map("statement_part") @db.SmallInt
   kind            PaymentKind
   serviceJobId    String?        @map("service_job_id") @db.Uuid
   depositId       String?        @map("deposit_id") @db.Uuid

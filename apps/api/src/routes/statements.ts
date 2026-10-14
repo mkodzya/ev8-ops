@@ -7,10 +7,10 @@ import { env } from '../lib/env.js';
 import { badRequest, conflict, notFound } from '../lib/errors.js';
 import { actorOf } from '../lib/guard.js';
 import { voidPayment } from '../lib/payments.js';
-import { attach, importStatement, linkBankDeposit, linkPayment, previewStatement } from '../lib/statements/import.js';
+import { SPLIT_MAX, attach, importStatement, linkBankDeposit, linkPayment, previewStatement, split } from '../lib/statements/import.js';
 import { ParseError, cardOf } from '../lib/statements/parse.js';
 import { isCashDeposit, loadCtx, suggest, type Line } from '../lib/statements/reconcile.js';
-import { str } from '../lib/validate.js';
+import { str, tetri } from '../lib/validate.js';
 
 // Statements and "Разобрать" (wave 2 §3.2, §3.5).
 //
@@ -275,6 +275,29 @@ export function statementRoutes(app: FastifyInstance): void {
     }
     const r = await prisma.$transaction((tx) => attach(tx, { actorId: actorOf(req).id, lineId: req.params.id, rule: 'by_hand', ...target }));
     return { ok: true, id: r.paymentId };
+  });
+
+  /**
+   * "Разделить": one line, several records — a rental week and a repair paid
+   * in one transfer (meeting of 14.10.2026). Each part is what the customer
+   * paid for that record; together they are the whole line.
+   */
+  app.post<{ Params: { id: string }; Body: Body }>('/api/statement-lines/:id/split', { config: { scope: 'payments.reconcile' } }, async (req) => {
+    const raw = (req.body ?? {}).parts;
+    if (!Array.isArray(raw) || raw.length === 0) throw badRequest('missing_field', 'Say what each part pays for.', { field: 'parts' });
+    if (raw.length > SPLIT_MAX) throw badRequest('split_too_many', `A split has at most ${SPLIT_MAX} parts.`);
+    const parts = raw.map((x) => {
+      const b = (x ?? {}) as Body;
+      return {
+        grossTetri: tetri(b, 'grossTetri', { required: true, min: 1 })!,
+        rentalId: str(b, 'rentalId'),
+        saleId: str(b, 'saleId'),
+        serviceJobId: str(b, 'serviceJobId'),
+        customerId: str(b, 'customerId'),
+      };
+    });
+    const r = await prisma.$transaction((tx) => split(tx, { actorId: actorOf(req).id, lineId: req.params.id, parts }));
+    return { ok: true, ids: r.paymentIds };
   });
 
   /** "Да, это он": the line is a payment already entered by hand (§3.2 "Похоже, уже записан"). */
