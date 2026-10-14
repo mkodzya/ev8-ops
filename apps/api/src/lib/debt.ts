@@ -41,7 +41,7 @@ export async function debtsOf(customerIds: string[], today: string = todayISO(ne
         // The two facts a rental's state is read from: for the due day only, never for the figure.
         paidThrough: true,
         pickedUpOn: true,
-        // The pay day: when within a week its rent is owed (ADR-0021).
+        // The pay day: when within a week its rent is owed (ADR-0022).
         payWeekday: true,
         periods: { select: { startsOn: true, amountTetri: true, paidTetri: true } },
         charges: { where: { voidedAt: null }, select: { amountTetri: true, allocations: { where: { payment: { voidedAt: null } }, select: { amountTetri: true } } } },

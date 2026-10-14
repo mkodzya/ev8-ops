@@ -1,4 +1,4 @@
-// The day of the week a rental's rent is due (ADR-0021).
+// The day of the week a rental's rent is due (ADR-0022).
 //
 // Literal dates: Monday 12.10.2026 … Sunday 18.10.2026. The two renters of the
 // decision, with made-up rentals: one picked up on a Tuesday who pays on
@@ -18,7 +18,7 @@ import {
 const TUE_PICKUP = '2026-05-19';
 const MON_PICKUP = '2026-08-03';
 
-describe('the pay day of a rental (ADR-0021)', () => {
+describe('the pay day of a rental (ADR-0022)', () => {
   it('knows the weekday of a date, Monday 1 … Sunday 7', () => {
     expect(['2026-10-12', '2026-10-13', '2026-10-14', '2026-10-15', '2026-10-16', '2026-10-17', '2026-10-18'].map(isoWeekday)).toEqual([1, 2, 3, 4, 5, 6, 7]);
     expect(isoWeekday(TUE_PICKUP)).toBe(2);

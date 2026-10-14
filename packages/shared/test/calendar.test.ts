@@ -1032,7 +1032,7 @@ describe('the function itself', () => {
   });
 });
 
-describe('a rental with its own pay day (ADR-0021)', () => {
+describe('a rental with its own pay day (ADR-0022)', () => {
   // Today is Wednesday 14.10. Made-up rentals: one picked up on Tuesday 06.10
   // who pays on Wednesdays, one picked up on Monday 05.10 who pays on Thursdays.
   const tuesday = { ...rental({ id: 'W', pickedUpOn: '2026-10-06', rows: [paidRow(1, '2026-10-06'), row(2, '2026-10-13')], debtTetri: RATE }), payOffsetDays: 1 };
