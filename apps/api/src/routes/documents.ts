@@ -59,7 +59,7 @@ function customerOf(r: Rental) {
 
 function vehicleOf(r: Rental) {
   return r.vehicle
-    ? { brand: r.vehicle.model.brand, model: r.vehicle.model.name, vin: r.vehicle.vin, color: r.vehicle.color }
+    ? { brand: r.vehicle.model.brand, model: r.vehicle.model.name, vin: r.vehicle.vin, color: r.vehicle.color, fleetNo: r.vehicle.fleetNo }
     : null;
 }
 

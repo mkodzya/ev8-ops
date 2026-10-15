@@ -12,7 +12,7 @@ import { Field } from '../components/Wizard.js';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { FormSheet, SubmitButton } from '../ds/form/Form.js';
-import { BlockHead, Empty, Loading, PageHead, RentalBadge, Vin } from '../components/ui.js';
+import { BlockHead, Empty, FleetNo, Loading, PageHead, RentalBadge, Vin } from '../components/ui.js';
 import { useMoneyForm } from '../ds/money/MoneyForm.js';
 import { Row } from '../components/Wizard.js';
 import { fmtDate, formatGel } from '../format.js';
@@ -50,7 +50,7 @@ export interface RentalCard {
     status: RentalStatus;
     storedStatus: RentalStatus;
     customer: { id: string; name: string; phone: string | null };
-    vehicle: { id: string; vin: string; model: string } | null;
+    vehicle: { id: string; vin: string; fleetNo?: number | null; model: string } | null;
     vinUnconfirmed: boolean;
     vinNote: string | null;
     weeklyRateTetri: number;
@@ -339,7 +339,7 @@ export function RentalPage() {
             v={
               r.vehicle ? (
                 <Link to={`/fleet/${r.vehicle.id}`}>
-                  <Vin vin={r.vehicle.vin} /> <span className="muted">{r.vehicle.model}</span>
+                  <FleetNo n={r.vehicle.fleetNo} /> <Vin vin={r.vehicle.vin} /> <span className="muted">{r.vehicle.model}</span>
                 </Link>
               ) : (
                 <span className="warn-text">

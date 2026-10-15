@@ -1,4 +1,4 @@
-import { addDays, formatGel, parseGel, SEARCH_MIN } from '@ev8/shared';
+import { formatGel, parseGel, SEARCH_MIN } from '@ev8/shared';
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../../api.js';
@@ -388,7 +388,7 @@ function OtherSheet({ line, onClose }: { line: SortLine; onClose: () => void }) 
 
 interface Targets {
   debt: { parts: { kind: 'rent' | 'deposit' | 'charge' | 'sale' | 'service'; id: string; owesTetri: number }[] };
-  rentals: { id: string; number: string; status: string; model: string | null }[];
+  rentals: { id: string; number: string; status: string; model: string | null; transferredOn?: string | null }[];
   sales: { id: string; number: string; nextTetri: number }[];
   repairs: { id: string; number: string }[];
   /** Open fines and other charges, each its own part (ADR-0023). */
@@ -402,10 +402,18 @@ interface SplitRow {
   label: string;
   sub: string;
   owesTetri: number;
+  /** Rent paid before the rental was carried over: is it the week the carry-over already counted? (ADR-0023) */
+  old?: { rentalId: string; week: { id: string; startsOn: string; endsOn: string; amountTetri: number } };
+  /** A new fine on this rental, typed here with what it is for. */
+  fineOf?: string;
 }
 interface SplitValue {
   customer: { id: string; name: string } | null;
   amounts: Record<string, string>;
+  /** Per rental: the old line's rent is the carried week's money, or new money. */
+  choice: Record<string, 'carried' | 'new'>;
+  /** Per rental: what a new fine is for. */
+  reasons: Record<string, string>;
 }
 
 /**
@@ -416,7 +424,7 @@ interface SplitValue {
 function SplitSheet({ line, onClose }: { line: SortLine; onClose: () => void }) {
   const t = useT();
   const total = line.channel === 'acquiring' && line.grossTetri != null ? line.grossTetri : line.amountTetri;
-  const initial: SplitValue = { customer: null, amounts: {} };
+  const initial: SplitValue = { customer: null, amounts: {}, choice: {}, reasons: {} };
   const [value, setValue] = useState<SplitValue>(initial);
   const [q, setQ] = useState('');
   const [answer, setAnswer] = useState<SearchAnswer | null>(null);
@@ -439,21 +447,31 @@ function SplitSheet({ line, onClose }: { line: SortLine; onClose: () => void }) 
 
   const owes = (kinds: string[], id: string) => (targets.data?.debt.parts ?? []).filter((p) => p.id === id && kinds.includes(p.kind)).reduce((n, p) => n + p.owesTetri, 0);
   const numberOf = (rentalId: string) => targets.data?.rentals.find((r) => r.id === rentalId)?.number ?? '';
-  // A carried week is offered when the line's day is near it: a week paid on
-  // time, a little early or a little late (Mika, 15.10.2026, «А»).
-  const near = (w: { startsOn: string; endsOn: string }) => w.startsOn <= addDays(line.occurredOn, 7) && w.endsOn >= addDays(line.occurredOn, -7);
+  // Rent paid no later than the day the rental was carried over may be the
+  // week the carry-over already marked paid — or money it did not know of.
+  // Only a person knows which (Mika, 15.10.2026; ADR-0018, ADR-0023).
+  const oldWeek = (r: Targets['rentals'][number]) =>
+    r.transferredOn && line.occurredOn <= r.transferredOn
+      ? (targets.data?.carriedWeeks ?? []).find((w) => w.rentalId === r.id && w.startsOn <= line.occurredOn && line.occurredOn <= w.endsOn) ?? null
+      : null;
+  const shown = (targets.data?.rentals ?? []).filter((r) => owes(['rent', 'deposit'], r.id) > 0 || !['returned', 'cancelled'].includes(r.status));
   const rows: SplitRow[] = targets.data
     ? [
-        ...targets.data.rentals
-          .filter((r) => owes(['rent', 'deposit'], r.id) > 0 || !['returned', 'cancelled'].includes(r.status))
-          .map((r) => ({ key: `r:${r.id}`, body: { rentalId: r.id }, label: r.number, sub: r.model ?? '', owesTetri: owes(['rent', 'deposit'], r.id) })),
-        ...(targets.data.carriedWeeks ?? []).filter(near).map((w) => ({
-          key: `w:${w.id}`,
-          body: { carriedPeriodId: w.id },
-          label: t.sort.splitCarried(numberOf(w.rentalId), fmtDate(w.startsOn), fmtDate(w.endsOn)),
-          sub: t.sort.splitCarriedSub,
-          owesTetri: w.amountTetri,
-        })),
+        ...shown.flatMap((r): SplitRow[] => {
+          const week = oldWeek(r);
+          const carried = !!week && value.choice[r.id] === 'carried';
+          return [
+            {
+              key: `r:${r.id}`,
+              body: carried ? { carriedPeriodId: week!.id } : { rentalId: r.id },
+              label: t.sort.splitRent(r.number),
+              sub: r.model ?? '',
+              owesTetri: carried ? week!.amountTetri : owes(['rent', 'deposit'], r.id),
+              ...(week ? { old: { rentalId: r.id, week } } : {}),
+            },
+            { key: `n:${r.id}`, body: { fineRentalId: r.id, fineReason: value.reasons[r.id] ?? '' }, label: t.sort.splitFineNew(r.number), sub: '', owesTetri: 0, fineOf: r.id },
+          ];
+        }),
         ...(targets.data.charges ?? []).map((c) => ({
           key: `f:${c.id}`,
           body: { chargeId: c.id },
@@ -495,7 +513,9 @@ function SplitSheet({ line, onClose }: { line: SortLine; onClose: () => void }) 
       initial={initial}
       label={t.sort.split}
       submit={async (key) => {
-        const parts = rows.filter((r) => amountOf(r.key) > 0).map((r) => ({ ...r.body, grossTetri: amountOf(r.key) }));
+        const used = rows.filter((r) => amountOf(r.key) > 0);
+        if (used.some((r) => r.old && !value.choice[r.old.rentalId])) throw new Error(t.sort.splitOldPick);
+        const parts = used.map((r) => ({ ...r.body, grossTetri: amountOf(r.key) }));
         const r = await api.post<{ ids: string[] }>(`/api/statement-lines/${line.id}/split`, { parts }, { key });
         return { toast: { text: t.sort.splitDone(parts.length), undo: () => api.post(`/api/payments/${r.ids[0]}/undo`) } };
       }}
@@ -506,7 +526,7 @@ function SplitSheet({ line, onClose }: { line: SortLine; onClose: () => void }) 
           <ul className="pick-cards">
             {people.map((c) => (
               <li key={`${c.id}:${c.sub}`}>
-                <button type="button" className="pick-card" onClick={() => setValue({ customer: { id: c.id, name: c.name }, amounts: {} })}>
+                <button type="button" className="pick-card" onClick={() => setValue({ ...initial, customer: { id: c.id, name: c.name } })}>
                   <span className="pick-card-main">
                     <span className="pick-card-title">{c.name}</span>
                     <span className="pick-card-sub">{c.sub}</span>
@@ -529,14 +549,47 @@ function SplitSheet({ line, onClose }: { line: SortLine; onClose: () => void }) 
           {!targets.data && !targets.failure && <Skeleton rows={3} />}
           {targets.data && rows.length === 1 && <p className="hint muted">{t.sort.splitNothing}</p>}
           {rows.map((r) => (
-            <Field key={r.key} label={r.label} hint={[r.sub, r.owesTetri > 0 ? t.money.owes(formatGel(r.owesTetri)) : ''].filter(Boolean).join(' · ')} name={r.key}>
-              <div className="money-who-row">
-                <input className="input mono" inputMode="decimal" value={value.amounts[r.key] ?? ''} onChange={(e) => setAmount(r.key, e.target.value)} />
-                <button type="button" className="pill pill-sm" onClick={() => fillRest(r)}>
-                  {t.sort.splitRest}
-                </button>
-              </div>
-            </Field>
+            <div key={r.key}>
+              <Field
+                label={r.label}
+                hint={r.old ? r.sub : [r.sub, r.owesTetri > 0 ? t.money.owes(formatGel(r.owesTetri)) : ''].filter(Boolean).join(' · ')}
+                name={r.key}
+              >
+                <div className="money-who-row">
+                  <input className="input mono" inputMode="decimal" value={value.amounts[r.key] ?? ''} onChange={(e) => setAmount(r.key, e.target.value)} />
+                  <button type="button" className="pill pill-sm" onClick={() => fillRest(r)}>
+                    {t.sort.splitRest}
+                  </button>
+                </div>
+              </Field>
+              {r.old && (
+                <div>
+                  <p className="hint muted">{t.sort.splitOldQ(fmtDate(line.occurredOn))}</p>
+                  <div className="sort-actions">
+                    {(['carried', 'new'] as const).map((c) => (
+                      <button
+                        key={c}
+                        type="button"
+                        className={`pill pill-sm ${value.choice[r.old!.rentalId] === c ? 'on' : ''}`}
+                        aria-pressed={value.choice[r.old!.rentalId] === c}
+                        onClick={() => setValue((v) => ({ ...v, choice: { ...v.choice, [r.old!.rentalId]: c } }))}
+                      >
+                        {c === 'carried' ? t.sort.splitOldCarried(fmtDate(r.old!.week.startsOn), fmtDate(r.old!.week.endsOn)) : t.sort.splitOldNew}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {r.fineOf && amountOf(r.key) > 0 && (
+                <Field label={t.sort.splitFineReason} name="fineReason">
+                  <input
+                    className="input"
+                    value={value.reasons[r.fineOf] ?? ''}
+                    onChange={(e) => setValue((v) => ({ ...v, reasons: { ...v.reasons, [r.fineOf!]: e.target.value } }))}
+                  />
+                </Field>
+              )}
+            </div>
           ))}
           {targets.data && (
             <p className={left < 0 ? 'field-err' : 'money-after'} aria-live="polite">

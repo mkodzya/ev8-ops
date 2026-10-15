@@ -1,4 +1,4 @@
-import { vinMatches, VEHICLE_COLORS, VEHICLE_POOLS, VEHICLE_STATES, colorOf, daysBetween, tokens, todayISO, type VehiclePool, type VehicleState } from '@ev8/shared';
+import { readFleetNumber, vinMatches, VEHICLE_COLORS, VEHICLE_POOLS, VEHICLE_STATES, colorOf, daysBetween, tokens, todayISO, type VehiclePool, type VehicleState } from '@ev8/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -7,7 +7,8 @@ import { ColorPicker } from '../components/ColorPicker.js';
 import { LoadError } from '../components/LoadError.js';
 import { ModelDrawer, NEW_MODEL } from '../components/ModelDrawer.js';
 import { RowMenu, type RowAction } from '../components/RowMenu.js';
-import { ColorText, CustomerName, Loading, PageHead, PlaceText, StateBadge, Vin } from '../components/ui.js';
+import { ColorText, CustomerName, FleetNo, Loading, PageHead, PlaceText, StateBadge, Vin } from '../components/ui.js';
+import { StickersButton } from '../components/Stickers.js';
 import { Field } from '../components/Wizard.js';
 import { FormSheet } from '../ds/form/Form.js';
 import { DataList } from '../ds/list/DataList.js';
@@ -20,6 +21,8 @@ import { useSession } from '../session.js';
 interface Vehicle {
   id: string;
   vin: string;
+  /** EV-007 on the sticker (migration 0043); absent while an older API answers. */
+  fleetNo?: number | null;
   model: string;
   color: string | null;
   year: number | null;
@@ -106,6 +109,7 @@ export function FleetPage() {
       <PageHead title={t.fleet.title} sub={t.fleet.count(rows.length)}>
         {/* Drawn at once, not when the models arrive: a button that turns up a
             beat after the page pushed everything under it down (29.09.2026). */}
+        <StickersButton numbers={rows.map((v) => v.fleetNo).filter((n): n is number => n != null)} />
         {can('settings.manage') && <NewVehicle models={models.data?.models ?? []} onModels={models.reload} onDone={fleet.reload} />}
       </PageHead>
       <DataList
@@ -116,8 +120,8 @@ export function FleetPage() {
         byDefault="quiet"
         search={{
           placeholder: t.fleet.searchHint,
-          // The last four of a VIN, or the model by name (§3.7).
-          match: (v, q) => vinMatches(q, v.vin) || v.model.toLowerCase().includes(q.text),
+          // The number on the sticker, the last four of a VIN, or the model by name (§3.7).
+          match: (v, q) => (v.fleetNo != null && readFleetNumber(q.text, { digitsToo: true }) === v.fleetNo) || vinMatches(q, v.vin) || v.model.toLowerCase().includes(q.text),
         }}
         chips={[
           { key: 'available', label: t.states.available, test: (v) => v.state === 'available' },
@@ -130,7 +134,7 @@ export function FleetPage() {
         card={(v) => ({
           title: (
             <>
-              {v.model} <ColorText of={v.color} />
+              <FleetNo n={v.fleetNo} /> {v.model} <ColorText of={v.color} />
             </>
           ),
           sub: <Vin vin={v.vin} />,
@@ -142,6 +146,7 @@ export function FleetPage() {
           ),
         })}
         columns={[
+          { key: 'no', label: t.fleet.no, cell: (v) => <FleetNo n={v.fleetNo} />, sort: { value: (v) => v.fleetNo ?? Number.MAX_SAFE_INTEGER } },
           { key: 'vin', label: t.fleet.vin, cell: (v) => <Vin vin={v.vin} />, sort: { value: (v) => v.vin } },
           { key: 'model', label: t.fleet.model, cell: (v) => <span>{v.model}</span>, sort: { value: (v) => v.model } },
           {

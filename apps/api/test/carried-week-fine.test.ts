@@ -25,6 +25,7 @@ interface Card {
   charges: { id: string; kind: string; amountTetri: number; note: string | null; paidTetri: number }[];
 }
 interface Targets {
+  rentals: { id: string; transferredOn: string | null }[];
   charges: { id: string; openTetri: number }[];
   carriedWeeks: { id: string; seq: number; amountTetri: number }[];
 }
@@ -93,7 +94,8 @@ describe.skipIf(!HAS_DB)('a fine on a running rental', () => {
 
 describe.skipIf(!HAS_DB)('a bank line split onto a carried week and a fine', () => {
   it('150 is the carried week’s money, 200 pays the fine: nothing paid twice, nothing left over, and taken back it is all as before', async () => {
-    const f = await carriedWithLines(['350.00', '150.00']);
+    // The second line's sum is one no rule or hand-entered payment of another suite can claim.
+    const f = await carriedWithLines(['350.00', '157.00']);
     const [lineId, otherLineId] = f.lineIds as [string, string];
     expect((await call(f.owner, 'POST', `/api/rentals/${f.rentalId}/fines`, { amountTetri: '200', reason: 'damage' })).statusCode).toBe(201);
     const start = await f.card();
@@ -132,7 +134,7 @@ describe.skipIf(!HAS_DB)('a bank line split onto a carried week and a fine', () 
     // One week, one bank payment.
     expect((await call(f.owner, 'POST', `/api/rentals/${f.rentalId}/fines`, { amountTetri: '50', reason: 'dirty moped' })).statusCode).toBe(201);
     const fine2 = (await f.targets()).charges[0]!;
-    const twice = await call(f.owner, 'POST', `/api/statement-lines/${otherLineId}/split`, { parts: [{ carriedPeriodId: week.id, grossTetri: 10000 }, { chargeId: fine2.id, grossTetri: 5000 }] });
+    const twice = await call(f.owner, 'POST', `/api/statement-lines/${otherLineId}/split`, { parts: [{ carriedPeriodId: week.id, grossTetri: 10700 }, { chargeId: fine2.id, grossTetri: 5000 }] });
     expect(json<{ error: string }>(twice).error).toBe('week_has_bank_money');
     // A fine with money on it is not taken back.
     expect(json<{ error: string }>(await call(f.owner, 'POST', `/api/rentals/${f.rentalId}/fines/${fine.id}/void`, { reason: 'x' })).error).toBe('fine_paid');
@@ -147,5 +149,44 @@ describe.skipIf(!HAS_DB)('a bank line split onto a carried week and a fine', () 
     const queue = json<{ lines: { id: string }[] }>(await call(f.owner, 'GET', '/api/statement-lines'));
     expect(queue.lines.some((l) => l.id === lineId)).toBe(true);
     expect((await f.targets()).carriedWeeks.some((w) => w.id === week.id)).toBe(true);
+  });
+});
+
+describe.skipIf(!HAS_DB)('a fine typed into «Разделить» (Mika, 15.10.2026: «150 за аренду, 200 как штраф — вот и все»)', () => {
+  it('charges the fine and pays it in one go; without what it is for, nothing is written', async () => {
+    const f = await carriedWithLines(['350.00']);
+    const [lineId] = f.lineIds as [string];
+    const start = await f.card();
+    const t0 = await f.targets();
+    // The screen asks about the old line's rent: the rental says the day it was carried over.
+    expect(t0.rentals.find((r) => r.id === f.rentalId)?.transferredOn).toBe(todayISO());
+    const week = t0.carriedWeeks.find((w) => w.seq === 2)!;
+
+    const noReason = await call(f.owner, 'POST', `/api/statement-lines/${lineId}/split`, { parts: [{ carriedPeriodId: week.id, grossTetri: 15000 }, { fineRentalId: f.rentalId, grossTetri: 20000 }] });
+    expect(json<{ error: string; field: string }>(noReason)).toMatchObject({ error: 'missing_field', field: 'fineReason' });
+    expect((await f.card()).charges).toHaveLength(0);
+
+    const res = await call(f.owner, 'POST', `/api/statement-lines/${lineId}/split`, {
+      parts: [
+        { carriedPeriodId: week.id, grossTetri: 15000 },
+        { fineRentalId: f.rentalId, fineReason: 'damage to the moped', grossTetri: 20000 },
+      ],
+    });
+    expect(res.statusCode, res.body).toBe(200);
+    const c = await f.card();
+    expect(c.charges).toEqual([expect.objectContaining({ kind: 'fine', amountTetri: 20000, note: 'damage to the moped', paidTetri: 20000 })]);
+    expect(c.rental.paidThrough).toBe(start.rental.paidThrough);
+    expect(c.rental.debtTetri).toBe(start.rental.debtTetri);
+    expect(await f.prisma.auditLog.count({ where: { action: 'rental.charge.add', entityId: f.rentalId } })).toBe(1);
+
+    // A rental's rent and a new fine on it are two records, not "the same one twice".
+    const other = await carriedWithLines(['313.00']);
+    const both = await call(other.owner, 'POST', `/api/statement-lines/${other.lineIds[0]}/split`, {
+      parts: [
+        { rentalId: other.rentalId, grossTetri: 15000 },
+        { fineRentalId: other.rentalId, fineReason: 'a dirty moped', grossTetri: 16300 },
+      ],
+    });
+    expect(both.statusCode, both.body).toBe(200);
   });
 });

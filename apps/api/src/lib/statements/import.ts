@@ -252,6 +252,12 @@ export interface LineTarget {
   carriedPeriodId?: string | null;
 }
 
+/** A part that is a new fine on a rental, charged and paid in the same split (Mika, 15.10.2026). */
+export interface NewFine {
+  fineRentalId?: string | null;
+  fineReason?: string | null;
+}
+
 /** A charge of a rental and what of it is still open. */
 async function chargeOwed(tx: Tx, chargeId: string): Promise<{ rentalId: string; customerId: string; openTetri: number }> {
   const c = await tx.rentalCharge.findUnique({
@@ -461,7 +467,7 @@ export const SPLIT_MAX = 9;
  */
 export async function split(
   tx: Tx,
-  input: { actorId: string; lineId: string; parts: (LineTarget & { grossTetri: number })[] },
+  input: { actorId: string; lineId: string; parts: (LineTarget & NewFine & { grossTetri: number })[] },
 ): Promise<{ paymentIds: string[] }> {
   const line = await incomingLine(tx, input.lineId);
   const parts = input.parts;
@@ -470,9 +476,21 @@ export async function split(
   const keys = new Set<string>();
   for (const p of parts) {
     if (!Number.isInteger(p.grossTetri) || p.grossTetri <= 0) throw badRequest('split_bad_amount', 'Every part is a sum above zero.', { field: 'grossTetri' });
-    const named = [p.rentalId, p.saleId, p.serviceJobId, p.customerId, p.chargeId, p.carriedPeriodId].filter(Boolean);
+    const named = (
+      [
+        ['rental', p.rentalId],
+        ['sale', p.saleId],
+        ['repair', p.serviceJobId],
+        ['account', p.customerId],
+        ['charge', p.chargeId],
+        ['week', p.carriedPeriodId],
+        ['fine', p.fineRentalId],
+      ] as const
+    ).filter(([, id]) => !!id);
     if (named.length !== 1) throw badRequest('split_bad_target', 'Every part pays exactly one record.', { field: 'rentalId' });
-    const key = String(named[0]);
+    // A rental's rent and a new fine on the same rental are two records.
+    const key = `${named[0]![0]}:${named[0]![1]}`;
+    if (p.fineRentalId && !p.fineReason?.trim()) throw badRequest('missing_field', 'Say what the fine is for.', { field: 'fineReason' });
     if (keys.has(key)) throw badRequest('split_same_target', 'Two parts pay the same record: make them one.');
     keys.add(key);
   }
@@ -498,6 +516,19 @@ export async function split(
   }
 
   await claim(tx, line.id, 'split');
+  // A fine typed into the split is charged here, in the same transaction as
+  // its payment: it exists only if the money that pays it is written too.
+  for (const p of parts) {
+    if (!p.fineRentalId) continue;
+    const rental = await tx.rental.findUnique({ where: { id: p.fineRentalId }, select: { id: true } });
+    if (!rental) throw notFound('rental_not_found', 'No such rental.');
+    const fine = await tx.rentalCharge.create({ data: { rentalId: rental.id, kind: 'fine', amountTetri: p.grossTetri, note: p.fineReason!.trim(), createdById: input.actorId }, select: { id: true } });
+    await tx.auditLog.create({
+      data: { actorId: input.actorId, action: 'rental.charge.add', entityType: 'rental', entityId: rental.id, after: { chargeId: fine.id, kind: 'fine', amountTetri: p.grossTetri, statementLineId: line.id }, note: p.fineReason!.trim() },
+    });
+    p.chargeId = fine.id;
+    p.fineRentalId = null;
+  }
   const paymentIds: string[] = [];
   let feeLeft = money.feeTetri;
   for (const [i, p] of parts.entries()) {

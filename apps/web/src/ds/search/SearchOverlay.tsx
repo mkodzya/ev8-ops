@@ -1,4 +1,4 @@
-import { SEARCH_MIN, formatGel } from '@ev8/shared';
+import { SEARCH_MIN, fleetNumber, formatGel } from '@ev8/shared';
 import { useQuery } from '@tanstack/react-query';
 import { ChevronLeft, Clock, Search, UserPlus } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
@@ -23,7 +23,7 @@ interface Answer {
   groups: {
     /** `dueTodayTetri` — of the debt figure: awaited today and not late (ADR-0017). */
     customers: Group<{ id: string; name: string; nameKa: string | null; nameLat: string | null; phone: string | null; debtTetri: number; dueTodayTetri: number }>;
-    vehicles: Group<{ id: string; vin: string; state: string; model: string }>;
+    vehicles: Group<{ id: string; vin: string; fleetNo?: number | null; state: string; model: string }>;
     rentals: Group<{ id: string; number: string; status: string; customer: string; vin: string | null; debtTetri: number; dueTodayTetri: number }>;
     sales: Group<{ id: string; number: string; status: string; customer: string; vin: string | null }>;
     payments: Group<{ id: string; grossTetri: number; occurredOn: string; channel: string; voided: boolean; customer: string | null; rental: { id: string; number: string } | null; sale: { id: string; number: string } | null }>;
@@ -132,12 +132,13 @@ export function SearchOverlay({ onClose }: { onClose: () => void }) {
       key: `v-${v.id}`,
       title: (
         <>
+          {v.fleetNo != null && <span className="mono">{fleetNumber(v.fleetNo)} · </span>}
           <Lit text={v.model} q={q} /> <Tail vin={v.vin} />
         </>
       ),
       sub: t.states[v.state as keyof typeof t.states] ?? v.state,
       href: `/fleet/${v.id}`,
-      recent: { href: `/fleet/${v.id}`, title: `${v.model} ···${vinParts(v.vin).tail}`, sub: v.vin },
+      recent: { href: `/fleet/${v.id}`, title: `${v.fleetNo != null ? `${fleetNumber(v.fleetNo)} · ` : ''}${v.model} ···${vinParts(v.vin).tail}`, sub: v.vin },
     }));
     rows.rentals = groups.rentals.items.map((r) => ({
       key: `r-${r.id}`,

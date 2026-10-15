@@ -328,7 +328,7 @@ export function paymentRoutes(app: FastifyInstance): void {
       prisma.rental.findMany({
         where: { customerId: id },
         orderBy: { pickedUpOn: 'desc' },
-        select: { id: true, number: true, status: true, weeklyRateTetri: true, vehicle: { select: { vin: true, model: { select: { name: true } } } } },
+        select: { id: true, number: true, status: true, weeklyRateTetri: true, transferredAt: true, vehicle: { select: { vin: true, model: { select: { name: true } } } } },
       }),
       prisma.sale.findMany({
         where: { customerId: id, status: 'active' },
@@ -354,7 +354,16 @@ export function paymentRoutes(app: FastifyInstance): void {
     ]);
     return {
       debt,
-      rentals: rentals.map((r) => ({ id: r.id, number: r.number, status: r.status, weeklyRateTetri: r.weeklyRateTetri, vin: r.vehicle?.vin ?? null, model: r.vehicle?.model.name ?? null })),
+      rentals: rentals.map((r) => ({
+        id: r.id,
+        number: r.number,
+        status: r.status,
+        weeklyRateTetri: r.weeklyRateTetri,
+        vin: r.vehicle?.vin ?? null,
+        model: r.vehicle?.model.name ?? null,
+        // The day it was carried over: a line no later than it may already be inside "paid through" (ADR-0018).
+        transferredOn: r.transferredAt ? todayISO(r.transferredAt, env.TZ) : null,
+      })),
       sales: sales.map((s) => {
         const next = s.instalments.find((i) => i.paidTetri < i.amountTetri);
         return { id: s.id, number: s.number, nextTetri: next ? next.amountTetri - next.paidTetri : 0, nextDueOn: next ? isoDate(next.dueOn) : null, overdue: !!next && isoDate(next.dueOn)! <= today };

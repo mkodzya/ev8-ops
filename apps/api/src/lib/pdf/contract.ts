@@ -1,4 +1,4 @@
-import { colorOnPaper, tokens } from '@ev8/shared';
+import { colorOnPaper, fleetNumber, tokens } from '@ev8/shared';
 import { finish, gap, newDoc, write } from './doc.js';
 import { COMPANY, DISCLAIMER, LESSEE, LESSOR, TERMS, dmy, gel, km } from './company.js';
 import { bullet, check, field, h1, h2, para, rule, signatures, stampPages, type DrawnSignature } from './layout.js';
@@ -11,7 +11,7 @@ export interface ContractData {
   number: string;
   contractDate: string; // ISO
   customer: { name: string; personalId: string | null; phone: string | null; email: string | null; address: string | null };
-  vehicle: { brand: string; model: string; vin: string; color: string | null } | null;
+  vehicle: { brand: string; model: string; vin: string; color: string | null; fleetNo?: number | null } | null;
   vinNote: string | null;
   weeklyRateTetri: number;
   depositTetri: number;
@@ -57,6 +57,7 @@ export async function renderContract(d: ContractData): Promise<Buffer> {
   });
   field(doc, { ka: 'მოდელი', en: 'Model' }, d.vehicle ? `${d.vehicle.brand} ${d.vehicle.model}` : '—');
   field(doc, { ka: 'VIN', en: 'VIN' }, d.vehicle?.vin ?? d.vinNote ?? '—');
+  if (d.vehicle?.fleetNo) field(doc, { ka: 'შიდა ნომერი', en: 'Internal number' }, fleetNumber(d.vehicle.fleetNo)!);
   field(doc, { ka: 'ფერი', en: 'Colour' }, colorOnPaper(d.vehicle?.color));
   para(doc, {
     ka: 'გადაცემის აქტი წარმოადგენს წინამდებარე ხელშეკრულების განუყოფელ და არსებით ნაწილს. აქტში მითითებული ინფორმაცია (მდგომარეობა, კომპლექტაცია, შენიშვნები) სავალდებულოა ორივე მხარისთვის.',

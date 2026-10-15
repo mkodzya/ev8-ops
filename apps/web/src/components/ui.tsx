@@ -1,4 +1,4 @@
-import { colorOf, type RentalStatus, type VehicleState } from '@ev8/shared';
+import { colorOf, fleetNumber, type RentalStatus, type VehicleState } from '@ev8/shared';
 import type { ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useLocale, useT } from '../i18n/index.js';
@@ -37,6 +37,12 @@ export function Vin({ vin }: { vin: string }) {
       <span className="vin-tail">{tail}</span>
     </span>
   );
+}
+
+/** A moped's own number, EV-007 (migration 0043); nothing for a moped without one. */
+export function FleetNo({ n }: { n: number | null | undefined }) {
+  const text = fleetNumber(n);
+  return text ? <span className="mono fleet-no">{text}</span> : null;
 }
 
 export function Empty({ text }: { text: string }) {

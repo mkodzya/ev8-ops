@@ -36,6 +36,7 @@ describe('route table', () => {
       'PATCH /api/models/:id',
       // Wave 6: the deposit and the weekly rates are an owner's to set (R5).
       'PATCH /api/settings/rental',
+      'PATCH /api/settings/sticker',
       'PATCH /api/users/:id',
       'PATCH /api/workshops/:id',
       'POST /api/customers/:id/merge',

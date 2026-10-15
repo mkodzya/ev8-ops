@@ -366,6 +366,8 @@ model Vehicle {
   odooFleetId     Int?         @unique @map("odoo_fleet_id")
   odooLotId       Int?         @unique @map("odoo_lot_id")
   archived        Boolean      @default(false)
+  /// The company's own number, shown EV-007; given by the database in arrival order (migration 0043).
+  fleetNo         Int?         @unique @default(dbgenerated("nextval('vehicles_fleet_no_seq'::regclass)")) @map("fleet_no")
   createdAt       DateTime     @default(now()) @map("created_at")
   updatedAt       DateTime     @default(now()) @map("updated_at")
 
@@ -1042,6 +1044,8 @@ model BankCashDeposit {
 model RentalSettings {
   id           Boolean  @id @default(true)
   depositTetri Int      @default(18000) @map("deposit_tetri")
+  /// The telephone on the moped sticker for a customer with a breakdown; none — the line is left out.
+  stickerPhone String?  @map("sticker_phone")
   updatedById  String?  @map("updated_by") @db.Uuid
   updatedAt    DateTime @default(now()) @map("updated_at")
 

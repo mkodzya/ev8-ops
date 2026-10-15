@@ -24,6 +24,7 @@ import { PaymentsList } from './pages/money/PaymentsList.js';
 import { AsidePage, RulesPage, SortPage } from './pages/money/SortPage.js';
 import { TillPage } from './pages/money/TillPage.js';
 import { PickupWizard } from './pages/PickupWizard.js';
+import { MopedByNumber } from './pages/MopedByNumber.js';
 import { ProfilePage } from './pages/ProfilePage.js';
 import { LoginSettingsPage, RentalSettingsPage, SettingsPage } from './pages/SettingsPage.js';
 import { JournalPage } from './pages/JournalPage.js';
@@ -132,6 +133,8 @@ export function App() {
         <Route path="fleet/points" element={<Require perm="settings.manage"><PointsPage /></Require>} />
         <Route path="settings/points" element={<Require perm="settings.manage"><PointsPage /></Require>} />
         <Route path="fleet/:id" element={<VehiclePage />} />
+        {/* A sticker's QR: ops.ev8.ge/m/EV-007 (Mika, 15.10.2026). */}
+        <Route path="m/:code" element={<MopedByNumber />} />
 
         <Route path="service" element={<ServicePage />} />
         <Route path="service/stock" element={<StockPage />} />
