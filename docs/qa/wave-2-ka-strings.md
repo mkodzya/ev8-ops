@@ -298,20 +298,32 @@
 
 | Ключ | RU | EN | KA | Чтение |
 |---|---|---|---|---|
-| `bogApi.freshAt(дата, время)` | Выписка приходит сама (Business Online). Банк ответил 14.10.2026 в 14:05. | The statement comes by itself (Business Online). The bank last answered 14.10.2026, 14:05. | ამონაწერი ავტომატურად მოდის (Business Online). ბანკის ბოლო პასუხი: 14.10.2026, 14:05. | amonatseri avtomaturad modis … bankis bolo pasukhi |
-| `bogApi.waiting` | Выписка приходит сама (Business Online). Первый ответ банка — в течение пяти минут. | … The bank’s first answer comes within five minutes. | … ბანკის პირველი პასუხი — ხუთ წუთში. | bankis pirveli pasukhi — khut tsutshi |
-| `bogApi.noAccount` | Подключение к Business Online не закончено: не задан счёт. Пока выписку загружайте файлом. | The Business Online link is not finished: no account is set. Until then, load statements as files. | Business Online-თან კავშირი ბოლომდე არ არის გამართული: ანგარიში არ არის მითითებული. მანამდე ამონაწერი ფაილით ატვირთეთ. | … kavshiri bolomde ar aris gamartuli: angarishi ar aris mititebuli. manamde amonatseri pailit atvirtet |
-| `bogApi.silentSince(причина, дата, время)` | Business Online не отвечает: … Последний ответ — 14.10.2026 в 14:05. | Business Online is not answering: … Last answer 14.10.2026, 14:05. | Business Online არ პასუხობს: … ბოლო პასუხი: 14.10.2026, 14:05. | ar pasukhobs … bolo pasukhi |
-| `bogApi.silentNever(причина)` | Business Online не отвечает: … Ответа ещё не было ни разу. | … It has not answered once yet. | Business Online არ პასუხობს: … პასუხი ჯერ არ ყოფილა. | pasukhi jer ar qopila |
-| `bogApi.nightFailed(причина)` | Полная выписка за ночь не пришла: … Система спросит её снова следующей ночью. | The full statement for the night did not come: … It is asked for again the next night. | ღამის სრული ამონაწერი არ მოვიდა: … სისტემა მას მომდევნო ღამეს ისევ მოითხოვს. | ghamis sruli amonatseri ar movida … momdevno ghames isev moitkhovs |
-| `bogApi.why.unauthorized` | банк не принял ключи | the bank did not accept the keys | ბანკმა გასაღებები არ მიიღო | bankma gasaghebebi ar miigho |
-| `bogApi.why.forbidden` | у ключей нет доступа к счёту | the keys have no access to the account | გასაღებებს ანგარიშზე წვდომა არ აქვს | gasaghebebs angarishze tsvdoma ar akvs |
-| `bogApi.why.not_found` | банк не знает такого счёта | the bank does not know the account | ბანკმა ასეთი ანგარიში არ იცის | bankma aseti angarishi ar itsis |
-| `bogApi.why.rate_limited` | слишком много запросов | too many requests | ძალიან ბევრი მოთხოვნა | dzalian bevri motkhovna |
-| `bogApi.why.http`, `bad_answer` | банк ответил не так, как ожидалось | the bank answered unexpectedly | ბანკმა მოულოდნელად უპასუხა | bankma moulodnelad upasukha |
-| `bogApi.why.network` | нет связи с банком | no connection to the bank | ბანკთან კავშირი არ არის | banktan kavshiri ar aris |
-| `bogApi.why.no_account` | не задан счёт | no account is set | ანგარიში არ არის მითითებული | angarishi ar aris mititebuli |
-| журнал `statement.pull` | Строки Bank of Georgia пришли сами | Bank of Georgia lines came in by themselves | Bank of Georgia-ს ხაზები ავტომატურად შემოვიდა | … khazebi avtomaturad shemovida |
+| `bankApi.freshAt(дата, время)` | Выписка приходит сама (Business Online). Банк ответил 14.10.2026 в 14:05. | The statement comes by itself (Business Online). The bank last answered 14.10.2026, 14:05. | ამონაწერი ავტომატურად მოდის (Business Online). ბანკის ბოლო პასუხი: 14.10.2026, 14:05. | amonatseri avtomaturad modis … bankis bolo pasukhi |
+| `bankApi.waiting` | Выписка приходит сама (Business Online). Первый ответ банка — в течение пяти минут. | … The bank’s first answer comes within five minutes. | … ბანკის პირველი პასუხი — ხუთ წუთში. | bankis pirveli pasukhi — khut tsutshi |
+| `bankApi.noAccount` | Подключение к Business Online не закончено: не задан счёт. Пока выписку загружайте файлом. | The Business Online link is not finished: no account is set. Until then, load statements as files. | Business Online-თან კავშირი ბოლომდე არ არის გამართული: ანგარიში არ არის მითითებული. მანამდე ამონაწერი ფაილით ატვირთეთ. | … kavshiri bolomde ar aris gamartuli: angarishi ar aris mititebuli. manamde amonatseri pailit atvirtet |
+| `bankApi.silentSince(причина, дата, время)` | Business Online не отвечает: … Последний ответ — 14.10.2026 в 14:05. | Business Online is not answering: … Last answer 14.10.2026, 14:05. | Business Online არ პასუხობს: … ბოლო პასუხი: 14.10.2026, 14:05. | ar pasukhobs … bolo pasukhi |
+| `bankApi.silentNever(причина)` | Business Online не отвечает: … Ответа ещё не было ни разу. | … It has not answered once yet. | Business Online არ პასუხობს: … პასუხი ჯერ არ ყოფილა. | pasukhi jer ar qopila |
+| `bankApi.nightFailed(причина)` | Полная выписка за ночь не пришла: … Система спросит её снова в течение часа. | The full statement for the night did not come: … It is asked for again within the hour. | ღამის სრული ამონაწერი არ მოვიდა: … სისტემა მას ერთი საათის განმავლობაში ისევ მოითხოვს. | ghamis sruli amonatseri ar movida … erti saatis ganmavlobashi isev moitkhovs |
+| `bankApi.why.unauthorized` | банк не принял ключи | the bank did not accept the keys | ბანკმა გასაღებები არ მიიღო | bankma gasaghebebi ar miigho |
+| `bankApi.why.forbidden` | у ключей нет доступа к счёту | the keys have no access to the account | გასაღებებს ანგარიშზე წვდომა არ აქვს | gasaghebebs angarishze tsvdoma ar akvs |
+| `bankApi.why.not_found` | банк не знает такого счёта | the bank does not know the account | ბანკმა ასეთი ანგარიში არ იცის | bankma aseti angarishi ar itsis |
+| `bankApi.why.rate_limited` | слишком много запросов | too many requests | ძალიან ბევრი მოთხოვნა | dzalian bevri motkhovna |
+| `bankApi.why.http`, `bad_answer` | банк ответил не так, как ожидалось | the bank answered unexpectedly | ბანკმა მოულოდნელად უპასუხა | bankma moulodnelad upasukha |
+| `bankApi.why.network` | нет связи с банком | no connection to the bank | ბანკთან კავშირი არ არის | banktan kavshiri ar aris |
+| `bankApi.why.no_account` | не задан счёт | no account is set | ანგარიში არ არის მითითებული | angarishi ar aris mititebuli |
+| журнал `statement.pull` | Строки банка пришли сами (с 15.10.2026; до того — «Строки Bank of Georgia…») | Bank lines came in by themselves | ბანკის ხაზები ავტომატურად შემოვიდა | bankis khazebi avtomaturad shemovida |
+
+## 15.10.2026 — TBC по API: та же строка на карточке TBC и две новые
+
+Написано не носителем языка. Строки карточки банка теперь общие для Bank of Georgia и TBC: вместо «Business Online»
+подставляется имя сервиса банка (`bankApi.service`: Business Online / Business Integration Services — латиницей
+во всех языках). «შედარება» [shedareba] — «сверка» (сравнение); «ჯამი» [jami] — «сумма, итог».
+
+| Ключ | RU | EN | KA | Чтение |
+|---|---|---|---|---|
+| `bankApi.nightMismatch(дата)` | Ночная сверка за 14.10.2026 не сошлась: суммы банка за день не равны пришедшим строкам. Система перечитает день в течение часа. | The night check for 14.10.2026 does not add up: the bank’s sums for the day differ from the lines that came. The day is read again within the hour. | 14.10.2026-ის ღამის შედარება არ დაემთხვა: ბანკის დღის ჯამები მოსულ ხაზებს არ ემთხვევა. სისტემა დღეს ერთი საათის განმავლობაში ხელახლა წაიკითხავს. | …-is ghamis shedareba ar daemtkhva: bankis dghis jamebi mosul khazebs ar emtkhveva. sistema dghes erti saatis ganmavlobashi khelakhla tsaikitkhavs |
+| `bankApi.why.user_inactive` | пользователь интернет-банка, к которому привязаны ключи, не активен | the internet-bank user the keys belong to is not active | ინტერნეტბანკის მომხმარებელი, რომელზეც გასაღებებია მიბმული, აქტიური არ არის | internetbankis momkhmarebeli, romelzets gasaghebebia mibmuli, aktiuri ar aris |
+| `bankApi.why.mismatch` | ночная сверка не сошлась | the night check does not add up | ღამის შედარება არ დაემთხვა | ghamis shedareba ar daemtkhva |
 
 ## 15.10.2026 — форма денег: «Банк уже прислал эту сумму» (B11-03)
 

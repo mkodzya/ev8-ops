@@ -700,7 +700,7 @@ model Statement {
   newLines    Int       @default(0) @map("new_lines")
   matched     Int       @default(0)
   uploadedById String?  @map("uploaded_by") @db.Uuid
-  /// 'file' for an upload; 'api' for a day Bank of Georgia was asked about, one per account and day (migration 0041).
+  /// 'file' for an upload; 'api' for a day a bank was asked about by its API, one per bank, account and day (migrations 0041, 0045).
   source      String    @default("file")
   createdAt   DateTime  @default(now()) @map("created_at")
 
@@ -1123,6 +1123,8 @@ model BatteryInventory {
   repairQty   Int      @map("repair_qty")
   couriersQty Int      @map("couriers_qty")
   totalQty    Int      @map("total_qty")
+  /// What the row counts: battery or charger (migration 0044).
+  item        String   @default("battery")
   reason      String?
   createdById String?  @map("created_by") @db.Uuid
   createdAt   DateTime @default(now()) @map("created_at")
@@ -1137,6 +1139,8 @@ model BatteryMove {
   id          String   @id @default(uuid()) @db.Uuid
   kind        String
   qty         Int
+  /// What the row counts: battery or charger (migration 0044).
+  item        String   @default("battery")
   reason      String?
   rentalId    String?  @map("rental_id") @db.Uuid
   actId       String?  @map("act_id") @db.Uuid
@@ -1204,4 +1208,22 @@ model BogSync {
   nightAdded      Int       @default(0) @map("night_added")
 
   @@map("bog_sync")
+}
+
+/// TBC read by its Business Integration Services (migration 0045, ADR-0026): one row, as bog_sync.
+model TbcSync {
+  id              Boolean   @id @default(true)
+  lastOkAt        DateTime? @map("last_ok_at")
+  lastTryAt       DateTime? @map("last_try_at")
+  lastFailure     String?   @map("last_failure")
+  lastHttpStatus  Int?      @map("last_http_status")
+  todayCount      Int       @default(0) @map("today_count")
+  nightThrough    DateTime? @map("night_through") @db.Date
+  nightAt         DateTime? @map("night_at")
+  nightFailure    String?   @map("night_failure")
+  nightHttpStatus Int?      @map("night_http_status")
+  nightMismatchOn DateTime? @map("night_mismatch_on") @db.Date
+  nightAdded      Int       @default(0) @map("night_added")
+
+  @@map("tbc_sync")
 }
