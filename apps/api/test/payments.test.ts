@@ -2,7 +2,7 @@
 // ones the company actually sees: 320 by card credited as 315.20, a weekly
 // tariff of 140 and a deposit of 180.
 import { describe, expect, it } from 'vitest';
-import { HAS_DB, call, json, loginAs, uniq } from './helpers.js';
+import { HAS_DB, byHand, call, json, loginAs, uniq } from './helpers.js';
 
 async function activeRental(weeklyRateTetri = 14000, pickedUpOn = '2026-09-01') {
   const { prisma } = await import('../src/lib/db.js');
@@ -27,7 +27,7 @@ function card(res: { body: string }) {
 describe.skipIf(!HAS_DB)('recording a payment', () => {
   it('320 by card closes the 180 deposit and the first week, and leaves no 4.80 debt (PAY-04)', async () => {
     const { owner, rentalId } = await activeRental();
-    const res = await call(owner, 'POST', '/api/payments', {
+    const res = await byHand(owner, '/api/payments', {
       rentalId,
       channel: 'acquiring',
       grossTetri: 32000,
@@ -50,7 +50,7 @@ describe.skipIf(!HAS_DB)('recording a payment', () => {
 
   it('recovers the gross from the net a statement shows, and refuses a net no gross produces', async () => {
     const { owner, rentalId } = await activeRental();
-    const ok = await call(owner, 'POST', '/api/payments', { rentalId, channel: 'acquiring', netTetri: 31520 });
+    const ok = await byHand(owner, '/api/payments', { rentalId, channel: 'acquiring', netTetri: 31520 });
     expect(ok.statusCode, ok.body).toBe(201);
     const { prisma } = await import('../src/lib/db.js');
     const p = await prisma.payment.findFirstOrThrow({ where: { rentalId } });

@@ -1,6 +1,6 @@
 // What one moped earned and cost (DSH-03).
 import { describe, expect, it } from 'vitest';
-import { HAS_DB, call, json, loginAs, uniq } from './helpers.js';
+import { HAS_DB, byHand, call, json, loginAs, uniq } from './helpers.js';
 
 interface Row {
   id: string;
@@ -109,7 +109,7 @@ describe.skipIf(!HAS_DB)('what a moped earned', () => {
     const { id } = json<{ id: string }>(
       await call(otherOwner, 'POST', '/api/sales', { customerId: customer.id, vehicleId: vehicle.id, priceTetri: '2900', soldOn: '2026-05-19' }),
     );
-    await call(otherOwner, 'POST', `/api/sales/${id}/payments`, { channel: 'transfer', grossTetri: '2900', occurredOn: '2026-05-19' });
+    await byHand(otherOwner, `/api/sales/${id}/payments`, { channel: 'transfer', grossTetri: '2900', occurredOn: '2026-05-19' });
     await call(otherOwner, 'POST', `/api/sales/${id}/buy-back`, { amountTetri: '2440', occurredOn: '2026-06-03', channel: 'cash' });
     const e = await economics(otherOwner, vehicle.id);
     expect(e.saleRevenueTetri).toBe(290000);

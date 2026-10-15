@@ -4,7 +4,7 @@
 // corrections an owner may make to a record (docs/redesign/wave-5.md §6).
 import { todayISO } from '@ev8/shared';
 import { describe, expect, it } from 'vitest';
-import { HAS_DB, call, json, loginAs, uniq } from './helpers.js';
+import { HAS_DB, byHand, call, json, loginAs, uniq } from './helpers.js';
 
 const vin = (...parts: (string | number)[]): string => {
   const clean = parts.join('').toUpperCase().replace(/[^A-HJ-NPR-Z0-9]/g, '');
@@ -48,7 +48,7 @@ describe.skipIf(!HAS_DB)('wave 5 · selling', () => {
     expect(made.statusCode, made.body).toBe(201);
     const { id } = json<{ id: string }>(made);
 
-    const paid = await call(owner, 'POST', `/api/sales/${id}/payments`, { grossTetri: '1396', channel: 'acquiring' });
+    const paid = await byHand(owner, `/api/sales/${id}/payments`, { grossTetri: '1396', channel: 'acquiring' });
     expect(paid.statusCode, paid.body).toBe(201);
     // 1.5 % of an acquiring payment is the company's expense (money.md).
     expect(json<{ feeTetri: number }>(paid).feeTetri).toBe(2094);

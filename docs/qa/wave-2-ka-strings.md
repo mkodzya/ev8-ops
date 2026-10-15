@@ -311,3 +311,23 @@
 | `bogApi.why.network` | нет связи с банком | no connection to the bank | ბანკთან კავშირი არ არის | banktan kavshiri ar aris |
 | `bogApi.why.no_account` | не задан счёт | no account is set | ანგარიში არ არის მითითებული | angarishi ar aris mititebuli |
 | журнал `statement.pull` | Строки Bank of Georgia пришли сами | Bank of Georgia lines came in by themselves | Bank of Georgia-ს ხაზები ავტომატურად შემოვიდა | … khazebi avtomaturad shemovida |
+
+## 15.10.2026 — форма денег: «Банк уже прислал эту сумму» (B11-03)
+
+Написано не носителем языка. «გატარებულია» [gatarebulia] — слово, которым «Разобрать» уже называет записанный
+платёж («ჰგავს, უკვე გატარებულია»); «მიბმა» [mibma] — «привязать», как в «მიბმა … -ზე»; «ხაზი» [khazi] — строка
+выписки; «გადარიცხვა» [gadaritskhva] — перевод.
+
+| Ключ | RU | EN | KA | Чтение |
+|---|---|---|---|---|
+| `inBank.title` | Банк уже прислал эту сумму | The bank has already sent this sum | ბანკმა ეს თანხა უკვე გამოგზავნა | bankma es tankha ukve gamogzavna |
+| `inBank.credited(сумма)` | банк зачислил 315.20 ₾ | the bank credited 315.20 ₾ | ბანკმა ჩარიცხა 315.20 ₾ | bankma charitskha |
+| `inBank.paidAs(номер)` | Уже записано: платёж по R-00491 | Already recorded: the payment for R-00491 | უკვე გატარებულია: R-00491-ის გადახდა | ukve gatarebulia: …-is gadakhda |
+| `inBank.paidAsPlain` | Уже записано платежом этого клиента | Already recorded as this customer’s payment | უკვე გატარებულია ამ კლიენტის გადახდად | ukve gatarebulia am klientis gadakhdad |
+| `inBank.waits` | Ждёт в «Разобрать» | Waiting in “Sort” | ელოდება «დასახარისხებელში» | elodeba «dasakharisskhebelshi» |
+| `inBank.attach` | Привязать эту строку | Attach this line | ამ ხაზის მიბმა | am khazis mibma |
+| `inBank.another` | Это другой перевод — записать | This is another transfer — record it | ეს სხვა გადარიცხვაა — ჩაწერა | es skhva gadaritskhvaa — chatsera |
+| `inBank.choose` | Выберите: привязать строку банка или записать другой перевод. | Choose: attach the bank’s line, or record another transfer. | აირჩიეთ: ბანკის ხაზის მიბმა ან სხვა გადარიცხვის ჩაწერა. | airchiet: bankis khazis mibma an skhva gadaritskhvis chatsera |
+| `inBank.submitAttach` | Привязать строку банка | Attach the bank’s line | ბანკის ხაზის მიბმა | bankis khazis mibma |
+| `inBank.attached(сумма, номер)` | Строка банка привязана: 320.00 ₾ · R-00491 | Bank line attached: 320.00 ₾ · R-00491 | ბანკის ხაზი მიება: 320.00 ₾ · R-00491 | bankis khazi mieba |
+| `errors.codes.bank_line_exists` | Банк уже прислал эту сумму. Привяжите его строку или отметьте, что это другой перевод. | The bank has already sent this sum. Attach its line, or mark that this is another transfer. | ბანკმა ეს თანხა უკვე გამოგზავნა. მიაბით მისი ხაზი ან მონიშნეთ, რომ ეს სხვა გადარიცხვაა. | … miabit misi khazi an monishnet, rom es skhva gadaritskhvaa |
