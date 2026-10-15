@@ -1,5 +1,5 @@
 import { formatGel, parseGel, SEARCH_MIN, todayISO } from '@ev8/shared';
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { api, ApiError } from '../../api.js';
 import { Field } from '../../components/Wizard.js';
@@ -82,7 +82,7 @@ interface State {
   toState: 'available' | 'service';
   /** A deposit handed back in cash beyond what is in the till: said and agreed to (designer's answer 1). */
   minusOk: boolean;
-  /** The bank has sent this sum already (B11-03): the line to attach instead, or 'another' transfer. */
+  /** The bank has sent this sum already (B11-03): the line waiting in «Разобрать» to attach instead. */
   bankChoice: string | null;
 }
 
@@ -183,7 +183,14 @@ function MoneySheet({ opening, onClose }: { opening: Opening; onClose: () => voi
   const plan = usePlan(s, tetri);
   const awaitedTetri = useAwaitedTetri(s.target);
   const inBank = useInBank(s, plan, (bankChoice) => set({ bankChoice }));
-  const attaching = inBank.lines.length > 0 && s.bankChoice != null && s.bankChoice !== 'another';
+  // Mika, 15.10.2026, variant «А»: a line waiting in «Разобрать» makes the
+  // main button «Привязать эту строку», with «Это другой перевод — записать»
+  // beside it; lines already recorded only make the main button the latter.
+  const waiting = inBank.lines.filter((l) => !l.payment);
+  const attaching = waiting.length > 0;
+  const anotherTransfer = inBank.lines.length > 0 && !attaching;
+  /** Up only while the button beside the main one submits the form. */
+  const asAnother = useRef(false);
   const till = useLoad<{ me: string; rows: { userId: string; onHandTetri: number }[] }>(kind === 'deposit_payout' && owner ? '/api/till' : null);
   const tillOnHand = till.data?.rows.find((r) => r.userId === till.data!.me)?.onHandTetri ?? null;
   const amountText = tetri ? formatGel(tetri) : '';
@@ -194,8 +201,10 @@ function MoneySheet({ opening, onClose }: { opening: Opening; onClose: () => voi
       : t.money.takeCash
     : titleFor(t, s.target);
   const label = attaching
-    ? t.inBank.submitAttach
-    : kind === 'deposit_payout'
+    ? t.inBank.attach
+    : anotherTransfer
+      ? t.inBank.another
+      : kind === 'deposit_payout'
       ? t.money.payOut(amountText)
       : kind === 'supplier'
         ? t.money.recordSupplier
@@ -222,11 +231,11 @@ function MoneySheet({ opening, onClose }: { opening: Opening; onClose: () => voi
         }
         // The bank has sent this sum already (B11-03): its line becomes the
         // payment, or the person says this is another transfer.
-        if (inBank.lines.length > 0 && !s.bankChoice) {
-          throw new ApiError(400, 'missing_field', 'Attach the bank line or say it is another transfer.', { field: 'notBankLines', fieldText: t.inBank.choose });
-        }
-        if (attaching) {
-          const line = inBank.lines.find((l) => l.lineId === s.bankChoice)!;
+        const another = asAnother.current;
+        asAnother.current = false;
+        if (attaching && !another) {
+          const line = waiting.find((l) => l.lineId === s.bankChoice);
+          if (!line) throw new ApiError(400, 'missing_field', 'Choose the bank line to attach.', { field: 'notBankLines', fieldText: t.inBank.choose });
           const target = s.target;
           const what =
             target.kind === 'rent' ? { rentalId: target.rentalId } : target.kind === 'sale' ? { saleId: target.saleId } : target.kind === 'service' ? { serviceJobId: target.serviceJobId } : { customerId: target.customerId };
@@ -256,7 +265,8 @@ function MoneySheet({ opening, onClose }: { opening: Opening; onClose: () => voi
           foreignCurrency: s.foreignAmount ? plan.purchase?.currency : undefined,
           bankFeeTetri: s.bankFee || undefined,
           toState: s.target.kind === 'buyback' ? s.toState : undefined,
-          notBankLines: s.bankChoice === 'another' ? inBank.lines.map((l) => l.lineId) : undefined,
+          // Whatever the bank sent and was shown: the person said this is not it.
+          notBankLines: inBank.lines.length > 0 ? inBank.lines.map((l) => l.lineId) : undefined,
         };
         const { id } = await api.post<{ id: string }>('/api/money', body, { key }).catch((e: unknown) => {
           // A line came in after the preview: shown now, and asked about again.
@@ -273,6 +283,23 @@ function MoneySheet({ opening, onClose }: { opening: Opening; onClose: () => voi
           },
         };
       }}
+      actions={
+        attaching ? (
+          <button
+            type="button"
+            className="pill money-another"
+            onClick={(e) => {
+              // Not a submit button: Enter in a field presses the form's first one, and that must stay «Привязать».
+              // The submit reads the flag before its first await, so it is down again whatever happened.
+              asAnother.current = true;
+              e.currentTarget.form?.requestSubmit();
+              asAnother.current = false;
+            }}
+          >
+            {t.inBank.another}
+          </button>
+        ) : undefined
+      }
     >
       {owner && !fixed && (
         <div className="seg-row" role="radiogroup" aria-label={t.money.in}>
@@ -458,9 +485,8 @@ function usePlan(s: State, tetri: number | null) {
  * The bank lines this money may already be (B11-03), from a preview of
  * exactly what is in the form now — a line of the sum typed a moment ago is
  * never offered for this one — and from a refusal, when a line came in after
- * the preview. The choice follows the lines: a line waiting in «Разобрать» is
- * chosen in advance, so attaching it is one tap; with only lines already
- * recorded nothing is chosen, and the person says it is another transfer.
+ * the preview. The line to attach follows the lines: the first one waiting in
+ * «Разобрать» is chosen in advance, so attaching it is one tap.
  */
 function useInBank(s: State, plan: ReturnType<typeof usePlan>, choose: (choice: string | null) => void) {
   const [refused, setRefused] = useState<{ key: string; lines: InBank[] } | null>(null);
@@ -470,8 +496,7 @@ function useInBank(s: State, plan: ReturnType<typeof usePlan>, choose: (choice: 
   const shape = lines.map((l) => `${l.lineId}${l.payment ? '+' : ''}`).join(',');
   useEffect(() => {
     const waiting = lines.filter((l) => !l.payment).map((l) => l.lineId);
-    const valid = s.bankChoice === 'another' ? lines.length > 0 : s.bankChoice != null && waiting.includes(s.bankChoice);
-    if (!valid && (waiting[0] ?? null) !== s.bankChoice) choose(waiting[0] ?? null);
+    if (!(s.bankChoice != null && waiting.includes(s.bankChoice)) && (waiting[0] ?? null) !== s.bankChoice) choose(waiting[0] ?? null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shape]);
   return {
@@ -486,13 +511,15 @@ function useInBank(s: State, plan: ReturnType<typeof usePlan>, choose: (choice: 
 
 /**
  * «Банк уже прислал эту сумму»: each line with its day, sum and payer; one
- * waiting in «Разобрать» can be attached instead, one already recorded names
- * its payment with a way to it. Not a <label>: a click on a line's words
- * would press the first button inside.
+ * waiting in «Разобрать» is what the main button attaches (with several, the
+ * person picks which), one already recorded names its payment with a way to
+ * it. Not a <label>: a click on a line's words would press the first button
+ * inside.
  */
 function InBankLines({ lines, choice, onChoose, onOpen }: { lines: InBank[]; choice: string | null; onChoose: (choice: string) => void; onOpen: () => void }) {
   const t = useT();
   const error = useFieldError('notBankLines');
+  const several = lines.filter((l) => !l.payment).length > 1;
   return (
     <div className={`field money-bank ${error ? 'field-bad' : ''}`} data-field="notBankLines" role="group" aria-label={t.inBank.title}>
       <span className="lbl">{t.inBank.title}</span>
@@ -513,18 +540,15 @@ function InBankLines({ lines, choice, onChoose, onOpen }: { lines: InBank[]; cho
           ) : (
             <div className="money-bank-row">
               <span className="muted">{t.inBank.waits}</span>
-              <button type="button" className={`pill pill-sm ${choice === l.lineId ? 'on' : ''}`} aria-pressed={choice === l.lineId} onClick={() => onChoose(l.lineId)}>
-                {t.inBank.attach}
-              </button>
+              {several && (
+                <button type="button" className={`pill pill-sm ${choice === l.lineId ? 'on' : ''}`} aria-pressed={choice === l.lineId} onClick={() => onChoose(l.lineId)}>
+                  {t.inBank.pick}
+                </button>
+              )}
             </div>
           )}
         </div>
       ))}
-      <div className="chips">
-        <button type="button" className={`pill pill-sm ${choice === 'another' ? 'on' : ''}`} aria-pressed={choice === 'another'} onClick={() => onChoose('another')}>
-          {t.inBank.another}
-        </button>
-      </div>
       {error && <span className="field-err">{error}</span>}
     </div>
   );
