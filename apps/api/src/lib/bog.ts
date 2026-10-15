@@ -92,12 +92,16 @@ export function bogConfig(e: NodeJS.ProcessEnv = process.env): BogConfig | null 
 /** Why the bank gave nothing: our word for it, never its answer. */
 export type BogFailure = 'unauthorized' | 'forbidden' | 'not_found' | 'rate_limited' | 'http' | 'network' | 'bad_answer' | 'no_account';
 
+/** Where it failed: buying the token, or asking the API with it. */
+export type BogStage = 'token' | 'api';
+
 export class BogError extends Error {
   constructor(
     readonly failure: BogFailure,
     readonly httpStatus: number | null = null,
+    readonly stage: BogStage | null = null,
   ) {
-    super(`bog: ${failure}${httpStatus ? ` (${httpStatus})` : ''}`);
+    super(`bog: ${failure}${httpStatus ? ` (${httpStatus})` : ''}${stage ? ` at ${stage}` : ''}`);
   }
 }
 
@@ -118,6 +122,11 @@ const TIMEOUT_MS = 20_000;
 const MAX_RETRY_AFTER_S = 30;
 /** The statement comes in pages of a thousand entries. */
 const MAX_PAGES = 20;
+// The bank's gateway answers 502–504 now and then and the same request a
+// moment later goes through (test stand, 15.10.2026: 503, then 200 five
+// minutes on, then 503). Such an answer is asked again once, after this pause.
+const GATEWAY_RETRY_MS = 3_000;
+const GATEWAY = new Set([502, 503, 504]);
 
 export interface BogClientOptions {
   fetch?: BogFetch;
@@ -157,7 +166,7 @@ export class BogClient {
   }
 
   /** One request, one at a time, with the gap kept; a network error becomes our word. */
-  private send(url: string, init: { method: 'GET' | 'POST'; headers: Record<string, string>; body?: string }): Promise<BogResponse> {
+  private sendOnce(stage: BogStage, url: string, init: { method: 'GET' | 'POST'; headers: Record<string, string>; body?: string }): Promise<BogResponse> {
     const run = async (): Promise<BogResponse> => {
       const wait = this.lastStart + this.gapMs - this.now();
       if (wait > 0) await this.sleep(wait);
@@ -166,12 +175,20 @@ export class BogClient {
         return await this.fetchFn(url, { ...init, signal: AbortSignal.timeout(TIMEOUT_MS) });
       } catch {
         // The cause is dropped on purpose: a fetch error can quote the request.
-        throw new BogError('network');
+        throw new BogError('network', null, stage);
       }
     };
     const next = this.queue.then(run, run);
     this.queue = next.catch(() => undefined);
     return next;
+  }
+
+  /** The same, asked once more after a pause when the bank's gateway was busy. */
+  private async send(stage: BogStage, url: string, init: { method: 'GET' | 'POST'; headers: Record<string, string>; body?: string }): Promise<BogResponse> {
+    const res = await this.sendOnce(stage, url, init);
+    if (!GATEWAY.has(res.status)) return res;
+    await this.sleep(GATEWAY_RETRY_MS);
+    return this.sendOnce(stage, url, init);
   }
 
   /**
@@ -183,22 +200,22 @@ export class BogClient {
     if (this.token && this.token.until > this.now()) return this.token.value;
     const basic = Buffer.from(`${this.cfg.clientId}:${this.cfg.clientSecret}`).toString('base64');
     const body = new URLSearchParams({ grant_type: 'client_credentials', client_id: this.cfg.clientId, client_secret: this.cfg.clientSecret }).toString();
-    const res = await this.send(TOKEN_URL, {
+    const res = await this.send('token', TOKEN_URL, {
       method: 'POST',
       headers: { authorization: `Basic ${basic}`, 'content-type': 'application/x-www-form-urlencoded', accept: 'application/json' },
       body,
     });
-    if (res.status === 400 || res.status === 401 || res.status === 403) throw new BogError('unauthorized', res.status);
-    if (res.status === 429) throw new BogError('rate_limited', res.status);
-    if (res.status < 200 || res.status >= 300) throw new BogError('http', res.status);
+    if (res.status === 400 || res.status === 401 || res.status === 403) throw new BogError('unauthorized', res.status, 'token');
+    if (res.status === 429) throw new BogError('rate_limited', res.status, 'token');
+    if (res.status < 200 || res.status >= 300) throw new BogError('http', res.status, 'token');
     let answer: Record<string, unknown>;
     try {
       answer = obj(await res.json());
     } catch {
-      throw new BogError('bad_answer', res.status);
+      throw new BogError('bad_answer', res.status, 'token');
     }
     const value = typeof answer.access_token === 'string' ? answer.access_token : '';
-    if (!value) throw new BogError('bad_answer', res.status);
+    if (!value) throw new BogError('bad_answer', res.status, 'token');
     const ttl = typeof answer.expires_in === 'number' && answer.expires_in > 0 ? answer.expires_in : 300;
     this.token = { value, until: this.now() + Math.max(0, ttl - 30) * 1000 };
     return value;
@@ -212,7 +229,7 @@ export class BogClient {
   private async get(path: string): Promise<unknown | null> {
     for (let attempt = 0; ; attempt++) {
       const token = await this.accessToken();
-      const res = await this.send(`${API_BASE}${path}`, { method: 'GET', headers: { authorization: `Bearer ${token}`, accept: 'application/json' } });
+      const res = await this.send('api', `${API_BASE}${path}`, { method: 'GET', headers: { authorization: `Bearer ${token}`, accept: 'application/json' } });
       if (res.status === 401 && attempt === 0) {
         this.token = null;
         continue;
@@ -224,16 +241,16 @@ export class BogClient {
           continue;
         }
       }
-      if (res.status === 401) throw new BogError('unauthorized', res.status);
-      if (res.status === 403) throw new BogError('forbidden', res.status);
-      if (res.status === 404) throw new BogError('not_found', res.status);
-      if (res.status === 429) throw new BogError('rate_limited', res.status);
-      if (res.status < 200 || res.status >= 300) throw new BogError('http', res.status);
+      if (res.status === 401) throw new BogError('unauthorized', res.status, 'api');
+      if (res.status === 403) throw new BogError('forbidden', res.status, 'api');
+      if (res.status === 404) throw new BogError('not_found', res.status, 'api');
+      if (res.status === 429) throw new BogError('rate_limited', res.status, 'api');
+      if (res.status < 200 || res.status >= 300) throw new BogError('http', res.status, 'api');
       if (res.status === 204) return null;
       try {
         return await res.json();
       } catch {
-        throw new BogError('bad_answer', res.status);
+        throw new BogError('bad_answer', res.status, 'api');
       }
     }
   }
@@ -457,7 +474,7 @@ export type BogOutcome =
       /** The days read (the nightly reading); a day a file covers in full is not read. */
       days: string[];
     }
-  | { status: 'failed'; failure: BogFailure; httpStatus: number | null };
+  | { status: 'failed'; failure: BogFailure; httpStatus: number | null; stage: BogStage | null };
 
 type Ok = Extract<BogOutcome, { status: 'ok' }>;
 
@@ -487,8 +504,9 @@ export function syncBogToday(now: Date = new Date()): Promise<BogOutcome> {
 /**
  * Read the full statement from the last day the nightly reading reached up
  * to yesterday, and add what the day's pulls did not bring. Nothing to do
- * when it has already reached yesterday — so the worker can ask on every
- * start as well, and a night the stand was down is caught up the next time.
+ * when it has already reached yesterday — so the worker asks every hour and
+ * on every start: a night the bank or the stand was down is caught up within
+ * the hour, and the bank is asked only once a day when all goes well.
  */
 export function reconcileBogNight(now: Date = new Date()): Promise<BogOutcome> {
   const cfg = bogConfig();
@@ -526,7 +544,7 @@ async function pullToday(cfg: BogConfig, now: Date): Promise<BogOutcome> {
     if (!(err instanceof BogError)) throw err;
     const failed = { lastTryAt: now, lastFailure: err.failure, lastHttpStatus: err.httpStatus };
     await prisma.bogSync.upsert({ where: SYNC, update: failed, create: { ...SYNC, ...failed } });
-    return { status: 'failed', failure: err.failure, httpStatus: err.httpStatus };
+    return { status: 'failed', failure: err.failure, httpStatus: err.httpStatus, stage: err.stage };
   }
 
   const outcome = blank();
@@ -568,7 +586,7 @@ async function readNights(cfg: BogConfig, now: Date): Promise<BogOutcome> {
     if (!(err instanceof BogError)) throw err;
     const failed = { nightAt: now, nightFailure: err.failure, nightHttpStatus: err.httpStatus };
     await prisma.bogSync.upsert({ where: SYNC, update: failed, create: { ...SYNC, ...failed } });
-    return { status: 'failed', failure: err.failure, httpStatus: err.httpStatus };
+    return { status: 'failed', failure: err.failure, httpStatus: err.httpStatus, stage: err.stage };
   }
   const ok = { nightThrough: dateFromISO(yesterday), nightAt: now, nightFailure: null, nightHttpStatus: null, nightAdded: outcome.added };
   await prisma.bogSync.upsert({ where: SYNC, update: ok, create: { ...SYNC, ...ok } });

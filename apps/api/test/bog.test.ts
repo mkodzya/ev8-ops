@@ -33,12 +33,14 @@ function fakeBank(state: {
   entries?: unknown[];
   pageSize?: number;
   tokenStatus?: number;
+  tokenStatuses?: number[];
   apiStatus?: number[];
   retryAfter?: string;
 }) {
   const calls: Call[] = [];
   let tokens = 0;
   const apiStatus = [...(state.apiStatus ?? [])];
+  const tokenStatuses = [...(state.tokenStatuses ?? [])];
   const reply = (status: number, body: unknown, headers: Record<string, string> = {}) => ({
     status,
     headers: { get: (n: string) => headers[n.toLowerCase()] ?? null },
@@ -47,6 +49,8 @@ function fakeBank(state: {
   const fetchFn: BogFetch = async (url, init) => {
     calls.push({ url, method: init.method, headers: init.headers, body: init.body });
     if (url === TOKEN_URL) {
+      const once = tokenStatuses.shift();
+      if (once) return reply(once, { error: 'busy' });
       if (state.tokenStatus) return reply(state.tokenStatus, { error: 'invalid_client', error_description: 'ТЕСТ Тайна' });
       tokens++;
       return reply(200, { access_token: `token-${tokens}`, expires_in: 300, token_type: 'Bearer' });
@@ -248,11 +252,23 @@ describe('the client', () => {
     await expect(new BogClient(cfg(), { ...quick, fetch: long.fetchFn }).today(ACCOUNT)).rejects.toMatchObject({ failure: 'rate_limited', httpStatus: 429 });
   });
 
+  it('asks once more after a pause when the bank’s gateway is busy (503), for the token and for the API alike', async () => {
+    const waited: number[] = [];
+    const sleep = async (ms: number) => void waited.push(ms);
+    const blip = fakeBank({ today: [activity({ id: 1, day: '2031-03-10', credit: 10 })], tokenStatuses: [503], apiStatus: [502] });
+    expect(await new BogClient(cfg(), { gapMs: 0, sleep, fetch: blip.fetchFn }).today(ACCOUNT)).toHaveLength(1);
+    expect(waited.filter((w) => w === 3000)).toHaveLength(2);
+    const down = fakeBank({ apiStatus: [503, 503] });
+    await expect(new BogClient(cfg(), { ...quick, fetch: down.fetchFn }).today(ACCOUNT)).rejects.toMatchObject({ failure: 'http', httpStatus: 503, stage: 'api' });
+    const noToken = fakeBank({ tokenStatuses: [503, 503] });
+    await expect(new BogClient(cfg(), { ...quick, fetch: noToken.fetchFn }).today(ACCOUNT)).rejects.toMatchObject({ failure: 'http', httpStatus: 503, stage: 'token' });
+  });
+
   it('turns a refusal into our word, with nothing of the bank’s answer or of the keys in it', async () => {
     const refused = fakeBank({ tokenStatus: 401 });
     const err = await new BogClient(cfg(), { ...quick, fetch: refused.fetchFn }).today(ACCOUNT).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(BogError);
-    expect(err).toMatchObject({ failure: 'unauthorized', httpStatus: 401 });
+    expect(err).toMatchObject({ failure: 'unauthorized', httpStatus: 401, stage: 'token' });
     expect(String(err)).not.toContain('Тайна');
     expect(String(err)).not.toContain(SECRET);
     const forbidden = fakeBank({ apiStatus: [403] });
@@ -436,8 +452,8 @@ describe.skipIf(!HAS_DB)('the pull, the night and the queue', () => {
 
   it('keeps the failure and its word, and the night that failed is read the next time', async () => {
     setBogFetchForTests(fakeBank({ tokenStatus: 401 }).fetchFn, quick);
-    expect(await syncBogToday(at('2031-03-12'))).toEqual({ status: 'failed', failure: 'unauthorized', httpStatus: 401 });
-    expect(await reconcileBogNight(at('2031-03-12'))).toEqual({ status: 'failed', failure: 'unauthorized', httpStatus: 401 });
+    expect(await syncBogToday(at('2031-03-12'))).toEqual({ status: 'failed', failure: 'unauthorized', httpStatus: 401, stage: 'token' });
+    expect(await reconcileBogNight(at('2031-03-12'))).toEqual({ status: 'failed', failure: 'unauthorized', httpStatus: 401, stage: 'token' });
     const { prisma } = await import('../src/lib/db.js');
     const sync = await prisma.bogSync.findUnique({ where: { id: true } });
     expect(sync).toMatchObject({ lastFailure: 'unauthorized', lastHttpStatus: 401, lastOkAt: null, nightFailure: 'unauthorized', nightThrough: null });
@@ -451,7 +467,7 @@ describe.skipIf(!HAS_DB)('the pull, the night and the queue', () => {
   it('asks about the account of the last uploaded statement when the env file names none — and says when there is none', async () => {
     delete process.env.BOG_ACCOUNT;
     process.env.BOG_ACCOUNT = 'GE00BG123';
-    expect(await syncBogToday(at('2031-03-13'))).toEqual({ status: 'failed', failure: 'no_account', httpStatus: null });
+    expect(await syncBogToday(at('2031-03-13'))).toEqual({ status: 'failed', failure: 'no_account', httpStatus: null, stage: null });
 
     delete process.env.BOG_ACCOUNT;
     const owner = await loginAs('owner');
