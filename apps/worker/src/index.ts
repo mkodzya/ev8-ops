@@ -12,8 +12,10 @@
 //
 // Bank of Georgia the same way (B11-03, Mika 14.10.2026): every five minutes
 // the API asks the bank for the day's operations — 288 of the 800 requests a
-// day the bank allows — and once a night, and on every start, it reads the
-// full statement up to yesterday so nothing the day's pulls missed is lost.
+// day the bank allows — and once a night it reads the full statement up to
+// yesterday so nothing the day's pulls missed is lost. The night is asked
+// again every hour and on every start; it does nothing once yesterday is read,
+// so a night the bank did not answer is caught up within the hour.
 import { ORG_TZ, todayISO } from '@ev8/shared';
 import cron from 'node-cron';
 
@@ -22,8 +24,9 @@ const TOKEN = process.env.WORKER_TOKEN ?? 'dev-worker-token';
 const PERIODS_CRON = process.env.PERIODS_CRON ?? '10 0 * * *';
 const KOMMO_CRON = process.env.KOMMO_CRON ?? '*/5 * * * *';
 const BOG_CRON = process.env.BOG_CRON ?? '*/5 * * * *';
-// Off the five-minute marks, so the night does not queue behind a pull.
-const BOG_NIGHT_CRON = process.env.BOG_NIGHT_CRON ?? '17 1 * * *';
+// Off the five-minute marks, so the night does not queue behind a pull; every
+// hour, and the first that finds yesterday unread reads it (01:17 normally).
+const BOG_NIGHT_CRON = process.env.BOG_NIGHT_CRON ?? '17 * * * *';
 const TZ = process.env.TZ ?? ORG_TZ;
 
 interface RollResult {
@@ -73,9 +76,10 @@ type BogOutcome =
   | { status: 'off' }
   | { status: 'busy' }
   | { status: 'ok'; listed: number; added: number; recorded: number; matched: number; known: { byKey: number; byDoc: number; bySum: number }; days: string[] }
-  | { status: 'failed'; failure: string; httpStatus: number | null };
+  | { status: 'failed'; failure: string; httpStatus: number | null; stage?: string | null };
 
 let bogSaid = '';
+let nightSaid = '';
 
 /** Counts and our own words only: the bank's answers carry names and account numbers. */
 async function askBog(job: 'bog-today' | 'bog-night'): Promise<void> {
@@ -87,7 +91,8 @@ async function askBog(job: 'bog-today' | 'bog-night'): Promise<void> {
     const r = (await res.json()) as BogOutcome;
     if (r.status === 'busy') return;
     if (r.status === 'off') line = 'the Bank of Georgia link is off (no keys on this stand)';
-    else if (r.status === 'failed') line = `Bank of Georgia did not answer${job === 'bog-night' ? ' with the statement' : ''} — ${r.failure}${r.httpStatus ? ` (${r.httpStatus})` : ''}`;
+    else if (r.status === 'failed')
+      line = `Bank of Georgia did not answer${job === 'bog-night' ? ' with the statement' : ''} — ${r.failure}${r.httpStatus ? ` (${r.httpStatus})` : ''}${r.stage ? ` at the ${r.stage === 'token' ? 'token' : 'API'}` : ''}`;
     else {
       const known = r.known.byKey + r.known.byDoc + r.known.bySum;
       const added = r.added ? `${r.added} new line(s), ${r.recorded} linked to payments entered by hand, ${r.matched} attached by a rule` : 'nothing new';
@@ -98,13 +103,15 @@ async function askBog(job: 'bog-today' | 'bog-night'): Promise<void> {
             ? `Bank of Georgia statement ${r.days[0]}…${r.days[r.days.length - 1]} — ${r.listed} entr(ies), ${known} already in${from}, ${added}`
             : 'Bank of Georgia statement — the nights are read'
           : `Bank of Georgia answered — ${r.listed} operation(s) today, ${added}${from}`;
-      always = r.added > 0 || job === 'bog-night';
+      always = r.added > 0 || (job === 'bog-night' && r.days.length > 0);
     }
   } catch (err) {
     line = `the Bank of Georgia ${job === 'bog-night' ? 'statement' : 'pull'} did not reach the API — ${(err as Error).message}`;
   }
-  if (always || line !== bogSaid) console.log(`worker: ${line}`);
+  const said = job === 'bog-today' ? bogSaid : nightSaid;
+  if (always || line !== said) console.log(`worker: ${line}`);
   if (job === 'bog-today') bogSaid = line;
+  else nightSaid = line;
 }
 
 async function waitForApi(): Promise<void> {

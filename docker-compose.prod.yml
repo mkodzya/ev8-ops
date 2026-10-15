@@ -132,9 +132,10 @@ services:
       # Kommo is asked every five minutes; the account's plan has no webhooks.
       KOMMO_CRON: ${KOMMO_CRON:-*/5 * * * *}
       # Bank of Georgia: the day's operations every five minutes (288 of the
-      # 800 requests a day the bank allows), the full statement once a night.
+      # 800 requests a day the bank allows), the full statement once a night —
+      # asked every hour, read by the first that finds yesterday unread.
       BOG_CRON: ${BOG_CRON:-*/5 * * * *}
-      BOG_NIGHT_CRON: ${BOG_NIGHT_CRON:-17 1 * * *}
+      BOG_NIGHT_CRON: ${BOG_NIGHT_CRON:-17 * * * *}
       TZ: ${TZ:-Asia/Tbilisi}
     depends_on:
       api:
