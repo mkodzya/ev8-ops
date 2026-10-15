@@ -1,0 +1,212 @@
+<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>«Разделить» — варианты · EV8 Ops, прототип</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=Noto+Sans+Georgian:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+:root { --bg:#fbfbfb; --surface:#fff; --surface-2:#f3f3f3; --ink:#0b0b0b; --muted:#5d5d5d; --line:#dbe4de; --line-soft:#ebebeb; --line-control:#7a7a7a; --accent:#557553; --accent-soft:#e3ebe3; --lime:#e0ffa2; --crit:#c8402f;
+  --sans:"Be Vietnam Pro","Noto Sans Georgian",system-ui,sans-serif; --mono:"IBM Plex Mono","Noto Sans Georgian",ui-monospace,monospace; }
+* { box-sizing:border-box; }
+body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.5 var(--sans); }
+main { max-width:1180px; margin:0 auto; padding:32px 16px 64px; }
+h1 { font-size:28px; line-height:1.2; margin:0 0 8px; }
+h2 { font-size:20px; margin:36px 0 4px; }
+.lead { color:var(--muted); margin:0 0 8px; max-width:780px; }
+.note { color:var(--muted); font-size:13px; }
+.mono { font-family:var(--mono); }
+.common { background:var(--surface); border:1px solid var(--line-soft); border-radius:14px; padding:14px 18px; margin-top:16px; }
+.common ul { margin:6px 0 0; padding-left:20px; } .common li { margin:4px 0; }
+.grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(330px,1fr)); gap:20px; margin-top:16px; align-items:start; }
+.opt h3 { margin:0 0 4px; font-size:17px; }
+.tag { display:inline-block; font-size:12px; font-weight:600; padding:2px 8px; border-radius:99px; background:var(--surface-2); margin-bottom:6px; }
+.rec .tag { background:var(--lime); }
+.opt ul { padding-left:18px; margin:6px 0 10px; font-size:14px; } .opt li { margin:3px 0; }
+.pro { color:#2f6b3a; } .con { color:#9a3b2c; }
+
+/* the sheet, phone width */
+.sheet { width:100%; max-width:360px; background:var(--surface); border:1px solid var(--line-soft); border-radius:16px; box-shadow:0 2px 10px rgba(0,0,0,.08); overflow:hidden; }
+.rec .sheet { border:2px solid var(--accent); }
+.sh-head { display:flex; justify-content:space-between; align-items:flex-start; padding:14px 16px; border-bottom:1px solid var(--line-soft); }
+.sh-head b { font-size:16px; } .sh-head .sub { display:block; font-size:12px; color:var(--muted); font-weight:400; }
+.x { font-size:20px; line-height:1; color:var(--muted); }
+.sh-body { padding:14px 16px 16px; display:flex; flex-direction:column; gap:12px; }
+.who { display:flex; justify-content:space-between; align-items:center; font-weight:600; }
+.pill { display:inline-flex; align-items:center; border:1px solid var(--line-control); border-radius:99px; padding:4px 12px; font-size:13px; background:#fff; }
+.pill.on { background:var(--lime); border-color:var(--lime); font-weight:600; }
+.pill.accent { background:var(--accent); color:#fff; border-color:var(--accent); font-weight:600; padding:9px 20px; font-size:15px; }
+.pill.ghost { border-style:dashed; color:var(--muted); }
+.part { border:1px solid var(--line); border-radius:12px; padding:10px 12px; display:flex; flex-direction:column; gap:8px; }
+.part-top { display:flex; justify-content:space-between; align-items:center; gap:10px; }
+.part-name { font-weight:600; font-size:14px; } .part-name .r { font-family:var(--mono); font-weight:500; color:var(--muted); font-size:12px; }
+.amount { width:110px; border:1px solid var(--line-control); border-radius:10px; padding:7px 10px; font-family:var(--mono); font-size:16px; text-align:right; background:#fff; }
+.amount.empty { color:#9a9a9a; }
+.field { border:1px solid var(--line-control); border-radius:10px; padding:7px 10px; font-size:14px; background:#fff; }
+.label { font-size:12px; color:var(--muted); }
+.q { font-size:13px; font-weight:600; margin-top:2px; }
+.radio { display:flex; gap:8px; align-items:flex-start; font-size:13px; padding:6px 8px; border-radius:8px; }
+.radio i { flex:none; width:16px; height:16px; border-radius:50%; border:1.5px solid var(--line-control); margin-top:2px; position:relative; background:#fff; }
+.radio.on { background:var(--accent-soft); } .radio.on i { border-color:var(--accent); } .radio.on i::after { content:""; position:absolute; inset:3px; border-radius:50%; background:var(--accent); }
+.radio span small { display:block; color:var(--muted); font-size:12px; }
+.sum { display:flex; justify-content:space-between; align-items:center; font-size:14px; border-top:1px solid var(--line-soft); padding-top:10px; }
+.ok { color:var(--accent); font-weight:600; }
+.result { background:var(--surface-2); border-radius:10px; padding:10px 12px; font-size:13px; }
+.result b { display:block; margin-bottom:4px; font-size:13px; }
+.result ul { margin:0; padding-left:16px; } .result li { margin:3px 0; }
+.chips { display:flex; flex-wrap:wrap; gap:6px; }
+.steps { display:flex; gap:6px; font-size:12px; color:var(--muted); } .steps .on { color:var(--ink); font-weight:600; }
+.pair { display:grid; grid-template-columns:1fr; gap:12px; }
+.cap { font-size:12px; color:var(--muted); margin:6px 0 2px; }
+.ask { background:var(--surface); border:2px solid var(--accent); border-radius:14px; padding:16px 20px; margin-top:36px; }
+@media (max-width:640px) { h1 { font-size:22px; } }
+</style></head><body><main>
+
+<h1>«Разделить» — варианты понятнее</h1>
+<p class="lead">Задача окна (Mika, 15.10.2026): «принять 150 за аренду и 200 указать как штраф — вот и все». Ниже четыре варианта на одном и том же примере: перевод 350 ₾ от 08.10, аренда R-00002, неделя 08–14.10 уже отмечена оплаченной при переносе. Первым стоит тот, что рекомендую.</p>
+<p class="note">Макеты статичные, нажимать в них нечего. Имя клиента — пример, не данные.</p>
+
+<div class="common"><b>Во всех вариантах одинаково — по сравнению с окном сейчас:</b>
+<ul>
+  <li>Вопрос про неделю — <b>датами</b>, а не словами «учтена при переносе / новая оплата»: «08–14.10 — уже отмечена оплаченной» или «15–21.10 — к оплате сейчас».</li>
+  <li>Нет кнопки «Остаток сюда» у каждой строки: последняя пустая строка сама подсказывает остаток серым — нажал на неё, и он вписан.</li>
+  <li>«На счёт клиента», ремонт и продажа спрятаны за «+ ещё» — нужны редко.</li>
+  <li>Под суммой нет «WOLF-8» и «Должен …» — только то, что нужно для решения.</li>
+</ul></div>
+
+<div class="grid">
+
+<!-- А -->
+<section class="opt rec">
+  <span class="tag">А · рекомендую</span>
+  <h3>Две карточки и короткий итог</h3>
+  <ul>
+    <li class="pro">Видно сразу: аренда 150, штраф 200, и одной строкой — что получится.</li>
+    <li class="pro">Вопрос про неделю появляется только у старого платежа, у остальных его нет.</li>
+    <li class="con">Итог одной строкой; подробности — в карточке аренды после записи.</li>
+  </ul>
+  <div class="sheet">
+    <div class="sh-head"><b>Разделить 350 ₾<span class="sub">перевод от 08.10.2026 · TBC</span></b><span class="x">×</span></div>
+    <div class="sh-body">
+      <div class="who">Клиент (пример) <span class="pill">Другой</span></div>
+      <div class="part">
+        <div class="part-top"><span class="part-name">Аренда <span class="r">R-00002</span></span><span class="amount">150</span></div>
+        <div class="q">За какую неделю?</div>
+        <div class="radio on"><i></i><span>08–14.10<small>уже отмечена оплаченной при переносе — эти деньги и есть её оплата</small></span></div>
+        <div class="radio"><i></i><span>15–21.10<small>к оплате сейчас</small></span></div>
+      </div>
+      <div class="part">
+        <div class="part-top"><span class="part-name">Штраф <span class="r">R-00002</span></span><span class="amount">200</span></div>
+        <div><div class="label">За что</div><div class="field">поломка</div></div>
+      </div>
+      <span class="pill ghost">+ ещё: ремонт, на счёт клиента</span>
+      <div class="sum"><span>150 + 200 = 350 ₾</span><span class="ok">всё разнесено ✓</span></div>
+      <div class="note">Останется к оплате: неделя 15–21.10, 150 ₾.</div>
+      <span class="pill accent">Разделить</span>
+    </div>
+  </div>
+</section>
+
+<!-- Б -->
+<section class="opt">
+  <span class="tag">Б</span>
+  <h3>Сначала — что это за деньги</h3>
+  <ul>
+    <li class="pro">На экране только то, что выбрала: отметила «Аренда» и «Штраф» — появились две строки.</li>
+    <li class="pro">Подходит и для других случаев: аренда + ремонт, штраф + залог.</li>
+    <li class="con">На одно нажатие больше.</li>
+  </ul>
+  <div class="sheet">
+    <div class="sh-head"><b>Разделить 350 ₾<span class="sub">перевод от 08.10.2026 · TBC</span></b><span class="x">×</span></div>
+    <div class="sh-body">
+      <div class="who">Клиент (пример) <span class="pill">Другой</span></div>
+      <div class="label">Что в этих деньгах?</div>
+      <div class="chips"><span class="pill on">✓ Аренда</span><span class="pill on">✓ Штраф</span><span class="pill">Ремонт</span><span class="pill">Залог</span><span class="pill">На счёт</span></div>
+      <div class="part">
+        <div class="part-top"><span class="part-name">Аренда <span class="r">R-00002</span></span><span class="amount">150</span></div>
+        <div class="q">За какую неделю?</div>
+        <div class="radio on"><i></i><span>08–14.10<small>уже отмечена оплаченной при переносе</small></span></div>
+        <div class="radio"><i></i><span>15–21.10<small>к оплате сейчас</small></span></div>
+      </div>
+      <div class="part">
+        <div class="part-top"><span class="part-name">Штраф <span class="r">R-00002</span></span><span class="amount">200</span></div>
+        <div><div class="label">За что</div><div class="field">поломка</div></div>
+      </div>
+      <div class="sum"><span>150 + 200 = 350 ₾</span><span class="ok">всё разнесено ✓</span></div>
+      <span class="pill accent">Разделить</span>
+    </div>
+  </div>
+</section>
+
+<!-- В -->
+<section class="opt">
+  <span class="tag">В</span>
+  <h3>С подробным итогом словами</h3>
+  <ul>
+    <li class="pro">Перед нажатием видно, что именно запишется и что останется долгом — никаких сомнений.</li>
+    <li class="con">Экран длиннее, на телефоне — прокрутка.</li>
+  </ul>
+  <div class="sheet">
+    <div class="sh-head"><b>Разделить 350 ₾<span class="sub">перевод от 08.10.2026 · TBC</span></b><span class="x">×</span></div>
+    <div class="sh-body">
+      <div class="who">Клиент (пример) <span class="pill">Другой</span></div>
+      <div class="part">
+        <div class="part-top"><span class="part-name">Аренда <span class="r">R-00002</span></span><span class="amount">150</span></div>
+        <div class="q">За какую неделю?</div>
+        <div class="radio on"><i></i><span>08–14.10<small>уже отмечена оплаченной при переносе</small></span></div>
+        <div class="radio"><i></i><span>15–21.10<small>к оплате сейчас</small></span></div>
+      </div>
+      <div class="part">
+        <div class="part-top"><span class="part-name">Штраф <span class="r">R-00002</span></span><span class="amount">200</span></div>
+        <div><div class="label">За что</div><div class="field">поломка</div></div>
+      </div>
+      <span class="pill ghost">+ ещё: ремонт, на счёт клиента</span>
+      <div class="result"><b>Что запишется</b>
+        <ul>
+          <li>150 ₾ — оплата недели 08–14.10 по R-00002. Неделя и так была оплаченной, теперь у неё есть платёж из банка.</li>
+          <li>200 ₾ — штраф «поломка» по R-00002, сразу оплачен.</li>
+          <li>Долг клиента не изменится: 150 ₾ за 15–21.10.</li>
+        </ul>
+      </div>
+      <span class="pill accent">Разделить</span>
+    </div>
+  </div>
+</section>
+
+<!-- Г -->
+<section class="opt">
+  <span class="tag">Г</span>
+  <h3>В два шага</h3>
+  <ul>
+    <li class="pro">Каждый экран простой: сначала суммы, потом проверка.</li>
+    <li class="con">Два экрана вместо одного; для простой строки — лишний шаг.</li>
+  </ul>
+  <div class="pair">
+    <div class="sheet">
+      <div class="sh-head"><b>Разделить 350 ₾<span class="sub">шаг 1 из 2 · суммы</span></b><span class="x">×</span></div>
+      <div class="sh-body">
+        <div class="who">Клиент (пример) <span class="pill">Другой</span></div>
+        <div class="part"><div class="part-top"><span class="part-name">Аренда <span class="r">R-00002</span></span><span class="amount">150</span></div></div>
+        <div class="part"><div class="part-top"><span class="part-name">Штраф <span class="r">R-00002</span></span><span class="amount">200</span></div>
+          <div><div class="label">За что</div><div class="field">поломка</div></div></div>
+        <span class="pill ghost">+ ещё: ремонт, на счёт клиента</span>
+        <div class="sum"><span>150 + 200 = 350 ₾</span><span class="ok">✓</span></div>
+        <span class="pill accent">Дальше</span>
+      </div>
+    </div>
+    <div class="sheet">
+      <div class="sh-head"><b>Проверьте<span class="sub">шаг 2 из 2</span></b><span class="x">×</span></div>
+      <div class="sh-body">
+        <div class="q">Аренда 150 ₾ — за какую неделю?</div>
+        <div class="radio on"><i></i><span>08–14.10<small>уже отмечена оплаченной при переносе</small></span></div>
+        <div class="radio"><i></i><span>15–21.10<small>к оплате сейчас</small></span></div>
+        <div class="result"><b>Запишется</b>
+          <ul><li>150 ₾ — неделя 08–14.10, R-00002</li><li>200 ₾ — штраф «поломка», R-00002</li><li>К оплате останется: 150 ₾ за 15–21.10</li></ul>
+        </div>
+        <span class="pill accent">Записать</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+</div>
+
+<div class="ask"><b>Какой вариант делать — А, Б, В или Г?</b> Можно и смесь: например, А с итогом из В.</div>
+
+</main></body></html>
