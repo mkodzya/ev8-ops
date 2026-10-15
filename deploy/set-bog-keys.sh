@@ -196,8 +196,14 @@ case "$CODE" in
   *) echo "Банк ответил не так, как ожидалось (ответ $CODE). Ключи не записаны; это нужно показать разработчику."; exit 1 ;;
 esac
 
-API=$(printf 'header = "Authorization: Bearer %s"\n' "$TOKEN" \
-  | curl -s -K - -o /dev/null -w '%{http_code}' --max-time 20 "$API_URL" 2>/dev/null) || API=000
+probe() {
+  printf 'header = "Authorization: Bearer %s"\n' "$TOKEN" \
+    | curl -s -K - -o /dev/null -w '%{http_code}' --max-time 20 "$API_URL" 2>/dev/null || echo 000
+}
+# The bank's gateway answers 502-504 now and then and a moment later lets the
+# same request through (15.10.2026): asked once more after a pause.
+API=$(probe)
+case "$API" in 502|503|504) sleep 3; API=$(probe) ;; esac
 unset TOKEN
 
 # printf is a shell builtin: the keys are not in any process's arguments.
@@ -206,6 +212,9 @@ unset ID SECRET ACCOUNT
 
 case "$API" in
   200|429) echo "Банк принял ключи, API отвечает этому серверу. Ключи записаны ($NAME)." ;;
+  # The keys were taken (the token came); only the gateway was busy. The stand
+  # asks the bank by itself every five minutes and gets through between.
+  502|503|504) echo "Банк принял ключи, но его шлюз сейчас занят (ответ $API). Ключи записаны ($NAME); стенд будет спрашивать банк сам." ;;
   401|403) echo "Ключи записаны ($NAME): банк их принял, но API ответил $API. Скорее всего, в Business Online вписан не тот IP (нужен 204.168.149.105) или у выбранного пользователя нет прав на счета." ; exit 1 ;;
   000) echo "Ключи записаны ($NAME): банк их принял, но до API с сервера достучаться не удалось. Это нужно показать разработчику."; exit 1 ;;
   *) echo "Ключи записаны ($NAME): банк их принял, API ответил $API. Это нужно показать разработчику."; exit 1 ;;
