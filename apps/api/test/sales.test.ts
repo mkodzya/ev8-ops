@@ -1,6 +1,6 @@
 // Selling a moped (SAL-01, SAL-02, SAL-03).
 import { describe, expect, it } from 'vitest';
-import { HAS_DB, call, json, loginAs, uniq } from './helpers.js';
+import { HAS_DB, byHand, call, json, loginAs, uniq } from './helpers.js';
 
 async function fixtures(price = 320600) {
   const { prisma } = await import('../src/lib/db.js');
@@ -94,7 +94,7 @@ describe.skipIf(!HAS_DB)('the schedule (SAL-02)', () => {
 
     // Only the down payment arrived. Every monthly instalment is long past
     // due, so 2 700 is behind — the figure the company knows.
-    await call(owner, 'POST', `/api/sales/${id}/payments`, { channel: 'transfer', grossTetri: '900', occurredOn: '2025-05-27' });
+    await byHand(owner, `/api/sales/${id}/payments`, { channel: 'transfer', grossTetri: '900', occurredOn: '2025-05-27' });
     card = saleCard(await call(owner, 'GET', `/api/sales/${id}`));
     expect(card.sale.paidTetri).toBe(90000);
     expect(card.sale.outstandingTetri).toBe(270000);

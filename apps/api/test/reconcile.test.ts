@@ -4,7 +4,7 @@
 // name never matches somebody an earlier run left behind.
 import { addDays, todayISO } from '@ev8/shared';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { HAS_DB, call, json, loginAs, uniq } from './helpers.js';
+import { HAS_DB, byHand, call, json, loginAs, uniq } from './helpers.js';
 
 const today = () => todayISO(new Date(), 'Asia/Tbilisi');
 const dmy = (iso: string) => iso.split('-').reverse().join('.');
@@ -64,7 +64,7 @@ async function queued(owner: string, t: string, direction = 'in'): Promise<Queue
 describe.skipIf(!HAS_DB)('money entered by hand, then the statement (B2-03)', () => {
   it('a line within three days links to the payment already in, and writes nothing new (crit. 11)', async () => {
     const { prisma, owner, customer, rentalId, tag: t } = await rental({ pickedUpOn: addDays(today(), -2) });
-    await call(owner, 'POST', '/api/money', { kind: 'rent', rentalId, amountTetri: '150', channel: 'transfer', occurredOn: addDays(today(), -1), backdateReason: 'bank transfer seen yesterday' });
+    await byHand(owner, '/api/money', { kind: 'rent', rentalId, amountTetri: '150', channel: 'transfer', occurredOn: addDays(today(), -1), backdateReason: 'bank transfer seen yesterday' });
     const text = file(inRow(today(), '150.00', `Caricxva: gadmomricxavi: testaZe gela ${t}; daniSnuleba: qira`));
     const preview = json<{ recorded: number }>(await call(owner, 'POST', '/api/statements/preview', { fileName: 's.csv', text }));
     expect(preview.recorded).toBe(1);
@@ -76,7 +76,7 @@ describe.skipIf(!HAS_DB)('money entered by hand, then the statement (B2-03)', ()
 
   it('the same line a week later is not that payment (crit. 12)', async () => {
     const { prisma, owner, customer, rentalId, tag: t } = await rental({ pickedUpOn: addDays(today(), -9) });
-    await call(owner, 'POST', '/api/money', { kind: 'rent', rentalId, amountTetri: '150', channel: 'transfer', occurredOn: addDays(today(), -8), backdateReason: 'x' });
+    await byHand(owner, '/api/money', { kind: 'rent', rentalId, amountTetri: '150', channel: 'transfer', occurredOn: addDays(today(), -8), backdateReason: 'x' });
     await call(owner, 'POST', '/api/statements', { fileName: 's.csv', text: file(inRow(today(), '150.00', `gadmomricxavi: testaZe gela ${t}`)) });
     const first = await prisma.payment.findFirstOrThrow({ where: { customerId: customer.id, source: 'manual' } });
     expect(first.statementLineId).toBeNull();
@@ -84,8 +84,8 @@ describe.skipIf(!HAS_DB)('money entered by hand, then the statement (B2-03)', ()
 
   it('two candidates: the line waits under "already recorded" with both, nothing is written (crit. 13)', async () => {
     const { prisma, owner, customer, rentalId, tag: t } = await rental({ pickedUpOn: addDays(today(), -9) });
-    await call(owner, 'POST', '/api/money', { kind: 'rent', rentalId, amountTetri: '150', channel: 'transfer', occurredOn: addDays(today(), -1), backdateReason: 'x' });
-    await call(owner, 'POST', '/api/money', { kind: 'rent', rentalId, amountTetri: '150', channel: 'transfer', occurredOn: addDays(today(), -2), backdateReason: 'x' });
+    await byHand(owner, '/api/money', { kind: 'rent', rentalId, amountTetri: '150', channel: 'transfer', occurredOn: addDays(today(), -1), backdateReason: 'x' });
+    await byHand(owner, '/api/money', { kind: 'rent', rentalId, amountTetri: '150', channel: 'transfer', occurredOn: addDays(today(), -2), backdateReason: 'x' });
     await call(owner, 'POST', '/api/statements', { fileName: 's.csv', text: file(inRow(today(), '150.00', `gadmomricxavi: testaZe gela ${t}`)) });
     const line = await queued(owner, t);
     expect(line?.group).toBe('recorded');
@@ -316,7 +316,7 @@ describe.skipIf(!HAS_DB)('round 1 of wave 2 (QA-W2-04, designer’s answer 3)', 
   it('a line that is both a hand-entered payment and another rental’s first card payment is asked about, not linked', async () => {
     const entered = await rental({ pickedUpOn: addDays(today(), -1) });
     const fresh = await rental({ pickedUpOn: today() });
-    await call(entered.owner, 'POST', '/api/money', { kind: 'rent', rentalId: entered.rentalId, amountTetri: '330', channel: 'acquiring', occurredOn: addDays(today(), -1), backdateReason: 'x' });
+    await byHand(entered.owner, '/api/money', { kind: 'rent', rentalId: entered.rentalId, amountTetri: '330', channel: 'acquiring', occurredOn: addDays(today(), -1), backdateReason: 'x' });
     const t = tag();
     await call(entered.owner, 'POST', '/api/statements', { fileName: 's.csv', text: file(inRow(today(), '325.05', `Wallet/domestic MC cards ${t}`)) });
     const line = await queued(entered.owner, t);

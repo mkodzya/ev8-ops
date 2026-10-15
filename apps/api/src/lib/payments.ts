@@ -96,6 +96,8 @@ export interface RecordPaymentInput {
   /** Which part of that line, when the line is split (migration 0039). */
   statementPart?: number;
   backdateReason?: string | null;
+  /** Bank lines of the same sum the person said this payment is not (B11-03): kept in the journal. */
+  notBankLines?: string[];
 }
 
 /**
@@ -168,7 +170,14 @@ export async function recordPaymentTx(tx: Tx, input: RecordPaymentInput): Promis
         action: 'payment.record',
         entityType: 'payment',
         entityId: payment.id,
-        after: { occurredOn: input.occurredOn, channel: input.channel, grossTetri: input.grossTetri, saleId: input.saleId, allocated: input.grossTetri - spread.leftoverTetri },
+        after: {
+          occurredOn: input.occurredOn,
+          channel: input.channel,
+          grossTetri: input.grossTetri,
+          saleId: input.saleId,
+          allocated: input.grossTetri - spread.leftoverTetri,
+          ...(input.notBankLines?.length ? { notBankLines: input.notBankLines } : {}),
+        },
       },
     });
     return { id: payment.id, allocated: input.grossTetri - spread.leftoverTetri, leftover: spread.leftoverTetri };
@@ -209,6 +218,7 @@ export async function recordPaymentTx(tx: Tx, input: RecordPaymentInput): Promis
         customerId: input.customerId,
         rentalId: input.rentalId,
         allocated: input.grossTetri - left,
+        ...(input.notBankLines?.length ? { notBankLines: input.notBankLines } : {}),
       },
     },
   });

@@ -10,6 +10,7 @@ import { kommoLinkKa } from './kommo-link.js';
 import { bogApiKa } from './bog-api.js';
 import { calendarKa } from './payments-calendar.js';
 import { payDayKa } from './pay-day.js';
+import { inBankKa } from './in-bank.js';
 import type { Dict } from './en.js';
 
 // Typed as Dict: a missing or misspelled key fails the build.
@@ -1096,6 +1097,7 @@ export const ka: Dict = {
     codes: {
       act_not_found: 'დოკუმენტი ვერ მოიძებნა.',
       bad_channel: 'დეპოზიტი ბრუნდება ნაღდით ან გადარიცხვით.',
+      bank_line_exists: 'ბანკმა ეს თანხა უკვე გამოგზავნა. მიაბით მისი ხაზი ან მონიშნეთ, რომ ეს სხვა გადარიცხვაა.',
       buyback_void: 'უკან გამოსყიდვამ მოპედი პარკში დააბრუნა — აქედან არ უქმდება.',
       deposit_has_line: 'ბანკში ამ შეტანას უკვე აქვს ამონაწერის ხაზი.',
       future_date: 'გადახდას მომავალი თარიღით ვერ ჩაწერთ.',
@@ -1254,4 +1256,5 @@ export const ka: Dict = {
   ...bogApiKa,
   ...calendarKa,
   ...payDayKa,
+  ...inBankKa,
 };

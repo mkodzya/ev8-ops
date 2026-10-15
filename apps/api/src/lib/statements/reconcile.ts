@@ -2,6 +2,7 @@ import { daysBetween, grossOf, nameMatches, todayISO } from '@ev8/shared';
 import { isoDate } from '../dates.js';
 import { prisma } from '../db.js';
 import { env } from '../env.js';
+import { cardOf } from './parse.js';
 
 // What to do with one bank line (wave 2 §3.2, B2-03…B2-06, ADR-0004).
 //
@@ -179,6 +180,35 @@ export async function loadCtx(): Promise<Ctx> {
       number: p.rental?.number ?? p.sale?.number ?? p.purchase?.number ?? null,
     })),
     bankDeposits: bankDeposits.map((b) => ({ id: b.id, bank: b.bank, occurredOn: isoDate(b.occurredOn)!, amountTetri: b.amountTetri })),
+  };
+}
+
+/** A line as it is stored, read the way the rules read it. */
+export function storedLine(l: {
+  occurredOn: Date;
+  direction: 'in' | 'out';
+  amountTetri: number;
+  grossTetri: number | null;
+  feeTetri: number | null;
+  payer: string | null;
+  purpose: string | null;
+  raw: string;
+  bank: 'bog' | 'tbc' | 'credo';
+}): Line {
+  // A card line is told by its text as well as by its stored sums: one loaded
+  // before a bank's wording was known is read here as it would be read today.
+  const card = l.direction === 'in' ? cardOf(l) : null;
+  return {
+    occurredOn: isoDate(l.occurredOn)!,
+    direction: l.direction,
+    amountTetri: l.amountTetri,
+    grossTetri: card?.grossTetri ?? null,
+    feeTetri: card?.feeTetri ?? null,
+    payer: l.payer,
+    purpose: l.purpose,
+    raw: l.raw,
+    channel: card ? 'acquiring' : 'transfer',
+    bank: l.bank,
   };
 }
 

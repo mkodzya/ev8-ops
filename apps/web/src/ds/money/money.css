@@ -337,3 +337,13 @@ button.cal-cell { cursor: pointer; }
 .skel.cal-skel-cell.low { height: 44px; }
 .cal-grid.big .skel.cal-skel-cell { height: 40px; }
 .skel.cal-skel-row { height: 56px; border-radius: var(--radius-card); }
+
+/* "The bank has already sent this sum" in the money form (B11-03). */
+.money-bank { display: grid; gap: 8px; }
+.money-bank-line { display: grid; gap: 4px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--warn-soft); }
+.money-bank-head { margin: 0; font: var(--text-body-sm); }
+.money-bank-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; font: var(--text-body-sm); }
+.money-bank-row > span { min-width: 0; }
+/* «Это другой перевод — записать» stands after the main button, and on a phone has a line of its own. */
+.row-actions > .money-another { order: 1; }
+@media (max-width: 899px) { .drawer-body .row-actions > .money-another { flex: 1 1 100%; justify-content: center; } }

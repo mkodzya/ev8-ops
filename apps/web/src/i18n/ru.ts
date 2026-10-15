@@ -10,6 +10,7 @@ import { kommoLinkRu } from './kommo-link.js';
 import { bogApiRu } from './bog-api.js';
 import { calendarRu } from './payments-calendar.js';
 import { payDayRu } from './pay-day.js';
+import { inBankRu } from './in-bank.js';
 import type { Dict } from './en.js';
 
 // Typed as Dict: a missing or misspelled key fails the build.
@@ -1107,6 +1108,7 @@ export const ru: Dict = {
     codes: {
       act_not_found: 'Документ не найден.',
       bad_channel: 'Залог возвращают наличными или переводом.',
+      bank_line_exists: 'Банк уже прислал эту сумму. Привяжите его строку или отметьте, что это другой перевод.',
       buyback_void: 'Выкуп вернул мопед в парк — его не аннулируют отсюда.',
       deposit_has_line: 'У этого взноса в банк уже есть строка выписки.',
       future_date: 'Платёж нельзя записать будущей датой.',
@@ -1265,4 +1267,5 @@ export const ru: Dict = {
   ...bogApiRu,
   ...calendarRu,
   ...payDayRu,
+  ...inBankRu,
 };

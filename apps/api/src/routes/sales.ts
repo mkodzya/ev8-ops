@@ -10,7 +10,7 @@ import { hasPerm } from '../lib/auth.js';
 import { actorOf } from '../lib/guard.js';
 import { recordMoney } from '../lib/money.js';
 import { recomputeSale } from '../lib/payments.js';
-import { date, int, oneOf, str, tetri } from '../lib/validate.js';
+import { date, int, oneOf, str, strList, tetri } from '../lib/validate.js';
 import { moveVehicle } from '../lib/vehicles.js';
 
 // Selling a moped (SAL-01…03).
@@ -340,6 +340,7 @@ export function saleRoutes(app: FastifyInstance): void {
       occurredOn: date(b, 'occurredOn'),
       backdateReason: str(b, 'backdateReason', { max: 500 }) ?? (date(b, 'occurredOn') ? 'dated on entry' : null),
       note: str(b, 'note', { max: 1000 }),
+      notBankLines: strList(b, 'notBankLines'),
     });
     return reply.code(201).send({ id, feeTetri: plan.feeTetri, closes: plan.closes });
   });
