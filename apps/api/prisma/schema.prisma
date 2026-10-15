@@ -1123,6 +1123,8 @@ model BatteryInventory {
   repairQty   Int      @map("repair_qty")
   couriersQty Int      @map("couriers_qty")
   totalQty    Int      @map("total_qty")
+  /// What the row counts: battery or charger (migration 0044).
+  item        String   @default("battery")
   reason      String?
   createdById String?  @map("created_by") @db.Uuid
   createdAt   DateTime @default(now()) @map("created_at")
@@ -1137,6 +1139,8 @@ model BatteryMove {
   id          String   @id @default(uuid()) @db.Uuid
   kind        String
   qty         Int
+  /// What the row counts: battery or charger (migration 0044).
+  item        String   @default("battery")
   reason      String?
   rentalId    String?  @map("rental_id") @db.Uuid
   actId       String?  @map("act_id") @db.Uuid

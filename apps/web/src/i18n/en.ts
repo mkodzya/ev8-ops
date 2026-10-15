@@ -99,7 +99,7 @@ export const en = {
       vehicles: 'Mopeds',
       models: 'Models',
       points: 'Points',
-      batteries: 'Batteries',
+      batteries: 'Batteries and chargers',
       jobs: 'Repairs',
       stock: 'Stock',
       payments: 'Payments',

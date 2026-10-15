@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { LoadError } from '../components/LoadError.js';
 import { Empty, Loading, PageHead } from '../components/ui.js';
@@ -10,7 +11,10 @@ import { useLoad } from '../lib/use.js';
 import { useSession } from '../session.js';
 
 // Батареи — счёт без номеров (wave 4 §3.8, D16): four numbers, how they moved,
-// and the stocktake that sets them straight.
+// and the stocktake that sets them straight. Зарядки — the same count since
+// migration 0044 (meeting of 14.10.2026), one switch at the top.
+
+type Item = 'battery' | 'charger';
 
 interface Batteries {
   total: number;
@@ -26,15 +30,26 @@ interface Batteries {
 export function BatteriesPage() {
   const t = useT();
   const { can } = useSession();
-  const { data, failure, reload } = useLoad<Batteries>('/api/batteries');
+  const [params, setParams] = useSearchParams();
+  const item: Item = params.get('item') === 'charger' ? 'charger' : 'battery';
+  const { data, failure, reload } = useLoad<Batteries>(`/api/batteries?item=${item}`);
   const [sheet, setSheet] = useState<null | 'inventory' | 'move'>(null);
   const mayCount = can('fleet.pool.set');
+  const switcher = (
+    <div className="list-chips" role="tablist">
+      {(['battery', 'charger'] as const).map((it) => (
+        <button key={it} type="button" role="tab" aria-selected={item === it} className={`list-chip ${item === it ? 'on' : ''}`} onClick={() => setParams(it === 'battery' ? {} : { item: it }, { replace: true })}>
+          {t.bat.items[it]}
+        </button>
+      ))}
+    </div>
+  );
   if (!data && failure) return <LoadError failure={failure} onRetry={reload} />;
   if (!data) return <Loading />;
 
   return (
     <>
-      <PageHead title={t.bat.title} sub={data.lastInventory ? t.bat.counted(fmtDate(data.lastInventory.countedOn), data.lastInventory.by ?? '') : t.bat.never}>
+      <PageHead title={t.bat.items[item]} sub={data.lastInventory ? t.bat.counted(fmtDate(data.lastInventory.countedOn), data.lastInventory.by ?? '') : t.bat.never}>
         {mayCount && (
           <>
             <button type="button" className="pill pill-sm" onClick={() => setSheet('move')}>
@@ -46,6 +61,7 @@ export function BatteriesPage() {
           </>
         )}
       </PageHead>
+      {switcher}
 
       <div className="num-strip">
         <span className="num">
@@ -103,14 +119,14 @@ export function BatteriesPage() {
         )}
       </section>
 
-      {sheet === 'inventory' && <InventorySheet now={data} onClose={() => setSheet(null)} onSaved={() => { setSheet(null); reload(); }} />}
-      {sheet === 'move' && <MoveSheet onClose={() => setSheet(null)} onSaved={() => { setSheet(null); reload(); }} />}
+      {sheet === 'inventory' && <InventorySheet item={item} now={data} onClose={() => setSheet(null)} onSaved={() => { setSheet(null); reload(); }} />}
+      {sheet === 'move' && <MoveSheet item={item} onClose={() => setSheet(null)} onSaved={() => { setSheet(null); reload(); }} />}
     </>
   );
 }
 
 /** The owner counted the shelf; what the couriers hold comes from the acts (§3.8). */
-function InventorySheet({ now, onClose, onSaved }: { now: Batteries; onClose: () => void; onSaved: () => void }) {
+function InventorySheet({ item, now, onClose, onSaved }: { item: Item; now: Batteries; onClose: () => void; onSaved: () => void }) {
   const t = useT();
   const initial = { showroom: String(now.showroom), repair: String(now.repair), reason: '' };
   const [f, setF] = useState(initial);
@@ -118,14 +134,14 @@ function InventorySheet({ now, onClose, onSaved }: { now: Batteries; onClose: ()
   const differs = counted !== now.total;
   return (
     <FormSheet
-      title={t.bat.inventoryTitle}
+      title={item === 'charger' ? t.bat.chargerInventoryTitle : t.bat.inventoryTitle}
       onClose={onClose}
       value={f}
       initial={initial}
       onRestore={setF}
       label={t.bat.save}
       submit={async (key) => {
-        await api.post('/api/batteries/inventory', { showroomQty: Number(f.showroom), repairQty: Number(f.repair), reason: f.reason.trim() || null }, { key });
+        await api.post('/api/batteries/inventory', { item, showroomQty: Number(f.showroom), repairQty: Number(f.repair), reason: f.reason.trim() || null }, { key });
         return { toast: { text: t.form.changesSaved } };
       }}
       onDone={onSaved}
@@ -149,20 +165,20 @@ function InventorySheet({ now, onClose, onSaved }: { now: Batteries; onClose: ()
 }
 
 /** To repair and back, a loss outside a return, a battery that turned up. */
-function MoveSheet({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
+function MoveSheet({ item, onClose, onSaved }: { item: Item; onClose: () => void; onSaved: () => void }) {
   const t = useT();
   const initial = { kind: 'to_repair', qty: '1', reason: '' };
   const [f, setF] = useState(initial);
   return (
     <FormSheet
-      title={t.bat.moveTitle}
+      title={item === 'charger' ? t.bat.chargerMoveTitle : t.bat.moveTitle}
       onClose={onClose}
       value={f}
       initial={initial}
       onRestore={setF}
       label={t.bat.moveSave}
       submit={async (key) => {
-        await api.post('/api/batteries/moves', { kind: f.kind, qty: Number(f.qty), reason: f.reason.trim() }, { key });
+        await api.post('/api/batteries/moves', { item, kind: f.kind, qty: Number(f.qty), reason: f.reason.trim() }, { key });
         return { toast: { text: t.form.changesSaved } };
       }}
       onDone={onSaved}
