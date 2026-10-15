@@ -808,7 +808,6 @@ export const ka: Dict = {
     splitWeekNewSub: 'მომდევნო კვირებში წავა',
     splitOldPick: 'მონიშნეთ, რომელი კვირის ქირაა.',
     splitMore: '+ კიდევ: შეკეთება, კლიენტის ანგარიში',
-    splitRestHint: (n) => `ნაშთი ${n}`,
     splitAllPlaced: 'ყველაფერი განაწილდა ✓',
     resTitle: 'რა ჩაიწერება',
     resCarried: (a, week, r) => `${a} — კვირის ${week} გადახდა, ${r}. კვირა ისედაც გადახდილი იყო, ახლა მას ბანკის გადახდა აქვს.`,

@@ -819,7 +819,6 @@ export const en = {
     splitWeekNewSub: 'it goes to the weeks ahead',
     splitOldPick: 'Mark which week the rent is for.',
     splitMore: '+ more: a repair, the customer’s account',
-    splitRestHint: (n: string) => `the rest ${n}`,
     splitAllPlaced: 'all placed ✓',
     resTitle: 'What will be written',
     resCarried: (a: string, week: string, r: string) => `${a} — the week ${week} of ${r}. It was paid already; now it has its payment from the bank.`,
