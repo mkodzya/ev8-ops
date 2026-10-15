@@ -15,6 +15,7 @@ export * from './economics.js';
 export * from './stock.js';
 export * from './tokens.js';
 export * from './navigation.js';
+export * from './fleet.js';
 export * from './search.js';
 export * from './debt.js';
 export * from './due.js';

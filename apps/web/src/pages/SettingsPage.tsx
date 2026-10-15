@@ -25,6 +25,8 @@ type LocationKind = (typeof LOCATION_KINDS)[number];
 
 interface RentalSettings {
   depositTetri: number;
+  /** The telephone on the moped stickers (migration 0043); absent while an older API answers. */
+  stickerPhone?: string | null;
   quickRates: { id: string; rateTetri: number }[];
 }
 
@@ -266,6 +268,7 @@ export function RentalBlock() {
   const [adding, setAdding] = useState(false);
   const [rate, setRate] = useState('');
   const [deposit, setDeposit] = useState<string | null>(null);
+  const [phone, setPhone] = useState<string | null>(null);
 
   if (!settings.data) {
     return settings.failure ? <LoadError failure={settings.failure} onRetry={settings.reload} /> : <Loading />;
@@ -283,6 +286,19 @@ export function RentalBlock() {
     if (!res.ok) return;
     setDeposit(null);
     toast({ text: t.rentalSettings.depositSaved(formatGel(parsed)) });
+    settings.reload();
+  };
+
+  const phoneText = phone ?? s.stickerPhone ?? '';
+  const savePhone = async () => {
+    if (phone == null || phone.trim() === (s.stickerPhone ?? '')) {
+      setPhone(null);
+      return;
+    }
+    const res = await op.run((key) => api.patch('/api/settings/sticker', { stickerPhone: phone.trim() }, { key }), `sticker:${phone}`);
+    if (!res.ok) return;
+    setPhone(null);
+    toast({ text: t.form.changesSaved });
     settings.reload();
   };
 
@@ -341,6 +357,9 @@ export function RentalBlock() {
           onChange={(e) => setDeposit(e.target.value)}
           onBlur={() => void saveDeposit()}
         />
+      </Field>
+      <Field label={t.rentalSettings.stickerPhone} hint={t.rentalSettings.stickerPhoneHint} name="stickerPhone">
+        <input className="input mono" inputMode="tel" value={phoneText} aria-label={t.rentalSettings.stickerPhone} onChange={(e) => setPhone(e.target.value)} onBlur={() => void savePhone()} />
       </Field>
       {op.failure && <div className="field-err">{op.failure.fieldText ?? op.failure.text}</div>}
     </section>

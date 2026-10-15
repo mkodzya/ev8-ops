@@ -1,11 +1,11 @@
-import { acquiringFee, acquiringNet, addDays, CUSTOMER_SOURCES, DEFAULT_DEPOSIT_TETRI, gelFromTetri, handOverBlockTetri, parseGel, todayISO, type VehiclePool, type VehicleState } from '@ev8/shared';
+import { acquiringFee, acquiringNet, addDays, CUSTOMER_SOURCES, DEFAULT_DEPOSIT_TETRI, gelFromTetri, handOverBlockTetri, parseGel, readFleetNumber, todayISO, type VehiclePool, type VehicleState } from '@ev8/shared';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api, ApiError } from '../api.js';
 import { DocumentRow } from '../components/Documents.js';
 import { LoadError } from '../components/LoadError.js';
 import { PhotoPicker } from '../components/PhotoPicker.js';
-import { ColorText, CustomerName, Loading, Vin } from '../components/ui.js';
+import { ColorText, CustomerName, FleetNo, Loading, Vin } from '../components/ui.js';
 import { Field, Row, Wizard } from '../components/Wizard.js';
 import { DraftOffer } from '../ds/form/Form.js';
 import { useDraft } from '../ds/form/drafts.js';
@@ -42,6 +42,8 @@ interface CustomerRow {
 interface FleetRow {
   id: string;
   vin: string;
+  /** EV-007 on the sticker (migration 0043); absent while an older API answers. */
+  fleetNo?: number | null;
   model: string;
   weeklyRateTetri: number | null;
   color: string | null;
@@ -198,7 +200,9 @@ export function PickupWizard() {
   }, [allCustomers, recentRentals.data, q]);
 
   const vinNeedle = vq.trim().toUpperCase();
-  const free = vehicles.filter((v) => v.state === 'available' && (!vinNeedle || v.vin.includes(vinNeedle)));
+  // The number on the sticker or a piece of the VIN (Mika, 15.10.2026).
+  const noNeedle = readFleetNumber(vq, { digitsToo: true });
+  const free = vehicles.filter((v) => v.state === 'available' && (!vinNeedle || v.vin.includes(vinNeedle) || (noNeedle != null && v.fleetNo === noNeedle)));
   const forRent = free.filter((v) => v.pool !== 'sale');
   const forSale = free.filter((v) => v.pool === 'sale');
 
@@ -351,7 +355,7 @@ export function PickupWizard() {
     <span className="warn-text">{t.rentals.vinUnconfirmed}</span>
   ) : vehicle ? (
     <>
-      {vehicle.model} <Vin vin={vehicle.vin} />
+      <FleetNo n={vehicle.fleetNo} /> {vehicle.model} <Vin vin={vehicle.vin} />
     </>
   ) : (
     ''
@@ -822,7 +826,7 @@ function VehicleList({ list, chosen, disabled, onPick }: { list: FleetRow[]; cho
           <button type="button" className={v.id === chosen ? 'on' : ''} disabled={disabled} onClick={() => onPick(v.id)}>
             <span className="pick-main">
               <span>
-                {v.model}
+                <FleetNo n={v.fleetNo} /> {v.model}
                 {v.color && (
                   <span className="muted">
                     {' '}
