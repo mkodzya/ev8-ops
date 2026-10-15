@@ -336,6 +336,22 @@ export function paymentRoutes(app: FastifyInstance): void {
       }),
       prisma.serviceJob.findMany({ where: { customerId: id, payer: 'customer', status: 'done' }, select: { id: true, number: true } }),
     ]);
+    // What "Разделить" can put a part on beyond a whole rental (ADR-0023): a
+    // fine or other charge still open, and a week carried over as paid that
+    // no bank money stands behind yet.
+    const rentalIds = rentals.map((r) => r.id);
+    const [charges, carried] = await Promise.all([
+      prisma.rentalCharge.findMany({
+        where: { rentalId: { in: rentalIds }, voidedAt: null },
+        orderBy: { createdAt: 'asc' },
+        select: { id: true, rentalId: true, kind: true, note: true, amountTetri: true, allocations: { where: { payment: { voidedAt: null } }, select: { amountTetri: true } } },
+      }),
+      prisma.rentalPeriod.findMany({
+        where: { rentalId: { in: rentalIds }, paidBeforeTransfer: true, carriedPaymentId: null },
+        orderBy: [{ rentalId: 'asc' }, { seq: 'asc' }],
+        select: { id: true, rentalId: true, seq: true, startsOn: true, endsOn: true, amountTetri: true },
+      }),
+    ]);
     return {
       debt,
       rentals: rentals.map((r) => ({ id: r.id, number: r.number, status: r.status, weeklyRateTetri: r.weeklyRateTetri, vin: r.vehicle?.vin ?? null, model: r.vehicle?.model.name ?? null })),
@@ -344,6 +360,10 @@ export function paymentRoutes(app: FastifyInstance): void {
         return { id: s.id, number: s.number, nextTetri: next ? next.amountTetri - next.paidTetri : 0, nextDueOn: next ? isoDate(next.dueOn) : null, overdue: !!next && isoDate(next.dueOn)! <= today };
       }),
       repairs: jobs,
+      charges: charges
+        .map((c) => ({ id: c.id, rentalId: c.rentalId, kind: c.kind, note: c.note, openTetri: c.amountTetri - c.allocations.reduce((n, a) => n + a.amountTetri, 0) }))
+        .filter((c) => c.openTetri > 0),
+      carriedWeeks: carried.map((w) => ({ id: w.id, rentalId: w.rentalId, seq: w.seq, startsOn: isoDate(w.startsOn), endsOn: isoDate(w.endsOn), amountTetri: w.amountTetri })),
     };
   });
 }

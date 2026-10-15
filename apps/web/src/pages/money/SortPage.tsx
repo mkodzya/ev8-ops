@@ -1,4 +1,4 @@
-import { formatGel, parseGel, SEARCH_MIN } from '@ev8/shared';
+import { addDays, formatGel, parseGel, SEARCH_MIN } from '@ev8/shared';
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../../api.js';
@@ -391,6 +391,10 @@ interface Targets {
   rentals: { id: string; number: string; status: string; model: string | null }[];
   sales: { id: string; number: string; nextTetri: number }[];
   repairs: { id: string; number: string }[];
+  /** Open fines and other charges, each its own part (ADR-0023). */
+  charges?: { id: string; rentalId: string; kind: string; note: string | null; openTetri: number }[];
+  /** Weeks carried over as paid with no bank money behind them yet (ADR-0023). */
+  carriedWeeks?: { id: string; rentalId: string; seq: number; startsOn: string; endsOn: string; amountTetri: number }[];
 }
 interface SplitRow {
   key: string;
@@ -434,11 +438,29 @@ function SplitSheet({ line, onClose }: { line: SortLine; onClose: () => void }) 
   const targets = useLoad<Targets>(value.customer ? `/api/customers/${value.customer.id}/money-targets` : null);
 
   const owes = (kinds: string[], id: string) => (targets.data?.debt.parts ?? []).filter((p) => p.id === id && kinds.includes(p.kind)).reduce((n, p) => n + p.owesTetri, 0);
+  const numberOf = (rentalId: string) => targets.data?.rentals.find((r) => r.id === rentalId)?.number ?? '';
+  // A carried week is offered when the line's day is near it: a week paid on
+  // time, a little early or a little late (Mika, 15.10.2026, «А»).
+  const near = (w: { startsOn: string; endsOn: string }) => w.startsOn <= addDays(line.occurredOn, 7) && w.endsOn >= addDays(line.occurredOn, -7);
   const rows: SplitRow[] = targets.data
     ? [
         ...targets.data.rentals
-          .filter((r) => owes(['rent', 'deposit', 'charge'], r.id) > 0 || !['returned', 'cancelled'].includes(r.status))
-          .map((r) => ({ key: `r:${r.id}`, body: { rentalId: r.id }, label: r.number, sub: r.model ?? '', owesTetri: owes(['rent', 'deposit', 'charge'], r.id) })),
+          .filter((r) => owes(['rent', 'deposit'], r.id) > 0 || !['returned', 'cancelled'].includes(r.status))
+          .map((r) => ({ key: `r:${r.id}`, body: { rentalId: r.id }, label: r.number, sub: r.model ?? '', owesTetri: owes(['rent', 'deposit'], r.id) })),
+        ...(targets.data.carriedWeeks ?? []).filter(near).map((w) => ({
+          key: `w:${w.id}`,
+          body: { carriedPeriodId: w.id },
+          label: t.sort.splitCarried(numberOf(w.rentalId), fmtDate(w.startsOn), fmtDate(w.endsOn)),
+          sub: t.sort.splitCarriedSub,
+          owesTetri: w.amountTetri,
+        })),
+        ...(targets.data.charges ?? []).map((c) => ({
+          key: `f:${c.id}`,
+          body: { chargeId: c.id },
+          label: t.sort.splitFine(numberOf(c.rentalId), t.rentalMoney.charges[c.kind] ?? c.kind),
+          sub: c.note ?? '',
+          owesTetri: c.openTetri,
+        })),
         ...targets.data.repairs
           .filter((j) => owes(['service'], j.id) > 0)
           .map((j) => ({ key: `j:${j.id}`, body: { serviceJobId: j.id }, label: `${t.money.kinds.service} ${j.number}`, sub: '', owesTetri: owes(['service'], j.id) })),

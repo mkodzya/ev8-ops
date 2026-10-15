@@ -73,7 +73,7 @@ export interface RentalCard {
     undoReturnUntil?: string | null;
   };
   /** What a return charged beyond the weeks: a key, days of delay (wave 3 §3.4). */
-  charges: { kind: string; amountTetri: number; note: string | null; paidTetri: number }[];
+  charges: { id: string; kind: string; amountTetri: number; note: string | null; paidTetri: number }[];
   /** One timeline of the rental: money, acts, documents, the journal (ux №7). */
   feed: { at: string; kind: 'payment' | 'act' | 'document' | 'log'; by: string | null; text: string; amountTetri: number | null; note: string | null }[];
   documents: { contract: DocState; returnAct: DocState | null };
@@ -101,7 +101,7 @@ export function RentalPage() {
   const { can } = useSession();
   const { data, failure, reload } = useLoad<RentalCard>(id ? `/api/rentals/${id}` : null);
   const [params, setParams] = useSearchParams();
-  const [sheet, setSheet] = useState<null | 'edit' | 'status' | 'undo' | 'decide'>(params.get('decide') === '1' ? 'decide' : null);
+  const [sheet, setSheet] = useState<null | 'edit' | 'status' | 'undo' | 'decide' | 'fine'>(params.get('decide') === '1' ? 'decide' : null);
   const [wa, setWa] = useState(false);
   const [feedFilter, setFeedFilter] = useState<'all' | 'payment' | 'act' | 'document' | 'log'>('all');
   const closeSheet = () => {
@@ -115,6 +115,7 @@ export function RentalPage() {
   // on some renders and not others, which React counts and then throws on.
   const [preview, setPreview] = useState<'contract' | 'return-act' | null>(null);
   const [discounting, setDiscounting] = useState<RentalCard['periods'][number] | null>(null);
+  const [unfining, setUnfining] = useState<RentalCard['charges'][number] | null>(null);
   if (failure) return <LoadError failure={failure} onRetry={reload} />;
   if (!data) return <Loading />;
   const r = data.rental;
@@ -140,6 +141,8 @@ export function RentalPage() {
   const menu = [
     ...(open && can('rental.create') ? [{ key: 'edit', label: t.rentalMenu.edit, onPick: () => setSheet('edit') }] : []),
     ...(open && owner ? [{ key: 'status', label: t.rentalMenu.status, onPick: () => setSheet('status') }] : []),
+    // A fine — damage, a dirty moped — while the rental runs or after it (ADR-0023).
+    ...(owner ? [{ key: 'fine', label: t.rental.fine, onPick: () => setSheet('fine') }] : []),
     ...(!open && owner && r.undoReturnUntil ? [{ key: 'undo', label: t.rentalMenu.undo, onPick: () => setSheet('undo') }] : []),
     ...(!open && owner && d && !d.decided ? [{ key: 'decide', label: t.rentalMenu.decide, onPick: () => setSheet('decide') }] : []),
   ];
@@ -184,6 +187,18 @@ export function RentalPage() {
           onClose={closeSheet}
           onSaved={() => {
             closeSheet();
+            reload();
+          }}
+        />
+      )}
+      {sheet === 'fine' && <FineSheet rentalId={r.id} onClose={closeSheet} onDone={() => { closeSheet(); reload(); }} />}
+      {unfining && (
+        <UnfineSheet
+          rentalId={r.id}
+          charge={unfining}
+          onClose={() => setUnfining(null)}
+          onDone={() => {
+            setUnfining(null);
             reload();
           }}
         />
@@ -284,14 +299,15 @@ export function RentalPage() {
 
       {data.charges.length > 0 && (
         <section className="card">
-          {data.charges.map((c, i) => (
+          {data.charges.map((c) => (
             <Row
-              key={i}
-              k={t.rentalMoney.charges[c.kind] ?? c.kind}
+              key={c.id}
+              k={c.kind === 'fine' && c.note ? `${t.rentalMoney.charges.fine} · ${c.note}` : (t.rentalMoney.charges[c.kind] ?? c.kind)}
               v={
                 <span>
                   <span className="mono">{formatGel(c.amountTetri, { decimals: false })}</span>
                   {c.paidTetri < c.amountTetri && c.paidTetri > 0 && <span className="muted"> · {t.rentalMoney.rest(formatGel(c.amountTetri - c.paidTetri, { decimals: false }))}</span>}
+                  {owner && c.kind === 'fine' && c.paidTetri === 0 && <RowMenu actions={[{ key: 'unfine', label: t.rental.fineVoid, onPick: () => setUnfining(c) }]} />}
                 </span>
               }
             />
@@ -779,6 +795,60 @@ function DiscountSheet({ rentalId, week, onClose, onDone }: { rentalId: string; 
       </Field>
       <Field label={t.rental.discountReason} hint={t.rental.discountReasonHint} name="reason">
         <input className="input" value={f.reason} onChange={(e) => setF({ ...f, reason: e.target.value })} />
+      </Field>
+    </FormSheet>
+  );
+}
+
+/** "Начислить штраф" — an owner, with an amount and what it is for (ADR-0023). */
+function FineSheet({ rentalId, onClose, onDone }: { rentalId: string; onClose: () => void; onDone: () => void }) {
+  const t = useT();
+  const initial = { amount: '', reason: '' };
+  const [f, setF] = useState(initial);
+  return (
+    <FormSheet
+      title={t.rental.fine}
+      onClose={onClose}
+      value={f}
+      initial={initial}
+      label={t.rental.fine}
+      submit={async (key) => {
+        await api.post(`/api/rentals/${rentalId}/fines`, { amountTetri: f.amount.trim(), reason: f.reason.trim() }, { key });
+        return { toast: { text: t.rental.fineDone } };
+      }}
+      onDone={onDone}
+    >
+      <p className="hint muted">{t.rental.fineHint}</p>
+      <Field label={t.rental.fineAmount} name="amountTetri">
+        <input className="input mono" inputMode="decimal" autoFocus value={f.amount} onChange={(e) => setF({ ...f, amount: e.target.value })} />
+      </Field>
+      <Field label={t.rental.fineReason} hint={t.rental.fineReasonHint} name="reason">
+        <input className="input" value={f.reason} onChange={(e) => setF({ ...f, reason: e.target.value })} />
+      </Field>
+    </FormSheet>
+  );
+}
+
+/** A fine nobody has paid, taken back with a reason. */
+function UnfineSheet({ rentalId, charge, onClose, onDone }: { rentalId: string; charge: RentalCard['charges'][number]; onClose: () => void; onDone: () => void }) {
+  const t = useT();
+  const initial = { reason: '' };
+  const [f, setF] = useState(initial);
+  return (
+    <FormSheet
+      title={`${t.rental.fineVoid} · ${formatGel(charge.amountTetri)}`}
+      onClose={onClose}
+      value={f}
+      initial={initial}
+      label={t.rental.fineVoid}
+      submit={async (key) => {
+        await api.post(`/api/rentals/${rentalId}/fines/${charge.id}/void`, { reason: f.reason.trim() }, { key });
+        return { toast: { text: t.rental.fineVoidDone } };
+      }}
+      onDone={onDone}
+    >
+      <Field label={t.rental.fineVoidReason} name="reason">
+        <input className="input" autoFocus value={f.reason} onChange={(e) => setF({ ...f, reason: e.target.value })} />
       </Field>
     </FormSheet>
   );

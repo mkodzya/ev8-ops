@@ -271,6 +271,8 @@ export function statementRoutes(app: FastifyInstance): void {
         saleId: str(b, 'saleId'),
         serviceJobId: str(b, 'serviceJobId'),
         customerId: str(b, 'customerId'),
+        chargeId: str(b, 'chargeId'),
+        carriedPeriodId: str(b, 'carriedPeriodId'),
       };
     });
     const r = await prisma.$transaction((tx) => split(tx, { actorId: actorOf(req).id, lineId: req.params.id, parts }));

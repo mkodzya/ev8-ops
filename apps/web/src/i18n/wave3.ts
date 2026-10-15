@@ -253,7 +253,7 @@ export const wave3En = {
     documents: 'Documents',
   },
   rentalMoney: {
-    charges: { key: 'Key not returned', late: 'Delay', withheld: 'Kept beyond the claims', other: 'Other' } as Record<string, string>,
+    charges: { key: 'Key not returned', late: 'Delay', withheld: 'Kept beyond the claims', other: 'Other', fine: 'Fine' } as Record<string, string>,
     rest: (n: string) => `rest ${n}`,
     receivedOf: (a: string, b: string) => `${a} of ${b}`,
     keptRepair: (n: string) => `Kept · repair ${n}`,
@@ -511,7 +511,7 @@ export const wave3Ru: Wave3 = {
     documents: 'Документы',
   },
   rentalMoney: {
-    charges: { key: 'Потеря ключа', late: 'Опоздание', withheld: 'Удержано сверх претензий', other: 'Другое' },
+    charges: { key: 'Потеря ключа', late: 'Опоздание', withheld: 'Удержано сверх претензий', other: 'Другое', fine: 'Штраф' },
     rest: (n) => `остаток ${n}`,
     receivedOf: (a, b) => `${a} из ${b}`,
     keptRepair: (n) => `Удержано · ремонт ${n}`,
@@ -767,7 +767,7 @@ export const wave3Ka: Wave3 = {
     documents: 'დოკუმენტები',
   },
   rentalMoney: {
-    charges: { key: 'გასაღების დაკარგვა', late: 'დაგვიანება', withheld: 'პრეტენზიებზე მეტი დაკავება', other: 'სხვა' },
+    charges: { key: 'გასაღების დაკარგვა', late: 'დაგვიანება', withheld: 'პრეტენზიებზე მეტი დაკავება', other: 'სხვა', fine: 'ჯარიმა' },
     rest: (n) => `ნაშთი ${n}`,
     receivedOf: (a, b) => `${a} / ${b}`,
     keptRepair: (n) => `დაკავებულია · რემონტი ${n}`,

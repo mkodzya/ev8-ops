@@ -484,6 +484,8 @@ model RentalPeriod {
   endsOn      DateTime        @map("ends_on") @db.Date
   amountTetri Int             @map("amount_tetri")
   paidBeforeTransfer Boolean @default(false) @map("paid_before_transfer")
+  /// The bank's payment a week carried over as paid turned out to be (migration 0042, ADR-0023).
+  carriedPaymentId String?   @map("carried_payment_id") @db.Uuid
   paidTetri   Int             @default(0) @map("paid_tetri")
   /// Taken off the week by an owner, with a reason; amountTetri is the price after it (migration 0040).
   discountTetri  Int       @default(0) @map("discount_tetri")
