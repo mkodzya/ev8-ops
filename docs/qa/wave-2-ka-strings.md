@@ -339,8 +339,6 @@
 
 | Ключ | RU | EN | KA | Чтение |
 |---|---|---|---|---|
-| `sort.splitCarried(R, с, по)` | R-00002 · неделя 08.10.2026–14.10.2026 | R-00002 · week … | R-00002 · კვირა … | kvira |
-| `sort.splitCarriedSub` | учтена при переносе — эти деньги и есть её оплата | carried over as paid — this money is what paid it | გადმოტანისას გადახდილად ჩაითვალა — ეს თანხა სწორედ მისი გადახდაა | gadmotanisas gadakhdilad chaitvala — es tankha stsored misi gadakhdaa |
 | `rentalMoney.charges.fine` | Штраф | Fine | ჯარიმა | jarima |
 | `rental.fine` | Начислить штраф | Charge a fine | ჯარიმის დარიცხვა | jarimis daritskhva |
 | `rental.fineAmount` | Сумма | Amount | თანხა | tankha |
@@ -353,3 +351,17 @@
 | `rental.fineVoidDone` | Штраф снят | Fine taken back | ჯარიმა მოიხსნა | jarima moikhsna |
 | ошибки `charge_not_found`, `week_not_carried`, `week_has_bank_money`, `split_over_charge`, `split_carried_week`, `fine_paid` | см. `ru.ts` | see `en.ts` | см. `ka.ts` | — |
 | журнал `rental.charge.add` / `.void` | Начислен штраф / Штраф снят | A fine was charged / taken back | ჯარიმა დაერიცხა / მოიხსნა | — |
+
+## 15.10.2026, вечер — «Разделить» проще: аренда с выбором для старого платежа, штраф прямо в окне
+
+Написано не носителем языка. Строки `sort.splitCarried…` из записи выше заменены этими.
+
+| Ключ | RU | EN | KA | Чтение |
+|---|---|---|---|---|
+| `sort.splitRent(R)` | R-00002 · аренда | R-00002 · rent | R-00002 · ქირა | kira |
+| `sort.splitFineNew(R)` | R-00002 · штраф | R-00002 · fine | R-00002 · ჯარიმა | jarima |
+| `sort.splitFineReason` | За что штраф | What the fine is for | რისთვისაა ჯარიმა | ristvisaa jarima |
+| `sort.splitOldQ(дата)` | Платёж от 08.10.2026 пришёл до переноса аренды. Эти деньги — | This payment of … came before the rental was carried over. The money is: | 08.10.2026-ის გადახდა ქირაობის გადმოტანამდე მოვიდა. ეს თანხა — | … gadakhda kiraobis gadmotanamde movida. es tankha — |
+| `sort.splitOldCarried(с, по)` | за неделю 08.10.2026–14.10.2026: она уже отмечена оплаченной при переносе | for the week …, already marked paid at the carry-over | კვირისთვისაა …: ის გადმოტანისას უკვე გადახდილად მოინიშნა | kviristvisaa …: is gadmotanisas ukve gadakhdilad moinishna |
+| `sort.splitOldNew` | новая оплата: закроет то, что клиент должен сейчас | new money — it pays what the customer owes now | ახალი გადახდაა: დაფარავს იმას, რაც კლიენტს ახლა მართებს | akhali gadakhdaa: dapharavs imas, rats kliens akhla martebs |
+| `sort.splitOldPick` | Отметьте, за что деньги аренды: … | Mark what the rent money is: … | მონიშნეთ, რისთვისაა ქირის თანხა: … | monishnet, ristvisaa kiris tankha |
