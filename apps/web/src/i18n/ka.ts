@@ -10,6 +10,7 @@ import { kommoLinkKa } from './kommo-link.js';
 import { bogApiKa } from './bog-api.js';
 import { calendarKa } from './payments-calendar.js';
 import { payDayKa } from './pay-day.js';
+import { inBankKa } from './in-bank.js';
 import type { Dict } from './en.js';
 
 // Typed as Dict: a missing or misspelled key fails the build.
@@ -1255,4 +1256,5 @@ export const ka: Dict = {
   ...bogApiKa,
   ...calendarKa,
   ...payDayKa,
+  ...inBankKa,
 };

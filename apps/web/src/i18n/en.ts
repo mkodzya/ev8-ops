@@ -19,6 +19,7 @@ import { kommoLinkEn } from './kommo-link.js';
 import { bogApiEn } from './bog-api.js';
 import { calendarEn } from './payments-calendar.js';
 import { payDayEn } from './pay-day.js';
+import { inBankEn } from './in-bank.js';
 export const en = {
   lang: { label: 'Language', ka: 'ქართული', ru: 'Русский', en: 'English' },
 
@@ -1269,6 +1270,7 @@ export const en = {
   ...bogApiEn,
   ...calendarEn,
   ...payDayEn,
+  ...inBankEn,
 };
 
 export type Dict = typeof en;

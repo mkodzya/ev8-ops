@@ -10,6 +10,7 @@ import { kommoLinkRu } from './kommo-link.js';
 import { bogApiRu } from './bog-api.js';
 import { calendarRu } from './payments-calendar.js';
 import { payDayRu } from './pay-day.js';
+import { inBankRu } from './in-bank.js';
 import type { Dict } from './en.js';
 
 // Typed as Dict: a missing or misspelled key fails the build.
@@ -1266,4 +1267,5 @@ export const ru: Dict = {
   ...bogApiRu,
   ...calendarRu,
   ...payDayRu,
+  ...inBankRu,
 };
