@@ -473,6 +473,8 @@ export type BogOutcome =
       known: { byKey: number; byDoc: number; bySum: number };
       /** The days read (the nightly reading); a day a file covers in full is not read. */
       days: string[];
+      /** The day's operations came from today's statement: the list of the day's operations did not answer. */
+      fromStatement: boolean;
     }
   | { status: 'failed'; failure: BogFailure; httpStatus: number | null; stage: BogStage | null };
 
@@ -532,13 +534,25 @@ const SYNC = { id: true } as const;
 async function pullToday(cfg: BogConfig, now: Date): Promise<BogOutcome> {
   const today = todayISO(now, env.TZ);
   const lists: { account: string; lines: ParsedLine[]; listed: number }[] = [];
+  let fromStatement = false;
   try {
     const accounts = await accountsFor(cfg);
     if (accounts.length === 0) throw new BogError('no_account');
     const bank = client(cfg);
     for (const account of accounts) {
-      const rows = await bank.today(account);
-      lists.push({ account, lines: onceEach(rows.map((r) => lineFromToday(r, today))), listed: rows.length });
+      try {
+        const rows = await bank.today(account);
+        lists.push({ account, lines: onceEach(rows.map((r) => lineFromToday(r, today))), listed: rows.length });
+      } catch (err) {
+        // The list of the day's operations is down while the statement is not
+        // (test stand, 15.10.2026: `todayactivities` 503 again and again, the
+        // statement of the 14th read at once). Today's statement holds the same
+        // operations, keyed as the night will key them.
+        if (!(err instanceof BogError && err.stage === 'api' && err.httpStatus != null && err.httpStatus >= 500)) throw err;
+        const rows = await bank.statement(account, today, today);
+        lists.push({ account, lines: onceEach(rows.map(lineFromEntry)), listed: rows.length });
+        fromStatement = true;
+      }
     }
   } catch (err) {
     if (!(err instanceof BogError)) throw err;
@@ -548,6 +562,7 @@ async function pullToday(cfg: BogConfig, now: Date): Promise<BogOutcome> {
   }
 
   const outcome = blank();
+  outcome.fromStatement = fromStatement;
   for (const { account, lines, listed } of lists) {
     outcome.listed += listed;
     for (const [day, ofDay] of byDay(lines)) await keep(account, day, ofDay, outcome);
@@ -595,7 +610,7 @@ async function readNights(cfg: BogConfig, now: Date): Promise<BogOutcome> {
 }
 
 function blank(): Ok {
-  return { status: 'ok', listed: 0, added: 0, recorded: 0, matched: 0, known: { byKey: 0, byDoc: 0, bySum: 0 }, days: [] };
+  return { status: 'ok', listed: 0, added: 0, recorded: 0, matched: 0, known: { byKey: 0, byDoc: 0, bySum: 0 }, days: [], fromStatement: false };
 }
 
 function byDay(lines: ParsedLine[]): Map<string, ParsedLine[]> {

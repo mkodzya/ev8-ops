@@ -75,7 +75,7 @@ async function pollKommo(): Promise<void> {
 type BogOutcome =
   | { status: 'off' }
   | { status: 'busy' }
-  | { status: 'ok'; listed: number; added: number; recorded: number; matched: number; known: { byKey: number; byDoc: number; bySum: number }; days: string[] }
+  | { status: 'ok'; listed: number; added: number; recorded: number; matched: number; known: { byKey: number; byDoc: number; bySum: number }; days: string[]; fromStatement?: boolean }
   | { status: 'failed'; failure: string; httpStatus: number | null; stage?: string | null };
 
 let bogSaid = '';
@@ -102,7 +102,7 @@ async function askBog(job: 'bog-today' | 'bog-night'): Promise<void> {
           ? r.days.length
             ? `Bank of Georgia statement ${r.days[0]}…${r.days[r.days.length - 1]} — ${r.listed} entr(ies), ${known} already in${from}, ${added}`
             : 'Bank of Georgia statement — the nights are read'
-          : `Bank of Georgia answered — ${r.listed} operation(s) today, ${added}${from}`;
+          : `Bank of Georgia answered${r.fromStatement ? ' through today’s statement (the day’s list did not)' : ''} — ${r.listed} operation(s) today, ${added}${from}`;
       always = r.added > 0 || (job === 'bog-night' && r.days.length > 0);
     }
   } catch (err) {

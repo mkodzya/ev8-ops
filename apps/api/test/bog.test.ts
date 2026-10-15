@@ -359,7 +359,7 @@ describe.skipIf(!HAS_DB)('the pull, the night and the queue', () => {
     setBogFetchForTests(bank.fetchFn, quick);
 
     const first = await syncBogToday(at(day));
-    expect(first).toMatchObject({ status: 'ok', listed: 2, added: 2, known: { byKey: 0, byDoc: 0, bySum: 0 } });
+    expect(first).toMatchObject({ status: 'ok', listed: 2, added: 2, known: { byKey: 0, byDoc: 0, bySum: 0 }, fromStatement: false });
     const second = await syncBogToday(at(day, '10:05'));
     expect(second).toMatchObject({ status: 'ok', listed: 2, added: 0, known: { byKey: 2 } });
 
@@ -379,6 +379,22 @@ describe.skipIf(!HAS_DB)('the pull, the night and the queue', () => {
     expect(journal).toHaveLength(1);
     expect(journal[0]!.actorId).toBeNull();
     expect(JSON.stringify(journal[0]!.after)).not.toContain('TEST PAYER');
+  });
+
+  it('takes the day from today’s statement when the list of the day’s operations is down, and the night knows those lines by their key', async () => {
+    const day = '2031-03-15';
+    const bank = fakeBank({ apiStatus: [503, 503], entries: [entry({ id: 99501, day, doc: '0501', credit: sum(1) })] });
+    setBogFetchForTests(bank.fetchFn, quick);
+    expect(await syncBogToday(at(day))).toMatchObject({ status: 'ok', listed: 1, added: 1, fromStatement: true });
+    expect(bank.calls.filter((c) => c.url.startsWith(API)).map((c) => c.url.slice(API.length)).at(-1)).toBe(`/v2/statement/${ACCOUNT}/GEL/${day}/${day}`);
+    const { prisma } = await import('../src/lib/db.js');
+    await prisma.bogSync.update({ where: { id: true }, data: { nightThrough: new Date('2031-03-14T00:00:00Z') } });
+    expect(await reconcileBogNight(at('2031-03-16', '01:17'))).toMatchObject({ status: 'ok', listed: 1, added: 0, known: { byKey: 1 } });
+    expect(await linesOf([sum(1)])).toHaveLength(1);
+
+    // A refusal is not a busy gateway: it is said, and the statement is not asked instead.
+    setBogFetchForTests(fakeBank({ apiStatus: [403] }).fetchFn, quick);
+    expect(await syncBogToday(at(day, '11:00'))).toMatchObject({ status: 'failed', failure: 'forbidden', stage: 'api' });
   });
 
   it('does not bring again a line already loaded from a CSV: one operation, known by its document number', async () => {
