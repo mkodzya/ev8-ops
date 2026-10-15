@@ -19,6 +19,7 @@ import { kommoLinkEn } from './kommo-link.js';
 import { bankApiEn } from './bank-api.js';
 import { calendarEn } from './payments-calendar.js';
 import { payDayEn } from './pay-day.js';
+import { expEn } from './expenses.js';
 import { inBankEn } from './in-bank.js';
 export const en = {
   lang: { label: 'Language', ka: 'ქართული', ru: 'Русский', en: 'English' },
@@ -112,6 +113,7 @@ export const en = {
       journal: 'Journal',
       migration: 'Transfer',
       login: 'Sign-in',
+      expenses: 'Expenses',
     },
   },
 
@@ -1172,6 +1174,10 @@ export const en = {
       service_not_found: 'No such repair.',
       undo_too_late: 'Too late to undo. An owner can annul it with a reason.',
       already_matched: 'This bank line is already attached to a payment.',
+      category_not_found: 'No such expense category.',
+      category_exists: 'There is a category by that name already.',
+      no_payee: 'The bank names nobody on this line — there is no payee to remember.',
+      rule_not_found: 'That remembered payee is gone already.',
       bad_range: 'Give the numbers from and to, the first not above the last.',
       week_not_found: 'No such week in this rental.',
       week_paid_before_transfer: 'This week was paid before the rental was carried over — it cannot be discounted.',
@@ -1319,6 +1325,7 @@ export const en = {
   ...bankApiEn,
   ...calendarEn,
   ...payDayEn,
+  ...expEn,
   ...inBankEn,
 };
 

@@ -10,6 +10,7 @@ import { kommoLinkKa } from './kommo-link.js';
 import { bankApiKa } from './bank-api.js';
 import { calendarKa } from './payments-calendar.js';
 import { payDayKa } from './pay-day.js';
+import { expKa } from './expenses.js';
 import { inBankKa } from './in-bank.js';
 import type { Dict } from './en.js';
 
@@ -105,6 +106,7 @@ export const ka: Dict = {
       journal: 'ჟურნალი',
       migration: 'გადმოტანა',
       login: 'შესვლა',
+      expenses: 'ხარჯები',
     },
   },
 
@@ -1158,6 +1160,10 @@ export const ka: Dict = {
       service_not_found: 'ასეთი შეკეთება არ არის.',
       undo_too_late: 'გაუქმება უკვე გვიანია. მფლობელს შეუძლია გადახდის ანულირება მიზეზით.',
       already_matched: 'ამონაწერის ეს ხაზი უკვე გადახდას მიბმულია.',
+      category_not_found: 'ხარჯების ასეთი კატეგორია არ არის.',
+      category_exists: 'ასეთი სახელის კატეგორია უკვე არსებობს.',
+      no_payee: 'ბანკს ამ ხაზში მიმღები არ მიუთითებია — დასამახსოვრებელი არავინაა.',
+      rule_not_found: 'ეს წესი უკვე აღარ არის.',
       bad_range: 'მიუთითეთ ნომრები დან და მდე; პირველი ბოლოზე მეტი არ უნდა იყოს.',
       week_not_found: 'ასეთი კვირა ამ იჯარაში არ არის.',
       week_paid_before_transfer: 'ეს კვირა იჯარის გადმოტანამდეა გადახდილი — ფასდაკლება შეუძლებელია.',
@@ -1305,5 +1311,6 @@ export const ka: Dict = {
   ...bankApiKa,
   ...calendarKa,
   ...payDayKa,
+  ...expKa,
   ...inBankKa,
 };

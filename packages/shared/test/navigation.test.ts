@@ -49,8 +49,9 @@ describe('the structure each role sees (wave 1 §3.2)', () => {
 
   // Wave 6 §3.4–3.9. Settings grew into tabs; the points did not move with
   // them — one list, one address (designer, 21.09.2026).
-  it('gives settings six tabs, and its points stay in Settings (Mika, 29.09.2026)', () => {
-    expect(tabsForRole('settings', 'owner').map((t) => t.id)).toEqual(['people', 'points', 'rental', 'journal', 'migration', 'login']);
+  // The expense categories joined them on 15.10.2026 (migration 0046).
+  it('gives settings seven tabs, and its points stay in Settings (Mika, 29.09.2026)', () => {
+    expect(tabsForRole('settings', 'owner').map((t) => t.id)).toEqual(['people', 'points', 'rental', 'expenses', 'journal', 'migration', 'login']);
     expect(tabsForRole('settings', 'owner').find((t) => t.id === 'points')?.path).toBe('/settings/points');
     expect(sectionOfPath('/settings/points')).toBe('settings');
     // Fleet keeps its own tab to the same page.

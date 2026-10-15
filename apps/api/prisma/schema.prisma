@@ -734,14 +734,52 @@ model StatementLine {
   resolvedById String?            @map("resolved_by") @db.Uuid
   resolvedAt  DateTime?           @map("resolved_at")
   paymentId   String?             @map("payment_id") @db.Uuid
+  /// Money going out as an expense: what it was for, and the remembered payee that sorted it (migration 0046).
+  expenseCategoryId String?       @map("expense_category_id") @db.Uuid
+  expenseRuleId     String?       @map("expense_rule_id") @db.Uuid
   createdAt   DateTime            @default(now()) @map("created_at")
 
   statement Statement @relation(fields: [statementId], references: [id], onDelete: Cascade)
   payments  Payment[] @relation("payment_of_line")
   bankDeposit BankCashDeposit?
+  expenseCategory ExpenseCategory? @relation(fields: [expenseCategoryId], references: [id])
+  expenseRule     ExpenseRule?     @relation(fields: [expenseRuleId], references: [id])
 
   @@unique([bank, naturalKey])
   @@map("statement_lines")
+}
+
+/// What money going out was for (migration 0046): twelve to begin with, an owner keeps the list.
+model ExpenseCategory {
+  id          String   @id @default(uuid()) @db.Uuid
+  nameRu      String   @map("name_ru")
+  nameKa      String?  @map("name_ka")
+  nameEn      String?  @map("name_en")
+  sortOrder   Int      @default(0) @map("sort_order")
+  archived    Boolean  @default(false)
+  createdById String?  @map("created_by") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  lines StatementLine[]
+  rules ExpenseRule[]
+
+  @@map("expense_categories")
+}
+
+/// "Remember this payee": its next line is sorted into the category by itself (migration 0046).
+model ExpenseRule {
+  id           String    @id @default(uuid()) @db.Uuid
+  payeeKey     String    @map("payee_key")
+  categoryId   String    @map("category_id") @db.Uuid
+  createdById  String?   @map("created_by") @db.Uuid
+  createdAt    DateTime  @default(now()) @map("created_at")
+  archivedAt   DateTime? @map("archived_at")
+  archivedById String?   @map("archived_by") @db.Uuid
+
+  category ExpenseCategory @relation(fields: [categoryId], references: [id])
+  lines    StatementLine[]
+
+  @@map("expense_rules")
 }
 
 /// A repair (SRV-01). Opened on a VIN; charged to the company or to the

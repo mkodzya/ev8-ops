@@ -44,6 +44,10 @@ export async function teardown(): Promise<void> {
     await prisma.cashHandover.deleteMany({ where: { handedAt: since } });
     await prisma.bankCashDeposit.deleteMany({ where: { createdAt: since } });
     await prisma.statement.deleteMany({ where: { createdAt: since } }); // lines cascade
+    // Remembered payees and the categories a run added point at people and at
+    // each other; the lines that pointed at them went with their statements.
+    await prisma.expenseRule.deleteMany({ where: { createdAt: since } });
+    await prisma.expenseCategory.deleteMany({ where: { createdAt: since } });
     await prisma.serviceJob.deleteMany({ where: { createdAt: since } }); // parts and photos cascade
     await prisma.sale.deleteMany({ where: { createdAt: since } }); // instalments cascade
     await prisma.vehicle.updateMany({ where: { createdAt: since }, data: { purchaseId: null } });
