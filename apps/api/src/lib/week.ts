@@ -123,7 +123,8 @@ export async function weekReport(from: string, to: string): Promise<WeekAnswer> 
         _sum: { amountTetri: true },
       }),
       depositsOverview(),
-      prisma.rentalPeriod.aggregate({ where: { paidBeforeTransfer: true }, _sum: { amountTetri: true } }),
+      // A carried week whose bank money came in is takings of that money's day (ADR-0023), not "before the transfer".
+      prisma.rentalPeriod.aggregate({ where: { paidBeforeTransfer: true, carriedPaymentId: null }, _sum: { amountTetri: true } }),
       prisma.deposit.aggregate({ _sum: { receivedBeforeTransferTetri: true } }),
       prisma.statementLine.count({ where: { status: 'unmatched', occurredOn: { gte: fromDate, lte: toDate } } }),
       batteriesNow(),

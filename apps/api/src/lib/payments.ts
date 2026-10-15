@@ -290,6 +290,9 @@ async function voidOne(tx: Tx, input: VoidInput): Promise<void> {
     where: { id: p.id },
     data: { voidedAt: new Date(), voidReason: input.reason, voidedById: input.actorId, voidKind: input.kind ?? 'void' },
   });
+  // A week carried over as paid that this money was is carried again as it
+  // was — paid, with no bank money behind it (ADR-0023) — not left unpaid.
+  await tx.rentalPeriod.updateMany({ where: { carriedPaymentId: p.id }, data: { carriedPaymentId: null, updatedAt: new Date() } });
   // The bank line this payment was goes back to the queue, to be attached
   // to the right record (B2-07).
   if (p.statementLineId) {

@@ -4,7 +4,7 @@ import type { Prisma } from '../../generated/prisma/client.js';
 import { badRequest, conflict, notFound } from '../errors.js';
 import { dateFromISO, isoDate } from '../dates.js';
 import { prisma } from '../db.js';
-import { recordPaymentTx } from '../payments.js';
+import { recomputeRental, recordPaymentTx } from '../payments.js';
 import { serviceOwed } from '../money.js';
 import { cardOf, parseStatement, type ParsedLine } from './parse.js';
 import { decide, lineGross, loadCtx, type Ctx, type Decision, type Line } from './reconcile.js';
@@ -246,6 +246,29 @@ export interface LineTarget {
   saleId?: string | null;
   serviceJobId?: string | null;
   customerId?: string | null;
+  /** One fine or other charge of a rental: the money goes on it alone (ADR-0023). */
+  chargeId?: string | null;
+  /** A week carried over as paid: this money is what paid it (ADR-0023). */
+  carriedPeriodId?: string | null;
+}
+
+/** A charge of a rental and what of it is still open. */
+async function chargeOwed(tx: Tx, chargeId: string): Promise<{ rentalId: string; customerId: string; openTetri: number }> {
+  const c = await tx.rentalCharge.findUnique({
+    where: { id: chargeId },
+    include: { rental: { select: { customerId: true } }, allocations: { where: { payment: { voidedAt: null } }, select: { amountTetri: true } } },
+  });
+  if (!c || c.voidedAt) throw notFound('charge_not_found', 'No such charge on the rental.');
+  return { rentalId: c.rentalId, customerId: c.rental.customerId, openTetri: c.amountTetri - c.allocations.reduce((n, a) => n + a.amountTetri, 0) };
+}
+
+/** A week carried over as paid that no bank money stands behind yet. */
+async function carriedWeek(tx: Tx, periodId: string): Promise<{ rentalId: string; customerId: string; seq: number; amountTetri: number }> {
+  const w = await tx.rentalPeriod.findUnique({ where: { id: periodId }, include: { rental: { select: { customerId: true } } } });
+  if (!w) throw notFound('week_not_found', 'No such week in this rental.');
+  if (!w.paidBeforeTransfer) throw conflict('week_not_carried', 'This week was not carried over as paid.');
+  if (w.carriedPaymentId) throw conflict('week_has_bank_money', 'This week already has its bank money.');
+  return { rentalId: w.rentalId, customerId: w.rental.customerId, seq: w.seq, amountTetri: w.amountTetri };
 }
 
 type StoredLine = NonNullable<Awaited<ReturnType<Tx['statementLine']['findUnique']>>>;
@@ -272,6 +295,72 @@ function moneyOf(line: StoredLine): { channel: 'transfer' | 'acquiring'; grossTe
   return { channel, grossTetri: gross, feeTetri: fee };
 }
 
+/**
+ * A payment that goes on one charge, or that is a carried week's money
+ * (ADR-0023). Not spread over the rental: the person said where it goes. A
+ * carried week stays paid as it was; the money is placed on it so that it is
+ * neither the customer's credit nor paid onto the next week.
+ */
+async function placedPayment(
+  tx: Tx,
+  actorId: string | null,
+  line: StoredLine,
+  money: { channel: 'transfer' | 'acquiring'; grossTetri: number; feeTetri: number },
+  target: { chargeId?: string | null; carriedPeriodId?: string | null },
+  part: number,
+): Promise<string> {
+  const to = target.chargeId ? await chargeOwed(tx, target.chargeId) : await carriedWeek(tx, target.carriedPeriodId!);
+  const p = await tx.payment.create({
+    data: {
+      occurredOn: line.occurredOn,
+      direction: 'in',
+      channel: money.channel,
+      grossTetri: money.grossTetri,
+      feeTetri: money.feeTetri,
+      netTetri: money.grossTetri - money.feeTetri,
+      customerId: to.customerId,
+      rentalId: to.rentalId,
+      kind: 'rent',
+      bankText: line.raw.slice(0, 500),
+      source: 'statement',
+      createdById: actorId,
+      statementLineId: line.id,
+      statementPart: part,
+    },
+    select: { id: true },
+  });
+  await tx.paymentAllocation.create({
+    data: {
+      paymentId: p.id,
+      target: target.chargeId ? 'charge' : 'period',
+      chargeId: target.chargeId ?? null,
+      periodId: target.carriedPeriodId ?? null,
+      amountTetri: money.grossTetri,
+    },
+  });
+  if (target.carriedPeriodId) {
+    const done = await tx.rentalPeriod.updateMany({ where: { id: target.carriedPeriodId, carriedPaymentId: null }, data: { carriedPaymentId: p.id, updatedAt: new Date() } });
+    if (done.count === 0) throw conflict('week_has_bank_money', 'This week already has its bank money.');
+  }
+  await recomputeRental(tx, to.rentalId);
+  await tx.auditLog.create({
+    data: {
+      actorId,
+      action: 'payment.record',
+      entityType: 'payment',
+      entityId: p.id,
+      after: {
+        occurredOn: isoDate(line.occurredOn),
+        channel: money.channel,
+        grossTetri: money.grossTetri,
+        rentalId: to.rentalId,
+        ...(target.chargeId ? { chargeId: target.chargeId } : { carriedWeek: 'seq' in to ? to.seq : null }),
+      },
+    },
+  });
+  return p.id;
+}
+
 /** One payment made of a line, or of one part of it. */
 async function paymentOf(
   tx: Tx,
@@ -281,6 +370,7 @@ async function paymentOf(
   target: LineTarget,
   part: number,
 ): Promise<string> {
+  if (target.chargeId || target.carriedPeriodId) return placedPayment(tx, actorId, line, money, target, part);
   if (target.serviceJobId) {
     const job = await serviceOwed(tx, target.serviceJobId);
     const p = await tx.payment.create({
@@ -380,7 +470,7 @@ export async function split(
   const keys = new Set<string>();
   for (const p of parts) {
     if (!Number.isInteger(p.grossTetri) || p.grossTetri <= 0) throw badRequest('split_bad_amount', 'Every part is a sum above zero.', { field: 'grossTetri' });
-    const named = [p.rentalId, p.saleId, p.serviceJobId, p.customerId].filter(Boolean);
+    const named = [p.rentalId, p.saleId, p.serviceJobId, p.customerId, p.chargeId, p.carriedPeriodId].filter(Boolean);
     if (named.length !== 1) throw badRequest('split_bad_target', 'Every part pays exactly one record.', { field: 'rentalId' });
     const key = String(named[0]);
     if (keys.has(key)) throw badRequest('split_same_target', 'Two parts pay the same record: make them one.');
@@ -392,9 +482,19 @@ export async function split(
     throw badRequest('split_sum', 'The parts must add up to the whole line.', { lineTetri: money.grossTetri, partsTetri: sum });
   }
   for (const p of parts) {
-    if (!p.serviceJobId) continue;
-    const job = await serviceOwed(tx, p.serviceJobId);
-    if (p.grossTetri > job.openTetri) throw conflict('split_over_repair', 'That part is more than the repair still owes.', { number: job.number, openTetri: job.openTetri });
+    if (p.serviceJobId) {
+      const job = await serviceOwed(tx, p.serviceJobId);
+      if (p.grossTetri > job.openTetri) throw conflict('split_over_repair', 'That part is more than the repair still owes.', { number: job.number, openTetri: job.openTetri });
+    }
+    if (p.chargeId) {
+      const charge = await chargeOwed(tx, p.chargeId);
+      if (p.grossTetri > charge.openTetri) throw conflict('split_over_charge', 'That part is more than the charge still owes.', { openTetri: charge.openTetri });
+    }
+    if (p.carriedPeriodId) {
+      // The whole week or nothing: it was carried over paid in full.
+      const week = await carriedWeek(tx, p.carriedPeriodId);
+      if (p.grossTetri !== week.amountTetri) throw conflict('split_carried_week', 'A carried week is paid by exactly its price.', { amountTetri: week.amountTetri });
+    }
   }
 
   await claim(tx, line.id, 'split');
@@ -421,6 +521,8 @@ export async function split(
           saleId: p.saleId ?? null,
           serviceJobId: p.serviceJobId ?? null,
           customerId: p.customerId ?? null,
+          chargeId: p.chargeId ?? null,
+          carriedPeriodId: p.carriedPeriodId ?? null,
         })),
       },
     },
