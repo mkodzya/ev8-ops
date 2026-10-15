@@ -327,6 +327,8 @@ describe.skipIf(!HAS_DB)('the TBC pull, the night and the queue', () => {
 
     const first = await syncTbcToday(at(day));
     expect(first).toMatchObject({ status: 'ok', listed: 3, added: 2, known: { byKey: 0, byId: 0, byDoc: 0, bySum: 0 } });
+    // Yesterday is asked too: a movement booked under it after the night has read it comes this way.
+    expect(new URL(bank.calls.at(-1)!.url).searchParams.get('PeriodFrom')).toBe('2032-03-09');
     const second = await syncTbcToday(at(day, '10:05'));
     expect(second).toMatchObject({ status: 'ok', listed: 3, added: 0, known: { byKey: 2 } });
 

@@ -230,10 +230,6 @@ REFUSED=""
 : > "$BODY"
 unset TOKEN
 
-case "$API:$REFUSED" in
-  400:USER_IS_*) echo "Пользователь интернет-банка, к которому привязаны ключи, не активен, заблокирован или удалён ($REFUSED). Ключи не записаны."; exit 1 ;;
-esac
-
 # printf is a shell builtin: the keys are not in any process's arguments.
 { printf 'TBC_CLIENT_ID=%s\nTBC_CLIENT_SECRET=%s\n' "$ID" "$SECRET"; [ -z "$ACCOUNT" ] || printf 'TBC_ACCOUNT=%s\n' "$ACCOUNT"; } | write_env 'CLIENT_ID|CLIENT_SECRET|ACCOUNT'
 unset ID SECRET ACCOUNT
@@ -244,6 +240,7 @@ case "$API:$REFUSED" in
   502:*|503:*|504:*) echo "Банк принял ключи, но его шлюз сейчас занят (ответ $API). Ключи записаны ($NAME); стенд будет спрашивать банк сам." ;;
   400:INVALID_ACCOUNT) echo "Ключи записаны ($NAME): банк их принял, но не знает этого счёта в лари. Проверьте номер: ssh -t root@204.168.149.105 /srv/ev8-ops/deploy/set-tbc-keys.sh$FLAG --account"; exit 1 ;;
   403:*) echo "Ключи записаны ($NAME): банк их принял, но читать выписки не даёт (403). У пользователя, привязанного к интеграции, нет права на просмотр выписок в интернет-банке."; exit 1 ;;
+  400:USER_IS_*) echo "Ключи записаны ($NAME): банк их принял, но пользователь интернет-банка, к которому они привязаны, не активен, заблокирован или удалён ($REFUSED). Когда его включат, стенд начнёт читать банк сам."; exit 1 ;;
   000:*) echo "Ключи записаны ($NAME): банк их принял, но до списка операций с сервера достучаться не удалось. Это нужно показать разработчику."; exit 1 ;;
   *) echo "Ключи записаны ($NAME): банк их принял, список операций ответил $API${REFUSED:+ ($REFUSED)}. Это нужно показать разработчику."; exit 1 ;;
 esac

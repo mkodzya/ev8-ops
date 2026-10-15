@@ -1,9 +1,9 @@
 // TBC, read through its Business Integration Services (B11-03; ADR-0026).
 //
 // The same as Bank of Georgia (ADR-0021, `bog.ts`): every five minutes the
-// stand asks the bank for the day's movements, and once a night it reads the
-// whole of yesterday again and checks it against the bank's statement, so
-// that nothing the day's pulls missed is lost. Both go into the queue a CSV
+// stand asks the bank for the movements of yesterday and today, and once a
+// night it reads the whole of yesterday again and checks it against the
+// bank's statement, so that nothing the day's pulls missed is lost. Both go into the queue a CSV
 // upload feeds, through the same rules (`statements/import.ts`, `ingest`).
 //
 // What TBC's documentation says (developers.tbcbank.ge, read 15.10.2026):
@@ -325,6 +325,11 @@ const text = (v: unknown): string | null => {
   return null;
 };
 
+/** The movement's day: its value date (the file's "Date"), else the document's. */
+function movementDay(o: Record<string, unknown>): string | null {
+  return bankDay(pick(o, 'date')) ?? bankDay(pick(o, 'documentDate'));
+}
+
 const dmySlash = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`;
 
 /**
@@ -340,7 +345,7 @@ const dmySlash = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.
 export function lineFromMovement(row: unknown): ParsedLine | null {
   const o = obj(row);
   const id = text(pick(o, 'movementId'));
-  const day = bankDay(pick(o, 'date')) ?? bankDay(pick(o, 'documentDate'));
+  const day = movementDay(o);
   if (!id || !day) throw new TbcError('bad_answer');
   const currency = text(pick(o, 'currency'));
   if (currency && currency.toUpperCase() !== TBC_CURRENCY) return null;
@@ -413,7 +418,13 @@ function serial<T>(job: () => Promise<T>): Promise<T> {
   return run;
 }
 
-/** Ask the bank for today's movements and put the new ones in the queue. Never throws for the bank's sake. */
+/**
+ * Ask the bank for the movements of yesterday and today and put the new ones
+ * in the queue. Yesterday too: a movement the bank books under yesterday after
+ * the night has read it would otherwise come by no road. It costs no request
+ * more, and what is in already is known by its key. Never throws for the
+ * bank's sake.
+ */
 export function syncTbcToday(now: Date = new Date()): Promise<TbcOutcome> {
   const cfg = tbcConfig();
   if (!cfg) return Promise.resolve({ status: 'off' });
@@ -460,8 +471,9 @@ async function pullToday(cfg: TbcConfig, now: Date): Promise<TbcOutcome> {
     if (accounts.length === 0) throw new TbcError('no_account');
     const bank = client(cfg);
     for (const account of accounts) {
-      const rows = await bank.movements(account, today, today);
-      lists.push({ account, lines: onceEach(rows.map(lineFromMovement)), listed: rows.length });
+      const rows = await bank.movements(account, addDays(today, -1), today);
+      // What the screen and the log call "today's": the movements dated today.
+      lists.push({ account, lines: onceEach(rows.map(lineFromMovement)), listed: rows.filter((r) => movementDay(obj(r)) === today).length });
     }
   } catch (err) {
     if (!(err instanceof TbcError)) throw err;
