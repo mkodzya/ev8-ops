@@ -165,6 +165,8 @@ export const SECTION_TABS: Partial<Record<SectionId, readonly { id: TabId; path:
     { id: 'week', path: '/reports/week', anyOf: ['reports.view'] },
     { id: 'utilisation', path: UTILISATION_PATH, anyOf: ['reports.view'] },
     { id: 'economics', path: '/reports/economics', anyOf: ['reports.view'] },
+    // What left the accounts, by category (migration 0046).
+    { id: 'expenses', path: '/reports/expenses', anyOf: ['reports.view'] },
   ],
 };
 

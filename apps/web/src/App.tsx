@@ -26,6 +26,7 @@ import { TillPage } from './pages/money/TillPage.js';
 import { PickupWizard } from './pages/PickupWizard.js';
 import { MopedByNumber } from './pages/MopedByNumber.js';
 import { ExpenseCategoriesPage } from './pages/ExpenseCategoriesPage.js';
+import { ExpensesReportPage } from './pages/ExpensesReportPage.js';
 import { ProfilePage } from './pages/ProfilePage.js';
 import { LoginSettingsPage, RentalSettingsPage, SettingsPage } from './pages/SettingsPage.js';
 import { JournalPage } from './pages/JournalPage.js';
@@ -169,6 +170,7 @@ export function App() {
         <Route path="reports/week" element={<Require perm="reports.view"><WeekPage /></Require>} />
         <Route path="reports/utilisation" element={<Require perm="reports.view"><UtilisationPage /></Require>} />
         <Route path="reports/economics" element={<Require perm="reports.view"><EconomicsPage /></Require>} />
+        <Route path="reports/expenses" element={<Require perm="reports.view"><ExpensesReportPage /></Require>} />
 
         <Route path="customers" element={<CustomersPage />} />
         <Route path="customers/new" element={<CustomerForm />} />

@@ -158,4 +158,22 @@ describe.skipIf(!HAS_DB)('what money going out was for', () => {
     expect((await queue(owner)).find((l) => l.id === line.id)).toBeTruthy();
     expect((await owed()).toHandBackTetri).toBe(before);
   });
+
+  it('the report adds up a category over the period, and leaves out what is not spending', async () => {
+    const owner = await loginAs('owner');
+    const { id: categoryId } = json<{ id: string }>(await call(owner, 'POST', '/api/expense-categories', { nameRu: `ТЕСТ отчёт ${uniq()}` }));
+    const payee = `TEST REPORT ${uniq()}`;
+    await load(owner, [outRow('20.10.2026', '12.50', payee), outRow('21.10.2026', '7.50', payee), outRow('22.10.2026', '100.00', `${payee} OWN`)]);
+    const mine = (await queue(owner)).filter((l) => l.raw.includes(payee));
+    for (const l of mine.filter((x) => !x.raw.includes('OWN'))) {
+      expect((await call(owner, 'POST', `/api/statement-lines/${l.id}/expense`, { categoryId })).statusCode).toBe(200);
+    }
+    expect((await call(owner, 'POST', `/api/statement-lines/${mine.find((x) => x.raw.includes('OWN'))!.id}/own-transfer`, {})).statusCode).toBe(200);
+    const r = json<{ categories: { categoryId: string; tetri: number; lines: number }[]; ownTransfers: number }>(await call(owner, 'GET', '/api/reports/expenses?from=2026-10-20&to=2026-10-22'));
+    expect(r.categories.find((c) => c.categoryId === categoryId)).toEqual({ categoryId, tetri: 2000, lines: 2 });
+    expect(r.ownTransfers).toBeGreaterThanOrEqual(10000);
+    const manager = await loginAs('manager');
+    expect((await call(manager, 'GET', '/api/reports/expenses')).statusCode).toBe(403);
+    expect((await call(owner, 'GET', '/api/reports/expenses?from=2026-10-22&to=2026-10-20')).statusCode).toBe(400);
+  });
 });
