@@ -19,25 +19,30 @@
 .money-after { margin: 8px 0 0; font: var(--text-body-sm); }
 
 /* «Разделить» (variant «В», docs/redesign/prototypes/split-options.html): a card per
-   place the money goes, the week asked by its dates, and in words what is written. */
-.split-from { margin: -4px 0 0; font: var(--text-body-sm); color: var(--muted); }
-.split-part { display: grid; gap: 8px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--surface); }
-.split-part-top { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+   place the money goes, the week asked by its dates, and in words what is written.
+   Spaced so that each card, each choice and the result read apart (Mika, 15.10.2026:
+   «очень слипшиеся элементы»). */
+.split-from { margin: 0 0 var(--space3); font: var(--text-body-sm); color: var(--muted); }
+.split-body { display: grid; gap: var(--space5); margin-bottom: var(--space5); }
+.split-who { align-items: center; }
+.split-parts { display: grid; gap: var(--space4); }
+.split-part { display: grid; gap: var(--space4); padding: var(--space4); border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--surface); }
+.split-part .field { margin-bottom: 0; }
+.split-part-top { display: flex; justify-content: space-between; align-items: center; gap: var(--space3); }
 .split-part-name { min-width: 0; font-weight: 600; }
-.split-part-ref { font: var(--text-mono-sm); color: var(--muted); }
+.split-part-ref { margin-left: var(--space1); font: var(--text-mono-sm); color: var(--muted); }
 .split-part .split-amount { width: 130px; min-width: 0; max-width: 45%; flex: none; text-align: right; }
-.split-week { border: 0; margin: 0; padding: 0; display: grid; gap: 4px; }
-.split-week legend { padding: 0; margin-bottom: 4px; font-weight: 600; font: var(--text-body-sm); font-weight: 600; }
-.split-radio { display: flex; gap: 8px; align-items: flex-start; padding: 6px 8px; border-radius: 8px; cursor: pointer; font: var(--text-body-sm); }
-.split-radio.on { background: var(--accent-soft); }
+.split-week { border: 0; margin: 0; padding: 0; display: grid; gap: var(--space2); }
+.split-week legend { padding: 0; margin-bottom: var(--space2); font: var(--text-body-sm); font-weight: 600; }
+.split-radio { display: flex; gap: var(--space3); align-items: flex-start; padding: 10px var(--space3); border: 1px solid var(--line-soft); border-radius: 12px; cursor: pointer; font: var(--text-body-sm); }
+.split-radio.on { background: var(--accent-soft); border-color: var(--accent-soft); }
 .split-radio input { margin-top: 3px; accent-color: var(--accent); }
-.split-radio small { display: block; color: var(--muted); }
+.split-radio small { display: block; margin-top: 2px; color: var(--muted); }
 .split-more { justify-self: start; border-style: dashed; }
-.split-sum { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding-top: 10px; border-top: 1px solid var(--line-soft); font: var(--text-body-sm); }
+.split-sum { display: flex; justify-content: space-between; align-items: center; gap: var(--space2); padding-top: var(--space4); border-top: 1px solid var(--line-soft); font: var(--text-body-sm); }
 .split-ok { color: var(--accent-ink); font-weight: 600; }
-.split-result { padding: 10px 12px; border-radius: 10px; background: var(--surface-2); font: var(--text-body-sm); }
-.split-result ul { margin: 4px 0 0; padding-left: 18px; }
-.split-result li { margin: 3px 0; }
+.split-result { padding: var(--space4); border-radius: 12px; background: var(--surface-2); font: var(--text-body-sm); }
+.split-result ul { margin: var(--space2) 0 0; padding-left: 18px; display: grid; gap: var(--space2); }
 
 /* Amounts with a sign (§3.3): in is the accent ink, out is ink with a minus. */
 .amt-in { color: var(--accent-ink); }

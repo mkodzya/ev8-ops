@@ -586,8 +586,8 @@ function SplitSheet({ line, onClose }: { line: SortLine; onClose: () => void }) 
           </ul>
         </>
       ) : (
-        <>
-          <div className="money-who-row">
+        <div className="split-body">
+          <div className="money-who-row split-who">
             <p className="t-h3">{value.customer.name}</p>
             <button type="button" className="pill pill-sm" onClick={() => setValue(initial)}>
               {t.sort.splitAnother}
@@ -596,6 +596,7 @@ function SplitSheet({ line, onClose }: { line: SortLine; onClose: () => void }) 
           {targets.failure && <LoadError failure={targets.failure} onRetry={targets.reload} />}
           {!targets.data && !targets.failure && <Skeleton rows={3} />}
           {targets.data && parts.length === 1 && <p className="hint muted">{t.sort.splitNothing}</p>}
+          <div className="split-parts">
           {visible.map((p) => (
             <div key={p.key} className="split-part">
               <div className="split-part-top">
@@ -637,6 +638,7 @@ function SplitSheet({ line, onClose }: { line: SortLine; onClose: () => void }) 
               )}
             </div>
           ))}
+          </div>
           {hidden && (
             <button type="button" className="pill pill-sm split-more" onClick={() => setValue((v) => ({ ...v, more: true }))}>
               {t.sort.splitMore}
@@ -659,7 +661,7 @@ function SplitSheet({ line, onClose }: { line: SortLine; onClose: () => void }) 
               </ul>
             </div>
           )}
-        </>
+        </div>
       )}
     </FormSheet>
   );
