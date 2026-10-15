@@ -11,7 +11,7 @@ import { FormSheet } from '../../ds/form/Form.js';
 import { useOperation } from '../../ds/form/operation.js';
 import '../../ds/money/money.css';
 import { Skeleton } from '../../ds/state/Skeleton.js';
-import { fmtDate } from '../../format.js';
+import { fmtDate, fmtDayMonth } from '../../format.js';
 import { useT } from '../../i18n/index.js';
 import { useLoad } from '../../lib/use.js';
 
@@ -386,9 +386,13 @@ function OtherSheet({ line, onClose }: { line: SortLine; onClose: () => void }) 
   );
 }
 
+interface Week {
+  startsOn: string | null;
+  endsOn: string | null;
+}
 interface Targets {
   debt: { parts: { kind: 'rent' | 'deposit' | 'charge' | 'sale' | 'service'; id: string; owesTetri: number }[] };
-  rentals: { id: string; number: string; status: string; model: string | null; transferredOn?: string | null }[];
+  rentals: { id: string; number: string; status: string; model: string | null; transferredOn?: string | null; firstOpenWeek?: Week | null }[];
   sales: { id: string; number: string; nextTetri: number }[];
   repairs: { id: string; number: string }[];
   /** Open fines and other charges, each its own part (ADR-0023). */
@@ -396,15 +400,23 @@ interface Targets {
   /** Weeks carried over as paid with no bank money behind them yet (ADR-0023). */
   carriedWeeks?: { id: string; rentalId: string; seq: number; startsOn: string; endsOn: string; amountTetri: number }[];
 }
-interface SplitRow {
+
+/** One place the line's money can go. */
+interface SplitPart {
   key: string;
+  kind: 'rent' | 'fine' | 'charge' | 'repair' | 'sale' | 'account';
+  title: string;
+  /** The record's number, in mono beside the title. */
+  ref: string;
   body: Record<string, string>;
-  label: string;
-  sub: string;
+  /** What the record still owes: the most "the rest" fills in. 0 — no limit. */
   owesTetri: number;
-  /** Rent paid before the rental was carried over: is it the week the carry-over already counted? (ADR-0023) */
-  old?: { rentalId: string; week: { id: string; startsOn: string; endsOn: string; amountTetri: number } };
-  /** A new fine on this rental, typed here with what it is for. */
+  /** Behind "+ ещё": rarely needed. */
+  extra: boolean;
+  /** Rent: the week a payment older than the carry-over may be, and the week it goes to otherwise (ADR-0023). */
+  carried?: { rentalId: string; week: { id: string; startsOn: string; endsOn: string; amountTetri: number } };
+  openWeek?: Week | null;
+  /** A new fine on this rental, with what it is for. */
   fineOf?: string;
 }
 interface SplitValue {
@@ -414,17 +426,24 @@ interface SplitValue {
   choice: Record<string, 'carried' | 'new'>;
   /** Per rental: what a new fine is for. */
   reasons: Record<string, string>;
+  /** "+ ещё" opened. */
+  more: boolean;
 }
+
+const weekText = (w: { startsOn: string | null; endsOn: string | null }) => `${fmtDayMonth(w.startsOn)}–${fmtDayMonth(w.endsOn)}`;
 
 /**
  * "Разделить": one line, several of the customer's records — a rental week
- * and a repair paid in one transfer (meeting of 14.10.2026). The person says
- * how much goes where; the parts must make the whole line.
+ * and a fine paid in one transfer (meeting of 14.10.2026). Laid out the way
+ * an owner says it (Mika, 15.10.2026, variant «В» of
+ * docs/redesign/prototypes/split-options.html): rent and a fine per rental,
+ * the week asked by its dates when the payment is older than the carry-over,
+ * and in words what will be written and what the customer will owe after.
  */
 function SplitSheet({ line, onClose }: { line: SortLine; onClose: () => void }) {
   const t = useT();
   const total = line.channel === 'acquiring' && line.grossTetri != null ? line.grossTetri : line.amountTetri;
-  const initial: SplitValue = { customer: null, amounts: {}, choice: {}, reasons: {} };
+  const initial: SplitValue = { customer: null, amounts: {}, choice: {}, reasons: {}, more: false };
   const [value, setValue] = useState<SplitValue>(initial);
   const [q, setQ] = useState('');
   const [answer, setAnswer] = useState<SearchAnswer | null>(null);
@@ -450,52 +469,82 @@ function SplitSheet({ line, onClose }: { line: SortLine; onClose: () => void }) 
   // Rent paid no later than the day the rental was carried over may be the
   // week the carry-over already marked paid — or money it did not know of.
   // Only a person knows which (Mika, 15.10.2026; ADR-0018, ADR-0023).
-  const oldWeek = (r: Targets['rentals'][number]) =>
+  const carriedWeekOf = (r: Targets['rentals'][number]) =>
     r.transferredOn && line.occurredOn <= r.transferredOn
       ? (targets.data?.carriedWeeks ?? []).find((w) => w.rentalId === r.id && w.startsOn <= line.occurredOn && line.occurredOn <= w.endsOn) ?? null
       : null;
   const shown = (targets.data?.rentals ?? []).filter((r) => owes(['rent', 'deposit'], r.id) > 0 || !['returned', 'cancelled'].includes(r.status));
-  const rows: SplitRow[] = targets.data
+  const parts: SplitPart[] = targets.data
     ? [
-        ...shown.flatMap((r): SplitRow[] => {
-          const week = oldWeek(r);
-          const carried = !!week && value.choice[r.id] === 'carried';
+        ...shown.flatMap((r): SplitPart[] => {
+          const week = carriedWeekOf(r);
+          const asCarried = !!week && value.choice[r.id] === 'carried';
           return [
             {
               key: `r:${r.id}`,
-              body: carried ? { carriedPeriodId: week!.id } : { rentalId: r.id },
-              label: t.sort.splitRent(r.number),
-              sub: r.model ?? '',
-              owesTetri: carried ? week!.amountTetri : owes(['rent', 'deposit'], r.id),
-              ...(week ? { old: { rentalId: r.id, week } } : {}),
+              kind: 'rent',
+              title: t.sort.splitRentTitle,
+              ref: r.number,
+              body: asCarried ? { carriedPeriodId: week!.id } : { rentalId: r.id },
+              owesTetri: asCarried ? week!.amountTetri : owes(['rent', 'deposit'], r.id),
+              extra: false,
+              ...(week ? { carried: { rentalId: r.id, week } } : {}),
+              openWeek: r.firstOpenWeek ?? null,
             },
-            { key: `n:${r.id}`, body: { fineRentalId: r.id, fineReason: value.reasons[r.id] ?? '' }, label: t.sort.splitFineNew(r.number), sub: '', owesTetri: 0, fineOf: r.id },
+            { key: `n:${r.id}`, kind: 'fine', title: t.sort.splitFineTitle, ref: r.number, body: { fineRentalId: r.id, fineReason: value.reasons[r.id] ?? '' }, owesTetri: 0, extra: false, fineOf: r.id },
           ];
         }),
-        ...(targets.data.charges ?? []).map((c) => ({
-          key: `f:${c.id}`,
-          body: { chargeId: c.id },
-          label: t.sort.splitFine(numberOf(c.rentalId), t.rentalMoney.charges[c.kind] ?? c.kind),
-          sub: c.note ?? '',
-          owesTetri: c.openTetri,
-        })),
+        ...(targets.data.charges ?? []).map(
+          (c): SplitPart => ({
+            key: `f:${c.id}`,
+            kind: 'charge',
+            title: [t.rentalMoney.charges[c.kind] ?? c.kind, c.note].filter(Boolean).join(' · '),
+            ref: numberOf(c.rentalId),
+            body: { chargeId: c.id },
+            owesTetri: c.openTetri,
+            extra: false,
+          }),
+        ),
         ...targets.data.repairs
           .filter((j) => owes(['service'], j.id) > 0)
-          .map((j) => ({ key: `j:${j.id}`, body: { serviceJobId: j.id }, label: `${t.money.kinds.service} ${j.number}`, sub: '', owesTetri: owes(['service'], j.id) })),
-        ...targets.data.sales.map((x) => ({ key: `s:${x.id}`, body: { saleId: x.id }, label: `${t.money.kinds.sale} ${x.number}`, sub: '', owesTetri: owes(['sale'], x.id) })),
-        { key: `c:${value.customer!.id}`, body: { customerId: value.customer!.id }, label: t.money.toAccount, sub: t.money.toAccountHint, owesTetri: 0 },
+          .map((j): SplitPart => ({ key: `j:${j.id}`, kind: 'repair', title: t.money.kinds.service, ref: j.number, body: { serviceJobId: j.id }, owesTetri: owes(['service'], j.id), extra: true })),
+        ...targets.data.sales.map((x): SplitPart => ({ key: `s:${x.id}`, kind: 'sale', title: t.money.kinds.sale, ref: x.number, body: { saleId: x.id }, owesTetri: owes(['sale'], x.id), extra: true })),
+        { key: `c:${value.customer!.id}`, kind: 'account', title: t.money.toAccount, ref: '', body: { customerId: value.customer!.id }, owesTetri: 0, extra: true },
       ]
     : [];
   const amountOf = (key: string) => parseGel(value.amounts[key] ?? '') ?? 0;
-  const placed = rows.reduce((n, r) => n + amountOf(r.key), 0);
+  const placed = parts.reduce((n, p) => n + amountOf(p.key), 0);
   const left = total - placed;
   const setAmount = (key: string, text: string) => setValue((v) => ({ ...v, amounts: { ...v.amounts, [key]: text } }));
-  const fillRest = (r: SplitRow) => {
-    const others = placed - amountOf(r.key);
-    const rest = total - others;
-    const take = r.owesTetri > 0 ? Math.min(r.owesTetri, rest) : rest;
-    if (take > 0) setAmount(r.key, (take / 100).toFixed(2));
+  // An empty sum takes the rest when it is touched, selected so that typing replaces it.
+  const takeRest = (p: SplitPart, input: HTMLInputElement) => {
+    if ((value.amounts[p.key] ?? '').trim() !== '' || left <= 0) return;
+    const take = p.owesTetri > 0 ? Math.min(p.owesTetri, left) : left;
+    setAmount(p.key, (take / 100).toFixed(2));
+    window.setTimeout(() => input.select(), 0);
   };
+  const visible = parts.filter((p) => !p.extra || value.more || amountOf(p.key) > 0);
+  const hidden = parts.some((p) => p.extra && !visible.includes(p));
+
+  // What will be written, said in words, and what the customer will owe after.
+  const used = parts.filter((p) => amountOf(p.key) > 0);
+  const said = used.map((p) => {
+    const a = formatGel(amountOf(p.key));
+    if (p.kind === 'rent' && p.carried && value.choice[p.carried.rentalId] === 'carried') return t.sort.resCarried(a, weekText(p.carried.week), p.ref);
+    if (p.kind === 'rent') return p.openWeek ? t.sort.resRent(a, p.ref, weekText(p.openWeek)) : t.sort.resRentAhead(a, p.ref);
+    if (p.kind === 'fine') return t.sort.resFine(a, (value.reasons[p.fineOf!] ?? '').trim() || '…', p.ref);
+    if (p.kind === 'charge') return t.sort.resCharge(a, p.title, p.ref);
+    if (p.kind === 'repair') return t.sort.resRepair(a, p.ref);
+    if (p.kind === 'sale') return t.sort.resSale(a, p.ref);
+    return t.sort.resAccount(a);
+  });
+  const before = (targets.data?.debt.parts ?? []).reduce((n, p) => n + p.owesTetri, 0);
+  const paidOff = used.reduce((n, p) => {
+    const a = amountOf(p.key);
+    if (p.kind === 'fine' || (p.kind === 'rent' && p.carried && value.choice[p.carried.rentalId] === 'carried')) return n;
+    return n + (p.owesTetri > 0 ? Math.min(a, p.owesTetri) : a);
+  }, 0);
+  const after = Math.max(0, before - paidOff);
 
   const g = answer?.groups;
   const people: { id: string; name: string; sub: string }[] = g
@@ -513,13 +562,13 @@ function SplitSheet({ line, onClose }: { line: SortLine; onClose: () => void }) 
       initial={initial}
       label={t.sort.split}
       submit={async (key) => {
-        const used = rows.filter((r) => amountOf(r.key) > 0);
-        if (used.some((r) => r.old && !value.choice[r.old.rentalId])) throw new Error(t.sort.splitOldPick);
-        const parts = used.map((r) => ({ ...r.body, grossTetri: amountOf(r.key) }));
-        const r = await api.post<{ ids: string[] }>(`/api/statement-lines/${line.id}/split`, { parts }, { key });
-        return { toast: { text: t.sort.splitDone(parts.length), undo: () => api.post(`/api/payments/${r.ids[0]}/undo`) } };
+        if (used.some((p) => p.carried && !value.choice[p.carried.rentalId])) throw new Error(t.sort.splitOldPick);
+        const body = used.map((p) => ({ ...p.body, grossTetri: amountOf(p.key) }));
+        const r = await api.post<{ ids: string[] }>(`/api/statement-lines/${line.id}/split`, { parts: body }, { key });
+        return { toast: { text: t.sort.splitDone(body.length), undo: () => api.post(`/api/payments/${r.ids[0]}/undo`) } };
       }}
     >
+      <p className="split-from">{t.sort.splitFrom(fmtDate(line.occurredOn), t.statements.banks[line.bank])}</p>
       {!value.customer ? (
         <>
           <input className="input" autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder={t.money.whoIn} aria-label={t.money.whoIn} />
@@ -537,66 +586,82 @@ function SplitSheet({ line, onClose }: { line: SortLine; onClose: () => void }) 
           </ul>
         </>
       ) : (
-        <>
-          <div className="money-who-row">
+        <div className="split-body">
+          <div className="money-who-row split-who">
             <p className="t-h3">{value.customer.name}</p>
             <button type="button" className="pill pill-sm" onClick={() => setValue(initial)}>
               {t.sort.splitAnother}
             </button>
           </div>
-          <p className="hint muted">{t.sort.splitHint}</p>
           {targets.failure && <LoadError failure={targets.failure} onRetry={targets.reload} />}
           {!targets.data && !targets.failure && <Skeleton rows={3} />}
-          {targets.data && rows.length === 1 && <p className="hint muted">{t.sort.splitNothing}</p>}
-          {rows.map((r) => (
-            <div key={r.key}>
-              <Field
-                label={r.label}
-                hint={r.old ? r.sub : [r.sub, r.owesTetri > 0 ? t.money.owes(formatGel(r.owesTetri)) : ''].filter(Boolean).join(' · ')}
-                name={r.key}
-              >
-                <div className="money-who-row">
-                  <input className="input mono" inputMode="decimal" value={value.amounts[r.key] ?? ''} onChange={(e) => setAmount(r.key, e.target.value)} />
-                  <button type="button" className="pill pill-sm" onClick={() => fillRest(r)}>
-                    {t.sort.splitRest}
-                  </button>
-                </div>
-              </Field>
-              {r.old && (
-                <div>
-                  <p className="hint muted">{t.sort.splitOldQ(fmtDate(line.occurredOn))}</p>
-                  <div className="sort-actions">
-                    {(['carried', 'new'] as const).map((c) => (
-                      <button
-                        key={c}
-                        type="button"
-                        className={`pill pill-sm ${value.choice[r.old!.rentalId] === c ? 'on' : ''}`}
-                        aria-pressed={value.choice[r.old!.rentalId] === c}
-                        onClick={() => setValue((v) => ({ ...v, choice: { ...v.choice, [r.old!.rentalId]: c } }))}
-                      >
-                        {c === 'carried' ? t.sort.splitOldCarried(fmtDate(r.old!.week.startsOn), fmtDate(r.old!.week.endsOn)) : t.sort.splitOldNew}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+          {targets.data && parts.length === 1 && <p className="hint muted">{t.sort.splitNothing}</p>}
+          <div className="split-parts">
+          {visible.map((p) => (
+            <div key={p.key} className="split-part">
+              <div className="split-part-top">
+                <label className="split-part-name" htmlFor={`split-${p.key}`}>
+                  {p.title} {p.ref && <span className="split-part-ref">{p.ref}</span>}
+                </label>
+                <input
+                  id={`split-${p.key}`}
+                  name={p.key}
+                  className="input mono split-amount"
+                  inputMode="decimal"
+                  value={value.amounts[p.key] ?? ''}
+                  placeholder={left > 0 ? formatGel(p.owesTetri > 0 ? Math.min(p.owesTetri, left) : left, { decimals: false }) : ''}
+                  onFocus={(e) => takeRest(p, e.currentTarget)}
+                  onChange={(e) => setAmount(p.key, e.target.value)}
+                />
+              </div>
+              {p.carried && (
+                <fieldset className="split-week">
+                  <legend>{t.sort.splitWhichWeek}</legend>
+                  {(['carried', 'new'] as const).map((c) => {
+                    const on = value.choice[p.carried!.rentalId] === c;
+                    return (
+                      <label key={c} className={`split-radio ${on ? 'on' : ''}`}>
+                        <input type="radio" name={`week-${p.carried!.rentalId}`} checked={on} onChange={() => setValue((v) => ({ ...v, choice: { ...v.choice, [p.carried!.rentalId]: c } }))} />
+                        <span>
+                          {c === 'carried' ? weekText(p.carried!.week) : p.openWeek ? weekText(p.openWeek) : t.sort.splitWeekNewTitle}
+                          <small>{c === 'carried' ? t.sort.splitWeekCarried : p.openWeek ? t.sort.splitWeekOpen : t.sort.splitWeekNewSub}</small>
+                        </span>
+                      </label>
+                    );
+                  })}
+                </fieldset>
               )}
-              {r.fineOf && amountOf(r.key) > 0 && (
-                <Field label={t.sort.splitFineReason} name="fineReason">
-                  <input
-                    className="input"
-                    value={value.reasons[r.fineOf] ?? ''}
-                    onChange={(e) => setValue((v) => ({ ...v, reasons: { ...v.reasons, [r.fineOf!]: e.target.value } }))}
-                  />
+              {p.fineOf && (
+                <Field label={t.sort.splitFineFor} name="fineReason">
+                  <input className="input" value={value.reasons[p.fineOf] ?? ''} onChange={(e) => setValue((v) => ({ ...v, reasons: { ...v.reasons, [p.fineOf!]: e.target.value } }))} />
                 </Field>
               )}
             </div>
           ))}
-          {targets.data && (
-            <p className={left < 0 ? 'field-err' : 'money-after'} aria-live="polite">
-              {left < 0 ? t.sort.splitOver(formatGel(-left)) : t.sort.splitLeft(formatGel(left))}
-            </p>
+          </div>
+          {hidden && (
+            <button type="button" className="pill pill-sm split-more" onClick={() => setValue((v) => ({ ...v, more: true }))}>
+              {t.sort.splitMore}
+            </button>
           )}
-        </>
+          {targets.data && (
+            <div className="split-sum" aria-live="polite">
+              <span className="mono">{used.length > 0 ? `${used.map((p) => formatGel(amountOf(p.key), { decimals: false })).join(' + ')} = ${formatGel(placed, { decimals: false })}` : ''}</span>
+              {left === 0 ? <span className="split-ok">{t.sort.splitAllPlaced}</span> : left > 0 ? <span>{t.sort.splitLeft(formatGel(left))}</span> : <span className="field-err">{t.sort.splitOver(formatGel(-left))}</span>}
+            </div>
+          )}
+          {targets.data && said.length > 0 && (
+            <div className="split-result">
+              <b>{t.sort.resTitle}</b>
+              <ul>
+                {said.map((x, i) => (
+                  <li key={i}>{x}</li>
+                ))}
+                <li>{after === before ? t.sort.resDebtSame(formatGel(before)) : t.sort.resDebt(formatGel(before), formatGel(after))}</li>
+              </ul>
+            </div>
+          )}
+        </div>
       )}
     </FormSheet>
   );
