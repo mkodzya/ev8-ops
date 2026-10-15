@@ -11,6 +11,7 @@ export const bogApiEn = {
   bogApi: {
     freshAt: (date: string, time: string) => `The statement comes by itself (Business Online). The bank last answered ${date}, ${time}.`,
     waiting: 'The statement comes by itself (Business Online). The bank’s first answer comes within five minutes.',
+    noAccount: 'The Business Online link is not finished: no account is set. Until then, load statements as files.',
     silentSince: (why: string, date: string, time: string) => `Business Online is not answering: ${why}. Last answer ${date}, ${time}.`,
     silentNever: (why: string) => `Business Online is not answering: ${why}. It has not answered once yet.`,
     nightFailed: (why: string) => `The full statement for the night did not come: ${why}. It is asked for again the next night.`,
@@ -31,6 +32,7 @@ export const bogApiRu: typeof bogApiEn = {
   bogApi: {
     freshAt: (date, time) => `Выписка приходит сама (Business Online). Банк ответил ${date} в ${time}.`,
     waiting: 'Выписка приходит сама (Business Online). Первый ответ банка — в течение пяти минут.',
+    noAccount: 'Подключение к Business Online не закончено: не задан счёт. Пока выписку загружайте файлом.',
     silentSince: (why, date, time) => `Business Online не отвечает: ${why}. Последний ответ — ${date} в ${time}.`,
     silentNever: (why) => `Business Online не отвечает: ${why}. Ответа ещё не было ни разу.`,
     nightFailed: (why) => `Полная выписка за ночь не пришла: ${why}. Система спросит её снова следующей ночью.`,
@@ -51,6 +53,7 @@ export const bogApiKa: typeof bogApiEn = {
   bogApi: {
     freshAt: (date, time) => `ამონაწერი ავტომატურად მოდის (Business Online). ბანკის ბოლო პასუხი: ${date}, ${time}.`,
     waiting: 'ამონაწერი ავტომატურად მოდის (Business Online). ბანკის პირველი პასუხი — ხუთ წუთში.',
+    noAccount: 'Business Online-თან კავშირი ბოლომდე არ არის გამართული: ანგარიში არ არის მითითებული. მანამდე ამონაწერი ფაილით ატვირთეთ.',
     silentSince: (why, date, time) => `Business Online არ პასუხობს: ${why}. ბოლო პასუხი: ${date}, ${time}.`,
     silentNever: (why) => `Business Online არ პასუხობს: ${why}. პასუხი ჯერ არ ყოფილა.`,
     nightFailed: (why) => `ღამის სრული ამონაწერი არ მოვიდა: ${why}. სისტემა მას მომდევნო ღამეს ისევ მოითხოვს.`,

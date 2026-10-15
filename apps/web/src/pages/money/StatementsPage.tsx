@@ -60,12 +60,16 @@ function ApiLine({ api }: { api: BankApi }) {
   const w = t.bogApi;
   const why = (f: Why | null) => w.why[f ?? 'http'];
   const at = api.lastOkAt ? localDateTime(api.lastOkAt) : null;
+  // No account is a step of setting up, not the bank failing: one quiet line, and what to do meanwhile.
+  if (api.failure === 'no_account' || api.nightFailure === 'no_account') return <span className="muted">{w.noAccount}</span>;
+  const silent = api.freshness === 'silent';
   return (
     <>
       {api.freshness === 'waiting' && <span className="muted">{w.waiting}</span>}
       {api.freshness === 'ok' && at && <span className="muted">{w.freshAt(at.date, at.time)}</span>}
-      {api.freshness === 'silent' && <span className="warn-text">{at ? w.silentSince(why(api.failure), at.date, at.time) : w.silentNever(why(api.failure))}</span>}
-      {api.nightFailure && <span className="warn-text">{w.nightFailed(why(api.nightFailure))}</span>}
+      {silent && <span className="warn-text">{at ? w.silentSince(why(api.failure), at.date, at.time) : w.silentNever(why(api.failure))}</span>}
+      {/* The night's failure is said apart only when it is news: not the same reason the line above gives. */}
+      {api.nightFailure && !(silent && api.nightFailure === api.failure) && <span className="warn-text">{w.nightFailed(why(api.nightFailure))}</span>}
     </>
   );
 }
