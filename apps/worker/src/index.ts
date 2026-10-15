@@ -3,14 +3,19 @@
 // Every night in Asia/Tbilisi the worker asks the API to roll rental weeks
 // forward (RNT-02) and to put any credit a customer is holding onto the new
 // week (PAY-06). It does not do that work itself: those are money rules and
-// there is one copy of them, in the API. Later jobs that talk to the outside
-// world — WhatsApp reminders, the BOG statement pull — will live here with
-// their own logic.
+// there is one copy of them, in the API.
 //
 // Every few minutes it also asks the API to ask Kommo who is renting
 // (ADR-0012: the account's plan has no webhooks, so the link polls). The
 // asking itself happens in the API, where the Kommo token and the database
 // are; the worker holds neither and is only the clock here too.
+//
+// Bank of Georgia the same way (B11-03, Mika 14.10.2026): every five minutes
+// the API asks the bank for the day's operations — 288 of the 800 requests a
+// day the bank allows — and once a night it reads the full statement up to
+// yesterday so nothing the day's pulls missed is lost. The night is asked
+// again every hour and on every start; it does nothing once yesterday is read,
+// so a night the bank did not answer is caught up within the hour.
 import { ORG_TZ, todayISO } from '@ev8/shared';
 import cron from 'node-cron';
 
@@ -18,6 +23,10 @@ const API = (process.env.API_URL ?? 'http://api:8080').replace(/\/+$/, '');
 const TOKEN = process.env.WORKER_TOKEN ?? 'dev-worker-token';
 const PERIODS_CRON = process.env.PERIODS_CRON ?? '10 0 * * *';
 const KOMMO_CRON = process.env.KOMMO_CRON ?? '*/5 * * * *';
+const BOG_CRON = process.env.BOG_CRON ?? '*/5 * * * *';
+// Off the five-minute marks, so the night does not queue behind a pull; every
+// hour, and the first that finds yesterday unread reads it (01:17 normally).
+const BOG_NIGHT_CRON = process.env.BOG_NIGHT_CRON ?? '17 * * * *';
 const TZ = process.env.TZ ?? ORG_TZ;
 
 interface RollResult {
@@ -63,6 +72,48 @@ async function pollKommo(): Promise<void> {
   kommoSaid = line;
 }
 
+type BogOutcome =
+  | { status: 'off' }
+  | { status: 'busy' }
+  | { status: 'ok'; listed: number; added: number; recorded: number; matched: number; known: { byKey: number; byDoc: number; bySum: number }; days: string[]; fromStatement?: boolean }
+  | { status: 'failed'; failure: string; httpStatus: number | null; stage?: string | null };
+
+let bogSaid = '';
+let nightSaid = '';
+
+/** Counts and our own words only: the bank's answers carry names and account numbers. */
+async function askBog(job: 'bog-today' | 'bog-night'): Promise<void> {
+  let line: string;
+  let always = false;
+  try {
+    const res = await fetch(`${API}/api/jobs/${job}`, { method: 'POST', headers: { 'x-worker-token': TOKEN } });
+    if (!res.ok) throw new Error(`${job}: ${res.status}`);
+    const r = (await res.json()) as BogOutcome;
+    if (r.status === 'busy') return;
+    if (r.status === 'off') line = 'the Bank of Georgia link is off (no keys on this stand)';
+    else if (r.status === 'failed')
+      line = `Bank of Georgia did not answer${job === 'bog-night' ? ' with the statement' : ''} — ${r.failure}${r.httpStatus ? ` (${r.httpStatus})` : ''}${r.stage ? ` at the ${r.stage === 'token' ? 'token' : 'API'}` : ''}`;
+    else {
+      const known = r.known.byKey + r.known.byDoc + r.known.bySum;
+      const added = r.added ? `${r.added} new line(s), ${r.recorded} linked to payments entered by hand, ${r.matched} attached by a rule` : 'nothing new';
+      const from = r.known.byDoc + r.known.bySum ? `; ${r.known.byDoc + r.known.bySum} already in from another source` : '';
+      line =
+        job === 'bog-night'
+          ? r.days.length
+            ? `Bank of Georgia statement ${r.days[0]}…${r.days[r.days.length - 1]} — ${r.listed} entr(ies), ${known} already in${from}, ${added}`
+            : 'Bank of Georgia statement — the nights are read'
+          : `Bank of Georgia answered${r.fromStatement ? ' through today’s statement (the day’s list did not)' : ''} — ${r.listed} operation(s) today, ${added}${from}`;
+      always = r.added > 0 || (job === 'bog-night' && r.days.length > 0);
+    }
+  } catch (err) {
+    line = `the Bank of Georgia ${job === 'bog-night' ? 'statement' : 'pull'} did not reach the API — ${(err as Error).message}`;
+  }
+  const said = job === 'bog-today' ? bogSaid : nightSaid;
+  if (always || line !== said) console.log(`worker: ${line}`);
+  if (job === 'bog-today') bogSaid = line;
+  else nightSaid = line;
+}
+
 async function waitForApi(): Promise<void> {
   for (let i = 0; i < 60; i++) {
     try {
@@ -94,7 +145,13 @@ async function main(): Promise<void> {
   cron.schedule(PERIODS_CRON, () => void run(todayISO(new Date(), TZ)), { timezone: TZ });
   await pollKommo();
   cron.schedule(KOMMO_CRON, () => void pollKommo(), { timezone: TZ });
-  console.log(`worker: up — weeks roll at "${PERIODS_CRON}" ${TZ}, Kommo is asked at "${KOMMO_CRON}"`);
+  await askBog('bog-today');
+  await askBog('bog-night');
+  cron.schedule(BOG_CRON, () => void askBog('bog-today'), { timezone: TZ });
+  cron.schedule(BOG_NIGHT_CRON, () => void askBog('bog-night'), { timezone: TZ });
+  console.log(
+    `worker: up — weeks roll at "${PERIODS_CRON}" ${TZ}, Kommo is asked at "${KOMMO_CRON}", Bank of Georgia at "${BOG_CRON}" and its statement at "${BOG_NIGHT_CRON}"`,
+  );
 }
 
 main().catch((err) => {

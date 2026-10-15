@@ -1,16 +1,17 @@
 import { daysBetween, todayISO } from '@ev8/shared';
 import type { FastifyInstance } from 'fastify';
 import { audit } from '../lib/audit.js';
+import { bogApiStatus } from '../lib/bog.js';
 import { isoDate } from '../lib/dates.js';
 import { prisma } from '../lib/db.js';
 import { env } from '../lib/env.js';
 import { badRequest, conflict, notFound } from '../lib/errors.js';
 import { actorOf } from '../lib/guard.js';
 import { voidPayment } from '../lib/payments.js';
-import { attach, importStatement, linkBankDeposit, linkPayment, previewStatement } from '../lib/statements/import.js';
-import { ParseError, cardOf } from '../lib/statements/parse.js';
-import { isCashDeposit, loadCtx, suggest, type Line } from '../lib/statements/reconcile.js';
-import { str } from '../lib/validate.js';
+import { SPLIT_MAX, attach, importStatement, linkBankDeposit, linkPayment, previewStatement, split } from '../lib/statements/import.js';
+import { ParseError } from '../lib/statements/parse.js';
+import { isCashDeposit, loadCtx, storedLine, suggest } from '../lib/statements/reconcile.js';
+import { str, tetri } from '../lib/validate.js';
 
 // Statements and "Разобрать" (wave 2 §3.2, §3.5).
 //
@@ -40,34 +41,6 @@ function readFile(b: Body): { fileName: string; text: string } {
   return { fileName, text };
 }
 
-function asLine(l: {
-  occurredOn: Date;
-  direction: 'in' | 'out';
-  amountTetri: number;
-  grossTetri: number | null;
-  feeTetri: number | null;
-  payer: string | null;
-  purpose: string | null;
-  raw: string;
-  bank: 'bog' | 'tbc' | 'credo';
-}): Line {
-  // A card line is told by its text as well as by its stored sums: one loaded
-  // before a bank's wording was known is read here as it would be read today.
-  const card = l.direction === 'in' ? cardOf(l) : null;
-  return {
-    occurredOn: isoDate(l.occurredOn)!,
-    direction: l.direction,
-    amountTetri: l.amountTetri,
-    grossTetri: card?.grossTetri ?? null,
-    feeTetri: card?.feeTetri ?? null,
-    payer: l.payer,
-    purpose: l.purpose,
-    raw: l.raw,
-    channel: card ? 'acquiring' : 'transfer',
-    bank: l.bank,
-  };
-}
-
 export function statementRoutes(app: FastifyInstance): void {
   /** By bank: the last upload and up to which day; below, the history (§3.5). */
   app.get('/api/statements', { config: { scope: 'payments.reconcile' } }, async () => {
@@ -75,6 +48,8 @@ export function statementRoutes(app: FastifyInstance): void {
     const statements = await prisma.statement.findMany({ orderBy: { createdAt: 'desc' }, take: 100, include: { uploadedBy: { select: { name: true } } } });
     const lastLines = await prisma.statementLine.groupBy({ by: ['bank'], _max: { occurredOn: true } });
     const queue = await prisma.statementLine.count({ where: { status: 'unmatched' } });
+    // Bank of Georgia comes by itself once its keys are on the stand (B11-03).
+    const bogApi = await bogApiStatus();
     const banks = BANKS.map((bank) => {
       const last = statements.find((s) => s.bank === bank) ?? null;
       const through = isoDate(lastLines.find((l) => l.bank === bank)?._max.occurredOn ?? null);
@@ -87,6 +62,7 @@ export function statementRoutes(app: FastifyInstance): void {
         daysOld: upTo ? Math.max(0, daysBetween(upTo, today)) : null,
         stale: upTo ? daysBetween(upTo, today) > STALE_DAYS : false,
         never: !last,
+        api: bank === 'bog' ? bogApi : null,
       };
     });
     return {
@@ -105,6 +81,7 @@ export function statementRoutes(app: FastifyInstance): void {
         newLines: s.newLines,
         matched: s.matched,
         uploadedBy: s.uploadedBy?.name ?? null,
+        source: s.source,
         createdAt: s.createdAt.toISOString(),
       })),
     };
@@ -151,7 +128,7 @@ export function statementRoutes(app: FastifyInstance): void {
       byRulesWeek: byRules,
       asideMonth: aside,
       lines: lines.map((l) => {
-        const line = asLine(l);
+        const line = storedLine(l);
         return {
           id: l.id,
           bank: l.bank,
@@ -230,7 +207,7 @@ export function statementRoutes(app: FastifyInstance): void {
     return {
       days,
       lines: lines.map((l) => {
-        const line = asLine(l);
+        const line = storedLine(l);
         return {
           id: l.id,
           bank: l.bank,
@@ -256,7 +233,7 @@ export function statementRoutes(app: FastifyInstance): void {
   app.get<{ Params: { id: string } }>('/api/statement-lines/:id', { config: { scope: 'payments.reconcile' } }, async (req) => {
     const l = await prisma.statementLine.findUnique({ where: { id: req.params.id } });
     if (!l) throw notFound('line_not_found', 'No such statement line.');
-    const line = asLine(l);
+    const line = storedLine(l);
     const s = suggest(line, await loadCtx());
     return {
       line: { id: l.id, occurredOn: isoDate(l.occurredOn), direction: l.direction, amountTetri: l.amountTetri, grossTetri: line.grossTetri, payer: l.payer, purpose: l.purpose, raw: l.raw, channel: line.channel, status: l.status },
@@ -275,6 +252,29 @@ export function statementRoutes(app: FastifyInstance): void {
     }
     const r = await prisma.$transaction((tx) => attach(tx, { actorId: actorOf(req).id, lineId: req.params.id, rule: 'by_hand', ...target }));
     return { ok: true, id: r.paymentId };
+  });
+
+  /**
+   * "Разделить": one line, several records — a rental week and a repair paid
+   * in one transfer (meeting of 14.10.2026). Each part is what the customer
+   * paid for that record; together they are the whole line.
+   */
+  app.post<{ Params: { id: string }; Body: Body }>('/api/statement-lines/:id/split', { config: { scope: 'payments.reconcile' } }, async (req) => {
+    const raw = (req.body ?? {}).parts;
+    if (!Array.isArray(raw) || raw.length === 0) throw badRequest('missing_field', 'Say what each part pays for.', { field: 'parts' });
+    if (raw.length > SPLIT_MAX) throw badRequest('split_too_many', `A split has at most ${SPLIT_MAX} parts.`);
+    const parts = raw.map((x) => {
+      const b = (x ?? {}) as Body;
+      return {
+        grossTetri: tetri(b, 'grossTetri', { required: true, min: 1 })!,
+        rentalId: str(b, 'rentalId'),
+        saleId: str(b, 'saleId'),
+        serviceJobId: str(b, 'serviceJobId'),
+        customerId: str(b, 'customerId'),
+      };
+    });
+    const r = await prisma.$transaction((tx) => split(tx, { actorId: actorOf(req).id, lineId: req.params.id, parts }));
+    return { ok: true, ids: r.paymentIds };
   });
 
   /** "Да, это он": the line is a payment already entered by hand (§3.2 "Похоже, уже записан"). */

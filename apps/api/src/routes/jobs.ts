@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { todayISO } from '@ev8/shared';
+import { reconcileBogNight, syncBogToday } from '../lib/bog.js';
 import { env } from '../lib/env.js';
 import { syncKommo } from '../lib/kommo.js';
 import { rollPeriods } from '../lib/periods.js';
@@ -11,7 +12,8 @@ import { rollPeriods } from '../lib/periods.js';
 // copy of them in the worker, the worker calls in here with a shared token.
 //
 // The Kommo poll knocks here for a different reason: the Kommo token and the
-// database both live in this process, and the worker has neither.
+// database both live in this process, and the worker has neither. So do the
+// two Bank of Georgia jobs (B11-03), for the bank's keys.
 
 function workerOnly(req: FastifyRequest, reply: FastifyReply): boolean {
   const given = req.headers['x-worker-token'];
@@ -37,6 +39,26 @@ export function jobRoutes(app: FastifyInstance): void {
     if (!workerOnly(req, reply)) return reply;
     const outcome = await syncKommo();
     if (outcome.status === 'failed') app.log.warn(outcome, 'kommo did not answer');
+    return outcome;
+  });
+
+  // Ask Bank of Georgia for the day's operations (every five minutes), and
+  // read the full statement up to yesterday (once a night, and on every
+  // start of the worker — it does nothing when the night is already read).
+  // The outcome is counts, days and one of our own words for a failure: no
+  // names, no account, nothing of the bank's answer. With no keys it says
+  // `off` and does nothing.
+  app.post('/api/jobs/bog-today', { config: { scope: 'public' } }, async (req, reply) => {
+    if (!workerOnly(req, reply)) return reply;
+    const outcome = await syncBogToday();
+    if (outcome.status === 'failed') app.log.warn(outcome, 'bank of georgia did not answer');
+    return outcome;
+  });
+
+  app.post('/api/jobs/bog-night', { config: { scope: 'public' } }, async (req, reply) => {
+    if (!workerOnly(req, reply)) return reply;
+    const outcome = await reconcileBogNight();
+    if (outcome.status === 'failed') app.log.warn(outcome, 'bank of georgia statement did not come');
     return outcome;
   });
 }

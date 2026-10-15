@@ -7,7 +7,10 @@ import { wave6weekRu } from './wave6-week.js';
 import { wave6utilRu } from './wave6-utilisation.js';
 import { wave6manageRu } from './wave6-manage.js';
 import { kommoLinkRu } from './kommo-link.js';
+import { bogApiRu } from './bog-api.js';
 import { calendarRu } from './payments-calendar.js';
+import { payDayRu } from './pay-day.js';
+import { inBankRu } from './in-bank.js';
 import type { Dict } from './en.js';
 
 // Typed as Dict: a missing or misspelled key fails the build.
@@ -339,6 +342,14 @@ export const ru: Dict = {
     returnedTo: 'Кому возвращён',
     buyout: 'Выкуп',
     buyoutProgress: (target: string, per: string) => `${per} с каждого платежа в счёт ${target}`,
+    discount: 'Скидка на неделю',
+    discountTitle: (seq: number, from: string, to: string) => `Скидка · неделя ${seq}, ${from}–${to}`,
+    discountAmount: 'Сколько снять с недели',
+    discountHint: (full: string, paid: string, after: string) => `Полная цена ${full}, оплачено ${paid}. Неделя станет ${after}. 0 — убрать скидку.`,
+    discountReason: 'Причина',
+    discountReasonHint: 'Обязательна: например, «мопед день стоял в ремонте».',
+    discountDone: 'Скидка записана',
+    discountShort: (n: string) => `скидка ${n}`,
     notes: 'Заметки',
   },
 
@@ -771,6 +782,15 @@ export const ru: Dict = {
     bankDeposit: 'Похоже на внесение наличных — записать «Внёс в банк»?',
     bankDepositYes: 'Да, это взнос наличных',
     whereTo: (n: string) => `Куда привязать ${n}`,
+    split: 'Разделить',
+    splitTitle: (n: string) => `Разделить ${n}`,
+    splitHint: 'Сколько из суммы идёт на каждую запись клиента. Вместе — вся строка; каждая часть закроет свою запись.',
+    splitLeft: (n: string) => `Осталось разнести ${n}`,
+    splitOver: (n: string) => `Больше строки на ${n}`,
+    splitRest: 'Остаток сюда',
+    splitAnother: 'Другой клиент',
+    splitNothing: 'У клиента нет открытых записей — только «на счёт клиента».',
+    splitDone: (n: number) => `Строка разделена, частей: ${n}`,
     byCard: (paid: string, fee: string) => `Оплата картой: клиент заплатил ${paid}, комиссия банка ${fee}.`,
     byCardPlain: 'Оплата картой.',
     whereHint: 'Поиск: номер записи, имя, телефон. Показаны записи с долгом и «на счёт клиента».',
@@ -884,6 +904,8 @@ export const ru: Dict = {
     voidTitle: (n: string) => `Аннулировать платёж ${n}?`,
     voidReason: 'Причина',
     voidHint: 'Обязательна. Недели и залог снова станут неоплаченными; строка выписки вернётся в «Разобрать».',
+    voidSplit: (n: number) => `Строка выписки разделена на части (${n}): аннулируются все, строка вернётся в «Разобрать».`,
+    splitWith: 'Та же строка выписки, другие части:',
     voided: 'Аннулирован',
     undone: 'отменён сразу',
     voidedToast: 'Платёж аннулирован',
@@ -1086,6 +1108,7 @@ export const ru: Dict = {
     codes: {
       act_not_found: 'Документ не найден.',
       bad_channel: 'Залог возвращают наличными или переводом.',
+      bank_line_exists: 'Банк уже прислал эту сумму. Привяжите его строку или отметьте, что это другой перевод.',
       buyback_void: 'Выкуп вернул мопед в парк — его не аннулируют отсюда.',
       deposit_has_line: 'У этого взноса в банк уже есть строка выписки.',
       future_date: 'Платёж нельзя записать будущей датой.',
@@ -1104,6 +1127,17 @@ export const ru: Dict = {
       service_not_found: 'Такого ремонта нет.',
       undo_too_late: 'Отменить уже нельзя. Владелец может аннулировать платёж с причиной.',
       already_matched: 'Эта строка выписки уже привязана к платежу.',
+      week_not_found: 'Такой недели в аренде нет.',
+      week_paid_before_transfer: 'Эта неделя оплачена до переноса аренды — скидку на неё дать нельзя.',
+      discount_over_week: 'Скидка больше цены недели.',
+      discount_over_paid: 'Столько уже оплачено: снять можно только неоплаченную часть недели.',
+      split_needs_two: 'Чтобы разделить строку, нужны хотя бы две части.',
+      split_too_many: 'Слишком много частей: не больше девяти.',
+      split_bad_amount: 'У каждой части должна быть сумма больше нуля.',
+      split_bad_target: 'Каждая часть оплачивает ровно одну запись.',
+      split_same_target: 'Две части на одну запись — сложите их в одну.',
+      split_sum: 'Части не складываются в сумму строки.',
+      split_over_repair: 'Часть больше, чем осталось оплатить по ремонту.',
       already_returned: 'Эта аренда уже закрыта.',
       already_voided: 'Этот платёж уже отменён.',
       bad_field: 'Поле заполнено неверно. Проверьте форму и попробуйте ещё раз.',
@@ -1230,5 +1264,8 @@ export const ru: Dict = {
   ...wave6utilRu,
   ...wave6manageRu,
   ...kommoLinkRu,
+  ...bogApiRu,
   ...calendarRu,
+  ...payDayRu,
+  ...inBankRu,
 };

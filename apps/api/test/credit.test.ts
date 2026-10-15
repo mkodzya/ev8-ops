@@ -4,7 +4,7 @@
 // customer paid beyond what was owed has to land on the next week by
 // itself, not wait for somebody to notice it.
 import { describe, expect, it } from 'vitest';
-import { HAS_DB, call, json, loginAs, uniq } from './helpers.js';
+import { HAS_DB, byHand, call, json, loginAs, uniq } from './helpers.js';
 
 async function rentalPickedUp(pickedUpOn: string, rate = 14000) {
   const { prisma } = await import('../src/lib/db.js');
@@ -66,7 +66,7 @@ describe.skipIf(!HAS_DB)('money paid ahead', () => {
 
   it('a payment made against the customer, with no rental named, still pays their rental', async () => {
     const { owner, customer, rentalId } = await rentalPickedUp('2026-09-01');
-    await call(owner, 'POST', '/api/payments', { customerId: customer.id, channel: 'transfer', grossTetri: 60000, occurredOn: '2026-09-01' });
+    await byHand(owner, '/api/payments', { customerId: customer.id, channel: 'transfer', grossTetri: 60000, occurredOn: '2026-09-01' });
     const { rollPeriods } = await import('../src/lib/periods.js');
     await rollPeriods('2026-09-15');
     const c = card(await call(owner, 'GET', `/api/rentals/${rentalId}`));

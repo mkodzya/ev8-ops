@@ -345,3 +345,91 @@ describe.skipIf(!HAS_DB)('who may load a statement', () => {
     expect(json<{ message: string }>(bad).message).toMatch(/Bank of Georgia|TBC/);
   });
 });
+
+describe.skipIf(!HAS_DB)('one bank line for several records (meeting of 14.10.2026)', () => {
+  /** A rental, a customer repair on its moped, and one transfer of `amount` waiting in the queue. */
+  async function rentAndRepair(amount: string, raw: string) {
+    const who = tagged({ ru: 'Разнос Тестовый', ka: 'გაყოფა ტესტიძე' });
+    const { prisma, owner, customer, rentalId } = await rentalFor(who, { rate: 15000, pickedUpOn: '2026-09-01' });
+    const { vehicleId } = await prisma.rental.findUniqueOrThrow({ where: { id: rentalId }, select: { vehicleId: true } });
+    const job = json<{ id: string }>(await call(owner, 'POST', '/api/service', { vehicleId, reason: 'brake cable', payer: 'customer', labourTetri: '200' }));
+    expect((await call(owner, 'POST', `/api/service/${job.id}/close`, {})).statusCode).toBe(200);
+    const tag = uniq();
+    await call(owner, 'POST', '/api/statements', { fileName: `split-${tag}.csv`, text: [BOG_HEADER, bogRow('06.10.2026', amount, `${raw} ${tag}`)].join('\n') });
+    const queue = json<{ lines: { id: string; raw: string }[] }>(await call(owner, 'GET', '/api/statement-lines'));
+    const line = queue.lines.find((l) => l.raw.includes(tag))!;
+    expect(line).toBeTruthy();
+    return { prisma, owner, customer, rentalId, jobId: job.id, lineId: line.id };
+  }
+
+  it('a transfer pays a rental week and a repair: two payments, the line leaves the queue', async () => {
+    const { prisma, owner, rentalId, jobId, lineId } = await rentAndRepair('350.0', 'Caricxva - Tanxa GEL350.00; gadmomricxavi: unknown sender');
+
+    // The parts must make the whole line, one record each, never the same record twice.
+    const short = await call(owner, 'POST', `/api/statement-lines/${lineId}/split`, { parts: [{ rentalId, grossTetri: 15000 }, { serviceJobId: jobId, grossTetri: 10000 }] });
+    expect(short.statusCode).toBe(400);
+    expect(json<{ error: string }>(short).error).toBe('split_sum');
+    const twice = await call(owner, 'POST', `/api/statement-lines/${lineId}/split`, { parts: [{ rentalId, grossTetri: 15000 }, { rentalId, grossTetri: 20000 }] });
+    expect(json<{ error: string }>(twice).error).toBe('split_same_target');
+    const one = await call(owner, 'POST', `/api/statement-lines/${lineId}/split`, { parts: [{ rentalId, grossTetri: 35000 }] });
+    expect(json<{ error: string }>(one).error).toBe('split_needs_two');
+    const over = await call(owner, 'POST', `/api/statement-lines/${lineId}/split`, { parts: [{ rentalId, grossTetri: 10000 }, { serviceJobId: jobId, grossTetri: 25000 }] });
+    expect(json<{ error: string }>(over).error).toBe('split_over_repair');
+
+    const res = await call(owner, 'POST', `/api/statement-lines/${lineId}/split`, { parts: [{ rentalId, grossTetri: '150' }, { serviceJobId: jobId, grossTetri: '200' }] });
+    expect(res.statusCode, res.body).toBe(200);
+    const { ids } = json<{ ids: string[] }>(res);
+    expect(ids).toHaveLength(2);
+
+    const made = await prisma.payment.findMany({ where: { statementLineId: lineId, voidedAt: null }, orderBy: { statementPart: 'asc' } });
+    expect(made.map((p) => [p.statementPart, p.kind, p.grossTetri, p.channel])).toEqual([
+      [1, 'rent', 15000, 'transfer'],
+      [2, 'service', 20000, 'transfer'],
+    ]);
+    expect(made[0].rentalId).toBe(rentalId);
+    expect(made[1].serviceJobId).toBe(jobId);
+    const { job } = json<{ job: { status: string } }>(await call(owner, 'GET', `/api/service/${jobId}`));
+    expect(job.status).toBe('done');
+
+    const after = json<{ lines: { id: string }[] }>(await call(owner, 'GET', '/api/statement-lines'));
+    expect(after.lines.find((l) => l.id === lineId)).toBeUndefined();
+    // A second answer for the same line finds it taken, whole or split.
+    expect((await call(owner, 'POST', `/api/statement-lines/${lineId}/assign`, { rentalId })).statusCode).toBe(409);
+    expect((await call(owner, 'POST', `/api/statement-lines/${lineId}/split`, { parts: [{ rentalId, grossTetri: 15000 }, { serviceJobId: jobId, grossTetri: 20000 }] })).statusCode).toBe(409);
+
+    // The payment's page names the other part.
+    const page = json<{ payment: { splitWith: { id: string; grossTetri: number }[] } }>(await call(owner, 'GET', `/api/payments/${ids[0]}`));
+    expect(page.payment.splitWith).toEqual([expect.objectContaining({ id: ids[1], grossTetri: 20000 })]);
+  });
+
+  it('voiding one part voids them all and the line waits for a person again', async () => {
+    const { prisma, owner, rentalId, jobId, lineId } = await rentAndRepair('350.0', 'Caricxva - Tanxa GEL350.00; gadmomricxavi: unknown sender');
+    const { ids } = json<{ ids: string[] }>(
+      await call(owner, 'POST', `/api/statement-lines/${lineId}/split`, { parts: [{ serviceJobId: jobId, grossTetri: 20000 }, { rentalId, grossTetri: 15000 }] }),
+    );
+    expect((await call(owner, 'POST', `/api/payments/${ids[1]}/void`, { reason: 'wrong split' })).statusCode).toBe(200);
+
+    const live = await prisma.payment.count({ where: { statementLineId: lineId, voidedAt: null } });
+    expect(live).toBe(0);
+    const queue = json<{ lines: { id: string }[] }>(await call(owner, 'GET', '/api/statement-lines'));
+    expect(queue.lines.find((l) => l.id === lineId)).toBeTruthy();
+
+    // And it can be split again, the other way.
+    const again = await call(owner, 'POST', `/api/statement-lines/${lineId}/split`, { parts: [{ rentalId, grossTetri: 30000 }, { serviceJobId: jobId, grossTetri: 5000 }] });
+    expect(again.statusCode, again.body).toBe(200);
+  });
+
+  it('a card line shares the acquirer’s fee between the parts in proportion', async () => {
+    const { prisma, owner, rentalId, jobId, lineId } = await rentAndRepair('344.75', 'Caricxva - Tanxa GEL344.75; Wallet/domestic MC cards');
+    const gross = acquiringGross(34475);
+    expect(gross).toBe(35000);
+    const res = await call(owner, 'POST', `/api/statement-lines/${lineId}/split`, { parts: [{ rentalId, grossTetri: 15000 }, { serviceJobId: jobId, grossTetri: 20000 }] });
+    expect(res.statusCode, res.body).toBe(200);
+    const made = await prisma.payment.findMany({ where: { statementLineId: lineId, voidedAt: null }, orderBy: { statementPart: 'asc' } });
+    expect(made.every((p) => p.channel === 'acquiring')).toBe(true);
+    expect(made.map((p) => p.grossTetri)).toEqual([15000, 20000]);
+    // 5.25 kept by the bank: 2.25 on the first part, the rest on the last; net adds up to what was credited.
+    expect(made.map((p) => p.feeTetri)).toEqual([225, 300]);
+    expect(made.reduce((n, p) => n + p.netTetri, 0)).toBe(34475);
+  });
+});

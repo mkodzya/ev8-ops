@@ -8,6 +8,7 @@ import { badRequest, conflict, forbidden, notFound } from './errors.js';
 import { recordPaymentTx } from './payments.js';
 import { recostPurchase } from './purchases.js';
 import { rentalOwed, spreadRental } from './rentalMoney.js';
+import { inBankAlready, type InBank } from './statements/inBank.js';
 import { moveVehicle } from './vehicles.js';
 
 // One way money moves (wave 2 §3.1). The money form, a card's "take money",
@@ -46,6 +47,8 @@ export interface MoneyInput {
   bankFeeTetri?: number | null;
   /** A buy-back: where the moped goes. */
   toState?: 'available' | 'service';
+  /** Bank lines of this sum the person was shown and said this money is not: another transfer (B11-03). */
+  notBankLines?: string[] | null;
 }
 
 /** One thing a payment will close, in words the form can say. */
@@ -273,6 +276,27 @@ export async function depositMoney(tx: Tx | typeof prisma, rentalId: string) {
   };
 }
 
+/** Money a customer brings, which a bank line may already be. */
+const FROM_CUSTOMER: readonly MoneyKind[] = ['rent', 'sale', 'service', 'on_account'];
+
+/** Whose money it is: the customer of the record it pays. */
+async function payerOf(tx: Tx, input: MoneyInput): Promise<string | null> {
+  if (input.kind === 'rent' && input.rentalId) return (await tx.rental.findUnique({ where: { id: input.rentalId }, select: { customerId: true } }))?.customerId ?? null;
+  if (input.kind === 'sale' && input.saleId) return (await tx.sale.findUnique({ where: { id: input.saleId }, select: { customerId: true } }))?.customerId ?? null;
+  if (input.kind === 'service' && input.serviceJobId) return (await tx.serviceJob.findUnique({ where: { id: input.serviceJobId }, select: { customerId: true } }))?.customerId ?? null;
+  return input.customerId ?? null;
+}
+
+/**
+ * Bank lines this money may already be (B11-03, `statements/inBank.ts`): a
+ * transfer or a card payment from a customer, of the same sum within ±3 days.
+ * Cash and money going out have none.
+ */
+export async function bankLinesFor(tx: Tx, input: MoneyInput, occurredOn: string): Promise<InBank[]> {
+  if (!FROM_CUSTOMER.includes(input.kind) || input.channel === 'cash') return [];
+  return inBankAlready(tx, { customerId: await payerOf(tx, input), grossTetri: input.amountTetri, channel: input.channel, occurredOn });
+}
+
 /** Write it. The plan is worked out again inside the transaction, so what is written is what was true then. */
 export async function recordMoney(actor: Actor, input: MoneyInput): Promise<{ id: string; plan: MoneyPlan }> {
   checkMoney(actor, input);
@@ -280,6 +304,14 @@ export async function recordMoney(actor: Actor, input: MoneyInput): Promise<{ id
   const backdateReason = occurredOn < today() ? input.backdateReason?.trim() ?? null : null;
   return prisma.$transaction(async (tx) => {
     const plan = await planMoney(tx, input);
+    // The bank sends its lines within minutes now, so the money may be in
+    // already: written again by hand it would count twice. The form shows the
+    // line first; a line the person has not seen refuses the write (B11-03).
+    const notBankLines = input.notBankLines ?? [];
+    const unseen = (await bankLinesFor(tx, input, occurredOn)).filter((l) => !notBankLines.includes(l.lineId));
+    if (unseen.length > 0) {
+      throw conflict('bank_line_exists', 'The bank has sent this money already: attach its line, or say this is another transfer.', { field: 'notBankLines', lines: unseen });
+    }
     let id: string;
     if (input.kind === 'rent' || input.kind === 'sale' || input.kind === 'on_account') {
       const r = await recordPaymentTx(tx, {
@@ -296,6 +328,7 @@ export async function recordMoney(actor: Actor, input: MoneyInput): Promise<{ id
         source: 'manual',
         kind: input.kind,
         backdateReason,
+        notBankLines: notBankLines.length > 0 ? notBankLines : undefined,
       });
       id = r.id;
     } else {
@@ -370,7 +403,17 @@ async function writeOther(tx: Tx, actor: Actor, input: MoneyInput, plan: MoneyPl
       action: `payment.${input.kind}`,
       entityType: 'payment',
       entityId: payment.id,
-      after: { occurredOn, channel: input.channel, grossTetri: plan.grossTetri, feeTetri: plan.feeTetri, kind: input.kind, paidTo: input.paidTo ?? null, paidToReason: input.paidToReason ?? null, rate: plan.rate },
+      after: {
+        occurredOn,
+        channel: input.channel,
+        grossTetri: plan.grossTetri,
+        feeTetri: plan.feeTetri,
+        kind: input.kind,
+        paidTo: input.paidTo ?? null,
+        paidToReason: input.paidToReason ?? null,
+        rate: plan.rate,
+        ...(input.notBankLines?.length ? { notBankLines: input.notBankLines } : {}),
+      },
     },
   });
   return payment.id;

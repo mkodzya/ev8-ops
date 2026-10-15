@@ -16,7 +16,10 @@ import { wave6weekEn } from './wave6-week.js';
 import { wave6utilEn } from './wave6-utilisation.js';
 import { wave6manageEn } from './wave6-manage.js';
 import { kommoLinkEn } from './kommo-link.js';
+import { bogApiEn } from './bog-api.js';
 import { calendarEn } from './payments-calendar.js';
+import { payDayEn } from './pay-day.js';
+import { inBankEn } from './in-bank.js';
 export const en = {
   lang: { label: 'Language', ka: 'ქართული', ru: 'Русский', en: 'English' },
 
@@ -337,6 +340,14 @@ export const en = {
     returnedTo: 'Returned to',
     buyout: 'Buy-out',
     buyoutProgress: (target: string, per: string) => `${per} of each payment towards ${target}`,
+    discount: 'Discount on the week',
+    discountTitle: (seq: number, from: string, to: string) => `Discount · week ${seq}, ${from}–${to}`,
+    discountAmount: 'How much to take off the week',
+    discountHint: (full: string, paid: string, after: string) => `Full price ${full}, paid ${paid}. The week becomes ${after}. 0 removes the discount.`,
+    discountReason: 'Reason',
+    discountReasonHint: 'Required: for example, “the moped stood a day in the workshop”.',
+    discountDone: 'Discount saved',
+    discountShort: (n: string) => `discount ${n}`,
     notes: 'Notes',
   },
 
@@ -771,6 +782,15 @@ export const en = {
     bankDeposit: 'Looks like cash paid in — record “Taken to the bank”?',
     bankDepositYes: 'Yes, cash paid in',
     whereTo: (n: string) => `Where does ${n} go`,
+    split: 'Split',
+    splitTitle: (n: string) => `Split ${n}`,
+    splitHint: 'How much of the sum goes to each of the customer’s records. Together they make the whole line; each part closes its own record.',
+    splitLeft: (n: string) => `${n} left to place`,
+    splitOver: (n: string) => `${n} more than the line`,
+    splitRest: 'The rest here',
+    splitAnother: 'Another customer',
+    splitNothing: 'The customer has no open records — only “on the customer’s account”.',
+    splitDone: (n: number) => `Line split into ${n} parts`,
     /** On a card line: the sum on the card is what the bank credited; this is what the customer paid and what the bank kept. */
     byCard: (paid: string, fee: string) => `Card payment: the customer paid ${paid}, the bank kept ${fee}.`,
     byCardPlain: 'Card payment.',
@@ -887,6 +907,8 @@ export const en = {
     voidTitle: (n: string) => `Annul the ${n} payment?`,
     voidReason: 'Reason',
     voidHint: 'Required. The weeks and the deposit become unpaid again; the statement line goes back to “Sort”.',
+    voidSplit: (n: number) => `The bank line is split into ${n} parts: all of them are annulled and the line goes back to “Sort”.`,
+    splitWith: 'The same bank line, its other parts:',
     voided: 'Annulled',
     undone: 'undone at once',
     voidedToast: 'Payment annulled',
@@ -1089,6 +1111,7 @@ export const en = {
     codes: {
       act_not_found: 'This document was not found.',
       bad_channel: 'A deposit goes back in cash or by transfer.',
+      bank_line_exists: 'The bank has already sent this sum. Attach its line, or mark that this is another transfer.',
       buyback_void: 'A buy-back moved the moped back; it is not annulled from here.',
       deposit_has_line: 'That bank deposit already has its statement line.',
       future_date: 'A payment cannot be dated in the future.',
@@ -1107,6 +1130,17 @@ export const en = {
       service_not_found: 'No such repair.',
       undo_too_late: 'Too late to undo. An owner can annul it with a reason.',
       already_matched: 'This bank line is already attached to a payment.',
+      week_not_found: 'No such week in this rental.',
+      week_paid_before_transfer: 'This week was paid before the rental was carried over — it cannot be discounted.',
+      discount_over_week: 'The discount is more than the week.',
+      discount_over_paid: 'That much is paid already: only the unpaid part of the week can be taken off.',
+      split_needs_two: 'A split needs at least two parts.',
+      split_too_many: 'Too many parts: nine at most.',
+      split_bad_amount: 'Every part needs a sum above zero.',
+      split_bad_target: 'Every part pays exactly one record.',
+      split_same_target: 'Two parts pay the same record — make them one.',
+      split_sum: 'The parts do not add up to the line.',
+      split_over_repair: 'That part is more than the repair still owes.',
       already_returned: 'This rental is already closed.',
       already_voided: 'This payment is already cancelled.',
       bad_field: 'A field is filled in wrongly. Check the form and try again.',
@@ -1233,7 +1267,10 @@ export const en = {
   ...wave6utilEn,
   ...wave6manageEn,
   ...kommoLinkEn,
+  ...bogApiEn,
   ...calendarEn,
+  ...payDayEn,
+  ...inBankEn,
 };
 
 export type Dict = typeof en;

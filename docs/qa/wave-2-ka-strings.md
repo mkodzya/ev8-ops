@@ -290,3 +290,45 @@
 | `errors.codes.not_set_aside` | Эта строка не отложена. Обновите список. | This line is not set aside. Refresh the list. | ეს ხაზი გადადებული არ არის. განაახლეთ სია. | es khazi gadadebuli ar aris. ganaakhlet sia |
 | журнал `statement.line.restore` | Строка возвращена в очередь | A line was put back into the queue | ხაზი რიგში დაბრუნდა | khazi rigshi dabrunda |
 
+## 14.10.2026 — Bank of Georgia по API: строка на карточке банка в «Выписках»
+
+Написано не носителем языка. «ამონაწერი» [amonatseri] — слово, которым экран «Выписки» уже называет выписку;
+«ხაზი» [khazi] — строка выписки, как в «Разобрать». Причины отказа подставляются в строки `silentSince`,
+`silentNever` и `nightFailed` после двоеточия.
+
+| Ключ | RU | EN | KA | Чтение |
+|---|---|---|---|---|
+| `bogApi.freshAt(дата, время)` | Выписка приходит сама (Business Online). Банк ответил 14.10.2026 в 14:05. | The statement comes by itself (Business Online). The bank last answered 14.10.2026, 14:05. | ამონაწერი ავტომატურად მოდის (Business Online). ბანკის ბოლო პასუხი: 14.10.2026, 14:05. | amonatseri avtomaturad modis … bankis bolo pasukhi |
+| `bogApi.waiting` | Выписка приходит сама (Business Online). Первый ответ банка — в течение пяти минут. | … The bank’s first answer comes within five minutes. | … ბანკის პირველი პასუხი — ხუთ წუთში. | bankis pirveli pasukhi — khut tsutshi |
+| `bogApi.noAccount` | Подключение к Business Online не закончено: не задан счёт. Пока выписку загружайте файлом. | The Business Online link is not finished: no account is set. Until then, load statements as files. | Business Online-თან კავშირი ბოლომდე არ არის გამართული: ანგარიში არ არის მითითებული. მანამდე ამონაწერი ფაილით ატვირთეთ. | … kavshiri bolomde ar aris gamartuli: angarishi ar aris mititebuli. manamde amonatseri pailit atvirtet |
+| `bogApi.silentSince(причина, дата, время)` | Business Online не отвечает: … Последний ответ — 14.10.2026 в 14:05. | Business Online is not answering: … Last answer 14.10.2026, 14:05. | Business Online არ პასუხობს: … ბოლო პასუხი: 14.10.2026, 14:05. | ar pasukhobs … bolo pasukhi |
+| `bogApi.silentNever(причина)` | Business Online не отвечает: … Ответа ещё не было ни разу. | … It has not answered once yet. | Business Online არ პასუხობს: … პასუხი ჯერ არ ყოფილა. | pasukhi jer ar qopila |
+| `bogApi.nightFailed(причина)` | Полная выписка за ночь не пришла: … Система спросит её снова следующей ночью. | The full statement for the night did not come: … It is asked for again the next night. | ღამის სრული ამონაწერი არ მოვიდა: … სისტემა მას მომდევნო ღამეს ისევ მოითხოვს. | ghamis sruli amonatseri ar movida … momdevno ghames isev moitkhovs |
+| `bogApi.why.unauthorized` | банк не принял ключи | the bank did not accept the keys | ბანკმა გასაღებები არ მიიღო | bankma gasaghebebi ar miigho |
+| `bogApi.why.forbidden` | у ключей нет доступа к счёту | the keys have no access to the account | გასაღებებს ანგარიშზე წვდომა არ აქვს | gasaghebebs angarishze tsvdoma ar akvs |
+| `bogApi.why.not_found` | банк не знает такого счёта | the bank does not know the account | ბანკმა ასეთი ანგარიში არ იცის | bankma aseti angarishi ar itsis |
+| `bogApi.why.rate_limited` | слишком много запросов | too many requests | ძალიან ბევრი მოთხოვნა | dzalian bevri motkhovna |
+| `bogApi.why.http`, `bad_answer` | банк ответил не так, как ожидалось | the bank answered unexpectedly | ბანკმა მოულოდნელად უპასუხა | bankma moulodnelad upasukha |
+| `bogApi.why.network` | нет связи с банком | no connection to the bank | ბანკთან კავშირი არ არის | banktan kavshiri ar aris |
+| `bogApi.why.no_account` | не задан счёт | no account is set | ანგარიში არ არის მითითებული | angarishi ar aris mititebuli |
+| журнал `statement.pull` | Строки Bank of Georgia пришли сами | Bank of Georgia lines came in by themselves | Bank of Georgia-ს ხაზები ავტომატურად შემოვიდა | … khazebi avtomaturad shemovida |
+
+## 15.10.2026 — форма денег: «Банк уже прислал эту сумму» (B11-03)
+
+Написано не носителем языка. «გატარებულია» [gatarebulia] — слово, которым «Разобрать» уже называет записанный
+платёж («ჰგავს, უკვე გატარებულია»); «მიბმა» [mibma] — «привязать», как в «მიბმა … -ზე»; «ხაზი» [khazi] — строка
+выписки; «გადარიცხვა» [gadaritskhva] — перевод.
+
+| Ключ | RU | EN | KA | Чтение |
+|---|---|---|---|---|
+| `inBank.title` | Банк уже прислал эту сумму | The bank has already sent this sum | ბანკმა ეს თანხა უკვე გამოგზავნა | bankma es tankha ukve gamogzavna |
+| `inBank.credited(сумма)` | банк зачислил 315.20 ₾ | the bank credited 315.20 ₾ | ბანკმა ჩარიცხა 315.20 ₾ | bankma charitskha |
+| `inBank.paidAs(номер)` | Уже записано: платёж по R-00491 | Already recorded: the payment for R-00491 | უკვე გატარებულია: R-00491-ის გადახდა | ukve gatarebulia: …-is gadakhda |
+| `inBank.paidAsPlain` | Уже записано платежом этого клиента | Already recorded as this customer’s payment | უკვე გატარებულია ამ კლიენტის გადახდად | ukve gatarebulia am klientis gadakhdad |
+| `inBank.waits` | Ждёт в «Разобрать» | Waiting in “Sort” | ელოდება «დასახარისხებელში» | elodeba «dasakharisskhebelshi» |
+| `inBank.attach` | Привязать эту строку (главная кнопка) | Attach this line | ამ ხაზის მიბმა | am khazis mibma |
+| `inBank.another` | Это другой перевод — записать (кнопка) | This is another transfer — record it | ეს სხვა გადარიცხვაა — ჩაწერა | es skhva gadaritskhvaa — chatsera |
+| `inBank.pick` | Эту (из нескольких строк — какую привязать) | This one | ეს | es |
+| `inBank.choose` | Выберите, какую строку привязать. | Choose which line to attach. | აირჩიეთ, რომელი ხაზი მივაბათ. | airchiet, romeli khazi mivabat |
+| `inBank.attached(сумма, номер)` | Строка банка привязана: 320.00 ₾ · R-00491 | Bank line attached: 320.00 ₾ · R-00491 | ბანკის ხაზი მიება: 320.00 ₾ · R-00491 | bankis khazi mieba |
+| `errors.codes.bank_line_exists` | Банк уже прислал эту сумму. Привяжите его строку или отметьте, что это другой перевод. | The bank has already sent this sum. Attach its line, or mark that this is another transfer. | ბანკმა ეს თანხა უკვე გამოგზავნა. მიაბით მისი ხაზი ან მონიშნეთ, რომ ეს სხვა გადარიცხვაა. | … miabit misi khazi an monishnet, rom es skhva gadaritskhvaa |

@@ -7,7 +7,10 @@ import { wave6weekKa } from './wave6-week.js';
 import { wave6utilKa } from './wave6-utilisation.js';
 import { wave6manageKa } from './wave6-manage.js';
 import { kommoLinkKa } from './kommo-link.js';
+import { bogApiKa } from './bog-api.js';
 import { calendarKa } from './payments-calendar.js';
+import { payDayKa } from './pay-day.js';
+import { inBankKa } from './in-bank.js';
 import type { Dict } from './en.js';
 
 // Typed as Dict: a missing or misspelled key fails the build.
@@ -328,6 +331,14 @@ export const ka: Dict = {
     returnedTo: 'ვის დაუბრუნდა',
     buyout: 'გამოსყიდვა',
     buyoutProgress: (target: string, per: string) => `თითო გადახდიდან ${per} ${target}-ის ანგარიშში`,
+    discount: 'კვირის ფასდაკლება',
+    discountTitle: (seq: number, from: string, to: string) => `ფასდაკლება · კვირა ${seq}, ${from}–${to}`,
+    discountAmount: 'რამდენი მოაკლდეს კვირას',
+    discountHint: (full: string, paid: string, after: string) => `სრული ფასი ${full}, გადახდილია ${paid}. კვირა გახდება ${after}. 0 — ფასდაკლების მოხსნა.`,
+    discountReason: 'მიზეზი',
+    discountReasonHint: 'სავალდებულოა: მაგალითად, «მოპედი ერთი დღე სარემონტოში იდგა».',
+    discountDone: 'ფასდაკლება ჩაიწერა',
+    discountShort: (n: string) => `ფასდაკლება ${n}`,
     notes: 'შენიშვნები',
   },
 
@@ -760,6 +771,15 @@ export const ka: Dict = {
     bankDeposit: 'ჰგავს ნაღდის შეტანას — ჩავწეროთ «ბანკში შევიტანე»?',
     bankDepositYes: 'დიახ, ნაღდის შეტანაა',
     whereTo: (n: string) => `სად მივაბათ ${n}`,
+    split: 'გაყოფა',
+    splitTitle: (n: string) => `${n}-ის გაყოფა`,
+    splitHint: 'თანხიდან რამდენი მიდის კლიენტის თითოეულ ჩანაწერზე. ერთად — მთელი ხაზი; თითო ნაწილი თავის ჩანაწერს დახურავს.',
+    splitLeft: (n: string) => `გასანაწილებელი დარჩა ${n}`,
+    splitOver: (n: string) => `ხაზზე მეტია ${n}-ით`,
+    splitRest: 'ნაშთი აქ',
+    splitAnother: 'სხვა კლიენტი',
+    splitNothing: 'კლიენტს ღია ჩანაწერები არ აქვს — მხოლოდ «კლიენტის ანგარიშზე».',
+    splitDone: (n: number) => `ხაზი გაიყო ${n} ნაწილად`,
     byCard: (paid: string, fee: string) => `ბარათით გადახდა: კლიენტმა გადაიხადა ${paid}, ბანკის საკომისიო ${fee}.`,
     byCardPlain: 'ბარათით გადახდა.',
     whereHint: 'ძებნა: ჩანაწერის ნომერი, სახელი, ტელეფონი. ჩანს ვალიანი ჩანაწერები და «კლიენტის ანგარიშზე».',
@@ -873,6 +893,8 @@ export const ka: Dict = {
     voidTitle: (n: string) => `გავაუქმოთ ${n} გადახდა?`,
     voidReason: 'მიზეზი',
     voidHint: 'სავალდებულოა. კვირები და დეპოზიტი ისევ გადაუხდელი გახდება; ამონაწერის ხაზი «დასახარისხებელში» დაბრუნდება.',
+    voidSplit: (n: number) => `ამონაწერის ხაზი ${n} ნაწილადაა გაყოფილი: ყველა ანულირდება და ხაზი «დასახარისხებელში» დაბრუნდება.`,
+    splitWith: 'ამონაწერის იგივე ხაზი, სხვა ნაწილები:',
     voided: 'ანულირებულია',
     undone: 'მაშინვე გაუქმდა',
     voidedToast: 'გადახდა ანულირებულია',
@@ -1075,6 +1097,7 @@ export const ka: Dict = {
     codes: {
       act_not_found: 'დოკუმენტი ვერ მოიძებნა.',
       bad_channel: 'დეპოზიტი ბრუნდება ნაღდით ან გადარიცხვით.',
+      bank_line_exists: 'ბანკმა ეს თანხა უკვე გამოგზავნა. მიაბით მისი ხაზი ან მონიშნეთ, რომ ეს სხვა გადარიცხვაა.',
       buyback_void: 'უკან გამოსყიდვამ მოპედი პარკში დააბრუნა — აქედან არ უქმდება.',
       deposit_has_line: 'ბანკში ამ შეტანას უკვე აქვს ამონაწერის ხაზი.',
       future_date: 'გადახდას მომავალი თარიღით ვერ ჩაწერთ.',
@@ -1093,6 +1116,17 @@ export const ka: Dict = {
       service_not_found: 'ასეთი შეკეთება არ არის.',
       undo_too_late: 'გაუქმება უკვე გვიანია. მფლობელს შეუძლია გადახდის ანულირება მიზეზით.',
       already_matched: 'ამონაწერის ეს ხაზი უკვე გადახდას მიბმულია.',
+      week_not_found: 'ასეთი კვირა ამ იჯარაში არ არის.',
+      week_paid_before_transfer: 'ეს კვირა იჯარის გადმოტანამდეა გადახდილი — ფასდაკლება შეუძლებელია.',
+      discount_over_week: 'ფასდაკლება კვირის ფასზე მეტია.',
+      discount_over_paid: 'ეს თანხა უკვე გადახდილია: მოკლება შეიძლება მხოლოდ კვირის გადაუხდელი ნაწილის.',
+      split_needs_two: 'ხაზის გასაყოფად საჭიროა მინიმუმ ორი ნაწილი.',
+      split_too_many: 'ზედმეტად ბევრი ნაწილია: მაქსიმუმ ცხრა.',
+      split_bad_amount: 'თითოეულ ნაწილს ნულზე მეტი თანხა უნდა ჰქონდეს.',
+      split_bad_target: 'თითო ნაწილი ზუსტად ერთ ჩანაწერს იხდის.',
+      split_same_target: 'ორი ნაწილი ერთსა და იმავე ჩანაწერზეა — გააერთიანეთ.',
+      split_sum: 'ნაწილების ჯამი ხაზის თანხას არ ემთხვევა.',
+      split_over_repair: 'ნაწილი მეტია, ვიდრე შეკეთებაზე გადასახდელი დარჩა.',
       already_returned: 'ეს იჯარა უკვე დახურულია.',
       already_voided: 'ეს გადახდა უკვე გაუქმებულია.',
       bad_field: 'ველი არასწორად არის შევსებული. შეამოწმეთ ფორმა და სცადეთ ხელახლა.',
@@ -1219,5 +1253,8 @@ export const ka: Dict = {
   ...wave6utilKa,
   ...wave6manageKa,
   ...kommoLinkKa,
+  ...bogApiKa,
   ...calendarKa,
+  ...payDayKa,
+  ...inBankKa,
 };

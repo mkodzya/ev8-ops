@@ -48,7 +48,7 @@ interface Card {
   canOpenDocuments: boolean;
   /** Is there a personal number, and may this person ask to see it (Q27). */
   personalIdAvailable: boolean;
-  rentals: { id: string; number: string; status: RentalStatus; vehicle: { id: string; vin: string } | null; vinUnconfirmed: boolean; pickedUpOn: string | null; returnedOn: string | null; paidThrough: string | null; weeklyRateTetri: number; deposit: { amountTetri: number; status: DepositStatus } | null }[];
+  rentals: { id: string; number: string; status: RentalStatus; vehicle: { id: string; vin: string } | null; vinUnconfirmed: boolean; pickedUpOn: string | null; returnedOn: string | null; paidThrough: string | null; dueOn: string | null; weeklyRateTetri: number; deposit: { amountTetri: number; status: DepositStatus } | null }[];
 }
 
 interface Balance {
@@ -320,7 +320,7 @@ export function CustomerPage() {
       {editing && <CustomerEdit customer={c} onClose={() => setEditing(false)} onSaved={() => { setEditing(false); reload(); }} />}
       {wa && c.phone && (
         <WhatsappSheet
-          target={{ rentalId: waPick.rental?.id ?? null, number: waAbout?.number ?? '', name: c.name, phone: c.phone, paidThrough: waAbout?.paidThrough ?? null, debtTetri: balance.data?.owesTetri ?? 0 }}
+          target={{ rentalId: waPick.rental?.id ?? null, number: waAbout?.number ?? '', name: c.name, phone: c.phone, paidThrough: waAbout?.paidThrough ?? null, dueOn: waAbout?.dueOn ?? null, debtTetri: balance.data?.owesTetri ?? 0 }}
           onClose={() => setWa(false)}
         />
       )}

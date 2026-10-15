@@ -63,3 +63,19 @@ export async function call(cookie: string | null, method: InjectOptions['method'
 export function json<T = unknown>(res: { body: string }): T {
   return JSON.parse(res.body) as T;
 }
+
+/**
+ * Money an owner types in by hand: a transfer or a card payment (B11-03).
+ * The suites share one database and run side by side, and a bank line
+ * another suite left in «Разобрать» can be the same sum within ±3 days — the
+ * server then asks whether this is that line's money. A suite that is not
+ * about the question answers it as a person would who knows this money is
+ * another transfer, and only when asked; `in-bank.test.ts` asks it itself.
+ */
+export async function byHand(cookie: string, url: string, payload: Record<string, unknown>) {
+  const res = await call(cookie, 'POST', url, payload);
+  if (res.statusCode !== 409) return res;
+  const refusal = json<{ error?: string; lines?: { lineId: string }[] }>(res);
+  if (refusal.error !== 'bank_line_exists' || !refusal.lines) return res;
+  return call(cookie, 'POST', url, { ...payload, notBankLines: refusal.lines.map((l) => l.lineId) });
+}

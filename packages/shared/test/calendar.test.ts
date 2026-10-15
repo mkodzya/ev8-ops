@@ -1031,3 +1031,36 @@ describe('the function itself', () => {
     expect(entryOf(cal, 'T2', '2026-10-15')).toMatchObject({ state: 'expected', creditTetri: 50_00, leftTetri: 100_00 });
   });
 });
+
+describe('a rental with its own pay day (ADR-0022)', () => {
+  // Today is Wednesday 14.10. Made-up rentals: one picked up on Tuesday 06.10
+  // who pays on Wednesdays, one picked up on Monday 05.10 who pays on Thursdays.
+  const tuesday = { ...rental({ id: 'W', pickedUpOn: '2026-10-06', rows: [paidRow(1, '2026-10-06'), row(2, '2026-10-13')], debtTetri: RATE }), payOffsetDays: 1 };
+  const monday = { ...rental({ id: 'H', pickedUpOn: '2026-10-05', rows: [paidRow(1, '2026-10-05'), row(2, '2026-10-12')] }), payOffsetDays: 3 };
+
+  it('puts each week on its pay day: due today on Wednesday, expected on Thursday, not late', () => {
+    const cal = calendar({ rentals: [tuesday, monday] });
+    identities(cal);
+    expect(entryOf(cal, 'W', '2026-10-14')).toMatchObject({ state: 'due_today', leftTetri: RATE, endsOn: '2026-10-19' });
+    expect(entryOf(cal, 'H', '2026-10-15')).toMatchObject({ state: 'expected', leftTetri: RATE, endsOn: '2026-10-18' });
+    expect(cal.entries.some((e) => e.dueOn === '2026-10-13' || e.dueOn === '2026-10-12')).toBe(false);
+    expect(lateOf(cal, 'W')).toBeUndefined();
+    expect(lateOf(cal, 'H')).toBeUndefined();
+    // The weeks after follow on the same weekday.
+    expect(entryOf(cal, 'W', '2026-10-21')).toMatchObject({ state: 'expected', projected: true });
+    expect(entryOf(cal, 'H', '2026-10-22')).toMatchObject({ state: 'expected', projected: true });
+  });
+
+  it('the same weeks without a pay day are late from their first day, as before', () => {
+    const cal = calendar({ rentals: [{ ...tuesday, payOffsetDays: 0 }] });
+    expect(entryOf(cal, 'W', '2026-10-13')).toMatchObject({ state: 'overdue' });
+    expect(lateOf(cal, 'W')).toBeDefined();
+  });
+
+  it('money held for the rental is placed the night the week begins, before its pay day', () => {
+    const noRow = { ...rental({ id: 'P', pickedUpOn: '2026-10-06', rows: [paidRow(1, '2026-10-06')] }), payOffsetDays: 1 };
+    const cal = calendar({ rentals: [noRow], credits: [credit({ paymentId: 'early', occurredOn: '2026-10-12', creditTetri: RATE, customerId: 'c-P', rentalId: 'P' })] });
+    identities(cal);
+    expect(entryOf(cal, 'P', '2026-10-14')).toMatchObject({ state: 'paid_ahead', creditTetri: RATE, paidOn: '2026-10-12' });
+  });
+});

@@ -7,6 +7,7 @@
 // can print it calmly only when the whole figure is that.
 import type { Debt } from './debt.js';
 import type { Tetri } from './money.js';
+import { weekDueOn } from './periods.js';
 import type { ISODate, RentalStatus } from './types.js';
 
 /** A rental as the due-day rule needs it: its EFFECTIVE status and its pickup day. */
@@ -143,16 +144,18 @@ export interface DueWeek {
 
 /**
  * One stored week by the due-day rule — the calendar's rule on rows. none: a
- * week at nothing; paid: nothing left; ahead: begins after today; late: began
- * before today, or began today while an older week of the same rental is not
- * fully paid; due_today: began today, nothing older open.
+ * week at nothing; paid: nothing left; ahead: due after today; late: was due
+ * before today, or is due today while an older week of the same rental is not
+ * fully paid; due_today: due today, nothing older open. A week is due on its
+ * first day, or on the rental's pay day within it (`payOffsetDays`, ADR-0022).
  * It does not know the rental's status: a screen prints `due_today` only for
  * a rental that IS due today.
  */
-export function weekDue(week: DueWeek, all: readonly DueWeek[], today: ISODate): WeekDue {
+export function weekDue(week: DueWeek, all: readonly DueWeek[], today: ISODate, payOffsetDays = 0): WeekDue {
   if (week.amountTetri <= 0) return 'none';
   if (week.paidTetri >= week.amountTetri) return 'paid';
-  if (week.startsOn > today) return 'ahead';
-  if (week.startsOn < today) return 'late';
+  const dueOn = weekDueOn(week.startsOn, payOffsetDays);
+  if (dueOn > today) return 'ahead';
+  if (dueOn < today) return 'late';
   return all.some((w) => w.seq < week.seq && w.amountTetri > 0 && w.paidTetri < w.amountTetri) ? 'late' : 'due_today';
 }

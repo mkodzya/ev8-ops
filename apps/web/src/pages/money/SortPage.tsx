@@ -1,4 +1,4 @@
-import { formatGel, SEARCH_MIN } from '@ev8/shared';
+import { formatGel, parseGel, SEARCH_MIN } from '@ev8/shared';
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../../api.js';
@@ -98,6 +98,7 @@ export function SortPage() {
   const { data, failure, reload } = useLoad<Queue>(`/api/statement-lines?direction=${direction}`);
   const [other, setOther] = useState<SortLine | null>(null);
   const [notOurs, setNotOurs] = useState<SortLine | null>(null);
+  const [splitting, setSplitting] = useState<SortLine | null>(null);
 
   const groups = (['recorded', 'suggested', 'none'] as const).map((g) => ({ g, lines: (data?.lines ?? []).filter((l) => l.group === g) }));
   const title = { recorded: t.sort.recordedGroup, suggested: t.sort.hintsGroup, none: t.sort.noneGroup };
@@ -132,7 +133,7 @@ export function SortPage() {
                   {title[g]} <span className="muted mono">{lines.length}</span>
                 </h2>
                 {lines.map((l) => (
-                  <LineCard key={l.id} line={l} onOther={() => setOther(l)} onNotOurs={() => setNotOurs(l)} />
+                  <LineCard key={l.id} line={l} onOther={() => setOther(l)} onNotOurs={() => setNotOurs(l)} onSplit={() => setSplitting(l)} />
                 ))}
               </section>
             ),
@@ -146,6 +147,7 @@ export function SortPage() {
       )}
       {other && <OtherSheet line={other} onClose={() => setOther(null)} />}
       {notOurs && <NotOursSheet line={notOurs} onClose={() => setNotOurs(null)} />}
+      {splitting && <SplitSheet line={splitting} onClose={() => setSplitting(null)} />}
     </>
   );
 }
@@ -177,7 +179,7 @@ function AllSorted({ byRules, aside }: { byRules: number; aside: number }) {
 }
 
 /** One line: its amount, day, bank, the bank's words — and the answers (§3.2). */
-function LineCard({ line, onOther, onNotOurs }: { line: SortLine; onOther: () => void; onNotOurs: () => void }) {
+function LineCard({ line, onOther, onNotOurs, onSplit }: { line: SortLine; onOther: () => void; onNotOurs: () => void; onSplit: () => void }) {
   const t = useT();
   const toast = useToast();
   const reason = useReasonText();
@@ -211,7 +213,12 @@ function LineCard({ line, onOther, onNotOurs }: { line: SortLine; onOther: () =>
         <span className="sort-line-meta">
           {fmtDate(line.occurredOn)} · {t.statements.banks[line.bank]}
         </span>
-        <RowMenu actions={[{ key: 'not', label: t.sort.notOurs, onPick: onNotOurs }]} />
+        <RowMenu
+          actions={[
+            ...(line.direction === 'in' ? [{ key: 'split', label: t.sort.split, onPick: onSplit }] : []),
+            { key: 'not', label: t.sort.notOurs, onPick: onNotOurs },
+          ]}
+        />
       </div>
       {/* The sum above is what the bank credited. A card line says what the customer paid — that is what
           attaching it writes — and what the bank kept. */}
@@ -263,6 +270,11 @@ function LineCard({ line, onOther, onNotOurs }: { line: SortLine; onOther: () =>
             <button type="button" className="pill pill-sm" disabled={busy} onClick={onOther}>
               {t.sort.other}
             </button>
+            {line.direction === 'in' && (
+              <button type="button" className="pill pill-sm" disabled={busy} onClick={onSplit}>
+                {t.sort.split}
+              </button>
+            )}
           </div>
         </>
       )}
@@ -279,9 +291,14 @@ function LineCard({ line, onOther, onNotOurs }: { line: SortLine; onOther: () =>
       {(line.group === 'none' || line.group === 'recorded') && (
         <div className="sort-actions">
           {line.direction === 'in' ? (
-            <button type="button" className={`pill pill-sm ${line.group === 'none' ? 'pill-accent' : ''}`} disabled={busy} onClick={onOther}>
-              {line.group === 'recorded' ? t.sort.no : t.sort.other}
-            </button>
+            <>
+              <button type="button" className={`pill pill-sm ${line.group === 'none' ? 'pill-accent' : ''}`} disabled={busy} onClick={onOther}>
+                {line.group === 'recorded' ? t.sort.no : t.sort.other}
+              </button>
+              <button type="button" className="pill pill-sm" disabled={busy} onClick={onSplit}>
+                {t.sort.split}
+              </button>
+            </>
           ) : (
             <button type="button" className="pill pill-sm" disabled={busy} onClick={() => act('expense', {}, { text: t.sort.expenseDone })}>
               {t.sort.expense}
@@ -304,7 +321,7 @@ function LineCard({ line, onOther, onNotOurs }: { line: SortLine; onOther: () =>
 interface SearchAnswer {
   groups: {
     customers: { items: { id: string; name: string; phone: string | null }[] };
-    rentals: { items: { id: string; number: string; customer: string; status: string }[] };
+    rentals: { items: { id: string; number: string; customer: string; customerId?: string; status: string }[] };
     sales: { items: { id: string; number: string; customer: string; status: string }[] };
   };
 }
@@ -365,6 +382,147 @@ function OtherSheet({ line, onClose }: { line: SortLine; onClose: () => void }) 
           </li>
         ))}
       </ul>
+    </FormSheet>
+  );
+}
+
+interface Targets {
+  debt: { parts: { kind: 'rent' | 'deposit' | 'charge' | 'sale' | 'service'; id: string; owesTetri: number }[] };
+  rentals: { id: string; number: string; status: string; model: string | null }[];
+  sales: { id: string; number: string; nextTetri: number }[];
+  repairs: { id: string; number: string }[];
+}
+interface SplitRow {
+  key: string;
+  body: Record<string, string>;
+  label: string;
+  sub: string;
+  owesTetri: number;
+}
+interface SplitValue {
+  customer: { id: string; name: string } | null;
+  amounts: Record<string, string>;
+}
+
+/**
+ * "Разделить": one line, several of the customer's records — a rental week
+ * and a repair paid in one transfer (meeting of 14.10.2026). The person says
+ * how much goes where; the parts must make the whole line.
+ */
+function SplitSheet({ line, onClose }: { line: SortLine; onClose: () => void }) {
+  const t = useT();
+  const total = line.channel === 'acquiring' && line.grossTetri != null ? line.grossTetri : line.amountTetri;
+  const initial: SplitValue = { customer: null, amounts: {} };
+  const [value, setValue] = useState<SplitValue>(initial);
+  const [q, setQ] = useState('');
+  const [answer, setAnswer] = useState<SearchAnswer | null>(null);
+  useEffect(() => {
+    const text = q.trim();
+    if (value.customer || text.length < SEARCH_MIN) {
+      setAnswer(null);
+      return;
+    }
+    let live = true;
+    const id = window.setTimeout(() => {
+      api.get<SearchAnswer>(`/api/search?q=${encodeURIComponent(text)}`).then((a) => live && setAnswer(a)).catch(() => live && setAnswer(null));
+    }, 250);
+    return () => {
+      live = false;
+      window.clearTimeout(id);
+    };
+  }, [q, value.customer]);
+  const targets = useLoad<Targets>(value.customer ? `/api/customers/${value.customer.id}/money-targets` : null);
+
+  const owes = (kinds: string[], id: string) => (targets.data?.debt.parts ?? []).filter((p) => p.id === id && kinds.includes(p.kind)).reduce((n, p) => n + p.owesTetri, 0);
+  const rows: SplitRow[] = targets.data
+    ? [
+        ...targets.data.rentals
+          .filter((r) => owes(['rent', 'deposit', 'charge'], r.id) > 0 || !['returned', 'cancelled'].includes(r.status))
+          .map((r) => ({ key: `r:${r.id}`, body: { rentalId: r.id }, label: r.number, sub: r.model ?? '', owesTetri: owes(['rent', 'deposit', 'charge'], r.id) })),
+        ...targets.data.repairs
+          .filter((j) => owes(['service'], j.id) > 0)
+          .map((j) => ({ key: `j:${j.id}`, body: { serviceJobId: j.id }, label: `${t.money.kinds.service} ${j.number}`, sub: '', owesTetri: owes(['service'], j.id) })),
+        ...targets.data.sales.map((x) => ({ key: `s:${x.id}`, body: { saleId: x.id }, label: `${t.money.kinds.sale} ${x.number}`, sub: '', owesTetri: owes(['sale'], x.id) })),
+        { key: `c:${value.customer!.id}`, body: { customerId: value.customer!.id }, label: t.money.toAccount, sub: t.money.toAccountHint, owesTetri: 0 },
+      ]
+    : [];
+  const amountOf = (key: string) => parseGel(value.amounts[key] ?? '') ?? 0;
+  const placed = rows.reduce((n, r) => n + amountOf(r.key), 0);
+  const left = total - placed;
+  const setAmount = (key: string, text: string) => setValue((v) => ({ ...v, amounts: { ...v.amounts, [key]: text } }));
+  const fillRest = (r: SplitRow) => {
+    const others = placed - amountOf(r.key);
+    const rest = total - others;
+    const take = r.owesTetri > 0 ? Math.min(r.owesTetri, rest) : rest;
+    if (take > 0) setAmount(r.key, (take / 100).toFixed(2));
+  };
+
+  const g = answer?.groups;
+  const people: { id: string; name: string; sub: string }[] = g
+    ? [
+        ...g.customers.items.map((c) => ({ id: c.id, name: c.name, sub: c.phone ?? '' })),
+        ...g.rentals.items.filter((r) => r.customerId && !g.customers.items.some((c) => c.id === r.customerId)).map((r) => ({ id: r.customerId!, name: r.customer, sub: r.number })),
+      ]
+    : [];
+
+  return (
+    <FormSheet
+      title={t.sort.splitTitle(formatGel(total))}
+      onClose={onClose}
+      value={value}
+      initial={initial}
+      label={t.sort.split}
+      submit={async (key) => {
+        const parts = rows.filter((r) => amountOf(r.key) > 0).map((r) => ({ ...r.body, grossTetri: amountOf(r.key) }));
+        const r = await api.post<{ ids: string[] }>(`/api/statement-lines/${line.id}/split`, { parts }, { key });
+        return { toast: { text: t.sort.splitDone(parts.length), undo: () => api.post(`/api/payments/${r.ids[0]}/undo`) } };
+      }}
+    >
+      {!value.customer ? (
+        <>
+          <input className="input" autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder={t.money.whoIn} aria-label={t.money.whoIn} />
+          <ul className="pick-cards">
+            {people.map((c) => (
+              <li key={`${c.id}:${c.sub}`}>
+                <button type="button" className="pick-card" onClick={() => setValue({ customer: { id: c.id, name: c.name }, amounts: {} })}>
+                  <span className="pick-card-main">
+                    <span className="pick-card-title">{c.name}</span>
+                    <span className="pick-card-sub">{c.sub}</span>
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : (
+        <>
+          <div className="money-who-row">
+            <p className="t-h3">{value.customer.name}</p>
+            <button type="button" className="pill pill-sm" onClick={() => setValue(initial)}>
+              {t.sort.splitAnother}
+            </button>
+          </div>
+          <p className="hint muted">{t.sort.splitHint}</p>
+          {targets.failure && <LoadError failure={targets.failure} onRetry={targets.reload} />}
+          {!targets.data && !targets.failure && <Skeleton rows={3} />}
+          {targets.data && rows.length === 1 && <p className="hint muted">{t.sort.splitNothing}</p>}
+          {rows.map((r) => (
+            <Field key={r.key} label={r.label} hint={[r.sub, r.owesTetri > 0 ? t.money.owes(formatGel(r.owesTetri)) : ''].filter(Boolean).join(' · ')} name={r.key}>
+              <div className="money-who-row">
+                <input className="input mono" inputMode="decimal" value={value.amounts[r.key] ?? ''} onChange={(e) => setAmount(r.key, e.target.value)} />
+                <button type="button" className="pill pill-sm" onClick={() => fillRest(r)}>
+                  {t.sort.splitRest}
+                </button>
+              </div>
+            </Field>
+          ))}
+          {targets.data && (
+            <p className={left < 0 ? 'field-err' : 'money-after'} aria-live="polite">
+              {left < 0 ? t.sort.splitOver(formatGel(-left)) : t.sort.splitLeft(formatGel(left))}
+            </p>
+          )}
+        </>
+      )}
     </FormSheet>
   );
 }

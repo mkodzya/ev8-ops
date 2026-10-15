@@ -7,9 +7,9 @@ import { prisma } from '../lib/db.js';
 import { env } from '../lib/env.js';
 import { badRequest, conflict, forbidden, notFound } from '../lib/errors.js';
 import { actorOf } from '../lib/guard.js';
-import { MONEY_KINDS, planMoney, recordMoney, type MoneyInput } from '../lib/money.js';
+import { MONEY_KINDS, bankLinesFor, planMoney, recordMoney, type MoneyInput } from '../lib/money.js';
 import { voidPayment } from '../lib/payments.js';
-import { date, oneOf, str, tetri } from '../lib/validate.js';
+import { date, oneOf, str, strList, tetri } from '../lib/validate.js';
 
 // Money in and out (wave 2 §3.1, §3.3). One form writes every kind; the
 // list says what came in, what went out and what the card acquirer kept; a
@@ -48,6 +48,7 @@ function moneyInput(b: Body): MoneyInput {
     foreignCurrency: str(b, 'foreignCurrency', { max: 3 }),
     bankFeeTetri: tetri(b, 'bankFeeTetri', { min: 0 }),
     toState: oneOf(b, 'toState', ['available', 'service'] as const) ?? 'available',
+    notBankLines: strList(b, 'notBankLines'),
   };
 }
 
@@ -179,6 +180,15 @@ export function paymentRoutes(app: FastifyInstance): void {
     });
     if (!p) throw notFound('payment_not_found', 'No such payment.');
     if (!hasPerm(actor, 'payments.view') && p.createdById !== actor.id) throw forbidden('forbidden', 'This payment is not yours.');
+    // The other parts of a split bank line: voiding this payment voids them too (migration 0039).
+    const splitWith =
+      p.statementLineId && p.source === 'statement'
+        ? await prisma.payment.findMany({
+            where: { statementLineId: p.statementLineId, source: 'statement', voidedAt: p.voidedAt ? undefined : null, id: { not: p.id } },
+            orderBy: { statementPart: 'asc' },
+            select: { id: true, grossTetri: true, rental: { select: { number: true } }, sale: { select: { number: true } }, serviceJob: { select: { number: true } }, customer: { select: { name: true } } },
+          })
+        : [];
     const journal = await prisma.auditLog.findMany({
       where: { entityType: 'payment', entityId: p.id },
       orderBy: { createdAt: 'asc' },
@@ -214,6 +224,7 @@ export function paymentRoutes(app: FastifyInstance): void {
         voidedBy: p.voidedBy?.name ?? null,
         voidedAt: p.voidedAt?.toISOString() ?? null,
         statementLine: p.statementLine ? { ...p.statementLine, occurredOn: isoDate(p.statementLine.occurredOn) } : null,
+        splitWith: splitWith.map((x) => ({ id: x.id, grossTetri: x.grossTetri, number: x.rental?.number ?? x.sale?.number ?? x.serviceJob?.number ?? null, customer: x.customer?.name ?? null })),
         closed: p.allocations.map((a) => ({
           target: a.target,
           amountTetri: a.amountTetri,
@@ -228,10 +239,18 @@ export function paymentRoutes(app: FastifyInstance): void {
     };
   });
 
-  /** What the money form's payment will close, before it is written (§3.1 "Закроет"). */
+  /**
+   * What the money form's payment will close, before it is written (§3.1
+   * "Закроет") — and the bank lines it may already be (B11-03). Lines are
+   * the queue's, an owner's: a manager takes cash, which has none.
+   */
   app.post<{ Body: Body }>('/api/money/preview', { config: { scope: 'cash.record' } }, async (req) => {
     const input = moneyInput(req.body ?? {});
-    return prisma.$transaction((tx) => planMoney(tx, input));
+    const owner = hasPerm(actorOf(req), 'payments.reconcile');
+    return prisma.$transaction(async (tx) => ({
+      ...(await planMoney(tx, input)),
+      inBank: owner ? await bankLinesFor(tx, input, input.occurredOn ?? todayISO(new Date(), env.TZ)) : [],
+    }));
   });
 
   /** One form, every kind of money (§3.1). */
@@ -267,6 +286,7 @@ export function paymentRoutes(app: FastifyInstance): void {
       occurredOn,
       backdateReason: str(b, 'backdateReason', { max: 500 }) ?? (occurredOn ? str(b, 'note', { max: 500 }) ?? 'dated on entry' : null),
       note: str(b, 'note', { max: 1000 }),
+      notBankLines: strList(b, 'notBankLines'),
     });
     return reply.code(201).send({ id, allocated: plan.grossTetri - plan.leftoverTetri, leftover: plan.leftoverTetri });
   });

@@ -439,6 +439,9 @@ model Rental {
   returnedOn            DateTime?    @map("returned_on") @db.Date
   status                RentalStatus @default(booked)
   paidThrough           DateTime?    @map("paid_through") @db.Date
+  /// The weekday a week's rent is due on, ISO 1 = Monday … 7 = Sunday; null =
+  /// the pickup's weekday (ADR-0022). The weeks still run from the pickup.
+  payWeekday            Int?         @map("pay_weekday") @db.SmallInt
   buyoutTargetTetri     Int?         @map("buyout_target_tetri")
   buyoutPerPaymentTetri Int?         @map("buyout_per_payment_tetri")
   nightParkingAddress   String?      @map("night_parking_address")
@@ -482,6 +485,11 @@ model RentalPeriod {
   amountTetri Int             @map("amount_tetri")
   paidBeforeTransfer Boolean @default(false) @map("paid_before_transfer")
   paidTetri   Int             @default(0) @map("paid_tetri")
+  /// Taken off the week by an owner, with a reason; amountTetri is the price after it (migration 0040).
+  discountTetri  Int       @default(0) @map("discount_tetri")
+  discountReason String?   @map("discount_reason")
+  discountedById String?   @map("discounted_by") @db.Uuid
+  discountedAt   DateTime? @map("discounted_at")
   payStatus   PeriodPayStatus @default(unpaid) @map("pay_status")
   createdAt   DateTime        @default(now()) @map("created_at")
   updatedAt   DateTime        @default(now()) @map("updated_at")
@@ -628,6 +636,8 @@ model Payment {
   voidedById    String?          @map("voided_by") @db.Uuid
   odooPaymentId Int?             @unique @map("odoo_payment_id")
   statementLineId String?        @map("statement_line_id") @db.Uuid
+  /// Which part of a split bank line this payment is; a line paid whole is part 1 (migration 0039).
+  statementPart   Int            @default(1) @map("statement_part") @db.SmallInt
   kind            PaymentKind
   serviceJobId    String?        @map("service_job_id") @db.Uuid
   depositId       String?        @map("deposit_id") @db.Uuid
@@ -686,6 +696,8 @@ model Statement {
   newLines    Int       @default(0) @map("new_lines")
   matched     Int       @default(0)
   uploadedById String?  @map("uploaded_by") @db.Uuid
+  /// 'file' for an upload; 'api' for a day Bank of Georgia was asked about, one per account and day (migration 0041).
+  source      String    @default("file")
   createdAt   DateTime  @default(now()) @map("created_at")
 
   uploadedBy User?           @relation(fields: [uploadedById], references: [id])
@@ -701,6 +713,8 @@ model StatementLine {
   statementId String              @map("statement_id") @db.Uuid
   bank        BankName
   naturalKey  String              @map("natural_key")
+  /// The bank's document number: how one operation is known in a file and in the API alike (migration 0041).
+  docNo       String?             @map("doc_no")
   occurredOn  DateTime            @map("occurred_on") @db.Date
   direction   PaymentDirection
   amountTetri Int                 @map("amount_tetri")
@@ -1166,4 +1180,22 @@ model KommoSync {
   intakeFrom     DateTime? @map("intake_from")
 
   @@map("kommo_sync")
+}
+
+/// The Bank of Georgia API (B11-03, migration 0041): when it last answered,
+/// why it last failed, and which day the nightly reading has reached.
+model BogSync {
+  id              Boolean   @id @default(true)
+  lastOkAt        DateTime? @map("last_ok_at")
+  lastTryAt       DateTime? @map("last_try_at")
+  lastFailure     String?   @map("last_failure")
+  lastHttpStatus  Int?      @map("last_http_status")
+  todayCount      Int       @default(0) @map("today_count")
+  nightThrough    DateTime? @map("night_through") @db.Date
+  nightAt         DateTime? @map("night_at")
+  nightFailure    String?   @map("night_failure")
+  nightHttpStatus Int?      @map("night_http_status")
+  nightAdded      Int       @default(0) @map("night_added")
+
+  @@map("bog_sync")
 }

@@ -1,9 +1,9 @@
-import { todayISO } from '@ev8/shared';
+import { rentDueOn, todayISO } from '@ev8/shared';
 import type { FastifyInstance } from 'fastify';
 import { dayOf, isoDate } from '../lib/dates.js';
 import { debtsOf, rentalDueToday } from '../lib/debt.js';
 import { UNDO_RETURN_MS } from '../lib/rentals.js';
-import { rentStateOf } from '../lib/rentState.js';
+import { payOffsetOf, rentStateOf } from '../lib/rentState.js';
 import { prisma } from '../lib/db.js';
 import { env } from '../lib/env.js';
 import { notFound } from '../lib/errors.js';
@@ -128,6 +128,11 @@ export function rentalRoutes(app: FastifyInstance): void {
         expectedReturnOn: isoDate(r.expectedReturnOn),
         returnedOn: isoDate(r.returnedOn),
         paidThrough,
+        // The weekday its rent is due on (ISO 1–7); null — the pickup's weekday (ADR-0022).
+        payWeekday: r.payWeekday,
+        payOffsetDays: payOffsetOf(r),
+        // The day the next rent is due, for a running rental: the WhatsApp text names it.
+        dueOn: pickedUpOn && (r.status === 'active' || r.status === 'overdue') ? rentDueOn(paidThrough, pickedUpOn, payOffsetOf(r)) : null,
         buyoutTargetTetri: r.buyoutTargetTetri,
         buyoutPerPaymentTetri: r.buyoutPerPaymentTetri,
         nightParkingAddress: r.nightParkingAddress,
@@ -171,6 +176,9 @@ export function rentalRoutes(app: FastifyInstance): void {
         amountTetri: p.amountTetri,
         paidTetri: p.paidTetri,
         payStatus: p.payStatus,
+        discountTetri: p.discountTetri,
+        discountReason: p.discountReason,
+        paidBeforeTransfer: p.paidBeforeTransfer,
       })),
       payments: r.payments.map((p) => ({
         id: p.id,

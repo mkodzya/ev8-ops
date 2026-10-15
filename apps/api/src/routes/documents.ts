@@ -81,6 +81,7 @@ async function render(kind: DocKind, r: Rental, signature: DrawnSignature | null
       nightParkingAddress: r.nightParkingAddress,
       pickedUpOn: isoDate(r.pickedUpOn),
       condition: pickup?.condition ?? null,
+      odometerKm: pickup?.odometerKm ?? null,
       hasPhotos: (pickup?._count.photos ?? 0) > 0,
       signature,
     });
@@ -97,6 +98,8 @@ async function render(kind: DocKind, r: Rental, signature: DrawnSignature | null
     customer: customerOf(r),
     vehicle: vehicleOf(r),
     vinNote: r.vinNote,
+    odometerAtPickupKm: pickup?.odometerKm ?? null,
+    odometerKm: ret.odometerKm,
     items: (ret.items ?? {}) as Record<string, { state: ItemState; note?: string | null }>,
     hasPhotos: ret._count.photos > 0,
     depositTetri: d?.amountTetri ?? r.depositTetri,

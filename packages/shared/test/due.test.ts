@@ -395,6 +395,7 @@ describe('the four cases in the queue of “Today”', () => {
     pickedUpOn: d(-7),
     expectedReturnOn: null,
     paidThrough: d(-1),
+    payOffsetDays: 0,
     status: 'due_today',
     debtTetri: 15000,
     dueTodayTetri: 15000,

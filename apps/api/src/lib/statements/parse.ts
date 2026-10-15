@@ -14,6 +14,8 @@ import { parseBankAmount } from '@ev8/shared';
 
 export interface ParsedLine {
   naturalKey: string;
+  /** The bank's document number, where the bank gives one (Bank of Georgia): one operation in a file and in the API alike. */
+  docNo?: string | null;
   occurredOn: string; // ISO
   direction: 'in' | 'out';
   amountTetri: number;
@@ -158,6 +160,29 @@ const BOG_SUMMARY_ROW = /^(sawyisi\s+naSTi|naSTi|brunva|opening balance|closing 
 const BOG_CARD_GROSS = /Tanxa:\s*GEL\s*([\d.,]+)/i;
 const BOG_CARD_FEE = /sakomisio:\s*GEL\s*([\d.,]+)/i;
 
+/**
+ * What the text of a Bank of Georgia line says: who, what for, and whether it
+ * is a card payment with both of its sums. The same text comes in the CSV's
+ * last column and in the API's entry comment, and is read one way.
+ */
+export function readBogText(
+  content: string,
+  direction: 'in' | 'out',
+): { payer: string | null; purpose: string | null; card: boolean; grossTetri: number | null; feeTetri: number | null } {
+  const grossText = BOG_CARD_GROSS.exec(content)?.[1];
+  const feeText = BOG_CARD_FEE.exec(content)?.[1];
+  const stated = grossText != null && feeText != null;
+  return {
+    payer: (direction === 'in' ? BOG_PAYER : BOG_RECIPIENT).exec(content)?.[1]?.trim() ?? null,
+    purpose: BOG_PURPOSE.exec(content)?.[1]?.trim() ?? null,
+    // "Wallet/domestic MC cards" is a card payment too (B2-06): the account
+    // was credited the net, and the gross is recovered from it.
+    card: stated || BOG_WALLET.test(content),
+    grossTetri: stated ? parseBankAmount(grossText) : null,
+    feeTetri: stated ? parseBankAmount(feeText) : null,
+  };
+}
+
 export function parseBog(text: string, opts: { fileName: string }): ParsedStatement {
   const rows = parseCsv(text);
   const headerAt = rows.findIndex((r) => r[0]?.trim() === 'TariRi');
@@ -186,26 +211,20 @@ export function parseBog(text: string, opts: { fileName: string }): ParsedStatem
     const amountTetri = Math.abs((direction === 'in' ? credit : debit) ?? 0);
     if (amountTetri === 0) continue; // nothing moved
 
-    const grossText = BOG_CARD_GROSS.exec(content)?.[1];
-    const feeText = BOG_CARD_FEE.exec(content)?.[1];
-    // "Wallet/domestic MC cards" is a card payment too (B2-06): the account
-    // was credited the net, and the gross is recovered from it.
-    const isWallet = /Wallet\/domestic MC cards/i.test(content);
-    const isCard = (grossText != null && feeText != null) || isWallet;
-    const stated = grossText != null && feeText != null;
-    const payer = (direction === 'in' ? BOG_PAYER : BOG_RECIPIENT).exec(content)?.[1]?.trim() ?? null;
+    const text = readBogText(content, direction);
 
     lines.push({
       naturalKey: hashKey('bog', [occurredOn, r[1] ?? '', r[3] ?? '', r[4] ?? '', content], seen),
+      docNo: (r[1] ?? '').trim() || null,
       occurredOn,
       direction,
       amountTetri,
-      grossTetri: stated ? parseBankAmount(grossText) : null,
-      feeTetri: stated ? parseBankAmount(feeText) : null,
-      payer,
-      purpose: BOG_PURPOSE.exec(content)?.[1]?.trim() ?? content.slice(0, 200),
+      grossTetri: text.grossTetri,
+      feeTetri: text.feeTetri,
+      payer: text.payer,
+      purpose: text.purpose ?? content.slice(0, 200),
       raw: [r[0], r[1], r[2], r[3], r[4], r[7]].join(' | '),
-      channel: isCard ? 'acquiring' : 'transfer',
+      channel: text.card ? 'acquiring' : 'transfer',
     });
   }
   if (lines.length === 0) throw new ParseError(`No transactions found in ${opts.fileName}.`);

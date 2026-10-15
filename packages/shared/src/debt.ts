@@ -10,6 +10,7 @@
 // A sale bought back owes nothing (M8).
 // Money paid that nothing has taken yet is the customer's credit, and it
 // comes off what is owed before anything is shown.
+import { weekDueOn } from './periods.js';
 import type { ISODate } from './types.js';
 import type { Tetri } from './money.js';
 
@@ -19,6 +20,8 @@ export interface DebtRental {
   /** booked, active, overdue, paused, disputed — a returned or cancelled one owes only its unpaid weeks. */
   open: boolean;
   periods: { startsOn: ISODate; amountTetri: Tetri; paidTetri: Tetri }[];
+  /** Days after a week's first day its rent is due: the rental's pay day (ADR-0022). 0 when absent. */
+  payOffsetDays?: number;
   deposit: { amountTetri: Tetri; paidTetri: Tetri } | null;
   /** What a return charged beyond the weeks: a key, days of delay, what was kept (wave 3). */
   charges?: { amountTetri: Tetri; paidTetri: Tetri }[];
@@ -76,8 +79,9 @@ export function customerDebt(input: DebtInput): Debt {
   let ahead = 0;
 
   for (const r of input.rentals) {
-    // A week is paid at its start: the week that began today is already due.
-    const rent = r.periods.filter((p) => p.startsOn <= input.today).reduce((n, p) => n + open(p.amountTetri, p.paidTetri), 0);
+    // A week is paid at its start: the week that began today is already due —
+    // or on the rental's pay day within the week, from that morning (ADR-0022).
+    const rent = r.periods.filter((p) => weekDueOn(p.startsOn, r.payOffsetDays) <= input.today).reduce((n, p) => n + open(p.amountTetri, p.paidTetri), 0);
     if (rent > 0) parts.push({ kind: 'rent', id: r.id, number: r.number, owesTetri: rent });
     // An unpaid deposit is owed while the rental runs; after the return the
     // deposit decision settles it.

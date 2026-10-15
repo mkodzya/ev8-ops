@@ -2,7 +2,7 @@
 // criteria 1–10 and 32–35, at the API.
 import { addDays, todayISO } from '@ev8/shared';
 import { describe, expect, it } from 'vitest';
-import { HAS_DB, call, json, loginAs, uniq } from './helpers.js';
+import { HAS_DB, byHand, call, json, loginAs, uniq } from './helpers.js';
 
 const today = () => todayISO(new Date(), 'Asia/Tbilisi');
 
@@ -47,7 +47,7 @@ describe.skipIf(!HAS_DB)('the money form (§3.1)', () => {
     const plan = json<Plan>(await call(owner, 'POST', '/api/money/preview', { kind: 'rent', rentalId, amountTetri: '330', channel: 'acquiring' }));
     expect(plan.feeTetri).toBe(495);
     expect(plan.netTetri).toBe(32505);
-    const { id } = json<{ id: string }>(await call(owner, 'POST', '/api/money', { kind: 'rent', rentalId, amountTetri: '330', channel: 'acquiring' }));
+    const { id } = json<{ id: string }>(await byHand(owner, '/api/money', { kind: 'rent', rentalId, amountTetri: '330', channel: 'acquiring' }));
     const page = json<{ payment: { grossTetri: number; feeTetri: number; kind: string } }>(await call(owner, 'GET', `/api/payments/${id}`));
     expect(page.payment).toMatchObject({ grossTetri: 33000, feeTetri: 495, kind: 'rent' });
     expect((await debt(owner, customer.id)).owesTetri).toBe(0);
@@ -87,7 +87,7 @@ describe.skipIf(!HAS_DB)('the money form (§3.1)', () => {
     const { prisma, owner, customer, modelId } = await freshRental();
     const vehicle = await prisma.vehicle.create({ data: { vin: `TESTS${uniq().replace(/\D/g, '').slice(-12).padStart(12, '0')}`, modelId } });
     const sale = json<{ id: string }>(await call(owner, 'POST', '/api/sales', { customerId: customer.id, vehicleId: vehicle.id, priceTetri: '4188', downPaymentTetri: '1396', months: 2, soldOn: today() }));
-    const { id } = json<{ id: string }>(await call(owner, 'POST', '/api/money', { kind: 'sale', saleId: sale.id, amountTetri: '1396', channel: 'acquiring' }));
+    const { id } = json<{ id: string }>(await byHand(owner, '/api/money', { kind: 'sale', saleId: sale.id, amountTetri: '1396', channel: 'acquiring' }));
     const page = json<{ payment: { feeTetri: number; closed: { target: string; seq: number }[] } }>(await call(owner, 'GET', `/api/payments/${id}`));
     expect(page.payment.feeTetri).toBe(2094);
     expect(page.payment.closed).toEqual([expect.objectContaining({ target: 'instalment', seq: 1 })]);

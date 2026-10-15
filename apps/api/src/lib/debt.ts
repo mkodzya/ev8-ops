@@ -2,7 +2,7 @@ import { customerDebt, dueTodayOf, todayISO, type Debt } from '@ev8/shared';
 import { isoDate } from './dates.js';
 import { prisma } from './db.js';
 import { env } from './env.js';
-import { rentStateOf } from './rentState.js';
+import { payOffsetOf, rentStateOf } from './rentState.js';
 
 // The database side of the one debt figure (B7-02): read what a customer's
 // records ask for and what their money has taken, and hand it to the one
@@ -41,6 +41,8 @@ export async function debtsOf(customerIds: string[], today: string = todayISO(ne
         // The two facts a rental's state is read from: for the due day only, never for the figure.
         paidThrough: true,
         pickedUpOn: true,
+        // The pay day: when within a week its rent is owed (ADR-0022).
+        payWeekday: true,
         periods: { select: { startsOn: true, amountTetri: true, paidTetri: true } },
         charges: { where: { voidedAt: null }, select: { amountTetri: true, allocations: { where: { payment: { voidedAt: null } }, select: { amountTetri: true } } } },
         deposit: {
@@ -90,6 +92,7 @@ export async function debtsOf(customerIds: string[], today: string = todayISO(ne
           number: r.number,
           open: OPEN.has(r.status),
           periods: r.periods.map((p) => ({ startsOn: isoDate(p.startsOn)!, amountTetri: p.amountTetri, paidTetri: p.paidTetri })),
+          payOffsetDays: payOffsetOf(r),
           deposit: r.deposit ? { amountTetri: r.deposit.amountTetri, paidTetri: r.deposit.paidTetri } : null,
           charges: r.charges.map((c) => ({ amountTetri: c.amountTetri, paidTetri: c.allocations.reduce((n, a) => n + a.amountTetri, 0) })),
         })),

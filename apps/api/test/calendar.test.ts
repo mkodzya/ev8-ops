@@ -11,7 +11,7 @@
 // one they can force, a deleted row of today.
 import { CALENDAR_FIRST_DAY, addDays, calendarGrid, todayISO, weekOf, type PaymentsCalendarAnswer } from '@ev8/shared';
 import { describe, expect, it } from 'vitest';
-import { HAS_DB, call, json, loginAs, uniq } from './helpers.js';
+import { HAS_DB, byHand, call, json, loginAs, uniq } from './helpers.js';
 
 type Cal = PaymentsCalendarAnswer;
 
@@ -222,7 +222,7 @@ describe.skipIf(!HAS_DB)('payments calendar · the states of a week', () => {
   it('a week paid in two goes is dated by the later payment, whichever was entered first (note §3.4)', async () => {
     const t = today();
     const pay = async (owner: string, body: Record<string, unknown>) => {
-      const res = await call(owner, 'POST', '/api/money', { kind: 'rent', ...body });
+      const res = await byHand(owner, '/api/money', { kind: 'rent', ...body });
       expect(res.statusCode, res.body).toBe(201);
       return json<{ id: string }>(res).id;
     };
@@ -435,7 +435,7 @@ describe.skipIf(!HAS_DB)('payments calendar · the sums', () => {
     const dueOn = addDays(t, -28);
     const q = weekOf(dueOn);
     const before = dayOn(await calendar(owner, q), dueOn).receivedTetri;
-    const paid = await call(owner, 'POST', '/api/money', {
+    const paid = await byHand(owner, '/api/money', {
       kind: 'rent',
       rentalId: id,
       amountTetri: 33000,
