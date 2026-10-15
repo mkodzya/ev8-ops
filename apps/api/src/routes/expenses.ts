@@ -1,9 +1,12 @@
+import { todayISO, weekOf } from '@ev8/shared';
 import type { FastifyInstance } from 'fastify';
+import { dateFromISO } from '../lib/dates.js';
+import { env } from '../lib/env.js';
 import { audit } from '../lib/audit.js';
 import { prisma } from '../lib/db.js';
 import { badRequest, conflict, notFound } from '../lib/errors.js';
 import { actorOf } from '../lib/guard.js';
-import { str } from '../lib/validate.js';
+import { date, str } from '../lib/validate.js';
 
 // What money going out was for (migration 0046): the categories an owner
 // keeps, and the remembered payees, which an owner may forget.
@@ -69,5 +72,53 @@ export function expenseRoutes(app: FastifyInstance): void {
     if (done.count === 0) throw notFound('rule_not_found', 'No such remembered payee.');
     await audit({ actorId: actor.id, action: 'expense.rule.forget', entityType: 'expense_rule', entityId: req.params.id });
     return { ok: true };
+  });
+
+  /**
+   * «Отчёты → Расходы»: what left the accounts in a period, by what it was —
+   * expenses by category, deposits handed back, suppliers paid, money between
+   * the company's own accounts — and what still waits in «Разобрать» (the
+   * report of variant 1, Mika 15.10.2026). Lines set aside as "not ours" are
+   * not the company's money and are left out.
+   */
+  app.get<{ Querystring: { from?: string; to?: string } }>('/api/reports/expenses', { config: { scope: 'reports.view' } }, async (req) => {
+    const week = weekOf(todayISO(new Date(), env.TZ));
+    const from = date(req.query, 'from') ?? week.from;
+    const to = date(req.query, 'to') ?? week.to;
+    if (from > to) throw badRequest('bad_period', 'The period starts after it ends.', { field: 'from' });
+    const lines = await prisma.statementLine.findMany({
+      where: { direction: 'out', occurredOn: { gte: dateFromISO(from)!, lte: dateFromISO(to)! } },
+      select: { amountTetri: true, status: true, resolution: true, expenseCategoryId: true, payments: { where: { voidedAt: null }, select: { kind: true, grossTetri: true } } },
+    });
+    const byCategory = new Map<string | null, { tetri: number; lines: number }>();
+    const other = { depositsBack: 0, suppliers: 0, ownTransfers: 0, unsorted: 0, unsortedLines: 0, otherPaid: 0 };
+    for (const l of lines) {
+      if (l.status === 'unmatched') {
+        other.unsorted += l.amountTetri;
+        other.unsortedLines++;
+      } else if (l.resolution === 'company_expense') {
+        const row = byCategory.get(l.expenseCategoryId) ?? { tetri: 0, lines: 0 };
+        row.tetri += l.amountTetri;
+        row.lines++;
+        byCategory.set(l.expenseCategoryId, row);
+      } else if (l.resolution === 'own_transfer') {
+        other.ownTransfers += l.amountTetri;
+      } else if (l.status === 'matched') {
+        const kind = l.payments[0]?.kind;
+        if (kind === 'deposit_payout') other.depositsBack += l.amountTetri;
+        else if (kind === 'supplier') other.suppliers += l.amountTetri;
+        else other.otherPaid += l.amountTetri;
+      }
+    }
+    const categories = [...byCategory.entries()].map(([categoryId, v]) => ({ categoryId, tetri: v.tetri, lines: v.lines })).sort((a, b) => b.tetri - a.tetri);
+    const expensesTetri = categories.reduce((n, c) => n + c.tetri, 0);
+    return {
+      from,
+      to,
+      categories,
+      expensesTetri,
+      ...other,
+      totalOutTetri: expensesTetri + other.depositsBack + other.suppliers + other.ownTransfers + other.otherPaid + other.unsorted,
+    };
   });
 }
