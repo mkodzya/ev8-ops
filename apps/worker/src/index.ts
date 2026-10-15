@@ -16,6 +16,12 @@
 // yesterday so nothing the day's pulls missed is lost. The night is asked
 // again every hour and on every start; it does nothing once yesterday is read,
 // so a night the bank did not answer is caught up within the hour.
+//
+// TBC the same way (ADR-0026), two minutes after each Bank of Georgia pull and
+// half an hour off its night, so the two banks' lines do not meet the same
+// hand-entered payment at the same moment: the day's movements every five
+// minutes, and once a night yesterday read whole and checked against the
+// bank's own sums for it.
 import { ORG_TZ, todayISO } from '@ev8/shared';
 import cron from 'node-cron';
 
@@ -27,6 +33,8 @@ const BOG_CRON = process.env.BOG_CRON ?? '*/5 * * * *';
 // Off the five-minute marks, so the night does not queue behind a pull; every
 // hour, and the first that finds yesterday unread reads it (01:17 normally).
 const BOG_NIGHT_CRON = process.env.BOG_NIGHT_CRON ?? '17 * * * *';
+const TBC_CRON = process.env.TBC_CRON ?? '2-59/5 * * * *';
+const TBC_NIGHT_CRON = process.env.TBC_NIGHT_CRON ?? '47 * * * *';
 const TZ = process.env.TZ ?? ORG_TZ;
 
 interface RollResult {
@@ -72,46 +80,63 @@ async function pollKommo(): Promise<void> {
   kommoSaid = line;
 }
 
-type BogOutcome =
+type BankOutcome =
   | { status: 'off' }
   | { status: 'busy' }
-  | { status: 'ok'; listed: number; added: number; recorded: number; matched: number; known: { byKey: number; byDoc: number; bySum: number }; days: string[]; fromStatement?: boolean }
+  | {
+      status: 'ok';
+      listed: number;
+      added: number;
+      recorded: number;
+      matched: number;
+      known: { byKey: number; byId?: number; byDoc: number; bySum: number };
+      days: string[];
+      fromStatement?: boolean;
+      mismatched?: string[];
+    }
   | { status: 'failed'; failure: string; httpStatus: number | null; stage?: string | null };
 
-let bogSaid = '';
-let nightSaid = '';
+type Bank = 'bog' | 'tbc';
+const BANK_NAME: Record<Bank, string> = { bog: 'Bank of Georgia', tbc: 'TBC' };
+
+// What each job last said, so the log gets a line when something changes.
+const said: Record<string, string> = {};
 
 /** Counts and our own words only: the bank's answers carry names and account numbers. */
-async function askBog(job: 'bog-today' | 'bog-night'): Promise<void> {
+async function askBank(bank: Bank, part: 'today' | 'night'): Promise<void> {
+  const job = `${bank}-${part}`;
+  const name = BANK_NAME[bank];
+  const night = part === 'night';
   let line: string;
   let always = false;
   try {
     const res = await fetch(`${API}/api/jobs/${job}`, { method: 'POST', headers: { 'x-worker-token': TOKEN } });
     if (!res.ok) throw new Error(`${job}: ${res.status}`);
-    const r = (await res.json()) as BogOutcome;
+    const r = (await res.json()) as BankOutcome;
     if (r.status === 'busy') return;
-    if (r.status === 'off') line = 'the Bank of Georgia link is off (no keys on this stand)';
+    if (r.status === 'off') line = `the ${name} link is off (no keys on this stand)`;
     else if (r.status === 'failed')
-      line = `Bank of Georgia did not answer${job === 'bog-night' ? ' with the statement' : ''} — ${r.failure}${r.httpStatus ? ` (${r.httpStatus})` : ''}${r.stage ? ` at the ${r.stage === 'token' ? 'token' : 'API'}` : ''}`;
+      line = `${name} did not answer${night ? ' with the statement' : ''} — ${r.failure}${r.httpStatus ? ` (${r.httpStatus})` : ''}${r.stage ? ` at the ${r.stage === 'token' ? 'token' : 'API'}` : ''}`;
     else {
-      const known = r.known.byKey + r.known.byDoc + r.known.bySum;
+      const byId = r.known.byId ?? 0;
+      const known = r.known.byKey + byId + r.known.byDoc + r.known.bySum;
       const added = r.added ? `${r.added} new line(s), ${r.recorded} linked to payments entered by hand, ${r.matched} attached by a rule` : 'nothing new';
-      const from = r.known.byDoc + r.known.bySum ? `; ${r.known.byDoc + r.known.bySum} already in from another source` : '';
-      line =
-        job === 'bog-night'
-          ? r.days.length
-            ? `Bank of Georgia statement ${r.days[0]}…${r.days[r.days.length - 1]} — ${r.listed} entr(ies), ${known} already in${from}, ${added}`
-            : 'Bank of Georgia statement — the nights are read'
-          : `Bank of Georgia answered${r.fromStatement ? ' through today’s statement (the day’s list did not)' : ''} — ${r.listed} operation(s) today, ${added}${from}`;
-      always = r.added > 0 || (job === 'bog-night' && r.days.length > 0);
+      const other = byId + r.known.byDoc + r.known.bySum;
+      // How a line from a file was known matters while the join of file and API is unproven (ADR-0021, ADR-0026).
+      const from = other ? `; ${other} already in from another source${byId ? ` (${byId} by the bank's transaction id, ${r.known.byDoc + r.known.bySum} by day and sum)` : ''}` : '';
+      const off = r.mismatched?.length ? `; the movements of ${r.mismatched.join(', ')} do not add up to the bank's statement — read again within the hour` : '';
+      line = night
+        ? r.days.length
+          ? `${name} statement ${r.days[0]}…${r.days[r.days.length - 1]} — ${r.listed} entr(ies), ${known} already in${from}, ${added}${off}`
+          : `${name} statement — the nights are read`
+        : `${name} answered${r.fromStatement ? ' through today’s statement (the day’s list did not)' : ''} — ${r.listed} operation(s) today, ${added}${from}`;
+      always = r.added > 0 || (night && r.days.length > 0);
     }
   } catch (err) {
-    line = `the Bank of Georgia ${job === 'bog-night' ? 'statement' : 'pull'} did not reach the API — ${(err as Error).message}`;
+    line = `the ${name} ${night ? 'statement' : 'pull'} did not reach the API — ${(err as Error).message}`;
   }
-  const said = job === 'bog-today' ? bogSaid : nightSaid;
-  if (always || line !== said) console.log(`worker: ${line}`);
-  if (job === 'bog-today') bogSaid = line;
-  else nightSaid = line;
+  if (always || line !== said[job]) console.log(`worker: ${line}`);
+  said[job] = line;
 }
 
 async function waitForApi(): Promise<void> {
@@ -145,12 +170,16 @@ async function main(): Promise<void> {
   cron.schedule(PERIODS_CRON, () => void run(todayISO(new Date(), TZ)), { timezone: TZ });
   await pollKommo();
   cron.schedule(KOMMO_CRON, () => void pollKommo(), { timezone: TZ });
-  await askBog('bog-today');
-  await askBog('bog-night');
-  cron.schedule(BOG_CRON, () => void askBog('bog-today'), { timezone: TZ });
-  cron.schedule(BOG_NIGHT_CRON, () => void askBog('bog-night'), { timezone: TZ });
+  await askBank('bog', 'today');
+  await askBank('bog', 'night');
+  cron.schedule(BOG_CRON, () => void askBank('bog', 'today'), { timezone: TZ });
+  cron.schedule(BOG_NIGHT_CRON, () => void askBank('bog', 'night'), { timezone: TZ });
+  await askBank('tbc', 'today');
+  await askBank('tbc', 'night');
+  cron.schedule(TBC_CRON, () => void askBank('tbc', 'today'), { timezone: TZ });
+  cron.schedule(TBC_NIGHT_CRON, () => void askBank('tbc', 'night'), { timezone: TZ });
   console.log(
-    `worker: up — weeks roll at "${PERIODS_CRON}" ${TZ}, Kommo is asked at "${KOMMO_CRON}", Bank of Georgia at "${BOG_CRON}" and its statement at "${BOG_NIGHT_CRON}"`,
+    `worker: up — weeks roll at "${PERIODS_CRON}" ${TZ}, Kommo is asked at "${KOMMO_CRON}", Bank of Georgia at "${BOG_CRON}" and its statement at "${BOG_NIGHT_CRON}", TBC at "${TBC_CRON}" and its statement at "${TBC_NIGHT_CRON}"`,
   );
 }
 

@@ -11,6 +11,7 @@ import { voidPayment } from '../lib/payments.js';
 import { SPLIT_MAX, attach, importStatement, linkBankDeposit, linkPayment, previewStatement, split } from '../lib/statements/import.js';
 import { ParseError } from '../lib/statements/parse.js';
 import { isCashDeposit, loadCtx, storedLine, suggest } from '../lib/statements/reconcile.js';
+import { tbcApiStatus } from '../lib/tbc.js';
 import { str, tetri } from '../lib/validate.js';
 
 // Statements and "Разобрать" (wave 2 §3.2, §3.5).
@@ -48,8 +49,8 @@ export function statementRoutes(app: FastifyInstance): void {
     const statements = await prisma.statement.findMany({ orderBy: { createdAt: 'desc' }, take: 100, include: { uploadedBy: { select: { name: true } } } });
     const lastLines = await prisma.statementLine.groupBy({ by: ['bank'], _max: { occurredOn: true } });
     const queue = await prisma.statementLine.count({ where: { status: 'unmatched' } });
-    // Bank of Georgia comes by itself once its keys are on the stand (B11-03).
-    const bogApi = await bogApiStatus();
+    // A bank comes by itself once its keys are on the stand (B11-03): Bank of Georgia, TBC.
+    const [bogApi, tbcApi] = await Promise.all([bogApiStatus(), tbcApiStatus()]);
     const banks = BANKS.map((bank) => {
       const last = statements.find((s) => s.bank === bank) ?? null;
       const through = isoDate(lastLines.find((l) => l.bank === bank)?._max.occurredOn ?? null);
@@ -62,7 +63,7 @@ export function statementRoutes(app: FastifyInstance): void {
         daysOld: upTo ? Math.max(0, daysBetween(upTo, today)) : null,
         stale: upTo ? daysBetween(upTo, today) > STALE_DAYS : false,
         never: !last,
-        api: bank === 'bog' ? bogApi : null,
+        api: bank === 'bog' ? bogApi : bank === 'tbc' ? tbcApi : null,
       };
     });
     return {

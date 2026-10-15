@@ -48,19 +48,19 @@ function asLine(bank: 'bog' | 'tbc', l: ParsedLine): Line {
 }
 
 /**
- * Which lines are in already. A line is in when its key is; a Bank of
- * Georgia line is in, too, when the same operation came from its other
- * source — a file against the API, or the day's pull against the nightly
- * statement (`sameLine.ts`, ADR-0021).
+ * Which lines are in already. A line is in when its key is; it is in, too,
+ * when the same operation came from another source — a file against the
+ * API, or the day's pull against the nightly statement (`sameLine.ts`,
+ * ADR-0021; TBC, ADR-0026).
  */
 export async function knownLines<T extends ParsedLine>(parsed: { bank: 'bog' | 'tbc'; lines: T[] }): Promise<AlreadyIn<T>> {
   const select = { naturalKey: true, docNo: true, occurredOn: true, direction: true, amountTetri: true } as const;
   const byKey = await prisma.statementLine.findMany({ where: { bank: parsed.bank, naturalKey: { in: parsed.lines.map((l) => l.naturalKey) } }, select });
   let near: typeof byKey = [];
-  if (parsed.bank === 'bog' && parsed.lines.length > 0) {
+  if (parsed.lines.length > 0) {
     const days = parsed.lines.map((l) => l.occurredOn).sort();
     near = await prisma.statementLine.findMany({
-      where: { bank: 'bog', occurredOn: { gte: dateFromISO(addDays(days[0]!, -1))!, lte: dateFromISO(addDays(days[days.length - 1]!, 1))! } },
+      where: { bank: parsed.bank, occurredOn: { gte: dateFromISO(addDays(days[0]!, -1))!, lte: dateFromISO(addDays(days[days.length - 1]!, 1))! } },
       select,
     });
   }

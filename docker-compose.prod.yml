@@ -107,6 +107,18 @@ services:
       BOG_CLIENT_ID: ${BOG_CLIENT_ID-}
       BOG_CLIENT_SECRET: ${BOG_CLIENT_SECRET-}
       BOG_ACCOUNT: ${BOG_ACCOUNT-}
+      # TBC statements by its Business Integration Services (B11-03, ADR-0026),
+      # the same way: optional, off without keys. The keys are issued by the
+      # company in Business Internet Banking (API Integration, the permission
+      # to view transaction history and statements only) and reach this file's
+      # env through deploy/set-tbc-keys.sh. TBC_ACCOUNT is the account in lari
+      # (GE…TB…); blank, the account named in the last TBC statement uploaded
+      # here. TBC_BASE_URL is blank for the bank itself; its test environment,
+      # https://test-api.tbcbank.ge, takes only the test keys of its portal.
+      TBC_CLIENT_ID: ${TBC_CLIENT_ID-}
+      TBC_CLIENT_SECRET: ${TBC_CLIENT_SECRET-}
+      TBC_ACCOUNT: ${TBC_ACCOUNT-}
+      TBC_BASE_URL: ${TBC_BASE_URL-}
     # No ports either. The browser reaches /api through the web container,
     # which is the same origin the page came from.
     depends_on:
@@ -136,6 +148,9 @@ services:
       # asked every hour, read by the first that finds yesterday unread.
       BOG_CRON: ${BOG_CRON:-*/5 * * * *}
       BOG_NIGHT_CRON: ${BOG_NIGHT_CRON:-17 * * * *}
+      # TBC: two minutes after each Bank of Georgia pull, its night half an hour off.
+      TBC_CRON: ${TBC_CRON:-2-59/5 * * * *}
+      TBC_NIGHT_CRON: ${TBC_NIGHT_CRON:-47 * * * *}
       TZ: ${TZ:-Asia/Tbilisi}
     depends_on:
       api:

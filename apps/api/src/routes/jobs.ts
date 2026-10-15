@@ -4,6 +4,7 @@ import { reconcileBogNight, syncBogToday } from '../lib/bog.js';
 import { env } from '../lib/env.js';
 import { syncKommo } from '../lib/kommo.js';
 import { rollPeriods } from '../lib/periods.js';
+import { reconcileTbcNight, syncTbcToday } from '../lib/tbc.js';
 
 // The worker is the clock; this is where it knocks.
 //
@@ -13,7 +14,7 @@ import { rollPeriods } from '../lib/periods.js';
 //
 // The Kommo poll knocks here for a different reason: the Kommo token and the
 // database both live in this process, and the worker has neither. So do the
-// two Bank of Georgia jobs (B11-03), for the bank's keys.
+// two jobs of each bank read by its API (B11-03), for the bank's keys.
 
 function workerOnly(req: FastifyRequest, reply: FastifyReply): boolean {
   const given = req.headers['x-worker-token'];
@@ -59,6 +60,23 @@ export function jobRoutes(app: FastifyInstance): void {
     if (!workerOnly(req, reply)) return reply;
     const outcome = await reconcileBogNight();
     if (outcome.status === 'failed') app.log.warn(outcome, 'bank of georgia statement did not come');
+    return outcome;
+  });
+
+  // TBC the same way (ADR-0026): the day's movements every five minutes, and
+  // yesterday read whole and checked against the bank's sums once a night.
+  app.post('/api/jobs/tbc-today', { config: { scope: 'public' } }, async (req, reply) => {
+    if (!workerOnly(req, reply)) return reply;
+    const outcome = await syncTbcToday();
+    if (outcome.status === 'failed') app.log.warn(outcome, 'tbc did not answer');
+    return outcome;
+  });
+
+  app.post('/api/jobs/tbc-night', { config: { scope: 'public' } }, async (req, reply) => {
+    if (!workerOnly(req, reply)) return reply;
+    const outcome = await reconcileTbcNight();
+    if (outcome.status === 'failed') app.log.warn(outcome, 'tbc statement did not come');
+    else if (outcome.status === 'ok' && outcome.mismatched.length > 0) app.log.warn({ mismatched: outcome.mismatched }, 'tbc movements do not add up to the statement');
     return outcome;
   });
 }
