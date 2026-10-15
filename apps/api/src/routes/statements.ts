@@ -9,8 +9,8 @@ import { badRequest, conflict, notFound } from '../lib/errors.js';
 import { actorOf } from '../lib/guard.js';
 import { voidPayment } from '../lib/payments.js';
 import { SPLIT_MAX, attach, importStatement, linkBankDeposit, linkPayment, previewStatement, split } from '../lib/statements/import.js';
-import { ParseError, cardOf } from '../lib/statements/parse.js';
-import { isCashDeposit, loadCtx, suggest, type Line } from '../lib/statements/reconcile.js';
+import { ParseError } from '../lib/statements/parse.js';
+import { isCashDeposit, loadCtx, storedLine, suggest } from '../lib/statements/reconcile.js';
 import { str, tetri } from '../lib/validate.js';
 
 // Statements and "Разобрать" (wave 2 §3.2, §3.5).
@@ -39,34 +39,6 @@ function readFile(b: Body): { fileName: string; text: string } {
     throw badRequest('file_too_big', 'Statements up to 8 MB.', { limitBytes: MAX_STATEMENT_BYTES });
   }
   return { fileName, text };
-}
-
-function asLine(l: {
-  occurredOn: Date;
-  direction: 'in' | 'out';
-  amountTetri: number;
-  grossTetri: number | null;
-  feeTetri: number | null;
-  payer: string | null;
-  purpose: string | null;
-  raw: string;
-  bank: 'bog' | 'tbc' | 'credo';
-}): Line {
-  // A card line is told by its text as well as by its stored sums: one loaded
-  // before a bank's wording was known is read here as it would be read today.
-  const card = l.direction === 'in' ? cardOf(l) : null;
-  return {
-    occurredOn: isoDate(l.occurredOn)!,
-    direction: l.direction,
-    amountTetri: l.amountTetri,
-    grossTetri: card?.grossTetri ?? null,
-    feeTetri: card?.feeTetri ?? null,
-    payer: l.payer,
-    purpose: l.purpose,
-    raw: l.raw,
-    channel: card ? 'acquiring' : 'transfer',
-    bank: l.bank,
-  };
 }
 
 export function statementRoutes(app: FastifyInstance): void {
@@ -156,7 +128,7 @@ export function statementRoutes(app: FastifyInstance): void {
       byRulesWeek: byRules,
       asideMonth: aside,
       lines: lines.map((l) => {
-        const line = asLine(l);
+        const line = storedLine(l);
         return {
           id: l.id,
           bank: l.bank,
@@ -235,7 +207,7 @@ export function statementRoutes(app: FastifyInstance): void {
     return {
       days,
       lines: lines.map((l) => {
-        const line = asLine(l);
+        const line = storedLine(l);
         return {
           id: l.id,
           bank: l.bank,
@@ -261,7 +233,7 @@ export function statementRoutes(app: FastifyInstance): void {
   app.get<{ Params: { id: string } }>('/api/statement-lines/:id', { config: { scope: 'payments.reconcile' } }, async (req) => {
     const l = await prisma.statementLine.findUnique({ where: { id: req.params.id } });
     if (!l) throw notFound('line_not_found', 'No such statement line.');
-    const line = asLine(l);
+    const line = storedLine(l);
     const s = suggest(line, await loadCtx());
     return {
       line: { id: l.id, occurredOn: isoDate(l.occurredOn), direction: l.direction, amountTetri: l.amountTetri, grossTetri: line.grossTetri, payer: l.payer, purpose: l.purpose, raw: l.raw, channel: line.channel, status: l.status },

@@ -1110,6 +1110,7 @@ export const en = {
     codes: {
       act_not_found: 'This document was not found.',
       bad_channel: 'A deposit goes back in cash or by transfer.',
+      bank_line_exists: 'The bank has already sent this sum. Attach its line, or mark that this is another transfer.',
       buyback_void: 'A buy-back moved the moped back; it is not annulled from here.',
       deposit_has_line: 'That bank deposit already has its statement line.',
       future_date: 'A payment cannot be dated in the future.',
