@@ -448,14 +448,17 @@ export async function returnRental(input: ReturnInput): Promise<{ actId: string;
     await tx.rental.update({ where: { id: r.id }, data: { status: 'returned', returnedOn: dateFromISO(input.returnedOn)!, updatedAt: new Date() } });
     const applied = await applyCharges(tx, input.actor.id, r.id, settlement);
 
-    const lostBatteries = Object.entries(input.items).filter(([k, v]) => k.startsWith('battery_') && v.state === 'missing').length;
-    if (lostBatteries > 0) {
+    // A battery or a charger the act calls missing leaves the count (QA-W4-07; chargers since migration 0044).
+    for (const item of ['battery', 'charger'] as const) {
+      const missing = Object.entries(input.items).filter(([k, v]) => k.startsWith(`${item}_`) && v.state === 'missing');
+      if (missing.length === 0) continue;
       await tx.batteryMove.create({
         data: {
+          item,
           kind: 'lost',
-          qty: lostBatteries,
-          // The note if the act carried one; otherwise the act itself says it (QA-W4-07).
-          reason: Object.entries(input.items).find(([k, v]) => k.startsWith('battery_') && v.state === 'missing')?.[1].note?.trim() || null,
+          qty: missing.length,
+          // The note if the act carried one; otherwise the act itself says it.
+          reason: missing.find(([, v]) => v.note?.trim())?.[1].note?.trim() || null,
           rentalId: r.id,
           occurredOn: dateFromISO(input.returnedOn)!,
           createdById: input.actor.id,

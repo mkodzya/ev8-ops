@@ -46,6 +46,35 @@ describe.skipIf(!HAS_DB)('wave 4 · batteries', () => {
     expect({ showroom: after.showroom, repair: after.repair, total: after.total }).toEqual({ showroom: 7, repair: 1, total: 8 + after.couriers });
   });
 
+  it('chargers are counted apart from batteries; one missing on return is one fewer charger (migration 0044)', async () => {
+    const owner = await loginAs('owner');
+    const { customer, vehicle } = await fixtures();
+    const { id } = json<{ id: string }>(
+      await call(owner, 'POST', '/api/rentals', { customerId: customer.id, vehicleId: vehicle.id, weeklyRateTetri: 15000, batteries: 2, chargers: 3, pickedUpOn: addDays(todayISO(), -3) }),
+    );
+    const batteriesBefore = json<Count>(await call(owner, 'GET', '/api/batteries'));
+    const counted = await call(owner, 'POST', '/api/batteries/inventory', { item: 'charger', showroomQty: 4, repairQty: 0, reason: 'ТЕСТ: зарядки' });
+    expect(counted.statusCode, counted.body).toBe(201);
+    const chargers = json<Count & { item: string }>(await call(owner, 'GET', '/api/batteries?item=charger'));
+    expect(chargers.item).toBe('charger');
+    // What the couriers hold is the chargers the open rentals' acts handed over — three on this one.
+    expect(chargers.couriers).toBeGreaterThanOrEqual(3);
+    expect({ showroom: chargers.showroom, total: chargers.total }).toEqual({ showroom: 4, total: 4 + chargers.couriers });
+    // The batteries did not move.
+    expect(json<Count>(await call(owner, 'GET', '/api/batteries')).total).toBe(batteriesBefore.total);
+
+    const ret = await call(owner, 'POST', `/api/rentals/${id}/return`, {
+      odometerKm: 10,
+      items: { moped: { state: 'ok' }, key: { state: 'ok' }, battery_1: { state: 'ok' }, battery_2: { state: 'ok' }, charger_1: { state: 'ok' }, charger_2: { state: 'missing', note: 'ТЕСТ: не принёс' }, charger_3: { state: 'ok' } },
+    });
+    expect(ret.statusCode, ret.body).toBe(200);
+    const after = json<Count & { moves: { kind: string; qty: number; reason: string | null }[] }>(await call(owner, 'GET', '/api/batteries?item=charger'));
+    expect(after.total).toBe(chargers.total - 1);
+    expect(after.moves[0]).toMatchObject({ kind: 'lost', qty: 1, reason: 'ТЕСТ: не принёс' });
+    expect(json<Count>(await call(owner, 'GET', '/api/batteries')).total).toBe(batteriesBefore.total);
+    expect((await call(owner, 'GET', '/api/batteries?item=helmet')).statusCode).toBe(400);
+  });
+
   it('a battery that did not come back is one fewer, and says so in the movement (crit. 31)', async () => {
     const owner = await loginAs('owner');
     const { customer, vehicle } = await fixtures();
