@@ -332,3 +332,24 @@
 | `inBank.choose` | Выберите, какую строку привязать. | Choose which line to attach. | აირჩიეთ, რომელი ხაზი მივაბათ. | airchiet, romeli khazi mivabat |
 | `inBank.attached(сумма, номер)` | Строка банка привязана: 320.00 ₾ · R-00491 | Bank line attached: 320.00 ₾ · R-00491 | ბანკის ხაზი მიება: 320.00 ₾ · R-00491 | bankis khazi mieba |
 | `errors.codes.bank_line_exists` | Банк уже прислал эту сумму. Привяжите его строку или отметьте, что это другой перевод. | The bank has already sent this sum. Attach its line, or mark that this is another transfer. | ბანკმა ეს თანხა უკვე გამოგზავნა. მიაბით მისი ხაზი ან მონიშნეთ, რომ ეს სხვა გადარიცხვაა. | … miabit misi khazi an monishnet, rom es skhva gadaritskhvaa |
+
+## 15.10.2026 — штраф на аренде и «Разделить» на неделю, учтённую при переносе (ADR-0023)
+
+Написано не носителем языка. «ჯარიმა» [jarima] — штраф; «გადმოტანა» [gadmotana] — перенос, как в «Неделе».
+
+| Ключ | RU | EN | KA | Чтение |
+|---|---|---|---|---|
+| `sort.splitCarried(R, с, по)` | R-00002 · неделя 08.10.2026–14.10.2026 | R-00002 · week … | R-00002 · კვირა … | kvira |
+| `sort.splitCarriedSub` | учтена при переносе — эти деньги и есть её оплата | carried over as paid — this money is what paid it | გადმოტანისას გადახდილად ჩაითვალა — ეს თანხა სწორედ მისი გადახდაა | gadmotanisas gadakhdilad chaitvala — es tankha stsored misi gadakhdaa |
+| `rentalMoney.charges.fine` | Штраф | Fine | ჯარიმა | jarima |
+| `rental.fine` | Начислить штраф | Charge a fine | ჯარიმის დარიცხვა | jarimis daritskhva |
+| `rental.fineAmount` | Сумма | Amount | თანხა | tankha |
+| `rental.fineReason` | За что | What for | რისთვის | ristvis |
+| `rental.fineReasonHint` | Обязательно: например, «повреждение мопеда» или «грязный мопед». | … | სავალდებულოა: მაგალითად, «მოპედის დაზიანება» ან «ჭუჭყიანი მოპედი». | savaldebuloa … mopedis dazianeba an chuchkiani mopedi |
+| `rental.fineHint` | Штраф войдёт в долг клиента. Оплатить его — «Принять деньги» или «Разделить» строку банка. | … | ჯარიმა კლიენტის დავალიანებას დაემატება. მისი გადახდა — «ფულის მიღება» ან ბანკის ხაზის «გაყოფა». | jarima klientis davalianebas daemateba … |
+| `rental.fineDone` | Штраф начислен | Fine charged | ჯარიმა დაერიცხა | jarima daeritskha |
+| `rental.fineVoid` | Снять штраф | Take the fine back | ჯარიმის მოხსნა | jarimis mokhsna |
+| `rental.fineVoidReason` | Почему снимаете | Why it is taken back | რატომ იხსნება | ratom ikhsneba |
+| `rental.fineVoidDone` | Штраф снят | Fine taken back | ჯარიმა მოიხსნა | jarima moikhsna |
+| ошибки `charge_not_found`, `week_not_carried`, `week_has_bank_money`, `split_over_charge`, `split_carried_week`, `fine_paid` | см. `ru.ts` | see `en.ts` | см. `ka.ts` | — |
+| журнал `rental.charge.add` / `.void` | Начислен штраф / Штраф снят | A fine was charged / taken back | ჯარიმა დაერიცხა / მოიხსნა | — |

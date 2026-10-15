@@ -10,6 +10,7 @@ import { settingsRow } from './settings.js';
 import { decideDeposit, pickUp, returnPreview, returnRental, setRentalStatus, undoReturn, type DepositDecision, type NewCustomer, type PickupInput } from '../lib/rentals.js';
 import { WITHHOLD_GROUNDS } from '../lib/pdf/returnAct.js';
 import { discountWeek } from '../lib/discount.js';
+import { addFine, voidFine } from '../lib/fines.js';
 import { date, int, oneOf, str, strList, tetri } from '../lib/validate.js';
 
 // Hand-over and return, as the wave 3 wizards send them (wave 3 §3.1, §3.4–§3.7).
@@ -198,6 +199,19 @@ export function handoverRoutes(app: FastifyInstance): void {
       reason: str(b, 'reason', { max: 500 }),
     });
     return { ok: true, amountTetri: r.amountTetri };
+  });
+
+  /** A fine on the rental — damage, a dirty moped — an owner's, with a reason (ADR-0023). */
+  app.post<{ Params: { id: string }; Body: Body }>('/api/rentals/:id/fines', { config: { scope: 'deposit.decide' } }, async (req, reply) => {
+    const b = req.body ?? {};
+    const r = await addFine({ actorId: actorOf(req).id, rentalId: req.params.id, amountTetri: tetri(b, 'amountTetri', { required: true, min: 1 })!, reason: str(b, 'reason', { max: 500 }) });
+    return reply.code(201).send({ ok: true, id: r.id });
+  });
+
+  /** A fine nobody has paid, taken back with a reason. */
+  app.post<{ Params: { id: string; chargeId: string }; Body: Body }>('/api/rentals/:id/fines/:chargeId/void', { config: { scope: 'deposit.decide' } }, async (req) => {
+    await voidFine({ actorId: actorOf(req).id, rentalId: req.params.id, chargeId: req.params.chargeId, reason: str(req.body ?? {}, 'reason', { max: 500 }) });
+    return { ok: true };
   });
 
   app.post<{ Params: { id: string }; Body: Body }>('/api/rentals/:id/status', { config: { scope: 'deposit.decide' } }, async (req) => {

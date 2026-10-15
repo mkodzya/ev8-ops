@@ -146,7 +146,7 @@ export function rentalRoutes(app: FastifyInstance): void {
         undoReturnUntil: returnUndoUntil(r.acts),
       },
       // What the return charged beyond the weeks, and what is still open (§3.7, B5-08).
-      charges: r.charges.map((c) => ({ kind: c.kind, amountTetri: c.amountTetri, note: c.note, paidTetri: c.allocations.reduce((n, a) => n + a.amountTetri, 0) })),
+      charges: r.charges.map((c) => ({ id: c.id, kind: c.kind, amountTetri: c.amountTetri, note: c.note, paidTetri: c.allocations.reduce((n, a) => n + a.amountTetri, 0) })),
       // The contract and the return act: signed or not, and what the contract lacks (D17, B4-06).
       documents: {
         contract: docState(r.documents, 'contract', contractGaps(r.customer)),
