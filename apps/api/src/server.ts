@@ -26,6 +26,7 @@ import { saleRoutes } from './routes/sales.js';
 import { searchRoutes } from './routes/search.js';
 import { serviceRoutes } from './routes/service.js';
 import { statementRoutes } from './routes/statements.js';
+import { expenseRoutes } from './routes/expenses.js';
 import { tillRoutes } from './routes/till.js';
 import { handoverRoutes } from './routes/handover.js';
 import { signRoutes } from './routes/documents.js';
@@ -94,6 +95,7 @@ export function buildApp(): FastifyInstance {
   paymentRoutes(app);
   calendarRoutes(app);
   statementRoutes(app);
+  expenseRoutes(app);
   tillRoutes(app);
   handoverRoutes(app);
   signRoutes(app);

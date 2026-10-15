@@ -8,6 +8,7 @@ import { recomputeRental, recordPaymentTx } from '../payments.js';
 import { serviceOwed } from '../money.js';
 import { cardOf, parseStatement, type ParsedLine } from './parse.js';
 import { decide, lineGross, loadCtx, type Ctx, type Decision, type Line } from './reconcile.js';
+import { expenseKey, liveRules, sortByRule } from './expenses.js';
 import { alreadyIn, type AlreadyIn } from './sameLine.js';
 
 // Loading a statement and letting it settle what it can (PAY-01, PAY-02,
@@ -171,6 +172,8 @@ export async function ingest(input: { statementId: string; bank: 'bog' | 'tbc'; 
   let recorded = 0;
   let matched = 0;
   let ctx = await loadCtx();
+  // Payees a person chose to remember: their next outgoing line is sorted here (migration 0046).
+  const rules = await liveRules(prisma);
   for (const line of input.lines) {
     const d = decide(asLine(input.bank, line), ctx);
     await prisma.$transaction(async (tx) => {
@@ -201,6 +204,10 @@ export async function ingest(input: { statementId: string; bank: 'bog' | 'tbc'; 
       } else if (d.type === 'rule') {
         await attach(tx, { actorId: input.actorId, lineId: row.id, rule: d.rule, rentalId: d.target.rentalId ?? null, saleId: d.target.saleId ?? null, customerId: d.customerId, reason: d.reason });
         matched++;
+      } else if (line.direction === 'out') {
+        const key = expenseKey(line);
+        const rule = key ? rules.get(key) : undefined;
+        if (rule && (await sortByRule(tx, row.id, rule, input.actorId))) matched++;
       }
     });
     // A line that just settled a rental changes what the next can match.

@@ -30,6 +30,8 @@ describe('route table', () => {
       'GET /api/migration',
       'GET /api/settings/login',
       'GET /api/users',
+      // What money going out was for: the owner keeps the categories (migration 0046).
+      'PATCH /api/expense-categories/:id',
       'PATCH /api/fleet/:id',
       'PATCH /api/fleet/:id/vin',
       'PATCH /api/locations/:id',
@@ -40,6 +42,7 @@ describe('route table', () => {
       'PATCH /api/users/:id',
       'PATCH /api/workshops/:id',
       'POST /api/customers/:id/merge',
+      'POST /api/expense-categories',
       'POST /api/fleet',
       'POST /api/locations',
       'POST /api/models',
