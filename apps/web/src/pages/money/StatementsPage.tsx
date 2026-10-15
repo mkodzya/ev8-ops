@@ -14,15 +14,17 @@ import { useT } from '../../i18n/index.js';
 import { errorText, useLoad } from '../../lib/use.js';
 
 type Bank = 'bog' | 'tbc' | 'credo';
-type Why = 'unauthorized' | 'forbidden' | 'not_found' | 'rate_limited' | 'http' | 'network' | 'bad_answer' | 'no_account';
+type Why = 'unauthorized' | 'forbidden' | 'not_found' | 'user_inactive' | 'rate_limited' | 'http' | 'network' | 'bad_answer' | 'no_account' | 'mismatch';
 
-/** Bank of Georgia read through its API (B11-03): how the link stands. */
+/** A bank read through its API (B11-03; Bank of Georgia, TBC): how the link stands. */
 interface BankApi {
   freshness: 'ok' | 'silent' | 'waiting';
   lastOkAt: string | null;
   failure: Why | null;
   nightThrough: string | null;
   nightFailure: Why | null;
+  /** TBC: the first day whose movements did not add up to the bank's sums at the last nightly reading. */
+  nightMismatchOn?: string | null;
 }
 
 interface Statements {
@@ -55,22 +57,28 @@ interface Result {
 const mb = (bytes: number) => `${(bytes / 1024 / 1024).toFixed(1).replace('.', ',')} MB`;
 
 /** The line under a bank that comes by itself: when it last answered, or why it does not. */
-function ApiLine({ api }: { api: BankApi }) {
+function ApiLine({ bank, api }: { bank: 'bog' | 'tbc'; api: BankApi }) {
   const t = useT();
-  const w = t.bogApi;
+  const w = t.bankApi;
+  const service = w.service[bank];
   const why = (f: Why | null) => w.why[f ?? 'http'];
   const at = api.lastOkAt ? localDateTime(api.lastOkAt) : null;
   // No account is a step of setting up, not the bank failing: one quiet line, and what to do meanwhile.
   // The last pull says whether it is still missing; a night that failed for it before it was set does not.
-  if (api.failure === 'no_account') return <span className="muted">{w.noAccount}</span>;
+  if (api.failure === 'no_account') return <span className="muted">{w.noAccount(service)}</span>;
   const silent = api.freshness === 'silent';
+  const mismatch = api.nightFailure === 'mismatch' && api.nightMismatchOn;
   return (
     <>
-      {api.freshness === 'waiting' && <span className="muted">{w.waiting}</span>}
-      {api.freshness === 'ok' && at && <span className="muted">{w.freshAt(at.date, at.time)}</span>}
-      {silent && <span className="warn-text">{at ? w.silentSince(why(api.failure), at.date, at.time) : w.silentNever(why(api.failure))}</span>}
+      {api.freshness === 'waiting' && <span className="muted">{w.waiting(service)}</span>}
+      {api.freshness === 'ok' && at && <span className="muted">{w.freshAt(service, at.date, at.time)}</span>}
+      {silent && <span className="warn-text">{at ? w.silentSince(service, why(api.failure), at.date, at.time) : w.silentNever(service, why(api.failure))}</span>}
       {/* The night's failure is said apart only when it is news: not the same reason the line above gives. */}
-      {api.nightFailure && api.nightFailure !== 'no_account' && !(silent && api.nightFailure === api.failure) && <span className="warn-text">{w.nightFailed(why(api.nightFailure))}</span>}
+      {mismatch ? (
+        <span className="warn-text">{w.nightMismatch(fmtDate(api.nightMismatchOn))}</span>
+      ) : (
+        api.nightFailure && api.nightFailure !== 'no_account' && !(silent && api.nightFailure === api.failure) && <span className="warn-text">{w.nightFailed(why(api.nightFailure))}</span>
+      )}
     </>
   );
 }
@@ -150,7 +158,7 @@ export function StatementsPage() {
                   {b.stale && <span className="warn-text">{t.statements.staleNote(data.staleDays)}</span>}
                 </>
               )}
-              {b.api && <ApiLine api={b.api} />}
+              {b.api && b.bank !== 'credo' && <ApiLine bank={b.bank} api={b.api} />}
             </div>
           ))}
         </div>

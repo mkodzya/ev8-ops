@@ -33,8 +33,10 @@ import { addDays, parseBankAmount, todayISO } from '@ev8/shared';
 import { dateFromISO, isoDate } from './dates.js';
 import { prisma } from './db.js';
 import { env } from './env.js';
-import { ingest, knownLines } from './statements/import.js';
+import { accountOf, bankDay, byDay, daysFrom, daysInFiles, keep as keepDay, lastFileDay, onceEach, tally, type Tally } from './statements/apiDays.js';
 import { readBogText, type ParsedLine } from './statements/parse.js';
+
+export { accountOf, bankDay };
 
 export interface BogConfig {
   clientId: string;
@@ -58,25 +60,13 @@ const STALE_MINUTES = 20;
 /** The name an API day carries in the list of statements. */
 export const BOG_API_NAME = 'Business Online';
 
-const IBAN = /^GE\d{2}[A-Z]{2}\d{16}$/;
-
-/**
- * An account as the bank's API takes it: the IBAN, without the currency a
- * statement file writes after it (`GE…BG…GEL`). Null when it is not one.
- */
-export function accountOf(raw: string | null | undefined): string | null {
-  const t = (raw ?? '').replace(/\s+/g, '').toUpperCase();
-  const iban = t.slice(0, 22);
-  return IBAN.test(iban) && /^([A-Z]{3})?$/.test(t.slice(22)) ? iban : null;
-}
-
 /** Null without both keys: the link is then off. */
 export function bogConfig(e: NodeJS.ProcessEnv = process.env): BogConfig | null {
   const clientId = (e.BOG_CLIENT_ID ?? '').trim();
   const clientSecret = (e.BOG_CLIENT_SECRET ?? '').trim();
   if (!clientId || !clientSecret) return null;
   const named = (e.BOG_ACCOUNT ?? '').split(/[\s,;]+/).filter(Boolean);
-  const accounts = named.map(accountOf);
+  const accounts = named.map((a) => accountOf(a));
   const minutes = parseInt(e.BOG_STALE_MINUTES ?? '', 10);
   return {
     clientId,
@@ -308,25 +298,6 @@ function tetri(v: unknown): number | null {
   return null;
 }
 
-/**
- * A day as the bank writes it: `2026-10-14T00:00:00` is that day as written;
- * a moment with its zone is the day it was in Tbilisi; `14.10.2026` is read
- * too. An empty date of a .NET serializer (`0001-01-01`) is no date.
- */
-export function bankDay(v: unknown, tz: string = env.TZ): string | null {
-  if (typeof v !== 'string') return null;
-  const s = v.trim();
-  const ms = /^\/Date\((-?\d+)/.exec(s);
-  let day: string | null = null;
-  if (ms) day = todayISO(new Date(Number(ms[1])), tz);
-  const iso = /^(\d{4})-(\d{2})-(\d{2})(T[\d:.]+)?(Z|[+-]\d{2}:?\d{2})?$/.exec(s);
-  if (iso) day = iso[4] && iso[5] ? todayISO(new Date(s), tz) : `${iso[1]}-${iso[2]}-${iso[3]}`;
-  const dmy = /^(\d{2})[./](\d{2})[./](\d{4})/.exec(s);
-  if (dmy) day = `${dmy[3]}-${dmy[2]}-${dmy[1]}`;
-  if (!day || day < '2000-01-01' || Number.isNaN(Date.parse(`${day}T00:00:00Z`))) return null;
-  return day;
-}
-
 const dmy = (iso: string) => `${iso.slice(8, 10)}.${iso.slice(5, 7)}.${iso.slice(0, 4)}`;
 const money = (t: number) => (t / 100).toFixed(2);
 
@@ -437,16 +408,6 @@ export function lineFromEntry(row: unknown): ParsedLine | null {
   });
 }
 
-/** Each operation once, should the bank list one twice. */
-function onceEach(lines: (ParsedLine | null)[]): ParsedLine[] {
-  const seen = new Set<string>();
-  return lines.filter((l): l is ParsedLine => {
-    if (!l || seen.has(l.naturalKey)) return false;
-    seen.add(l.naturalKey);
-    return true;
-  });
-}
-
 // ── The pull ────────────────────────────────────────────────────────────
 
 let fetchForTests: BogFetch | null = null;
@@ -461,21 +422,13 @@ export function setBogFetchForTests(fn: BogFetch | null, opts: BogClientOptions 
 export type BogOutcome =
   | { status: 'off' }
   | { status: 'busy' }
-  | {
+  | (Tally & {
       status: 'ok';
-      /** Operations the bank listed. */
-      listed: number;
-      /** New lines in the queue, and of them: linked to money entered by hand, attached by a rule. */
-      added: number;
-      recorded: number;
-      matched: number;
-      /** Listed and already in: by their own key, by document number from another source, by day and sum. */
-      known: { byKey: number; byDoc: number; bySum: number };
       /** The days read (the nightly reading); a day a file covers in full is not read. */
       days: string[];
       /** The day's operations came from today's statement: the list of the day's operations did not answer. */
       fromStatement: boolean;
-    }
+    })
   | { status: 'failed'; failure: BogFailure; httpStatus: number | null; stage: BogStage | null };
 
 type Ok = Extract<BogOutcome, { status: 'ok' }>;
@@ -580,7 +533,7 @@ async function readNights(cfg: BogConfig, now: Date): Promise<BogOutcome> {
 
   // The first night starts at the last day the uploaded files reached: the
   // days between that file and the first pull are read too.
-  const start = reached ?? (await lastFileDay()) ?? yesterday;
+  const start = reached ?? (await lastFileDay('bog')) ?? yesterday;
   const from = [[start, addDays(yesterday, -(NIGHT_MAX_DAYS - 1))].sort().pop()!, yesterday].sort()[0]!;
   const outcome = blank();
   try {
@@ -588,7 +541,7 @@ async function readNights(cfg: BogConfig, now: Date): Promise<BogOutcome> {
     if (accounts.length === 0) throw new BogError('no_account');
     const bank = client(cfg);
     for (const account of accounts) {
-      const covered = await daysInFiles(account, from, yesterday);
+      const covered = await daysInFiles('bog', account, from, yesterday);
       const open = daysFrom(from, yesterday).filter((d) => !covered.has(d));
       if (open.length === 0) continue;
       const rows = await bank.statement(account, open[0]!, yesterday);
@@ -610,92 +563,12 @@ async function readNights(cfg: BogConfig, now: Date): Promise<BogOutcome> {
 }
 
 function blank(): Ok {
-  return { status: 'ok', listed: 0, added: 0, recorded: 0, matched: 0, known: { byKey: 0, byDoc: 0, bySum: 0 }, days: [], fromStatement: false };
+  return { status: 'ok', ...tally(), days: [], fromStatement: false };
 }
 
-function byDay(lines: ParsedLine[]): Map<string, ParsedLine[]> {
-  const days = new Map<string, ParsedLine[]>();
-  for (const l of lines) days.set(l.occurredOn, [...(days.get(l.occurredOn) ?? []), l]);
-  return days;
-}
-
-function daysFrom(from: string, to: string): string[] {
-  const days: string[] = [];
-  for (let d = from; d <= to; d = addDays(d, 1)) days.push(d);
-  return days;
-}
-
-/** The last day a Bank of Georgia file reached, by its lines and by the period it states. */
-async function lastFileDay(): Promise<string | null> {
-  const [line, statement] = await Promise.all([
-    prisma.statementLine.findFirst({ where: { bank: 'bog', statement: { source: 'file' } }, orderBy: { occurredOn: 'desc' }, select: { occurredOn: true } }),
-    prisma.statement.findFirst({ where: { bank: 'bog', source: 'file', periodTo: { not: null } }, orderBy: { periodTo: 'desc' }, select: { periodTo: true } }),
-  ]);
-  return [isoDate(line?.occurredOn ?? null), isoDate(statement?.periodTo ?? null)].filter((d): d is string => d != null).sort().pop() ?? null;
-}
-
-/**
- * The days an uploaded statement of this account covers in full: every day
- * of its period but the last, and the last too when the file was uploaded
- * after that day was over. A file of the same bank that names no account is
- * taken to be this one — the company has one account at Bank of Georgia.
- */
-async function daysInFiles(account: string, from: string, to: string): Promise<Set<string>> {
-  const files = await prisma.statement.findMany({
-    where: { bank: 'bog', source: 'file', periodFrom: { lte: dateFromISO(to)! }, periodTo: { gte: dateFromISO(from)! } },
-    select: { account: true, periodFrom: true, periodTo: true, createdAt: true },
-  });
-  const days = new Set<string>();
-  for (const f of files) {
-    if (f.account && accountOf(f.account) !== account) continue;
-    const first = isoDate(f.periodFrom)!;
-    const last = isoDate(f.periodTo)!;
-    const lastIsWhole = todayISO(f.createdAt, env.TZ) > last;
-    for (const d of daysFrom(first, last)) if (d < last || lastIsWhole) days.add(d);
-  }
-  return days;
-}
-
-/**
- * One day of one account: its new lines into the queue, under that day's
- * statement from the API — made the first time the day brings a new line,
- * and added to as the day goes on.
- */
-async function keep(account: string, day: string, lines: ParsedLine[], outcome: Ok): Promise<void> {
-  const sorted = await knownLines({ bank: 'bog', lines });
-  outcome.known.byKey += sorted.byKey;
-  outcome.known.byDoc += sorted.byDoc;
-  outcome.known.bySum += sorted.bySum;
-  const statement = await prisma.statement.findFirst({ where: { bank: 'bog', source: 'api', account, periodFrom: dateFromISO(day)! }, select: { id: true, lineCount: true } });
-  if (sorted.fresh.length === 0) {
-    if (statement && lines.length > statement.lineCount) await prisma.statement.update({ where: { id: statement.id }, data: { lineCount: lines.length } });
-    return;
-  }
-  const id =
-    statement?.id ??
-    (
-      await prisma.statement.create({
-        data: { bank: 'bog', source: 'api', fileName: BOG_API_NAME, fileSha256: 'api', account, periodFrom: dateFromISO(day), periodTo: dateFromISO(day), uploadedById: null },
-        select: { id: true },
-      })
-    ).id;
-  const { recorded, matched } = await ingest({ statementId: id, bank: 'bog', actorId: null, lines: sorted.fresh });
-  await prisma.statement.update({
-    where: { id },
-    data: { lineCount: Math.max(statement?.lineCount ?? 0, lines.length), newLines: { increment: sorted.fresh.length }, matched: { increment: recorded + matched } },
-  });
-  await prisma.auditLog.create({
-    data: {
-      actorId: null,
-      action: 'statement.pull',
-      entityType: 'statement',
-      entityId: id,
-      after: { bank: 'bog', source: 'api', day, newLines: sorted.fresh.length, recorded, matched },
-    },
-  });
-  outcome.added += sorted.fresh.length;
-  outcome.recorded += recorded;
-  outcome.matched += matched;
+/** One day of one account into the queue, under its "Business Online" statement. */
+function keep(account: string, day: string, lines: ParsedLine[], outcome: Ok): Promise<void> {
+  return keepDay('bog', BOG_API_NAME, account, day, lines, outcome);
 }
 
 // ── For the screen ──────────────────────────────────────────────────────
