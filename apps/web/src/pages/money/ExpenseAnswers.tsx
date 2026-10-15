@@ -2,6 +2,7 @@ import { formatGel } from '@ev8/shared';
 import { useState } from 'react';
 import { api } from '../../api.js';
 import { useToast } from '../../ds/feedback/Toast.js';
+import { FormSheet } from '../../ds/form/Form.js';
 import { useOperation } from '../../ds/form/operation.js';
 import { fmtDate } from '../../format.js';
 import { useLocale, useT } from '../../i18n/index.js';
@@ -45,10 +46,13 @@ export function useExpenseCategories(load: boolean, all = false): Categories {
 
 export interface OutLine {
   id: string;
+  amountTetri: number;
   group: 'recorded' | 'suggested' | 'none';
   payee?: string | null;
   canRemember?: boolean;
   lastCategoryId?: string | null;
+  /** A deposit we owe back of exactly this sum; absent while an older API answers. */
+  depositHint?: { rentalId: string; number: string } | null;
 }
 
 /** The answers under a line going out; `quiet` when a payment entered by hand is offered first. */
@@ -60,7 +64,9 @@ export function ExpenseAnswers({ line, cats, quiet }: { line: OutLine; cats: Cat
   const [open, setOpen] = useState(false);
   const [pick, setPick] = useState<string | null>(line.lastCategoryId ?? null);
   const [remember, setRemember] = useState(!!line.canRemember);
+  const [sheet, setSheet] = useState<null | 'deposit' | 'supplier'>(null);
   const last = line.lastCategoryId ? cats.nameOf(line.lastCategoryId) : '';
+  const hint = line.depositHint ?? null;
 
   const save = async (categoryId: string, keep: boolean) => {
     const name = cats.nameOf(categoryId);
@@ -72,6 +78,10 @@ export function ExpenseAnswers({ line, cats, quiet }: { line: OutLine; cats: Cat
     const { ruleId, alsoSorted } = res.value;
     toast({ text: t.exp.saved(name, alsoSorted.length), undo: () => api.post(`/api/statement-lines/${line.id}/expense-undo`, { ruleId }) });
   };
+  const payOut = async (body: { kind: 'deposit_payout'; rentalId: string } | { kind: 'supplier'; purchaseId: string }, text: string) => {
+    const res = await op.run((key) => api.post<{ id: string }>(`/api/statement-lines/${line.id}/pay-out`, body, { key }), `payout:${JSON.stringify(body)}`);
+    if (res.ok) toast({ text, undo: () => api.post(`/api/payments/${res.value.id}/undo`) });
+  };
   const ownTransfer = async () => {
     const res = await op.run((key) => api.post(`/api/statement-lines/${line.id}/own-transfer`, {}, { key }), 'own');
     if (res.ok) toast({ text: t.exp.ownTransferDone, undo: () => api.post(`/api/statement-lines/${line.id}/restore`, {}) });
@@ -79,7 +89,20 @@ export function ExpenseAnswers({ line, cats, quiet }: { line: OutLine; cats: Cat
 
   return (
     <>
-      {!open && last && !quiet && (
+      {!open && hint && !quiet && (
+        <>
+          <p className="sort-reason">{t.exp.looksLikeDeposit(formatGel(line.amountTetri), hint.number)}</p>
+          <div className="sort-actions">
+            <button type="button" className="pill pill-sm pill-accent" disabled={busy} onClick={() => void payOut({ kind: 'deposit_payout', rentalId: hint.rentalId }, t.exp.depositDone(hint.number))}>
+              {t.exp.depositYes(hint.number)}
+            </button>
+            <button type="button" className="pill pill-sm" disabled={busy} onClick={() => setOpen(true)}>
+              {t.sort.other}
+            </button>
+          </div>
+        </>
+      )}
+      {!open && !hint && last && !quiet && (
         <>
           <p className="sort-reason">{t.exp.lastTime(last)}</p>
           <div className="sort-actions">
@@ -92,16 +115,24 @@ export function ExpenseAnswers({ line, cats, quiet }: { line: OutLine; cats: Cat
           </div>
         </>
       )}
-      {(open || !last || quiet) && (
+      {(open || (!last && !hint) || quiet) && (
         <div className="sort-actions">
           <button type="button" className={`pill pill-sm ${open ? 'on' : quiet ? '' : 'pill-accent'}`} disabled={busy} onClick={() => setOpen(!open)} aria-expanded={open}>
             {t.exp.spend} {open ? '▾' : '▸'}
+          </button>
+          <button type="button" className="pill pill-sm" disabled={busy} onClick={() => setSheet('deposit')}>
+            {t.exp.deposit}
+          </button>
+          <button type="button" className="pill pill-sm" disabled={busy} onClick={() => setSheet('supplier')}>
+            {t.exp.supplier}
           </button>
           <button type="button" className="pill pill-sm" disabled={busy} onClick={() => void ownTransfer()}>
             {t.exp.ownTransfer}
           </button>
         </div>
       )}
+      {sheet === 'deposit' && <DepositSheet line={line} onClose={() => setSheet(null)} />}
+      {sheet === 'supplier' && <SupplierSheet line={line} onClose={() => setSheet(null)} />}
       {open && (
         <div className="exp-panel">
           <p className="hint muted">{t.exp.forWhat}</p>
@@ -189,5 +220,97 @@ export function ExpenseRuleCard({ line, cats, bank, onDone }: { line: ExpenseRul
       </div>
       {op.failure && <p className="field-err" role="alert">{op.failure.text}</p>}
     </article>
+  );
+}
+
+interface DepositRow {
+  rentalId: string;
+  number: string;
+  customer: { name: string } | null;
+  toHandBackTetri: number;
+  returnedOn: string | null;
+}
+
+/** «Возврат залога»: the deposits we owe back; the one of this line's sum first. */
+function DepositSheet({ line, onClose }: { line: OutLine; onClose: () => void }) {
+  const t = useT();
+  const { data } = useLoad<{ deposits: DepositRow[] }>('/api/deposits');
+  const [pick, setPick] = useState<DepositRow | null>(null);
+  const rows = (data?.deposits ?? []).filter((d) => d.toHandBackTetri > 0).sort((a, b) => Number(b.toHandBackTetri === line.amountTetri) - Number(a.toHandBackTetri === line.amountTetri));
+  return (
+    <FormSheet
+      title={t.exp.depositTitle(formatGel(line.amountTetri))}
+      onClose={onClose}
+      value={pick?.rentalId ?? null}
+      initial={null}
+      label={pick ? t.exp.depositYes(pick.number) : t.exp.deposit}
+      submit={async (key) => {
+        if (!pick) throw new Error('nothing picked');
+        const r = await api.post<{ id: string }>(`/api/statement-lines/${line.id}/pay-out`, { kind: 'deposit_payout', rentalId: pick.rentalId }, { key });
+        return { toast: { text: t.exp.depositDone(pick.number), undo: () => api.post(`/api/payments/${r.id}/undo`) } };
+      }}
+    >
+      <p className="hint muted">{t.exp.depositHint}</p>
+      {data && rows.length === 0 && <p className="muted">{t.exp.depositNone}</p>}
+      <ul className="pick-cards">
+        {rows.map((d) => (
+          <li key={d.rentalId}>
+            <button type="button" className={`pick-card ${pick?.rentalId === d.rentalId ? 'on' : ''}`} onClick={() => setPick(d)}>
+              <span className="pick-card-main">
+                <span className="pick-card-title mono">{d.number}</span>
+                <span className="pick-card-sub">
+                  {[d.customer?.name, t.exp.toHandBack(formatGel(d.toHandBackTetri)), d.returnedOn ? fmtDate(d.returnedOn) : null].filter(Boolean).join(' · ')}
+                </span>
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </FormSheet>
+  );
+}
+
+interface PurchaseRow {
+  id: string;
+  number: string;
+  status: string;
+  supplier: { name: string } | null;
+  paidPercent: number | null;
+}
+
+/** «Поставщику»: the orders not paid in full. */
+function SupplierSheet({ line, onClose }: { line: OutLine; onClose: () => void }) {
+  const t = useT();
+  const { data } = useLoad<{ purchases: PurchaseRow[] }>('/api/purchases');
+  const [pick, setPick] = useState<PurchaseRow | null>(null);
+  const rows = (data?.purchases ?? []).filter((p) => p.status !== 'cancelled' && (p.paidPercent ?? 0) < 100);
+  return (
+    <FormSheet
+      title={t.exp.supplierTitle(formatGel(line.amountTetri))}
+      onClose={onClose}
+      value={pick?.id ?? null}
+      initial={null}
+      label={pick ? `${t.exp.supplier} · ${pick.number}` : t.exp.supplier}
+      submit={async (key) => {
+        if (!pick) throw new Error('nothing picked');
+        const r = await api.post<{ id: string }>(`/api/statement-lines/${line.id}/pay-out`, { kind: 'supplier', purchaseId: pick.id }, { key });
+        return { toast: { text: t.exp.supplierDone(pick.number), undo: () => api.post(`/api/payments/${r.id}/undo`) } };
+      }}
+    >
+      <p className="hint muted">{t.exp.supplierHint}</p>
+      {data && rows.length === 0 && <p className="muted">{t.exp.supplierNone}</p>}
+      <ul className="pick-cards">
+        {rows.map((p) => (
+          <li key={p.id}>
+            <button type="button" className={`pick-card ${pick?.id === p.id ? 'on' : ''}`} onClick={() => setPick(p)}>
+              <span className="pick-card-main">
+                <span className="pick-card-title mono">{p.number}</span>
+                <span className="pick-card-sub">{[p.supplier?.name, p.paidPercent != null ? t.exp.paidPercent(p.paidPercent) : null].filter(Boolean).join(' · ')}</span>
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </FormSheet>
   );
 }

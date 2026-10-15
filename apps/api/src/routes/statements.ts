@@ -9,12 +9,14 @@ import { env } from '../lib/env.js';
 import { badRequest, conflict, notFound } from '../lib/errors.js';
 import { actorOf } from '../lib/guard.js';
 import { voidPayment } from '../lib/payments.js';
+import { recordOutFromLine } from '../lib/money.js';
+import { depositsOverview } from '../lib/deposits.js';
 import { SPLIT_MAX, attach, importStatement, linkBankDeposit, linkPayment, previewStatement, split } from '../lib/statements/import.js';
 import { ParseError } from '../lib/statements/parse.js';
 import { isCashDeposit, loadCtx, storedLine, suggest } from '../lib/statements/reconcile.js';
 import { expenseKey, lastCategories, payeeLabel, sortByRule, waitingFrom } from '../lib/statements/expenses.js';
 import { tbcApiStatus } from '../lib/tbc.js';
-import { str, tetri } from '../lib/validate.js';
+import { oneOf, str, tetri } from '../lib/validate.js';
 
 // Statements and "Разобрать" (wave 2 §3.2, §3.5).
 //
@@ -130,6 +132,8 @@ export function statementRoutes(app: FastifyInstance): void {
     const byExpenseRules = await prisma.statementLine.count({ where: { status: 'ignored', matchedRule: 'expense_rule', resolvedAt: { gte: weekAgo } } });
     // "Как в прошлый раз" for money going out (migration 0046).
     const last = direction === 'in' ? new Map<string, string>() : await lastCategories();
+    // A line going out of exactly a deposit we owe back looks like that deposit handed back.
+    const toHandBack = direction === 'in' ? [] : (await depositsOverview()).deposits.filter((d) => d.toHandBackTetri > 0).map((d) => ({ rentalId: d.rentalId, number: d.number, tetri: d.toHandBackTetri }));
     return {
       counts: { in: counts.find((c) => c.direction === 'in')?._count._all ?? 0, out: counts.find((c) => c.direction === 'out')?._count._all ?? 0 },
       byRulesWeek: byRules + byExpenseRules,
@@ -139,6 +143,7 @@ export function statementRoutes(app: FastifyInstance): void {
         const hints = suggest(line, ctx);
         const key = l.direction === 'out' ? expenseKey(l) : null;
         const lastCategoryId = key ? last.get(key) ?? null : null;
+        const deposit = l.direction === 'out' ? toHandBack.find((d) => d.tetri === l.amountTetri) ?? null : null;
         return {
           id: l.id,
           bank: l.bank,
@@ -160,7 +165,8 @@ export function statementRoutes(app: FastifyInstance): void {
                 payee: payeeLabel(l),
                 canRemember: key != null,
                 lastCategoryId,
-                group: hints.group === 'none' && lastCategoryId ? ('suggested' as const) : hints.group,
+                depositHint: deposit ? { rentalId: deposit.rentalId, number: deposit.number } : null,
+                group: hints.group === 'none' && (lastCategoryId || deposit) ? ('suggested' as const) : hints.group,
               }
             : {}),
         };
@@ -404,6 +410,37 @@ export function statementRoutes(app: FastifyInstance): void {
     });
     await audit({ actorId: actor.id, action: 'statement.line.expense_undo', entityType: 'statement_line', entityId: req.params.id, after: { ruleId, restored } });
     return { ok: true, restored };
+  });
+
+  /**
+   * «Возврат залога» or «Поставщику» from the line itself (migration 0046's
+   * screen): the payout or the supplier payment is written with this line as
+   * its source — nobody enters it in «Деньги» by hand first. Annulled, the
+   * line goes back to the queue like any line's payment.
+   */
+  app.post<{ Params: { id: string }; Body: Body }>('/api/statement-lines/:id/pay-out', { config: { scope: 'payments.reconcile' } }, async (req) => {
+    const actor = actorOf(req);
+    const b = req.body ?? {};
+    const kind = oneOf(b, 'kind', ['deposit_payout', 'supplier'] as const, { required: true })!;
+    const rentalId = kind === 'deposit_payout' ? str(b, 'rentalId', { required: true }) : null;
+    const purchaseId = kind === 'supplier' ? str(b, 'purchaseId', { required: true }) : null;
+    const id = await prisma.$transaction(async (tx) => {
+      const line = await tx.statementLine.findUnique({ where: { id: req.params.id } });
+      if (!line) throw notFound('line_not_found', 'No such statement line.');
+      if (line.direction !== 'out') throw conflict('incoming_line', 'Money coming in is not handed back or paid out.');
+      const claimed = await tx.statementLine.updateMany({ where: { id: line.id, status: 'unmatched' }, data: { status: 'matched', matchedRule: 'by_hand' } });
+      if (claimed.count === 0) throw conflict('already_matched', 'This line is already attached.');
+      const paymentId = await recordOutFromLine(
+        tx,
+        actor,
+        { kind, rentalId, purchaseId, amountTetri: line.amountTetri, channel: 'transfer', occurredOn: isoDate(line.occurredOn) },
+        { id: line.id, occurredOn: isoDate(line.occurredOn)!, raw: line.raw },
+      );
+      await tx.statementLine.update({ where: { id: line.id }, data: { paymentId } });
+      return paymentId;
+    });
+    await audit({ actorId: actor.id, action: 'statement.line.pay_out', entityType: 'statement_line', entityId: req.params.id, after: { kind, rentalId, purchaseId, paymentId: id } });
+    return { ok: true, id };
   });
 
   /** «Между счетами»: money between the company's own accounts, or into the till — neither spent nor somebody else's. */

@@ -58,6 +58,7 @@ export interface SortLine {
   payee?: string | null;
   canRemember?: boolean;
   lastCategoryId?: string | null;
+  depositHint?: { rentalId: string; number: string } | null;
 }
 interface Queue {
   counts: { in: number; out: number };

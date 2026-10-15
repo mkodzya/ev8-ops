@@ -116,4 +116,46 @@ describe.skipIf(!HAS_DB)('what money going out was for', () => {
     expect(expenseKey({ payer: 'თიბისი ბანკის VISA ბარათებით', purpose: 'POS - GOOGLE *Google One, 1.25 GEL, Oct 11 2026' })).toBe('pos:google *google one');
     expect(nameless.resolution).toBe('own_transfer');
   });
+
+  it('a deposit handed back from the bank line itself: hinted, written, and back in the queue when annulled', async () => {
+    const owner = await loginAs('owner');
+    const { prisma } = await import('../src/lib/db.js');
+    const model = await prisma.vehicleModel.create({ data: { brand: 'Test', name: `Model ${uniq()}`, forRent: true } });
+    const vehicle = await prisma.vehicle.create({ data: { vin: `TESTE${uniq().replace(/\D/g, '').slice(-12).padStart(12, '0')}`, modelId: model.id } });
+    const customer = await prisma.customer.create({ data: { name: `ТЕСТ Залог ${uniq()}` } });
+    const { id: rentalId } = json<{ id: string }>(
+      await call(owner, 'POST', '/api/rentals', { customerId: customer.id, vehicleId: vehicle.id, weeklyRateTetri: 15000, batteries: 2, chargers: 2, pickedUpOn: '2026-09-01' }),
+    );
+    // 180 of deposit and the first week, paid; then the moped comes back and the whole deposit is owed back.
+    expect((await call(owner, 'POST', '/api/payments', { rentalId, channel: 'cash', grossTetri: 33000, occurredOn: '2026-09-01' })).statusCode).toBe(201);
+    const back = await call(owner, 'POST', `/api/rentals/${rentalId}/return`, {
+      odometerKm: 10,
+      returnedOn: '2026-09-07',
+      items: { moped: { state: 'ok' }, key: { state: 'ok' }, battery_1: { state: 'ok' }, battery_2: { state: 'ok' }, charger_1: { state: 'ok' }, charger_2: { state: 'ok' } },
+      deposit: { action: 'return_all' },
+    });
+    expect(back.statusCode, back.body).toBe(200);
+    const owed = async () => json<{ deposits: { rentalId: string; toHandBackTetri: number }[] }>(await call(owner, 'GET', '/api/deposits')).deposits.find((d) => d.rentalId === rentalId)!;
+    const before = (await owed()).toHandBackTetri;
+    expect(before).toBeGreaterThan(0);
+
+    const payee = `TEST DEPOSIT ${uniq()}`;
+    await load(owner, [outRow('10.10.2026', (before / 100).toFixed(2), payee)]);
+    const line = (await queue(owner)).find((l) => l.raw.includes(payee)) as QueueLine & { depositHint: { rentalId: string } | null };
+    expect(line.depositHint?.rentalId).toBe(rentalId);
+    expect(line.group).toBe('suggested');
+
+    const paid = await call(owner, 'POST', `/api/statement-lines/${line.id}/pay-out`, { kind: 'deposit_payout', rentalId });
+    expect(paid.statusCode, paid.body).toBe(200);
+    const { id: paymentId } = json<{ id: string }>(paid);
+    const p = await prisma.payment.findUniqueOrThrow({ where: { id: paymentId } });
+    expect(p).toMatchObject({ kind: 'deposit_payout', direction: 'out', source: 'statement', statementLineId: line.id, grossTetri: before });
+    expect((await owed()).toHandBackTetri).toBe(0);
+    expect((await queue(owner)).find((l) => l.id === line.id)).toBeUndefined();
+    // Twice is refused; annulled, the line waits again and the deposit is owed again.
+    expect((await call(owner, 'POST', `/api/statement-lines/${line.id}/pay-out`, { kind: 'deposit_payout', rentalId })).statusCode).toBe(409);
+    expect((await call(owner, 'POST', `/api/payments/${paymentId}/void`, { reason: 'ТЕСТ: не тот залог' })).statusCode).toBe(200);
+    expect((await queue(owner)).find((l) => l.id === line.id)).toBeTruthy();
+    expect((await owed()).toHandBackTetri).toBe(before);
+  });
 });

@@ -338,7 +338,28 @@ export async function recordMoney(actor: Actor, input: MoneyInput): Promise<{ id
   });
 }
 
-async function writeOther(tx: Tx, actor: Actor, input: MoneyInput, plan: MoneyPlan, occurredOn: string, backdateReason: string | null): Promise<string> {
+/**
+ * Money going out that a bank line already is — a deposit handed back, a
+ * supplier paid — written from the line in «Разобрать» (migration 0046's
+ * screen): the same checks and the same writing as the money form, with the
+ * line as its source. The caller claims the line in the same transaction.
+ */
+export async function recordOutFromLine(tx: Tx, actor: Actor, input: MoneyInput, line: { id: string; occurredOn: string; raw: string }): Promise<string> {
+  // The day is the bank's, not a person's choice: no reason is asked for a line's own date.
+  checkMoney(actor, { ...input, occurredOn: null });
+  const plan = await planMoney(tx, input);
+  return writeOther(tx, actor, input, plan, line.occurredOn, null, { statementLineId: line.id, bankText: line.raw.slice(0, 500) });
+}
+
+async function writeOther(
+  tx: Tx,
+  actor: Actor,
+  input: MoneyInput,
+  plan: MoneyPlan,
+  occurredOn: string,
+  backdateReason: string | null,
+  from?: { statementLineId: string; bankText: string },
+): Promise<string> {
   const common = {
     occurredOn: dateFromISO(occurredOn)!,
     direction: plan.direction,
@@ -347,7 +368,9 @@ async function writeOther(tx: Tx, actor: Actor, input: MoneyInput, plan: MoneyPl
     feeTetri: plan.feeTetri,
     netTetri: plan.netTetri,
     note: input.note ?? null,
-    source: 'manual' as const,
+    source: from ? ('statement' as const) : ('manual' as const),
+    statementLineId: from?.statementLineId ?? null,
+    bankText: from?.bankText ?? null,
     createdById: actor.id,
     kind: input.kind,
     backdateReason,
