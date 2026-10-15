@@ -19,7 +19,7 @@ export function rentalRoutes(app: FastifyInstance): void {
       include: {
         // The phone too: "Whose return?" finds a renter by the digits of it (wave 1 §3.2).
         customer: { select: { id: true, name: true, nameKa: true, nameLat: true, phone: true } },
-        vehicle: { select: { id: true, vin: true, model: { select: { brand: true, name: true } } } },
+        vehicle: { select: { id: true, vin: true, fleetNo: true, model: { select: { brand: true, name: true } } } },
         deposit: { select: { amountTetri: true, status: true, paidTetri: true } },
         _count: { select: { periods: true } },
         // Signed on the screen or not: the "Не подписан" filter (wave 3 §3.2).
@@ -44,7 +44,7 @@ export function rentalRoutes(app: FastifyInstance): void {
           odooName: r.odooName,
           status,
           customer: r.customer,
-          vehicle: r.vehicle ? { id: r.vehicle.id, vin: r.vehicle.vin, model: `${r.vehicle.model.brand} ${r.vehicle.model.name}` } : null,
+          vehicle: r.vehicle ? { id: r.vehicle.id, vin: r.vehicle.vin, fleetNo: r.vehicle.fleetNo, model: `${r.vehicle.model.brand} ${r.vehicle.model.name}` } : null,
           vinUnconfirmed: r.vinUnconfirmed,
           vinNote: r.vinNote,
           weeklyRateTetri: r.weeklyRateTetri,
@@ -119,7 +119,7 @@ export function rentalRoutes(app: FastifyInstance): void {
         status: rentStateOf(r, today).status,
         storedStatus: r.status,
         customer: { id: r.customer.id, name: r.customer.name, phone: r.customer.phone },
-        vehicle: r.vehicle ? { id: r.vehicle.id, vin: r.vehicle.vin, model: `${r.vehicle.model.brand} ${r.vehicle.model.name}` } : null,
+        vehicle: r.vehicle ? { id: r.vehicle.id, vin: r.vehicle.vin, fleetNo: r.vehicle.fleetNo, model: `${r.vehicle.model.brand} ${r.vehicle.model.name}` } : null,
         vinUnconfirmed: r.vinUnconfirmed,
         vinNote: r.vinNote,
         weeklyRateTetri: r.weeklyRateTetri,

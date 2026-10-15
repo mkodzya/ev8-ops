@@ -5,7 +5,7 @@ import { isDevStack } from '../lib/env.js';
 import { prisma } from '../lib/db.js';
 import { conflict, isUniqueViolation, notFound } from '../lib/errors.js';
 import { actorOf } from '../lib/guard.js';
-import { int, tetri } from '../lib/validate.js';
+import { int, str, tetri } from '../lib/validate.js';
 
 // What a hand-over proposes when nobody says otherwise (wave 6 §3.5, R5).
 //
@@ -48,8 +48,27 @@ export function settingsRoutes(app: FastifyInstance): void {
     ]);
     return {
       depositTetri: row.depositTetri,
+      stickerPhone: row.stickerPhone,
       quickRates: rates.map((r) => ({ id: r.id, rateTetri: r.rateTetri })),
     };
+  });
+
+  /** The telephone on the moped stickers (migration 0043); empty — the stickers leave the line out. */
+  app.patch<{ Body: Body }>('/api/settings/sticker', { config: { scope: 'settings.manage' } }, async (req) => {
+    const actor = actorOf(req);
+    const before = await settingsRow();
+    const phone = str(req.body ?? {}, 'stickerPhone', { max: 40 });
+    if (phone === before.stickerPhone) return { ok: true, stickerPhone: phone };
+    await prisma.rentalSettings.update({ where: { id: true }, data: { stickerPhone: phone, updatedById: actor.id, updatedAt: new Date() } });
+    await audit({
+      actorId: actor.id,
+      action: 'settings.sticker_phone',
+      entityType: 'settings',
+      entityId: 'rental',
+      before: { stickerPhone: before.stickerPhone },
+      after: { stickerPhone: phone },
+    });
+    return { ok: true, stickerPhone: phone };
   });
 
   app.patch<{ Body: Body }>('/api/settings/rental', { config: { scope: 'settings.manage' } }, async (req) => {

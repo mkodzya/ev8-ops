@@ -1,4 +1,4 @@
-import { SEARCH_GROUP_LIMIT, spellingMatches, numberMatches, paymentMatches, phoneMatches, readQuery, vinMatches, type Query } from '@ev8/shared';
+import { SEARCH_GROUP_LIMIT, spellingMatches, numberMatches, paymentMatches, phoneMatches, readFleetNumber, readQuery, vinMatches, type Query } from '@ev8/shared';
 import type { FastifyInstance } from 'fastify';
 import { isoDate } from '../lib/dates.js';
 import { debtsOf, rentalDueToday } from '../lib/debt.js';
@@ -30,6 +30,7 @@ export function searchRoutes(app: FastifyInstance): void {
   app.get<{ Querystring: { q?: string } }>('/api/search', { config: { scope: 'fleet.view' } }, async (req) => {
     const q = readQuery(req.query.q ?? '');
     if (!q) return { q: null, groups: null };
+    const fleetNo = readFleetNumber(q.text, { digitsToo: true });
     const actor = actorOf(req);
     const seeIdentity = mayView(req, 'customer.documents.view');
     const seeAllPayments = mayView(req, 'payments.view');
@@ -43,7 +44,7 @@ export function searchRoutes(app: FastifyInstance): void {
       }),
       prisma.vehicle.findMany({
         where: { archived: false },
-        select: { id: true, vin: true, state: true, model: { select: { brand: true, name: true } } },
+        select: { id: true, vin: true, fleetNo: true, state: true, model: { select: { brand: true, name: true } } },
         orderBy: { vin: 'asc' },
       }),
       prisma.rental.findMany({
@@ -107,8 +108,9 @@ export function searchRoutes(app: FastifyInstance): void {
       ),
       vehicles: group(
         vehicles
-          .filter((v) => vinMatches(q, v.vin) || spellingMatches(q, [`${v.model.brand} ${v.model.name}`]))
-          .map((v) => ({ id: v.id, vin: v.vin, state: v.state, model: `${v.model.brand} ${v.model.name}` })),
+          // The number on the sticker: "EV-7", "ev007", or the digits alone (migration 0043).
+          .filter((v) => (fleetNo != null && v.fleetNo === fleetNo) || vinMatches(q, v.vin) || spellingMatches(q, [`${v.model.brand} ${v.model.name}`]))
+          .map((v) => ({ id: v.id, vin: v.vin, fleetNo: v.fleetNo, state: v.state, model: `${v.model.brand} ${v.model.name}` })),
       ),
       rentals: group(
         rentals

@@ -6,7 +6,7 @@ import { LoadError } from '../components/LoadError.js';
 import { FormSheet } from '../ds/form/Form.js';
 import { useOperation } from '../ds/form/operation.js';
 import { useToast } from '../ds/feedback/Toast.js';
-import { BlockHead, ColorText, Empty, Loading, PageHead, PlaceText, RentalBadge, StateBadge, Vin } from '../components/ui.js';
+import { BlockHead, ColorText, Empty, FleetNo, Loading, PageHead, PlaceText, RentalBadge, StateBadge, Vin } from '../components/ui.js';
 import { RowMenu } from '../components/RowMenu.js';
 import { Field, Row } from '../components/Wizard.js';
 import { fmtDate } from '../format.js';
@@ -22,6 +22,8 @@ interface Card {
   vehicle: {
     id: string;
     vin: string;
+    /** EV-007 (migration 0043); absent while an older API answers. */
+    fleetNo?: number | null;
     model: { id: string; brand: string; name: string };
     color: string | null;
     year: number | null;
@@ -83,7 +85,8 @@ export function VehiclePage() {
 
   return (
     <>
-      <PageHead wrap title={<Vin vin={v.vin} />} badge={<StateBadge state={v.state} />} sub={<Link to={`/fleet/models/${v.model.id}`}>{`${v.model.brand} ${v.model.name}`}</Link>}>
+      {/* The number people say and the sticker carries; the VIN goes to the card below (Mika, 15.10.2026). */}
+      <PageHead wrap title={v.fleetNo ? <FleetNo n={v.fleetNo} /> : <Vin vin={v.vin} />} badge={<StateBadge state={v.state} />} sub={<Link to={`/fleet/models/${v.model.id}`}>{`${v.model.brand} ${v.model.name}`}</Link>}>
         {can('fleet.state.manual') && (
           <button type="button" className="pill pill-sm" onClick={() => setOpen(true)} disabled={locked} title={locked ? t.vehicle.rentedLock : undefined}>
             {t.actions.changeState}
@@ -191,6 +194,7 @@ export function VehiclePage() {
               that line gives way to the VIN — so the card could not answer
               "what is this moped" at all (QA-W5-27). It is the second thing
               anybody asks after the VIN, so it belongs in the card itself. */}
+          {v.fleetNo != null && <Row k={t.fleet.vin} v={<Vin vin={v.vin} />} />}
           <Row k={t.fleet.model} v={<Link to={`/fleet/models/${v.model.id}`}>{`${v.model.brand} ${v.model.name}`}</Link>} />
           <Row k={t.fleet.color} v={v.color ? <ColorText of={v.color} named /> : t.common.dash} />
           <Row k={t.fleet.year} v={<span className="mono">{v.year ?? t.common.dash}</span>} />

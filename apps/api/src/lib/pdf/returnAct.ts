@@ -1,4 +1,4 @@
-import { colorOnPaper, tokens } from '@ev8/shared';
+import { colorOnPaper, fleetNumber, tokens } from '@ev8/shared';
 import { finish, gap, newDoc, write } from './doc.js';
 import { COMPANY, DISCLAIMER, LESSEE, LESSOR, dmy, gel, km } from './company.js';
 import { check, field, h1, h2, para, rule, signatures, stampPages, type DrawnSignature } from './layout.js';
@@ -52,7 +52,7 @@ export interface ReturnActData {
   returnedOn: string;
   contractDate: string;
   customer: { name: string; personalId: string | null; phone: string | null; email: string | null; address: string | null };
-  vehicle: { brand: string; model: string; vin: string; color: string | null } | null;
+  vehicle: { brand: string; model: string; vin: string; color: string | null; fleetNo?: number | null } | null;
   vinNote: string | null;
   /** The odometer at hand-over and at return (meeting of 14.10.2026: the act must carry what was read). */
   odometerAtPickupKm: number | null;
@@ -115,6 +115,7 @@ export async function renderReturnAct(d: ReturnActData): Promise<Buffer> {
   h2(doc, { ka: '3. დასაბრუნებელი მოპედის მონაცემები', en: '3. Details of the moped being returned' });
   field(doc, { ka: 'მოდელი', en: 'Model' }, d.vehicle ? `${d.vehicle.brand} ${d.vehicle.model}` : '—');
   field(doc, { ka: 'VIN', en: 'VIN' }, d.vehicle?.vin ?? d.vinNote ?? '—');
+  if (d.vehicle?.fleetNo) field(doc, { ka: 'შიდა ნომერი', en: 'Internal number' }, fleetNumber(d.vehicle.fleetNo)!);
   field(doc, { ka: 'ფერი', en: 'Colour' }, colorOnPaper(d.vehicle?.color));
   field(doc, { ka: 'გარბენი გადაცემისას', en: 'Mileage at hand-over' }, km(d.odometerAtPickupKm));
   field(doc, { ka: 'გარბენი დაბრუნებისას', en: 'Mileage at return' }, km(d.odometerKm));
