@@ -365,3 +365,27 @@
 | `sort.splitOldCarried(с, по)` | за неделю 08.10.2026–14.10.2026: она уже отмечена оплаченной при переносе | for the week …, already marked paid at the carry-over | კვირისთვისაა …: ის გადმოტანისას უკვე გადახდილად მოინიშნა | kviristvisaa …: is gadmotanisas ukve gadakhdilad moinishna |
 | `sort.splitOldNew` | новая оплата: закроет то, что клиент должен сейчас | new money — it pays what the customer owes now | ახალი გადახდაა: დაფარავს იმას, რაც კლიენტს ახლა მართებს | akhali gadakhdaa: dapharavs imas, rats kliens akhla martebs |
 | `sort.splitOldPick` | Отметьте, за что деньги аренды: … | Mark what the rent money is: … | მონიშნეთ, რისთვისაა ქირის თანხა: … | monishnet, ristvisaa kiris tankha |
+
+## 15.10.2026, поздно — «Разделить», вариант «В» (подробный итог словами)
+
+Написано не носителем языка. Строки `sort.splitRent`, `splitFineNew`, `splitFineReason`, `splitOldQ`, `splitOldCarried`,
+`splitOldNew`, `splitFine`, `splitHint`, `splitRest` из записей выше удалены — их заменили эти.
+
+| Ключ | RU | KA | Чтение |
+|---|---|---|---|
+| `sort.splitFrom` | перевод от 08.10.2026 · TBC | გადარიცხვა 08.10.2026 · TBC | gadaritskhva |
+| `sort.splitRentTitle` / `splitFineTitle` / `splitFineFor` | Аренда / Штраф / За что | ქირა / ჯარიმა / რისთვის | kira / jarima / ristvis |
+| `sort.splitWhichWeek` | За какую неделю? | რომელი კვირისთვისაა? | romeli kviristvisaa |
+| `sort.splitWeekCarried` | уже отмечена оплаченной при переносе — эти деньги и есть её оплата | გადმოტანისას უკვე გადახდილად მოინიშნა — ეს თანხა სწორედ მისი გადახდაა | … |
+| `sort.splitWeekOpen` | к оплате сейчас | ახლა გადასახდელი | akhla gadasakhdeli |
+| `sort.splitWeekNewTitle` / `Sub` | Новая оплата / пойдёт в следующие недели | ახალი გადახდა / მომდევნო კვირებში წავა | … |
+| `sort.splitOldPick` | Отметьте, за какую неделю аренда. | მონიშნეთ, რომელი კვირის ქირაა. | … |
+| `sort.splitMore` | + ещё: ремонт, на счёт клиента | + კიდევ: შეკეთება, კლიენტის ანგარიში | kidev: shekheteba |
+| `sort.splitRestHint` | остаток 200.00 ₾ | ნაშთი 200.00 ₾ | nashti |
+| `sort.splitAllPlaced` | всё разнесено ✓ | ყველაფერი განაწილდა ✓ | qvelaperi ganatsilda |
+| `sort.resTitle` | Что запишется | რა ჩაიწერება | ra chaitsereba |
+| `sort.resCarried` | 150 ₾ — оплата недели 08.10–14.10 по R-00002. Неделя и так была оплаченной, теперь у неё есть платёж из банка. | … კვირა ისედაც გადახდილი იყო, ახლა მას ბანკის გადახდა აქვს. | … |
+| `sort.resRent` / `resRentAhead` | 150 ₾ — аренда R-…, начиная с недели … / в счёт следующих недель | ქირა …, კვირიდან … / მომდევნო კვირების ანგარიშში | … |
+| `sort.resFine` | 200 ₾ — штраф «поломка» по R-…, сразу оплачен. | ჯარიმა «…», …, მაშინვე გადახდილი. | … |
+| `sort.resCharge` / `resRepair` / `resSale` / `resAccount` | … / оплата ремонта … / оплата продажи … / на счёт клиента: уйдёт в следующие недели | … | … |
+| `sort.resDebtSame` / `resDebt` | Долг клиента не изменится: 150 ₾. / Долг клиента: было …, станет … | კლიენტის დავალიანება არ შეიცვლება / იყო …, გახდება … | … |
