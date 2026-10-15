@@ -340,7 +340,7 @@ export function paymentRoutes(app: FastifyInstance): void {
     // fine or other charge still open, and a week carried over as paid that
     // no bank money stands behind yet.
     const rentalIds = rentals.map((r) => r.id);
-    const [charges, carried] = await Promise.all([
+    const [charges, carried, open] = await Promise.all([
       prisma.rentalCharge.findMany({
         where: { rentalId: { in: rentalIds }, voidedAt: null },
         orderBy: { createdAt: 'asc' },
@@ -351,7 +351,15 @@ export function paymentRoutes(app: FastifyInstance): void {
         orderBy: [{ rentalId: 'asc' }, { seq: 'asc' }],
         select: { id: true, rentalId: true, seq: true, startsOn: true, endsOn: true, amountTetri: true },
       }),
+      // The first week each rental still owes: where new rent money goes.
+      prisma.rentalPeriod.findMany({
+        where: { rentalId: { in: rentalIds }, payStatus: { not: 'paid' } },
+        orderBy: [{ rentalId: 'asc' }, { seq: 'asc' }],
+        select: { rentalId: true, startsOn: true, endsOn: true },
+      }),
     ]);
+    const firstOpen = new Map<string, { startsOn: string | null; endsOn: string | null }>();
+    for (const w of open) if (!firstOpen.has(w.rentalId)) firstOpen.set(w.rentalId, { startsOn: isoDate(w.startsOn), endsOn: isoDate(w.endsOn) });
     return {
       debt,
       rentals: rentals.map((r) => ({
@@ -363,6 +371,7 @@ export function paymentRoutes(app: FastifyInstance): void {
         model: r.vehicle?.model.name ?? null,
         // The day it was carried over: a line no later than it may already be inside "paid through" (ADR-0018).
         transferredOn: r.transferredAt ? todayISO(r.transferredAt, env.TZ) : null,
+        firstOpenWeek: firstOpen.get(r.id) ?? null,
       })),
       sales: sales.map((s) => {
         const next = s.instalments.find((i) => i.paidTetri < i.amountTetri);

@@ -18,6 +18,27 @@
 .money-closes li { display: flex; justify-content: space-between; gap: 12px; }
 .money-after { margin: 8px 0 0; font: var(--text-body-sm); }
 
+/* «Разделить» (variant «В», docs/redesign/prototypes/split-options.html): a card per
+   place the money goes, the week asked by its dates, and in words what is written. */
+.split-from { margin: -4px 0 0; font: var(--text-body-sm); color: var(--muted); }
+.split-part { display: grid; gap: 8px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--surface); }
+.split-part-top { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.split-part-name { font-weight: 600; }
+.split-part-ref { font: var(--text-mono-sm); color: var(--muted); }
+.split-amount { width: 130px; flex: none; text-align: right; }
+.split-week { border: 0; margin: 0; padding: 0; display: grid; gap: 4px; }
+.split-week legend { padding: 0; margin-bottom: 4px; font-weight: 600; font: var(--text-body-sm); font-weight: 600; }
+.split-radio { display: flex; gap: 8px; align-items: flex-start; padding: 6px 8px; border-radius: 8px; cursor: pointer; font: var(--text-body-sm); }
+.split-radio.on { background: var(--accent-soft); }
+.split-radio input { margin-top: 3px; accent-color: var(--accent); }
+.split-radio small { display: block; color: var(--muted); }
+.split-more { justify-self: start; border-style: dashed; }
+.split-sum { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding-top: 10px; border-top: 1px solid var(--line-soft); font: var(--text-body-sm); }
+.split-ok { color: var(--accent-ink); font-weight: 600; }
+.split-result { padding: 10px 12px; border-radius: 10px; background: var(--surface-2); font: var(--text-body-sm); }
+.split-result ul { margin: 4px 0 0; padding-left: 18px; }
+.split-result li { margin: 3px 0; }
+
 /* Amounts with a sign (§3.3): in is the accent ink, out is ink with a minus. */
 .amt-in { color: var(--accent-ink); }
 .amt-out { color: var(--ink); }
