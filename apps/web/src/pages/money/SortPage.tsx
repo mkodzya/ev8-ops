@@ -608,7 +608,7 @@ function SplitSheet({ line, onClose }: { line: SortLine; onClose: () => void }) 
                   className="input mono split-amount"
                   inputMode="decimal"
                   value={value.amounts[p.key] ?? ''}
-                  placeholder={left > 0 ? t.sort.splitRestHint(formatGel(p.owesTetri > 0 ? Math.min(p.owesTetri, left) : left)) : ''}
+                  placeholder={left > 0 ? formatGel(p.owesTetri > 0 ? Math.min(p.owesTetri, left) : left, { decimals: false }) : ''}
                   onFocus={(e) => takeRest(p, e.currentTarget)}
                   onChange={(e) => setAmount(p.key, e.target.value)}
                 />

@@ -23,9 +23,9 @@
 .split-from { margin: -4px 0 0; font: var(--text-body-sm); color: var(--muted); }
 .split-part { display: grid; gap: 8px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--surface); }
 .split-part-top { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
-.split-part-name { font-weight: 600; }
+.split-part-name { min-width: 0; font-weight: 600; }
 .split-part-ref { font: var(--text-mono-sm); color: var(--muted); }
-.split-amount { width: 130px; flex: none; text-align: right; }
+.split-part .split-amount { width: 130px; min-width: 0; max-width: 45%; flex: none; text-align: right; }
 .split-week { border: 0; margin: 0; padding: 0; display: grid; gap: 4px; }
 .split-week legend { padding: 0; margin-bottom: 4px; font-weight: 600; font: var(--text-body-sm); font-weight: 600; }
 .split-radio { display: flex; gap: 8px; align-items: flex-start; padding: 6px 8px; border-radius: 8px; cursor: pointer; font: var(--text-body-sm); }

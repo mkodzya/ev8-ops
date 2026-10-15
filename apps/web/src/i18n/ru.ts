@@ -819,7 +819,6 @@ export const ru: Dict = {
     splitWeekNewSub: 'пойдёт в следующие недели',
     splitOldPick: 'Отметьте, за какую неделю аренда.',
     splitMore: '+ ещё: ремонт, на счёт клиента',
-    splitRestHint: (n) => `остаток ${n}`,
     splitAllPlaced: 'всё разнесено ✓',
     resTitle: 'Что запишется',
     resCarried: (a, week, r) => `${a} — оплата недели ${week} по ${r}. Неделя и так была оплаченной, теперь у неё есть платёж из банка.`,
