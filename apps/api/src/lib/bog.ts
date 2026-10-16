@@ -29,7 +29,7 @@
 // them the rights of the internet-bank user they were issued for — and this
 // file never sends anything to the bank but the request for a token.
 
-import { addDays, parseBankAmount, todayISO } from '@ev8/shared';
+import { addDays, localDateTime, parseBankAmount, todayISO } from '@ev8/shared';
 import { dateFromISO, isoDate } from './dates.js';
 import { prisma } from './db.js';
 import { env } from './env.js';
@@ -55,6 +55,13 @@ const API_BASE = 'https://api.businessonline.ge/api';
 export const BOG_CURRENCY = 'GEL';
 /** How far back the nightly reading reaches when it has fallen behind. */
 export const NIGHT_MAX_DAYS = 31;
+/**
+ * The bank books part of an evening's money after midnight under the day
+ * before (16.10.2026: a transfer of 140 and a fee of 10 dated 15.10 came after
+ * the 00:17 reading of 15.10, and the day's list of 16.10 does not show them).
+ * Yesterday counts as read only by a reading made at this hour or later.
+ */
+export const MORNING_HOUR = 6;
 const STALE_MINUTES = 20;
 
 /** The name an API day carries in the list of statements. */
@@ -525,11 +532,26 @@ async function pullToday(cfg: BogConfig, now: Date): Promise<BogOutcome> {
   return outcome;
 }
 
+/** Hour of the day in Tbilisi. */
+const hourAt = (at: Date) => Number(localDateTime(at, env.TZ).time.slice(0, 2));
+
+/**
+ * Yesterday is read already, but before the morning: once the morning has
+ * come it is read once more, for what the bank booked after midnight under
+ * yesterday's date. A reading that failed does not count as made.
+ */
+export function readAgain(sync: { nightAt: Date | null; nightFailure: string | null } | null, now: Date): boolean {
+  if (hourAt(now) < MORNING_HOUR) return false;
+  const at = sync?.nightAt;
+  if (!at || sync?.nightFailure) return true;
+  return todayISO(at, env.TZ) < todayISO(now, env.TZ) || hourAt(at) < MORNING_HOUR;
+}
+
 async function readNights(cfg: BogConfig, now: Date): Promise<BogOutcome> {
   const yesterday = addDays(todayISO(now, env.TZ), -1);
   const sync = await prisma.bogSync.findUnique({ where: SYNC });
   const reached = isoDate(sync?.nightThrough ?? null);
-  if (reached && reached >= yesterday) return blank();
+  if (reached && reached >= yesterday && !readAgain(sync, now)) return blank();
 
   // The first night starts at the last day the uploaded files reached: the
   // days between that file and the first pull are read too.

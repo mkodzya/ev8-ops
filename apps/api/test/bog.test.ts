@@ -39,6 +39,8 @@ function fakeBank(state: {
 }) {
   const calls: Call[] = [];
   let tokens = 0;
+  // The days of the last statement asked for: its pages hold those days.
+  let range: [string, string] | null = null;
   const apiStatus = [...(state.apiStatus ?? [])];
   const tokenStatuses = [...(state.tokenStatuses ?? [])];
   const reply = (status: number, body: unknown, headers: Record<string, string> = {}) => ({
@@ -61,17 +63,25 @@ function fakeBank(state: {
     if (path.startsWith('/v2/documents/todayactivities/')) return reply(200, state.today ?? []);
     const paged = /^\/v2\/statement\/[^/]+\/GEL\/(\d+)\/(\d+)$/.exec(path);
     const size = state.pageSize ?? 1000;
-    const all = state.entries ?? [];
+    // Like the bank, the statement holds the days asked for and no others.
+    const dayOf = (e: unknown) => String((e as { EntryDate?: string }).EntryDate ?? '').slice(0, 10);
+    const ranged = /^\/v2\/statement\/[^/]+\/GEL\/(\d{4}-\d{2}-\d{2})\/(\d{4}-\d{2}-\d{2})$/.exec(path);
+    if (ranged) range = [ranged[1]!, ranged[2]!];
+    const all = (state.entries ?? []).filter((e) => !range || (dayOf(e) >= range[0] && dayOf(e) <= range[1]));
     if (paged) {
       const page = Number(paged[2]);
       return reply(200, { Id: Number(paged[1]), Count: 0, TotalCount: all.length, Records: all.slice((page - 1) * size, page * size) });
     }
-    if (/^\/v2\/statement\/[^/]+\/GEL\/\d{4}-\d{2}-\d{2}\/\d{4}-\d{2}-\d{2}$/.test(path)) {
+    if (ranged) {
       return reply(200, { Id: 777, Count: Math.min(size, all.length), TotalCount: all.length, Records: all.slice(0, size) });
     }
     return reply(404, {});
   };
-  return { fetchFn, calls, tokens: () => tokens };
+  /** An entry the bank books later, under a day already read. */
+  const addEntry = (e: unknown) => {
+    state.entries = [...(state.entries ?? []), e];
+  };
+  return { fetchFn, calls, tokens: () => tokens, addEntry };
 }
 
 /** The two sides of an operation: money in comes from someone to the company, money out the other way. */
@@ -451,7 +461,7 @@ describe.skipIf(!HAS_DB)('the pull, the night and the queue', () => {
     });
     setBogFetchForTests(bank.fetchFn, quick);
     const night = await reconcileBogNight(at('2031-03-10', '01:17'));
-    expect(night).toMatchObject({ status: 'ok', listed: 4, added: 1, known: { byDoc: 2 }, days: ['2031-03-08', '2031-03-09'] });
+    expect(night).toMatchObject({ status: 'ok', listed: 3, added: 1, known: { byDoc: 2 }, days: ['2031-03-08', '2031-03-09'] });
     expect(bank.calls.filter((c) => c.url.startsWith(API)).map((c) => c.url.slice(API.length))).toEqual([`/v2/statement/${ACCOUNT}/GEL/2031-03-08/2031-03-09`]);
     expect(await linesOf([sum(9)])).toHaveLength(0);
     expect(await linesOf([sum(1), sum(2), sum(3)])).toHaveLength(3);
@@ -460,10 +470,23 @@ describe.skipIf(!HAS_DB)('the pull, the night and the queue', () => {
     expect(sync).toMatchObject({ nightFailure: null, nightAdded: 1 });
     expect(sync?.nightThrough?.toISOString().slice(0, 10)).toBe('2031-03-09');
 
-    // Asked again the same day — the worker asks on every start — it reads nothing.
-    const again = await reconcileBogNight(at('2031-03-10', '09:00'));
-    expect(again).toMatchObject({ status: 'ok', listed: 0, days: [] });
+    // Asked again before the morning — the worker asks every hour and on every start — it reads nothing.
+    const early = await reconcileBogNight(at('2031-03-10', '04:17'));
+    expect(early).toMatchObject({ status: 'ok', listed: 0, days: [] });
     expect(bank.calls.filter((c) => c.url.startsWith(API))).toHaveLength(1);
+
+    // The bank books part of the evening after midnight under the day before:
+    // in the morning yesterday is read once more, and what came late comes in.
+    bank.addEntry(entry({ id: 99304, day: '2031-03-09', doc: '0304', credit: sum(4) }));
+    const morning = await reconcileBogNight(at('2031-03-10', '06:17'));
+    expect(morning).toMatchObject({ status: 'ok', added: 1, days: ['2031-03-09'] });
+    expect(bank.calls.filter((c) => c.url.startsWith(API)).at(-1)!.url.slice(API.length)).toBe(`/v2/statement/${ACCOUNT}/GEL/2031-03-09/2031-03-09`);
+    expect(await linesOf([sum(4)])).toHaveLength(1);
+
+    // After the morning's reading the day is read whole: the rest of the day asks nothing.
+    const later = await reconcileBogNight(at('2031-03-10', '09:00'));
+    expect(later).toMatchObject({ status: 'ok', listed: 0, days: [] });
+    expect(bank.calls.filter((c) => c.url.startsWith(API))).toHaveLength(2);
   });
 
   it('keeps the failure and its word, and the night that failed is read the next time', async () => {
