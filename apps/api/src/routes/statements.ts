@@ -1,5 +1,6 @@
 import { daysBetween, todayISO } from '@ev8/shared';
 import type { FastifyInstance } from 'fastify';
+import type { Prisma } from '../generated/prisma/client.js';
 import { audit } from '../lib/audit.js';
 import { bogApiStatus } from '../lib/bog.js';
 import { isoDate } from '../lib/dates.js';
@@ -8,11 +9,14 @@ import { env } from '../lib/env.js';
 import { badRequest, conflict, notFound } from '../lib/errors.js';
 import { actorOf } from '../lib/guard.js';
 import { voidPayment } from '../lib/payments.js';
+import { recordOutFromLine } from '../lib/money.js';
+import { depositsOverview } from '../lib/deposits.js';
 import { SPLIT_MAX, attach, importStatement, linkBankDeposit, linkPayment, previewStatement, split } from '../lib/statements/import.js';
 import { ParseError } from '../lib/statements/parse.js';
 import { isCashDeposit, loadCtx, storedLine, suggest } from '../lib/statements/reconcile.js';
+import { expenseKey, lastCategories, payeeLabel, sortByRule, waitingFrom } from '../lib/statements/expenses.js';
 import { tbcApiStatus } from '../lib/tbc.js';
-import { str, tetri } from '../lib/validate.js';
+import { oneOf, str, tetri } from '../lib/validate.js';
 
 // Statements and "Разобрать" (wave 2 §3.2, §3.5).
 //
@@ -123,13 +127,23 @@ export function statementRoutes(app: FastifyInstance): void {
       prisma.statementLine.count({ where: { status: 'matched', matchedRule: { in: BY_RULES }, createdAt: { gte: new Date(Date.now() - 7 * 24 * 3600_000) } } }),
       loadCtx(),
     ]);
-    const aside = await prisma.statementLine.count({ where: { status: 'ignored', resolvedAt: { gte: new Date(Date.now() - ASIDE_DAYS * 24 * 3600_000) } } });
+    const aside = await prisma.statementLine.count({ where: { status: 'ignored', OR: [{ matchedRule: null }, { matchedRule: { not: 'expense_rule' } }], resolvedAt: { gte: new Date(Date.now() - ASIDE_DAYS * 24 * 3600_000) } } });
+    const weekAgo = new Date(Date.now() - 7 * 24 * 3600_000);
+    const byExpenseRules = await prisma.statementLine.count({ where: { status: 'ignored', matchedRule: 'expense_rule', resolvedAt: { gte: weekAgo } } });
+    // "Как в прошлый раз" for money going out (migration 0046).
+    const last = direction === 'in' ? new Map<string, string>() : await lastCategories();
+    // A line going out of exactly a deposit we owe back looks like that deposit handed back.
+    const toHandBack = direction === 'in' ? [] : (await depositsOverview()).deposits.filter((d) => d.toHandBackTetri > 0).map((d) => ({ rentalId: d.rentalId, number: d.number, tetri: d.toHandBackTetri }));
     return {
       counts: { in: counts.find((c) => c.direction === 'in')?._count._all ?? 0, out: counts.find((c) => c.direction === 'out')?._count._all ?? 0 },
-      byRulesWeek: byRules,
+      byRulesWeek: byRules + byExpenseRules,
       asideMonth: aside,
       lines: lines.map((l) => {
         const line = storedLine(l);
+        const hints = suggest(line, ctx);
+        const key = l.direction === 'out' ? expenseKey(l) : null;
+        const lastCategoryId = key ? last.get(key) ?? null : null;
+        const deposit = l.direction === 'out' ? toHandBack.find((d) => d.tetri === l.amountTetri) ?? null : null;
         return {
           id: l.id,
           bank: l.bank,
@@ -144,7 +158,17 @@ export function statementRoutes(app: FastifyInstance): void {
           raw: l.raw,
           fileName: l.statement.fileName,
           cashDeposit: isCashDeposit(line),
-          ...suggest(line, ctx),
+          ...hints,
+          ...(l.direction === 'out'
+            ? {
+                // Who the money went to, as "Запомнить для …" says it; none — nothing to remember.
+                payee: payeeLabel(l),
+                canRemember: key != null,
+                lastCategoryId,
+                depositHint: deposit ? { rentalId: deposit.rentalId, number: deposit.number } : null,
+                group: hints.group === 'none' && (lastCategoryId || deposit) ? ('suggested' as const) : hints.group,
+              }
+            : {}),
         };
       }),
     };
@@ -169,8 +193,24 @@ export function statementRoutes(app: FastifyInstance): void {
       select: { entityId: true, after: true },
     });
     const why = new Map(reasons.map((r) => [r.entityId, (r.after as { reason?: unknown } | null)?.reason ?? null]));
+    const expenses = await prisma.statementLine.findMany({
+      where: { status: 'ignored', matchedRule: 'expense_rule', resolvedAt: { gte: new Date(Date.now() - days * 24 * 3600_000) } },
+      orderBy: [{ occurredOn: 'desc' }],
+      take: 300,
+      include: { expenseRule: { select: { id: true, createdAt: true, archivedAt: true } } },
+    });
     return {
       days,
+      // Money going out sorted by a remembered payee (migration 0046).
+      expenses: expenses.map((l) => ({
+        id: l.id,
+        bank: l.bank,
+        occurredOn: isoDate(l.occurredOn),
+        amountTetri: l.amountTetri,
+        payee: payeeLabel(l),
+        categoryId: l.expenseCategoryId,
+        rule: l.expenseRule ? { id: l.expenseRule.id, since: todayISO(l.expenseRule.createdAt, env.TZ), live: l.expenseRule.archivedAt == null } : null,
+      })),
       lines: lines.map((l) => {
         const p = l.payments[0] ?? null;
         return {
@@ -199,7 +239,7 @@ export function statementRoutes(app: FastifyInstance): void {
   app.get<{ Querystring: { days?: string } }>('/api/statement-lines/aside', { config: { scope: 'payments.reconcile' } }, async (req) => {
     const days = Math.min(90, Math.max(1, Number(req.query.days) || ASIDE_DAYS));
     const lines = await prisma.statementLine.findMany({
-      where: { status: 'ignored', resolvedAt: { gte: new Date(Date.now() - days * 24 * 3600_000) } },
+      where: { status: 'ignored', OR: [{ matchedRule: null }, { matchedRule: { not: 'expense_rule' } }], resolvedAt: { gte: new Date(Date.now() - days * 24 * 3600_000) } },
       orderBy: [{ resolvedAt: 'desc' }],
       take: 300,
     });
@@ -222,6 +262,9 @@ export function statementRoutes(app: FastifyInstance): void {
           purpose: l.purpose,
           raw: l.raw,
           resolution: l.resolution,
+          // Who answered: a rule's name when the stand did it itself (`own_transfer_auto`, ADR-0028).
+          rule: l.matchedRule,
+          categoryId: l.expenseCategoryId,
           reason: l.resolutionReason,
           by: l.resolvedById ? (who.get(l.resolvedById) ?? null) : null,
           on: l.resolvedAt ? todayISO(l.resolvedAt, env.TZ) : null,
@@ -319,13 +362,94 @@ export function statementRoutes(app: FastifyInstance): void {
   });
 
   /** An outgoing line that is the company's own spending: one tap (§3.2 "Списания"). */
-  app.post<{ Params: { id: string } }>('/api/statement-lines/:id/expense', { config: { scope: 'payments.reconcile' } }, async (req) => {
+  app.post<{ Params: { id: string }; Body: Body }>('/api/statement-lines/:id/expense', { config: { scope: 'payments.reconcile' } }, async (req) => {
     const actor = actorOf(req);
-    const line = await prisma.statementLine.findUnique({ where: { id: req.params.id }, select: { direction: true } });
+    const b = req.body ?? {};
+    const line = await prisma.statementLine.findUnique({ where: { id: req.params.id }, select: { direction: true, payer: true, purpose: true } });
     if (!line) throw notFound('line_not_found', 'No such statement line.');
     if (line.direction !== 'out') throw conflict('incoming_line', 'Money coming in is not a company expense.');
-    await setAside(req.params.id, actor.id, 'company_expense', null);
-    await audit({ actorId: actor.id, action: 'statement.line.expense', entityType: 'statement_line', entityId: req.params.id });
+    // What it was for (migration 0046). A screen from before the categories sends none.
+    const categoryId = str(b, 'categoryId');
+    if (categoryId) {
+      const c = await prisma.expenseCategory.findUnique({ where: { id: categoryId }, select: { archived: true } });
+      if (!c || c.archived) throw notFound('category_not_found', 'No such expense category.');
+    }
+    const remember = b.remember === true && categoryId != null;
+    const key = remember ? expenseKey(line) : null;
+    if (remember && !key) throw badRequest('no_payee', 'The bank names nobody on this line: there is no payee to remember.');
+    const result = await prisma.$transaction(async (tx) => {
+      await setAside(req.params.id, actor.id, 'company_expense', null, categoryId, tx);
+      if (!key) return { ruleId: null as string | null, alsoSorted: [] as string[] };
+      // One live rule a payee: remembering it again replaces the old one.
+      await tx.expenseRule.updateMany({ where: { payeeKey: key, archivedAt: null }, data: { archivedAt: new Date(), archivedById: actor.id } });
+      const rule = await tx.expenseRule.create({ data: { payeeKey: key, categoryId: categoryId!, createdById: actor.id }, select: { id: true, categoryId: true } });
+      const alsoSorted: string[] = [];
+      for (const id of await waitingFrom(tx, key, req.params.id)) if (await sortByRule(tx, id, rule, actor.id)) alsoSorted.push(id);
+      return { ruleId: rule.id, alsoSorted };
+    });
+    await audit({ actorId: actor.id, action: 'statement.line.expense', entityType: 'statement_line', entityId: req.params.id, after: { categoryId, remember, ...result } });
+    return { ok: true, ...result };
+  });
+
+  /**
+   * "Отменить" right after «Записать»: the line waits again, and so do the
+   * lines the remembered payee sorted in the same tap; the rule is forgotten.
+   */
+  app.post<{ Params: { id: string }; Body: Body }>('/api/statement-lines/:id/expense-undo', { config: { scope: 'payments.reconcile' } }, async (req) => {
+    const actor = actorOf(req);
+    const ruleId = str(req.body ?? {}, 'ruleId');
+    const restored = await prisma.$transaction(async (tx) => {
+      const back = (where: Prisma.StatementLineWhereInput) =>
+        tx.statementLine.updateMany({
+          where: { ...where, status: 'ignored', resolution: 'company_expense' },
+          data: { status: 'unmatched', matchedRule: null, resolution: null, resolutionReason: null, resolvedById: null, resolvedAt: null, expenseCategoryId: null, expenseRuleId: null },
+        });
+      const own = await back({ id: req.params.id });
+      if (own.count === 0) throw conflict('not_set_aside', 'This line is not set aside.');
+      if (!ruleId) return 1;
+      await tx.expenseRule.updateMany({ where: { id: ruleId, archivedAt: null }, data: { archivedAt: new Date(), archivedById: actor.id } });
+      return 1 + (await back({ expenseRuleId: ruleId })).count;
+    });
+    await audit({ actorId: actor.id, action: 'statement.line.expense_undo', entityType: 'statement_line', entityId: req.params.id, after: { ruleId, restored } });
+    return { ok: true, restored };
+  });
+
+  /**
+   * «Возврат залога» or «Поставщику» from the line itself (migration 0046's
+   * screen): the payout or the supplier payment is written with this line as
+   * its source — nobody enters it in «Деньги» by hand first. Annulled, the
+   * line goes back to the queue like any line's payment.
+   */
+  app.post<{ Params: { id: string }; Body: Body }>('/api/statement-lines/:id/pay-out', { config: { scope: 'payments.reconcile' } }, async (req) => {
+    const actor = actorOf(req);
+    const b = req.body ?? {};
+    const kind = oneOf(b, 'kind', ['deposit_payout', 'supplier'] as const, { required: true })!;
+    const rentalId = kind === 'deposit_payout' ? str(b, 'rentalId', { required: true }) : null;
+    const purchaseId = kind === 'supplier' ? str(b, 'purchaseId', { required: true }) : null;
+    const id = await prisma.$transaction(async (tx) => {
+      const line = await tx.statementLine.findUnique({ where: { id: req.params.id } });
+      if (!line) throw notFound('line_not_found', 'No such statement line.');
+      if (line.direction !== 'out') throw conflict('incoming_line', 'Money coming in is not handed back or paid out.');
+      const claimed = await tx.statementLine.updateMany({ where: { id: line.id, status: 'unmatched' }, data: { status: 'matched', matchedRule: 'by_hand' } });
+      if (claimed.count === 0) throw conflict('already_matched', 'This line is already attached.');
+      const paymentId = await recordOutFromLine(
+        tx,
+        actor,
+        { kind, rentalId, purchaseId, amountTetri: line.amountTetri, channel: 'transfer', occurredOn: isoDate(line.occurredOn) },
+        { id: line.id, occurredOn: isoDate(line.occurredOn)!, raw: line.raw },
+      );
+      await tx.statementLine.update({ where: { id: line.id }, data: { paymentId } });
+      return paymentId;
+    });
+    await audit({ actorId: actor.id, action: 'statement.line.pay_out', entityType: 'statement_line', entityId: req.params.id, after: { kind, rentalId, purchaseId, paymentId: id } });
+    return { ok: true, id };
+  });
+
+  /** «Между счетами»: money between the company's own accounts, or into the till — neither spent nor somebody else's. */
+  app.post<{ Params: { id: string } }>('/api/statement-lines/:id/own-transfer', { config: { scope: 'payments.reconcile' } }, async (req) => {
+    const actor = actorOf(req);
+    await setAside(req.params.id, actor.id, 'own_transfer', null);
+    await audit({ actorId: actor.id, action: 'statement.line.own_transfer', entityType: 'statement_line', entityId: req.params.id });
     return { ok: true };
   });
 
@@ -339,7 +463,7 @@ export function statementRoutes(app: FastifyInstance): void {
     if (!line) throw notFound('line_not_found', 'No such statement line.');
     const done = await prisma.statementLine.updateMany({
       where: { id: line.id, status: 'ignored' },
-      data: { status: 'unmatched', matchedRule: null, resolution: null, resolutionReason: null, resolvedById: null, resolvedAt: null },
+      data: { status: 'unmatched', matchedRule: null, resolution: null, resolutionReason: null, resolvedById: null, resolvedAt: null, expenseCategoryId: null, expenseRuleId: null },
     });
     if (done.count === 0) throw conflict('not_set_aside', 'This line is not set aside.');
     await audit({ actorId: actor.id, action: 'statement.line.restore', entityType: 'statement_line', entityId: line.id, before: { resolution: line.resolution, reason: line.resolutionReason } });
@@ -374,13 +498,20 @@ export function statementRoutes(app: FastifyInstance): void {
 }
 
 /** Set a line aside, once: a second answer finds it taken. */
-async function setAside(lineId: string, actorId: string, resolution: 'not_ours' | 'company_expense', reason: string | null): Promise<void> {
-  const done = await prisma.statementLine.updateMany({
+async function setAside(
+  lineId: string,
+  actorId: string,
+  resolution: 'not_ours' | 'company_expense' | 'own_transfer',
+  reason: string | null,
+  categoryId: string | null = null,
+  db: Prisma.TransactionClient | typeof prisma = prisma,
+): Promise<void> {
+  const done = await db.statementLine.updateMany({
     where: { id: lineId, status: 'unmatched' },
-    data: { status: 'ignored', matchedRule: resolution, resolution, resolutionReason: reason, resolvedById: actorId, resolvedAt: new Date() },
+    data: { status: 'ignored', matchedRule: resolution, resolution, resolutionReason: reason, resolvedById: actorId, resolvedAt: new Date(), expenseCategoryId: categoryId },
   });
   if (done.count === 0) {
-    const exists = await prisma.statementLine.findUnique({ where: { id: lineId }, select: { id: true } });
+    const exists = await db.statementLine.findUnique({ where: { id: lineId }, select: { id: true } });
     if (!exists) throw notFound('line_not_found', 'No such statement line.');
     throw conflict('already_matched', 'This line is already attached.');
   }

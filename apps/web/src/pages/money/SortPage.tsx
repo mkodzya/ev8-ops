@@ -14,6 +14,7 @@ import { Skeleton } from '../../ds/state/Skeleton.js';
 import { fmtDate, fmtDayMonth } from '../../format.js';
 import { useT } from '../../i18n/index.js';
 import { useLoad } from '../../lib/use.js';
+import { ExpenseAnswers, ExpenseRuleCard, useExpenseCategories, type Categories, type ExpenseRuleLine } from './ExpenseAnswers.js';
 
 interface Reason {
   code: 'name' | 'card_pickup' | 'amount_week' | 'amount' | 'recorded' | 'bank_deposit';
@@ -53,6 +54,11 @@ export interface SortLine {
   group: 'recorded' | 'suggested' | 'none';
   recorded: Suggestion[];
   suggestions: Suggestion[];
+  /** Money going out (migration 0046): the payee to remember, and how it was sorted last time. */
+  payee?: string | null;
+  canRemember?: boolean;
+  lastCategoryId?: string | null;
+  depositHint?: { rentalId: string; number: string } | null;
 }
 interface Queue {
   counts: { in: number; out: number };
@@ -99,6 +105,7 @@ export function SortPage() {
   const [other, setOther] = useState<SortLine | null>(null);
   const [notOurs, setNotOurs] = useState<SortLine | null>(null);
   const [splitting, setSplitting] = useState<SortLine | null>(null);
+  const cats = useExpenseCategories(direction === 'out');
 
   const groups = (['recorded', 'suggested', 'none'] as const).map((g) => ({ g, lines: (data?.lines ?? []).filter((l) => l.group === g) }));
   const title = { recorded: t.sort.recordedGroup, suggested: t.sort.hintsGroup, none: t.sort.noneGroup };
@@ -133,7 +140,7 @@ export function SortPage() {
                   {title[g]} <span className="muted mono">{lines.length}</span>
                 </h2>
                 {lines.map((l) => (
-                  <LineCard key={l.id} line={l} onOther={() => setOther(l)} onNotOurs={() => setNotOurs(l)} onSplit={() => setSplitting(l)} />
+                  <LineCard key={l.id} line={l} cats={cats} onOther={() => setOther(l)} onNotOurs={() => setNotOurs(l)} onSplit={() => setSplitting(l)} />
                 ))}
               </section>
             ),
@@ -179,7 +186,7 @@ function AllSorted({ byRules, aside }: { byRules: number; aside: number }) {
 }
 
 /** One line: its amount, day, bank, the bank's words — and the answers (§3.2). */
-function LineCard({ line, onOther, onNotOurs, onSplit }: { line: SortLine; onOther: () => void; onNotOurs: () => void; onSplit: () => void }) {
+function LineCard({ line, cats, onOther, onNotOurs, onSplit }: { line: SortLine; cats: Categories; onOther: () => void; onNotOurs: () => void; onSplit: () => void }) {
   const t = useT();
   const toast = useToast();
   const reason = useReasonText();
@@ -216,6 +223,10 @@ function LineCard({ line, onOther, onNotOurs, onSplit }: { line: SortLine; onOth
         <RowMenu
           actions={[
             ...(line.direction === 'in' ? [{ key: 'split', label: t.sort.split, onPick: onSplit }] : []),
+            // Money coming in from another of the company's accounts (ADR-0028); going out, the answer sits under the line.
+            ...(line.direction === 'in'
+              ? [{ key: 'own', label: t.exp.ownTransfer, onPick: () => void act('own-transfer', {}, { text: t.exp.ownTransferDone, undo: () => () => api.post(`/api/statement-lines/${line.id}/restore`, {}) }) }]
+              : []),
             { key: 'not', label: t.sort.notOurs, onPick: onNotOurs },
           ]}
         />
@@ -288,7 +299,7 @@ function LineCard({ line, onOther, onNotOurs, onSplit }: { line: SortLine; onOth
         </div>
       )}
 
-      {(line.group === 'none' || line.group === 'recorded') && (
+      {line.direction === 'in' && (line.group === 'none' || line.group === 'recorded') && (
         <div className="sort-actions">
           {line.direction === 'in' ? (
             <>
@@ -299,20 +310,11 @@ function LineCard({ line, onOther, onNotOurs, onSplit }: { line: SortLine; onOth
                 {t.sort.split}
               </button>
             </>
-          ) : (
-            <button type="button" className="pill pill-sm" disabled={busy} onClick={() => act('expense', {}, { text: t.sort.expenseDone })}>
-              {t.sort.expense}
-            </button>
-          )}
+          ) : null}
         </div>
       )}
-      {line.direction === 'out' && line.group === 'suggested' && (
-        <div className="sort-actions">
-          <button type="button" className="pill pill-sm" disabled={busy} onClick={() => act('expense', {}, { text: t.sort.expenseDone })}>
-            {t.sort.expense}
-          </button>
-        </div>
-      )}
+      {/* Money going out: what it is, and for an expense what it was for (migration 0046). */}
+      {line.direction === 'out' && <ExpenseAnswers line={line} cats={cats} quiet={line.group === 'recorded'} />}
       {op.failure && <p className="field-err" role="alert">{op.failure.text}</p>}
     </article>
   );
@@ -715,7 +717,11 @@ interface AsideLine {
   payer: string | null;
   purpose: string | null;
   raw: string;
-  resolution: 'not_ours' | 'company_expense' | string | null;
+  resolution: 'not_ours' | 'company_expense' | 'own_transfer' | string | null;
+  /** The rule that answered when the stand did it itself — `own_transfer_auto` (ADR-0028). */
+  rule?: string | null;
+  /** What an expense was for (migration 0046); absent while an older API answers. */
+  categoryId?: string | null;
   reason: string | null;
   by: string | null;
   on: string | null;
@@ -725,22 +731,32 @@ interface AsideLine {
 export function AsidePage() {
   const t = useT();
   const { data, failure, reload } = useLoad<{ days: number; lines: AsideLine[] }>('/api/statement-lines/aside');
+  const cats = useExpenseCategories(true, true);
   if (failure) return <LoadError failure={failure} onRetry={reload} />;
   return (
     <>
       <PageHead title={t.sort.asideTitle} sub={data ? t.sort.asideSub(data.lines.length) : undefined} />
       {!data && <Skeleton rows={4} />}
       {data && data.lines.length === 0 && <p className="muted">{t.sort.asideEmpty}</p>}
-      {data?.lines.map((l) => <AsideCard key={l.id} line={l} />)}
+      {data?.lines.map((l) => <AsideCard key={l.id} line={l} cats={cats} />)}
     </>
   );
 }
 
-function AsideCard({ line }: { line: AsideLine }) {
+function AsideCard({ line, cats }: { line: AsideLine; cats: Categories }) {
   const t = useT();
   const toast = useToast();
   const op = useOperation();
-  const why = line.resolution === 'company_expense' ? t.sort.asideExpense : t.sort.asideNotOurs(line.reason ?? '');
+  const why =
+    line.resolution === 'company_expense'
+      ? line.categoryId
+        ? t.exp.asideExpense(cats.nameOf(line.categoryId))
+        : t.sort.asideExpense
+      : line.resolution === 'own_transfer'
+        ? line.rule === 'own_transfer_auto'
+          ? t.exp.ownAuto(ownWhy(t, line.reason))
+          : t.exp.asideOwn
+        : t.sort.asideNotOurs(line.reason ?? '');
   return (
     <article className="sort-line">
       <div className="sort-line-head">
@@ -774,15 +790,36 @@ function AsideCard({ line }: { line: AsideLine }) {
   );
 }
 
+/** Why the stand found a line to be money between the company's accounts, from the reason it stored (ADR-0028). */
+function ownWhy(t: ReturnType<typeof useT>, reason: string | null): string {
+  const [kind, a, b] = (reason ?? '').split(':');
+  const bank = (code: string | undefined) => t.statements.banks[(code === 'bg' ? 'bog' : code === 'tb' ? 'tbc' : code) as 'bog' | 'tbc'] ?? code ?? '';
+  if (kind === 'account') return t.exp.ownWhyAccount(bank(a));
+  if (kind === 'pair') return t.exp.ownWhyPair(bank(a), fmtDate(reason!.slice(`pair:${a}:`.length)));
+  return t.exp.ownWhyCompany;
+}
+
 /** "Разобрано правилами": what the rules attached, with why; "Отвязать" puts it back (§3.2, B2-07). */
 export function RulesPage() {
   const t = useT();
   const reason = useReasonText();
-  const { data, failure, reload } = useLoad<{ days: number; lines: RuleLine[] }>('/api/statement-lines/by-rules');
+  const { data, failure, reload } = useLoad<{ days: number; lines: RuleLine[]; expenses?: ExpenseRuleLine[] }>('/api/statement-lines/by-rules');
+  const cats = useExpenseCategories(true, true);
   if (failure) return <LoadError failure={failure} onRetry={reload} />;
+  const expenses = data?.expenses ?? [];
   return (
     <>
-      <PageHead title={t.sort.rulesTitle} sub={data ? t.sort.rulesSub(data.lines.length) : undefined} />
+      <PageHead title={t.sort.rulesTitle} sub={data ? t.sort.rulesSub(data.lines.length + expenses.length) : undefined} />
+      {expenses.length > 0 && (
+        <section>
+          <h2 className="sort-group t-h3">
+            {t.exp.rulesExpenses} <span className="muted mono">{expenses.length}</span>
+          </h2>
+          {expenses.map((l) => (
+            <ExpenseRuleCard key={l.id} line={l} cats={cats} bank={t.statements.banks[l.bank]} onDone={reload} />
+          ))}
+        </section>
+      )}
       {!data && <Skeleton rows={4} />}
       {data?.lines.map((l) => (
         <RuleCard

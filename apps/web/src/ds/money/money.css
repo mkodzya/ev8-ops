@@ -373,3 +373,10 @@ button.cal-cell { cursor: pointer; }
 /* «Это другой перевод — записать» stands after the main button, and on a phone has a line of its own. */
 .row-actions > .money-another { order: 1; }
 @media (max-width: 899px) { .drawer-body .row-actions > .money-another { flex: 1 1 100%; justify-content: center; } }
+
+/* Money going out: what it was for, inside the card (migration 0046, variant 1). */
+.exp-panel { display: grid; gap: 8px; padding-top: 4px; border-top: 1px solid var(--line-soft); }
+.check-row { display: flex; gap: 8px; align-items: center; font: var(--text-body-sm); color: var(--ink); }
+.check-row input { width: 18px; height: 18px; accent-color: var(--accent); }
+.exp-bar { display: inline-block; height: 8px; min-width: 2px; border-radius: var(--radius-pill); background: var(--accent); vertical-align: middle; }
+.exp-total td, .exp-total { font-weight: 600; }

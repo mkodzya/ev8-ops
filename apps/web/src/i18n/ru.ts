@@ -10,6 +10,7 @@ import { kommoLinkRu } from './kommo-link.js';
 import { bankApiRu } from './bank-api.js';
 import { calendarRu } from './payments-calendar.js';
 import { payDayRu } from './pay-day.js';
+import { expRu } from './expenses.js';
 import { inBankRu } from './in-bank.js';
 import type { Dict } from './en.js';
 
@@ -116,6 +117,7 @@ export const ru: Dict = {
       journal: 'Журнал',
       migration: 'Перенос',
       login: 'Вход',
+      expenses: 'Расходы',
     },
   },
 
@@ -1169,6 +1171,10 @@ export const ru: Dict = {
       service_not_found: 'Такого ремонта нет.',
       undo_too_late: 'Отменить уже нельзя. Владелец может аннулировать платёж с причиной.',
       already_matched: 'Эта строка выписки уже привязана к платежу.',
+      category_not_found: 'Такой категории расходов нет.',
+      category_exists: 'Категория с таким названием уже есть.',
+      no_payee: 'Банк не назвал получателя в этой строке — запоминать некого.',
+      rule_not_found: 'Этого правила уже нет.',
       bad_range: 'Укажите номера с и по; первый не больше последнего.',
       week_not_found: 'Такой недели в аренде нет.',
       week_paid_before_transfer: 'Эта неделя оплачена до переноса аренды — скидку на неё дать нельзя.',
@@ -1316,5 +1322,6 @@ export const ru: Dict = {
   ...bankApiRu,
   ...calendarRu,
   ...payDayRu,
+  ...expRu,
   ...inBankRu,
 };

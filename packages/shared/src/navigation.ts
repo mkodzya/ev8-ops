@@ -103,6 +103,7 @@ export type TabId =
   | 'journal'
   | 'migration'
   | 'login'
+  | 'expenses'
   | 'orders'
   | 'suppliers';
 
@@ -147,6 +148,8 @@ export const SECTION_TABS: Partial<Record<SectionId, readonly { id: TabId; path:
     // One page on two addresses, so still no copy (designer, 21.09.2026).
     { id: 'points', path: '/settings/points', anyOf: ['settings.manage'] },
     { id: 'rental', path: '/settings/rental', anyOf: ['settings.manage'] },
+    // What money going out was for (migration 0046).
+    { id: 'expenses', path: '/settings/expenses', anyOf: ['settings.manage'] },
     { id: 'journal', path: '/settings/journal', anyOf: ['users.manage'] },
     { id: 'migration', path: '/settings/migration', anyOf: ['users.manage'] },
     { id: 'login', path: '/settings/login', anyOf: ['users.manage'] },
@@ -162,6 +165,8 @@ export const SECTION_TABS: Partial<Record<SectionId, readonly { id: TabId; path:
     { id: 'week', path: '/reports/week', anyOf: ['reports.view'] },
     { id: 'utilisation', path: UTILISATION_PATH, anyOf: ['reports.view'] },
     { id: 'economics', path: '/reports/economics', anyOf: ['reports.view'] },
+    // What left the accounts, by category (migration 0046).
+    { id: 'expenses', path: '/reports/expenses', anyOf: ['reports.view'] },
   ],
 };
 

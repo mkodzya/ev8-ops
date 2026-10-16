@@ -25,6 +25,8 @@ import { AsidePage, RulesPage, SortPage } from './pages/money/SortPage.js';
 import { TillPage } from './pages/money/TillPage.js';
 import { PickupWizard } from './pages/PickupWizard.js';
 import { MopedByNumber } from './pages/MopedByNumber.js';
+import { ExpenseCategoriesPage } from './pages/ExpenseCategoriesPage.js';
+import { ExpensesReportPage } from './pages/ExpensesReportPage.js';
 import { ProfilePage } from './pages/ProfilePage.js';
 import { LoginSettingsPage, RentalSettingsPage, SettingsPage } from './pages/SettingsPage.js';
 import { JournalPage } from './pages/JournalPage.js';
@@ -168,6 +170,7 @@ export function App() {
         <Route path="reports/week" element={<Require perm="reports.view"><WeekPage /></Require>} />
         <Route path="reports/utilisation" element={<Require perm="reports.view"><UtilisationPage /></Require>} />
         <Route path="reports/economics" element={<Require perm="reports.view"><EconomicsPage /></Require>} />
+        <Route path="reports/expenses" element={<Require perm="reports.view"><ExpensesReportPage /></Require>} />
 
         <Route path="customers" element={<CustomersPage />} />
         <Route path="customers/new" element={<CustomerForm />} />
@@ -176,6 +179,7 @@ export function App() {
         {/* Settings is six tabs since wave 6 (§3.4–3.9); the people are first. */}
         <Route path="settings" element={<Require perm="users.manage"><SettingsPage /></Require>} />
         <Route path="settings/rental" element={<Require perm="settings.manage"><RentalSettingsPage /></Require>} />
+        <Route path="settings/expenses" element={<Require perm="settings.manage"><ExpenseCategoriesPage /></Require>} />
         <Route path="settings/journal" element={<Require perm="users.manage"><JournalPage /></Require>} />
         <Route path="settings/migration" element={<Require perm="users.manage"><MigrationPage /></Require>} />
         <Route path="settings/login" element={<Require perm="users.manage"><LoginSettingsPage /></Require>} />
