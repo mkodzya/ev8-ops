@@ -67,7 +67,11 @@ export interface OwnLine {
 export function ownSign(line: OwnLine, own: ReadonlySet<string>): string | null {
   // A card payment is a customer's money, whoever the bank names as the merchant.
   if (line.direction === 'in' && cardOf(line)) return null;
-  const other = ibansIn([line.payer, line.purpose, line.raw].filter(Boolean).join(' ')).find((i) => own.has(i) && i !== line.account);
+  // The line's own account is not "another": when its statement does not say
+  // which account it is, every account at the line's own bank is taken for it.
+  const ownBank = line.bank === 'bog' ? 'BG' : line.bank === 'tbc' ? 'TB' : null;
+  const isItself = (i: string) => (line.account ? i === line.account : i.slice(4, 6) === ownBank);
+  const other = ibansIn([line.payer, line.purpose, line.raw].filter(Boolean).join(' ')).find((i) => own.has(i) && !isItself(i));
   if (other) return `account:${other.slice(4, 6).toLowerCase()}`;
   if (isCompany(line.payer)) return 'company';
   return null;
