@@ -41,8 +41,10 @@ describe('money between the company’s own accounts (ADR-0028)', () => {
 
   it('a line says it is ours when it names another of our accounts, or the company is on its other side', () => {
     expect(ownSign(line({ direction: 'out', amountTetri: 50000, occurredOn: '2026-10-16', account: BOG, purpose: `Account: ${TBC}` }), OWN)).toBe('account:tb');
-    // Its own account in its text is not a sign.
+    // Its own account in its text is not a sign — nor, on a statement that does not say its account, any at its own bank.
     expect(ownSign(line({ direction: 'in', amountTetri: 50000, occurredOn: '2026-10-16', account: BOG, raw: BOG }), OWN)).toBeNull();
+    expect(ownSign(line({ direction: 'out', amountTetri: 1500, occurredOn: '2026-10-16', account: null, bank: 'bog', raw: `Payment; Account: ${BOG}` }), OWN)).toBeNull();
+    expect(ownSign(line({ direction: 'out', amountTetri: 1500, occurredOn: '2026-10-16', account: null, bank: 'bog', raw: `Account: ${TBC}` }), OWN)).toBe('account:tb');
     expect(ownSign(line({ direction: 'in', amountTetri: 50000, occurredOn: '2026-10-16', account: TBC, payer: 'E MOTION MOTORS LLC' }), OWN)).toBe('company');
     // A card settlement names the company as the merchant: it is customers' money.
     const card = line({ direction: 'in', amountTetri: 19700, occurredOn: '2026-10-08', account: TBC, payer: 'E MOTION MOTORS LLC', raw: 'Wallet/domestic/x | E MOTION MOTORS LLC, TBC BANK, Visa, 200.00, ' });
