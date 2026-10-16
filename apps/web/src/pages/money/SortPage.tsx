@@ -223,6 +223,10 @@ function LineCard({ line, cats, onOther, onNotOurs, onSplit }: { line: SortLine;
         <RowMenu
           actions={[
             ...(line.direction === 'in' ? [{ key: 'split', label: t.sort.split, onPick: onSplit }] : []),
+            // Money coming in from another of the company's accounts (ADR-0028); going out, the answer sits under the line.
+            ...(line.direction === 'in'
+              ? [{ key: 'own', label: t.exp.ownTransfer, onPick: () => void act('own-transfer', {}, { text: t.exp.ownTransferDone, undo: () => () => api.post(`/api/statement-lines/${line.id}/restore`, {}) }) }]
+              : []),
             { key: 'not', label: t.sort.notOurs, onPick: onNotOurs },
           ]}
         />
@@ -714,6 +718,8 @@ interface AsideLine {
   purpose: string | null;
   raw: string;
   resolution: 'not_ours' | 'company_expense' | 'own_transfer' | string | null;
+  /** The rule that answered when the stand did it itself — `own_transfer_auto` (ADR-0028). */
+  rule?: string | null;
   /** What an expense was for (migration 0046); absent while an older API answers. */
   categoryId?: string | null;
   reason: string | null;
@@ -747,7 +753,9 @@ function AsideCard({ line, cats }: { line: AsideLine; cats: Categories }) {
         ? t.exp.asideExpense(cats.nameOf(line.categoryId))
         : t.sort.asideExpense
       : line.resolution === 'own_transfer'
-        ? t.exp.asideOwn
+        ? line.rule === 'own_transfer_auto'
+          ? t.exp.ownAuto(ownWhy(t, line.reason))
+          : t.exp.asideOwn
         : t.sort.asideNotOurs(line.reason ?? '');
   return (
     <article className="sort-line">
@@ -780,6 +788,15 @@ function AsideCard({ line, cats }: { line: AsideLine; cats: Categories }) {
       </div>
     </article>
   );
+}
+
+/** Why the stand found a line to be money between the company's accounts, from the reason it stored (ADR-0028). */
+function ownWhy(t: ReturnType<typeof useT>, reason: string | null): string {
+  const [kind, a, b] = (reason ?? '').split(':');
+  const bank = (code: string | undefined) => t.statements.banks[(code === 'bg' ? 'bog' : code === 'tb' ? 'tbc' : code) as 'bog' | 'tbc'] ?? code ?? '';
+  if (kind === 'account') return t.exp.ownWhyAccount(bank(a));
+  if (kind === 'pair') return t.exp.ownWhyPair(bank(a), fmtDate(reason!.slice(`pair:${a}:`.length)));
+  return t.exp.ownWhyCompany;
 }
 
 /** "Разобрано правилами": what the rules attached, with why; "Отвязать" puts it back (§3.2, B2-07). */
