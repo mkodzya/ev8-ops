@@ -262,6 +262,8 @@ export function statementRoutes(app: FastifyInstance): void {
           purpose: l.purpose,
           raw: l.raw,
           resolution: l.resolution,
+          // Who answered: a rule's name when the stand did it itself (`own_transfer_auto`, ADR-0028).
+          rule: l.matchedRule,
           categoryId: l.expenseCategoryId,
           reason: l.resolutionReason,
           by: l.resolvedById ? (who.get(l.resolvedById) ?? null) : null,

@@ -9,6 +9,7 @@ import { serviceOwed } from '../money.js';
 import { cardOf, parseStatement, type ParsedLine } from './parse.js';
 import { decide, lineGross, loadCtx, type Ctx, type Decision, type Line } from './reconcile.js';
 import { expenseKey, liveRules, sortByRule } from './expenses.js';
+import { markOwnTransfers } from './ownTransfers.js';
 import { alreadyIn, type AlreadyIn } from './sameLine.js';
 
 // Loading a statement and letting it settle what it can (PAY-01, PAY-02,
@@ -214,6 +215,8 @@ export async function ingest(input: { statementId: string; bank: 'bog' | 'tbc'; 
     if (d.type === 'rule') ctx = await loadCtx();
     else spend(ctx, d);
   }
+  // Money between the company's own accounts, once both halves may be in (ADR-0028).
+  await markOwnTransfers();
   return { recorded, matched };
 }
 
