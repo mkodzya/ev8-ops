@@ -21,6 +21,8 @@ describe('route table', () => {
       // Wave 5 moved the orders onto a purchases scope of their own; what is
       // left here is the settings and the people.
       'DELETE /api/settings/rates/:id',
+      // The rentals folders in Drive beside the rentals here (ADR-0031): an owner's list.
+      'GET /api/drive/reconciliation',
       // Wave 6: the journal and its export are an owner's (§3.8).
       'GET /api/journal',
       'GET /api/journal.csv',
@@ -42,6 +44,7 @@ describe('route table', () => {
       'PATCH /api/users/:id',
       'PATCH /api/workshops/:id',
       'POST /api/customers/:id/merge',
+      'POST /api/drive/scan',
       'POST /api/expense-categories',
       'POST /api/fleet',
       'POST /api/locations',
@@ -54,7 +57,7 @@ describe('route table', () => {
     ]);
     const publicOnes = app.routeTable.filter((r) => r.scope === 'public').map((r) => r.url).sort();
     // The jobs are public to the session guard and closed by the worker token (routes/jobs.ts).
-    expect(publicOnes).toEqual(['/api/auth/login', '/api/health', '/api/jobs/bog-night', '/api/jobs/bog-today', '/api/jobs/kommo-sync', '/api/jobs/roll-periods', '/api/jobs/tbc-night', '/api/jobs/tbc-today', '/api/site/queue']);
+    expect(publicOnes).toEqual(['/api/auth/login', '/api/health', '/api/jobs/bog-night', '/api/jobs/bog-today', '/api/jobs/drive-scan', '/api/jobs/kommo-sync', '/api/jobs/roll-periods', '/api/jobs/tbc-night', '/api/jobs/tbc-today', '/api/site/queue']);
   });
 });
 
