@@ -153,7 +153,7 @@ export async function matchDrive(): Promise<number> {
     rows
       .filter((f) => f.section === section)
       .map((f) => ({ id: f.id, datedOn: isoDate(f.datedOn), person: folderName(f.name).person, vins: f.files.map((x) => x.vin).filter((v): v is string => !!v) }));
-  const found = new Map([...matchFolders(pool('active'), toMatch), ...matchFolders(pool('finished'), toMatch)]);
+  const found = new Map([...matchFolders(pool('active'), toMatch), ...matchFolders(pool('finished'), toMatch, { nameAlone: false })]);
   await prisma.driveFolder.updateMany({ data: { rentalId: null, matchedBy: null } });
   for (const [folderId, m] of found) await prisma.driveFolder.update({ where: { id: folderId }, data: { rentalId: m.rentalId, matchedBy: m.by } });
   return found.size;
