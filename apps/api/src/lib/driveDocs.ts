@@ -15,9 +15,11 @@ export function folderName(name: string): { datedOn: string | null; person: stri
   return { datedOn: isRealDay(datedOn) ? datedOn : null, person: rest.trim() };
 }
 
+/** A calendar day that exists: 31.02 does not. */
 function isRealDay(iso: string): boolean {
-  const d = new Date(`${iso}T00:00:00Z`);
-  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === iso;
+  const [y, m, d] = iso.split('-').map(Number);
+  const t = new Date(Date.UTC(y, m - 1, d));
+  return t.getUTCFullYear() === y && t.getUTCMonth() === m - 1 && t.getUTCDate() === d;
 }
 
 /**
