@@ -583,7 +583,18 @@ export function PickupWizard() {
           <input className="input mono" placeholder={t.hand.vinSearch} aria-label={t.hand.vinSearch} value={vq} onChange={(e) => setVq(e.target.value)} disabled={f.noVin} />
           {!fleet.data && (fleet.failure ? <LoadError failure={fleet.failure} onRetry={fleet.reload} /> : <Loading rows={3} />)}
           {fleet.data && forRent.length === 0 && !f.noVin && <p className="empty">{t.hand.noAvailable}</p>}
-          <VehicleList list={forRent} chosen={f.vehicleId} disabled={f.noVin} onPick={(id) => set({ vehicleId: id, moveFromSale: false, noVin: false })} />
+          {/* What is chosen, said above the list: a moped chosen far down it, or by a contract, is not seen otherwise (Mika, 19.10.2026). */}
+          {vehicle && !f.noVin && (
+            <p className="pick-chosen">
+              <span aria-hidden="true">✓</span> {t.hand.chosenVehicle} <FleetNo n={vehicle.fleetNo} /> {vehicle.model} <Vin vin={vehicle.vin} />
+            </p>
+          )}
+          <VehicleList
+            list={vehicle && !inSale ? [vehicle, ...forRent.filter((v) => v.id !== vehicle.id)] : forRent}
+            chosen={f.vehicleId}
+            disabled={f.noVin}
+            onPick={(id) => set({ vehicleId: id, moveFromSale: false, noVin: false })}
+          />
           {forSale.length > 0 && (
             <button type="button" className="pill pill-sm" onClick={() => setShowSale(!showSale)}>
               {showSale ? t.hand.hideSale : t.hand.showSale(forSale.length)}
@@ -882,7 +893,7 @@ function VehicleList({ list, chosen, disabled, onPick }: { list: FleetRow[]; cho
     <ul className={`pick-list ${disabled ? 'dim' : ''}`}>
       {list.map((v) => (
         <li key={v.id}>
-          <button type="button" className={v.id === chosen ? 'on' : ''} disabled={disabled} onClick={() => onPick(v.id)}>
+          <button type="button" className={v.id === chosen ? 'on' : ''} aria-pressed={v.id === chosen} disabled={disabled} onClick={() => onPick(v.id)}>
             <span className="pick-main">
               <span>
                 <FleetNo n={v.fleetNo} /> {v.model}
@@ -895,7 +906,10 @@ function VehicleList({ list, chosen, disabled, onPick }: { list: FleetRow[]; cho
               </span>
               <Vin vin={v.vin} />
             </span>
-            <span className="muted">{v.pool == null ? t.hand.poolUndecided : v.location?.name ?? t.hand.noPoint}</span>
+            <span className="muted">
+              {v.id === chosen && <span className="pick-check" aria-hidden="true">✓ </span>}
+              {v.pool == null ? t.hand.poolUndecided : v.location?.name ?? t.hand.noPoint}
+            </span>
           </button>
         </li>
       ))}
