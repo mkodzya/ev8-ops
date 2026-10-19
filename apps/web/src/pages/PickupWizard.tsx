@@ -87,7 +87,7 @@ interface DrivePrefill {
   pickedUpOn: string | null;
   rateTetri: number | null;
   depositTetri: number | null;
-  vehicle: { id: string | null; vin: string; available: boolean } | null;
+  vehicle: { id: string | null; vin: string; available: boolean; state: string | null } | null;
   customer: { id: string; name: string } | null;
 }
 
@@ -571,6 +571,15 @@ export function PickupWizard() {
 
       {f.step === 1 && (
         <>
+          {/* The contract's moped, when it cannot be handed over as it stands here (ADR-0031). */}
+          {prefill.data?.vehicle && !prefill.data.vehicle.available && (
+            <p className="hint warn-text">
+              {prefill.data.vehicle.id && prefill.data.vehicle.state
+                ? t.drive.vehicleBusy(prefill.data.vehicle.vin.slice(-6), t.states[prefill.data.vehicle.state as keyof typeof t.states] ?? prefill.data.vehicle.state)
+                : t.drive.vehicleUnknown(prefill.data.vehicle.vin)}{' '}
+              {prefill.data.vehicle.id && <Link to={`/fleet/${prefill.data.vehicle.id}`}>{t.drive.openVehicle}</Link>}
+            </p>
+          )}
           <input className="input mono" placeholder={t.hand.vinSearch} aria-label={t.hand.vinSearch} value={vq} onChange={(e) => setVq(e.target.value)} disabled={f.noVin} />
           {!fleet.data && (fleet.failure ? <LoadError failure={fleet.failure} onRetry={fleet.reload} /> : <Loading rows={3} />)}
           {fleet.data && forRent.length === 0 && !f.noVin && <p className="empty">{t.hand.noAvailable}</p>}
