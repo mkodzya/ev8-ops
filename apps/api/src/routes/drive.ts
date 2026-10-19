@@ -39,7 +39,9 @@ export function driveRoutes(app: FastifyInstance): void {
     const contract = folder.files[0];
     const party = cfg && contract ? readContractParty(await pdfText(new Uint8Array(await download(cfg, contract.id)))) : null;
     const vin = party?.vin ?? contract?.vin ?? null;
-    const vehicle = vin ? await prisma.vehicle.findUnique({ where: { vin }, select: { id: true, state: true, vin: true } }) : null;
+    // The moped by its VIN — or, typed a letter or two short in the contract, by the one VIN that ends so.
+    const ends = vin && vin.length < 17 ? await prisma.vehicle.findMany({ where: { vin: { endsWith: vin } }, select: { id: true, state: true, vin: true }, take: 2 }) : [];
+    const vehicle = vin ? (vin.length === 17 ? await prisma.vehicle.findUnique({ where: { vin }, select: { id: true, state: true, vin: true } }) : ends.length === 1 ? ends[0] : null) : null;
     // A card already here for this person: by the personal number, or else by the phone's digits.
     const digits = (party?.phone ?? '').replace(/\D/g, '').slice(-9);
     const card =

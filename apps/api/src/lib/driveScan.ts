@@ -2,7 +2,7 @@ import { effectiveRentalStatus, payOffsetDays, todayISO, type RentalStatus } fro
 import { dateFromISO, isoDate } from './dates.js';
 import { prisma } from './db.js';
 import { DriveError, FOLDER, download, driveConfig, listFolder, type DriveConfig, type DriveFailure, type DriveItem } from './drive.js';
-import { fileDate, fileKind, folderName, matchFolders, pdfText, readContract, readReturnAct, type FolderToMatch, type RentalToMatch } from './driveDocs.js';
+import { fileDate, fileKind, folderName, kindOfText, matchFolders, pdfText, readContract, readReturnAct, type FolderToMatch, type RentalToMatch } from './driveDocs.js';
 import { env } from './env.js';
 
 // Reading the rentals folders in Drive, and laying them beside the rentals
@@ -83,22 +83,27 @@ export async function scanDrive(fetchFn: typeof fetch = fetch): Promise<DriveOut
           update: { name: f.name, section, webUrl: f.webViewLink, datedOn: dateFromISO(datedOn), seenAt: started },
         });
         for (const doc of await documentsOf(cfg, f, fetchFn)) {
-          const kind = fileKind(doc.name, doc.mimeType);
-          if (kind === 'skip') continue;
+          const byName = fileKind(doc.name, doc.mimeType);
+          if (byName === 'skip') continue;
           files++;
           const modifiedAt = new Date(doc.modifiedTime);
           const known = await prisma.driveFile.findUnique({ where: { id: doc.id }, select: { readModifiedAt: true } });
           await prisma.driveFile.upsert({
             where: { id: doc.id },
-            create: { id: doc.id, folderId: f.id, name: doc.name, kind, modifiedAt, webUrl: doc.webViewLink, datedOn: dateFromISO(fileDate(doc.name)), seenAt: started },
-            // A document read keeps the date read off it; a scan's date is its name's.
-            update: { folderId: f.id, name: doc.name, kind, modifiedAt, webUrl: doc.webViewLink, seenAt: started, ...(kind === 'scan' ? { datedOn: dateFromISO(fileDate(doc.name)) } : {}) },
+            create: { id: doc.id, folderId: f.id, name: doc.name, kind: byName, modifiedAt, webUrl: doc.webViewLink, datedOn: dateFromISO(fileDate(doc.name)), seenAt: started },
+            // What a document is and what it says are what was read off it: a later read of the list keeps them.
+            update: { folderId: f.id, name: doc.name, modifiedAt, webUrl: doc.webViewLink, seenAt: started },
           });
-          if (kind === 'scan' || known?.readModifiedAt?.getTime() === modifiedAt.getTime()) continue;
-          // Signify's own PDF: read its text. One that will not read is marked read, not asked for every night.
+          if (known?.readModifiedAt?.getTime() === modifiedAt.getTime()) continue;
+          // Every PDF is read once (and again when it changes): a contract named
+          // in English — «Rental agreement — …» (19.10.2026) — is Signify's too,
+          // and its text says so. A scan of paper has no text and stays a scan.
+          // One that will not read is marked read, not asked for every night.
+          let kind: 'contract' | 'return_act' | 'scan' = byName;
           let facts: Record<string, unknown> = {};
           try {
             const text = await pdfText(new Uint8Array(await download(cfg, doc.id, fetchFn)));
+            kind = kindOfText(text) ?? byName;
             if (kind === 'return_act') {
               const a = readReturnAct(text);
               facts = {
@@ -109,14 +114,14 @@ export async function scanDrive(fetchFn: typeof fetch = fetch): Promise<DriveOut
                 withheldTetri: a.withheldTetri,
                 paidBackTetri: a.paidBackTetri,
               };
-            } else {
+            } else if (kind === 'contract') {
               const c = readContract(text);
               facts = { contractOn: dateFromISO(c.signedOn), vin: c.vin };
             }
           } catch (err) {
             if (err instanceof DriveError) throw err;
           }
-          await prisma.driveFile.update({ where: { id: doc.id }, data: { ...facts, readModifiedAt: modifiedAt } });
+          await prisma.driveFile.update({ where: { id: doc.id }, data: { ...facts, kind, readModifiedAt: modifiedAt } });
           read++;
         }
       }
