@@ -744,9 +744,25 @@ model StatementLine {
   bankDeposit BankCashDeposit?
   expenseCategory ExpenseCategory? @relation(fields: [expenseCategoryId], references: [id])
   expenseRule     ExpenseRule?     @relation(fields: [expenseRuleId], references: [id])
+  expenseParts    StatementLineExpensePart[]
 
   @@unique([bank, naturalKey])
   @@map("statement_lines")
+}
+
+/// One outgoing line split into several expenses, each with its category (migration 0050, ADR-0030).
+model StatementLineExpensePart {
+  id          String @id @default(uuid()) @db.Uuid
+  lineId      String @map("line_id") @db.Uuid
+  seq         Int    @db.SmallInt
+  amountTetri Int    @map("amount_tetri")
+  categoryId  String @map("category_id") @db.Uuid
+
+  line     StatementLine   @relation(fields: [lineId], references: [id], onDelete: Cascade)
+  category ExpenseCategory @relation(fields: [categoryId], references: [id])
+
+  @@unique([lineId, seq])
+  @@map("statement_line_expense_parts")
 }
 
 /// What money going out was for (migration 0046): twelve to begin with, an owner keeps the list.
@@ -762,6 +778,7 @@ model ExpenseCategory {
 
   lines StatementLine[]
   rules ExpenseRule[]
+  parts StatementLineExpensePart[]
 
   @@map("expense_categories")
 }
