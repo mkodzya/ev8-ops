@@ -1,4 +1,4 @@
-import { formatGel } from '@ev8/shared';
+import { formatGel, parseGel } from '@ev8/shared';
 import { useState } from 'react';
 import { api } from '../../api.js';
 import { useToast } from '../../ds/feedback/Toast.js';
@@ -64,7 +64,7 @@ export function ExpenseAnswers({ line, cats, quiet }: { line: OutLine; cats: Cat
   const [open, setOpen] = useState(false);
   const [pick, setPick] = useState<string | null>(line.lastCategoryId ?? null);
   const [remember, setRemember] = useState(!!line.canRemember);
-  const [sheet, setSheet] = useState<null | 'deposit' | 'supplier'>(null);
+  const [sheet, setSheet] = useState<null | 'deposit' | 'supplier' | 'split'>(null);
   const last = line.lastCategoryId ? cats.nameOf(line.lastCategoryId) : '';
   const hint = line.depositHint ?? null;
 
@@ -141,6 +141,7 @@ export function ExpenseAnswers({ line, cats, quiet }: { line: OutLine; cats: Cat
       )}
       {sheet === 'deposit' && <DepositSheet line={line} onClose={() => setSheet(null)} />}
       {sheet === 'supplier' && <SupplierSheet line={line} onClose={() => setSheet(null)} />}
+      {sheet === 'split' && <ExpenseSplitSheet line={line} cats={cats} onClose={() => setSheet(null)} />}
       {open && (
         <div className="exp-panel">
           <p className="hint muted">{t.exp.forWhat}</p>
@@ -160,10 +161,86 @@ export function ExpenseAnswers({ line, cats, quiet }: { line: OutLine; cats: Cat
           <button type="button" className="pill pill-sm pill-accent pill-wide" disabled={busy || !pick} onClick={() => pick && void save(pick, remember && !!line.canRemember)}>
             {pick ? t.exp.save(cats.nameOf(pick)) : t.exp.chooseFirst}
           </button>
+          {/* Several things paid at once: each part its category (ADR-0030). */}
+          <button type="button" className="pill pill-sm" disabled={busy} onClick={() => setSheet('split')}>
+            {t.sort.split}
+          </button>
         </div>
       )}
       {op.failure && <p className="field-err" role="alert">{op.failure.text}</p>}
     </>
+  );
+}
+
+/** One outgoing line as several expenses, each with its category and sum (ADR-0030). */
+function ExpenseSplitSheet({ line, cats, onClose }: { line: OutLine; cats: Categories; onClose: () => void }) {
+  const t = useT();
+  const initial = { rows: [{ categoryId: '', amount: '' }, { categoryId: '', amount: '' }] };
+  const [f, setF] = useState(initial);
+  const amountOf = (text: string) => parseGel(text) ?? 0;
+  const placed = f.rows.reduce((n, r) => n + amountOf(r.amount), 0);
+  const left = line.amountTetri - placed;
+  const setRow = (i: number, patch: Partial<(typeof initial.rows)[number]>) => setF((v) => ({ rows: v.rows.map((r, j) => (j === i ? { ...r, ...patch } : r)) }));
+  // An empty sum takes what is left when it is touched.
+  const takeRest = (i: number) => {
+    if (f.rows[i].amount.trim() !== '' || left <= 0) return;
+    setRow(i, { amount: (left / 100).toFixed(2) });
+  };
+  const used = f.rows.filter((r) => r.categoryId && amountOf(r.amount) > 0);
+  return (
+    <FormSheet
+      title={t.sort.splitTitle(formatGel(line.amountTetri))}
+      onClose={onClose}
+      value={f}
+      initial={initial}
+      label={t.sort.split}
+      submit={async (key) => {
+        const parts = used.map((r) => ({ categoryId: r.categoryId, amountTetri: amountOf(r.amount) }));
+        await api.post(`/api/statement-lines/${line.id}/expense-split`, { parts }, { key });
+        return { toast: { text: t.sort.splitDone(parts.length), undo: () => api.post(`/api/statement-lines/${line.id}/restore`, {}) } };
+      }}
+    >
+      <p className="hint muted">{t.exp.splitHint}</p>
+      <div className="split-parts">
+        {f.rows.map((r, i) => (
+          <div key={i} className="split-part">
+            <div className="split-part-top">
+              <select className="input" aria-label={t.exp.partCategory} value={r.categoryId} onChange={(e) => setRow(i, { categoryId: e.target.value })}>
+                <option value="">{t.exp.partCategory}</option>
+                {cats.list.map((c) => (
+                  <option key={c.id} value={c.id} disabled={c.id !== r.categoryId && f.rows.some((x) => x.categoryId === c.id)}>
+                    {cats.nameOf(c.id)}
+                  </option>
+                ))}
+              </select>
+              <input
+                className="input mono split-amount"
+                inputMode="decimal"
+                aria-label={t.exp.partAmount}
+                value={r.amount}
+                placeholder={left > 0 ? formatGel(left, { decimals: false }) : ''}
+                onFocus={() => takeRest(i)}
+                onChange={(e) => setRow(i, { amount: e.target.value })}
+              />
+              {f.rows.length > 2 && (
+                <button type="button" className="pill pill-sm" aria-label={t.exp.removePart} onClick={() => setF((v) => ({ rows: v.rows.filter((_, j) => j !== i) }))}>
+                  ×
+                </button>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+      {f.rows.length < 9 && (
+        <button type="button" className="pill pill-sm split-more" onClick={() => setF((v) => ({ rows: [...v.rows, { categoryId: '', amount: '' }] }))}>
+          {t.exp.addPart}
+        </button>
+      )}
+      <div className="split-sum" aria-live="polite">
+        <span className="mono">{used.length > 0 ? `${used.map((r) => formatGel(amountOf(r.amount), { decimals: false })).join(' + ')} = ${formatGel(placed, { decimals: false })}` : ''}</span>
+        {left === 0 ? <span className="split-ok">{t.sort.splitAllPlaced}</span> : left > 0 ? <span>{t.sort.splitLeft(formatGel(left))}</span> : <span className="field-err">{t.sort.splitOver(formatGel(-left))}</span>}
+      </div>
+    </FormSheet>
   );
 }
 
