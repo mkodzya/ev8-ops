@@ -10,6 +10,7 @@ import { kommoLinkRu } from './kommo-link.js';
 import { bankApiRu } from './bank-api.js';
 import { calendarRu } from './payments-calendar.js';
 import { payDayRu } from './pay-day.js';
+import { driveRu } from './drive.js';
 import { expRu } from './expenses.js';
 import { inBankRu } from './in-bank.js';
 import type { Dict } from './en.js';
@@ -118,6 +119,7 @@ export const ru: Dict = {
       migration: 'Перенос',
       login: 'Вход',
       expenses: 'Расходы',
+      drive: 'Drive',
     },
   },
 
@@ -1323,6 +1325,7 @@ export const ru: Dict = {
   ...bankApiRu,
   ...calendarRu,
   ...payDayRu,
+  ...driveRu,
   ...expRu,
   ...inBankRu,
 };

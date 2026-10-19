@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { todayISO } from '@ev8/shared';
 import { reconcileBogNight, syncBogToday } from '../lib/bog.js';
 import { env } from '../lib/env.js';
+import { scanDrive } from '../lib/driveScan.js';
 import { syncKommo } from '../lib/kommo.js';
 import { rollPeriods } from '../lib/periods.js';
 import { reconcileTbcNight, syncTbcToday } from '../lib/tbc.js';
@@ -60,6 +61,15 @@ export function jobRoutes(app: FastifyInstance): void {
     if (!workerOnly(req, reply)) return reply;
     const outcome = await reconcileBogNight();
     if (outcome.status === 'failed') app.log.warn(outcome, 'bank of georgia statement did not come');
+    return outcome;
+  });
+
+  // The rentals folders in Drive, read once a night (ADR-0031). Counts and our
+  // own words for a failure; with no key it says `off` and does nothing.
+  app.post('/api/jobs/drive-scan', { config: { scope: 'public' } }, async (req, reply) => {
+    if (!workerOnly(req, reply)) return reply;
+    const outcome = await scanDrive();
+    if (outcome.status === 'failed') app.log.warn(outcome, 'drive did not answer');
     return outcome;
   });
 

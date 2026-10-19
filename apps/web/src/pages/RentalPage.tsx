@@ -71,6 +71,8 @@ export interface RentalCard {
     debtOverrideReason?: string | null;
     /** Until when an owner may take the return back (B5-08); null — not any more. */
     undoReturnUntil?: string | null;
+    /** The renter's folder, contract and return act in Drive, as last read (ADR-0031). */
+    drive?: { folderUrl: string | null; contractUrl: string | null; returnActUrl: string | null } | null;
   };
   /** What a return charged beyond the weeks: a key, days of delay (wave 3 §3.4). */
   charges: { id: string; kind: string; amountTetri: number; note: string | null; paidTetri: number }[];
@@ -379,6 +381,30 @@ export function RentalPage() {
             />
           )}
           {r.notes && <Row k={t.rental.notes} v={<span className="pre">{r.notes}</span>} />}
+          {r.drive && (
+            // Where the paper of this rental is filed (ADR-0031): Drive opens in a new tab.
+            <Row
+              k={t.drive.rentalFolder}
+              v={
+                <span>
+                  {[
+                    r.drive.contractUrl && { url: r.drive.contractUrl, label: t.drive.contract },
+                    r.drive.returnActUrl && { url: r.drive.returnActUrl, label: t.drive.returnAct },
+                    r.drive.folderUrl && { url: r.drive.folderUrl, label: t.drive.folder },
+                  ]
+                    .filter((x): x is { url: string; label: string } => !!x)
+                    .map((x, i) => (
+                      <span key={x.label}>
+                        {i > 0 && ' · '}
+                        <a href={x.url} target="_blank" rel="noreferrer">
+                          {x.label}
+                        </a>
+                      </span>
+                    ))}
+                </span>
+              }
+            />
+          )}
           {/* The front office's deal, one way only until the webhook tariff (B10-03). */}
           <Row k={t.kommo.label} v={<KommoField url={`/api/rentals/${r.id}`} value={r.kommoRef ?? null} onDone={reload} />} />
         </section>

@@ -35,6 +35,8 @@ const BOG_CRON = process.env.BOG_CRON ?? '*/5 * * * *';
 const BOG_NIGHT_CRON = process.env.BOG_NIGHT_CRON ?? '17 * * * *';
 const TBC_CRON = process.env.TBC_CRON ?? '2-59/5 * * * *';
 const TBC_NIGHT_CRON = process.env.TBC_NIGHT_CRON ?? '47 * * * *';
+// The rentals folders in Drive, read once a night (ADR-0031).
+const DRIVE_CRON = process.env.DRIVE_CRON ?? '23 3 * * *';
 const TZ = process.env.TZ ?? ORG_TZ;
 
 interface RollResult {
@@ -95,6 +97,35 @@ type BankOutcome =
       mismatched?: string[];
     }
   | { status: 'failed'; failure: string; httpStatus: number | null; stage?: string | null };
+
+type DriveOutcome =
+  | { status: 'off' }
+  | { status: 'busy' }
+  | { status: 'ok'; folders: number; files: number; read: number; matched: number }
+  | { status: 'failed'; failure: string; httpStatus: number | null };
+
+let driveSaid = '';
+
+/** Counts and our own words only: the folders are named by the renters. */
+async function readDrive(): Promise<void> {
+  let line: string;
+  try {
+    const res = await fetch(`${API}/api/jobs/drive-scan`, { method: 'POST', headers: { 'x-worker-token': TOKEN } });
+    if (!res.ok) throw new Error(`drive-scan: ${res.status}`);
+    const r = (await res.json()) as DriveOutcome;
+    if (r.status === 'busy') return;
+    line =
+      r.status === 'off'
+        ? 'the Drive link is off (no key on this stand)'
+        : r.status === 'ok'
+          ? `Drive read — ${r.folders} folder(s), ${r.files} document(s), ${r.read} read anew, ${r.matched} folder(s) with their rental`
+          : `Drive did not answer — ${r.failure}${r.httpStatus ? ` (${r.httpStatus})` : ''}`;
+  } catch (err) {
+    line = `the Drive read did not reach the API — ${(err as Error).message}`;
+  }
+  if (line !== driveSaid || line.startsWith('Drive read')) console.log(`worker: ${line}`);
+  driveSaid = line;
+}
 
 type Bank = 'bog' | 'tbc';
 const BANK_NAME: Record<Bank, string> = { bog: 'Bank of Georgia', tbc: 'TBC' };
@@ -178,8 +209,10 @@ async function main(): Promise<void> {
   await askBank('tbc', 'night');
   cron.schedule(TBC_CRON, () => void askBank('tbc', 'today'), { timezone: TZ });
   cron.schedule(TBC_NIGHT_CRON, () => void askBank('tbc', 'night'), { timezone: TZ });
+  await readDrive();
+  cron.schedule(DRIVE_CRON, () => void readDrive(), { timezone: TZ });
   console.log(
-    `worker: up — weeks roll at "${PERIODS_CRON}" ${TZ}, Kommo is asked at "${KOMMO_CRON}", Bank of Georgia at "${BOG_CRON}" and its statement at "${BOG_NIGHT_CRON}", TBC at "${TBC_CRON}" and its statement at "${TBC_NIGHT_CRON}"`,
+    `worker: up — weeks roll at "${PERIODS_CRON}" ${TZ}, Kommo is asked at "${KOMMO_CRON}", Bank of Georgia at "${BOG_CRON}" and its statement at "${BOG_NIGHT_CRON}", TBC at "${TBC_CRON}" and its statement at "${TBC_NIGHT_CRON}", Drive is read at "${DRIVE_CRON}"`,
   );
 }
 
