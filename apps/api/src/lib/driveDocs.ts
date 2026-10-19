@@ -1,6 +1,6 @@
 import { createRequire } from 'node:module';
 import { dirname } from 'node:path';
-import { looseNames, parseBankAmount } from '@ev8/shared';
+import { daysBetween, looseNames, parseBankAmount } from '@ev8/shared';
 
 // What EV8 Ops reads off the rentals folders in Drive (ADR-0031): the date and
 // the person in a folder's name, what kind of document a file is by its name,
@@ -297,7 +297,17 @@ export function sharedWords(folderPerson: string, names: (string | null)[]): num
  * the day alone never does — two rentals start on one day. The best pairs
  * are taken first.
  */
-export function matchFolders(folders: readonly FolderToMatch[], rentals: readonly RentalToMatch[]): Map<string, { rentalId: string; by: 'vin' | 'name_date' | 'name' }> {
+export function matchFolders(
+  folders: readonly FolderToMatch[],
+  rentals: readonly RentalToMatch[],
+  opts: { nameAlone?: boolean } = {},
+): Map<string, { rentalId: string; by: 'vin' | 'name_date' | 'name' }> {
+  // Among the finished folders a name alone is not enough, and a folder dated
+  // before the pickup is an older rental: a renter who comes back has one there,
+  // and it is not this rental's return (19.10.2026, production: a renter's
+  // folder of June beside his rental of October). Three days of slack for a
+  // folder named a day or two off.
+  const nameAlone = opts.nameAlone ?? true;
   const pairs: { folderId: string; rentalId: string; score: number; by: 'vin' | 'name_date' | 'name' }[] = [];
   for (const f of folders) {
     for (const r of rentals) {
@@ -310,6 +320,8 @@ export function matchFolders(folders: readonly FolderToMatch[], rentals: readonl
       if (words === 0 && !(vin && day)) continue;
       const score = words + (day ? 2 : 0) + (vin ? 3 : 0);
       if (score < 2) continue;
+      if (!nameAlone && !day && !vin) continue;
+      if (!nameAlone && f.datedOn && r.pickedUpOn && daysBetween(f.datedOn, r.pickedUpOn) > 3) continue;
       pairs.push({ folderId: f.id, rentalId: r.id, score, by: vin ? 'vin' : day ? 'name_date' : 'name' });
     }
   }
