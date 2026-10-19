@@ -19,6 +19,7 @@ import { kommoLinkEn } from './kommo-link.js';
 import { bankApiEn } from './bank-api.js';
 import { calendarEn } from './payments-calendar.js';
 import { payDayEn } from './pay-day.js';
+import { driveEn } from './drive.js';
 import { expEn } from './expenses.js';
 import { inBankEn } from './in-bank.js';
 export const en = {
@@ -114,6 +115,7 @@ export const en = {
       migration: 'Transfer',
       login: 'Sign-in',
       expenses: 'Expenses',
+      drive: 'Drive',
     },
   },
 
@@ -1326,6 +1328,7 @@ export const en = {
   ...bankApiEn,
   ...calendarEn,
   ...payDayEn,
+  ...driveEn,
   ...expEn,
   ...inBankEn,
 };

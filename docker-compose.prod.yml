@@ -119,6 +119,11 @@ services:
       TBC_CLIENT_SECRET: ${TBC_CLIENT_SECRET-}
       TBC_ACCOUNT: ${TBC_ACCOUNT-}
       TBC_BASE_URL: ${TBC_BASE_URL-}
+      # The rentals folders in Google Drive, read only (ADR-0031): the service
+      # account's JSON key and the shared folder, put in the stand's env file
+      # by deploy/set-drive-key.sh. Blank — the link is off.
+      DRIVE_SA_KEY: ${DRIVE_SA_KEY-}
+      DRIVE_ROOT: ${DRIVE_ROOT-}
     # No ports either. The browser reaches /api through the web container,
     # which is the same origin the page came from.
     depends_on:
@@ -151,6 +156,8 @@ services:
       # TBC: two minutes after each Bank of Georgia pull, its night half an hour off.
       TBC_CRON: ${TBC_CRON:-2-59/5 * * * *}
       TBC_NIGHT_CRON: ${TBC_NIGHT_CRON:-47 * * * *}
+      # The rentals folders in Drive, once a night (ADR-0031).
+      DRIVE_CRON: ${DRIVE_CRON:-23 3 * * *}
       TZ: ${TZ:-Asia/Tbilisi}
     depends_on:
       api:
