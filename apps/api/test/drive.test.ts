@@ -181,6 +181,18 @@ describe('the rentals folders in Drive: names and documents (ADR-0031)', () => {
     expect(m.get('f3')?.by).toBe('name');
   });
 
+  it('a finished folder needs the day or the VIN besides the name: a renter who came back has an older one', () => {
+    const rentals = [{ id: 'r', pickedUpOn: '2031-10-08', vin: 'HH8TEST0000000029', names: ['Shota Khachapuridze'] }];
+    const older = { id: 'old', datedOn: '2031-06-30', person: 'Khachapuridze Shota', vins: ['HH8TEST0000000021'] };
+    expect(matchFolders([older], rentals, { nameAlone: false }).size).toBe(0);
+    expect(matchFolders([older], rentals).get('old')?.rentalId).toBe('r');
+    // The same moped again: the VIN is his, but the folder is months older.
+    const sameMoped = { ...older, vins: ['HH8TEST0000000029'] };
+    expect(matchFolders([sameMoped], rentals, { nameAlone: false }).size).toBe(0);
+    const same = { id: 'same', datedOn: '2031-10-08', person: 'Khachapuridze Shota', vins: [] };
+    expect(matchFolders([older, same], rentals, { nameAlone: false }).get('same')?.rentalId).toBe('r');
+  });
+
   it('knows the two folders inside the shared one by their names', () => {
     expect(sectionOf('Aktiuri_Qiraoba')).toBe('active');
     expect(sectionOf('Dasrulebuli_Qiraoba_Depositis_dabruneba')).toBe('finished');
