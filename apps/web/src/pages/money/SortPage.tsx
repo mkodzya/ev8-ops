@@ -756,7 +756,9 @@ function AsideCard({ line, cats }: { line: AsideLine; cats: Categories }) {
         ? line.rule === 'own_transfer_auto'
           ? t.exp.ownAuto(ownWhy(t, line.reason))
           : t.exp.asideOwn
-        : t.sort.asideNotOurs(line.reason ?? '');
+        : line.resolution === 'shareholder'
+          ? t.exp.asideShareholder
+          : t.sort.asideNotOurs(line.reason ?? '');
   return (
     <article className="sort-line">
       <div className="sort-line-head">

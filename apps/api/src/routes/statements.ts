@@ -454,6 +454,20 @@ export function statementRoutes(app: FastifyInstance): void {
   });
 
   /**
+   * «Акционеру»: money a shareholder took out of the company (ADR-0029) —
+   * not an expense, and not somebody else's. Money going out only.
+   */
+  app.post<{ Params: { id: string } }>('/api/statement-lines/:id/shareholder', { config: { scope: 'payments.reconcile' } }, async (req) => {
+    const actor = actorOf(req);
+    const line = await prisma.statementLine.findUnique({ where: { id: req.params.id }, select: { direction: true } });
+    if (!line) throw notFound('line_not_found', 'No such statement line.');
+    if (line.direction !== 'out') throw conflict('not_outgoing', 'Only money going out is taken by a shareholder.');
+    await setAside(req.params.id, actor.id, 'shareholder', null);
+    await audit({ actorId: actor.id, action: 'statement.line.shareholder', entityType: 'statement_line', entityId: req.params.id });
+    return { ok: true };
+  });
+
+  /**
    * "Вернуть в очередь": a line set aside waits for a person again. Setting a
    * line aside wrote nothing but the decision, so nothing else is undone.
    */
@@ -501,7 +515,7 @@ export function statementRoutes(app: FastifyInstance): void {
 async function setAside(
   lineId: string,
   actorId: string,
-  resolution: 'not_ours' | 'company_expense' | 'own_transfer',
+  resolution: 'not_ours' | 'company_expense' | 'own_transfer' | 'shareholder',
   reason: string | null,
   categoryId: string | null = null,
   db: Prisma.TransactionClient | typeof prisma = prisma,
