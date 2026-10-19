@@ -376,7 +376,11 @@ select.input { appearance: auto; }
   min-height: var(--control); padding: 8px 14px; border-radius: 12px; border: 1px solid var(--line-control);
   background: var(--surface); color: var(--ink); font: inherit; text-align: left; cursor: pointer;
 }
-.pick-list button.on { border-color: var(--accent); background: var(--accent-soft); }
+.pick-list button.on { border-color: var(--accent); background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent); }
+.pick-list .pick-check { color: var(--accent); font-weight: 600; }
+/* The chosen moped, said above the list (the hand-over wizard). */
+.pick-chosen { margin: 8px 0 0; padding: 10px 12px; border-radius: 10px; background: var(--accent-soft); display: flex; flex-wrap: wrap; gap: 6px; align-items: baseline; }
+.pick-chosen > span:first-child { color: var(--accent); font-weight: 600; }
 .pick-list button:disabled { opacity: 0.5; cursor: default; }
 .pick-list.dim { opacity: 0.6; }
 @media (max-width: 719px) {
