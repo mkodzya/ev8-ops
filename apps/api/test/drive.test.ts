@@ -7,7 +7,7 @@ import PDFDocument from 'pdfkit';
 import { describe, expect, it } from 'vitest';
 import { HAS_DB, call, json, loginAs, uniq } from './helpers.js';
 import { assertion, driveConfig, forgetToken } from '../src/lib/drive.js';
-import { fileKind, folderName, matchFolders, pdfText, readContract, readReturnAct, sharedWords } from '../src/lib/driveDocs.js';
+import { fileKind, folderName, matchFolders, pdfText, readContract, readReturnAct, readingOrder, sharedWords } from '../src/lib/driveDocs.js';
 import { sectionOf } from '../src/lib/driveScan.js';
 
 const ACT = [
@@ -64,6 +64,47 @@ describe('the rentals folders in Drive: names and documents (ADR-0031)', () => {
     expect(readReturnAct(ACT)).toEqual({ returnedOn: '2031-11-03', contractOn: '2031-09-06', vin: 'HH8TEST0000000017', depositTetri: 18000, withheldTetri: 3000, paidBackTetri: 15000 });
     expect(readContract(CONTRACT)).toEqual({ signedOn: '2031-09-06', vin: 'HH8TEST0000000017' });
     expect(readReturnAct('nothing to read')).toEqual({ returnedOn: null, contractOn: null, vin: null, depositTetri: null, withheldTetri: null, paidBackTetri: null });
+  });
+
+  it('puts a field’s value beside its label, line by line, as the page shows them', () => {
+    expect(
+      readingOrder([
+        { x: 300, y: 702, str: '03/11/2031' },
+        { x: 72, y: 700, str: 'თარიღი:' },
+        { x: 72, y: 650, str: 'VIN:' },
+        { x: 200, y: 652, str: 'HH8TEST0000000017' },
+      ]),
+    ).toBe('თარიღი: 03/11/2031\nVIN: HH8TEST0000000017');
+  });
+
+  it('reads what Signify typed into the form fields, not only the print under them', async () => {
+    const fonts = join(import.meta.dirname, '../src/assets/fonts');
+    const doc = new PDFDocument({ size: 'A4' });
+    doc.registerFont('geo', readFileSync(join(fonts, 'NotoSansGeorgian-Regular.ttf')));
+    doc.initForm();
+    const row = (label: string, value: string, y: number, unit = '') => {
+      doc.font('geo').fontSize(11).text(label, 72, y);
+      doc.font('Helvetica').formText(`f${y}`, 330, y, 140, 14, { value });
+      if (unit) doc.font('geo').text(unit, 480, y);
+    };
+    row('დაბრუნებისა და საბოლოო ანგარიშსწორების აქტი თარიღი:', '03/11/2031', 80);
+    row('ქირავნობის ხელშეკრულების თარიღი:', '06/09/2031', 120);
+    row('VIN:', 'HH8TEST0000000017', 160);
+    row('შეტანილი დეპოზიტის ოდენობა:', '180', 200, 'ლარი');
+    row('დაკავებული თანხა:', '0', 240, 'ლარი');
+    row('მოქირავისთვის ფაქტობრივად დაბრუნებული თანხა:', '180', 280, 'ლარი');
+    doc.font('geo').text('7. დაკავებული თანხის საფუძველი', 72, 320);
+    const chunks: Buffer[] = [];
+    doc.on('data', (c: Buffer) => chunks.push(c));
+    const done = new Promise<Buffer>((resolve) => doc.on('end', () => resolve(Buffer.concat(chunks))));
+    doc.end();
+    const text = await pdfText(new Uint8Array(await done));
+    expect(readReturnAct(text)).toEqual({ returnedOn: '2031-11-03', contractOn: '2031-09-06', vin: 'HH8TEST0000000017', depositTetri: 18000, withheldTetri: 0, paidBackTetri: 18000 });
+  });
+
+  it('an empty field is nothing, not the next number on the page', () => {
+    const blank = ['აქტი თარიღი: 1. მხარეები', 'შეტანილი დეპოზიტის ოდენობა: ____ ლარი', 'დაკავებული თანხა: ____ ლარი 7. საფუძველი'].join('\n');
+    expect(readReturnAct(blank)).toMatchObject({ returnedOn: null, depositTetri: null, withheldTetri: null });
   });
 
   it('reads the same off a PDF with text', async () => {

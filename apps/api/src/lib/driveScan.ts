@@ -91,7 +91,8 @@ export async function scanDrive(fetchFn: typeof fetch = fetch): Promise<DriveOut
           await prisma.driveFile.upsert({
             where: { id: doc.id },
             create: { id: doc.id, folderId: f.id, name: doc.name, kind, modifiedAt, webUrl: doc.webViewLink, datedOn: dateFromISO(fileDate(doc.name)), seenAt: started },
-            update: { folderId: f.id, name: doc.name, kind, modifiedAt, webUrl: doc.webViewLink, datedOn: dateFromISO(fileDate(doc.name)), seenAt: started },
+            // A document read keeps the date read off it; a scan's date is its name's.
+            update: { folderId: f.id, name: doc.name, kind, modifiedAt, webUrl: doc.webViewLink, seenAt: started, ...(kind === 'scan' ? { datedOn: dateFromISO(fileDate(doc.name)) } : {}) },
           });
           if (kind === 'scan' || known?.readModifiedAt?.getTime() === modifiedAt.getTime()) continue;
           // Signify's own PDF: read its text. One that will not read is marked read, not asked for every night.
