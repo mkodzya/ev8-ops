@@ -3,6 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import { dayOf, isoDate } from '../lib/dates.js';
 import { debtsOf, rentalDueToday } from '../lib/debt.js';
 import { UNDO_RETURN_MS } from '../lib/rentals.js';
+import { driveOfRental } from '../lib/driveScan.js';
 import { payOffsetOf, rentStateOf } from '../lib/rentState.js';
 import { prisma } from '../lib/db.js';
 import { env } from '../lib/env.js';
@@ -144,6 +145,8 @@ export function rentalRoutes(app: FastifyInstance): void {
         debtOverrideReason: r.debtOverrideReason,
         // A return may be taken back by an owner within a day of the act (B5-08).
         undoReturnUntil: returnUndoUntil(r.acts),
+        // The renter's folder and contract in Drive, as last read (ADR-0031); null — none found.
+        drive: await driveOfRental(r.id),
       },
       // What the return charged beyond the weeks, and what is still open (§3.7, B5-08).
       charges: r.charges.map((c) => ({ id: c.id, kind: c.kind, amountTetri: c.amountTetri, note: c.note, paidTetri: c.allocations.reduce((n, a) => n + a.amountTetri, 0) })),

@@ -32,6 +32,7 @@ import { LoginSettingsPage, RentalSettingsPage, SettingsPage } from './pages/Set
 import { JournalPage } from './pages/JournalPage.js';
 import { MigrationPage } from './pages/MigrationPage.js';
 import { KommoPage } from './pages/KommoPage.js';
+import { DrivePage } from './pages/DrivePage.js';
 import { RentalPage } from './pages/RentalPage.js';
 import { ReturnWizard } from './pages/ReturnWizard.js';
 import { PurchasePage } from './pages/PurchasePage.js';
@@ -186,6 +187,7 @@ export function App() {
         {/* Kommo against the rentals here (ADR-0012): opened from its row in
             "Today", in no menu — with the link off there is nothing on it. */}
         <Route path="settings/kommo" element={<Require perm="users.manage"><KommoPage /></Require>} />
+        <Route path="settings/drive" element={<Require perm="users.manage"><DrivePage /></Require>} />
         {/* The design catalogue is a review surface, not an operating screen:
             the owner reads it by address, it is in no menu. */}
         <Route path="design" element={<Require perm="users.manage"><DesignPage /></Require>} />

@@ -10,6 +10,7 @@ import { kommoLinkRu } from './kommo-link.js';
 import { bankApiRu } from './bank-api.js';
 import { calendarRu } from './payments-calendar.js';
 import { payDayRu } from './pay-day.js';
+import { driveRu } from './drive.js';
 import { expRu } from './expenses.js';
 import { inBankRu } from './in-bank.js';
 import type { Dict } from './en.js';
@@ -118,6 +119,7 @@ export const ru: Dict = {
       migration: 'Перенос',
       login: 'Вход',
       expenses: 'Расходы',
+      drive: 'Drive',
     },
   },
 
@@ -1206,6 +1208,7 @@ export const ru: Dict = {
       closed_before_opened: 'Ремонт не может закрыться раньше дня открытия.',
       customer_mismatch: 'Эта аренда другого клиента. Выберите аренду этого клиента.',
       customer_not_found: 'Клиент не найден.',
+      drive_folder_not_found: 'Этой папки больше нет в копии Drive — прочитайте Drive снова.',
       demo_login_off: 'Демо-учётки на этом стенде отключены.',
       deposit_decision_forbidden: 'Решение по залогу принимает владелец.',
       deposit_not_found: 'У этой аренды нет залога.',
@@ -1323,6 +1326,7 @@ export const ru: Dict = {
   ...bankApiRu,
   ...calendarRu,
   ...payDayRu,
+  ...driveRu,
   ...expRu,
   ...inBankRu,
 };

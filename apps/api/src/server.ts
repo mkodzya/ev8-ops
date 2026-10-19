@@ -39,6 +39,7 @@ import { migrationRoutes } from './routes/migration.js';
 import { userRoutes } from './routes/users.js';
 import { siteRoutes } from './routes/site.js';
 import { kommoRoutes } from './routes/kommo.js';
+import { driveRoutes } from './routes/drive.js';
 
 export function buildApp(): FastifyInstance {
   const app = Fastify({
@@ -108,6 +109,7 @@ export function buildApp(): FastifyInstance {
   searchRoutes(app);
   siteRoutes(app);
   kommoRoutes(app);
+  driveRoutes(app);
 
   return app;
 }

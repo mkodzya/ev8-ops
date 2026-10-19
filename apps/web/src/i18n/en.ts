@@ -19,6 +19,7 @@ import { kommoLinkEn } from './kommo-link.js';
 import { bankApiEn } from './bank-api.js';
 import { calendarEn } from './payments-calendar.js';
 import { payDayEn } from './pay-day.js';
+import { driveEn } from './drive.js';
 import { expEn } from './expenses.js';
 import { inBankEn } from './in-bank.js';
 export const en = {
@@ -114,6 +115,7 @@ export const en = {
       migration: 'Transfer',
       login: 'Sign-in',
       expenses: 'Expenses',
+      drive: 'Drive',
     },
   },
 
@@ -1209,6 +1211,7 @@ export const en = {
       closed_before_opened: 'A repair cannot close before the day it was opened.',
       customer_mismatch: 'That rental belongs to a different customer. Pick this customer’s own rental.',
       customer_not_found: 'Customer not found.',
+      drive_folder_not_found: 'That folder is no longer in the copy of Drive — read Drive again.',
       demo_login_off: 'Demo logins are switched off on this stand.',
       deposit_decision_forbidden: 'Only an owner decides on a deposit.',
       deposit_not_found: 'This rental has no deposit.',
@@ -1326,6 +1329,7 @@ export const en = {
   ...bankApiEn,
   ...calendarEn,
   ...payDayEn,
+  ...driveEn,
   ...expEn,
   ...inBankEn,
 };

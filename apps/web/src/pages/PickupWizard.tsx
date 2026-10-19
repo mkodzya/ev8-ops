@@ -77,6 +77,20 @@ async function photoBody(p: PreparedPhoto | null) {
 
 // Hand-over in six screens and "Done" (wave 3 §3.1): customer → moped → terms →
 // act → payment → summary. One button at the end writes all of it under one key.
+/** What a contract in Drive fills the wizard with (ADR-0031): `GET /api/drive/folders/:id/prefill`. */
+interface DrivePrefill {
+  folder: { id: string; name: string; url: string | null };
+  fromContract: boolean;
+  name: string | null;
+  personalId: string | null;
+  phone: string | null;
+  pickedUpOn: string | null;
+  rateTetri: number | null;
+  depositTetri: number | null;
+  vehicle: { id: string | null; vin: string; available: boolean; state: string | null } | null;
+  customer: { id: string; name: string } | null;
+}
+
 export function PickupWizard() {
   const t = useT();
   const [params] = useSearchParams();
@@ -89,6 +103,9 @@ export function PickupWizard() {
   const presetCustomer = params.get('customer');
   // Started from a deal in "Today" (ADR-0015): the rental keeps the deal's link.
   const fromLead = params.get('lead');
+  // Started from a contract in Drive with no rental here (ADR-0031): filled in from it.
+  const fromDrive = params.get('drive');
+  const prefill = useLoad<DrivePrefill>(fromDrive ? `/api/drive/folders/${encodeURIComponent(fromDrive)}/prefill` : null);
 
   const customers = useLoad<{ customers: CustomerRow[] }>('/api/customers');
   const fleet = useLoad<{ vehicles: FleetRow[] }>('/api/fleet');
@@ -174,6 +191,31 @@ export function PickupWizard() {
     set({ deposit: gel(settings.data.depositTetri), depositBefore: gel(settings.data.depositTetri) });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settings.data?.depositTetri]);
+
+  // The contract in Drive fills the wizard once, when it has been read: a
+  // card here if the person has one, else a new one; the moped by its VIN if
+  // it is free; the day, and for a day before today the carry-over of a
+  // running rental; the rate and the deposit the contract names. A person
+  // checks each field before going on; the ID photo is still theirs to add.
+  const [prefilled, setPrefilled] = useState(false);
+  useEffect(() => {
+    const p = prefill.data;
+    if (!p || prefilled) return;
+    setPrefilled(true);
+    const patch: Partial<typeof start> = {};
+    if (p.customer) Object.assign(patch, { customerId: p.customer.id, creating: false });
+    else Object.assign(patch, { creating: true, ncName: p.name ?? '', ...(p.phone ? { ncPhone: formatPhone(p.phone) } : {}) });
+    if (p.vehicle?.id && p.vehicle.available) patch.vehicleId = p.vehicle.id;
+    if (p.pickedUpOn && p.pickedUpOn <= today) Object.assign(patch, { pickedUpOn: p.pickedUpOn, ...(owner && p.pickedUpOn < today ? { transfer: true } : {}) });
+    if (p.rateTetri) Object.assign(patch, { rate: gel(p.rateTetri), rateTouched: true });
+    if (p.depositTetri != null) {
+      Object.assign(patch, { deposit: gel(p.depositTetri), depositBefore: gel(p.depositTetri) });
+      setDepositTouched(true);
+    }
+    set(patch);
+    if (!p.customer && p.personalId) setNcPersonalId(p.personalId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefill.data]);
 
   // The model's rate, until somebody types another (B4-05).
   useEffect(() => {
@@ -377,6 +419,14 @@ export function PickupWizard() {
     >
       {f.step === 0 && (
         <>
+          {fromDrive &&
+            (prefill.data ? (
+              <p className="hint">{prefill.data.fromContract ? t.drive.prefilled(prefill.data.folder.name) : t.drive.prefilledScan(prefill.data.folder.name)}</p>
+            ) : prefill.failure ? (
+              <LoadError failure={prefill.failure} onRetry={prefill.reload} />
+            ) : (
+              <p className="hint muted">{t.drive.prefillLoading}</p>
+            ))}
           {!f.creating && (
             <>
               <input className="input" placeholder={t.hand.searchHint} aria-label={t.hand.search} value={q} onChange={(e) => setQ(e.target.value)} autoFocus />
@@ -521,10 +571,30 @@ export function PickupWizard() {
 
       {f.step === 1 && (
         <>
+          {/* The contract's moped, when it cannot be handed over as it stands here (ADR-0031). */}
+          {prefill.data?.vehicle && !prefill.data.vehicle.available && (
+            <p className="hint warn-text">
+              {prefill.data.vehicle.id && prefill.data.vehicle.state
+                ? t.drive.vehicleBusy(prefill.data.vehicle.vin.slice(-6), t.states[prefill.data.vehicle.state as keyof typeof t.states] ?? prefill.data.vehicle.state)
+                : t.drive.vehicleUnknown(prefill.data.vehicle.vin)}{' '}
+              {prefill.data.vehicle.id && <Link to={`/fleet/${prefill.data.vehicle.id}`}>{t.drive.openVehicle}</Link>}
+            </p>
+          )}
           <input className="input mono" placeholder={t.hand.vinSearch} aria-label={t.hand.vinSearch} value={vq} onChange={(e) => setVq(e.target.value)} disabled={f.noVin} />
           {!fleet.data && (fleet.failure ? <LoadError failure={fleet.failure} onRetry={fleet.reload} /> : <Loading rows={3} />)}
           {fleet.data && forRent.length === 0 && !f.noVin && <p className="empty">{t.hand.noAvailable}</p>}
-          <VehicleList list={forRent} chosen={f.vehicleId} disabled={f.noVin} onPick={(id) => set({ vehicleId: id, moveFromSale: false, noVin: false })} />
+          {/* What is chosen, said above the list: a moped chosen far down it, or by a contract, is not seen otherwise (Mika, 19.10.2026). */}
+          {vehicle && !f.noVin && (
+            <p className="pick-chosen">
+              <span aria-hidden="true">✓</span> {t.hand.chosenVehicle} <FleetNo n={vehicle.fleetNo} /> {vehicle.model} <Vin vin={vehicle.vin} />
+            </p>
+          )}
+          <VehicleList
+            list={vehicle && !inSale ? [vehicle, ...forRent.filter((v) => v.id !== vehicle.id)] : forRent}
+            chosen={f.vehicleId}
+            disabled={f.noVin}
+            onPick={(id) => set({ vehicleId: id, moveFromSale: false, noVin: false })}
+          />
           {forSale.length > 0 && (
             <button type="button" className="pill pill-sm" onClick={() => setShowSale(!showSale)}>
               {showSale ? t.hand.hideSale : t.hand.showSale(forSale.length)}
@@ -823,7 +893,7 @@ function VehicleList({ list, chosen, disabled, onPick }: { list: FleetRow[]; cho
     <ul className={`pick-list ${disabled ? 'dim' : ''}`}>
       {list.map((v) => (
         <li key={v.id}>
-          <button type="button" className={v.id === chosen ? 'on' : ''} disabled={disabled} onClick={() => onPick(v.id)}>
+          <button type="button" className={v.id === chosen ? 'on' : ''} aria-pressed={v.id === chosen} disabled={disabled} onClick={() => onPick(v.id)}>
             <span className="pick-main">
               <span>
                 <FleetNo n={v.fleetNo} /> {v.model}
@@ -836,7 +906,10 @@ function VehicleList({ list, chosen, disabled, onPick }: { list: FleetRow[]; cho
               </span>
               <Vin vin={v.vin} />
             </span>
-            <span className="muted">{v.pool == null ? t.hand.poolUndecided : v.location?.name ?? t.hand.noPoint}</span>
+            <span className="muted">
+              {v.id === chosen && <span className="pick-check" aria-hidden="true">✓ </span>}
+              {v.pool == null ? t.hand.poolUndecided : v.location?.name ?? t.hand.noPoint}
+            </span>
           </button>
         </li>
       ))}

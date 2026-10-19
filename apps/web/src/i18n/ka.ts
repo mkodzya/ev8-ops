@@ -10,6 +10,7 @@ import { kommoLinkKa } from './kommo-link.js';
 import { bankApiKa } from './bank-api.js';
 import { calendarKa } from './payments-calendar.js';
 import { payDayKa } from './pay-day.js';
+import { driveKa } from './drive.js';
 import { expKa } from './expenses.js';
 import { inBankKa } from './in-bank.js';
 import type { Dict } from './en.js';
@@ -107,6 +108,7 @@ export const ka: Dict = {
       migration: 'გადმოტანა',
       login: 'შესვლა',
       expenses: 'ხარჯები',
+      drive: 'Drive',
     },
   },
 
@@ -1195,6 +1197,7 @@ export const ka: Dict = {
       closed_before_opened: 'რემონტი არ შეიძლება დაიხუროს გახსნის დღემდე.',
       customer_mismatch: 'ეს იჯარა სხვა კლიენტისაა. აირჩიეთ ამ კლიენტის იჯარა.',
       customer_not_found: 'კლიენტი ვერ მოიძებნა.',
+      drive_folder_not_found: 'ეს საქაღალდე Drive-ის ასლში აღარ არის — წაიკითხეთ Drive თავიდან.',
       demo_login_off: 'დემო ანგარიშები ამ სტენდზე გამორთულია.',
       deposit_decision_forbidden: 'გირაოს შესახებ გადაწყვეტას იღებს მფლობელი.',
       deposit_not_found: 'ამ იჯარას გირაო არ აქვს.',
@@ -1312,6 +1315,7 @@ export const ka: Dict = {
   ...bankApiKa,
   ...calendarKa,
   ...payDayKa,
+  ...driveKa,
   ...expKa,
   ...inBankKa,
 };

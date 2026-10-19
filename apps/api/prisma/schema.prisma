@@ -462,6 +462,7 @@ model Rental {
 
   customer  Customer       @relation(fields: [customerId], references: [id])
   vehicle   Vehicle?       @relation("rental_vehicle", fields: [vehicleId], references: [id])
+  driveFolders DriveFolder[]
   createdBy User?          @relation("rental_created_by", fields: [createdById], references: [id])
   periods   RentalPeriod[]
   deposit   Deposit?
@@ -1282,3 +1283,57 @@ model TbcSync {
 
   @@map("tbc_sync")
 }
+
+/// A renter's folder in the rentals folders of Drive, as last read (migration 0051, ADR-0031).
+model DriveFolder {
+  id        String    @id
+  name      String
+  section   String
+  webUrl    String?   @map("web_url")
+  datedOn   DateTime? @map("dated_on") @db.Date
+  rentalId  String?   @map("rental_id") @db.Uuid
+  matchedBy String?   @map("matched_by")
+  seenAt    DateTime  @default(now()) @map("seen_at")
+
+  rental Rental?     @relation(fields: [rentalId], references: [id], onDelete: SetNull)
+  files  DriveFile[]
+
+  @@index([rentalId])
+  @@map("drive_folders")
+}
+
+/// A document in a renter's folder; what a Signify PDF says, once read (migration 0051).
+model DriveFile {
+  id             String    @id
+  folderId       String    @map("folder_id")
+  name           String
+  kind           String
+  modifiedAt     DateTime  @map("modified_at")
+  webUrl         String?   @map("web_url")
+  readModifiedAt DateTime? @map("read_modified_at")
+  datedOn        DateTime? @map("dated_on") @db.Date
+  contractOn     DateTime? @map("contract_on") @db.Date
+  vin            String?
+  depositTetri   Int?      @map("deposit_tetri")
+  withheldTetri  Int?      @map("withheld_tetri")
+  paidBackTetri  Int?      @map("paid_back_tetri")
+  seenAt         DateTime  @default(now()) @map("seen_at")
+
+  folder DriveFolder @relation(fields: [folderId], references: [id], onDelete: Cascade)
+
+  @@index([folderId])
+  @@map("drive_files")
+}
+
+/// How the last read of Drive went (migration 0051).
+model DriveSync {
+  id        Int       @id @default(1) @db.SmallInt
+  lastTryAt DateTime? @map("last_try_at")
+  lastOkAt  DateTime? @map("last_ok_at")
+  failure   String?
+  folders   Int       @default(0)
+  files     Int       @default(0)
+
+  @@map("drive_sync")
+}
+

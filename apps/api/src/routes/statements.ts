@@ -1,4 +1,4 @@
-import { daysBetween, todayISO } from '@ev8/shared';
+import { daysBetween, nameMatches, todayISO } from '@ev8/shared';
 import type { FastifyInstance } from 'fastify';
 import type { Prisma } from '../generated/prisma/client.js';
 import { audit } from '../lib/audit.js';
@@ -133,7 +133,19 @@ export function statementRoutes(app: FastifyInstance): void {
     // "Как в прошлый раз" for money going out (migration 0046).
     const last = direction === 'in' ? new Map<string, string>() : await lastCategories();
     // A line going out of exactly a deposit we owe back looks like that deposit handed back.
-    const toHandBack = direction === 'in' ? [] : (await depositsOverview()).deposits.filter((d) => d.toHandBackTetri > 0).map((d) => ({ rentalId: d.rentalId, number: d.number, tetri: d.toHandBackTetri }));
+    const toHandBack =
+      direction === 'in'
+        ? []
+        : (await depositsOverview()).deposits.filter((d) => d.toHandBackTetri > 0).map((d) => ({ rentalId: d.rentalId, number: d.number, tetri: d.toHandBackTetri, names: [d.customer.name, d.customer.nameKa, d.customer.nameLat] }));
+    // Of the deposits owed back in exactly this sum, the one whose renter the
+    // bank names — or the only one there is. Two of one sum and no name: no
+    // guess (Mika, 19.10.2026: which deposit is this money?).
+    const depositFor = (l: { amountTetri: number; payer: string | null; purpose: string | null }) => {
+      const same = toHandBack.filter((d) => d.tetri === l.amountTetri);
+      const text = [l.payer, l.purpose].filter(Boolean).join(' ');
+      const named = text ? same.filter((d) => nameMatches(text, d.names)) : [];
+      return named.length === 1 ? named[0] : same.length === 1 ? same[0] : null;
+    };
     return {
       counts: { in: counts.find((c) => c.direction === 'in')?._count._all ?? 0, out: counts.find((c) => c.direction === 'out')?._count._all ?? 0 },
       byRulesWeek: byRules + byExpenseRules,
@@ -143,7 +155,7 @@ export function statementRoutes(app: FastifyInstance): void {
         const hints = suggest(line, ctx);
         const key = l.direction === 'out' ? expenseKey(l) : null;
         const lastCategoryId = key ? last.get(key) ?? null : null;
-        const deposit = l.direction === 'out' ? toHandBack.find((d) => d.tetri === l.amountTetri) ?? null : null;
+        const deposit = l.direction === 'out' ? depositFor(l) : null;
         return {
           id: l.id,
           bank: l.bank,

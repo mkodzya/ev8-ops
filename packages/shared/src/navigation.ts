@@ -104,6 +104,7 @@ export type TabId =
   | 'migration'
   | 'login'
   | 'expenses'
+  | 'drive'
   | 'orders'
   | 'suppliers';
 
@@ -150,6 +151,8 @@ export const SECTION_TABS: Partial<Record<SectionId, readonly { id: TabId; path:
     { id: 'rental', path: '/settings/rental', anyOf: ['settings.manage'] },
     // What money going out was for (migration 0046).
     { id: 'expenses', path: '/settings/expenses', anyOf: ['settings.manage'] },
+    // The rentals folders in Google Drive beside the rentals here (ADR-0031).
+    { id: 'drive', path: '/settings/drive', anyOf: ['users.manage'] },
     { id: 'journal', path: '/settings/journal', anyOf: ['users.manage'] },
     { id: 'migration', path: '/settings/migration', anyOf: ['users.manage'] },
     { id: 'login', path: '/settings/login', anyOf: ['users.manage'] },
