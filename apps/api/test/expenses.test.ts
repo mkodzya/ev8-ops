@@ -41,6 +41,8 @@ describe.skipIf(!HAS_DB)('what money going out was for', () => {
     const owner = await loginAs('owner');
     const names = (await categories(owner)).map((c) => c.nameRu);
     for (const n of ['Налоги', 'Взносы за сотрудников', 'Коммунальные', 'Банк и терминал', 'Прочее']) expect(names).toContain(n);
+    // The five 0048 added are taken out again by 0049: the list is the owner's.
+    for (const n of ['Пенсионный фонд', 'Расчёт по НДС', 'Подоходный налог']) expect(names).not.toContain(n);
     const manager = await loginAs('manager');
     expect((await call(manager, 'POST', '/api/expense-categories', { nameRu: `ТЕСТ ${uniq()}` })).statusCode).toBe(403);
     const name = `ТЕСТ категория ${uniq()}`;

@@ -720,6 +720,8 @@ interface AsideLine {
   resolution: 'not_ours' | 'company_expense' | 'own_transfer' | string | null;
   /** The rule that answered when the stand did it itself — `own_transfer_auto` (ADR-0028). */
   rule?: string | null;
+  /** An expense split into parts (ADR-0030); absent while an older API answers. */
+  parts?: { categoryId: string; amountTetri: number }[];
   /** What an expense was for (migration 0046); absent while an older API answers. */
   categoryId?: string | null;
   reason: string | null;
@@ -749,14 +751,18 @@ function AsideCard({ line, cats }: { line: AsideLine; cats: Categories }) {
   const op = useOperation();
   const why =
     line.resolution === 'company_expense'
-      ? line.categoryId
+      ? line.parts && line.parts.length > 0
+        ? t.exp.asideSplit(line.parts.map((p) => `${cats.nameOf(p.categoryId)} ${formatGel(p.amountTetri)}`).join(' · '))
+        : line.categoryId
         ? t.exp.asideExpense(cats.nameOf(line.categoryId))
         : t.sort.asideExpense
       : line.resolution === 'own_transfer'
         ? line.rule === 'own_transfer_auto'
           ? t.exp.ownAuto(ownWhy(t, line.reason))
           : t.exp.asideOwn
-        : t.sort.asideNotOurs(line.reason ?? '');
+        : line.resolution === 'shareholder'
+          ? t.exp.asideShareholder
+          : t.sort.asideNotOurs(line.reason ?? '');
   return (
     <article className="sort-line">
       <div className="sort-line-head">

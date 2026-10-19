@@ -17,6 +17,8 @@ interface Report {
   depositsBack: number;
   suppliers: number;
   ownTransfers: number;
+  /** Taken out by a shareholder (ADR-0029); absent while an older API answers. */
+  shareholder?: number;
   otherPaid: number;
   unsorted: number;
   unsortedLines: number;
@@ -46,6 +48,7 @@ export function ExpensesReportPage() {
         { key: 'deposits', label: t.exp.depositsBack, tetri: data.depositsBack },
         { key: 'suppliers', label: t.exp.suppliers, tetri: data.suppliers },
         { key: 'own', label: t.exp.ownTransfers, tetri: data.ownTransfers },
+        { key: 'shareholder', label: t.exp.shareholders, tetri: data.shareholder ?? 0 },
         { key: 'other', label: t.exp.otherPaid, tetri: data.otherPaid },
       ].filter((r) => r.tetri > 0)
     : [];

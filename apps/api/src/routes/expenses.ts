@@ -88,21 +88,35 @@ export function expenseRoutes(app: FastifyInstance): void {
     if (from > to) throw badRequest('bad_period', 'The period starts after it ends.', { field: 'from' });
     const lines = await prisma.statementLine.findMany({
       where: { direction: 'out', occurredOn: { gte: dateFromISO(from)!, lte: dateFromISO(to)! } },
-      select: { amountTetri: true, status: true, resolution: true, expenseCategoryId: true, payments: { where: { voidedAt: null }, select: { kind: true, grossTetri: true } } },
+      select: {
+        amountTetri: true,
+        status: true,
+        resolution: true,
+        expenseCategoryId: true,
+        expenseParts: { select: { amountTetri: true, categoryId: true } },
+        payments: { where: { voidedAt: null }, select: { kind: true, grossTetri: true } },
+      },
     });
     const byCategory = new Map<string | null, { tetri: number; lines: number }>();
-    const other = { depositsBack: 0, suppliers: 0, ownTransfers: 0, unsorted: 0, unsortedLines: 0, otherPaid: 0 };
+    const other = { depositsBack: 0, suppliers: 0, ownTransfers: 0, shareholder: 0, unsorted: 0, unsortedLines: 0, otherPaid: 0 };
     for (const l of lines) {
       if (l.status === 'unmatched') {
         other.unsorted += l.amountTetri;
         other.unsortedLines++;
       } else if (l.resolution === 'company_expense') {
-        const row = byCategory.get(l.expenseCategoryId) ?? { tetri: 0, lines: 0 };
-        row.tetri += l.amountTetri;
-        row.lines++;
-        byCategory.set(l.expenseCategoryId, row);
+        // A line split into expenses counts each part in its category (ADR-0030).
+        const pieces = l.expenseParts.length > 0 ? l.expenseParts.map((p) => ({ categoryId: p.categoryId as string | null, tetri: p.amountTetri })) : [{ categoryId: l.expenseCategoryId, tetri: l.amountTetri }];
+        for (const piece of pieces) {
+          const row = byCategory.get(piece.categoryId) ?? { tetri: 0, lines: 0 };
+          row.tetri += piece.tetri;
+          row.lines++;
+          byCategory.set(piece.categoryId, row);
+        }
       } else if (l.resolution === 'own_transfer') {
         other.ownTransfers += l.amountTetri;
+      } else if (l.resolution === 'shareholder') {
+        // Taken out by a shareholder (ADR-0029): left the accounts, not spent.
+        other.shareholder += l.amountTetri;
       } else if (l.status === 'matched') {
         const kind = l.payments[0]?.kind;
         if (kind === 'deposit_payout') other.depositsBack += l.amountTetri;
@@ -118,7 +132,7 @@ export function expenseRoutes(app: FastifyInstance): void {
       categories,
       expensesTetri,
       ...other,
-      totalOutTetri: expensesTetri + other.depositsBack + other.suppliers + other.ownTransfers + other.otherPaid + other.unsorted,
+      totalOutTetri: expensesTetri + other.depositsBack + other.suppliers + other.ownTransfers + other.shareholder + other.otherPaid + other.unsorted,
     };
   });
 }

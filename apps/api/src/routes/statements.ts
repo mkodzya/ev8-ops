@@ -242,6 +242,7 @@ export function statementRoutes(app: FastifyInstance): void {
       where: { status: 'ignored', OR: [{ matchedRule: null }, { matchedRule: { not: 'expense_rule' } }], resolvedAt: { gte: new Date(Date.now() - days * 24 * 3600_000) } },
       orderBy: [{ resolvedAt: 'desc' }],
       take: 300,
+      include: { expenseParts: { orderBy: { seq: 'asc' }, select: { categoryId: true, amountTetri: true } } },
     });
     const people = await prisma.user.findMany({ where: { id: { in: [...new Set(lines.map((l) => l.resolvedById).filter((x): x is string => x != null))] } }, select: { id: true, name: true } });
     const who = new Map(people.map((u) => [u.id, u.name]));
@@ -262,6 +263,8 @@ export function statementRoutes(app: FastifyInstance): void {
           purpose: l.purpose,
           raw: l.raw,
           resolution: l.resolution,
+          // An expense split into parts (ADR-0030): each part's category and sum.
+          parts: l.expenseParts.map((p) => ({ categoryId: p.categoryId, amountTetri: p.amountTetri })),
           // Who answered: a rule's name when the stand did it itself (`own_transfer_auto`, ADR-0028).
           rule: l.matchedRule,
           categoryId: l.expenseCategoryId,
@@ -392,6 +395,38 @@ export function statementRoutes(app: FastifyInstance): void {
   });
 
   /**
+   * One outgoing line as several expenses (ADR-0030): two to nine parts, each
+   * with its category and sum; together they are the whole line. No payee is
+   * remembered — the next line from it may be split differently.
+   */
+  app.post<{ Params: { id: string }; Body: Body }>('/api/statement-lines/:id/expense-split', { config: { scope: 'payments.reconcile' } }, async (req) => {
+    const actor = actorOf(req);
+    const raw = (req.body ?? {}).parts;
+    if (!Array.isArray(raw) || raw.length === 0) throw badRequest('missing_field', 'Say what each part was for.', { field: 'parts' });
+    if (raw.length < 2) throw badRequest('split_needs_two', 'A split has at least two parts.');
+    if (raw.length > SPLIT_MAX) throw badRequest('split_too_many', `A split has at most ${SPLIT_MAX} parts.`);
+    const parts = raw.map((x) => {
+      const b = (x ?? {}) as Body;
+      const amountTetri = tetri(b, 'amountTetri', { required: true, min: 1 })!;
+      return { amountTetri, categoryId: str(b, 'categoryId', { required: true })! };
+    });
+    if (new Set(parts.map((p) => p.categoryId)).size !== parts.length) throw badRequest('split_same_target', 'Two parts have the same category: make them one.');
+    const line = await prisma.statementLine.findUnique({ where: { id: req.params.id }, select: { direction: true, amountTetri: true } });
+    if (!line) throw notFound('line_not_found', 'No such statement line.');
+    if (line.direction !== 'out') throw conflict('incoming_line', 'Money coming in is not a company expense.');
+    const sum = parts.reduce((n, p) => n + p.amountTetri, 0);
+    if (sum !== line.amountTetri) throw badRequest('split_sum', 'The parts must add up to the whole line.', { lineTetri: line.amountTetri, partsTetri: sum });
+    const live = await prisma.expenseCategory.count({ where: { id: { in: parts.map((p) => p.categoryId) }, archived: false } });
+    if (live !== parts.length) throw notFound('category_not_found', 'No such expense category.');
+    await prisma.$transaction(async (tx) => {
+      await setAside(req.params.id, actor.id, 'company_expense', null, null, tx);
+      await tx.statementLineExpensePart.createMany({ data: parts.map((p, i) => ({ lineId: req.params.id, seq: i + 1, amountTetri: p.amountTetri, categoryId: p.categoryId })) });
+    });
+    await audit({ actorId: actor.id, action: 'statement.line.expense_split', entityType: 'statement_line', entityId: req.params.id, after: { parts } });
+    return { ok: true };
+  });
+
+  /**
    * "Отменить" right after «Записать»: the line waits again, and so do the
    * lines the remembered payee sorted in the same tap; the rule is forgotten.
    */
@@ -454,6 +489,20 @@ export function statementRoutes(app: FastifyInstance): void {
   });
 
   /**
+   * «Акционеру»: money a shareholder took out of the company (ADR-0029) —
+   * not an expense, and not somebody else's. Money going out only.
+   */
+  app.post<{ Params: { id: string } }>('/api/statement-lines/:id/shareholder', { config: { scope: 'payments.reconcile' } }, async (req) => {
+    const actor = actorOf(req);
+    const line = await prisma.statementLine.findUnique({ where: { id: req.params.id }, select: { direction: true } });
+    if (!line) throw notFound('line_not_found', 'No such statement line.');
+    if (line.direction !== 'out') throw conflict('not_outgoing', 'Only money going out is taken by a shareholder.');
+    await setAside(req.params.id, actor.id, 'shareholder', null);
+    await audit({ actorId: actor.id, action: 'statement.line.shareholder', entityType: 'statement_line', entityId: req.params.id });
+    return { ok: true };
+  });
+
+  /**
    * "Вернуть в очередь": a line set aside waits for a person again. Setting a
    * line aside wrote nothing but the decision, so nothing else is undone.
    */
@@ -466,6 +515,8 @@ export function statementRoutes(app: FastifyInstance): void {
       data: { status: 'unmatched', matchedRule: null, resolution: null, resolutionReason: null, resolvedById: null, resolvedAt: null, expenseCategoryId: null, expenseRuleId: null },
     });
     if (done.count === 0) throw conflict('not_set_aside', 'This line is not set aside.');
+    // A line split into expenses waits again whole (ADR-0030).
+    await prisma.statementLineExpensePart.deleteMany({ where: { lineId: line.id } });
     await audit({ actorId: actor.id, action: 'statement.line.restore', entityType: 'statement_line', entityId: line.id, before: { resolution: line.resolution, reason: line.resolutionReason } });
     return { ok: true };
   });
@@ -501,7 +552,7 @@ export function statementRoutes(app: FastifyInstance): void {
 async function setAside(
   lineId: string,
   actorId: string,
-  resolution: 'not_ours' | 'company_expense' | 'own_transfer',
+  resolution: 'not_ours' | 'company_expense' | 'own_transfer' | 'shareholder',
   reason: string | null,
   categoryId: string | null = null,
   db: Prisma.TransactionClient | typeof prisma = prisma,
