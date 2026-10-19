@@ -91,7 +91,7 @@ export function expenseRoutes(app: FastifyInstance): void {
       select: { amountTetri: true, status: true, resolution: true, expenseCategoryId: true, payments: { where: { voidedAt: null }, select: { kind: true, grossTetri: true } } },
     });
     const byCategory = new Map<string | null, { tetri: number; lines: number }>();
-    const other = { depositsBack: 0, suppliers: 0, ownTransfers: 0, unsorted: 0, unsortedLines: 0, otherPaid: 0 };
+    const other = { depositsBack: 0, suppliers: 0, ownTransfers: 0, shareholder: 0, unsorted: 0, unsortedLines: 0, otherPaid: 0 };
     for (const l of lines) {
       if (l.status === 'unmatched') {
         other.unsorted += l.amountTetri;
@@ -103,6 +103,9 @@ export function expenseRoutes(app: FastifyInstance): void {
         byCategory.set(l.expenseCategoryId, row);
       } else if (l.resolution === 'own_transfer') {
         other.ownTransfers += l.amountTetri;
+      } else if (l.resolution === 'shareholder') {
+        // Taken out by a shareholder (ADR-0029): left the accounts, not spent.
+        other.shareholder += l.amountTetri;
       } else if (l.status === 'matched') {
         const kind = l.payments[0]?.kind;
         if (kind === 'deposit_payout') other.depositsBack += l.amountTetri;
@@ -118,7 +121,7 @@ export function expenseRoutes(app: FastifyInstance): void {
       categories,
       expensesTetri,
       ...other,
-      totalOutTetri: expensesTetri + other.depositsBack + other.suppliers + other.ownTransfers + other.otherPaid + other.unsorted,
+      totalOutTetri: expensesTetri + other.depositsBack + other.suppliers + other.ownTransfers + other.shareholder + other.otherPaid + other.unsorted,
     };
   });
 }

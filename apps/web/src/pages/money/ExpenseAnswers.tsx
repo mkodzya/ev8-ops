@@ -82,6 +82,11 @@ export function ExpenseAnswers({ line, cats, quiet }: { line: OutLine; cats: Cat
     const res = await op.run((key) => api.post<{ id: string }>(`/api/statement-lines/${line.id}/pay-out`, body, { key }), `payout:${JSON.stringify(body)}`);
     if (res.ok) toast({ text, undo: () => api.post(`/api/payments/${res.value.id}/undo`) });
   };
+  /** «Акционеру» (ADR-0029): taken out by a shareholder — left the accounts, not spent. */
+  const shareholder = async () => {
+    const res = await op.run((key) => api.post(`/api/statement-lines/${line.id}/shareholder`, {}, { key }), 'shareholder');
+    if (res.ok) toast({ text: t.exp.shareholderDone, undo: () => api.post(`/api/statement-lines/${line.id}/restore`, {}) });
+  };
   const ownTransfer = async () => {
     const res = await op.run((key) => api.post(`/api/statement-lines/${line.id}/own-transfer`, {}, { key }), 'own');
     if (res.ok) toast({ text: t.exp.ownTransferDone, undo: () => api.post(`/api/statement-lines/${line.id}/restore`, {}) });
@@ -128,6 +133,9 @@ export function ExpenseAnswers({ line, cats, quiet }: { line: OutLine; cats: Cat
           </button>
           <button type="button" className="pill pill-sm" disabled={busy} onClick={() => void ownTransfer()}>
             {t.exp.ownTransfer}
+          </button>
+          <button type="button" className="pill pill-sm" disabled={busy} onClick={() => void shareholder()}>
+            {t.exp.shareholder}
           </button>
         </div>
       )}

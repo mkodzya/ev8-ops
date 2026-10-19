@@ -1174,6 +1174,7 @@ export const en = {
       service_not_found: 'No such repair.',
       undo_too_late: 'Too late to undo. An owner can annul it with a reason.',
       already_matched: 'This bank line is already attached to a payment.',
+      not_outgoing: 'Only money going out of the account can be marked as taken out by a shareholder.',
       category_not_found: 'No such expense category.',
       category_exists: 'There is a category by that name already.',
       no_payee: 'The bank names nobody on this line — there is no payee to remember.',
