@@ -41,6 +41,18 @@ export function fileKind(name: string, mimeType: string): DriveFileKind {
   return 'scan';
 }
 
+/**
+ * What a PDF is by its text, whatever its name: Signify's return act or its
+ * rental contract (a contract named «Rental agreement — …» in Drive is one).
+ * None — a scan of paper, or something else.
+ */
+export function kindOfText(text: string): 'contract' | 'return_act' | null {
+  const t = flat(text);
+  if (/დაბრუნებისა და საბოლოო ანგარიშსწორების აქტი/.test(t)) return 'return_act';
+  if (/ქირაობის ხელშეკრულება/.test(t)) return 'contract';
+  return null;
+}
+
 /** A date at the head of a file's name — «261012 …» — as Kardu names the acts he files. */
 export function fileDate(name: string): string | null {
   return folderName(name).datedOn;
@@ -107,6 +119,12 @@ const flat = (text: string): string =>
 
 const DAY = /\b(\d{2})[/.](\d{2})[/.](\d{4})\b/;
 const VIN = /\b[A-HJ-NPR-Z0-9]{17}\b/;
+/** A VIN as typed into a field, a letter or two short («H8LWF…» for «HH8LWF…»): the end of one. */
+const VIN_TYPED = /\b[A-HJ-NPR-Z0-9]{11,17}\b/;
+const vinAfterLabel = (t: string): string | null => {
+  const near = after(t, /VIN\s*:?/) ?? '';
+  return VIN.exec(near)?.[0] ?? VIN_TYPED.exec(near)?.[0] ?? VIN.exec(t)?.[0] ?? null;
+};
 const iso = (m: RegExpExecArray | null): string | null => (m && isRealDay(`${m[3]}-${m[2]}-${m[1]}`) ? `${m[3]}-${m[2]}-${m[1]}` : null);
 
 /** What stands right after a label: the next few words, never the next section. */
@@ -154,7 +172,7 @@ export function readReturnAct(text: string): ReturnActFacts {
     // The act's own date is the first «თარიღი» (date) on it; the contract's has its own label.
     returnedOn: dayAfter(t, /თარიღი:?/),
     contractOn: dayAfter(t, /ხელშეკრულების თარიღი:?/),
-    vin: VIN.exec(after(t, /VIN:?/) ?? '')?.[0] ?? VIN.exec(t)?.[0] ?? null,
+    vin: vinAfterLabel(t),
     depositTetri: sumAfter(t, /დეპოზიტის ოდენობა/),
     withheldTetri: sumAfter(t, /დაკავებული თანხა(?!ის)/),
     paidBackTetri: sumAfter(t, /დაბრუნებული თანხა/),
@@ -164,7 +182,7 @@ export function readReturnAct(text: string): ReturnActFacts {
 /** Signify's rental contract: the day it was made, and the moped. */
 export function readContract(text: string): { signedOn: string | null; vin: string | null } {
   const t = flat(text);
-  return { signedOn: dayAfter(t, /თარიღი:?/) ?? iso(DAY.exec(t)), vin: VIN.exec(after(t, /VIN:?/) ?? '')?.[0] ?? VIN.exec(t)?.[0] ?? null };
+  return { signedOn: dayAfter(t, /თარიღი:?/) ?? iso(DAY.exec(t)), vin: vinAfterLabel(t) };
 }
 
 /** Text between a label and the next label, trimmed; none when the field is empty. */
@@ -284,7 +302,8 @@ export function matchFolders(folders: readonly FolderToMatch[], rentals: readonl
   for (const f of folders) {
     for (const r of rentals) {
       const words = sharedWords(f.person, r.names);
-      const vin = !!r.vin && f.vins.includes(r.vin);
+      // A VIN typed a letter or two short is the end of the moped's.
+      const vin = !!r.vin && f.vins.some((v) => v === r.vin || (v.length >= 11 && r.vin!.endsWith(v)));
       const day = !!f.datedOn && f.datedOn === r.pickedUpOn;
       // A VIN without the person's name is the moped, not the renter — the
       // same moped goes from hand to hand — so it counts only with the day.

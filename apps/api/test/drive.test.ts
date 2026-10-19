@@ -7,7 +7,7 @@ import PDFDocument from 'pdfkit';
 import { describe, expect, it } from 'vitest';
 import { HAS_DB, call, json, loginAs, uniq } from './helpers.js';
 import { assertion, driveConfig, forgetToken } from '../src/lib/drive.js';
-import { fileKind, folderName, matchFolders, pdfText, readContract, readContractParty, readReturnAct, readingOrder, sharedWords } from '../src/lib/driveDocs.js';
+import { fileKind, folderName, kindOfText, matchFolders, pdfText, readContract, readContractParty, readReturnAct, readingOrder, sharedWords } from '../src/lib/driveDocs.js';
 import { sectionOf } from '../src/lib/driveScan.js';
 
 const ACT = [
@@ -134,6 +134,16 @@ describe('the rentals folders in Drive: names and documents (ADR-0031)', () => {
     expect(readContractParty(PARTY.replace('• ქირა: 150 ლარი', '• ქირა: _____ ლარი')).rateTetri).toBeNull();
   });
 
+  it('knows Signify’s documents by their text, whatever the file is called', () => {
+    expect(kindOfText(PARTY)).toBe('contract');
+    expect(kindOfText(ACT)).toBe('return_act');
+    expect(kindOfText('')).toBeNull();
+    // A VIN typed a letter short in the contract is read as it is, and found as the end of the moped's.
+    expect(readContract(CONTRACT.replace('HH8TEST0000000017', 'H8TEST0000000017')).vin).toBe('H8TEST0000000017');
+    const m = matchFolders([{ id: 'f', datedOn: '2031-09-06', person: 'Someone Else', vins: ['H8TEST0000000017'] }], [{ id: 'r', pickedUpOn: '2031-09-06', vin: 'HH8TEST0000000017', names: ['Nino Tushidze'] }]);
+    expect(m.get('f')?.rentalId).toBe('r');
+  });
+
   it('an empty field is nothing, not the next number on the page', () => {
     const blank = ['აქტი თარიღი: 1. მხარეები', 'შეტანილი დეპოზიტის ოდენობა: ____ ლარი', 'დაკავებული თანხა: ____ ლარი 7. საფუძველი'].join('\n');
     expect(readReturnAct(blank)).toMatchObject({ returnedOn: null, depositTetri: null, withheldTetri: null });
@@ -217,7 +227,8 @@ describe.skipIf(!HAS_DB)('the rentals folders in Drive, read and laid beside the
       'm-11': [{ id: 'f-nino', name: `260906 Nino ${surname}`, mimeType: 'application/vnd.google-apps.folder' }],
       'f-stranger': [
         { id: 'doc-scan', name: '260907 Stranger.pdf', mimeType: 'application/pdf' },
-        { id: 'doc-contract', name: 'ქირაობის ხელშეკრულება-777.pdf', mimeType: 'application/pdf' },
+        // Signify's contract under an English name, as Kardu filed one on 17.10.2026.
+        { id: 'doc-contract', name: 'Rental agreement — Test Person — 2026-09-07.pdf', mimeType: 'application/pdf' },
       ],
       'f-nino': [
         { id: 'doc-act', name: '261103 დაბრუნებისა და საბოლოო ანგარიშსწორების აქტი test.pdf', mimeType: 'application/pdf' },
@@ -245,9 +256,11 @@ describe.skipIf(!HAS_DB)('the rentals folders in Drive, read and laid beside the
     forgetToken();
     try {
       const outcome = await scanDrive(fakeFetch);
-      expect(outcome).toMatchObject({ status: 'ok', folders: 2, files: 3, read: 2 });
-      // The photo was listed and never asked for; only Signify's documents were downloaded.
-      expect(asked.filter((u) => u.includes('/files/doc-')).sort()).toEqual(['https://www.googleapis.com/drive/v3/files/doc-act', 'https://www.googleapis.com/drive/v3/files/doc-contract']);
+      expect(outcome).toMatchObject({ status: 'ok', folders: 2, files: 3, read: 3 });
+      // Every PDF read once; the photo listed and never asked for.
+      expect(asked.filter((u) => u.includes('/files/doc-')).sort()).toEqual(['doc-act', 'doc-contract', 'doc-scan'].map((id) => `https://www.googleapis.com/drive/v3/files/${id}`));
+      expect((await prisma.driveFile.findUniqueOrThrow({ where: { id: 'doc-contract' } })).kind).toBe('contract');
+      expect((await prisma.driveFile.findUniqueOrThrow({ where: { id: 'doc-scan' } })).kind).toBe('scan');
 
       const r = json<{
         on: boolean;
