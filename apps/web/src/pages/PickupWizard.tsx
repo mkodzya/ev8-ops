@@ -77,6 +77,20 @@ async function photoBody(p: PreparedPhoto | null) {
 
 // Hand-over in six screens and "Done" (wave 3 §3.1): customer → moped → terms →
 // act → payment → summary. One button at the end writes all of it under one key.
+/** What a contract in Drive fills the wizard with (ADR-0031): `GET /api/drive/folders/:id/prefill`. */
+interface DrivePrefill {
+  folder: { id: string; name: string; url: string | null };
+  fromContract: boolean;
+  name: string | null;
+  personalId: string | null;
+  phone: string | null;
+  pickedUpOn: string | null;
+  rateTetri: number | null;
+  depositTetri: number | null;
+  vehicle: { id: string | null; vin: string; available: boolean } | null;
+  customer: { id: string; name: string } | null;
+}
+
 export function PickupWizard() {
   const t = useT();
   const [params] = useSearchParams();
@@ -89,6 +103,9 @@ export function PickupWizard() {
   const presetCustomer = params.get('customer');
   // Started from a deal in "Today" (ADR-0015): the rental keeps the deal's link.
   const fromLead = params.get('lead');
+  // Started from a contract in Drive with no rental here (ADR-0031): filled in from it.
+  const fromDrive = params.get('drive');
+  const prefill = useLoad<DrivePrefill>(fromDrive ? `/api/drive/folders/${encodeURIComponent(fromDrive)}/prefill` : null);
 
   const customers = useLoad<{ customers: CustomerRow[] }>('/api/customers');
   const fleet = useLoad<{ vehicles: FleetRow[] }>('/api/fleet');
@@ -174,6 +191,31 @@ export function PickupWizard() {
     set({ deposit: gel(settings.data.depositTetri), depositBefore: gel(settings.data.depositTetri) });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settings.data?.depositTetri]);
+
+  // The contract in Drive fills the wizard once, when it has been read: a
+  // card here if the person has one, else a new one; the moped by its VIN if
+  // it is free; the day, and for a day before today the carry-over of a
+  // running rental; the rate and the deposit the contract names. A person
+  // checks each field before going on; the ID photo is still theirs to add.
+  const [prefilled, setPrefilled] = useState(false);
+  useEffect(() => {
+    const p = prefill.data;
+    if (!p || prefilled) return;
+    setPrefilled(true);
+    const patch: Partial<typeof start> = {};
+    if (p.customer) Object.assign(patch, { customerId: p.customer.id, creating: false });
+    else Object.assign(patch, { creating: true, ncName: p.name ?? '', ...(p.phone ? { ncPhone: formatPhone(p.phone) } : {}) });
+    if (p.vehicle?.id && p.vehicle.available) patch.vehicleId = p.vehicle.id;
+    if (p.pickedUpOn && p.pickedUpOn <= today) Object.assign(patch, { pickedUpOn: p.pickedUpOn, ...(owner && p.pickedUpOn < today ? { transfer: true } : {}) });
+    if (p.rateTetri) Object.assign(patch, { rate: gel(p.rateTetri), rateTouched: true });
+    if (p.depositTetri != null) {
+      Object.assign(patch, { deposit: gel(p.depositTetri), depositBefore: gel(p.depositTetri) });
+      setDepositTouched(true);
+    }
+    set(patch);
+    if (!p.customer && p.personalId) setNcPersonalId(p.personalId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefill.data]);
 
   // The model's rate, until somebody types another (B4-05).
   useEffect(() => {
@@ -377,6 +419,14 @@ export function PickupWizard() {
     >
       {f.step === 0 && (
         <>
+          {fromDrive &&
+            (prefill.data ? (
+              <p className="hint">{prefill.data.fromContract ? t.drive.prefilled(prefill.data.folder.name) : t.drive.prefilledScan(prefill.data.folder.name)}</p>
+            ) : prefill.failure ? (
+              <LoadError failure={prefill.failure} onRetry={prefill.reload} />
+            ) : (
+              <p className="hint muted">{t.drive.prefillLoading}</p>
+            ))}
           {!f.creating && (
             <>
               <input className="input" placeholder={t.hand.searchHint} aria-label={t.hand.search} value={q} onChange={(e) => setQ(e.target.value)} autoFocus />

@@ -27,7 +27,7 @@ interface Reconciliation {
     rental: { id: string; number: string; customer: { id: string; name: string } };
     act: { url: string | null; returnedOn: string | null; contractOn: string | null; vin: string | null; depositTetri: number | null; withheldTetri: number | null; paidBackTetri: number | null } | null;
   }[];
-  missingHere: { name: string; url: string | null; datedOn: string | null; contract: { url: string | null; signedOn: string | null; vin: string | null } | null }[];
+  missingHere: { id: string; name: string; url: string | null; datedOn: string | null; contract: { url: string | null; signedOn: string | null; vin: string | null } | null }[];
   missingThere: { id: string; number: string; customer: { id: string; name: string }; pickedUpOn: string | null; vin: string | null }[];
 }
 
@@ -123,20 +123,24 @@ export function DrivePage() {
             ) : (
               <ul className="queue">
                 {x.missingHere.map((f) => (
-                  <li key={`${f.name}:${f.url}`} className="q-row">
+                  <li key={f.id} className="q-row">
                     <span className="q-who">
                       <span className="q-name">{f.name}</span>
                       <span className="q-sub muted">
                         {[f.contract?.signedOn ? d.contractOf(fmtDate(f.contract.signedOn)) : '', f.contract?.vin ? `···${f.contract.vin.slice(-4)}` : ''].filter(Boolean).join(' · ')}
                       </span>
                     </span>
-                    {f.url && (
-                      <span className="q-acts">
+                    <span className="q-acts">
+                      {/* The hand-over wizard, filled in from the contract (Mika, 19.10.2026). */}
+                      <Link className="pill pill-sm pill-accent" to={`/rentals/new?drive=${encodeURIComponent(f.id)}`}>
+                        {d.newRental}
+                      </Link>
+                      {f.url && (
                         <a className="pill pill-sm" href={f.url} target="_blank" rel="noreferrer">
                           {d.open}
                         </a>
-                      </span>
-                    )}
+                      )}
+                    </span>
                   </li>
                 ))}
               </ul>

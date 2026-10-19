@@ -1211,6 +1211,7 @@ export const en = {
       closed_before_opened: 'A repair cannot close before the day it was opened.',
       customer_mismatch: 'That rental belongs to a different customer. Pick this customer’s own rental.',
       customer_not_found: 'Customer not found.',
+      drive_folder_not_found: 'That folder is no longer in the copy of Drive — read Drive again.',
       demo_login_off: 'Demo logins are switched off on this stand.',
       deposit_decision_forbidden: 'Only an owner decides on a deposit.',
       deposit_not_found: 'This rental has no deposit.',
