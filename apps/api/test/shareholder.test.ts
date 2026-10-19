@@ -8,7 +8,7 @@ describe.skipIf(!HAS_DB)('money taken out by a shareholder (ADR-0029)', () => {
     const { prisma } = await import('../src/lib/db.js');
     const stmt = await prisma.statement.create({ data: { bank: 'bog', fileName: `test-${uniq()}.csv`, fileSha256: uniq() } });
     // A day far from any other suite's lines, so the report's sums are this test's alone.
-    const day = new Date('2031-03-05T00:00:00Z');
+    const day = new Date('2033-07-05T00:00:00Z');
     const mk = (direction: 'in' | 'out', amountTetri: number) =>
       prisma.statementLine.create({ data: { statementId: stmt.id, bank: 'bog', naturalKey: `test-${uniq()}`, occurredOn: day, direction, amountTetri, raw: 'test line', status: 'unmatched' } });
     const out = await mk('out', 500000);
@@ -23,7 +23,7 @@ describe.skipIf(!HAS_DB)('money taken out by a shareholder (ADR-0029)', () => {
     const log = await prisma.auditLog.findFirst({ where: { entityId: out.id, action: 'statement.line.shareholder' } });
     expect(log).not.toBeNull();
 
-    const report = json<{ expensesTetri: number; shareholder: number; totalOutTetri: number }>(await call(owner, 'GET', '/api/reports/expenses?from=2031-03-01&to=2031-03-31'));
+    const report = json<{ expensesTetri: number; shareholder: number; totalOutTetri: number }>(await call(owner, 'GET', '/api/reports/expenses?from=2033-07-01&to=2033-07-31'));
     expect(report).toMatchObject({ expensesTetri: 0, shareholder: 500000, totalOutTetri: 500000 });
 
     const aside = json<{ lines: { id: string; resolution: string }[] }>(await call(owner, 'GET', '/api/statement-lines/aside?days=90'));
