@@ -1,3 +1,5 @@
+import { createRequire } from 'node:module';
+import { dirname } from 'node:path';
 import { looseNames, parseBankAmount } from '@ev8/shared';
 
 // What EV8 Ops reads off the rentals folders in Drive (ADR-0031): the date and
@@ -44,15 +46,53 @@ export function fileDate(name: string): string | null {
   return folderName(name).datedOn;
 }
 
-/** The text of a PDF that has text: Signify's documents do. Lines as the pages give them. */
+/** A piece of a page: printed text, or what was typed into a form field, where it stands. */
+export interface PagePiece {
+  y: number;
+  x: number;
+  str: string;
+}
+
+/**
+ * Pieces in reading order: top to bottom, a line at a time, left to right. A
+ * field and the label beside it stand a few points apart in height; within
+ * that, they are one line.
+ */
+export function readingOrder(pieces: readonly PagePiece[], tolerance = 6): string {
+  const sorted = [...pieces].filter((p) => p.str.trim() !== '').sort((a, b) => b.y - a.y || a.x - b.x);
+  const lines: PagePiece[][] = [];
+  for (const p of sorted) {
+    const line = lines[lines.length - 1];
+    if (line && Math.abs(line[0].y - p.y) <= tolerance) line.push(p);
+    else lines.push([p]);
+  }
+  return lines.map((l) => l.sort((a, b) => a.x - b.x).map((p) => p.str).join(' ')).join('\n');
+}
+
+/**
+ * The text of a PDF that has text — Signify's documents do. Signify prints the
+ * form and puts what was filled in into form fields over it: the date, the
+ * renter, the VIN, the deposit (seen on its return acts, 19.10.2026). So the
+ * printed text and the fields' values are read together, each where it
+ * stands, and a label is followed by its value as the page shows them.
+ * Ticks (yes/no boxes) and signatures are not read.
+ */
 export async function pdfText(bytes: Uint8Array): Promise<string> {
   const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
-  const doc = await pdfjs.getDocument({ data: bytes, useSystemFonts: false, isEvalSupported: false, disableFontFace: true }).promise;
+  // The fourteen standard PDF fonts come with the library; a document that names one without embedding it is still read.
+  const standardFontDataUrl = `${dirname(createRequire(import.meta.url).resolve('pdfjs-dist/package.json'))}/standard_fonts/`;
+  const doc = await pdfjs.getDocument({ data: bytes, useSystemFonts: false, isEvalSupported: false, disableFontFace: true, standardFontDataUrl }).promise;
   const out: string[] = [];
   for (let i = 1; i <= doc.numPages; i++) {
     const page = await doc.getPage(i);
     const content = await page.getTextContent();
-    out.push(content.items.map((it) => ('str' in it ? it.str : '')).join(' '));
+    const pieces: PagePiece[] = content.items.flatMap((it) => ('str' in it ? [{ x: it.transform[4] as number, y: it.transform[5] as number, str: it.str }] : []));
+    for (const a of (await page.getAnnotations()) as { subtype?: string; fieldType?: string; fieldValue?: unknown; rect?: number[] }[]) {
+      if (a.subtype !== 'Widget' || a.fieldType !== 'Tx' || typeof a.fieldValue !== 'string' || !a.rect) continue;
+      // A field's text sits a little above its box's lower edge, as a printed line's baseline does.
+      pieces.push({ x: a.rect[0], y: a.rect[1] + 3, str: a.fieldValue });
+    }
+    out.push(readingOrder(pieces));
   }
   await doc.destroy();
   return out.join('\n');
@@ -69,17 +109,24 @@ const DAY = /\b(\d{2})[/.](\d{2})[/.](\d{4})\b/;
 const VIN = /\b[A-HJ-NPR-Z0-9]{17}\b/;
 const iso = (m: RegExpExecArray | null): string | null => (m && isRealDay(`${m[3]}-${m[2]}-${m[1]}`) ? `${m[3]}-${m[2]}-${m[1]}` : null);
 
-/** The first date after a label. */
-function dayAfter(text: string, label: RegExp): string | null {
+/** What stands right after a label: the next few words, never the next section. */
+function after(text: string, label: RegExp, span = 40): string | null {
   const at = label.exec(text);
-  return at ? iso(DAY.exec(text.slice(at.index + at[0].length))) : null;
+  return at ? text.slice(at.index + at[0].length, at.index + at[0].length + span) : null;
 }
 
-/** The first sum after a label, in tetri: «… 180 ლარი» → 18000. */
+/** A date right after a label; an empty field gives none. */
+function dayAfter(text: string, label: RegExp): string | null {
+  const near = after(text, label);
+  return near ? iso(DAY.exec(near)) : null;
+}
+
+/** A sum between a label and its «ლარი» (lari), in tetri: «… 180 ლარი» → 18000; an empty field gives none. */
 function sumAfter(text: string, label: RegExp): number | null {
-  const at = label.exec(text);
-  if (!at) return null;
-  const m = /(\d[\d.,]*)/.exec(text.slice(at.index + at[0].length, at.index + at[0].length + 60));
+  const near = after(text, label, 60);
+  if (near == null) return null;
+  const upTo = near.split('ლარი')[0];
+  const m = /(\d[\d.,]*)/.exec(upTo);
   return m ? parseBankAmount(m[1].replace(/[.,]$/, '')) : null;
 }
 
@@ -103,11 +150,11 @@ export interface ReturnActFacts {
  */
 export function readReturnAct(text: string): ReturnActFacts {
   const t = flat(text);
-  const contractOn = dayAfter(t, /ხელშეკრულების თარიღი/);
   return {
-    returnedOn: iso(DAY.exec(t)),
-    contractOn,
-    vin: VIN.exec(t)?.[0] ?? null,
+    // The act's own date is the first «თარიღი» (date) on it; the contract's has its own label.
+    returnedOn: dayAfter(t, /თარიღი:?/),
+    contractOn: dayAfter(t, /ხელშეკრულების თარიღი:?/),
+    vin: VIN.exec(after(t, /VIN:?/) ?? '')?.[0] ?? VIN.exec(t)?.[0] ?? null,
     depositTetri: sumAfter(t, /დეპოზიტის ოდენობა/),
     withheldTetri: sumAfter(t, /დაკავებული თანხა(?!ის)/),
     paidBackTetri: sumAfter(t, /დაბრუნებული თანხა/),
@@ -117,7 +164,7 @@ export function readReturnAct(text: string): ReturnActFacts {
 /** Signify's rental contract: the day it was made, and the moped. */
 export function readContract(text: string): { signedOn: string | null; vin: string | null } {
   const t = flat(text);
-  return { signedOn: iso(DAY.exec(t)), vin: VIN.exec(t)?.[0] ?? null };
+  return { signedOn: dayAfter(t, /თარიღი:?/) ?? iso(DAY.exec(t)), vin: VIN.exec(after(t, /VIN:?/) ?? '')?.[0] ?? VIN.exec(t)?.[0] ?? null };
 }
 
 // ---------------------------------------------------------------------------
