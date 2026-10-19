@@ -167,6 +167,52 @@ export function readContract(text: string): { signedOn: string | null; vin: stri
   return { signedOn: dayAfter(t, /თარიღი:?/) ?? iso(DAY.exec(t)), vin: VIN.exec(after(t, /VIN:?/) ?? '')?.[0] ?? VIN.exec(t)?.[0] ?? null };
 }
 
+/** Text between a label and the next label, trimmed; none when the field is empty. */
+function between(text: string, from: RegExp, to: RegExp, max = 120): string | null {
+  const at = from.exec(text);
+  if (!at) return null;
+  const rest = text.slice(at.index + at[0].length);
+  const end = to.exec(rest);
+  const value = (end ? rest.slice(0, end.index) : rest.slice(0, max)).trim().replace(/^[:\s]+/, '');
+  return value && value.length <= max ? value : null;
+}
+
+export interface ContractParty {
+  /** The renter as the contract writes them. */
+  name: string | null;
+  /** Georgian personal number (11 digits) or a passport's. */
+  personalId: string | null;
+  phone: string | null;
+  address: string | null;
+  signedOn: string | null;
+  vin: string | null;
+  rateTetri: number | null;
+  depositTetri: number | null;
+}
+
+/**
+ * The renter and the terms off Signify's rental contract — to fill the
+ * hand-over wizard when a contract in Drive has no rental here (Mika,
+ * 19.10.2026). Read in the renter's part (after «მოქირავე», the renter): the
+ * company's own address comes before it.
+ */
+export function readContractParty(text: string): ContractParty {
+  const t = flat(text);
+  const at = t.search(/მოქირავე\s*:/);
+  const renter = at >= 0 ? t.slice(at) : t;
+  const idNear = after(renter, /პირადი\s+ნომერი\s*:?/) ?? '';
+  const phoneNear = after(renter, /ტელეფონი\s*:?/) ?? '';
+  return {
+    name: between(renter, /სახელი\s*,?\s*გვარი\s*:?/, /პირადი|ტელეფონი/, 80),
+    personalId: /\b(\d{11}|[A-Z]{1,3}\d{6,9})\b/.exec(idNear)?.[1] ?? null,
+    phone: /(\+?\d[\d\s-]{7,}\d)/.exec(phoneNear)?.[1].replace(/[\s-]+/g, ' ').trim() ?? null,
+    address: between(renter, /მისამართი:?/, /\s\d\.\s|ხელშეკრულების საგანი/, 120),
+    ...readContract(text),
+    rateTetri: sumAfter(t, /ქირა\s*:/),
+    depositTetri: sumAfter(t, /დეპოზიტი\s*:/),
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Which rental a folder is
 // ---------------------------------------------------------------------------

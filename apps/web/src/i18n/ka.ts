@@ -1197,6 +1197,7 @@ export const ka: Dict = {
       closed_before_opened: 'რემონტი არ შეიძლება დაიხუროს გახსნის დღემდე.',
       customer_mismatch: 'ეს იჯარა სხვა კლიენტისაა. აირჩიეთ ამ კლიენტის იჯარა.',
       customer_not_found: 'კლიენტი ვერ მოიძებნა.',
+      drive_folder_not_found: 'ეს საქაღალდე Drive-ის ასლში აღარ არის — წაიკითხეთ Drive თავიდან.',
       demo_login_off: 'დემო ანგარიშები ამ სტენდზე გამორთულია.',
       deposit_decision_forbidden: 'გირაოს შესახებ გადაწყვეტას იღებს მფლობელი.',
       deposit_not_found: 'ამ იჯარას გირაო არ აქვს.',

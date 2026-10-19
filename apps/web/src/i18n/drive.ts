@@ -39,6 +39,10 @@ export const driveEn = {
     folder: 'folder',
     contract: 'contract',
     returnAct: 'return act',
+    newRental: 'Enter the rental',
+    prefilled: (name: string) => `Filled in from the contract in Drive (${name}). Check every field before you go on.`,
+    prefilledScan: (name: string) => `Filled in from the folder in Drive (${name}): its contract is a scan, so only the name and the day.`,
+    prefillLoading: 'Reading the contract in Drive…',
   },
 };
 
@@ -80,6 +84,10 @@ export const driveRu: typeof driveEn = {
     folder: 'папка',
     contract: 'договор',
     returnAct: 'акт возврата',
+    newRental: 'Завести аренду',
+    prefilled: (name) => `Заполнено из договора в Drive (${name}). Проверьте каждое поле, прежде чем идти дальше.`,
+    prefilledScan: (name) => `Заполнено из папки в Drive (${name}): договор — скан, поэтому только имя и дата.`,
+    prefillLoading: 'Читаем договор в Drive…',
   },
 };
 
@@ -121,5 +129,9 @@ export const driveKa: typeof driveEn = {
     folder: 'საქაღალდე',
     contract: 'ხელშეკრულება',
     returnAct: 'დაბრუნების აქტი',
+    newRental: 'ქირაობის შეყვანა',
+    prefilled: (name) => `შევსებულია Drive-ის ხელშეკრულებიდან (${name}). შეამოწმეთ ყველა ველი, სანამ გააგრძელებთ.`,
+    prefilledScan: (name) => `შევსებულია Drive-ის საქაღალდიდან (${name}): ხელშეკრულება სკანია, ამიტომ მხოლოდ სახელი და თარიღი.`,
+    prefillLoading: 'Drive-ის ხელშეკრულება იკითხება…',
   },
 };

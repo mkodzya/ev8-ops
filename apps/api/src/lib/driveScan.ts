@@ -206,7 +206,7 @@ export async function driveReconciliation() {
       .filter((f) => f.section === 'active' && !f.rentalId)
       .map((f) => {
         const c = contract(f);
-        return { name: f.name, url: f.webUrl, datedOn: isoDate(f.datedOn), contract: c ? { url: c.webUrl, signedOn: isoDate(c.contractOn), vin: c.vin } : null };
+        return { id: f.id, name: f.name, url: f.webUrl, datedOn: isoDate(f.datedOn), contract: c ? { url: c.webUrl, signedOn: isoDate(c.contractOn), vin: c.vin } : null };
       }),
     // A running rental here with no folder in Drive.
     missingThere: rentals.filter((r) => !withFolder.has(r.id)).map((r) => ({ id: r.id, number: r.number, customer: r.customer, pickedUpOn: isoDate(r.pickedUpOn), vin: r.vehicle?.vin ?? null })),

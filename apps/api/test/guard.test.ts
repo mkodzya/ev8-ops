@@ -22,6 +22,7 @@ describe('route table', () => {
       // left here is the settings and the people.
       'DELETE /api/settings/rates/:id',
       // The rentals folders in Drive beside the rentals here (ADR-0031): an owner's list.
+      'GET /api/drive/folders/:id/prefill',
       'GET /api/drive/reconciliation',
       // Wave 6: the journal and its export are an owner's (§3.8).
       'GET /api/journal',

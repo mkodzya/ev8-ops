@@ -7,7 +7,7 @@ import PDFDocument from 'pdfkit';
 import { describe, expect, it } from 'vitest';
 import { HAS_DB, call, json, loginAs, uniq } from './helpers.js';
 import { assertion, driveConfig, forgetToken } from '../src/lib/drive.js';
-import { fileKind, folderName, matchFolders, pdfText, readContract, readReturnAct, readingOrder, sharedWords } from '../src/lib/driveDocs.js';
+import { fileKind, folderName, matchFolders, pdfText, readContract, readContractParty, readReturnAct, readingOrder, sharedWords } from '../src/lib/driveDocs.js';
 import { sectionOf } from '../src/lib/driveScan.js';
 
 const ACT = [
@@ -23,6 +23,23 @@ const ACT = [
 
 const CONTRACT = ['ქირაობის ხელშეკრულება', 'თარიღი: 06/09/2031', 'მოდელი: Fly Brother', 'VIN: HH8TEST0000000017'].join('\n');
 
+/** A contract as Signify prints it with its fields filled in: a made-up renter, number and phone. */
+const PARTY = [
+  'ელექტრო მოპედის ქირაობის ხელშეკრულება',
+  'თარიღი: 06/09/2031',
+  'დამქირავებელი: შპს „ე-მოუშენ მოთორს“ (ს/ნ: 000000000; მისამართი: ქუთაისი, ქუჩა 1)',
+  'მოქირავე:',
+  'სახელი, გვარი:________________ ნინო თუშიძე',
+  'პირადი ნომერი : ______________ 01234567890',
+  'ტელეფონი: ____________________ +995 555 00 00 00',
+  'ელ. ფოსტა: ___________________ test@example.com',
+  'მისამართი: ___________________ სატესტო ქუჩა 1',
+  '2. ხელშეკრულების საგანი',
+  'VIN: _________________________ HH8TEST0000000017',
+  '• ქირა: 150 ლარი',
+  '• დეპოზიტი: 180 _____ ლარი (დაბრუნებადი)',
+].join('\n');
+
 /** A PDF with text, as Signify makes them — here made with the API's own fonts. */
 async function pdfOf(text: string): Promise<Buffer> {
   const fonts = join(import.meta.dirname, '../src/assets/fonts');
@@ -32,7 +49,7 @@ async function pdfOf(text: string): Promise<Buffer> {
   doc.fontSize(11);
   // Each run in the font that has its letters: the Georgian one has no digits.
   for (const line of text.split('\n')) {
-    const runs = line.match(/[\u10A0-\u10FF]+(?:[ ,.-]+[\u10A0-\u10FF]+)*|[^\u10A0-\u10FF]+/g) ?? [''];
+    const runs = line.match(/[\u10A0-\u10FF]+(?:[ -]+[\u10A0-\u10FF]+)*|[^\u10A0-\u10FF]+/g) ?? [''];
     runs.forEach((run, i) => doc.font(/[\u10A0-\u10FF]/.test(run) ? 'geo' : 'lat').text(run, { continued: i < runs.length - 1 }));
   }
   const chunks: Buffer[] = [];
@@ -100,6 +117,21 @@ describe('the rentals folders in Drive: names and documents (ADR-0031)', () => {
     doc.end();
     const text = await pdfText(new Uint8Array(await done));
     expect(readReturnAct(text)).toEqual({ returnedOn: '2031-11-03', contractOn: '2031-09-06', vin: 'HH8TEST0000000017', depositTetri: 18000, withheldTetri: 0, paidBackTetri: 18000 });
+  });
+
+  it('reads the renter and the terms off a contract, after the company’s own part', () => {
+    expect(readContractParty(PARTY)).toEqual({
+      name: 'ნინო თუშიძე',
+      personalId: '01234567890',
+      phone: '+995 555 00 00 00',
+      address: 'სატესტო ქუჩა 1',
+      signedOn: '2031-09-06',
+      vin: 'HH8TEST0000000017',
+      rateTetri: 15000,
+      depositTetri: 18000,
+    });
+    // An empty rate is none, not the deposit's sum.
+    expect(readContractParty(PARTY.replace('• ქირა: 150 ლარი', '• ქირა: _____ ლარი')).rateTetri).toBeNull();
   });
 
   it('an empty field is nothing, not the next number on the page', () => {
@@ -174,6 +206,7 @@ describe.skipIf(!HAS_DB)('the rentals folders in Drive, read and laid beside the
 
     // Google, played by a function: the shared folder, its two sections, the renters' folders, two documents.
     const act = await pdfOf(ACT.replace('HH8TEST0000000017', vin));
+    const contract = await pdfOf(PARTY.replace('06/09/2031', '07/09/2026'));
     const tree: Record<string, { id: string; name: string; mimeType: string }[]> = {
       root: [
         { id: 'sec-active', name: 'Aktiuri_Qiraoba', mimeType: 'application/vnd.google-apps.folder' },
@@ -182,7 +215,10 @@ describe.skipIf(!HAS_DB)('the rentals folders in Drive, read and laid beside the
       'sec-active': [{ id: 'f-stranger', name: '260907 Stranger Testperson', mimeType: 'application/vnd.google-apps.folder' }],
       'sec-done': [{ id: 'm-11', name: '11', mimeType: 'application/vnd.google-apps.folder' }],
       'm-11': [{ id: 'f-nino', name: `260906 Nino ${surname}`, mimeType: 'application/vnd.google-apps.folder' }],
-      'f-stranger': [{ id: 'doc-scan', name: '260907 Stranger.pdf', mimeType: 'application/pdf' }],
+      'f-stranger': [
+        { id: 'doc-scan', name: '260907 Stranger.pdf', mimeType: 'application/pdf' },
+        { id: 'doc-contract', name: 'ქირაობის ხელშეკრულება-777.pdf', mimeType: 'application/pdf' },
+      ],
       'f-nino': [
         { id: 'doc-act', name: '261103 დაბრუნებისა და საბოლოო ანგარიშსწორების აქტი test.pdf', mimeType: 'application/pdf' },
         { id: 'doc-photo', name: 'Nino ID.JPG', mimeType: 'image/jpeg' },
@@ -197,7 +233,7 @@ describe.skipIf(!HAS_DB)('the rentals folders in Drive, read and laid beside the
         return new Response(JSON.stringify({ access_token: 'test-token', expires_in: 3600 }), { status: 200 });
       }
       const m = /\/files\/([^/?]+)\?alt=media/.exec(url);
-      if (m) return new Response(m[1] === 'doc-act' ? act : 'not a pdf', { status: 200 });
+      if (m) return new Response(m[1] === 'doc-act' ? act : m[1] === 'doc-contract' ? contract : 'not a pdf', { status: 200 });
       const parent = /'([^']+)' in parents/.exec(new URL(url).searchParams.get('q') ?? '')?.[1] ?? '';
       const files = (tree[parent] ?? []).map((f) => ({ ...f, modifiedTime: '2026-11-03T10:00:00.000Z', webViewLink: `https://drive.example/${f.id}` }));
       return new Response(JSON.stringify({ files }), { status: 200 });
@@ -209,9 +245,9 @@ describe.skipIf(!HAS_DB)('the rentals folders in Drive, read and laid beside the
     forgetToken();
     try {
       const outcome = await scanDrive(fakeFetch);
-      expect(outcome).toMatchObject({ status: 'ok', folders: 2, files: 2, read: 1 });
-      // The photo was listed and never asked for; only the act was downloaded.
-      expect(asked.filter((u) => u.includes('/files/doc-'))).toEqual(['https://www.googleapis.com/drive/v3/files/doc-act']);
+      expect(outcome).toMatchObject({ status: 'ok', folders: 2, files: 3, read: 2 });
+      // The photo was listed and never asked for; only Signify's documents were downloaded.
+      expect(asked.filter((u) => u.includes('/files/doc-')).sort()).toEqual(['https://www.googleapis.com/drive/v3/files/doc-act', 'https://www.googleapis.com/drive/v3/files/doc-contract']);
 
       const r = json<{
         on: boolean;
@@ -233,8 +269,26 @@ describe.skipIf(!HAS_DB)('the rentals folders in Drive, read and laid beside the
       expect(await scanDrive(fakeFetch)).toMatchObject({ status: 'ok', read: 0 });
       expect(asked.some((u) => u.includes('/files/doc-act'))).toBe(false);
 
+      // «Завести аренду»: the wizard's fields, read off the contract there and then; nothing of the person kept in the copy.
+      const missing = r.missingHere.find((x) => x.name === '260907 Stranger Testperson') as { id?: string } | undefined;
+      expect(missing?.id).toBe('f-stranger');
+      const realFetch = globalThis.fetch;
+      globalThis.fetch = fakeFetch;
+      try {
+        const p = json<{ fromContract: boolean; name: string; personalId: string; phone: string; pickedUpOn: string; rateTetri: number; depositTetri: number; customer: unknown }>(
+          await call(owner, 'GET', '/api/drive/folders/f-stranger/prefill'),
+        );
+        expect(p).toMatchObject({ fromContract: true, name: 'ნინო თუშიძე', personalId: '01234567890', phone: '+995 555 00 00 00', pickedUpOn: '2026-09-07', rateTetri: 15000, depositTetri: 18000, customer: null });
+      } finally {
+        globalThis.fetch = realFetch;
+      }
+      const kept = await prisma.driveFile.findUniqueOrThrow({ where: { id: 'doc-contract' } });
+      expect(JSON.stringify(kept)).not.toContain('01234567890');
+      expect(await prisma.auditLog.count({ where: { action: 'drive.prefill', entityId: 'f-stranger' } })).toBeGreaterThan(0);
+
       const manager = await loginAs('manager');
       expect((await call(manager, 'GET', '/api/drive/reconciliation')).statusCode).toBe(403);
+      expect((await call(manager, 'GET', '/api/drive/folders/f-stranger/prefill')).statusCode).toBe(403);
     } finally {
       delete process.env.DRIVE_SA_KEY;
       delete process.env.DRIVE_ROOT;
