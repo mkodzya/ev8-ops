@@ -58,7 +58,8 @@ export function driveRoutes(app: FastifyInstance): void {
       pickedUpOn: party?.signedOn ?? isoDate(contract?.contractOn ?? null) ?? fromName.datedOn,
       rateTetri: party?.rateTetri ?? null,
       depositTetri: party?.depositTetri ?? null,
-      vehicle: vehicle ? { id: vehicle.id, vin: vehicle.vin, available: vehicle.state === 'available' } : vin ? { id: null, vin, available: false } : null,
+      // The moped the contract names, and whether it can be handed over now: one «в сервисе» here has to be made free first.
+      vehicle: vehicle ? { id: vehicle.id, vin: vehicle.vin, available: vehicle.state === 'available', state: vehicle.state } : vin ? { id: null, vin, available: false, state: null } : null,
       customer: card,
     };
   });

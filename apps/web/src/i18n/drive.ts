@@ -43,6 +43,9 @@ export const driveEn = {
     prefilled: (name: string) => `Filled in from the contract in Drive (${name}). Check every field before you go on.`,
     prefilledScan: (name: string) => `Filled in from the folder in Drive (${name}): its contract is a scan, so only the name and the day.`,
     prefillLoading: 'Reading the contract in Drive…',
+    vehicleBusy: (vin: string, state: string) => `The contract names the moped …${vin}; here it is «${state}». Make it free on its card first, then choose it below.`,
+    vehicleUnknown: (vin: string) => `The contract names VIN ${vin}; there is no such moped here.`,
+    openVehicle: 'Open the moped',
   },
 };
 
@@ -88,6 +91,9 @@ export const driveRu: typeof driveEn = {
     prefilled: (name) => `Заполнено из договора в Drive (${name}). Проверьте каждое поле, прежде чем идти дальше.`,
     prefilledScan: (name) => `Заполнено из папки в Drive (${name}): договор — скан, поэтому только имя и дата.`,
     prefillLoading: 'Читаем договор в Drive…',
+    vehicleBusy: (vin, state) => `В договоре мопед …${vin}; здесь он «${state}». Сначала переведите его в «Свободен» на карточке мопеда, потом выберите ниже.`,
+    vehicleUnknown: (vin) => `В договоре VIN ${vin}; такого мопеда здесь нет.`,
+    openVehicle: 'Открыть мопед',
   },
 };
 
@@ -133,5 +139,8 @@ export const driveKa: typeof driveEn = {
     prefilled: (name) => `შევსებულია Drive-ის ხელშეკრულებიდან (${name}). შეამოწმეთ ყველა ველი, სანამ გააგრძელებთ.`,
     prefilledScan: (name) => `შევსებულია Drive-ის საქაღალდიდან (${name}): ხელშეკრულება სკანია, ამიტომ მხოლოდ სახელი და თარიღი.`,
     prefillLoading: 'Drive-ის ხელშეკრულება იკითხება…',
+    vehicleBusy: (vin, state) => `ხელშეკრულებაში მოპედია …${vin}; აქ ის არის «${state}». ჯერ მოპედის ბარათზე გადაიყვანეთ «თავისუფალში», შემდეგ აირჩიეთ ქვემოთ.`,
+    vehicleUnknown: (vin) => `ხელშეკრულებაში VIN ${vin}; ასეთი მოპედი აქ არ არის.`,
+    openVehicle: 'მოპედის გახსნა',
   },
 };
