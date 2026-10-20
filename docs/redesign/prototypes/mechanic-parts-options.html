@@ -1,0 +1,593 @@
+<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Запчасти и трекеры в ремонте — варианты · EV8 Ops, прототип</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=Inter:wght@400;500;600&family=Noto+Sans+Georgian:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+/* Static prototype: no JavaScript (Mika's viewer runs none). Colours are the
+   product's tokens (packages/shared/tokens.json). People, VINs and fleet
+   numbers, parts, prices, IMEI and SIM are invented; the works and norms are the bot's book
+   (CATALOG_SEED, 11.10.2026). */
+:root { --bg:#fbfbfb; --surface:#fff; --surface-2:#f3f3f3; --ink:#0b0b0b; --muted:#5d5d5d; --line:#dbe4de; --line-soft:#ebebeb; --line-control:#7a7a7a; --accent:#557553; --accent-soft:#e3ebe3; --accent-ink:#4d6a4b; --lime:#e0ffa2; --crit:#c8402f; --crit-soft:#f9e3df; --crit-ink:#b3392a; --warn-soft:#fdeadf; --service-deep:#b2450f; --info-soft:#e4ecfb; --rented-ink:#2f63c0; --toast:#0b0b0b;
+  --sans:"Be Vietnam Pro","Inter","Noto Sans Georgian",system-ui,sans-serif; --mono:"IBM Plex Mono","Noto Sans Georgian",ui-monospace,monospace; }
+* { box-sizing:border-box; }
+body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.5 var(--sans); }
+main { max-width:1240px; margin:0 auto; padding:32px 16px 64px; }
+h1 { font-size:28px; line-height:1.2; margin:0 0 8px; font-weight:500; letter-spacing:-.02em; }
+h2 { font-size:21px; margin:44px 0 4px; font-weight:500; letter-spacing:-.02em; }
+h2.part { font-size:25px; margin-top:64px; padding-top:22px; border-top:2px solid var(--ink); }
+.lead { color:var(--muted); margin:0 0 8px; max-width:860px; }
+.note { color:var(--muted); font-size:13px; }
+.common { background:var(--surface); border:1px solid var(--line-soft); border-radius:16px; padding:14px 18px; margin-top:16px; max-width:1000px; }
+.common ul { margin:6px 0 0; padding-left:20px; } .common li { margin:4px 0; }
+.tag { display:inline-block; font-size:12px; font-weight:600; padding:2px 10px; border-radius:99px; background:var(--surface-2); margin-bottom:6px; vertical-align:middle; }
+.rec .tag { background:var(--lime); }
+.why { display:grid; grid-template-columns:1fr 1fr; gap:6px 24px; max-width:960px; font-size:14px; margin:8px 0 0; }
+.why ul { margin:2px 0; padding-left:18px; } .why li { margin:3px 0; }
+.pro b { color:#2f6b3a; } .con b { color:#9a3b2c; }
+.row { display:flex; flex-wrap:wrap; gap:22px; margin-top:16px; align-items:flex-start; }
+.cap { font-size:13px; color:var(--muted); margin:6px 0 0; max-width:380px; }
+.cap b { color:var(--ink); font-weight:600; }
+.cap .ka { color:var(--ink); }
+code { font-family:var(--mono); font-size:13px; background:var(--surface-2); padding:1px 5px; border-radius:4px; }
+
+/* device frames: the screen inside is drawn at full size and scaled down */
+.frame { width:380px; height:500px; border-radius:22px; background:#1c1c1c; position:relative; box-shadow:0 2px 14px rgba(0,0,0,.18); flex:none; }
+.scr { position:absolute; left:10px; top:10px; width:768px; height:1024px; transform:scale(.469); transform-origin:top left; background:var(--bg); border-radius:24px; overflow:hidden; display:flex; flex-direction:column; }
+.frame.land { width:500px; height:380px; } .land .scr { width:1024px; height:768px; }
+.frame.lap { width:660px; height:432px; border-radius:14px; } .lap .scr { width:1366px; height:878px; transform:scale(.469); border-radius:8px; }
+.frame.ph { width:245px; height:507px; border-radius:26px; } .ph .scr { width:375px; height:812px; transform:scale(.6); border-radius:30px; font-size:15px; }
+.cap.wide { max-width:660px; } .cap.ph { max-width:245px; }
+
+/* tablet chrome after a PIN sign-in (TabletFrame: no logo below 900 px) */
+.bar { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:14px 22px; background:var(--surface); border-bottom:1px solid var(--line-soft); flex:none; }
+.bar .l { display:flex; align-items:center; gap:14px; min-width:0; }
+.bk { width:52px; height:52px; border-radius:50%; border:1.5px solid var(--line-control); display:flex; align-items:center; justify-content:center; font-size:28px; line-height:1; }
+.ttl { display:flex; flex-direction:column; } .ttl b { font-size:26px; font-weight:500; letter-spacing:-.02em; line-height:1.15; } .ttl span { font-size:15px; color:var(--muted); }
+.bar .r { display:flex; align-items:center; gap:14px; flex:none; }
+.me { display:flex; align-items:center; gap:10px; font-size:17px; font-weight:600; line-height:1.15; } .me i { display:block; font-style:normal; font-weight:400; font-size:14px; color:var(--muted); }
+.av { width:44px; height:44px; border-radius:50%; background:var(--accent-soft); color:var(--accent); font-weight:600; font-size:18px; display:flex; align-items:center; justify-content:center; }
+.out { height:52px; padding:0 22px; border:2px solid var(--ink); border-radius:99px; font-size:19px; font-weight:500; display:flex; align-items:center; gap:8px; }
+.logo { font:700 26px/1 var(--sans); color:#819481; letter-spacing:-.04em; }
+
+/* wizard */
+.steps { display:flex; gap:8px; padding:16px 26px 0; flex:none; }
+.steps span { flex:1; height:8px; border-radius:99px; background:var(--line-soft); } .steps span.done { background:var(--accent); } .steps span.now { background:var(--ink); }
+.body { flex:1; min-height:0; padding:22px 26px 0; display:flex; flex-direction:column; gap:20px; overflow:hidden; }
+.q { font-size:32px; font-weight:500; letter-spacing:-.02em; margin:0; line-height:1.15; }
+.lbl { font-size:17px; color:var(--muted); margin:0 0 8px; }
+.lbl b { color:var(--ink); font-weight:600; }
+.inp { height:72px; border:1.5px solid var(--line-control); border-radius:14px; background:var(--surface); display:flex; align-items:center; padding:0 20px; font-size:30px; }
+.inp.big { height:96px; font-size:52px; font-family:var(--mono); letter-spacing:.02em; }
+.inp.txt { font-size:22px; height:64px; }
+.inp .ph { color:#8a8a8a; }
+.caret { display:inline-block; width:2px; height:1em; background:var(--accent); margin-left:3px; vertical-align:-.12em; }
+.hint { font-size:16px; color:var(--muted); margin:8px 0 0; }
+.btn-o { height:64px; border:1.5px solid var(--ink); border-radius:99px; display:inline-flex; align-items:center; justify-content:center; gap:10px; padding:0 28px; font-size:21px; font-weight:500; background:var(--surface); }
+.btn-f { height:64px; border-radius:99px; display:inline-flex; align-items:center; justify-content:center; padding:0 34px; font-size:22px; font-weight:600; background:var(--accent); color:#fff; }
+.stick { margin-top:auto; padding:16px 26px 24px; background:var(--surface); border-top:1px solid var(--line-soft); display:flex; gap:14px; align-items:center; flex:none; }
+.stick .btn-f { flex:1; } .stick .sum { flex:1; font-size:17px; line-height:1.3; } .stick .sum b { font-size:20px; }
+.card { background:var(--surface); border:1.5px solid var(--line-soft); border-radius:18px; padding:16px 20px; }
+.card.sel { border:3px solid var(--accent); background:var(--accent-soft); }
+.mop { display:flex; justify-content:space-between; gap:12px; align-items:flex-start; }
+.mop .n { font-size:24px; font-weight:600; } .mop .m { font-size:20px; }
+.vin { font-family:var(--mono); font-size:19px; color:var(--muted); letter-spacing:.01em; } .vin b { color:var(--ink); font-weight:600; background:var(--lime); border-radius:4px; padding:0 2px; }
+.pill { display:inline-flex; align-items:center; gap:7px; font-size:16px; font-weight:500; padding:5px 14px; border-radius:99px; white-space:nowrap; }
+.pill::before { content:""; width:10px; height:10px; border-radius:50%; background:currentColor; }
+.p-av { background:var(--accent-soft); color:var(--accent-ink); }
+.p-rent { background:var(--info-soft); color:var(--rented-ink); }
+.p-serv { background:var(--warn-soft); color:var(--service-deep); } .p-serv::before { border-radius:3px; }
+.p-wait { background:var(--surface); color:var(--ink); border:1.5px solid var(--line-control); } .p-wait::before { background:transparent; border:2.5px solid var(--ink); width:6px; height:6px; }
+.warnline { margin-top:12px; font-size:17px; padding:10px 14px; border-radius:12px; background:var(--warn-soft); display:flex; justify-content:space-between; gap:10px; align-items:center; }
+.link { color:var(--accent); font-weight:600; text-decoration:underline; text-underline-offset:4px; }
+.chips { display:flex; flex-wrap:wrap; gap:12px; }
+.chip { height:60px; padding:0 24px; border:1.5px solid var(--line-control); border-radius:99px; display:inline-flex; align-items:center; font-size:20px; background:var(--surface); white-space:nowrap; }
+.chip.on { background:var(--ink); color:#fff; border-color:var(--ink); }
+.chip.sm { height:52px; font-size:18px; padding:0 18px; }
+.scroll-x { display:flex; gap:10px; overflow:hidden; white-space:nowrap; }
+.photos { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; }
+.pic { aspect-ratio:1; border-radius:14px; background:repeating-linear-gradient(135deg,#d9dcd9 0 10px,#e6e8e6 10px 20px); position:relative; }
+.pic span { position:absolute; left:8px; bottom:8px; background:rgba(11,11,11,.7); color:#fff; font-size:14px; padding:2px 9px; border-radius:99px; }
+.pic.add { background:var(--surface); border:2px dashed var(--line-control); display:flex; flex-direction:column; align-items:center; justify-content:center; font-size:18px; color:var(--ink); gap:4px; }
+.pic.add big { font-size:36px; line-height:1; }
+.odo { display:grid; grid-template-columns:1fr 190px; gap:18px; align-items:end; }
+.err { color:var(--crit-ink); font-size:17px; font-weight:500; margin:8px 0 0; }
+.box-warn { background:var(--warn-soft); border-radius:16px; padding:16px 18px; font-size:18px; }
+.box-warn p { margin:0 0 12px; }
+.wk { display:flex; align-items:center; gap:14px; padding:12px 16px; background:var(--surface); border:1.5px solid var(--line-soft); border-radius:16px; }
+.wk.on { border-color:var(--accent); border-width:2.5px; }
+.wk .c { font-family:var(--mono); font-size:16px; color:var(--muted); width:62px; flex:none; }
+.wk .t { flex:1; font-size:19px; line-height:1.25; }
+.wk .mn { font-family:var(--mono); font-size:18px; white-space:nowrap; }
+.qty { display:flex; align-items:center; gap:0; border:1.5px solid var(--line-control); border-radius:99px; height:52px; flex:none; }
+.qty span { width:52px; text-align:center; font-size:26px; line-height:52px; } .qty b { width:34px; text-align:center; font-size:21px; }
+.plus { width:52px; height:52px; border-radius:50%; border:1.5px solid var(--ink); font-size:28px; line-height:48px; text-align:center; flex:none; }
+.nonorm { font-size:15px; font-weight:600; padding:3px 10px; border-radius:99px; background:var(--crit-soft); color:var(--crit-ink); white-space:nowrap; }
+.kv { display:grid; grid-template-columns:150px 1fr; gap:10px 16px; font-size:19px; } .kv dt { color:var(--muted); } .kv dd { margin:0; }
+.lines { display:flex; flex-direction:column; gap:0; font-size:18px; }
+.lines div { display:flex; gap:12px; padding:9px 0; border-bottom:1px solid var(--line-soft); align-items:baseline; }
+.lines .c { font-family:var(--mono); color:var(--muted); width:62px; flex:none; font-size:16px; }
+.lines .t { flex:1; } .lines .mn, .lines .gel { font-family:var(--mono); white-space:nowrap; } .lines .gel { width:96px; text-align:right; }
+.tot { display:flex; justify-content:space-between; font-size:19px; font-weight:600; padding-top:10px; }
+.thumbs { display:flex; gap:10px; } .thumbs .pic { width:96px; }
+.ka { font-family:"Noto Sans Georgian","Be Vietnam Pro",sans-serif; }
+.sect-h { display:flex; justify-content:space-between; align-items:baseline; font-size:20px; font-weight:600; margin-top:6px; }
+.sect-h span { font-size:16px; color:var(--muted); font-weight:400; }
+.toast { position:absolute; left:26px; right:26px; bottom:26px; background:var(--toast); color:#fff; border-radius:18px; padding:20px 24px; font-size:19px; display:flex; justify-content:space-between; }
+.toast b { color:var(--lime); }
+
+/* the book of works */
+.banner { background:var(--surface-2); border-radius:14px; padding:12px 16px; font-size:16px; line-height:1.4; }
+.banner b { font-weight:600; }
+.grp { display:flex; flex-direction:column; gap:0; background:var(--surface); border:1px solid var(--line-soft); border-radius:16px; overflow:hidden; }
+.grp .gh { display:flex; justify-content:space-between; align-items:baseline; padding:12px 18px; background:var(--surface-2); font-size:19px; font-weight:600; }
+.grp .gh span { font-size:15px; font-weight:400; color:var(--muted); }
+.grp .r { display:flex; gap:14px; align-items:center; padding:12px 18px; border-top:1px solid var(--line-soft); font-size:18px; min-height:60px; }
+.grp .r .c { font-family:var(--mono); font-size:16px; color:var(--muted); width:60px; flex:none; }
+.grp .r .t { flex:1; line-height:1.25; } .grp .r .mn { font-family:var(--mono); font-size:18px; }
+.grp .r.off .t, .grp .r.off .mn { color:var(--muted); text-decoration:line-through; }
+.mark { font-size:13px; padding:2px 8px; border-radius:99px; background:var(--surface-2); color:var(--muted); white-space:nowrap; }
+.mark.note { background:var(--lime); color:var(--ink); }
+.veil { position:absolute; inset:0; background:rgba(11,11,11,.32); }
+.sheet { position:absolute; left:0; right:0; bottom:0; background:var(--surface); border-radius:28px 28px 0 0; padding:24px 26px 26px; display:flex; flex-direction:column; gap:16px; }
+.sheet .grab { width:60px; height:6px; border-radius:99px; background:var(--line-soft); align-self:center; margin-top:-8px; }
+.f2 { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+.fl .lbl { margin-bottom:6px; font-size:15px; } .fl .inp { height:60px; font-size:20px; }
+.fl .inp.ro { background:var(--surface-2); border-color:var(--line-soft); color:var(--muted); }
+.fl .inp.empty { border-style:dashed; }
+.tgl { display:flex; align-items:center; gap:14px; font-size:19px; }
+.tgl i { width:64px; height:36px; border-radius:99px; background:var(--accent); position:relative; flex:none; }
+.tgl i::after { content:""; position:absolute; right:4px; top:4px; width:28px; height:28px; border-radius:50%; background:#fff; }
+.tiles3 { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; }
+.tl { background:var(--surface); border:1.5px solid var(--line-control); border-radius:20px; padding:16px; height:150px; display:flex; flex-direction:column; justify-content:space-between; }
+.tl .k { font-family:var(--mono); font-size:15px; color:var(--muted); } .tl .nm { font-size:18px; font-weight:600; line-height:1.2; } .tl .ct { font-size:15px; color:var(--muted); }
+table.tb { border-collapse:collapse; width:100%; font-size:15px; background:var(--surface); }
+table.tb th { text-align:left; font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); background:var(--surface-2); padding:8px 10px; }
+table.tb td { padding:7px 10px; border-top:1px solid var(--line-soft); vertical-align:top; }
+table.tb td.c { font-family:var(--mono); color:var(--muted); white-space:nowrap; } table.tb td.mn { font-family:var(--mono); text-align:right; }
+table.tb td.gap { color:#8a8a8a; } table.tb td.gap span { border:1px dashed var(--line-control); border-radius:6px; padding:1px 8px; }
+table.tb td.edit { outline:2px solid var(--accent); outline-offset:-2px; background:var(--accent-soft); }
+.side { display:flex; } .side .rail { width:220px; background:#0b0b0b; flex:none; } .side .main { flex:1; padding:26px 32px; display:flex; flex-direction:column; gap:16px; }
+
+table.words { border-collapse:collapse; margin-top:10px; font-size:14px; }
+table.words td { padding:5px 14px 5px 0; border-bottom:1px solid var(--line-soft); vertical-align:top; }
+table.words td:first-child { font-family:"Noto Sans Georgian",sans-serif; font-size:15px; }
+table.words td.lat { color:var(--muted); font-style:italic; }
+table.words td.num { font-family:var(--mono); text-align:right; }
+</style></head><body><main>
+<style>
+/* stage 3 additions */
+.p-ok { background:var(--accent-soft); color:var(--accent-ink); }
+.p-rej { background:var(--surface-2); color:#666; } .p-rej::before { content:"×"; background:none; width:auto; height:auto; font-size:20px; line-height:1; font-weight:600; }
+.p-done { background:var(--surface-2); color:#666; }
+.lines div.ok .t::after { content:"  ✓"; color:var(--accent); font-weight:600; }
+.lines div.ok { color:var(--muted); }
+.lines div.wait { background:var(--warn-soft); margin:4px -10px; padding:9px 10px; border-radius:10px; border-bottom:none; }
+.lines div.rej .t, .lines div.rej .mn, .lines div.rej .gel { text-decoration:line-through; color:var(--muted); }
+.wtag { font-size:14px; font-weight:600; padding:2px 10px; border-radius:99px; background:var(--surface); border:1.5px solid var(--line-control); white-space:nowrap; }
+.mini { height:46px; width:120px; border:1.5px solid var(--accent); border-radius:10px; background:var(--surface); display:inline-flex; align-items:center; padding:0 12px; font:18px var(--mono); flex:none; }
+.mini .caret { height:.9em; }
+.qcard { background:var(--surface); border:1.5px solid var(--line-soft); border-radius:20px; padding:18px 20px; display:flex; flex-direction:column; gap:12px; }
+.qcard .hd { display:flex; justify-content:space-between; align-items:baseline; gap:12px; }
+.qcard .hd b { font-size:22px; font-weight:600; } .qcard .hd span { font-size:16px; color:var(--muted); }
+.qcard .why2 { font-size:19px; line-height:1.3; }
+.qcard .acts { display:flex; gap:14px; justify-content:flex-end; }
+.qcard .acts .btn-o, .qcard .acts .btn-f { height:58px; font-size:20px; }
+.qcard .thumbs .pic { width:110px; }
+.qrow { display:flex; align-items:center; gap:14px; background:var(--surface); border:1.5px solid var(--line-soft); border-radius:16px; padding:14px 18px; }
+.qrow .w { flex:1; } .qrow .w b { font-size:20px; } .qrow .w div { font-size:17px; color:var(--muted); }
+.qrow .s { text-align:right; font-family:var(--mono); font-size:17px; } .qrow .s i { display:block; font-style:normal; color:var(--service-deep); font-family:var(--sans); font-size:15px; }
+.qrow .go { font-size:30px; color:var(--muted); }
+.box-sug { background:var(--accent-soft); border-radius:16px; padding:14px 18px; font-size:17px; display:flex; flex-direction:column; gap:10px; }
+.box-sug p { margin:0; } .box-sug .acts { display:flex; gap:12px; }
+.box-info { background:var(--surface-2); border-radius:14px; padding:12px 16px; font-size:17px; line-height:1.35; }
+.reason-box { background:var(--surface-2); border-radius:14px; padding:12px 16px; font-size:18px; }
+.reason-box b { display:block; font-size:15px; color:var(--muted); font-weight:500; margin-bottom:2px; }
+.inp.area { height:120px; align-items:flex-start; padding-top:16px; font-size:21px; }
+.ph .bar { padding:10px 14px; } .ph .ttl b { font-size:20px; } .ph .ttl span { font-size:13px; }
+.ph .body { padding:14px 14px 0; gap:12px; }
+.ph .qcard { padding:14px; gap:10px; border-radius:16px; } .ph .qcard .hd b { font-size:18px; } .ph .qcard .why2 { font-size:16px; }
+.ph .lines { font-size:15px; } .ph .lines .c { width:52px; font-size:13px; } .ph .lines .gel { width:70px; }
+.ph .qcard .thumbs .pic { width:64px; } .ph .qcard .acts .btn-o, .ph .qcard .acts .btn-f { height:48px; font-size:16px; padding:0 18px; }
+.ph .avo { width:36px; height:36px; border-radius:50%; background:var(--accent-soft); color:var(--accent); font-weight:600; display:flex; align-items:center; justify-content:center; }
+.ph .tabs { display:flex; justify-content:space-around; border-top:1px solid var(--line-soft); background:var(--surface); padding:8px 0 14px; font-size:12px; color:var(--muted); margin-top:auto; flex:none; }
+.ph .box-sug { font-size:14px; padding:12px; } .ph .kv { font-size:15px; grid-template-columns:96px 1fr; gap:6px 10px; }
+.stick .note2 { flex:1; font-size:17px; color:var(--muted); line-height:1.3; }
+.locs { display:flex; gap:12px; flex-wrap:wrap; }
+</style>
+<style>
+/* stage 4 additions */
+.plines { display:flex; flex-direction:column; font-size:18px; }
+.plines > div { display:flex; gap:12px; padding:10px 0; border-bottom:1px solid var(--line-soft); align-items:center; }
+.plines .t { flex:1; line-height:1.25; } .plines .t small { display:block; font-size:15px; color:var(--muted); }
+.plines .pq { font-family:var(--mono); white-space:nowrap; width:44px; text-align:right; }
+.plines .i { font-size:15px; color:var(--muted); text-align:right; white-space:nowrap; }
+.plines .i b { font-family:var(--mono); color:var(--ink); font-weight:500; }
+.plines .gel { font-family:var(--mono); width:96px; text-align:right; white-space:nowrap; }
+.plines div.wait { background:var(--warn-soft); margin:4px -10px; padding:10px; border-radius:10px; border-bottom:none; }
+.kt { font-size:14px; font-weight:600; padding:2px 10px; border-radius:99px; background:var(--surface-2); white-space:nowrap; color:var(--ink); }
+.kt.bat { background:var(--info-soft); color:var(--rented-ink); }
+.ktiles { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+.ktile { background:var(--surface); border:1.5px solid var(--line-control); border-radius:20px; padding:18px 20px; min-height:132px; display:flex; flex-direction:column; gap:6px; }
+.ktile .g { font-size:30px; line-height:1; color:var(--accent); font-family:var(--mono); }
+.ktile b { font-size:23px; font-weight:600; line-height:1.15; } .ktile span { font-size:17px; color:var(--muted); line-height:1.3; }
+.ktile.bat { border-style:dashed; }
+.res { display:flex; flex-direction:column; gap:10px; }
+.res .r { display:flex; align-items:center; gap:14px; background:var(--surface); border:1.5px solid var(--line-soft); border-radius:16px; padding:12px 16px; min-height:64px; }
+.res .r.on { border:3px solid var(--accent); background:var(--accent-soft); }
+.res .r .c { font-family:var(--mono); font-size:15px; color:var(--muted); width:84px; flex:none; }
+.res .r .t { flex:1; font-size:19px; line-height:1.25; }
+.res .r .s { font-size:16px; color:var(--muted); white-space:nowrap; } .res .r .s b { font-family:var(--mono); color:var(--ink); font-weight:500; }
+.res .r .s.bad b { color:var(--crit-ink); }
+.res .r.free { border-style:dashed; color:var(--muted); }
+.okline { font-size:17px; color:var(--accent-ink); font-weight:500; margin:8px 0 0; }
+.sw { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+.sw .lb { font-size:16px; color:var(--muted); width:84px; flex:none; }
+.pic.req { border:2px dashed var(--crit); background:var(--surface); display:flex; flex-direction:column; align-items:center; justify-content:center; font-size:17px; gap:4px; color:var(--ink); }
+.pic.req big { font-size:34px; line-height:1; }
+.ph .plines { font-size:14px; } .ph .plines .gel { width:70px; } .ph .plines .pq { width:30px; } .ph .kt { font-size:12px; padding:1px 8px; }
+.ph .card { padding:12px 14px; border-radius:14px; }
+.ph .sect-h { font-size:16px; }
+.ph .kv { font-size:14px; grid-template-columns:84px 1fr; }
+.mono { font-family:var(--mono); }
+</style>
+
+<h1>Запчасти и трекеры в ремонте — варианты</h1>
+<p class="lead">Этап 4 плана «Механик в EV8 Ops» (<code>docs/spec/mechanic-in-erp-plan.md</code>), ADR-0032, 0033, 0035 и решения 20.10.2026 ниже. Механик сам записывает
+в свою заявку каждую деталь, которая вошла в мопед или вышла из него: со склада, купленную сам, снятую на склад, переставленную с донора, а ещё батарею или
+зарядку в ремонт. Ставит трекер — записывает его IMEI и SIM. Экраны планшета — в натуральную величину 768×1024, уменьшены до 47 %, телефон — 375 px. Подписи
+по-русски для чтения; на планшете по умолчанию грузинский, слова — в конце страницы. <b>Имена, VIN, номера мопедов, артикулы, цены, IMEI и SIM выдуманы.</b>
+Работы и нормы — из справочника бота на 11.10.2026.</p>
+
+<div class="common">
+<b>Решено тобой 20.10.2026 — общее у всех вариантов</b> (выбирать не нужно):
+<ul>
+<li><b>«Купил сам» — без предела суммы</b> (п. 111). Без фото чека строка не записывается — проверяет сервер. Строка ждёт согласования главного механика, как работа,
+найденная позже: заявка снова в очереди, закрыть её нельзя, пока строка ждёт. Сумма чека идёт механику к возмещению вместе с оплатой работ (выплата — этап 5).
+Главный механик видит сумму и чек — без этого не согласовать.</li>
+<li><b>Батареи и зарядки — только счётом «Парк → Батареи и зарядки»</b> (п. 91). На склад запчастей их не заводим. В заявке механик отмечает «в ремонт» или «из
+ремонта» количеством — это движение того же счёта, что у владельца.</li>
+<li><b>Трекер закреплён за мопедом</b> (Q31 пересмотрен). Ставит трекер — экран спрашивает IMEI с наклейки (15 цифр, проверяем контрольную цифру — опечатка видна
+сразу) и номер SIM. Два действующих трекера с одним IMEI система не примет. Снятый трекер закрывается датой, история остаётся. IMEI и SIM видят владелец и
+механики, менеджер — нет. Какая запчасть — трекер, отмечает владелец в карточке запчасти на «Складе».</li>
+<li><b>Снятая рабочая деталь приходит на склад по 0 ₾</b> с пометкой «снято с EV-…, SV-…»: средняя цена этой детали на складе падает. Нерабочую деталь не
+записывают. Неизвестная цена — по-прежнему пусто, не ноль.</li>
+<li><b>«Купил сам» и «с донора» не трогают среднюю цену полки:</b> деталь проходит парой «приход + расход» по одной цене — по чеку или по 0 для донора. Ремонт
+получает ровно эту цену. С донора — в карточке донора видно, что с него снято и куда.</li>
+<li><b>Со склада — как сейчас:</b> нехватка не запрещает ремонт, остаток уходит в минус и краснеет. Механик видит, сколько на полке, но не видит цен склада и
+себестоимости (ADR-0033). Убрал строку, пока заявка не закрыта, — детали возвращаются на склад отдельным движением, как сейчас.</li>
+<li>Записывать детали механик может, пока заявка ждёт согласования или в работе; закрытую не правят. Владелец видит всё с суммами, как сейчас; деньги ремонта
+по-прежнему «запчасти + работа» одной строкой — строки работ войдут в стоимость на этапе 5 (п. 113).</li>
+<li><b>Запчасти, остатки и трекеры из таблицы склада</b> переносятся отдельной веткой, когда придёт выгрузка xlsx; релиз для пилота ждёт её. До импорта склад в EV8
+Ops почти пуст — на QA-стенде будут тестовые детали. Фильтр по категории и модели мопеда появится, если такие колонки есть в листе «Запчасти»; пока — поиск по
+названию и артикулу.</li>
+</ul>
+</div>
+
+<!-- ================================================================== part 1 -->
+<h2 class="part">1. Где механик записывает детали</h2>
+
+<!-- ============================ 1A ============================ -->
+<section class="rec">
+<h2>А. В карточке заявки, по ходу работы <span class="tag">рекомендую</span></h2>
+<div class="why">
+<div class="pro"><b>За:</b><ul><li>Деталь записана, когда её взяли: склад в EV8 Ops верен весь день, а не после закрытия.</li><li>«Купил сам» уходит на согласование сразу, пока механик работает, — к закрытию решение уже есть.</li><li>Тот же блок и та же кнопка, что «＋ Работа» этапа 3: учить нечему.</li><li>Перед закрытием экран закрытия показывает список деталей итогом — забытое видно.</li></ul></div>
+<div class="con"><b>Против:</b><ul><li>Механик должен не забыть записать деталь сразу — привычка бота другая (там детали в конце).</li><li>Карточка длиннее: работы, детали, фото.</li></ul></div>
+</div>
+<div class="row">
+<div><div class="frame"><div class="scr">
+  <div class="bar"><div class="l"><span class="bk">‹</span><span class="ttl"><b>SV-00042</b><span>EV-014 · XL1200 · ···4F21</span></span></div><div class="r"><span class="me"><span class="av">С</span><span>Сандро<i>механик</i></span></span><span class="out">⇥ Выйти</span></div></div>
+  <div class="body" style="gap:14px">
+    <div style="display:flex;gap:12px;align-items:center"><span class="pill p-wait">Ждёт согласования</span><span class="note" style="font-size:16px">Согласовала Ника в 10:58 · трос ждёт решения</span></div>
+    <div class="card"><div class="sect-h">Работы <span>2 · 80 мин</span></div>
+      <div class="lines">
+        <div class="ok"><span class="c">BR-01</span><span class="t">Замена колодок, дисковый × 2</span><span class="mn">60 мин</span><span class="gel">50,00 ₾</span></div>
+        <div class="ok"><span class="c">BR-04</span><span class="t">Регулировка тормозного троса × 1</span><span class="mn">20 мин</span><span class="gel">16,67 ₾</span></div>
+      </div></div>
+    <div class="card"><div class="sect-h">Детали <span>6 строк</span></div>
+      <div class="plines">
+        <div><span class="kt">со склада</span><span class="t">Колодки тормозные задние<small>KL-2041 · на полке 4 → 2</small></span><span class="pq">× 2</span></div>
+        <div class="wait"><span class="kt">купил сам</span><span class="t">Трос тормоза задний<small>чек · 18,00 ₾ вернётся тебе</small></span><span class="wtag">ждёт</span><span class="pq">× 1</span></div>
+        <div><span class="kt">с донора</span><span class="t">Датчик Холла<small>снят с EV-031</small></span><span class="pq">× 1</span></div>
+        <div><span class="kt">снято на склад</span><span class="t">Колодки тормозные задние<small>рабочие, на полку по 0 ₾</small></span><span class="pq">× 2</span></div>
+        <div><span class="kt">со склада</span><span class="t">GPS-трекер<small>IMEI ···4828 · SIM ···0203</small></span><span class="pq">× 1</span></div>
+        <div><span class="kt bat">батарея</span><span class="t">В ремонт<small>счёт батарей, не склад</small></span><span class="pq">× 1</span></div>
+      </div></div>
+    <div style="display:flex;gap:14px"><span class="btn-o">＋ Работа</span><span class="btn-o">＋ Деталь</span></div>
+  </div>
+  <div class="stick"><span class="note2">Закрыть можно после решения по тросу</span><span class="btn-o" style="color:var(--muted);border-color:var(--line-control)">Закрыть заявку</span></div>
+</div></div>
+<p class="cap"><b>Заявка в работе у механика.</b> Блок «Детали» рядом с «Работами», кнопка «＋ Деталь» рядом с «＋ Работа». Вид строки — меткой слева. Цен склада механик не видит; сумму своего чека — видит.</p></div>
+
+<div><div class="frame"><div class="scr">
+  <div class="bar"><div class="l"><span class="bk">‹</span><span class="ttl"><b>Закрыть SV-00042</b><span>EV-014 · XL1200</span></span></div><div class="r"><span class="me"><span class="av">С</span><span>Сандро<i>механик</i></span></span><span class="out">⇥ Выйти</span></div></div>
+  <div class="body" style="gap:16px">
+    <div><p class="lbl"><b>Фото после ремонта</b> · от 1 до 5</p><div class="photos"><div class="pic"><span>после</span></div><div class="pic"><span>после</span></div><div class="pic add"><big>＋</big>Снять</div></div></div>
+    <div><p class="lbl"><b>Пробег при закрытии, км</b></p><div class="inp big" style="height:84px;font-size:44px">4 815</div></div>
+    <div class="card"><div class="sect-h">Детали <span>всё ли записано?</span></div>
+      <div class="plines">
+        <div><span class="kt">со склада</span><span class="t">Колодки тормозные задние</span><span class="pq">× 2</span></div>
+        <div><span class="kt">купил сам</span><span class="t">Трос тормоза задний<small>согласовала Ника · 18,00 ₾ к возмещению</small></span><span class="pq">× 1</span></div>
+        <div><span class="kt">с донора</span><span class="t">Датчик Холла · с EV-031</span><span class="pq">× 1</span></div>
+        <div><span class="kt">снято на склад</span><span class="t">Колодки тормозные задние</span><span class="pq">× 2</span></div>
+        <div><span class="kt">со склада</span><span class="t">GPS-трекер · IMEI ···4828</span><span class="pq">× 1</span></div>
+      </div>
+      <p class="hint" style="margin-top:10px">Забыл деталь — «‹» назад в заявку, «＋ Деталь».</p></div>
+  </div>
+  <div class="stick"><span class="btn-f">Закрыть заявку</span></div>
+</div></div>
+<p class="cap"><b>Экран закрытия этапа 3</b> показывает детали итогом — правки в нём нет, он только напоминает. Трос уже согласован, заявка закрывается.</p></div>
+</div>
+</section>
+
+<!-- ============================ 1B ============================ -->
+<section>
+<h2>Б. На экране закрытия, как в боте <span class="tag">вариант</span></h2>
+<div class="why">
+<div class="pro"><b>За:</b><ul><li>Привычно: в боте механик отмечал детали при закрытии.</li><li>Одно место, один список, ничего не записано зря, если работу отменили.</li></ul></div>
+<div class="con"><b>Против:</b><ul><li>Весь день склад в EV8 Ops врёт: детали уже в мопеде, а на полке ещё числятся.</li><li>«Купил сам» впервые видно при закрытии — строка уходит на согласование, и закрыть заявку сразу нельзя: механик ждёт главного механика с мопедом на подъёмнике.</li><li>Трекер, поставленный утром, до вечера ни за кем не закреплён.</li></ul></div>
+</div>
+<div class="row">
+<div><div class="frame"><div class="scr">
+  <div class="bar"><div class="l"><span class="bk">‹</span><span class="ttl"><b>Закрыть SV-00042</b><span>Шаг 1 из 2 · Детали</span></span></div><div class="r"><span class="me"><span class="av">С</span><span>Сандро<i>механик</i></span></span><span class="out">⇥ Выйти</span></div></div>
+  <div class="steps"><span class="now"></span><span></span></div>
+  <div class="body" style="gap:16px">
+    <p class="q">Что поставил и что снял</p>
+    <div class="card">
+      <div class="plines">
+        <div><span class="kt">со склада</span><span class="t">Колодки тормозные задние<small>на полке 4 → 2</small></span><span class="pq">× 2</span></div>
+        <div class="wait"><span class="kt">купил сам</span><span class="t">Трос тормоза задний<small>чек · 18,00 ₾</small></span><span class="wtag">уйдёт на согласование</span><span class="pq">× 1</span></div>
+        <div><span class="kt">с донора</span><span class="t">Датчик Холла · с EV-031</span><span class="pq">× 1</span></div>
+        <div><span class="kt">снято на склад</span><span class="t">Колодки тормозные задние</span><span class="pq">× 2</span></div>
+      </div></div>
+    <span class="btn-o" style="align-self:flex-start">＋ Деталь</span>
+    <div class="box-warn"><p style="margin:0">«Купил сам» ждёт согласования — заявку закроешь после решения Ники.</p></div>
+  </div>
+  <div class="stick"><span class="btn-o">Назад</span><span class="btn-f">Далее</span></div>
+</div></div>
+<p class="cap"><b>Шаг «Детали» перед фото «после».</b> В карточке заявки деталей нет, пока не начато закрытие.</p></div>
+</div>
+</section>
+
+<!-- ================================================================== part 2 -->
+<h2 class="part">2. Лист «＋ Деталь»</h2>
+
+<!-- ============================ 2A ============================ -->
+<section class="rec">
+<h2>А. Сначала «откуда», потом только нужные поля <span class="tag">рекомендую</span></h2>
+<div class="why">
+<div class="pro"><b>За:</b><ul><li>Пять крупных плиток (56 px и больше — палец в смазке), каждая со строкой «что это значит».</li><li>Каждый вид спрашивает только своё: чек — только у «купил сам», донор — только у «с донора», IMEI — только у трекера.</li><li>Ошибиться видом трудно: «снял на склад» не спутать с «поставил со склада».</li></ul></div>
+<div class="con"><b>Против:</b><ul><li>На одно касание больше: плитка, потом деталь.</li><li>Пять экранов листа вместо одного — больше перевода и проверки.</li></ul></div>
+</div>
+<div class="row">
+<div><div class="frame"><div class="scr">
+  <div class="bar"><div class="l"><span class="bk">‹</span><span class="ttl"><b>SV-00042</b><span>EV-014 · XL1200</span></span></div><div class="r"><span class="me"><span class="av">С</span><span>Сандро<i>механик</i></span></span><span class="out">⇥ Выйти</span></div></div>
+  <div class="veil"></div>
+  <div class="sheet"><div class="grab"></div>
+    <p class="q" style="font-size:28px">Деталь — откуда?</p>
+    <div class="ktiles">
+      <div class="ktile"><span class="g">▤</span><b>Со склада</b><span>взял с полки</span></div>
+      <div class="ktile"><span class="g">₾</span><b>Купил сам</b><span>нужно фото чека, деньги вернём</span></div>
+      <div class="ktile"><span class="g">↩</span><b>Снял на склад</b><span>рабочая деталь с этого мопеда</span></div>
+      <div class="ktile"><span class="g">⇄</span><b>С донора</b><span>снял с другого мопеда и поставил сюда</span></div>
+      <div class="ktile bat"><span class="g">⚡</span><b>Батарея или зарядка</b><span>в ремонт или из ремонта</span></div>
+    </div>
+    <span class="btn-o">Отмена</span>
+  </div>
+</div></div>
+<p class="cap"><b>Шаг 1.</b> Пять видов. Батарея — пунктиром: это не склад, а счёт батарей.</p></div>
+
+<div><div class="frame"><div class="scr">
+  <div class="bar"><div class="l"><span class="bk">‹</span><span class="ttl"><b>SV-00042</b><span>EV-014 · XL1200</span></span></div><div class="r"><span class="me"><span class="av">С</span><span>Сандро<i>механик</i></span></span><span class="out">⇥ Выйти</span></div></div>
+  <div class="veil"></div>
+  <div class="sheet" style="top:120px"><div class="grab"></div>
+    <p class="q" style="font-size:28px">Со склада</p>
+    <div class="inp txt">колод<span class="caret"></span></div>
+    <div class="res">
+      <div class="r on"><span class="c">KL-2041</span><span class="t">Колодки тормозные задние</span><span class="s">на полке <b>4</b></span><span class="qty"><span>−</span><b>2</b><span>＋</span></span></div>
+      <div class="r"><span class="c">KL-2040</span><span class="t">Колодки тормозные передние</span><span class="s bad">на полке <b>0</b></span></div>
+      <div class="r"><span class="c">—</span><span class="t">Колодки барабанные</span><span class="s">на полке <b>3</b></span></div>
+    </div>
+    <p class="hint">Нет на полке — всё равно записывай: остаток уйдёт в минус, владелец пересчитает склад.</p>
+    <div style="display:flex;gap:14px;margin-top:auto"><span class="btn-o">Назад</span><span class="btn-f" style="flex:1">Записать × 2</span></div>
+  </div>
+</div></div>
+<p class="cap"><b>Со склада.</b> Поиск по названию и артикулу с первой буквы. Сколько на полке — видно, цены — нет.</p></div>
+
+<div><div class="frame"><div class="scr">
+  <div class="bar"><div class="l"><span class="bk">‹</span><span class="ttl"><b>SV-00042</b><span>EV-014 · XL1200</span></span></div><div class="r"><span class="me"><span class="av">С</span><span>Сандро<i>механик</i></span></span><span class="out">⇥ Выйти</span></div></div>
+  <div class="veil"></div>
+  <div class="sheet" style="top:90px"><div class="grab"></div>
+    <p class="q" style="font-size:28px">Купил сам</p>
+    <div><p class="lbl"><b>Что купил</b></p>
+      <div class="res"><div class="r on"><span class="c">TR-0310</span><span class="t">Трос тормоза задний</span></div><div class="r free"><span class="t">Нет в списке — написать название</span></div></div></div>
+    <div class="f2">
+      <div class="fl"><p class="lbl"><b>Заплатил за всё, ₾</b></p><div class="inp big" style="height:72px;font-size:34px">18,00<span class="caret"></span></div></div>
+      <div class="fl"><p class="lbl"><b>Сколько штук</b></p><span class="qty" style="height:72px"><span style="line-height:72px">−</span><b>1</b><span style="line-height:72px">＋</span></span></div>
+    </div>
+    <div><p class="lbl"><b>Фото чека</b> · обязательно</p><div class="thumbs"><div class="pic req" style="width:150px"><big>＋</big>Снять чек</div></div></div>
+    <div class="box-info">Вернём тебе вместе с оплатой работ, когда Ника согласует. Пока ждёт — заявку не закрыть.</div>
+    <div style="display:flex;gap:14px;margin-top:auto"><span class="btn-o">Назад</span><span class="btn-f" style="flex:1">Записать</span></div>
+  </div>
+</div></div>
+<p class="cap"><b>Купил сам.</b> Деталь из каталога или своим названием, сумма, фото чека. Без чека «Записать» ответит «Сфотографируй чек» — проверяет сервер.</p></div>
+</div>
+
+<div class="row">
+<div><div class="frame"><div class="scr">
+  <div class="bar"><div class="l"><span class="bk">‹</span><span class="ttl"><b>SV-00042</b><span>EV-014 · XL1200</span></span></div><div class="r"><span class="me"><span class="av">С</span><span>Сандро<i>механик</i></span></span><span class="out">⇥ Выйти</span></div></div>
+  <div class="veil"></div>
+  <div class="sheet" style="top:110px"><div class="grab"></div>
+    <p class="q" style="font-size:28px">Со склада · трекер</p>
+    <div class="res"><div class="r on"><span class="c">GT-0001</span><span class="t">GPS-трекер</span><span class="s">на полке <b>12</b></span></div></div>
+    <div><p class="lbl"><b>IMEI</b> — 15 цифр с наклейки трекера</p><div class="inp big" style="height:84px;font-size:40px">352 098 114 374 828<span class="caret"></span></div><p class="okline">✓ Контрольная цифра сошлась</p></div>
+    <div><p class="lbl"><b>Номер SIM</b> — на карте или её конверте</p><div class="inp big" style="height:72px;font-size:34px">555 01 02 03</div></div>
+    <div class="box-info">Трекер закрепится за EV-014. Если этот IMEI уже стоит на другом мопеде, запись не пройдёт: «Этот трекер на EV-022 с 12.10 — сначала сними его там».</div>
+    <div style="display:flex;gap:14px;margin-top:auto"><span class="btn-o">Назад</span><span class="btn-f" style="flex:1">Записать</span></div>
+  </div>
+</div></div>
+<p class="cap"><b>Трекер.</b> Та же «Со склада», но деталь отмечена владельцем как трекер — лист сразу спрашивает IMEI и SIM. Цифры крупно, моноширинно, группами по три.</p></div>
+
+<div><div class="frame"><div class="scr">
+  <div class="bar"><div class="l"><span class="bk">‹</span><span class="ttl"><b>SV-00042</b><span>EV-014 · XL1200</span></span></div><div class="r"><span class="me"><span class="av">С</span><span>Сандро<i>механик</i></span></span><span class="out">⇥ Выйти</span></div></div>
+  <div class="veil"></div>
+  <div class="sheet" style="top:110px"><div class="grab"></div>
+    <p class="q" style="font-size:28px">С донора</p>
+    <div><p class="lbl"><b>С какого мопеда</b> — номер с наклейки или конец VIN</p><div class="inp txt">31<span class="caret"></span></div></div>
+    <div class="card sel"><div class="mop"><div><div class="n">EV-031</div><div class="m">XL1200 <span class="vin">···7Q<b>31</b></span></div></div><span class="pill p-serv">В сервисе</span></div></div>
+    <div><p class="lbl"><b>Что снял и поставил сюда</b></p><div class="res"><div class="r on"><span class="c">DH-0102</span><span class="t">Датчик Холла</span><span class="qty"><span>−</span><b>1</b><span>＋</span></span></div></div></div>
+    <div class="box-info">В карточке EV-031 будет видно: снят датчик Холла → EV-014, SV-00042. Склад не меняется.</div>
+    <div style="display:flex;gap:14px;margin-top:auto"><span class="btn-o">Назад</span><span class="btn-f" style="flex:1">Записать</span></div>
+  </div>
+</div></div>
+<p class="cap"><b>С донора.</b> Донор — тем же поиском, что в «Новой заявке». Себестоимость детали в ремонте — 0.</p></div>
+
+<div><div class="frame"><div class="scr">
+  <div class="bar"><div class="l"><span class="bk">‹</span><span class="ttl"><b>SV-00042</b><span>EV-014 · XL1200</span></span></div><div class="r"><span class="me"><span class="av">С</span><span>Сандро<i>механик</i></span></span><span class="out">⇥ Выйти</span></div></div>
+  <div class="veil"></div>
+  <div class="sheet" style="top:170px"><div class="grab"></div>
+    <p class="q" style="font-size:28px">Снял на склад</p>
+    <div class="res"><div class="r on"><span class="c">KL-2041</span><span class="t">Колодки тормозные задние</span><span class="qty"><span>−</span><b>2</b><span>＋</span></span></div></div>
+    <div><p class="lbl"><b>Деталь рабочая?</b></p><div class="chips"><span class="chip on">Да, рабочая</span><span class="chip">Нет</span></div><p class="hint">Нерабочую не записываем — она на склад не идёт.</p></div>
+    <div class="box-info">Придут на полку с пометкой «снято с EV-014, SV-00042»: на полке станет 4.</div>
+    <div style="display:flex;gap:14px;margin-top:auto"><span class="btn-o">Назад</span><span class="btn-f" style="flex:1">Записать</span></div>
+  </div>
+</div></div>
+<p class="cap"><b>Снял на склад.</b> Только деталь из каталога — у полки должно быть имя. Приход по 0 ₾ механику не показываем: цен склада он не видит.</p></div>
+</div>
+
+<div class="row">
+<div><div class="frame"><div class="scr">
+  <div class="bar"><div class="l"><span class="bk">‹</span><span class="ttl"><b>SV-00042</b><span>EV-014 · XL1200</span></span></div><div class="r"><span class="me"><span class="av">С</span><span>Сандро<i>механик</i></span></span><span class="out">⇥ Выйти</span></div></div>
+  <div class="veil"></div>
+  <div class="sheet"><div class="grab"></div>
+    <p class="q" style="font-size:28px">Батарея или зарядка</p>
+    <div class="sw"><span class="lb">Что</span><span class="chip on">Батарея</span><span class="chip">Зарядка</span></div>
+    <div class="sw"><span class="lb">Куда</span><span class="chip on">В ремонт</span><span class="chip">Из ремонта</span></div>
+    <div class="sw"><span class="lb">Сколько</span><span class="qty" style="height:60px"><span style="line-height:60px">−</span><b>1</b><span style="line-height:60px">＋</span></span></div>
+    <div class="box-info">Это счёт «Парк → Батареи и зарядки», а не склад деталей: в ремонте станет на одну больше, в шоуруме — на одну меньше.</div>
+    <div style="display:flex;gap:14px"><span class="btn-o">Назад</span><span class="btn-f" style="flex:1">Записать</span></div>
+  </div>
+</div></div>
+<p class="cap"><b>Батарея или зарядка.</b> Количеством, без номеров (17.09.2026). В заявке — строка с синей меткой «батарея».</p></div>
+</div>
+</section>
+
+<!-- ============================ 2B ============================ -->
+<section>
+<h2>Б. Один лист: деталь, потом два переключателя <span class="tag">вариант</span></h2>
+<div class="why">
+<div class="pro"><b>За:</b><ul><li>Самый частый случай — «со склада» — на одно касание короче: деталь и сразу «Записать».</li><li>Один экран вместо пяти.</li></ul></div>
+<div class="con"><b>Против:</b><ul><li>Два переключателя — «поставил / снял» и «склад / купил / донор» — надо прочесть оба: легко записать «со склада» вместо «купил сам».</li><li>Поля появляются и исчезают при каждом переключении — на планшете в мастерской это путает.</li><li>Батарея не помещается — отдельная кнопка рядом с «＋ Деталь».</li></ul></div>
+</div>
+<div class="row">
+<div><div class="frame"><div class="scr">
+  <div class="bar"><div class="l"><span class="bk">‹</span><span class="ttl"><b>SV-00042</b><span>EV-014 · XL1200</span></span></div><div class="r"><span class="me"><span class="av">С</span><span>Сандро<i>механик</i></span></span><span class="out">⇥ Выйти</span></div></div>
+  <div class="veil"></div>
+  <div class="sheet" style="top:90px"><div class="grab"></div>
+    <p class="q" style="font-size:28px">Деталь</p>
+    <div class="inp txt">трос<span class="caret"></span></div>
+    <div class="res"><div class="r on"><span class="c">TR-0310</span><span class="t">Трос тормоза задний</span><span class="s">на полке <b>0</b></span><span class="qty"><span>−</span><b>1</b><span>＋</span></span></div></div>
+    <div class="sw"><span class="lb">Что</span><span class="chip on">Поставил</span><span class="chip">Снял</span></div>
+    <div class="sw"><span class="lb">Откуда</span><span class="chip">Склад</span><span class="chip on">Купил сам</span><span class="chip">Донор</span></div>
+    <div class="f2"><div class="fl"><p class="lbl"><b>Заплатил, ₾</b></p><div class="inp">18,00</div></div><div class="fl"><p class="lbl"><b>Фото чека</b></p><div class="pic req" style="height:60px;aspect-ratio:auto;flex-direction:row">＋ Снять чек</div></div></div>
+    <div style="display:flex;gap:14px;margin-top:auto"><span class="btn-o">Отмена</span><span class="btn-f" style="flex:1">Записать</span></div>
+  </div>
+</div></div>
+<p class="cap"><b>Купил сам</b> в одном листе: деталь, «Поставил», «Купил сам» — и появляются сумма и чек.</p></div>
+
+<div><div class="frame"><div class="scr">
+  <div class="bar"><div class="l"><span class="bk">‹</span><span class="ttl"><b>SV-00042</b><span>EV-014 · XL1200</span></span></div><div class="r"><span class="me"><span class="av">С</span><span>Сандро<i>механик</i></span></span><span class="out">⇥ Выйти</span></div></div>
+  <div class="veil"></div>
+  <div class="sheet" style="top:90px"><div class="grab"></div>
+    <p class="q" style="font-size:28px">Деталь</p>
+    <div class="inp txt">трекер<span class="caret"></span></div>
+    <div class="res"><div class="r on"><span class="c">GT-0001</span><span class="t">GPS-трекер</span><span class="s">на полке <b>12</b></span></div></div>
+    <div class="sw"><span class="lb">Что</span><span class="chip on">Поставил</span><span class="chip">Снял</span></div>
+    <div class="sw"><span class="lb">Откуда</span><span class="chip on">Склад</span><span class="chip">Купил сам</span><span class="chip">Донор</span></div>
+    <div class="f2"><div class="fl"><p class="lbl"><b>IMEI</b></p><div class="inp mono">352098114374828</div></div><div class="fl"><p class="lbl"><b>SIM</b></p><div class="inp mono">555 01 02 03</div></div></div>
+    <div style="display:flex;gap:14px;margin-top:auto"><span class="btn-o">Отмена</span><span class="btn-f" style="flex:1">Записать</span></div>
+  </div>
+</div></div>
+<p class="cap"><b>Трекер</b> — те же переключатели, IMEI и SIM появляются под ними мельче, чем в А.</p></div>
+</div>
+</section>
+
+<!-- ================================================================== part 3 -->
+<h2 class="part">3. Согласование, владелец и карточка мопеда — одинаково при любом выборе</h2>
+<div class="row">
+<div><div class="frame"><div class="scr">
+  <div class="bar"><div class="l"><span class="ttl"><b>Ремонт</b><span>Ждут согласования · 1</span></span></div><div class="r"><span class="me"><span class="av">Н</span><span>Ника<i>главный механик</i></span></span><span class="out">⇥ Выйти</span></div></div>
+  <div class="body" style="gap:16px">
+    <div class="sect-h">Ждут согласования <span>1</span></div>
+    <div class="qcard">
+      <div class="hd"><b>SV-00042 · EV-014 · XL1200</b><span>Сандро · купил сам 11:40</span></div>
+      <div class="lines">
+        <div class="ok"><span class="c">BR-01</span><span class="t">Замена колодок, дисковый × 2</span><span class="mn">60 мин</span><span class="gel">50,00 ₾</span></div>
+        <div class="ok"><span class="c">BR-04</span><span class="t">Регулировка тормозного троса × 1</span><span class="mn">20 мин</span><span class="gel">16,67 ₾</span></div>
+      </div>
+      <div class="plines">
+        <div class="wait"><span class="kt">купил сам</span><span class="t">Трос тормоза задний × 1<small>вернуть Сандро</small></span><span class="wtag">новая</span><span class="gel">18,00 ₾</span></div>
+      </div>
+      <div class="thumbs"><div class="pic"><span>чек</span></div></div>
+      <div class="acts"><span class="btn-o">Отклонить деталь</span><span class="btn-f">Согласовать деталь</span></div>
+    </div>
+  </div>
+</div></div>
+<p class="cap"><b>Очередь главного механика.</b> «Купил сам» — та же строка «ждёт», что работа этапа 3: сумма, чек миниатюрой (касание — во весь экран), решение в карточке. Отклонённая деталь остаётся в заявке зачёркнутой и не возмещается.</p></div>
+
+<div><div class="frame ph"><div class="scr">
+  <div class="bar"><div class="l"><span class="bk" style="width:40px;height:40px;font-size:22px">‹</span><span class="ttl"><b>SV-00042</b><span>EV-014 · XL1200 · в работе</span></span></div><span class="avo">М</span></div>
+  <div class="body">
+    <div class="card"><div class="sect-h">Детали <span>себестоимость</span></div>
+      <div class="plines">
+        <div><span class="kt">склад</span><span class="t">Колодки задние</span><span class="pq">× 2</span><span class="gel">24,00 ₾</span></div>
+        <div><span class="kt">купил</span><span class="t">Трос задний<small>Сандро, к возмещению</small></span><span class="pq">× 1</span><span class="gel">18,00 ₾</span></div>
+        <div><span class="kt">донор</span><span class="t">Датчик Холла<small>с EV-031</small></span><span class="pq">× 1</span><span class="gel">0,00 ₾</span></div>
+        <div><span class="kt">на склад</span><span class="t">Колодки задние<small>приход по 0</small></span><span class="pq">× 2</span><span class="gel">—</span></div>
+        <div><span class="kt">склад</span><span class="t">GPS-трекер<small>IMEI ···4828</small></span><span class="pq">× 1</span><span class="gel">95,00 ₾</span></div>
+        <div><span class="kt bat">батарея</span><span class="t">В ремонт</span><span class="pq">× 1</span><span class="gel">—</span></div>
+      </div>
+      <div class="tot" style="font-size:15px"><span>Детали</span><span class="mono">137,00 ₾</span></div></div>
+    <div class="card"><div class="sect-h">Работы <span>2 · 80 мин</span></div></div>
+  </div>
+  <div class="tabs"><span>Сегодня</span><span>Аренды</span><span>＋</span><span>Деньги</span><span>Парк</span></div>
+</div></div>
+<p class="cap ph"><b>Владелец на телефоне.</b> Детали с суммами, как сейчас: склад — по себестоимости (за счёт клиента — по рознице), купил — по чеку, донор — 0, снятое на склад в сумму ремонта не входит.</p></div>
+
+<div><div class="frame ph"><div class="scr">
+  <div class="bar"><div class="l"><span class="bk" style="width:40px;height:40px;font-size:22px">‹</span><span class="ttl"><b>EV-014</b><span>XL1200 · в сервисе</span></span></div><span class="avo">М</span></div>
+  <div class="body">
+    <div class="card"><div class="sect-h">Трекер</div>
+      <dl class="kv"><dt>IMEI</dt><dd class="mono">352 098 114 374 828</dd><dt>SIM</dt><dd class="mono">555 01 02 03</dd><dt>Стоит с</dt><dd>20.10.2026 · <span class="link">SV-00042</span></dd></dl>
+      <p class="hint" style="font-size:13px">Раньше: ···1170, 12.09–19.10 · SV-00031</p></div>
+    <div class="card"><div class="sect-h">Снято с мопеда <span>для EV-031</span></div>
+      <p class="note" style="margin:6px 0 0;font-size:14px">У донора EV-031 здесь строка: «Датчик Холла × 1 → EV-014, SV-00042, 20.10».</p></div>
+  </div>
+  <div class="tabs"><span>Сегодня</span><span>Аренды</span><span>＋</span><span>Деньги</span><span>Парк</span></div>
+</div></div>
+<p class="cap ph"><b>Карточка мопеда у владельца.</b> Действующий трекер — сверху, прежние — строкой ниже. У донора — блок «Снято с мопеда». Менеджер этих блоков не видит.</p></div>
+</div>
+
+<!-- ============================ words ============================ -->
+<h2>Слова экранов на грузинском</h2>
+<p class="lead">Перевод — мой, его вычитает директор. Где слово в EV8 Ops уже есть (ნაწილი — деталь, საწყობი — склад, თარო — полка, შეკეთებაში / შეკეთებიდან —
+в ремонт / из ремонта), взято оттуда.</p>
+<table class="words">
+<tr><td>＋ ნაწილი</td><td class="lat">＋ natsili</td><td>＋ Деталь</td></tr>
+<tr><td>ნაწილი — საიდან?</td><td class="lat">natsili — saidan?</td><td>Деталь — откуда?</td></tr>
+<tr><td>საწყობიდან · ავიღე თაროდან</td><td class="lat">satsqobidan · avighe tarodan</td><td>Со склада · взял с полки</td></tr>
+<tr><td>თავად ვიყიდე · საჭიროა ჩეკის ფოტო</td><td class="lat">tavad viqide · sachiroa chekis poto</td><td>Купил сам · нужно фото чека</td></tr>
+<tr><td>მოვხსენი საწყობში · მუშა ნაწილი</td><td class="lat">movkhseni satsqobshi · musha natsili</td><td>Снял на склад · рабочая деталь</td></tr>
+<tr><td>დონორიდან · რომელი მოპედიდან</td><td class="lat">donoridan · romeli mopedidan</td><td>С донора · с какого мопеда</td></tr>
+<tr><td>ბატარეა ან დამტენი · შეკეთებაში · შეკეთებიდან</td><td class="lat">batarea an damteni · sheketebashi · sheketebidan</td><td>Батарея или зарядка · в ремонт · из ремонта</td></tr>
+<tr><td>თაროზეა 4</td><td class="lat">tarozea 4</td><td>На полке 4</td></tr>
+<tr><td>რამდენი გადაიხადე, ₾ · ჩეკის ფოტო</td><td class="lat">ramdeni gadaikhade, ₾ · chekis poto</td><td>Сколько заплатил, ₾ · Фото чека</td></tr>
+<tr><td>ჩეკი გადაუღე</td><td class="lat">cheki gadaughe</td><td>Сфотографируй чек</td></tr>
+<tr><td>ანაზღაურება — დამტკიცების შემდეგ</td><td class="lat">anazghaureba — damtkitsebis shemdeg</td><td>Вернём — после согласования</td></tr>
+<tr><td>ნაწილი მუშაა?</td><td class="lat">natsili mushaa?</td><td>Деталь рабочая?</td></tr>
+<tr><td>ტრეკერი · IMEI — 15 ციფრი სტიკერიდან · SIM-ის ნომერი</td><td class="lat">trekeri · IMEI — 15 tsipri stikeridan · SIM-is nomeri</td><td>Трекер · IMEI — 15 цифр с наклейки · Номер SIM</td></tr>
+<tr><td>ეს ტრეკერი EV-022-ზეა — ჯერ იქ მოხსენი</td><td class="lat">es trekeri EV-022-zea — jer ik mokhseni</td><td>Этот трекер на EV-022 — сначала сними его там</td></tr>
+<tr><td>მოპედიდან მოხსნილი</td><td class="lat">mopedidan mokhsnili</td><td>Снято с мопеда</td></tr>
+</table>
+<p class="note" style="margin-top:28px">Файл статичный, без JavaScript. Цвета и шрифты — токены EV8 Ops. Размеры — на экране планшета до уменьшения. Детали, артикулы, цены, IMEI
+и SIM выдуманы; IMEI выдуман с верной контрольной цифрой, чтобы показать проверку.</p>
+</main></body></html>
