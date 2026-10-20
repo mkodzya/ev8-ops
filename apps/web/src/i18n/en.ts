@@ -23,6 +23,7 @@ import { workshopEn } from './workshop.js';
 import { workshopJobsEn } from './workshop-jobs.js';
 import { workshopApprovalEn } from './workshop-approval.js';
 import { workshopPartsEn } from './workshop-parts.js';
+import { workshopPayoutsEn } from './workshop-payouts.js';
 import { driveEn } from './drive.js';
 import { expEn } from './expenses.js';
 import { inBankEn } from './in-bank.js';
@@ -109,6 +110,8 @@ export const en = {
       jobs: 'Repairs',
       stock: 'Stock',
       works: 'Book of works',
+      payouts: 'To pay',
+      balance: 'Balance',
       payments: 'Payments',
       statements: 'Statements',
       week: 'The week',
@@ -1381,6 +1384,7 @@ export const en = {
   ...workshopJobsEn,
   ...workshopApprovalEn,
   ...workshopPartsEn,
+  ...workshopPayoutsEn,
   ...driveEn,
   ...expEn,
   ...inBankEn,

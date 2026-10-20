@@ -116,10 +116,12 @@ export type TabId =
   | 'expenses'
   | 'drive'
   | 'orders'
-  | 'suppliers';
+  | 'suppliers'
+  | 'payouts'
+  | 'balance';
 
 /** Tabs inside a section, in the address (wave 1 §3.2). */
-export const SECTION_TABS: Partial<Record<SectionId, readonly { id: TabId; path: string; anyOf: readonly Permission[] }[]>> = {
+export const SECTION_TABS: Partial<Record<SectionId, readonly { id: TabId; path: string; anyOf: readonly Permission[]; noneOf?: readonly Permission[] }[]>> = {
   fleet: [
     { id: 'vehicles', path: '/fleet', anyOf: ['fleet.view'] },
     { id: 'models', path: '/fleet/models', anyOf: ['fleet.view'] },
@@ -131,6 +133,11 @@ export const SECTION_TABS: Partial<Record<SectionId, readonly { id: TabId; path:
     { id: 'stock', path: '/service/stock', anyOf: ['fleet.view'] },
     // The book of works and its norms (stage 2 of the mechanic plan).
     { id: 'works', path: '/service/works', anyOf: ['service.norms'] },
+    // Paying the mechanic (stage 5, ADR-0037): the owners mark it, the mechanics
+    // read their own balance. An owner carries no repairs of his own, so he has
+    // no balance tab — the same test the repairs screen makes for the workshop.
+    { id: 'payouts', path: '/service/payouts', anyOf: ['service.payout'] },
+    { id: 'balance', path: '/service/balance', anyOf: ['service.work'], noneOf: ['service.manage'] },
   ],
   // Money in one place (wave 2 §3.0): sort the bank lines, the payments,
   // the till by person, the statements, the deposits. The payments calendar

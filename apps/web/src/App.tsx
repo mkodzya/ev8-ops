@@ -45,6 +45,8 @@ import { SaleWizard } from './pages/SaleWizard.js';
 import { ServiceJobPage } from './pages/ServiceJobPage.js';
 import { ServicePage } from './pages/ServicePage.js';
 import { WorkBookPage } from './pages/WorkBookPage.js';
+import { PayoutsPage } from './pages/PayoutsPage.js';
+import { MechanicBalancePage } from './pages/MechanicBalancePage.js';
 import { WorkshopJobWizard } from './pages/WorkshopJobWizard.js';
 import { RepairClosePage } from './pages/RepairClosePage.js';
 import { StatementsPage } from './pages/money/StatementsPage.js';
@@ -158,6 +160,9 @@ export function App() {
         <Route path="service/new" element={<Require perm="service.work"><WorkshopJobWizard /></Require>} />
         <Route path="service/:id/close" element={<Require perm="service.work"><RepairClosePage /></Require>} />
         <Route path="service/works" element={<Require perm="service.norms"><WorkBookPage /></Require>} />
+        {/* Paying the mechanic (stage 5, ADR-0037): the owners mark it, a mechanic reads his own. */}
+        <Route path="service/payouts" element={<Require perm="service.payout"><PayoutsPage /></Require>} />
+        <Route path="service/balance" element={<Require perm="service.work"><MechanicBalancePage /></Require>} />
         <Route path="service/:id" element={<ServiceJobPage />} />
 
         {/* Money in one place (wave 2 §3.0). */}

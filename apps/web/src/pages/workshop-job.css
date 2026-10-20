@@ -269,3 +269,58 @@
   .wparts-tiles { grid-template-columns: minmax(0, 1fr); }
   .wparts-tile { min-height: 96px; }
 }
+
+/* Paying the mechanic (stage 5; prototype mechanic-payouts-options.html,
+   variants A and A). «К оплате»: a card for each mechanic with his repairs,
+   the sum right above the one button; on a laptop the repairs are a table to
+   check against the bot's report line by line. The balance: what is his to
+   be paid, large, then three tiles and the lists. */
+.wpay-person { display: flex; flex-direction: column; gap: var(--space3); margin-bottom: var(--space4); padding: 14px 16px; border: 1.5px solid var(--line-soft); border-radius: var(--radius-card); background: var(--surface); }
+.wpay-head { display: flex; justify-content: space-between; align-items: center; gap: var(--space3); flex-wrap: wrap; }
+.wpay-head b { font: var(--text-h2); }
+.wpay-rows { list-style: none; margin: 0; padding: 0; }
+.wpay-rows > li, .wpay-line { display: flex; align-items: baseline; gap: var(--space3); padding: 8px 0; border-bottom: 1px solid var(--line-soft); }
+.wpay-rows > li.wpay-job { display: block; padding: 0; }
+.wpay-rows > li.wpay-job .wpay-line:last-child { border-bottom: 0; }
+.wpay-rows > li.wpay-job { border-bottom: 1px solid var(--line-soft); }
+.wpay-n { width: 84px; flex: none; }
+.wpay-t { flex: 1; min-width: 0; }
+.wpay-t small { display: block; font: var(--text-body-sm); }
+.wpay-g { white-space: nowrap; text-align: right; }
+.wpay-receipt .wpay-n { font: var(--text-body-sm); }
+.wpay-moped { white-space: nowrap; }
+.wpay-sum { display: flex; flex-direction: column; gap: 2px; margin: 0; }
+.wpay-sum div { display: flex; justify-content: space-between; gap: var(--space3); }
+.wpay-sum dt { color: var(--muted); }
+.wpay-sum dd { margin: 0; white-space: nowrap; }
+.wpay-sum .wpay-all { margin-top: var(--space1); padding-top: var(--space1); border-top: 1px solid var(--line-soft); font-weight: 600; }
+.wpay-sum .wpay-all dt { color: var(--ink); }
+.wpay-pay { min-height: var(--control-large); padding: 0 24px; font: var(--text-cta); }
+.wpay-narrow .wpay-pay { width: 100%; }
+.wpay-state { white-space: nowrap; }
+.wpay-held, .wpay-history { margin-bottom: var(--space4); }
+.wpay-void .wpay-g { color: var(--muted); text-decoration: line-through; }
+.wpay-wide { display: none; }
+@media (min-width: 900px) {
+  .wpay-wide { display: block; }
+  .wpay-head .wpay-wide { display: inline-flex; }
+  .wpay-narrow { display: none; }
+}
+
+/* The mechanic's balance on the tablet and his phone. */
+.wpay-big { display: flex; flex-direction: column; gap: var(--space1); margin-bottom: var(--space3); padding: 18px 20px; border: 1.5px solid var(--line-soft); border-radius: var(--radius-card); background: var(--surface); }
+.wpay-big b { font: var(--text-display); font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.wpay-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space3); margin-bottom: var(--space4); }
+.wpay-tile { display: flex; flex-direction: column; gap: var(--space1); min-height: 112px; padding: 14px 16px; border: 1.5px solid var(--line-control); border-radius: var(--radius-card); background: var(--surface); }
+.wpay-tile.quiet { border-color: var(--line-soft); }
+.wpay-tile b { font: var(--text-money-lg); }
+.wpay-tile-jobs { display: flex; flex-wrap: wrap; gap: var(--space2); }
+.wpay-tile-jobs a { min-height: 44px; display: inline-flex; align-items: center; }
+.wpay-mine > li { min-height: 56px; align-items: center; }
+@media (max-width: 719px) {
+  .wpay-tiles { grid-template-columns: 1fr; }
+  .wpay-tile { min-height: 0; }
+  .wpay-n { width: 76px; }
+}
+/* On the tablet the balance is reached from «Ремонт»: a finger's size, not a chip's. */
+.wpay-link { min-height: var(--control-large); padding: 0 20px; }
