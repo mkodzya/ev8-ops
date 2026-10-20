@@ -1,6 +1,6 @@
 import { JOB_PHOTOS_MAX, SERVICE_REASONS, WORK_QTY_MAX, worksTotal, type ServiceReason, type VehicleState } from '@ev8/shared';
 import { Camera, Minus, Plus, ScanLine } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { LoadError } from '../components/LoadError.js';
@@ -180,6 +180,16 @@ export function WorkshopJobWizard() {
         onNext={last ? () => void submit() : next}
         submit={last ? { state: op.state, failure: op.failure, label: approver ? t.wjob.openRepair : t.wjob.send } : undefined}
         failure={op.failure}
+        footNote={
+          step === 3 ? (
+            <>
+              {t.wjob.picked(f.lines.length, total.unnormed)}
+              <b className="mono">
+                {t.wjob.min(normText(total.seconds, locale))} · {formatGel(total.tetri)}
+              </b>
+            </>
+          ) : undefined
+        }
       >
         {step === 0 && (
           <MopedStep
@@ -245,13 +255,7 @@ export function WorkshopJobWizard() {
           </div>
         )}
         {step === 3 && (
-          <WorksStep
-            book={wb}
-            lines={f.lines}
-            onChange={(lines) => set({ lines })}
-            error={shown.works}
-            summary={`${t.wjob.picked(f.lines.length, total.unnormed)} · ${t.wjob.min(normText(total.seconds, locale))} · ${formatGel(total.tetri)}`}
-          />
+          <WorksStep book={wb} lines={f.lines} onChange={(lines) => set({ lines })} error={shown.works} />
         )}
         {step === 4 && f.vehicle && (
           <div className="wjob-step">
@@ -330,7 +334,7 @@ function MopedStep({
     const id = window.setTimeout(() => setAsked(typed.trim()), 250);
     return () => window.clearTimeout(id);
   }, [typed]);
-  const found = useLoad<{ vehicles: FoundVehicle[] }>(asked.length >= 2 ? `/api/service/vehicles?q=${encodeURIComponent(asked)}` : null);
+  const found = useLoad<{ vehicles: FoundVehicle[] }>(asked ? `/api/service/vehicles?q=${encodeURIComponent(asked)}` : null);
   const list = found.data?.vehicles ?? [];
   // One moped for what was asked — from a sticker, most often — is the one meant.
   useEffect(() => {
@@ -357,7 +361,7 @@ function MopedStep({
   return (
     <div className="wjob-step">
       <h2 className="wjob-q">{t.wjob.whichMoped}</h2>
-      <Field label={t.wjob.whichMoped} name="vehicleId" hint={t.wjob.searchHint} error={error}>
+      <Field label={t.wjob.searchLabel} name="vehicleId" hint={t.wjob.searchHint} error={error}>
         <input
           className="input wjob-big"
           autoFocus
@@ -378,7 +382,7 @@ function MopedStep({
         </label>
       )}
       {qrError && <p className="field-err">{t.wjob.qrNotRead}</p>}
-      {asked.length >= 2 && found.data && list.length === 0 && <p className="empty">{t.wjob.nothingFound(asked)}</p>}
+      {asked && found.data && list.length === 0 && <p className="empty">{t.wjob.nothingFound(asked)}</p>}
       <ul className="wjob-mopeds">
         {list.map((v) => {
           const job = v.openJob;
@@ -461,7 +465,7 @@ function OnePhoto({ label, tag, photo, onChange, error }: { label: string; tag: 
 }
 
 /** Photos of the damage: one at least, four at most. */
-function Photos({ photos, onChange, error }: { photos: PreparedPhoto[]; onChange: (p: PreparedPhoto[]) => void; error?: string }) {
+function Photos({ photos, onChange, error }: { photos: PreparedPhoto[]; onChange: Dispatch<SetStateAction<PreparedPhoto[]>>; error?: string }) {
   const t = useT();
   const ref = useRef<HTMLInputElement>(null);
   const add = async (files: FileList | null) => {
@@ -475,7 +479,9 @@ function Photos({ photos, onChange, error }: { photos: PreparedPhoto[]; onChange
         /* skipped: not a picture the browser can read */
       }
     }
-    onChange([...photos, ...out]);
+    // Against the list as it is when they are ready, not as it was when the camera opened:
+    // a second photo taken while the first is still being made smaller is not lost.
+    onChange((now) => [...now, ...out].slice(0, JOB_PHOTOS_MAX));
   };
   return (
     <div className={`field ${error ? 'field-bad' : ''}`} data-field="photos">
@@ -504,7 +510,7 @@ function Photos({ photos, onChange, error }: { photos: PreparedPhoto[]; onChange
 }
 
 /** Step 4: the works, from the book by category or by search, and words for one it lacks. */
-function WorksStep({ book, lines, onChange, error, summary }: { book: WorkBook; lines: Line[]; onChange: (l: Line[]) => void; error?: string; summary: string }) {
+function WorksStep({ book, lines, onChange, error }: { book: WorkBook; lines: Line[]; onChange: (l: Line[]) => void; error?: string }) {
   const t = useT();
   const { locale } = useLocale();
   const [q, setQ] = useState('');
@@ -522,9 +528,6 @@ function WorksStep({ book, lines, onChange, error, summary }: { book: WorkBook; 
   const freeLines = lines.map((l, i) => ({ l, i })).filter(({ l }) => !l.workTypeId);
   return (
     <div className="wjob-step">
-      <div className="wjob-sum" aria-live="polite">
-        {summary}
-      </div>
       <input className="input wjob-text" placeholder={t.wjob.searchWorks} value={q} onChange={(e) => setQ(e.target.value)} />
       <div className="wjob-cats" role="group">
         <button type="button" className={`wjob-chip wjob-chip-sm ${cat == null ? 'on' : ''}`} aria-pressed={cat == null} onClick={() => setCat(null)}>

@@ -276,9 +276,13 @@ describe.skipIf(!HAS_DB)('the workshop tablet (ADR-0033)', () => {
       (await call(device, 'GET', '/api/workshop/tablet')).body,
       (await call(withCookies(signedIn, device), 'GET', '/api/me')).body,
     ];
+    // A PIN that leaked would be a value of its own. Looked for as a piece of
+    // the text it is found in other people's test names, whose random digits
+    // contain «4826» now and then — and the test failed on nothing.
+    const values = (x: unknown): unknown[] => (x && typeof x === 'object' ? Object.values(x).flatMap(values) : [x]);
     for (const body of answers) {
       expect(body).not.toMatch(HASHES);
-      expect(body).not.toContain(m.pin);
+      expect(values(JSON.parse(body))).not.toContain(m.pin);
     }
     const listed = json<{ users: { id: string; hasPin: boolean; email: string | null }[] }>(await call(owner, 'GET', '/api/users')).users.find((u) => u.id === m.id);
     expect(listed).toMatchObject({ hasPin: true, email: null });

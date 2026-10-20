@@ -359,9 +359,10 @@ export function serviceRoutes(app: FastifyInstance): void {
    */
   app.get<{ Querystring: { q?: string } }>('/api/service/vehicles', { config: { scope: 'service.work' } }, async (req) => {
     const raw = (req.query.q ?? '').trim();
+    // «8» is EV-008: a sticker's number may be one digit, a VIN's tail is two characters at least.
     const q = readQuery(raw);
-    if (!q) return { vehicles: [] };
     const number = readFleetNumber(raw, { digitsToo: true });
+    if (!q && number == null) return { vehicles: [] };
     const all = await prisma.vehicle.findMany({
       where: { archived: false, state: { notIn: ['sold', 'out'] } },
       select: {
@@ -381,7 +382,7 @@ export function serviceRoutes(app: FastifyInstance): void {
     });
     const actor = actorOf(req);
     const found = all
-      .filter((v) => (number != null && v.fleetNo === number) || vinMatches(q, v.vin))
+      .filter((v) => (number != null && v.fleetNo === number) || (q != null && vinMatches(q, v.vin)))
       // The sticker's number first: «14» is EV-014 before it is a VIN ending in 14.
       .sort((a, b) => Number(b.fleetNo === number) - Number(a.fleetNo === number) || (a.fleetNo ?? 0) - (b.fleetNo ?? 0))
       .slice(0, 8);

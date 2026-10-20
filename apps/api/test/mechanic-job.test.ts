@@ -36,6 +36,16 @@ async function ownWork(owner: string, minutes: number | string = 30) {
   return json<{ id: string; code: string; normSec: number }>(res);
 }
 
+/**
+ * A repair waiting for approval is a row on the owners' «Сегодня», which shows
+ * the oldest few: one left lying would crowd out another suite's. Each test
+ * here takes its own away when it is done.
+ */
+async function settle(...ids: string[]) {
+  const owner = await loginAs('owner');
+  for (const id of ids) await call(owner, 'POST', `/api/service/${id}/cancel`, { reason: 'ТЕСТ done' });
+}
+
 function opening(vehicleId: string, works: unknown[], extra: Record<string, unknown> = {}) {
   return {
     vehicleId,
@@ -215,6 +225,7 @@ describe.skipIf(!HAS_DB)('a repair the mechanic opens (stage 2)', () => {
     ]);
     // His own sum he sees; the customers' money he does not.
     expect(got.worksTotal).toEqual({ seconds: 3600, tetri: 5000, unnormed: 1 });
+    await settle(id);
   });
 
   it('is in work at once when the chief mechanic opens it', async () => {
@@ -238,6 +249,7 @@ describe.skipIf(!HAS_DB)('a repair the mechanic opens (stage 2)', () => {
     const said = await call(mech.cookie, 'POST', '/api/service/workshop', opening(vehicle.id, [{ workTypeId: w.id }], { odometerKm: 1230, odometerReason: 'odometer replaced' }));
     expect(said.statusCode, said.body).toBe(201);
     expect((await prisma.vehicle.findUniqueOrThrow({ where: { id: vehicle.id } })).odometerKm).toBe(1230);
+    await settle(json<{ id: string }>(said).id);
   });
 
   it('keeps the norm a line was written with when the book’s norm changes', async () => {
@@ -254,6 +266,7 @@ describe.skipIf(!HAS_DB)('a repair the mechanic opens (stage 2)', () => {
     expect(line.normSec).toBe(1800);
     const job = json<{ job: { works: { normSec: number; amountTetri: number }[] } }>(await call(mech.cookie, 'GET', `/api/service/${id}`)).job;
     expect(job.works[0]).toMatchObject({ normSec: 1800, amountTetri: 2500 });
+    await settle(id);
   });
 
   it('refuses a work switched off in the book', async () => {
@@ -284,6 +297,7 @@ describe.skipIf(!HAS_DB)('a repair the mechanic opens (stage 2)', () => {
     const seen = json<{ job: { works: { amountTetri: number | null; rateTetri: number | null }[]; worksTotal: { tetri: number | null } } }>(await call(manager.cookie, 'GET', `/api/service/${id}`)).job;
     expect(seen.works[0]).toMatchObject({ amountTetri: null, rateTetri: null });
     expect(seen.worksTotal.tetri).toBeNull();
+    await settle(id);
   });
 
   it('carries on a repair already open on the moped instead of opening a second one', async () => {
@@ -312,6 +326,7 @@ describe.skipIf(!HAS_DB)('a repair the mechanic opens (stage 2)', () => {
     const again = await call(b.cookie, 'POST', '/api/service/workshop', opening(vehicle.id, [{ workTypeId: w.id }], { jobId: id }));
     expect(again.statusCode).toBe(409);
     expect(json<{ error: string }>(again).error).toBe('job_has_mechanic');
+    await settle(id);
   });
 
   it('finds the moped by the sticker’s number and tells the mechanic nothing about the customer', async () => {
@@ -323,6 +338,9 @@ describe.skipIf(!HAS_DB)('a repair the mechanic opens (stage 2)', () => {
     const hit = json<{ vehicles: Record<string, unknown>[] }>(res).vehicles[0];
     expect(hit).toMatchObject({ id: vehicle.id, odometerKm: 700, state: 'available' });
     expect(Object.keys(hit).sort()).toEqual(['color', 'id', 'model', 'number', 'odometerKm', 'openJob', 'state', 'vin']);
+    // The bare number, as the sticker says it — one digit is enough for EV-008.
+    const bare = json<{ vehicles: { id: string }[] }>(await call(mech.cookie, 'GET', `/api/service/vehicles?q=${v.fleetNo}`)).vehicles;
+    expect(bare[0]?.id).toBe(vehicle.id);
   });
 });
 

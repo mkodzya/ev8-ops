@@ -215,6 +215,9 @@ export function ServiceJobPage() {
         </section>
       </div>
 
+      {/* Parts and the old single line of work. A mechanic adds neither yet
+          (parts are stage 4), so an empty block is only shown to who can fill it. */}
+      {(mayManage || j.parts.length > 0 || j.labourMinutes > 0 || (j.labourTetri ?? 0) > 0) && (
       <section className="card">
         <BlockHead title={t.repair.lines} />
         {j.parts.length === 0 && (j.labourTetri ?? 0) === 0 && j.labourMinutes === 0 ? (
@@ -304,6 +307,7 @@ export function ServiceJobPage() {
           </p>
         )}
       </section>
+      )}
 
       {/* The works a mechanic wrote, with the norm and rate they were written
           with (stage 2). A repair from before has none, and no block. */}
