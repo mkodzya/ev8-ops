@@ -58,3 +58,97 @@ export function closeCharge(input: { totalTetri: Tetri; withholdTetri: Tetri; de
   const withheldTetri = Math.max(0, Math.min(input.withholdTetri, input.totalTetri, input.depositFreeTetri));
   return { withheldTetri, debtTetri: Math.max(0, input.totalTetri - withheldTetri) };
 }
+
+// The mechanic's own repair (stage 2 of docs/spec/mechanic-in-erp-plan.md).
+
+/** Why a repair came in: the bot's five reasons, one of them on every repair a mechanic opens. */
+export const SERVICE_REASONS = ['wear', 'accident', 'renter_fault', 'warranty', 'planned'] as const;
+export type ServiceReason = (typeof SERVICE_REASONS)[number];
+
+/**
+ * Photos of the damage a new repair carries, besides the odometer's: at least
+ * one, at most four — five "before" photos in all, as the spec says.
+ */
+export const JOB_PHOTOS_MAX = 4;
+
+/** How many of one work a line may say; more is a typing slip, not a repair. */
+export const WORK_QTY_MAX = 99;
+
+/** The longest norm the book takes: a hundred hours. */
+const NORM_MAX_SEC = 100 * 3600;
+
+/**
+ * A norm as a person types it — "30", "2,5", 2.5 minutes — kept in seconds.
+ * OT-01 is two and a half minutes in the bot's book: in whole minutes it would
+ * have to become another norm, and the book's norms are the company's, not
+ * the column's (code check, §3). Null when it is not a norm.
+ */
+export function normSecFromMinutes(input: string | number | null | undefined): number | null {
+  if (input == null) return null;
+  const n = typeof input === 'number' ? input : Number(String(input).trim().replace(/\s/g, '').replace(',', '.'));
+  if (!Number.isFinite(n) || n <= 0) return null;
+  const sec = Math.round(n * 60);
+  return sec > 0 && sec <= NORM_MAX_SEC ? sec : null;
+}
+
+/** 150 seconds → 2.5 minutes; the screen writes it in its own language. */
+export function normMinutes(sec: number): number {
+  return Math.round((sec / 60) * 100) / 100;
+}
+
+export interface WorkLine {
+  qty: number;
+  /** Empty for a work that is not in the book and has no norm yet. */
+  normSec: number | null;
+  rateTetri: Tetri;
+}
+
+/**
+ * One line of work: quantity × norm × the mechanic's rate for an hour of norm,
+ * as in the bot. Null while the line has no norm — it is not paid until it
+ * has one.
+ */
+export function workLineTetri(line: WorkLine): Tetri | null {
+  if (line.normSec == null) return null;
+  return Math.round((line.qty * line.normSec * line.rateTetri) / 3600);
+}
+
+/**
+ * The lines together: the time by the norm, the money, and how many lines
+ * still have no norm. The money is rounded once, on the sum, not line by
+ * line — the bot's control figure (282.5 min at 50 ₾ = 235.42 ₾) only holds
+ * that way; whether a payout rounds so is stage 5's question.
+ */
+export function worksTotal(lines: readonly WorkLine[]): { seconds: number; tetri: Tetri; unnormed: number } {
+  let seconds = 0;
+  let exact = 0;
+  let unnormed = 0;
+  for (const l of lines) {
+    if (l.normSec == null) {
+      unnormed++;
+      continue;
+    }
+    seconds += l.qty * l.normSec;
+    exact += (l.qty * l.normSec * l.rateTetri) / 3600;
+  }
+  return { seconds, tetri: Math.round(exact), unnormed };
+}
+
+/** The category of a work is the letters of its code: BR-04 is brakes. */
+export function workCategoryOf(code: string): string {
+  return code.split('-')[0] ?? '';
+}
+
+/**
+ * The code a new work gets: the next number of its category, never one that
+ * was used — a switched-off work keeps its code (BR-07 → BR-08).
+ */
+export function nextWorkCode(category: string, codes: readonly string[]): string {
+  let top = 0;
+  for (const c of codes) {
+    if (workCategoryOf(c) !== category) continue;
+    const n = Number(c.slice(category.length + 1));
+    if (Number.isInteger(n) && n > top) top = n;
+  }
+  return `${category}-${String(top + 1).padStart(2, '0')}`;
+}

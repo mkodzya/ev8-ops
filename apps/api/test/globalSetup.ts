@@ -80,6 +80,11 @@ export async function teardown(): Promise<void> {
     await prisma.workshop.updateMany({ where: { createdBy: { createdAt: since } }, data: { createdById: null } });
     await prisma.rentalSettings.updateMany({ where: { updatedBy: { createdAt: since } }, data: { updatedById: null } });
     await prisma.customer.deleteMany({ where: { createdAt: since } });
+    // The book of works: what a run wrote into it — the bot's book too, when
+    // the run imported it into an empty database — goes after the repairs
+    // that used it (their lines cascade) and before the people who wrote it.
+    await prisma.workType.deleteMany({ where: { createdAt: since } });
+    await prisma.workCategory.deleteMany({ where: { createdAt: since, works: { none: {} } } });
     // Workshop devices name the owner who registered them (0055); sessions on them go first.
     await prisma.session.deleteMany({ where: { device: { registeredAt: since } } });
     await prisma.workshopDevice.deleteMany({ where: { registeredAt: since } });

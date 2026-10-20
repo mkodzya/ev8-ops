@@ -185,17 +185,19 @@ describe.skipIf(!HAS_DB)('the workshop tablet (ADR-0033)', () => {
     const chief = await mechanic(owner, 'chief_mechanic', '3344');
     const { prisma } = await import('../src/lib/db.js');
     const model = await prisma.vehicleModel.create({ data: { brand: 'Test', name: `Mine ${uniq()}` } });
-    const job = async (createdById: string) => {
+    const job = async (createdById: string, mechanicId: string | null) => {
       const v = await prisma.vehicle.create({ data: { vin: `MIN${uniq().replace(/\D/g, '').slice(0, 14).padStart(14, '0')}`, modelId: model.id } });
       const j = await prisma.serviceJob.create({
-        data: { vehicleId: v.id, reason: 'ТЕСТ brakes', openedOn: new Date('2026-10-20'), status: 'open', labourMinutes: 90, labourTetri: 7500, withheldTetri: 0, createdById },
+        data: { vehicleId: v.id, reason: 'ТЕСТ brakes', openedOn: new Date('2026-10-20'), status: 'open', labourMinutes: 90, labourTetri: 7500, withheldTetri: 0, createdById, mechanicId },
       });
       await prisma.servicePart.create({ data: { jobId: j.id, name: 'ТЕСТ pad', qty: 2, unitPriceTetri: 1200, unitCostTetri: 800 } });
       return j.id;
     };
-    const own = await job(m.id);
     const ownerMe = json<{ id: string }>(await call(owner, 'GET', '/api/me'));
-    const other = await job(ownerMe.id);
+    // His own are the repairs he carries (stage 2), whoever opened them; one
+    // he opened for nobody in particular is not his.
+    const own = await job(ownerMe.id, m.id);
+    const other = await job(m.id, null);
 
     const asMechanic = await onTablet(device, m.id, m.pin);
     const list = json<{ jobs: { id: string; totalTetri: number | null; labourTetri: number | null; labourMinutes: number; customer: unknown; parts: { unitPriceTetri: number | null; unitCostTetri?: number | null }[] }[] }>(
