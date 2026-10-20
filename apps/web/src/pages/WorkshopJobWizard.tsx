@@ -38,7 +38,7 @@ interface FoundVehicle {
 
 type Lower = '' | 'replaced' | 'mistake' | 'other';
 
-interface Line {
+export interface Line {
   workTypeId: string | null;
   freeText: string | null;
   qty: number;
@@ -470,12 +470,29 @@ function OnePhoto({ label, tag, photo, onChange, error }: { label: string; tag: 
   );
 }
 
-/** Photos of the damage: one at least, four at most. */
-function Photos({ photos, onChange, error }: { photos: PreparedPhoto[]; onChange: Dispatch<SetStateAction<PreparedPhoto[]>>; error?: string }) {
+/**
+ * Photos taken with the tablet's camera: of the damage — one at least, four at
+ * most — or, at closing, after the repair (stage 3: `label`, `tag`, `max`).
+ */
+export function Photos({
+  photos,
+  onChange,
+  error,
+  label,
+  tag,
+  max = JOB_PHOTOS_MAX,
+}: {
+  photos: PreparedPhoto[];
+  onChange: Dispatch<SetStateAction<PreparedPhoto[]>>;
+  error?: string | null;
+  label?: string;
+  tag?: string;
+  max?: number;
+}) {
   const t = useT();
   const ref = useRef<HTMLInputElement>(null);
   const add = async (files: FileList | null) => {
-    const list = [...(files ?? [])].slice(0, JOB_PHOTOS_MAX - photos.length);
+    const list = [...(files ?? [])].slice(0, max - photos.length);
     if (ref.current) ref.current.value = '';
     const out: PreparedPhoto[] = [];
     for (const file of list) {
@@ -487,22 +504,22 @@ function Photos({ photos, onChange, error }: { photos: PreparedPhoto[]; onChange
     }
     // Against the list as it is when they are ready, not as it was when the camera opened:
     // a second photo taken while the first is still being made smaller is not lost.
-    onChange((now) => [...now, ...out].slice(0, JOB_PHOTOS_MAX));
+    onChange((now) => [...now, ...out].slice(0, max));
   };
   return (
     <div className={`field ${error ? 'field-bad' : ''}`} data-field="photos">
-      <span className="lbl">{t.wjob.damagePhotos(photos.length, JOB_PHOTOS_MAX)}</span>
+      <span className="lbl">{label ?? t.wjob.damagePhotos(photos.length, max)}</span>
       <div className="wjob-pics">
         {photos.map((p, i) => (
           <span key={p.previewUrl} className="wjob-pic">
             <img src={p.previewUrl} alt="" />
-            <span className="wjob-tag">{t.wjob.photoTags.before}</span>
+            <span className="wjob-tag">{tag ?? t.wjob.photoTags.before}</span>
             <button type="button" className="thumb-x" aria-label={t.photos.remove} onClick={() => onChange(photos.filter((_, j) => j !== i))}>
               ×
             </button>
           </span>
         ))}
-        {photos.length < JOB_PHOTOS_MAX && (
+        {photos.length < max && (
           <label className="wjob-pic wjob-pic-add">
             <input ref={ref} type="file" accept="image/*" multiple capture="environment" hidden onChange={(e) => void add(e.target.files)} />
             <Camera size={28} strokeWidth={1.75} aria-hidden="true" />
@@ -516,7 +533,7 @@ function Photos({ photos, onChange, error }: { photos: PreparedPhoto[]; onChange
 }
 
 /** Step 4: the works, from the book by category or by search, and words for one it lacks. */
-function WorksStep({ book, lines, update, error }: { book: WorkBook; lines: Line[]; update: (fn: (now: Line[]) => Line[]) => void; error?: string }) {
+export function WorksStep({ book, lines, update, error }: { book: WorkBook; lines: Line[]; update: (fn: (now: Line[]) => Line[]) => void; error?: string }) {
   const t = useT();
   const { locale } = useLocale();
   const [q, setQ] = useState('');

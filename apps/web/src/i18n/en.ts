@@ -21,6 +21,7 @@ import { calendarEn } from './payments-calendar.js';
 import { payDayEn } from './pay-day.js';
 import { workshopEn } from './workshop.js';
 import { workshopJobsEn } from './workshop-jobs.js';
+import { workshopApprovalEn } from './workshop-approval.js';
 import { driveEn } from './drive.js';
 import { expEn } from './expenses.js';
 import { inBankEn } from './in-bank.js';
@@ -1361,6 +1362,7 @@ export const en = {
   ...payDayEn,
   ...workshopEn,
   ...workshopJobsEn,
+  ...workshopApprovalEn,
   ...driveEn,
   ...expEn,
   ...inBankEn,

@@ -121,6 +121,7 @@ function serialize(job: {
     normSec: number | null;
     rateTetri: number;
     mechanicId: string | null;
+    createdAt: Date;
     approvedAt: Date | null;
     rejectedAt: Date | null;
     rejectReason: string | null;
@@ -144,6 +145,7 @@ function serialize(job: {
     mechanicId: w.mechanicId,
     /** Approved with the repair or on its own, waiting, or refused (stage 3). */
     state: workLineState(w),
+    addedAt: w.createdAt.toISOString(),
     decidedAt: (w.rejectedAt ?? w.approvedAt)?.toISOString() ?? null,
     rejectReason: w.rejectReason,
   }));

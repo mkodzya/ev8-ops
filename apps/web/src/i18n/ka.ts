@@ -12,6 +12,7 @@ import { calendarKa } from './payments-calendar.js';
 import { payDayKa } from './pay-day.js';
 import { workshopKa } from './workshop.js';
 import { workshopJobsKa } from './workshop-jobs.js';
+import { workshopApprovalKa } from './workshop-approval.js';
 import { driveKa } from './drive.js';
 import { expKa } from './expenses.js';
 import { inBankKa } from './in-bank.js';
@@ -1347,6 +1348,7 @@ export const ka: Dict = {
   ...payDayKa,
   ...workshopKa,
   ...workshopJobsKa,
+  ...workshopApprovalKa,
   ...driveKa,
   ...expKa,
   ...inBankKa,

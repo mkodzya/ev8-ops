@@ -202,3 +202,33 @@
   text-decoration: none;
 }
 .wjob-new:hover { background: var(--accent-hover); color: var(--on-accent); }
+
+/* Approving and closing (stage 3; prototype mechanic-approval-options.html,
+   variants A and A). The queue decides in the card: the two buttons are the
+   tablet's size, the refusal is never the loud one. */
+.wappr-queue { margin-bottom: var(--space4); }
+.wappr-list { list-style: none; margin: var(--space2) 0 0; padding: 0; display: flex; flex-direction: column; gap: var(--space3); }
+.wappr-card { display: flex; flex-direction: column; gap: var(--space3); padding: 16px 18px; border: 1.5px solid var(--line-soft); border-radius: var(--radius-card); background: var(--surface); }
+.wappr-head { display: flex; justify-content: space-between; align-items: baseline; gap: var(--space3); flex-wrap: wrap; }
+.wappr-head b { font: var(--text-h2); }
+.wappr-head a { color: var(--ink); text-decoration: none; }
+.wappr-why { margin: 0; font: var(--text-body); }
+.wappr-thumb { width: 96px; height: 96px; }
+.wappr-acts { display: flex; justify-content: flex-end; gap: var(--space3); flex-wrap: wrap; }
+.wappr-acts .pill { min-height: var(--control-large); padding: 0 24px; font: var(--text-cta); }
+.wappr-suggest { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space2); margin-bottom: var(--space4); padding: 14px 18px; border-radius: var(--radius-card); background: var(--accent-soft); }
+.wappr-suggest p { margin: 0; }
+.wappr-reason { display: flex; flex-direction: column; gap: var(--space1); margin-bottom: var(--space4); padding: 12px 16px; border-radius: var(--radius-card); background: var(--surface-2); }
+
+/* A line of work and where it stands: approved quietly, waiting shaded,
+   refused struck through with its reason under the name. */
+.wjob-lines li { align-items: center; }
+.wjob-line-approved .wjob-name::after { content: " ✓"; color: var(--accent); font-weight: 600; }
+.wjob-line-approved .wjob-name, .wjob-line-approved .mono { color: var(--muted); }
+.wjob-lines li.wjob-line-waiting { margin: var(--space1) calc(-1 * var(--space2)); padding: 9px var(--space2); border-bottom: 0; border-radius: var(--radius-card); background: var(--warn-soft); }
+.wjob-line-rejected .wjob-name, .wjob-line-rejected .mono { color: var(--muted); text-decoration: line-through; }
+.wjob-line-why { display: block; color: var(--crit-ink); font: var(--text-body-sm); text-decoration: none; }
+.wjob-line-rejected .wjob-line-why { text-decoration: none; }
+.wjob-wtag { padding: 1px 10px; border: 1.5px solid var(--line-control); border-radius: var(--radius-pill); background: var(--surface); font: var(--text-label); font-weight: 600; white-space: nowrap; }
+.wjob-norm { display: inline-flex; align-items: center; gap: var(--space2); flex-wrap: wrap; }
+.wjob-norm .input { width: 96px; min-height: 48px; }

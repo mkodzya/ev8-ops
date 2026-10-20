@@ -12,6 +12,7 @@ import { calendarRu } from './payments-calendar.js';
 import { payDayRu } from './pay-day.js';
 import { workshopRu } from './workshop.js';
 import { workshopJobsRu } from './workshop-jobs.js';
+import { workshopApprovalRu } from './workshop-approval.js';
 import { driveRu } from './drive.js';
 import { expRu } from './expenses.js';
 import { inBankRu } from './in-bank.js';
@@ -1358,6 +1359,7 @@ export const ru: Dict = {
   ...payDayRu,
   ...workshopRu,
   ...workshopJobsRu,
+  ...workshopApprovalRu,
   ...driveRu,
   ...expRu,
   ...inBankRu,
