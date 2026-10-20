@@ -470,7 +470,9 @@ export function serviceRoutes(app: FastifyInstance): void {
    */
   app.post<{ Params: { id: string }; Body: Body }>('/api/service/:id/reject', { config: { scope: 'service.approve' } }, async (req) => {
     const actor = actorOf(req);
-    const reason = str(req.body ?? {}, 'reason', { required: true, max: 1000 })!;
+    // Spaces are no reason: the mechanic reads it on his repair.
+    const reason = str(req.body ?? {}, 'reason', { required: true, max: 1000 });
+    if (!reason) throw badRequest('missing_field', 'Say why it is refused.', { field: 'reason' });
     const job = await prisma.serviceJob.findUnique({
       where: { id: req.params.id },
       select: { id: true, number: true, status: true, approvedAt: true, movedVehicle: true, vehicleId: true, works: { select: { id: true, approvedAt: true, rejectedAt: true } } },
