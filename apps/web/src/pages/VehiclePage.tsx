@@ -300,7 +300,7 @@ export function VehiclePage() {
         )}
       </section>
 
-      {data.trackers && <TrackerBlock trackers={data.trackers} />}
+      {data.trackers && data.trackers.length > 0 && <TrackerBlock trackers={data.trackers} />}
       {(data.donated?.length ?? 0) > 0 && (
         <section className="card">
           <BlockHead title={t.wparts.donatedBlock} sub={t.wparts.lines(data.donated!.length)} />

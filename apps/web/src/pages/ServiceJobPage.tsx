@@ -304,7 +304,7 @@ export function ServiceJobPage() {
                       <PartNote p={p} />
                     </td>
                     <td className="num mono">{p.qty}</td>
-                    {money && <td className="num mono">{p.lineTetri == null ? '—' : p.kind === 'removed' ? '—' : formatGel(p.lineTetri)}</td>}
+                    {money && <td className="num mono">{p.lineTetri == null || p.kind === 'removed' || p.state === 'rejected' ? '—' : formatGel(p.lineTetri)}</td>}
                     {mayEdit && (
                       <td className="num">
                         <button

@@ -177,7 +177,8 @@ export function ApprovalCard({ job, onDone }: { job: ServiceJob; onDone: () => v
   const lines = job.works;
   const folded = !open && lines.length > 4;
   const shown = folded ? lines.slice(0, 3) : lines;
-  const photos = job.photos.filter((p) => p.tag !== 'after');
+  // The receipt stands beside the part it paid for, not in the row of photos too.
+  const photos = job.photos.filter((p) => p.tag !== 'after' && p.tag !== 'receipt');
   const since = repeat ? [...waiting.map((w) => w.addedAt), ...boughtWaiting.map((p) => p.addedAt)].sort()[0] : job.openedAt;
   const firstWaiting = [...waiting, ...boughtWaiting].sort((a, b) => a.addedAt.localeCompare(b.addedAt))[0];
   const mayNorm = can('service.norms');

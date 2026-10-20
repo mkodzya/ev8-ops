@@ -245,11 +245,12 @@
 .wparts-tile b { font: var(--text-h2); }
 .wparts-tile:hover { border-color: var(--accent); }
 .wparts-tile-bat { border-style: dashed; }
-.wparts-glyph { font: var(--text-h2); color: var(--accent); font-family: var(--mono); }
+.wparts-glyph { font: var(--text-display); line-height: 1; color: var(--accent); }
 .wparts-form { display: flex; flex-direction: column; gap: var(--space4); }
 .wparts-res { list-style: none; margin: var(--space2) 0 0; padding: 0; display: flex; flex-direction: column; gap: var(--space2); }
 .wparts-row { display: flex; align-items: center; gap: var(--space3); width: 100%; min-height: 60px; padding: 10px 16px; border: 1.5px solid var(--line-soft); border-radius: var(--radius-card); background: var(--surface); color: var(--ink); text-align: left; cursor: pointer; }
 .wparts-row.on { border: 3px solid var(--accent); background: var(--accent-soft); padding: 9px 15px; }
+.wparts-row .wjob-code { width: auto; min-width: 56px; max-width: 112px; overflow-wrap: anywhere; }
 .wparts-free { border-style: dashed; color: var(--muted); }
 .wparts-mark { margin-left: var(--space2); padding: 1px 8px; border-radius: var(--radius-pill); background: var(--surface-2); font: var(--text-label); }
 .wparts-on { color: var(--muted); white-space: nowrap; }
