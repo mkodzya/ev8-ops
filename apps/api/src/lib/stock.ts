@@ -221,10 +221,17 @@ export async function initialStock(
 }
 
 /**
- * What a repair line adds to what the repair cost, as the five places that sum
- * a repair read it (`partLineTetri`, ADR-0036): a select to spread into theirs.
+ * What a repair line adds to what the repair cost, as the places that sum a
+ * repair read it (`partLineTetri`, ADR-0036): a select to spread into theirs.
  */
 export const PART_MONEY = { qty: true, unitPriceTetri: true, kind: true, paidTetri: true, rejectedAt: true } as const;
+
+/**
+ * What a line of the mechanic's work adds to what a company repair cost
+ * (`repairTotalTetri`, ADR-0037 §6): its norm and rate as written, and the
+ * decision on it. The sibling of PART_MONEY.
+ */
+export const WORK_MONEY = { qty: true, normSec: true, rateTetri: true, approvedAt: true, rejectedAt: true } as const;
 
 /**
  * A part that only passed through the shelf on its way into a moped — bought

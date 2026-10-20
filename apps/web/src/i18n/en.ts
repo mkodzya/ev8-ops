@@ -1236,6 +1236,7 @@ export const en = {
       work_category_not_found: 'No such category of works.',
       job_already_open: 'This moped already has an open repair. Open that one.',
       job_closed: 'A closed repair cannot be edited.',
+      job_paid: 'The mechanic has been paid for this repair: it is not changed any more.',
       job_not_found: 'Repair not found.',
       job_not_waiting: 'This repair is not waiting for approval.',
       job_waits_approval: 'This repair waits for approval; it closes after the decision.',
