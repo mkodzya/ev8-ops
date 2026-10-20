@@ -810,6 +810,26 @@ async function chiefOnTablet(owner: string): Promise<{ id: string; cookie: strin
   return { id, cookie: withCookies(signed, device) };
 }
 
+interface Bucket {
+  jobs: { id: string; number: string; amountTetri: number }[];
+  tetri: number;
+}
+
+interface Balance {
+  mechanic: { id: string; rateTetri: number };
+  payable: Due;
+  waiting: Bucket;
+  open: Bucket;
+  unnormed: Bucket;
+  payouts: Payout[];
+}
+
+async function balanceOf(cookie: string): Promise<Balance> {
+  const res = await call(cookie, 'GET', '/api/service/balance');
+  expect(res.statusCode, res.body).toBe(200);
+  return json<Balance>(res);
+}
+
 describe.skipIf(!HAS_DB)('who marks a payout, and whose balance (ADR-0037; ADR-0033 §7)', () => {
   it('only an owner at a password session reads «К оплате», marks and voids', async () => {
     const owner = await person('owner');
@@ -856,26 +876,14 @@ describe.skipIf(!HAS_DB)('who marks a payout, and whose balance (ADR-0037; ADR-0
     const others = await closedRepair(other.cookie, chief.cookie, [{ workTypeId: w20.id }]);
     const paidBefore = await pay(owner.cookie, (await dueOf(owner.cookie, other.id))!);
 
-    interface Balance {
-      mechanic: { id: string; rateTetri: number };
-      payable: Due;
-      waiting: { jobs: { id: string; amountTetri: number }[]; tetri: number };
-      open: { jobs: { id: string; amountTetri: number }[]; tetri: number };
-      unnormed: { jobs: { id: string; number: string }[] };
-      payouts: Payout[];
-    }
-    const balanceOf = async (cookie: string) => {
-      const res = await call(cookie, 'GET', '/api/service/balance');
-      expect(res.statusCode, res.body).toBe(200);
-      return json<Balance>(res);
-    };
     const mine = await balanceOf(mech.cookie);
     expect(mine.mechanic).toEqual({ id: mech.id, name: 'Test mechanic', rateTetri: 5000 });
     expect(mine.payable).toMatchObject({ id: mech.id, jobIds: [payable], workTetri: 2500, totalTetri: 2500 });
     expect(mine.waiting).toEqual({ jobs: [{ id: waiting, number: expect.any(String), amountTetri: 2500 }], tetri: 2500 });
     // In work: his work and the part he paid for.
     expect(mine.open).toEqual({ jobs: [{ id: open, number: expect.any(String), amountTetri: 1917 }], tetri: 1917 });
-    expect(mine.unnormed.jobs.map((j) => j.id)).toEqual([unnormed]);
+    // Without a norm, its work is nothing yet.
+    expect(mine.unnormed).toEqual({ jobs: [{ id: unnormed, number: expect.any(String), amountTetri: 0 }], tetri: 0 });
     expect(mine.payouts).toEqual([]);
     expect(JSON.stringify(mine)).not.toContain(others);
 
@@ -891,9 +899,45 @@ describe.skipIf(!HAS_DB)('who marks a payout, and whose balance (ADR-0037; ADR-0
       payable: { jobs: [], otherReceipts: [], totalTetri: 0 },
       waiting: { jobs: [], tetri: 0 },
       open: { jobs: [], tetri: 0 },
-      unnormed: { jobs: [] },
+      unnormed: { jobs: [], tetri: 0 },
       payouts: [],
     });
     await settle(owner.cookie, waiting, open);
+  });
+
+  it('a chief mechanic’s balance shows what he paid in another mechanic’s repair wherever that repair stands', async () => {
+    const owner = await person('owner');
+    const mech = await person('mechanic');
+    const chief = await person('chief_mechanic');
+    const { vehicle } = await freeVehicle();
+    const id = await repairInWork(mech.cookie, chief.cookie, vehicle.id, [{ freeText: 'ТЕСТ true the front wheel' }]);
+    // Bought by the chief for the mechanic's repair in work: approved as he writes it, his own money back.
+    const part = await boughtPart(chief.cookie, id, '4,50');
+    const his = { id, number: expect.any(String), amountTetri: 450 };
+    const none = { jobs: [], tetri: 0 };
+    let b = await balanceOf(chief.cookie);
+    expect([b.waiting, b.open, b.unnormed]).toEqual([none, { jobs: [his], tetri: 450 }, none]);
+
+    // A work found later: the repair waits, and his money with it.
+    expect((await call(mech.cookie, 'POST', `/api/service/${id}/works`, { works: [{ freeText: 'ТЕСТ a new spoke' }] })).statusCode).toBe(201);
+    b = await balanceOf(chief.cookie);
+    expect([b.waiting, b.open, b.unnormed]).toEqual([{ jobs: [his], tetri: 450 }, none, none]);
+
+    // Approved without norms and closed: it waits for a norm, and says how much is held there.
+    expect((await call(chief.cookie, 'POST', `/api/service/${id}/approve`)).statusCode).toBe(200);
+    await closeRepair(mech.cookie, id);
+    b = await balanceOf(chief.cookie);
+    expect([b.waiting, b.open, b.unnormed]).toEqual([none, none, { jobs: [his], tetri: 450 }]);
+    expect(b.payable.partIds).toEqual([]);
+    // The repair's own mechanic sees it there too, his work at no norm yet worth nothing.
+    expect((await balanceOf(mech.cookie)).unnormed).toEqual({ jobs: [{ id, number: expect.any(String), amountTetri: 0 }], tetri: 0 });
+
+    // Normed, it is owed: his receipt is in «payable» and nowhere else.
+    for (const l of (await jobOf(owner.cookie, id)).works) {
+      expect((await call(chief.cookie, 'PATCH', `/api/service/${id}/works/${l.id}`, { normMin: 10 })).statusCode).toBe(200);
+    }
+    b = await balanceOf(chief.cookie);
+    expect([b.waiting, b.open, b.unnormed]).toEqual([none, none, none]);
+    expect(b.payable).toMatchObject({ partIds: [part], reimburseTetri: 450, otherReceipts: [{ id: part, jobId: id, paidTetri: 450 }] });
   });
 });

@@ -429,13 +429,14 @@ export function payoutRoutes(app: FastifyInstance): void {
   /**
    * A mechanic's own money (spec, «баланс»): what is owed him now, what waits
    * for approval, what is still in work, what waits for a norm, and his last
-   * payouts. Only his — the repairs he carries and the receipts he paid; an
+   * payouts. Only his — the repairs he carries and the receipts he paid, in
+   * his repairs or in somebody else's, each where its repair stands; an
    * owner, who carries none, reads it empty.
    */
   app.get('/api/service/balance', { config: { scope: 'service.work' } }, async (req) => {
     const actor = actorOf(req);
     const me = await prisma.user.findUniqueOrThrow({ where: { id: actor.id }, select: { id: true, name: true, role: true, labourRateTetri: true } });
-    const [due, jobs, payouts] = await Promise.all([
+    const [due, jobs, receipts, payouts] = await Promise.all([
       payableFor(prisma, me.id),
       prisma.serviceJob.findMany({
         where: { mechanicId: me.id, paidInPayoutId: null, status: { in: ['draft', 'open', 'done'] } },
@@ -449,15 +450,35 @@ export function payoutRoutes(app: FastifyInstance): void {
           parts: { select: { kind: true, approvedAt: true, rejectedAt: true, paidTetri: true, reimburseToId: true } },
         },
       }),
+      // What he laid out in repairs not yet settled, whoever carries them: a
+      // chief mechanic buys for anyone's repair, and is paid back himself.
+      prisma.servicePart.findMany({
+        where: { kind: 'bought', rejectedAt: null, paidInPayoutId: null, reimburseToId: me.id, job: { status: { in: ['draft', 'open', 'done'] } } },
+        orderBy: { createdAt: 'asc' },
+        select: { paidTetri: true, job: { select: PAY_STATE } },
+      }),
       prisma.mechanicPayout.findMany({ where: { mechanicId: me.id }, orderBy: [{ markedAt: 'desc' }, { id: 'asc' }], take: 20, select: PAYOUT }),
     ]);
+    const own = new Set(jobs.map((j) => j.id));
+    const elsewhere = new Map<string, { id: string; number: string; state: PayState; amountTetri: number }>();
+    for (const p of receipts) {
+      if (own.has(p.job.id)) continue;
+      const was = elsewhere.get(p.job.id) ?? { id: p.job.id, number: p.job.number, state: jobPayState(p.job), amountTetri: 0 };
+      was.amountTetri += p.paidTetri ?? 0;
+      elsewhere.set(p.job.id, was);
+    }
+    // His repairs: their work by the norms so far, and what he paid in them;
+    // somebody else's: only what he paid. Payable ones are in «payable».
     const bucket = (state: PayState) => {
-      const list = jobs
-        .filter((j) => jobPayState(j) === state)
-        .map((j) => {
-          const mine = j.parts.filter((p) => p.kind === 'bought' && partLineState(p) !== 'rejected' && p.reimburseToId === me.id);
-          return { id: j.id, number: j.number, amountTetri: heldTetri(j) + mine.reduce((n, p) => n + (p.paidTetri ?? 0), 0) };
-        });
+      const list = [
+        ...jobs
+          .filter((j) => jobPayState(j) === state)
+          .map((j) => {
+            const mine = j.parts.filter((p) => p.kind === 'bought' && partLineState(p) !== 'rejected' && p.reimburseToId === me.id);
+            return { id: j.id, number: j.number, amountTetri: heldTetri(j) + mine.reduce((n, p) => n + (p.paidTetri ?? 0), 0) };
+          }),
+        ...[...elsewhere.values()].filter((j) => j.state === state).map(({ id, number, amountTetri }) => ({ id, number, amountTetri })),
+      ];
       return { jobs: list, tetri: list.reduce((n, j) => n + j.amountTetri, 0) };
     };
     return {
@@ -465,7 +486,7 @@ export function payoutRoutes(app: FastifyInstance): void {
       payable: due ?? nothingDue(me),
       waiting: bucket('waiting'),
       open: bucket('open'),
-      unnormed: { jobs: jobs.filter((j) => jobPayState(j) === 'unnormed').map((j) => ({ id: j.id, number: j.number })) },
+      unnormed: bucket('unnormed'),
       payouts: await payoutsOut(payouts),
     };
   });
