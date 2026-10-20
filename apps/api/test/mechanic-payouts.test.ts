@@ -555,6 +555,37 @@ describe.skipIf(!HAS_DB)('«К оплате» (ADR-0037 §2)', () => {
     expect(Object.fromEntries(jobs.map((j) => [j.id, j.paidInPayoutId]))).toEqual({ [a]: paid.id, [b]: null, [c]: null, [d]: null });
     await settle(owner.cookie, c, d);
   });
+
+  it('a receipt approved in a repair the owner calls off is still paid back; its work is not, nor a refused repair’s receipt', async () => {
+    const { prisma } = await import('../src/lib/db.js');
+    const owner = await person('owner');
+    const mech = await person('mechanic');
+    const chief = await person('chief_mechanic');
+    const w = await ownWork(owner.cookie, 30);
+    const { vehicle } = await freeVehicle();
+    const called = await repairInWork(mech.cookie, chief.cookie, vehicle.id, [{ workTypeId: w.id }]);
+    const receipt = await boughtPart(mech.cookie, called, '25,00');
+    expect((await call(chief.cookie, 'POST', `/api/service/${called}/approve`)).statusCode).toBe(200);
+    const vr = await freeVehicle();
+    const refused = await repairInWork(mech.cookie, chief.cookie, vr.vehicle.id, [{ workTypeId: w.id }]);
+    const refusedReceipt = await boughtPart(mech.cookie, refused, '7,00');
+    expect((await call(chief.cookie, 'POST', `/api/service/${refused}/approve`)).statusCode).toBe(200);
+    await settle(owner.cookie, called, refused);
+    // A repair is refused whole only before its first approval, when nothing on it is approved yet;
+    // written so by hand, it stands for the rule that a refused repair pays nothing.
+    await prisma.serviceJob.update({ where: { id: refused }, data: { rejectedById: chief.id, rejectedAt: new Date(), rejectReason: 'ТЕСТ not a repair' } });
+
+    // The part he bought stays in the moped (ADR-0036), so the money he laid out is his.
+    const due = (await dueOf(owner.cookie, mech.id))!;
+    expect(due).toMatchObject({ jobs: [], jobIds: [], partIds: [receipt], workTetri: 0, reimburseTetri: 2500, totalTetri: 2500 });
+    expect(due.otherReceipts).toMatchObject([{ id: receipt, jobId: called, paidTetri: 2500 }]);
+    const payout = await pay(owner.cookie, due);
+    expect(payout).toMatchObject({ labourTetri: 0, reimburseTetri: 2500, jobs: [], receiptsCount: 1 });
+    expect((await prisma.servicePart.findUniqueOrThrow({ where: { id: receipt } })).paidInPayoutId).toBe(payout.id);
+    expect((await prisma.servicePart.findUniqueOrThrow({ where: { id: refusedReceipt } })).paidInPayoutId).toBeNull();
+    expect(await prisma.serviceJob.count({ where: { id: { in: [called, refused] }, paidInPayoutId: { not: null } } })).toBe(0);
+    expect(await dueOf(owner.cookie, mech.id)).toBeUndefined();
+  });
 });
 
 describe.skipIf(!HAS_DB)('«Оплачено» (ADR-0037 §4)', () => {

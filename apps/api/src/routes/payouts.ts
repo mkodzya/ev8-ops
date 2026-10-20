@@ -24,6 +24,14 @@ type Db = Prisma.TransactionClient;
 /** A bought line approved, not refused and not yet paid back (ADR-0036). */
 const UNPAID_RECEIPT = { kind: 'bought', approvedAt: { not: null }, rejectedAt: null, paidInPayoutId: null } as const;
 
+/**
+ * The repairs a receipt is paid back from: closed — or called off, which keeps
+ * the part it got (ADR-0036: bought parts stay as they are), so the money the
+ * mechanic laid out for it is still his. A refused repair pays nothing
+ * (ADR-0035 §3, ADR-0037 §2); only a cancelled repair can be refused.
+ */
+const RECEIPT_JOB: Prisma.ServiceJobWhereInput = { status: { in: ['done', 'cancelled'] }, rejectedAt: null };
+
 /** The money a repair's lines carry, and what holds it back (jobPayState). */
 const PAY_JOB = {
   id: true,
@@ -96,7 +104,11 @@ export interface MechanicDue {
   /** His rate now, or the company's — to read by; every line keeps the rate it was written at. */
   rateTetri: number;
   jobs: PayJob[];
-  /** Receipts he paid in somebody else's repair: they come back to him, not to its mechanic. */
+  /**
+   * Receipts not paid with a repair of his on this screen: those he paid in
+   * somebody else's repair — they come back to him, not to its mechanic — and
+   * those in a repair called off.
+   */
   otherReceipts: (Receipt & { jobId: string; jobNumber: string })[];
   seconds: number;
   workTetri: number;
@@ -106,8 +118,11 @@ export interface MechanicDue {
   partIds: string[];
 }
 
-/** A receipt waits for its repair: closed and nothing on it undecided — or its mechanic already paid. */
-const RECEIPT_DUE: readonly PayState[] = ['payable', 'paid'];
+/**
+ * A receipt waits for its repair: closed and nothing on it undecided — or its
+ * mechanic already paid; one in a repair called off waits for nothing.
+ */
+const RECEIPT_DUE: readonly PayState[] = ['payable', 'paid', 'cancelled'];
 
 /**
  * What one person is owed now, or null when nothing. The one place this is
@@ -124,7 +139,7 @@ async function payableFor(db: Db, mechanicId: string): Promise<MechanicDue | nul
     select: PAY_JOB,
   });
   const bought = await db.servicePart.findMany({
-    where: { ...UNPAID_RECEIPT, reimburseToId: mechanicId, job: { status: 'done' } },
+    where: { ...UNPAID_RECEIPT, reimburseToId: mechanicId, job: RECEIPT_JOB },
     orderBy: { createdAt: 'asc' },
     select: { id: true, name: true, paidTetri: true, jobId: true, job: { select: PAY_STATE } },
   });
@@ -263,7 +278,7 @@ export function payoutRoutes(app: FastifyInstance): void {
   app.get('/api/service/payouts', { config: { scope: 'service.payout' } }, async () => {
     const [carried, bought] = await Promise.all([
       prisma.serviceJob.findMany({ where: { status: 'done', paidInPayoutId: null, mechanicId: { not: null } }, distinct: ['mechanicId'], select: { mechanicId: true } }),
-      prisma.servicePart.findMany({ where: { ...UNPAID_RECEIPT, reimburseToId: { not: null }, job: { status: 'done' } }, distinct: ['reimburseToId'], select: { reimburseToId: true } }),
+      prisma.servicePart.findMany({ where: { ...UNPAID_RECEIPT, reimburseToId: { not: null }, job: RECEIPT_JOB }, distinct: ['reimburseToId'], select: { reimburseToId: true } }),
     ]);
     const ids = [...new Set([...carried.map((j) => j.mechanicId), ...bought.map((p) => p.reimburseToId)].filter((id): id is string => id != null))];
     const due: MechanicDue[] = [];
