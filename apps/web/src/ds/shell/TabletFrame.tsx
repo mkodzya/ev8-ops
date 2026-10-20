@@ -1,12 +1,12 @@
 import { LOCALES } from '@ev8/shared';
-import { LogOut } from 'lucide-react';
+import { ChevronLeft, LogOut } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Outlet, useNavigate } from 'react-router-dom';
+import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../../api.js';
 import { LanguageToggle, useLocale, useT, type Locale } from '../../i18n/index.js';
 import { useSession } from '../../session.js';
 import { SyncBar } from '../state/SyncBar.js';
-import { PageHeadSlot } from './header.js';
+import { PageHeadSlot, useHeader } from './header.js';
 import { ICON } from './icons.js';
 import './tablet.css';
 
@@ -26,6 +26,10 @@ export function TabletFrame() {
   const { me, logout } = useSession();
   const { setLocale } = useLocale();
   const navigate = useNavigate();
+  const { pathname } = useLocation();
+  // Below 900 px a page hands its title to the header, as on a phone: here the bar carries it.
+  const header = useHeader();
+  const atRoot = pathname === '/service' || pathname === '/';
 
   // The tablet speaks the language of whoever signed in on it, whatever the
   // last person chose (ADR-0033 §9).
@@ -46,8 +50,21 @@ export function TabletFrame() {
     <div className="tablet-app">
       <header className="tablet-bar">
         <div className="tablet-bar-left">
-          <img src="/logo.svg" alt="EV8" height={24} width={96} />
-          <span className="tablet-section">{t.nav.service}</span>
+          <img className="tablet-logo" src="/logo.svg" alt="EV8" height={24} width={96} />
+          {!atRoot && (
+            <button
+              type="button"
+              className="icon-btn"
+              onClick={() => (window.history.length > 1 ? navigate(-1) : navigate('/service'))}
+              aria-label={t.shell.back}
+            >
+              <ChevronLeft {...ICON} aria-hidden="true" />
+            </button>
+          )}
+          <span className="tablet-title">
+            <span className="tablet-section">{header?.title ?? t.nav.service}</span>
+            {header?.sub != null && <span className="tablet-sub">{header.sub}</span>}
+          </span>
         </div>
         <div className="tablet-bar-right">
           <LanguageToggle onChange={(l) => void api.patch('/api/me/locale', { locale: l }).catch(() => {})} />

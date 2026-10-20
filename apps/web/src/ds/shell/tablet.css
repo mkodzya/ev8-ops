@@ -14,14 +14,22 @@
   padding: 12px 20px;
   background: var(--surface);
   border-bottom: 1px solid var(--line-soft);
-  flex-wrap: wrap;
 }
 .tablet-bar-left, .tablet-bar-right { display: flex; align-items: center; gap: var(--space3); }
-.tablet-section { font: var(--text-h1); letter-spacing: var(--tracking-tight); }
+.tablet-bar-left { flex: 1; min-width: 0; }
+.tablet-bar-right { flex: none; }
+.tablet-title { display: flex; flex-direction: column; min-width: 0; }
+.tablet-section { font: var(--text-h1); letter-spacing: var(--tracking-tight); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tablet-sub { font: var(--text-label); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* A tablet standing up has no room for the wordmark beside the name and the sign-out. */
+@media (max-width: 899px) { .tablet-logo { display: none; } }
+/* A phone: the bar takes two lines rather than squeezing the sign-out. */
+@media (max-width: 640px) { .tablet-bar { flex-wrap: wrap; } }
 
 .tablet-me { display: flex; align-items: center; gap: 10px; }
 .tablet-me .avatar { width: 44px; height: 44px; font-size: 18px; }
-.tablet-me-text { display: flex; flex-direction: column; line-height: 1.15; }
+.tablet-me-text { display: flex; flex-direction: column; line-height: 1.15; min-width: 0; max-width: 190px; }
+.tablet-me-name, .tablet-me-role { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tablet-me-name { font: var(--text-body); font-weight: 600; }
 .tablet-me-role { font: var(--text-body-sm); color: var(--muted); }
 
