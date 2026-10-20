@@ -6,7 +6,7 @@ import { fmtDayMonth, formatGel } from '../format.js';
 import { useLocale, useT } from '../i18n/index.js';
 import { useLoad } from '../lib/use.js';
 import { normText } from '../lib/workBook.js';
-import { mopedOf, worksOf, type PayMechanic, type PayoutRow } from './PayoutsPage.js';
+import { mopedOf, WorksOf, type PayMechanic, type PayoutRow } from './PayoutsPage.js';
 import './workshop-job.css';
 
 // The mechanic's balance (stage 5; prototype mechanic-payouts-options.html,
@@ -81,7 +81,7 @@ export function MechanicBalancePage() {
                   <span className="wpay-t">
                     {mopedOf(j.vehicle)}
                     <small className="muted">
-                      {worksOf(j)}
+                      <WorksOf j={j} />
                       {paidBack > 0 ? ` · ${t.wpay.payBack(formatGel(paidBack))}` : ''}
                     </small>
                   </span>

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, ApiError } from '../api.js';
 import { LoadError } from '../components/LoadError.js';
@@ -76,9 +76,24 @@ export function mopedOf(v: PayJob['vehicle']): string {
   return v.number ?? `${v.model} ···${v.vin.slice(-4)}`;
 }
 
-/** BR-04 × 2, DG-01 — the codes say what was done; a work not in the book says itself. */
-export function worksOf(j: PayJob): string {
-  return j.works.map((w) => `${w.code ?? w.freeText ?? '—'}${w.qty > 1 ? ` × ${w.qty}` : ''}`).join(', ');
+/**
+ * BR-04 × 2, DG-01 — the codes say what was done; a work not in the book says
+ * itself. A code is never broken at its hyphen on a narrow screen.
+ */
+export function WorksOf({ j }: { j: PayJob }) {
+  return (
+    <>
+      {j.works.map((w, i) => (
+        <Fragment key={i}>
+          {i > 0 ? ', ' : ''}
+          <span className={w.code ? 'wpay-code' : undefined}>
+            {w.code ?? w.freeText ?? '—'}
+            {w.qty > 1 ? ` × ${w.qty}` : ''}
+          </span>
+        </Fragment>
+      ))}
+    </>
+  );
 }
 
 export function PayoutsPage() {
@@ -157,7 +172,7 @@ function MechanicToPay({ m, onDone }: { m: PayMechanic; onDone: () => void }) {
                 {mopedOf(j.vehicle)} · {t.wjob.min(normText(j.seconds, locale))}
                 <small className="muted">
                   {j.closedOn ? `${t.wpay.closed(fmtDayMonth(j.closedOn))} · ` : ''}
-                  {worksOf(j)}
+                  <WorksOf j={j} />
                 </small>
               </span>
               <span className="mono wpay-g">{formatGel(j.workTetri)}</span>
@@ -221,7 +236,7 @@ function MechanicToPay({ m, onDone }: { m: PayMechanic; onDone: () => void }) {
                   <td className="wpay-moped">{mopedOf(j.vehicle)}</td>
                   <td className="mono">{fmtDayMonth(j.closedOn)}</td>
                   <td>
-                    {worksOf(j)}
+                    <WorksOf j={j} />
                     {j.receipts.length > 0 && <span className="muted"> · {j.receipts.map((r) => r.name).join(', ')}</span>}
                   </td>
                   <td className="num mono">{normText(j.seconds, locale)}</td>

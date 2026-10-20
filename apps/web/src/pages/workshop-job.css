@@ -309,7 +309,9 @@
 
 /* The mechanic's balance on the tablet and his phone. */
 .wpay-big { display: flex; flex-direction: column; gap: var(--space1); margin-bottom: var(--space3); padding: 18px 20px; border: 1.5px solid var(--line-soft); border-radius: var(--radius-card); background: var(--surface); }
-.wpay-big b { font: var(--text-display); font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.wpay-big b { font: var(--text-display); font-family: var(--mono); font-size: 44px; font-variant-numeric: tabular-nums; }
+/* A work's code and its count stay on one line; the list breaks between works. */
+.wpay-code { white-space: nowrap; }
 .wpay-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space3); margin-bottom: var(--space4); }
 .wpay-tile { display: flex; flex-direction: column; gap: var(--space1); min-height: 112px; padding: 14px 16px; border: 1.5px solid var(--line-control); border-radius: var(--radius-card); background: var(--surface); }
 .wpay-tile.quiet { border-color: var(--line-soft); }
