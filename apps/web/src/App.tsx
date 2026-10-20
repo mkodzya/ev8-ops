@@ -44,6 +44,8 @@ import { SalesPage } from './pages/SalesPage.js';
 import { SaleWizard } from './pages/SaleWizard.js';
 import { ServiceJobPage } from './pages/ServiceJobPage.js';
 import { ServicePage } from './pages/ServicePage.js';
+import { WorkBookPage } from './pages/WorkBookPage.js';
+import { WorkshopJobWizard } from './pages/WorkshopJobWizard.js';
 import { StatementsPage } from './pages/money/StatementsPage.js';
 import { VehiclePage } from './pages/VehiclePage.js';
 import { ModelPage } from './pages/ModelPage.js';
@@ -152,6 +154,8 @@ export function App() {
         <Route path="service" element={<ServicePage />} />
         <Route path="service/stock" element={<StockPage />} />
         <Route path="service/stock/parts/:id" element={<PartPage />} />
+        <Route path="service/new" element={<Require perm="service.work"><WorkshopJobWizard /></Require>} />
+        <Route path="service/works" element={<Require perm="service.norms"><WorkBookPage /></Require>} />
         <Route path="service/:id" element={<ServiceJobPage />} />
 
         {/* Money in one place (wave 2 §3.0). */}

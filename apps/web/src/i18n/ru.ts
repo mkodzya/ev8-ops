@@ -11,6 +11,7 @@ import { bankApiRu } from './bank-api.js';
 import { calendarRu } from './payments-calendar.js';
 import { payDayRu } from './pay-day.js';
 import { workshopRu } from './workshop.js';
+import { workshopJobsRu } from './workshop-jobs.js';
 import { driveRu } from './drive.js';
 import { expRu } from './expenses.js';
 import { inBankRu } from './in-bank.js';
@@ -109,6 +110,7 @@ export const ru: Dict = {
       batteries: 'Батареи и зарядки',
       jobs: 'Ремонты',
       stock: 'Склад',
+      works: 'Справочник работ',
       payments: 'Платежи',
       statements: 'Выписки',
       week: 'Неделя',
@@ -1223,6 +1225,10 @@ export const ru: Dict = {
       internal: 'Что-то сломалось на нашей стороне. Повторите или сообщите владельцу.',
       invalid_credentials: 'Почта и пароль не подходят.',
       invalid_pin: 'Неверный PIN.',
+      job_has_mechanic: 'Эту заявку ведёт другой механик.',
+      work_type_not_found: 'Такой работы в справочнике нет.',
+      work_type_off: 'Эта работа выключена в справочнике — выберите другую.',
+      work_category_not_found: 'Такой категории работ нет.',
       job_already_open: 'У этого мопеда уже открыт ремонт — откройте его.',
       job_closed: 'Закрытый ремонт не редактируется.',
       job_not_found: 'Ремонт не найден.',
@@ -1345,6 +1351,7 @@ export const ru: Dict = {
   ...calendarRu,
   ...payDayRu,
   ...workshopRu,
+  ...workshopJobsRu,
   ...driveRu,
   ...expRu,
   ...inBankRu,

@@ -16,7 +16,9 @@ import { useLocale, useT } from '../i18n/index.js';
 import { uploadAll, type PreparedPhoto } from '../lib/photos.js';
 import { useLoad } from '../lib/use.js';
 import { useSession } from '../session.js';
+import { groupDigits, normText } from '../lib/workBook.js';
 import type { ServiceJob, Workshop } from './ServicePage.js';
+import { WorkLines } from './WorkshopJobWizard.js';
 import type { PartRow } from './StockPage.js';
 
 interface Locations {
@@ -43,6 +45,7 @@ type Sheet = 'workshop' | 'payer' | 'part' | 'work' | 'close' | 'cancel';
 export function ServiceJobPage() {
   const { id } = useParams();
   const t = useT();
+  const { locale } = useLocale();
   const { can } = useSession();
   const navigate = useNavigate();
   const toast = useToast();
@@ -116,7 +119,7 @@ export function ServiceJobPage() {
         )}
       </PageHead>
 
-      {draft && <p className="hint">{t.repair.reportNote}</p>}
+      {draft && <p className="hint">{j.mechanic ? t.wjob.waitsNote : t.repair.reportNote}</p>}
 
       <div className="two-col">
         <section className="card">
@@ -134,7 +137,27 @@ export function ServiceJobPage() {
               )
             }
           />
-          <Row k={t.repair.what} v={<span className="pre">{j.reason}</span>} />
+          <Row
+            k={t.repair.what}
+            v={
+              <span className="pre">
+                {j.reasonKind ? `${t.wjob.reasons[j.reasonKind] ?? j.reasonKind} — ` : ''}
+                {j.reason}
+              </span>
+            }
+          />
+          {j.mechanic && <Row k={t.wjob.mechanic} v={j.mechanic.name} />}
+          {j.openedOdometerKm != null && (
+            <Row
+              k={t.wjob.openedKm}
+              v={
+                <>
+                  <span className="mono">{groupDigits(j.openedOdometerKm)}</span>
+                  {j.odometerReason && <span className="muted"> · {j.odometerReason}</span>}
+                </>
+              }
+            />
+          )}
           {j.rental && (
             <Row
               k={t.repair.rental}
@@ -282,13 +305,39 @@ export function ServiceJobPage() {
         )}
       </section>
 
+      {/* The works a mechanic wrote, with the norm and rate they were written
+          with (stage 2). A repair from before has none, and no block. */}
+      {j.works.length > 0 && (
+        <section className="card">
+          <BlockHead title={t.wjob.works} />
+          <WorkLines
+            lines={j.works.map((w) => ({
+              key: w.id,
+              type: w.code ? { code: w.code, nameKa: w.nameKa, nameRu: w.nameRu, nameEn: w.nameEn, normSec: w.normSec ?? 0 } : null,
+              freeText: w.freeText,
+              qty: w.qty,
+              normSec: w.normSec,
+              ...(j.worksTotal.tetri != null ? { amount: w.amountTetri } : {}),
+            }))}
+          />
+          <div className="wjob-total">
+            <span>{t.wjob.byNorm}</span>
+            <span className="mono">
+              {t.wjob.min(normText(j.worksTotal.seconds, locale))}
+              {j.worksTotal.tetri != null && ` · ${formatGel(j.worksTotal.tetri)}`}
+            </span>
+          </div>
+        </section>
+      )}
+
       <section className="card">
         <BlockHead title={t.repair.photos} sub={t.photos.count(j.photos.length)} />
         {j.photos.length > 0 && (
           <div className="thumbs">
             {j.photos.map((p) => (
-              <a key={p.id} className="thumb" href={`/api/files/${p.id}`} target="_blank" rel="noreferrer">
+              <a key={p.id} className="thumb wjob-thumb" href={`/api/files/${p.id}`} target="_blank" rel="noreferrer">
                 <img src={`/api/files/${p.id}`} alt="" loading="lazy" />
+                {p.tag && <span className="wjob-tag">{t.wjob.photoTags[p.tag] ?? p.tag}</span>}
               </a>
             ))}
           </div>

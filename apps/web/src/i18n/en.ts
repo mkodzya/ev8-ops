@@ -20,6 +20,7 @@ import { bankApiEn } from './bank-api.js';
 import { calendarEn } from './payments-calendar.js';
 import { payDayEn } from './pay-day.js';
 import { workshopEn } from './workshop.js';
+import { workshopJobsEn } from './workshop-jobs.js';
 import { driveEn } from './drive.js';
 import { expEn } from './expenses.js';
 import { inBankEn } from './in-bank.js';
@@ -105,6 +106,7 @@ export const en = {
       batteries: 'Batteries and chargers',
       jobs: 'Repairs',
       stock: 'Stock',
+      works: 'Book of works',
       payments: 'Payments',
       statements: 'Statements',
       week: 'The week',
@@ -1226,6 +1228,10 @@ export const en = {
       internal: 'Something broke on our side. Try again or tell the owner.',
       invalid_credentials: 'That email and password don’t match.',
       invalid_pin: 'Wrong PIN.',
+      job_has_mechanic: 'Another mechanic carries this repair.',
+      work_type_not_found: 'No such work in the book.',
+      work_type_off: 'This work is switched off in the book: choose another.',
+      work_category_not_found: 'No such category of works.',
       job_already_open: 'This moped already has an open repair. Open that one.',
       job_closed: 'A closed repair cannot be edited.',
       job_not_found: 'Repair not found.',
@@ -1348,6 +1354,7 @@ export const en = {
   ...calendarEn,
   ...payDayEn,
   ...workshopEn,
+  ...workshopJobsEn,
   ...driveEn,
   ...expEn,
   ...inBankEn,

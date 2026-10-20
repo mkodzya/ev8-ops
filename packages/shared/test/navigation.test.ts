@@ -67,9 +67,11 @@ describe('the structure each role sees (wave 1 §3.2)', () => {
       expect(phoneTabsForRole(role)).toEqual(['service']);
       expect(menuSectionsForRole(role)).toEqual([]);
       expect(actionsForRole(role)).toEqual([]);
-      expect(tabsForRole('service', role).map((t) => t.id)).toEqual(['jobs']);
       expect(homePathForRole(role)).toBe('/service');
     }
+    // The book of works is the chief mechanic's to keep, not the mechanic's (stage 2).
+    expect(tabsForRole('service', 'mechanic').map((t) => t.id)).toEqual(['jobs']);
+    expect(tabsForRole('service', 'chief_mechanic').map((t) => t.id)).toEqual(['jobs', 'works']);
     expect(homePathForRole('owner')).toBe('/');
     expect(homePathForRole('manager')).toBe('/');
   });
