@@ -1059,12 +1059,20 @@ export function serviceRoutes(app: FastifyInstance): void {
     const job = await prisma.$transaction(async (tx) => {
       let made: { id: string; number: string; status: string };
       if (open) {
+        // Read again under a lock: taken by another mechanic, closed or
+        // approved since the read above, it is taken as it is now, or not at
+        // all — never written over from what it was.
+        await tx.$queryRaw`SELECT 1 FROM service_jobs WHERE id = ${open.id}::uuid FOR UPDATE`;
+        const held = await tx.serviceJob.findUniqueOrThrow({ where: { id: open.id }, select: { status: true, mechanicId: true, mechanic: { select: { name: true } }, approvedAt: true } });
+        if (held.status !== 'open' && held.status !== 'draft') throw conflict('job_closed', 'That repair is no longer open on this moped.');
+        if (held.mechanicId === actor.id) throw conflict('job_already_open', 'This repair is already yours.', { job: { id: open.id, number: open.number } });
+        if (held.mechanicId) throw conflict('job_has_mechanic', 'Another mechanic carries this repair.', { mechanic: held.mechanic?.name ?? null });
         // A repair in work taken on by a mechanic who may not approve: his
         // works wait, and so does the repair (ADR-0035 §1). One opened straight
         // in work was let start by whoever opened it (ADR-0035 §2, as 0057
         // recorded it), so a refusal now refuses his lines, not the repair.
-        const waits = open.status === 'open' && !approver;
-        const stamp = waits && open.approvedAt == null ? { approvedById: open.createdById, approvedAt: open.openedAt ?? open.createdAt } : {};
+        const waits = held.status === 'open' && !approver;
+        const stamp = waits && held.approvedAt == null ? { approvedById: open.createdById, approvedAt: open.openedAt ?? open.createdAt } : {};
         made = await tx.serviceJob.update({
           where: { id: open.id },
           data: {

@@ -375,6 +375,46 @@ describe.skipIf(!HAS_DB)('a repair the mechanic opens (stage 2)', () => {
     await settle(id, second);
   });
 
+  it('takes on a repair as it is now, not as it was read: one taken or closed a moment ago is refused, not overwritten', async () => {
+    const { prisma, vehicle } = await freeVehicle();
+    const owner = await loginAs('owner');
+    const w = await ownWork(owner);
+    const a = await person('mechanic');
+    const b = await person('mechanic');
+    // Long enough for the request started inside to reach the lock the transaction holds.
+    const pause = () => new Promise((r) => setTimeout(r, 300));
+    const id = json<{ id: string }>(await call(owner, 'POST', '/api/service', { vehicleId: vehicle.id, reason: 'ТЕСТ rattles' })).id;
+
+    // B takes it on in the same moment: A's take-over waits for him, then finds it carried.
+    let taking: ReturnType<typeof call> | undefined;
+    await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT 1 FROM service_jobs WHERE id = ${id}::uuid FOR UPDATE`;
+      await tx.serviceJob.update({ where: { id }, data: { mechanicId: b.id } });
+      taking = call(a.cookie, 'POST', '/api/service/workshop', opening(vehicle.id, [{ workTypeId: w.id }], { jobId: id }));
+      await pause();
+    });
+    const taken = await taking!;
+    expect(taken.statusCode, taken.body).toBe(409);
+    expect(json<{ error: string }>(taken).error).toBe('job_has_mechanic');
+    expect(await prisma.serviceJob.findUniqueOrThrow({ where: { id }, select: { mechanicId: true, status: true } })).toEqual({ mechanicId: b.id, status: 'open' });
+    expect(await prisma.serviceWork.count({ where: { jobId: id } })).toBe(0);
+    await settle(id);
+
+    // Closed in the same moment: it is not opened again as a draft.
+    const other = await freeVehicle();
+    const closing = json<{ id: string }>(await call(owner, 'POST', '/api/service', { vehicleId: other.vehicle.id, reason: 'ТЕСТ squeaks' })).id;
+    await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT 1 FROM service_jobs WHERE id = ${closing}::uuid FOR UPDATE`;
+      await tx.serviceJob.update({ where: { id: closing }, data: { status: 'done', closedOn: new Date(), closedAt: new Date() } });
+      taking = call(a.cookie, 'POST', '/api/service/workshop', opening(other.vehicle.id, [{ workTypeId: w.id }], { jobId: closing }));
+      await pause();
+    });
+    const shut = await taking!;
+    expect(shut.statusCode, shut.body).toBe(409);
+    expect(json<{ error: string }>(shut).error).toBe('job_closed');
+    expect(await prisma.serviceJob.findUniqueOrThrow({ where: { id: closing }, select: { mechanicId: true, status: true } })).toEqual({ mechanicId: null, status: 'done' });
+  });
+
   it('finds the moped by the sticker’s number and tells the mechanic nothing about the customer', async () => {
     const { prisma, vehicle } = await freeVehicle(700);
     const v = await prisma.vehicle.findUniqueOrThrow({ where: { id: vehicle.id }, select: { fleetNo: true } });
