@@ -232,3 +232,10 @@
 .wjob-wtag { padding: 1px 10px; border: 1.5px solid var(--line-control); border-radius: var(--radius-pill); background: var(--surface); font: var(--text-label); font-weight: 600; white-space: nowrap; }
 .wjob-norm { display: inline-flex; align-items: center; gap: var(--space2); flex-wrap: wrap; }
 .wjob-norm .input { width: 96px; min-height: 48px; }
+.wappr-close { min-height: var(--control-large); padding: 0 28px; font: var(--text-cta); }
+@media (max-width: 719px) {
+  .wjob-lines li { flex-wrap: wrap; }
+  .wjob-lines .wjob-name { flex: 1 1 calc(100% - 72px); }
+  .wjob-lines .wjob-gel { width: auto; margin-left: auto; }
+  .wappr-acts .pill { flex: 1 1 auto; }
+}

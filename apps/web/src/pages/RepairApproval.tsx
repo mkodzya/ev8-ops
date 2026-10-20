@@ -78,8 +78,10 @@ export function StatedLines({
         const sec = l.normSec ?? normSecFromMinutes(typed);
         const amount = l.rateTetri != null && sec != null ? Math.round((l.qty * sec * l.rateTetri) / 3600) : null;
         const state = whole ? 'rejected' : l.state;
+        // The first time everything waits together: only a later work stands out as waiting.
+        const shade = state === 'waiting' && job.approved == null ? '' : `wjob-line-${state}`;
         return (
-          <li key={l.id} className={`wjob-line-${state}`}>
+          <li key={l.id} className={shade}>
             <span className="wjob-code">{l.code ?? '—'}</span>
             <span className="wjob-name">
               {l.code ? nameIn(l, locale) : l.freeText} × {l.qty}

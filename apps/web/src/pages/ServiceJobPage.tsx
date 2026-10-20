@@ -139,7 +139,7 @@ export function ServiceJobPage() {
           </>
         )}
         {mayCloseHere && (
-          <Link className="pill pill-sm pill-accent" to={`/service/${j.id}/close`}>
+          <Link className="pill pill-accent wappr-close" to={`/service/${j.id}/close`}>
             {t.wappr.close}
           </Link>
         )}
