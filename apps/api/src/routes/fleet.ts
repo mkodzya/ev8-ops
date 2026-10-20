@@ -180,8 +180,9 @@ export function fleetRoutes(app: FastifyInstance): void {
         reason: j.reason,
         openedOn: isoDate(j.openedOn),
         closedOn: isoDate(j.closedOn),
-        totalTetri: j.labourTetri + j.parts.reduce((n, p) => n + p.qty * p.unitPriceTetri, 0),
-        withheldTetri: j.withheldTetri,
+        // What a repair cost is the owners' (ADR-0033 §4), on the card as in the repairs.
+        totalTetri: mayView(req, 'cost.view') ? j.labourTetri + j.parts.reduce((n, p) => n + p.qty * p.unitPriceTetri, 0) : null,
+        withheldTetri: mayView(req, 'cost.view') ? j.withheldTetri : null,
       })),
       rentals: v.rentals.map((r) => ({
         id: r.id,

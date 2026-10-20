@@ -6,14 +6,19 @@ import { prisma } from '../lib/db.js';
 import { demoLoginRefused } from '../lib/env.js';
 import { badRequest, conflict, forbidden, isUniqueViolation, notFound } from '../lib/errors.js';
 import { actorOf } from '../lib/guard.js';
-import { oneOf, str } from '../lib/validate.js';
+import { oneOf, str, tetri } from '../lib/validate.js';
+import { hashPin, isPinRole, isPinShaped, lockedUntil } from '../lib/workshop.js';
 
 // The team's logins (spec §3). Rights come from the role, so this screen has
-// exactly three decisions: who, which role, and still working here or not.
+// exactly three decisions: who, which role, and still working here or not —
+// and for a mechanic, the PIN for the workshop tablet and the rate for an
+// hour of norm (ADR-0033).
 //
-// Passwords never leave this file: they are hashed on the way in, never
-// returned, never written to the journal. The owner sets the first one and
-// says it to the person; the person changes it on their own page.
+// Passwords and PINs never leave this file: they are hashed on the way in,
+// never returned, never written to the journal. The owner sets the first one
+// and says it to the person; the person changes a password on their own page.
+// A mechanic who signs in only on the workshop tablet needs no address and no
+// password; everybody else signs in with both (migration 0055).
 
 const MIN_PASSWORD = 8;
 
@@ -24,6 +29,20 @@ function readPassword(b: Body, field = 'password'): string {
   if (pw.length < MIN_PASSWORD) throw badRequest('password_too_short', `At least ${MIN_PASSWORD} characters.`, { min: MIN_PASSWORD });
   return pw;
 }
+
+function readEmail(b: Body, required: boolean): string | null {
+  const email = str(b, 'email', { required, max: 200 })?.toLowerCase() ?? null;
+  if (email && demoLoginRefused(email)) throw forbidden('demo_login_off', 'Demo logins are switched off on a stand.');
+  return email;
+}
+
+/** A mechanic's rate for an hour of norm; empty is the company's (0055). */
+function readRate(b: Body): number | null {
+  return tetri(b, 'labourRateTetri', { min: 1 });
+}
+
+/** The PIN sessions of this person end — a new PIN, no PIN, another role. */
+const closePinSessions = (userId: string) => prisma.session.deleteMany({ where: { userId, kind: 'pin' } });
 
 export function userRoutes(app: FastifyInstance): void {
   app.get('/api/users', { config: { scope: 'users.manage' } }, async () => {
@@ -56,6 +75,10 @@ export function userRoutes(app: FastifyInstance): void {
           role: u.role,
           locale: u.locale,
           active: u.active,
+          /** Whether a PIN is set — the PIN itself never leaves the server. */
+          hasPin: u.pinHash != null,
+          pinLockedUntil: lockedUntil(u)?.toISOString() ?? null,
+          labourRateTetri: u.labourRateTetri,
           sessions: u.sessions.length,
           /** The last sign-in the journal knows of; null means nothing is known. */
           lastLoginAt: signedIn?.toISOString() ?? null,
@@ -70,17 +93,19 @@ export function userRoutes(app: FastifyInstance): void {
   app.post<{ Body: Body }>('/api/users', { config: { scope: 'users.manage' } }, async (req, reply) => {
     const b = req.body ?? {};
     const actor = actorOf(req);
-    const email = str(b, 'email', { required: true, max: 200 })!.toLowerCase();
-    if (demoLoginRefused(email)) throw forbidden('demo_login_off', 'Demo logins are switched off on a stand.');
-    const name = str(b, 'name', { required: true, max: 200 })!;
     const role = oneOf(b, 'role', ROLES, { required: true })!;
-    const password = readPassword(b);
+    // A mechanic may be somebody who only ever signs in on the tablet; an
+    // address, when given, comes with a password like everybody's.
+    const email = readEmail(b, !isPinRole(role));
+    const name = str(b, 'name', { required: true, max: 200 })!;
+    const password = email ? readPassword(b) : null;
+    const labourRateTetri = isPinRole(role) ? readRate(b) : null;
     try {
       const u = await prisma.user.create({
-        data: { email, name, role, passwordHash: hashPassword(password), locale: str(b, 'locale', { max: 5 }) ?? 'ka' },
+        data: { email, name, role, passwordHash: password ? hashPassword(password) : null, labourRateTetri, locale: str(b, 'locale', { max: 5 }) ?? 'ka' },
         select: { id: true },
       });
-      await audit({ actorId: actor.id, action: 'user.create', entityType: 'user', entityId: u.id, after: { email, name, role } });
+      await audit({ actorId: actor.id, action: 'user.create', entityType: 'user', entityId: u.id, after: { email, name, role, labourRateTetri } });
       return reply.code(201).send({ id: u.id });
     } catch (e) {
       if (isUniqueViolation(e)) throw conflict('duplicate_email', 'Somebody already signs in with that email.');
@@ -93,10 +118,19 @@ export function userRoutes(app: FastifyInstance): void {
     const actor = actorOf(req);
     const before = await prisma.user.findUnique({ where: { id: req.params.id } });
     if (!before) throw notFound('user_not_found', 'No such user.');
-    const data: { name?: string; role?: Role; active?: boolean } = {};
+    const data: { name?: string; role?: Role; active?: boolean; labourRateTetri?: number | null; pinHash?: null; pinFailed?: number; pinLockedUntil?: null } = {};
     if ('name' in b) data.name = str(b, 'name', { required: true, max: 200 })!;
     if ('role' in b) data.role = oneOf(b, 'role', ROLES, { required: true })!;
     if ('active' in b) data.active = Boolean(b.active);
+    if ('labourRateTetri' in b) data.labourRateTetri = readRate(b);
+    const role = data.role ?? (before.role as Role);
+    // Somebody without an address signs in only with a PIN, which only a
+    // mechanic has: give them an address and a password before another role.
+    if (!before.email && !isPinRole(role)) throw conflict('email_required', 'This role signs in with an address and a password.');
+    // Out of the workshop, the PIN and the rate go with the role.
+    const leavesWorkshop = isPinRole(before.role) && !isPinRole(role);
+    if (leavesWorkshop) Object.assign(data, { pinHash: null, pinFailed: 0, pinLockedUntil: null, labourRateTetri: null });
+    else if (!isPinRole(role) && data.labourRateTetri != null) throw conflict('rate_for_mechanics', 'A rate for an hour of norm is a mechanic\'s.');
 
     // The last working owner cannot be demoted or switched off: a system
     // nobody can administer is not a safe state to leave one click away.
@@ -108,26 +142,70 @@ export function userRoutes(app: FastifyInstance): void {
     await prisma.user.update({ where: { id: before.id }, data: { ...data, updatedAt: new Date() } });
     // Switching somebody off cuts their access now, not when their session expires.
     if (data.active === false) await prisma.session.deleteMany({ where: { userId: before.id } });
+    // Out of the workshop, the tablet's sessions end with the PIN.
+    else if (leavesWorkshop) await closePinSessions(before.id);
+    const { pinHash: _cleared, ...shown } = data;
     await audit({
       actorId: actor.id,
       action: 'user.update',
       entityType: 'user',
       entityId: before.id,
-      before: { name: before.name, role: before.role, active: before.active },
-      after: data,
+      before: { name: before.name, role: before.role, active: before.active, labourRateTetri: before.labourRateTetri },
+      after: leavesWorkshop ? { ...shown, pin: 'cleared' } : shown,
     });
     return { ok: true };
   });
 
-  /** The owner sets somebody a new password and tells them what it is. */
+  /**
+   * The owner sets somebody a new password and tells them what it is. A
+   * mechanic who had only a PIN gets an address with it — the chief mechanic
+   * who will now also sign in from a phone.
+   */
   app.post<{ Params: { id: string }; Body: Body }>('/api/users/:id/password', { config: { scope: 'users.manage' } }, async (req) => {
     const actor = actorOf(req);
+    const b = req.body ?? {};
     const user = await prisma.user.findUnique({ where: { id: req.params.id }, select: { id: true, email: true } });
     if (!user) throw notFound('user_not_found', 'No such user.');
-    const password = readPassword(req.body ?? {});
-    await prisma.user.update({ where: { id: user.id }, data: { passwordHash: hashPassword(password), updatedAt: new Date() } });
-    await prisma.session.deleteMany({ where: { userId: user.id } }); // every old session is now stale
-    await audit({ actorId: actor.id, action: 'user.password.reset', entityType: 'user', entityId: user.id });
+    const email = user.email ? null : readEmail(b, true);
+    const password = readPassword(b);
+    try {
+      await prisma.user.update({ where: { id: user.id }, data: { passwordHash: hashPassword(password), ...(email ? { email } : {}), updatedAt: new Date() } });
+    } catch (e) {
+      if (isUniqueViolation(e)) throw conflict('duplicate_email', 'Somebody already signs in with that email.');
+      throw e;
+    }
+    await prisma.session.deleteMany({ where: { userId: user.id, kind: 'password' } }); // every old sign-in by password is now stale
+    await audit({ actorId: actor.id, action: 'user.password.reset', entityType: 'user', entityId: user.id, after: email ? { email } : undefined });
+    return { ok: true };
+  });
+
+  /**
+   * The PIN for the workshop tablet (ADR-0033 §6): the owner sets it and says
+   * it to the mechanic. A new PIN opens a closed sign-in at once and ends the
+   * PIN sessions the old one opened.
+   */
+  app.post<{ Params: { id: string }; Body: Body }>('/api/users/:id/pin', { config: { scope: 'users.manage' } }, async (req) => {
+    const actor = actorOf(req);
+    const user = await prisma.user.findUnique({ where: { id: req.params.id }, select: { id: true, role: true, pinHash: true } });
+    if (!user) throw notFound('user_not_found', 'No such user.');
+    if (!isPinRole(user.role)) throw conflict('pin_for_mechanics', 'A PIN is for a mechanic or a chief mechanic.');
+    const pin = (req.body ?? {}).pin;
+    if (!isPinShaped(pin)) throw badRequest('bad_pin', 'A PIN is 4 to 6 digits.');
+    await prisma.user.update({ where: { id: user.id }, data: { pinHash: hashPin(pin), pinFailed: 0, pinLockedUntil: null, updatedAt: new Date() } });
+    await closePinSessions(user.id);
+    await audit({ actorId: actor.id, action: user.pinHash ? 'user.pin.reset' : 'user.pin.set', entityType: 'user', entityId: user.id });
+    return { ok: true };
+  });
+
+  /** No PIN: this person no longer signs in on the tablet. */
+  app.delete<{ Params: { id: string } }>('/api/users/:id/pin', { config: { scope: 'users.manage' } }, async (req) => {
+    const actor = actorOf(req);
+    const user = await prisma.user.findUnique({ where: { id: req.params.id }, select: { id: true, pinHash: true } });
+    if (!user) throw notFound('user_not_found', 'No such user.');
+    if (!user.pinHash) return { ok: true };
+    await prisma.user.update({ where: { id: user.id }, data: { pinHash: null, pinFailed: 0, pinLockedUntil: null, updatedAt: new Date() } });
+    await closePinSessions(user.id);
+    await audit({ actorId: actor.id, action: 'user.pin.clear', entityType: 'user', entityId: user.id });
     return { ok: true };
   });
 
@@ -152,7 +230,10 @@ export function userRoutes(app: FastifyInstance): void {
     const b = req.body ?? {};
     const current = str(b, 'currentPassword', { required: true })!;
     const next = readPassword(b, 'newPassword');
+    // On the workshop tablet the session is for repairs, not for one's account (ADR-0033 §7).
+    if (actor.via === 'pin') throw forbidden('not_on_workshop_tablet', 'A password is changed when signed in with it, not on the workshop tablet.');
     const me = await prisma.user.findUniqueOrThrow({ where: { id: actor.id } });
+    if (!me.passwordHash) throw conflict('no_password', 'Somebody who signs in with a PIN has no password to change.');
     if (!verifyPassword(current, me.passwordHash)) throw conflict('wrong_password', 'The current password does not match.');
     await prisma.user.update({ where: { id: me.id }, data: { passwordHash: hashPassword(next), updatedAt: new Date() } });
     // A new password is usually a reaction to a phone left somewhere: every

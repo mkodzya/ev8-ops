@@ -109,7 +109,7 @@ export function SessionEnded() {
   if (!ended) return null;
   return (
     <div className="session-ended" role="dialog" aria-modal="true" aria-label={t.session.ended}>
-      <SessionEndedCard title={header?.title} email={ended.email} />
+      <SessionEndedCard title={header?.title} email={ended.email ?? ''} />
     </div>
   );
 }

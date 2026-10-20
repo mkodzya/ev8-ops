@@ -1,0 +1,80 @@
+/* The workshop tablet's frame (ADR-0033 §10; prototypes/mechanic-pin-login-options.html,
+   "После входа"). A thumb-wide sign-out and the name of whoever is signed in. */
+
+.tablet-app { min-height: 100%; display: flex; flex-direction: column; background: var(--bg); }
+
+.tablet-bar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space3);
+  padding: 12px 20px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line-soft);
+  flex-wrap: wrap;
+}
+.tablet-bar-left, .tablet-bar-right { display: flex; align-items: center; gap: var(--space3); }
+.tablet-section { font: var(--text-h1); letter-spacing: var(--tracking-tight); }
+
+.tablet-me { display: flex; align-items: center; gap: 10px; }
+.tablet-me .avatar { width: 44px; height: 44px; font-size: 18px; }
+.tablet-me-text { display: flex; flex-direction: column; line-height: 1.15; }
+.tablet-me-name { font: var(--text-body); font-weight: 600; }
+.tablet-me-role { font: var(--text-body-sm); color: var(--muted); }
+
+.tablet-out {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: var(--control-large);
+  padding: 0 24px;
+  border-radius: var(--radius-pill);
+  border: 2px solid var(--ink);
+  background: var(--surface);
+  color: var(--ink);
+  font: var(--text-cta);
+  cursor: pointer;
+}
+.tablet-out:hover { color: var(--accent); border-color: var(--accent); }
+.tablet-out:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+
+.app-page.tablet-page { padding: 20px 20px 96px; max-width: 1100px; width: 100%; margin: 0 auto; }
+.tablet-idle { margin-top: var(--space4); }
+
+.tablet-warn {
+  position: fixed;
+  left: 20px;
+  right: 20px;
+  bottom: 20px;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space3);
+  padding: 16px 20px;
+  border-radius: var(--radius-card);
+  background: var(--toast);
+  color: var(--toast-ink);
+  font: var(--text-body);
+  font-weight: 500;
+  box-shadow: var(--shadow);
+}
+.tablet-stay {
+  min-height: var(--control-large);
+  padding: 0 24px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--lime);
+  color: var(--ink);
+  font: var(--text-cta);
+  cursor: pointer;
+  flex: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .tablet-warn { animation: tablet-warn-in var(--enter) both; }
+  @keyframes tablet-warn-in { from { transform: translateY(16px); opacity: 0; } }
+}

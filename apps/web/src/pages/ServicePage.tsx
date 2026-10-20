@@ -28,8 +28,9 @@ export interface ServiceJobPart {
   partId: string | null;
   name: string;
   qty: number;
-  unitPriceTetri: number;
-  unitCostTetri: number | null;
+  /** Money is the owners' (ADR-0033 §4): empty for whoever does not see cost. */
+  unitPriceTetri: number | null;
+  unitCostTetri?: number | null;
 }
 
 export interface ServiceJob {
@@ -40,14 +41,16 @@ export interface ServiceJob {
   closedOn: string | null;
   status: ServiceStatus;
   payer: 'company' | 'customer';
-  labourTetri: number;
+  // What the repair cost is the owners' (ADR-0033 §4): these come empty to
+  // whoever does not see cost — a manager, a mechanic.
+  labourTetri: number | null;
   labourMinutes: number;
-  labourRateTetri: number;
-  partsTetri: number;
-  totalTetri: number;
-  withheldTetri: number;
+  labourRateTetri: number | null;
+  partsTetri: number | null;
+  totalTetri: number | null;
+  withheldTetri: number | null;
   /** What the deposit did not cover and the customer owes (Q26). */
-  chargedTetri: number;
+  chargedTetri: number | null;
   odometerKm: number | null;
   workshop: Workshop | null;
   closedAt: { id: string; name: string } | null;
@@ -96,6 +99,10 @@ export function ServicePage() {
   if (!data && failure) return <LoadError failure={failure} onRetry={reload} />;
   if (!data) return <Loading />;
   const mayManage = can('service.manage');
+  // Taking a reported breakdown up is the approval (ADR-0033): the chief mechanic's and the owners'.
+  const mayApprove = can('service.approve');
+  const mayCost = can('cost.view');
+  const mayFleet = can('fleet.view');
   const drafts = data.jobs.filter((j) => j.status === 'draft');
 
   return (
@@ -104,7 +111,7 @@ export function ServicePage() {
         {can('service.report') && <NewJob onDone={reload} />}
       </PageHead>
 
-      {mayManage && drafts.length > 0 && (
+      {mayApprove && drafts.length > 0 && (
         <section className="card card-warn queue-card">
           <div className="queue-head">
             <h2>{t.repair.draftsHead}</h2>
@@ -158,7 +165,7 @@ export function ServicePage() {
             ) : (
               <span className="muted">{t.repair.statuses[j.status]}</span>
             ),
-          rightSub: j.totalTetri > 0 ? <span className="mono">{formatGel(j.totalTetri)}</span> : t.repair.payers[j.payer],
+          rightSub: j.totalTetri != null && j.totalTetri > 0 ? <span className="mono">{formatGel(j.totalTetri)}</span> : t.repair.payers[j.payer],
         })}
         columns={[
           { key: 'number', label: t.repair.cols.number, cell: (j) => <span className="mono">{j.number}</span>, sort: { value: (j) => j.number } },
@@ -167,9 +174,14 @@ export function ServicePage() {
             label: t.repair.cols.vehicle,
             cell: (j) => (
               <>
-                <Link to={`/fleet/${j.vehicle.id}`}>
+                {/* A mechanic sees the repair, not the fleet card behind it. */}
+                {mayFleet ? (
+                  <Link to={`/fleet/${j.vehicle.id}`}>
+                    <Vin vin={j.vehicle.vin} />
+                  </Link>
+                ) : (
                   <Vin vin={j.vehicle.vin} />
-                </Link>{' '}
+                )}{' '}
                 <span className="muted">{j.vehicle.model}</span>
               </>
             ),
@@ -187,7 +199,9 @@ export function ServicePage() {
             sort: { value: (j) => j.workshop?.name ?? '' },
           },
           { key: 'payer', label: t.repair.cols.payer, cell: (j) => t.repair.payers[j.payer], sort: { value: (j) => j.payer } },
-          { key: 'total', label: t.repair.cols.total, num: true, cell: (j) => <span className="mono">{formatGel(j.totalTetri)}</span>, sort: { value: (j) => j.totalTetri, first: 'desc' } },
+          ...(mayCost
+            ? [{ key: 'total', label: t.repair.cols.total, num: true, cell: (j: ServiceJob) => <span className="mono">{formatGel(j.totalTetri ?? 0)}</span>, sort: { value: (j: ServiceJob) => j.totalTetri ?? 0, first: 'desc' as const } }]
+            : []),
           {
             key: 'days',
             label: t.repair.cols.days,
@@ -224,7 +238,7 @@ function Draft({ job, onDone }: { job: ServiceJob; onDone: () => void }) {
           state={op.state}
           label={t.repair.takeUp}
           onClick={async () => {
-            const res = await op.run((key) => api.patch(`/api/service/${job.id}`, { open: true }, { key }));
+            const res = await op.run((key) => api.post(`/api/service/${job.id}/approve`, undefined, { key }));
             if (!res.ok) return;
             onDone();
             navigate(`/service/${job.id}`);

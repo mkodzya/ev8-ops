@@ -16,6 +16,8 @@ datasource db {
 enum UserRole {
   owner
   manager
+  mechanic
+  chief_mechanic
 
   @@map("user_role")
 }
@@ -221,15 +223,22 @@ enum ServicePayer {
 }
 
 model User {
-  id           String   @id @default(uuid()) @db.Uuid
-  email        String   @unique
-  name         String
-  passwordHash String   @map("password_hash")
-  role         UserRole
-  locale       String   @default("ka")
-  active       Boolean  @default(true)
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @default(now()) @map("updated_at")
+  id              String    @id @default(uuid()) @db.Uuid
+  /// Empty only for a mechanic who signs in with a PIN on the workshop tablet (0055).
+  email           String?   @unique
+  name            String
+  passwordHash    String?   @map("password_hash")
+  role            UserRole
+  locale          String    @default("ka")
+  active          Boolean   @default(true)
+  /// The workshop PIN, hashed like a password; never returned (ADR-0033).
+  pinHash         String?   @map("pin_hash")
+  pinFailed       Int       @default(0) @map("pin_failed")
+  pinLockedUntil  DateTime? @map("pin_locked_until")
+  /// A mechanic's rate for an hour of norm; empty is the company's rate.
+  labourRateTetri Int?      @map("labour_rate_tetri")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @default(now()) @map("updated_at")
 
   sessions          Session[]
   operationKeys     OperationKey[]
@@ -257,6 +266,8 @@ model User {
   handoversFrom     CashHandover[] @relation("handover_from")
   handoversDecided  CashHandover[] @relation("handover_decided_by")
   bankDeposits      BankCashDeposit[]
+  devicesRegistered WorkshopDevice[] @relation("device_registered_by")
+  devicesRevoked    WorkshopDevice[] @relation("device_revoked_by")
 
   @@map("users")
 }
@@ -290,15 +301,45 @@ model LoginAttempt {
 }
 
 model Session {
-  token      String   @id
-  userId     String   @map("user_id") @db.Uuid
-  createdAt  DateTime @default(now()) @map("created_at")
-  lastSeenAt DateTime @default(now()) @map("last_seen_at")
-  expiresAt  DateTime @map("expires_at")
+  token      String      @id
+  userId     String      @map("user_id") @db.Uuid
+  createdAt  DateTime    @default(now()) @map("created_at")
+  lastSeenAt DateTime    @default(now()) @map("last_seen_at")
+  expiresAt  DateTime    @map("expires_at")
+  /// How the sign-in began: a PIN session belongs to a workshop device (0055).
+  kind       SessionKind @default(password)
+  deviceId   String?     @map("device_id") @db.Uuid
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user   User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  device WorkshopDevice? @relation(fields: [deviceId], references: [id])
 
   @@map("sessions")
+}
+
+enum SessionKind {
+  password
+  pin
+
+  @@map("session_kind")
+}
+
+/// The workshop's shared tablet (ADR-0033 §5). Its token is the id and a
+/// secret; only the secret's scrypt hash is kept. Revoked, never deleted.
+model WorkshopDevice {
+  id           String    @id @default(uuid()) @db.Uuid
+  name         String
+  secretHash   String    @map("secret_hash")
+  registeredBy String    @map("registered_by") @db.Uuid
+  registeredAt DateTime  @default(now()) @map("registered_at")
+  lastSeenAt   DateTime? @map("last_seen_at")
+  revokedAt    DateTime? @map("revoked_at")
+  revokedBy    String?   @map("revoked_by") @db.Uuid
+
+  registrar User      @relation("device_registered_by", fields: [registeredBy], references: [id])
+  revoker   User?     @relation("device_revoked_by", fields: [revokedBy], references: [id])
+  sessions  Session[]
+
+  @@map("workshop_devices")
 }
 
 model VehicleModel {

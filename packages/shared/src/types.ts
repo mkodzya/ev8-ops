@@ -2,11 +2,12 @@
 // database stores (enums in migration 0001); the words a person reads come
 // from the web dictionaries, never from these values.
 
-/** Five roles, fixed in code (spec §3): rights come from the role, not the person. */
-// Two roles (Mika, 17.09.2026; redesign blueprint D0): the owners — Mika and
-// Kardu — and the managers. Director, mechanic and accountant were roles of
-// spec v1.1 and are not any more; migration 0015 moved their people over.
-export const ROLES = ['owner', 'manager'] as const;
+/** Roles are fixed in code (spec §3): rights come from the role, not the person. */
+// The owners — Mika and Kardu — and the managers (Mika, 17.09.2026; redesign
+// blueprint D0); since 20.10.2026 also the mechanic and the chief mechanic,
+// who do the repairs from the workshop tablet (ADR-0033, migrations 0053,
+// 0054). Director and accountant were roles of spec v1.1 and are not.
+export const ROLES = ['owner', 'manager', 'mechanic', 'chief_mechanic'] as const;
 export type Role = (typeof ROLES)[number];
 
 /** Vehicle state, derived from events (spec FLT-03); brand.md fixes colour + label per state. */

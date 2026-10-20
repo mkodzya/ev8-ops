@@ -1,7 +1,8 @@
 import { createHash } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { audit } from '../lib/audit.js';
-import { hasPerm } from '../lib/auth.js';
+import { seesEveryRepair } from '@ev8/shared';
+import { hasPerm, permissionsOf } from '../lib/auth.js';
 import { prisma } from '../lib/db.js';
 import { badRequest, conflict, forbidden, notFound } from '../lib/errors.js';
 import { actorOf } from '../lib/guard.js';
@@ -107,18 +108,22 @@ export function fileRoutes(app: FastifyInstance): void {
     },
   );
 
-  // The file itself. Act photos: anyone who sees the fleet. Customer
+  // The file itself. Act photos: anyone who sees the fleet. Repair photos:
+  // whoever sees that repair — a mechanic, their own (ADR-0033). Customer
   // documents: the owners, and the access is journaled (spec §8).
   app.get<{ Params: { id: string } }>('/api/files/:id', { config: { scope: 'session' } }, async (req, reply) => {
     const actor = actorOf(req);
     const meta = await prisma.storedFile.findUnique({
       where: { id: req.params.id },
-      select: { id: true, kind: true, customerId: true, mimeType: true, sizeBytes: true, label: true, archived: true },
+      select: { id: true, kind: true, customerId: true, mimeType: true, sizeBytes: true, label: true, archived: true, serviceJob: { select: { createdById: true } } },
     });
     if (!meta || meta.archived) throw notFound('file_not_found', 'No such file.');
     if (meta.kind === 'customer_document') {
       if (!hasPerm(actor, 'customer.documents.view')) throw forbidden('documents_restricted', 'Customer documents are for the owners only.');
       await audit({ actorId: actor.id, action: 'customer.document.open', entityType: 'customer', entityId: meta.customerId, after: { fileId: meta.id } });
+    } else if (meta.kind === 'service_photo' && !hasPerm(actor, 'fleet.view')) {
+      const sees = hasPerm(actor, 'service.view') && (seesEveryRepair(permissionsOf(actor.role, actor.via)) || meta.serviceJob?.createdById === actor.id);
+      if (!sees) throw forbidden('forbidden', 'No access to files.');
     } else if (!hasPerm(actor, 'fleet.view')) {
       throw forbidden('forbidden', 'No access to files.');
     }

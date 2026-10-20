@@ -201,8 +201,8 @@ describe.skipIf(!HAS_DB)('who may do what', () => {
     // A manager may say what broke, and no more than that.
     expect((await call(manager, 'POST', `/api/service/${id}/close`, await CLOSED())).statusCode).toBe(403);
     expect((await call(manager, 'GET', '/api/service')).statusCode).toBe(200);
-    // The owner picks it up and it is a repair.
-    expect((await call(owner, 'PATCH', `/api/service/${id}`, { open: true })).statusCode).toBe(200);
+    // The owner picks it up and it is a repair (ADR-0033: the approval).
+    expect((await call(owner, 'POST', `/api/service/${id}/approve`)).statusCode).toBe(200);
     expect(json<{ job: { status: string } }>(await call(owner, 'GET', `/api/service/${id}`)).job.status).toBe('open');
   });
 });

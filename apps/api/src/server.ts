@@ -40,6 +40,7 @@ import { userRoutes } from './routes/users.js';
 import { siteRoutes } from './routes/site.js';
 import { kommoRoutes } from './routes/kommo.js';
 import { driveRoutes } from './routes/drive.js';
+import { workshopRoutes } from './routes/workshop.js';
 
 export function buildApp(): FastifyInstance {
   const app = Fastify({
@@ -75,6 +76,7 @@ export function buildApp(): FastifyInstance {
   });
 
   authRoutes(app);
+  workshopRoutes(app);
   summaryRoutes(app);
   todayRoutes(app);
   batteryRoutes(app);
