@@ -180,8 +180,12 @@ export function workLineTetri(line: WorkLine): Tetri | null {
 /**
  * The lines together: the time by the norm, the money, and how many lines
  * still have no norm. The money is rounded once, on the sum, not line by
- * line — the bot's control figure (282.5 min at 50 ₾ = 235.42 ₾) only holds
- * that way; whether a payout rounds so is stage 5's question.
+ * line. A payout rounds per repair (ADR-0037 §8): one call per repair, and a
+ * payout is the sum of its repairs — so «К оплате», the repair's card, the
+ * economics and the payout carry the same figure for a repair. The bot rounds
+ * a whole payout once, so on other data the two may part by a tetri; that is
+ * reported, not adjusted. On the bot's control (282.5 min at 50 ₾) both give
+ * 235.42 ₾.
  */
 export function worksTotal(lines: readonly WorkLine[]): { seconds: number; tetri: Tetri; unnormed: number } {
   let seconds = 0;
@@ -196,6 +200,65 @@ export function worksTotal(lines: readonly WorkLine[]): { seconds: number; tetri
     exact += (l.qty * l.normSec * l.rateTetri) / 3600;
   }
   return { seconds, tetri: Math.round(exact), unnormed };
+}
+
+// Paying the mechanic (stage 5; ADR-0037).
+
+/** A line of work as money reads it: its norm and rate, and the decision on it. */
+export interface WorkMoneyLine extends WorkLine {
+  approvedAt: unknown;
+  rejectedAt: unknown;
+}
+
+/**
+ * The approved mechanic work of one repair, rounded once for the repair
+ * (ADR-0037 §8). A line waiting or refused is not work done; one approved
+ * without a norm is not money until it has one (worksTotal skips it).
+ */
+export function approvedWorksTetri(works: readonly WorkMoneyLine[]): Tetri {
+  return worksTotal(works.filter((w) => workLineState(w) === 'approved')).tetri;
+}
+
+/**
+ * What a repair cost (ADR-0037 §6): the old line of hours and the parts — a
+ * receipt is already among them (partLineTetri) — and, on the company's own
+ * repair, the mechanic's approved work by the norm. A customer's repair is
+ * charged what the owner typed and the parts: the mechanic's work is not added
+ * to it, or the customer would pay for it twice. A repair called off cost no
+ * work. Every place that sums a repair asks here.
+ */
+export function repairTotalTetri(job: {
+  status: string;
+  payer: string;
+  labourTetri: Tetri;
+  parts: readonly JobLine[];
+  works: readonly WorkMoneyLine[];
+}): Tetri {
+  const works = job.payer === 'company' && job.status !== 'cancelled' ? approvedWorksTetri(job.works) : 0;
+  return jobTotalTetri(job) + works;
+}
+
+/**
+ * Where a repair stands for paying its mechanic (ADR-0037 §2): called off;
+ * paid; still waiting — a draft, or a line of work or a bought part with no
+ * decision; still in work; closed with an approved work that has no norm —
+ * not payable until the chief mechanic gives it one; or payable.
+ */
+export type PayState = 'payable' | 'paid' | 'unnormed' | 'waiting' | 'open' | 'cancelled';
+
+export function jobPayState(job: {
+  status: string;
+  paidInPayoutId: string | null;
+  works: readonly { normSec: number | null; approvedAt: unknown; rejectedAt: unknown }[];
+  parts: readonly { kind?: string | null; approvedAt: unknown; rejectedAt: unknown }[];
+}): PayState {
+  if (job.status === 'cancelled') return 'cancelled';
+  if (job.paidInPayoutId != null) return 'paid';
+  const waits = job.works.some((w) => workLineState(w) === 'waiting') || job.parts.some((p) => partLineState(p) === 'waiting');
+  if (job.status === 'draft' || waits) return 'waiting';
+  if (job.status === 'open') return 'open';
+  if (job.works.some((w) => workLineState(w) === 'approved' && w.normSec == null)) return 'unnormed';
+  return 'payable';
 }
 
 /** The category of a work is the letters of its code: BR-04 is brakes. */

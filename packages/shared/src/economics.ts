@@ -74,7 +74,7 @@ export function vehicleEconomics(input: {
   saleRevenueTetri: number;
   /** Money paid out to buy it back. */
   buyBackTetri: number;
-  /** Repairs the company paid for. */
+  /** Repairs the company paid for, its mechanics' approved work among them (ADR-0037 §6). */
   serviceCompanyTetri: number;
   /** Repairs charged to a renter — a cost recovered, not a cost borne. */
   serviceChargedTetri: number;
