@@ -1,9 +1,24 @@
 import { describe, expect, it } from 'vitest';
-import { PERMISSIONS, ROLES, roleCan } from '../src/index.js';
+import { PERMISSIONS, PIN_ROLES, ROLE_PERMISSIONS, ROLES, roleCan, seesEveryRepair } from '../src/index.js';
 
-describe('roles and permissions (redesign §2.1, Mika 17.09.2026)', () => {
-  it('has two roles: the owners and the managers', () => {
-    expect(ROLES).toEqual(['owner', 'manager']);
+describe('roles and permissions (redesign §2.1, Mika 17.09.2026; ADR-0033, 20.10.2026)', () => {
+  it('has four roles: the owners, the managers, the mechanics and the chief mechanics', () => {
+    expect(ROLES).toEqual(['owner', 'manager', 'mechanic', 'chief_mechanic']);
+    expect(PIN_ROLES).toEqual(['mechanic', 'chief_mechanic']);
+  });
+
+  it('gives a mechanic their own repairs and the chief mechanic every repair, the approval and the norms', () => {
+    expect(ROLE_PERMISSIONS.mechanic).toEqual(['service.view', 'service.work']);
+    expect(ROLE_PERMISSIONS.chief_mechanic).toEqual(['service.view', 'service.work', 'service.approve', 'service.norms']);
+    expect(seesEveryRepair(ROLE_PERMISSIONS.mechanic)).toBe(false);
+    for (const role of ['owner', 'manager', 'chief_mechanic'] as const) expect(seesEveryRepair(ROLE_PERMISSIONS[role]), role).toBe(true);
+    // Marking a mechanic paid is the owners' alone.
+    for (const role of ['manager', 'mechanic', 'chief_mechanic'] as const) expect(roleCan(role, 'service.payout'), role).toBe(false);
+  });
+
+  it('a manager reads the repairs, without their money (ADR-0033 §4)', () => {
+    expect(roleCan('manager', 'service.view')).toBe(true);
+    expect(roleCan('manager', 'service.approve')).toBe(false);
   });
 
   it('the owner may do everything', () => {

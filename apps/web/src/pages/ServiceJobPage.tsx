@@ -62,6 +62,11 @@ export function ServiceJobPage() {
   const open = j.status === 'open';
   const mayManage = can('service.manage');
   const mayEdit = open && mayManage;
+  // The approval of ADR-0033 — taking a reported breakdown up — is the chief
+  // mechanic's as well as the owners'; what it costs stays the owners'.
+  const mayApprove = draft && can('service.approve');
+  const mayFleet = can('fleet.view');
+  const money = j.totalTetri != null;
   const days = Math.max(0, daysBetween(j.openedOn, j.closedOn ?? todayISO()));
   const hours = hoursFromMinutes(j.labourMinutes);
   // Only what came off the shelf goes back to it when the repair is cancelled.
@@ -86,17 +91,17 @@ export function ServiceJobPage() {
           </>
         }
       >
-        {mayManage && (draft || open) && (
+        {(mayApprove || (mayManage && (draft || open))) && (
           <>
-            <RowMenu actions={[{ key: 'cancel', label: t.repair.cancel, onPick: () => setSheet('cancel') }]} />
+            {mayManage && <RowMenu actions={[{ key: 'cancel', label: t.repair.cancel, onPick: () => setSheet('cancel') }]} />}
             {draft ? (
-              <SubmitButton
+              mayApprove && <SubmitButton
                 small
                 type="button"
                 state={takeUpOp.state}
                 label={t.repair.takeUp}
                 onClick={async () => {
-                  const res = await takeUpOp.run((key) => api.patch(`/api/service/${j.id}`, { open: true }, { key }));
+                  const res = await takeUpOp.run((key) => api.post(`/api/service/${j.id}/approve`, undefined, { key }));
                   if (!res.ok) return;
                   toast({ text: t.repair.takenUp });
                   reload();
@@ -118,9 +123,15 @@ export function ServiceJobPage() {
           <Row
             k={t.repair.vehicle}
             v={
-              <Link to={`/fleet/${j.vehicle.id}`}>
-                <Vin vin={j.vehicle.vin} /> <span className="muted">{j.vehicle.model}</span>
-              </Link>
+              mayFleet ? (
+                <Link to={`/fleet/${j.vehicle.id}`}>
+                  <Vin vin={j.vehicle.vin} /> <span className="muted">{j.vehicle.model}</span>
+                </Link>
+              ) : (
+                <>
+                  <Vin vin={j.vehicle.vin} /> <span className="muted">{j.vehicle.model}</span>
+                </>
+              )
             }
           />
           <Row k={t.repair.what} v={<span className="pre">{j.reason}</span>} />
@@ -128,9 +139,13 @@ export function ServiceJobPage() {
             <Row
               k={t.repair.rental}
               v={
-                <Link to={`/rentals/${j.rental.id}`} className="mono">
-                  {j.rental.number}
-                </Link>
+                mayFleet ? (
+                  <Link to={`/rentals/${j.rental.id}`} className="mono">
+                    {j.rental.number}
+                  </Link>
+                ) : (
+                  <span className="mono">{j.rental.number}</span>
+                )
               }
             />
           )}
@@ -154,12 +169,14 @@ export function ServiceJobPage() {
         <section className="card">
           <Choice k={t.repair.workshop} v={j.workshop?.name ?? t.repair.workshopNone} quiet={!j.workshop} onPick={mayEdit ? () => setSheet('workshop') : undefined} />
           <Choice k={t.repair.payer} v={t.repair.payers[j.payer]} onPick={mayEdit ? () => setSheet('payer') : undefined} />
-          <div className="kv kv-total">
-            <span className="kv-k">{t.repair.total}</span>
-            <span className="kv-v mono">{formatGel(j.totalTetri)}</span>
-          </div>
-          {j.withheldTetri > 0 && <Row k={t.repair.withhold} v={<span className="mono">{formatGel(j.withheldTetri)}</span>} />}
-          {j.chargedTetri > 0 && <p className="hint">{t.repair.debtNote(formatGel(j.chargedTetri), j.number)}</p>}
+          {money && (
+            <div className="kv kv-total">
+              <span className="kv-k">{t.repair.total}</span>
+              <span className="kv-v mono">{formatGel(j.totalTetri ?? 0)}</span>
+            </div>
+          )}
+          {(j.withheldTetri ?? 0) > 0 && <Row k={t.repair.withhold} v={<span className="mono">{formatGel(j.withheldTetri ?? 0)}</span>} />}
+          {(j.chargedTetri ?? 0) > 0 && <p className="hint">{t.repair.debtNote(formatGel(j.chargedTetri ?? 0), j.number)}</p>}
           {/* A repair charged to the customer is paid through the one money form (wave 2 §3.1). */}
           {j.payer === 'customer' && j.status === 'done' && j.customer && can('cash.record') && (
             <div className="row-actions">
@@ -177,7 +194,7 @@ export function ServiceJobPage() {
 
       <section className="card">
         <BlockHead title={t.repair.lines} />
-        {j.parts.length === 0 && j.labourTetri === 0 ? (
+        {j.parts.length === 0 && (j.labourTetri ?? 0) === 0 && j.labourMinutes === 0 ? (
           <Empty text={t.repair.noLines} />
         ) : (
           <div className="table-wrap table-flat">
@@ -186,7 +203,7 @@ export function ServiceJobPage() {
                 <tr>
                   <th>{t.repair.lineWhat}</th>
                   <th className="num">{t.repair.lineQty}</th>
-                  <th className="num">{t.repair.lineSum}</th>
+                  {money && <th className="num">{t.repair.lineSum}</th>}
                   {mayEdit && <th />}
                 </tr>
               </thead>
@@ -197,7 +214,7 @@ export function ServiceJobPage() {
                       {p.name} <span className="muted">· {j.payer === 'customer' ? t.repair.retailWord : t.repair.costWord}</span>
                     </td>
                     <td className="num mono">{p.qty}</td>
-                    <td className="num mono">{formatGel(p.qty * p.unitPriceTetri)}</td>
+                    {money && <td className="num mono">{formatGel(p.qty * (p.unitPriceTetri ?? 0))}</td>}
                     {mayEdit && (
                       <td className="num">
                         <button
@@ -221,22 +238,25 @@ export function ServiceJobPage() {
                     )}
                   </tr>
                 ))}
-                {j.labourTetri > 0 && (
+                {((j.labourTetri ?? 0) > 0 || j.labourMinutes > 0) && (
                   <tr>
                     <td>
-                      {t.repair.workLine(t.repair.hours(hours))} <span className="muted">· {formatGel(j.labourRateTetri)}</span>
+                      {t.repair.workLine(t.repair.hours(hours))}
+                      {money && <span className="muted"> · {formatGel(j.labourRateTetri ?? 0)}</span>}
                     </td>
                     <td className="num mono">{t.repair.hours(hours)}</td>
-                    <td className="num mono">{formatGel(j.labourTetri)}</td>
+                    {money && <td className="num mono">{formatGel(j.labourTetri ?? 0)}</td>}
                     {mayEdit && <td />}
                   </tr>
                 )}
-                <tr className="row-total">
-                  <td>{t.repair.total}</td>
-                  <td />
-                  <td className="num mono">{formatGel(j.totalTetri)}</td>
-                  {mayEdit && <td />}
-                </tr>
+                {money && (
+                  <tr className="row-total">
+                    <td>{t.repair.total}</td>
+                    <td />
+                    <td className="num mono">{formatGel(j.totalTetri ?? 0)}</td>
+                    {mayEdit && <td />}
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
@@ -457,7 +477,7 @@ function WorkSheet({ job, onClose, onSaved }: { job: ServiceJob; onClose: () => 
   const initial = { hours: job.labourMinutes > 0 ? String(hoursFromMinutes(job.labourMinutes)) : '' };
   const [f, setF] = useState(initial);
   const hours = Number(f.hours.replace(',', '.')) || 0;
-  const sum = labourFor(minutesFromHours(hours), job.labourRateTetri);
+  const sum = labourFor(minutesFromHours(hours), job.labourRateTetri ?? undefined);
   return (
     <FormSheet
       title={t.repair.workTitle}
@@ -471,10 +491,10 @@ function WorkSheet({ job, onClose, onSaved }: { job: ServiceJob; onClose: () => 
       }}
       onDone={onSaved}
     >
-      <Field label={t.repair.workHours} hint={t.repair.workRate(formatGel(job.labourRateTetri))} name="labourHours">
+      <Field label={t.repair.workHours} hint={t.repair.workRate(formatGel(job.labourRateTetri ?? 0))} name="labourHours">
         <input className="input input-amount mono" value={f.hours} onChange={(e) => setF({ hours: e.target.value })} inputMode="decimal" autoFocus />
       </Field>
-      <p className="hint">{t.repair.workWillBe(t.repair.hours(hours), formatGel(job.labourRateTetri), formatGel(sum))}</p>
+      <p className="hint">{t.repair.workWillBe(t.repair.hours(hours), formatGel(job.labourRateTetri ?? 0), formatGel(sum))}</p>
     </FormSheet>
   );
 }
@@ -497,8 +517,10 @@ function CloseSheet({ job, onClose, onSaved }: { job: ServiceJob; onClose: () =>
   // The same arithmetic the API does before it agrees: paid in, less what is
   // already kept, less what has gone back out.
   const free = deposit ? deposit.paidTetri - deposit.withholdings.reduce((n, w) => n + w.amountTetri, 0) - deposit.paidOutTetri : null;
-  const withheld = Math.max(0, Math.min(parseGel(f.withhold) ?? 0, job.totalTetri, free ?? job.totalTetri));
-  const debt = Math.max(0, job.totalTetri - withheld);
+  // Closing is an owner's, who sees what the repair cost.
+  const total = job.totalTetri ?? 0;
+  const withheld = Math.max(0, Math.min(parseGel(f.withhold) ?? 0, total, free ?? total));
+  const debt = Math.max(0, total - withheld);
 
   return (
     <FormSheet
@@ -526,7 +548,7 @@ function CloseSheet({ job, onClose, onSaved }: { job: ServiceJob; onClose: () =>
     >
       <div className="kv">
         <span className="kv-k">{t.repair.jobTotal}</span>
-        <span className="kv-v mono">{formatGel(job.totalTetri)}</span>
+        <span className="kv-v mono">{formatGel(total)}</span>
       </div>
       <div className="two-col two-col-tight">
         <Field label={t.repair.closedOn} name="closedOn">

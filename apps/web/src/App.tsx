@@ -1,4 +1,4 @@
-import { REDIRECTS, type Permission } from '@ev8/shared';
+import { REDIRECTS, homePathFor, type Permission } from '@ev8/shared';
 import { Navigate, Route, Routes, useLocation, useParams } from 'react-router-dom';
 import { LoginPage } from './LoginPage.js';
 import { AppShell } from './ds/shell/AppShell.js';
@@ -99,6 +99,16 @@ function Unreachable() {
   );
 }
 
+/**
+ * "/" is "Today" — the front office's queue. Whoever has none of it, a
+ * mechanic, lands on their own first section instead (ADR-0033).
+ */
+function Home() {
+  const { me, can } = useSession();
+  if (!me || can('fleet.view')) return <TodayPage />;
+  return <Navigate to={homePathFor(me.permissions)} replace />;
+}
+
 /** An old address, with its :id carried over (build plan Р8). */
 function Moved({ to }: { to: string }) {
   const params = useParams();
@@ -121,7 +131,7 @@ export function App() {
           </RequireAuth>
         }
       >
-        <Route index element={<TodayPage />} />
+        <Route index element={<Home />} />
 
         <Route path="rentals" element={<RentalsPage />} />
         <Route path="rentals/new" element={<PickupWizard />} />

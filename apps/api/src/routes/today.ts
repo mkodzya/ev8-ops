@@ -87,7 +87,7 @@ export function weekStart(today: string): string {
 }
 
 export function todayRoutes(app: FastifyInstance): void {
-  app.get('/api/today', { config: { scope: 'session' } }, async (req) => {
+  app.get('/api/today', { config: { scope: 'fleet.view' } }, async (req) => {
     const actor = actorOf(req);
     const owner = mayView(req, 'deposit.decide');
     const today = todayISO(new Date(), env.TZ);

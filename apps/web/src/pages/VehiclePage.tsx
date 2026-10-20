@@ -39,7 +39,7 @@ interface Card {
     currentRentalId: string | null;
   };
   events: { id: string; kind: VehicleEventKind; occurredOn: string; fromState: VehicleState | null; toState: VehicleState; fromPool: VehiclePool | null; toPool: VehiclePool | null; rentalId: string | null; reason: string | null; actor: string | null }[];
-  serviceJobs: { id: string; number: string; status: 'open' | 'done' | 'cancelled'; payer: 'company' | 'customer'; reason: string; openedOn: string; closedOn: string | null; totalTetri: number; withheldTetri: number }[];
+  serviceJobs: { id: string; number: string; status: 'open' | 'done' | 'cancelled'; payer: 'company' | 'customer'; reason: string; openedOn: string; closedOn: string | null; totalTetri: number | null; withheldTetri: number | null }[];
   rentals: { id: string; number: string; status: RentalStatus; customer: { id: string; name: string }; pickedUpOn: string | null; returnedOn: string | null; paidThrough: string | null; weeklyRateTetri: number }[];
   /** Corrections: what was changed by hand, from what to what, and why. */
   journal: { id: string; at: string; occurredOn: string | null; action: string; by: string | null; note: string | null; before: unknown; after: unknown }[];
@@ -286,7 +286,8 @@ export function VehiclePage() {
                     {j.number}
                   </Link>{' '}
                   {j.reason} <span className="muted">· {t.service.payers[j.payer]}</span>
-                  <span className="muted"> · {formatGel(j.totalTetri)}</span>
+                  {/* What it cost is the owners' (ADR-0033 §4). */}
+                  {j.totalTetri != null && <span className="muted"> · {formatGel(j.totalTetri)}</span>}
                   <span className={j.status === 'open' ? 'warn-text' : 'muted'}> · {t.service.statuses[j.status]}</span>
                 </span>
               </li>

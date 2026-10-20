@@ -61,8 +61,9 @@ async function request<T>(method: string, url: string, body?: unknown, opts: Wri
     // The session ended somewhere else — expired, signed out on another
     // device, password changed. Whatever screen asked, the answer is the
     // login page and then back here (B1-02). The login call itself and the
-    // first "who am I" are expected to meet a 401 and are left alone.
-    if (res.status === 401 && url !== '/api/auth/login' && url !== '/api/me') {
+    // first "who am I" are expected to meet a 401 and are left alone, and so
+    // is a wrong PIN on the workshop tablet (ADR-0033).
+    if (res.status === 401 && url !== '/api/auth/login' && url !== '/api/auth/pin' && url !== '/api/me') {
       window.dispatchEvent(new Event(SIGNED_OUT_EVENT));
     }
     const { error, message, ...extra } = data as { error?: string; message?: string };

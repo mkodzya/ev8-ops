@@ -1,13 +1,13 @@
-import { closeCharge, jobTotalTetri, labourTetri as labourFor, minutesFromHours, partPriceTetri, todayISO } from '@ev8/shared';
-import type { FastifyInstance } from 'fastify';
+import { closeCharge, jobTotalTetri, labourTetri as labourFor, minutesFromHours, partPriceTetri, seesEveryRepair, todayISO } from '@ev8/shared';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { audit } from '../lib/audit.js';
-import { hasPerm } from '../lib/auth.js';
+import { hasPerm, permissionsOf, type Actor } from '../lib/auth.js';
 import { dateFromISO, isoDate } from '../lib/dates.js';
 import { prisma } from '../lib/db.js';
 import { env } from '../lib/env.js';
 import { badRequest, conflict, isUniqueViolation, notFound } from '../lib/errors.js';
 import { issueForServicePart, partRows, returnServiceParts, returnServicePart } from '../lib/stock.js';
-import { actorOf } from '../lib/guard.js';
+import { actorOf, mayView } from '../lib/guard.js';
 import { date, int, oneOf, str, tetri } from '../lib/validate.js';
 import { syncDeposit } from '../lib/rentalMoney.js';
 import { moveVehicle } from '../lib/vehicles.js';
@@ -85,15 +85,15 @@ function serialize(job: {
     closedOn: isoDate(job.closedOn),
     status: job.status,
     payer: job.payer,
-    labourTetri: job.labourTetri,
+    labourTetri: job.labourTetri as number | null,
     /** Work as it was entered: hours at a rate, so "1.5 × 50 ₾" reads back (§3.7). */
     labourMinutes: job.labourMinutes,
-    labourRateTetri: job.labourRateTetri,
-    partsTetri: job.parts.reduce((n, p) => n + p.qty * p.unitPriceTetri, 0),
-    totalTetri: totalOf(job),
-    withheldTetri: job.withheldTetri,
+    labourRateTetri: job.labourRateTetri as number | null,
+    partsTetri: job.parts.reduce((n, p) => n + p.qty * p.unitPriceTetri, 0) as number | null,
+    totalTetri: totalOf(job) as number | null,
+    withheldTetri: job.withheldTetri as number | null,
     /** What the customer owes for this repair after the deposit was drawn on (Q26). */
-    chargedTetri: job.chargedTetri,
+    chargedTetri: job.chargedTetri as number | null,
     odometerKm: job.odometerKm,
     workshop: job.workshop ?? null,
     closedAt: job.closedAt ?? null,
@@ -101,10 +101,44 @@ function serialize(job: {
     movedVehicle: job.movedVehicle,
     vehicle: { id: job.vehicle.id, vin: job.vehicle.vin, model: `${job.vehicle.model.brand} ${job.vehicle.model.name}` },
     rental: job.rental,
-    customer: job.customer,
-    parts: job.parts,
+    customer: job.customer as { id: string; name: string } | null,
+    parts: job.parts as { id: string; name: string; qty: number; unitPriceTetri: number | null; unitCostTetri?: number | null; partId?: string | null }[],
     photos: job.photos ?? [],
   };
+}
+
+type Job = ReturnType<typeof serialize>;
+
+/**
+ * A repair as this person may see it (ADR-0033 §4). What it costs — the work,
+ * the parts at the shelf's price and at the customer's, what the deposit
+ * gave and what the customer still owes — goes only to whoever sees cost;
+ * the customer's name only to whoever sees the fleet. The rest — the moped,
+ * the reason, the hours, the lines and the photos — is the repair itself.
+ * The fields go out empty, as the stock and the models do it.
+ */
+function present(req: FastifyRequest, job: Job): Job {
+  const out = mayView(req, 'cost.view')
+    ? job
+    : {
+        ...job,
+        labourTetri: null,
+        labourRateTetri: null,
+        partsTetri: null,
+        totalTetri: null,
+        withheldTetri: null,
+        chargedTetri: null,
+        parts: job.parts.map((p) => ({ id: p.id, name: p.name, qty: p.qty, partId: p.partId ?? null, unitPriceTetri: null, unitCostTetri: null })),
+      };
+  return mayView(req, 'fleet.view') ? out : { ...out, customer: null };
+}
+
+/**
+ * Which repairs a person sees: all of them, or — a mechanic — the ones they
+ * opened. From stage 2 a job names its mechanic and the rule reads that.
+ */
+function mine(actor: Actor): { createdById?: string } {
+  return seesEveryRepair(permissionsOf(actor.role, actor.via)) ? {} : { createdById: actor.id };
 }
 
 const INCLUDE = {
@@ -165,29 +199,46 @@ export function serviceRoutes(app: FastifyInstance): void {
     return { ok: true };
   });
 
-  app.get<{ Querystring: { status?: string } }>('/api/service', { config: { scope: 'fleet.view' } }, async (req) => {
+  app.get<{ Querystring: { status?: string } }>('/api/service', { config: { scope: 'service.view' } }, async (req) => {
     const status = req.query.status;
+    const own = mine(actorOf(req));
     const jobs = await prisma.serviceJob.findMany({
-      where: status === 'open' || status === 'done' || status === 'cancelled' || status === 'draft' ? { status } : {},
+      where: { ...own, ...(status === 'open' || status === 'done' || status === 'cancelled' || status === 'draft' ? { status } : {}) },
       orderBy: [{ status: 'asc' }, { openedOn: 'desc' }],
       take: 300,
       include: INCLUDE,
     });
     const [open, drafts, workshops] = await Promise.all([
-      prisma.serviceJob.count({ where: { status: 'open' } }),
-      prisma.serviceJob.count({ where: { status: 'draft' } }),
+      prisma.serviceJob.count({ where: { ...own, status: 'open' } }),
+      prisma.serviceJob.count({ where: { ...own, status: 'draft' } }),
       prisma.workshop.findMany({ where: { archived: false }, orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }], select: { id: true, name: true, phone: true } }),
     ]);
-    return { open, drafts, workshops, jobs: jobs.map(serialize) };
+    return { open, drafts, workshops, jobs: jobs.map((j) => present(req, serialize(j))) };
   });
 
-  app.get<{ Params: { id: string } }>('/api/service/:id', { config: { scope: 'fleet.view' } }, async (req) => {
-    const job = await prisma.serviceJob.findUnique({
-      where: { id: req.params.id },
+  app.get<{ Params: { id: string } }>('/api/service/:id', { config: { scope: 'service.view' } }, async (req) => {
+    const job = await prisma.serviceJob.findFirst({
+      where: { id: req.params.id, ...mine(actorOf(req)) },
       include: { ...INCLUDE, photos: { where: { archived: false }, select: { id: true, label: true }, orderBy: { createdAt: 'asc' } } },
     });
+    // Somebody else's repair is, to a mechanic, no repair at all.
     if (!job) throw notFound('job_not_found', 'No such repair job.');
-    return { job: serialize(job) };
+    return { job: present(req, serialize(job)) };
+  });
+
+  /**
+   * A reported breakdown is taken up — the repair may start (§3.10). This is
+   * the approval of ADR-0033: the chief mechanic or an owner gives it, a
+   * mechanic may not. Stage 3 adds who refused and why; the step is this one.
+   */
+  app.post<{ Params: { id: string } }>('/api/service/:id/approve', { config: { scope: 'service.approve' } }, async (req) => {
+    const actor = actorOf(req);
+    const job = await prisma.serviceJob.findUnique({ where: { id: req.params.id }, select: { id: true, number: true, status: true } });
+    if (!job) throw notFound('job_not_found', 'No such repair job.');
+    if (job.status !== 'draft') throw conflict('job_not_waiting', 'Only a reported breakdown waits to be taken up.', { status: job.status });
+    await prisma.serviceJob.update({ where: { id: job.id }, data: { status: 'open', updatedAt: new Date() } });
+    await audit({ actorId: actor.id, action: 'service.approve', entityType: 'service_job', entityId: job.id, after: { number: job.number, status: 'open' } });
+    return { ok: true };
   });
 
   /**
@@ -278,8 +329,6 @@ export function serviceRoutes(app: FastifyInstance): void {
       data.labourMinutes = minutes;
       data.labourTetri = labourFor(minutes);
     } else if ('labourTetri' in b) data.labourTetri = tetri(b, 'labourTetri', { min: 0 }) ?? 0;
-    // An owner picks a manager's report up and it becomes a repair (§3.10).
-    if (b.open === true) data.status = 'open';
     if ('notes' in b) data.notes = str(b, 'notes', { max: 4000 });
     // Who pays decides what a catalogue part costs (B8-04, crit. 22, 23), so
     // changing the payer repriced nothing and the lines already on the job

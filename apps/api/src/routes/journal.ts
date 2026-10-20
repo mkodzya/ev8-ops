@@ -138,7 +138,7 @@ async function idsMatching(query: string): Promise<{ ids: string[]; emails: stri
     prisma.customer.findMany({ where: { name: like }, select: { id: true } }),
     prisma.user.findMany({ where: { OR: [{ name: like }, { email: like }] }, select: { id: true, email: true } }),
   ]);
-  return { ids: [...vehicles, ...customers, ...users].map((x) => x.id), emails: users.map((u) => u.email) };
+  return { ids: [...vehicles, ...customers, ...users].map((x) => x.id), emails: users.flatMap((u) => (u.email ? [u.email] : [])) };
 }
 
 async function read(query: { q?: string; filter?: string; from?: string; to?: string; record?: string }): Promise<JournalRow[]> {

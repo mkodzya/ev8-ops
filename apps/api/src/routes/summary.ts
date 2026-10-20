@@ -11,7 +11,7 @@ import { rentalsNow } from '../lib/overdue.js';
 // click away; nothing is computed that the lists cannot reproduce.
 
 export function summaryRoutes(app: FastifyInstance): void {
-  app.get('/api/summary', { config: { scope: 'session' } }, async (req) => {
+  app.get('/api/summary', { config: { scope: 'fleet.view' } }, async (req) => {
     const today = todayISO(new Date(), env.TZ);
     const day = dateFromISO(today)!;
     const [vehicles, rentals, customers, pickedUpToday, unmatchedLines, openServiceJobs, overdueInstalments, dueBackToday] = await Promise.all([

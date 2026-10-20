@@ -127,7 +127,7 @@ describe.skipIf(!HAS_DB)('the journal on its own screen (wave 6 §3.8)', () => {
     const me = json<{ id: string; role: string }>(await call(owner, 'GET', '/api/me'));
 
     await prisma.$transaction(async (tx) => {
-      await applyDecision(tx, { id: me.id, email: '', name: '', role: 'owner', locale: 'ru' }, rental.id, {
+      await applyDecision(tx, { id: me.id, email: '', name: '', role: 'owner', locale: 'ru', via: 'password', deviceId: null }, rental.id, {
         action: 'withhold',
         withheldTetri: 5000,
         grounds: ['damage'],

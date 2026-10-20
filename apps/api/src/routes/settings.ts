@@ -1,3 +1,4 @@
+import { PIN_IDLE_MINUTES, PIN_LOCK_MINUTES, PIN_MAX_DIGITS, PIN_MAX_FAILURES, PIN_MIN_DIGITS } from '@ev8/shared';
 import type { FastifyInstance } from 'fastify';
 import { audit } from '../lib/audit.js';
 import { MAX_ATTEMPTS, SESSION_IDLE_MS, SESSION_TTL_MS } from '../lib/auth.js';
@@ -38,6 +39,8 @@ export function settingsRoutes(app: FastifyInstance): void {
     idleDays: Math.round(SESSION_IDLE_MS / 86_400_000),
     maxAttempts: MAX_ATTEMPTS,
     demoLoginsRefused: !isDevStack(),
+    // The workshop tablet (ADR-0033 §6–7).
+    pin: { minDigits: PIN_MIN_DIGITS, maxDigits: PIN_MAX_DIGITS, maxFailures: PIN_MAX_FAILURES, lockMinutes: PIN_LOCK_MINUTES, idleMinutes: PIN_IDLE_MINUTES },
   }));
 
   /** Read by anyone who hands a moped over; written by an owner. */

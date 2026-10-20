@@ -1,4 +1,4 @@
-import { ROLES, addDays, formatGel, gelFromTetri, localDateTime, parseGel, todayISO, type Role } from '@ev8/shared';
+import { PIN_MAX_DIGITS, PIN_ROLES, ROLES, addDays, formatGel, gelFromTetri, localDateTime, parseGel, todayISO, type Role } from '@ev8/shared';
 import { useState } from 'react';
 import { api } from '../api.js';
 import { BlockHead, Empty, Loading, PageHead } from '../components/ui.js';
@@ -13,8 +13,24 @@ import { useSession } from '../session.js';
 import { LoadError } from '../components/LoadError.js';
 
 interface Users {
-  users: { id: string; name: string; email: string; role: Role; active: boolean; sessions: number; lastLoginAt: string | null; lastSeenAt: string | null; createdAt: string }[];
+  users: {
+    id: string;
+    name: string;
+    /** Empty for a mechanic who signs in only with a PIN (ADR-0033). */
+    email: string | null;
+    role: Role;
+    active: boolean;
+    hasPin: boolean;
+    pinLockedUntil: string | null;
+    labourRateTetri: number | null;
+    sessions: number;
+    lastLoginAt: string | null;
+    lastSeenAt: string | null;
+    createdAt: string;
+  }[];
 }
+
+const isPinRole = (role: Role) => PIN_ROLES.includes(role);
 interface Points {
   locations: { id: string; name: string; kind: LocationKind; note: string | null; sortOrder: number; archived: boolean; vehicles: number }[];
 }
@@ -87,7 +103,111 @@ export function SettingsPage() {
         )}
       </section>
 
+      <WorkshopDevices />
     </>
+  );
+}
+
+interface Devices {
+  devices: { id: string; name: string; registeredAt: string; registeredBy: string; lastSeenAt: string | null; revokedAt: string | null; revokedBy: string | null; sessions: number; here: boolean }[];
+}
+
+/**
+ * The workshop tablet (ADR-0033 §5). It is registered from the tablet itself,
+ * by an owner signed in on it: the token lands in that browser's cookie and
+ * nowhere else. Revoked, never deleted.
+ */
+function WorkshopDevices() {
+  const t = useT();
+  const devices = useLoad<Devices>('/api/workshop/devices');
+  const [registering, setRegistering] = useState(false);
+  const [name, setName] = useState(t.workshop.defaultName);
+  const [revoking, setRevoking] = useState<{ id: string; name: string } | null>(null);
+  const list = devices.data?.devices ?? [];
+  const live = list.filter((d) => !d.revokedAt);
+  const isHere = list.some((d) => d.here && !d.revokedAt);
+  const when = (at: string) => `${localDateTime(at).date} ${localDateTime(at).time}`;
+
+  return (
+    <section className="card">
+      <BlockHead title={t.workshop.devices} sub={devices.data ? t.workshop.devicesSub(live.length) : undefined}>
+        {devices.data && !isHere && (
+          <button type="button" className="pill pill-sm" onClick={() => setRegistering(true)}>
+            {t.workshop.registerHere}
+          </button>
+        )}
+      </BlockHead>
+      {!devices.data ? (
+        devices.failure ? <LoadError failure={devices.failure} onRetry={devices.reload} /> : <Loading />
+      ) : list.length === 0 ? (
+        <Empty text={t.workshop.devicesNone} />
+      ) : (
+        <div className="table-wrap table-flat">
+          <table className="table">
+            <tbody>
+              {list.map((d) => (
+                <tr key={d.id} className={d.revokedAt ? 'row-off' : ''}>
+                  <td>
+                    {d.name}
+                    {d.here && <span className="muted"> · {t.workshop.here}</span>}
+                    <div className="hint muted">
+                      {t.workshop.registeredBy(d.registeredBy, when(d.registeredAt))}
+                      {d.lastSeenAt && ` · ${t.workshop.lastSeen(when(d.lastSeenAt))}`}
+                      {d.revokedAt && d.revokedBy && ` · ${t.workshop.revokedAt(d.revokedBy, when(d.revokedAt))}`}
+                    </div>
+                  </td>
+                  <td className="num">{!d.revokedAt && d.sessions > 0 && <span className="muted">{t.workshop.sessionsNow(d.sessions)}</span>}</td>
+                  <td className="num">
+                    {!d.revokedAt && (
+                      <button type="button" className="pill pill-sm" onClick={() => setRevoking({ id: d.id, name: d.name })}>
+                        {t.workshop.revoke}
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {registering && (
+        <FormSheet
+          title={t.workshop.registerTitle}
+          onClose={() => setRegistering(false)}
+          value={name}
+          initial={t.workshop.defaultName}
+          label={t.workshop.registerHere}
+          submit={async (key) => {
+            await api.post('/api/workshop/devices', { name }, { key });
+            return { toast: { text: t.workshop.registered(name) } };
+          }}
+          onDone={devices.reload}
+        >
+          <p className="hint">{t.workshop.registerNote}</p>
+          <Field label={t.workshop.deviceName} name="name">
+            <input className="input" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
+          </Field>
+        </FormSheet>
+      )}
+
+      {revoking && (
+        <FormSheet
+          title={t.workshop.revokeTitle}
+          onClose={() => setRevoking(null)}
+          value={revoking.id}
+          initial={revoking.id}
+          label={t.workshop.revokeButton}
+          submit={async (key) => {
+            await api.post(`/api/workshop/devices/${revoking.id}/revoke`, {}, { key });
+            return { toast: { text: t.workshop.revoked(revoking.name) } };
+          }}
+          onDone={devices.reload}
+        >
+          <p>{t.workshop.revokeConfirm(revoking.name)}</p>
+        </FormSheet>
+      )}
+    </section>
   );
 }
 
@@ -113,7 +233,14 @@ export function RentalSettingsPage() {
  */
 export function LoginSettingsPage() {
   const t = useT();
-  const rules = useLoad<{ sessionDays: number; idleDays: number; maxAttempts: number; demoLoginsRefused: boolean }>('/api/settings/login');
+  const rules = useLoad<{
+    sessionDays: number;
+    idleDays: number;
+    maxAttempts: number;
+    demoLoginsRefused: boolean;
+    /** Absent while an older API answers. */
+    pin?: { minDigits: number; maxDigits: number; maxFailures: number; lockMinutes: number; idleMinutes: number };
+  }>('/api/settings/login');
   return (
     <>
       <PageHead title={t.loginSettings.title} sub={t.loginSettings.subtitle} />
@@ -143,6 +270,22 @@ export function LoginSettingsPage() {
                   <td>{t.loginSettings.demo}</td>
                   <td className="num">{rules.data.demoLoginsRefused ? t.loginSettings.demoOff : t.common.dash}</td>
                 </tr>
+                {rules.data.pin && (
+                  <>
+                    <tr>
+                      <td>{t.workshop.pinRule}</td>
+                      <td className="num">{t.workshop.pinRuleValue(rules.data.pin.minDigits, rules.data.pin.maxDigits)}</td>
+                    </tr>
+                    <tr>
+                      <td>{t.workshop.pinLockRule}</td>
+                      <td className="num">{t.workshop.pinLockRuleValue(rules.data.pin.maxFailures, rules.data.pin.lockMinutes)}</td>
+                    </tr>
+                    <tr>
+                      <td>{t.workshop.pinIdleRule}</td>
+                      <td className="num">{t.workshop.pinIdleRuleValue(rules.data.pin.idleMinutes)}</td>
+                    </tr>
+                  </>
+                )}
               </tbody>
             </table>
           </div>
@@ -159,9 +302,22 @@ function UserRow({ user: u, onRole, onDone }: { user: Users['users'][number]; on
   const { me } = useSession();
   const toast = useToast();
   const op = useOperation();
-  const [resetting, setResetting] = useState(false);
+  // One thing typed at a time in a row: a password, a PIN or a rate (ADR-0033).
+  const [editing, setEditing] = useState<'password' | 'pin' | 'rate' | null>(null);
   const [pw, setPw] = useState('');
+  const [email, setEmail] = useState('');
+  const [pin, setPin] = useState('');
+  const [rate, setRate] = useState('');
+  const mechanic = isPinRole(u.role);
 
+  const stopEditing = () => {
+    setEditing(null);
+    setPw('');
+    setEmail('');
+    setPin('');
+    setRate('');
+    op.reset();
+  };
   const toggle = async () => {
     const res = await op.run((key) => api.patch(`/api/users/${u.id}`, { active: !u.active }, { key }), `active:${!u.active}`);
     if (!res.ok) return;
@@ -169,12 +325,35 @@ function UserRow({ user: u, onRole, onDone }: { user: Users['users'][number]; on
     onDone();
   };
   const reset = async () => {
-    const res = await op.run((key) => api.post(`/api/users/${u.id}/password`, { password: pw }, { key }), 'password');
+    // Somebody who had only a PIN gets an address with their first password.
+    const body = u.email ? { password: pw } : { email, password: pw };
+    const res = await op.run((key) => api.post(`/api/users/${u.id}/password`, body, { key }), 'password');
     if (!res.ok) return;
-    setPw('');
-    setResetting(false);
+    stopEditing();
+    toast({ text: u.email ? t.users.passwordSet(u.name) : t.workshop.passwordSetWithEmail(u.name) });
+    onDone();
+  };
+  /** The PIN goes to the server and nowhere else: not to a draft, not back into the row. */
+  const savePin = async () => {
+    const res = await op.run((key) => api.post(`/api/users/${u.id}/pin`, { pin }, { key }), 'pin');
+    if (!res.ok) return;
+    stopEditing();
+    toast({ text: t.workshop.pinSet(u.name) });
+    onDone();
+  };
+  const clearPin = async () => {
+    const res = await op.run((key) => api.del(`/api/users/${u.id}/pin`, { key }), 'pin:clear');
+    if (!res.ok) return;
+    toast({ text: t.workshop.pinCleared(u.name) });
     op.reset();
-    toast({ text: t.users.passwordSet(u.name) });
+    onDone();
+  };
+  const saveRate = async () => {
+    const res = await op.run((key) => api.patch(`/api/users/${u.id}`, { labourRateTetri: rate.trim() === '' ? null : rate }, { key }), 'rate');
+    if (!res.ok) return;
+    stopEditing();
+    toast({ text: t.workshop.rateSaved(u.name) });
+    onDone();
   };
   /** A phone left somewhere: every device signs in again, the password stays theirs (§3.4). */
   const closeSessions = async () => {
@@ -187,9 +366,25 @@ function UserRow({ user: u, onRole, onDone }: { user: Users['users'][number]; on
 
   return (
     <tr className={u.active ? '' : 'row-off'}>
-      <td>{u.name}</td>
+      <td>
+        {u.name}
+        {/* A mechanic's PIN and rate, never the PIN itself (ADR-0033). */}
+        {mechanic && (
+          <div className="hint muted">
+            {u.pinLockedUntil ? (
+              <span className="crit-text">{t.workshop.pinLockedUntil(localDateTime(u.pinLockedUntil).time)}</span>
+            ) : u.hasPin ? (
+              t.workshop.hasPin
+            ) : (
+              t.workshop.noPin
+            )}
+            {' · '}
+            {u.labourRateTetri != null ? t.workshop.rateValue(formatGel(u.labourRateTetri)) : t.workshop.rateCompany}
+          </div>
+        )}
+      </td>
       <td className="mono">
-        {u.email}
+        {u.email ?? <span className="muted">{t.workshop.pinOnly}</span>}
         {/* When this person was last seen, and on how many devices: the two
             things "Закрыть все входы" is decided by. */}
         <div className="hint muted">
@@ -211,22 +406,76 @@ function UserRow({ user: u, onRole, onDone }: { user: Users['users'][number]; on
       </td>
       <td>{u.active ? t.common.yes : t.users.off}</td>
       <td className="num">
-        <button type="button" className="pill pill-sm" onClick={() => void toggle()} disabled={u.id === me?.id || op.state === 'busy'}>
-          {u.active ? t.users.switchOff : t.users.switchOn}
-        </button>{' '}
-        {!resetting ? (
-          <button type="button" className="pill pill-sm" onClick={() => setResetting(true)}>
-            {t.users.resetPassword}
-          </button>
-        ) : (
+        {editing === 'password' ? (
           <span className="inline-form">
-            <input className="input input-inline" value={pw} onChange={(e) => setPw(e.target.value)} autoFocus aria-label={t.users.password} />
+            {!u.email && (
+              <input className="input input-inline" type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoFocus placeholder={t.users.email} aria-label={t.users.email} />
+            )}
+            <input className="input input-inline" value={pw} onChange={(e) => setPw(e.target.value)} autoFocus={!!u.email} aria-label={t.users.password} placeholder={t.users.password} />
             <SubmitButton small type="button" state={op.state} label={t.actions.save} onClick={() => void reset()} />
+            <button type="button" className="pill pill-sm" onClick={stopEditing}>
+              {t.actions.cancel}
+            </button>
           </span>
-        )}
-        {!resetting && (
+        ) : editing === 'pin' ? (
+          <span className="inline-form">
+            <input
+              className="input input-inline mono"
+              inputMode="numeric"
+              autoComplete="off"
+              maxLength={PIN_MAX_DIGITS}
+              value={pin}
+              onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
+              autoFocus
+              aria-label={t.workshop.pin}
+              title={t.workshop.pinHint}
+            />
+            <SubmitButton small type="button" state={op.state} label={t.actions.save} onClick={() => void savePin()} />
+            <button type="button" className="pill pill-sm" onClick={stopEditing}>
+              {t.actions.cancel}
+            </button>
+          </span>
+        ) : editing === 'rate' ? (
+          <span className="inline-form">
+            <input className="input input-inline mono" inputMode="decimal" value={rate} onChange={(e) => setRate(e.target.value)} autoFocus aria-label={t.workshop.rate} title={t.workshop.rateHint} placeholder="50" />
+            <SubmitButton small type="button" state={op.state} label={t.actions.save} onClick={() => void saveRate()} />
+            <button type="button" className="pill pill-sm" onClick={stopEditing}>
+              {t.actions.cancel}
+            </button>
+          </span>
+        ) : (
           <>
-            {' '}
+            <button type="button" className="pill pill-sm" onClick={() => void toggle()} disabled={u.id === me?.id || op.state === 'busy'}>
+              {u.active ? t.users.switchOff : t.users.switchOn}
+            </button>{' '}
+            <button type="button" className="pill pill-sm" onClick={() => setEditing('password')}>
+              {u.email ? t.users.resetPassword : t.workshop.giveEmail}
+            </button>{' '}
+            {mechanic && (
+              <>
+                <button type="button" className="pill pill-sm" title={t.workshop.pinHint} onClick={() => setEditing('pin')}>
+                  {u.hasPin ? t.workshop.newPin : t.workshop.setPin}
+                </button>{' '}
+                {u.hasPin && (
+                  <>
+                    <button type="button" className="pill pill-sm" onClick={() => void clearPin()} disabled={op.state === 'busy'}>
+                      {t.workshop.clearPin}
+                    </button>{' '}
+                  </>
+                )}
+                <button
+                  type="button"
+                  className="pill pill-sm"
+                  title={t.workshop.rateHint}
+                  onClick={() => {
+                    setRate(u.labourRateTetri != null ? String(gelFromTetri(u.labourRateTetri)) : '');
+                    setEditing('rate');
+                  }}
+                >
+                  {t.workshop.rate}
+                </button>{' '}
+              </>
+            )}
             <button type="button" className="pill pill-sm" title={t.peopleW6.closeSessionsHint} onClick={() => void closeSessions()} disabled={op.state === 'busy'}>
               {t.peopleW6.closeSessions}
             </button>
@@ -484,7 +733,7 @@ function PointRow({ point: l, onDone }: { point: Points['locations'][number]; on
   );
 }
 
-const blankUser = { name: '', email: '', role: 'manager' as Role, password: '' };
+const blankUser = { name: '', email: '', role: 'manager' as Role, password: '', pin: '' };
 
 function NewUser({ onDone }: { onDone: () => void }) {
   const t = useT();
@@ -504,7 +753,11 @@ function NewUser({ onDone }: { onDone: () => void }) {
           initial={blankUser}
           label={t.users.create}
           submit={async (key) => {
-            await api.post('/api/users', f, { key });
+            // A mechanic may come without an address and with a PIN instead (ADR-0033 §8).
+            const { pin, ...person } = f;
+            const body = isPinRole(f.role) && person.email.trim() === '' ? { name: person.name, role: person.role } : person;
+            const { id } = await api.post<{ id: string }>('/api/users', body, { key });
+            if (isPinRole(f.role) && pin !== '') await api.post(`/api/users/${id}/pin`, { pin });
             return { toast: { text: t.users.created(f.name) } };
           }}
           onDone={() => {
@@ -531,7 +784,20 @@ function NewUser({ onDone }: { onDone: () => void }) {
             <Field label={t.users.password} hint={t.users.passwordHint} name="password">
               <input className="input" value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} />
             </Field>
+            {isPinRole(f.role) && (
+              <Field label={t.workshop.pin} hint={t.workshop.pinHint} name="pin">
+                <input
+                  className="input mono"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  maxLength={PIN_MAX_DIGITS}
+                  value={f.pin}
+                  onChange={(e) => setF({ ...f, pin: e.target.value.replace(/\D/g, '') })}
+                />
+              </Field>
+            )}
           </div>
+          {isPinRole(f.role) && <p className="hint muted">{t.workshop.emailOptional}</p>}
         </FormSheet>
       )}
     </>

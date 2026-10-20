@@ -80,6 +80,9 @@ export async function teardown(): Promise<void> {
     await prisma.workshop.updateMany({ where: { createdBy: { createdAt: since } }, data: { createdById: null } });
     await prisma.rentalSettings.updateMany({ where: { updatedBy: { createdAt: since } }, data: { updatedById: null } });
     await prisma.customer.deleteMany({ where: { createdAt: since } });
+    // Workshop devices name the owner who registered them (0055); sessions on them go first.
+    await prisma.session.deleteMany({ where: { device: { registeredAt: since } } });
+    await prisma.workshopDevice.deleteMany({ where: { registeredAt: since } });
     await prisma.user.deleteMany({ where: { createdAt: since } }); // sessions cascade
   } catch (err) {
     // Loudly. A cleanup that fails quietly leaves the next run matching

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { actionsForRole, menuSectionsForRole, phoneTabsForRole, sectionOfPath, sectionsForRole, tabsForRole } from './navigation-helpers.js';
+import { actionsForRole, homePathForRole, menuSectionsForRole, phoneTabsForRole, sectionOfPath, sectionsForRole, tabsForRole } from './navigation-helpers.js';
 
 describe('the structure each role sees (wave 1 §3.2)', () => {
   it('gives the owner Today · Rentals · + · Money · Fleet, and everything else in the avatar menu', () => {
@@ -57,6 +57,21 @@ describe('the structure each role sees (wave 1 §3.2)', () => {
     // Fleet keeps its own tab to the same page.
     expect(tabsForRole('fleet', 'owner').find((t) => t.id === 'points')?.path).toBe('/fleet/points');
     expect(tabsForRole('settings', 'manager')).toEqual([]);
+  });
+
+  // ADR-0033: a mechanic and a chief mechanic see the repairs and nothing else,
+  // and land on them — "Today" is the front office's queue.
+  it('gives a mechanic and a chief mechanic the repairs alone, as their first screen', () => {
+    for (const role of ['mechanic', 'chief_mechanic'] as const) {
+      expect(sectionsForRole(role).map((s) => s.id)).toEqual(['service']);
+      expect(phoneTabsForRole(role)).toEqual(['service']);
+      expect(menuSectionsForRole(role)).toEqual([]);
+      expect(actionsForRole(role)).toEqual([]);
+      expect(tabsForRole('service', role).map((t) => t.id)).toEqual(['jobs']);
+      expect(homePathForRole(role)).toBe('/service');
+    }
+    expect(homePathForRole('owner')).toBe('/');
+    expect(homePathForRole('manager')).toBe('/');
   });
 
   it('knows which section an address belongs to', () => {
