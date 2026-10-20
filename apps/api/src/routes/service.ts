@@ -2,6 +2,7 @@ import {
   AFTER_PHOTOS_MAX,
   JOB_PHOTOS_MAX,
   LABOUR_RATE_TETRI,
+  SERVICE_PART_KINDS,
   SERVICE_REASONS,
   WORK_QTY_MAX,
   closeCharge,
@@ -10,9 +11,14 @@ import {
   labourTetri as labourFor,
   minutesFromHours,
   normSecFromMinutes,
+  partLineState,
+  partLineTetri,
   partPriceTetri,
+  partsTetri,
   readFleetNumber,
+  readImei,
   readQuery,
+  readSimPhone,
   seesEveryRepair,
   todayISO,
   vinMatches,
@@ -28,7 +34,7 @@ import { dateFromISO, isoDate } from '../lib/dates.js';
 import { prisma } from '../lib/db.js';
 import { env } from '../lib/env.js';
 import { badRequest, conflict, forbidden, isUniqueViolation, notFound } from '../lib/errors.js';
-import { issueForServicePart, partRows, returnServiceParts, returnServicePart } from '../lib/stock.js';
+import { issueForServicePart, partRows, passThrough, receiveRemoved, returnServiceParts, returnServicePart } from '../lib/stock.js';
 import { actorOf, mayView } from '../lib/guard.js';
 import { date, int, oneOf, str, tetri } from '../lib/validate.js';
 import { syncDeposit } from '../lib/rentalMoney.js';
@@ -59,7 +65,9 @@ type Payer = (typeof PAYERS)[number];
  */
 async function repriceLines(jobId: string, from: Payer, to: Payer): Promise<{ id: string; from: number; to: number }[]> {
   const lines = await prisma.servicePart.findMany({
-    where: { jobId, partId: { not: null } },
+    // A bought line is priced by its receipt and one taken off onto the shelf
+    // costs the repair nothing (ADR-0036): neither follows the payer.
+    where: { jobId, partId: { not: null }, kind: { in: ['stock', 'donor'] } },
     select: { id: true, unitPriceTetri: true, unitCostTetri: true, part: { select: { salePriceTetri: true } } },
   });
   const out: { id: string; from: number; to: number }[] = [];
@@ -74,8 +82,13 @@ async function repriceLines(jobId: string, from: Payer, to: Payer): Promise<{ id
   return out;
 }
 
-function totalOf(job: { labourTetri: number; parts: { qty: number; unitPriceTetri: number }[] }): number {
+function totalOf(job: { labourTetri: number; parts: { qty: number; unitPriceTetri: number; kind?: string | null; paidTetri?: number | null; rejectedAt?: Date | null }[] }): number {
   return jobTotalTetri({ parts: job.parts, labourTetri: job.labourTetri });
+}
+
+/** A tracker as a repair or a moped shows it. */
+function trackerOut(t: { id: string; imei: string; simPhone: string | null; installedOn: Date; removedOn?: Date | null }) {
+  return { id: t.id, imei: t.imei as string | null, simPhone: t.simPhone, installedOn: isoDate(t.installedOn), removedOn: isoDate(t.removedOn ?? null) };
 }
 
 function serialize(job: {
@@ -103,10 +116,37 @@ function serialize(job: {
   notes: string | null;
   movedVehicle: boolean;
   withheldTetri: number;
-  vehicle: { id: string; vin: string; fleetNo: number | null; model: { brand: string; name: string } };
+  vehicle: {
+    id: string;
+    vin: string;
+    fleetNo: number | null;
+    model: { brand: string; name: string };
+    trackers: { id: string; imei: string; simPhone: string | null; installedOn: Date; partId: string | null }[];
+  };
   rental: { id: string; number: string } | null;
   customer: { id: string; name: string } | null;
-  parts: { id: string; name: string; qty: number; unitPriceTetri: number; unitCostTetri?: number | null; partId?: string | null }[];
+  parts: {
+    id: string;
+    name: string;
+    qty: number;
+    unitPriceTetri: number;
+    unitCostTetri: number | null;
+    partId: string | null;
+    kind: string;
+    paidTetri: number | null;
+    receiptPhotoId: string | null;
+    createdAt: Date;
+    approvedAt: Date | null;
+    rejectedAt: Date | null;
+    rejectReason: string | null;
+    donor: { id: string; vin: string; fleetNo: number | null } | null;
+    reimburseTo: { id: string; name: string } | null;
+    part: { isTracker: boolean } | null;
+    trackers: { imei: string; simPhone: string | null }[];
+  }[];
+  batteryMoves: { id: string; item: string; kind: string; qty: number; occurredOn: Date }[];
+  trackersFitted: { id: string; imei: string; simPhone: string | null; installedOn: Date; removedOn: Date | null }[];
+  trackersRemoved: { id: string; imei: string; simPhone: string | null; installedOn: Date; removedOn: Date | null }[];
   photos?: { id: string; label: string; tag: string | null }[];
   mechanic: { id: string; name: string } | null;
   reasonKind: string | null;
@@ -164,7 +204,7 @@ function serialize(job: {
     /** Work as it was entered: hours at a rate, so "1.5 × 50 ₾" reads back (§3.7). */
     labourMinutes: job.labourMinutes,
     labourRateTetri: job.labourRateTetri as number | null,
-    partsTetri: job.parts.reduce((n, p) => n + p.qty * p.unitPriceTetri, 0) as number | null,
+    partsTetri: partsTetri(job.parts) as number | null,
     totalTetri: totalOf(job) as number | null,
     withheldTetri: job.withheldTetri as number | null,
     /** What the customer owes for this repair after the deposit was drawn on (Q26). */
@@ -180,10 +220,45 @@ function serialize(job: {
     rejected: job.rejectedAt ? { at: job.rejectedAt.toISOString(), by: job.rejectedBy?.name ?? null, reason: job.rejectReason ?? '' } : null,
     notes: job.notes,
     movedVehicle: job.movedVehicle,
-    vehicle: { id: job.vehicle.id, vin: job.vehicle.vin, number: fleetNumber(job.vehicle.fleetNo), model: `${job.vehicle.model.brand} ${job.vehicle.model.name}` },
+    vehicle: {
+      id: job.vehicle.id,
+      vin: job.vehicle.vin,
+      number: fleetNumber(job.vehicle.fleetNo),
+      model: `${job.vehicle.model.brand} ${job.vehicle.model.name}`,
+      /** The tracker on the moped now, if any (ADR-0036): what «снять трекер» takes off. */
+      tracker: job.vehicle.trackers[0] ? trackerOut(job.vehicle.trackers[0]) : null,
+    },
     rental: job.rental,
     customer: job.customer as { id: string; name: string } | null,
-    parts: job.parts as { id: string; name: string; qty: number; unitPriceTetri: number | null; unitCostTetri?: number | null; partId?: string | null }[],
+    parts: job.parts.map((p) => ({
+      id: p.id,
+      name: p.name,
+      qty: p.qty,
+      partId: p.partId,
+      /** Off the shelf, bought, taken off onto the shelf, off a donor (ADR-0036). */
+      kind: p.kind,
+      unitPriceTetri: p.unitPriceTetri as number | null,
+      unitCostTetri: p.unitCostTetri,
+      /** What the line adds to the repair: the receipt for a bought one, nothing for one taken off. */
+      lineTetri: partLineTetri(p) as number | null,
+      /** Bought: what the mechanic paid, and to whom it goes back. */
+      paidTetri: p.paidTetri,
+      reimburseTo: p.reimburseTo,
+      receiptPhotoId: p.receiptPhotoId,
+      /** Bought only: waiting, approved or refused; nothing for the rest. */
+      state: partLineState(p),
+      rejectReason: p.rejectReason,
+      donor: p.donor ? { id: p.donor.id, number: fleetNumber(p.donor.fleetNo), vin: p.donor.vin } : null,
+      isTracker: p.part?.isTracker ?? false,
+      tracker: p.trackers[0] ? { imei: p.trackers[0].imei as string | null, simPhone: p.trackers[0].simPhone } : null,
+      addedAt: p.createdAt.toISOString(),
+    })),
+    /** Batteries and chargers this repair took to repair or brought back: their own count (ADR-0025, ADR-0036). */
+    batteries: job.batteryMoves.map((m) => ({ id: m.id, item: m.item, kind: m.kind, qty: m.qty, occurredOn: isoDate(m.occurredOn) })),
+    trackers: {
+      fitted: job.trackersFitted.map(trackerOut),
+      removed: job.trackersRemoved.map(trackerOut),
+    },
     photos: job.photos ?? [],
     mechanic: job.mechanic,
     reasonKind: job.reasonKind,
@@ -227,9 +302,25 @@ function present(req: FastifyRequest, job: Job): Job {
         totalTetri: null,
         withheldTetri: null,
         chargedTetri: null,
-        parts: job.parts.map((p) => ({ id: p.id, name: p.name, qty: p.qty, partId: p.partId ?? null, unitPriceTetri: null, unitCostTetri: null })),
+        // A mechanic sees what he paid for a part himself — it is his money
+        // coming back — and the chief mechanic sees it to approve it; neither
+        // sees what the shelf paid (ADR-0033 §4, ADR-0036).
+        parts: job.parts.map((p) => ({ ...p, unitPriceTetri: null, unitCostTetri: null, lineTetri: null, paidTetri: mayView(req, 'service.work') ? p.paidTetri : null })),
       };
-  return mayView(req, 'fleet.view') ? out : { ...out, customer: null };
+  // The IMEI and the SIM say which tracker to look for when a moped is
+  // stolen: the owners' and the workshop's, not a manager's (ADR-0036).
+  const tracked = mayView(req, 'service.work') || mayView(req, 'service.manage') ? out : hideTrackers(out);
+  return mayView(req, 'fleet.view') ? tracked : { ...tracked, customer: null };
+}
+
+function hideTrackers(job: Job): Job {
+  const blank = <T extends { imei: string | null; simPhone: string | null }>(t: T): T => ({ ...t, imei: null, simPhone: null });
+  return {
+    ...job,
+    vehicle: { ...job.vehicle, tracker: job.vehicle.tracker ? blank(job.vehicle.tracker) : null },
+    parts: job.parts.map((p) => ({ ...p, tracker: p.tracker ? blank(p.tracker) : null })),
+    trackers: { fitted: job.trackers.fitted.map(blank), removed: job.trackers.removed.map(blank) },
+  };
 }
 
 /**
@@ -242,12 +333,28 @@ function mine(actor: Actor): { mechanicId?: string } {
 }
 
 const INCLUDE = {
-  vehicle: { include: { model: { select: { brand: true, name: true } } } },
+  vehicle: {
+    include: {
+      model: { select: { brand: true, name: true } },
+      trackers: { where: { removedOn: null }, select: { id: true, imei: true, simPhone: true, installedOn: true, partId: true }, take: 1 },
+    },
+  },
   rental: { select: { id: true, number: true } },
   customer: { select: { id: true, name: true, nameKa: true, nameLat: true } },
   workshop: { select: { id: true, name: true } },
   closedLocation: { select: { id: true, name: true } },
-  parts: { orderBy: { createdAt: 'asc' as const } },
+  parts: {
+    orderBy: { createdAt: 'asc' as const },
+    include: {
+      donor: { select: { id: true, vin: true, fleetNo: true } },
+      reimburseTo: { select: { id: true, name: true } },
+      part: { select: { isTracker: true } },
+      trackers: { select: { imei: true, simPhone: true }, take: 1 },
+    },
+  },
+  batteryMoves: { orderBy: { createdAt: 'asc' as const }, select: { id: true, item: true, kind: true, qty: true, occurredOn: true } },
+  trackersFitted: { orderBy: { createdAt: 'asc' as const }, select: { id: true, imei: true, simPhone: true, installedOn: true, removedOn: true } },
+  trackersRemoved: { orderBy: { createdAt: 'asc' as const }, select: { id: true, imei: true, simPhone: true, installedOn: true, removedOn: true } },
   mechanic: { select: { id: true, name: true } },
   approvedBy: { select: { id: true, name: true } },
   rejectedBy: { select: { id: true, name: true } },
@@ -336,6 +443,136 @@ function readNorms(raw: unknown): { workId: string; normSec: number }[] {
     const normSec = normSecFromMinutes(o.normMin as string | number | null | undefined);
     if (normSec == null) throw badRequest('bad_field', 'A norm is minutes above zero.', { field: 'normMin', workId });
     return { workId, normSec };
+  });
+}
+
+/**
+ * The repair a line is written into (stage 4): the owner's in work, as it always
+ * was; a mechanic's own — or any, to the chief mechanic — while it waits for
+ * approval or is in work. A repair with no mechanic is the owners' alone.
+ */
+async function writableJob(actor: Actor, id: string) {
+  const owner = hasPerm(actor, 'service.manage');
+  const job = await prisma.serviceJob.findFirst({
+    where: { id, ...(owner ? {} : mine(actor)) },
+    select: { id: true, number: true, status: true, openedOn: true, payer: true, mechanicId: true, approvedAt: true, vehicleId: true, vehicle: { select: { fleetNo: true, vin: true } } },
+  });
+  if (!job) throw notFound('job_not_found', 'No such repair job.');
+  const writable = job.status === 'open' || (job.status === 'draft' && job.mechanicId != null);
+  if (!writable) throw conflict('job_closed', 'A closed job is a record; it is not edited.');
+  if (!owner && !job.mechanicId) throw forbidden('forbidden', 'This repair is the owners’.', { permission: 'service.manage' });
+  return job;
+}
+
+/**
+ * What a part off the shelf goes on the line at, and what the shelf paid for
+ * it (B8-04): the shelf's average; with nothing on the shelf, the last price a
+ * shipment or a receipt paid — a figure somebody paid, not a guess. A part
+ * nobody ever paid for has no cost, and the line says so by an empty one.
+ */
+async function shelfPrice(partId: string, payer: Payer): Promise<{ unitPriceTetri: number | null; unitCostTetri: number | null }> {
+  const row = (await partRows({ includeArchived: true })).find((r) => r.id === partId) ?? null;
+  let cost = row?.avgCostTetri ?? null;
+  if (cost == null) {
+    const last = await prisma.stockMove.findFirst({
+      where: { partId, kind: 'receipt', servicePartId: null, unitCostTetri: { gt: 0 } },
+      orderBy: [{ occurredOn: 'desc' }, { createdAt: 'desc' }],
+      select: { unitCostTetri: true },
+    });
+    cost = last?.unitCostTetri ?? null;
+  }
+  const part = await prisma.part.findUnique({ where: { id: partId }, select: { salePriceTetri: true } });
+  return { unitPriceTetri: partPriceTetri(payer, { avgCostTetri: cost, salePriceTetri: part?.salePriceTetri ?? null }), unitCostTetri: cost };
+}
+
+/** The IMEI and the SIM of a tracker being fitted — one tracker, one line (ADR-0036). */
+function readTracker(b: Body, qty: number): { imei: string; simPhone: string } {
+  if (qty !== 1) throw badRequest('bad_field', 'A tracker is fitted one at a time: its IMEI is its own.', { field: 'qty' });
+  const imei = readImei(str(b, 'imei', { required: true, max: 40 }));
+  if (!imei) throw badRequest('imei_bad', 'An IMEI is fifteen digits off the sticker; the last one checks the rest.', { field: 'imei' });
+  const simPhone = readSimPhone(str(b, 'sim', { required: true, max: 40 }));
+  if (!simPhone) throw badRequest('sim_bad', 'A SIM number is its digits.', { field: 'sim' });
+  return { imei, simPhone };
+}
+
+/**
+ * A tracker goes onto the moped (ADR-0036). One at a time on a moped, and an
+ * IMEI on one moped at a time — the database refuses the second open row of
+ * an IMEI whatever this says. Off a donor, the tracker moves with the part:
+ * closed on the donor, opened here.
+ */
+async function fitTracker(
+  tx: Tx,
+  input: { job: { id: string; vehicleId: string }; partId: string; servicePartId: string; donorVehicleId: string | null; imei: string; simPhone: string; on: string; actorId: string },
+): Promise<void> {
+  const onMoped = await tx.vehicleTracker.findFirst({ where: { vehicleId: input.job.vehicleId, removedOn: null }, select: { imei: true } });
+  if (onMoped) throw conflict('tracker_on_vehicle', 'This moped has a tracker; take that one off first.', { imei: `···${onMoped.imei.slice(-4)}` });
+  const elsewhere = await tx.vehicleTracker.findFirst({
+    where: { imei: input.imei, removedOn: null },
+    select: { id: true, vehicleId: true, installedOn: true, vehicle: { select: { fleetNo: true, vin: true } } },
+  });
+  if (elsewhere) {
+    if (input.donorVehicleId == null || elsewhere.vehicleId !== input.donorVehicleId) {
+      throw conflict('tracker_imei_in_use', 'This IMEI is on another moped; take it off there first.', {
+        vehicle: fleetNumber(elsewhere.vehicle.fleetNo) ?? `···${elsewhere.vehicle.vin.slice(-6)}`,
+        since: isoDate(elsewhere.installedOn),
+      });
+    }
+    await tx.vehicleTracker.update({ where: { id: elsewhere.id }, data: { removedOn: dateFromISO(input.on)!, removedJobId: input.job.id, removedById: input.actorId } });
+  }
+  try {
+    await tx.vehicleTracker.create({
+      data: {
+        vehicleId: input.job.vehicleId,
+        partId: input.partId,
+        imei: input.imei,
+        simPhone: input.simPhone,
+        installedOn: dateFromISO(input.on)!,
+        serviceJobId: input.job.id,
+        servicePartId: input.servicePartId,
+        createdById: input.actorId,
+      },
+    });
+  } catch (e) {
+    if (isUniqueViolation(e)) throw conflict('tracker_imei_in_use', 'This IMEI is on another moped; take it off there first.');
+    throw e;
+  }
+}
+
+/**
+ * A repair called off gives its shelf's parts back, so a tracker it took off
+ * the shelf was never fitted (ADR-0036). One it moved off a donor, or took off
+ * the moped, stays as it is: those parts did not go back anywhere.
+ */
+async function unfitTrackers(tx: Tx, jobId: string): Promise<void> {
+  await tx.vehicleTracker.deleteMany({ where: { serviceJobId: jobId, removedOn: null, servicePart: { kind: 'stock' } } });
+}
+
+/** A repair that waited only for a line just taken off goes back to work. */
+async function settleIfNothingWaits(tx: Tx, jobId: string): Promise<void> {
+  const job = await tx.serviceJob.findUnique({ where: { id: jobId }, select: { status: true, approvedAt: true } });
+  if (!job || job.status !== 'draft' || job.approvedAt == null) return;
+  const works = await tx.serviceWork.count({ where: { jobId, approvedAt: null, rejectedAt: null } });
+  const parts = await tx.servicePart.count({ where: { jobId, kind: 'bought', approvedAt: null, rejectedAt: null } });
+  if (works + parts === 0) await tx.serviceJob.update({ where: { id: jobId }, data: { status: 'open', updatedAt: new Date() } });
+}
+
+/**
+ * A bought part from the catalogue passes through the shelf once it is the
+ * company's — approved — in at what the receipt says one cost and out at the
+ * same, on the day it was written into the repair (ADR-0036). A part bought
+ * under a name of the mechanic's own never touches the shelf.
+ */
+async function boughtThrough(tx: Tx, line: { id: string; partId: string | null; qty: number; paidTetri: number | null; createdAt: Date }, number: string, actorId: string): Promise<void> {
+  if (!line.partId || line.paidTetri == null) return;
+  await passThrough(tx, {
+    servicePartId: line.id,
+    partId: line.partId,
+    qty: line.qty,
+    unitCostTetri: Math.round(line.paidTetri / line.qty),
+    occurredOn: todayISO(line.createdAt, env.TZ),
+    actorId,
+    reason: `${number}: купил механик`,
   });
 }
 
@@ -429,7 +666,14 @@ export function serviceRoutes(app: FastifyInstance): void {
     if (norms.length > 0 && !hasPerm(actor, 'service.norms')) throw forbidden('forbidden', 'Norms are kept by the chief mechanic and the owners.', { permission: 'service.norms' });
     const job = await prisma.serviceJob.findUnique({
       where: { id: req.params.id },
-      select: { id: true, number: true, status: true, approvedAt: true, works: { select: { id: true, workTypeId: true, normSec: true, approvedAt: true, rejectedAt: true } } },
+      select: {
+        id: true,
+        number: true,
+        status: true,
+        approvedAt: true,
+        works: { select: { id: true, workTypeId: true, normSec: true, approvedAt: true, rejectedAt: true } },
+        parts: { where: { kind: 'bought' }, select: { id: true, kind: true, partId: true, qty: true, paidTetri: true, createdAt: true, approvedAt: true, rejectedAt: true } },
+      },
     });
     if (!job) throw notFound('job_not_found', 'No such repair job.');
     if (job.status !== 'draft') throw conflict('job_not_waiting', 'This repair is not waiting for approval.', { status: job.status });
@@ -439,11 +683,16 @@ export function serviceRoutes(app: FastifyInstance): void {
       if (line.workTypeId) throw conflict('norm_from_book', 'A work from the book keeps the norm it was written with.');
     }
     const waiting = job.works.filter((w) => workLineState(w) === 'waiting');
+    // A part the mechanic bought waits with the works (ADR-0036): approving it
+    // is the company taking it on, so that is when it passes through the shelf.
+    const bought = job.parts.filter((p) => partLineState(p) === 'waiting');
     const now = new Date();
     const first = job.approvedAt == null;
     await prisma.$transaction(async (tx) => {
       for (const n of norms) await tx.serviceWork.update({ where: { id: n.workId }, data: { normSec: n.normSec } });
       await tx.serviceWork.updateMany({ where: { id: { in: waiting.map((w) => w.id) } }, data: { approvedById: actor.id, approvedAt: now } });
+      await tx.servicePart.updateMany({ where: { id: { in: bought.map((p) => p.id) } }, data: { approvedById: actor.id, approvedAt: now } });
+      for (const p of bought) await boughtThrough(tx, p, job.number, actor.id);
       await tx.serviceJob.update({
         where: { id: job.id },
         data: { status: 'open', ...(first ? { approvedById: actor.id, approvedAt: now } : {}), updatedAt: now },
@@ -454,11 +703,11 @@ export function serviceRoutes(app: FastifyInstance): void {
           action: 'service.approve',
           entityType: 'service_job',
           entityId: job.id,
-          after: { number: job.number, status: 'open', works: waiting.length, again: !first, norms: norms.length > 0 ? norms : undefined },
+          after: { number: job.number, status: 'open', works: waiting.length, parts: bought.length || undefined, again: !first, norms: norms.length > 0 ? norms : undefined },
         },
       });
     });
-    return { ok: true, works: waiting.length };
+    return { ok: true, works: waiting.length, parts: bought.length };
   });
 
   /**
@@ -475,7 +724,16 @@ export function serviceRoutes(app: FastifyInstance): void {
     if (!reason) throw badRequest('missing_field', 'Say why it is refused.', { field: 'reason' });
     const job = await prisma.serviceJob.findUnique({
       where: { id: req.params.id },
-      select: { id: true, number: true, status: true, approvedAt: true, movedVehicle: true, vehicleId: true, works: { select: { id: true, approvedAt: true, rejectedAt: true } } },
+      select: {
+        id: true,
+        number: true,
+        status: true,
+        approvedAt: true,
+        movedVehicle: true,
+        vehicleId: true,
+        works: { select: { id: true, approvedAt: true, rejectedAt: true } },
+        parts: { where: { kind: 'bought' }, select: { id: true, kind: true, approvedAt: true, rejectedAt: true } },
+      },
     });
     if (!job) throw notFound('job_not_found', 'No such repair job.');
     if (job.status !== 'draft') throw conflict('job_not_waiting', 'This repair is not waiting for approval.', { status: job.status });
@@ -485,6 +743,7 @@ export function serviceRoutes(app: FastifyInstance): void {
       let back = 0;
       await prisma.$transaction(async (tx) => {
         back = await returnServiceParts(tx, { jobId: job.id, occurredOn: today, actorId: actor.id, reason: `${job.number}: ${reason}`.slice(0, 1000) });
+        await unfitTrackers(tx, job.id);
         await tx.serviceJob.update({
           where: { id: job.id },
           data: { status: 'cancelled', closedOn: dateFromISO(today)!, closedAt: now, rejectedById: actor.id, rejectedAt: now, rejectReason: reason, updatedAt: now },
@@ -497,14 +756,18 @@ export function serviceRoutes(app: FastifyInstance): void {
       return { ok: true, status: 'cancelled', partsBack: back };
     }
     const waiting = job.works.filter((w) => workLineState(w) === 'waiting').map((w) => w.id);
+    // A bought part refused stays on the repair, struck through, and is not
+    // paid back; it never passed the shelf (ADR-0036).
+    const bought = job.parts.filter((p) => partLineState(p) === 'waiting').map((p) => p.id);
     await prisma.$transaction(async (tx) => {
       await tx.serviceWork.updateMany({ where: { id: { in: waiting } }, data: { rejectedById: actor.id, rejectedAt: now, rejectReason: reason } });
+      await tx.servicePart.updateMany({ where: { id: { in: bought } }, data: { rejectedById: actor.id, rejectedAt: now, rejectReason: reason } });
       await tx.serviceJob.update({ where: { id: job.id }, data: { status: 'open', updatedAt: now } });
       await tx.auditLog.create({
-        data: { actorId: actor.id, action: 'service.reject', entityType: 'service_job', entityId: job.id, after: { number: job.number, status: 'open', works: waiting.length }, note: reason },
+        data: { actorId: actor.id, action: 'service.reject', entityType: 'service_job', entityId: job.id, after: { number: job.number, status: 'open', works: waiting.length, parts: bought.length || undefined }, note: reason },
       });
     });
-    return { ok: true, status: 'open', works: waiting.length };
+    return { ok: true, status: 'open', works: waiting.length, parts: bought.length };
   });
 
   /**
@@ -604,6 +867,12 @@ export function serviceRoutes(app: FastifyInstance): void {
     return reply.code(201).send({ ok: true, photos: had + photos.length });
   });
 
+  /** The shelf as the workshop reads it (ADR-0036): what there is and how many, never what it cost. */
+  app.get('/api/service/shelf', { config: { scope: 'service.work' } }, async () => {
+    const rows = await partRows();
+    return { parts: rows.map((p) => ({ id: p.id, sku: p.sku, name: p.name, nameKa: p.nameKa, unit: p.unit, onHand: p.onHand, isTracker: p.isTracker })) };
+  });
+
   /** Where a moped may be left when its repair closes: the points the owner keeps (stage 3). */
   app.get('/api/service/locations', { config: { scope: 'service.work' } }, async () => {
     const locations = await prisma.location.findMany({ where: { archived: false }, orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }], select: { id: true, name: true, kind: true } });
@@ -619,14 +888,16 @@ export function serviceRoutes(app: FastifyInstance): void {
    * carries that one on instead of being refused a second (code check, §3).
    * No customer: a mechanic does not see the fleet (ADR-0033 §2).
    */
-  app.get<{ Querystring: { q?: string } }>('/api/service/vehicles', { config: { scope: 'service.work' } }, async (req) => {
+  app.get<{ Querystring: { q?: string; donor?: string } }>('/api/service/vehicles', { config: { scope: 'service.work' } }, async (req) => {
     const raw = (req.query.q ?? '').trim();
+    // A donor is often a moped written off after an accident: it is looked for too (ADR-0036).
+    const donor = req.query.donor === '1';
     // «8» is EV-008: a sticker's number may be one digit, a VIN's tail is two characters at least.
     const q = readQuery(raw);
     const number = readFleetNumber(raw, { digitsToo: true });
     if (!q && number == null) return { vehicles: [] };
     const all = await prisma.vehicle.findMany({
-      where: { archived: false, state: { notIn: ['sold', 'out'] } },
+      where: { archived: false, state: { notIn: donor ? ['sold'] : ['sold', 'out'] } },
       select: {
         id: true,
         vin: true,
@@ -949,72 +1220,248 @@ export function serviceRoutes(app: FastifyInstance): void {
     return { ok: true, repriced: repriced.length };
   });
 
-  app.post<{ Params: { id: string }; Body: Body }>('/api/service/:id/parts', { config: { scope: 'service.manage' } }, async (req, reply) => {
+  /**
+   * A line of parts on a repair (SRV-01; stage 4, ADR-0036). Off the shelf, as
+   * it always was; bought by the mechanic, with the receipt; a working part
+   * taken off this moped onto the shelf; or one taken off a donor and fitted
+   * here. The owner writes into a repair in work, as before; a mechanic into
+   * his own while it waits or is in work. A tracker fitted asks for its IMEI and
+   * SIM. A bought line waits for approval like a work found later; nobody's
+   * shelf is a reason to refuse a repair, and a short one goes into the red.
+   */
+  app.post<{ Params: { id: string }; Body: Body }>('/api/service/:id/parts', { config: { scope: 'service.work' }, bodyLimit: JOB_BODY_LIMIT }, async (req, reply) => {
     const b = req.body ?? {};
     const actor = actorOf(req);
-    const job = await prisma.serviceJob.findUnique({ where: { id: req.params.id }, select: { id: true, status: true, openedOn: true, payer: true } });
-    if (!job) throw notFound('job_not_found', 'No such repair job.');
-    if (job.status !== 'open') throw conflict('job_closed', 'A closed job is a record; it is not edited.');
+    const job = await writableJob(actor, req.params.id);
+    const kind = oneOf(b, 'kind', SERVICE_PART_KINDS) ?? 'stock';
+    const owner = hasPerm(actor, 'service.manage');
 
     // A line may take the part off the shelf, or just name it. A repair on a
     // part nobody keeps in stock is still a repair.
     const catalogueId = str(b, 'partId');
     const catalogue = catalogueId ? await prisma.part.findUnique({ where: { id: catalogueId } }) : null;
     if (catalogueId && !catalogue) throw notFound('part_not_found', 'No such part.');
+    // The shelf needs a name it knows: only a part of the catalogue goes onto it,
+    // and a mechanic takes off it only what it holds.
+    if (!catalogue && (kind === 'removed' || (kind === 'stock' && !owner))) throw badRequest('missing_field', 'Pick the part from the catalogue.', { field: 'partId' });
     const name = catalogue?.name ?? str(b, 'name', { required: true, max: 200 })!;
-    const qty = int(b, 'qty', { min: 1 }) ?? 1;
-    // The company's own repair is costed at what the shelf paid; a customer's
-    // at what the part is sold for (B8-04, crit. 22, 23).
-    const shelf = catalogue ? (await partRows()).find((r) => r.id === catalogue.id) ?? null : null;
-    const suggested = catalogue ? partPriceTetri(job.payer as 'company' | 'customer', { avgCostTetri: shelf?.avgCostTetri ?? null, salePriceTetri: catalogue.salePriceTetri }) : null;
-    const price = tetri(b, 'unitPriceTetri', { min: 0 }) ?? suggested;
-    if (price == null) throw badRequest('missing_field', 'unitPriceTetri is required', { field: 'unitPriceTetri' });
+    const qty = int(b, 'qty', { min: 1, max: 999 }) ?? 1;
+    const today = todayISO(new Date(), env.TZ);
+    const here = `${fleetNumber(job.vehicle.fleetNo) ?? `···${job.vehicle.vin.slice(-6)}`} · ${job.number}`;
 
-    const part = await prisma.$transaction(async (tx) => {
+    // A tracker fitted is somebody's: its IMEI and SIM, one per moped (ADR-0036).
+    const fitsTracker = catalogue?.isTracker === true && kind !== 'removed';
+    if (catalogue?.isTracker && kind === 'removed') throw conflict('tracker_remove_apart', 'A tracker comes off by «снять трекер», which closes it on the moped.');
+    const tracker = fitsTracker ? readTracker(b, qty) : null;
+
+    let donor: { id: string; fleetNo: number | null; vin: string } | null = null;
+    if (kind === 'donor') {
+      const donorId = str(b, 'donorVehicleId', { required: true })!;
+      donor = await prisma.vehicle.findUnique({ where: { id: donorId }, select: { id: true, fleetNo: true, vin: true, state: true } });
+      if (!donor) throw notFound('vehicle_not_found', 'No such moped.');
+      if (donor.id === job.vehicleId) throw conflict('donor_is_this_moped', 'A donor is another moped.');
+    }
+
+    // What the line is priced at. The shelf's line, as before: what the shelf
+    // paid for a company repair, retail for a customer's; a price is typed only
+    // by whoever sees prices. Off a donor: nought to the company, retail to a
+    // customer. Bought: the receipt. Taken off: nothing.
+    let unitPriceTetri: number;
+    let unitCostTetri: number | null;
+    let paidTetri: number | null = null;
+    if (kind === 'stock') {
+      const shelf = catalogue ? await shelfPrice(catalogue.id, job.payer as Payer) : null;
+      const typed = owner ? tetri(b, 'unitPriceTetri', { min: 0 }) : null;
+      const price = typed ?? shelf?.unitPriceTetri ?? (owner ? null : 0);
+      if (price == null) throw badRequest('missing_field', 'unitPriceTetri is required', { field: 'unitPriceTetri' });
+      unitPriceTetri = price;
+      unitCostTetri = shelf?.unitCostTetri ?? null;
+    } else if (kind === 'bought') {
+      paidTetri = tetri(b, 'paidTetri', { required: true, min: 1 })!;
+      unitPriceTetri = Math.round(paidTetri / qty);
+      unitCostTetri = unitPriceTetri;
+    } else if (kind === 'donor') {
+      unitPriceTetri = job.payer === 'customer' ? (catalogue?.salePriceTetri ?? 0) : 0;
+      unitCostTetri = 0;
+    } else {
+      unitPriceTetri = 0;
+      unitCostTetri = 0;
+    }
+    const receipt = kind === 'bought' ? jobPhoto(b.receiptPhoto, 'receiptPhoto') : null;
+    if (kind === 'bought' && !receipt) throw badRequest('receipt_photo_missing', 'A part bought goes in with the photo of its receipt.', { field: 'receiptPhoto' });
+    // The money goes back to whoever bought it: the mechanic who writes it, or
+    // — an owner writing it for him — the repair's mechanic.
+    const reimburseToId = kind === 'bought' ? (owner ? job.mechanicId : actor.id) : null;
+    if (kind === 'bought' && !reimburseToId) throw conflict('job_no_mechanic', 'This repair has no mechanic to pay back.');
+    // Like a work found later (ADR-0035): bought by whoever may approve, into a
+    // repair in work, it is approved as it is written; otherwise it waits.
+    const approvedNow = kind === 'bought' && job.status === 'open' && hasPerm(actor, 'service.approve');
+    const waits = kind === 'bought' && !approvedNow;
+
+    const line = await prisma.$transaction(async (tx) => {
+      const photo = receipt
+        ? await tx.storedFile.create({
+            data: {
+              kind: 'service_photo',
+              serviceJobId: job.id,
+              tag: 'receipt',
+              label: `receipt-${name}`.slice(0, 200),
+              mimeType: receipt.mime,
+              sizeBytes: receipt.bytes.length,
+              sha256: createHash('sha256').update(receipt.bytes).digest('hex'),
+              bytes: new Uint8Array(receipt.bytes),
+              uploadedById: actor.id,
+            },
+            select: { id: true },
+          })
+        : null;
       const created = await tx.servicePart.create({
-        data: { jobId: job.id, name, qty, unitPriceTetri: price, unitCostTetri: shelf?.avgCostTetri ?? null, partId: catalogue?.id ?? null },
-        select: { id: true },
+        data: {
+          jobId: job.id,
+          name,
+          qty,
+          unitPriceTetri,
+          unitCostTetri,
+          partId: catalogue?.id ?? null,
+          kind,
+          donorVehicleId: donor?.id ?? null,
+          paidTetri,
+          receiptPhotoId: photo?.id ?? null,
+          reimburseToId,
+          createdById: actor.id,
+          ...(approvedNow ? { approvedById: actor.id, approvedAt: new Date() } : {}),
+        },
+        select: { id: true, createdAt: true },
       });
       if (catalogue) {
-        await issueForServicePart(tx, {
-          servicePartId: created.id,
-          partId: catalogue.id,
-          qty,
-          occurredOn: isoDate(job.openedOn)!,
-          actorId: actor.id,
-        });
+        if (kind === 'stock') {
+          // Dated the day the repair opened, as a shelf line always was.
+          await issueForServicePart(tx, { servicePartId: created.id, partId: catalogue.id, qty, occurredOn: isoDate(job.openedOn)!, actorId: actor.id });
+        } else if (kind === 'removed') {
+          await receiveRemoved(tx, { servicePartId: created.id, partId: catalogue.id, qty, occurredOn: today, actorId: actor.id, reason: `снято с ${here}` });
+        } else if (kind === 'donor') {
+          await passThrough(tx, { servicePartId: created.id, partId: catalogue.id, qty, unitCostTetri: 0, occurredOn: today, actorId: actor.id, reason: `с донора ${fleetNumber(donor!.fleetNo) ?? `···${donor!.vin.slice(-6)}`} → ${here}` });
+        } else if (approvedNow) {
+          await boughtThrough(tx, { id: created.id, partId: catalogue.id, qty, paidTetri, createdAt: created.createdAt }, job.number, actor.id);
+        }
       }
+      if (tracker) await fitTracker(tx, { job, partId: catalogue!.id, servicePartId: created.id, donorVehicleId: donor?.id ?? null, imei: tracker.imei, simPhone: tracker.simPhone, on: today, actorId: actor.id });
+      if (waits && job.status !== 'draft') await tx.serviceJob.update({ where: { id: job.id }, data: { status: 'draft', updatedAt: new Date() } });
+      await tx.auditLog.create({
+        data: {
+          actorId: actor.id,
+          action: 'service.part.add',
+          entityType: 'service_job',
+          entityId: job.id,
+          after: {
+            number: job.number,
+            partId: created.id,
+            name,
+            qty,
+            kind,
+            paidTetri: paidTetri ?? undefined,
+            donor: donor ? (fleetNumber(donor.fleetNo) ?? donor.vin) : undefined,
+            imei: tracker ? `···${tracker.imei.slice(-4)}` : undefined,
+            waits: waits || undefined,
+          },
+        },
+      });
       return created;
     });
-    await audit({ actorId: actor.id, action: 'service.part.add', entityType: 'service_job', entityId: job.id, after: { partId: part.id, name, qty } });
-    return reply.code(201).send(part);
+    return reply.code(201).send({ id: line.id, status: waits ? 'draft' : job.status });
   });
 
-  app.delete<{ Params: { id: string; partId: string } }>(
-    '/api/service/:id/parts/:partId',
-    { config: { scope: 'service.manage' } },
-    async (req) => {
-      const actor = actorOf(req);
-      const part = await prisma.servicePart.findUnique({ where: { id: req.params.partId }, include: { job: { select: { id: true, status: true, number: true } } } });
-      if (!part || part.job.id !== req.params.id) throw notFound('part_not_found', 'No such part on this job.');
-      if (part.job.status !== 'open') throw conflict('job_closed', 'A closed job is a record; it is not edited.');
-      // Taking the line off the job puts the parts back on the shelf — as a
-      // movement of its own, not by rubbing out the one that issued them
-      // (QA-W5-18). In "Движения" of that part both are visible: that they
-      // were taken, and that they came back.
-      await prisma.$transaction(async (tx) => {
-        await returnServicePart(tx, {
-          servicePartId: part.id,
-          occurredOn: todayISO(new Date(), env.TZ),
-          actorId: actor.id,
-          reason: `возврат из ремонта ${part.job.number}`,
-        });
-        await tx.servicePart.delete({ where: { id: part.id } });
+  app.delete<{ Params: { id: string; partId: string } }>('/api/service/:id/parts/:partId', { config: { scope: 'service.work' } }, async (req) => {
+    const actor = actorOf(req);
+    const job = await writableJob(actor, req.params.id);
+    const part = await prisma.servicePart.findUnique({ where: { id: req.params.partId }, include: { trackers: { where: { removedOn: null }, select: { id: true, imei: true } } } });
+    if (!part || part.jobId !== job.id) throw notFound('part_not_found', 'No such part on this job.');
+    // A part bought and approved is money owed to the mechanic: whoever approved
+    // it may take it off, he may not.
+    if (part.kind === 'bought' && part.approvedAt != null && !hasPerm(actor, 'service.approve')) {
+      throw conflict('line_approved', 'This part is approved; the chief mechanic takes it off.');
+    }
+    // Taking the line off the job puts the parts back on the shelf — as a
+    // movement of its own, not by rubbing out the one that issued them
+    // (QA-W5-18). In "Движения" of that part both are visible: that they
+    // were taken, and that they came back.
+    const today = todayISO(new Date(), env.TZ);
+    await prisma.$transaction(async (tx) => {
+      await returnServicePart(tx, { servicePartId: part.id, occurredOn: today, actorId: actor.id, reason: `возврат из ремонта ${job.number}` });
+      // A tracker fitted by this line was never fitted; one moved off a donor goes back on it.
+      for (const t of part.trackers) {
+        await tx.vehicleTracker.delete({ where: { id: t.id } });
+        if (part.donorVehicleId) {
+          await tx.vehicleTracker.updateMany({
+            where: { vehicleId: part.donorVehicleId, imei: t.imei, removedJobId: job.id },
+            data: { removedOn: null, removedJobId: null, removedById: null },
+          });
+        }
+      }
+      await tx.servicePart.delete({ where: { id: part.id } });
+      await settleIfNothingWaits(tx, job.id);
+      await tx.auditLog.create({
+        data: { actorId: actor.id, action: 'service.part.remove', entityType: 'service_job', entityId: job.id, before: { name: part.name, qty: part.qty, kind: part.kind } },
       });
-      await audit({ actorId: actor.id, action: 'service.part.remove', entityType: 'service_job', entityId: part.job.id, before: { name: part.name, qty: part.qty } });
-      return { ok: true };
-    },
-  );
+    });
+    return { ok: true };
+  });
+
+  /**
+   * The tracker comes off the moped (ADR-0036): it is closed on the moped with
+   * the day and the repair, and — working — goes onto the shelf at a nought,
+   * as any part taken off does. A broken one is only closed.
+   */
+  app.post<{ Params: { id: string }; Body: Body }>('/api/service/:id/tracker/remove', { config: { scope: 'service.work' } }, async (req, reply) => {
+    const actor = actorOf(req);
+    const job = await writableJob(actor, req.params.id);
+    const working = (req.body ?? {}).working === true;
+    const tracker = await prisma.vehicleTracker.findFirst({ where: { vehicleId: job.vehicleId, removedOn: null }, include: { part: { select: { id: true, name: true } } } });
+    if (!tracker) throw notFound('tracker_none', 'No tracker is on this moped.');
+    const today = todayISO(new Date(), env.TZ);
+    if (today < isoDate(tracker.installedOn)!) throw conflict('tracker_removed_before_fitted', 'A tracker cannot come off before it was fitted.');
+    const here = `${fleetNumber(job.vehicle.fleetNo) ?? `···${job.vehicle.vin.slice(-6)}`} · ${job.number}`;
+    await prisma.$transaction(async (tx) => {
+      await tx.vehicleTracker.update({ where: { id: tracker.id }, data: { removedOn: dateFromISO(today)!, removedJobId: job.id, removedById: actor.id } });
+      if (working && tracker.part) {
+        const line = await tx.servicePart.create({
+          data: { jobId: job.id, name: tracker.part.name, qty: 1, unitPriceTetri: 0, unitCostTetri: 0, partId: tracker.part.id, kind: 'removed', createdById: actor.id },
+          select: { id: true },
+        });
+        await receiveRemoved(tx, { servicePartId: line.id, partId: tracker.part.id, qty: 1, occurredOn: today, actorId: actor.id, reason: `снято с ${here}` });
+      }
+      await tx.auditLog.create({
+        data: { actorId: actor.id, action: 'tracker.remove', entityType: 'service_job', entityId: job.id, after: { number: job.number, imei: `···${tracker.imei.slice(-4)}`, working } },
+      });
+    });
+    return reply.code(201).send({ ok: true, toShelf: working && tracker.part != null });
+  });
+
+  /**
+   * A battery or a charger taken to repair, or brought back from it, by this
+   * repair (ADR-0036): a movement of their own count (ADR-0025), not of the
+   * shelf of parts — by number, without serials (17.09.2026).
+   */
+  app.post<{ Params: { id: string }; Body: Body }>('/api/service/:id/batteries', { config: { scope: 'service.work' } }, async (req, reply) => {
+    const b = req.body ?? {};
+    const actor = actorOf(req);
+    const job = await writableJob(actor, req.params.id);
+    const item = oneOf(b, 'item', ['battery', 'charger'] as const, { required: true })!;
+    const kind = oneOf(b, 'kind', ['to_repair', 'from_repair'] as const, { required: true })!;
+    const qty = int(b, 'qty', { required: true, min: 1, max: 50 })!;
+    const today = todayISO(new Date(), env.TZ);
+    const row = await prisma.$transaction(async (tx) => {
+      const made = await tx.batteryMove.create({
+        data: { item, kind, qty, reason: job.number, serviceJobId: job.id, occurredOn: dateFromISO(today)!, createdById: actor.id },
+        select: { id: true },
+      });
+      await tx.auditLog.create({
+        data: { actorId: actor.id, action: item === 'charger' ? 'charger.move' : 'battery.move', entityType: item, entityId: made.id, after: { kind, qty, job: job.number } },
+      });
+      return made;
+    });
+    return reply.code(201).send(row);
+  });
 
   /**
    * Close a job. The moped comes back only if this job is what took it away.
@@ -1149,6 +1596,7 @@ export function serviceRoutes(app: FastifyInstance): void {
     await prisma.$transaction(async (tx) => {
       // The parts go back as a movement of their own, with the reason on it (B8-04, crit. 27).
       back = await returnServiceParts(tx, { jobId: job.id, occurredOn: today, actorId: actor.id, reason: `${job.number}: ${reason}`.slice(0, 1000) });
+      await unfitTrackers(tx, job.id);
       await tx.serviceJob.update({ where: { id: job.id }, data: { status: 'cancelled', closedOn: dateFromISO(today)!, closedAt: new Date(), updatedAt: new Date() } });
       if (job.movedVehicle) {
         await moveVehicle(tx, { vehicleId: job.vehicleId, kind: 'service_out', occurredOn: today, actorId: actor.id, reason });

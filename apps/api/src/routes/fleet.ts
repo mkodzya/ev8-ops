@@ -1,7 +1,8 @@
-import { POOL_EVENT, VEHICLE_POOLS, VEHICLE_STATES, readFleetNumber, todayISO, type VehiclePool, type VehicleState } from '@ev8/shared';
+import { POOL_EVENT, VEHICLE_POOLS, VEHICLE_STATES, fleetNumber, partsTetri, readFleetNumber, todayISO, type VehiclePool, type VehicleState } from '@ev8/shared';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { isoDate } from '../lib/dates.js';
 import { prisma } from '../lib/db.js';
+import { PART_MONEY } from '../lib/stock.js';
 import { env } from '../lib/env.js';
 import { badRequest, notFound } from '../lib/errors.js';
 import { mayView } from '../lib/guard.js';
@@ -124,7 +125,15 @@ export function fleetRoutes(app: FastifyInstance): void {
         },
         serviceJobs: {
           orderBy: { openedOn: 'desc' },
-          include: { parts: { select: { qty: true, unitPriceTetri: true } } },
+          include: { parts: { select: PART_MONEY } },
+        },
+        trackers: {
+          orderBy: [{ installedOn: 'desc' }, { createdAt: 'desc' }],
+          include: { serviceJob: { select: { id: true, number: true } }, removedJob: { select: { id: true, number: true } } },
+        },
+        donatedParts: {
+          orderBy: { createdAt: 'desc' },
+          select: { id: true, name: true, qty: true, createdAt: true, job: { select: { id: true, number: true, vehicle: { select: { id: true, fleetNo: true, vin: true } } } } },
         },
       },
     });
@@ -181,7 +190,7 @@ export function fleetRoutes(app: FastifyInstance): void {
         openedOn: isoDate(j.openedOn),
         closedOn: isoDate(j.closedOn),
         // What a repair cost is the owners' (ADR-0033 §4), on the card as in the repairs.
-        totalTetri: mayView(req, 'cost.view') ? j.labourTetri + j.parts.reduce((n, p) => n + p.qty * p.unitPriceTetri, 0) : null,
+        totalTetri: mayView(req, 'cost.view') ? j.labourTetri + partsTetri(j.parts) : null,
         withheldTetri: mayView(req, 'cost.view') ? j.withheldTetri : null,
       })),
       rentals: v.rentals.map((r) => ({
@@ -194,6 +203,29 @@ export function fleetRoutes(app: FastifyInstance): void {
         returnedOn: isoDate(r.returnedOn),
         paidThrough: isoDate(r.paidThrough),
         weeklyRateTetri: r.weeklyRateTetri,
+      })),
+      // The tracker on it now first, then the ones it had (ADR-0036). The IMEI
+      // and the SIM are what is searched for when a moped is stolen: the
+      // owners' to read, not a manager's.
+      trackers: mayView(req, 'service.manage')
+        ? v.trackers.map((t) => ({
+            id: t.id,
+            imei: t.imei,
+            simPhone: t.simPhone,
+            installedOn: isoDate(t.installedOn),
+            removedOn: isoDate(t.removedOn),
+            job: t.serviceJob,
+            removedJob: t.removedJob,
+          }))
+        : null,
+      /** What was taken off this moped for another, as a donor (ADR-0036). */
+      donated: v.donatedParts.map((p) => ({
+        id: p.id,
+        name: p.name,
+        qty: p.qty,
+        on: todayISO(p.createdAt, env.TZ),
+        job: { id: p.job.id, number: p.job.number },
+        to: { id: p.job.vehicle.id, number: fleetNumber(p.job.vehicle.fleetNo), vin: p.job.vehicle.vin },
       })),
       journal: journal.map((l) => ({
         id: l.id,
