@@ -70,8 +70,11 @@ describe('the structure each role sees (wave 1 §3.2)', () => {
       expect(homePathForRole(role)).toBe('/service');
     }
     // The book of works is the chief mechanic's to keep, not the mechanic's (stage 2).
-    expect(tabsForRole('service', 'mechanic').map((t) => t.id)).toEqual(['jobs']);
-    expect(tabsForRole('service', 'chief_mechanic').map((t) => t.id)).toEqual(['jobs', 'works']);
+    // Each reads his own balance (stage 5); marking a mechanic paid is the owners' alone.
+    expect(tabsForRole('service', 'mechanic').map((t) => t.id)).toEqual(['jobs', 'balance']);
+    expect(tabsForRole('service', 'chief_mechanic').map((t) => t.id)).toEqual(['jobs', 'works', 'balance']);
+    expect(tabsForRole('service', 'owner').map((t) => t.id)).toEqual(['jobs', 'stock', 'works', 'payouts']);
+    expect(tabsForRole('service', 'manager').map((t) => t.id)).not.toContain('payouts');
     expect(homePathForRole('owner')).toBe('/');
     expect(homePathForRole('manager')).toBe('/');
   });

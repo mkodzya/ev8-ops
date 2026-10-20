@@ -5,9 +5,10 @@ import {
   SERVICE_PART_KINDS,
   SERVICE_REASONS,
   WORK_QTY_MAX,
+  approvedWorksTetri,
   closeCharge,
   fleetNumber,
-  jobTotalTetri,
+  jobPayState,
   labourTetri as labourFor,
   minutesFromHours,
   normSecFromMinutes,
@@ -19,6 +20,7 @@ import {
   readImei,
   readQuery,
   readSimPhone,
+  repairTotalTetri,
   seesEveryRepair,
   todayISO,
   vinMatches,
@@ -34,7 +36,7 @@ import { dateFromISO, isoDate } from '../lib/dates.js';
 import { prisma } from '../lib/db.js';
 import { env } from '../lib/env.js';
 import { badRequest, conflict, forbidden, isUniqueViolation, notFound } from '../lib/errors.js';
-import { issueForServicePart, partRows, passThrough, receiveRemoved, returnServiceParts, returnServicePart } from '../lib/stock.js';
+import { WORK_MONEY, issueForServicePart, partRows, passThrough, receiveRemoved, returnServiceParts, returnServicePart, unfitTrackers } from '../lib/stock.js';
 import { actorOf, mayView } from '../lib/guard.js';
 import { date, int, oneOf, str, tetri } from '../lib/validate.js';
 import { syncDeposit } from '../lib/rentalMoney.js';
@@ -82,8 +84,9 @@ async function repriceLines(jobId: string, from: Payer, to: Payer): Promise<{ id
   return out;
 }
 
-function totalOf(job: { labourTetri: number; parts: { qty: number; unitPriceTetri: number; kind?: string | null; paidTetri?: number | null; rejectedAt?: Date | null }[] }): number {
-  return jobTotalTetri({ parts: job.parts, labourTetri: job.labourTetri });
+/** A paid repair is a record: nothing on it changes any more (ADR-0037 §5). */
+function refusePaid(job: { paidInPayoutId: string | null }): void {
+  if (job.paidInPayoutId != null) throw conflict('job_paid', 'This repair is paid to its mechanic; it is not changed any more.');
 }
 
 /** A tracker as a repair or a moped shows it. */
@@ -108,6 +111,8 @@ function serialize(job: {
   workshop?: { id: string; name: string } | null;
   closedLocation?: { id: string; name: string } | null;
   closedAt: Date | null;
+  paidInPayoutId: string | null;
+  paidInPayout: { id: string; paidOn: Date; markedBy: { id: string; name: string } } | null;
   approvedAt: Date | null;
   approvedBy: { id: string; name: string } | null;
   rejectedAt: Date | null;
@@ -141,6 +146,7 @@ function serialize(job: {
     rejectReason: string | null;
     donor: { id: string; vin: string; fleetNo: number | null } | null;
     reimburseTo: { id: string; name: string } | null;
+    paidInPayoutId: string | null;
     part: { isTracker: boolean } | null;
     trackers: { imei: string; simPhone: string | null }[];
   }[];
@@ -205,7 +211,9 @@ function serialize(job: {
     labourMinutes: job.labourMinutes,
     labourRateTetri: job.labourRateTetri as number | null,
     partsTetri: partsTetri(job.parts) as number | null,
-    totalTetri: totalOf(job) as number | null,
+    totalTetri: repairTotalTetri(job) as number | null,
+    /** The mechanic's approved work as the company's repair cost carries it, rounded once (ADR-0037 §6, §8); nought on a customer's or a called-off one. */
+    worksCostTetri: (job.payer === 'company' && job.status !== 'cancelled' ? approvedWorksTetri(job.works) : 0) as number | null,
     withheldTetri: job.withheldTetri as number | null,
     /** What the customer owes for this repair after the deposit was drawn on (Q26). */
     chargedTetri: job.chargedTetri as number | null,
@@ -218,6 +226,12 @@ function serialize(job: {
     approved: job.approvedAt ? { at: job.approvedAt.toISOString(), by: job.approvedBy?.name ?? null } : null,
     /** A refused repair says who refused it and why (stage 3). */
     rejected: job.rejectedAt ? { at: job.rejectedAt.toISOString(), by: job.rejectedBy?.name ?? null, reason: job.rejectReason ?? '' } : null,
+    /** The payout that paid its mechanic: the status stays «closed», the screen says «paid» (ADR-0037 §1). */
+    paid: job.paidInPayout
+      ? { payoutId: job.paidInPayout.id, paidOn: isoDate(job.paidInPayout.paidOn) as string, markedBy: { id: job.paidInPayout.markedBy.id, name: job.paidInPayout.markedBy.name } }
+      : null,
+    /** Where it stands for paying its mechanic: payable, paid, unnormed, waiting, open or cancelled (ADR-0037 §2). */
+    payState: jobPayState(job),
     notes: job.notes,
     movedVehicle: job.movedVehicle,
     vehicle: {
@@ -244,6 +258,8 @@ function serialize(job: {
       /** Bought: what the mechanic paid, and to whom it goes back. */
       paidTetri: p.paidTetri,
       reimburseTo: p.reimburseTo,
+      /** Bought: paid back to that person in a payout of his (ADR-0037). */
+      reimbursed: p.paidInPayoutId != null,
       receiptPhotoId: p.receiptPhotoId,
       /** Bought only: waiting, approved or refused; nothing for the rest. */
       state: partLineState(p),
@@ -300,6 +316,7 @@ function present(req: FastifyRequest, job: Job): Job {
         labourRateTetri: null,
         partsTetri: null,
         totalTetri: null,
+        worksCostTetri: null,
         withheldTetri: null,
         chargedTetri: null,
         // A mechanic sees what he paid for a part himself — it is his money
@@ -358,6 +375,7 @@ const INCLUDE = {
   mechanic: { select: { id: true, name: true } },
   approvedBy: { select: { id: true, name: true } },
   rejectedBy: { select: { id: true, name: true } },
+  paidInPayout: { select: { id: true, paidOn: true, markedBy: { select: { id: true, name: true } } } },
   // Which photo is which is the repair's business; the bytes go by their own address.
   photos: { where: { archived: false }, select: { id: true, label: true, tag: true }, orderBy: { createdAt: 'asc' as const } },
   works: {
@@ -455,9 +473,11 @@ async function writableJob(actor: Actor, id: string) {
   const owner = hasPerm(actor, 'service.manage');
   const job = await prisma.serviceJob.findFirst({
     where: { id, ...(owner ? {} : mine(actor)) },
-    select: { id: true, number: true, status: true, openedOn: true, payer: true, mechanicId: true, approvedAt: true, vehicleId: true, vehicle: { select: { fleetNo: true, vin: true } } },
+    select: { id: true, number: true, status: true, openedOn: true, payer: true, mechanicId: true, approvedAt: true, paidInPayoutId: true, vehicleId: true, vehicle: { select: { fleetNo: true, vin: true } } },
   });
   if (!job) throw notFound('job_not_found', 'No such repair job.');
+  // A paid repair is closed as well; said first, it says why (ADR-0037 §5).
+  refusePaid(job);
   const writable = job.status === 'open' || (job.status === 'draft' && job.mechanicId != null);
   if (!writable) throw conflict('job_closed', 'A closed job is a record; it is not edited.');
   if (!owner && !job.mechanicId) throw forbidden('forbidden', 'This repair is the owners’.', { permission: 'service.manage' });
@@ -537,15 +557,6 @@ async function fitTracker(
     if (isUniqueViolation(e)) throw conflict('tracker_imei_in_use', 'This IMEI is on another moped; take it off there first.');
     throw e;
   }
-}
-
-/**
- * A repair called off gives its shelf's parts back, so a tracker it took off
- * the shelf was never fitted (ADR-0036). One it moved off a donor, or took off
- * the moped, stays as it is: those parts did not go back anywhere.
- */
-async function unfitTrackers(tx: Tx, jobId: string): Promise<void> {
-  await tx.vehicleTracker.deleteMany({ where: { serviceJobId: jobId, removedOn: null, servicePart: { kind: 'stock' } } });
 }
 
 /** A repair that waited only for a line just taken off goes back to work. */
@@ -829,20 +840,38 @@ export function serviceRoutes(app: FastifyInstance): void {
   /**
    * The norm of a work not in the book (spec: «норму вписывает главный механик
    * или владелец»): at approval or later, a closed repair included — until it
-   * is paid, which is stage 5. A work from the book keeps the norm it was
-   * written with.
+   * is paid (ADR-0037 §5): what a payout paid for is not changed under it. A
+   * work from the book keeps the norm it was written with.
    */
   app.patch<{ Params: { id: string; workId: string }; Body: Body }>('/api/service/:id/works/:workId', { config: { scope: 'service.norms' } }, async (req) => {
     const actor = actorOf(req);
     const b = req.body ?? {};
     const normSec = normSecFromMinutes(b.normMin as string | number | null | undefined);
     if (normSec == null) throw badRequest('bad_field', 'A norm is minutes above zero.', { field: 'normMin' });
-    const line = await prisma.serviceWork.findUnique({ where: { id: req.params.workId }, include: { job: { select: { id: true, number: true, status: true } } } });
+    const line = await prisma.serviceWork.findUnique({ where: { id: req.params.workId }, include: { job: { select: { id: true, number: true, status: true, paidInPayoutId: true } } } });
     if (!line || line.jobId !== req.params.id) throw notFound('work_line_not_found', 'No such work on this repair.');
     if (line.workTypeId) throw conflict('norm_from_book', 'A work from the book keeps the norm it was written with.');
     if (line.job.status === 'cancelled') throw conflict('job_closed', 'A cancelled repair is a record; it is not edited.');
-    await prisma.serviceWork.update({ where: { id: line.id }, data: { normSec } });
-    await audit({ actorId: actor.id, action: 'service.work.norm', entityType: 'service_job', entityId: line.jobId, before: { workId: line.id, normSec: line.normSec }, after: { number: line.job.number, workId: line.id, normSec } });
+    refusePaid(line.job);
+    await prisma.$transaction(async (tx) => {
+      // The repair's row is what «Оплачено» locks before it reads the works it
+      // pays: a norm lands before the mark reads it — and the mark, no longer
+      // what the owner saw, is refused — or after the mark, on a repair now
+      // paid, and is refused here (ADR-0037 §5, §8).
+      await tx.$queryRaw`SELECT 1 FROM service_jobs WHERE id = ${line.jobId}::uuid FOR UPDATE`;
+      refusePaid(await tx.serviceJob.findUniqueOrThrow({ where: { id: line.jobId }, select: { paidInPayoutId: true } }));
+      await tx.serviceWork.update({ where: { id: line.id }, data: { normSec } });
+      await tx.auditLog.create({
+        data: {
+          actorId: actor.id,
+          action: 'service.work.norm',
+          entityType: 'service_job',
+          entityId: line.jobId,
+          before: { workId: line.id, normSec: line.normSec },
+          after: { number: line.job.number, workId: line.id, normSec },
+        },
+      });
+    });
     return { ok: true, normSec };
   });
 
@@ -957,7 +986,9 @@ export function serviceRoutes(app: FastifyInstance): void {
    * for the chief mechanic's approval, which is the same waiting a manager's
    * reported breakdown does (`draft`, ADR-0033); one opened by whoever may
    * approve is in work at once. A moped already under repair is not given a
-   * second job: `jobId` takes the open one on, if nobody carries it yet.
+   * second job: `jobId` takes the open one on, if nobody carries it yet. What a
+   * mechanic plans on a repair already in work waits for approval like a work
+   * found later (ADR-0035 §1): the repair goes back to waiting.
    */
   app.post<{ Body: Body }>('/api/service/workshop', { config: { scope: 'service.work' }, bodyLimit: JOB_BODY_LIMIT }, async (req, reply) => {
     const b = req.body ?? {};
@@ -991,7 +1022,18 @@ export function serviceRoutes(app: FastifyInstance): void {
 
     const open = await prisma.serviceJob.findFirst({
       where: { vehicleId, status: { in: ['open', 'draft'] } },
-      select: { id: true, number: true, status: true, reason: true, mechanicId: true, mechanic: { select: { name: true } } },
+      select: {
+        id: true,
+        number: true,
+        status: true,
+        reason: true,
+        mechanicId: true,
+        mechanic: { select: { name: true } },
+        approvedAt: true,
+        createdById: true,
+        openedAt: true,
+        createdAt: true,
+      },
     });
     if (jobId) {
       if (!open || open.id !== jobId) throw conflict('job_closed', 'That repair is no longer open on this moped.');
@@ -1008,9 +1050,31 @@ export function serviceRoutes(app: FastifyInstance): void {
     const job = await prisma.$transaction(async (tx) => {
       let made: { id: string; number: string; status: string };
       if (open) {
+        // Read again under a lock: taken by another mechanic, closed or
+        // approved since the read above, it is taken as it is now, or not at
+        // all — never written over from what it was.
+        await tx.$queryRaw`SELECT 1 FROM service_jobs WHERE id = ${open.id}::uuid FOR UPDATE`;
+        const held = await tx.serviceJob.findUniqueOrThrow({ where: { id: open.id }, select: { status: true, mechanicId: true, mechanic: { select: { name: true } }, approvedAt: true } });
+        if (held.status !== 'open' && held.status !== 'draft') throw conflict('job_closed', 'That repair is no longer open on this moped.');
+        if (held.mechanicId === actor.id) throw conflict('job_already_open', 'This repair is already yours.', { job: { id: open.id, number: open.number } });
+        if (held.mechanicId) throw conflict('job_has_mechanic', 'Another mechanic carries this repair.', { mechanic: held.mechanic?.name ?? null });
+        // A repair in work taken on by a mechanic who may not approve: his
+        // works wait, and so does the repair (ADR-0035 §1). One opened straight
+        // in work was let start by whoever opened it (ADR-0035 §2, as 0057
+        // recorded it), so a refusal now refuses his lines, not the repair.
+        const waits = held.status === 'open' && !approver;
+        const stamp = waits && held.approvedAt == null ? { approvedById: open.createdById, approvedAt: open.openedAt ?? open.createdAt } : {};
         made = await tx.serviceJob.update({
           where: { id: open.id },
-          data: { mechanicId: actor.id, reasonKind, reason, openedOdometerKm: odometerKm, odometerReason, updatedAt: new Date() },
+          data: {
+            mechanicId: actor.id,
+            reasonKind,
+            reason,
+            openedOdometerKm: odometerKm,
+            odometerReason,
+            ...(waits ? { status: 'draft' as const, ...stamp } : {}),
+            updatedAt: new Date(),
+          },
           select: { id: true, number: true, status: true },
         });
       } else {
@@ -1479,7 +1543,7 @@ export function serviceRoutes(app: FastifyInstance): void {
     const b = req.body ?? {};
     const actor = actorOf(req);
     const owner = hasPerm(actor, 'service.manage');
-    const job = await prisma.serviceJob.findFirst({ where: { id: req.params.id, ...(owner ? {} : mine(actor)) }, include: { parts: true } });
+    const job = await prisma.serviceJob.findFirst({ where: { id: req.params.id, ...(owner ? {} : mine(actor)) }, include: { parts: true, works: { select: WORK_MONEY } } });
     if (!job) throw notFound('job_not_found', 'No such repair job.');
     if (job.status === 'draft') throw conflict('job_waits_approval', 'This repair waits for approval; it closes after.');
     if (job.status !== 'open') throw conflict('job_closed', 'This job is already closed.');
@@ -1492,7 +1556,8 @@ export function serviceRoutes(app: FastifyInstance): void {
     const closedOn = owner ? (date(b, 'closedOn') ?? today) : today;
     if (closedOn < isoDate(job.openedOn)!) throw conflict('closed_before_opened', 'A job cannot close before it was opened.');
     const withheldTetri = tetri(b, 'withheldTetri', { min: 0 }) ?? 0;
-    const total = totalOf(job);
+    // A customer's repair is charged labour and parts; the company's own also costs its mechanic's work (ADR-0037 §6).
+    const total = repairTotalTetri(job);
     // Two things are asked of every closing (B5-06, crit. 26): what the
     // odometer read, and where the moped stands now.
     const odometerKm = int(b, 'odometerKm', { min: 0, max: 1_000_000 });

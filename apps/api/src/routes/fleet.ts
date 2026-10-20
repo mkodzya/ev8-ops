@@ -1,8 +1,8 @@
-import { POOL_EVENT, VEHICLE_POOLS, VEHICLE_STATES, fleetNumber, partsTetri, readFleetNumber, todayISO, type VehiclePool, type VehicleState } from '@ev8/shared';
+import { POOL_EVENT, VEHICLE_POOLS, VEHICLE_STATES, fleetNumber, readFleetNumber, repairTotalTetri, todayISO, type VehiclePool, type VehicleState } from '@ev8/shared';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { isoDate } from '../lib/dates.js';
 import { prisma } from '../lib/db.js';
-import { PART_MONEY } from '../lib/stock.js';
+import { PART_MONEY, WORK_MONEY } from '../lib/stock.js';
 import { env } from '../lib/env.js';
 import { badRequest, notFound } from '../lib/errors.js';
 import { mayView } from '../lib/guard.js';
@@ -125,7 +125,7 @@ export function fleetRoutes(app: FastifyInstance): void {
         },
         serviceJobs: {
           orderBy: { openedOn: 'desc' },
-          include: { parts: { select: PART_MONEY } },
+          include: { parts: { select: PART_MONEY }, works: { select: WORK_MONEY } },
         },
         trackers: {
           orderBy: [{ installedOn: 'desc' }, { createdAt: 'desc' }],
@@ -190,7 +190,8 @@ export function fleetRoutes(app: FastifyInstance): void {
         openedOn: isoDate(j.openedOn),
         closedOn: isoDate(j.closedOn),
         // What a repair cost is the owners' (ADR-0033 §4), on the card as in the repairs.
-        totalTetri: mayView(req, 'cost.view') ? j.labourTetri + partsTetri(j.parts) : null,
+        // On the company's own repair, with its mechanic's approved work (ADR-0037 §6).
+        totalTetri: mayView(req, 'cost.view') ? repairTotalTetri(j) : null,
         withheldTetri: mayView(req, 'cost.view') ? j.withheldTetri : null,
       })),
       rentals: v.rentals.map((r) => ({

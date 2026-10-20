@@ -105,7 +105,7 @@ export function ServiceJobPage() {
       <PageHead
         wrap
         title={j.number}
-        badge={<span className={draft || open ? 'warn-text' : 'muted'}>{j.rejected ? t.wappr.statusRejected : t.repair.statuses[j.status]}</span>}
+        badge={<span className={draft || open ? 'warn-text' : 'muted'}>{j.rejected ? t.wappr.statusRejected : j.paid ? t.wpay.paid : t.repair.statuses[j.status]}</span>}
         sub={
           <>
             {j.vehicle.model} <span className="mono">···{j.vehicle.vin.slice(-4)}</span> · {t.repair.openedOn(fmtDate(j.openedOn))} · {t.repair.days(days)}
@@ -245,6 +245,8 @@ export function ServiceJobPage() {
               }
             />
           )}
+          {/* Its mechanic is paid for it: the repair is a record now (ADR-0037 §5). */}
+          {j.paid && <Row k={t.wpay.paid} v={t.wpay.paidIn(fmtDate(j.paid.paidOn), j.paid.markedBy.name)} />}
           {j.notes && <Row k={t.repair.notes} v={<span className="pre">{j.notes}</span>} />}
         </section>
 
@@ -280,7 +282,7 @@ export function ServiceJobPage() {
       {(mayManage || j.labourMinutes > 0 || (j.labourTetri ?? 0) > 0) && (
       <section className="card">
         <BlockHead title={t.repair.lines} />
-        {j.parts.length === 0 && (j.labourTetri ?? 0) === 0 && j.labourMinutes === 0 ? (
+        {j.parts.length === 0 && (j.labourTetri ?? 0) === 0 && j.labourMinutes === 0 && (j.worksCostTetri ?? 0) === 0 ? (
           <Empty text={t.repair.noLines} />
         ) : (
           <div className="table-wrap table-flat">
@@ -339,6 +341,16 @@ export function ServiceJobPage() {
                     {mayEdit && <td />}
                   </tr>
                 )}
+                {/* The mechanic's approved work is in the company's repair cost (ADR-0037 §6): its own
+                    row, so the lines add up to the total under them. */}
+                {money && (j.worksCostTetri ?? 0) > 0 && (
+                  <tr>
+                    <td>{t.wpay.worksCost}</td>
+                    <td />
+                    <td className="num mono">{formatGel(j.worksCostTetri ?? 0)}</td>
+                    {mayEdit && <td />}
+                  </tr>
+                )}
                 {money && (
                   <tr className="row-total">
                     <td>{t.repair.total}</td>
@@ -385,7 +397,7 @@ export function ServiceJobPage() {
                 job={j}
                 lines={j.works}
                 tagWaiting={j.approved ? t.wappr.waitingTag : undefined}
-                editNorm={can('service.norms') && j.status !== 'cancelled' ? (l) => <NormEdit job={j} line={l} onSaved={reload} /> : undefined}
+                editNorm={can('service.norms') && j.status !== 'cancelled' && !j.paid ? (l) => <NormEdit job={j} line={l} onSaved={reload} /> : undefined}
               />
               <NormTotal lines={j.works} />
             </>

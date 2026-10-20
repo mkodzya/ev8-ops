@@ -14,6 +14,7 @@ import { workshopKa } from './workshop.js';
 import { workshopJobsKa } from './workshop-jobs.js';
 import { workshopApprovalKa } from './workshop-approval.js';
 import { workshopPartsKa } from './workshop-parts.js';
+import { workshopPayoutsKa } from './workshop-payouts.js';
 import { driveKa } from './drive.js';
 import { expKa } from './expenses.js';
 import { inBankKa } from './in-bank.js';
@@ -102,6 +103,8 @@ export const ka: Dict = {
       jobs: 'რემონტები',
       stock: 'საწყობი',
       works: 'სამუშაოების ცნობარი',
+      payouts: 'გადასახდელი',
+      balance: 'ბალანსი',
       payments: 'გადახდები',
       statements: 'ამონაწერები',
       week: 'კვირა',
@@ -1222,6 +1225,12 @@ export const ka: Dict = {
       work_category_not_found: 'სამუშაოების ასეთი კატეგორია არ არის.',
       job_already_open: 'ამ მოპედს უკვე აქვს ღია რემონტი — გახსენით ის.',
       job_closed: 'დახურული რემონტის რედაქტირება შეუძლებელია.',
+      job_paid: 'ამ შეკეთებისთვის მექანიკოსს უკვე გადაუხადეს: ის აღარ იცვლება.',
+      nothing_to_pay: 'ამ მექანიკოსს ახლა გადასახდელი არაფერი აქვს.',
+      payout_changed: 'სანამ ეკრანი ღია იყო, გადასახდელი თანხა შეიცვალა. განაახლეთ და ხელახლა შეამოწმეთ.',
+      already_paid: 'ამის ნაწილი ახლახან გადაიხადეს. განაახლეთ ეკრანი.',
+      payout_not_found: 'ანაზღაურება ვერ მოიძებნა.',
+      payout_voided: 'ეს ანაზღაურება უკვე გაუქმებულია.',
       job_not_found: 'რემონტი ვერ მოიძებნა.',
       job_not_waiting: 'ეს რემონტი დამტკიცებას არ ელოდება.',
       job_waits_approval: 'შეკეთება ელოდება დამტკიცებას — დახურვა შესაძლებელია გადაწყვეტილების შემდეგ.',
@@ -1361,6 +1370,7 @@ export const ka: Dict = {
   ...workshopJobsKa,
   ...workshopApprovalKa,
   ...workshopPartsKa,
+  ...workshopPayoutsKa,
   ...driveKa,
   ...expKa,
   ...inBankKa,

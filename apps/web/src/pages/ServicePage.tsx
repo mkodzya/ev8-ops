@@ -39,6 +39,8 @@ export interface ServiceJobPart {
   /** Bought: what the mechanic paid — his and the approver's to see — and to whom it goes back. */
   paidTetri: number | null;
   reimburseTo: { id: string; name: string } | null;
+  /** Bought: paid back to that person in a payout of his (ADR-0037). */
+  reimbursed: boolean;
   receiptPhotoId: string | null;
   /** Bought only: waiting, approved or refused. */
   state: WorkLineState | null;
@@ -108,6 +110,11 @@ export interface ServiceJob {
   works: ServiceWorkLine[];
   /** The mechanic's sum comes empty to whoever neither carries repairs nor sees cost. */
   worksTotal: { seconds: number; tetri: number | null; unnormed: number };
+  /** The mechanic's approved work in what the company's repair cost (ADR-0037 §6); the owners' alone. */
+  worksCostTetri: number | null;
+  /** The payout that paid its mechanic; the status stays «closed» (ADR-0037 §1). */
+  paid: { payoutId: string; paidOn: string; markedBy: { id: string; name: string } } | null;
+  payState: 'payable' | 'paid' | 'unnormed' | 'waiting' | 'open' | 'cancelled';
 }
 
 export interface ServiceWorkLine {
@@ -187,6 +194,8 @@ export function ServicePage() {
             {t.wbook.title}
           </Link>
         )}
+        {/* And so is the mechanic's balance (stage 5, variant A); on a phone it is a tab. */}
+        {workshop && me?.via === 'pin' && <BalanceLink />}
         {!workshop && can('service.report') && <NewJob onDone={reload} />}
       </PageHead>
 
@@ -252,7 +261,7 @@ export function ServicePage() {
             ) : j.status === 'open' ? (
               <span className="warn-text">{t.repair.days(daysOf(j, today))}</span>
             ) : (
-              <span className="muted">{j.rejected ? t.wappr.statusRejected : t.repair.statuses[j.status]}</span>
+              <span className="muted">{j.rejected ? t.wappr.statusRejected : j.paid ? t.wpay.paid : t.repair.statuses[j.status]}</span>
             ),
           rightSub: j.totalTetri != null && j.totalTetri > 0 ? <span className="mono">{formatGel(j.totalTetri)}</span> : t.repair.payers[j.payer],
         })}
@@ -301,6 +310,17 @@ export function ServicePage() {
         ]}
       />
     </>
+  );
+}
+
+/** «Баланс · 253.42 ₾»: what is his to be paid, a press away from the work (ADR-0037). */
+function BalanceLink() {
+  const t = useT();
+  const { data } = useLoad<{ payable: { totalTetri: number } }>('/api/service/balance');
+  return (
+    <Link className="pill pill-sm wpay-link" to="/service/balance">
+      {data ? t.wpay.balanceLink(formatGel(data.payable.totalTetri)) : t.shell.tabs.balance}
+    </Link>
   );
 }
 

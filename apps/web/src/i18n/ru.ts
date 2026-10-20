@@ -14,6 +14,7 @@ import { workshopRu } from './workshop.js';
 import { workshopJobsRu } from './workshop-jobs.js';
 import { workshopApprovalRu } from './workshop-approval.js';
 import { workshopPartsRu } from './workshop-parts.js';
+import { workshopPayoutsRu } from './workshop-payouts.js';
 import { driveRu } from './drive.js';
 import { expRu } from './expenses.js';
 import { inBankRu } from './in-bank.js';
@@ -113,6 +114,8 @@ export const ru: Dict = {
       jobs: 'Ремонты',
       stock: 'Склад',
       works: 'Справочник работ',
+      payouts: 'К оплате',
+      balance: 'Баланс',
       payments: 'Платежи',
       statements: 'Выписки',
       week: 'Неделя',
@@ -1233,6 +1236,12 @@ export const ru: Dict = {
       work_category_not_found: 'Такой категории работ нет.',
       job_already_open: 'У этого мопеда уже открыт ремонт — откройте его.',
       job_closed: 'Закрытый ремонт не редактируется.',
+      job_paid: 'Механику за этот ремонт уже заплатили: он больше не меняется.',
+      nothing_to_pay: 'Этому механику сейчас платить нечего.',
+      payout_changed: 'Пока экран был открыт, сумма к оплате изменилась. Обновите его и проверьте ещё раз.',
+      already_paid: 'Часть этого только что оплатили. Обновите экран.',
+      payout_not_found: 'Выплата не найдена.',
+      payout_voided: 'Эта выплата уже отменена.',
       job_not_found: 'Ремонт не найден.',
       job_not_waiting: 'Этот ремонт не ждёт согласования.',
       job_waits_approval: 'Заявка ждёт согласования — закрыть можно после решения.',
@@ -1372,6 +1381,7 @@ export const ru: Dict = {
   ...workshopJobsRu,
   ...workshopApprovalRu,
   ...workshopPartsRu,
+  ...workshopPayoutsRu,
   ...driveRu,
   ...expRu,
   ...inBankRu,

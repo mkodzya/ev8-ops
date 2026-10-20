@@ -23,6 +23,7 @@ import { workshopEn } from './workshop.js';
 import { workshopJobsEn } from './workshop-jobs.js';
 import { workshopApprovalEn } from './workshop-approval.js';
 import { workshopPartsEn } from './workshop-parts.js';
+import { workshopPayoutsEn } from './workshop-payouts.js';
 import { driveEn } from './drive.js';
 import { expEn } from './expenses.js';
 import { inBankEn } from './in-bank.js';
@@ -109,6 +110,8 @@ export const en = {
       jobs: 'Repairs',
       stock: 'Stock',
       works: 'Book of works',
+      payouts: 'To pay',
+      balance: 'Balance',
       payments: 'Payments',
       statements: 'Statements',
       week: 'The week',
@@ -1236,6 +1239,12 @@ export const en = {
       work_category_not_found: 'No such category of works.',
       job_already_open: 'This moped already has an open repair. Open that one.',
       job_closed: 'A closed repair cannot be edited.',
+      job_paid: 'The mechanic has been paid for this repair: it is not changed any more.',
+      nothing_to_pay: 'Nothing is owed to this mechanic now.',
+      payout_changed: 'What is owed to this mechanic changed while the screen was open. Refresh it and check again.',
+      already_paid: 'Some of this has just been paid. Refresh the screen.',
+      payout_not_found: 'Payout not found.',
+      payout_voided: 'This payout is already voided.',
       job_not_found: 'Repair not found.',
       job_not_waiting: 'This repair is not waiting for approval.',
       job_waits_approval: 'This repair waits for approval; it closes after the decision.',
@@ -1375,6 +1384,7 @@ export const en = {
   ...workshopJobsEn,
   ...workshopApprovalEn,
   ...workshopPartsEn,
+  ...workshopPayoutsEn,
   ...driveEn,
   ...expEn,
   ...inBankEn,
