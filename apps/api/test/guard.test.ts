@@ -21,6 +21,8 @@ describe('route table', () => {
       // Wave 5 moved the orders onto a purchases scope of their own; what is
       // left here is the settings and the people.
       'DELETE /api/settings/rates/:id',
+      // ADR-0033: the PIN of the workshop tablet and the tablet itself are an owner's to give and take.
+      'DELETE /api/users/:id/pin',
       // The rentals folders in Drive beside the rentals here (ADR-0031): an owner's list.
       'GET /api/drive/folders/:id/prefill',
       'GET /api/drive/reconciliation',
@@ -33,6 +35,7 @@ describe('route table', () => {
       'GET /api/migration',
       'GET /api/settings/login',
       'GET /api/users',
+      'GET /api/workshop/devices',
       // What money going out was for: the owner keeps the categories (migration 0046).
       'PATCH /api/expense-categories/:id',
       'PATCH /api/fleet/:id',
@@ -53,12 +56,16 @@ describe('route table', () => {
       'POST /api/settings/rates',
       'POST /api/users',
       'POST /api/users/:id/password',
+      'POST /api/users/:id/pin',
       'POST /api/users/:id/sessions/close',
+      'POST /api/workshop/devices',
+      'POST /api/workshop/devices/:id/revoke',
       'POST /api/workshops',
     ]);
     const publicOnes = app.routeTable.filter((r) => r.scope === 'public').map((r) => r.url).sort();
     // The jobs are public to the session guard and closed by the worker token (routes/jobs.ts).
-    expect(publicOnes).toEqual(['/api/auth/login', '/api/health', '/api/jobs/bog-night', '/api/jobs/bog-today', '/api/jobs/drive-scan', '/api/jobs/kommo-sync', '/api/jobs/roll-periods', '/api/jobs/tbc-night', '/api/jobs/tbc-today', '/api/site/queue']);
+    // The PIN sign-in and the tablet's list of names are closed by the tablet's own token (ADR-0033).
+    expect(publicOnes).toEqual(['/api/auth/login', '/api/auth/pin', '/api/health', '/api/jobs/bog-night', '/api/jobs/bog-today', '/api/jobs/drive-scan', '/api/jobs/kommo-sync', '/api/jobs/roll-periods', '/api/jobs/tbc-night', '/api/jobs/tbc-today', '/api/site/queue', '/api/workshop/tablet']);
   });
 });
 
