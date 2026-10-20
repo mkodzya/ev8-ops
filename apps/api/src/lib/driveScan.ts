@@ -1,4 +1,4 @@
-import { effectiveRentalStatus, payOffsetDays, todayISO, type RentalStatus } from '@ev8/shared';
+import { addDays, effectiveRentalStatus, payOffsetDays, todayISO, type RentalStatus } from '@ev8/shared';
 import { dateFromISO, isoDate } from './dates.js';
 import { prisma } from './db.js';
 import { DriveError, FOLDER, download, driveConfig, listFolder, type DriveConfig, type DriveFailure, type DriveItem } from './drive.js';
@@ -161,6 +161,14 @@ export async function matchDrive(): Promise<number> {
 
 const RUNNING = ['active', 'overdue', 'paused', 'disputed'] as const;
 
+/** A return act is a rental's only when it is not dated before the pickup: an older act is an older rental's (ADR-0034). */
+export function actAfterPickup(actOn: string | null, pickedUpOn: string | null): boolean {
+  return !actOn || !pickedUpOn || actOn >= pickedUpOn;
+}
+
+/** How long a contract in Drive with no rental here is asked about on "Today": older ones are mostly finished rentals whose folder was not moved. */
+export const DRIVE_NEW_DAYS = 14;
+
 /**
  * Drive beside the rentals here: a return Drive has and the rental here does
  * not; a renter's folder with no rental here; a running rental with no folder.
@@ -184,7 +192,15 @@ export async function driveReconciliation() {
   const withFolder = new Set(folders.map((f) => f.rentalId).filter(Boolean));
   const statusOf = (r: NonNullable<(typeof folders)[number]['rental']>) =>
     effectiveRentalStatus(r.status as RentalStatus, isoDate(r.paidThrough), isoDate(r.pickedUpOn), today, payOffsetDays(isoDate(r.pickedUpOn), r.payWeekday));
-  const act = (f: (typeof folders)[number]) => f.files.find((x) => x.kind === 'return_act') ?? null;
+  // The folder's return act — the rental's own, not one dated before its pickup.
+  const act = (f: (typeof folders)[number]) => f.files.find((x) => x.kind === 'return_act' && actAfterPickup(isoDate(x.datedOn), isoDate(f.rental?.pickedUpOn ?? null))) ?? null;
+  // The moped came back by Drive: the folder was moved among the finished ones,
+  // or the return act is in it already while it still stands among the running
+  // (ADR-0034). One rental, one row: the one with an act first.
+  const back = folders
+    .filter((f) => f.rental && statusOf(f.rental) !== 'returned' && (f.section === 'finished' || act(f) != null))
+    .sort((a, b) => Number(act(b) != null) - Number(act(a) != null))
+    .filter((f, i, all) => all.findIndex((x) => x.rentalId === f.rentalId) === i);
   const contract = (f: (typeof folders)[number]) => f.files.find((x) => x.kind === 'contract') ?? f.files.find((x) => x.kind === 'scan') ?? null;
   return {
     on,
@@ -194,27 +210,45 @@ export async function driveReconciliation() {
     folders: folders.length,
     matched: folders.filter((f) => f.section === 'active' && f.rentalId).length,
     // The moped came back by Drive's act; here the rental still runs.
-    returnedThere: folders
-      .filter((f) => f.section === 'finished' && f.rental && statusOf(f.rental) !== 'returned')
-      .map((f) => {
-        const a = act(f);
-        return {
-          folder: { name: f.name, url: f.webUrl },
-          rental: { id: f.rental!.id, number: f.rental!.number, customer: f.rental!.customer },
-          act: a
-            ? { url: a.webUrl, returnedOn: isoDate(a.datedOn), contractOn: isoDate(a.contractOn), vin: a.vin, depositTetri: a.depositTetri, withheldTetri: a.withheldTetri, paidBackTetri: a.paidBackTetri }
-            : null,
-        };
-      }),
+    returnedThere: back.map((f) => {
+      const a = act(f);
+      return {
+        folder: { name: f.name, url: f.webUrl },
+        rental: { id: f.rental!.id, number: f.rental!.number, customer: f.rental!.customer },
+        act: a
+          ? { url: a.webUrl, returnedOn: isoDate(a.datedOn), contractOn: isoDate(a.contractOn), vin: a.vin, depositTetri: a.depositTetri, withheldTetri: a.withheldTetri, paidBackTetri: a.paidBackTetri }
+          : null,
+      };
+    }),
     // A renter's folder among the running ones with no rental here.
     missingHere: folders
       .filter((f) => f.section === 'active' && !f.rentalId)
       .map((f) => {
         const c = contract(f);
-        return { id: f.id, name: f.name, url: f.webUrl, datedOn: isoDate(f.datedOn), contract: c ? { url: c.webUrl, signedOn: isoDate(c.contractOn), vin: c.vin } : null };
+        // `returned`: a return act is in it — a rental that has ended, not one to enter.
+        return { id: f.id, name: f.name, url: f.webUrl, datedOn: isoDate(f.datedOn), returned: f.files.some((x) => x.kind === 'return_act'), contract: c ? { url: c.webUrl, signedOn: isoDate(c.contractOn), vin: c.vin } : null };
       }),
     // A running rental here with no folder in Drive.
     missingThere: rentals.filter((r) => !withFolder.has(r.id)).map((r) => ({ id: r.id, number: r.number, customer: r.customer, pickedUpOn: isoDate(r.pickedUpOn), vin: r.vehicle?.vin ?? null })),
+  };
+}
+
+/**
+ * What "Today" asks of an owner from Drive (ADR-0034): a contract of the last
+ * two weeks with no rental here, to enter; a return Drive has and the rental
+ * here has not, to close. The same reading as «Настройки → Drive», so the two
+ * never disagree. Nothing while the link is off.
+ */
+export async function driveTasks(today: string): Promise<{
+  contracts: { folderId: string; who: string; datedOn: string | null }[];
+  returns: { rentalId: string; returnedOn: string | null; paidBackTetri: number | null }[];
+}> {
+  if (!driveConfig()) return { contracts: [], returns: [] };
+  const r = await driveReconciliation();
+  const since = addDays(today, -DRIVE_NEW_DAYS);
+  return {
+    contracts: r.missingHere.filter((f) => !f.returned && f.datedOn != null && f.datedOn >= since).map((f) => ({ folderId: f.id, who: folderName(f.name).person, datedOn: f.datedOn })),
+    returns: r.returnedThere.map((x) => ({ rentalId: x.rental.id, returnedOn: x.act?.returnedOn ?? null, paidBackTetri: x.act?.paidBackTetri ?? null })),
   };
 }
 

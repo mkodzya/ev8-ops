@@ -10,9 +10,10 @@ import { overdueDays } from './periods.js';
 // "till" is a manager's last group (§3.1): their own cash, handed over at the
 // end of the day. An owner has no such group — a till handed to them is a
 // decision, and it stands in "decide".
-// "intake" — what Kommo has won and nobody has entered here yet (ADR-0015):
-// it stands right after the rentals' own groups, because it is a rental or a
-// sale waiting to be one.
+// "intake" — what Kommo has won and nobody has entered here yet (ADR-0015),
+// and a contract in Drive with no rental here (ADR-0034): it stands right
+// after the rentals' own groups, because it is a rental or a sale waiting to
+// be one.
 // "due_today" — the rentals whose week began today (ADR-0017): right after
 // the overdue ones, a calm group with the same actions.
 export const TASK_GROUPS = ['decide', 'returns', 'overdue', 'due_today', 'intake', 'money', 'instalments', 'service', 'purchases', 'decisions', 'fill', 'till'] as const;
@@ -40,7 +41,9 @@ export type TaskAction =
   | 'sort_odoo_deposits'
   | 'reconcile_kommo'
   | 'hand_over_from_kommo'
-  | 'sell_from_kommo';
+  | 'sell_from_kommo'
+  | 'hand_over_from_drive'
+  | 'close_from_drive';
 
 export interface TaskRow {
   /** Stable across reloads: the record it is about plus what it asks for. */
@@ -135,6 +138,15 @@ export interface QueueInput {
    * sees them too. `customerId` is the card the hand-over starts from.
    */
   kommoDeals: { leadId: string; kind: 'rent' | 'sale'; who: string; customerId: string | null; phone: string | null }[];
+  /**
+   * Drive beside the rentals here (ADR-0034), an owner's: a contract of the
+   * last two weeks with no rental here, and a return Drive has — its act's
+   * day and the deposit paid back by it — while the rental here still runs.
+   */
+  drive?: {
+    contracts: { folderId: string; who: string; datedOn: ISODate | null }[];
+    returns: { rentalId: string; returnedOn: ISODate | null; paidBackTetri: Tetri | null }[];
+  };
 }
 
 export interface TaskGroupRows {
@@ -209,8 +221,33 @@ export function dayQueue(input: QueueInput): TaskGroupRows[] {
     }
   }
 
-  // 2. Returns — planned for today, or the planned day has passed.
+  // 2. Returns — Drive's first: the moped is back by the act there, and here
+  // the rental still runs (ADR-0034). The return opens on the act's day; its
+  // planned-day row would say the same thing twice.
+  const driveBack = new Map((input.owner ? (input.drive?.returns ?? []) : []).map((d) => [d.rentalId, d]));
   for (const r of open) {
+    const d = driveBack.get(r.id);
+    if (!d) continue;
+    const on = d.returnedOn && d.returnedOn <= input.today ? `?on=${d.returnedOn}` : '';
+    rows.push({
+      id: `drive_return:${r.id}`,
+      group: 'returns',
+      action: 'close_from_drive',
+      who: r.customer.name,
+      number: r.number,
+      vin: r.vin,
+      days: null,
+      amountTetri: null,
+      href: `/rentals/${r.id}/return${on}`,
+      phone: r.customer.phone,
+      note: `${d.returnedOn ?? ''}|${d.paidBackTetri ?? ''}`,
+      ...wa(r),
+    });
+  }
+
+  // Then those planned for today, or whose planned day has passed.
+  for (const r of open) {
+    if (driveBack.has(r.id)) continue;
     if (!r.expectedReturnOn || r.expectedReturnOn > input.today) continue;
     const late = daysBetween(r.expectedReturnOn, input.today);
     rows.push({
@@ -391,6 +428,25 @@ export function dayQueue(input: QueueInput): TaskGroupRows[] {
       phone: d.phone,
       note: d.leadId,
     });
+  }
+
+  // A contract in Drive with no rental here (ADR-0034): the hand-over, filled in from it.
+  if (input.owner) {
+    for (const c of input.drive?.contracts ?? []) {
+      rows.push({
+        id: `drive_contract:${c.folderId}`,
+        group: 'intake',
+        action: 'hand_over_from_drive',
+        who: c.who,
+        number: null,
+        vin: null,
+        days: null,
+        amountTetri: null,
+        href: `/rentals/new?drive=${encodeURIComponent(c.folderId)}`,
+        phone: null,
+        note: c.datedOn,
+      });
+    }
   }
 
   // 10. Fill in — an unsigned contract, a rental without a VIN, a moped without a point.
