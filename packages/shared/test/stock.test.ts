@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { shortfall, stockState } from '../src/index.js';
+import { shortfall, stockState, type StockMoveInput } from '../src/index.js';
 
 const receipt = (qty: number, unitCostTetri: number, occurredOn: string) =>
   ({ kind: 'receipt' as const, qty, unitCostTetri, occurredOn });
@@ -59,7 +59,7 @@ describe('what is on the shelf', () => {
 // Stage 4 (ADR-0036): every kind of repair line, and what the shelf and its
 // average are after it. Figures are invented: four pads at 20.00 ₾.
 describe('the shelf after each kind of repair line (stage 4)', () => {
-  const shelf = [receipt(4, 2000, '2026-10-01')];
+  const shelf: StockMoveInput[] = [receipt(4, 2000, '2026-10-01')];
   const at = (t: string) => `2026-10-20T${t}:00.000Z`;
 
   it('off the shelf: the count goes down, the average stays', () => {
@@ -68,7 +68,7 @@ describe('the shelf after each kind of repair line (stage 4)', () => {
   });
 
   it('bought by the mechanic: in at the receipt and out at the same, the shelf as it was', () => {
-    const pair = [
+    const pair: StockMoveInput[] = [
       { kind: 'receipt' as const, qty: 1, unitCostTetri: 1800, occurredOn: '2026-10-20', at: at('09:00') },
       { kind: 'issue' as const, qty: -1, unitCostTetri: 1800, occurredOn: '2026-10-20', at: at('09:00') },
     ];
@@ -78,7 +78,7 @@ describe('the shelf after each kind of repair line (stage 4)', () => {
   });
 
   it('off a donor: in at nought and out at nought, the shelf as it was', () => {
-    const pair = [
+    const pair: StockMoveInput[] = [
       { kind: 'issue' as const, qty: -1, unitCostTetri: 0, occurredOn: '2026-10-20', at: at('10:00') },
       { kind: 'receipt' as const, qty: 1, unitCostTetri: 0, occurredOn: '2026-10-20', at: at('10:00') },
     ];
@@ -107,7 +107,7 @@ describe('the shelf after each kind of repair line (stage 4)', () => {
   });
 
   it('a day’s movements count in the order they were written, not the order they were read', () => {
-    const day = [
+    const day: StockMoveInput[] = [
       { kind: 'issue' as const, qty: -3, occurredOn: '2026-10-20', at: at('12:00') },
       { kind: 'receipt' as const, qty: 4, unitCostTetri: 1000, occurredOn: '2026-10-20', at: at('08:00') },
     ];

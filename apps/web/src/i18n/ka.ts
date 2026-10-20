@@ -13,6 +13,7 @@ import { payDayKa } from './pay-day.js';
 import { workshopKa } from './workshop.js';
 import { workshopJobsKa } from './workshop-jobs.js';
 import { workshopApprovalKa } from './workshop-approval.js';
+import { workshopPartsKa } from './workshop-parts.js';
 import { driveKa } from './drive.js';
 import { expKa } from './expenses.js';
 import { inBankKa } from './in-bank.js';
@@ -1228,6 +1229,16 @@ export const ka: Dict = {
       after_photo_missing: 'საჭიროა მინიმუმ ერთი ფოტო „შემდეგ“.',
       norm_from_book: 'ცნობარის სამუშაოს რჩება ის ნორმა, რომლითაც ჩაიწერა.',
       work_line_not_found: 'ეს სამუშაო შეკეთებაში აღარ არის — განაახლეთ გვერდი.',
+      receipt_photo_missing: 'ჩეკი გადაუღე: ნაყიდი ნაწილი მხოლოდ ჩეკით ჩაიწერება.',
+      imei_bad: 'ეს IMEI არ არის: 15 ციფრი სტიკერიდან, ბოლო საკონტროლოა. სტიკერი თავიდან წაიკითხე.',
+      sim_bad: 'SIM-ის ნომერი ციფრებით ჩაწერე.',
+      tracker_on_vehicle: 'ამ მოპედზე ტრეკერი უკვე დგას. ჯერ ის მოხსენი.',
+      tracker_imei_in_use: 'ეს ტრეკერი სხვა მოპედზე დგას — ჯერ იქ მოხსენი.',
+      tracker_none: 'ამ მოპედზე EV8 Ops-ში ტრეკერი არ არის.',
+      tracker_removed_before_fitted: 'ტრეკერს დაყენების დღემდე ვერ მოხსნი.',
+      tracker_remove_apart: 'ტრეკერი იხსნება ღილაკით „ტრეკერის მოხსნა“.',
+      donor_is_this_moped: 'დონორი სხვა მოპედია, არა ეს.',
+      line_approved: 'ნაწილი დამტკიცებულია: მისი მოხსნა მთავარ მექანიკოსს ან მფლობელს შეუძლია.',
       job_no_mechanic: 'ამ შეკეთებას მექანიკოსი არ ჰყავს: მას მფლობელები ძველი ფორმით აწარმოებენ.',
       last_owner: 'ეს უკანასკნელი აქტიური მფლობელია: მისი როლის შეცვლა ან გამორთვა შეუძლებელია.',
       line_not_found: 'ეს ხაზი შეკვეთაში აღარ არის.',
@@ -1349,6 +1360,7 @@ export const ka: Dict = {
   ...workshopKa,
   ...workshopJobsKa,
   ...workshopApprovalKa,
+  ...workshopPartsKa,
   ...driveKa,
   ...expKa,
   ...inBankKa,

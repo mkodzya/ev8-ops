@@ -32,6 +32,31 @@ export interface ServiceJobPart {
   /** Money is the owners' (ADR-0033 §4): empty for whoever does not see cost. */
   unitPriceTetri: number | null;
   unitCostTetri?: number | null;
+  /** Off the shelf, bought, taken off onto the shelf, off a donor (ADR-0036). */
+  kind: 'stock' | 'bought' | 'removed' | 'donor';
+  /** What the line adds to the repair — the owners'. */
+  lineTetri: number | null;
+  /** Bought: what the mechanic paid — his and the approver's to see — and to whom it goes back. */
+  paidTetri: number | null;
+  reimburseTo: { id: string; name: string } | null;
+  receiptPhotoId: string | null;
+  /** Bought only: waiting, approved or refused. */
+  state: WorkLineState | null;
+  rejectReason: string | null;
+  donor: { id: string; number: string | null; vin: string } | null;
+  isTracker: boolean;
+  /** The tracker this line fitted; the IMEI and SIM come empty to a manager. */
+  tracker: { imei: string | null; simPhone: string | null } | null;
+  addedAt: string;
+}
+
+/** A tracker as a repair shows it (ADR-0036). */
+export interface TrackerRow {
+  id: string;
+  imei: string | null;
+  simPhone: string | null;
+  installedOn: string | null;
+  removedOn: string | null;
 }
 
 export interface ServiceJob {
@@ -65,10 +90,14 @@ export interface ServiceJob {
   notes: string | null;
   /** True when this job is what took the moped out of the yard: only then does closing bring it back. */
   movedVehicle: boolean;
-  vehicle: { id: string; vin: string; number: string | null; model: string };
+  /** The tracker on the moped now, if any (ADR-0036). */
+  vehicle: { id: string; vin: string; number: string | null; model: string; tracker: TrackerRow | null };
   rental: { id: string; number: string } | null;
   customer: { id: string; name: string; nameKa: string | null; nameLat: string | null } | null;
   parts: ServiceJobPart[];
+  /** Batteries and chargers this repair took to repair or brought back: their own count (ADR-0036). */
+  batteries: { id: string; item: string; kind: string; qty: number; occurredOn: string | null }[];
+  trackers: { fitted: TrackerRow[]; removed: TrackerRow[] };
   photos: { id: string; label: string; tag?: string | null }[];
   /** Who carries the repair; empty on repairs from before stage 2 of the mechanic plan. */
   mechanic: { id: string; name: string } | null;

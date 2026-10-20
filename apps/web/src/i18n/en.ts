@@ -22,6 +22,7 @@ import { payDayEn } from './pay-day.js';
 import { workshopEn } from './workshop.js';
 import { workshopJobsEn } from './workshop-jobs.js';
 import { workshopApprovalEn } from './workshop-approval.js';
+import { workshopPartsEn } from './workshop-parts.js';
 import { driveEn } from './drive.js';
 import { expEn } from './expenses.js';
 import { inBankEn } from './in-bank.js';
@@ -1242,6 +1243,16 @@ export const en = {
       after_photo_missing: 'Take at least one photo after the repair.',
       norm_from_book: 'A work from the book keeps the norm it was written with.',
       work_line_not_found: 'This work is no longer on the repair. Refresh the page.',
+      receipt_photo_missing: 'Photograph the receipt: a part bought goes in only with it.',
+      imei_bad: 'This is not an IMEI: fifteen digits off the sticker, and the last one must check. Read the sticker again.',
+      sim_bad: 'Type the SIM number in digits.',
+      tracker_on_vehicle: 'This moped already has a tracker. Take that one off first.',
+      tracker_imei_in_use: 'This tracker is on another moped. Take it off there first.',
+      tracker_none: 'This moped has no tracker in EV8 Ops.',
+      tracker_removed_before_fitted: 'A tracker cannot come off before the day it was fitted.',
+      tracker_remove_apart: 'A tracker comes off by «Take the tracker off».',
+      donor_is_this_moped: 'A donor is another moped, not this one.',
+      line_approved: 'This part is approved: the chief mechanic or an owner takes it off.',
       job_no_mechanic: 'This repair has no mechanic: the owners keep it on the old form.',
       last_owner: 'This is the last active owner: the role cannot be changed or switched off.',
       line_not_found: 'This line is no longer on the order.',
@@ -1363,6 +1374,7 @@ export const en = {
   ...workshopEn,
   ...workshopJobsEn,
   ...workshopApprovalEn,
+  ...workshopPartsEn,
   ...driveEn,
   ...expEn,
   ...inBankEn,

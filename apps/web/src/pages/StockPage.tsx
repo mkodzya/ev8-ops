@@ -25,6 +25,8 @@ export interface PartRow {
   salePriceTetri: number | null;
   notes: string | null;
   archived: boolean;
+  /** A GPS tracker: fitting one asks for its IMEI and SIM (ADR-0036). */
+  isTracker: boolean;
   onHand: number;
   valueTetri: number | null;
   avgCostTetri: number | null;

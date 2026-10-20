@@ -12,7 +12,7 @@ import { useLocale, useT } from '../i18n/index.js';
 import { useLoad } from '../lib/use.js';
 import { groupDigits, nameIn, normText, type WorkBook } from '../lib/workBook.js';
 import { useSession } from '../session.js';
-import type { ServiceJob, ServiceWorkLine } from './ServicePage.js';
+import type { ServiceJob, ServiceJobPart, ServiceWorkLine } from './ServicePage.js';
 import { WorksStep, type Line } from './WorkshopJobWizard.js';
 import './workshop-job.css';
 
@@ -40,6 +40,27 @@ function minutesSince(iso: string): number {
 /** The lines that wait for the decision now. */
 export function waitingLines(job: ServiceJob): ServiceWorkLine[] {
   return job.works.filter((w) => w.state === 'waiting');
+}
+
+/** The parts the mechanic bought that wait for the decision now (ADR-0036). */
+export function waitingParts(job: ServiceJob): ServiceJobPart[] {
+  return job.parts.filter((p) => p.state === 'waiting');
+}
+
+/**
+ * What the two buttons say. The first time — the repair; later — what waits:
+ * a work, a part bought, or both (stage 4).
+ */
+export function useDecisionWords() {
+  const t = useT();
+  return (job: ServiceJob) => {
+    if (!isRepeat(job)) return { approve: t.wappr.approve, reject: t.wappr.reject, title: t.wappr.rejectTitle(job.number), note: null };
+    const works = waitingLines(job).length;
+    const parts = waitingParts(job).length;
+    if (works > 0 && parts > 0) return { approve: t.wparts.approveNew, reject: t.wparts.rejectNew, title: t.wparts.rejectNew, note: t.wappr.rejectWorkNote };
+    if (parts > 0) return { approve: t.wparts.approvePart(parts), reject: t.wparts.rejectPart(parts), title: t.wparts.rejectPart(parts), note: t.wparts.rejectPartNote };
+    return { approve: t.wappr.approveWork(works), reject: t.wappr.rejectWork(works), title: t.wappr.rejectWorkTitle(works), note: t.wappr.rejectWorkNote };
+  };
 }
 
 /** A second round: the repair was approved once, and a work found later waits. */
@@ -149,13 +170,16 @@ export function ApprovalCard({ job, onDone }: { job: ServiceJob; onDone: () => v
   const [open, setOpen] = useState(false);
   const repeat = isRepeat(job);
   const waiting = waitingLines(job);
+  const boughtWaiting = waitingParts(job);
+  const words = useDecisionWords()(job);
   // The first time, the whole repair is shown; the second, what was approved
   // stays in sight beside what waits.
   const lines = job.works;
   const folded = !open && lines.length > 4;
   const shown = folded ? lines.slice(0, 3) : lines;
   const photos = job.photos.filter((p) => p.tag !== 'after');
-  const since = repeat ? waiting.map((w) => w.addedAt).sort()[0] : job.openedAt;
+  const since = repeat ? [...waiting.map((w) => w.addedAt), ...boughtWaiting.map((p) => p.addedAt)].sort()[0] : job.openedAt;
+  const firstWaiting = [...waiting, ...boughtWaiting].sort((a, b) => a.addedAt.localeCompare(b.addedAt))[0];
   const mayNorm = can('service.norms');
 
   const approve = async () => {
@@ -182,7 +206,11 @@ export function ApprovalCard({ job, onDone }: { job: ServiceJob; onDone: () => v
         </Link>
         <span className="muted">
           {job.mechanic?.name ?? t.repair.fromManager}
-          {repeat && waiting[0] ? ` · ${t.wappr.addedAt(when(waiting[0].addedAt))}` : job.openedAt ? ` · ${when(job.openedAt)}` : ''}
+          {repeat && firstWaiting
+            ? ` · ${'code' in firstWaiting ? t.wappr.addedAt(when(firstWaiting.addedAt)) : t.wparts.boughtAt(when(firstWaiting.addedAt))}`
+            : job.openedAt
+              ? ` · ${when(job.openedAt)}`
+              : ''}
           {since ? `, ${t.wappr.waited(minutesSince(since))}` : ''}
         </span>
       </div>
@@ -220,6 +248,7 @@ export function ApprovalCard({ job, onDone }: { job: ServiceJob; onDone: () => v
           {!repeat && <NormTotal lines={lines} norms={norms} />}
         </>
       )}
+      <BoughtLines job={job} />
       {op.failure && (
         <p className="field-err" role="alert">
           {op.failure.fieldText ?? op.failure.text}
@@ -227,9 +256,9 @@ export function ApprovalCard({ job, onDone }: { job: ServiceJob; onDone: () => v
       )}
       <div className="wappr-acts">
         <button type="button" className="pill" onClick={() => setRefusing(true)}>
-          {repeat ? t.wappr.rejectWork(waiting.length) : t.wappr.reject}
+          {words.reject}
         </button>
-        <SubmitButton type="button" state={op.state} label={repeat ? t.wappr.approveWork(waiting.length) : t.wappr.approve} onClick={() => void approve()} />
+        <SubmitButton type="button" state={op.state} label={words.approve} onClick={() => void approve()} />
       </div>
       {refusing && <RejectSheet job={job} onClose={() => setRefusing(false)} onDone={onDone} />}
     </li>
@@ -245,15 +274,15 @@ export function RejectSheet({ job, onClose, onDone }: { job: ServiceJob; onClose
   const t = useT();
   const [reason, setReason] = useState('');
   const repeat = isRepeat(job);
-  const n = waitingLines(job).length;
+  const words = useDecisionWords()(job);
   const moped = job.vehicle.number ?? job.vehicle.model;
   return (
     <FormSheet
-      title={repeat ? t.wappr.rejectWorkTitle(n) : t.wappr.rejectTitle(job.number)}
+      title={words.title}
       onClose={onClose}
       value={reason}
       initial=""
-      label={repeat ? t.wappr.rejectWork(n) : t.wappr.reject}
+      label={words.reject}
       submit={async (key) => {
         await api.post(`/api/service/${job.id}/reject`, { reason: reason.trim() }, { key });
         return { toast: { text: repeat ? t.wappr.rejectedWork : t.wappr.rejected(job.number) } };
@@ -263,7 +292,7 @@ export function RejectSheet({ job, onClose, onDone }: { job: ServiceJob; onClose
       <Field label={t.wappr.reason} hint={t.wappr.reasonHint} name="reason">
         <textarea className="input" rows={3} value={reason} onChange={(e) => setReason(e.target.value)} required autoFocus />
       </Field>
-      <p className="hint">{repeat ? t.wappr.rejectWorkNote : job.movedVehicle ? t.wappr.rejectMoved(moped) : t.wappr.rejectRented}</p>
+      <p className="hint">{repeat ? words.note : job.movedVehicle ? t.wappr.rejectMoved(moped) : t.wappr.rejectRented}</p>
     </FormSheet>
   );
 }
@@ -317,5 +346,43 @@ export function SuggestCustomer({ job, onPick }: { job: ServiceJob; onPick: () =
         {t.wappr.suggestCta}
       </button>
     </section>
+  );
+}
+
+/**
+ * The parts the mechanic bought, beside the works in the queue (ADR-0036): the
+ * sum, to whom it goes back, the receipt to open full size, and where each
+ * stands. What waits is what the buttons decide.
+ */
+export function BoughtLines({ job }: { job: ServiceJob }) {
+  const t = useT();
+  const bought = job.parts.filter((p) => p.kind === 'bought');
+  if (bought.length === 0) return null;
+  const whole = job.rejected != null;
+  return (
+    <ul className="wjob-lines wparts-lines">
+      {bought.map((p) => {
+        const state = whole ? 'rejected' : p.state;
+        const shade = state === 'waiting' && job.approved == null ? '' : state ? `wjob-line-${state}` : '';
+        return (
+          <li key={p.id} className={shade}>
+            <span className="wparts-kind">{t.wparts.kinds.bought}</span>
+            <span className="wjob-name">
+              {p.name} × {p.qty}
+              {p.reimburseTo && <small className="wparts-sub">{t.wparts.payBackTo(formatGel(p.paidTetri ?? 0), p.reimburseTo.name)}</small>}
+              {state === 'rejected' && !whole && p.rejectReason && <span className="wjob-line-why">{t.wappr.lineRejected(p.rejectReason)}</span>}
+            </span>
+            {state === 'waiting' && job.approved != null && <span className="wjob-wtag">{t.wappr.newTag}</span>}
+            {p.receiptPhotoId && (
+              <a className="thumb wjob-thumb wparts-receipt" href={`/api/files/${p.receiptPhotoId}`} target="_blank" rel="noreferrer">
+                <img src={`/api/files/${p.receiptPhotoId}`} alt="" loading="lazy" />
+                <span className="wjob-tag">{t.wparts.receiptTag}</span>
+              </a>
+            )}
+            {p.paidTetri != null && <span className="mono wjob-gel">{formatGel(p.paidTetri)}</span>}
+          </li>
+        );
+      })}
+    </ul>
   );
 }
