@@ -269,6 +269,10 @@ model User {
   repairsCarried    ServiceJob[]   @relation("service_job_mechanic")
   worksDone         ServiceWork[]  @relation("service_work_mechanic")
   worksWritten      ServiceWork[]  @relation("service_work_created_by")
+  repairsApproved   ServiceJob[]   @relation("service_job_approved_by")
+  repairsRejected   ServiceJob[]   @relation("service_job_rejected_by")
+  worksApproved     ServiceWork[]  @relation("service_work_approved_by")
+  worksRejected     ServiceWork[]  @relation("service_work_rejected_by")
   workTypesAdded    WorkType[]
   sales             Sale[]
   purchases         Purchase[]
@@ -893,6 +897,15 @@ model ServiceJob {
   odometerReason String?      @map("odometer_reason")
   /// The minute the repair was opened; empty on repairs from before 0056.
   openedAt      DateTime?     @default(now()) @map("opened_at")
+  /// The first approval — the one that let the work start (0057).
+  approvedById  String?       @map("approved_by") @db.Uuid
+  approvedAt    DateTime?     @map("approved_at")
+  /// A refused repair is `cancelled` with who refused it, when and why (0057).
+  rejectedById  String?       @map("rejected_by") @db.Uuid
+  rejectedAt    DateTime?     @map("rejected_at")
+  rejectReason  String?       @map("reject_reason")
+  /// The minute it closed; repairs before 0057 have only the day.
+  closedAt      DateTime?     @map("closed_at")
   createdById   String?       @map("created_by") @db.Uuid
   createdAt     DateTime      @default(now()) @map("created_at")
   updatedAt     DateTime      @default(now()) @map("updated_at")
@@ -902,9 +915,11 @@ model ServiceJob {
   customer  Customer?     @relation(fields: [customerId], references: [id])
   createdBy User?         @relation("service_job_created_by", fields: [createdById], references: [id])
   mechanic  User?         @relation("service_job_mechanic", fields: [mechanicId], references: [id])
+  approvedBy User?        @relation("service_job_approved_by", fields: [approvedById], references: [id])
+  rejectedBy User?        @relation("service_job_rejected_by", fields: [rejectedById], references: [id])
   works     ServiceWork[]
   workshop  Workshop?     @relation(fields: [workshopId], references: [id])
-  closedAt  Location?     @relation(fields: [closedLocationId], references: [id])
+  closedLocation Location? @relation(fields: [closedLocationId], references: [id])
   parts     ServicePart[]
   photos    StoredFile[]
   payments  Payment[]
@@ -982,11 +997,19 @@ model ServiceWork {
   mechanicId  String?  @map("mechanic_id") @db.Uuid
   createdById String?  @map("created_by") @db.Uuid
   createdAt   DateTime @default(now()) @map("created_at")
+  /// Neither set — the line waits for approval with its repair (0057).
+  approvedById String?  @map("approved_by") @db.Uuid
+  approvedAt   DateTime? @map("approved_at")
+  rejectedById String?  @map("rejected_by") @db.Uuid
+  rejectedAt   DateTime? @map("rejected_at")
+  rejectReason String?  @map("reject_reason")
 
   job       ServiceJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
   workType  WorkType?  @relation(fields: [workTypeId], references: [id])
   mechanic  User?      @relation("service_work_mechanic", fields: [mechanicId], references: [id])
   createdBy User?      @relation("service_work_created_by", fields: [createdById], references: [id])
+  approvedBy User?     @relation("service_work_approved_by", fields: [approvedById], references: [id])
+  rejectedBy User?     @relation("service_work_rejected_by", fields: [rejectedById], references: [id])
 
   @@map("service_works")
 }

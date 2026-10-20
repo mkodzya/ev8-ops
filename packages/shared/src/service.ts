@@ -152,3 +152,31 @@ export function nextWorkCode(category: string, codes: readonly string[]): string
   }
   return `${category}-${String(top + 1).padStart(2, '0')}`;
 }
+
+// Approving and closing the mechanic's repair (stage 3; ADR-0035).
+
+/** Photos after the repair: one at least on a mechanic's repair, five at most (the spec). */
+export const AFTER_PHOTOS_MAX = 5;
+
+/**
+ * Where a line of work stands. A line waits until the repair it is on is
+ * approved, or — added once the work had started — until it is approved on
+ * its own; a refused line stays on the repair, struck through, and is never
+ * paid (Mika, 20.10.2026).
+ */
+export type WorkLineState = 'approved' | 'rejected' | 'waiting';
+
+export function workLineState(line: { approvedAt: unknown; rejectedAt: unknown }): WorkLineState {
+  if (line.rejectedAt != null) return 'rejected';
+  return line.approvedAt != null ? 'approved' : 'waiting';
+}
+
+/**
+ * The owner is offered «за счёт клиента» on a repair of a moped out with a
+ * renter only when the renter is to blame. An accident is not offered: who
+ * was at fault the system does not know, and a breakdown not the courier's
+ * fault is the insurance's (Mika, 20.10.2026; register #110).
+ */
+export function suggestsCustomerPays(job: { reasonKind: string | null; payer: string; rental: unknown; status: string }): boolean {
+  return job.reasonKind === 'renter_fault' && job.payer === 'company' && job.rental != null && (job.status === 'draft' || job.status === 'open');
+}
