@@ -21,6 +21,7 @@ import { calendarEn } from './payments-calendar.js';
 import { payDayEn } from './pay-day.js';
 import { workshopEn } from './workshop.js';
 import { workshopJobsEn } from './workshop-jobs.js';
+import { workshopApprovalEn } from './workshop-approval.js';
 import { driveEn } from './drive.js';
 import { expEn } from './expenses.js';
 import { inBankEn } from './in-bank.js';
@@ -1236,6 +1237,12 @@ export const en = {
       job_closed: 'A closed repair cannot be edited.',
       job_not_found: 'Repair not found.',
       job_not_waiting: 'This repair is not waiting for approval.',
+      job_waits_approval: 'This repair waits for approval; it closes after the decision.',
+      close_is_owners: 'The customer pays for this repair: an owner closes it and decides on the deposit. Leave the photos after the repair on it.',
+      after_photo_missing: 'Take at least one photo after the repair.',
+      norm_from_book: 'A work from the book keeps the norm it was written with.',
+      work_line_not_found: 'This work is no longer on the repair. Refresh the page.',
+      job_no_mechanic: 'This repair has no mechanic: the owners keep it on the old form.',
       last_owner: 'This is the last active owner: the role cannot be changed or switched off.',
       line_not_found: 'This line is no longer on the order.',
       line_shape: 'A line is either a model or a part.',
@@ -1355,6 +1362,7 @@ export const en = {
   ...payDayEn,
   ...workshopEn,
   ...workshopJobsEn,
+  ...workshopApprovalEn,
   ...driveEn,
   ...expEn,
   ...inBankEn,

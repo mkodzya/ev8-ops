@@ -1,4 +1,4 @@
-import { daysBetween, numberMatches, spellingMatches, todayISO, vinMatches } from '@ev8/shared';
+import { daysBetween, numberMatches, spellingMatches, todayISO, vinMatches, type WorkLineState } from '@ev8/shared';
 import { useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
@@ -6,14 +6,14 @@ import { LoadError } from '../components/LoadError.js';
 import { PhotoPicker } from '../components/PhotoPicker.js';
 import { Loading, PageHead, Vin } from '../components/ui.js';
 import { Field } from '../components/Wizard.js';
-import { FormSheet, SubmitButton } from '../ds/form/Form.js';
-import { useOperation } from '../ds/form/operation.js';
+import { FormSheet } from '../ds/form/Form.js';
 import { DataList } from '../ds/list/DataList.js';
-import { fmtDate, formatGel } from '../format.js';
+import { formatGel } from '../format.js';
 import { useT } from '../i18n/index.js';
 import { uploadAll, type PreparedPhoto } from '../lib/photos.js';
 import { useLoad } from '../lib/use.js';
 import { useSession } from '../session.js';
+import { ApprovalCard } from './RepairApproval.js';
 import './workshop-job.css';
 
 export type ServiceStatus = 'draft' | 'open' | 'done' | 'cancelled';
@@ -54,11 +54,18 @@ export interface ServiceJob {
   chargedTetri: number | null;
   odometerKm: number | null;
   workshop: Workshop | null;
-  closedAt: { id: string; name: string } | null;
+  /** Where the moped was left when the repair closed. */
+  closedLocation: { id: string; name: string } | null;
+  /** The minute it closed; empty on repairs closed before stage 3. */
+  closedAt: string | null;
+  /** Who let the work start, and when (stage 3). */
+  approved: { at: string; by: string | null } | null;
+  /** A refused repair: who refused it, when and why (stage 3). */
+  rejected: { at: string; by: string | null; reason: string } | null;
   notes: string | null;
   /** True when this job is what took the moped out of the yard: only then does closing bring it back. */
   movedVehicle: boolean;
-  vehicle: { id: string; vin: string; model: string };
+  vehicle: { id: string; vin: string; number: string | null; model: string };
   rental: { id: string; number: string } | null;
   customer: { id: string; name: string; nameKa: string | null; nameLat: string | null } | null;
   parts: ServiceJobPart[];
@@ -89,6 +96,11 @@ export interface ServiceWorkLine {
   rateTetri: number | null;
   amountTetri: number | null;
   mechanicId: string | null;
+  /** Approved with the repair or on its own, waiting, or refused (stage 3). */
+  state: WorkLineState;
+  addedAt: string;
+  decidedAt: string | null;
+  rejectReason: string | null;
 }
 
 export interface ServiceList {
@@ -157,15 +169,17 @@ export function ServicePage() {
         </Link>
       )}
 
+      {/* «Ждут согласования» decides in the card itself (stage 3, variant A):
+          the first round of a repair and a work found once it was open alike. */}
       {mayApprove && drafts.length > 0 && (
-        <section className="card card-warn queue-card">
+        <section className="wappr-queue">
           <div className="queue-head">
             <h2>{t.repair.draftsHead}</h2>
             <span className="muted">{t.service.jobsCount(drafts.length)}</span>
           </div>
-          <ul className="queue">
+          <ul className="wappr-list">
             {drafts.map((j) => (
-              <Draft key={j.id} job={j} onDone={reload} />
+              <ApprovalCard key={j.id} job={j} onDone={reload} />
             ))}
           </ul>
         </section>
@@ -209,7 +223,7 @@ export function ServicePage() {
             ) : j.status === 'open' ? (
               <span className="warn-text">{t.repair.days(daysOf(j, today))}</span>
             ) : (
-              <span className="muted">{t.repair.statuses[j.status]}</span>
+              <span className="muted">{j.rejected ? t.wappr.statusRejected : t.repair.statuses[j.status]}</span>
             ),
           rightSub: j.totalTetri != null && j.totalTetri > 0 ? <span className="mono">{formatGel(j.totalTetri)}</span> : t.repair.payers[j.payer],
         })}
@@ -258,40 +272,6 @@ export function ServicePage() {
         ]}
       />
     </>
-  );
-}
-
-/** A breakdown somebody reported: the moped, the words, the photos, one button. */
-function Draft({ job, onDone }: { job: ServiceJob; onDone: () => void }) {
-  const t = useT();
-  const navigate = useNavigate();
-  const op = useOperation();
-
-  return (
-    <li className="q-row">
-      <Link className="q-who" to={`/service/${job.id}`}>
-        <span className="q-name">{job.mechanic?.name ?? t.repair.fromManager}</span>
-        <span className="q-sub muted">
-          {job.vehicle.model} <span className="mono">···{job.vehicle.vin.slice(-4)}</span> · «{job.reason}»
-          {job.photos.length > 0 && <> · {t.photos.count(job.photos.length)}</>}
-        </span>
-      </Link>
-      <span className="q-sum mono muted">{fmtDate(job.openedOn)}</span>
-      <span className="q-acts">
-        <SubmitButton
-          small
-          type="button"
-          state={op.state}
-          label={t.repair.takeUp}
-          onClick={async () => {
-            const res = await op.run((key) => api.post(`/api/service/${job.id}/approve`, undefined, { key }));
-            if (!res.ok) return;
-            onDone();
-            navigate(`/service/${job.id}`);
-          }}
-        />
-      </span>
-    </li>
   );
 }
 

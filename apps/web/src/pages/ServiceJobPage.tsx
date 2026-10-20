@@ -1,4 +1,4 @@
-import { daysBetween, hoursFromMinutes, labourTetri as labourFor, minutesFromHours, parseGel, todayISO } from '@ev8/shared';
+import { AFTER_PHOTOS_MAX, daysBetween, localDateTime, hoursFromMinutes, labourTetri as labourFor, minutesFromHours, normSecFromMinutes, parseGel, todayISO } from '@ev8/shared';
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api.js';
@@ -13,12 +13,13 @@ import { useOperation } from '../ds/form/operation.js';
 import { useMoneyForm } from '../ds/money/MoneyForm.js';
 import { fmtDate, formatGel } from '../format.js';
 import { useLocale, useT } from '../i18n/index.js';
-import { uploadAll, type PreparedPhoto } from '../lib/photos.js';
+import { toBase64, uploadAll, type PreparedPhoto } from '../lib/photos.js';
 import { useLoad } from '../lib/use.js';
 import { useSession } from '../session.js';
-import { groupDigits, normText } from '../lib/workBook.js';
-import type { ServiceJob, Workshop } from './ServicePage.js';
-import { WorkLines } from './WorkshopJobWizard.js';
+import { groupDigits } from '../lib/workBook.js';
+import type { ServiceJob, ServiceWorkLine, Workshop } from './ServicePage.js';
+import { AddWorkSheet, NormTotal, RejectSheet, StatedLines, SuggestCustomer, isRepeat, useWhen, waitingLines } from './RepairApproval.js';
+import { Photos } from './WorkshopJobWizard.js';
 import type { PartRow } from './StockPage.js';
 
 interface Locations {
@@ -32,7 +33,7 @@ interface RentalDeposit {
   };
 }
 
-type Sheet = 'workshop' | 'payer' | 'part' | 'work' | 'close' | 'cancel';
+type Sheet = 'workshop' | 'payer' | 'part' | 'work' | 'close' | 'cancel' | 'reject' | 'addWork';
 
 /**
  * Ремонт (wave 5 §3.7). The head says which moped and how long it has stood;
@@ -53,10 +54,13 @@ export function ServiceJobPage() {
   const { data, failure, reload } = useLoad<{ job: ServiceJob }>(id ? `/api/service/${id}` : null);
   const [sheet, setSheet] = useState<Sheet | null>(null);
   const [photos, setPhotos] = useState<PreparedPhoto[]>([]);
+  const [after, setAfter] = useState<PreparedPhoto[]>([]);
   // A line and a photo are changed in place; one operation at a time, its refusal beside it.
   const lineOp = useOperation();
   const photoOp = useOperation();
   const takeUpOp = useOperation();
+  const afterOp = useOperation();
+  const when = useWhen();
 
   if (!data && failure) return <LoadError failure={failure} onRetry={reload} />;
   if (!data) return <Loading />;
@@ -68,6 +72,16 @@ export function ServiceJobPage() {
   // The approval of ADR-0033 — taking a reported breakdown up — is the chief
   // mechanic's as well as the owners'; what it costs stays the owners'.
   const mayApprove = draft && can('service.approve');
+  // Stage 3: the mechanic carries his repair to its end — a work found later,
+  // the photos after, the closing. One the customer pays for an owner closes.
+  const repeat = isRepeat(j);
+  const waiting = waitingLines(j);
+  const workshopHand = can('service.work') && !mayManage && j.mechanic != null;
+  const mayAddWork = can('service.work') && j.mechanic != null && (open || draft);
+  const ownersClose = j.payer === 'customer';
+  const mayCloseHere = workshopHand && open && !ownersClose;
+  const afterHad = j.photos.filter((p) => p.tag === 'after').length;
+  const mayAfter = can('service.work') && j.mechanic != null && (open || draft) && afterHad < AFTER_PHOTOS_MAX;
   const mayFleet = can('fleet.view');
   const money = j.totalTetri != null;
   const days = Math.max(0, daysBetween(j.openedOn, j.closedOn ?? todayISO()));
@@ -87,7 +101,7 @@ export function ServiceJobPage() {
       <PageHead
         wrap
         title={j.number}
-        badge={<span className={draft || open ? 'warn-text' : 'muted'}>{t.repair.statuses[j.status]}</span>}
+        badge={<span className={draft || open ? 'warn-text' : 'muted'}>{j.rejected ? t.wappr.statusRejected : t.repair.statuses[j.status]}</span>}
         sub={
           <>
             {j.vehicle.model} <span className="mono">···{j.vehicle.vin.slice(-4)}</span> · {t.repair.openedOn(fmtDate(j.openedOn))} · {t.repair.days(days)}
@@ -98,18 +112,25 @@ export function ServiceJobPage() {
           <>
             {mayManage && <RowMenu actions={[{ key: 'cancel', label: t.repair.cancel, onPick: () => setSheet('cancel') }]} />}
             {draft ? (
-              mayApprove && <SubmitButton
-                small
-                type="button"
-                state={takeUpOp.state}
-                label={t.repair.takeUp}
-                onClick={async () => {
-                  const res = await takeUpOp.run((key) => api.post(`/api/service/${j.id}/approve`, undefined, { key }));
-                  if (!res.ok) return;
-                  toast({ text: t.repair.takenUp });
-                  reload();
-                }}
-              />
+              mayApprove && (
+                <>
+                  <button type="button" className="pill pill-sm" onClick={() => setSheet('reject')}>
+                    {repeat ? t.wappr.rejectWork(waiting.length) : t.wappr.reject}
+                  </button>
+                  <SubmitButton
+                    small
+                    type="button"
+                    state={takeUpOp.state}
+                    label={repeat ? t.wappr.approveWork(waiting.length) : t.wappr.approve}
+                    onClick={async () => {
+                      const res = await takeUpOp.run((key) => api.post(`/api/service/${j.id}/approve`, undefined, { key }));
+                      if (!res.ok) return;
+                      toast({ text: repeat ? t.wappr.approvedWork : t.repair.takenUp });
+                      reload();
+                    }}
+                  />
+                </>
+              )
             ) : (
               <button type="button" className="pill pill-sm pill-accent" onClick={() => setSheet('close')}>
                 {t.repair.close}
@@ -117,9 +138,34 @@ export function ServiceJobPage() {
             )}
           </>
         )}
+        {mayCloseHere && (
+          <Link className="pill pill-accent wappr-close" to={`/service/${j.id}/close`}>
+            {t.wappr.close}
+          </Link>
+        )}
       </PageHead>
 
-      {draft && <p className="hint">{j.mechanic ? t.wjob.waitsNote : t.repair.reportNote}</p>}
+      {draft && <p className="hint">{repeat ? t.wappr.waitHint : j.mechanic ? t.wjob.waitsNote : t.repair.reportNote}</p>}
+      {takeUpOp.failure && (
+        <p className="field-err" role="alert">
+          {takeUpOp.failure.text}
+        </p>
+      )}
+      {j.rejected && (
+        <section className="wappr-reason">
+          <b>{t.wappr.rejectHead}</b>
+          <span className="pre">{j.rejected.reason}</span>
+          <span className="muted">{t.wappr.rejectedBy(j.rejected.by ?? t.common.dash, when(j.rejected.at))}</span>
+        </section>
+      )}
+      {j.approved && !j.rejected && <p className="hint muted">{t.wappr.approvedBy(j.approved.by ?? t.common.dash, when(j.approved.at))}</p>}
+      {workshopHand && open && ownersClose && <p className="hint">{t.wappr.ownersClose}</p>}
+      {j.rejected && workshopHand && j.vehicle.number && (
+        <Link className="wjob-new" to={`/service/new?q=${encodeURIComponent(j.vehicle.number)}`}>
+          + {t.wappr.newJobOn(j.vehicle.number)}
+        </Link>
+      )}
+      <SuggestCustomer job={j} onPick={() => setSheet('payer')} />
 
       <div className="two-col">
         <section className="card">
@@ -183,8 +229,18 @@ export function ServiceJobPage() {
             />
           )}
           {j.odometerKm != null && <Row k={t.repair.odometer} v={<span className="mono">{j.odometerKm}</span>} />}
-          {j.closedAt && <Row k={t.repair.closedAt} v={j.closedAt.name} />}
-          {j.closedOn && <Row k={t.repair.closedOn} v={<span className="mono">{fmtDate(j.closedOn)}</span>} />}
+          {j.closedLocation && <Row k={t.repair.closedAt} v={j.closedLocation.name} />}
+          {j.closedOn && (
+            <Row
+              k={t.repair.closedOn}
+              v={
+                <span className="mono">
+                  {fmtDate(j.closedOn)}
+                  {j.closedAt ? ` ${localDateTime(j.closedAt).time}` : ''}
+                </span>
+              }
+            />
+          )}
           {j.notes && <Row k={t.repair.notes} v={<span className="pre">{j.notes}</span>} />}
         </section>
 
@@ -310,27 +366,29 @@ export function ServiceJobPage() {
       )}
 
       {/* The works a mechanic wrote, with the norm and rate they were written
-          with (stage 2). A repair from before has none, and no block. */}
-      {j.works.length > 0 && (
+          with (stage 2), and where each stands (stage 3). A repair from before
+          has none, and no block. */}
+      {(j.works.length > 0 || mayAddWork) && (
         <section className="card">
           <BlockHead title={t.wjob.works} />
-          <WorkLines
-            lines={j.works.map((w) => ({
-              key: w.id,
-              type: w.code ? { code: w.code, nameKa: w.nameKa, nameRu: w.nameRu, nameEn: w.nameEn, normSec: w.normSec ?? 0 } : null,
-              freeText: w.freeText,
-              qty: w.qty,
-              normSec: w.normSec,
-              ...(j.worksTotal.tetri != null ? { amount: w.amountTetri } : {}),
-            }))}
-          />
-          <div className="wjob-total">
-            <span>{t.wjob.byNorm}</span>
-            <span className="mono">
-              {t.wjob.min(normText(j.worksTotal.seconds, locale))}
-              {j.worksTotal.tetri != null && ` · ${formatGel(j.worksTotal.tetri)}`}
-            </span>
-          </div>
+          {j.works.length > 0 && (
+            <>
+              <StatedLines
+                job={j}
+                lines={j.works}
+                tagWaiting={j.approved ? t.wappr.waitingTag : undefined}
+                editNorm={can('service.norms') && j.status !== 'cancelled' ? (l) => <NormEdit job={j} line={l} onSaved={reload} /> : undefined}
+              />
+              <NormTotal lines={j.works} />
+            </>
+          )}
+          {mayAddWork && (
+            <div className="row-actions">
+              <button type="button" className="wjob-btn" onClick={() => setSheet('addWork')}>
+                + {t.wappr.addWork}
+              </button>
+            </div>
+          )}
         </section>
       )}
 
@@ -371,6 +429,35 @@ export function ServiceJobPage() {
             )}
           </>
         )}
+        {/* Photos after the repair, left before it closes — on one the owner
+            closes, this is where the mechanic puts them (stage 3). */}
+        {mayAfter && (
+          <>
+            <Photos photos={after} onChange={setAfter} label={t.wappr.afterAdd} tag={t.wjob.photoTags.after} max={AFTER_PHOTOS_MAX - afterHad} />
+            {after.length > 0 && (
+              <SubmitButton
+                small
+                type="button"
+                state={afterOp.state}
+                label={t.photos.save}
+                onClick={async () => {
+                  const res = await afterOp.run(async (key) =>
+                    api.post(`/api/service/${j.id}/photos/after`, { photos: await Promise.all(after.map(async (p) => ({ mimeType: p.mimeType, dataBase64: await toBase64(p.blob) }))) }, { key }),
+                  );
+                  if (!res.ok) return;
+                  setAfter([]);
+                  toast({ text: t.wappr.afterSaved });
+                  reload();
+                }}
+              />
+            )}
+            {afterOp.failure && (
+              <p className="field-err" role="alert">
+                {afterOp.failure.fieldText ?? afterOp.failure.text}
+              </p>
+            )}
+          </>
+        )}
       </section>
 
       {sheet === 'workshop' && <WorkshopSheet job={j} onClose={close} onSaved={saved} />}
@@ -378,8 +465,38 @@ export function ServiceJobPage() {
       {sheet === 'part' && <PartSheet job={j} onClose={close} onSaved={saved} />}
       {sheet === 'work' && <WorkSheet job={j} onClose={close} onSaved={saved} />}
       {sheet === 'close' && <CloseSheet job={j} onClose={close} onSaved={saved} />}
+      {sheet === 'reject' && <RejectSheet job={j} onClose={close} onDone={reload} />}
+      {sheet === 'addWork' && <AddWorkSheet job={j} onClose={close} onDone={reload} />}
       {sheet === 'cancel' && <CancelSheet job={j} backCount={backCount} names={fromShelf.map((p) => `${p.name} × ${p.qty}`).join(', ')} onClose={close} onDone={() => navigate('/service')} />}
     </>
+  );
+}
+
+/** The norm of a work not in the book, written in place by whoever keeps norms (stage 3). */
+function NormEdit({ job, line, onSaved }: { job: ServiceJob; line: ServiceWorkLine; onSaved: () => void }) {
+  const t = useT();
+  const toast = useToast();
+  const op = useOperation();
+  const [v, setV] = useState('');
+  return (
+    <span className="wjob-norm">
+      <input className="input mono" inputMode="decimal" aria-label={t.wappr.normLabel} value={v} onChange={(e) => setV(e.target.value.replace(/[^\d.,]/g, ''))} />
+      <span className="muted">{t.wappr.minUnit}</span>
+      <SubmitButton
+        small
+        type="button"
+        state={op.state}
+        label={t.wappr.setNorm}
+        disabled={normSecFromMinutes(v) == null}
+        onClick={async () => {
+          const res = await op.run((key) => api.patch(`/api/service/${job.id}/works/${line.id}`, { normMin: v }, { key }));
+          if (!res.ok) return;
+          toast({ text: t.wappr.normSaved });
+          onSaved();
+        }}
+      />
+      {op.failure && <span className="field-err">{op.failure.fieldText ?? op.failure.text}</span>}
+    </span>
   );
 }
 
@@ -565,6 +682,9 @@ function CloseSheet({ job, onClose, onSaved }: { job: ServiceJob; onClose: () =>
   const rental = useLoad<RentalDeposit>(mayWithhold ? `/api/rentals/${job.rental!.id}` : null);
   const initial = { closedOn: todayISO(), odometer: job.odometerKm != null ? String(job.odometerKm) : '', locationId: '', withhold: '' };
   const [f, setF] = useState(initial);
+  // A mechanic's repair closes with a photo after it (stage 3); one may be on it already.
+  const afterHad = job.photos.filter((p) => p.tag === 'after').length;
+  const [after, setAfter] = useState<PreparedPhoto[]>([]);
 
   const deposit = rental.data?.rental.deposit ?? null;
   // The same arithmetic the API does before it agrees: paid in, less what is
@@ -592,6 +712,7 @@ function CloseSheet({ job, onClose, onSaved }: { job: ServiceJob; onClose: () =>
             odometerKm: f.odometer === '' ? null : Number(f.odometer),
             locationId: f.locationId || null,
             withheldTetri: parseGel(f.withhold) ?? 0,
+            photos: await Promise.all(after.map(async (p) => ({ mimeType: p.mimeType, dataBase64: await toBase64(p.blob) }))),
           },
           { key },
         );
@@ -603,6 +724,15 @@ function CloseSheet({ job, onClose, onSaved }: { job: ServiceJob; onClose: () =>
         <span className="kv-k">{t.repair.jobTotal}</span>
         <span className="kv-v mono">{formatGel(total)}</span>
       </div>
+      {job.mechanic && afterHad < AFTER_PHOTOS_MAX && (
+        <Photos
+          photos={after}
+          onChange={setAfter}
+          label={t.wappr.afterPhotos(afterHad + after.length, AFTER_PHOTOS_MAX)}
+          tag={t.wjob.photoTags.after}
+          max={AFTER_PHOTOS_MAX - afterHad}
+        />
+      )}
       <div className="two-col two-col-tight">
         <Field label={t.repair.closedOn} name="closedOn">
           <input className="input mono" type="date" value={f.closedOn} onChange={(e) => setF({ ...f, closedOn: e.target.value })} />

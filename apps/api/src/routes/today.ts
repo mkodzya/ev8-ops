@@ -115,7 +115,7 @@ export function todayRoutes(app: FastifyInstance): void {
         ? prisma.serviceJob.findMany({
             where: { status: 'draft' },
             orderBy: { createdAt: 'asc' },
-            select: { id: true, number: true, reason: true, vehicle: { select: { vin: true } }, createdBy: { select: { name: true } }, _count: { select: { photos: true } } },
+            select: { id: true, number: true, reason: true, vehicle: { select: { vin: true } }, createdBy: { select: { name: true } }, mechanic: { select: { name: true } }, _count: { select: { photos: true } } },
           })
         : [],
       owner ? partRows() : [],
@@ -198,7 +198,8 @@ export function todayRoutes(app: FastifyInstance): void {
         id: j.id,
         number: j.number,
         vin: j.vehicle?.vin ?? null,
-        who: j.createdBy?.name ?? null,
+        // The mechanic who carries it, or whoever reported the breakdown.
+        who: j.mechanic?.name ?? j.createdBy?.name ?? null,
         note: j.reason,
         photos: j._count.photos,
       })),

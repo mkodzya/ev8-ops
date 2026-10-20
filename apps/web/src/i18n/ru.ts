@@ -12,6 +12,7 @@ import { calendarRu } from './payments-calendar.js';
 import { payDayRu } from './pay-day.js';
 import { workshopRu } from './workshop.js';
 import { workshopJobsRu } from './workshop-jobs.js';
+import { workshopApprovalRu } from './workshop-approval.js';
 import { driveRu } from './drive.js';
 import { expRu } from './expenses.js';
 import { inBankRu } from './in-bank.js';
@@ -1233,6 +1234,12 @@ export const ru: Dict = {
       job_closed: 'Закрытый ремонт не редактируется.',
       job_not_found: 'Ремонт не найден.',
       job_not_waiting: 'Этот ремонт не ждёт согласования.',
+      job_waits_approval: 'Заявка ждёт согласования — закрыть можно после решения.',
+      close_is_owners: 'Ремонт за счёт клиента — закроет владелец и решит удержание из залога. Фото «после» оставьте в заявке.',
+      after_photo_missing: 'Нужно хотя бы одно фото «после».',
+      norm_from_book: 'У работы из справочника норма та, с которой её записали.',
+      work_line_not_found: 'Этой работы в заявке уже нет — обновите страницу.',
+      job_no_mechanic: 'У этого ремонта нет механика: его ведут владельцы прежней формой.',
       last_owner: 'Это последний действующий владелец: его роль не меняется и не отключается.',
       line_not_found: 'Этой строки в заказе уже нет.',
       line_shape: 'Строка — это либо модель, либо запчасть.',
@@ -1352,6 +1359,7 @@ export const ru: Dict = {
   ...payDayRu,
   ...workshopRu,
   ...workshopJobsRu,
+  ...workshopApprovalRu,
   ...driveRu,
   ...expRu,
   ...inBankRu,

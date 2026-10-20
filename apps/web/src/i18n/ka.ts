@@ -12,6 +12,7 @@ import { calendarKa } from './payments-calendar.js';
 import { payDayKa } from './pay-day.js';
 import { workshopKa } from './workshop.js';
 import { workshopJobsKa } from './workshop-jobs.js';
+import { workshopApprovalKa } from './workshop-approval.js';
 import { driveKa } from './drive.js';
 import { expKa } from './expenses.js';
 import { inBankKa } from './in-bank.js';
@@ -1222,6 +1223,12 @@ export const ka: Dict = {
       job_closed: 'დახურული რემონტის რედაქტირება შეუძლებელია.',
       job_not_found: 'რემონტი ვერ მოიძებნა.',
       job_not_waiting: 'ეს რემონტი დამტკიცებას არ ელოდება.',
+      job_waits_approval: 'შეკეთება ელოდება დამტკიცებას — დახურვა შესაძლებელია გადაწყვეტილების შემდეგ.',
+      close_is_owners: 'შეკეთება კლიენტის ხარჯზეა — დახურავს მფლობელი და გადაწყვეტს დეპოზიტიდან დაკავებას. ფოტო „შემდეგ“ დატოვეთ შეკეთებაში.',
+      after_photo_missing: 'საჭიროა მინიმუმ ერთი ფოტო „შემდეგ“.',
+      norm_from_book: 'ცნობარის სამუშაოს რჩება ის ნორმა, რომლითაც ჩაიწერა.',
+      work_line_not_found: 'ეს სამუშაო შეკეთებაში აღარ არის — განაახლეთ გვერდი.',
+      job_no_mechanic: 'ამ შეკეთებას მექანიკოსი არ ჰყავს: მას მფლობელები ძველი ფორმით აწარმოებენ.',
       last_owner: 'ეს უკანასკნელი აქტიური მფლობელია: მისი როლის შეცვლა ან გამორთვა შეუძლებელია.',
       line_not_found: 'ეს ხაზი შეკვეთაში აღარ არის.',
       line_shape: 'ხაზი არის ან მოდელი, ან სათადარიგო ნაწილი.',
@@ -1341,6 +1348,7 @@ export const ka: Dict = {
   ...payDayKa,
   ...workshopKa,
   ...workshopJobsKa,
+  ...workshopApprovalKa,
   ...driveKa,
   ...expKa,
   ...inBankKa,
