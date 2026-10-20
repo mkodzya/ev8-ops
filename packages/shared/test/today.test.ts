@@ -195,6 +195,12 @@ describe('Drive on "Today"', () => {
     expect(intake.rows[0]).toMatchObject({ id: 'drive_contract:f-new', action: 'hand_over_from_drive', who: 'Test Newcomer', href: '/rentals/new?drive=f-new', note: '2026-09-19' });
   });
 
+  it('with a deal in Kommo for the same person, the row carries the deal’s link, card and phone', () => {
+    const joined = { contracts: [{ ...drive.contracts[0]!, leadId: '777', customerId: 'c9', phone: '+995555000009' }], returns: [] };
+    const row = group(dayQueue(input({ drive: joined })), 'intake')!.rows[0];
+    expect(row).toMatchObject({ href: '/rentals/new?drive=f-new&lead=777&customer=c9', phone: '+995555000009' });
+  });
+
   it('is an owner’s: a manager’s queue has none of it', () => {
     const q = dayQueue(input({ owner: false, drive, rentals: [rental()] }));
     expect(q.flatMap((g) => g.rows).filter((r) => r.action === 'close_from_drive' || r.action === 'hand_over_from_drive')).toEqual([]);

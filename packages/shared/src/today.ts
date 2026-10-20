@@ -144,7 +144,8 @@ export interface QueueInput {
    * day and the deposit paid back by it — while the rental here still runs.
    */
   drive?: {
-    contracts: { folderId: string; who: string; datedOn: ISODate | null }[];
+    /** With a deal in Kommo for the same person: its link, the card it found, the phone (ADR-0034). */
+    contracts: { folderId: string; who: string; datedOn: ISODate | null; leadId?: string; customerId?: string | null; phone?: string | null }[];
     returns: { rentalId: string; returnedOn: ISODate | null; paidBackTetri: Tetri | null }[];
   };
 }
@@ -433,6 +434,7 @@ export function dayQueue(input: QueueInput): TaskGroupRows[] {
   // A contract in Drive with no rental here (ADR-0034): the hand-over, filled in from it.
   if (input.owner) {
     for (const c of input.drive?.contracts ?? []) {
+      const query = [`drive=${encodeURIComponent(c.folderId)}`, c.leadId ? `lead=${c.leadId}` : null, c.customerId ? `customer=${c.customerId}` : null].filter(Boolean).join('&');
       rows.push({
         id: `drive_contract:${c.folderId}`,
         group: 'intake',
@@ -442,8 +444,8 @@ export function dayQueue(input: QueueInput): TaskGroupRows[] {
         vin: null,
         days: null,
         amountTetri: null,
-        href: `/rentals/new?drive=${encodeURIComponent(c.folderId)}`,
-        phone: null,
+        href: `/rentals/new?${query}`,
+        phone: c.phone ?? null,
         note: c.datedOn,
       });
     }

@@ -203,8 +203,9 @@ export function PickupWizard() {
     if (!p || prefilled) return;
     setPrefilled(true);
     const patch: Partial<typeof start> = {};
+    // The card Kommo's deal found stays when the contract finds none (ADR-0034).
     if (p.customer) Object.assign(patch, { customerId: p.customer.id, creating: false });
-    else Object.assign(patch, { creating: true, ncName: p.name ?? '', ...(p.phone ? { ncPhone: formatPhone(p.phone) } : {}) });
+    else if (!presetCustomer) Object.assign(patch, { creating: true, ncName: p.name ?? '', ...(p.phone ? { ncPhone: formatPhone(p.phone) } : {}) });
     if (p.vehicle?.id && p.vehicle.available) patch.vehicleId = p.vehicle.id;
     if (p.pickedUpOn && p.pickedUpOn <= today) Object.assign(patch, { pickedUpOn: p.pickedUpOn, ...(owner && p.pickedUpOn < today ? { transfer: true } : {}) });
     if (p.rateTetri) Object.assign(patch, { rate: gel(p.rateTetri), rateTouched: true });
@@ -213,7 +214,7 @@ export function PickupWizard() {
       setDepositTouched(true);
     }
     set(patch);
-    if (!p.customer && p.personalId) setNcPersonalId(p.personalId);
+    if (!p.customer && !presetCustomer && p.personalId) setNcPersonalId(p.personalId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prefill.data]);
 
