@@ -978,7 +978,9 @@ export function serviceRoutes(app: FastifyInstance): void {
    * for the chief mechanic's approval, which is the same waiting a manager's
    * reported breakdown does (`draft`, ADR-0033); one opened by whoever may
    * approve is in work at once. A moped already under repair is not given a
-   * second job: `jobId` takes the open one on, if nobody carries it yet.
+   * second job: `jobId` takes the open one on, if nobody carries it yet. What a
+   * mechanic plans on a repair already in work waits for approval like a work
+   * found later (ADR-0035 §1): the repair goes back to waiting.
    */
   app.post<{ Body: Body }>('/api/service/workshop', { config: { scope: 'service.work' }, bodyLimit: JOB_BODY_LIMIT }, async (req, reply) => {
     const b = req.body ?? {};
@@ -1012,7 +1014,18 @@ export function serviceRoutes(app: FastifyInstance): void {
 
     const open = await prisma.serviceJob.findFirst({
       where: { vehicleId, status: { in: ['open', 'draft'] } },
-      select: { id: true, number: true, status: true, reason: true, mechanicId: true, mechanic: { select: { name: true } } },
+      select: {
+        id: true,
+        number: true,
+        status: true,
+        reason: true,
+        mechanicId: true,
+        mechanic: { select: { name: true } },
+        approvedAt: true,
+        createdById: true,
+        openedAt: true,
+        createdAt: true,
+      },
     });
     if (jobId) {
       if (!open || open.id !== jobId) throw conflict('job_closed', 'That repair is no longer open on this moped.');
@@ -1029,9 +1042,23 @@ export function serviceRoutes(app: FastifyInstance): void {
     const job = await prisma.$transaction(async (tx) => {
       let made: { id: string; number: string; status: string };
       if (open) {
+        // A repair in work taken on by a mechanic who may not approve: his
+        // works wait, and so does the repair (ADR-0035 §1). One opened straight
+        // in work was let start by whoever opened it (ADR-0035 §2, as 0057
+        // recorded it), so a refusal now refuses his lines, not the repair.
+        const waits = open.status === 'open' && !approver;
+        const stamp = waits && open.approvedAt == null ? { approvedById: open.createdById, approvedAt: open.openedAt ?? open.createdAt } : {};
         made = await tx.serviceJob.update({
           where: { id: open.id },
-          data: { mechanicId: actor.id, reasonKind, reason, openedOdometerKm: odometerKm, odometerReason, updatedAt: new Date() },
+          data: {
+            mechanicId: actor.id,
+            reasonKind,
+            reason,
+            openedOdometerKm: odometerKm,
+            odometerReason,
+            ...(waits ? { status: 'draft' as const, ...stamp } : {}),
+            updatedAt: new Date(),
+          },
           select: { id: true, number: true, status: true },
         });
       } else {

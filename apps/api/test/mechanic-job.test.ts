@@ -337,6 +337,44 @@ describe.skipIf(!HAS_DB)('a repair the mechanic opens (stage 2)', () => {
     await settle(id);
   });
 
+  it('taking on a repair already in work, a mechanic’s works wait for approval, and a refusal refuses only them (ADR-0035 §1, §3)', async () => {
+    const { prisma, vehicle } = await freeVehicle();
+    const owner = await loginAs('owner');
+    const w = await ownWork(owner);
+    // The owner's repair on the old form: in work at once, nobody carries it.
+    const made = await call(owner, 'POST', '/api/service', { vehicleId: vehicle.id, reason: 'ТЕСТ wobbles at speed' });
+    expect(made.statusCode, made.body).toBe(201);
+    const { id } = json<{ id: string }>(made);
+
+    const a = await person('mechanic');
+    const taken = await call(a.cookie, 'POST', '/api/service/workshop', opening(vehicle.id, [{ workTypeId: w.id }], { jobId: id }));
+    expect(taken.statusCode, taken.body).toBe(200);
+    expect(json<{ status: string }>(taken).status).toBe('draft');
+    // His plan is not approved by himself: it waits for the chief mechanic, and so does the repair.
+    expect(await prisma.serviceWork.findFirstOrThrow({ where: { jobId: id }, select: { approvedById: true, approvedAt: true } })).toEqual({ approvedById: null, approvedAt: null });
+    const closing = await call(a.cookie, 'POST', `/api/service/${id}/close`, { odometerKm: 5300, photos: [PHOTO] });
+    expect(json<{ error: string }>(closing).error).toBe('job_waits_approval');
+
+    // Refused, it is his lines that are refused — the owner's repair was in work and stays so.
+    const chief = await person('chief_mechanic');
+    const refused = await call(chief.cookie, 'POST', `/api/service/${id}/reject`, { reason: 'ТЕСТ not this work' });
+    expect(refused.statusCode, refused.body).toBe(200);
+    expect(json<{ status: string }>(refused).status).toBe('open');
+    const row = await prisma.serviceJob.findUniqueOrThrow({ where: { id }, select: { status: true, mechanicId: true, approvedAt: true } });
+    expect(row).toMatchObject({ status: 'open', mechanicId: a.id });
+    expect(row.approvedAt).not.toBeNull();
+    expect((await prisma.serviceWork.findFirstOrThrow({ where: { jobId: id } })).rejectedAt).not.toBeNull();
+
+    // Whoever may approve takes one on in work, as before.
+    const other = await freeVehicle();
+    const second = json<{ id: string }>(await call(owner, 'POST', '/api/service', { vehicleId: other.vehicle.id, reason: 'ТЕСТ brakes' })).id;
+    const byChief = await call(chief.cookie, 'POST', '/api/service/workshop', opening(other.vehicle.id, [{ workTypeId: w.id }], { jobId: second }));
+    expect(byChief.statusCode, byChief.body).toBe(200);
+    expect(json<{ status: string }>(byChief).status).toBe('open');
+    expect((await prisma.serviceWork.findFirstOrThrow({ where: { jobId: second } })).approvedById).toBe(chief.id);
+    await settle(id, second);
+  });
+
   it('finds the moped by the sticker’s number and tells the mechanic nothing about the customer', async () => {
     const { prisma, vehicle } = await freeVehicle(700);
     const v = await prisma.vehicle.findUniqueOrThrow({ where: { id: vehicle.id }, select: { fleetNo: true } });
