@@ -79,6 +79,7 @@ export function stockRoutes(app: FastifyInstance): void {
           minQty: int(b, 'minQty', { min: 0 }) ?? 0,
           salePriceTetri: tetri(b, 'salePriceTetri', { min: 0 }),
           notes: str(b, 'notes', { max: 2000 }),
+          isTracker: b.isTracker === true,
           createdById: actor.id,
         },
         select: { id: true, name: true },
@@ -107,6 +108,8 @@ export function stockRoutes(app: FastifyInstance): void {
     if ('salePriceTetri' in b) data.salePriceTetri = tetri(b, 'salePriceTetri', { min: 0 });
     if ('notes' in b) data.notes = str(b, 'notes', { max: 2000 });
     if ('archived' in b) data.archived = b.archived === true;
+    // Fitting a tracker asks for its IMEI and SIM (ADR-0036); the owner says which parts are trackers.
+    if ('isTracker' in b) data.isTracker = b.isTracker === true;
 
     try {
       await prisma.part.update({ where: { id: part.id }, data: { ...data, updatedAt: new Date() } });

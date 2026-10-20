@@ -41,6 +41,10 @@ interface Card {
   events: { id: string; kind: VehicleEventKind; occurredOn: string; fromState: VehicleState | null; toState: VehicleState; fromPool: VehiclePool | null; toPool: VehiclePool | null; rentalId: string | null; reason: string | null; actor: string | null }[];
   serviceJobs: { id: string; number: string; status: 'open' | 'done' | 'cancelled'; payer: 'company' | 'customer'; reason: string; openedOn: string; closedOn: string | null; totalTetri: number | null; withheldTetri: number | null }[];
   rentals: { id: string; number: string; status: RentalStatus; customer: { id: string; name: string }; pickedUpOn: string | null; returnedOn: string | null; paidThrough: string | null; weeklyRateTetri: number }[];
+  /** The tracker on it and the ones it had (ADR-0036); empty to whoever may not read an IMEI. */
+  trackers?: { id: string; imei: string; simPhone: string | null; installedOn: string; removedOn: string | null; job: { id: string; number: string } | null; removedJob: { id: string; number: string } | null }[] | null;
+  /** What was taken off this moped for another, as a donor (ADR-0036). */
+  donated?: { id: string; name: string; qty: number; on: string; job: { id: string; number: string }; to: { id: string; number: string | null; vin: string } }[];
   /** Corrections: what was changed by hand, from what to what, and why. */
   journal: { id: string; at: string; occurredOn: string | null; action: string; by: string | null; note: string | null; before: unknown; after: unknown }[];
 }
@@ -296,6 +300,30 @@ export function VehiclePage() {
         )}
       </section>
 
+      {data.trackers && data.trackers.length > 0 && <TrackerBlock trackers={data.trackers} />}
+      {(data.donated?.length ?? 0) > 0 && (
+        <section className="card">
+          <BlockHead title={t.wparts.donatedBlock} sub={t.wparts.lines(data.donated!.length)} />
+          <ul className="timeline">
+            {data.donated!.map((d) => (
+              <li key={d.id}>
+                <span className="mono muted">{fmtDate(d.on)}</span>
+                <span>
+                  {d.name} × {d.qty} →{' '}
+                  <Link to={`/fleet/${d.to.id}`} className="mono">
+                    {d.to.number ?? `···${d.to.vin.slice(-6)}`}
+                  </Link>{' '}
+                  ·{' '}
+                  <Link to={`/service/${d.job.id}`} className="mono">
+                    {d.job.number}
+                  </Link>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       <section className="card">
         <BlockHead title={t.vehicle.rentalsOf} sub={t.rentals.count(data.rentals.length)} />
         {data.rentals.length === 0 ? (
@@ -455,5 +483,44 @@ function VinSheet({ id, vin, onClose, onDone }: { id: string; vin: string; onClo
         <input className="input" value={f.reason} onChange={(e) => setF({ ...f, reason: e.target.value })} />
       </Field>
     </FormSheet>
+  );
+}
+
+/** The tracker on the moped now, then the ones it had (ADR-0036): what to look for when it is stolen. */
+function TrackerBlock({ trackers }: { trackers: NonNullable<Card['trackers']> }) {
+  const t = useT();
+  const now = trackers.find((x) => x.removedOn == null) ?? null;
+  const before = trackers.filter((x) => x.removedOn != null);
+  return (
+    <section className="card">
+      <BlockHead title={t.wparts.trackerBlock} />
+      {now ? (
+        <dl className="wjob-kv">
+          <dt>{t.wparts.imeiLabel}</dt>
+          <dd className="mono">{now.imei.replace(/(\d{3})(?=\d)/g, '$1 ')}</dd>
+          <dt>{t.wparts.simLabel}</dt>
+          <dd className="mono">{now.simPhone ?? '—'}</dd>
+          <dt>{t.wparts.trackerSince}</dt>
+          <dd>
+            {fmtDate(now.installedOn)}
+            {now.job && (
+              <>
+                {' · '}
+                <Link to={`/service/${now.job.id}`} className="mono">
+                  {now.job.number}
+                </Link>
+              </>
+            )}
+          </dd>
+        </dl>
+      ) : (
+        <Empty text={t.wparts.noTrackerCard} />
+      )}
+      {before.map((x) => (
+        <p key={x.id} className="hint muted">
+          {t.wparts.trackerEarlier(x.imei.slice(-4), fmtDate(x.installedOn), fmtDate(x.removedOn))}
+        </p>
+      ))}
+    </section>
   );
 }

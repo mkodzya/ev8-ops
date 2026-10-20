@@ -18,7 +18,8 @@ import { useLoad } from '../lib/use.js';
 import { useSession } from '../session.js';
 import { groupDigits } from '../lib/workBook.js';
 import type { ServiceJob, ServiceWorkLine, Workshop } from './ServicePage.js';
-import { AddWorkSheet, NormTotal, RejectSheet, StatedLines, SuggestCustomer, isRepeat, useWhen, waitingLines } from './RepairApproval.js';
+import { AddWorkSheet, NormTotal, RejectSheet, StatedLines, SuggestCustomer, isRepeat, useDecisionWords, useWhen, waitingLines } from './RepairApproval.js';
+import { PartNote, PartsBlock, TrackerFields } from './RepairParts.js';
 import { Photos } from './WorkshopJobWizard.js';
 import type { PartRow } from './StockPage.js';
 
@@ -61,6 +62,7 @@ export function ServiceJobPage() {
   const takeUpOp = useOperation();
   const afterOp = useOperation();
   const when = useWhen();
+  const decisionWords = useDecisionWords();
 
   if (!data && failure) return <LoadError failure={failure} onRetry={reload} />;
   if (!data) return <Loading />;
@@ -75,7 +77,9 @@ export function ServiceJobPage() {
   // Stage 3: the mechanic carries his repair to its end — a work found later,
   // the photos after, the closing. One the customer pays for an owner closes.
   const repeat = isRepeat(j);
-  const waiting = waitingLines(j);
+  const words = decisionWords(j);
+  // Only a part bought waits — the hint says so, not «a work waits» (stage 4).
+  const partsOnlyWait = repeat && waitingLines(j).length === 0;
   const workshopHand = can('service.work') && !mayManage && j.mechanic != null;
   const mayAddWork = can('service.work') && j.mechanic != null && (open || draft);
   const ownersClose = j.payer === 'customer';
@@ -115,13 +119,13 @@ export function ServiceJobPage() {
               mayApprove && (
                 <>
                   <button type="button" className="pill pill-sm" onClick={() => setSheet('reject')}>
-                    {repeat ? t.wappr.rejectWork(waiting.length) : t.wappr.reject}
+                    {words.reject}
                   </button>
                   <SubmitButton
                     small
                     type="button"
                     state={takeUpOp.state}
-                    label={repeat ? t.wappr.approveWork(waiting.length) : t.wappr.approve}
+                    label={words.approve}
                     onClick={async () => {
                       const res = await takeUpOp.run((key) => api.post(`/api/service/${j.id}/approve`, undefined, { key }));
                       if (!res.ok) return;
@@ -145,7 +149,7 @@ export function ServiceJobPage() {
         )}
       </PageHead>
 
-      {draft && <p className="hint">{repeat ? t.wappr.waitHint : j.mechanic ? t.wjob.waitsNote : t.repair.reportNote}</p>}
+      {draft && <p className="hint">{partsOnlyWait ? t.wparts.partWaitHint : repeat ? t.wappr.waitHint : j.mechanic ? t.wjob.waitsNote : t.repair.reportNote}</p>}
       {takeUpOp.failure && (
         <p className="field-err" role="alert">
           {takeUpOp.failure.text}
@@ -273,7 +277,7 @@ export function ServiceJobPage() {
 
       {/* Parts and the old single line of work. A mechanic adds neither yet
           (parts are stage 4), so an empty block is only shown to who can fill it. */}
-      {(mayManage || j.parts.length > 0 || j.labourMinutes > 0 || (j.labourTetri ?? 0) > 0) && (
+      {(mayManage || j.labourMinutes > 0 || (j.labourTetri ?? 0) > 0) && (
       <section className="card">
         <BlockHead title={t.repair.lines} />
         {j.parts.length === 0 && (j.labourTetri ?? 0) === 0 && j.labourMinutes === 0 ? (
@@ -291,12 +295,16 @@ export function ServiceJobPage() {
               </thead>
               <tbody>
                 {j.parts.map((p) => (
-                  <tr key={p.id}>
+                  <tr key={p.id} className={p.state === 'rejected' || (j.rejected && p.state) ? 'wparts-struck' : ''}>
                     <td>
-                      {p.name} <span className="muted">· {j.payer === 'customer' ? t.repair.retailWord : t.repair.costWord}</span>
+                      {p.kind !== 'stock' && <span className="wparts-kind">{t.wparts.kinds[p.kind] ?? p.kind}</span>} {p.name}{' '}
+                      {p.kind === 'stock' && <span className="muted">· {j.payer === 'customer' ? t.repair.retailWord : t.repair.costWord}</span>}
+                      {p.kind === 'stock' && p.partId && p.unitCostTetri == null && money && <span className="muted"> · {t.wparts.costUnknown}</span>}
+                      {p.state === 'waiting' && <span className="wjob-wtag">{t.wappr.waitingTag}</span>}
+                      <PartNote p={p} />
                     </td>
                     <td className="num mono">{p.qty}</td>
-                    {money && <td className="num mono">{formatGel(p.qty * (p.unitPriceTetri ?? 0))}</td>}
+                    {money && <td className="num mono">{p.lineTetri == null || p.kind === 'removed' || p.state === 'rejected' ? '—' : formatGel(p.lineTetri)}</td>}
                     {mayEdit && (
                       <td className="num">
                         <button
@@ -391,6 +399,11 @@ export function ServiceJobPage() {
           )}
         </section>
       )}
+
+      {/* The parts the workshop writes as the work goes (stage 4, variant A). The
+          owners keep their own form above; anyone else reads them here. */}
+      {!mayManage && <PartsBlock job={j} editable={can('service.work') && j.mechanic != null && (open || draft)} onChanged={reload} />}
+      {mayManage && (j.batteries.length > 0 || j.trackers.fitted.length > 0 || j.trackers.removed.length > 0) && <PartsBlock job={{ ...j, parts: [] }} editable={false} onChanged={reload} />}
 
       <section className="card">
         <BlockHead title={t.repair.photos} sub={t.photos.count(j.photos.length)} />
@@ -586,7 +599,7 @@ function PayerSheet({ job, onClose, onSaved }: { job: ServiceJob; onClose: () =>
   );
 }
 
-const blankPart = { partId: '', qty: '1', price: '' };
+const blankPart = { partId: '', qty: '1', price: '', imei: '', sim: '' };
 
 /** A part off the shelf. Short stock does not refuse it — the count goes red (`service.md`). */
 function PartSheet({ job, onClose, onSaved }: { job: ServiceJob; onClose: () => void; onSaved: () => void }) {
@@ -611,7 +624,9 @@ function PartSheet({ job, onClose, onSaved }: { job: ServiceJob; onClose: () => 
       summary={() => picked && nameOf(picked)}
       label={t.repair.partAdd}
       submit={async (key) => {
-        await api.post(`/api/service/${job.id}/parts`, { partId: f.partId, qty: qty || 1, ...(typed != null ? { unitPriceTetri: typed } : {}) }, { key });
+        const tracker = picked?.isTracker ? { imei: f.imei, sim: f.sim } : {};
+        const price = typed != null ? { unitPriceTetri: typed } : {};
+        await api.post(`/api/service/${job.id}/parts`, { partId: f.partId, qty: picked?.isTracker ? 1 : qty || 1, ...price, ...tracker }, { key });
         return { toast: { text: t.repair.partAdded } };
       }}
       onDone={onSaved}
@@ -630,6 +645,8 @@ function PartSheet({ job, onClose, onSaved }: { job: ServiceJob; onClose: () => 
         <input className="input input-amount mono" value={f.qty} onChange={(e) => setF({ ...f, qty: e.target.value })} inputMode="numeric" />
       </Field>
       {picked && qty > picked.onHand && <p className="hint hint-bad">{t.repair.partShort(picked.onHand, t.stock.units[picked.unit])}</p>}
+      {/* A tracker fitted asks for its IMEI and SIM, on the owners' form too (ADR-0036). */}
+      {picked?.isTracker && <TrackerFields imei={f.imei} sim={f.sim} vehicle={job.vehicle.number ?? job.vehicle.model} onChange={(imei, sim) => setF({ ...f, imei, sim })} />}
       {/* The price the API will pick is the shelf's or the retail one; it is
           shown only to whoever may see cost, and overtyped only on purpose. */}
       {can('cost.view') && (

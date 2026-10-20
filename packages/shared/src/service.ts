@@ -41,11 +41,75 @@ export function partPriceTetri(payer: ServicePayer, part: { avgCostTetri?: numbe
 export interface JobLine {
   qty: number;
   unitPriceTetri: Tetri;
+  /** What the line is (0058); a line from before it came off the shelf. */
+  kind?: string | null;
+  /** A bought line: what the mechanic paid for all of it, by the receipt. */
+  paidTetri?: Tetri | null;
+  /** A bought line refused at approval. */
+  rejectedAt?: unknown;
+}
+
+/**
+ * What one repair line adds to what the repair cost (ADR-0036). A part off the
+ * shelf or off a donor is its quantity at its price; one the mechanic bought is
+ * the receipt, to the tetri, however many it was for; one taken off onto the
+ * shelf cost the repair nothing; a bought one refused is not the company's.
+ * The one place this is worked out — the repair, the economics, the debt and
+ * the moped's card all ask here.
+ */
+export function partLineTetri(line: JobLine): Tetri {
+  if (line.rejectedAt != null || line.kind === 'removed') return 0;
+  if (line.kind === 'bought' && line.paidTetri != null) return line.paidTetri;
+  return line.qty * line.unitPriceTetri;
+}
+
+export function partsTetri(lines: readonly JobLine[]): Tetri {
+  return lines.reduce((n, p) => n + partLineTetri(p), 0);
 }
 
 /** Parts plus work — what the job comes to today. */
 export function jobTotalTetri(input: { parts: readonly JobLine[]; labourTetri: Tetri }): Tetri {
-  return input.parts.reduce((n, p) => n + p.qty * p.unitPriceTetri, 0) + input.labourTetri;
+  return partsTetri(input.parts) + input.labourTetri;
+}
+
+// Parts and trackers in the mechanic's repair (stage 4; ADR-0036).
+
+/** Off the shelf, bought by the mechanic, taken off onto the shelf, off a donor. */
+export const SERVICE_PART_KINDS = ['stock', 'bought', 'removed', 'donor'] as const;
+export type ServicePartKind = (typeof SERVICE_PART_KINDS)[number];
+
+/** Only a bought line waits for a decision; the shelf and a donor are the company's own. */
+export function partLineState(line: { kind?: string | null; approvedAt: unknown; rejectedAt: unknown }): WorkLineState | null {
+  return line.kind === 'bought' ? workLineState(line) : null;
+}
+
+/**
+ * An IMEI as it is read off a tracker's sticker: fifteen digits, spaces and
+ * dashes allowed, and the last one a Luhn check digit — a digit typed wrong is
+ * caught here and not when the moped is stolen. Null when it is not one.
+ */
+export function readImei(raw: string | null | undefined): string | null {
+  const digits = (raw ?? '').replace(/[\s-]/g, '');
+  if (!/^[0-9]{15}$/.test(digits)) return null;
+  let sum = 0;
+  for (let i = 0; i < 15; i++) {
+    let d = Number(digits[14 - i]);
+    if (i % 2 === 1) {
+      d *= 2;
+      if (d > 9) d -= 9;
+    }
+    sum += d;
+  }
+  return sum % 10 === 0 ? digits : null;
+}
+
+/** A SIM's number as it is kept: digits, a leading «+» if there was one. Null when it cannot be a number. */
+export function readSimPhone(raw: string | null | undefined): string | null {
+  const s = (raw ?? '').trim();
+  const plus = s.startsWith('+') ? '+' : '';
+  const digits = s.replace(/[^0-9]/g, '');
+  if (digits.length < 6 || digits.length > 15 || /[^0-9+\s()-]/.test(s)) return null;
+  return plus + digits;
 }
 
 /**

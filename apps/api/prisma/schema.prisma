@@ -205,6 +205,17 @@ enum FileKind {
   @@map("file_kind")
 }
 
+/// What a repair line is (0058): off the shelf, bought by the mechanic, taken
+/// off this moped onto the shelf, or taken off a donor and fitted here.
+enum ServicePartKind {
+  stock
+  bought
+  removed
+  donor
+
+  @@map("service_part_kind")
+}
+
 enum ServiceStatus {
   /// A breakdown a manager reported: an owner turns it into a repair (wave 5 §3.7).
   draft
@@ -273,6 +284,12 @@ model User {
   repairsRejected   ServiceJob[]   @relation("service_job_rejected_by")
   worksApproved     ServiceWork[]  @relation("service_work_approved_by")
   worksRejected     ServiceWork[]  @relation("service_work_rejected_by")
+  partsWritten      ServicePart[]  @relation("service_part_created_by")
+  partsReimbursed   ServicePart[]  @relation("service_part_reimburse_to")
+  partsApproved     ServicePart[]  @relation("service_part_approved_by")
+  partsRejected     ServicePart[]  @relation("service_part_rejected_by")
+  trackersFitted    VehicleTracker[] @relation("vehicle_tracker_created_by")
+  trackersRemoved   VehicleTracker[] @relation("vehicle_tracker_removed_by")
   workTypesAdded    WorkType[]
   sales             Sale[]
   purchases         Purchase[]
@@ -432,6 +449,8 @@ model Vehicle {
   updatedAt       DateTime     @default(now()) @map("updated_at")
 
   serviceJobs   ServiceJob[]
+  donatedParts  ServicePart[]    @relation("service_part_donor")
+  trackers      VehicleTracker[]
   sales         Sale[]
   purchase      Purchase?      @relation(fields: [purchaseId], references: [id])
   model         VehicleModel   @relation(fields: [modelId], references: [id])
@@ -654,6 +673,7 @@ model StoredFile {
   sale       Sale?       @relation(fields: [saleId], references: [id], onDelete: Cascade)
   serviceJob ServiceJob? @relation(fields: [serviceJobId], references: [id], onDelete: Cascade)
   uploadedBy User?     @relation(fields: [uploadedById], references: [id])
+  receiptOf  ServicePart[] @relation("service_part_receipt")
 
   @@map("files")
 }
@@ -924,6 +944,9 @@ model ServiceJob {
   photos    StoredFile[]
   payments  Payment[]
   withholdings DepositWithholding[]
+  batteryMoves BatteryMove[]
+  trackersFitted  VehicleTracker[] @relation("vehicle_tracker_job")
+  trackersRemoved VehicleTracker[] @relation("vehicle_tracker_removed_job")
 
   @@map("service_jobs")
 }
@@ -938,10 +961,31 @@ model ServicePart {
   unitCostTetri  Int?     @map("unit_cost_tetri")
   partId         String?  @map("part_id") @db.Uuid
   createdAt      DateTime @default(now()) @map("created_at")
+  /// Off the shelf, bought, taken off onto the shelf, or from a donor (0058).
+  kind           ServicePartKind @default(stock)
+  donorVehicleId String?  @map("donor_vehicle_id") @db.Uuid
+  /// Bought: what the mechanic paid for the whole line, by the receipt.
+  paidTetri      Int?     @map("paid_tetri")
+  receiptPhotoId String?  @map("receipt_photo_id") @db.Uuid
+  reimburseToId  String?  @map("reimburse_to") @db.Uuid
+  createdById    String?  @map("created_by") @db.Uuid
+  /// Bought only: neither set — the line waits for approval (0058, as works in 0057).
+  approvedById   String?  @map("approved_by") @db.Uuid
+  approvedAt     DateTime? @map("approved_at")
+  rejectedById   String?  @map("rejected_by") @db.Uuid
+  rejectedAt     DateTime? @map("rejected_at")
+  rejectReason   String?  @map("reject_reason")
 
-  job   ServiceJob  @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  part  Part?       @relation(fields: [partId], references: [id])
-  moves StockMove[]
+  job          ServiceJob  @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  part         Part?       @relation(fields: [partId], references: [id])
+  moves        StockMove[]
+  donor        Vehicle?    @relation("service_part_donor", fields: [donorVehicleId], references: [id])
+  receiptPhoto StoredFile? @relation("service_part_receipt", fields: [receiptPhotoId], references: [id])
+  reimburseTo  User?       @relation("service_part_reimburse_to", fields: [reimburseToId], references: [id])
+  createdBy    User?       @relation("service_part_created_by", fields: [createdById], references: [id])
+  approvedBy   User?       @relation("service_part_approved_by", fields: [approvedById], references: [id])
+  rejectedBy   User?       @relation("service_part_rejected_by", fields: [rejectedById], references: [id])
+  trackers     VehicleTracker[]
 
   @@map("service_parts")
 }
@@ -1152,6 +1196,8 @@ model Part {
   salePriceTetri Int?     @map("sale_price_tetri")
   notes          String?
   archived       Boolean  @default(false)
+  /// A GPS tracker: fitting one asks for its IMEI and SIM (0058).
+  isTracker      Boolean  @default(false) @map("is_tracker")
   createdById    String?  @map("created_by") @db.Uuid
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @default(now()) @map("updated_at")
@@ -1160,6 +1206,7 @@ model Part {
   moves         StockMove[]
   purchaseLines PurchaseLine[]
   serviceParts  ServicePart[]
+  trackers      VehicleTracker[]
 
   @@map("parts")
 }
@@ -1352,16 +1399,47 @@ model BatteryMove {
   reason      String?
   rentalId    String?  @map("rental_id") @db.Uuid
   actId       String?  @map("act_id") @db.Uuid
+  /// The repair a battery or a charger went to, or came back from (0058).
+  serviceJobId String? @map("service_job_id") @db.Uuid
   occurredOn  DateTime @map("occurred_on") @db.Date
   createdById String?  @map("created_by") @db.Uuid
   createdAt   DateTime @default(now()) @map("created_at")
 
-  rental    Rental? @relation(fields: [rentalId], references: [id])
-  act       Act?    @relation(fields: [actId], references: [id])
-  createdBy User?   @relation(fields: [createdById], references: [id])
+  rental     Rental?     @relation(fields: [rentalId], references: [id])
+  act        Act?        @relation(fields: [actId], references: [id])
+  serviceJob ServiceJob? @relation(fields: [serviceJobId], references: [id])
+  createdBy  User?       @relation(fields: [createdById], references: [id])
 
   @@index([occurredOn, createdAt])
   @@map("battery_moves")
+}
+
+/// The GPS tracker on a moped, by IMEI and SIM, from fitting to removal (0058, ADR-0036).
+model VehicleTracker {
+  id            String    @id @default(uuid()) @db.Uuid
+  vehicleId     String    @map("vehicle_id") @db.Uuid
+  partId        String?   @map("part_id") @db.Uuid
+  imei          String
+  simPhone      String?   @map("sim_phone")
+  installedOn   DateTime  @map("installed_on") @db.Date
+  removedOn     DateTime? @map("removed_on") @db.Date
+  serviceJobId  String?   @map("service_job_id") @db.Uuid
+  servicePartId String?   @map("service_part_id") @db.Uuid
+  removedJobId  String?   @map("removed_job_id") @db.Uuid
+  source        String?
+  createdById   String?   @map("created_by") @db.Uuid
+  removedById   String?   @map("removed_by") @db.Uuid
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  vehicle     Vehicle      @relation(fields: [vehicleId], references: [id])
+  part        Part?        @relation(fields: [partId], references: [id])
+  serviceJob  ServiceJob?  @relation("vehicle_tracker_job", fields: [serviceJobId], references: [id])
+  servicePart ServicePart? @relation(fields: [servicePartId], references: [id])
+  removedJob  ServiceJob?  @relation("vehicle_tracker_removed_job", fields: [removedJobId], references: [id])
+  createdBy   User?        @relation("vehicle_tracker_created_by", fields: [createdById], references: [id])
+  removedBy   User?        @relation("vehicle_tracker_removed_by", fields: [removedById], references: [id])
+
+  @@map("vehicle_trackers")
 }
 
 /// A deal standing in Kommo's "rented" stage at the last poll that worked

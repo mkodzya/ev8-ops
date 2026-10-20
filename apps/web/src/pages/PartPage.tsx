@@ -130,8 +130,9 @@ export function PartPage() {
       {p.onHand < 0 && <div className="hint hint-bad">{t.stock.negativeHint}</div>}
       {fresh && <div className="hint">{t.shelf.noMovesYet}</div>}
 
-      {(p.salePriceTetri != null || p.nameKa || p.notes) && (
+      {(p.salePriceTetri != null || p.nameKa || p.notes || p.isTracker) && (
         <section className="card">
+          {p.isTracker && <p className="hint">{t.wparts.partIsTracker}</p>}
           {p.nameKa && <Row k={t.stock.nameKa} v={p.nameKa} />}
           {p.salePriceTetri != null && <Row k={t.stock.salePrice} v={<span className="mono">{formatGel(p.salePriceTetri)}</span>} />}
           {p.notes && <Row k={t.stock.notes} v={<span className="pre">{p.notes}</span>} />}
@@ -320,6 +321,7 @@ function EditSheet({ part, onClose, onSaved }: { part: PartRow; onClose: () => v
     minQty: part.minQty > 0 ? String(part.minQty) : '',
     price: part.salePriceTetri != null ? (part.salePriceTetri / 100).toFixed(2) : '',
     notes: part.notes ?? '',
+    isTracker: part.isTracker,
   };
   const [f, setF] = useState(initial);
 
@@ -343,6 +345,7 @@ function EditSheet({ part, onClose, onSaved }: { part: PartRow; onClose: () => v
             minQty: f.minQty === '' ? 0 : Number(f.minQty),
             salePriceTetri: f.price ? parseGel(f.price) : null,
             notes: f.notes || null,
+            isTracker: f.isTracker,
           },
           { key },
         );
@@ -370,6 +373,11 @@ function EditSheet({ part, onClose, onSaved }: { part: PartRow; onClose: () => v
       <Field label={t.stock.notes} name="notes">
         <textarea className="input textarea" rows={3} value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })} />
       </Field>
+      {/* Fitting a tracker asks for its IMEI and SIM (ADR-0036). */}
+      <label className="check">
+        <input type="checkbox" checked={f.isTracker} onChange={(e) => setF({ ...f, isTracker: e.target.checked })} />
+        <span>{t.wparts.partIsTracker}</span>
+      </label>
     </FormSheet>
   );
 }

@@ -13,6 +13,7 @@ import { payDayRu } from './pay-day.js';
 import { workshopRu } from './workshop.js';
 import { workshopJobsRu } from './workshop-jobs.js';
 import { workshopApprovalRu } from './workshop-approval.js';
+import { workshopPartsRu } from './workshop-parts.js';
 import { driveRu } from './drive.js';
 import { expRu } from './expenses.js';
 import { inBankRu } from './in-bank.js';
@@ -1239,6 +1240,16 @@ export const ru: Dict = {
       after_photo_missing: 'Нужно хотя бы одно фото «после».',
       norm_from_book: 'У работы из справочника норма та, с которой её записали.',
       work_line_not_found: 'Этой работы в заявке уже нет — обновите страницу.',
+      receipt_photo_missing: 'Сфотографируй чек: купленная деталь записывается только с ним.',
+      imei_bad: 'Это не IMEI: 15 цифр с наклейки, последняя — контрольная. Перечитай наклейку.',
+      sim_bad: 'Впиши номер SIM цифрами.',
+      tracker_on_vehicle: 'На этом мопеде уже стоит трекер. Сначала сними его.',
+      tracker_imei_in_use: 'Этот трекер стоит на другом мопеде — сначала сними его там.',
+      tracker_none: 'На этом мопеде трекера в EV8 Ops нет.',
+      tracker_removed_before_fitted: 'Трекер не снять раньше дня, когда его поставили.',
+      tracker_remove_apart: 'Трекер снимается кнопкой «Снять трекер».',
+      donor_is_this_moped: 'Донор — другой мопед, не этот.',
+      line_approved: 'Деталь согласована: убрать её может главный механик или владелец.',
       job_no_mechanic: 'У этого ремонта нет механика: его ведут владельцы прежней формой.',
       last_owner: 'Это последний действующий владелец: его роль не меняется и не отключается.',
       line_not_found: 'Этой строки в заказе уже нет.',
@@ -1360,6 +1371,7 @@ export const ru: Dict = {
   ...workshopRu,
   ...workshopJobsRu,
   ...workshopApprovalRu,
+  ...workshopPartsRu,
   ...driveRu,
   ...expRu,
   ...inBankRu,

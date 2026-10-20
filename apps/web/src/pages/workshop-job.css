@@ -233,9 +233,39 @@
 .wjob-norm { display: inline-flex; align-items: center; gap: var(--space2); flex-wrap: wrap; }
 .wjob-norm .input { width: 96px; min-height: 48px; }
 .wappr-close { min-height: var(--control-large); padding: 0 28px; font: var(--text-cta); }
+/* Parts and trackers in the repair (stage 4; prototype mechanic-parts-options.html, A and A). */
+.wparts-lines li { align-items: center; }
+.wparts-kind { flex: none; padding: 2px 10px; border-radius: var(--radius-pill); background: var(--surface-2); font: var(--text-label); font-weight: 600; white-space: nowrap; }
+.wparts-bat { background: var(--info-soft); color: var(--rented-ink); }
+.wparts-sub { display: block; color: var(--muted); font: var(--text-body-sm); }
+.wparts-qty { white-space: nowrap; }
+.wparts-x { flex: none; width: 44px; height: 44px; border: 1.5px solid var(--line-control); border-radius: 50%; background: var(--surface); color: var(--ink); font: var(--text-h2); cursor: pointer; }
+.wparts-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space3); }
+.wparts-tile { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space1); min-height: 132px; padding: 16px 18px; border: 1.5px solid var(--line-control); border-radius: var(--radius-card); background: var(--surface); color: var(--ink); text-align: left; cursor: pointer; }
+.wparts-tile b { font: var(--text-h2); }
+.wparts-tile:hover { border-color: var(--accent); }
+.wparts-tile-bat { border-style: dashed; }
+.wparts-glyph { font: var(--text-display); line-height: 1; color: var(--accent); }
+.wparts-form { display: flex; flex-direction: column; gap: var(--space4); }
+.wparts-res { list-style: none; margin: var(--space2) 0 0; padding: 0; display: flex; flex-direction: column; gap: var(--space2); }
+.wparts-row { display: flex; align-items: center; gap: var(--space3); width: 100%; min-height: 60px; padding: 10px 16px; border: 1.5px solid var(--line-soft); border-radius: var(--radius-card); background: var(--surface); color: var(--ink); text-align: left; cursor: pointer; }
+.wparts-row.on { border: 3px solid var(--accent); background: var(--accent-soft); padding: 9px 15px; }
+.wparts-row .wjob-code { width: auto; min-width: 56px; max-width: 112px; overflow-wrap: anywhere; }
+.wparts-free { border-style: dashed; color: var(--muted); }
+.wparts-mark { margin-left: var(--space2); padding: 1px 8px; border-radius: var(--radius-pill); background: var(--surface-2); font: var(--text-label); }
+.wparts-on { color: var(--muted); white-space: nowrap; }
+.wparts-on.bad { color: var(--crit-ink); font-weight: 600; }
+.wparts-note { margin: 0; padding: 12px 16px; border-radius: var(--radius-card); background: var(--surface-2); }
+.wparts-ok { margin: 0; color: var(--accent-ink); font-weight: 500; }
+.wparts-imei { letter-spacing: 0.04em; }
+.wparts-q { margin: 0; font: var(--text-h2); }
+.wparts-receipt { flex: none; width: 64px; height: 64px; }
+.wparts-struck td { color: var(--muted); text-decoration: line-through; }
 @media (max-width: 719px) {
   .wjob-lines li { flex-wrap: wrap; }
   .wjob-lines .wjob-name { flex: 1 1 calc(100% - 72px); }
   .wjob-lines .wjob-gel { width: auto; margin-left: auto; }
   .wappr-acts .pill { flex: 1 1 auto; }
+  .wparts-tiles { grid-template-columns: minmax(0, 1fr); }
+  .wparts-tile { min-height: 96px; }
 }

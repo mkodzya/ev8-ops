@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { LoadError } from '../components/LoadError.js';
-import { Loading } from '../components/ui.js';
+import { BlockHead, Loading } from '../components/ui.js';
 import { Field } from '../components/Wizard.js';
 import { useToast } from '../ds/feedback/Toast.js';
 import { FailureProvider, SubmitButton } from '../ds/form/Form.js';
@@ -13,6 +13,7 @@ import { toBase64, type PreparedPhoto } from '../lib/photos.js';
 import { useLoad } from '../lib/use.js';
 import { groupDigits } from '../lib/workBook.js';
 import { NormTotal, StatedLines, useWhen } from './RepairApproval.js';
+import { PartLines } from './RepairParts.js';
 import type { ServiceJob } from './ServicePage.js';
 import { Photos } from './WorkshopJobWizard.js';
 import './workshop-job.css';
@@ -140,6 +141,12 @@ export function RepairClosePage() {
                   {j.openedAt && <p className="hint muted">{t.wappr.timeline(when(j.openedAt), j.approved ? when(j.approved.at) : null)}</p>}
                 </section>
               )}
+              {/* The parts as a last look, not a form (stage 4, variant A): forgotten ones show here. */}
+              <section className="card">
+                <BlockHead title={t.wparts.block} sub={t.wparts.closeCheck} />
+                {j.parts.length + j.batteries.length + j.trackers.removed.length > 0 && <PartLines job={j} />}
+                <p className="hint muted">{t.wparts.closeForgot}</p>
+              </section>
             </div>
           </section>
         </FailureProvider>

@@ -4,9 +4,10 @@
 // it — allocations, sale payments, repair lines, events — so a voided payment
 // or a corrected repair changes the answer the moment it is saved, and a
 // number on this screen can always be walked back to the row it came from.
-import { type VehicleEconomics, type VehicleState, todayISO, vehicleEconomics } from '@ev8/shared';
+import { type VehicleEconomics, type VehicleState, partsTetri, todayISO, vehicleEconomics } from '@ev8/shared';
 import { isoDate } from './dates.js';
 import { prisma } from './db.js';
+import { PART_MONEY } from './stock.js';
 import { preliminaryOf } from './purchases.js';
 
 export interface VehicleRow extends VehicleEconomics {
@@ -57,7 +58,7 @@ export async function fleetEconomics(opts: { vehicleIds?: string[]; until?: stri
 
   const jobs = await prisma.serviceJob.findMany({
     where: { vehicleId: { in: ids }, status: { not: 'cancelled' } },
-    select: { vehicleId: true, payer: true, labourTetri: true, parts: { select: { qty: true, unitPriceTetri: true } } },
+    select: { vehicleId: true, payer: true, labourTetri: true, parts: { select: PART_MONEY } },
   });
 
   const events = await prisma.vehicleEvent.findMany({
@@ -83,7 +84,7 @@ export async function fleetEconomics(opts: { vehicleIds?: string[]; until?: stri
   for (const j of jobs) {
     const bucket = acc.get(j.vehicleId);
     if (!bucket) continue;
-    const total = j.labourTetri + j.parts.reduce((n, p) => n + p.qty * p.unitPriceTetri, 0);
+    const total = j.labourTetri + partsTetri(j.parts);
     if (j.payer === 'customer') bucket.charged += total;
     else bucket.company += total;
   }
