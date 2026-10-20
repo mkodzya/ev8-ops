@@ -4,8 +4,10 @@ import { api, ApiError } from './api.js';
 import { useHeader } from './ds/shell/header.js';
 import { LanguageToggle, useT } from './i18n/index.js';
 import { queryClient } from './lib/queryClient.js';
+import { useTablet } from './lib/tablet.js';
 import { errorText } from './lib/use.js';
 import { useSession } from './session.js';
+import { TabletSignIn } from './TabletSignIn.js';
 
 export function LoginPage() {
   const navigate = useNavigate();
@@ -13,8 +15,16 @@ export function LoginPage() {
   const from = (useLocation().state as { from?: string } | null)?.from ?? '/';
   const { me, loading, signedOutOffline, dismissOffline } = useSession();
   const t = useT();
+  // On the registered workshop tablet the sign-in is names and a PIN (ADR-0033 §6).
+  const { tablet, reload } = useTablet();
+  const [byEmail, setByEmail] = useState(false);
 
   if (!loading && me) return <Navigate to={from} replace />;
+  // A moment while the tablet question is answered, rather than the wrong screen flashing.
+  if (!tablet) return null;
+  if (tablet.device && !byEmail && !signedOutOffline) {
+    return <TabletSignIn tablet={tablet} onReload={reload} onEmail={() => setByEmail(true)} onSignedIn={() => navigate('/', { replace: true })} />;
+  }
 
   return (
     <div className="login-wrap">
@@ -32,6 +42,13 @@ export function LoginPage() {
           <>
             <p className="login-note">{t.login.note}</p>
             <LoginForm onSignedIn={() => navigate(from, { replace: true })} />
+            {tablet.device && (
+              <p className="login-note login-back">
+                <button type="button" className="link-btn" onClick={() => setByEmail(false)}>
+                  ← {t.workshop.backToNames}
+                </button>
+              </p>
+            )}
           </>
         )}
       </div>
