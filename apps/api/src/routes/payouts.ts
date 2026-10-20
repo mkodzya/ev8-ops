@@ -323,6 +323,9 @@ export function payoutRoutes(app: FastifyInstance): void {
       // One mark for a mechanic at a time: a second one waits here, then finds
       // the repairs paid. The conditional writes below refuse it anyway.
       await tx.$queryRaw`SELECT 1 FROM users WHERE id = ${mechanicId}::uuid FOR NO KEY UPDATE`;
+      // His closed repairs hold still while they are read and paid: a norm
+      // given on one waits for this mark, then finds it paid (ADR-0037 §5).
+      await tx.$queryRaw`SELECT 1 FROM service_jobs WHERE mechanic_id = ${mechanicId}::uuid AND status = 'done' AND paid_in_payout_id IS NULL FOR UPDATE`;
       const due = await payableFor(tx, mechanicId);
       if (!due) throw conflict('nothing_to_pay', 'Nothing is owed to this mechanic now.');
       if (!sameSet(jobIds, due.jobIds) || !sameSet(partIds, due.partIds) || totalTetri !== due.totalTetri) {

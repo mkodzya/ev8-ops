@@ -676,7 +676,8 @@ describe.skipIf(!HAS_DB)('«Оплачено» (ADR-0037 §4)', () => {
     expect(errorOf(twice)).toBe('payout_voided');
   });
 
-  it('a repair paid through «Оплачено» refuses a norm and a photo', async () => {
+  it('a repair paid through «Оплачено» refuses a norm, a photo and hiding one', async () => {
+    const { prisma } = await import('../src/lib/db.js');
     const owner = await person('owner');
     const mech = await person('mechanic');
     const chief = await person('chief_mechanic');
@@ -685,6 +686,12 @@ describe.skipIf(!HAS_DB)('«Оплачено» (ADR-0037 §4)', () => {
     await closeRepair(mech.cookie, id);
     const line = (await jobOf(owner.cookie, id)).works[0]!;
     expect((await call(chief.cookie, 'PATCH', `/api/service/${id}/works/${line.id}`, { normMin: 15 })).statusCode).toBe(200);
+    // Not paid yet, a photo may still be hidden; the journal says on which repair.
+    const shots = await prisma.storedFile.findMany({ where: { serviceJobId: id, kind: 'service_photo' }, orderBy: { createdAt: 'asc' }, select: { id: true } });
+    expect(shots.length).toBeGreaterThanOrEqual(2);
+    const hidden = await call(owner.cookie, 'POST', `/api/files/${shots[0]!.id}/archive`, { reason: 'ТЕСТ blurry' });
+    expect(hidden.statusCode, hidden.body).toBe(200);
+    expect(await prisma.auditLog.findFirstOrThrow({ where: { action: 'file.archive', entityId: id }, select: { entityType: true, note: true } })).toEqual({ entityType: 'service_job', note: 'ТЕСТ blurry' });
     const payout = await pay(owner.cookie, (await dueOf(owner.cookie, mech.id))!);
     expect(await jobOf(owner.cookie, id)).toMatchObject({ status: 'done', payState: 'paid', paid: { payoutId: payout.id } });
 
@@ -694,6 +701,62 @@ describe.skipIf(!HAS_DB)('«Оплачено» (ADR-0037 §4)', () => {
     const photo = await call(owner.cookie, 'POST', `/api/service/${id}/photos`, PHOTO);
     expect(photo.statusCode).toBe(409);
     expect(errorOf(photo)).toBe('job_paid');
+    const late = await call(owner.cookie, 'POST', `/api/files/${shots[1]!.id}/archive`, { reason: 'ТЕСТ blurry too' });
+    expect(late.statusCode).toBe(409);
+    expect(errorOf(late)).toBe('job_paid');
+    expect((await prisma.storedFile.findUniqueOrThrow({ where: { id: shots[1]!.id }, select: { archived: true } })).archived).toBe(false);
+  });
+
+  it('a norm given at the moment of «Оплачено» never leaves a paid repair at another sum than its payout', async () => {
+    const { prisma } = await import('../src/lib/db.js');
+    const owner = await person('owner');
+    const mech = await person('mechanic');
+    const chief = await person('chief_mechanic');
+    // Long enough for the request started inside to reach the lock the transaction holds.
+    const pause = () => new Promise((r) => setTimeout(r, 300));
+
+    // The mark first, held open: the chief's norm waits for it, then finds the repair paid.
+    const { vehicle } = await freeVehicle();
+    const one = await repairInWork(mech.cookie, chief.cookie, vehicle.id, [{ freeText: 'ТЕСТ align the handlebar' }]);
+    await closeRepair(mech.cookie, one);
+    const line = (await jobOf(owner.cookie, one)).works[0]!;
+    expect((await call(chief.cookie, 'PATCH', `/api/service/${one}/works/${line.id}`, { normMin: 20 })).statusCode).toBe(200);
+    let norm: ReturnType<typeof call> | undefined;
+    const payout = await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT 1 FROM service_jobs WHERE id = ${one}::uuid FOR UPDATE`;
+      const p = await tx.mechanicPayout.create({ data: { mechanicId: mech.id, paidOn: new Date('2026-10-20T00:00:00Z'), labourTetri: 1667, reimburseTetri: 0, markedById: owner.id } });
+      await tx.serviceJob.update({ where: { id: one }, data: { paidInPayoutId: p.id } });
+      norm = call(chief.cookie, 'PATCH', `/api/service/${one}/works/${line.id}`, { normMin: 25 });
+      await pause();
+      return p;
+    });
+    const late = await norm!;
+    expect(late.statusCode, late.body).toBe(409);
+    expect(errorOf(late)).toBe('job_paid');
+    expect((await prisma.serviceWork.findUniqueOrThrow({ where: { id: line.id } })).normSec).toBe(1200);
+    expect(await jobOf(owner.cookie, one)).toMatchObject({ worksCostTetri: 1667, paid: { payoutId: payout.id } });
+
+    // The norm first, held open: the mark waits for it, then finds the sum is not what the owner saw.
+    const vt = await freeVehicle();
+    const two = await repairInWork(mech.cookie, chief.cookie, vt.vehicle.id, [{ freeText: 'ТЕСТ grease the stand' }]);
+    await closeRepair(mech.cookie, two);
+    const line2 = (await jobOf(owner.cookie, two)).works[0]!;
+    expect((await call(chief.cookie, 'PATCH', `/api/service/${two}/works/${line2.id}`, { normMin: 20 })).statusCode).toBe(200);
+    const seen = (await dueOf(owner.cookie, mech.id))!;
+    expect(seen).toMatchObject({ jobIds: [two], totalTetri: 1667 });
+    let mark: ReturnType<typeof call> | undefined;
+    await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT 1 FROM service_jobs WHERE id = ${two}::uuid FOR UPDATE`;
+      await tx.serviceWork.update({ where: { id: line2.id }, data: { normSec: 1500 } });
+      mark = call(owner.cookie, 'POST', '/api/service/payouts', markOf(seen));
+      await pause();
+    });
+    const stale = await mark!;
+    expect(stale.statusCode, stale.body).toBe(409);
+    expect(errorOf(stale)).toBe('payout_changed');
+    expect(json<{ mechanic: Due }>(stale).mechanic).toMatchObject({ jobIds: [two], workTetri: 2083 });
+    expect(await prisma.mechanicPayout.count({ where: { mechanicId: mech.id } })).toBe(1);
+    expect(await prisma.serviceJob.count({ where: { id: two, paidInPayoutId: null } })).toBe(1);
   });
 });
 

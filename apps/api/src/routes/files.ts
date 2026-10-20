@@ -146,10 +146,17 @@ export function fileRoutes(app: FastifyInstance): void {
   // No delete: archive hides a file, the bytes and the journal stay.
   app.post<{ Params: { id: string }; Body: Body }>('/api/files/:id/archive', { config: { scope: 'deposit.decide' } }, async (req) => {
     const actor = actorOf(req);
-    const f = await prisma.storedFile.findUnique({ where: { id: req.params.id }, select: { id: true, kind: true, actId: true, customerId: true } });
+    const f = await prisma.storedFile.findUnique({
+      where: { id: req.params.id },
+      select: { id: true, kind: true, actId: true, customerId: true, serviceJobId: true, serviceJob: { select: { paidInPayoutId: true } } },
+    });
     if (!f) throw notFound('file_not_found', 'No such file.');
+    // A paid repair is a record: nothing on it is hidden either (ADR-0037 §5).
+    if (f.serviceJob?.paidInPayoutId != null) throw conflict('job_paid', 'This repair is paid to its mechanic; it is not changed any more.');
     await prisma.storedFile.update({ where: { id: f.id }, data: { archived: true } });
-    await audit({ actorId: actor.id, action: 'file.archive', entityType: f.kind === 'act_photo' ? 'act' : 'customer', entityId: f.actId ?? f.customerId, note: str(req.body ?? {}, 'reason', { max: 1000 }) });
+    // The journal names what the file was on: a repair's photo, its repair.
+    const on = f.serviceJobId ? { entityType: 'service_job', entityId: f.serviceJobId } : { entityType: f.kind === 'act_photo' ? 'act' : 'customer', entityId: f.actId ?? f.customerId };
+    await audit({ actorId: actor.id, action: 'file.archive', ...on, note: str(req.body ?? {}, 'reason', { max: 1000 }) });
     return { ok: true };
   });
 }

@@ -862,8 +862,25 @@ export function serviceRoutes(app: FastifyInstance): void {
     if (line.workTypeId) throw conflict('norm_from_book', 'A work from the book keeps the norm it was written with.');
     if (line.job.status === 'cancelled') throw conflict('job_closed', 'A cancelled repair is a record; it is not edited.');
     refusePaid(line.job);
-    await prisma.serviceWork.update({ where: { id: line.id }, data: { normSec } });
-    await audit({ actorId: actor.id, action: 'service.work.norm', entityType: 'service_job', entityId: line.jobId, before: { workId: line.id, normSec: line.normSec }, after: { number: line.job.number, workId: line.id, normSec } });
+    await prisma.$transaction(async (tx) => {
+      // The repair's row is what «Оплачено» locks before it reads the works it
+      // pays: a norm lands before the mark reads it — and the mark, no longer
+      // what the owner saw, is refused — or after the mark, on a repair now
+      // paid, and is refused here (ADR-0037 §5, §8).
+      await tx.$queryRaw`SELECT 1 FROM service_jobs WHERE id = ${line.jobId}::uuid FOR UPDATE`;
+      refusePaid(await tx.serviceJob.findUniqueOrThrow({ where: { id: line.jobId }, select: { paidInPayoutId: true } }));
+      await tx.serviceWork.update({ where: { id: line.id }, data: { normSec } });
+      await tx.auditLog.create({
+        data: {
+          actorId: actor.id,
+          action: 'service.work.norm',
+          entityType: 'service_job',
+          entityId: line.jobId,
+          before: { workId: line.id, normSec: line.normSec },
+          after: { number: line.job.number, workId: line.id, normSec },
+        },
+      });
+    });
     return { ok: true, normSec };
   });
 
