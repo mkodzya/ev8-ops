@@ -304,6 +304,9 @@ model User {
   bankDeposits      BankCashDeposit[]
   devicesRegistered WorkshopDevice[] @relation("device_registered_by")
   devicesRevoked    WorkshopDevice[] @relation("device_revoked_by")
+  payoutsReceived   MechanicPayout[] @relation("mechanic_payout_mechanic")
+  payoutsMarked     MechanicPayout[] @relation("mechanic_payout_marked_by")
+  payoutsVoided     MechanicPayout[] @relation("mechanic_payout_voided_by")
 
   @@map("users")
 }
@@ -926,6 +929,8 @@ model ServiceJob {
   rejectReason  String?       @map("reject_reason")
   /// The minute it closed; repairs before 0057 have only the day.
   closedAt      DateTime?     @map("closed_at")
+  /// The payout that paid its mechanic for it — only his, only once it is closed; empty — not paid (0059, ADR-0037).
+  paidInPayoutId String?      @map("paid_in_payout_id") @db.Uuid
   createdById   String?       @map("created_by") @db.Uuid
   createdAt     DateTime      @default(now()) @map("created_at")
   updatedAt     DateTime      @default(now()) @map("updated_at")
@@ -947,6 +952,7 @@ model ServiceJob {
   batteryMoves BatteryMove[]
   trackersFitted  VehicleTracker[] @relation("vehicle_tracker_job")
   trackersRemoved VehicleTracker[] @relation("vehicle_tracker_removed_job")
+  paidInPayout MechanicPayout? @relation("service_job_paid_in_payout", fields: [paidInPayoutId, mechanicId], references: [id, mechanicId])
 
   @@map("service_jobs")
 }
@@ -975,6 +981,8 @@ model ServicePart {
   rejectedById   String?  @map("rejected_by") @db.Uuid
   rejectedAt     DateTime? @map("rejected_at")
   rejectReason   String?  @map("reject_reason")
+  /// Bought: the payout that paid the receipt back to `reimburseTo` — his payout only (0059, ADR-0037).
+  paidInPayoutId String?  @map("paid_in_payout_id") @db.Uuid
 
   job          ServiceJob  @relation(fields: [jobId], references: [id], onDelete: Cascade)
   part         Part?       @relation(fields: [partId], references: [id])
@@ -986,8 +994,37 @@ model ServicePart {
   approvedBy   User?       @relation("service_part_approved_by", fields: [approvedById], references: [id])
   rejectedBy   User?       @relation("service_part_rejected_by", fields: [rejectedById], references: [id])
   trackers     VehicleTracker[]
+  paidInPayout MechanicPayout? @relation("service_part_paid_in_payout", fields: [paidInPayoutId, reimburseToId], references: [id, mechanicId])
 
   @@map("service_parts")
+}
+
+/// The owner's mark that a mechanic was paid for closed repairs and receipts (0059, ADR-0037):
+/// not a payment and not an expense. What it paid is the sum of the two figures, never a stored total.
+model MechanicPayout {
+  id             String    @id @default(uuid()) @db.Uuid
+  mechanicId     String    @map("mechanic_id") @db.Uuid
+  /// The Tbilisi day it was marked.
+  paidOn         DateTime  @map("paid_on") @db.Date
+  /// The approved work of its repairs, each repair rounded once (ADR-0037 §8).
+  labourTetri    Int       @map("labour_tetri")
+  /// The receipts it paid back, to the tetri.
+  reimburseTetri Int       @map("reimburse_tetri")
+  markedById     String    @map("marked_by") @db.Uuid
+  markedAt       DateTime  @default(now()) @map("marked_at")
+  /// A payout marked by mistake is voided with a reason; its repairs are payable again (ADR-0037 §5).
+  voidedAt       DateTime? @map("voided_at")
+  voidedById     String?   @map("voided_by") @db.Uuid
+  voidReason     String?   @map("void_reason")
+
+  mechanic User          @relation("mechanic_payout_mechanic", fields: [mechanicId], references: [id])
+  markedBy User          @relation("mechanic_payout_marked_by", fields: [markedById], references: [id])
+  voidedBy User?         @relation("mechanic_payout_voided_by", fields: [voidedById], references: [id])
+  jobs     ServiceJob[]  @relation("service_job_paid_in_payout")
+  parts    ServicePart[] @relation("service_part_paid_in_payout")
+
+  @@unique([id, mechanicId])
+  @@map("mechanic_payouts")
 }
 
 /// A category of the book of works: BR — brakes. Its name is translated once (0056).

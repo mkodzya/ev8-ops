@@ -55,6 +55,9 @@ export async function teardown(): Promise<void> {
     // A battery moved by a repair names it (0058): the movement goes first.
     await prisma.batteryMove.deleteMany({ where: { createdAt: since } });
     await prisma.serviceJob.deleteMany({ where: { createdAt: since } }); // parts and photos cascade
+    // A paid repair and a receipt paid back name their payout (0059): they go
+    // first, then the payouts, before the people who were paid and who marked them.
+    await prisma.mechanicPayout.deleteMany({ where: { markedAt: since } });
     await prisma.sale.deleteMany({ where: { createdAt: since } }); // instalments cascade
     await prisma.vehicle.updateMany({ where: { createdAt: since }, data: { purchaseId: null } });
     await prisma.purchase.deleteMany({ where: { createdAt: since } }); // lines cascade
