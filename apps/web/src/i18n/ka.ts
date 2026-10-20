@@ -11,6 +11,7 @@ import { bankApiKa } from './bank-api.js';
 import { calendarKa } from './payments-calendar.js';
 import { payDayKa } from './pay-day.js';
 import { workshopKa } from './workshop.js';
+import { workshopJobsKa } from './workshop-jobs.js';
 import { driveKa } from './drive.js';
 import { expKa } from './expenses.js';
 import { inBankKa } from './in-bank.js';
@@ -98,6 +99,7 @@ export const ka: Dict = {
       batteries: 'ბატარეები და დამტენები',
       jobs: 'რემონტები',
       stock: 'საწყობი',
+      works: 'სამუშაოების ცნობარი',
       payments: 'გადახდები',
       statements: 'ამონაწერები',
       week: 'კვირა',
@@ -1212,6 +1214,10 @@ export const ka: Dict = {
       internal: 'რაღაც გაფუჭდა სისტემის მხარეს. სცადეთ ხელახლა ან შეატყობინეთ მფლობელს.',
       invalid_credentials: 'ელფოსტა და პაროლი არ ემთხვევა.',
       invalid_pin: 'არასწორი PIN.',
+      job_has_mechanic: 'ამ შეკეთებას სხვა მექანიკოსი აწარმოებს.',
+      work_type_not_found: 'ცნობარში ასეთი სამუშაო არ არის.',
+      work_type_off: 'ეს სამუშაო ცნობარში გამორთულია — აირჩიეთ სხვა.',
+      work_category_not_found: 'სამუშაოების ასეთი კატეგორია არ არის.',
       job_already_open: 'ამ მოპედს უკვე აქვს ღია რემონტი — გახსენით ის.',
       job_closed: 'დახურული რემონტის რედაქტირება შეუძლებელია.',
       job_not_found: 'რემონტი ვერ მოიძებნა.',
@@ -1334,6 +1340,7 @@ export const ka: Dict = {
   ...calendarKa,
   ...payDayKa,
   ...workshopKa,
+  ...workshopJobsKa,
   ...driveKa,
   ...expKa,
   ...inBankKa,

@@ -14,6 +14,7 @@ import { useT } from '../i18n/index.js';
 import { uploadAll, type PreparedPhoto } from '../lib/photos.js';
 import { useLoad } from '../lib/use.js';
 import { useSession } from '../session.js';
+import './workshop-job.css';
 
 export type ServiceStatus = 'draft' | 'open' | 'done' | 'cancelled';
 
@@ -61,7 +62,33 @@ export interface ServiceJob {
   rental: { id: string; number: string } | null;
   customer: { id: string; name: string; nameKa: string | null; nameLat: string | null } | null;
   parts: ServiceJobPart[];
-  photos: { id: string; label: string }[];
+  photos: { id: string; label: string; tag?: string | null }[];
+  /** Who carries the repair; empty on repairs from before stage 2 of the mechanic plan. */
+  mechanic: { id: string; name: string } | null;
+  reasonKind: string | null;
+  openedOdometerKm: number | null;
+  odometerReason: string | null;
+  openedAt: string | null;
+  works: ServiceWorkLine[];
+  /** The mechanic's sum comes empty to whoever neither carries repairs nor sees cost. */
+  worksTotal: { seconds: number; tetri: number | null; unnormed: number };
+}
+
+export interface ServiceWorkLine {
+  id: string;
+  workTypeId: string | null;
+  code: string | null;
+  category: string | null;
+  nameKa: string | null;
+  nameRu: string | null;
+  nameEn: string | null;
+  freeText: string | null;
+  qty: number;
+  /** The norm the line was written with; empty for a work not in the book. */
+  normSec: number | null;
+  rateTetri: number | null;
+  amountTetri: number | null;
+  mechanicId: string | null;
 }
 
 export interface ServiceList {
@@ -92,7 +119,7 @@ function daysOf(j: ServiceJob, today: string): number {
  */
 export function ServicePage() {
   const t = useT();
-  const { can } = useSession();
+  const { can, me } = useSession();
   const { data, failure, reload } = useLoad<ServiceList>('/api/service');
   const today = todayISO();
 
@@ -104,12 +131,31 @@ export function ServicePage() {
   const mayCost = can('cost.view');
   const mayFleet = can('fleet.view');
   const drafts = data.jobs.filter((j) => j.status === 'draft');
+  // Whoever carries repairs and does not keep the shop's books opens one from
+  // the workshop: the mechanic and the chief mechanic (stage 2). The owners
+  // keep their sheet, with the workshop and who pays on it.
+  const workshop = can('service.work') && !mayManage;
+  const onlyMine = !mayFleet && !mayApprove;
 
   return (
     <>
-      <PageHead wrap title={t.repair.title} sub={t.repair.openCount(data.open)}>
-        {can('service.report') && <NewJob onDone={reload} />}
+      <PageHead wrap title={t.repair.title} sub={onlyMine ? t.wjob.yours(data.jobs.length) : t.repair.openCount(data.open)}>
+        {/* On the tablet there are no section tabs: the book is reached from here. */}
+        {can('service.norms') && me?.via === 'pin' && (
+          <Link className="pill pill-sm" to="/service/works">
+            {t.wbook.title}
+          </Link>
+        )}
+        {!workshop && can('service.report') && <NewJob onDone={reload} />}
       </PageHead>
+
+      {/* The workshop's one loud action, first and the width of the screen
+          (stage 2; prototype mechanic-job-open-options.html, «Ремонт у механика»). */}
+      {workshop && (
+        <Link className="wjob-new" to="/service/new">
+          + {t.wjob.newJob}
+        </Link>
+      )}
 
       {mayApprove && drafts.length > 0 && (
         <section className="card card-warn queue-card">
@@ -224,7 +270,7 @@ function Draft({ job, onDone }: { job: ServiceJob; onDone: () => void }) {
   return (
     <li className="q-row">
       <Link className="q-who" to={`/service/${job.id}`}>
-        <span className="q-name">{t.repair.fromManager}</span>
+        <span className="q-name">{job.mechanic?.name ?? t.repair.fromManager}</span>
         <span className="q-sub muted">
           {job.vehicle.model} <span className="mono">···{job.vehicle.vin.slice(-4)}</span> · «{job.reason}»
           {job.photos.length > 0 && <> · {t.photos.count(job.photos.length)}</>}

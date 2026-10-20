@@ -97,6 +97,7 @@ export type TabId =
   | 'points'
   | 'batteries'
   | 'jobs'
+  | 'works'
   | 'stock'
   | 'sort'
   | 'payments'
@@ -128,6 +129,8 @@ export const SECTION_TABS: Partial<Record<SectionId, readonly { id: TabId; path:
   service: [
     { id: 'jobs', path: '/service', anyOf: ['service.view'] },
     { id: 'stock', path: '/service/stock', anyOf: ['fleet.view'] },
+    // The book of works and its norms (stage 2 of the mechanic plan).
+    { id: 'works', path: '/service/works', anyOf: ['service.norms'] },
   ],
   // Money in one place (wave 2 §3.0): sort the bank lines, the payments,
   // the till by person, the statements, the deposits. The payments calendar

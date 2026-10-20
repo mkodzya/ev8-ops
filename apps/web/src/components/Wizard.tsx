@@ -20,6 +20,8 @@ export function Wizard(props: {
   submit?: { state: SubmitState; failure: Failure | null; label: string };
   /** The last refusal, shown on any step — the step it sent you back to included (QA-W3-01). */
   failure?: Failure | null;
+  /** A line that stays beside the buttons, in sight while the step scrolls: what has been picked so far. */
+  footNote?: ReactNode;
 }) {
   const t = useT();
   const last = props.step >= props.steps.length - 1;
@@ -52,6 +54,7 @@ export function Wizard(props: {
       )}
       {props.error && <div className="hint hint-bad">{props.error}</div>}
       <footer className="wizard-foot">
+        {props.footNote != null && <span className="wizard-foot-note">{props.footNote}</span>}
         {props.onBack && (
           <button type="button" className="pill" onClick={props.onBack} disabled={props.busy}>
             {t.actions.back}

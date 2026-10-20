@@ -1,4 +1,23 @@
-import { closeCharge, jobTotalTetri, labourTetri as labourFor, minutesFromHours, partPriceTetri, seesEveryRepair, todayISO } from '@ev8/shared';
+import {
+  JOB_PHOTOS_MAX,
+  LABOUR_RATE_TETRI,
+  SERVICE_REASONS,
+  WORK_QTY_MAX,
+  closeCharge,
+  fleetNumber,
+  jobTotalTetri,
+  labourTetri as labourFor,
+  minutesFromHours,
+  partPriceTetri,
+  readFleetNumber,
+  readQuery,
+  seesEveryRepair,
+  todayISO,
+  vinMatches,
+  workLineTetri,
+  worksTotal,
+} from '@ev8/shared';
+import { createHash } from 'node:crypto';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { audit } from '../lib/audit.js';
 import { hasPerm, permissionsOf, type Actor } from '../lib/auth.js';
@@ -20,6 +39,10 @@ import { moveVehicle } from '../lib/vehicles.js';
 // remembers which of the two it did.
 
 type Body = Record<string, unknown>;
+
+/** A repair a mechanic opens carries its photos with it: one operation, one body (as a hand-over does). */
+const JOB_BODY_LIMIT = 16 * 1024 * 1024;
+const PHOTO_MIME = new Set(['image/jpeg', 'image/png', 'image/webp']);
 
 const PAYERS = ['company', 'customer'] as const;
 type Payer = (typeof PAYERS)[number];
@@ -75,8 +98,40 @@ function serialize(job: {
   rental: { id: string; number: string } | null;
   customer: { id: string; name: string } | null;
   parts: { id: string; name: string; qty: number; unitPriceTetri: number; unitCostTetri?: number | null; partId?: string | null }[];
-  photos?: { id: string; label: string }[];
+  photos?: { id: string; label: string; tag: string | null }[];
+  mechanic: { id: string; name: string } | null;
+  reasonKind: string | null;
+  openedOdometerKm: number | null;
+  odometerReason: string | null;
+  openedAt: Date | null;
+  works: {
+    id: string;
+    workTypeId: string | null;
+    freeText: string | null;
+    qty: number;
+    normSec: number | null;
+    rateTetri: number;
+    mechanicId: string | null;
+    workType: { code: string; category: string; nameKa: string | null; nameRu: string | null; nameEn: string | null } | null;
+  }[];
 }) {
+  const works = job.works.map((w) => ({
+    id: w.id,
+    workTypeId: w.workTypeId,
+    code: w.workType?.code ?? null,
+    category: w.workType?.category ?? null,
+    nameKa: w.workType?.nameKa ?? null,
+    nameRu: w.workType?.nameRu ?? null,
+    nameEn: w.workType?.nameEn ?? null,
+    freeText: w.freeText,
+    qty: w.qty,
+    normSec: w.normSec,
+    rateTetri: w.rateTetri as number | null,
+    /** The norm and the rate this line was written with, not today's (stage 2). */
+    amountTetri: workLineTetri(w) as number | null,
+    mechanicId: w.mechanicId,
+  }));
+  const total = worksTotal(job.works);
   return {
     id: job.id,
     number: job.number,
@@ -104,6 +159,13 @@ function serialize(job: {
     customer: job.customer as { id: string; name: string } | null,
     parts: job.parts as { id: string; name: string; qty: number; unitPriceTetri: number | null; unitCostTetri?: number | null; partId?: string | null }[],
     photos: job.photos ?? [],
+    mechanic: job.mechanic,
+    reasonKind: job.reasonKind,
+    openedOdometerKm: job.openedOdometerKm,
+    odometerReason: job.odometerReason,
+    openedAt: job.openedAt?.toISOString() ?? null,
+    works,
+    worksTotal: { seconds: total.seconds, tetri: total.tetri as number | null, unnormed: total.unnormed },
   };
 }
 
@@ -118,6 +180,17 @@ type Job = ReturnType<typeof serialize>;
  * The fields go out empty, as the stock and the models do it.
  */
 function present(req: FastifyRequest, job: Job): Job {
+  // The work by the norm is what a mechanic is paid: he sees it on the
+  // repairs he carries, the chief mechanic on those he approves (spec, «свои
+  // начисления видит»). A manager, who carries none, does not.
+  const seesWork = mayView(req, 'cost.view') || mayView(req, 'service.work');
+  if (!seesWork) {
+    job = {
+      ...job,
+      works: job.works.map((w) => ({ ...w, rateTetri: null, amountTetri: null })),
+      worksTotal: { ...job.worksTotal, tetri: null },
+    };
+  }
   const out = mayView(req, 'cost.view')
     ? job
     : {
@@ -134,11 +207,12 @@ function present(req: FastifyRequest, job: Job): Job {
 }
 
 /**
- * Which repairs a person sees: all of them, or — a mechanic — the ones they
- * opened. From stage 2 a job names its mechanic and the rule reads that.
+ * Which repairs a person sees: all of them, or — a mechanic — the ones he
+ * carries. A repair names its mechanic (stage 2); one he merely opened for
+ * somebody else is not his.
  */
-function mine(actor: Actor): { createdById?: string } {
-  return seesEveryRepair(permissionsOf(actor.role, actor.via)) ? {} : { createdById: actor.id };
+function mine(actor: Actor): { mechanicId?: string } {
+  return seesEveryRepair(permissionsOf(actor.role, actor.via)) ? {} : { mechanicId: actor.id };
 }
 
 const INCLUDE = {
@@ -148,7 +222,40 @@ const INCLUDE = {
   workshop: { select: { id: true, name: true } },
   closedAt: { select: { id: true, name: true } },
   parts: { orderBy: { createdAt: 'asc' as const } },
+  mechanic: { select: { id: true, name: true } },
+  works: {
+    orderBy: { createdAt: 'asc' as const },
+    include: { workType: { select: { code: true, category: true, nameKa: true, nameRu: true, nameEn: true } } },
+  },
 } as const;
+
+/** A photo inside the body of a new repair; empty when none was sent. */
+function jobPhoto(b: unknown, field: string): { bytes: Buffer; mime: string } | null {
+  if (!b || typeof b !== 'object') return null;
+  const o = b as Record<string, unknown>;
+  const mime = typeof o.mimeType === 'string' ? o.mimeType : '';
+  const data = typeof o.dataBase64 === 'string' ? o.dataBase64 : '';
+  if (!data) return null;
+  if (!PHOTO_MIME.has(mime)) throw badRequest('bad_mime', 'Repair photos are images: JPEG, PNG or WebP.', { field });
+  const bytes = Buffer.from(data, 'base64');
+  if (bytes.length === 0) throw badRequest('bad_field', 'The photo is empty.', { field });
+  if (bytes.length > 10 * 1024 * 1024) throw badRequest('file_too_big', 'Files up to 10 MB.', { field });
+  return { bytes, mime };
+}
+
+/** The works a new repair plans: from the book by id, or words for a work the book does not have. */
+function readWorkLines(raw: unknown): { workTypeId: string | null; freeText: string | null; qty: number }[] {
+  if (raw == null) return [];
+  if (!Array.isArray(raw)) throw badRequest('bad_field', 'works is a list.', { field: 'works' });
+  return raw.map((x) => {
+    const o = (x && typeof x === 'object' ? x : {}) as Body;
+    const workTypeId = str(o, 'workTypeId');
+    const freeText = workTypeId ? null : str(o, 'freeText', { max: 300 });
+    if (!workTypeId && !freeText) throw badRequest('missing_field', 'A line of work is a work from the book or words.', { field: 'works' });
+    const qty = int(o, 'qty', { min: 1, max: WORK_QTY_MAX }) ?? 1;
+    return { workTypeId, freeText, qty };
+  });
+}
 
 export function serviceRoutes(app: FastifyInstance): void {
   /** The workshops that do the repairs — a list the owner keeps (`service.md`). */
@@ -219,7 +326,7 @@ export function serviceRoutes(app: FastifyInstance): void {
   app.get<{ Params: { id: string } }>('/api/service/:id', { config: { scope: 'service.view' } }, async (req) => {
     const job = await prisma.serviceJob.findFirst({
       where: { id: req.params.id, ...mine(actorOf(req)) },
-      include: { ...INCLUDE, photos: { where: { archived: false }, select: { id: true, label: true }, orderBy: { createdAt: 'asc' } } },
+      include: { ...INCLUDE, photos: { where: { archived: false }, select: { id: true, label: true, tag: true }, orderBy: { createdAt: 'asc' } } },
     });
     // Somebody else's repair is, to a mechanic, no repair at all.
     if (!job) throw notFound('job_not_found', 'No such repair job.');
@@ -239,6 +346,217 @@ export function serviceRoutes(app: FastifyInstance): void {
     await prisma.serviceJob.update({ where: { id: job.id }, data: { status: 'open', updatedAt: new Date() } });
     await audit({ actorId: actor.id, action: 'service.approve', entityType: 'service_job', entityId: job.id, after: { number: job.number, status: 'open' } });
     return { ok: true };
+  });
+
+  /**
+   * The moped a mechanic is about to repair, found the way he finds it: by
+   * the last characters of the VIN, or by the number on the sticker (EV-014,
+   * or 14). What he is told is the repair's business only — the model, the
+   * colour, whether it stands in the yard or is out on a rental, the last
+   * odometer reading — and whether a repair is already open on it, so he
+   * carries that one on instead of being refused a second (code check, §3).
+   * No customer: a mechanic does not see the fleet (ADR-0033 §2).
+   */
+  app.get<{ Querystring: { q?: string } }>('/api/service/vehicles', { config: { scope: 'service.work' } }, async (req) => {
+    const raw = (req.query.q ?? '').trim();
+    // «8» is EV-008: a sticker's number may be one digit, a VIN's tail is two characters at least.
+    const q = readQuery(raw);
+    const number = readFleetNumber(raw, { digitsToo: true });
+    if (!q && number == null) return { vehicles: [] };
+    const all = await prisma.vehicle.findMany({
+      where: { archived: false, state: { notIn: ['sold', 'out'] } },
+      select: {
+        id: true,
+        vin: true,
+        fleetNo: true,
+        color: true,
+        state: true,
+        odometerKm: true,
+        model: { select: { brand: true, name: true } },
+        serviceJobs: {
+          where: { status: { in: ['open', 'draft'] } },
+          select: { id: true, number: true, status: true, reason: true, mechanicId: true, mechanic: { select: { name: true } } },
+          take: 1,
+        },
+      },
+    });
+    const actor = actorOf(req);
+    const found = all
+      .filter((v) => (number != null && v.fleetNo === number) || (q != null && vinMatches(q, v.vin)))
+      // The sticker's number first: «14» is EV-014 before it is a VIN ending in 14.
+      .sort((a, b) => Number(b.fleetNo === number) - Number(a.fleetNo === number) || (a.fleetNo ?? 0) - (b.fleetNo ?? 0))
+      .slice(0, 8);
+    return {
+      vehicles: found.map((v) => {
+        const job = v.serviceJobs[0] ?? null;
+        return {
+          id: v.id,
+          vin: v.vin,
+          number: fleetNumber(v.fleetNo),
+          model: `${v.model.brand} ${v.model.name}`,
+          color: v.color,
+          state: v.state,
+          odometerKm: v.odometerKm,
+          openJob: job
+            ? {
+                id: job.id,
+                number: job.number,
+                status: job.status,
+                reason: job.reason,
+                mechanic: job.mechanic?.name ?? null,
+                /** Nobody carries it yet — a manager's breakdown, a return's damage: he may take it on. */
+                takeable: job.mechanicId == null,
+                /** He carries it already: the screen opens it rather than writing it twice. */
+                mine: job.mechanicId === actor.id,
+              }
+            : null,
+        };
+      }),
+    };
+  });
+
+  /**
+   * A repair opened from the workshop (stage 2 of the mechanic plan): the
+   * moped, what the odometer reads and its photo, why it came in, photos of
+   * the damage and the works planned from the book — all in one body, so a
+   * repair without its mileage or its photos is never written, not even half
+   * (the spec: «без фото заявка не отправляется»). A mechanic's repair waits
+   * for the chief mechanic's approval, which is the same waiting a manager's
+   * reported breakdown does (`draft`, ADR-0033); one opened by whoever may
+   * approve is in work at once. A moped already under repair is not given a
+   * second job: `jobId` takes the open one on, if nobody carries it yet.
+   */
+  app.post<{ Body: Body }>('/api/service/workshop', { config: { scope: 'service.work' }, bodyLimit: JOB_BODY_LIMIT }, async (req, reply) => {
+    const b = req.body ?? {};
+    const actor = actorOf(req);
+    const vehicleId = str(b, 'vehicleId', { required: true })!;
+    const jobId = str(b, 'jobId');
+    const reasonKind = oneOf(b, 'reasonKind', SERVICE_REASONS, { required: true })!;
+    const reason = str(b, 'reason', { required: true, max: 2000 })!;
+    const odometerKm = int(b, 'odometerKm', { required: true, min: 0, max: 1_000_000 })!;
+    const odometerReason = str(b, 'odometerReason', { max: 500 });
+    const odometerPhoto = jobPhoto(b.odometerPhoto, 'odometerPhoto');
+    if (!odometerPhoto) throw badRequest('missing_field', 'A photo of the odometer goes with the mileage.', { field: 'odometerPhoto' });
+    const photoList = Array.isArray(b.photos) ? b.photos : [];
+    const photos = photoList.map((p) => jobPhoto(p, 'photos')).filter((p): p is NonNullable<typeof p> => p != null);
+    if (photos.length === 0) throw badRequest('missing_field', 'At least one photo of the damage.', { field: 'photos' });
+    if (photos.length > JOB_PHOTOS_MAX) throw badRequest('bad_field', `Up to ${JOB_PHOTOS_MAX} photos of the damage.`, { field: 'photos', max: JOB_PHOTOS_MAX });
+    const lines = readWorkLines(b.works);
+    if (lines.length === 0) throw badRequest('missing_field', 'Say what work is planned: one line at least.', { field: 'works' });
+
+    const vehicle = await prisma.vehicle.findUnique({ where: { id: vehicleId }, include: { currentRental: { select: { id: true } } } });
+    if (!vehicle) throw notFound('vehicle_not_found', 'No such moped.');
+    if (vehicle.state === 'sold' || vehicle.state === 'out') throw conflict('vehicle_gone', 'This moped is no longer in the fleet.', { state: vehicle.state });
+    // Less than the last reading is allowed — an odometer gets replaced — but
+    // not without the reason, which the chief mechanic reads at approval.
+    if (vehicle.odometerKm != null && odometerKm < vehicle.odometerKm && !odometerReason) {
+      throw badRequest('odometer_below', 'The mileage is below the last recorded one; say why.', { field: 'odometerReason', lastKm: vehicle.odometerKm });
+    }
+    const types = await prisma.workType.findMany({ where: { id: { in: lines.flatMap((l) => (l.workTypeId ? [l.workTypeId] : [])) } } });
+    for (const l of lines) {
+      if (!l.workTypeId) continue;
+      const w = types.find((x) => x.id === l.workTypeId);
+      if (!w) throw notFound('work_type_not_found', 'No such work in the book.');
+      if (!w.active) throw conflict('work_type_off', 'This work is switched off in the book.', { code: w.code });
+    }
+    const me = await prisma.user.findUniqueOrThrow({ where: { id: actor.id }, select: { labourRateTetri: true } });
+    const rateTetri = me.labourRateTetri ?? LABOUR_RATE_TETRI;
+
+    const open = await prisma.serviceJob.findFirst({
+      where: { vehicleId, status: { in: ['open', 'draft'] } },
+      select: { id: true, number: true, status: true, reason: true, mechanicId: true, mechanic: { select: { name: true } } },
+    });
+    if (jobId) {
+      if (!open || open.id !== jobId) throw conflict('job_closed', 'That repair is no longer open on this moped.');
+      // His own is opened, not taken again: a second pass would write its works and photos twice.
+      if (open.mechanicId === actor.id) throw conflict('job_already_open', 'This repair is already yours.', { job: { id: open.id, number: open.number } });
+      if (open.mechanicId) throw conflict('job_has_mechanic', 'Another mechanic carries this repair.', { mechanic: open.mechanic?.name ?? null });
+    } else if (open) {
+      throw conflict('job_already_open', 'This moped already has an open repair job.', { job: { id: open.id, number: open.number } });
+    }
+
+    const rented = vehicle.state === 'rented' && vehicle.currentRental != null;
+    const approver = hasPerm(actor, 'service.approve');
+    const today = todayISO(new Date(), env.TZ);
+    const job = await prisma.$transaction(async (tx) => {
+      let made: { id: string; number: string; status: string };
+      if (open) {
+        made = await tx.serviceJob.update({
+          where: { id: open.id },
+          data: { mechanicId: actor.id, reasonKind, reason, openedOdometerKm: odometerKm, odometerReason, updatedAt: new Date() },
+          select: { id: true, number: true, status: true },
+        });
+      } else {
+        made = await tx.serviceJob.create({
+          data: {
+            vehicleId,
+            rentalId: rented ? vehicle.currentRental!.id : null,
+            reason,
+            reasonKind,
+            openedOn: dateFromISO(today)!,
+            openedOdometerKm: odometerKm,
+            odometerReason,
+            status: approver ? 'open' : 'draft',
+            payer: 'company',
+            mechanicId: actor.id,
+            movedVehicle: !rented,
+            createdById: actor.id,
+          },
+          select: { id: true, number: true, status: true },
+        });
+        if (!rented) await moveVehicle(tx, { vehicleId, kind: 'service_in', occurredOn: today, actorId: actor.id, reason });
+      }
+      await tx.vehicle.update({ where: { id: vehicleId }, data: { odometerKm, updatedAt: new Date() } });
+      const files = [
+        { ...odometerPhoto, tag: 'odometer', label: 'odometer' },
+        ...photos.map((p, i) => ({ ...p, tag: 'before', label: `before-${i + 1}` })),
+      ];
+      for (const f of files) {
+        await tx.storedFile.create({
+          data: {
+            kind: 'service_photo',
+            serviceJobId: made.id,
+            tag: f.tag,
+            label: f.label,
+            mimeType: f.mime,
+            sizeBytes: f.bytes.length,
+            sha256: createHash('sha256').update(f.bytes).digest('hex'),
+            bytes: new Uint8Array(f.bytes),
+            uploadedById: actor.id,
+          },
+        });
+      }
+      for (const l of lines) {
+        const w = l.workTypeId ? types.find((x) => x.id === l.workTypeId)! : null;
+        // The norm and the rate are copied now and never read again (stage 2):
+        // a norm changed in the book tomorrow does not change today's work.
+        await tx.serviceWork.create({
+          data: { jobId: made.id, workTypeId: w?.id ?? null, freeText: w ? null : l.freeText, qty: l.qty, normSec: w?.normSec ?? null, rateTetri, mechanicId: actor.id, createdById: actor.id },
+        });
+      }
+      await tx.auditLog.create({
+        data: {
+          actorId: actor.id,
+          action: open ? 'service.take' : made.status === 'draft' ? 'service.request' : 'service.open',
+          entityType: 'service_job',
+          entityId: made.id,
+          after: {
+            number: made.number,
+            vehicleId,
+            reasonKind,
+            reason,
+            odometerKm,
+            odometerReason,
+            photos: files.length,
+            works: lines.map((l) => ({ code: types.find((x) => x.id === l.workTypeId)?.code ?? null, freeText: l.workTypeId ? null : l.freeText, qty: l.qty })),
+            movedVehicle: open ? undefined : !rented,
+          },
+          before: open ? { reason: open.reason, mechanicId: open.mechanicId } : undefined,
+        },
+      });
+      return made;
+    });
+    return reply.code(open ? 200 : 201).send(job);
   });
 
   /**

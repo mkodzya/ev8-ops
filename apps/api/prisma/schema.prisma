@@ -222,6 +222,17 @@ enum ServicePayer {
   @@map("service_payer")
 }
 
+/// Why a repair came in — the bot's five reasons (stage 2 of the mechanic plan, 0056).
+enum ServiceReason {
+  wear
+  accident
+  renter_fault
+  warranty
+  planned
+
+  @@map("service_reason")
+}
+
 model User {
   id              String    @id @default(uuid()) @db.Uuid
   /// Empty only for a mechanic who signs in with a PIN on the workshop tablet (0055).
@@ -254,7 +265,11 @@ model User {
   batteryMoves      BatteryMove[]
   paymentsVoided    Payment[]     @relation("payment_voided_by")
   statements        Statement[]
-  serviceJobs       ServiceJob[]
+  serviceJobs       ServiceJob[]   @relation("service_job_created_by")
+  repairsCarried    ServiceJob[]   @relation("service_job_mechanic")
+  worksDone         ServiceWork[]  @relation("service_work_mechanic")
+  worksWritten      ServiceWork[]  @relation("service_work_created_by")
+  workTypesAdded    WorkType[]
   sales             Sale[]
   purchases         Purchase[]
   parts             Part[]
@@ -616,6 +631,8 @@ model StoredFile {
   saleId       String?  @map("sale_id") @db.Uuid
   serviceJobId String?  @map("service_job_id") @db.Uuid
   label        String   @default("")
+  /// What a repair photo shows: before, after, odometer, receipt (0056).
+  tag          String?
   docKind      String?  @map("doc_kind")
   mimeType     String   @map("mime_type")
   sizeBytes    Int      @map("size_bytes")
@@ -867,6 +884,15 @@ model ServiceJob {
   movedVehicle  Boolean       @default(false) @map("moved_vehicle")
   withheldTetri Int           @default(0) @map("withheld_tetri")
   odooRepairId  Int?          @unique @map("odoo_repair_id")
+  /// Who carries the repair: a mechanic's "own repairs" are these (0056).
+  mechanicId    String?       @map("mechanic_id") @db.Uuid
+  reasonKind    ServiceReason? @map("reason_kind")
+  /// The odometer when the repair was opened; `odometerKm` is the reading at closing.
+  openedOdometerKm Int?       @map("opened_odometer_km")
+  /// Why the odometer reads less than the moped's last reading.
+  odometerReason String?      @map("odometer_reason")
+  /// The minute the repair was opened; empty on repairs from before 0056.
+  openedAt      DateTime?     @default(now()) @map("opened_at")
   createdById   String?       @map("created_by") @db.Uuid
   createdAt     DateTime      @default(now()) @map("created_at")
   updatedAt     DateTime      @default(now()) @map("updated_at")
@@ -874,7 +900,9 @@ model ServiceJob {
   vehicle   Vehicle       @relation(fields: [vehicleId], references: [id])
   rental    Rental?       @relation(fields: [rentalId], references: [id])
   customer  Customer?     @relation(fields: [customerId], references: [id])
-  createdBy User?         @relation(fields: [createdById], references: [id])
+  createdBy User?         @relation("service_job_created_by", fields: [createdById], references: [id])
+  mechanic  User?         @relation("service_job_mechanic", fields: [mechanicId], references: [id])
+  works     ServiceWork[]
   workshop  Workshop?     @relation(fields: [workshopId], references: [id])
   closedAt  Location?     @relation(fields: [closedLocationId], references: [id])
   parts     ServicePart[]
@@ -901,6 +929,66 @@ model ServicePart {
   moves StockMove[]
 
   @@map("service_parts")
+}
+
+/// A category of the book of works: BR — brakes. Its name is translated once (0056).
+model WorkCategory {
+  code      String   @id
+  nameKa    String?  @map("name_ka")
+  nameRu    String?  @map("name_ru")
+  nameEn    String?  @map("name_en")
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  works WorkType[]
+
+  @@map("work_categories")
+}
+
+/// A work in the book: a permanent code and a norm in seconds (0056).
+model WorkType {
+  id          String   @id @default(uuid()) @db.Uuid
+  code        String   @unique
+  category    String
+  nameKa      String?  @map("name_ka")
+  nameRu      String?  @map("name_ru")
+  nameEn      String?  @map("name_en")
+  normSec     Int      @map("norm_sec")
+  active      Boolean  @default(true)
+  notes       String?
+  /// 'bot-2026-10-11' for the bot's CATALOG_SEED; empty for a work added on the screen.
+  source      String?
+  createdById String?  @map("created_by") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @default(now()) @map("updated_at")
+
+  categoryRow WorkCategory  @relation(fields: [category], references: [code])
+  createdBy   User?         @relation(fields: [createdById], references: [id])
+  lines       ServiceWork[]
+
+  @@map("work_types")
+}
+
+/// A line of work on a repair: the norm and the rate are copies, made when it was written (0056).
+model ServiceWork {
+  id          String   @id @default(uuid()) @db.Uuid
+  jobId       String   @map("job_id") @db.Uuid
+  workTypeId  String?  @map("work_type_id") @db.Uuid
+  freeText    String?  @map("free_text")
+  qty         Int      @default(1)
+  /// Empty — a work not in the book, with no norm yet.
+  normSec     Int?     @map("norm_sec")
+  rateTetri   Int      @map("rate_tetri")
+  mechanicId  String?  @map("mechanic_id") @db.Uuid
+  createdById String?  @map("created_by") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  job       ServiceJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  workType  WorkType?  @relation(fields: [workTypeId], references: [id])
+  mechanic  User?      @relation("service_work_mechanic", fields: [mechanicId], references: [id])
+  createdBy User?      @relation("service_work_created_by", fields: [createdById], references: [id])
+
+  @@map("service_works")
 }
 
 /// One VIN leaving the fleet for one customer (SAL-01). Ending it the other
