@@ -255,7 +255,7 @@ export function WorkshopJobWizard() {
           </div>
         )}
         {step === 3 && (
-          <WorksStep book={wb} lines={f.lines} onChange={(lines) => set({ lines })} error={shown.works} />
+          <WorksStep book={wb} lines={f.lines} update={(fn) => setF((x) => ({ ...x, lines: fn(x.lines) }))} error={shown.works} />
         )}
         {step === 4 && f.vehicle && (
           <div className="wjob-step">
@@ -516,17 +516,19 @@ function Photos({ photos, onChange, error }: { photos: PreparedPhoto[]; onChange
 }
 
 /** Step 4: the works, from the book by category or by search, and words for one it lacks. */
-function WorksStep({ book, lines, onChange, error }: { book: WorkBook; lines: Line[]; onChange: (l: Line[]) => void; error?: string }) {
+function WorksStep({ book, lines, update, error }: { book: WorkBook; lines: Line[]; update: (fn: (now: Line[]) => Line[]) => void; error?: string }) {
   const t = useT();
   const { locale } = useLocale();
   const [q, setQ] = useState('');
   const [cat, setCat] = useState<string | null>(null);
   const [free, setFree] = useState<string | null>(null);
   const qty = (id: string) => lines.find((l) => l.workTypeId === id)?.qty ?? 0;
-  const setQty = (id: string, n: number) => {
-    const rest = lines.filter((l) => l.workTypeId !== id);
-    onChange(n <= 0 ? rest : lines.some((l) => l.workTypeId === id) ? lines.map((l) => (l.workTypeId === id ? { ...l, qty: n } : l)) : [...lines, { workTypeId: id, freeText: null, qty: n }]);
-  };
+  // Against the lines as they are when the tap lands: two quick taps on two works keep both.
+  const setQty = (id: string, n: number) =>
+    update((now) => {
+      if (n <= 0) return now.filter((l) => l.workTypeId !== id);
+      return now.some((l) => l.workTypeId === id) ? now.map((l) => (l.workTypeId === id ? { ...l, qty: n } : l)) : [...now, { workTypeId: id, freeText: null, qty: n }];
+    });
   const needle = q.trim().toLowerCase();
   const shown = book.works.filter(
     (w) => w.active && (cat == null || w.category === cat) && (!needle || w.code.toLowerCase().includes(needle) || [w.nameKa, w.nameRu, w.nameEn].some((n) => n?.toLowerCase().includes(needle))),
@@ -551,7 +553,7 @@ function WorksStep({ book, lines, onChange, error }: { book: WorkBook; lines: Li
           <span className="wjob-code">—</span>
           <span className="wjob-name">{l.freeText}</span>
           <span className="wjob-nonorm">{t.wjob.noNorm}</span>
-          <button type="button" className="wjob-round" aria-label={t.photos.remove} onClick={() => onChange(lines.filter((_, j) => j !== i))}>
+          <button type="button" className="wjob-round" aria-label={t.photos.remove} onClick={() => update((now) => now.filter((_, j) => j !== i))}>
             <Minus size={22} strokeWidth={1.75} aria-hidden="true" />
           </button>
         </div>
@@ -575,7 +577,8 @@ function WorksStep({ book, lines, onChange, error }: { book: WorkBook; lines: Li
             className="pill pill-accent"
             disabled={!free.trim()}
             onClick={() => {
-              onChange([...lines, { workTypeId: null, freeText: free.trim(), qty: 1 }]);
+              const text = free.trim();
+              update((now) => [...now, { workTypeId: null, freeText: text, qty: 1 }]);
               setFree(null);
             }}
           >
