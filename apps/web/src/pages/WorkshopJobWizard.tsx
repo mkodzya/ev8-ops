@@ -1,7 +1,7 @@
 import { JOB_PHOTOS_MAX, SERVICE_REASONS, WORK_QTY_MAX, worksTotal, type ServiceReason, type VehicleState } from '@ev8/shared';
 import { Camera, Minus, Plus, ScanLine } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { LoadError } from '../components/LoadError.js';
 import { ColorText, Loading, StateBadge, Vin } from '../components/ui.js';
@@ -33,7 +33,7 @@ interface FoundVehicle {
   color: string | null;
   state: VehicleState;
   odometerKm: number | null;
-  openJob: { id: string; number: string; status: string; reason: string; mechanic: string | null; takeable: boolean } | null;
+  openJob: { id: string; number: string; status: string; reason: string; mechanic: string | null; takeable: boolean; mine: boolean } | null;
 }
 
 type Lower = '' | 'replaced' | 'mistake' | 'other';
@@ -409,12 +409,18 @@ function MopedStep({
                   <span className="wjob-has">
                     <span>
                       {t.wjob.hasJob(job.number)}
-                      {job.mechanic ? ` · ${t.wjob.carriedBy(job.mechanic)}` : ''}
+                      {job.mechanic && !job.mine ? ` · ${t.wjob.carriedBy(job.mechanic)}` : ''}
                     </span>
                     {job.takeable && <span className="wjob-link">{picked && jobId ? '✓' : t.wjob.carryOn}</span>}
                   </span>
                 )}
               </button>
+              {/* His own repair on this moped: he opens it, he does not write it again. */}
+              {job?.mine && (
+                <Link className="wjob-link wjob-open-own" to={`/service/${job.id}`}>
+                  {t.wjob.openOwn(job.number)}
+                </Link>
+              )}
             </li>
           );
         })}

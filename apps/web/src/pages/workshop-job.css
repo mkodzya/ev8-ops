@@ -64,6 +64,7 @@
 .wjob-moped-head { display: flex; justify-content: space-between; align-items: center; gap: var(--space3); font: var(--text-h2); }
 .wjob-has { display: flex; justify-content: space-between; gap: var(--space3); margin-top: var(--space2); padding: 10px 14px; border-radius: var(--radius-card); background: var(--warn-soft); }
 .wjob-link { color: var(--accent); font-weight: 600; text-decoration: underline; text-underline-offset: 4px; }
+.wjob-open-own { display: inline-flex; align-items: center; min-height: var(--control); margin-top: var(--space1); }
 
 .wjob-odo { display: grid; grid-template-columns: 1fr 180px; gap: var(--space4); align-items: start; }
 @media (max-width: 719px) { .wjob-odo { grid-template-columns: 1fr; } }

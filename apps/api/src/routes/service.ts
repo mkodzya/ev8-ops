@@ -404,8 +404,10 @@ export function serviceRoutes(app: FastifyInstance): void {
                 status: job.status,
                 reason: job.reason,
                 mechanic: job.mechanic?.name ?? null,
-                /** Nobody carries it yet, or this mechanic does: he may take it on. */
-                takeable: job.mechanicId == null || job.mechanicId === actor.id,
+                /** Nobody carries it yet — a manager's breakdown, a return's damage: he may take it on. */
+                takeable: job.mechanicId == null,
+                /** He carries it already: the screen opens it rather than writing it twice. */
+                mine: job.mechanicId === actor.id,
               }
             : null,
         };
@@ -422,7 +424,7 @@ export function serviceRoutes(app: FastifyInstance): void {
    * for the chief mechanic's approval, which is the same waiting a manager's
    * reported breakdown does (`draft`, ADR-0033); one opened by whoever may
    * approve is in work at once. A moped already under repair is not given a
-   * second job: `jobId` takes the open one on, if nobody else carries it.
+   * second job: `jobId` takes the open one on, if nobody carries it yet.
    */
   app.post<{ Body: Body }>('/api/service/workshop', { config: { scope: 'service.work' }, bodyLimit: JOB_BODY_LIMIT }, async (req, reply) => {
     const b = req.body ?? {};
@@ -466,9 +468,9 @@ export function serviceRoutes(app: FastifyInstance): void {
     });
     if (jobId) {
       if (!open || open.id !== jobId) throw conflict('job_closed', 'That repair is no longer open on this moped.');
-      if (open.mechanicId && open.mechanicId !== actor.id) {
-        throw conflict('job_has_mechanic', 'Another mechanic carries this repair.', { mechanic: open.mechanic?.name ?? null });
-      }
+      // His own is opened, not taken again: a second pass would write its works and photos twice.
+      if (open.mechanicId === actor.id) throw conflict('job_already_open', 'This repair is already yours.', { job: { id: open.id, number: open.number } });
+      if (open.mechanicId) throw conflict('job_has_mechanic', 'Another mechanic carries this repair.', { mechanic: open.mechanic?.name ?? null });
     } else if (open) {
       throw conflict('job_already_open', 'This moped already has an open repair job.', { job: { id: open.id, number: open.number } });
     }

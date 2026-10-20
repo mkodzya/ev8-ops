@@ -321,7 +321,15 @@ describe.skipIf(!HAS_DB)('a repair the mechanic opens (stage 2)', () => {
     expect(json<{ id: string; status: string }>(taken)).toMatchObject({ id, status: 'draft' });
     expect(await prisma.serviceJob.count({ where: { vehicleId: vehicle.id } })).toBe(1);
 
-    // Once he carries it, another mechanic may not take it from him.
+    // Once he carries it, he opens it — taking it again would write its works twice …
+    const mineNow = json<{ vehicles: { id: string; openJob: { takeable: boolean; mine: boolean } | null }[] }>(
+      await call(a.cookie, 'GET', `/api/service/vehicles?q=${vehicle.vin.slice(-6)}`),
+    ).vehicles.find((v) => v.id === vehicle.id)?.openJob;
+    expect(mineNow).toMatchObject({ takeable: false, mine: true });
+    const twice = await call(a.cookie, 'POST', '/api/service/workshop', opening(vehicle.id, [{ workTypeId: w.id }], { jobId: id }));
+    expect(json<{ error: string }>(twice).error).toBe('job_already_open');
+    expect(await prisma.serviceWork.count({ where: { jobId: id } })).toBe(1);
+    // … and another mechanic may not take it from him.
     const b = await person('mechanic');
     const again = await call(b.cookie, 'POST', '/api/service/workshop', opening(vehicle.id, [{ workTypeId: w.id }], { jobId: id }));
     expect(again.statusCode).toBe(409);
