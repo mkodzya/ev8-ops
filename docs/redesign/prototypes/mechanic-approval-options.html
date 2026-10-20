@@ -1,0 +1,502 @@
+<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Согласование и закрытие ремонта — варианты · EV8 Ops, прототип</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=Inter:wght@400;500;600&family=Noto+Sans+Georgian:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+/* Static prototype: no JavaScript (Mika's viewer runs none). Colours are the
+   product's tokens (packages/shared/tokens.json). People, VINs and fleet
+   numbers are invented; the works and their norms are the bot's book
+   (CATALOG_SEED, 11.10.2026). */
+:root { --bg:#fbfbfb; --surface:#fff; --surface-2:#f3f3f3; --ink:#0b0b0b; --muted:#5d5d5d; --line:#dbe4de; --line-soft:#ebebeb; --line-control:#7a7a7a; --accent:#557553; --accent-soft:#e3ebe3; --accent-ink:#4d6a4b; --lime:#e0ffa2; --crit:#c8402f; --crit-soft:#f9e3df; --crit-ink:#b3392a; --warn-soft:#fdeadf; --service-deep:#b2450f; --info-soft:#e4ecfb; --rented-ink:#2f63c0; --toast:#0b0b0b;
+  --sans:"Be Vietnam Pro","Inter","Noto Sans Georgian",system-ui,sans-serif; --mono:"IBM Plex Mono","Noto Sans Georgian",ui-monospace,monospace; }
+* { box-sizing:border-box; }
+body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.5 var(--sans); }
+main { max-width:1240px; margin:0 auto; padding:32px 16px 64px; }
+h1 { font-size:28px; line-height:1.2; margin:0 0 8px; font-weight:500; letter-spacing:-.02em; }
+h2 { font-size:21px; margin:44px 0 4px; font-weight:500; letter-spacing:-.02em; }
+h2.part { font-size:25px; margin-top:64px; padding-top:22px; border-top:2px solid var(--ink); }
+.lead { color:var(--muted); margin:0 0 8px; max-width:860px; }
+.note { color:var(--muted); font-size:13px; }
+.common { background:var(--surface); border:1px solid var(--line-soft); border-radius:16px; padding:14px 18px; margin-top:16px; max-width:1000px; }
+.common ul { margin:6px 0 0; padding-left:20px; } .common li { margin:4px 0; }
+.tag { display:inline-block; font-size:12px; font-weight:600; padding:2px 10px; border-radius:99px; background:var(--surface-2); margin-bottom:6px; vertical-align:middle; }
+.rec .tag { background:var(--lime); }
+.why { display:grid; grid-template-columns:1fr 1fr; gap:6px 24px; max-width:960px; font-size:14px; margin:8px 0 0; }
+.why ul { margin:2px 0; padding-left:18px; } .why li { margin:3px 0; }
+.pro b { color:#2f6b3a; } .con b { color:#9a3b2c; }
+.row { display:flex; flex-wrap:wrap; gap:22px; margin-top:16px; align-items:flex-start; }
+.cap { font-size:13px; color:var(--muted); margin:6px 0 0; max-width:380px; }
+.cap b { color:var(--ink); font-weight:600; }
+.cap .ka { color:var(--ink); }
+code { font-family:var(--mono); font-size:13px; background:var(--surface-2); padding:1px 5px; border-radius:4px; }
+
+/* device frames: the screen inside is drawn at full size and scaled down */
+.frame { width:380px; height:500px; border-radius:22px; background:#1c1c1c; position:relative; box-shadow:0 2px 14px rgba(0,0,0,.18); flex:none; }
+.scr { position:absolute; left:10px; top:10px; width:768px; height:1024px; transform:scale(.469); transform-origin:top left; background:var(--bg); border-radius:24px; overflow:hidden; display:flex; flex-direction:column; }
+.frame.land { width:500px; height:380px; } .land .scr { width:1024px; height:768px; }
+.frame.lap { width:660px; height:432px; border-radius:14px; } .lap .scr { width:1366px; height:878px; transform:scale(.469); border-radius:8px; }
+.frame.ph { width:245px; height:507px; border-radius:26px; } .ph .scr { width:375px; height:812px; transform:scale(.6); border-radius:30px; font-size:15px; }
+.cap.wide { max-width:660px; } .cap.ph { max-width:245px; }
+
+/* tablet chrome after a PIN sign-in (TabletFrame: no logo below 900 px) */
+.bar { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:14px 22px; background:var(--surface); border-bottom:1px solid var(--line-soft); flex:none; }
+.bar .l { display:flex; align-items:center; gap:14px; min-width:0; }
+.bk { width:52px; height:52px; border-radius:50%; border:1.5px solid var(--line-control); display:flex; align-items:center; justify-content:center; font-size:28px; line-height:1; }
+.ttl { display:flex; flex-direction:column; } .ttl b { font-size:26px; font-weight:500; letter-spacing:-.02em; line-height:1.15; } .ttl span { font-size:15px; color:var(--muted); }
+.bar .r { display:flex; align-items:center; gap:14px; flex:none; }
+.me { display:flex; align-items:center; gap:10px; font-size:17px; font-weight:600; line-height:1.15; } .me i { display:block; font-style:normal; font-weight:400; font-size:14px; color:var(--muted); }
+.av { width:44px; height:44px; border-radius:50%; background:var(--accent-soft); color:var(--accent); font-weight:600; font-size:18px; display:flex; align-items:center; justify-content:center; }
+.out { height:52px; padding:0 22px; border:2px solid var(--ink); border-radius:99px; font-size:19px; font-weight:500; display:flex; align-items:center; gap:8px; }
+.logo { font:700 26px/1 var(--sans); color:#819481; letter-spacing:-.04em; }
+
+/* wizard */
+.steps { display:flex; gap:8px; padding:16px 26px 0; flex:none; }
+.steps span { flex:1; height:8px; border-radius:99px; background:var(--line-soft); } .steps span.done { background:var(--accent); } .steps span.now { background:var(--ink); }
+.body { flex:1; min-height:0; padding:22px 26px 0; display:flex; flex-direction:column; gap:20px; overflow:hidden; }
+.q { font-size:32px; font-weight:500; letter-spacing:-.02em; margin:0; line-height:1.15; }
+.lbl { font-size:17px; color:var(--muted); margin:0 0 8px; }
+.lbl b { color:var(--ink); font-weight:600; }
+.inp { height:72px; border:1.5px solid var(--line-control); border-radius:14px; background:var(--surface); display:flex; align-items:center; padding:0 20px; font-size:30px; }
+.inp.big { height:96px; font-size:52px; font-family:var(--mono); letter-spacing:.02em; }
+.inp.txt { font-size:22px; height:64px; }
+.inp .ph { color:#8a8a8a; }
+.caret { display:inline-block; width:2px; height:1em; background:var(--accent); margin-left:3px; vertical-align:-.12em; }
+.hint { font-size:16px; color:var(--muted); margin:8px 0 0; }
+.btn-o { height:64px; border:1.5px solid var(--ink); border-radius:99px; display:inline-flex; align-items:center; justify-content:center; gap:10px; padding:0 28px; font-size:21px; font-weight:500; background:var(--surface); }
+.btn-f { height:64px; border-radius:99px; display:inline-flex; align-items:center; justify-content:center; padding:0 34px; font-size:22px; font-weight:600; background:var(--accent); color:#fff; }
+.stick { margin-top:auto; padding:16px 26px 24px; background:var(--surface); border-top:1px solid var(--line-soft); display:flex; gap:14px; align-items:center; flex:none; }
+.stick .btn-f { flex:1; } .stick .sum { flex:1; font-size:17px; line-height:1.3; } .stick .sum b { font-size:20px; }
+.card { background:var(--surface); border:1.5px solid var(--line-soft); border-radius:18px; padding:16px 20px; }
+.card.sel { border:3px solid var(--accent); background:var(--accent-soft); }
+.mop { display:flex; justify-content:space-between; gap:12px; align-items:flex-start; }
+.mop .n { font-size:24px; font-weight:600; } .mop .m { font-size:20px; }
+.vin { font-family:var(--mono); font-size:19px; color:var(--muted); letter-spacing:.01em; } .vin b { color:var(--ink); font-weight:600; background:var(--lime); border-radius:4px; padding:0 2px; }
+.pill { display:inline-flex; align-items:center; gap:7px; font-size:16px; font-weight:500; padding:5px 14px; border-radius:99px; white-space:nowrap; }
+.pill::before { content:""; width:10px; height:10px; border-radius:50%; background:currentColor; }
+.p-av { background:var(--accent-soft); color:var(--accent-ink); }
+.p-rent { background:var(--info-soft); color:var(--rented-ink); }
+.p-serv { background:var(--warn-soft); color:var(--service-deep); } .p-serv::before { border-radius:3px; }
+.p-wait { background:var(--surface); color:var(--ink); border:1.5px solid var(--line-control); } .p-wait::before { background:transparent; border:2.5px solid var(--ink); width:6px; height:6px; }
+.warnline { margin-top:12px; font-size:17px; padding:10px 14px; border-radius:12px; background:var(--warn-soft); display:flex; justify-content:space-between; gap:10px; align-items:center; }
+.link { color:var(--accent); font-weight:600; text-decoration:underline; text-underline-offset:4px; }
+.chips { display:flex; flex-wrap:wrap; gap:12px; }
+.chip { height:60px; padding:0 24px; border:1.5px solid var(--line-control); border-radius:99px; display:inline-flex; align-items:center; font-size:20px; background:var(--surface); white-space:nowrap; }
+.chip.on { background:var(--ink); color:#fff; border-color:var(--ink); }
+.chip.sm { height:52px; font-size:18px; padding:0 18px; }
+.scroll-x { display:flex; gap:10px; overflow:hidden; white-space:nowrap; }
+.photos { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; }
+.pic { aspect-ratio:1; border-radius:14px; background:repeating-linear-gradient(135deg,#d9dcd9 0 10px,#e6e8e6 10px 20px); position:relative; }
+.pic span { position:absolute; left:8px; bottom:8px; background:rgba(11,11,11,.7); color:#fff; font-size:14px; padding:2px 9px; border-radius:99px; }
+.pic.add { background:var(--surface); border:2px dashed var(--line-control); display:flex; flex-direction:column; align-items:center; justify-content:center; font-size:18px; color:var(--ink); gap:4px; }
+.pic.add big { font-size:36px; line-height:1; }
+.odo { display:grid; grid-template-columns:1fr 190px; gap:18px; align-items:end; }
+.err { color:var(--crit-ink); font-size:17px; font-weight:500; margin:8px 0 0; }
+.box-warn { background:var(--warn-soft); border-radius:16px; padding:16px 18px; font-size:18px; }
+.box-warn p { margin:0 0 12px; }
+.wk { display:flex; align-items:center; gap:14px; padding:12px 16px; background:var(--surface); border:1.5px solid var(--line-soft); border-radius:16px; }
+.wk.on { border-color:var(--accent); border-width:2.5px; }
+.wk .c { font-family:var(--mono); font-size:16px; color:var(--muted); width:62px; flex:none; }
+.wk .t { flex:1; font-size:19px; line-height:1.25; }
+.wk .mn { font-family:var(--mono); font-size:18px; white-space:nowrap; }
+.qty { display:flex; align-items:center; gap:0; border:1.5px solid var(--line-control); border-radius:99px; height:52px; flex:none; }
+.qty span { width:52px; text-align:center; font-size:26px; line-height:52px; } .qty b { width:34px; text-align:center; font-size:21px; }
+.plus { width:52px; height:52px; border-radius:50%; border:1.5px solid var(--ink); font-size:28px; line-height:48px; text-align:center; flex:none; }
+.nonorm { font-size:15px; font-weight:600; padding:3px 10px; border-radius:99px; background:var(--crit-soft); color:var(--crit-ink); white-space:nowrap; }
+.kv { display:grid; grid-template-columns:150px 1fr; gap:10px 16px; font-size:19px; } .kv dt { color:var(--muted); } .kv dd { margin:0; }
+.lines { display:flex; flex-direction:column; gap:0; font-size:18px; }
+.lines div { display:flex; gap:12px; padding:9px 0; border-bottom:1px solid var(--line-soft); align-items:baseline; }
+.lines .c { font-family:var(--mono); color:var(--muted); width:62px; flex:none; font-size:16px; }
+.lines .t { flex:1; } .lines .mn, .lines .gel { font-family:var(--mono); white-space:nowrap; } .lines .gel { width:96px; text-align:right; }
+.tot { display:flex; justify-content:space-between; font-size:19px; font-weight:600; padding-top:10px; }
+.thumbs { display:flex; gap:10px; } .thumbs .pic { width:96px; }
+.ka { font-family:"Noto Sans Georgian","Be Vietnam Pro",sans-serif; }
+.sect-h { display:flex; justify-content:space-between; align-items:baseline; font-size:20px; font-weight:600; margin-top:6px; }
+.sect-h span { font-size:16px; color:var(--muted); font-weight:400; }
+.toast { position:absolute; left:26px; right:26px; bottom:26px; background:var(--toast); color:#fff; border-radius:18px; padding:20px 24px; font-size:19px; display:flex; justify-content:space-between; }
+.toast b { color:var(--lime); }
+
+/* the book of works */
+.banner { background:var(--surface-2); border-radius:14px; padding:12px 16px; font-size:16px; line-height:1.4; }
+.banner b { font-weight:600; }
+.grp { display:flex; flex-direction:column; gap:0; background:var(--surface); border:1px solid var(--line-soft); border-radius:16px; overflow:hidden; }
+.grp .gh { display:flex; justify-content:space-between; align-items:baseline; padding:12px 18px; background:var(--surface-2); font-size:19px; font-weight:600; }
+.grp .gh span { font-size:15px; font-weight:400; color:var(--muted); }
+.grp .r { display:flex; gap:14px; align-items:center; padding:12px 18px; border-top:1px solid var(--line-soft); font-size:18px; min-height:60px; }
+.grp .r .c { font-family:var(--mono); font-size:16px; color:var(--muted); width:60px; flex:none; }
+.grp .r .t { flex:1; line-height:1.25; } .grp .r .mn { font-family:var(--mono); font-size:18px; }
+.grp .r.off .t, .grp .r.off .mn { color:var(--muted); text-decoration:line-through; }
+.mark { font-size:13px; padding:2px 8px; border-radius:99px; background:var(--surface-2); color:var(--muted); white-space:nowrap; }
+.mark.note { background:var(--lime); color:var(--ink); }
+.veil { position:absolute; inset:0; background:rgba(11,11,11,.32); }
+.sheet { position:absolute; left:0; right:0; bottom:0; background:var(--surface); border-radius:28px 28px 0 0; padding:24px 26px 26px; display:flex; flex-direction:column; gap:16px; }
+.sheet .grab { width:60px; height:6px; border-radius:99px; background:var(--line-soft); align-self:center; margin-top:-8px; }
+.f2 { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+.fl .lbl { margin-bottom:6px; font-size:15px; } .fl .inp { height:60px; font-size:20px; }
+.fl .inp.ro { background:var(--surface-2); border-color:var(--line-soft); color:var(--muted); }
+.fl .inp.empty { border-style:dashed; }
+.tgl { display:flex; align-items:center; gap:14px; font-size:19px; }
+.tgl i { width:64px; height:36px; border-radius:99px; background:var(--accent); position:relative; flex:none; }
+.tgl i::after { content:""; position:absolute; right:4px; top:4px; width:28px; height:28px; border-radius:50%; background:#fff; }
+.tiles3 { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; }
+.tl { background:var(--surface); border:1.5px solid var(--line-control); border-radius:20px; padding:16px; height:150px; display:flex; flex-direction:column; justify-content:space-between; }
+.tl .k { font-family:var(--mono); font-size:15px; color:var(--muted); } .tl .nm { font-size:18px; font-weight:600; line-height:1.2; } .tl .ct { font-size:15px; color:var(--muted); }
+table.tb { border-collapse:collapse; width:100%; font-size:15px; background:var(--surface); }
+table.tb th { text-align:left; font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); background:var(--surface-2); padding:8px 10px; }
+table.tb td { padding:7px 10px; border-top:1px solid var(--line-soft); vertical-align:top; }
+table.tb td.c { font-family:var(--mono); color:var(--muted); white-space:nowrap; } table.tb td.mn { font-family:var(--mono); text-align:right; }
+table.tb td.gap { color:#8a8a8a; } table.tb td.gap span { border:1px dashed var(--line-control); border-radius:6px; padding:1px 8px; }
+table.tb td.edit { outline:2px solid var(--accent); outline-offset:-2px; background:var(--accent-soft); }
+.side { display:flex; } .side .rail { width:220px; background:#0b0b0b; flex:none; } .side .main { flex:1; padding:26px 32px; display:flex; flex-direction:column; gap:16px; }
+
+table.words { border-collapse:collapse; margin-top:10px; font-size:14px; }
+table.words td { padding:5px 14px 5px 0; border-bottom:1px solid var(--line-soft); vertical-align:top; }
+table.words td:first-child { font-family:"Noto Sans Georgian",sans-serif; font-size:15px; }
+table.words td.lat { color:var(--muted); font-style:italic; }
+table.words td.num { font-family:var(--mono); text-align:right; }
+</style></head><body><main>
+<style>
+/* stage 3 additions */
+.p-ok { background:var(--accent-soft); color:var(--accent-ink); }
+.p-rej { background:var(--surface-2); color:#666; } .p-rej::before { content:"×"; background:none; width:auto; height:auto; font-size:20px; line-height:1; font-weight:600; }
+.p-done { background:var(--surface-2); color:#666; }
+.lines div.ok .t::after { content:"  ✓"; color:var(--accent); font-weight:600; }
+.lines div.ok { color:var(--muted); }
+.lines div.wait { background:var(--warn-soft); margin:4px -10px; padding:9px 10px; border-radius:10px; border-bottom:none; }
+.lines div.rej .t, .lines div.rej .mn, .lines div.rej .gel { text-decoration:line-through; color:var(--muted); }
+.wtag { font-size:14px; font-weight:600; padding:2px 10px; border-radius:99px; background:var(--surface); border:1.5px solid var(--line-control); white-space:nowrap; }
+.mini { height:46px; width:120px; border:1.5px solid var(--accent); border-radius:10px; background:var(--surface); display:inline-flex; align-items:center; padding:0 12px; font:18px var(--mono); flex:none; }
+.mini .caret { height:.9em; }
+.qcard { background:var(--surface); border:1.5px solid var(--line-soft); border-radius:20px; padding:18px 20px; display:flex; flex-direction:column; gap:12px; }
+.qcard .hd { display:flex; justify-content:space-between; align-items:baseline; gap:12px; }
+.qcard .hd b { font-size:22px; font-weight:600; } .qcard .hd span { font-size:16px; color:var(--muted); }
+.qcard .why2 { font-size:19px; line-height:1.3; }
+.qcard .acts { display:flex; gap:14px; justify-content:flex-end; }
+.qcard .acts .btn-o, .qcard .acts .btn-f { height:58px; font-size:20px; }
+.qcard .thumbs .pic { width:110px; }
+.qrow { display:flex; align-items:center; gap:14px; background:var(--surface); border:1.5px solid var(--line-soft); border-radius:16px; padding:14px 18px; }
+.qrow .w { flex:1; } .qrow .w b { font-size:20px; } .qrow .w div { font-size:17px; color:var(--muted); }
+.qrow .s { text-align:right; font-family:var(--mono); font-size:17px; } .qrow .s i { display:block; font-style:normal; color:var(--service-deep); font-family:var(--sans); font-size:15px; }
+.qrow .go { font-size:30px; color:var(--muted); }
+.box-sug { background:var(--accent-soft); border-radius:16px; padding:14px 18px; font-size:17px; display:flex; flex-direction:column; gap:10px; }
+.box-sug p { margin:0; } .box-sug .acts { display:flex; gap:12px; }
+.box-info { background:var(--surface-2); border-radius:14px; padding:12px 16px; font-size:17px; line-height:1.35; }
+.reason-box { background:var(--surface-2); border-radius:14px; padding:12px 16px; font-size:18px; }
+.reason-box b { display:block; font-size:15px; color:var(--muted); font-weight:500; margin-bottom:2px; }
+.inp.area { height:120px; align-items:flex-start; padding-top:16px; font-size:21px; }
+.ph .bar { padding:10px 14px; } .ph .ttl b { font-size:20px; } .ph .ttl span { font-size:13px; }
+.ph .body { padding:14px 14px 0; gap:12px; }
+.ph .qcard { padding:14px; gap:10px; border-radius:16px; } .ph .qcard .hd b { font-size:18px; } .ph .qcard .why2 { font-size:16px; }
+.ph .lines { font-size:15px; } .ph .lines .c { width:52px; font-size:13px; } .ph .lines .gel { width:70px; }
+.ph .qcard .thumbs .pic { width:64px; } .ph .qcard .acts .btn-o, .ph .qcard .acts .btn-f { height:48px; font-size:16px; padding:0 18px; }
+.ph .avo { width:36px; height:36px; border-radius:50%; background:var(--accent-soft); color:var(--accent); font-weight:600; display:flex; align-items:center; justify-content:center; }
+.ph .tabs { display:flex; justify-content:space-around; border-top:1px solid var(--line-soft); background:var(--surface); padding:8px 0 14px; font-size:12px; color:var(--muted); margin-top:auto; flex:none; }
+.ph .box-sug { font-size:14px; padding:12px; } .ph .kv { font-size:15px; grid-template-columns:96px 1fr; gap:6px 10px; }
+.stick .note2 { flex:1; font-size:17px; color:var(--muted); line-height:1.3; }
+.locs { display:flex; gap:12px; flex-wrap:wrap; }
+</style>
+
+<h1>Согласование и закрытие ремонта — варианты</h1>
+<p class="lead">Этап 3 плана «Механик в EV8 Ops» (<code>docs/spec/mechanic-in-erp-plan.md</code>), ADR-0032 и ADR-0033. Главный механик или владелец согласует заявку механика
+или отклоняет её с причиной; механик ведёт ремонт и закрывает его сам, с фото «после». Экраны планшета — в натуральную величину 768×1024, уменьшены до 47 %,
+телефон — 375 px. Подписи по-русски для чтения; на планшете по умолчанию грузинский, слова — в конце страницы. <b>Имена, VIN, номера мопедов и аренд, точки
+выдуманы.</b> Работы и нормы — настоящие, из справочника бота на 11.10.2026; суммы — по ставке 50 ₾ за час нормы.</p>
+
+<div class="common">
+<b>Решено тобой 20.10.2026 — общее у всех вариантов</b> (выбирать не нужно):
+<ul>
+<li><b>«Ждёт согласования» — одно место</b>, то же, что на этапе 2: и первая заявка механика, и заявка с добавленной работой стоят в одной очереди «Ждут согласования»
+у главного механика и владельца (в «Ремонте» на планшете, в «Сервисе» и в «Сегодня»).</li>
+<li><b>«Согласовать»</b> — заявка «В работе»; кто и когда согласовал, видно в карточке: «Согласовал Ника, 11:05». Пока не согласовано, механик работы не ведёт и заявку не закрывает.</li>
+<li><b>«Отклонить» — только с причиной.</b> Первое согласование: заявка «Отклонена», причина видна в карточке и в списке (сейчас отказ — это «отменена», а причина
+лежит только в журнале); мопед со двора возвращается в парк «Свободен», запчасти — на склад, оплаты механику нет. Повторное согласование (добавленная работа):
+отклоняется <b>только эта работа</b> — она остаётся в заявке зачёркнутой и к оплате не идёт, заявка дальше «В работе» (п. 108, 109 — вариант А).</li>
+<li><b>Работа, найденная после согласования:</b> механик добавляет её в карточке тем же списком справочника, что в «Новой заявке». Строка «ждёт согласования»,
+заявка снова в очереди; уже согласованное механик продолжает. Закрыть заявку, пока строка ждёт, нельзя.</li>
+<li><b>Норма для работы «не из списка»</b> вписывает главный механик или владелец — прямо при согласовании или позже, в том числе в закрытой заявке, пока ремонт не
+оплачен механику (выплата — этап 5). Без нормы строка помечена «без нормы», и такая заявка к оплате не пойдёт.</li>
+<li><b>Закрытие:</b> механик закрывает свою заявку сам (сейчас это может только владелец). Фото «после» — от 1 до 5, без них заявка не закрывается — проверяет сервер,
+не только экран. Ещё пробег при закрытии и где стоит мопед, если в сервис его увела эта заявка; мопед возвращается в парк «Свободен».</li>
+<li><b>Ремонт «за счёт клиента» закрывает владелец</b>: при закрытии решается удержание из залога, а залог решает только владелец (17.09.2026). Механик в такой заявке
+добавляет фото «после» и видит «Закроет владелец». Ремонт без механика — у партнёрской мастерской, старой формой — владелец закрывает как раньше, фото «после» там не обязательно.</li>
+<li><b>«Вина арендатора» у мопеда в аренде</b> — владелец видит в карточке подсказку «за счёт клиента?», кнопка открывает нынешний выбор «кто платит»; при «ДТП»
+подсказки нет. Цену работы для клиента вводит владелец, как сейчас (п. 110 — вариант А). Главный механик подсказку не видит: деньги — не его.</li>
+<li>Время открытия, согласования и закрытия пишется с минутами. Простой и ожидание согласования в часах — этап 6, уведомления механику в Telegram — тоже этап 6;
+до этого он видит «Согласовано» или «Отклонена» в своём «Ремонте».</li>
+</ul>
+</div>
+
+<!-- ================================================================== part 1 -->
+<h2 class="part">1. «Ждут согласования» и решение</h2>
+
+<!-- ============================ 1A ============================ -->
+<section class="rec">
+<h2>А. Решение прямо в очереди <span class="tag">рекомендую</span></h2>
+<div class="why">
+<div class="pro"><b>За:</b><ul><li>От строки до решения — одно касание (принцип 2 <code>ux.md</code>: «в строке — действие»).</li><li>Фото, причина, пробег, работы и сумма по норме — в карточке очереди; фото открывается во весь экран касанием.</li><li>Норма «не из списка» вписывается в той же карточке, не уходя из очереди.</li><li>Владелец с телефона решает за секунды — экран справа.</li></ul></div>
+<div class="con"><b>Против:</b><ul><li>Карточка с пятью и больше работами длинная — после трёх строк «ещё 2», раскрывается касанием.</li><li>Две заявки на экране планшета, третья — прокруткой.</li></ul></div>
+</div>
+<div class="row">
+<div><div class="frame"><div class="scr">
+  <div class="bar"><div class="l"><span class="ttl"><b>Ремонт</b><span>Ждут согласования · 2</span></span></div><div class="r"><span class="me"><span class="av">Н</span><span>Ника<i>главный механик</i></span></span><span class="out">⇥ Выйти</span></div></div>
+  <div class="body" style="gap:16px">
+    <div class="sect-h">Ждут согласования <span>2</span></div>
+    <div class="qcard">
+      <div class="hd"><b>SV-00042 · EV-014 · XL1200</b><span>Сандро · 10:42, ждёт 25 мин</span></div>
+      <div class="why2">Износ — не тормозит задний, скрип · <span class="mono">4 812 км</span></div>
+      <div class="thumbs"><div class="pic"><span>одометр</span></div><div class="pic"><span>до</span></div><div class="pic"><span>до</span></div></div>
+      <div class="lines">
+        <div><span class="c">BR-01</span><span class="t">Замена колодок, дисковый × 2</span><span class="mn">60 мин</span><span class="gel">50,00 ₾</span></div>
+        <div><span class="c">BR-04</span><span class="t">Регулировка тормозного троса × 1</span><span class="mn">20 мин</span><span class="gel">16,67 ₾</span></div>
+        <div style="align-items:center"><span class="c">—</span><span class="t">Прокачка заднего тормоза</span><span class="mini">25<span class="caret"></span></span><span class="mn">мин</span></div>
+      </div>
+      <div class="tot"><span>По норме</span><span>105 мин · 87,50 ₾</span></div>
+      <div class="acts"><span class="btn-o">Отклонить</span><span class="btn-f">Согласовать</span></div>
+    </div>
+    <div class="qcard">
+      <div class="hd"><b>SV-00039 · EV-022 · XL1200</b><span>Сандро · добавил работу 11:20</span></div>
+      <div class="lines">
+        <div class="ok"><span class="c">MT-03</span><span class="t">Замена датчика Холла × 1</span><span class="mn">60 мин</span><span class="gel">50,00 ₾</span></div>
+        <div class="wait"><span class="c">MT-04</span><span class="t">Диагностика контроллера × 1</span><span class="wtag">новая</span><span class="mn">30 мин</span><span class="gel">25,00 ₾</span></div>
+      </div>
+      <div class="acts"><span class="btn-o">Отклонить работу</span><span class="btn-f">Согласовать работу</span></div>
+    </div>
+  </div>
+</div></div>
+<p class="cap"><b>Очередь у главного механика.</b> Первая заявка — целиком; в заявке с добавленной работой решается только новая строка, согласованное отмечено «✓».
+Норму работы «не из списка» Ника вписала прямо в строке (25 мин) — итог пересчитался. Касание заголовка открывает заявку.</p></div>
+
+<div><div class="frame ph"><div class="scr">
+  <div class="bar"><div class="l"><span class="ttl"><b>Сервис</b><span>2 ждут · 3 в работе</span></span></div><div class="r"><span class="avo">В</span></div></div>
+  <div class="body">
+    <div class="qcard">
+      <div class="hd"><b>SV-00042 · EV-014</b><span>25 мин</span></div>
+      <div class="why2">Износ — не тормозит задний, скрип · <span class="mono">4 812 км</span> · Сандро</div>
+      <div class="thumbs"><div class="pic"></div><div class="pic"></div><div class="pic"></div></div>
+      <div class="lines">
+        <div><span class="c">BR-01</span><span class="t">Колодки × 2</span><span class="mn">60</span><span class="gel">50,00 ₾</span></div>
+        <div><span class="c">BR-04</span><span class="t">Трос × 1</span><span class="mn">20</span><span class="gel">16,67 ₾</span></div>
+        <div><span class="c">—</span><span class="t">Прокачка заднего тормоза</span><span class="nonorm" style="font-size:12px">без нормы</span></div>
+      </div>
+      <div class="acts"><span class="btn-o">Отклонить</span><span class="btn-f">Согласовать</span></div>
+    </div>
+    <div class="qrow" style="padding:10px 12px"><div class="w"><b style="font-size:16px">SV-00039 · EV-022</b><div style="font-size:14px">добавлена 1 работа · 30 мин</div></div><span class="go">›</span></div>
+  </div>
+  <div class="tabs"><span>Сегодня</span><span>Аренды</span><span>＋</span><span>Деньги</span><span>Парк</span></div>
+</div></div>
+<p class="cap ph"><b>Владелец, телефон.</b> Та же очередь в «Сервисе» и строкой в «Сегодня». Работу без нормы можно согласовать и так — до выплаты норму впишут.</p></div>
+
+<div><div class="frame"><div class="scr">
+  <div class="bar"><div class="l"><span class="ttl"><b>Ремонт</b><span>Ждут согласования · 2</span></span></div><div class="r"><span class="me"><span class="av">Н</span><span>Ника<i>главный механик</i></span></span><span class="out">⇥ Выйти</span></div></div>
+  <div class="body" style="opacity:.5"><div class="qcard"><div class="hd"><b>SV-00042 · EV-014 · XL1200</b><span>Сандро</span></div><div class="thumbs"><div class="pic"></div><div class="pic"></div></div></div></div>
+  <div class="veil"></div>
+  <div class="sheet">
+    <div class="grab"></div>
+    <p class="q" style="font-size:28px">Отклонить SV-00042?</p>
+    <div><p class="lbl"><b>Причина</b> — механик увидит её в заявке</p><div class="inp area">Колодки меняли 10.10, сначала проверь трос<span class="caret"></span></div></div>
+    <div class="box-info">Заявка станет «Отклонена». EV-014 вернётся в парк «Свободен». Оплаты механику по ней не будет.</div>
+    <div style="display:flex;gap:14px;justify-content:flex-end"><span class="btn-o">Назад</span><span class="btn-f">Отклонить</span></div>
+  </div>
+</div></div>
+<p class="cap"><b>Отклонить — одинаково во всех вариантах.</b> Без причины лист не отправится: «Напиши причину» под полем. Лист называет, что произойдёт, до нажатия
+(принцип 14). Отказ работы в повторном согласовании: «Отклонить MT-04?» и «Работа останется зачёркнутой, заявка — в работе».</p></div>
+</div>
+</section>
+
+<!-- ============================ 1B ============================ -->
+<section>
+<h2>Б. Очередь строками, решение в карточке заявки <span class="tag">вариант</span></h2>
+<div class="why">
+<div class="pro"><b>За:</b><ul><li>Решение принимается, когда видно всё: фото крупно, работы, история мопеда.</li><li>Очередь короткая: десять заявок — на одном экране.</li><li>Карточка одна для всех: механик видит ту же, что согласующий, только без кнопок.</li></ul></div>
+<div class="con"><b>Против:</b><ul><li>На каждую заявку на касание больше: открыть, решить, вернуться.</li><li>В очереди нет фото — решить «на глаз» из списка нельзя.</li></ul></div>
+</div>
+<div class="row">
+<div><div class="frame"><div class="scr">
+  <div class="bar"><div class="l"><span class="ttl"><b>Ремонт</b><span>Ждут согласования · 2</span></span></div><div class="r"><span class="me"><span class="av">Н</span><span>Ника<i>главный механик</i></span></span><span class="out">⇥ Выйти</span></div></div>
+  <div class="body" style="gap:12px">
+    <div class="sect-h">Ждут согласования <span>2</span></div>
+    <div class="qrow"><div class="w"><b>SV-00042 · EV-014 · XL1200</b><div>Износ — не тормозит задний, скрип · Сандро</div></div><div class="s">80 мин · 66,67 ₾<i>ждёт 25 мин · 1 без нормы</i></div><span class="go">›</span></div>
+    <div class="qrow"><div class="w"><b>SV-00039 · EV-022 · XL1200</b><div>Добавлена работа: Диагностика контроллера · Сандро</div></div><div class="s">+30 мин · 25,00 ₾<i>ждёт 5 мин</i></div><span class="go">›</span></div>
+    <div class="sect-h" style="margin-top:14px">В работе <span>3</span></div>
+    <div class="qrow"><div class="w"><b>SV-00037 · EV-009 · S70</b><div>Прокол заднего колеса · Сандро</div></div><div class="s">40 мин<i style="color:var(--muted)">2 дня</i></div><span class="go">›</span></div>
+    <div class="qrow"><div class="w"><b>SV-00035 · EV-031 · S70</b><div>Вина арендатора — разбит дисплей · Сандро</div></div><div class="s">70 мин<i style="color:var(--muted)">1 день</i></div><span class="go">›</span></div>
+  </div>
+</div></div>
+<p class="cap"><b>Очередь строками.</b> Номер, мопед, причина, механик, сумма по норме и сколько ждёт. Касание — в заявку.</p></div>
+
+<div><div class="frame"><div class="scr">
+  <div class="bar"><div class="l"><span class="bk">‹</span><span class="ttl"><b>SV-00042</b><span>EV-014 · XL1200</span></span></div><div class="r"><span class="me"><span class="av">Н</span><span>Ника<i>главный механик</i></span></span><span class="out">⇥ Выйти</span></div></div>
+  <div class="body" style="gap:14px">
+    <div style="display:flex;gap:12px;align-items:center"><span class="pill p-wait">Ждёт согласования</span><span style="font-size:17px;color:var(--muted)">открыта сегодня в 10:42 · Сандро</span></div>
+    <dl class="kv"><dt>Пробег</dt><dd>4 812 км при открытии</dd><dt>Причина</dt><dd>Износ — не тормозит задний, скрип</dd></dl>
+    <div class="thumbs"><div class="pic" style="width:150px"><span>одометр</span></div><div class="pic" style="width:150px"><span>до</span></div><div class="pic" style="width:150px"><span>до</span></div></div>
+    <div class="lines">
+      <div><span class="c">BR-01</span><span class="t">Замена колодок, дисковый × 2</span><span class="mn">60 мин</span><span class="gel">50,00 ₾</span></div>
+      <div><span class="c">BR-04</span><span class="t">Регулировка тормозного троса × 1</span><span class="mn">20 мин</span><span class="gel">16,67 ₾</span></div>
+      <div style="align-items:center"><span class="c">—</span><span class="t">Прокачка заднего тормоза</span><span class="nonorm">без нормы</span><span class="link" style="font-size:17px">Вписать норму</span></div>
+    </div>
+    <div class="tot"><span>По норме</span><span>80 мин · 66,67 ₾</span></div>
+  </div>
+  <div class="stick"><span class="btn-o">Отклонить</span><span class="btn-f">Согласовать</span></div>
+</div></div>
+<p class="cap"><b>Решение в карточке.</b> «Отклонить» и «Согласовать» — в липкой полосе снизу; отказ — тот же лист с причиной, что в варианте А. Механик видит эту же карточку без полосы.</p></div>
+</div>
+</section>
+
+<!-- ================================================================== part 2 -->
+<h2 class="part">2. В работе — одинаково при любом выборе</h2>
+<p class="lead">Карточка заявки, как её видит механик после решения, и как её видит владелец, когда причина — «вина арендатора».</p>
+<div class="row">
+<div><div class="frame"><div class="scr">
+  <div class="bar"><div class="l"><span class="bk">‹</span><span class="ttl"><b>SV-00039</b><span>EV-022 · XL1200</span></span></div><div class="r"><span class="me"><span class="av">С</span><span>Сандро<i>механик</i></span></span><span class="out">⇥ Выйти</span></div></div>
+  <div class="body" style="gap:14px">
+    <div style="display:flex;gap:12px;align-items:center"><span class="pill p-serv">В работе</span><span style="font-size:17px;color:var(--muted)">согласовала Ника, сегодня 09:15</span></div>
+    <dl class="kv"><dt>Пробег</dt><dd>7 340 км при открытии</dd><dt>Причина</dt><dd>Износ — не едет, ошибка датчика</dd></dl>
+    <div class="lines">
+      <div class="ok"><span class="c">MT-03</span><span class="t">Замена датчика Холла × 1</span><span class="mn">60 мин</span><span class="gel">50,00 ₾</span></div>
+      <div class="wait"><span class="c">MT-04</span><span class="t">Диагностика контроллера × 1</span><span class="wtag">ждёт согласования</span><span class="mn">30 мин</span><span class="gel">25,00 ₾</span></div>
+    </div>
+    <span class="btn-o" style="align-self:flex-start">＋ Работа</span>
+    <div><p class="lbl"><b>Фото</b></p><div class="thumbs"><div class="pic"><span>одометр</span></div><div class="pic"><span>до</span></div><div class="pic add" style="width:96px"><big>＋</big>после</div></div></div>
+  </div>
+  <div class="stick"><span class="note2">Диагностика контроллера ждёт согласования — закрыть заявку можно после решения</span></div>
+</div></div>
+<p class="cap"><b>Механик: работа добавлена.</b> Согласованное — «✓», новая строка ждёт; Сандро работает по согласованному. Кнопки «Закрыть» нет, вместо неё — почему.
+Фото «после» можно снимать уже сейчас. Если работу отклонят — строка зачёркнута, причина под ней, «Закрыть» вернётся.</p></div>
+
+<div><div class="frame"><div class="scr">
+  <div class="bar"><div class="l"><span class="bk">‹</span><span class="ttl"><b>SV-00042</b><span>EV-014 · XL1200</span></span></div><div class="r"><span class="me"><span class="av">С</span><span>Сандро<i>механик</i></span></span><span class="out">⇥ Выйти</span></div></div>
+  <div class="body" style="gap:14px">
+    <div style="display:flex;gap:12px;align-items:center"><span class="pill p-rej">Отклонена</span><span style="font-size:17px;color:var(--muted)">Ника, сегодня 11:08</span></div>
+    <div class="reason-box"><b>Причина отказа</b>Колодки меняли 10.10, сначала проверь трос</div>
+    <dl class="kv"><dt>Мопед</dt><dd><b>EV-014</b> · <span class="pill p-av" style="font-size:15px">Свободен</span></dd><dt>Пробег</dt><dd>4 812 км при открытии</dd><dt>Причина</dt><dd>Износ — не тормозит задний, скрип</dd></dl>
+    <div class="lines">
+      <div class="rej"><span class="c">BR-01</span><span class="t">Замена колодок, дисковый × 2</span><span class="mn">60 мин</span><span class="gel">50,00 ₾</span></div>
+      <div class="rej"><span class="c">BR-04</span><span class="t">Регулировка тормозного троса × 1</span><span class="mn">20 мин</span><span class="gel">16,67 ₾</span></div>
+      <div class="rej"><span class="c">—</span><span class="t">Прокачка заднего тормоза</span><span class="mn">25 мин</span><span class="gel">20,83 ₾</span></div>
+    </div>
+  </div>
+  <div class="stick"><span class="btn-f">＋ Новая заявка на EV-014</span></div>
+</div></div>
+<p class="cap"><b>Механик: заявка отклонена.</b> Причина — первым блоком. Мопед снова «Свободен», работы зачёркнуты, к оплате не идут. Если нужно сделать по-другому — новая заявка на тот же мопед.</p></div>
+
+<div><div class="frame ph"><div class="scr">
+  <div class="bar"><div class="l"><span class="bk" style="width:40px;height:40px;font-size:22px">‹</span><span class="ttl"><b>SV-00035</b><span>EV-031 · S70</span></span></div><div class="r"><span class="avo">В</span></div></div>
+  <div class="body">
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span class="pill p-wait" style="font-size:13px">Ждёт согласования</span><span style="font-size:13px;color:var(--muted)">Сандро · 09:40</span></div>
+    <div class="box-sug">
+      <p><b>Вина арендатора</b>, мопед в аренде <span class="mono">R-00512</span>. Ремонт за счёт клиента?</p>
+      <p style="color:var(--muted)">Сейчас — за счёт компании. Удержание из залога решается при закрытии.</p>
+      <div class="acts"><span class="btn-o" style="height:44px;font-size:15px;padding:0 16px">За счёт клиента…</span></div>
+    </div>
+    <dl class="kv"><dt>Причина</dt><dd>Вина арендатора — разбит дисплей, порвана шина</dd><dt>Клиент</dt><dd>ჟუჟუნა ჯაფარაძე</dd><dt>Пробег</dt><dd>11 207 км</dd></dl>
+    <div class="lines">
+      <div><span class="c">WH-02</span><span class="t">Шина/камера × 1</span><span class="mn">40</span><span class="gel">33,33 ₾</span></div>
+      <div><span class="c">EL-01</span><span class="t">Дисплей × 1</span><span class="mn">30</span><span class="gel">25,00 ₾</span></div>
+    </div>
+  </div>
+  <div class="stick" style="padding:10px 14px 16px;gap:8px"><span class="btn-o" style="height:48px;font-size:16px;padding:0 16px">Отклонить</span><span class="btn-f" style="height:48px;font-size:16px">Согласовать</span></div>
+</div></div>
+<p class="cap ph"><b>Владелец: «вина арендатора».</b> Подсказка — с причиной, почему (принцип 15); «За счёт клиента…» открывает нынешний выбор «кто платит».
+При «ДТП» блока нет. Имя клиента выдумано.</p></div>
+</div>
+
+<!-- ================================================================== part 3 -->
+<h2 class="part">3. Закрытие с фото «после»</h2>
+
+<!-- ============================ 3A ============================ -->
+<section class="rec">
+<h2>А. Один экран <span class="tag">рекомендую</span></h2>
+<div class="why">
+<div class="pro"><b>За:</b><ul><li>Полей три — фото, пробег, точка; по правилу <code>ux.md</code> до шести полей — один экран, не мастер.</li><li>Итог виден рядом с фото: что сделано и за сколько по норме.</li><li>Ошибка — под своим полем: «Нужно хотя бы одно фото „после“».</li></ul></div>
+<div class="con"><b>Против:</b><ul><li>На телефоне экран длинный — «Закрыть» в липкой полосе, а итог прокруткой.</li></ul></div>
+</div>
+<div class="row">
+<div><div class="frame"><div class="scr">
+  <div class="bar"><div class="l"><span class="bk">‹</span><span class="ttl"><b>Закрыть SV-00037</b><span>EV-009 · S70</span></span></div><div class="r"><span class="me"><span class="av">С</span><span>Сандро<i>механик</i></span></span><span class="out">⇥ Выйти</span></div></div>
+  <div class="body" style="gap:18px">
+    <div><p class="lbl"><b>Фото после ремонта</b> · от 1 до 5</p><div class="photos"><div class="pic"><span>после</span></div><div class="pic"><span>после</span></div><div class="pic add"><big>＋</big>Снять</div><div></div></div></div>
+    <div class="odo">
+      <div><p class="lbl"><b>Пробег при закрытии, км</b></p><div class="inp big" style="height:84px;font-size:44px">5 120<span class="caret"></span></div><p class="hint">При открытии — 5 104 км</p></div>
+    </div>
+    <div><p class="lbl"><b>Где стоит мопед</b></p><div class="locs"><span class="chip on">Мастерская</span><span class="chip">Шоурум</span></div></div>
+    <div class="card"><div class="lines">
+      <div class="ok"><span class="c">WH-02</span><span class="t">Замена шины/камеры × 1</span><span class="mn">40 мин</span><span class="gel">33,33 ₾</span></div>
+    </div><div class="tot"><span>По норме</span><span>40 мин · 33,33 ₾</span></div><p class="hint" style="margin-top:4px">Открыта 18.10 в 16:05 · согласована 18.10 в 16:30</p></div>
+  </div>
+  <div class="stick"><span class="sum">EV-009 вернётся в парк<br><b>«Свободен»</b></span><span class="btn-f" style="flex:none">Закрыть заявку</span></div>
+</div></div>
+<p class="cap"><b>Закрытие на планшете.</b> Фото — те же квадраты, что при открытии; пробег подсказывает, каким он был при открытии; точка — из списка «Настроек»
+(названия выдуманы). Полоса снизу говорит, что будет с мопедом.</p></div>
+
+<div><div class="frame"><div class="scr">
+  <div class="bar"><div class="l"><span class="bk">‹</span><span class="ttl"><b>Закрыть SV-00037</b><span>EV-009 · S70</span></span></div><div class="r"><span class="me"><span class="av">С</span><span>Сандро<i>механик</i></span></span><span class="out">⇥ Выйти</span></div></div>
+  <div class="body" style="gap:18px">
+    <div><p class="lbl"><b>Фото после ремонта</b> · от 1 до 5</p><div class="photos"><div class="pic add"><big>＋</big>Снять</div><div></div><div></div><div></div></div><p class="err">Нужно хотя бы одно фото «после»</p></div>
+    <div><p class="lbl"><b>Пробег при закрытии, км</b></p><div class="inp big" style="height:84px;font-size:44px;width:360px">5 120</div></div>
+  </div>
+  <div class="toast"><span>SV-00031 закрыта · EV-012 свободен</span><b>Ремонт</b></div>
+</div></div>
+<p class="cap"><b>Без фото и после закрытия.</b> «Закрыть» без фото — фокус на фото и ошибка под ним (кнопка заранее не блокируется). Закрыл — тёмное сообщение
+снизу и обратно в заявку (на экране — сообщение о прошлой заявке, для примера).</p></div>
+</div>
+</section>
+
+<!-- ============================ 3B ============================ -->
+<section>
+<h2>Б. Два шага: сначала фото, потом пробег и итог <span class="tag">вариант</span></h2>
+<div class="why">
+<div class="pro"><b>За:</b><ul><li>Тот же ход, что у «Новой заявки»: шаг — одно дело.</li><li>Фото не забудешь: без него «Далее» не уводит со шага.</li></ul></div>
+<div class="con"><b>Против:</b><ul><li>Лишний экран ради трёх полей.</li><li>Итог отдельно от фото; поправить фото с итога — «Назад».</li></ul></div>
+</div>
+<div class="row">
+<div><div class="frame"><div class="scr">
+  <div class="bar"><div class="l"><span class="bk">‹</span><span class="ttl"><b>Закрыть SV-00037</b><span>Шаг 1 из 2 · Фото</span></span></div><div class="r"><span class="me"><span class="av">С</span><span>Сандро<i>механик</i></span></span><span class="out">⇥ Выйти</span></div></div>
+  <div class="steps"><span class="now"></span><span></span></div>
+  <div class="body">
+    <p class="q">Сфотографируй мопед после ремонта</p>
+    <div class="photos"><div class="pic"><span>после</span></div><div class="pic"><span>после</span></div><div class="pic add"><big>＋</big>Снять</div><div></div></div>
+    <p class="hint">От 1 до 5 фото: то, что чинил, и мопед целиком</p>
+  </div>
+  <div class="stick"><span class="btn-f">Далее</span></div>
+</div></div>
+<p class="cap"><b>Шаг 1.</b> Только фото.</p></div>
+
+<div><div class="frame"><div class="scr">
+  <div class="bar"><div class="l"><span class="bk">‹</span><span class="ttl"><b>Закрыть SV-00037</b><span>Шаг 2 из 2 · Итог</span></span></div><div class="r"><span class="me"><span class="av">С</span><span>Сандро<i>механик</i></span></span><span class="out">⇥ Выйти</span></div></div>
+  <div class="steps"><span class="done"></span><span class="now"></span></div>
+  <div class="body">
+    <div><p class="lbl"><b>Пробег при закрытии, км</b></p><div class="inp big" style="height:84px;font-size:44px">5 120</div><p class="hint">При открытии — 5 104 км</p></div>
+    <div><p class="lbl"><b>Где стоит мопед</b></p><div class="locs"><span class="chip on">Мастерская</span><span class="chip">Шоурум</span></div></div>
+    <div class="card"><div class="lines"><div class="ok"><span class="c">WH-02</span><span class="t">Замена шины/камеры × 1</span><span class="mn">40 мин</span><span class="gel">33,33 ₾</span></div></div><div class="tot"><span>По норме</span><span>40 мин · 33,33 ₾</span></div></div>
+    <div class="thumbs"><div class="pic"><span>после</span></div><div class="pic"><span>после</span></div></div>
+  </div>
+  <div class="stick"><span class="btn-o">Назад</span><span class="btn-f">Закрыть заявку</span></div>
+</div></div>
+<p class="cap"><b>Шаг 2.</b> Пробег, точка и итог; фото — миниатюрами.</p></div>
+</div>
+</section>
+
+<!-- ============================ words ============================ -->
+<h2>Слова экранов на грузинском</h2>
+<p class="lead">Так экраны выглядят на планшете по умолчанию. Перевод — мой, его вычитает директор. Где слово в EV8 Ops уже есть (დამტკიცება — согласовать,
+ელოდება დამტკიცებას — ждёт согласования, მუშავდება — в работе), взято оттуда.</p>
+<table class="words">
+<tr><td>ელოდება დამტკიცებას</td><td class="lat">elodeba damtkitsebas</td><td>Ждут согласования / ждёт согласования</td></tr>
+<tr><td>დამტკიცება · სამუშაოს დამტკიცება</td><td class="lat">damtkitseba · samushaos damtkitseba</td><td>Согласовать · Согласовать работу</td></tr>
+<tr><td>უარყოფა · სამუშაოს უარყოფა</td><td class="lat">uarqopa · samushaos uarqopa</td><td>Отклонить · Отклонить работу</td></tr>
+<tr><td>უარყოფილია</td><td class="lat">uarqopilia</td><td>Отклонена</td></tr>
+<tr><td>უარის მიზეზი · დაწერე მიზეზი</td><td class="lat">uaris mizezi · datsere mizezi</td><td>Причина отказа · Напиши причину</td></tr>
+<tr><td>დაამტკიცა ნიკამ, დღეს 09:15</td><td class="lat">daamtkitsa nikam, dghes 09:15</td><td>Согласовала Ника, сегодня 09:15</td></tr>
+<tr><td>მუშავდება</td><td class="lat">mushavdeba</td><td>В работе</td></tr>
+<tr><td>＋ სამუშაო · ახალი</td><td class="lat">＋ samushao · akhali</td><td>＋ Работа · новая</td></tr>
+<tr><td>დახურვა შესაძლებელია გადაწყვეტილების შემდეგ</td><td class="lat">dakhurva shesadzlebelia gadatsqvetilebis shemdeg</td><td>Закрыть можно после решения</td></tr>
+<tr><td>ნორმის ჩაწერა</td><td class="lat">normis chatsera</td><td>Вписать норму</td></tr>
+<tr><td>შეკეთების დახურვა</td><td class="lat">sheketebis dakhurva</td><td>Закрыть заявку</td></tr>
+<tr><td>ფოტო შეკეთების შემდეგ · 1-დან 5-მდე</td><td class="lat">poto sheketebis shemdeg · 1-dan 5-mde</td><td>Фото после ремонта · от 1 до 5</td></tr>
+<tr><td>საჭიროა მინიმუმ ერთი ფოტო „შემდეგ“</td><td class="lat">sachiroa minimum erti poto "shemdeg"</td><td>Нужно хотя бы одно фото «после»</td></tr>
+<tr><td>გარბენი დახურვისას, კმ</td><td class="lat">garbeni dakhurvisas, km</td><td>Пробег при закрытии, км</td></tr>
+<tr><td>სად დგას მოპედი</td><td class="lat">sad dgas mopedi</td><td>Где стоит мопед</td></tr>
+<tr><td>დახურავს მფლობელი: შეკეთება კლიენტის ხარჯზეა</td><td class="lat">dakhuravs mplobeli: sheketeba klientis kharjzea</td><td>Закроет владелец: ремонт за счёт клиента</td></tr>
+</table>
+<p class="note" style="margin-top:28px">Файл статичный, без JavaScript. Цвета и шрифты — токены EV8 Ops. Размеры — на экране планшета до уменьшения. Суммы — по ставке 50 ₾ за час нормы;
+как округлять итог выплаты — вопрос этапа 5. Имя «ჟუჟუნა ჯაფარაძე» (Zhuzhuna Japaradze) — выдуманное, из образца шрифта <code>brand.md</code>.</p>
+</main></body></html>
