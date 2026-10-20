@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest';
 import { HAS_DB, call, json, loginAs, uniq } from './helpers.js';
 import { assertion, driveConfig, forgetToken } from '../src/lib/drive.js';
 import { fileKind, folderName, kindOfText, matchFolders, pdfText, readContract, readContractParty, readReturnAct, readingOrder, sharedWords } from '../src/lib/driveDocs.js';
-import { actAfterPickup, sectionOf } from '../src/lib/driveScan.js';
+import { actAfterPickup, joinKommoDeals, sectionOf } from '../src/lib/driveScan.js';
 import { todayISO } from '@ev8/shared';
 
 const ACT = [
@@ -199,6 +199,20 @@ describe('the rentals folders in Drive: names and documents (ADR-0031)', () => {
     expect(actAfterPickup('2031-10-08', '2031-10-08')).toBe(true);
     expect(actAfterPickup('2031-07-01', '2031-10-08')).toBe(false);
     expect(actAfterPickup(null, '2031-10-08')).toBe(true);
+  });
+
+  it('a contract in Drive and a deal in Kommo for one person are one row, the deal’s link kept', () => {
+    const contracts = [{ folderId: 'f1', who: 'Testadze Shota', datedOn: '2031-10-08' }, { folderId: 'f2', who: 'Nobody Else', datedOn: '2031-10-09' }];
+    const deals = [
+      { leadId: '1', kind: 'rent' as const, who: 'Shota Testadze', customerId: 'c1', phone: '+995555000001' },
+      { leadId: '2', kind: 'rent' as const, who: 'Shota Otheradze', customerId: null, phone: null },
+      { leadId: '3', kind: 'sale' as const, who: 'Nobody Else', customerId: null, phone: null },
+    ];
+    const r = joinKommoDeals(contracts, deals);
+    expect(r.contracts[0]).toMatchObject({ folderId: 'f1', leadId: '1', customerId: 'c1', phone: '+995555000001' });
+    // One shared word is not the same person; a sale is not a hand-over.
+    expect(r.contracts[1]).toEqual(contracts[1]);
+    expect(r.deals.map((d) => d.leadId)).toEqual(['2', '3']);
   });
 
   it('knows the two folders inside the shared one by their names', () => {

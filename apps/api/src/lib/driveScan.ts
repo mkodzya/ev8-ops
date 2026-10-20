@@ -2,7 +2,7 @@ import { addDays, effectiveRentalStatus, payOffsetDays, todayISO, type RentalSta
 import { dateFromISO, isoDate } from './dates.js';
 import { prisma } from './db.js';
 import { DriveError, FOLDER, download, driveConfig, listFolder, type DriveConfig, type DriveFailure, type DriveItem } from './drive.js';
-import { fileDate, fileKind, folderName, kindOfText, matchFolders, pdfText, readContract, readReturnAct, type FolderToMatch, type RentalToMatch } from './driveDocs.js';
+import { fileDate, fileKind, folderName, kindOfText, matchFolders, pdfText, readContract, readReturnAct, sharedWords, type FolderToMatch, type RentalToMatch } from './driveDocs.js';
 import { env } from './env.js';
 
 // Reading the rentals folders in Drive, and laying them beside the rentals
@@ -250,6 +250,26 @@ export async function driveTasks(today: string): Promise<{
     contracts: r.missingHere.filter((f) => !f.returned && f.datedOn != null && f.datedOn >= since).map((f) => ({ folderId: f.id, who: folderName(f.name).person, datedOn: f.datedOn })),
     returns: r.returnedThere.map((x) => ({ rentalId: x.rental.id, returnedOn: x.act?.returnedOn ?? null, paidBackTetri: x.act?.paidBackTetri ?? null })),
   };
+}
+
+type DriveContract = Awaited<ReturnType<typeof driveTasks>>['contracts'][number];
+type KommoDeal = { leadId: string; kind: 'rent' | 'sale'; who: string; customerId: string | null; phone: string | null };
+
+/**
+ * One person, one row on "Today" (ADR-0034): a deal Kommo has won and a
+ * contract in Drive with no rental here are the same hand-over when the names
+ * share two words — the Drive row stays, filled in from the contract, and
+ * takes the deal's link, card and phone; the deal's own row goes.
+ */
+export function joinKommoDeals(contracts: readonly DriveContract[], deals: readonly KommoDeal[]): { contracts: (DriveContract & { leadId?: string; customerId?: string | null; phone?: string | null })[]; deals: KommoDeal[] } {
+  let left = [...deals];
+  const joined = contracts.map((c) => {
+    const d = left.find((x) => x.kind === 'rent' && sharedWords(c.who, [x.who]) >= 2);
+    if (!d) return c;
+    left = left.filter((x) => x !== d);
+    return { ...c, leadId: d.leadId, customerId: d.customerId, phone: d.phone };
+  });
+  return { contracts: joined, deals: left };
 }
 
 /** A rental's folder and contract in Drive, for its card: the running rentals' folder first. */

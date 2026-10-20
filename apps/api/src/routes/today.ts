@@ -4,7 +4,7 @@ import type { Prisma } from '../generated/prisma/client.js';
 import { dateFromISO, isoDate } from '../lib/dates.js';
 import { debtsOf, rentalDebt, rentalDueToday, type CustomerDebt } from '../lib/debt.js';
 import { depositsOverview } from '../lib/deposits.js';
-import { driveTasks } from '../lib/driveScan.js';
+import { driveTasks, joinKommoDeals } from '../lib/driveScan.js';
 import { prisma } from '../lib/db.js';
 import { partRows } from '../lib/stock.js';
 import { env } from '../lib/env.js';
@@ -168,6 +168,11 @@ export function todayRoutes(app: FastifyInstance): void {
         }).filter((b) => b.days > STALE_DAYS)
       : [];
 
+    // Drive is read by the owners only (ADR-0031), and so are its rows; a
+    // contract there and a deal in Kommo for one person are one row (ADR-0034).
+    const driveNow = owner && mayView(req, 'users.manage') ? await driveTasks(today) : null;
+    const joined = driveNow ? joinKommoDeals(driveNow.contracts, kommoDeals) : null;
+
     const longest = serviceJobs.reduce((n, j) => Math.max(n, daysBetween(isoDate(j.openedOn)!, today)), 0);
     const groups = dayQueue({
       today,
@@ -212,9 +217,8 @@ export function todayRoutes(app: FastifyInstance): void {
       vehiclesWithoutPoint: vehicles.filter((v) => v.locationId == null && v.state === 'available').length,
       odooDeposits,
       kommo,
-      kommoDeals,
-      // Drive is read by the owners only (ADR-0031), and so are its rows.
-      drive: owner && mayView(req, 'users.manage') ? await driveTasks(today) : undefined,
+      kommoDeals: joined?.deals ?? kommoDeals,
+      drive: driveNow && joined ? { contracts: joined.contracts, returns: driveNow.returns } : undefined,
     });
 
     const fleet = Object.fromEntries(VEHICLE_STATES.map((s) => [s, 0])) as Record<VehicleState, number>;
