@@ -46,6 +46,12 @@ export const driveEn = {
     vehicleBusy: (vin: string, state: string) => `The contract names the moped …${vin}; here it is «${state}». Make it free on its card first, then choose it below.`,
     vehicleUnknown: (vin: string) => `The contract names VIN ${vin}; there is no such moped here.`,
     openVehicle: 'Open the moped',
+    // Drive's rows on "Today" and the return they open (ADR-0034).
+    todayContract: (date: string) => `contract in Drive of ${date}, no rental here`,
+    todayAct: (date: string) => `return act in Drive of ${date}`,
+    todayFinished: 'the folder in Drive is among the finished',
+    todayPaidBack: (sum: string) => `deposit paid back ${sum}`,
+    returnOnAct: (date: string) => `The day of the return is the act's in Drive: ${date}. Check the deposit against the act.`,
   },
 };
 
@@ -94,6 +100,11 @@ export const driveRu: typeof driveEn = {
     vehicleBusy: (vin, state) => `В договоре мопед …${vin}; здесь он «${state}». Сначала переведите его в «Свободен» на карточке мопеда, потом выберите ниже.`,
     vehicleUnknown: (vin) => `В договоре VIN ${vin}; такого мопеда здесь нет.`,
     openVehicle: 'Открыть мопед',
+    todayContract: (date) => `договор в Drive от ${date}, здесь аренды нет`,
+    todayAct: (date) => `акт возврата в Drive от ${date}`,
+    todayFinished: 'папка в Drive — в завершённых',
+    todayPaidBack: (sum) => `залог вернули ${sum}`,
+    returnOnAct: (date) => `Дата возврата — из акта в Drive: ${date}. Сверьте залог с актом.`,
   },
 };
 
@@ -142,5 +153,10 @@ export const driveKa: typeof driveEn = {
     vehicleBusy: (vin, state) => `ხელშეკრულებაში მოპედია …${vin}; აქ ის არის «${state}». ჯერ მოპედის ბარათზე გადაიყვანეთ «თავისუფალში», შემდეგ აირჩიეთ ქვემოთ.`,
     vehicleUnknown: (vin) => `ხელშეკრულებაში VIN ${vin}; ასეთი მოპედი აქ არ არის.`,
     openVehicle: 'მოპედის გახსნა',
+    todayContract: (date) => `ხელშეკრულება Drive-ში ${date}, აქ ქირაობა არ არის`,
+    todayAct: (date) => `დაბრუნების აქტი Drive-ში ${date}`,
+    todayFinished: 'საქაღალდე Drive-ში დასრულებულებშია',
+    todayPaidBack: (sum) => `დეპოზიტი დაბრუნდა ${sum}`,
+    returnOnAct: (date) => `დაბრუნების თარიღი Drive-ის აქტიდანაა: ${date}. დეპოზიტი შეადარეთ აქტს.`,
   },
 };

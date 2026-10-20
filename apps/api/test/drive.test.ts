@@ -8,7 +8,8 @@ import { describe, expect, it } from 'vitest';
 import { HAS_DB, call, json, loginAs, uniq } from './helpers.js';
 import { assertion, driveConfig, forgetToken } from '../src/lib/drive.js';
 import { fileKind, folderName, kindOfText, matchFolders, pdfText, readContract, readContractParty, readReturnAct, readingOrder, sharedWords } from '../src/lib/driveDocs.js';
-import { sectionOf } from '../src/lib/driveScan.js';
+import { actAfterPickup, sectionOf } from '../src/lib/driveScan.js';
+import { todayISO } from '@ev8/shared';
 
 const ACT = [
   'ელექტრო მოპედის დაბრუნებისა და საბოლოო ანგარიშსწორების აქტი',
@@ -193,6 +194,13 @@ describe('the rentals folders in Drive: names and documents (ADR-0031)', () => {
     expect(matchFolders([older, same], rentals, { nameAlone: false }).get('same')?.rentalId).toBe('r');
   });
 
+  it('a return act dated before the pickup is an older rental’s, not this one’s (ADR-0034)', () => {
+    expect(actAfterPickup('2031-11-03', '2031-10-08')).toBe(true);
+    expect(actAfterPickup('2031-10-08', '2031-10-08')).toBe(true);
+    expect(actAfterPickup('2031-07-01', '2031-10-08')).toBe(false);
+    expect(actAfterPickup(null, '2031-10-08')).toBe(true);
+  });
+
   it('knows the two folders inside the shared one by their names', () => {
     expect(sectionOf('Aktiuri_Qiraoba')).toBe('active');
     expect(sectionOf('Dasrulebuli_Qiraoba_Depositis_dabruneba')).toBe('finished');
@@ -225,16 +233,33 @@ describe.skipIf(!HAS_DB)('the rentals folders in Drive, read and laid beside the
     const made = await call(owner, 'POST', '/api/rentals', { customerId: customer.id, vehicleId: vehicle.id, weeklyRateTetri: '150', pickedUpOn: '2026-09-06' });
     expect(made.statusCode, made.body).toBe(201);
     const rentalId = json<{ id: string }>(made).id;
+    // A second renter whose return act is in the folder while it still stands among the running ones.
+    const vin2 = `TESTE${uniq().replace(/\D/g, '').slice(-12).padStart(12, '0')}`;
+    const vehicle2 = await prisma.vehicle.create({ data: { vin: vin2, modelId: model.id } });
+    const surname2 = `Testava${uniq().replace(/\D/g, '').slice(-5)}`;
+    const customer2 = await prisma.customer.create({ data: { name: `Levan ${surname2}`, nameLat: `Levan ${surname2}` } });
+    const made2 = await call(owner, 'POST', '/api/rentals', { customerId: customer2.id, vehicleId: vehicle2.id, weeklyRateTetri: '150', pickedUpOn: '2026-09-08' });
+    expect(made2.statusCode, made2.body).toBe(201);
+    const rentalId2 = json<{ id: string }>(made2).id;
+    // A contract of this week with no rental here: "Today" asks for it to be entered.
+    const fresh = todayISO(new Date(), 'Asia/Tbilisi').slice(2).replace(/-/g, '');
 
     // Google, played by a function: the shared folder, its two sections, the renters' folders, two documents.
     const act = await pdfOf(ACT.replace('HH8TEST0000000017', vin));
+    const act2 = await pdfOf(ACT.replace('HH8TEST0000000017', vin2));
     const contract = await pdfOf(PARTY.replace('06/09/2031', '07/09/2026'));
     const tree: Record<string, { id: string; name: string; mimeType: string }[]> = {
       root: [
         { id: 'sec-active', name: 'Aktiuri_Qiraoba', mimeType: 'application/vnd.google-apps.folder' },
         { id: 'sec-done', name: 'Dasrulebuli_Qiraoba_Depositis_dabruneba', mimeType: 'application/vnd.google-apps.folder' },
       ],
-      'sec-active': [{ id: 'f-stranger', name: '260907 Stranger Testperson', mimeType: 'application/vnd.google-apps.folder' }],
+      'sec-active': [
+        { id: 'f-stranger', name: '260907 Stranger Testperson', mimeType: 'application/vnd.google-apps.folder' },
+        { id: 'f-levan', name: `260908 Levan ${surname2}`, mimeType: 'application/vnd.google-apps.folder' },
+        { id: 'f-fresh', name: `${fresh} Fresh Testperson`, mimeType: 'application/vnd.google-apps.folder' },
+      ],
+      'f-levan': [{ id: 'doc-act2', name: '261103 დაბრუნებისა და საბოლოო ანგარიშსწორების აქტი test.pdf', mimeType: 'application/pdf' }],
+      'f-fresh': [{ id: 'doc-fresh', name: `${fresh} Fresh.pdf`, mimeType: 'application/pdf' }],
       'sec-done': [{ id: 'm-11', name: '11', mimeType: 'application/vnd.google-apps.folder' }],
       'm-11': [{ id: 'f-nino', name: `260906 Nino ${surname}`, mimeType: 'application/vnd.google-apps.folder' }],
       'f-stranger': [
@@ -256,7 +281,7 @@ describe.skipIf(!HAS_DB)('the rentals folders in Drive, read and laid beside the
         return new Response(JSON.stringify({ access_token: 'test-token', expires_in: 3600 }), { status: 200 });
       }
       const m = /\/files\/([^/?]+)\?alt=media/.exec(url);
-      if (m) return new Response(m[1] === 'doc-act' ? act : m[1] === 'doc-contract' ? contract : 'not a pdf', { status: 200 });
+      if (m) return new Response(m[1] === 'doc-act' ? act : m[1] === 'doc-act2' ? act2 : m[1] === 'doc-contract' ? contract : 'not a pdf', { status: 200 });
       const parent = /'([^']+)' in parents/.exec(new URL(url).searchParams.get('q') ?? '')?.[1] ?? '';
       const files = (tree[parent] ?? []).map((f) => ({ ...f, modifiedTime: '2026-11-03T10:00:00.000Z', webViewLink: `https://drive.example/${f.id}` }));
       return new Response(JSON.stringify({ files }), { status: 200 });
@@ -268,9 +293,9 @@ describe.skipIf(!HAS_DB)('the rentals folders in Drive, read and laid beside the
     forgetToken();
     try {
       const outcome = await scanDrive(fakeFetch);
-      expect(outcome).toMatchObject({ status: 'ok', folders: 2, files: 3, read: 3 });
+      expect(outcome).toMatchObject({ status: 'ok', folders: 4, files: 5, read: 5 });
       // Every PDF read once; the photo listed and never asked for.
-      expect(asked.filter((u) => u.includes('/files/doc-')).sort()).toEqual(['doc-act', 'doc-contract', 'doc-scan'].map((id) => `https://www.googleapis.com/drive/v3/files/${id}`));
+      expect(asked.filter((u) => u.includes('/files/doc-')).sort()).toEqual(['doc-act', 'doc-act2', 'doc-contract', 'doc-fresh', 'doc-scan'].map((id) => `https://www.googleapis.com/drive/v3/files/${id}`));
       expect((await prisma.driveFile.findUniqueOrThrow({ where: { id: 'doc-contract' } })).kind).toBe('contract');
       expect((await prisma.driveFile.findUniqueOrThrow({ where: { id: 'doc-scan' } })).kind).toBe('scan');
 
@@ -283,6 +308,19 @@ describe.skipIf(!HAS_DB)('the rentals folders in Drive, read and laid beside the
       expect(r.on).toBe(true);
       expect(r.returnedThere.find((x) => x.rental.id === rentalId)?.act).toMatchObject({ returnedOn: '2031-11-03', depositTetri: 18000, withheldTetri: 3000, paidBackTetri: 15000 });
       expect(r.missingHere.map((x) => x.name)).toContain('260907 Stranger Testperson');
+      // The act is in the folder among the running ones: the moped is back all the same (ADR-0034).
+      expect(r.returnedThere.find((x) => x.rental.id === rentalId2)?.act).toMatchObject({ returnedOn: '2031-11-03', paidBackTetri: 15000 });
+
+      // "Today": the return to close, the new contract to enter; the September folder is too old to ask about.
+      type Q = { queue: { group: string; rows: { id: string; action: string; href: string; note: string | null }[] }[] };
+      const rows = (q: Q) => q.queue.flatMap((g) => g.rows);
+      const mine = rows(json<Q>(await call(owner, 'GET', '/api/today')));
+      expect(mine.find((x) => x.id === `drive_return:${rentalId}`)).toMatchObject({ action: 'close_from_drive', href: `/rentals/${rentalId}/return`, note: '2031-11-03|15000' });
+      expect(mine.find((x) => x.id === `drive_return:${rentalId2}`)?.action).toBe('close_from_drive');
+      expect(mine.find((x) => x.id === 'drive_contract:f-fresh')).toMatchObject({ action: 'hand_over_from_drive', href: '/rentals/new?drive=f-fresh' });
+      expect(mine.some((x) => x.id === 'drive_contract:f-stranger')).toBe(false);
+      const managers = rows(json<Q>(await call(await loginAs('manager'), 'GET', '/api/today')));
+      expect(managers.some((x) => x.id.startsWith('drive_'))).toBe(false);
       // The rental has its folder (a finished one), so it is not "with no folder".
       expect(r.missingThere.map((x) => x.id)).not.toContain(rentalId);
 

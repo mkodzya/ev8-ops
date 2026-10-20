@@ -4,6 +4,7 @@ import type { Prisma } from '../generated/prisma/client.js';
 import { dateFromISO, isoDate } from '../lib/dates.js';
 import { debtsOf, rentalDebt, rentalDueToday, type CustomerDebt } from '../lib/debt.js';
 import { depositsOverview } from '../lib/deposits.js';
+import { driveTasks } from '../lib/driveScan.js';
 import { prisma } from '../lib/db.js';
 import { partRows } from '../lib/stock.js';
 import { env } from '../lib/env.js';
@@ -212,6 +213,8 @@ export function todayRoutes(app: FastifyInstance): void {
       odooDeposits,
       kommo,
       kommoDeals,
+      // Drive is read by the owners only (ADR-0031), and so are its rows.
+      drive: owner && mayView(req, 'users.manage') ? await driveTasks(today) : undefined,
     });
 
     const fleet = Object.fromEntries(VEHICLE_STATES.map((s) => [s, 0])) as Record<VehicleState, number>;

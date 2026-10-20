@@ -1,6 +1,6 @@
 import { needsConfirming, todayISO } from '@ev8/shared';
 import { useEffect, useRef, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { DocumentRow } from '../components/Documents.js';
 import { LoadError } from '../components/LoadError.js';
@@ -50,11 +50,15 @@ export function ReturnWizard() {
   const owner = can('deposit.decide');
   const card = useLoad<RentalCard>(id ? `/api/rentals/${id}` : null);
   const points = useLoad<{ locations: { id: string; name: string }[] }>('/api/locations');
+  // From "Today", a return Drive has: the day is the act's (ADR-0034).
+  const [search] = useSearchParams();
+  const asked = search.get('on');
+  const actOn = asked && /^\d{4}-\d{2}-\d{2}$/.test(asked) && asked <= todayISO() ? asked : null;
   const steps = [t.back.steps.act, owner ? `${t.back.steps.calc} · ${t.back.steps.deposit}` : t.back.steps.calc, t.back.steps.where, t.back.steps.summary];
 
   const start = {
     step: 0,
-    returnedOn: todayISO(),
+    returnedOn: actOn ?? todayISO(),
     odometer: '',
     condition: '',
     items: {} as Items,
@@ -205,6 +209,16 @@ export function ReturnWizard() {
               · {t.back.handedOn(fmtDate(r.pickedUpOn))} · {t.back.paidThrough(fmtDate(r.paidThrough))}
             </p>
           </section>
+          {actOn && (
+            <p className="hint">
+              {t.drive.returnOnAct(fmtDate(actOn))}{' '}
+              {r.drive?.returnActUrl && (
+                <a href={r.drive.returnActUrl} target="_blank" rel="noreferrer">
+                  {t.drive.returnAct}
+                </a>
+              )}
+            </p>
+          )}
           <div className="two-col two-col-tight">
             <Field label={t.back.returnedOn} name="returnedOn">
               <input className="input mono" type="date" max={todayISO()} min={r.pickedUpOn ?? undefined} value={f.returnedOn} onChange={(e) => set({ returnedOn: e.target.value })} />

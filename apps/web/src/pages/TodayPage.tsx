@@ -5,7 +5,7 @@ import { LoadError } from '../components/LoadError.js';
 import { Loading } from '../components/ui.js';
 import { WhatsappSheet, type WaTarget } from '../components/Whatsapp.js';
 import { useMoneyForm } from '../ds/money/MoneyForm.js';
-import { formatGel } from '../format.js';
+import { fmtDate, formatGel } from '../format.js';
 import { useT } from '../i18n/index.js';
 import { useLoad } from '../lib/use.js';
 import { useSession } from '../session.js';
@@ -76,7 +76,13 @@ export function TodayPage() {
     const bits: string[] = [];
     if (r.number) bits.push(r.number);
     if (r.vin) bits.push(`···${r.vin.slice(-4)}`);
-    if (r.group === 'returns') bits.push(r.days && r.days > 0 ? t.today.lateBy(r.days) : t.today.duesToday);
+    // Drive's return: the act's day and what it paid back, or only that the folder was moved (ADR-0034).
+    if (r.action === 'close_from_drive') {
+      const [on, back] = (r.note ?? '|').split('|');
+      bits.push(on ? t.drive.todayAct(fmtDate(on)) : t.drive.todayFinished);
+      if (back) bits.push(t.drive.todayPaidBack(formatGel(Number(back), { decimals: false })));
+    } else if (r.action === 'hand_over_from_drive') bits.push(t.drive.todayContract(fmtDate(r.note)));
+    else if (r.group === 'returns') bits.push(r.days && r.days > 0 ? t.today.lateBy(r.days) : t.today.duesToday);
     else if (r.group === 'overdue' && r.days) bits.push(t.today.overdueDays(r.days));
     else if (r.group === 'due_today' && r.note === 'handed_today') bits.push(t.today.handedToday);
     else if (r.action === 'take_instalment' && r.days) bits.push(t.today.overdueDays(r.days));
