@@ -36,7 +36,7 @@ import { dateFromISO, isoDate } from '../lib/dates.js';
 import { prisma } from '../lib/db.js';
 import { env } from '../lib/env.js';
 import { badRequest, conflict, forbidden, isUniqueViolation, notFound } from '../lib/errors.js';
-import { WORK_MONEY, issueForServicePart, partRows, passThrough, receiveRemoved, returnServiceParts, returnServicePart } from '../lib/stock.js';
+import { WORK_MONEY, issueForServicePart, partRows, passThrough, receiveRemoved, returnServiceParts, returnServicePart, unfitTrackers } from '../lib/stock.js';
 import { actorOf, mayView } from '../lib/guard.js';
 import { date, int, oneOf, str, tetri } from '../lib/validate.js';
 import { syncDeposit } from '../lib/rentalMoney.js';
@@ -557,15 +557,6 @@ async function fitTracker(
     if (isUniqueViolation(e)) throw conflict('tracker_imei_in_use', 'This IMEI is on another moped; take it off there first.');
     throw e;
   }
-}
-
-/**
- * A repair called off gives its shelf's parts back, so a tracker it took off
- * the shelf was never fitted (ADR-0036). One it moved off a donor, or took off
- * the moped, stays as it is: those parts did not go back anywhere.
- */
-async function unfitTrackers(tx: Tx, jobId: string): Promise<void> {
-  await tx.vehicleTracker.deleteMany({ where: { serviceJobId: jobId, removedOn: null, servicePart: { kind: 'stock' } } });
 }
 
 /** A repair that waited only for a line just taken off goes back to work. */

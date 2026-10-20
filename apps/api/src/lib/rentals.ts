@@ -9,6 +9,7 @@ import { debtOf } from './debt.js';
 import { badRequest, conflict, forbidden, notFound } from './errors.js';
 import { recomputeRental, recordPaymentTx } from './payments.js';
 import { rentalOwed, spreadRental, syncDeposit, writeAllocations } from './rentalMoney.js';
+import { returnServiceParts, unfitTrackers } from './stock.js';
 import { movePool, moveVehicle } from './vehicles.js';
 import { itemLabel } from './pdf/returnAct.js';
 
@@ -701,7 +702,21 @@ export async function undoReturn(input: { actor: Actor; rentalId: string; reason
     }
     await tx.rental.update({ where: { id: r.id }, data: { status: 'active', returnedOn: null, updatedAt: now } });
     if (record.serviceJobId) {
-      await tx.serviceJob.updateMany({ where: { id: record.serviceJobId, status: 'open' }, data: { status: 'cancelled', updatedAt: now } });
+      // The repair the return opened is called off with it, as a repair
+      // cancelled is: dated, its shelf's parts back. Still open — or waiting,
+      // since a mechanic who took it on put it back to waiting (ADR-0035 §1).
+      // One closed already stays closed; the moped goes back to the customer.
+      const called = await tx.serviceJob.updateMany({
+        where: { id: record.serviceJobId, status: { in: ['open', 'draft'] } },
+        data: { status: 'cancelled', closedOn: dateFromISO(input.today)!, closedAt: now, updatedAt: now },
+      });
+      if (called.count === 1) {
+        const job = await tx.serviceJob.findUniqueOrThrow({ where: { id: record.serviceJobId }, select: { id: true, number: true } });
+        const why = `return undone: ${input.reason}`;
+        const back = await returnServiceParts(tx, { jobId: job.id, occurredOn: input.today, actorId: input.actor.id, reason: `${job.number}: ${why}`.slice(0, 1000) });
+        await unfitTrackers(tx, job.id);
+        await tx.auditLog.create({ data: { actorId: input.actor.id, action: 'service.cancel', entityType: 'service_job', entityId: job.id, after: { partsBack: back }, note: why } });
+      }
     }
     if (r.vehicleId) {
       await moveVehicle(tx, { vehicleId: r.vehicleId, kind: 'pickup', occurredOn: input.today, actorId: input.actor.id, rentalId: r.id, reason: `return undone: ${input.reason}` });
