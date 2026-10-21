@@ -1,0 +1,530 @@
+<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ТО, простой и уведомления — варианты · EV8 Ops, прототип</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=Inter:wght@400;500;600&family=Noto+Sans+Georgian:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+/* Static prototype: no JavaScript (Mika's viewer runs none). Colours are the
+   product's tokens (packages/shared/tokens.json). People, VINs and fleet
+   numbers, job numbers and sums paid are invented; the works and norms are the bot's book
+   (CATALOG_SEED, 11.10.2026). */
+:root { --bg:#fbfbfb; --surface:#fff; --surface-2:#f3f3f3; --ink:#0b0b0b; --muted:#5d5d5d; --line:#dbe4de; --line-soft:#ebebeb; --line-control:#7a7a7a; --accent:#557553; --accent-soft:#e3ebe3; --accent-ink:#4d6a4b; --lime:#e0ffa2; --crit:#c8402f; --crit-soft:#f9e3df; --crit-ink:#b3392a; --warn-soft:#fdeadf; --service-deep:#b2450f; --info-soft:#e4ecfb; --rented-ink:#2f63c0; --toast:#0b0b0b;
+  --sans:"Be Vietnam Pro","Inter","Noto Sans Georgian",system-ui,sans-serif; --mono:"IBM Plex Mono","Noto Sans Georgian",ui-monospace,monospace; }
+* { box-sizing:border-box; }
+body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.5 var(--sans); }
+main { max-width:1240px; margin:0 auto; padding:32px 16px 64px; }
+h1 { font-size:28px; line-height:1.2; margin:0 0 8px; font-weight:500; letter-spacing:-.02em; }
+h2 { font-size:21px; margin:44px 0 4px; font-weight:500; letter-spacing:-.02em; }
+h2.part { font-size:25px; margin-top:64px; padding-top:22px; border-top:2px solid var(--ink); }
+.lead { color:var(--muted); margin:0 0 8px; max-width:860px; }
+.note { color:var(--muted); font-size:13px; }
+.common { background:var(--surface); border:1px solid var(--line-soft); border-radius:16px; padding:14px 18px; margin-top:16px; max-width:1000px; }
+.common ul { margin:6px 0 0; padding-left:20px; } .common li { margin:4px 0; }
+.tag { display:inline-block; font-size:12px; font-weight:600; padding:2px 10px; border-radius:99px; background:var(--surface-2); margin-bottom:6px; vertical-align:middle; }
+.rec .tag { background:var(--lime); }
+.why { display:grid; grid-template-columns:1fr 1fr; gap:6px 24px; max-width:960px; font-size:14px; margin:8px 0 0; }
+.why ul { margin:2px 0; padding-left:18px; } .why li { margin:3px 0; }
+.pro b { color:#2f6b3a; } .con b { color:#9a3b2c; }
+.row { display:flex; flex-wrap:wrap; gap:22px; margin-top:16px; align-items:flex-start; }
+.cap { font-size:13px; color:var(--muted); margin:6px 0 0; max-width:380px; }
+.cap b { color:var(--ink); font-weight:600; }
+.cap .ka { color:var(--ink); }
+code { font-family:var(--mono); font-size:13px; background:var(--surface-2); padding:1px 5px; border-radius:4px; }
+
+/* device frames: the screen inside is drawn at full size and scaled down */
+.frame { width:380px; height:500px; border-radius:22px; background:#1c1c1c; position:relative; box-shadow:0 2px 14px rgba(0,0,0,.18); flex:none; }
+.scr { position:absolute; left:10px; top:10px; width:768px; height:1024px; transform:scale(.469); transform-origin:top left; background:var(--bg); border-radius:24px; overflow:hidden; display:flex; flex-direction:column; }
+.frame.land { width:500px; height:380px; } .land .scr { width:1024px; height:768px; }
+.frame.lap { width:660px; height:432px; border-radius:14px; } .lap .scr { width:1366px; height:878px; transform:scale(.469); border-radius:8px; }
+.frame.ph { width:245px; height:507px; border-radius:26px; } .ph .scr { width:375px; height:812px; transform:scale(.6); border-radius:30px; font-size:15px; }
+.cap.wide { max-width:660px; } .cap.ph { max-width:245px; }
+
+/* tablet chrome after a PIN sign-in (TabletFrame: no logo below 900 px) */
+.bar { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:14px 22px; background:var(--surface); border-bottom:1px solid var(--line-soft); flex:none; }
+.bar .l { display:flex; align-items:center; gap:14px; min-width:0; }
+.bk { width:52px; height:52px; border-radius:50%; border:1.5px solid var(--line-control); display:flex; align-items:center; justify-content:center; font-size:28px; line-height:1; }
+.ttl { display:flex; flex-direction:column; } .ttl b { font-size:26px; font-weight:500; letter-spacing:-.02em; line-height:1.15; } .ttl span { font-size:15px; color:var(--muted); }
+.bar .r { display:flex; align-items:center; gap:14px; flex:none; }
+.me { display:flex; align-items:center; gap:10px; font-size:17px; font-weight:600; line-height:1.15; } .me i { display:block; font-style:normal; font-weight:400; font-size:14px; color:var(--muted); }
+.av { width:44px; height:44px; border-radius:50%; background:var(--accent-soft); color:var(--accent); font-weight:600; font-size:18px; display:flex; align-items:center; justify-content:center; }
+.out { height:52px; padding:0 22px; border:2px solid var(--ink); border-radius:99px; font-size:19px; font-weight:500; display:flex; align-items:center; gap:8px; }
+.logo { font:700 26px/1 var(--sans); color:#819481; letter-spacing:-.04em; }
+
+/* wizard */
+.steps { display:flex; gap:8px; padding:16px 26px 0; flex:none; }
+.steps span { flex:1; height:8px; border-radius:99px; background:var(--line-soft); } .steps span.done { background:var(--accent); } .steps span.now { background:var(--ink); }
+.body { flex:1; min-height:0; padding:22px 26px 0; display:flex; flex-direction:column; gap:20px; overflow:hidden; }
+.q { font-size:32px; font-weight:500; letter-spacing:-.02em; margin:0; line-height:1.15; }
+.lbl { font-size:17px; color:var(--muted); margin:0 0 8px; }
+.lbl b { color:var(--ink); font-weight:600; }
+.inp { height:72px; border:1.5px solid var(--line-control); border-radius:14px; background:var(--surface); display:flex; align-items:center; padding:0 20px; font-size:30px; }
+.inp.big { height:96px; font-size:52px; font-family:var(--mono); letter-spacing:.02em; }
+.inp.txt { font-size:22px; height:64px; }
+.inp .ph { color:#8a8a8a; }
+.caret { display:inline-block; width:2px; height:1em; background:var(--accent); margin-left:3px; vertical-align:-.12em; }
+.hint { font-size:16px; color:var(--muted); margin:8px 0 0; }
+.btn-o { height:64px; border:1.5px solid var(--ink); border-radius:99px; display:inline-flex; align-items:center; justify-content:center; gap:10px; padding:0 28px; font-size:21px; font-weight:500; background:var(--surface); }
+.btn-f { height:64px; border-radius:99px; display:inline-flex; align-items:center; justify-content:center; padding:0 34px; font-size:22px; font-weight:600; background:var(--accent); color:#fff; }
+.stick { margin-top:auto; padding:16px 26px 24px; background:var(--surface); border-top:1px solid var(--line-soft); display:flex; gap:14px; align-items:center; flex:none; }
+.stick .btn-f { flex:1; } .stick .sum { flex:1; font-size:17px; line-height:1.3; } .stick .sum b { font-size:20px; }
+.card { background:var(--surface); border:1.5px solid var(--line-soft); border-radius:18px; padding:16px 20px; }
+.card.sel { border:3px solid var(--accent); background:var(--accent-soft); }
+.mop { display:flex; justify-content:space-between; gap:12px; align-items:flex-start; }
+.mop .n { font-size:24px; font-weight:600; } .mop .m { font-size:20px; }
+.vin { font-family:var(--mono); font-size:19px; color:var(--muted); letter-spacing:.01em; } .vin b { color:var(--ink); font-weight:600; background:var(--lime); border-radius:4px; padding:0 2px; }
+.pill { display:inline-flex; align-items:center; gap:7px; font-size:16px; font-weight:500; padding:5px 14px; border-radius:99px; white-space:nowrap; }
+.pill::before { content:""; width:10px; height:10px; border-radius:50%; background:currentColor; }
+.p-av { background:var(--accent-soft); color:var(--accent-ink); }
+.p-rent { background:var(--info-soft); color:var(--rented-ink); }
+.p-serv { background:var(--warn-soft); color:var(--service-deep); } .p-serv::before { border-radius:3px; }
+.p-wait { background:var(--surface); color:var(--ink); border:1.5px solid var(--line-control); } .p-wait::before { background:transparent; border:2.5px solid var(--ink); width:6px; height:6px; }
+.warnline { margin-top:12px; font-size:17px; padding:10px 14px; border-radius:12px; background:var(--warn-soft); display:flex; justify-content:space-between; gap:10px; align-items:center; }
+.link { color:var(--accent); font-weight:600; text-decoration:underline; text-underline-offset:4px; }
+.chips { display:flex; flex-wrap:wrap; gap:12px; }
+.chip { height:60px; padding:0 24px; border:1.5px solid var(--line-control); border-radius:99px; display:inline-flex; align-items:center; font-size:20px; background:var(--surface); white-space:nowrap; }
+.chip.on { background:var(--ink); color:#fff; border-color:var(--ink); }
+.chip.sm { height:52px; font-size:18px; padding:0 18px; }
+.scroll-x { display:flex; gap:10px; overflow:hidden; white-space:nowrap; }
+.photos { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; }
+.pic { aspect-ratio:1; border-radius:14px; background:repeating-linear-gradient(135deg,#d9dcd9 0 10px,#e6e8e6 10px 20px); position:relative; }
+.pic span { position:absolute; left:8px; bottom:8px; background:rgba(11,11,11,.7); color:#fff; font-size:14px; padding:2px 9px; border-radius:99px; }
+.pic.add { background:var(--surface); border:2px dashed var(--line-control); display:flex; flex-direction:column; align-items:center; justify-content:center; font-size:18px; color:var(--ink); gap:4px; }
+.pic.add big { font-size:36px; line-height:1; }
+.odo { display:grid; grid-template-columns:1fr 190px; gap:18px; align-items:end; }
+.err { color:var(--crit-ink); font-size:17px; font-weight:500; margin:8px 0 0; }
+.box-warn { background:var(--warn-soft); border-radius:16px; padding:16px 18px; font-size:18px; }
+.box-warn p { margin:0 0 12px; }
+.wk { display:flex; align-items:center; gap:14px; padding:12px 16px; background:var(--surface); border:1.5px solid var(--line-soft); border-radius:16px; }
+.wk.on { border-color:var(--accent); border-width:2.5px; }
+.wk .c { font-family:var(--mono); font-size:16px; color:var(--muted); width:62px; flex:none; }
+.wk .t { flex:1; font-size:19px; line-height:1.25; }
+.wk .mn { font-family:var(--mono); font-size:18px; white-space:nowrap; }
+.qty { display:flex; align-items:center; gap:0; border:1.5px solid var(--line-control); border-radius:99px; height:52px; flex:none; }
+.qty span { width:52px; text-align:center; font-size:26px; line-height:52px; } .qty b { width:34px; text-align:center; font-size:21px; }
+.plus { width:52px; height:52px; border-radius:50%; border:1.5px solid var(--ink); font-size:28px; line-height:48px; text-align:center; flex:none; }
+.nonorm { font-size:15px; font-weight:600; padding:3px 10px; border-radius:99px; background:var(--crit-soft); color:var(--crit-ink); white-space:nowrap; }
+.kv { display:grid; grid-template-columns:150px 1fr; gap:10px 16px; font-size:19px; } .kv dt { color:var(--muted); } .kv dd { margin:0; }
+.lines { display:flex; flex-direction:column; gap:0; font-size:18px; }
+.lines div { display:flex; gap:12px; padding:9px 0; border-bottom:1px solid var(--line-soft); align-items:baseline; }
+.lines .c { font-family:var(--mono); color:var(--muted); width:62px; flex:none; font-size:16px; }
+.lines .t { flex:1; } .lines .mn, .lines .gel { font-family:var(--mono); white-space:nowrap; } .lines .gel { width:96px; text-align:right; }
+.tot { display:flex; justify-content:space-between; font-size:19px; font-weight:600; padding-top:10px; }
+.thumbs { display:flex; gap:10px; } .thumbs .pic { width:96px; }
+.ka { font-family:"Noto Sans Georgian","Be Vietnam Pro",sans-serif; }
+.sect-h { display:flex; justify-content:space-between; align-items:baseline; font-size:20px; font-weight:600; margin-top:6px; }
+.sect-h span { font-size:16px; color:var(--muted); font-weight:400; }
+.toast { position:absolute; left:26px; right:26px; bottom:26px; background:var(--toast); color:#fff; border-radius:18px; padding:20px 24px; font-size:19px; display:flex; justify-content:space-between; }
+.toast b { color:var(--lime); }
+
+/* the book of works */
+.banner { background:var(--surface-2); border-radius:14px; padding:12px 16px; font-size:16px; line-height:1.4; }
+.banner b { font-weight:600; }
+.grp { display:flex; flex-direction:column; gap:0; background:var(--surface); border:1px solid var(--line-soft); border-radius:16px; overflow:hidden; }
+.grp .gh { display:flex; justify-content:space-between; align-items:baseline; padding:12px 18px; background:var(--surface-2); font-size:19px; font-weight:600; }
+.grp .gh span { font-size:15px; font-weight:400; color:var(--muted); }
+.grp .r { display:flex; gap:14px; align-items:center; padding:12px 18px; border-top:1px solid var(--line-soft); font-size:18px; min-height:60px; }
+.grp .r .c { font-family:var(--mono); font-size:16px; color:var(--muted); width:60px; flex:none; }
+.grp .r .t { flex:1; line-height:1.25; } .grp .r .mn { font-family:var(--mono); font-size:18px; }
+.grp .r.off .t, .grp .r.off .mn { color:var(--muted); text-decoration:line-through; }
+.mark { font-size:13px; padding:2px 8px; border-radius:99px; background:var(--surface-2); color:var(--muted); white-space:nowrap; }
+.mark.note { background:var(--lime); color:var(--ink); }
+.veil { position:absolute; inset:0; background:rgba(11,11,11,.32); }
+.sheet { position:absolute; left:0; right:0; bottom:0; background:var(--surface); border-radius:28px 28px 0 0; padding:24px 26px 26px; display:flex; flex-direction:column; gap:16px; }
+.sheet .grab { width:60px; height:6px; border-radius:99px; background:var(--line-soft); align-self:center; margin-top:-8px; }
+.f2 { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+.fl .lbl { margin-bottom:6px; font-size:15px; } .fl .inp { height:60px; font-size:20px; }
+.fl .inp.ro { background:var(--surface-2); border-color:var(--line-soft); color:var(--muted); }
+.fl .inp.empty { border-style:dashed; }
+.tgl { display:flex; align-items:center; gap:14px; font-size:19px; }
+.tgl i { width:64px; height:36px; border-radius:99px; background:var(--accent); position:relative; flex:none; }
+.tgl i::after { content:""; position:absolute; right:4px; top:4px; width:28px; height:28px; border-radius:50%; background:#fff; }
+.tiles3 { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; }
+.tl { background:var(--surface); border:1.5px solid var(--line-control); border-radius:20px; padding:16px; height:150px; display:flex; flex-direction:column; justify-content:space-between; }
+.tl .k { font-family:var(--mono); font-size:15px; color:var(--muted); } .tl .nm { font-size:18px; font-weight:600; line-height:1.2; } .tl .ct { font-size:15px; color:var(--muted); }
+table.tb { border-collapse:collapse; width:100%; font-size:15px; background:var(--surface); }
+table.tb th { text-align:left; font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); background:var(--surface-2); padding:8px 10px; }
+table.tb td { padding:7px 10px; border-top:1px solid var(--line-soft); vertical-align:top; }
+table.tb td.c { font-family:var(--mono); color:var(--muted); white-space:nowrap; } table.tb td.mn { font-family:var(--mono); text-align:right; }
+table.tb td.gap { color:#8a8a8a; } table.tb td.gap span { border:1px dashed var(--line-control); border-radius:6px; padding:1px 8px; }
+table.tb td.edit { outline:2px solid var(--accent); outline-offset:-2px; background:var(--accent-soft); }
+.side { display:flex; } .side .rail { width:220px; background:#0b0b0b; flex:none; } .side .main { flex:1; padding:26px 32px; display:flex; flex-direction:column; gap:16px; }
+
+table.words { border-collapse:collapse; margin-top:10px; font-size:14px; }
+table.words td { padding:5px 14px 5px 0; border-bottom:1px solid var(--line-soft); vertical-align:top; }
+table.words td:first-child { font-family:"Noto Sans Georgian",sans-serif; font-size:15px; }
+table.words td.lat { color:var(--muted); font-style:italic; }
+table.words td.num { font-family:var(--mono); text-align:right; }
+</style></head><body><main>
+<style>
+/* stage 3 additions */
+.p-ok { background:var(--accent-soft); color:var(--accent-ink); }
+.p-rej { background:var(--surface-2); color:#666; } .p-rej::before { content:"×"; background:none; width:auto; height:auto; font-size:20px; line-height:1; font-weight:600; }
+.p-done { background:var(--surface-2); color:#666; }
+.lines div.ok .t::after { content:"  ✓"; color:var(--accent); font-weight:600; }
+.lines div.ok { color:var(--muted); }
+.lines div.wait { background:var(--warn-soft); margin:4px -10px; padding:9px 10px; border-radius:10px; border-bottom:none; }
+.lines div.rej .t, .lines div.rej .mn, .lines div.rej .gel { text-decoration:line-through; color:var(--muted); }
+.wtag { font-size:14px; font-weight:600; padding:2px 10px; border-radius:99px; background:var(--surface); border:1.5px solid var(--line-control); white-space:nowrap; }
+.mini { height:46px; width:120px; border:1.5px solid var(--accent); border-radius:10px; background:var(--surface); display:inline-flex; align-items:center; padding:0 12px; font:18px var(--mono); flex:none; }
+.mini .caret { height:.9em; }
+.qcard { background:var(--surface); border:1.5px solid var(--line-soft); border-radius:20px; padding:18px 20px; display:flex; flex-direction:column; gap:12px; }
+.qcard .hd { display:flex; justify-content:space-between; align-items:baseline; gap:12px; }
+.qcard .hd b { font-size:22px; font-weight:600; } .qcard .hd span { font-size:16px; color:var(--muted); }
+.qcard .why2 { font-size:19px; line-height:1.3; }
+.qcard .acts { display:flex; gap:14px; justify-content:flex-end; }
+.qcard .acts .btn-o, .qcard .acts .btn-f { height:58px; font-size:20px; }
+.qcard .thumbs .pic { width:110px; }
+.qrow { display:flex; align-items:center; gap:14px; background:var(--surface); border:1.5px solid var(--line-soft); border-radius:16px; padding:14px 18px; }
+.qrow .w { flex:1; } .qrow .w b { font-size:20px; } .qrow .w div { font-size:17px; color:var(--muted); }
+.qrow .s { text-align:right; font-family:var(--mono); font-size:17px; } .qrow .s i { display:block; font-style:normal; color:var(--service-deep); font-family:var(--sans); font-size:15px; }
+.qrow .go { font-size:30px; color:var(--muted); }
+.box-sug { background:var(--accent-soft); border-radius:16px; padding:14px 18px; font-size:17px; display:flex; flex-direction:column; gap:10px; }
+.box-sug p { margin:0; } .box-sug .acts { display:flex; gap:12px; }
+.box-info { background:var(--surface-2); border-radius:14px; padding:12px 16px; font-size:17px; line-height:1.35; }
+.reason-box { background:var(--surface-2); border-radius:14px; padding:12px 16px; font-size:18px; }
+.reason-box b { display:block; font-size:15px; color:var(--muted); font-weight:500; margin-bottom:2px; }
+.inp.area { height:120px; align-items:flex-start; padding-top:16px; font-size:21px; }
+.ph .bar { padding:10px 14px; } .ph .ttl b { font-size:20px; } .ph .ttl span { font-size:13px; }
+.ph .body { padding:14px 14px 0; gap:12px; }
+.ph .qcard { padding:14px; gap:10px; border-radius:16px; } .ph .qcard .hd b { font-size:18px; } .ph .qcard .why2 { font-size:16px; }
+.ph .lines { font-size:15px; } .ph .lines .c { width:52px; font-size:13px; } .ph .lines .gel { width:70px; }
+.ph .qcard .thumbs .pic { width:64px; } .ph .qcard .acts .btn-o, .ph .qcard .acts .btn-f { height:48px; font-size:16px; padding:0 18px; }
+.ph .avo { width:36px; height:36px; border-radius:50%; background:var(--accent-soft); color:var(--accent); font-weight:600; display:flex; align-items:center; justify-content:center; }
+.ph .tabs { display:flex; justify-content:space-around; border-top:1px solid var(--line-soft); background:var(--surface); padding:8px 0 14px; font-size:12px; color:var(--muted); margin-top:auto; flex:none; }
+.ph .box-sug { font-size:14px; padding:12px; } .ph .kv { font-size:15px; grid-template-columns:96px 1fr; gap:6px 10px; }
+.stick .note2 { flex:1; font-size:17px; color:var(--muted); line-height:1.3; }
+.locs { display:flex; gap:12px; flex-wrap:wrap; }
+</style>
+<style>
+/* stage 4 additions */
+.plines { display:flex; flex-direction:column; font-size:18px; }
+.plines > div { display:flex; gap:12px; padding:10px 0; border-bottom:1px solid var(--line-soft); align-items:center; }
+.plines .t { flex:1; line-height:1.25; } .plines .t small { display:block; font-size:15px; color:var(--muted); }
+.plines .pq { font-family:var(--mono); white-space:nowrap; width:44px; text-align:right; }
+.plines .i { font-size:15px; color:var(--muted); text-align:right; white-space:nowrap; }
+.plines .i b { font-family:var(--mono); color:var(--ink); font-weight:500; }
+.plines .gel { font-family:var(--mono); width:96px; text-align:right; white-space:nowrap; }
+.plines div.wait { background:var(--warn-soft); margin:4px -10px; padding:10px; border-radius:10px; border-bottom:none; }
+.kt { font-size:14px; font-weight:600; padding:2px 10px; border-radius:99px; background:var(--surface-2); white-space:nowrap; color:var(--ink); }
+.kt.bat { background:var(--info-soft); color:var(--rented-ink); }
+.ktiles { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+.ktile { background:var(--surface); border:1.5px solid var(--line-control); border-radius:20px; padding:18px 20px; min-height:132px; display:flex; flex-direction:column; gap:6px; }
+.ktile .g { font-size:30px; line-height:1; color:var(--accent); font-family:var(--mono); }
+.ktile b { font-size:23px; font-weight:600; line-height:1.15; } .ktile span { font-size:17px; color:var(--muted); line-height:1.3; }
+.ktile.bat { border-style:dashed; }
+.res { display:flex; flex-direction:column; gap:10px; }
+.res .r { display:flex; align-items:center; gap:14px; background:var(--surface); border:1.5px solid var(--line-soft); border-radius:16px; padding:12px 16px; min-height:64px; }
+.res .r.on { border:3px solid var(--accent); background:var(--accent-soft); }
+.res .r .c { font-family:var(--mono); font-size:15px; color:var(--muted); width:84px; flex:none; }
+.res .r .t { flex:1; font-size:19px; line-height:1.25; }
+.res .r .s { font-size:16px; color:var(--muted); white-space:nowrap; } .res .r .s b { font-family:var(--mono); color:var(--ink); font-weight:500; }
+.res .r .s.bad b { color:var(--crit-ink); }
+.res .r.free { border-style:dashed; color:var(--muted); }
+.okline { font-size:17px; color:var(--accent-ink); font-weight:500; margin:8px 0 0; }
+.sw { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+.sw .lb { font-size:16px; color:var(--muted); width:84px; flex:none; }
+.pic.req { border:2px dashed var(--crit); background:var(--surface); display:flex; flex-direction:column; align-items:center; justify-content:center; font-size:17px; gap:4px; color:var(--ink); }
+.pic.req big { font-size:34px; line-height:1; }
+.ph .plines { font-size:14px; } .ph .plines .gel { width:70px; } .ph .plines .pq { width:30px; } .ph .kt { font-size:12px; padding:1px 8px; }
+.ph .card { padding:12px 14px; border-radius:14px; }
+.ph .sect-h { font-size:16px; }
+.ph .kv { font-size:14px; grid-template-columns:84px 1fr; }
+.mono { font-family:var(--mono); }
+</style>
+<style>
+/* stage 5 additions */
+.p-paid { background:var(--surface-2); color:#666; } .p-paid::before { content:"✓"; background:none; width:auto; height:auto; font-size:16px; line-height:1; font-weight:700; color:var(--accent-ink); }
+.stabs { display:flex; gap:20px; padding:0 14px; border-bottom:1px solid var(--line-soft); background:var(--surface); font-size:14px; color:var(--muted); flex:none; white-space:nowrap; overflow:hidden; }
+.stabs span { padding:10px 0 8px; } .stabs span.on { color:var(--ink); font-weight:600; border-bottom:2.5px solid var(--ink); }
+.pay { background:var(--surface); border:1.5px solid var(--line-soft); border-radius:16px; padding:12px 14px; display:flex; flex-direction:column; gap:8px; }
+.pay .hd { display:flex; justify-content:space-between; align-items:baseline; gap:10px; } .pay .hd b { font-size:18px; font-weight:600; } .pay .hd span { font-size:13px; color:var(--muted); }
+.jr { display:flex; flex-direction:column; }
+.jr > div, .jr summary { display:flex; gap:10px; padding:7px 0; border-bottom:1px solid var(--line-soft); align-items:baseline; font-size:14px; }
+.jr summary { list-style:none; color:var(--accent); font-weight:600; cursor:pointer; } .jr summary::-webkit-details-marker { display:none; }
+.jr details[open] summary { display:none; }
+.blines summary { list-style:none; display:flex; padding:10px 0; cursor:pointer; } .blines summary::-webkit-details-marker { display:none; } .blines details[open] summary { display:none; }
+.blines details > div { display:flex; gap:14px; padding:10px 0; border-bottom:1px solid var(--line-soft); align-items:baseline; }
+.jr .n { font-family:var(--mono); font-size:13px; width:72px; flex:none; }
+.jr .t { flex:1; min-width:0; line-height:1.3; } .jr .t small { display:block; font-size:12px; color:var(--muted); }
+.jr .g { font-family:var(--mono); white-space:nowrap; text-align:right; }
+.jr .rc { color:var(--muted); } .jr .rc .n::before { content:"↳ "; }
+.sum3 { display:flex; flex-direction:column; gap:2px; font-size:14px; }
+.sum3 div { display:flex; justify-content:space-between; } .sum3 .mono { font-size:14px; }
+.sum3 .all { font-weight:600; font-size:16px; padding-top:4px; border-top:1px solid var(--line-soft); margin-top:2px; }
+.btn-f.s, .btn-o.s { height:48px; font-size:16px; padding:0 18px; }
+.btn-f.s.full { width:100%; }
+.held { background:var(--surface); border:1.5px dashed var(--line-control); border-radius:16px; padding:10px 14px; display:flex; flex-direction:column; gap:2px; }
+.held .hd { font-size:15px; font-weight:600; display:flex; justify-content:space-between; } .held .hd span { font-weight:400; color:var(--muted); font-size:13px; }
+.held div.r { display:flex; gap:10px; font-size:13px; padding:5px 0; border-top:1px solid var(--line-soft); align-items:baseline; }
+.held .r .n { font-family:var(--mono); width:72px; flex:none; } .held .r .t { flex:1; } .held .r .why3 { white-space:nowrap; }
+.why3.bad { color:var(--crit-ink); font-weight:600; } .why3.lk { color:var(--accent); font-weight:600; }
+.hist div.r { display:flex; gap:10px; font-size:13px; padding:6px 0; border-top:1px solid var(--line-soft); align-items:baseline; }
+.hist .d { font-family:var(--mono); width:44px; flex:none; } .hist .t { flex:1; } .hist .g { font-family:var(--mono); }
+.hh { font-size:15px; font-weight:600; display:flex; justify-content:space-between; align-items:baseline; margin-top:4px; } .hh span { font-size:13px; font-weight:400; color:var(--muted); }
+.qrow2 { display:flex; align-items:center; gap:10px; background:var(--surface); border:1.5px solid var(--line-soft); border-radius:14px; padding:10px 12px; min-height:60px; }
+.qrow2 .w { flex:1; } .qrow2 .w b { font-size:16px; } .qrow2 .w div { font-size:13px; color:var(--muted); }
+.qrow2 .s { font-family:var(--mono); font-size:15px; } .qrow2 .go { font-size:22px; color:var(--muted); }
+.segs { display:flex; border:1.5px solid var(--line-control); border-radius:99px; overflow:hidden; align-self:flex-start; flex:none; }
+.segs span { padding:0 16px; height:40px; display:flex; align-items:center; font-size:14px; } .segs span.on { background:var(--ink); color:#fff; }
+.ph .stick { padding:10px 14px 14px; gap:10px; } .ph .stick .sum { font-size:13px; } .ph .stick .sum b { font-size:17px; }
+.ph .sheet { padding:18px 16px 18px; gap:12px; border-radius:22px 22px 0 0; } .ph .sheet .q { font-size:21px !important; } .ph .box-info { font-size:14px; padding:10px 12px; }
+.ph .toast { left:14px; right:14px; bottom:84px; font-size:14px; padding:14px 16px; border-radius:14px; }
+.lap .main h3 { margin:6px 0 0; font-size:20px; font-weight:600; display:flex; justify-content:space-between; align-items:center; }
+.lap .main h3 span.q2 { font-size:15px; font-weight:400; color:var(--muted); margin-left:10px; }
+.lap .btn-f { height:44px; font-size:16px; padding:0 22px; }
+table.tb tr.sumrow td { font-weight:600; border-top:1.5px solid var(--ink); }
+.lap table.tb td { white-space:nowrap; } .lap table.tb td.wk2 { white-space:normal; }
+table.tb tr.rc td { color:var(--muted); }
+table.tb td.nn span { background:var(--crit-soft); color:var(--crit-ink); border-radius:99px; padding:1px 8px; font-size:13px; font-weight:600; }
+.bigsum { background:var(--surface); border:1.5px solid var(--line-soft); border-radius:20px; padding:20px 22px; display:flex; flex-direction:column; gap:6px; }
+.bigsum .k { font-size:19px; color:var(--muted); } .bigsum .v { font:500 60px/1 var(--mono); letter-spacing:-.01em; }
+.bigsum .s2 { font-size:17px; color:var(--muted); line-height:1.35; } .bigsum .s2 b { color:var(--ink); font-weight:500; font-family:var(--mono); }
+.btile { background:var(--surface); border:1.5px solid var(--line-soft); border-radius:18px; padding:14px 16px; display:flex; flex-direction:column; gap:4px; min-height:120px; }
+.btile .k { font-size:16px; color:var(--muted); } .btile .v { font:500 28px/1.1 var(--mono); } .btile .s2 { font-size:15px; color:var(--muted); line-height:1.3; }
+.btile.wait { border:1.5px solid var(--line-control); } .btile.bad .v { color:var(--crit-ink); }
+.blines { display:flex; flex-direction:column; font-size:18px; }
+.blines > div { display:flex; gap:14px; padding:10px 0; border-bottom:1px solid var(--line-soft); align-items:baseline; }
+.blines .n { font-family:var(--mono); font-size:16px; width:96px; flex:none; } .blines .t { flex:1; } .blines .t small { display:block; font-size:15px; color:var(--muted); }
+.blines .mn { font-family:var(--mono); color:var(--muted); white-space:nowrap; } .blines .g { font-family:var(--mono); width:104px; text-align:right; white-space:nowrap; }
+.band { display:flex; align-items:center; gap:18px; background:var(--surface); border:1.5px solid var(--line-control); border-radius:18px; padding:14px 18px; }
+.band .c1 { display:flex; flex-direction:column; } .band .c1 i { font-style:normal; font-size:15px; color:var(--muted); } .band .c1 b { font:500 30px/1.1 var(--mono); }
+.band .sep { width:1px; align-self:stretch; background:var(--line-soft); }
+.band .c2 { font-size:16px; color:var(--muted); line-height:1.35; } .band .c2 b { font-family:var(--mono); color:var(--ink); font-weight:500; }
+.band .go { margin-left:auto; font-size:30px; color:var(--muted); }
+.mylist { display:flex; flex-direction:column; gap:10px; }
+.mylist .r { display:flex; align-items:center; gap:14px; background:var(--surface); border:1.5px solid var(--line-soft); border-radius:16px; padding:12px 16px; min-height:68px; }
+.mylist .r .w { flex:1; } .mylist .r .w b { font-size:20px; } .mylist .r .w div { font-size:16px; color:var(--muted); }
+.mylist .r .s { text-align:right; font-family:var(--mono); font-size:18px; } .mylist .r .s i { display:block; font-family:var(--sans); font-style:normal; font-size:14px; color:var(--muted); }
+</style>
+<style>
+/* stage 6 additions */
+.tg { display:flex; flex-direction:column; gap:10px; padding:14px 12px; background:#e7ebe4; flex:1; overflow:hidden; }
+.tgm { background:var(--surface); border-radius:14px 14px 14px 4px; padding:9px 12px; font-size:13px; line-height:1.4; max-width:92%; box-shadow:0 1px 1px rgba(0,0,0,.08); }
+.tgm .ru { color:var(--muted); display:block; margin-top:2px; }
+.tgm .lnk { display:block; color:#2f63c0; margin-top:4px; font-size:12px; }
+.tgm .tm { display:block; text-align:right; color:#8a8a8a; font-size:11px; }
+.tghead { background:#557553; color:#fff; padding:10px 14px; font-size:15px; font-weight:600; flex:none; }
+.tghead span { display:block; font-weight:400; font-size:12px; opacity:.85; }
+.tgrp { display:flex; flex-direction:column; gap:0; }
+.tgrp .gh { display:flex; justify-content:space-between; align-items:baseline; font-size:15px; font-weight:600; padding:6px 0; }
+.tgrp .gh span { font-weight:400; font-size:13px; color:var(--muted); }
+.trow { display:flex; align-items:center; gap:10px; background:var(--surface); border:1.5px solid var(--line-soft); border-radius:14px; padding:10px 12px; margin-bottom:8px; }
+.trow .w { flex:1; min-width:0; } .trow .w b { font-size:15px; } .trow .w div { font-size:12px; color:var(--muted); }
+.trow .s { text-align:right; font-family:var(--mono); font-size:13px; white-space:nowrap; } .trow .s i { display:block; font-style:normal; font-family:var(--sans); font-size:11px; color:var(--muted); }
+.trow .s.bad { color:var(--crit-ink); }
+.trow .go { font-size:20px; color:var(--muted); }
+.more { font-size:13px; color:var(--accent); font-weight:600; padding:2px 0 8px; }
+.toblk { background:var(--surface); border:1.5px solid var(--line-soft); border-radius:16px; padding:12px 14px; display:flex; flex-direction:column; gap:6px; }
+.toblk .h { display:flex; justify-content:space-between; align-items:center; font-size:15px; font-weight:600; }
+.toblk .big { font:500 22px/1.2 var(--mono); }
+.toblk .sub { font-size:12px; color:var(--muted); line-height:1.35; }
+.p-soon { background:var(--warn-soft); color:var(--service-deep); font-size:12px; padding:2px 9px; } .p-soon::before { width:7px; height:7px; border-radius:2px; }
+.p-over { background:var(--crit-soft); color:var(--crit-ink); font-size:12px; padding:2px 9px; } .p-over::before { width:7px; height:7px; }
+.p-none { background:var(--surface-2); color:#666; font-size:12px; padding:2px 9px; } .p-none::before { background:transparent; border:1.5px solid #666; width:6px; height:6px; }
+.jl div { display:flex; gap:8px; font-size:12px; padding:6px 0; border-top:1px solid var(--line-soft); align-items:baseline; }
+.jl .n { font-family:var(--mono); width:66px; flex:none; } .jl .t { flex:1; } .jl .h { font-family:var(--mono); white-space:nowrap; }
+.tblock { background:var(--surface); border:1.5px solid var(--line-soft); border-radius:18px; padding:14px 18px; display:flex; flex-direction:column; gap:8px; }
+.tblock .h { display:flex; justify-content:space-between; align-items:baseline; font-size:20px; font-weight:600; } .tblock .h span { font-size:15px; font-weight:400; color:var(--muted); }
+.tbr { display:flex; align-items:center; gap:14px; padding:10px 0; border-top:1px solid var(--line-soft); font-size:18px; }
+.tbr .w { flex:1; } .tbr .w small { display:block; font-size:15px; color:var(--muted); }
+.tbr .s { font-family:var(--mono); font-size:17px; white-space:nowrap; } .tbr .s.bad { color:var(--crit-ink); }
+.tbr .btn-o { height:52px; font-size:17px; padding:0 18px; }
+.setf { display:flex; flex-direction:column; gap:4px; } .setf .lbl { font-size:13px; margin:0; } .setf .inp { height:48px; font-size:17px; font-family:var(--mono); }
+.setf .hint { font-size:12px; margin:0; }
+</style>
+
+<h1>ТО, простой и уведомления — варианты</h1>
+<p class="lead">Этап 6 плана «Механик в EV8 Ops» (<code>docs/spec/mechanic-in-erp-plan.md</code>), ADR-0038 и твои ответы 21.10.2026 ниже. Мопед сам
+зовёт на плановое ТО каждые 5 000 км. Простой ремонта считается в часах. EV8 Ops пишет в Telegram-группу мастерской. Экраны планшета нарисованы в
+натуральную величину 768×1024 и уменьшены до 47 %, телефон — 375 px. Подписи по-русски для чтения; на планшете по умолчанию грузинский,
+слова — в конце страницы. <b>Номера мопедов и заявок, пробеги, даты, имена и причины выдуманы.</b></p>
+
+<div class="common">
+<b>Решено тобой 21.10.2026 — общее у всех вариантов</b> (выбирать не нужно):
+<ul>
+<li><b>ТО считается только от пробега, записанного в EV8 Ops</b> (п. 112): при выдаче, возврате, открытии и закрытии заявки. Если такого пробега
+нет, мопеда нет в «Пора на ТО», а в его карточке написано «пробег не записан». Сейчас пробег записан у одного мопеда из 46 (копия боевого на
+тестовом стенде). Остальные наберут его сами за неделю-две выдач и возвратов.</li>
+<li><b>Следующее ТО</b> = пробег последней закрытой заявки «Плановое ТО» + 5 000 км. Пока такой заявки не было, ТО стоит на ближайшей отметке,
+кратной 5 000, от первого записанного пробега: первый пробег 4 820 → ТО на 5 000. Отметка не уезжает вперёд: проехал её без ТО — ТО просрочено.
+<b>«Пора на ТО»</b> — осталось меньше 300 км или просрочено.</li>
+<li><b>Интервал, порог и ставку компании</b> (50 ₾ за час нормы для механика без своей ставки) ты меняешь в «Настройках → Ремонт».</li>
+<li><b>Меньший пробег — только с причиной</b>, теперь и при закрытии заявки, и при возврате из аренды, как уже было при открытии. Опечатка не
+сдвинет ТО молча.</li>
+<li><b>Простой</b> считается в часах: от открытия до закрытия, отдельно — ожидание согласования. Ремонты, открытые до этапа 2 или с датой,
+вписанной задним числом, часов не получают: там «нет данных», дни в часы не пересчитываются. Ремонт, отменённый по ошибке, в суммы не входит.</li>
+<li><b>Уведомления</b> приходят в одну группу мастерской от твоего нового бота: заявка ждёт согласования, согласована, отклонена, закрыта; пора
+на ТО (один раз на каждую отметку); деталь ниже минимума (один раз до следующего прихода). В каждом сообщении сначала грузинская строка, под ней
+русская, и ссылка на запись. Денег и имён клиентов в сообщениях нет. Кнопок «согласовать» нет: решают в EV8 Ops. «Пора на ТО» и склад
+приходят только с 9:00 до 21:00, чтобы не будить группу ночью.</li>
+<li>Токен бота и номер группы кладёшь ты одной командой. Пока их нет, EV8 Ops молчит, но ничего не теряет.</li>
+</ul>
+</div>
+
+<!-- ================================================================== part 1 -->
+<h2 class="part">1. Где живёт «Пора на ТО»</h2>
+
+<section class="rec">
+<h2>А. Своя группа на «Сегодня» и блок у главного механика в «Ремонте» <span class="tag">рекомендую</span></h2>
+<div class="why">
+<div class="pro"><b>За:</b><ul><li>Мопеды видны сразу, без лишнего касания, как «Ждут решения» и «Сегодня ждём». Каждая строка говорит, сколько осталось (принцип 2 <code>ux.md</code>).</li><li>Главный механик видит тот же список в «Ремонте» на планшете. Из строки он сразу открывает заявку «Плановое ТО» на этот мопед.</li><li>Просрочка красная и стоит первой.</li></ul></div>
+<div class="con"><b>Против:</b><ul><li>На «Сегодня» ещё одна группа, до трёх строк и «Ещё N».</li><li>На планшете «Ремонт» становится длиннее, когда мопедов пора на ТО много.</li></ul></div>
+</div>
+<div class="row">
+<div><div class="frame ph"><div class="scr">
+  <div class="bar"><div class="l"><span class="ttl"><b>Сегодня</b><span>вторник, 21 октября</span></span></div><div class="r"><span class="avo">В</span></div></div>
+  <div class="body" style="gap:6px;overflow:hidden">
+    <div class="tgrp"><div class="gh">Ремонт <span>2</span></div>
+      <div class="trow"><span class="w"><b>В ремонте 2 мопеда</b><div>дольше всех — 3 дня</div></span><span class="go">›</span></div>
+    </div>
+    <div class="tgrp"><div class="gh">Пора на ТО <span>3</span></div>
+      <div class="trow"><span class="w"><b>EV-022 · 17C</b><div>ТО на 9 900 км · пробег 10 220</div></span><span class="s bad">−320 км<i>просрочено</i></span><span class="go">›</span></div>
+      <div class="trow"><span class="w"><b>EV-014 · XL1200</b><div>ТО на 5 000 км · пробег 4 860</div></span><span class="s">140 км<i>осталось</i></span><span class="go">›</span></div>
+      <div class="trow"><span class="w"><b>EV-031 · S70</b><div>ТО на 10 000 км · пробег 9 780</div></span><span class="s">220 км<i>осталось</i></span><span class="go">›</span></div>
+      <div class="note" style="font-size:12px">ещё у 43 мопедов пробег не записан</div>
+    </div>
+  </div>
+  <div class="tabs"><span>Сегодня</span><span>Аренды</span><span>＋</span><span>Деньги</span><span>Парк</span></div>
+</div></div>
+<p class="cap ph"><b>«Сегодня» владельца и менеджера.</b> Группа «Пора на ТО» стоит после «Ремонта». Просрочено — красным и первым. Строка ведёт в карточку мопеда. Под группой тихо сказано, у скольких мопедов пробега ещё нет.</p></div>
+
+<div><div class="frame"><div class="scr">
+  <div class="bar"><div class="l"><span class="ttl"><b>Ремонт</b><span>Ждут согласования · 1</span></span></div><div class="r"><span class="me"><span class="av">Н</span><span>Ника<i>главный механик</i></span></span><span class="out">⇥ Выйти</span></div></div>
+  <div class="body" style="gap:14px">
+    <span class="btn-f" style="height:64px;font-size:22px">＋ Новая заявка</span>
+    <div class="tblock">
+      <div class="h">Пора на ТО <span>3 мопеда · каждые 5 000 км</span></div>
+      <div class="tbr"><span class="w">EV-022 · 17C<small>ТО на 9 900 км · пробег 10 220</small></span><span class="s bad">просрочено 320 км</span><span class="btn-o">＋ ТО</span></div>
+      <div class="tbr"><span class="w">EV-014 · XL1200<small>ТО на 5 000 км · пробег 4 860</small></span><span class="s">осталось 140 км</span><span class="btn-o">＋ ТО</span></div>
+      <div class="tbr"><span class="w">EV-031 · S70<small>ТО на 10 000 км · пробег 9 780</small></span><span class="s">осталось 220 км</span><span class="btn-o">＋ ТО</span></div>
+    </div>
+    <div class="sect-h">Ждут согласования <span>1</span></div>
+    <div class="qrow"><span class="w"><b>SV-00043 · EV-009</b><div>Сандро · BR-04 · ждёт 12 мин</div></span><span class="go">›</span></div>
+  </div>
+</div></div>
+<p class="cap"><b>«Ремонт» главного механика на планшете.</b> Тот же список блоком над очередью. «＋ ТО» открывает «Новую заявку», где уже выбраны мопед и причина «Плановое ТО». Механик без права согласования блока не видит.</p></div>
+</div>
+</section>
+
+<section>
+<h2>Б. Одна строка на «Сегодня», список — во вкладке «Сервис → ТО» <span class="tag">вариант</span></h2>
+<div class="why">
+<div class="pro"><b>За:</b><ul><li>«Сегодня» не растёт: одна строка «Пора на ТО · 3» в группе «Ремонт».</li><li>Весь парк по ТО собран на одном экране: сколько осталось у каждого мопеда, а не только у тех, кому пора.</li></ul></div>
+<div class="con"><b>Против:</b><ul><li>Чтобы увидеть, какие мопеды, нужно лишнее касание.</li><li>На планшете у главного механика нет вкладок, поэтому список открывается кнопкой «ТО · 3» в шапке «Ремонта», как «Баланс».</li></ul></div>
+</div>
+<div class="row">
+<div><div class="frame ph"><div class="scr">
+  <div class="bar"><div class="l"><span class="ttl"><b>Сегодня</b><span>вторник, 21 октября</span></span></div><div class="r"><span class="avo">В</span></div></div>
+  <div class="body" style="gap:6px">
+    <div class="tgrp"><div class="gh">Ремонт <span>3</span></div>
+      <div class="trow"><span class="w"><b>В ремонте 2 мопеда</b><div>дольше всех — 3 дня</div></span><span class="go">›</span></div>
+      <div class="trow"><span class="w"><b>Пора на ТО · 3 мопеда</b><div><span style="color:var(--crit-ink)">1 просрочен</span> · ещё у 43 пробег не записан</div></span><span class="go">›</span></div>
+    </div>
+  </div>
+  <div class="tabs"><span>Сегодня</span><span>Аренды</span><span>＋</span><span>Деньги</span><span>Парк</span></div>
+</div></div>
+<p class="cap ph"><b>«Сегодня».</b> Одна строка в группе «Ремонт».</p></div>
+
+<div><div class="frame ph"><div class="scr">
+  <div class="bar"><div class="l"><span class="ttl"><b>Сервис</b><span>ТО · каждые 5 000 км</span></span></div><div class="r"><span class="avo">В</span></div></div>
+  <div class="stabs"><span>Ремонты</span><span>Склад</span><span class="on">ТО</span><span>К оплате</span></div>
+  <div class="body" style="gap:6px;overflow:hidden">
+    <div class="segs"><span class="on">Пора · 3</span><span>Все · 3</span><span>Без пробега · 43</span></div>
+    <div class="trow"><span class="w"><b>EV-022 · 17C</b><div>ТО на 9 900 · пробег 10 220</div></span><span class="s bad">−320 км</span></div>
+    <div class="trow"><span class="w"><b>EV-014 · XL1200</b><div>ТО на 5 000 · пробег 4 860</div></span><span class="s">140 км</span></div>
+    <div class="trow"><span class="w"><b>EV-031 · S70</b><div>ТО на 10 000 · пробег 9 780</div></span><span class="s">220 км</span></div>
+  </div>
+  <div class="tabs"><span>Сегодня</span><span>Аренды</span><span>＋</span><span>Деньги</span><span>Парк</span></div>
+</div></div>
+<p class="cap ph"><b>«Сервис → ТО».</b> Отдельная вкладка: кому пора, весь парк с пробегом и мопеды без пробега.</p></div>
+</div>
+</section>
+
+<!-- ================================================================== part 2 -->
+<h2 class="part">2. Карточки, настройки и сообщения — одинаково при любом выборе</h2>
+<div class="row">
+<div><div class="frame ph"><div class="scr">
+  <div class="bar"><div class="l"><span class="bk" style="width:40px;height:40px;font-size:22px">‹</span><span class="ttl"><b>EV-014 · XL1200</b><span>Свободен · ···4F21</span></span></div></div>
+  <div class="body" style="gap:10px">
+    <div class="toblk">
+      <div class="h">ТО <span class="pill p-soon">Пора на ТО</span></div>
+      <span class="big">осталось 140 км</span>
+      <span class="sub">Следующее ТО на 5 000 км · пробег 4 860 (возврат R-0042, 18.10)<br>Плановых ТО в EV8 Ops ещё не было: отметка — ближайшая кратная 5 000 от первого пробега 4 820</span>
+    </div>
+    <div class="toblk">
+      <div class="h">Ремонты <span style="font-size:12px;font-weight:400;color:var(--muted)">простой 41 ч за 30 дней</span></div>
+      <div class="jl">
+        <div><span class="n">SV-00042</span><span class="t">Тормоза · закрыта 19.10</span><span class="h">26 ч</span></div>
+        <div><span class="n">SV-00038</span><span class="t">Диагностика · закрыта 12.10</span><span class="h">15 ч</span></div>
+        <div><span class="n">SV-00017</span><span class="t">Зеркало · закрыта 14.09</span><span class="h" style="color:var(--muted)">нет данных</span></div>
+      </div>
+    </div>
+    <div class="toblk">
+      <div class="h">ТО <span class="pill p-none">Пробег не записан</span></div>
+      <span class="sub">Так выглядит мопед без пробега (EV-005). ТО посчитается после выдачи, возврата или заявки, где записан пробег.</span>
+    </div>
+  </div>
+</div></div>
+<p class="cap ph"><b>Карточка мопеда.</b> Блок «ТО»: сколько осталось, на какой отметке, откуда пробег. Блок «Ремонты» показывает простой в часах за 30 дней. У старых ремонтов — «нет данных».</p></div>
+
+<div><div class="frame ph"><div class="scr">
+  <div class="bar"><div class="l"><span class="bk" style="width:40px;height:40px;font-size:22px">‹</span><span class="ttl"><b>SV-00042</b><span>Завершён · XL1200 ···4F21</span></span></div></div>
+  <div class="body" style="gap:10px">
+    <div class="kv"><dt>Открыта</dt><dd>18.10 16:05</dd><dt>Согласована</dt><dd>18.10 16:30 · Ника</dd><dt>Закрыта</dt><dd>19.10 18:10</dd><dt>Простой</dt><dd><b>26 ч</b> · из них ожидание согласования 25 мин</dd><dt>Причина</dt><dd>Плановое ТО</dd><dt>Пробег</dt><dd>4 980 → следующее ТО на 9 980 км</dd></div>
+  </div>
+</div></div>
+<p class="cap ph"><b>Карточка заявки.</b> Простой в часах и отдельно ожидание согласования. Закрытая заявка «Плановое ТО» сдвигает следующее ТО, и карточка об этом пишет.</p></div>
+
+<div><div class="frame"><div class="scr">
+  <div class="bar"><div class="l"><span class="bk">‹</span><span class="ttl"><b>Закрыть SV-00044</b><span>EV-009 · 17C</span></span></div><div class="r"><span class="me"><span class="av">С</span><span>Сандро<i>механик</i></span></span><span class="out">⇥ Выйти</span></div></div>
+  <div class="body" style="gap:14px">
+    <div class="lbl"><b>Пробег сейчас, км</b> · при открытии было 6 410</div>
+    <div class="inp big">6 140<span class="caret"></span></div>
+    <p class="err">Меньше, чем при открытии (6 410). Напиши, почему — главный механик увидит.</p>
+    <div class="inp txt"><span class="ph">Причина: заменили одометр…</span></div>
+    <div class="box-info">Открыта 21.10 09:12 · согласована 09:40 · простой сейчас 3 ч</div>
+  </div>
+  <div class="stick"><span class="btn-f">Закрыть заявку</span></div>
+</div></div>
+<p class="cap"><b>Закрытие на планшете.</b> Если пробег меньше, чем при открытии, появляется поле для причины, как уже было при открытии. Внизу — простой на эту минуту.</p></div>
+
+<div><div class="frame ph"><div class="scr">
+  <div class="bar"><div class="l"><span class="ttl"><b>Настройки</b><span>Ремонт</span></span></div><div class="r"><span class="avo">В</span></div></div>
+  <div class="stabs"><span>Люди</span><span>Аренда</span><span class="on">Ремонт</span><span>Расходы</span></div>
+  <div class="body" style="gap:14px">
+    <div class="setf"><p class="lbl">Ставка компании за час нормы, ₾</p><div class="inp">50</div><p class="hint">Для механика без своей ставки. Записанные работы не пересчитываются.</p></div>
+    <div class="setf"><p class="lbl">Плановое ТО каждые, км</p><div class="inp">5 000</div></div>
+    <div class="setf"><p class="lbl">«Пора на ТО», когда осталось меньше, км</p><div class="inp">300</div></div>
+  </div>
+</div></div>
+<p class="cap ph"><b>«Настройки → Ремонт».</b> Видит и меняет только владелец. Каждое изменение пишется в журнал.</p></div>
+
+<div><div class="frame ph"><div class="scr">
+  <div class="tghead">EV8 · სახელოსნო<span>группа мастерской · бот EV8 Ops</span></div>
+  <div class="tg">
+    <div class="tgm">🔧 <b>SV-00043</b> · EV-009 — ელოდება დამტკიცებას · Сандро · BR-04<span class="ru">ждёт согласования</span><span class="lnk">ops.ev8.ge/service/…</span><span class="tm">09:28</span></div>
+    <div class="tgm">✅ <b>SV-00043</b> · EV-009 — დამტკიცდა · Ника<span class="ru">согласована — можно работать</span><span class="lnk">ops.ev8.ge/service/…</span><span class="tm">09:40</span></div>
+    <div class="tgm">❌ <b>SV-00041</b> · EV-019 — უარყოფილია: «трос уже меняли»<span class="ru">отклонена</span><span class="lnk">ops.ev8.ge/service/…</span><span class="tm">10:02</span></div>
+    <div class="tgm">🏁 <b>SV-00042</b> · EV-014 — დაიხურა · Сандро · მოცდენა 26 სთ<span class="ru">закрыта · простой 26 ч</span><span class="lnk">ops.ev8.ge/service/…</span><span class="tm">18:10</span></div>
+    <div class="tgm">🛠 <b>EV-022</b> — ტექმომსახურების დროა: გადაცილებულია 320 კმ-ით<span class="ru">пора на ТО: просрочено на 320 км (ТО на 9 900)</span><span class="lnk">ops.ev8.ge/fleet/…</span><span class="tm">09:00</span></div>
+    <div class="tgm">📦 Колодки тормозные задние — 1 ცალი, მინიმუმი 4<span class="ru">ниже минимума: 1 шт., минимум 4</span><span class="lnk">ops.ev8.ge/service/stock/parts/…</span><span class="tm">09:00</span></div>
+  </div>
+</div></div>
+<p class="cap ph"><b>Группа мастерской в Telegram.</b> Шесть видов сообщений: сверху грузинский, снизу русский, в конце ссылка. Причина отказа и название детали — как их записали в EV8 Ops.</p></div>
+</div>
+
+<h2>Слова экранов и сообщений на грузинском</h2>
+<p class="lead">Перевод мой, его вычитает директор. Группа называется по-грузински «სახელოსნო» (sakhelosno, «мастерская»). Слова, которые в EV8 Ops уже есть (გარბენი — пробег, ელოდება დამტკიცებას, დამტკიცდა,
+უარყოფილია, დაიხურა), взяты оттуда.</p>
+<table class="words">
+<tr><td>ტექმომსახურება</td><td class="lat">tekmomsakhureba</td><td>ТО (техобслуживание) — <i>новое</i></td></tr>
+<tr><td>ტექმომსახურების დროა</td><td class="lat">tekmomsakhurebis droa</td><td>Пора на ТО — <i>новое</i></td></tr>
+<tr><td>დარჩა 140 კმ · გადაცილებულია 320 კმ-ით</td><td class="lat">darcha · gadatsilebulia</td><td>осталось 140 км · просрочено на 320 км — <i>новое</i></td></tr>
+<tr><td>გარბენი არ არის ჩაწერილი</td><td class="lat">garbeni ar aris chatserili</td><td>пробег не записан (уже есть: «ჯერ არ არის ჩაწერილი»)</td></tr>
+<tr><td>მოცდენა · სთ</td><td class="lat">motsdena · st</td><td>простой · ч — <i>новое</i></td></tr>
+<tr><td>დამტკიცების მოლოდინი</td><td class="lat">damtkitsebis molodini</td><td>ожидание согласования — <i>новое</i></td></tr>
+<tr><td>მინიმუმზე ნაკლები · ცალი</td><td class="lat">minimumze naklebi · tsali</td><td>ниже минимума · шт. — <i>новое</i></td></tr>
+</table>
+
+<p class="note" style="margin-top:28px">Файл статичный, без JavaScript. Цвета и шрифты — токены EV8 Ops. Размеры — на экране планшета до уменьшения.
+Выдуманы номера мопедов и заявок, пробеги, даты, люди (Сандро, Ника), причина отказа и деталь. Тексты сообщений — образец; точные строки
+появятся в коде и пройдут вычитку директора.</p>
+</main></body></html>
