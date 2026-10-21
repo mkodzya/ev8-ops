@@ -941,6 +941,19 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
   .list-table .v-why-line .v-why,
   .list-table .v-why-line .typed-clip { max-width: 100%; }
 }
+/* Only what somebody typed ends in an ellipsis. The repair's kind is one of
+   five product words, and a product word is never cut (ux.md 12): at 12ch,
+   or at the width of the state's badge, «გეგმიური მომსახურება» lost half of
+   itself and the tooltip showed the typed note instead (review, 22.10.2026).
+   So the kind wraps between its words: in the column and in the line under
+   the state it is as narrow as its longest word and adds that much at most;
+   on a phone card it keeps the card's 18ch and takes a second line there. */
+.v-why.v-why-kind { white-space: normal; overflow: visible; }
+.list-table .col-why .v-why-kind { max-width: none; }
+@media (max-width: 1359px) {
+  .list-table .v-why-line.v-why-line-kind { width: auto; min-width: 0; overflow: visible; }
+  .list-table .v-why-line .v-why-kind { max-width: none; }
+}
 .v-where { grid-area: where; font: var(--text-label); color: var(--muted); margin-top: 2px; }
 /* A point nobody has named is still a question, but it is asked once — by the
    orange number above the list. Thirty-five orange cells in a column answer
