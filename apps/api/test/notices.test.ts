@@ -51,6 +51,28 @@ describe('the Telegram link, without a database', () => {
     expect(telegramConfig({ TELEGRAM_BOT_TOKEN: ` ${TOKEN} `, TELEGRAM_CHAT_ID: CHAT })).toEqual({ token: TOKEN, chatId: CHAT });
   });
 
+  it('finds the group the bot was just added to, for the setup script, the latest last and each once', async () => {
+    const { TelegramClient } = await import('../src/lib/telegram.js');
+    // Invented chats: two groups, a private chat that is not one, and the first group again.
+    const updates = [
+      { update_id: 1, my_chat_member: { chat: { id: -100111, type: 'supergroup', title: 'Test workshop' } } },
+      { update_id: 2, message: { chat: { id: 555, type: 'private' } } },
+      { update_id: 3, my_chat_member: { chat: { id: -222, type: 'group', title: 'Test other' } } },
+      { update_id: 4, message: { chat: { id: -100111, type: 'supergroup', title: 'Test workshop' } } },
+    ];
+    const tg = fakeTelegram([{ status: 200, body: { ok: true, result: updates } }]);
+    const client = new TelegramClient({ token: TOKEN, chatId: '0' }, { fetch: tg.fn, gapMs: 0 });
+    expect(await client.findGroups()).toEqual([
+      { id: '-222', title: 'Test other' },
+      { id: '-100111', title: 'Test workshop' },
+    ]);
+    expect(tg.asked[0]!.url.endsWith('/getUpdates')).toBe(true);
+    // A bot with a webhook is refused the updates: a word of ours, never the token.
+    const busy = fakeTelegram([refused(409, 'Conflict: can not use getUpdates method while webhook is active')]);
+    const err = await new TelegramClient({ token: TOKEN, chatId: '0' }, { fetch: busy.fn, gapMs: 0 }).findGroups().catch((e: unknown) => e);
+    expect(String(err)).not.toContain(TOKEN);
+  });
+
   it('links only to one of EV8 Ops’ own stands', async () => {
     const { publicUrl } = await import('../src/lib/origin.js');
     expect(publicUrl({ PUBLIC_URL: 'https://ops.ev8.ge/' })).toBe('https://ops.ev8.ge');

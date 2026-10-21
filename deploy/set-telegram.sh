@@ -12,13 +12,14 @@
 # The bot is the owner's own (Mika, 21.10.2026: «новый бот, который я заведу
 # сам, и одна группа мастерской»): made with @BotFather, which gives the token
 # once; a token that leaked is replaced there (/revoke) and this script is run
-# again. The bot is added to the workshop's group; the group's id is a
-# negative number (a supergroup's starts with -100) — @BotFather does not show
-# it, a bot such as @RawDataBot added to the group for a moment does.
+# again. The bot is added to the workshop's group, and the script finds the
+# group itself: it asks Telegram once which groups the bot was just added to
+# (a new bot has no webhook, so this disturbs nobody). Where that fails it asks
+# for the group's number — a negative one, a supergroup's starts with -100.
 #
-# EV8 Ops only sends: it asks Telegram who the bot is and sends messages, and
-# never asks for updates — it does not disturb another program the same bot
-# may answer through a webhook.
+# EV8 Ops itself only sends: it asks Telegram who the bot is and sends
+# messages, and never reads updates — it does not disturb another program the
+# same bot may answer through a webhook.
 #
 # After writing them the script restarts the API, asks Telegram whether the
 # token is a bot's and sends ONE test message to the group, through the
@@ -111,7 +112,27 @@ else
   # The bot's number, a colon and the secret: nothing an env file could read
   # as a quote, a comment or a variable.
   [[ "$T" =~ ^[0-9]+:[A-Za-z0-9_-]{30,}$ ]] || { echo "Это не похоже на токен бота: он выглядит как число, двоеточие и длинная строка букв. Ничего не изменено."; exit 1; }
-  read -rsp "Номер группы мастерской (отрицательное число, например -100…; на экране не виден): " C; echo
+  # The group: found by the stand itself from the bot's fresh updates, so the
+  # owner needs no other bot to learn its number. The token goes to the
+  # container on stdin, never as an argument.
+  echo "Добавьте бота в группу мастерской (если он уже там — удалите и добавьте снова), потом нажмите Enter."
+  read -r _
+  FOUND=$(printf '%s\n' "$T" | "${COMPOSE[@]}" exec -T api npx tsx src/telegramFindGroup.ts 2>/dev/null || echo "failed stand -")
+  C=""
+  TITLE=""
+  while IFS=$'\t' read -r KIND GID GTITLE; do
+    [ "$KIND" = group ] && { C=$GID; TITLE=$GTITLE; }
+  done <<< "$FOUND"
+  if [ -n "$C" ]; then
+    echo "Нашёл группу «$TITLE» — уведомления пойдут в неё."
+  else
+    case "$FOUND" in
+      none) echo "Бот пока не видит ни одной группы." ;;
+      "failed unauthorized"*) echo "Telegram не принял токен. Возьмите токен у @BotFather ещё раз и запустите скрипт снова. Ничего не изменено."; exit 1 ;;
+      *) echo "Не получилось спросить Telegram о группах." ;;
+    esac
+    read -rsp "Номер группы мастерской (отрицательное число, например -100…; на экране не виден): " C; echo
+  fi
   C=${C//[[:space:]]/}
   [[ "$C" =~ ^-?[0-9]+$ ]] || { echo "Номер группы — это число (у группы оно отрицательное). Ничего не изменено."; exit 1; }
 

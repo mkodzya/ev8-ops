@@ -100,10 +100,11 @@ export class TelegramClient {
 
   /**
    * The one door to Telegram: the token goes into the address here and only
-   * here, and a refusal becomes one of our words here. Two methods, both
-   * that only send or only describe the bot itself.
+   * here, and a refusal becomes one of our words here. The running app
+   * only describes the bot and sends; reading updates is the setup script's,
+   * once, to find the group (`findGroups`).
    */
-  private async call(method: 'getMe' | 'sendMessage', payload: Record<string, unknown>): Promise<unknown> {
+  private async call(method: 'getMe' | 'sendMessage' | 'getUpdates', payload: Record<string, unknown>): Promise<unknown> {
     let res: Awaited<ReturnType<TelegramFetch>>;
     try {
       res = await this.fetchFn(`${API}/bot${this.cfg.token}/${method}`, {
@@ -150,6 +151,29 @@ export class TelegramClient {
     const me = obj(await this.call('getMe', {}));
     if (typeof me.id !== 'number') throw new TelegramError('bad_answer');
     return { id: me.id };
+  }
+
+  /**
+   * The groups the bot was just added to, most recent last — for the setup
+   * script alone (deploy/set-telegram.sh), so the owner pastes only the token.
+   * The app itself never reads updates (ADR-0032 §2): a new bot has no
+   * webhook, so asking once disturbs nobody, and with one set Telegram
+   * refuses and the owner types the number instead. Being added to a group
+   * reaches a bot whatever its privacy setting.
+   */
+  async findGroups(): Promise<{ id: string; title: string }[]> {
+    const updates = await this.call('getUpdates', { allowed_updates: ['message', 'my_chat_member'], timeout: 0 });
+    const found = new Map<string, string>();
+    for (const u of Array.isArray(updates) ? updates : []) {
+      const x = obj(u);
+      const chat = obj(obj(x.my_chat_member).chat ?? obj(x.message).chat);
+      if ((chat.type === 'group' || chat.type === 'supergroup') && typeof chat.id === 'number') {
+        const id = String(chat.id);
+        found.delete(id);
+        found.set(id, typeof chat.title === 'string' ? chat.title : '');
+      }
+    }
+    return [...found].map(([id, title]) => ({ id, title }));
   }
 
   /** One message in Telegram's HTML, with no preview of the link under it. */
