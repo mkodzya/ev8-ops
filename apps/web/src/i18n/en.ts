@@ -1269,6 +1269,7 @@ export const en = {
       tracker_none: 'This moped has no tracker in EV8 Ops.',
       tracker_removed_before_fitted: 'A tracker cannot come off before the day it was fitted.',
       tracker_remove_apart: 'A tracker comes off by «Take the tracker off».',
+      tracker_date_bad: 'A day the tracker was on the moped: not after today, not before the moped came, not before its last tracker came off. Not sure — leave today.',
       donor_is_this_moped: 'A donor is another moped, not this one.',
       line_approved: 'This part is approved: the chief mechanic or an owner takes it off.',
       job_no_mechanic: 'This repair has no mechanic: the owners keep it on the old form.',

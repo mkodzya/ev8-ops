@@ -2,8 +2,9 @@
 // parts off the shelf and hours of work. Both are priced by who is paying —
 // the company pays what a part cost it, a customer pays what it is sold for —
 // and the total is the sum, never a stored number.
+import { phoneKey } from './kommo.js';
 import type { Tetri } from './money.js';
-import type { VehicleState } from './types.js';
+import type { ISODate, VehicleState } from './types.js';
 
 /**
  * An hour of work, until the book has norms per job (register #33). Since
@@ -115,6 +116,74 @@ export function readSimPhone(raw: string | null | undefined): string | null {
   const digits = s.replace(/[^0-9]/g, '');
   if (digits.length < 6 || digits.length > 15 || /[^0-9+\s()-]/.test(s)) return null;
   return plus + digits;
+}
+
+// A tracker already on a moped, written or corrected by an owner from the
+// moped's card without a repair (ADR-0036, addendum 21.10.2026).
+
+/** `990 000 000 000 010` — an IMEI as it is read aloud and held against a sticker. */
+export function imeiGroups(imei: string): string {
+  return imei.replace(/(\d{3})(?=\d)/g, '$1 ');
+}
+
+/** Why a day cannot be the day a tracker was on the moped. */
+export type TrackerDayFault = 'future' | 'before_arrival' | 'before_last_removed';
+
+/**
+ * «Стоит с» on the card says the tracker was on the moped that day — not
+ * necessarily the day it was fitted, which nobody may know and which is never
+ * made up. Today, the default, is always true. A day still has to be
+ * possible: not after today, not before the moped came, and not before the
+ * tracker it had last came off — one tracker on a moped at a time. Null when
+ * the day will do.
+ */
+export function trackerDayFault(input: { on: ISODate; today: ISODate; arrivedOn: ISODate | null; lastRemovedOn: ISODate | null }): TrackerDayFault | null {
+  if (input.on > input.today) return 'future';
+  if (input.arrivedOn != null && input.on < input.arrivedOn) return 'before_arrival';
+  if (input.lastRemovedOn != null && input.on < input.lastRemovedOn) return 'before_last_removed';
+  return null;
+}
+
+/** A tracker's two numbers as they are kept. */
+export interface TrackerNumbers {
+  imei: string;
+  simPhone: string | null;
+}
+
+/**
+ * One SIM written two ways — `555010203` and `+995555010203` are the same
+ * Georgian number, compared as the Kommo link compares phones — so putting one
+ * in place of the other corrects nothing.
+ */
+function sameSim(kept: string | null, asked: string): boolean {
+  if (kept == null) return false;
+  const a = phoneKey(kept);
+  const b = phoneKey(asked);
+  return a != null && b != null ? a === b : kept === asked;
+}
+
+/**
+ * What a correction changes: the numbers asked for that differ from the ones
+ * kept. Null when nothing does — then nothing is written, and the journal gets
+ * no empty line.
+ */
+export function trackerCorrection(kept: TrackerNumbers, asked: { imei?: string | null; simPhone?: string | null }): Partial<TrackerNumbers> | null {
+  const out: Partial<TrackerNumbers> = {};
+  if (asked.imei != null && asked.imei !== kept.imei) out.imei = asked.imei;
+  if (asked.simPhone != null && !sameSim(kept.simPhone, asked.simPhone)) out.simPhone = asked.simPhone;
+  return Object.keys(out).length > 0 ? out : null;
+}
+
+/**
+ * What of a tracker the journal may keep: the last four digits of each
+ * number, named. A moped's history is read by managers too, and the IMEI and
+ * the SIM are the owners' and the workshop's (ADR-0036 §7).
+ */
+export function trackerTails(n: { imei?: string | null; simPhone?: string | null }): { imei?: string; sim?: string } {
+  const out: { imei?: string; sim?: string } = {};
+  if (n.imei) out.imei = `IMEI ···${n.imei.replace(/\D/g, '').slice(-4)}`;
+  if (n.simPhone) out.sim = `SIM ···${n.simPhone.replace(/\D/g, '').slice(-4)}`;
+  return out;
 }
 
 /**

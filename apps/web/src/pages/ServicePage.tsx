@@ -93,8 +93,12 @@ export interface ServiceJob {
   notes: string | null;
   /** True when this job is what took the moped out of the yard: only then does closing bring it back. */
   movedVehicle: boolean;
-  /** The tracker on the moped now, if any (ADR-0036). */
-  vehicle: { id: string; vin: string; number: string | null; model: string; tracker: TrackerRow | null };
+  /**
+   * The tracker on the moped now, if any (ADR-0036); `fromShelf` — whether it
+   * came off a shelf (one written on the moped's card did not), absent while an
+   * older API answers.
+   */
+  vehicle: { id: string; vin: string; number: string | null; model: string; tracker: (TrackerRow & { fromShelf?: boolean }) | null };
   rental: { id: string; number: string } | null;
   customer: { id: string; name: string; nameKa: string | null; nameLat: string | null } | null;
   parts: ServiceJobPart[];

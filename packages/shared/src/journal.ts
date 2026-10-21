@@ -48,6 +48,8 @@ const EVENT_ACTIONS = new Set<string>([
   'user.password.reset',
   'user.sessions.closed',
   'vehicle.create',
+  // A tracker already on the moped, written from its card (ADR-0036, addendum 21.10.2026).
+  'tracker.write',
   'workshop.create',
   'document.sign',
   // A contract marked signed in Signify, and the mark taken back (ADR-0039): nothing edited.
