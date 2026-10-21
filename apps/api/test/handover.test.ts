@@ -114,6 +114,18 @@ describe.skipIf(!HAS_DB)('wave 3 · hand-over', () => {
     expect(err(await call(manager, 'POST', '/api/pickups', pickup(customer.id, vehicle.id, { payment: undefined })))).toMatchObject({ field: 'payment' });
   });
 
+  it('a rate left empty is no rate — refused under its field; a 0 typed on purpose is a rate (QA 21.10.2026)', async () => {
+    const { vehicle, customer } = await fixtures();
+    const manager = await loginAs('manager');
+    // The wizard once sent 0 for an empty field and the rental ran at 0 ₾ a week.
+    expect(err(await call(manager, 'POST', '/api/pickups', pickup(customer.id, vehicle.id, { weeklyRateTetri: '' })))).toMatchObject({ error: 'missing_field', field: 'weeklyRateTetri' });
+    expect(err(await call(manager, 'POST', '/api/pickups', pickup(customer.id, vehicle.id, { weeklyRateTetri: undefined })))).toMatchObject({ error: 'missing_field', field: 'weeklyRateTetri' });
+    expect(err(await call(manager, 'POST', '/api/pickups', pickup(customer.id, vehicle.id, { weeklyRateTetri: 'abc' })))).toMatchObject({ error: 'bad_field', field: 'weeklyRateTetri' });
+    const zero = await call(manager, 'POST', '/api/pickups', pickup(customer.id, vehicle.id, { weeklyRateTetri: 0, payment: { later: false, channel: 'cash', amountTetri: 18000 } }));
+    expect(zero.statusCode, zero.body).toBe(201);
+    expect((await card(manager, json<{ id: string }>(zero).id)).periods[0]).toMatchObject({ seq: 1, amountTetri: 0 });
+  });
+
   it('a mileage below the last act needs a reason (crit. 9)', async () => {
     const { vehicle, customer } = await fixtures({ odometerKm: 1234 });
     const manager = await loginAs('manager');

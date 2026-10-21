@@ -765,8 +765,10 @@ function RentalEdit({ rental, owner, onClose, onSaved }: { rental: RentalCard['r
           body.reason = f.payReason.trim();
         }
         if (f.target !== initial.target || f.per !== initial.per) {
-          body.buyoutTargetTetri = f.target ? parseGel(f.target) : null;
-          body.buyoutPerPaymentTetri = f.per ? parseGel(f.per) : null;
+          // As typed: the server reads the sum, and refuses one it cannot read
+          // under its field — it no longer turns into «no buy-out» on the way.
+          body.buyoutTargetTetri = f.target.trim() || null;
+          body.buyoutPerPaymentTetri = f.per.trim() || null;
         }
         await api.patch(`/api/rentals/${rental.id}`, body, { key });
         return { toast: { text: t.form.changesSaved } };
@@ -886,7 +888,8 @@ function DiscountSheet({ rentalId, week, onClose, onDone }: { rentalId: string; 
       initial={initial}
       label={t.rental.discount}
       submit={async (key) => {
-        await api.post(`/api/rentals/${rentalId}/weeks/${week.seq}/discount`, { discountTetri: f.amount.trim() || '0', reason: f.reason.trim() }, { key });
+        // Empty is no figure: 0 is typed to take a discount away, as the hint says (QA 21.10.2026).
+        await api.post(`/api/rentals/${rentalId}/weeks/${week.seq}/discount`, { discountTetri: f.amount.trim(), reason: f.reason.trim() }, { key });
         return { toast: { text: t.rental.discountDone } };
       }}
       onDone={onDone}
