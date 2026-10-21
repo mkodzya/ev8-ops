@@ -28,6 +28,7 @@ import { workshopMaintenanceEn } from './workshop-maintenance.js';
 import { driveEn } from './drive.js';
 import { expEn } from './expenses.js';
 import { inBankEn } from './in-bank.js';
+import { rentalSwapEn } from './rental-swap.js';
 export const en = {
   lang: { label: 'Language', ka: 'ქართული', ru: 'Русский', en: 'English' },
 
@@ -1394,6 +1395,7 @@ export const en = {
   ...driveEn,
   ...expEn,
   ...inBankEn,
+  ...rentalSwapEn,
 };
 
 export type Dict = typeof en;

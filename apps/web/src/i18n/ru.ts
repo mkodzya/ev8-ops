@@ -19,6 +19,7 @@ import { workshopMaintenanceRu } from './workshop-maintenance.js';
 import { driveRu } from './drive.js';
 import { expRu } from './expenses.js';
 import { inBankRu } from './in-bank.js';
+import { rentalSwapRu } from './rental-swap.js';
 import type { Dict } from './en.js';
 
 // Typed as Dict: a missing or misspelled key fails the build.
@@ -1391,4 +1392,5 @@ export const ru: Dict = {
   ...driveRu,
   ...expRu,
   ...inBankRu,
+  ...rentalSwapRu,
 };

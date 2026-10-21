@@ -57,7 +57,18 @@ interface Card {
   maintenance?: VehicleMaintenance | null;
   /** Downtime of its repairs over the last 30 days. */
   downtime30?: RepairHours;
-  rentals: { id: string; number: string; status: RentalStatus; customer: { id: string; name: string }; pickedUpOn: string | null; returnedOn: string | null; paidThrough: string | null; weeklyRateTetri: number }[];
+  rentals: {
+    id: string;
+    number: string;
+    status: RentalStatus;
+    customer: { id: string; name: string };
+    pickedUpOn: string | null;
+    returnedOn: string | null;
+    paidThrough: string | null;
+    weeklyRateTetri: number;
+    /** This moped's part of a rental a swap went through (ADR-0040); null — the rental had no other moped. */
+    withThisMoped?: { from: string; to: string | null; swappedIn: boolean; swappedOut: boolean } | null;
+  }[];
   /** The tracker on it and the ones it had (ADR-0036); empty to whoever may not read an IMEI. */
   trackers?: { id: string; imei: string; simPhone: string | null; installedOn: string; removedOn: string | null; job: { id: string; number: string } | null; removedJob: { id: string; number: string } | null }[] | null;
   /** What was taken off this moped for another, as a donor (ADR-0036). */
@@ -382,12 +393,17 @@ export function VehiclePage() {
                     <td>
                       <Link to={`/customers/${r.customer.id}`}>{r.customer.name}</Link>
                     </td>
-                    <td className="mono">{fmtDate(r.pickedUpOn)}</td>
-                    <td className="mono">{fmtDate(r.returnedOn)}</td>
-                    <td className="num mono">{formatGel(r.weeklyRateTetri, { decimals: false })}</td>
-                    <td>
-                      <RentalBadge status={r.status} />
+                    {/* With this moped: after a swap, from and to the swap's day, and so marked (ADR-0040). */}
+                    <td className="mono">
+                      {fmtDate(r.withThisMoped ? r.withThisMoped.from : r.pickedUpOn)}
+                      {r.withThisMoped?.swappedIn && <span className="muted"> · {t.swap.mark}</span>}
                     </td>
+                    <td className="mono">
+                      {fmtDate(r.withThisMoped ? r.withThisMoped.to : r.returnedOn)}
+                      {r.withThisMoped?.swappedOut && <span className="muted"> · {t.swap.mark}</span>}
+                    </td>
+                    <td className="num mono">{formatGel(r.weeklyRateTetri, { decimals: false })}</td>
+                    <td>{r.withThisMoped?.swappedOut ? <span className="muted">{t.swap.changed}</span> : <RentalBadge status={r.status} />}</td>
                   </tr>
                 ))}
               </tbody>

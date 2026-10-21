@@ -19,6 +19,7 @@ import { workshopMaintenanceKa } from './workshop-maintenance.js';
 import { driveKa } from './drive.js';
 import { expKa } from './expenses.js';
 import { inBankKa } from './in-bank.js';
+import { rentalSwapKa } from './rental-swap.js';
 import type { Dict } from './en.js';
 
 // Typed as Dict: a missing or misspelled key fails the build.
@@ -1380,4 +1381,5 @@ export const ka: Dict = {
   ...driveKa,
   ...expKa,
   ...inBankKa,
+  ...rentalSwapKa,
 };
