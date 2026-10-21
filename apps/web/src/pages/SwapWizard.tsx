@@ -104,7 +104,12 @@ export function SwapWizard() {
   if (result && card.data) return <SwapDone rentalId={card.data.rental.id} serviceJobId={result.serviceJobId} point={result.point} photoTrouble={photoTrouble} />;
   if (!card.data || (oldId && !oldMoped.data)) return <Loading />;
   const r = card.data.rental;
-  const title = `${t.swap.title} · ${r.number}`;
+  // The rental's number holds together: at 375 px it broke at its hyphen, «R-» / «00480» (QA 21.10.2026).
+  const title = (
+    <>
+      {t.swap.title} · <span className="nobr">{r.number}</span>
+    </>
+  );
 
   // Nothing to change: a closed rental, or one handed over without a VIN — its moped is given in «Изменить условия».
   const old = r.vehicle;

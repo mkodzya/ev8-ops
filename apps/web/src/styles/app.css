@@ -38,6 +38,9 @@ a { color: var(--accent); text-decoration: none; }
 
 .muted { color: var(--muted); }
 .num { text-align: right; }
+/* A phrase that holds together: a record number (R-00480 broke at its hyphen),
+   «+3 дн.» or «доплата 64 ₾» — the line breaks beside it, never inside. */
+.nobr { white-space: nowrap; }
 .warn-text { color: var(--service-ink); font-weight: 500; }
 .crit-text { color: var(--crit); font-weight: 500; }
 
@@ -1257,6 +1260,13 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
 .card-warn { border-color: var(--service); background: var(--warn-soft); }
 .pick-list button { justify-content: space-between; }
 .pick-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; text-align: left; }
+/* A long VIN gives way at its head — the four digits of its tail stay whole —
+   and never runs over the park or point on the right (QA 21.10.2026: EV-056
+   at 375 px, RU and KA). The words on the right wrap between them instead. */
+.pick-main > .vin { display: flex; min-width: 0; }
+.pick-main > .vin .vin-head { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.pick-main > .vin .vin-tail { flex: none; }
+.pick-list button > .pick-main + .muted { flex: 0 1 auto; text-align: right; }
 .stepper { display: flex; align-items: center; gap: 10px; }
 .stepper-n { min-width: 2ch; text-align: center; font: var(--text-money); }
 .due-card { display: flex; flex-direction: column; gap: 4px; }

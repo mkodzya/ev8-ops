@@ -6,7 +6,8 @@ import { useT } from '../i18n/index.js';
 // One step per screen, one button at the bottom, reachable with a thumb
 // (spec §9.2). On a laptop the same frame sits in a narrow column.
 export function Wizard(props: {
-  title: string;
+  /** Words, or words with a record number held together in it (`.nobr`). */
+  title: ReactNode;
   steps: string[];
   step: number; // 0-based
   children: ReactNode;

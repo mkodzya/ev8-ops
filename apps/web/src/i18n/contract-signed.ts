@@ -47,19 +47,26 @@ export const contractSignedRu: typeof contractSignedEn = {
   },
 };
 
+/**
+ * «Signify-ში» with a word joiner (U+2060) after the hyphen: a line may break
+ * after a hyphen, and at 375 px the sheet's title fell apart into «Signify-» /
+ * «ში» (QA 21.10.2026). The joiner is invisible and holds the word together.
+ */
+export const SIGNIFY_IN_KA = 'Signify-\u2060ში';
+
 export const contractSignedKa: typeof contractSignedEn = {
   signedElsewhere: {
-    mark: 'ხელმოწერილია Signify-ში',
-    state: (at, by) => (by ? `მონიშნულია Signify-ში ხელმოწერილად ${at} · ${by}` : `მონიშნულია Signify-ში ხელმოწერილად ${at}`),
-    title: 'ხელშეკრულება ხელმოწერილია Signify-ში',
-    hint: 'კლიენტმა ხელშეკრულებას ხელი მოაწერა Signify-ში ან ქაღალდზე. EV8 Ops აღარ მოითხოვს ხელმოწერას: ქირა აღარ გამოჩნდება „ხელმოუწერელში“ და „დღეს“-ზე. მონიშვნა ჩაიწერება ჟურნალში თქვენი სახელით.',
+    mark: `ხელმოწერილია ${SIGNIFY_IN_KA}`,
+    state: (at, by) => (by ? `მონიშნულია ${SIGNIFY_IN_KA} ხელმოწერილად ${at} · ${by}` : `მონიშნულია ${SIGNIFY_IN_KA} ხელმოწერილად ${at}`),
+    title: `ხელშეკრულება ხელმოწერილია ${SIGNIFY_IN_KA}`,
+    hint: `კლიენტმა ხელშეკრულებას ხელი მოაწერა ${SIGNIFY_IN_KA} ან ქაღალდზე. EV8 Ops აღარ მოითხოვს ხელმოწერას: ქირა აღარ გამოჩნდება „ხელმოუწერელში“ და „დღეს“-ზე. მონიშვნა ჩაიწერება ჟურნალში თქვენი სახელით.`,
     drive: 'ხელშეკრულების გახსნა Drive-ში',
     note: 'შენიშვნა',
     noteHint: 'არასავალდებულო — მაგალითად, სად ინახება ხელმოწერილი ეგზემპლარი.',
     submit: 'მონიშვნა ხელმოწერილად',
-    done: 'მოინიშნა: ხელშეკრულება ხელმოწერილია Signify-ში',
+    done: `მოინიშნა: ხელშეკრულება ხელმოწერილია ${SIGNIFY_IN_KA}`,
     undo: 'მონიშვნის მოხსნა',
-    undoTitle: 'მონიშვნის „ხელმოწერილია Signify-ში“ მოხსნა',
+    undoTitle: `მონიშვნის „ხელმოწერილია ${SIGNIFY_IN_KA}“ მოხსნა`,
     undoHint: 'ხელშეკრულება კვლავ მოითხოვს ხელმოწერას — სიაში და „დღეს“-ზე. ჟურნალში დარჩება, ვინ და როდის მონიშნა.',
     reason: 'რატომ იხსნება',
     reasonHint: 'სავალდებულოა. ჩაიწერება ჟურნალში — მაგალითად, «სხვა ქირა მოინიშნა».',
