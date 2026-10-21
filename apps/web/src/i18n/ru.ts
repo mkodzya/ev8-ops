@@ -10,6 +10,7 @@ import { kommoLinkRu } from './kommo-link.js';
 import { bankApiRu } from './bank-api.js';
 import { calendarRu } from './payments-calendar.js';
 import { payDayRu } from './pay-day.js';
+import { weekShiftRu } from './week-shift.js';
 import { workshopRu } from './workshop.js';
 import { workshopJobsRu } from './workshop-jobs.js';
 import { workshopApprovalRu } from './workshop-approval.js';
@@ -1315,6 +1316,7 @@ export const ru: Dict = {
       reconcile_required: 'Банковские платежи вносит владелец.',
       regenerate_forbidden: 'Заменить уже выданный документ может только владелец.',
       rental_not_found: 'Аренда не найдена.',
+      rental_not_running: 'Сдвинуть можно только неделю идущей аренды — не на паузе, не в споре и не возвращённой.',
       return_before_pickup: 'Дата возврата раньше даты выдачи.',
       rule_not_found: 'Этого правила уже нет.',
       sale_closed: 'Эта продажа закрыта.',
@@ -1322,6 +1324,8 @@ export const ru: Dict = {
       sale_not_found: 'Продажа не найдена.',
       same_customer: 'Карточку нельзя объединить с самой собой.',
       service_not_found: 'Такого ремонта нет.',
+      shift_days_range: 'Неделю удлиняют на 1–6 дней. Ещё 7 дней — это просто следующая неделя.',
+      shift_over_paid: 'Столько за неделю уже оплачено: дешевле оплаченного она стать не может.',
       sold_by_sale: 'Мопед продаётся продажей, а возвращается выкупом.',
       split_bad_amount: 'У каждой части должна быть сумма больше нуля.',
       split_bad_target: 'Каждая часть оплачивает ровно одну запись.',
@@ -1357,10 +1361,12 @@ export const ru: Dict = {
       vin_or_note: 'Выберите мопед из парка или напишите, почему VIN не подтверждён.',
       vins_count: 'Число VIN в строке не совпадает с заказанным. Проверьте каждую строку.',
       vins_missing: 'В строке нет VIN. Впишите по одному VIN в строке для каждой модели.',
+      week_at_nothing: 'Эта неделя ничего не стоит — удлинять нечего.',
       week_has_bank_money: 'У этой недели уже есть деньги из банка.',
       week_not_carried: 'Эта неделя не отмечена оплаченной при переносе.',
       week_not_found: 'Такой недели в аренде нет.',
-      week_paid_before_transfer: 'Эта неделя оплачена до переноса аренды — скидку на неё дать нельзя.',
+      week_not_last: 'Сдвинуть можно только последнюю неделю: следующая уже началась.',
+      week_paid_before_transfer: 'Эта неделя оплачена до переноса аренды — она остаётся как есть.',
       withheld_over_total: 'Удержать больше стоимости ремонта нельзя.',
       workshop_exists: 'Мастерская с таким названием уже есть в списке.',
       workshop_not_found: 'Такой мастерской нет.',
@@ -1379,6 +1385,7 @@ export const ru: Dict = {
   ...bankApiRu,
   ...calendarRu,
   ...payDayRu,
+  ...weekShiftRu,
   ...workshopRu,
   ...workshopJobsRu,
   ...workshopApprovalRu,

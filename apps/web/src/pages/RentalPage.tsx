@@ -1,6 +1,6 @@
 import type { ActKind, DepositStatus, PeriodPayStatus, RentalStatus, WeekDue } from '@ev8/shared';
 import { useState } from 'react';
-import { isoWeekday, parseGel, todayISO, waOffered, weekDue, type VehicleState } from '@ev8/shared';
+import { MAX_SHIFT_DAYS, daysBetween, isoWeekday, parseGel, todayISO, waOffered, weekDue, weekShiftPlan, type VehicleState } from '@ev8/shared';
 import { DocumentRow, signedAtText, type DocState } from '../components/Documents.js';
 import { KommoField } from '../components/Kommo.js';
 import { RecordHistory } from '../components/RecordHistory.js';
@@ -15,7 +15,7 @@ import { FormSheet, SubmitButton } from '../ds/form/Form.js';
 import { BlockHead, Empty, FleetNo, Loading, PageHead, RentalBadge, Vin } from '../components/ui.js';
 import { useMoneyForm } from '../ds/money/MoneyForm.js';
 import { Row } from '../components/Wizard.js';
-import { fmtDate, formatGel } from '../format.js';
+import { fmtDate, fmtDayMonth, formatGel } from '../format.js';
 import { useT } from '../i18n/index.js';
 import { useLoad } from '../lib/use.js';
 import { useSession } from '../session.js';
@@ -62,6 +62,9 @@ export interface RentalCard {
     /** The weekday the rent is due on, ISO 1–7; null — the pickup's weekday (ADR-0022). */
     payWeekday: number | null;
     payOffsetDays: number;
+    /** The days its weeks were made longer, and the day they run from now (ADR-0041); absent while an older API answers. */
+    weekShiftDays?: number;
+    weeksFromOn?: string | null;
     /** The day the next rent is due, for a running rental. */
     dueOn: string | null;
     buyoutTargetTetri: number | null;
@@ -91,6 +94,10 @@ export interface RentalCard {
     /** Taken off by an owner, with a reason (migration 0040); absent while an older API answers. */
     discountTetri?: number;
     discountReason?: string | null;
+    /** Made longer by an owner: the days, what they cost, why (ADR-0041); absent while an older API answers. */
+    extraDays?: number;
+    extraTetri?: number;
+    shiftReason?: string | null;
     paidBeforeTransfer?: boolean;
   }[];
   acts: { id: string; kind: ActKind; occurredOn: string; odometerKm: number | null; condition: string | null; photos: { id: string; label: string }[]; pdfUrl: string | null }[];
@@ -117,6 +124,7 @@ export function RentalPage() {
   // on some renders and not others, which React counts and then throws on.
   const [preview, setPreview] = useState<'contract' | 'return-act' | null>(null);
   const [discounting, setDiscounting] = useState<RentalCard['periods'][number] | null>(null);
+  const [shifting, setShifting] = useState<RentalCard['periods'][number] | null>(null);
   const [unfining, setUnfining] = useState<RentalCard['charges'][number] | null>(null);
   if (failure) return <LoadError failure={failure} onRetry={reload} />;
   if (!data) return <Loading />;
@@ -140,6 +148,15 @@ export function RentalPage() {
   const d = data.deposit;
   const open = r.status !== 'returned';
   const owner = can('deposit.decide');
+  // Its weeks were made longer (ADR-0041): they start on another weekday than the pickup's.
+  const moved = (r.weekShiftDays ?? 0) > 0;
+  // Only the last week of a running rental is made longer (ADR-0041).
+  const running = !r.returnedOn && (r.storedStatus === 'active' || r.storedStatus === 'overdue');
+  const lastSeq = data.periods.reduce((n, p) => Math.max(n, p.seq), 0);
+  const weekActions = (p: RentalCard['periods'][number]) => [
+    ...(!p.paidBeforeTransfer && (p.paidTetri < p.amountTetri || (p.discountTetri ?? 0) > 0) ? [{ key: 'discount', label: t.rental.discount, onPick: () => setDiscounting(p) }] : []),
+    ...(running && p.seq === lastSeq && !p.paidBeforeTransfer && p.amountTetri - (p.extraTetri ?? 0) > 0 ? [{ key: 'shift', label: t.weekShift.action, onPick: () => setShifting(p) }] : []),
+  ];
   const menu = [
     ...(open && can('rental.create') ? [{ key: 'edit', label: t.rentalMenu.edit, onPick: () => setSheet('edit') }] : []),
     ...(open && owner ? [{ key: 'status', label: t.rentalMenu.status, onPick: () => setSheet('status') }] : []),
@@ -212,6 +229,17 @@ export function RentalPage() {
           onClose={() => setDiscounting(null)}
           onDone={() => {
             setDiscounting(null);
+            reload();
+          }}
+        />
+      )}
+      {shifting && (
+        <ShiftSheet
+          rental={r}
+          week={shifting}
+          onClose={() => setShifting(null)}
+          onDone={() => {
+            setShifting(null);
             reload();
           }}
         />
@@ -362,8 +390,8 @@ export function RentalPage() {
               k={t.payDay.label}
               v={
                 <span>
-                  {t.payDay.days[(r.payWeekday ?? isoWeekday(r.pickedUpOn)) - 1]}
-                  <span className="muted"> · {r.payWeekday ? t.payDay.agreed : t.payDay.asPickup}</span>
+                  {t.payDay.days[(r.payWeekday ?? isoWeekday(r.weeksFromOn ?? r.pickedUpOn)) - 1]}
+                  <span className="muted"> · {r.payWeekday ? t.payDay.agreed : moved ? t.payDay.asWeekStart : t.payDay.asPickup}</span>
                   {/* The next pay day only while it is ahead or today: a late rental already says so in red above. */}
                   {r.dueOn && r.dueOn >= today && <span className="muted"> · {t.payDay.next(fmtDate(r.dueOn))}</span>}
                 </span>
@@ -465,26 +493,26 @@ export function RentalPage() {
                 </tr>
               </thead>
               <tbody>
-                {data.periods.map((p) => (
-                  <tr key={p.seq}>
-                    <td className="mono">{p.seq}</td>
-                    <td className="mono">{fmtDate(p.startsOn)}</td>
-                    <td className="mono">{fmtDate(p.endsOn)}</td>
-                    <td className="num mono" title={p.discountReason ?? undefined}>
-                      {formatGel(p.amountTetri, { decimals: false })}
-                      {(p.discountTetri ?? 0) > 0 && <span className="muted"> · {t.rental.discountShort(formatGel(p.discountTetri ?? 0, { decimals: false }))}</span>}
-                    </td>
-                    <td className="num mono">{formatGel(p.paidTetri, { decimals: false })}</td>
-                    <WeekState kind={weekKind(p)} partPaid={p.paidTetri > 0} overdue={r.status === 'overdue'} />
-                    {owner && (
-                      <td>
-                        {!p.paidBeforeTransfer && (p.paidTetri < p.amountTetri || (p.discountTetri ?? 0) > 0) && (
-                          <RowMenu actions={[{ key: 'discount', label: t.rental.discount, onPick: () => setDiscounting(p) }]} />
-                        )}
+                {data.periods.map((p) => {
+                  const actions = weekActions(p);
+                  // Why the week costs what it does: the discount's reason, the move's (ADR-0041).
+                  const why = [p.discountReason, p.shiftReason].filter(Boolean).join(' · ');
+                  return (
+                    <tr key={p.seq}>
+                      <td className="mono">{p.seq}</td>
+                      <td className="mono">{fmtDate(p.startsOn)}</td>
+                      <td className="mono">{fmtDate(p.endsOn)}</td>
+                      <td className="num mono" title={why || undefined}>
+                        {formatGel(p.amountTetri, { decimals: false })}
+                        {(p.discountTetri ?? 0) > 0 && <span className="muted"> · {t.rental.discountShort(formatGel(p.discountTetri ?? 0, { decimals: false }))}</span>}
+                        {(p.extraDays ?? 0) > 0 && <span className="muted"> · {t.weekShift.short(p.extraDays ?? 0, formatGel(p.extraTetri ?? 0, { decimals: false }))}</span>}
                       </td>
-                    )}
-                  </tr>
-                ))}
+                      <td className="num mono">{formatGel(p.paidTetri, { decimals: false })}</td>
+                      <WeekState kind={weekKind(p)} partPaid={p.paidTetri > 0} overdue={r.status === 'overdue'} />
+                      {owner && <td>{actions.length > 0 && <RowMenu actions={actions} />}</td>}
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -653,8 +681,11 @@ interface FreeVehicles {
 function RentalEdit({ rental, owner, onClose, onSaved }: { rental: RentalCard['rental']; owner: boolean; onClose: () => void; onSaved: () => void }) {
   const t = useT();
   const fleet = useLoad<FreeVehicles>(rental.vinUnconfirmed ? '/api/fleet' : null);
-  // The pay day (ADR-0022): the pickup's weekday unless agreed otherwise. An owner's, with a reason.
-  const pickupDay = rental.pickedUpOn ? isoWeekday(rental.pickedUpOn) : null;
+  // The pay day (ADR-0022): the weekday the weeks start on unless agreed otherwise — the
+  // pickup's, or the one they moved to (ADR-0041). An owner's, with a reason.
+  const weeksFrom = rental.weeksFromOn ?? rental.pickedUpOn;
+  const pickupDay = weeksFrom ? isoWeekday(weeksFrom) : null;
+  const moved = (rental.weekShiftDays ?? 0) > 0;
   const initial = {
     payDay: String(rental.payWeekday ?? pickupDay ?? ''),
     payReason: '',
@@ -720,7 +751,7 @@ function RentalEdit({ rental, owner, onClose, onSaved }: { rental: RentalCard['r
           <select className="input" value={f.payDay} onChange={(e) => setF({ ...f, payDay: e.target.value })}>
             {t.payDay.days.map((day, i) => (
               <option key={day} value={String(i + 1)}>
-                {i + 1 === pickupDay ? t.payDay.pickupMark(day) : day}
+                {i + 1 !== pickupDay ? day : moved ? t.payDay.weekStartMark(day) : t.payDay.pickupMark(day)}
               </option>
             ))}
           </select>
@@ -822,6 +853,83 @@ function DiscountSheet({ rentalId, week, onClose, onDone }: { rentalId: string; 
       <Field label={t.rental.discountReason} hint={t.rental.discountReasonHint} name="reason">
         <input className="input" value={f.reason} onChange={(e) => setF({ ...f, reason: e.target.value })} />
       </Field>
+    </FormSheet>
+  );
+}
+
+/**
+ * "Сдвинуть неделю" — an owner makes the running week 1–6 days longer, for an
+ * extra a person types, with a reason (ADR-0041; the courier of 21.10.2026 who
+ * paid three days late with the three days on top). The choice is the day the
+ * next week starts; the suggestion is rate ÷ 7 × days, and the sheet says what
+ * the week becomes and when the next one is due. On a week already moved, the
+ * days start where they are, and «not moved» takes the move back.
+ */
+function ShiftSheet({ rental, week, onClose, onDone }: { rental: RentalCard['rental']; week: RentalCard['periods'][number]; onClose: () => void; onDone: () => void }) {
+  const t = useT();
+  const had = week.extraDays ?? 0;
+  const plan = (days: number) => weekShiftPlan({ startsOn: week.startsOn, days, weeklyRateTetri: rental.weeklyRateTetri, payOffsetDays: rental.payOffsetDays });
+  const gel = (tetri: number) => String(tetri / 100);
+  // Offered first: as many days as the week has run today — the next week a
+  // week after the day he paid. A week already moved keeps its own.
+  const ran = daysBetween(week.startsOn, todayISO());
+  const guess = had || Math.min(MAX_SHIFT_DAYS, Math.max(1, ran));
+  const initial = { days: String(guess), extra: gel(had ? (week.extraTetri ?? 0) : plan(guess).suggestedExtraTetri), reason: '' };
+  const [f, setF] = useState(initial);
+  const days = Number(f.days);
+  const p = plan(days);
+  const price = week.amountTetri - (week.extraTetri ?? 0) + (days === 0 ? 0 : (parseGel(f.extra) ?? 0));
+  // Weekdays inside a sentence, Sunday first.
+  const weekday = (date: string) => t.calendar.weekdaysIn[isoWeekday(date) % 7];
+  const choices = Array.from({ length: MAX_SHIFT_DAYS + 1 }, (_, n) => n).filter((n) => n !== 0 || had !== 0);
+  const pick = (value: string) => {
+    // A suggestion left as it was follows the days; a sum typed by hand stays.
+    const extra = f.extra === gel(plan(days).suggestedExtraTetri) ? gel(plan(Number(value)).suggestedExtraTetri) : f.extra;
+    setF({ ...f, days: value, extra });
+  };
+  return (
+    <FormSheet
+      title={t.weekShift.title(week.seq, fmtDate(week.startsOn), fmtDate(week.endsOn))}
+      onClose={onClose}
+      value={f}
+      initial={initial}
+      label={t.weekShift.action}
+      submit={async (key) => {
+        const body = days === 0 ? { days, reason: f.reason.trim() } : { days, extraTetri: f.extra.trim(), reason: f.reason.trim() };
+        await api.post(`/api/rentals/${rental.id}/weeks/${week.seq}/shift`, body, { key });
+        return { toast: { text: t.weekShift.done } };
+      }}
+      onDone={onDone}
+    >
+      <p className="hint muted">{t.weekShift.intro}</p>
+      <Field label={t.weekShift.nextFrom} name="days">
+        <select className="input" value={f.days} onChange={(e) => pick(e.target.value)}>
+          {choices.map((n) => {
+            const next = plan(n).nextStartsOn;
+            return (
+              <option key={n} value={String(n)}>
+                {n === 0 ? t.weekShift.asBefore(weekday(next), fmtDayMonth(next)) : t.weekShift.dayOption(weekday(next), fmtDayMonth(next), n)}
+              </option>
+            );
+          })}
+        </select>
+      </Field>
+      {days !== 0 && (
+        <Field
+          label={t.weekShift.extra}
+          hint={t.weekShift.extraHint(formatGel(rental.weeklyRateTetri, { decimals: false }), days, formatGel(p.suggestedExtraTetri, { decimals: false }))}
+          name="extraTetri"
+        >
+          <input className="input mono" inputMode="decimal" value={f.extra} onChange={(e) => setF({ ...f, extra: e.target.value })} />
+        </Field>
+      )}
+      <Field label={t.weekShift.reason} hint={t.weekShift.reasonHint} name="reason">
+        <input className="input" value={f.reason} onChange={(e) => setF({ ...f, reason: e.target.value })} />
+      </Field>
+      <p className="hint">
+        {days === 0 ? t.weekShift.undo : t.weekShift.summary(week.seq, fmtDayMonth(week.startsOn), fmtDayMonth(p.endsOn), p.lengthDays, formatGel(price, { decimals: false }))}{' '}
+        {t.weekShift.next(fmtDayMonth(p.nextStartsOn), weekday(p.nextStartsOn), weekday(p.nextDueOn))}
+      </p>
     </FormSheet>
   );
 }
