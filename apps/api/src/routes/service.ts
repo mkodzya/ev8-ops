@@ -43,6 +43,7 @@ import { moveVehicle } from '../lib/vehicles.js';
 import { rateOf } from '../lib/serviceSettings.js';
 import { maintenanceOverview } from '../lib/maintenance.js';
 import { downtimeOf } from '../lib/downtime.js';
+import { enqueueJobNotice, enqueueNotice, kickNotices, noticeKey } from '../lib/notices.js';
 
 // Repair jobs (SRV-01, SRV-02).
 //
@@ -731,7 +732,7 @@ export function serviceRoutes(app: FastifyInstance): void {
         where: { id: job.id },
         data: { status: 'open', ...(first ? { approvedById: actor.id, approvedAt: now } : {}), updatedAt: now },
       });
-      await tx.auditLog.create({
+      const logged = await tx.auditLog.create({
         data: {
           actorId: actor.id,
           action: 'service.approve',
@@ -740,7 +741,10 @@ export function serviceRoutes(app: FastifyInstance): void {
           after: { number: job.number, status: 'open', works: waiting.length, parts: bought.length || undefined, again: !first, norms: norms.length > 0 ? norms : undefined },
         },
       });
+      // The workshop's group hears it, the first time and every time after (ADR-0038 §6).
+      await enqueueJobNotice(tx, 'job_approved', job.id, logged.id);
     });
+    kickNotices();
     return { ok: true, works: waiting.length, parts: bought.length };
   });
 
@@ -783,10 +787,12 @@ export function serviceRoutes(app: FastifyInstance): void {
           data: { status: 'cancelled', closedOn: dateFromISO(today)!, closedAt: now, rejectedById: actor.id, rejectedAt: now, rejectReason: reason, updatedAt: now },
         });
         if (job.movedVehicle) await moveVehicle(tx, { vehicleId: job.vehicleId, kind: 'service_out', occurredOn: today, actorId: actor.id, reason });
-        await tx.auditLog.create({
+        const logged = await tx.auditLog.create({
           data: { actorId: actor.id, action: 'service.reject', entityType: 'service_job', entityId: job.id, after: { number: job.number, status: 'cancelled', partsBack: back }, note: reason },
         });
+        await enqueueJobNotice(tx, 'job_rejected', job.id, logged.id);
       });
+      kickNotices();
       return { ok: true, status: 'cancelled', partsBack: back };
     }
     const waiting = job.works.filter((w) => workLineState(w) === 'waiting').map((w) => w.id);
@@ -797,10 +803,12 @@ export function serviceRoutes(app: FastifyInstance): void {
       await tx.serviceWork.updateMany({ where: { id: { in: waiting } }, data: { rejectedById: actor.id, rejectedAt: now, rejectReason: reason } });
       await tx.servicePart.updateMany({ where: { id: { in: bought } }, data: { rejectedById: actor.id, rejectedAt: now, rejectReason: reason } });
       await tx.serviceJob.update({ where: { id: job.id }, data: { status: 'open', updatedAt: now } });
-      await tx.auditLog.create({
+      const logged = await tx.auditLog.create({
         data: { actorId: actor.id, action: 'service.reject', entityType: 'service_job', entityId: job.id, after: { number: job.number, status: 'open', works: waiting.length, parts: bought.length || undefined }, note: reason },
       });
+      await enqueueJobNotice(tx, 'job_rejected', job.id, logged.id);
     });
+    kickNotices();
     return { ok: true, status: 'open', works: waiting.length, parts: bought.length };
   });
 
@@ -848,7 +856,7 @@ export function serviceRoutes(app: FastifyInstance): void {
         });
       }
       if (status !== job.status) await tx.serviceJob.update({ where: { id: job.id }, data: { status, updatedAt: now } });
-      await tx.auditLog.create({
+      const logged = await tx.auditLog.create({
         data: {
           actorId: actor.id,
           action: 'service.work.add',
@@ -857,7 +865,10 @@ export function serviceRoutes(app: FastifyInstance): void {
           after: { number: job.number, works: lines.map((l) => ({ code: types.find((x) => x.id === l.workTypeId)?.code ?? null, freeText: l.workTypeId ? null : l.freeText, qty: l.qty })), waits: !approvedNow },
         },
       });
+      // Back to waiting: the group is asked again. Added to one that already waits, it was asked already.
+      if (status === 'draft' && job.status !== 'draft') await enqueueJobNotice(tx, 'job_waiting', job.id, logged.id);
     });
+    kickNotices();
     return reply.code(201).send({ ok: true, status });
   });
 
@@ -1161,7 +1172,7 @@ export function serviceRoutes(app: FastifyInstance): void {
           },
         });
       }
-      await tx.auditLog.create({
+      const logged = await tx.auditLog.create({
         data: {
           actorId: actor.id,
           action: open ? 'service.take' : made.status === 'draft' ? 'service.request' : 'service.open',
@@ -1181,8 +1192,11 @@ export function serviceRoutes(app: FastifyInstance): void {
           before: open ? { reason: open.reason, mechanicId: open.mechanicId } : undefined,
         },
       });
+      // His repair, or his works on one taken over, wait: the group is asked (ADR-0038 §6).
+      if (made.status === 'draft') await enqueueJobNotice(tx, 'job_waiting', made.id, logged.id);
       return made;
     });
+    kickNotices();
     return reply.code(open ? 200 : 201).send(job);
   });
 
@@ -1243,7 +1257,7 @@ export function serviceRoutes(app: FastifyInstance): void {
       if (!rented) {
         await moveVehicle(tx, { vehicleId, kind: 'service_in', occurredOn: openedOn, actorId: actor.id, reason });
       }
-      await tx.auditLog.create({
+      const logged = await tx.auditLog.create({
         data: {
           actorId: actor.id,
           action: reported ? 'service.report' : 'service.open',
@@ -1252,8 +1266,10 @@ export function serviceRoutes(app: FastifyInstance): void {
           after: { number: created.number, vehicleId, reason, payer, movedVehicle: !rented, draft: reported },
         },
       });
+      if (reported) await enqueueJobNotice(tx, 'job_waiting', created.id, logged.id);
       return created;
     });
+    kickNotices();
     return reply.code(201).send(job);
   });
 
@@ -1435,7 +1451,7 @@ export function serviceRoutes(app: FastifyInstance): void {
       }
       if (tracker) await fitTracker(tx, { job, partId: catalogue!.id, servicePartId: created.id, donorVehicleId: donor?.id ?? null, imei: tracker.imei, simPhone: tracker.simPhone, on: today, actorId: actor.id });
       if (waits && job.status !== 'draft') await tx.serviceJob.update({ where: { id: job.id }, data: { status: 'draft', updatedAt: new Date() } });
-      await tx.auditLog.create({
+      const logged = await tx.auditLog.create({
         data: {
           actorId: actor.id,
           action: 'service.part.add',
@@ -1454,8 +1470,11 @@ export function serviceRoutes(app: FastifyInstance): void {
           },
         },
       });
+      // A bought part sends a repair in work back to waiting: the group is asked again.
+      if (waits && job.status !== 'draft') await enqueueJobNotice(tx, 'job_waiting', job.id, logged.id);
       return created;
     });
+    kickNotices();
     return reply.code(201).send({ id: line.id, status: waits ? 'draft' : job.status });
   });
 
@@ -1679,7 +1698,10 @@ export function serviceRoutes(app: FastifyInstance): void {
           after: { closedOn, totalTetri: total, withheldTetri, payer: job.payer, odometerKm, odometerReason: lower ? odometerReason : undefined, locationId: closedLocationId, photosAfter: had + photos.length },
         },
       });
+      // A repair closes once; told twice it is still one notice.
+      await enqueueNotice(tx, { kind: 'job_closed', entityId: job.id, dedupeKey: noticeKey.closed(job.id) });
     });
+    kickNotices();
     // What it came to is the owners' to read (ADR-0033 §4); the mechanic is told it is closed.
     return mayView(req, 'cost.view') ? { ok: true, totalTetri: total, withheldTetri } : { ok: true };
   });

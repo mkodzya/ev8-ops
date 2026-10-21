@@ -1623,3 +1623,25 @@ model DriveSync {
   @@map("drive_sync")
 }
 
+
+/// A notice to the workshop's Telegram group (migration 0061; ADR-0038 §6–7):
+/// written with its event, sent after it, tried again by the worker. Only
+/// what was asked and how it went; the text is written from `entityId` when
+/// it is sent.
+model Notice {
+  id             String    @id @default(uuid()) @db.Uuid
+  /// job_waiting, job_approved, job_rejected, job_closed, maintenance_due, stock_low.
+  kind           String
+  dedupeKey      String    @unique @map("dedupe_key")
+  entityId       String    @map("entity_id") @db.Uuid
+  createdAt      DateTime  @default(now()) @map("created_at")
+  nextTryAt      DateTime  @default(now()) @map("next_try_at")
+  attempts       Int       @default(0)
+  sentAt         DateTime? @map("sent_at")
+  gaveUpAt       DateTime? @map("gave_up_at")
+  /// Our word for the last failure, never Telegram's answer.
+  lastFailure    String?   @map("last_failure")
+  lastHttpStatus Int?      @map("last_http_status")
+
+  @@map("notices")
+}

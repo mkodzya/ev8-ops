@@ -6,6 +6,7 @@ import { PART_MONEY, WORK_MONEY } from '../lib/stock.js';
 import { env } from '../lib/env.js';
 import { badRequest, notFound } from '../lib/errors.js';
 import { mayView } from '../lib/guard.js';
+import { OWN_ORIGIN } from '../lib/origin.js';
 import { maintenanceOf } from '../lib/maintenance.js';
 import { clockOf, downtimeOf } from '../lib/downtime.js';
 import { preliminaryOf } from '../lib/purchases.js';
@@ -254,9 +255,7 @@ export function fleetRoutes(app: FastifyInstance): void {
   });
 }
 
-/** EV8 Ops' own stands, and a laptop; any other address in a QR would send people elsewhere. */
-const OWN_ORIGIN = /^(https:\/\/(test\.)?ops\.ev8\.ge|http:\/\/(localhost|127\.0\.0\.1)(:\d+)?)$/;
-
+/** EV8 Ops' own stands, and a laptop (lib/origin.ts); any other address in a QR would send people elsewhere. */
 export function stickerOrigin(given: string | undefined): string {
   return given && OWN_ORIGIN.test(given) ? given : 'https://ops.ev8.ge';
 }

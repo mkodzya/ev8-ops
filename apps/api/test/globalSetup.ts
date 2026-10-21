@@ -32,6 +32,8 @@ export async function teardown(): Promise<void> {
   const since = { gte: startedAt };
   try {
     await prisma.auditLog.deleteMany({ where: { createdAt: since } });
+    // The notices a run wrote (0061) point at nothing by a key: they go first.
+    await prisma.notice.deleteMany({ where: { createdAt: since } });
     // What a stand-in for Kommo left behind, should a suite have died before
     // its own cleanup. The one row of `kommo_sync` is a singleton and stays.
     await prisma.kommoLead.deleteMany({ where: { firstSeenAt: since } });

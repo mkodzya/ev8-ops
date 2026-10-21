@@ -29,10 +29,10 @@ export interface PartRow {
   shortBy: number;
 }
 
-/** Every part with what the ledger makes of it. */
-export async function partRows(opts: { includeArchived?: boolean } = {}): Promise<PartRow[]> {
+/** Every part with what the ledger makes of it — or only the ones asked for. */
+export async function partRows(opts: { includeArchived?: boolean; ids?: string[] } = {}): Promise<PartRow[]> {
   const parts = await prisma.part.findMany({
-    where: opts.includeArchived ? {} : { archived: false },
+    where: { ...(opts.includeArchived ? {} : { archived: false }), ...(opts.ids ? { id: { in: opts.ids } } : {}) },
     orderBy: { name: 'asc' },
     include: { moves: { select: { kind: true, qty: true, unitCostTetri: true, occurredOn: true, createdAt: true } } },
   });

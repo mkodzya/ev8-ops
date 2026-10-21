@@ -1,5 +1,5 @@
 import cookie from '@fastify/cookie';
-import Fastify, { type FastifyInstance } from 'fastify';
+import Fastify, { type FastifyInstance, type FastifyServerOptions } from 'fastify';
 import { env } from './lib/env.js';
 import { ApiError } from './lib/errors.js';
 import { installGuard } from './lib/guard.js';
@@ -44,9 +44,10 @@ import { driveRoutes } from './routes/drive.js';
 import { workshopRoutes } from './routes/workshop.js';
 import { workBookRoutes } from './routes/workBook.js';
 
-export function buildApp(): FastifyInstance {
+/** `logger` only for a test that reads what the API logs — a secret must never be in it. */
+export function buildApp(opts: { logger?: FastifyServerOptions['logger'] } = {}): FastifyInstance {
   const app = Fastify({
-    logger: process.env.NODE_ENV === 'test' ? false : { level: 'info' },
+    logger: opts.logger ?? (process.env.NODE_ENV === 'test' ? false : { level: 'info' }),
     exposeHeadRoutes: false, // keep the auto-registered route table exact
   });
 

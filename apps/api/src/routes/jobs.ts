@@ -4,6 +4,7 @@ import { reconcileBogNight, syncBogToday } from '../lib/bog.js';
 import { env } from '../lib/env.js';
 import { scanDrive } from '../lib/driveScan.js';
 import { syncKommo } from '../lib/kommo.js';
+import { deliverNotices, scanNotices } from '../lib/notices.js';
 import { rollPeriods } from '../lib/periods.js';
 import { reconcileTbcNight, syncTbcToday } from '../lib/tbc.js';
 
@@ -15,7 +16,8 @@ import { reconcileTbcNight, syncTbcToday } from '../lib/tbc.js';
 //
 // The Kommo poll knocks here for a different reason: the Kommo token and the
 // database both live in this process, and the worker has neither. So do the
-// two jobs of each bank read by its API (B11-03), for the bank's keys.
+// two jobs of each bank read by its API (B11-03), for the bank's keys, and
+// the notices to the workshop's Telegram group (ADR-0032 §2), for the bot's.
 
 function workerOnly(req: FastifyRequest, reply: FastifyReply): boolean {
   const given = req.headers['x-worker-token'];
@@ -80,6 +82,29 @@ export function jobRoutes(app: FastifyInstance): void {
     const outcome = await syncTbcToday();
     if (outcome.status === 'failed') app.log.warn(outcome, 'tbc did not answer');
     return outcome;
+  });
+
+  // The notices to the workshop's Telegram group (ADR-0038 §6–7): each goes
+  // right after its event; what Telegram did not take is tried here, every
+  // minute. The outcome is counts — the token is in the address Telegram is
+  // asked at, and nothing of it, or of Telegram's answer, is in here. With no
+  // token or group it says `off` and sends nothing.
+  app.post('/api/jobs/notices', { config: { scope: 'public' } }, async (req, reply) => {
+    if (!workerOnly(req, reply)) return reply;
+    const outcome = await deliverNotices();
+    if (outcome.failed > 0) app.log.warn(outcome, 'telegram did not take every notice');
+    return outcome;
+  });
+
+  // Mopeds due for their maintenance and parts below the minimum are nobody's
+  // event: they are found here, by day (the worker asks hourly from morning to
+  // evening, Tbilisi time, so the group is not woken at night), each told once.
+  app.post('/api/jobs/notices-scan', { config: { scope: 'public' } }, async (req, reply) => {
+    if (!workerOnly(req, reply)) return reply;
+    const found = await scanNotices();
+    const outcome = await deliverNotices();
+    if (outcome.failed > 0) app.log.warn(outcome, 'telegram did not take every notice');
+    return { ...outcome, maintenance: found.maintenance, stock: found.stock };
   });
 
   app.post('/api/jobs/tbc-night', { config: { scope: 'public' } }, async (req, reply) => {
