@@ -71,7 +71,8 @@ export function TrackerRows({ v, trackers, onDone }: { v: TrackerMoped; trackers
               <>
                 <span className="mono">{imeiGroups(now.imei)}</span>
                 <div className="hint">
-                  {t.wparts.onSince(fmtDate(now.installedOn))}
+                  {/* Written on the card, the day is one it surely was on — not its fitting day (addendum, item 3). */}
+                  {now.source === 'card' ? t.wparts.onBy(fmtDate(now.installedOn)) : t.wparts.onSince(fmtDate(now.installedOn))}
                   {now.job ? (
                     <>
                       {' · '}

@@ -250,7 +250,7 @@ describe.skipIf(!HAS_DB)('a tracker belongs to a moped (stage 4 «Сдан», AD
 
     const fitted = await call(mech.cookie, 'POST', `/api/service/${jobA}/parts`, { kind: 'stock', partId: trackerPart, qty: 1, imei: x.replace(/(\d{3})/g, '$1 '), sim: '+995 555 01 02 03' });
     expect(fitted.statusCode, fitted.body).toBe(201);
-    expect((await jobOf(mech.cookie, jobA)).vehicle.tracker).toMatchObject({ imei: x, simPhone: '+995555010203' });
+    expect((await jobOf(mech.cookie, jobA)).vehicle.tracker).toMatchObject({ imei: x, simPhone: '+995555010203', fromShelf: true });
     expect((await shelfOf(owner, trackerPart)).onHand).toBe(2);
 
     // The same IMEI on another moped is refused, and nothing is written.

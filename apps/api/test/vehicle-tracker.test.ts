@@ -250,6 +250,10 @@ describe.skipIf(!HAS_DB)('a tracker written on the card and the repairs', () => 
     const opened = await call(owner, 'POST', '/api/service', { vehicleId: v.id, reason: 'ТЕСТ tracker off' });
     expect(opened.statusCode, opened.body).toBe(201);
     const jobId = json<{ id: string }>(opened).id;
+    // The repair says so before the mechanic answers, so the form does not promise a shelf.
+    const before = await call(owner, 'GET', `/api/service/${jobId}`);
+    expect(before.statusCode, before.body).toBe(200);
+    expect(json<{ job: { vehicle: { tracker: unknown } } }>(before).job.vehicle.tracker).toMatchObject({ imei: x, fromShelf: false });
 
     const off = await call(owner, 'POST', `/api/service/${jobId}/tracker/remove`, { working: true });
     expect(off.statusCode, off.body).toBe(201);

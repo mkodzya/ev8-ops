@@ -251,8 +251,12 @@ function serialize(job: {
       model: `${job.vehicle.model.brand} ${job.vehicle.model.name}`,
       /** The moped's last reading: a lower one at closing asks for its reason (ADR-0038 §4). */
       odometerKm: job.vehicle.odometerKm,
-      /** The tracker on the moped now, if any (ADR-0036): what «снять трекер» takes off. */
-      tracker: job.vehicle.trackers[0] ? trackerOut(job.vehicle.trackers[0]) : null,
+      /**
+       * The tracker on the moped now, if any (ADR-0036): what «снять трекер»
+       * takes off. `fromShelf` says whether it came off a shelf — one written
+       * on the moped's card did not, and goes back to none (addendum 21.10.2026, item 6).
+       */
+      tracker: job.vehicle.trackers[0] ? { ...trackerOut(job.vehicle.trackers[0]), fromShelf: job.vehicle.trackers[0].partId != null } : null,
     },
     rental: job.rental,
     customer: job.customer as { id: string; name: string } | null,

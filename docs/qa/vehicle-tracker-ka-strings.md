@@ -21,6 +21,8 @@
 | `wparts.fittedOnHint` | Не знаешь дня — оставь сегодня: в этот день трекер точно стоял. | Don’t know the day — leave today… | დღე არ იცი — დატოვე დღევანდელი: ამ დღეს ტრეკერი ნამდვილად იდგა. | dghe ar itsi — datove dghevandeli: am dghes trekeri namdvilad idga. | подсказка под датой |
 | `wparts.fixNote` | Исправление переписывает номера этого трекера. Поставили другой трекер — сними этот в ремонте. | This rewrites the numbers of this tracker… | შესწორება ამ ტრეკერის ნომრებს გადაწერს. სხვა ტრეკერი დააყენეს — ეს შეკეთებაში მოხსენი. | shestsoreba am trekeris nomrebs gadatsers. skhva trekeri daayenes — es sheketebashi mokhseni. | подсказка в листе исправления |
 | `wparts.onSince(дата)` | стоит с 21.10.2026 | on since 21.10.2026 | დგას 21.10.2026-დან | dgas 21.10.2026-dan | под номером IMEI |
+| `wparts.onBy(дата)` | уже стоял 21.10.2026 | already on as of 21.10.2026 | 21.10.2026-ისთვის უკვე იდგა | 21.10.2026-istvis ukve idga | под номером IMEI у трекера, записанного в карточке: день не день установки |
+| `wparts.trackerOffNoShelf` | Закроется на мопеде; на полку не пойдёт: его записали в карточке, с полки не брали. | It is closed on the moped and does not go to the shelf: it was written on the card, not taken off a shelf. | მოპედზე დაიხურება; თაროზე არ მივა: ბარათში ჩაიწერა, თაროდან არ აუღიათ. | mopedze daikhureba; taroze ar miva: baratshi chaitsera, tarodan ar aughiat. | ремонт, «Снять трекер», ответ «рабочий» у трекера, записанного в карточке |
 | `wparts.byCard` | записан в карточке | written on the card | ჩაწერილია ბარათში | chatserilia baratshi | под IMEI, когда трекер записан без ремонта |
 | `wparts.trackerWritten(···1234)` | Трекер ···1234 записан | Tracker ···1234 written | ტრეკერი ···1234 ჩაიწერა | trekeri ···1234 chaitsera | сообщение после записи |
 | `wparts.trackerCorrected` | Трекер исправлен | Tracker corrected | ტრეკერი შესწორდა | trekeri shestsorda | сообщение после исправления |
@@ -43,3 +45,5 @@
    стоял, а не обязательно день установки.
 2. «Записать трекер» — «ტრეკერის ჩაწერა» [trekeris chatsera], как «ჩაწერა» на кнопках этапа 4. Не читается ли это как
    «записать на трекер»?
+3. «Уже стоял 21.10.2026» — «21.10.2026-ისთვის უკვე იდგა» [21.10.2026-istvis ukve idga] («к 21.10.2026 уже стоял»). Понятно
+   ли, что это день, когда трекер точно был на мопеде, а не день, когда его поставили?
