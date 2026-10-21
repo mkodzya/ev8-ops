@@ -166,10 +166,11 @@ export class TelegramClient {
 let fetchForTests: TelegramFetch | null = null;
 let clientOptsForTests: TelegramClientOptions = {};
 
-/** Tests stand in for Telegram: no request leaves the machine. */
+/** Tests stand in for Telegram: no request leaves the machine, and the stand-in starts unpaced. */
 export function setTelegramFetchForTests(fn: TelegramFetch | null, opts: TelegramClientOptions = {}): void {
   fetchForTests = fn;
   clientOptsForTests = opts;
+  lastSendAt = 0;
 }
 
 /** A client for the stand's own bot, or the stand-in a test put in its place. */

@@ -143,12 +143,25 @@ async function composeJob(n: NoticeRow, now: Date, e: NodeJS.ProcessEnv): Promis
   if (n.kind === 'job_waiting') {
     // Told only while it still waits: approved or refused since, it has nothing to ask.
     if (job.status !== 'draft') return null;
+    // Waiting again since — approved, then a work added — the later wait is the
+    // one to tell; this one would repeat it in its words (ADR-0038 §7).
+    if (await supersededWait(n)) return null;
     const what: Waiting = logged?.action === 'service.part.add' ? 'part' : job.approvedAt != null ? 'work' : 'repair';
     const people: JobPeople = { mechanic, reporter: mechanic ? null : actor };
     return message((w) => w.waiting(ref, what, people, job.reasonKind ? (w.reasons[job.reasonKind] ?? null) : null), path, e);
   }
   if (n.kind === 'job_approved') return message((w) => w.approved(ref, after.again === true, { mechanic, by: actor }), path, e);
   return message((w) => w.rejected(ref, after.status === 'cancelled', { mechanic, by: actor }), path, e);
+}
+
+/** A later wait, approval or refusal of the same repair was written after this wait. */
+async function supersededWait(n: NoticeRow): Promise<boolean> {
+  const self = await prisma.notice.findUnique({ where: { dedupeKey: n.dedupeKey }, select: { createdAt: true } });
+  if (!self) return false;
+  const later = await prisma.notice.count({
+    where: { entityId: n.entityId, kind: { in: ['job_waiting', 'job_approved', 'job_rejected'] }, createdAt: { gt: self.createdAt } },
+  });
+  return later > 0;
 }
 
 async function composeMaintenance(n: NoticeRow, e: NodeJS.ProcessEnv): Promise<string | null> {
@@ -163,6 +176,8 @@ async function composeMaintenance(n: NoticeRow, e: NodeJS.ProcessEnv): Promise<s
 async function composeStock(n: NoticeRow, e: NodeJS.ProcessEnv): Promise<string | null> {
   const [p] = await partRows({ ids: [n.entityId] });
   if (!p || p.shortBy <= 0) return null;
+  // Restocked since and short again: the notice of that restock tells it, not this one.
+  if (noticeKey.stock(p.id, (await lastRestocks([p.id])).get(p.id) ?? null) !== n.dedupeKey) return null;
   const [onHand, min] = [String(p.onHand), String(p.minQty)];
   // The Georgian line names the part in Georgian where the catalogue has it.
   const name: Record<NoticeLang, string> = { ka: escapeHtml(p.nameKa?.trim() || p.name), ru: escapeHtml(p.name) };
@@ -198,13 +213,21 @@ const STOPS = new Set<TelegramFailure>(['unauthorized', 'rate_limited', 'network
 let running: Promise<NoticeOutcome> | null = null;
 /** Telegram asked to wait (429): until then no run sends anything. */
 let pausedUntil = 0;
+/** The clock a run reads its time passing on; a test may hold it or move it. */
+let clockMs: () => number = Date.now;
 
 const WAITING = { sentAt: null, gaveUpAt: null } as const;
 const countPending = () => prisma.notice.count({ where: WAITING });
 
-/** Tests start from a sender that was never paused. */
+/** Tests start from a sender that was never paused, on the real clock. */
 export function resetNoticeSenderForTests(): void {
   pausedUntil = 0;
+  clockMs = Date.now;
+}
+
+/** Tests hold the clock, or move it with a stand-in Telegram's pauses. */
+export function setNoticeClockForTests(fn: () => number): void {
+  clockMs = fn;
 }
 
 /**
@@ -228,6 +251,11 @@ async function deliverOnce(cfg: TelegramConfig, now: Date): Promise<NoticeOutcom
   if (now.getTime() < pausedUntil) return { status: 'ok', sent: 0, failed: 0, pending: await countPending() };
   const due = await prisma.notice.findMany({ where: { ...WAITING, nextTryAt: { lte: now } }, orderBy: [{ nextTryAt: 'asc' }, { createdAt: 'asc' }], take: BATCH });
   const client = telegramClient(cfg);
+  // A run takes time — three seconds between messages — and a wait Telegram
+  // asks for counts from its refusal, not from the run's start: ten messages
+  // in, a 30-second pause counted from the start would be nearly over.
+  const started = clockMs();
+  const at = () => new Date(now.getTime() + (clockMs() - started));
   let sent = 0;
   let failed = 0;
   for (const n of due) {
@@ -237,7 +265,7 @@ async function deliverOnce(cfg: TelegramConfig, now: Date): Promise<NoticeOutcom
     } catch {
       // A record that could not be read now is tried again later, like a failed send.
       failed++;
-      await retryLater(n, now, 'compose', null);
+      await retryLater(n, at(), 'compose', null);
       continue;
     }
     if (html == null) {
@@ -249,12 +277,13 @@ async function deliverOnce(cfg: TelegramConfig, now: Date): Promise<NoticeOutcom
     } catch (err) {
       if (!(err instanceof TelegramError)) throw err;
       failed++;
+      const refusedAt = at();
       if (FINAL.has(err.failure)) {
-        await prisma.notice.update({ where: { id: n.id }, data: { attempts: n.attempts + 1, gaveUpAt: now, lastFailure: err.failure, lastHttpStatus: err.httpStatus } });
+        await prisma.notice.update({ where: { id: n.id }, data: { attempts: n.attempts + 1, gaveUpAt: refusedAt, lastFailure: err.failure, lastHttpStatus: err.httpStatus } });
       } else {
         const wait = err.failure === 'rate_limited' && err.retryAfterSec != null ? err.retryAfterSec * 1000 : null;
-        if (wait != null) pausedUntil = now.getTime() + wait;
-        await retryLater(n, now, err.failure, err.httpStatus, wait);
+        if (wait != null) pausedUntil = refusedAt.getTime() + wait;
+        await retryLater(n, refusedAt, err.failure, err.httpStatus, wait);
       }
       if (STOPS.has(err.failure)) break;
       continue;
@@ -265,12 +294,12 @@ async function deliverOnce(cfg: TelegramConfig, now: Date): Promise<NoticeOutcom
   return { status: 'ok', sent, failed, pending: await countPending() };
 }
 
-/** Back off — or, past a day since it was written, give it up. */
-async function retryLater(n: { id: string; attempts: number; createdAt: Date }, now: Date, failure: string, httpStatus: number | null, waitMs: number | null = null): Promise<void> {
+/** Back off from the moment it failed — or, past a day since it was written, give it up. */
+async function retryLater(n: { id: string; attempts: number; createdAt: Date }, failedAt: Date, failure: string, httpStatus: number | null, waitMs: number | null = null): Promise<void> {
   const attempts = n.attempts + 1;
-  const next = new Date(now.getTime() + (waitMs ?? BACKOFF_MIN[Math.min(attempts, BACKOFF_MIN.length) - 1]! * 60_000));
+  const next = new Date(failedAt.getTime() + (waitMs ?? BACKOFF_MIN[Math.min(attempts, BACKOFF_MIN.length) - 1]! * 60_000));
   const over = next.getTime() - n.createdAt.getTime() > GIVE_UP_MS;
-  await prisma.notice.update({ where: { id: n.id }, data: { attempts, lastFailure: failure, lastHttpStatus: httpStatus, ...(over ? { gaveUpAt: now } : { nextTryAt: next }) } });
+  await prisma.notice.update({ where: { id: n.id }, data: { attempts, lastFailure: failure, lastHttpStatus: httpStatus, ...(over ? { gaveUpAt: failedAt } : { nextTryAt: next }) } });
 }
 
 /**
@@ -308,19 +337,36 @@ export async function scanNotices(): Promise<{ status: 'off' | 'ok'; maintenance
 }
 
 /**
- * The last move that put each part back on the shelf: a shipment, a part
- * taken off a moped, parts back from a cancelled repair, a stock-take that
- * found more. A part a mechanic bought or took off a donor only passes
- * through (ADR-0036) and restocks nothing.
+ * The last arrival of each part — «до следующего прихода» (ADR-0038 §6): a
+ * shipment, a part bought in a shop for the shelf, the first count, a part
+ * taken off a moped onto the shelf. Parts given back — a line taken off a
+ * repair, a repair called off — and a stock-take that found more arrive from
+ * nowhere: they correct the shelf and tell nothing new. A part a mechanic
+ * bought or took off a donor only passes through (ADR-0036), and neither
+ * counts — not even once its line is gone and the movement names no line:
+ * its pair, the issue written in the same instant, still gives it away.
  */
 async function lastRestocks(partIds: string[]): Promise<Map<string, string>> {
   if (partIds.length === 0) return new Map();
-  const moves = await prisma.stockMove.findMany({
-    where: { partId: { in: partIds }, qty: { gt: 0 }, NOT: { kind: 'receipt', servicePart: { is: { kind: { in: ['bought', 'donor'] } } } } },
+  const receipts = await prisma.stockMove.findMany({
+    where: { partId: { in: partIds }, kind: 'receipt', qty: { gt: 0 } },
     orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-    select: { id: true, partId: true },
+    select: { id: true, partId: true, qty: true, createdAt: true, servicePart: { select: { kind: true } }, servicePartId: true },
   });
+  const loose = receipts.filter((m) => m.servicePartId == null);
+  const pairs = loose.length
+    ? await prisma.stockMove.findMany({
+        where: { partId: { in: partIds }, kind: 'issue', servicePartId: null, createdAt: { in: loose.map((m) => m.createdAt) } },
+        select: { partId: true, qty: true, createdAt: true },
+      })
+    : [];
+  const paired = new Set(pairs.map((m) => `${m.partId}:${m.createdAt.getTime()}:${-m.qty}`));
   const last = new Map<string, string>();
-  for (const m of moves) if (!last.has(m.partId)) last.set(m.partId, m.id);
+  for (const m of receipts) {
+    if (last.has(m.partId)) continue;
+    if (m.servicePart && (m.servicePart.kind === 'bought' || m.servicePart.kind === 'donor')) continue;
+    if (m.servicePartId == null && paired.has(`${m.partId}:${m.createdAt.getTime()}:${m.qty}`)) continue;
+    last.set(m.partId, m.id);
+  }
   return last;
 }

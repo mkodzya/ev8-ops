@@ -6,7 +6,7 @@
 // The suites share one database, and other suites write notices too (every
 // repair they open or close does): each test here first gives up whatever
 // another left waiting, and reads its own rows by their record.
-import { fleetNumber } from '@ev8/shared';
+import { fleetNumber, todayISO } from '@ev8/shared';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { TelegramFetch } from '../src/lib/telegram.js';
 import { HAS_DB, call, json, login, makeUser, uniq } from './helpers.js';
@@ -114,8 +114,10 @@ describe('the Telegram link, without a database', () => {
 describe.skipIf(!HAS_DB)('the notices to the workshop’s group (ADR-0038 §6–7)', () => {
   beforeEach(async () => {
     const { prisma } = await import('../src/lib/db.js');
-    const { resetNoticeSenderForTests } = await import('../src/lib/notices.js');
+    const { resetNoticeSenderForTests, setNoticeClockForTests } = await import('../src/lib/notices.js');
     resetNoticeSenderForTests();
+    // A run takes no time unless a test moves the clock itself.
+    setNoticeClockForTests(() => 0);
     process.env.TELEGRAM_BOT_TOKEN = TOKEN;
     process.env.TELEGRAM_CHAT_ID = CHAT;
     process.env.PUBLIC_URL = STAND;
@@ -305,13 +307,13 @@ describe.skipIf(!HAS_DB)('the notices to the workshop’s group (ADR-0038 §6–
       data: { vehicleId: done.vehicleId, reason: `test: ${customerName} broke it, 120 GEL`, reasonKind: 'renter_fault', openedOn: new Date(), status: 'draft', payer: 'customer', customerId: customer.id, labourTetri: 12000 },
     });
     const part = await prisma.part.create({ data: { name: `Test cable ${uniq()}`, minQty: 5, salePriceTetri: 98765 } });
-    await prisma.stockMove.create({ data: { partId: part.id, kind: 'receipt', qty: 1, unitCostTetri: 43210, occurredOn: new Date() } });
+    const arrived = await prisma.stockMove.create({ data: { partId: part.id, kind: 'receipt', qty: 1, unitCostTetri: 43210, occurredOn: new Date() } });
     const texts = [
       await composeNotice({ kind: 'job_waiting', entityId: waiting.id, dedupeKey: noticeKey.waiting(waiting.id, 'none') }),
       await composeNotice({ kind: 'job_approved', entityId: done.id, dedupeKey: noticeKey.approved(done.id, 'none') }),
       await composeNotice({ kind: 'job_rejected', entityId: done.id, dedupeKey: noticeKey.rejected(done.id, 'none') }),
       await composeNotice({ kind: 'job_closed', entityId: done.id, dedupeKey: noticeKey.closed(done.id) }),
-      await composeNotice({ kind: 'stock_low', entityId: part.id, dedupeKey: noticeKey.stock(part.id, null) }),
+      await composeNotice({ kind: 'stock_low', entityId: part.id, dedupeKey: noticeKey.stock(part.id, arrived.id) }),
     ];
     for (const t of texts) {
       expect(t).toBeTruthy();
@@ -354,6 +356,34 @@ describe.skipIf(!HAS_DB)('the notices to the workshop’s group (ADR-0038 §6–
     expect(rows[0]!.gaveUpAt).not.toBeNull();
   });
 
+  it('sends only the latest wait of a repair that waited again, not an earlier one left behind', async () => {
+    const { prisma } = await import('../src/lib/db.js');
+    const { deliverNotices } = await import('../src/lib/notices.js');
+    const owner = await person('owner');
+    const workId = await bookWork(owner.cookie);
+    const mech = await person('mechanic', 'Test Mechanic Giorgi');
+    const chief = await person('chief_mechanic');
+    const v = await moped();
+    // Telegram was away: the first wait, the approval and the second wait all pile up.
+    const opened = await call(mech.cookie, 'POST', '/api/service/workshop', { vehicleId: v.id, reasonKind: 'wear', reason: 'test squeal', odometerKm: 700, odometerPhoto: PHOTO, photos: [PHOTO], works: [{ workTypeId: workId, qty: 1 }] });
+    const id = json<{ id: string }>(opened).id;
+    expect((await call(chief.cookie, 'POST', `/api/service/${id}/approve`, {})).statusCode).toBe(200);
+    expect((await call(mech.cookie, 'POST', `/api/service/${id}/works`, { works: [{ freeText: 'test: chain', qty: 1 }] })).statusCode).toBe(201);
+    await onlyFor(id);
+
+    const tg = await useTelegram();
+    expect(await deliverNotices(soon())).toEqual({ status: 'ok', sent: 2, failed: 0, pending: 0 });
+    const rows = await prisma.notice.findMany({ where: { entityId: id }, orderBy: { createdAt: 'asc' } });
+    expect(rows.map((r) => [r.kind, r.sentAt != null, r.lastFailure])).toEqual([
+      ['job_waiting', false, 'stale'],
+      ['job_approved', true, null],
+      ['job_waiting', true, null],
+    ]);
+    // The one wait told is the work found later, said once.
+    expect(tg.texts().filter((t) => t.includes('ждёт'))).toHaveLength(1);
+    expect(tg.texts().find((t) => t.includes('ждёт'))).toContain('новая работа ждёт согласования');
+  });
+
   it('waits as long as Telegram asks on 429, and the rest of the run waits with it', async () => {
     const { prisma } = await import('../src/lib/db.js');
     const { deliverNotices } = await import('../src/lib/notices.js');
@@ -374,6 +404,31 @@ describe.skipIf(!HAS_DB)('the notices to the workshop’s group (ADR-0038 §6–
     expect(tg.asked).toHaveLength(1);
     expect(await deliverNotices(new Date(now.getTime() + 31_000))).toEqual({ status: 'ok', sent: 2, failed: 0, pending: 0 });
     expect(tg.asked).toHaveLength(3);
+  });
+
+  it('counts the pause of a 429 from the refusal, not from the start of a run that had been sending', async () => {
+    const { prisma } = await import('../src/lib/db.js');
+    const { deliverNotices, setNoticeClockForTests } = await import('../src/lib/notices.js');
+    const { setTelegramFetchForTests } = await import('../src/lib/telegram.js');
+    const a = await closedJob();
+    const b = await closedJob();
+    await enqueueClosed(a.id);
+    await enqueueClosed(b.id);
+    await onlyFor(a.id, b.id);
+    // One clock for the run and for the stand-in's three seconds between messages.
+    let t = 1_000_000;
+    const clock = () => t;
+    const tg = fakeTelegram([{ status: 200, body: { ok: true, result: { message_id: 1 } } }, refused(429, 'Too Many Requests: retry after 5', { retry_after: 5 })]);
+    setTelegramFetchForTests(tg.fn, { gapMs: 3000, now: clock, sleep: async (ms) => void (t += ms) });
+    setNoticeClockForTests(clock);
+    const now = soon();
+    expect(await deliverNotices(now)).toEqual({ status: 'ok', sent: 1, failed: 1, pending: 1 });
+    const [late] = await prisma.notice.findMany({ where: { entityId: { in: [a.id, b.id] }, lastFailure: 'rate_limited' } });
+    // Refused three seconds into the run: five seconds from then, not from the start.
+    expect(late!.nextTryAt.getTime()).toBe(now.getTime() + 3000 + 5000);
+    expect(await deliverNotices(new Date(now.getTime() + 6000))).toMatchObject({ sent: 0, pending: 1 });
+    expect(tg.asked).toHaveLength(2);
+    expect(await deliverNotices(new Date(now.getTime() + 8000))).toMatchObject({ sent: 1, pending: 0 });
   });
 
   it('gives a notice up on 403 or a group Telegram does not know, and does not try it again', async () => {
@@ -435,10 +490,11 @@ describe.skipIf(!HAS_DB)('the notices to the workshop’s group (ADR-0038 §6–
     expect(tg.asked).toHaveLength(0);
     expect((await noticesOf(a.id))[0]).toMatchObject({ sentAt: null, gaveUpAt: null });
 
-    await prisma.notice.updateMany({ where: { entityId: a.id }, data: { createdAt: new Date(Date.now() - 25 * 3_600_000) } });
+    // The link comes on a day and an hour later. The row is not back-dated:
+    // one written before the run would outlive the run's teardown.
     process.env.TELEGRAM_BOT_TOKEN = TOKEN;
     await onlyFor(a.id);
-    expect(await deliverNotices(soon())).toEqual({ status: 'ok', sent: 0, failed: 0, pending: 0 });
+    expect(await deliverNotices(new Date(Date.now() + 25 * 3_600_000))).toEqual({ status: 'ok', sent: 0, failed: 0, pending: 0 });
     expect(tg.asked).toHaveLength(0);
     expect((await noticesOf(a.id))[0]).toMatchObject({ sentAt: null, lastFailure: 'expired' });
   });
@@ -522,8 +578,7 @@ describe.skipIf(!HAS_DB)('the notices to the workshop’s group (ADR-0038 §6–
     const { prisma } = await import('../src/lib/db.js');
     const { deliverNotices, scanNotices } = await import('../src/lib/notices.js');
     const part = await prisma.part.create({ data: { name: `Test brake pad ${uniq()}`, nameKa: 'სატესტო ხუნდი', minQty: 5 } });
-    const move = (kind: 'receipt' | 'issue', qty: number, servicePartId?: string) =>
-      prisma.stockMove.create({ data: { partId: part.id, kind, qty, unitCostTetri: 1000, occurredOn: new Date(), servicePartId: servicePartId ?? null } });
+    const move = (kind: 'receipt' | 'issue', qty: number) => prisma.stockMove.create({ data: { partId: part.id, kind, qty, unitCostTetri: 1000, occurredOn: new Date() } });
     const first = await move('receipt', 3);
     await scanNotices();
     expect((await noticesOf(part.id)).map((n) => n.dedupeKey)).toEqual([`stock_low:${part.id}:${first.id}`]);
@@ -543,8 +598,22 @@ describe.skipIf(!HAS_DB)('the notices to the workshop’s group (ADR-0038 §6–
     const donor = await moped();
     const job = await prisma.serviceJob.create({ data: { vehicleId: v.id, reason: 'test', openedOn: new Date(), status: 'open' } });
     const line = await prisma.servicePart.create({ data: { jobId: job.id, name: part.name, qty: 1, unitPriceTetri: 0, partId: part.id, kind: 'donor', donorVehicleId: donor.id } });
-    await move('receipt', 1, line.id);
-    await move('issue', -1, line.id);
+    const { passThrough } = await import('../src/lib/stock.js');
+    const { id: actorId } = await makeUser('chief_mechanic');
+    await prisma.$transaction((tx) => passThrough(tx, { servicePartId: line.id, partId: part.id, qty: 1, unitCostTetri: 1000, occurredOn: todayISO(), actorId, reason: 'test donor' }));
+    await scanNotices();
+    expect(await noticesOf(part.id)).toHaveLength(1);
+
+    // Its line taken off the repair, the pass-through's movements name no line any more: still no arrival.
+    await prisma.servicePart.delete({ where: { id: line.id } });
+    await scanNotices();
+    expect(await noticesOf(part.id)).toHaveLength(1);
+
+    // Parts given back — a line taken off a repair, a repair called off — and
+    // a stock-take that found one more are no arrival: nothing new to tell.
+    await prisma.stockMove.create({ data: { partId: part.id, kind: 'issue', qty: -1, occurredOn: new Date() } });
+    await prisma.stockMove.create({ data: { partId: part.id, kind: 'return', qty: 1, unitCostTetri: 1000, occurredOn: new Date(), reason: 'test: line taken off' } });
+    await prisma.stockMove.create({ data: { partId: part.id, kind: 'adjust', qty: 1, occurredOn: new Date(), reason: 'test: counted one more' } });
     await scanNotices();
     expect(await noticesOf(part.id)).toHaveLength(1);
 
@@ -552,8 +621,30 @@ describe.skipIf(!HAS_DB)('the notices to the workshop’s group (ADR-0038 §6–
     const restock = await move('receipt', 7);
     await scanNotices();
     expect(await noticesOf(part.id)).toHaveLength(1);
-    await move('issue', -6);
+    await move('issue', -7);
     await scanNotices();
     expect((await noticesOf(part.id)).map((n) => n.dedupeKey)).toEqual([`stock_low:${part.id}:${first.id}`, `stock_low:${part.id}:${restock.id}`]);
+  });
+
+  it('sends only the notice of the last restock when an earlier one is still waiting', async () => {
+    const { prisma } = await import('../src/lib/db.js');
+    const { deliverNotices, scanNotices } = await import('../src/lib/notices.js');
+    const part = await prisma.part.create({ data: { name: `Test cable ${uniq()}`, minQty: 5 } });
+    const receipt = (qty: number) => prisma.stockMove.create({ data: { partId: part.id, kind: 'receipt', qty, unitCostTetri: 1000, occurredOn: new Date() } });
+    await receipt(2);
+    await scanNotices();
+    // Telegram away; a small shipment comes in, and the shelf is still short.
+    const second = await receipt(1);
+    await scanNotices();
+    expect(await noticesOf(part.id)).toHaveLength(2);
+    await onlyFor(part.id);
+    const tg = await useTelegram();
+    expect(await deliverNotices(soon())).toEqual({ status: 'ok', sent: 1, failed: 0, pending: 0 });
+    expect(tg.texts()[0]).toContain('остаток 3');
+    const rows = await noticesOf(part.id);
+    expect(rows.map((r) => [r.dedupeKey, r.sentAt != null, r.lastFailure])).toEqual([
+      [expect.any(String), false, 'stale'],
+      [`stock_low:${part.id}:${second.id}`, true, null],
+    ]);
   });
 });
