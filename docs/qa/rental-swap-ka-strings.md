@@ -22,6 +22,7 @@
 | `swap.reason` | Почему меняем мопед | რატომ იცვლება მოპედი | ratom itsvleba mopedi | поле причины |
 | `swap.reasonHint` | Обязательно. Уйдёт в журнал и в историю обоих мопедов — например, «отказали тормоза» или «клиент попросил». | სავალდებულოა. ჩაიწერება ჟურნალში და ორივე მოპედის ისტორიაში — მაგალითად, «მუხრუჭები გაფუჭდა» ან «კლიენტმა ითხოვა». | savaldebuloa. chaitsereba zhurnalshi da orive mopedis istoriashi — magalitad, «mukhruchebi gaputchda» an «klientma itkhova». | подсказка под причиной |
 | `swap.outOdometer` | Пробег сдаваемого мопеда, км | დაბრუნებული მოპედის გარბენი, კმ | dabrunebuli mopedis garbeni, km | поле пробега, шаг 1 |
+| `swap.outOdometerBelow` | Меньше, чем при выдаче этого мопеда: с таким пробегом замену не оформить. | ამ მოპედის გაცემისას ჩაწერილზე ნაკლებია: ასეთი გარბენით შეცვლა არ ფორმდება. | am mopedis gatsemisas chatserilze naklebia: aseti garbenit shetsvla ar pormdeba. | шаг 1, под пробегом, если он меньше, чем при выдаче |
 | `swap.kitHint` | Батареи и зарядки остаются у клиента. Если их число меняется — «Изменить условия». | ბატარეები და დამტენები კლიენტთან რჩება. თუ მათი რაოდენობა იცვლება — «პირობების შეცვლა». | batareebi da damtenebi klienttan rcheba. tu mati raodenoba itsvleba — «pirobebis shetsvla». | под мопедом и ключом |
 | `swap.outPhotos` | Фото сдаваемого мопеда | დაბრუნებული მოპედის ფოტო | dabrunebuli mopedis poto | фото, шаг 1 |
 | `swap.outCondition` | Состояние сдаваемого мопеда | დაბრუნებული მოპედის მდგომარეობა | dabrunebuli mopedis mdgomareoba | поле, шаг 1 |
@@ -43,6 +44,7 @@
 | `swap.doneLine(№)` | Аренда R-00001 продолжается на мопеде | ქირა R-00001 გრძელდება მოპედით | kira … grdzeldeba mopedit | «Готово», перед номером и VIN нового мопеда |
 | `swap.doneFree(точка)` | Старый мопед свободен · точка | ძველი მოპედი თავისუფალია · … | dzveli mopedi tavisupalia | «Готово» |
 | `swap.doneRepair(№)` | Старый мопед в ремонте SV-00001 | ძველი მოპედი რემონტშია: SV-00001 | dzveli mopedi remontshia | «Готово» и итог |
+| `swap.photosFailed` | Не все фото дошли до сервера. Замена оформлена, но в актах их нет — перед подписью проверьте §3 договора (фото). | ყველა ფოტო არ აიტვირთა. შეცვლა გაფორმებულია, მაგრამ აქტებში ისინი არ არის — ხელმოწერამდე შეამოწმეთ ხელშეკრულების §3 (ფოტო). | kvela poto ar aitvirta. shetsvla gapormebulia, magram aktebshi isini ar aris — khelmotseramde sheamotsmet khelshekrulebis §3 (poto). | «Готово», над договором, если фото не дошли |
 | `swap.openRepair` | Открыть ремонт | რემონტის გახსნა | remontis gakhsna | кнопка «Готово» |
 | `swap.contract` | Договор с новым мопедом | ხელშეკრულება ახალ მოპედზე | khelshekruleba akhal mopedze | «Готово», строка договора на подпись |
 | `swap.earlier` | Раньше | ადრე | adre | карточка аренды, прежние мопеды |

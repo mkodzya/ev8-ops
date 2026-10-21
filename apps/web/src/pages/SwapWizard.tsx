@@ -83,6 +83,8 @@ export function SwapWizard() {
   // The last readings the server named when it refused a lower one: read since this screen opened, maybe.
   const [refused, setRefused] = useState<{ out: number | null; in: number | null }>({ out: null, in: null });
   const [result, setResult] = useState<{ serviceJobId: string | null; point: string | null } | null>(null);
+  // The swap is recorded before the photos go; a photo that did not reach an act is said on «Готово», as at a hand-over.
+  const [photoTrouble, setPhotoTrouble] = useState(false);
   const op = useOperation();
   const drafts = useDraft({ id: id ? `swap:${id}` : undefined, value: f, initial, hold: result != null });
 
@@ -99,7 +101,7 @@ export function SwapWizard() {
 
   if (card.failure) return <LoadError failure={card.failure} onRetry={card.reload} />;
   if (oldMoped.failure) return <LoadError failure={oldMoped.failure} onRetry={oldMoped.reload} />;
-  if (result && card.data) return <SwapDone rentalId={card.data.rental.id} serviceJobId={result.serviceJobId} point={result.point} />;
+  if (result && card.data) return <SwapDone rentalId={card.data.rental.id} serviceJobId={result.serviceJobId} point={result.point} photoTrouble={photoTrouble} />;
   if (!card.data || (oldId && !oldMoped.data)) return <Loading />;
   const r = card.data.rental;
   const title = `${t.swap.title} · ${r.number}`;
@@ -212,8 +214,12 @@ export function SwapWizard() {
       drafts.drop();
       if (!openJob && !toService && locationId) rememberPoint(locationId);
       const total = outPhotos.length + inPhotos.length;
-      await uploadAll(`/api/acts/${out.outActId}/photos`, outPhotos, (n) => setProgress(t.hand.photosUploading(n, total)), `${key}-out`).catch(() => undefined);
-      await uploadAll(`/api/acts/${out.inActId}/photos`, inPhotos, (n) => setProgress(t.hand.photosUploading(outPhotos.length + n, total)), `${key}-in`).catch(() => undefined);
+      const failed = () => {
+        setPhotoTrouble(true);
+        return [];
+      };
+      await uploadAll(`/api/acts/${out.outActId}/photos`, outPhotos, (n) => setProgress(t.hand.photosUploading(n, total)), `${key}-out`).catch(failed);
+      await uploadAll(`/api/acts/${out.inActId}/photos`, inPhotos, (n) => setProgress(t.hand.photosUploading(outPhotos.length + n, total)), `${key}-in`).catch(failed);
       return out;
     });
     setProgress(null);
@@ -241,15 +247,14 @@ export function SwapWizard() {
               {t.swap.has}: <FleetNo n={old.fleetNo} /> {old.model} <Vin vin={old.vin} /> · {t.swap.since(fmtDate(handedOn))}
             </p>
           </section>
-          <div className="two-col two-col-tight">
-            <Field label={t.swap.swappedOn} name="swappedOn">
-              <input className="input mono" type="date" max={today} min={handedOn ?? undefined} value={f.swappedOn} onChange={(e) => set({ swappedOn: e.target.value })} />
-            </Field>
-            <Field label={t.swap.outOdometer} hint={pickupKm != null ? t.back.odometerMin(String(pickupKm), fmtDate(handedOn)) : undefined} name="outOdometerKm">
-              <input className="input mono" value={f.outOdometer} onChange={(e) => set({ outOdometer: e.target.value })} inputMode="numeric" />
-            </Field>
-          </div>
-          {outBelowPickup && <p className="field-err">{t.back.odometerBelow}</p>}
+          {/* Rows of their own: beside the date, the long mileage label wraps at 375 px and the two boxes stand at different heights. */}
+          <Field label={t.swap.swappedOn} name="swappedOn">
+            <input className="input mono" type="date" max={today} min={handedOn ?? undefined} value={f.swappedOn} onChange={(e) => set({ swappedOn: e.target.value })} />
+          </Field>
+          <Field label={t.swap.outOdometer} hint={pickupKm != null ? t.back.odometerMin(String(pickupKm), fmtDate(handedOn)) : undefined} name="outOdometerKm">
+            <input className="input mono" value={f.outOdometer} onChange={(e) => set({ outOdometer: e.target.value })} inputMode="numeric" />
+          </Field>
+          {outBelowPickup && <p className="field-err">{t.swap.outOdometerBelow}</p>}
           {outLower && (
             <>
               {outLastKm != null && <p className="warn-text">{t.back.odometerBelowLast(String(outLastKm))}</p>}
@@ -429,7 +434,7 @@ export function SwapWizard() {
 }
 
 /** «Готово»: the rental with its new moped, where the old one went, and the contract with the new VIN to sign. */
-function SwapDone({ rentalId, serviceJobId, point }: { rentalId: string; serviceJobId: string | null; point: string | null }) {
+function SwapDone({ rentalId, serviceJobId, point, photoTrouble }: { rentalId: string; serviceJobId: string | null; point: string | null; photoTrouble: boolean }) {
   const t = useT();
   const { data, reload } = useLoad<RentalCard>(`/api/rentals/${rentalId}`);
   const job = useLoad<{ job: { number: string } }>(serviceJobId ? `/api/service/${serviceJobId}` : null);
@@ -451,6 +456,8 @@ function SwapDone({ rentalId, serviceJobId, point }: { rentalId: string; service
           )}
         </p>
         <p className="muted">{serviceJobId ? t.swap.doneRepair(job.data?.job.number ?? '') : point ? t.swap.doneFree(point) : ''}</p>
+        {/* Above the contract: its §3 says «photos: yes/no» from the act of the moped handed out. */}
+        {photoTrouble && <p className="warn-text">{t.swap.photosFailed}</p>}
       </section>
       <section className="card">
         <DocumentRow rentalId={r.id} kind="contract" title={t.swap.contract} state={data.documents.contract} customerId={r.customer.id} onChanged={reload} />
