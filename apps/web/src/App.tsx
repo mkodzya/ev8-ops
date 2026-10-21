@@ -36,6 +36,7 @@ import { KommoPage } from './pages/KommoPage.js';
 import { DrivePage } from './pages/DrivePage.js';
 import { RentalPage } from './pages/RentalPage.js';
 import { ReturnWizard } from './pages/ReturnWizard.js';
+import { SwapWizard } from './pages/SwapWizard.js';
 import { PurchasePage } from './pages/PurchasePage.js';
 import { PurchasesPage } from './pages/PurchasesPage.js';
 import { SupplierPage } from './pages/SupplierPage.js';
@@ -144,6 +145,7 @@ export function App() {
         <Route path="rentals/return" element={<Require perm="rental.return"><ReturnPickPage /></Require>} />
         <Route path="rentals/:id" element={<RentalPage />} />
         <Route path="rentals/:id/return" element={<ReturnWizard />} />
+        <Route path="rentals/:id/swap" element={<Require perm="rental.return"><SwapWizard /></Require>} />
 
         <Route path="fleet" element={<FleetPage />} />
         <Route path="fleet/models" element={<ModelsPage />} />

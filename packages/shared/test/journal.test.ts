@@ -28,6 +28,9 @@ describe('which filter a line answers to', () => {
     expect(journalGroups('till.handover')).toEqual(['money']);
     expect(journalGroups('vehicle.state.manual')).toEqual(['states']);
     expect(journalGroups('vehicle.cost')).toEqual(['money', 'states']);
+    // A swap changes the rental's moped (ADR-0040): a state, with its before and after.
+    expect(journalGroups('rental.swap')).toEqual(['states']);
+    expect(journalKind('rental.swap')).toBe('change');
   });
 
   it('files sign-ins, roles and views under "входы и просмотры"', () => {
@@ -57,6 +60,10 @@ describe('two kinds of line', () => {
       expect(journalKind(a), a).toBe('event');
       expect(journalGroups(a), a).toEqual(['money']);
     }
+  });
+
+  it('a contract marked signed in Signify, and the mark taken back, are events (ADR-0039)', () => {
+    for (const a of ['document.signed_elsewhere', 'document.signed_elsewhere.undo']) expect(journalKind(a), a).toBe('event');
   });
 });
 

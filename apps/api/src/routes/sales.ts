@@ -1,11 +1,11 @@
-import { applyPaidBefore, instalmentSchedule, saleState, todayISO, warrantyUntil as warrantyFrom } from '@ev8/shared';
+import { applyPaidBefore, instalmentSchedule, redateSale, saleState, todayISO, warrantyUntil as warrantyFrom } from '@ev8/shared';
 import type { FastifyInstance } from 'fastify';
 import { audit } from '../lib/audit.js';
 import { dateFromISO, dayOf, isoDate } from '../lib/dates.js';
 import { prisma } from '../lib/db.js';
 import { env } from '../lib/env.js';
 import { kommoRefToKeep } from '../lib/kommo.js';
-import { conflict, forbidden, notFound } from '../lib/errors.js';
+import { badRequest, conflict, forbidden, notFound } from '../lib/errors.js';
 import { hasPerm } from '../lib/auth.js';
 import { actorOf } from '../lib/guard.js';
 import { recordMoney } from '../lib/money.js';
@@ -97,6 +97,12 @@ function serialize(s: SaleRow, today: string) {
   };
 }
 
+/** The sale date a journal row's side names, when it names one. */
+function soldOnIn(side: unknown): string | null {
+  const day = (side as { soldOn?: unknown } | null | undefined)?.soldOn;
+  return typeof day === 'string' ? day : null;
+}
+
 export function saleRoutes(app: FastifyInstance): void {
   app.get('/api/sales', { config: { scope: 'fleet.view' } }, async () => {
     const today = todayISO(new Date(), env.TZ);
@@ -133,8 +139,18 @@ export function saleRoutes(app: FastifyInstance): void {
       ...documents.filter((d) => d.signedAt).map((d) => ({ at: dayOf(d.signedAt)!, kind: 'document' as const, by: d.signedBy, text: d.docKind ?? '', amountTetri: null, note: null })),
       ...log.map((l) => ({ at: dayOf(l.createdAt)!, kind: 'log' as const, by: l.actor?.name ?? null, text: l.action, amountTetri: null, note: l.note })),
     ].sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
+    // What the buyer signed does not change (B4-06), so once the sale's date
+    // is put right after the signature, the paper and the sale name two
+    // different days — and the card says so instead of hiding it. The paper
+    // carries the day the sale had when it was signed: the "before" of the
+    // first correction made after the signature, or the sale's day if none was.
+    const signed = documents.find((d) => d.docKind === 'sale' && d.signedAt) ?? null;
+    const redatedAfter = signed ? log.find((l) => l.action === 'sale.date' && l.createdAt > signed.signedAt!) : undefined;
+    const signedSoldOn = signed ? (soldOnIn(redatedAfter?.before) ?? isoDate(sale.soldOn)) : null;
     return {
       sale: serialize(sale, todayISO(new Date(), env.TZ)),
+      /** The sale date on the signed document; null while nothing is signed. */
+      signedSoldOn,
       documents: documents.map((d) => ({ id: d.id, docKind: d.docKind, signedAt: d.signedAt?.toISOString() ?? null, signedBy: d.signedBy })),
       feed,
       payments: payments.map((p) => ({
@@ -386,5 +402,88 @@ export function saleRoutes(app: FastifyInstance): void {
       });
     });
     return { ok: true };
+  });
+
+  /**
+   * The sale was entered on the wrong day (call of 21.10.2026). Until now the
+   * date could not be edited at all, and the only way out was to void the
+   * money, cancel the sale, enter it again under a new number and take the
+   * money again. Now an owner corrects it with a reason, and what was worked
+   * out from that day moves with it in one transaction: the warranty, the
+   * schedule (`redateSale`), and the `sold` event in the moped's history —
+   * the same fact with its day put right, not a second sale. The journal keeps
+   * the day it had. The signed document does not change (B4-06); the card
+   * says what day it carries.
+   */
+  app.post<{ Params: { id: string }; Body: Body }>('/api/sales/:id/date', { config: { scope: 'sales.manage' } }, async (req) => {
+    const b = req.body ?? {};
+    const actor = actorOf(req);
+    if (!hasPerm(actor, 'deposit.decide')) throw forbidden('owner_only', 'Only an owner re-dates a sale.');
+    const soldOn = date(b, 'soldOn', { required: true })!;
+    const reason = str(b, 'reason', { required: true, max: 1000 })!;
+    const sale = await prisma.sale.findUnique({ where: { id: req.params.id }, include: { instalments: { orderBy: { seq: 'asc' } } } });
+    if (!sale) throw notFound('sale_not_found', 'No such sale.');
+    // A bought-back or cancelled sale is history; its date is what it was.
+    if (sale.status !== 'active') throw conflict('sale_closed', 'This sale is closed.');
+    if (soldOn > todayISO(new Date(), env.TZ)) throw badRequest('sale_date_future', 'A sale cannot be dated in the future.', { field: 'soldOn' });
+    const was = isoDate(sale.soldOn)!;
+    const wasWarranty = isoDate(sale.warrantyUntil);
+    if (soldOn === was) return { ok: true, changed: false, soldOn, warrantyUntil: wasWarranty, moved: 0, history: false };
+
+    // The moped's own history. Its `sold` event is the last one on the day
+    // the sale says: nothing else is written on a sold moped while the sale
+    // stands (no manual state, no park move, no repair), and a moped sold,
+    // bought back and sold again has one per sale. A sale that names only a
+    // VIN, or was carried over with no event, has nothing here to move —
+    // utilisation reads the sale's own date for those.
+    let soldEvent: { id: string } | null = null;
+    if (sale.vehicleId) {
+      const events = await prisma.vehicleEvent.findMany({
+        where: { vehicleId: sale.vehicleId },
+        orderBy: { createdAt: 'asc' },
+        select: { id: true, kind: true, occurredOn: true, createdAt: true },
+      });
+      const own = [...events].reverse().find((e) => e.kind === 'sold' && isoDate(e.occurredOn) === was) ?? null;
+      soldEvent = own;
+      // What happened to the moped before this sale — it arrived, came back
+      // from a renter or a buyer, moved park — is not moved, and the sale
+      // cannot go before the last of it: the days in each state are counted
+      // from the events in their order, and a sale dated before the moped
+      // came back would count it as sold and free at once.
+      const cutoff = own?.createdAt ?? sale.createdAt;
+      const latest = events
+        .filter((e) => e.id !== own?.id && e.createdAt < cutoff)
+        .reduce<{ kind: string; occurredOn: Date } | null>((m, e) => (!m || e.occurredOn > m.occurredOn ? e : m), null);
+      if (latest && soldOn < isoDate(latest.occurredOn)!) {
+        throw conflict('sale_before_history', 'The moped’s history has a later event than this day.', { field: 'soldOn', date: isoDate(latest.occurredOn), kind: latest.kind });
+      }
+    }
+
+    const plan = redateSale(
+      { soldOn: was, warrantyUntil: wasWarranty, transferred: sale.transferred, instalments: sale.instalments.map((i) => ({ seq: i.seq, dueOn: isoDate(i.dueOn)! })) },
+      soldOn,
+    );
+    const line = new Map(sale.instalments.map((i) => [i.seq, i]));
+    const moved = new Map(plan.instalments.map((m) => [m.seq, m.to]));
+    const schedule = (after: boolean) => sale.instalments.map((i) => ({ seq: i.seq, dueOn: after ? (moved.get(i.seq) ?? isoDate(i.dueOn)) : isoDate(i.dueOn) }));
+    await prisma.$transaction(async (tx) => {
+      await tx.sale.update({ where: { id: sale.id }, data: { soldOn: dateFromISO(soldOn)!, warrantyUntil: dateFromISO(plan.warrantyUntil), updatedAt: new Date() } });
+      for (const m of plan.instalments) {
+        await tx.saleInstalment.update({ where: { id: line.get(m.seq)!.id }, data: { dueOn: dateFromISO(m.to)!, updatedAt: new Date() } });
+      }
+      if (soldEvent) await tx.vehicleEvent.update({ where: { id: soldEvent.id }, data: { occurredOn: dateFromISO(soldOn)! } });
+      await tx.auditLog.create({
+        data: {
+          actorId: actor.id,
+          action: 'sale.date',
+          entityType: 'sale',
+          entityId: sale.id,
+          before: { soldOn: was, warrantyUntil: wasWarranty, schedule: schedule(false) },
+          after: { soldOn, warrantyUntil: plan.warrantyUntil, schedule: schedule(true) },
+          note: reason,
+        },
+      });
+    });
+    return { ok: true, changed: true, soldOn, warrantyUntil: plan.warrantyUntil, moved: plan.instalments.length, history: soldEvent != null };
   });
 }

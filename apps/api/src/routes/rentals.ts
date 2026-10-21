@@ -1,5 +1,6 @@
-import { rentDueOn, todayISO } from '@ev8/shared';
+import { actsInOrder, contractSignedOf, contractState, fleetNumber, mopedLegs, rentDueOn, todayISO } from '@ev8/shared';
 import type { FastifyInstance } from 'fastify';
+import { mopedActOf } from '../lib/acts.js';
 import { dayOf, isoDate } from '../lib/dates.js';
 import { debtsOf, rentalDueToday } from '../lib/debt.js';
 import { UNDO_RETURN_MS } from '../lib/rentals.js';
@@ -25,6 +26,8 @@ export function rentalRoutes(app: FastifyInstance): void {
         _count: { select: { periods: true } },
         // Signed on the screen or not: the "Не подписан" filter (wave 3 §3.2).
         documents: { where: { kind: 'pdf', archived: false, docKind: 'contract', signedAt: { not: null } }, select: { id: true } },
+        // A swap gives even a rental brought over a contract of EV8 Ops to sign (ADR-0040).
+        acts: { where: { kind: 'swap_in' }, select: { id: true }, take: 1 },
       },
     });
     // A rental's debt is its part of its customer's one figure: its unpaid weeks and deposit.
@@ -63,8 +66,20 @@ export function rentalRoutes(app: FastifyInstance): void {
           buyoutTargetTetri: r.buyoutTargetTetri,
           buyoutPerPaymentTetri: r.buyoutPerPaymentTetri,
           // Null: not asked. A rental brought over keeps its contract from before
-          // EV8 Ops, so it is neither signed here nor waiting to be (Mika, 08.10.2026).
-          contractSigned: r.transferredAt ? null : r.documents.length > 0,
+          // EV8 Ops, so it is neither signed here nor waiting to be (Mika, 08.10.2026) —
+          // until a swap: that contract names a moped the customer no longer has,
+          // and the new one is EV8 Ops' (ADR-0040).
+          // True: signed on the screen, or marked signed in Signify (ADR-0039) —
+          // the same rule "Today" asks, so the chip and the row agree.
+          contractSigned: contractSignedOf(
+            contractState({
+              signedHere: r.documents.length > 0,
+              signedElsewhereAt: r.contractSignedElsewhereAt,
+              transferredAt: r.transferredAt,
+              swapped: r.acts.length > 0,
+              returned: r.status === 'returned',
+            }),
+          ),
         };
       }),
     };
@@ -84,12 +99,28 @@ export function rentalRoutes(app: FastifyInstance): void {
         },
         charges: { where: { voidedAt: null }, orderBy: { createdAt: 'asc' }, include: { allocations: { where: { payment: { voidedAt: null } }, select: { amountTetri: true } } } },
         documents: { where: { kind: 'pdf', archived: false }, select: { docKind: true, signedAt: true, signedBy: true, createdAt: true } },
+        contractSignedElsewhereBy: { select: { name: true } },
         periods: { orderBy: { seq: 'asc' } },
         payments: { where: { voidedAt: null }, orderBy: { occurredOn: 'asc' }, select: { id: true, occurredOn: true, channel: true, grossTetri: true, feeTetri: true } },
-        acts: { orderBy: { occurredOn: 'asc' }, include: { photos: { where: { archived: false }, select: { id: true, label: true, sizeBytes: true }, orderBy: { createdAt: 'asc' } } } },
+        acts: {
+          orderBy: [{ occurredOn: 'asc' }, { createdAt: 'asc' }],
+          include: {
+            photos: { where: { archived: false }, select: { id: true, label: true, sizeBytes: true }, orderBy: { createdAt: 'asc' } },
+            // Each act's own moped (migration 0063): after a swap they are two.
+            vehicle: { select: { id: true, vin: true, fleetNo: true } },
+          },
+        },
       },
     });
     if (!r) throw notFound('rental_not_found', 'No such rental.');
+    // Which mopeds the rental had, and when (ADR-0040): one stretch for a
+    // rental no swap went through, one more for each swap.
+    const mopedOf = new Map(r.acts.flatMap((a) => (a.vehicle ? [[a.vehicle.id, a.vehicle] as const] : [])));
+    if (r.vehicle) mopedOf.set(r.vehicle.id, { id: r.vehicle.id, vin: r.vehicle.vin, fleetNo: r.vehicle.fleetNo });
+    const mopeds = mopedLegs(r.acts.map(mopedActOf), r.vehicleId).map((l) => {
+      const m = mopedOf.get(l.vehicleId);
+      return { vehicle: { id: l.vehicleId, vin: m?.vin ?? null, fleetNo: m?.fleetNo ?? null }, from: l.from, to: l.to, began: l.began, ended: l.ended };
+    });
     // One timeline of everything that happened to this rental (ux №7): money,
     // acts, documents, and the journal's own entries — WhatsApp, statuses,
     // changes of terms, a return taken back.
@@ -147,12 +178,20 @@ export function rentalRoutes(app: FastifyInstance): void {
         undoReturnUntil: returnUndoUntil(r.acts),
         // The renter's folder and contract in Drive, as last read (ADR-0031); null — none found.
         drive: await driveOfRental(r.id),
+        // The mopeds it had, in order; the last is the one it has (ADR-0040).
+        mopeds,
       },
       // What the return charged beyond the weeks, and what is still open (§3.7, B5-08).
       charges: r.charges.map((c) => ({ id: c.id, kind: c.kind, amountTetri: c.amountTetri, note: c.note, paidTetri: c.allocations.reduce((n, a) => n + a.amountTetri, 0) })),
       // The contract and the return act: signed or not, and what the contract lacks (D17, B4-06).
+      // The contract may also be marked signed in Signify, by whom and when (ADR-0039).
       documents: {
-        contract: docState(r.documents, 'contract', contractGaps(r.customer)),
+        contract: {
+          ...docState(r.documents, 'contract', contractGaps(r.customer)),
+          signedElsewhere: r.contractSignedElsewhereAt
+            ? { at: r.contractSignedElsewhereAt.toISOString(), by: r.contractSignedElsewhereBy?.name ?? null, note: r.contractSignedElsewhereNote }
+            : null,
+        },
         returnAct: r.acts.some((a) => a.kind === 'return') ? docState(r.documents, 'return_act', []) : null,
       },
       deposit: r.deposit
@@ -191,9 +230,12 @@ export function rentalRoutes(app: FastifyInstance): void {
         feeTetri: p.feeTetri,
       })),
       feed,
-      acts: r.acts.map((a) => ({
+      // In the order they happened: a swap writes its two acts in one moment, the moped given back first.
+      acts: actsInOrder(r.acts.map(mopedActOf)).map(({ row: a }) => ({
         id: a.id,
         kind: a.kind,
+        // Which moped the act is about: EV-007, or the end of its VIN.
+        vehicle: a.vehicle ? { id: a.vehicle.id, number: fleetNumber(a.vehicle.fleetNo), vin: a.vehicle.vin } : null,
         occurredOn: isoDate(a.occurredOn),
         odometerKm: a.odometerKm,
         condition: a.condition,
@@ -213,8 +255,16 @@ export function contractGaps(c: { personalId: string | null; name: string; phone
   return gaps;
 }
 
-function docState(files: { docKind: string | null; signedAt: Date | null; signedBy: string | null }[], kind: string, gaps: string[]) {
-  const f = files.find((x) => x.docKind === kind);
+/**
+ * A document's signature as the card shows it. Two copies may stand side by
+ * side unarchived; the signed one speaks — the latest of them — and only then
+ * the latest copy, as the list counts "signed" by any signed copy (ADR-0039).
+ * The database hands the copies back in no promised order. Exported for the
+ * test that feeds it the unsigned copy first.
+ */
+export function docState(files: { docKind: string | null; signedAt: Date | null; signedBy: string | null; createdAt: Date }[], kind: string, gaps: string[]) {
+  const mine = files.filter((x) => x.docKind === kind).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  const f = mine.find((x) => x.signedAt != null) ?? mine[0];
   return { signedAt: f?.signedAt?.toISOString() ?? null, signedBy: f?.signedBy ?? null, gaps };
 }
 
