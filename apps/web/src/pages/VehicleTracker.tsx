@@ -1,7 +1,7 @@
-import { fleetNumber, imeiGroups, phoneAsOnCard, todayISO, type VehicleState } from '@ev8/shared';
+import { fleetNumber, imeiGroups, isISODate, phoneAsOnCard, todayISO, trackerEarliestDay, type VehicleState } from '@ev8/shared';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { api } from '../api.js';
+import { api, ApiError } from '../api.js';
 import { BlockHead } from '../components/ui.js';
 import { Field, Row } from '../components/Wizard.js';
 import { FormSheet } from '../ds/form/Form.js';
@@ -112,6 +112,7 @@ export function TrackerRows({ v, trackers, onDone }: { v: TrackerMoped; trackers
         <TrackerSheet
           v={v}
           now={now}
+          lastRemovedOn={lastTakenOff(trackers)}
           onClose={() => setSheet(false)}
           onDone={() => {
             setSheet(false);
@@ -123,6 +124,11 @@ export function TrackerRows({ v, trackers, onDone }: { v: TrackerMoped; trackers
   );
 }
 
+/** The day the last tracker came off this moped, if one did. */
+function lastTakenOff(trackers: CardTracker[]): string | null {
+  return trackers.reduce<string | null>((last, x) => (x.removedOn != null && (last == null || x.removedOn > last) ? x.removedOn : last), null);
+}
+
 /** Refusals about the IMEI that come without a field are said under the IMEI. */
 const IMEI_REFUSALS = { tracker_imei_in_use: 'imei', tracker_on_vehicle: 'imei' };
 
@@ -132,13 +138,18 @@ const IMEI_REFUSALS = { tracker_imei_in_use: 'imei', tracker_on_vehicle: 'imei' 
  * tracker was on the moped — today unless somebody knows: the day it was
  * fitted is often known to nobody, and it is not made up.
  */
-function TrackerSheet({ v, now, onClose, onDone }: { v: TrackerMoped; now: CardTracker | null; onClose: () => void; onDone: () => void }) {
+function TrackerSheet({ v, now, lastRemovedOn, onClose, onDone }: { v: TrackerMoped; now: CardTracker | null; lastRemovedOn: string | null; onClose: () => void; onDone: () => void }) {
   const t = useT();
   const today = todayISO();
   const writing = now == null;
   const initial = { imei: now?.imei ?? '', sim: now?.simPhone ?? '', on: today };
   const [f, setF] = useState(initial);
   const label = fleetNumber(v.fleetNo) ?? `···${v.vin.slice(-6)}`;
+  // The first day «Стоит с» may say, by the rule the server checks, named
+  // under the field before anything is sent (QA, 22.10.2026).
+  const earliest = trackerEarliestDay({ arrivedOn: v.arrivedOn, lastRemovedOn });
+  const fromWords = (on: string, by: 'arrival' | 'last_removed') => (by === 'arrival' ? t.vcard.trackerFromArrival(fmtDate(on)) : t.vcard.trackerFromRemoved(fmtDate(on)));
+  const tooEarly = earliest && isISODate(f.on) && f.on < earliest.on ? fromWords(earliest.on, earliest.by) : null;
   return (
     <FormSheet
       title={writing ? t.wparts.writeTracker : t.wparts.fixTitle}
@@ -150,7 +161,17 @@ function TrackerSheet({ v, now, onClose, onDone }: { v: TrackerMoped; now: CardT
       fieldOf={IMEI_REFUSALS}
       submit={async (key) => {
         if (writing) {
-          await api.post(`/api/fleet/${v.id}/tracker`, { imei: f.imei, sim: f.sim, installedOn: f.on }, { key });
+          try {
+            await api.post(`/api/fleet/${v.id}/tracker`, { imei: f.imei, sim: f.sim, installedOn: f.on }, { key });
+          } catch (e) {
+            // The server names the first day it would take; the words under the field say it.
+            if (e instanceof ApiError && e.code === 'tracker_date_bad' && e.extra.fault !== 'future') {
+              const on = e.extra.earliest;
+              const by = e.extra.earliestBy === 'arrival' ? 'arrival' : e.extra.earliestBy === 'last_removed' ? 'last_removed' : null;
+              if (typeof on === 'string' && by) throw new ApiError(e.status, e.code, e.message, { ...e.extra, field: 'installedOn', fieldText: fromWords(on, by) });
+            }
+            throw e;
+          }
           return { toast: { text: t.wparts.trackerWritten(f.imei.replace(/\D/g, '').slice(-4)) } };
         }
         const res = await api.patch<{ changed: boolean }>(`/api/fleet/${v.id}/tracker`, { imei: f.imei, sim: f.sim }, { key });
@@ -160,8 +181,8 @@ function TrackerSheet({ v, now, onClose, onDone }: { v: TrackerMoped; now: CardT
     >
       <TrackerFields imei={f.imei} sim={f.sim} vehicle={label} onChange={(imei, sim) => setF({ ...f, imei, sim })} />
       {writing ? (
-        <Field label={t.wparts.fittedOn} hint={t.wparts.fittedOnHint} name="installedOn">
-          <input className="input mono" type="date" min={v.arrivedOn ?? undefined} max={today} value={f.on} onChange={(e) => setF({ ...f, on: e.target.value })} />
+        <Field label={t.wparts.fittedOn} hint={earliest ? `${fromWords(earliest.on, earliest.by)} ${t.wparts.fittedOnHint}` : t.wparts.fittedOnHint} name="installedOn" error={tooEarly}>
+          <input className="input mono" type="date" min={earliest?.on} max={today} value={f.on} onChange={(e) => setF({ ...f, on: e.target.value })} />
         </Field>
       ) : (
         <p className="hint muted">{t.wparts.fixNote}</p>

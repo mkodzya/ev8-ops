@@ -28,6 +28,7 @@ import { fleetListKa } from './fleet-list.js';
 import { contractSignedKa } from './contract-signed.js';
 import { saleDateKa } from './sale-date.js';
 import { rentalSwapKa } from './rental-swap.js';
+import { vehicleCardKa } from './vehicle-card.js';
 import type { Dict } from './en.js';
 
 // Typed as Dict: a missing or misspelled key fails the build.
@@ -318,8 +319,8 @@ export const ka: Dict = {
   },
 
   vehicle: {
-    stateChanged: (state: string) => `სტატუსი: ${state}`,
-    changeStateCta: 'სტატუსის შეცვლა',
+    stateChanged: (state: string) => `მდგომარეობა: ${state}`,
+    changeStateCta: 'მდგომარეობის შეცვლა',
     eventsCount: (n: number) => `${n} მოვლენა`,
     backToFleet: 'პარკში დაბრუნება',
     title: 'მოპედი',
@@ -1412,4 +1413,5 @@ export const ka: Dict = {
   ...contractSignedKa,
   ...saleDateKa,
   ...rentalSwapKa,
+  ...vehicleCardKa,
 };
