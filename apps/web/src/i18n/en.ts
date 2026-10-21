@@ -33,6 +33,7 @@ import { inBankEn } from './in-bank.js';
 import { fleetListEn } from './fleet-list.js';
 import { contractSignedEn } from './contract-signed.js';
 import { saleDateEn } from './sale-date.js';
+import { rentalSwapEn } from './rental-swap.js';
 export const en = {
   lang: { label: 'Language', ka: 'ქართული', ru: 'Русский', en: 'English' },
 
@@ -365,7 +366,7 @@ export const en = {
     /** After a week's pay status in the table of weeks, on a rental that is overdue (ADR-0017). */
     weekLate: 'late',
     acts: 'Acts',
-    actKind: { pickup: 'Hand-over act', return: 'Return act' },
+    actKind: { pickup: 'Hand-over act', return: 'Return act', swap_out: 'Swap act: moped given back', swap_in: 'Swap act: moped handed out' },
     returnedTo: 'Returned to',
     buyout: 'Buy-out',
     buyoutProgress: (target: string, per: string) => `${per} of each payment towards ${target}`,
@@ -1335,6 +1336,7 @@ export const en = {
       sale_not_found: 'Sale not found.',
       same_customer: 'A card cannot be merged into itself.',
       same_state: 'The moped is already in this state.',
+      same_vehicle: 'This is the moped the customer already has. Pick another one.',
       service_not_found: 'No such repair.',
       sold_by_sale: 'A moped is sold by a sale, and comes back by a buy-back.',
       split_bad_amount: 'Every part needs a sum above zero.',
@@ -1348,6 +1350,8 @@ export const en = {
       split_too_many: 'Too many parts: nine at most.',
       stock_started: 'This part has movements already: an opening balance comes before them.',
       supplier_not_found: 'No such supplier.',
+      swap_before_last_event: 'The swap date is before something already recorded in the history of one of the mopeds. Pick a later date.',
+      swap_no_vehicle: 'This rental has no moped yet. Give it one in «Change terms» first.',
       too_late: 'It is too late to undo. Move the moped to the other park again instead.',
       too_many_attempts: 'Too many attempts. Wait 15 minutes and try again.',
       transfer_date: 'A rental brought over must start before today, and paid weeks must end on a week boundary.',
@@ -1358,7 +1362,7 @@ export const en = {
       use_rental: 'A moped becomes rented only through a hand-over.',
       use_status_route: 'The status is changed through its own action, with a reason.',
       user_not_found: 'User not found.',
-      vehicle_already_set: 'This rental already has a moped.',
+      vehicle_already_set: 'This rental already has a moped. Change it with «Change the moped» in the menu.',
       vehicle_gone: 'This moped has left the fleet. A buy-back brings it back.',
       vehicle_in_rent_pool: 'This moped is kept for renting; selling it moves it to the sale park.',
       vehicle_in_sale_pool: 'This moped is in the sale park. Only an owner can hand it over.',
@@ -1409,6 +1413,7 @@ export const en = {
   ...fleetListEn,
   ...contractSignedEn,
   ...saleDateEn,
+  ...rentalSwapEn,
 };
 
 export type Dict = typeof en;

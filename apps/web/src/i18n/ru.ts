@@ -24,6 +24,7 @@ import { inBankRu } from './in-bank.js';
 import { fleetListRu } from './fleet-list.js';
 import { contractSignedRu } from './contract-signed.js';
 import { saleDateRu } from './sale-date.js';
+import { rentalSwapRu } from './rental-swap.js';
 import type { Dict } from './en.js';
 
 // Typed as Dict: a missing or misspelled key fails the build.
@@ -367,7 +368,7 @@ export const ru: Dict = {
     payStatus: { unpaid: 'Не оплачен', partial: 'Частично', paid: 'Оплачен' },
     weekLate: 'просрочен',
     acts: 'Акты',
-    actKind: { pickup: 'Акт выдачи', return: 'Акт возврата' },
+    actKind: { pickup: 'Акт выдачи', return: 'Акт возврата', swap_out: 'Акт замены: мопед сдан', swap_in: 'Акт замены: мопед выдан' },
     returnedTo: 'Кому возвращён',
     buyout: 'Выкуп',
     buyoutProgress: (target: string, per: string) => `${per} с каждого платежа в счёт ${target}`,
@@ -1332,6 +1333,7 @@ export const ru: Dict = {
       sale_not_found: 'Продажа не найдена.',
       same_customer: 'Карточку нельзя объединить с самой собой.',
       same_state: 'Мопед уже в этом состоянии.',
+      same_vehicle: 'Этот мопед уже у клиента. Выберите другой.',
       service_not_found: 'Такого ремонта нет.',
       sold_by_sale: 'Мопед продаётся продажей, а возвращается выкупом.',
       split_bad_amount: 'У каждой части должна быть сумма больше нуля.',
@@ -1345,6 +1347,8 @@ export const ru: Dict = {
       split_too_many: 'Слишком много частей: не больше девяти.',
       stock_started: 'По этой запчасти уже были движения — начальный остаток доступен только до них.',
       supplier_not_found: 'Такого поставщика нет.',
+      swap_before_last_event: 'Дата замены раньше того, что уже записано в истории одного из мопедов. Выберите дату позже.',
+      swap_no_vehicle: 'У этой аренды ещё нет мопеда. Сначала укажите его в «Изменить условия».',
       too_late: 'Отменить уже нельзя — переведите мопед в другой парк заново.',
       too_many_attempts: 'Слишком много попыток. Подождите 15 минут и попробуйте снова.',
       transfer_date: 'Перенесённая аренда должна начинаться раньше сегодняшнего дня, а оплаченные недели — заканчиваться на границе недели.',
@@ -1355,7 +1359,7 @@ export const ru: Dict = {
       use_rental: 'Мопед становится «в аренде» только через выдачу.',
       use_status_route: 'Статус меняется отдельным действием, с причиной.',
       user_not_found: 'Пользователь не найден.',
-      vehicle_already_set: 'У этой аренды уже есть мопед.',
+      vehicle_already_set: 'У этой аренды уже есть мопед. Сменить его — «Заменить мопед» в меню.',
       vehicle_gone: 'Мопед выбыл из парка. Вернуть его можно выкупом обратно.',
       vehicle_in_rent_pool: 'Мопед стоит в парке аренды: продажа переведёт его в парк продажи.',
       vehicle_in_sale_pool: 'Мопед в парке продажи. Выдать его может только владелец.',
@@ -1406,4 +1410,5 @@ export const ru: Dict = {
   ...fleetListRu,
   ...contractSignedRu,
   ...saleDateRu,
+  ...rentalSwapRu,
 };

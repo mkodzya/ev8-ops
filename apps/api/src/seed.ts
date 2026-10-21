@@ -149,13 +149,14 @@ async function seedDemo(ownerId: string): Promise<void> {
         source: 'manual',
       });
     }
-    await prisma.act.create({ data: { rentalId: r.id, kind: 'pickup', occurredOn: d(opts.pickedUpOn), odometerKm: 120, condition: DEMO_NOTE, createdById: ownerId } });
+    await prisma.act.create({ data: { rentalId: r.id, vehicleId: opts.vehicle?.id ?? null, kind: 'pickup', occurredOn: d(opts.pickedUpOn), odometerKm: 120, condition: DEMO_NOTE, createdById: ownerId } });
     if (opts.vehicle) {
       await prisma.vehicleEvent.create({ data: { vehicleId: opts.vehicle.id, kind: 'pickup', occurredOn: d(opts.pickedUpOn), fromState: 'available', toState: 'rented', rentalId: r.id, actorId: ownerId } });
       if (opts.returnedOn) {
         await prisma.act.create({
           data: {
             rentalId: r.id,
+            vehicleId: opts.vehicle.id,
             kind: 'return',
             occurredOn: d(opts.returnedOn),
             odometerKm: 640,

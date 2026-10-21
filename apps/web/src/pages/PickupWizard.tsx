@@ -39,7 +39,8 @@ interface CustomerRow {
   dueTodayRentTetri: number;
   debtIn: DebtPart[];
 }
-interface FleetRow {
+/** A moped as the hand-over and the swap pick one from the fleet. */
+export interface FleetRow {
   id: string;
   vin: string;
   /** EV-007 on the sticker (migration 0043); absent while an older API answers. */
@@ -888,7 +889,8 @@ function Stepper({ label, value, onChange }: { label: string; value: number; onC
   );
 }
 
-function VehicleList({ list, chosen, disabled, onPick }: { list: FleetRow[]; chosen: string | null; disabled: boolean; onPick: (id: string) => void }) {
+/** The free mopeds to pick from — the hand-over's, and the swap's (ADR-0040). */
+export function VehicleList({ list, chosen, disabled, onPick }: { list: FleetRow[]; chosen: string | null; disabled: boolean; onPick: (id: string) => void }) {
   const t = useT();
   return (
     <ul className={`pick-list ${disabled ? 'dim' : ''}`}>

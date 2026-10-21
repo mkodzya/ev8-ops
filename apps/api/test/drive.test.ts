@@ -7,8 +7,8 @@ import PDFDocument from 'pdfkit';
 import { describe, expect, it } from 'vitest';
 import { HAS_DB, call, json, loginAs, uniq } from './helpers.js';
 import { assertion, driveConfig, forgetToken } from '../src/lib/drive.js';
-import { fileKind, folderName, kindOfText, matchFolders, pdfText, readContract, readContractParty, readReturnAct, readingOrder, sharedWords } from '../src/lib/driveDocs.js';
-import { actAfterPickup, joinKommoDeals, sectionOf } from '../src/lib/driveScan.js';
+import { fileKind, folderName, kindOfText, matchFolders, pdfText, readContract, readContractParty, readReturnAct, readingOrder, sameVin, sharedWords } from '../src/lib/driveDocs.js';
+import { actAfterPickup, actOfSwappedMoped, joinKommoDeals, sectionOf } from '../src/lib/driveScan.js';
 import { todayISO } from '@ev8/shared';
 
 const ACT = [
@@ -192,6 +192,24 @@ describe('the rentals folders in Drive: names and documents (ADR-0031)', () => {
     expect(matchFolders([sameMoped], rentals, { nameAlone: false }).size).toBe(0);
     const same = { id: 'same', datedOn: '2031-10-08', person: 'Khachapuridze Shota', vins: [] };
     expect(matchFolders([older, same], rentals, { nameAlone: false }).get('same')?.rentalId).toBe('r');
+  });
+
+  it('after a swap the folder still finds its rental by the first moped’s VIN, and that moped’s return act does not close it (ADR-0040)', () => {
+    expect(sameVin('H8TEST0000000017', 'HH8TEST0000000017')).toBe(true);
+    expect(sameVin('HH8TEST0000000018', 'HH8TEST0000000017')).toBe(false);
+    expect(sameVin(null, 'HH8TEST0000000017')).toBe(false);
+    // The rental runs on a second moped; its folder holds the first contract, naming the first.
+    const rentals = [{ id: 'r', pickedUpOn: '2031-09-06', vin: 'HH8TEST0000000033', formerVins: ['HH8TEST0000000031'], names: ['Nino Tushidze'] }];
+    const folder = { id: 'f', datedOn: '2031-09-06', person: 'Tushidze', vins: ['HH8TEST0000000031'] };
+    expect(matchFolders([folder], rentals).get('f')).toEqual({ rentalId: 'r', by: 'vin' });
+    // The first moped's return act — the old contract closed — is that moped's paper, not the rental's end.
+    const rental = { vin: 'HH8TEST0000000033', swappedVins: ['HH8TEST0000000031'] };
+    expect(actOfSwappedMoped('HH8TEST0000000031', rental)).toBe(true);
+    expect(actOfSwappedMoped('H8TEST0000000031', rental)).toBe(true);
+    expect(actOfSwappedMoped('HH8TEST0000000033', rental)).toBe(false);
+    expect(actOfSwappedMoped(null, rental)).toBe(false);
+    // A moped swapped away and back again is the rental's own once more.
+    expect(actOfSwappedMoped('HH8TEST0000000031', { vin: 'HH8TEST0000000031', swappedVins: ['HH8TEST0000000031', 'HH8TEST0000000033'] })).toBe(false);
   });
 
   it('a return act dated before the pickup is an older rental’s, not this one’s (ADR-0034)', () => {

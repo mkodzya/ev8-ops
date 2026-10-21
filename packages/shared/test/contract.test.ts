@@ -28,6 +28,16 @@ describe('the state of a contract', () => {
     expect(contractSignedOf('not_asked')).toBeNull();
   });
 
+  it('is asked again of a rental brought over once its moped was swapped (ADR-0040)', () => {
+    // «Старый договор закрыть, новый выдать»: the paper from before EV8 Ops names the old moped.
+    expect(contractState(facts({ transferredAt: '2026-10-08T09:00:00.000Z', swapped: true }))).toBe('unsigned');
+    expect(contractState(facts({ transferredAt: '2026-10-08T09:00:00.000Z', swapped: false }))).toBe('not_asked');
+    expect(contractState(facts({ swapped: true }))).toBe('unsigned');
+    expect(contractState(facts({ swapped: true, signedHere: true }))).toBe('signed_here');
+    expect(contractState(facts({ swapped: true, signedElsewhereAt: '2026-10-22T08:00:00.000Z' }))).toBe('signed_elsewhere');
+    expect(contractState(facts({ transferredAt: '2026-10-08T09:00:00.000Z', swapped: true, returned: true }))).toBe('not_asked');
+  });
+
   it('puts a signature here above the mark, and the mark above "not asked"', () => {
     expect(contractState(facts({ signedHere: true, signedElsewhereAt: '2026-10-21T08:00:00.000Z' }))).toBe('signed_here');
     expect(contractState(facts({ signedElsewhereAt: '2026-10-21T08:00:00.000Z', transferredAt: '2026-10-08T09:00:00.000Z' }))).toBe('signed_elsewhere');

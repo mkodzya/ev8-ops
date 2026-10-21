@@ -99,8 +99,9 @@ export interface QueueRental {
   vinUnconfirmed: boolean;
   /**
    * Handed over more than a day ago and the contract is still unsigned (D17):
-   * `asksForSignature` of `contractState`. Never a rental brought over, nor
-   * one marked signed in Signify (ADR-0039).
+   * `asksForSignature` of `contractState`. Never a rental brought over (until
+   * a swap draws its contract here, ADR-0040), nor one marked signed in
+   * Signify (ADR-0039). After a swap the day counts from the swap.
    */
   contractUnsigned: boolean;
 }
