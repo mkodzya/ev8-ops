@@ -94,7 +94,9 @@ export function RepairClosePage() {
   const close = async () => {
     const p: Record<string, string> = {};
     if (had.length + photos.length === 0) p.photos = t.wappr.needAfter;
-    if (moved && (kmValue == null || !Number.isInteger(kmValue) || kmValue < 0)) p.km = t.wappr.needKm;
+    // «Плановое ТО» with no reading of its opening counts from this one (ADR-0038 §2), as the server asks.
+    const needKm = moved || (j.reasonKind === 'planned' && j.openedOdometerKm == null);
+    if (needKm && (kmValue == null || !Number.isInteger(kmValue) || kmValue < 0)) p.km = t.wappr.needKm;
     if (moved && !chosen) p.where = t.wappr.needWhere;
     if (below && !lowerText) p.lower = t.wjob.needWhy;
     setShown(p);

@@ -6,7 +6,7 @@
 // tablet. Mopeds, people and words are invented.
 import { suggestsCustomerPays, todayISO } from '@ev8/shared';
 import { describe, expect, it } from 'vitest';
-import { HAS_DB, call, json, loginAs, makeUser, uniq } from './helpers.js';
+import { HAS_DB, call, json, login, loginAs, makeUser, uniq } from './helpers.js';
 
 const digits = () => uniq().replace(/\D/g, '');
 
@@ -197,6 +197,46 @@ describe.skipIf(!HAS_DB)('the owner sets or changes the kind of a repair under w
     expect(change?.after).toEqual({ reason: 'ТЕСТ left mirror', notes: 'ТЕСТ a note' });
     expect((await call(owner, 'POST', `/api/service/${id}/cancel`, { reason: 'ТЕСТ done' })).statusCode).toBe(200);
   });
+
+  it('labour corrected says what its money was, not a bare count of minutes', async () => {
+    const { vehicle } = await freeVehicle();
+    const owner = await loginAs('owner');
+    const id = await opened(owner, { vehicleId: vehicle.id, reason: 'ТЕСТ headlight' });
+    expect((await call(owner, 'PATCH', `/api/service/${id}`, { labourHours: 1.5 })).statusCode).toBe(200);
+    const change = (await journalOf(owner, id)).find((l) => l.action === 'service.update');
+    expect(change?.before).toEqual({ labourTetri: 0 });
+    expect(change?.after).toMatchObject({ labourMinutes: 90 });
+    expect((await call(owner, 'POST', `/api/service/${id}/cancel`, { reason: 'ТЕСТ done' })).statusCode).toBe(200);
+  });
+});
+
+/** A photo as the tablet sends it; the server checks the type and that there are bytes. */
+const PHOTO = { mimeType: 'image/jpeg', dataBase64: Buffer.from(`test photo ${uniq()}`).toString('base64') };
+
+describe.skipIf(!HAS_DB)('a mechanic takes over a repair the office named', () => {
+  it('the tablet is told the kind, and his pick is journaled «было → стало», never a silent overwrite', async () => {
+    const { prisma, vehicle } = await freeVehicle();
+    const owner = await loginAs('owner');
+    const id = await opened(owner, { vehicleId: vehicle.id, reason: 'ТЕСТ dropped it', reasonKind: 'renter_fault' });
+
+    const mechanic = await makeUser('mechanic');
+    const cookie = await login(mechanic.email);
+    const found = await call(cookie, 'GET', `/api/service/vehicles?q=${vehicle.vin.slice(-6)}`);
+    expect(found.statusCode, found.body).toBe(200);
+    const row = json<{ vehicles: { id: string; openJob: { id: string; reasonKind: string | null; takeable: boolean } | null }[] }>(found).vehicles.find((v) => v.id === vehicle.id);
+    expect(row?.openJob).toMatchObject({ id, reasonKind: 'renter_fault', takeable: true });
+
+    const taken = await call(cookie, 'POST', '/api/service/workshop', {
+      vehicleId: vehicle.id, jobId: id, reasonKind: 'wear', reason: 'ТЕСТ dropped it', odometerKm: 3210,
+      odometerPhoto: PHOTO, photos: [PHOTO], works: [{ freeText: 'ТЕСТ new lever', qty: 1 }],
+    });
+    expect(taken.statusCode, taken.body).toBe(200);
+    expect((await prisma.serviceJob.findUniqueOrThrow({ where: { id } })).reasonKind).toBe('wear');
+    const take = (await journalOf(owner, id)).find((l) => l.action === 'service.take');
+    expect(take?.before).toMatchObject({ reasonKind: 'renter_fault' });
+    expect(take?.after).toMatchObject({ reasonKind: 'wear' });
+    expect((await call(owner, 'POST', `/api/service/${id}/cancel`, { reason: 'ТЕСТ done' })).statusCode).toBe(200);
+  });
 });
 
 // «Плановое ТО» picked in the office counts for the next maintenance as the
@@ -267,5 +307,34 @@ describe.skipIf(!HAS_DB)('«Плановое ТО» from the office moves the ne
     expect((await call(owner, 'PATCH', `/api/service/${second}`, { reasonKind: 'wear' })).statusCode).toBe(200);
     expect((await call(owner, 'POST', `/api/service/${second}/close`, { odometerKm: 5100, locationId: await point() })).statusCode).toBe(200);
     expect((await maintenance(owner, vehicle.id))?.lastPlanned).toMatchObject({ jobId: id, km: 4985 });
+  });
+
+  it('one at the renter’s, with no reading of its opening, is closed with one — or it would never count', async () => {
+    const { prisma, vehicle } = await freeVehicle();
+    const owner = await loginAs('owner');
+    const customer = await prisma.customer.create({ data: { name: `ТЕСТ renter ${uniq()}` } });
+    const rented = await call(owner, 'POST', '/api/rentals', { customerId: customer.id, vehicleId: vehicle.id, weeklyRateTetri: 15000, pickedUpOn: '2026-10-01' });
+    expect(rented.statusCode, rented.body).toBe(201);
+    const id = await opened(owner, { vehicleId: vehicle.id, reason: 'ТЕСТ maintenance at the renter’s', reasonKind: 'planned' });
+
+    const bare = await call(owner, 'POST', `/api/service/${id}/close`, {});
+    expect(bare.statusCode).toBe(400);
+    expect(json<{ error: string; field: string }>(bare)).toMatchObject({ error: 'missing_field', field: 'odometerKm' });
+    expect((await jobOf(owner, id)).status).toBe('open');
+
+    const closed = await call(owner, 'POST', `/api/service/${id}/close`, { odometerKm: 4990 });
+    expect(closed.statusCode, closed.body).toBe(200);
+    expect((await maintenance(owner, vehicle.id))?.lastPlanned).toMatchObject({ jobId: id, km: 4990 });
+  });
+
+  it('any other kind at the renter’s still closes without a reading, as before', async () => {
+    const { prisma, vehicle } = await freeVehicle();
+    const owner = await loginAs('owner');
+    const customer = await prisma.customer.create({ data: { name: `ТЕСТ renter ${uniq()}` } });
+    const rented = await call(owner, 'POST', '/api/rentals', { customerId: customer.id, vehicleId: vehicle.id, weeklyRateTetri: 15000, pickedUpOn: '2026-10-01' });
+    expect(rented.statusCode, rented.body).toBe(201);
+    const id = await opened(owner, { vehicleId: vehicle.id, reason: 'ТЕСТ loose mirror', reasonKind: 'wear' });
+    const closed = await call(owner, 'POST', `/api/service/${id}/close`, {});
+    expect(closed.statusCode, closed.body).toBe(200);
   });
 });

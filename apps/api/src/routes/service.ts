@@ -1021,7 +1021,7 @@ export function serviceRoutes(app: FastifyInstance): void {
         model: { select: { brand: true, name: true } },
         serviceJobs: {
           where: { status: { in: ['open', 'draft'] } },
-          select: { id: true, number: true, status: true, reason: true, mechanicId: true, mechanic: { select: { name: true } } },
+          select: { id: true, number: true, status: true, reason: true, reasonKind: true, mechanicId: true, mechanic: { select: { name: true } } },
           take: 1,
         },
       },
@@ -1049,6 +1049,8 @@ export function serviceRoutes(app: FastifyInstance): void {
                 number: job.number,
                 status: job.status,
                 reason: job.reason,
+                /** The kind the office named, if it did (Mika, 21.10.2026): the tablet starts from it, as from the words. */
+                reasonKind: job.reasonKind,
                 mechanic: job.mechanic?.name ?? null,
                 /** Nobody carries it yet — a manager's breakdown, a return's damage: he may take it on. */
                 takeable: job.mechanicId == null,
@@ -1111,6 +1113,7 @@ export function serviceRoutes(app: FastifyInstance): void {
         number: true,
         status: true,
         reason: true,
+        reasonKind: true,
         mechanicId: true,
         mechanic: { select: { name: true } },
         approvedAt: true,
@@ -1239,7 +1242,10 @@ export function serviceRoutes(app: FastifyInstance): void {
             movedVehicle: open ? undefined : !rented,
           },
           // The moped's figure before this reading: a repair called off by mistake puts it back (ADR-0038 §1).
-          before: { odometerKm: vehicle.odometerKm, ...(open ? { reason: open.reason, mechanicId: open.mechanicId } : {}) },
+          // A repair taken over keeps what it said before — its kind too, which
+          // the office or an owner may have named (Mika, 21.10.2026): the
+          // mechanic's pick is «было → стало», never a silent overwrite.
+          before: { odometerKm: vehicle.odometerKm, ...(open ? { reason: open.reason, reasonKind: open.reasonKind, mechanicId: open.mechanicId } : {}) },
         },
       });
       // His repair, or his works on one taken over, wait: the group is asked (ADR-0038 §6).
@@ -1384,13 +1390,15 @@ export function serviceRoutes(app: FastifyInstance): void {
     // «было → стало» (ux.md №14): what each field written held before. The
     // journal printed only the new values, so a kind changed from «ДТП» to
     // «Износ» could not say what it had been.
+    // The minutes stay out of it: a bare «0 → 90» read as nothing, and the
+    // labour's money beside them says the same change in lari.
     const was = job as unknown as Record<string, unknown>;
     await audit({
       actorId: actor.id,
       action: 'service.update',
       entityType: 'service_job',
       entityId: job.id,
-      before: Object.fromEntries(Object.keys(data).map((k) => [k, was[k] ?? null])),
+      before: Object.fromEntries(Object.keys(data).filter((k) => k !== 'labourMinutes').map((k) => [k, was[k] ?? null])),
       after: repriced.length > 0 ? { ...(data as object), repriced } : (data as object),
     });
     return { ok: true, repriced: repriced.length };
@@ -1686,6 +1694,13 @@ export function serviceRoutes(app: FastifyInstance): void {
     if (job.movedVehicle) {
       if (odometerKm == null) throw badRequest('missing_field', 'Say what the odometer reads.', { field: 'odometerKm' });
       if (!closedLocationId) throw badRequest('missing_field', 'Say where the moped stands now.', { field: 'locationId' });
+    }
+    // «Плановое ТО» is counted from a reading (ADR-0038 §2). The tablet takes
+    // one at the opening; the office does not, and a repair at the renter's
+    // closed without one would never move the next maintenance, which is what
+    // the office's «Плановое ТО» promises (Mika, 21.10.2026).
+    if (odometerKm == null && job.reasonKind === 'planned' && job.openedOdometerKm == null) {
+      throw badRequest('missing_field', 'A planned maintenance counts from what the odometer reads: say it.', { field: 'odometerKm' });
     }
     // Less than at the opening, or than the moped's last reading, only with
     // the reason — as the opening asks it (ADR-0038 §4): a typo would move the

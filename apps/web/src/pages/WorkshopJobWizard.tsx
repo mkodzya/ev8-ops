@@ -1,4 +1,4 @@
-import { JOB_PHOTOS_MAX, SERVICE_REASONS, WORK_QTY_MAX, worksTotal, type ServiceReason, type VehicleState } from '@ev8/shared';
+import { JOB_PHOTOS_MAX, SERVICE_REASONS, WORK_QTY_MAX, isServiceReason, worksTotal, type ServiceReason, type VehicleState } from '@ev8/shared';
 import { Camera, Minus, Plus, ScanLine } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
@@ -33,7 +33,17 @@ interface FoundVehicle {
   color: string | null;
   state: VehicleState;
   odometerKm: number | null;
-  openJob: { id: string; number: string; status: string; reason: string; mechanic: string | null; takeable: boolean; mine: boolean } | null;
+  openJob: {
+    id: string;
+    number: string;
+    status: string;
+    reason: string;
+    /** The kind the office named, if it did; an older answer has no such field. */
+    reasonKind?: string | null;
+    mechanic: string | null;
+    takeable: boolean;
+    mine: boolean;
+  } | null;
 }
 
 type Lower = '' | 'replaced' | 'mistake' | 'other';
@@ -210,7 +220,11 @@ export function WorkshopJobWizard() {
             onQuery={(q) => set({ q })}
             onPick={(v, jobId) => {
               setShown({});
-              set({ vehicle: v, jobId, reason: jobId && v.openJob ? v.openJob.reason : f.reason, km: '', lower: '', lowerWords: '' });
+              // A repair taken over starts from what it says — its words and
+              // the kind the office named (Mika, 21.10.2026) — so a kind
+              // already chosen is seen and kept unless he picks another.
+              const kind = jobId && v.openJob && isServiceReason(v.openJob.reasonKind) ? v.openJob.reasonKind : f.reasonKind;
+              set({ vehicle: v, jobId, reason: jobId && v.openJob ? v.openJob.reason : f.reason, reasonKind: kind, km: '', lower: '', lowerWords: '' });
             }}
           />
         )}
