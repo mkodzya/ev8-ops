@@ -182,12 +182,20 @@ export function FleetPage() {
                 <StateBadge state={v.state} />
                 {/* The word the line turns into once the offer to undo runs out: "For sale", not the park's dictionary name. */}
                 {moved?.id === v.id ? <span className="v-sub v-pool-new">→ {moved.to === 'sale' ? t.fleetList.forSale : t.pools[moved.to]}</span> : <ParkLine v={v} />}
+                {/* On a laptop too narrow for the reason column, the reason stands here, as on a phone. */}
+                {v.serviceWhy && (
+                  <span className="v-sub v-why-line">
+                    <Why v={v} />
+                  </span>
+                )}
               </span>
             ),
             sort: { value: (v) => VEHICLE_STATES.indexOf(v.state) },
           },
           // Only a moped in service has a reason; every other row leaves the cell empty rather than forty dashes.
-          { key: 'why', label: t.wjob.reason, cell: (v) => <Why v={v} />, sort: { value: (v) => whyText(v, t, shownWords) } },
+          // A narrow column, one line and an ellipsis; below 1360 px it gives way
+          // to a line under the state, or the row's dots fall off a 1280 px laptop (QA, 22.10.2026).
+          { key: 'why', label: t.wjob.reason, className: 'col-why', cell: (v) => <Why v={v} />, sort: { value: (v) => whyText(v, t, shownWords) } },
           {
             key: 'where',
             label: t.fleet.where,

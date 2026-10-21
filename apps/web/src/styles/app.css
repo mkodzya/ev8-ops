@@ -924,6 +924,23 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
    after it on the same line. */
 .v-why { display: inline-block; max-width: 28ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
 .lc-sub .v-why { max-width: 18ch; }
+/* The table's reason column (QA, 22.10.2026). At 28ch it took 289 px and
+   pushed «Где», «Тишина» and the row's dots off a 1280 px laptop: the table
+   needs 872 px without it in RU and 900 px in KA, inside 994 px. So the column
+   is narrow — 12ch, one line, the rest in the tooltip — and is shown only from
+   1360 px, where it fits in both (1038 of 1074 px in KA, measured on the QA
+   stand). Narrower, the reason stands under the state as a quiet line, as on
+   a phone, as wide as the state's column and never wider: the line takes the
+   cell's width without adding to it (width 0, min-width 100%). */
+.list-table .col-why .v-why,
+.list-table .col-why .typed-clip { max-width: 12ch; }
+.list-table .v-why-line { display: none; }
+@media (max-width: 1359px) {
+  .list-table .col-why { display: none; }
+  .list-table .v-why-line { display: block; width: 0; min-width: 100%; overflow: hidden; }
+  .list-table .v-why-line .v-why,
+  .list-table .v-why-line .typed-clip { max-width: 100%; }
+}
 .v-where { grid-area: where; font: var(--text-label); color: var(--muted); margin-top: 2px; }
 /* A point nobody has named is still a question, but it is asked once — by the
    orange number above the list. Thirty-five orange cells in a column answer
