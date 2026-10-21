@@ -1,0 +1,630 @@
+<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Оплата механику — варианты · EV8 Ops, прототип</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=Inter:wght@400;500;600&family=Noto+Sans+Georgian:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+/* Static prototype: no JavaScript (Mika's viewer runs none). Colours are the
+   product's tokens (packages/shared/tokens.json). People, VINs and fleet
+   numbers, job numbers and sums paid are invented; the works and norms are the bot's book
+   (CATALOG_SEED, 11.10.2026). */
+:root { --bg:#fbfbfb; --surface:#fff; --surface-2:#f3f3f3; --ink:#0b0b0b; --muted:#5d5d5d; --line:#dbe4de; --line-soft:#ebebeb; --line-control:#7a7a7a; --accent:#557553; --accent-soft:#e3ebe3; --accent-ink:#4d6a4b; --lime:#e0ffa2; --crit:#c8402f; --crit-soft:#f9e3df; --crit-ink:#b3392a; --warn-soft:#fdeadf; --service-deep:#b2450f; --info-soft:#e4ecfb; --rented-ink:#2f63c0; --toast:#0b0b0b;
+  --sans:"Be Vietnam Pro","Inter","Noto Sans Georgian",system-ui,sans-serif; --mono:"IBM Plex Mono","Noto Sans Georgian",ui-monospace,monospace; }
+* { box-sizing:border-box; }
+body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.5 var(--sans); }
+main { max-width:1240px; margin:0 auto; padding:32px 16px 64px; }
+h1 { font-size:28px; line-height:1.2; margin:0 0 8px; font-weight:500; letter-spacing:-.02em; }
+h2 { font-size:21px; margin:44px 0 4px; font-weight:500; letter-spacing:-.02em; }
+h2.part { font-size:25px; margin-top:64px; padding-top:22px; border-top:2px solid var(--ink); }
+.lead { color:var(--muted); margin:0 0 8px; max-width:860px; }
+.note { color:var(--muted); font-size:13px; }
+.common { background:var(--surface); border:1px solid var(--line-soft); border-radius:16px; padding:14px 18px; margin-top:16px; max-width:1000px; }
+.common ul { margin:6px 0 0; padding-left:20px; } .common li { margin:4px 0; }
+.tag { display:inline-block; font-size:12px; font-weight:600; padding:2px 10px; border-radius:99px; background:var(--surface-2); margin-bottom:6px; vertical-align:middle; }
+.rec .tag { background:var(--lime); }
+.why { display:grid; grid-template-columns:1fr 1fr; gap:6px 24px; max-width:960px; font-size:14px; margin:8px 0 0; }
+.why ul { margin:2px 0; padding-left:18px; } .why li { margin:3px 0; }
+.pro b { color:#2f6b3a; } .con b { color:#9a3b2c; }
+.row { display:flex; flex-wrap:wrap; gap:22px; margin-top:16px; align-items:flex-start; }
+.cap { font-size:13px; color:var(--muted); margin:6px 0 0; max-width:380px; }
+.cap b { color:var(--ink); font-weight:600; }
+.cap .ka { color:var(--ink); }
+code { font-family:var(--mono); font-size:13px; background:var(--surface-2); padding:1px 5px; border-radius:4px; }
+
+/* device frames: the screen inside is drawn at full size and scaled down */
+.frame { width:380px; height:500px; border-radius:22px; background:#1c1c1c; position:relative; box-shadow:0 2px 14px rgba(0,0,0,.18); flex:none; }
+.scr { position:absolute; left:10px; top:10px; width:768px; height:1024px; transform:scale(.469); transform-origin:top left; background:var(--bg); border-radius:24px; overflow:hidden; display:flex; flex-direction:column; }
+.frame.land { width:500px; height:380px; } .land .scr { width:1024px; height:768px; }
+.frame.lap { width:660px; height:432px; border-radius:14px; } .lap .scr { width:1366px; height:878px; transform:scale(.469); border-radius:8px; }
+.frame.ph { width:245px; height:507px; border-radius:26px; } .ph .scr { width:375px; height:812px; transform:scale(.6); border-radius:30px; font-size:15px; }
+.cap.wide { max-width:660px; } .cap.ph { max-width:245px; }
+
+/* tablet chrome after a PIN sign-in (TabletFrame: no logo below 900 px) */
+.bar { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:14px 22px; background:var(--surface); border-bottom:1px solid var(--line-soft); flex:none; }
+.bar .l { display:flex; align-items:center; gap:14px; min-width:0; }
+.bk { width:52px; height:52px; border-radius:50%; border:1.5px solid var(--line-control); display:flex; align-items:center; justify-content:center; font-size:28px; line-height:1; }
+.ttl { display:flex; flex-direction:column; } .ttl b { font-size:26px; font-weight:500; letter-spacing:-.02em; line-height:1.15; } .ttl span { font-size:15px; color:var(--muted); }
+.bar .r { display:flex; align-items:center; gap:14px; flex:none; }
+.me { display:flex; align-items:center; gap:10px; font-size:17px; font-weight:600; line-height:1.15; } .me i { display:block; font-style:normal; font-weight:400; font-size:14px; color:var(--muted); }
+.av { width:44px; height:44px; border-radius:50%; background:var(--accent-soft); color:var(--accent); font-weight:600; font-size:18px; display:flex; align-items:center; justify-content:center; }
+.out { height:52px; padding:0 22px; border:2px solid var(--ink); border-radius:99px; font-size:19px; font-weight:500; display:flex; align-items:center; gap:8px; }
+.logo { font:700 26px/1 var(--sans); color:#819481; letter-spacing:-.04em; }
+
+/* wizard */
+.steps { display:flex; gap:8px; padding:16px 26px 0; flex:none; }
+.steps span { flex:1; height:8px; border-radius:99px; background:var(--line-soft); } .steps span.done { background:var(--accent); } .steps span.now { background:var(--ink); }
+.body { flex:1; min-height:0; padding:22px 26px 0; display:flex; flex-direction:column; gap:20px; overflow:hidden; }
+.q { font-size:32px; font-weight:500; letter-spacing:-.02em; margin:0; line-height:1.15; }
+.lbl { font-size:17px; color:var(--muted); margin:0 0 8px; }
+.lbl b { color:var(--ink); font-weight:600; }
+.inp { height:72px; border:1.5px solid var(--line-control); border-radius:14px; background:var(--surface); display:flex; align-items:center; padding:0 20px; font-size:30px; }
+.inp.big { height:96px; font-size:52px; font-family:var(--mono); letter-spacing:.02em; }
+.inp.txt { font-size:22px; height:64px; }
+.inp .ph { color:#8a8a8a; }
+.caret { display:inline-block; width:2px; height:1em; background:var(--accent); margin-left:3px; vertical-align:-.12em; }
+.hint { font-size:16px; color:var(--muted); margin:8px 0 0; }
+.btn-o { height:64px; border:1.5px solid var(--ink); border-radius:99px; display:inline-flex; align-items:center; justify-content:center; gap:10px; padding:0 28px; font-size:21px; font-weight:500; background:var(--surface); }
+.btn-f { height:64px; border-radius:99px; display:inline-flex; align-items:center; justify-content:center; padding:0 34px; font-size:22px; font-weight:600; background:var(--accent); color:#fff; }
+.stick { margin-top:auto; padding:16px 26px 24px; background:var(--surface); border-top:1px solid var(--line-soft); display:flex; gap:14px; align-items:center; flex:none; }
+.stick .btn-f { flex:1; } .stick .sum { flex:1; font-size:17px; line-height:1.3; } .stick .sum b { font-size:20px; }
+.card { background:var(--surface); border:1.5px solid var(--line-soft); border-radius:18px; padding:16px 20px; }
+.card.sel { border:3px solid var(--accent); background:var(--accent-soft); }
+.mop { display:flex; justify-content:space-between; gap:12px; align-items:flex-start; }
+.mop .n { font-size:24px; font-weight:600; } .mop .m { font-size:20px; }
+.vin { font-family:var(--mono); font-size:19px; color:var(--muted); letter-spacing:.01em; } .vin b { color:var(--ink); font-weight:600; background:var(--lime); border-radius:4px; padding:0 2px; }
+.pill { display:inline-flex; align-items:center; gap:7px; font-size:16px; font-weight:500; padding:5px 14px; border-radius:99px; white-space:nowrap; }
+.pill::before { content:""; width:10px; height:10px; border-radius:50%; background:currentColor; }
+.p-av { background:var(--accent-soft); color:var(--accent-ink); }
+.p-rent { background:var(--info-soft); color:var(--rented-ink); }
+.p-serv { background:var(--warn-soft); color:var(--service-deep); } .p-serv::before { border-radius:3px; }
+.p-wait { background:var(--surface); color:var(--ink); border:1.5px solid var(--line-control); } .p-wait::before { background:transparent; border:2.5px solid var(--ink); width:6px; height:6px; }
+.warnline { margin-top:12px; font-size:17px; padding:10px 14px; border-radius:12px; background:var(--warn-soft); display:flex; justify-content:space-between; gap:10px; align-items:center; }
+.link { color:var(--accent); font-weight:600; text-decoration:underline; text-underline-offset:4px; }
+.chips { display:flex; flex-wrap:wrap; gap:12px; }
+.chip { height:60px; padding:0 24px; border:1.5px solid var(--line-control); border-radius:99px; display:inline-flex; align-items:center; font-size:20px; background:var(--surface); white-space:nowrap; }
+.chip.on { background:var(--ink); color:#fff; border-color:var(--ink); }
+.chip.sm { height:52px; font-size:18px; padding:0 18px; }
+.scroll-x { display:flex; gap:10px; overflow:hidden; white-space:nowrap; }
+.photos { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; }
+.pic { aspect-ratio:1; border-radius:14px; background:repeating-linear-gradient(135deg,#d9dcd9 0 10px,#e6e8e6 10px 20px); position:relative; }
+.pic span { position:absolute; left:8px; bottom:8px; background:rgba(11,11,11,.7); color:#fff; font-size:14px; padding:2px 9px; border-radius:99px; }
+.pic.add { background:var(--surface); border:2px dashed var(--line-control); display:flex; flex-direction:column; align-items:center; justify-content:center; font-size:18px; color:var(--ink); gap:4px; }
+.pic.add big { font-size:36px; line-height:1; }
+.odo { display:grid; grid-template-columns:1fr 190px; gap:18px; align-items:end; }
+.err { color:var(--crit-ink); font-size:17px; font-weight:500; margin:8px 0 0; }
+.box-warn { background:var(--warn-soft); border-radius:16px; padding:16px 18px; font-size:18px; }
+.box-warn p { margin:0 0 12px; }
+.wk { display:flex; align-items:center; gap:14px; padding:12px 16px; background:var(--surface); border:1.5px solid var(--line-soft); border-radius:16px; }
+.wk.on { border-color:var(--accent); border-width:2.5px; }
+.wk .c { font-family:var(--mono); font-size:16px; color:var(--muted); width:62px; flex:none; }
+.wk .t { flex:1; font-size:19px; line-height:1.25; }
+.wk .mn { font-family:var(--mono); font-size:18px; white-space:nowrap; }
+.qty { display:flex; align-items:center; gap:0; border:1.5px solid var(--line-control); border-radius:99px; height:52px; flex:none; }
+.qty span { width:52px; text-align:center; font-size:26px; line-height:52px; } .qty b { width:34px; text-align:center; font-size:21px; }
+.plus { width:52px; height:52px; border-radius:50%; border:1.5px solid var(--ink); font-size:28px; line-height:48px; text-align:center; flex:none; }
+.nonorm { font-size:15px; font-weight:600; padding:3px 10px; border-radius:99px; background:var(--crit-soft); color:var(--crit-ink); white-space:nowrap; }
+.kv { display:grid; grid-template-columns:150px 1fr; gap:10px 16px; font-size:19px; } .kv dt { color:var(--muted); } .kv dd { margin:0; }
+.lines { display:flex; flex-direction:column; gap:0; font-size:18px; }
+.lines div { display:flex; gap:12px; padding:9px 0; border-bottom:1px solid var(--line-soft); align-items:baseline; }
+.lines .c { font-family:var(--mono); color:var(--muted); width:62px; flex:none; font-size:16px; }
+.lines .t { flex:1; } .lines .mn, .lines .gel { font-family:var(--mono); white-space:nowrap; } .lines .gel { width:96px; text-align:right; }
+.tot { display:flex; justify-content:space-between; font-size:19px; font-weight:600; padding-top:10px; }
+.thumbs { display:flex; gap:10px; } .thumbs .pic { width:96px; }
+.ka { font-family:"Noto Sans Georgian","Be Vietnam Pro",sans-serif; }
+.sect-h { display:flex; justify-content:space-between; align-items:baseline; font-size:20px; font-weight:600; margin-top:6px; }
+.sect-h span { font-size:16px; color:var(--muted); font-weight:400; }
+.toast { position:absolute; left:26px; right:26px; bottom:26px; background:var(--toast); color:#fff; border-radius:18px; padding:20px 24px; font-size:19px; display:flex; justify-content:space-between; }
+.toast b { color:var(--lime); }
+
+/* the book of works */
+.banner { background:var(--surface-2); border-radius:14px; padding:12px 16px; font-size:16px; line-height:1.4; }
+.banner b { font-weight:600; }
+.grp { display:flex; flex-direction:column; gap:0; background:var(--surface); border:1px solid var(--line-soft); border-radius:16px; overflow:hidden; }
+.grp .gh { display:flex; justify-content:space-between; align-items:baseline; padding:12px 18px; background:var(--surface-2); font-size:19px; font-weight:600; }
+.grp .gh span { font-size:15px; font-weight:400; color:var(--muted); }
+.grp .r { display:flex; gap:14px; align-items:center; padding:12px 18px; border-top:1px solid var(--line-soft); font-size:18px; min-height:60px; }
+.grp .r .c { font-family:var(--mono); font-size:16px; color:var(--muted); width:60px; flex:none; }
+.grp .r .t { flex:1; line-height:1.25; } .grp .r .mn { font-family:var(--mono); font-size:18px; }
+.grp .r.off .t, .grp .r.off .mn { color:var(--muted); text-decoration:line-through; }
+.mark { font-size:13px; padding:2px 8px; border-radius:99px; background:var(--surface-2); color:var(--muted); white-space:nowrap; }
+.mark.note { background:var(--lime); color:var(--ink); }
+.veil { position:absolute; inset:0; background:rgba(11,11,11,.32); }
+.sheet { position:absolute; left:0; right:0; bottom:0; background:var(--surface); border-radius:28px 28px 0 0; padding:24px 26px 26px; display:flex; flex-direction:column; gap:16px; }
+.sheet .grab { width:60px; height:6px; border-radius:99px; background:var(--line-soft); align-self:center; margin-top:-8px; }
+.f2 { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+.fl .lbl { margin-bottom:6px; font-size:15px; } .fl .inp { height:60px; font-size:20px; }
+.fl .inp.ro { background:var(--surface-2); border-color:var(--line-soft); color:var(--muted); }
+.fl .inp.empty { border-style:dashed; }
+.tgl { display:flex; align-items:center; gap:14px; font-size:19px; }
+.tgl i { width:64px; height:36px; border-radius:99px; background:var(--accent); position:relative; flex:none; }
+.tgl i::after { content:""; position:absolute; right:4px; top:4px; width:28px; height:28px; border-radius:50%; background:#fff; }
+.tiles3 { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; }
+.tl { background:var(--surface); border:1.5px solid var(--line-control); border-radius:20px; padding:16px; height:150px; display:flex; flex-direction:column; justify-content:space-between; }
+.tl .k { font-family:var(--mono); font-size:15px; color:var(--muted); } .tl .nm { font-size:18px; font-weight:600; line-height:1.2; } .tl .ct { font-size:15px; color:var(--muted); }
+table.tb { border-collapse:collapse; width:100%; font-size:15px; background:var(--surface); }
+table.tb th { text-align:left; font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); background:var(--surface-2); padding:8px 10px; }
+table.tb td { padding:7px 10px; border-top:1px solid var(--line-soft); vertical-align:top; }
+table.tb td.c { font-family:var(--mono); color:var(--muted); white-space:nowrap; } table.tb td.mn { font-family:var(--mono); text-align:right; }
+table.tb td.gap { color:#8a8a8a; } table.tb td.gap span { border:1px dashed var(--line-control); border-radius:6px; padding:1px 8px; }
+table.tb td.edit { outline:2px solid var(--accent); outline-offset:-2px; background:var(--accent-soft); }
+.side { display:flex; } .side .rail { width:220px; background:#0b0b0b; flex:none; } .side .main { flex:1; padding:26px 32px; display:flex; flex-direction:column; gap:16px; }
+
+table.words { border-collapse:collapse; margin-top:10px; font-size:14px; }
+table.words td { padding:5px 14px 5px 0; border-bottom:1px solid var(--line-soft); vertical-align:top; }
+table.words td:first-child { font-family:"Noto Sans Georgian",sans-serif; font-size:15px; }
+table.words td.lat { color:var(--muted); font-style:italic; }
+table.words td.num { font-family:var(--mono); text-align:right; }
+</style></head><body><main>
+<style>
+/* stage 3 additions */
+.p-ok { background:var(--accent-soft); color:var(--accent-ink); }
+.p-rej { background:var(--surface-2); color:#666; } .p-rej::before { content:"×"; background:none; width:auto; height:auto; font-size:20px; line-height:1; font-weight:600; }
+.p-done { background:var(--surface-2); color:#666; }
+.lines div.ok .t::after { content:"  ✓"; color:var(--accent); font-weight:600; }
+.lines div.ok { color:var(--muted); }
+.lines div.wait { background:var(--warn-soft); margin:4px -10px; padding:9px 10px; border-radius:10px; border-bottom:none; }
+.lines div.rej .t, .lines div.rej .mn, .lines div.rej .gel { text-decoration:line-through; color:var(--muted); }
+.wtag { font-size:14px; font-weight:600; padding:2px 10px; border-radius:99px; background:var(--surface); border:1.5px solid var(--line-control); white-space:nowrap; }
+.mini { height:46px; width:120px; border:1.5px solid var(--accent); border-radius:10px; background:var(--surface); display:inline-flex; align-items:center; padding:0 12px; font:18px var(--mono); flex:none; }
+.mini .caret { height:.9em; }
+.qcard { background:var(--surface); border:1.5px solid var(--line-soft); border-radius:20px; padding:18px 20px; display:flex; flex-direction:column; gap:12px; }
+.qcard .hd { display:flex; justify-content:space-between; align-items:baseline; gap:12px; }
+.qcard .hd b { font-size:22px; font-weight:600; } .qcard .hd span { font-size:16px; color:var(--muted); }
+.qcard .why2 { font-size:19px; line-height:1.3; }
+.qcard .acts { display:flex; gap:14px; justify-content:flex-end; }
+.qcard .acts .btn-o, .qcard .acts .btn-f { height:58px; font-size:20px; }
+.qcard .thumbs .pic { width:110px; }
+.qrow { display:flex; align-items:center; gap:14px; background:var(--surface); border:1.5px solid var(--line-soft); border-radius:16px; padding:14px 18px; }
+.qrow .w { flex:1; } .qrow .w b { font-size:20px; } .qrow .w div { font-size:17px; color:var(--muted); }
+.qrow .s { text-align:right; font-family:var(--mono); font-size:17px; } .qrow .s i { display:block; font-style:normal; color:var(--service-deep); font-family:var(--sans); font-size:15px; }
+.qrow .go { font-size:30px; color:var(--muted); }
+.box-sug { background:var(--accent-soft); border-radius:16px; padding:14px 18px; font-size:17px; display:flex; flex-direction:column; gap:10px; }
+.box-sug p { margin:0; } .box-sug .acts { display:flex; gap:12px; }
+.box-info { background:var(--surface-2); border-radius:14px; padding:12px 16px; font-size:17px; line-height:1.35; }
+.reason-box { background:var(--surface-2); border-radius:14px; padding:12px 16px; font-size:18px; }
+.reason-box b { display:block; font-size:15px; color:var(--muted); font-weight:500; margin-bottom:2px; }
+.inp.area { height:120px; align-items:flex-start; padding-top:16px; font-size:21px; }
+.ph .bar { padding:10px 14px; } .ph .ttl b { font-size:20px; } .ph .ttl span { font-size:13px; }
+.ph .body { padding:14px 14px 0; gap:12px; }
+.ph .qcard { padding:14px; gap:10px; border-radius:16px; } .ph .qcard .hd b { font-size:18px; } .ph .qcard .why2 { font-size:16px; }
+.ph .lines { font-size:15px; } .ph .lines .c { width:52px; font-size:13px; } .ph .lines .gel { width:70px; }
+.ph .qcard .thumbs .pic { width:64px; } .ph .qcard .acts .btn-o, .ph .qcard .acts .btn-f { height:48px; font-size:16px; padding:0 18px; }
+.ph .avo { width:36px; height:36px; border-radius:50%; background:var(--accent-soft); color:var(--accent); font-weight:600; display:flex; align-items:center; justify-content:center; }
+.ph .tabs { display:flex; justify-content:space-around; border-top:1px solid var(--line-soft); background:var(--surface); padding:8px 0 14px; font-size:12px; color:var(--muted); margin-top:auto; flex:none; }
+.ph .box-sug { font-size:14px; padding:12px; } .ph .kv { font-size:15px; grid-template-columns:96px 1fr; gap:6px 10px; }
+.stick .note2 { flex:1; font-size:17px; color:var(--muted); line-height:1.3; }
+.locs { display:flex; gap:12px; flex-wrap:wrap; }
+</style>
+<style>
+/* stage 4 additions */
+.plines { display:flex; flex-direction:column; font-size:18px; }
+.plines > div { display:flex; gap:12px; padding:10px 0; border-bottom:1px solid var(--line-soft); align-items:center; }
+.plines .t { flex:1; line-height:1.25; } .plines .t small { display:block; font-size:15px; color:var(--muted); }
+.plines .pq { font-family:var(--mono); white-space:nowrap; width:44px; text-align:right; }
+.plines .i { font-size:15px; color:var(--muted); text-align:right; white-space:nowrap; }
+.plines .i b { font-family:var(--mono); color:var(--ink); font-weight:500; }
+.plines .gel { font-family:var(--mono); width:96px; text-align:right; white-space:nowrap; }
+.plines div.wait { background:var(--warn-soft); margin:4px -10px; padding:10px; border-radius:10px; border-bottom:none; }
+.kt { font-size:14px; font-weight:600; padding:2px 10px; border-radius:99px; background:var(--surface-2); white-space:nowrap; color:var(--ink); }
+.kt.bat { background:var(--info-soft); color:var(--rented-ink); }
+.ktiles { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+.ktile { background:var(--surface); border:1.5px solid var(--line-control); border-radius:20px; padding:18px 20px; min-height:132px; display:flex; flex-direction:column; gap:6px; }
+.ktile .g { font-size:30px; line-height:1; color:var(--accent); font-family:var(--mono); }
+.ktile b { font-size:23px; font-weight:600; line-height:1.15; } .ktile span { font-size:17px; color:var(--muted); line-height:1.3; }
+.ktile.bat { border-style:dashed; }
+.res { display:flex; flex-direction:column; gap:10px; }
+.res .r { display:flex; align-items:center; gap:14px; background:var(--surface); border:1.5px solid var(--line-soft); border-radius:16px; padding:12px 16px; min-height:64px; }
+.res .r.on { border:3px solid var(--accent); background:var(--accent-soft); }
+.res .r .c { font-family:var(--mono); font-size:15px; color:var(--muted); width:84px; flex:none; }
+.res .r .t { flex:1; font-size:19px; line-height:1.25; }
+.res .r .s { font-size:16px; color:var(--muted); white-space:nowrap; } .res .r .s b { font-family:var(--mono); color:var(--ink); font-weight:500; }
+.res .r .s.bad b { color:var(--crit-ink); }
+.res .r.free { border-style:dashed; color:var(--muted); }
+.okline { font-size:17px; color:var(--accent-ink); font-weight:500; margin:8px 0 0; }
+.sw { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+.sw .lb { font-size:16px; color:var(--muted); width:84px; flex:none; }
+.pic.req { border:2px dashed var(--crit); background:var(--surface); display:flex; flex-direction:column; align-items:center; justify-content:center; font-size:17px; gap:4px; color:var(--ink); }
+.pic.req big { font-size:34px; line-height:1; }
+.ph .plines { font-size:14px; } .ph .plines .gel { width:70px; } .ph .plines .pq { width:30px; } .ph .kt { font-size:12px; padding:1px 8px; }
+.ph .card { padding:12px 14px; border-radius:14px; }
+.ph .sect-h { font-size:16px; }
+.ph .kv { font-size:14px; grid-template-columns:84px 1fr; }
+.mono { font-family:var(--mono); }
+</style>
+<style>
+/* stage 5 additions */
+.p-paid { background:var(--surface-2); color:#666; } .p-paid::before { content:"✓"; background:none; width:auto; height:auto; font-size:16px; line-height:1; font-weight:700; color:var(--accent-ink); }
+.stabs { display:flex; gap:20px; padding:0 14px; border-bottom:1px solid var(--line-soft); background:var(--surface); font-size:14px; color:var(--muted); flex:none; white-space:nowrap; overflow:hidden; }
+.stabs span { padding:10px 0 8px; } .stabs span.on { color:var(--ink); font-weight:600; border-bottom:2.5px solid var(--ink); }
+.pay { background:var(--surface); border:1.5px solid var(--line-soft); border-radius:16px; padding:12px 14px; display:flex; flex-direction:column; gap:8px; }
+.pay .hd { display:flex; justify-content:space-between; align-items:baseline; gap:10px; } .pay .hd b { font-size:18px; font-weight:600; } .pay .hd span { font-size:13px; color:var(--muted); }
+.jr { display:flex; flex-direction:column; }
+.jr > div, .jr summary { display:flex; gap:10px; padding:7px 0; border-bottom:1px solid var(--line-soft); align-items:baseline; font-size:14px; }
+.jr summary { list-style:none; color:var(--accent); font-weight:600; cursor:pointer; } .jr summary::-webkit-details-marker { display:none; }
+.jr details[open] summary { display:none; }
+.blines summary { list-style:none; display:flex; padding:10px 0; cursor:pointer; } .blines summary::-webkit-details-marker { display:none; } .blines details[open] summary { display:none; }
+.blines details > div { display:flex; gap:14px; padding:10px 0; border-bottom:1px solid var(--line-soft); align-items:baseline; }
+.jr .n { font-family:var(--mono); font-size:13px; width:72px; flex:none; }
+.jr .t { flex:1; min-width:0; line-height:1.3; } .jr .t small { display:block; font-size:12px; color:var(--muted); }
+.jr .g { font-family:var(--mono); white-space:nowrap; text-align:right; }
+.jr .rc { color:var(--muted); } .jr .rc .n::before { content:"↳ "; }
+.sum3 { display:flex; flex-direction:column; gap:2px; font-size:14px; }
+.sum3 div { display:flex; justify-content:space-between; } .sum3 .mono { font-size:14px; }
+.sum3 .all { font-weight:600; font-size:16px; padding-top:4px; border-top:1px solid var(--line-soft); margin-top:2px; }
+.btn-f.s, .btn-o.s { height:48px; font-size:16px; padding:0 18px; }
+.btn-f.s.full { width:100%; }
+.held { background:var(--surface); border:1.5px dashed var(--line-control); border-radius:16px; padding:10px 14px; display:flex; flex-direction:column; gap:2px; }
+.held .hd { font-size:15px; font-weight:600; display:flex; justify-content:space-between; } .held .hd span { font-weight:400; color:var(--muted); font-size:13px; }
+.held div.r { display:flex; gap:10px; font-size:13px; padding:5px 0; border-top:1px solid var(--line-soft); align-items:baseline; }
+.held .r .n { font-family:var(--mono); width:72px; flex:none; } .held .r .t { flex:1; } .held .r .why3 { white-space:nowrap; }
+.why3.bad { color:var(--crit-ink); font-weight:600; } .why3.lk { color:var(--accent); font-weight:600; }
+.hist div.r { display:flex; gap:10px; font-size:13px; padding:6px 0; border-top:1px solid var(--line-soft); align-items:baseline; }
+.hist .d { font-family:var(--mono); width:44px; flex:none; } .hist .t { flex:1; } .hist .g { font-family:var(--mono); }
+.hh { font-size:15px; font-weight:600; display:flex; justify-content:space-between; align-items:baseline; margin-top:4px; } .hh span { font-size:13px; font-weight:400; color:var(--muted); }
+.qrow2 { display:flex; align-items:center; gap:10px; background:var(--surface); border:1.5px solid var(--line-soft); border-radius:14px; padding:10px 12px; min-height:60px; }
+.qrow2 .w { flex:1; } .qrow2 .w b { font-size:16px; } .qrow2 .w div { font-size:13px; color:var(--muted); }
+.qrow2 .s { font-family:var(--mono); font-size:15px; } .qrow2 .go { font-size:22px; color:var(--muted); }
+.segs { display:flex; border:1.5px solid var(--line-control); border-radius:99px; overflow:hidden; align-self:flex-start; flex:none; }
+.segs span { padding:0 16px; height:40px; display:flex; align-items:center; font-size:14px; } .segs span.on { background:var(--ink); color:#fff; }
+.ph .stick { padding:10px 14px 14px; gap:10px; } .ph .stick .sum { font-size:13px; } .ph .stick .sum b { font-size:17px; }
+.ph .sheet { padding:18px 16px 18px; gap:12px; border-radius:22px 22px 0 0; } .ph .sheet .q { font-size:21px !important; } .ph .box-info { font-size:14px; padding:10px 12px; }
+.ph .toast { left:14px; right:14px; bottom:84px; font-size:14px; padding:14px 16px; border-radius:14px; }
+.lap .main h3 { margin:6px 0 0; font-size:20px; font-weight:600; display:flex; justify-content:space-between; align-items:center; }
+.lap .main h3 span.q2 { font-size:15px; font-weight:400; color:var(--muted); margin-left:10px; }
+.lap .btn-f { height:44px; font-size:16px; padding:0 22px; }
+table.tb tr.sumrow td { font-weight:600; border-top:1.5px solid var(--ink); }
+.lap table.tb td { white-space:nowrap; } .lap table.tb td.wk2 { white-space:normal; }
+table.tb tr.rc td { color:var(--muted); }
+table.tb td.nn span { background:var(--crit-soft); color:var(--crit-ink); border-radius:99px; padding:1px 8px; font-size:13px; font-weight:600; }
+.bigsum { background:var(--surface); border:1.5px solid var(--line-soft); border-radius:20px; padding:20px 22px; display:flex; flex-direction:column; gap:6px; }
+.bigsum .k { font-size:19px; color:var(--muted); } .bigsum .v { font:500 60px/1 var(--mono); letter-spacing:-.01em; }
+.bigsum .s2 { font-size:17px; color:var(--muted); line-height:1.35; } .bigsum .s2 b { color:var(--ink); font-weight:500; font-family:var(--mono); }
+.btile { background:var(--surface); border:1.5px solid var(--line-soft); border-radius:18px; padding:14px 16px; display:flex; flex-direction:column; gap:4px; min-height:120px; }
+.btile .k { font-size:16px; color:var(--muted); } .btile .v { font:500 28px/1.1 var(--mono); } .btile .s2 { font-size:15px; color:var(--muted); line-height:1.3; }
+.btile.wait { border:1.5px solid var(--line-control); } .btile.bad .v { color:var(--crit-ink); }
+.blines { display:flex; flex-direction:column; font-size:18px; }
+.blines > div { display:flex; gap:14px; padding:10px 0; border-bottom:1px solid var(--line-soft); align-items:baseline; }
+.blines .n { font-family:var(--mono); font-size:16px; width:96px; flex:none; } .blines .t { flex:1; } .blines .t small { display:block; font-size:15px; color:var(--muted); }
+.blines .mn { font-family:var(--mono); color:var(--muted); white-space:nowrap; } .blines .g { font-family:var(--mono); width:104px; text-align:right; white-space:nowrap; }
+.band { display:flex; align-items:center; gap:18px; background:var(--surface); border:1.5px solid var(--line-control); border-radius:18px; padding:14px 18px; }
+.band .c1 { display:flex; flex-direction:column; } .band .c1 i { font-style:normal; font-size:15px; color:var(--muted); } .band .c1 b { font:500 30px/1.1 var(--mono); }
+.band .sep { width:1px; align-self:stretch; background:var(--line-soft); }
+.band .c2 { font-size:16px; color:var(--muted); line-height:1.35; } .band .c2 b { font-family:var(--mono); color:var(--ink); font-weight:500; }
+.band .go { margin-left:auto; font-size:30px; color:var(--muted); }
+.mylist { display:flex; flex-direction:column; gap:10px; }
+.mylist .r { display:flex; align-items:center; gap:14px; background:var(--surface); border:1.5px solid var(--line-soft); border-radius:16px; padding:12px 16px; min-height:68px; }
+.mylist .r .w { flex:1; } .mylist .r .w b { font-size:20px; } .mylist .r .w div { font-size:16px; color:var(--muted); }
+.mylist .r .s { text-align:right; font-family:var(--mono); font-size:18px; } .mylist .r .s i { display:block; font-family:var(--sans); font-style:normal; font-size:14px; color:var(--muted); }
+</style>
+
+<h1>Оплата механику — варианты</h1>
+<p class="lead">Этап 5 плана «Механик в EV8 Ops» (<code>docs/spec/mechanic-in-erp-plan.md</code>), ADR-0035, 0036 и твои ответы 20.10.2026 ниже (ADR-0037).
+Два новых экрана. Первый — «К оплате» у владельца: по каждому механику заявки, работа, чеки «купил сам» и кнопка «Оплачено». Второй — баланс механика на планшете
+мастерской. Экраны планшета нарисованы в натуральную величину 768×1024 и уменьшены до 47 %, телефон — 375 px, ноутбук — 1366 px. Подписи по-русски для чтения;
+на планшете по умолчанию грузинский, слова — в конце страницы. <b>Имена, номера мопедов и заявок, даты, чеки и прошлые выплаты выдуманы.</b> Работы и нормы
+взяты из справочника бота на 11.10.2026. Семь заявок Сандро — это контроль бота (семь заявок, 282,5 мин по 50 ₾ за час нормы = 235,42 ₾): так сверка
+видна прямо на экране.</p>
+
+<div class="common">
+<b>Решено тобой 20.10.2026 — общее у всех вариантов</b> (выбирать не нужно):
+<ul>
+<li><b>Оплаченная заявка ссылается на свою выплату</b>, статус остаётся «Завершён». На экране пишется «Оплачено» серой пилюлей с галочкой. После оплаты
+заявку больше не правят: ни нормы, ни работы, ни детали.</li>
+<li><b>Выплата — это отметка, а не платёж и не расход</b> (п. 113). Деньги механику уходят как уходят. Перевод с банковского счёта в «Разобрать» получает
+«Расход ▸» с категорией, которую ты выберешь. Наличные отчёт «Расходы» не видит, как любой наличный расход. В «Деньгах» от отметки ничего не появляется.</li>
+<li><b>Работа механика входит в стоимость ремонта за счёт компании</b>: «Экономика» мопеда и сумма в карточке ремонта теперь включают согласованные работы с
+нормой. Ремонт за счёт клиента не меняется: цену работы для клиента вводишь ты (п. 110), и работа механика в счёт клиенту сама не попадает.</li>
+<li><b>Сумма считается по заявке</b> (п. 113). Работа каждой заявки округляется до тетри один раз, выплата — это сумма заявок плюс сумма чеков. Строки экрана
+всегда складываются в итог ровно. На контроле бота выходит те же 235,42 ₾. Бот округляет всю выплату целиком, поэтому на других данных итог может разойтись с
+ним на тетри (например, две заявки по 2,5 мин дают 4,16 ₾, а у бота 4,17 ₾). Такое расхождение я докладываю, а не подгоняю.</li>
+<li><b>Что идёт к оплате:</b> закрытая заявка механика, в которой ничего не ждёт согласования и у каждой работы есть норма. В выплату идут её согласованные работы
+и согласованные чеки «купил сам». Отклонённые строки и отклонённые заявки не платятся. Заявка с работой «без нормы» ждёт целиком, пока норму не впишут.</li>
+<li><b>Дважды оплатить одну заявку нельзя</b>: это проверяет база, а не только экран. Кнопка «Оплачено» платит ровно то, что ты видишь. Если за это время
+закрылась ещё одна заявка, экран попросит обновиться, а не доплатит её молча.</li>
+<li><b>Ошибочную выплату ты отменяешь с причиной</b> — в списке выплат. Её заявки снова идут к оплате и снова правятся. Отмена видна в журнале.</li>
+<li>Отмечает выплату только владелец. С планшета мастерской её не отметить: по PIN этого права нет (ADR-0033).</li>
+</ul>
+</div>
+
+<!-- ================================================================== part 1 -->
+<h2 class="part">1. «К оплате» у владельца</h2>
+
+<!-- ============================ 1A ============================ -->
+<section class="rec">
+<h2>А. Один экран: механики карточками, заявки внутри <span class="tag">рекомендую</span></h2>
+<div class="why">
+<div class="pro"><b>За:</b><ul><li>Всё, за что платишь, видно рядом с кнопкой: заявки, минуты, чеки, итог. В понедельник открыл, сверил с ботом, нажал — два касания до записи (принцип 2 <code>ux.md</code>).</li><li>Сумма стоит прямо над кнопкой «Оплачено», а не над списком (правило планшета и телефона).</li><li>На ноутбуке — таблица, удобно сверять построчно с отчётом бота.</li><li>Сейчас механик один, и экран короткий.</li></ul></div>
+<div class="con"><b>Против:</b><ul><li>Если механиков станет несколько, на экране будет несколько залитых кнопок — по одной на карточку, как в очереди «Ждут согласования».</li><li>При многих заявках карточка длинная; свёрнуто под «ещё N заявок».</li></ul></div>
+</div>
+<div class="row">
+<div><div class="frame ph"><div class="scr">
+  <div class="bar"><div class="l"><span class="ttl"><b>Сервис</b><span>К оплате · 315,92 ₾</span></span></div><div class="r"><span class="avo">В</span></div></div>
+  <div class="stabs"><span>Ремонты</span><span>Склад</span><span>Справочник</span><span class="on">К оплате</span></div>
+  <div class="body" style="gap:10px;overflow:hidden">
+    <div class="pay">
+      <div class="hd"><b>Сандро</b><span>механик · 50 ₾/ч</span></div>
+      <div class="jr">
+        <div><span class="n">SV-00037</span><span class="t">EV-017 · 115 мин<small>закрыта 18.10 · 5 работ</small></span><span class="g">95,83</span></div>
+        <div><span class="n">SV-00035</span><span class="t">EV-012 · 60 мин<small>закрыта 16.10 · BR-03</small></span><span class="g">50,00</span></div>
+        <div class="rc"><span class="n">чек</span><span class="t">Трос тормоза · купил сам</span><span class="g">18,00</span></div>
+        <details><summary><span>ещё 5 заявок ▾</span></summary>
+          <div><span class="n">SV-00036</span><span class="t">EV-005 · 30 мин<small>закрыта 17.10 · MT-06</small></span><span class="g">25,00</span></div>
+          <div><span class="n">SV-00034</span><span class="t">EV-031 · 7,5 мин<small>закрыта 15.10 · OT-01 × 3</small></span><span class="g">6,25</span></div>
+          <div><span class="n">SV-00033</span><span class="t">EV-009 · 20 мин<small>закрыта 15.10 · BR-04</small></span><span class="g">16,67</span></div>
+          <div><span class="n">SV-00032</span><span class="t">EV-022 · 20 мин<small>закрыта 14.10 · BR-04</small></span><span class="g">16,67</span></div>
+          <div><span class="n">SV-00031</span><span class="t">EV-014 · 30 мин<small>закрыта 14.10 · DG-02</small></span><span class="g">25,00</span></div>
+        </details>
+      </div>
+      <div class="sum3">
+        <div><span>Работа · 7 заявок · 282,5 мин</span><span class="mono">235,42 ₾</span></div>
+        <div><span>Чеки · 1</span><span class="mono">18,00 ₾</span></div>
+        <div class="all"><span>Итого</span><span class="mono">253,42 ₾</span></div>
+      </div>
+      <span class="btn-f s full">Оплачено · 253,42 ₾</span>
+    </div>
+    <div class="pay">
+      <div class="hd"><b>Ника</b><span>главный механик · 50 ₾/ч</span></div>
+      <div class="jr"><div><span class="n">SV-00038</span><span class="t">EV-020 · 75 мин<small>закрыта 18.10 · DG-03</small></span><span class="g">62,50</span></div></div>
+      <div class="sum3"><div class="all"><span>Итого</span><span class="mono">62,50 ₾</span></div></div>
+      <span class="btn-f s full">Оплачено · 62,50 ₾</span>
+    </div>
+    <div class="held">
+      <div class="hd">Пока не к оплате <span>3 заявки</span></div>
+      <div class="r"><span class="n">SV-00039</span><span class="t">Сандро · закрыта</span><span class="why3 bad">без нормы ›</span></div>
+      <div class="r"><span class="n">SV-00041</span><span class="t">Сандро · 25,00</span><span class="why3">ждёт согласования</span></div>
+      <div class="r"><span class="n">SV-00040</span><span class="t">Сандро · 41,67</span><span class="why3">в работе</span></div>
+    </div>
+  </div>
+  <div class="tabs"><span>Сегодня</span><span>Аренды</span><span>＋</span><span>Деньги</span><span>Парк</span></div>
+</div></div>
+<p class="cap ph"><b>Телефон владельца.</b> Новая вкладка «К оплате» в «Сервисе». По карточке на механика; последние заявки видны, остальные — под «ещё 5 заявок». Чек стоит под своей заявкой. Внизу — что ещё не к оплате и почему; «без нормы ›» ведёт в заявку вписать норму.</p></div>
+
+<div><div class="frame lap"><div class="scr"><div class="side" style="height:100%"><div class="rail"></div><div class="main" style="gap:12px">
+  <div style="display:flex;justify-content:space-between;align-items:baseline"><span><span style="font-size:24px;font-weight:500">К оплате</span> <span style="color:var(--muted)">2 механика · 8 заявок · 315,92 ₾</span></span><span style="color:var(--muted);font-size:15px">Выплаты ›</span></div>
+  <h3><span>Сандро <span class="q2">механик · 50 ₾ за час нормы · 7 заявок · 282,5 мин</span></span><span class="btn-f">Оплачено · 253,42 ₾</span></h3>
+  <table class="tb">
+    <tr><th>Заявка</th><th>Мопед</th><th>Закрыта</th><th>Работы</th><th style="text-align:right">Мин</th><th style="text-align:right">Работа</th><th style="text-align:right">Чек</th><th style="text-align:right">Итого</th></tr>
+    <tr><td class="c">SV-00031</td><td>EV-014</td><td>14.10</td><td class="wk2">DG-02</td><td class="mn">30</td><td class="mn">25,00</td><td class="mn"></td><td class="mn">25,00</td></tr>
+    <tr><td class="c">SV-00032</td><td>EV-022</td><td>14.10</td><td class="wk2">BR-04</td><td class="mn">20</td><td class="mn">16,67</td><td class="mn"></td><td class="mn">16,67</td></tr>
+    <tr><td class="c">SV-00033</td><td>EV-009</td><td>15.10</td><td class="wk2">BR-04</td><td class="mn">20</td><td class="mn">16,67</td><td class="mn"></td><td class="mn">16,67</td></tr>
+    <tr><td class="c">SV-00034</td><td>EV-031</td><td>15.10</td><td class="wk2">OT-01 × 3</td><td class="mn">7,5</td><td class="mn">6,25</td><td class="mn"></td><td class="mn">6,25</td></tr>
+    <tr><td class="c">SV-00035</td><td>EV-012</td><td>16.10</td><td class="wk2">BR-03 · трос тормоза купил сам</td><td class="mn">60</td><td class="mn">50,00</td><td class="mn">18,00</td><td class="mn">68,00</td></tr>
+    <tr><td class="c">SV-00036</td><td>EV-005</td><td>17.10</td><td class="wk2">MT-06</td><td class="mn">30</td><td class="mn">25,00</td><td class="mn"></td><td class="mn">25,00</td></tr>
+    <tr><td class="c">SV-00037</td><td>EV-017</td><td>18.10</td><td class="wk2">DG-01, BR-04 × 2, WH-01, BR-06</td><td class="mn">115</td><td class="mn">95,83</td><td class="mn"></td><td class="mn">95,83</td></tr>
+    <tr class="sumrow"><td colspan="4">Итого</td><td class="mn">282,5</td><td class="mn">235,42</td><td class="mn">18,00</td><td class="mn">253,42</td></tr>
+  </table>
+  <h3><span>Ника <span class="q2">главный механик · 50 ₾ за час нормы · 1 заявка · 75 мин</span></span><span class="btn-f">Оплачено · 62,50 ₾</span></h3>
+  <table class="tb">
+    <tr><th>Заявка</th><th>Мопед</th><th>Закрыта</th><th>Работы</th><th style="text-align:right">Мин</th><th style="text-align:right">Работа</th><th style="text-align:right">Чек</th><th style="text-align:right">Итого</th></tr>
+    <tr><td class="c">SV-00038</td><td>EV-020</td><td>18.10</td><td class="wk2">DG-03</td><td class="mn">75</td><td class="mn">62,50</td><td class="mn"></td><td class="mn">62,50</td></tr>
+  </table>
+  <div style="font-size:15px;color:var(--muted)">Пока не к оплате: <b style="color:var(--crit-ink)">SV-00039 без нормы</b> · SV-00041 ждёт согласования · SV-00040 в работе</div>
+</div></div></div></div>
+<p class="cap wide"><b>Ноутбук.</b> То же таблицей: каждая заявка — строка с минутами, работой, чеком и итогом; итог механика стоит в строке «Итого» и на кнопке справа от его имени. Строка ведёт в заявку. «Выплаты ›» — история (часть 3).</p></div>
+</div>
+</section>
+
+<!-- ============================ 1B ============================ -->
+<section>
+<h2>Б. Список механиков, кнопка — на странице механика <span class="tag">вариант</span></h2>
+<div class="why">
+<div class="pro"><b>За:</b><ul><li>Одна залитая кнопка на экране (принцип 3 <code>ux.md</code>), сумма рядом с ней в нижней полосе.</li><li>Сколько бы ни было механиков, первый экран короткий: строка на механика.</li><li>«К оплате» и «Выплаты» — две части одного экрана.</li></ul></div>
+<div class="con"><b>Против:</b><ul><li>На одно касание больше: механик → «Оплачено» → подтверждение.</li><li>На первом экране не видно, за какие заявки сумма, — только итог.</li></ul></div>
+</div>
+<div class="row">
+<div><div class="frame ph"><div class="scr">
+  <div class="bar"><div class="l"><span class="ttl"><b>Сервис</b><span>К оплате · 315,92 ₾</span></span></div><div class="r"><span class="avo">В</span></div></div>
+  <div class="stabs"><span>Ремонты</span><span>Склад</span><span>Справочник</span><span class="on">К оплате</span></div>
+  <div class="body" style="gap:10px">
+    <div class="segs"><span class="on">К оплате · 2</span><span>Выплаты</span></div>
+    <div class="qrow2"><span class="w"><b>Сандро</b><div>7 заявок · 282,5 мин · чек 18,00</div></span><span class="s">253,42 ₾</span><span class="go">›</span></div>
+    <div class="qrow2"><span class="w"><b>Ника</b><div>1 заявка · 75 мин</div></span><span class="s">62,50 ₾</span><span class="go">›</span></div>
+    <div class="qrow2" style="border-style:dashed"><span class="w"><b style="font-size:15px">Пока не к оплате · 3</b><div><span style="color:var(--crit-ink);font-weight:600">1 без нормы</span> · 1 ждёт · 1 в работе</div></span><span class="go">›</span></div>
+  </div>
+  <div class="tabs"><span>Сегодня</span><span>Аренды</span><span>＋</span><span>Деньги</span><span>Парк</span></div>
+</div></div>
+<p class="cap ph"><b>Первый экран.</b> Строка на механика: сколько заявок и сумма. Сверху — «К оплате» и «Выплаты».</p></div>
+
+<div><div class="frame ph"><div class="scr">
+  <div class="bar"><div class="l"><span class="bk" style="width:40px;height:40px;font-size:22px">‹</span><span class="ttl"><b>Сандро — к оплате</b><span>7 заявок · 50 ₾/ч</span></span></div></div>
+  <div class="body" style="gap:8px;overflow:hidden">
+    <div class="jr">
+      <div><span class="n">SV-00031</span><span class="t">EV-014 · 30 мин<small>14.10 · DG-02</small></span><span class="g">25,00</span></div>
+      <div><span class="n">SV-00032</span><span class="t">EV-022 · 20 мин<small>14.10 · BR-04</small></span><span class="g">16,67</span></div>
+      <div><span class="n">SV-00033</span><span class="t">EV-009 · 20 мин<small>15.10 · BR-04</small></span><span class="g">16,67</span></div>
+      <div><span class="n">SV-00034</span><span class="t">EV-031 · 7,5 мин<small>15.10 · OT-01 × 3</small></span><span class="g">6,25</span></div>
+      <div><span class="n">SV-00035</span><span class="t">EV-012 · 60 мин<small>16.10 · BR-03</small></span><span class="g">50,00</span></div>
+      <div class="rc"><span class="n">чек</span><span class="t">Трос тормоза · купил сам</span><span class="g">18,00</span></div>
+      <div><span class="n">SV-00036</span><span class="t">EV-005 · 30 мин<small>17.10 · MT-06</small></span><span class="g">25,00</span></div>
+      <div><span class="n">SV-00037</span><span class="t">EV-017 · 115 мин<small>18.10 · DG-01, BR-04 × 2, WH-01, BR-06</small></span><span class="g">95,83</span></div>
+    </div>
+  </div>
+  <div class="stick"><span class="sum">Работа 235,42 · чек 18,00<br><b>Итого 253,42 ₾</b></span><span class="btn-f s">Оплачено</span></div>
+</div></div>
+<p class="cap ph"><b>Страница механика.</b> Все заявки списком, итог — в нижней полосе рядом с единственной кнопкой.</p></div>
+</div>
+</section>
+
+<!-- ================================================================== part 2 -->
+<h2 class="part">2. Баланс механика</h2>
+<p class="lead">По ТЗ механик видит свой баланс: к оплате, ждёт согласования, незакрытые заявки, выплаты. На планшете после входа по PIN раздел один — «Ремонт»;
+баланс — второе, что механику там можно (ТЗ, «Роли и доступ»). Денег клиентов и цен склада он по-прежнему не видит — только свою работу по своей ставке и
+свои чеки. На телефоне у механика и главного механика появляется вкладка «Баланс».</p>
+
+<!-- ============================ 2A ============================ -->
+<section class="rec">
+<h2>А. Свой экран «Баланс», вход — кнопкой в «Ремонте» <span class="tag">рекомендую</span></h2>
+<div class="why">
+<div class="pro"><b>За:</b><ul><li>«Ремонт» остаётся про работу, деньги — на своём экране (принцип 1 <code>ux.md</code>: один вопрос — одно место).</li><li>Кнопка сделана так же, как «Справочник работ» у главного механика: учить нечему.</li><li>На экране помещаются все четыре части ТЗ и история выплат.</li></ul></div>
+<div class="con"><b>Против:</b><ul><li>Чтобы увидеть сумму, нужно одно касание.</li></ul></div>
+</div>
+<div class="row">
+<div><div class="frame"><div class="scr">
+  <div class="bar"><div class="l"><span class="ttl"><b>Ремонт</b><span>3 мои</span></span></div><div class="r"><span class="me"><span class="av">С</span><span>Сандро<i>механик</i></span></span><span class="out">⇥ Выйти</span></div></div>
+  <div class="body" style="gap:14px">
+    <div style="display:flex;gap:12px;align-items:center"><span class="chip sm" style="border-width:2.5px;border-color:var(--ink);font-weight:600">Баланс · 253,42 ₾</span></div>
+    <span class="btn-f" style="height:72px;font-size:24px">＋ Новая заявка</span>
+    <div class="mylist">
+      <div class="r"><span class="w"><b>SV-00041 · EV-019</b><div>MT-06 · открыта сегодня 09:12</div></span><span class="pill p-wait">Ждёт согласования</span></div>
+      <div class="r"><span class="w"><b>SV-00040 · EV-003</b><div>BR-01, BR-04 · согласовала Ника</div></span><span class="pill p-serv">В работе</span></div>
+      <div class="r"><span class="w"><b>SV-00039 · EV-008</b><div>Замена стойки руля · не из списка</div></span><span class="nonorm">без нормы</span></div>
+      <div class="r"><span class="w"><b>SV-00037 · EV-017</b><div>закрыта 18.10</div></span><span class="pill p-done">Завершён</span></div>
+      <div class="r"><span class="w"><b>SV-00030 · EV-002</b><div>закрыта 11.10</div></span><span class="pill p-paid">Оплачено</span></div>
+    </div>
+  </div>
+</div></div>
+<p class="cap"><b>«Ремонт» механика.</b> Над «Новой заявкой» — кнопка «Баланс» с суммой к оплате. Оплаченная заявка в списке — «Оплачено».</p></div>
+
+<div><div class="frame"><div class="scr">
+  <div class="bar"><div class="l"><span class="bk">‹</span><span class="ttl"><b>Баланс</b><span>50 ₾ за час нормы</span></span></div><div class="r"><span class="me"><span class="av">С</span><span>Сандро<i>механик</i></span></span><span class="out">⇥ Выйти</span></div></div>
+  <div class="body" style="gap:14px">
+    <div class="bigsum"><span class="k">К оплате</span><span class="v">253,42 ₾</span><span class="s2">7 заявок · работа <b>235,42 ₾</b> + чек <b>18,00 ₾</b> · выплата раз в неделю</span></div>
+    <div class="tiles3">
+      <div class="btile wait"><span class="k">Ждёт согласования</span><span class="v">25,00 ₾</span><span class="s2">1 заявка — SV-00041</span></div>
+      <div class="btile"><span class="k">В работе</span><span class="v">41,67 ₾</span><span class="s2">1 заявка — к оплате после закрытия</span></div>
+      <div class="btile bad"><span class="k">Без нормы</span><span class="v">1</span><span class="s2">SV-00039 — ждёт нормы от главного механика</span></div>
+    </div>
+    <div class="sect-h">К оплате <span>7 заявок</span></div>
+    <div class="blines">
+      <div><span class="n">SV-00037</span><span class="t">EV-017<small>DG-01, BR-04 × 2, WH-01, BR-06</small></span><span class="mn">115 мин</span><span class="g">95,83 ₾</span></div>
+      <div><span class="n">SV-00036</span><span class="t">EV-005<small>MT-06</small></span><span class="mn">30 мин</span><span class="g">25,00 ₾</span></div>
+      <div><span class="n">SV-00035</span><span class="t">EV-012<small>BR-03 · чек 18,00 ₾ вернётся тебе</small></span><span class="mn">60 мин</span><span class="g">68,00 ₾</span></div>
+      <details><summary><span class="n" style="color:var(--accent);font-weight:600">ещё 4 ▾</span></summary>
+        <div><span class="n">SV-00034</span><span class="t">EV-031<small>OT-01 × 3</small></span><span class="mn">7,5 мин</span><span class="g">6,25 ₾</span></div>
+        <div><span class="n">SV-00033</span><span class="t">EV-009<small>BR-04</small></span><span class="mn">20 мин</span><span class="g">16,67 ₾</span></div>
+        <div><span class="n">SV-00032</span><span class="t">EV-022<small>BR-04</small></span><span class="mn">20 мин</span><span class="g">16,67 ₾</span></div>
+        <div><span class="n">SV-00031</span><span class="t">EV-014<small>DG-02</small></span><span class="mn">30 мин</span><span class="g">25,00 ₾</span></div>
+      </details>
+    </div>
+    <div class="sect-h">Выплаты <span>последние</span></div>
+    <div class="blines">
+      <div><span class="n">13.10</span><span class="t">3 заявки<small>отметил владелец</small></span><span class="mn">175 мин</span><span class="g">145,83 ₾</span></div>
+    </div>
+  </div>
+</div></div>
+<p class="cap"><b>Баланс механика.</b> Сверху крупно — сколько к оплате, под ней три плитки: ждёт согласования, в работе, без нормы. Ниже — заявки к оплате и прошлые выплаты. Каждая строка ведёт в свою заявку.</p></div>
+
+<div><div class="frame ph"><div class="scr">
+  <div class="bar"><div class="l"><span class="ttl"><b>Ремонт</b><span>Баланс</span></span></div><div class="r"><span class="avo">С</span></div></div>
+  <div class="stabs"><span>Ремонты</span><span class="on">Баланс</span></div>
+  <div class="body" style="gap:10px;overflow:hidden">
+    <div class="bigsum" style="padding:14px 16px"><span class="k" style="font-size:14px">К оплате</span><span class="v" style="font-size:40px">253,42 ₾</span><span class="s2" style="font-size:13px">7 заявок · работа <b>235,42</b> + чек <b>18,00</b></span></div>
+    <div class="held" style="border-style:solid;border-color:var(--line-soft)">
+      <div class="r"><span class="t">Ждёт согласования · 1</span><span class="mono">25,00</span></div>
+      <div class="r"><span class="t">В работе · 1</span><span class="mono">41,67</span></div>
+      <div class="r"><span class="t" style="color:var(--crit-ink);font-weight:600">Без нормы · 1</span><span>SV-00039</span></div>
+    </div>
+    <div class="hh">Выплаты <span>последние</span></div>
+    <div class="hist"><div class="r"><span class="d">13.10</span><span class="t">3 заявки · 175 мин</span><span class="g">145,83</span></div></div>
+  </div>
+</div></div>
+<p class="cap ph"><b>Телефон механика.</b> У механика и главного механика появляется вкладка «Баланс» рядом с «Ремонтами».</p></div>
+</div>
+</section>
+
+<!-- ============================ 2B ============================ -->
+<section>
+<h2>Б. Полоса баланса прямо на «Ремонте» <span class="tag">вариант</span></h2>
+<div class="why">
+<div class="pro"><b>За:</b><ul><li>Сумма к оплате видна каждый раз, как механик входит, — касаний ноль.</li><li>Полоса ведёт в ту же раскладку, что вариант А.</li></ul></div>
+<div class="con"><b>Против:</b><ul><li>Деньги стоят на рабочем экране общего планшета — их видит каждый, кто рядом, пока механик не вышел.</li><li>Полоса занимает место над «Новой заявкой»; на «Ремонте» становится два вопроса — работа и деньги.</li></ul></div>
+</div>
+<div class="row">
+<div><div class="frame"><div class="scr">
+  <div class="bar"><div class="l"><span class="ttl"><b>Ремонт</b><span>3 мои</span></span></div><div class="r"><span class="me"><span class="av">С</span><span>Сандро<i>механик</i></span></span><span class="out">⇥ Выйти</span></div></div>
+  <div class="body" style="gap:14px">
+    <div class="band"><span class="c1"><i>К оплате</i><b>253,42 ₾</b></span><span class="sep"></span><span class="c2">ждёт согласования <b>25,00</b><br>в работе <b>41,67</b> · <span style="color:var(--crit-ink);font-weight:600">без нормы 1</span></span><span class="go">›</span></div>
+    <span class="btn-f" style="height:72px;font-size:24px">＋ Новая заявка</span>
+    <div class="mylist">
+      <div class="r"><span class="w"><b>SV-00041 · EV-019</b><div>MT-06 · открыта сегодня 09:12</div></span><span class="pill p-wait">Ждёт согласования</span></div>
+      <div class="r"><span class="w"><b>SV-00040 · EV-003</b><div>BR-01, BR-04 · согласовала Ника</div></span><span class="pill p-serv">В работе</span></div>
+      <div class="r"><span class="w"><b>SV-00039 · EV-008</b><div>Замена стойки руля · не из списка</div></span><span class="nonorm">без нормы</span></div>
+      <div class="r"><span class="w"><b>SV-00037 · EV-017</b><div>закрыта 18.10</div></span><span class="pill p-done">Завершён</span></div>
+    </div>
+  </div>
+</div></div>
+<p class="cap"><b>«Ремонт» с полосой.</b> Касание полосы открывает тот же экран, что в варианте А.</p></div>
+</div>
+</section>
+
+<!-- ================================================================== part 3 -->
+<h2 class="part">3. Отметка, оплаченная заявка и отмена — одинаково при любом выборе</h2>
+<div class="row">
+<div><div class="frame ph"><div class="scr">
+  <div class="bar"><div class="l"><span class="ttl"><b>Сервис</b><span>К оплате · 315,92 ₾</span></span></div><div class="r"><span class="avo">В</span></div></div>
+  <div class="stabs"><span>Ремонты</span><span>Склад</span><span>Справочник</span><span class="on">К оплате</span></div>
+  <div class="body" style="gap:10px"><div class="pay"><div class="hd"><b>Сандро</b><span>механик · 50 ₾/ч</span></div></div></div>
+  <div class="veil"></div>
+  <div class="sheet">
+    <span class="grab"></span>
+    <p class="q">Отметить выплату Сандро — 253,42 ₾?</p>
+    <div class="box-info">7 заявок станут «Оплачено», и их больше нельзя будет править: работа 235,42 ₾, чек 18,00 ₾.<br><br>Это отметка, не платёж: в «Деньгах» ничего не появится. Перевод механику разбери в «Разобрать» как «Расход ▸».</div>
+    <div style="display:flex;gap:10px;justify-content:flex-end"><span class="btn-o s">Назад</span><span class="btn-f s">Оплачено · 253,42 ₾</span></div>
+  </div>
+</div></div>
+<p class="cap ph"><b>Подтверждение.</b> Лист называет, что произойдёт, до нажатия (принцип 14). На кнопке та же сумма, что на экране.</p></div>
+
+<div><div class="frame ph"><div class="scr">
+  <div class="bar"><div class="l"><span class="ttl"><b>Сервис</b><span>К оплате · 62,50 ₾</span></span></div><div class="r"><span class="avo">В</span></div></div>
+  <div class="stabs"><span>Ремонты</span><span>Склад</span><span>Справочник</span><span class="on">К оплате</span></div>
+  <div class="body" style="gap:10px">
+    <div class="pay"><div class="hd"><b>Ника</b><span>главный механик · 50 ₾/ч</span></div><div class="sum3"><div class="all"><span>Итого</span><span class="mono">62,50 ₾</span></div></div><span class="btn-f s full">Оплачено · 62,50 ₾</span></div>
+    <div class="hh">Выплаты <span>все ›</span></div>
+    <div class="hist">
+      <div class="r"><span class="d">20.10</span><span class="t">Сандро · 7 заявок</span><span class="g">253,42</span><span style="color:var(--muted)">⋯</span></div>
+      <div class="r"><span class="d">13.10</span><span class="t">Сандро · 3 заявки</span><span class="g">145,83</span><span style="color:var(--muted)">⋯</span></div>
+    </div>
+  </div>
+  <div class="toast"><span>Сандро: выплата 253,42 ₾ · 7 заявок «Оплачено»</span></div>
+  <div class="tabs"><span>Сегодня</span><span>Аренды</span><span>＋</span><span>Деньги</span><span>Парк</span></div>
+</div></div>
+<p class="cap ph"><b>После отметки.</b> Карточка Сандро ушла, выплата встала первой в истории. В «⋯» у выплаты — «Отменить выплату».</p></div>
+
+<div><div class="frame ph"><div class="scr">
+  <div class="bar"><div class="l"><span class="bk" style="width:40px;height:40px;font-size:22px">‹</span><span class="ttl"><b>SV-00035</b><span>EV-012 · Сандро</span></span></div><div class="r"><span class="pill p-paid" style="font-size:13px;padding:3px 10px">Оплачено</span></div></div>
+  <div class="body" style="gap:10px">
+    <div class="box-info" style="font-size:14px">Оплачено 20.10.2026 в выплате Сандро 253,42 ₾ · отметил владелец. Заявку больше не правят.</div>
+    <div class="card"><div class="sect-h">Работы <span>60 мин</span></div>
+      <div class="lines"><div class="ok"><span class="c">BR-03</span><span class="t">Замена тормозного троса</span><span class="gel">50,00 ₾</span></div></div></div>
+    <div class="card"><div class="sect-h">Детали <span>1</span></div>
+      <div class="plines"><div><span class="kt">купил сам</span><span class="t">Трос тормоза<small>Сандро, возмещено</small></span><span class="gel">18,00 ₾</span></div></div></div>
+    <div class="sum3"><div><span>Работа механика</span><span class="mono">50,00 ₾</span></div><div><span>Детали</span><span class="mono">18,00 ₾</span></div><div class="all"><span>Ремонт стоил</span><span class="mono">68,00 ₾</span></div></div>
+  </div>
+</div></div>
+<p class="cap ph"><b>Оплаченная заявка у владельца.</b> Пилюля «Оплачено», строка «в какой выплате». «Вписать норму», «＋ Работа», «＋ Деталь» исчезают. Стоимость ремонта теперь включает работу механика.</p></div>
+
+<div><div class="frame ph"><div class="scr">
+  <div class="bar"><div class="l"><span class="ttl"><b>Сервис</b><span>Выплаты</span></span></div><div class="r"><span class="avo">В</span></div></div>
+  <div class="body" style="gap:10px"></div>
+  <div class="veil"></div>
+  <div class="sheet">
+    <span class="grab"></span>
+    <p class="q">Отменить выплату 20.10 — Сандро, 253,42 ₾?</p>
+    <div class="fl"><div class="lbl">Причина — её видно в журнале</div><div class="inp txt" style="height:52px;font-size:16px">Отметил не тому механику<span class="caret"></span></div></div>
+    <div class="box-info">7 заявок снова станут «К оплате» и снова правятся. Деньги эта кнопка не возвращает — она убирает отметку.</div>
+    <div style="display:flex;gap:10px;justify-content:flex-end"><span class="btn-o s">Назад</span><span class="btn-f s" style="background:var(--crit)">Отменить выплату</span></div>
+  </div>
+</div></div>
+<p class="cap ph"><b>Отмена выплаты.</b> Только с причиной. Заявки возвращаются к оплате.</p></div>
+</div>
+
+<h2>Слова экранов на грузинском</h2>
+<p class="lead">Перевод мой, его вычитает директор. Где слово в EV8 Ops уже есть («ждёт согласования», «без нормы», «купил сам», «ქვითარი» для чека, «в работе»),
+оно взято оттуда; новые слова отмечены.</p>
+<table class="words">
+<tr><td>გადასახდელი</td><td class="lat">gadasakhdeli</td><td>К оплате — <i>новое слово</i></td></tr>
+<tr><td>გადახდილია</td><td class="lat">gadakhdilia</td><td>Оплачено (кнопка и пилюля)</td></tr>
+<tr><td>გადახდები</td><td class="lat">gadakhdebi</td><td>Выплаты — <i>новое слово</i></td></tr>
+<tr><td>ბალანსი</td><td class="lat">balansi</td><td>Баланс — <i>новое слово</i></td></tr>
+<tr><td>სამუშაო · ქვითრები · სულ</td><td class="lat">samushao · kvitrebi · sul</td><td>Работа · Чеки · Итого</td></tr>
+<tr><td>ელოდება დამტკიცებას</td><td class="lat">elodeba damtkitsebas</td><td>Ждёт согласования</td></tr>
+<tr><td>მუშავდება</td><td class="lat">mushavdeba</td><td>В работе</td></tr>
+<tr><td>ნორმის გარეშე</td><td class="lat">normis gareshe</td><td>Без нормы</td></tr>
+<tr><td>ჯერ არ არის გადასახდელი</td><td class="lat">jer ar aris gadasakhdeli</td><td>Пока не к оплате — <i>новое</i></td></tr>
+<tr><td>გადახდის მონიშვნა — 253,42 ₾?</td><td class="lat">gadakhdis monishvna</td><td>Отметить выплату — сумма? — <i>новое</i></td></tr>
+<tr><td>გადახდის გაუქმება</td><td class="lat">gadakhdis gauqmeba</td><td>Отменить выплату — <i>новое</i></td></tr>
+<tr><td>მიზეზი</td><td class="lat">mizezi</td><td>Причина</td></tr>
+</table>
+
+<p class="note" style="margin-top:28px">Файл статичный, без JavaScript; «ещё 5 заявок ▾» и «ещё 4 ▾» раскрываются средствами HTML. Цвета и шрифты — токены EV8 Ops. Размеры — на экране
+планшета до уменьшения. Выдуманы люди (Сандро, Ника), номера мопедов и заявок, даты, чек 18,00 ₾ и прошлая выплата 13.10; работы, нормы и контроль
+235,42 ₾ — из бота. В продукте суммы пишутся с точкой (253.42 ₾), здесь — с запятой, как в прежних прототипах.</p>
+</main></body></html>

@@ -4,7 +4,8 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { LoadError } from '../components/LoadError.js';
 import { Loading, PageHead } from '../components/ui.js';
 import { fmtDate, formatGel } from '../format.js';
-import { useT } from '../i18n/index.js';
+import { useLocale, useT } from '../i18n/index.js';
+import { repairHoursText, type RepairHours } from '../lib/maintenance.js';
 import { useLoad } from '../lib/use.js';
 
 // "Отчёты → Неделя" (wave 6 §3.1): the figures of the book on one screen,
@@ -27,7 +28,7 @@ interface Week {
   to: string;
   asOf: string;
   today: string;
-  fleet: { rented: number; freeInRentPool: number; inService: number; serviceLongestDays: number | null };
+  fleet: { rented: number; freeInRentPool: number; inService: number; serviceLongestDays: number | null; repairs?: RepairHours };
   rentals: { started: number; returned: number; overdueCount: number; overdueTetri: number };
   money: {
     totalTetri: number;
@@ -65,6 +66,7 @@ const money = (tetri: number) => formatGel(tetri);
 
 export function WeekPage() {
   const t = useT();
+  const { locale } = useLocale();
   const [params, setParams] = useSearchParams();
   const [copied, setCopied] = useState<'' | 'ok' | 'failed'>('');
   const today = todayISO();
@@ -96,6 +98,8 @@ export function WeekPage() {
       text: w.fleet.serviceLongestDays == null ? String(w.fleet.inService) : `${w.fleet.inService} · ${t.weekReport.serviceDays(w.fleet.serviceLongestDays)}`,
       to: '/service',
     },
+    // Downtime of the week's repairs in hours, waiting for approval within it (ADR-0038).
+    ...(w.fleet.repairs ? [{ key: 'repair-hours', label: t.wmaint.repairsLine, text: repairHoursText(w.fleet.repairs, t, locale), to: '/service' }] : []),
     { key: 'moves', label: t.weekReport.startedReturned, text: `${w.rentals.started} · ${w.rentals.returned}`, to: '/rentals' },
     {
       key: 'overdue',

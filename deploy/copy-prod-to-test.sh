@@ -21,8 +21,10 @@
 # production's password; a login only on the test stand is not carried.
 #
 # Nothing is sent to anyone afterwards: the test stand's worker only rolls
-# rental weeks and reads Kommo and Bank of Georgia. A Claude session does not run this script on
-# the server: the owner does.
+# rental weeks and reads Kommo and Bank of Georgia, and production's notices
+# still waiting for Telegram come over given up (ADR-0038 §7) — production
+# sends them, the test stand never again. A Claude session does not run this
+# script on the server: the owner does.
 set -euo pipefail
 
 OPS=/srv/ev8-ops
@@ -76,9 +78,14 @@ echo "copy: 4/4 the test stand's logins come back"
   echo '\.'
   echo "CREATE TEMP TABLE keep_sessions (token text, email text, created_at timestamptz, last_seen_at timestamptz, expires_at timestamptz);"
   echo "COPY keep_sessions FROM STDIN;"
-  sql "$TEST_DB" "$PREV" -c "COPY (SELECT s.token, u.email, s.created_at, s.last_seen_at, s.expires_at FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.expires_at > now()) TO STDOUT"
+  # Password sign-ins only: a PIN session belongs to a workshop tablet whose
+  # registration production does not have, and carried over it would come
+  # back as an ordinary session (ADR-0033). The tablet is registered again.
+  sql "$TEST_DB" "$PREV" -c "COPY (SELECT s.token, u.email, s.created_at, s.last_seen_at, s.expires_at FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.expires_at > now() AND s.kind = 'password') TO STDOUT"
   echo '\.'
   echo "DELETE FROM sessions;"
+  # Production's notices that had not gone yet are production's to send.
+  echo "DO \$\$ BEGIN IF to_regclass('public.notices') IS NOT NULL THEN UPDATE notices SET gave_up_at = now(), last_failure = 'copied' WHERE sent_at IS NULL AND gave_up_at IS NULL; END IF; END \$\$;"
   echo "UPDATE users u SET password_hash = k.password_hash FROM keep_users k WHERE u.email = k.email;"
   echo "INSERT INTO sessions (token, user_id, created_at, last_seen_at, expires_at)
           SELECT k.token, u.id, k.created_at, k.last_seen_at, k.expires_at FROM keep_sessions k JOIN users u ON u.email = k.email;"

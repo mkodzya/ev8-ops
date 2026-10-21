@@ -22,6 +22,13 @@ export const PERMISSIONS = [
   'purchases.manage', // place an order, pay a factory, receive a shipment (wave 5 §3.4–3.6)
   'service.report', // report a breakdown: a manager may say a moped is broken (wave 5 §3.7)
   'service.manage', // repair jobs (SRV-01), and the parts catalogue
+  // The workshop (ADR-0033). Seeing a repair is not seeing the fleet: a
+  // mechanic reads repairs and none of the customers, payments or cost.
+  'service.view', // repair jobs without the customers' money
+  'service.work', // carry one's own repair job from the workshop tablet
+  'service.approve', // approve a repair before the work starts
+  'service.norms', // the book of works and their norm times
+  'service.payout', // mark a mechanic's work paid
   'stock.count', // correct a count by hand — a stock-take
   'sales.manage', // sales and buy-backs (SAL-01..03)
   // Return or keep a deposit. One owner decides; there is no second confirmation (D18).
@@ -38,13 +45,50 @@ export type Permission = (typeof PERMISSIONS)[number];
  * beyond their own cash, cost, purchases, reports and settings are the
  * owners' (redesign blueprint §2.1, Mika 17.09.2026).
  */
-const MANAGER: Permission[] = ['fleet.view', 'fleet.location.set', 'fleet.state.manual', 'rental.create', 'rental.return', 'customer.create', 'cash.record', 'service.report'];
+const MANAGER: Permission[] = ['fleet.view', 'fleet.location.set', 'fleet.state.manual', 'rental.create', 'rental.return', 'customer.create', 'cash.record', 'service.report', 'service.view'];
+
+/**
+ * A mechanic opens, carries and closes their own repairs and sees no one
+ * else's; the chief mechanic sees every repair, approves them and keeps the
+ * norms. Neither sees the fleet, a customer, a payment, a deposit or what
+ * anything cost (ADR-0033 §2). Marking a mechanic paid is the owners'.
+ */
+const MECHANIC: Permission[] = ['service.view', 'service.work'];
+const CHIEF_MECHANIC: Permission[] = [...MECHANIC, 'service.approve', 'service.norms'];
 
 export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
   owner: PERMISSIONS,
   manager: MANAGER,
+  mechanic: MECHANIC,
+  chief_mechanic: CHIEF_MECHANIC,
 };
 
 export function roleCan(role: Role, permission: Permission): boolean {
   return ROLE_PERMISSIONS[role].includes(permission);
 }
+
+/**
+ * Every repair, or only one's own? Whoever sees the fleet or approves repairs
+ * sees them all; a mechanic sees the jobs that are theirs (ADR-0033 §2). Asked
+ * of the rights, not the role's name, like everything else here.
+ */
+export function seesEveryRepair(permissions: readonly Permission[]): boolean {
+  return permissions.includes('fleet.view') || permissions.includes('service.approve');
+}
+
+/** Roles that sign in with a PIN on the workshop tablet; nobody else has one (ADR-0033 §6). */
+export const PIN_ROLES: readonly Role[] = ['mechanic', 'chief_mechanic'];
+
+/**
+ * What a session opened with a PIN on the workshop tablet may reach: the
+ * repair screens and nothing else (ADR-0033 §7), whatever the role allows on
+ * a phone. Paying a mechanic is not done from the workshop.
+ */
+export const PIN_SESSION_PERMISSIONS: readonly Permission[] = ['service.view', 'service.work', 'service.approve', 'service.norms'];
+
+/** PIN rules — code, like the other sign-in rules (wave 6 §3.9, Q30; ADR-0033 §7). */
+export const PIN_MIN_DIGITS = 4;
+export const PIN_MAX_DIGITS = 6;
+export const PIN_MAX_FAILURES = 5;
+export const PIN_LOCK_MINUTES = 15;
+export const PIN_IDLE_MINUTES = 10;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { actionsForRole, menuSectionsForRole, phoneTabsForRole, sectionOfPath, sectionsForRole, tabsForRole } from './navigation-helpers.js';
+import { actionsForRole, homePathForRole, menuSectionsForRole, phoneTabsForRole, sectionOfPath, sectionsForRole, tabsForRole } from './navigation-helpers.js';
 
 describe('the structure each role sees (wave 1 §3.2)', () => {
   it('gives the owner Today · Rentals · + · Money · Fleet, and everything else in the avatar menu', () => {
@@ -51,12 +51,32 @@ describe('the structure each role sees (wave 1 §3.2)', () => {
   // them — one list, one address (designer, 21.09.2026).
   // The expense categories joined them on 15.10.2026 (migration 0046).
   it('gives settings seven tabs, and its points stay in Settings (Mika, 29.09.2026)', () => {
-    expect(tabsForRole('settings', 'owner').map((t) => t.id)).toEqual(['people', 'points', 'rental', 'expenses', 'drive', 'journal', 'migration', 'login']);
+    expect(tabsForRole('settings', 'owner').map((t) => t.id)).toEqual(['people', 'points', 'rental', 'repair', 'expenses', 'drive', 'journal', 'migration', 'login']);
     expect(tabsForRole('settings', 'owner').find((t) => t.id === 'points')?.path).toBe('/settings/points');
     expect(sectionOfPath('/settings/points')).toBe('settings');
     // Fleet keeps its own tab to the same page.
     expect(tabsForRole('fleet', 'owner').find((t) => t.id === 'points')?.path).toBe('/fleet/points');
     expect(tabsForRole('settings', 'manager')).toEqual([]);
+  });
+
+  // ADR-0033: a mechanic and a chief mechanic see the repairs and nothing else,
+  // and land on them — "Today" is the front office's queue.
+  it('gives a mechanic and a chief mechanic the repairs alone, as their first screen', () => {
+    for (const role of ['mechanic', 'chief_mechanic'] as const) {
+      expect(sectionsForRole(role).map((s) => s.id)).toEqual(['service']);
+      expect(phoneTabsForRole(role)).toEqual(['service']);
+      expect(menuSectionsForRole(role)).toEqual([]);
+      expect(actionsForRole(role)).toEqual([]);
+      expect(homePathForRole(role)).toBe('/service');
+    }
+    // The book of works is the chief mechanic's to keep, not the mechanic's (stage 2).
+    // Each reads his own balance (stage 5); marking a mechanic paid is the owners' alone.
+    expect(tabsForRole('service', 'mechanic').map((t) => t.id)).toEqual(['jobs', 'balance']);
+    expect(tabsForRole('service', 'chief_mechanic').map((t) => t.id)).toEqual(['jobs', 'works', 'balance']);
+    expect(tabsForRole('service', 'owner').map((t) => t.id)).toEqual(['jobs', 'stock', 'works', 'payouts']);
+    expect(tabsForRole('service', 'manager').map((t) => t.id)).not.toContain('payouts');
+    expect(homePathForRole('owner')).toBe('/');
+    expect(homePathForRole('manager')).toBe('/');
   });
 
   it('knows which section an address belongs to', () => {

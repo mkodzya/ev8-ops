@@ -1,0 +1,60 @@
+<!doctype html><html lang="ka"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Инструкция главного механика · EV8 Ops</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600&family=Inter:wght@400;500;600&family=Noto+Sans+Georgian:wght@400;500;600;700&display=swap">
+<style>
+/* One screen for the chief mechanic, stages 1–3 of docs/spec/mechanic-in-erp-plan.md
+   (§5 «Живая проверка в мастерской»). Static, no JavaScript, prints on one A4 page.
+   Georgian is the session's translation; the director proofreads it. Colours are
+   the product's tokens (packages/shared/tokens.json). */
+:root { --bg:#fbfbfb; --surface:#fff; --ink:#0b0b0b; --muted:#5d5d5d; --line:#ebebeb; --accent:#557553; --accent-soft:#e3ebe3; --lime:#e0ffa2;
+  --ka:"Noto Sans Georgian","Be Vietnam Pro",sans-serif; --ru:"Be Vietnam Pro","Inter",sans-serif; }
+* { box-sizing:border-box; }
+body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.45 var(--ru); }
+main { max-width:1000px; margin:0 auto; padding:24px 16px 40px; }
+h1 { font:500 24px/1.2 var(--ka); margin:0; letter-spacing:-.01em; }
+.sub { color:var(--muted); margin:4px 0 18px; }
+ol { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:10px; }
+li { display:grid; grid-template-columns:40px 1fr 1fr; gap:6px 18px; background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:12px 16px; }
+li b.n { grid-row:span 2; width:32px; height:32px; border-radius:50%; background:var(--accent); color:#fff; display:flex; align-items:center; justify-content:center; font-weight:600; }
+.ka { font-family:var(--ka); font-size:16px; } .ru { color:var(--muted); }
+h2 { margin:0; font-size:17px; font-weight:600; } h2.ka { font-size:17px; }
+p { margin:0; }
+.btn { display:inline-block; padding:0 8px; border:1.5px solid var(--ink); border-radius:99px; font-weight:500; white-space:nowrap; }
+.btn.f { background:var(--accent); color:#fff; border-color:var(--accent); }
+.note { margin-top:14px; padding:10px 14px; border-radius:12px; background:var(--lime); }
+.foot { margin-top:14px; color:var(--muted); font-size:13px; }
+@media (max-width:700px) { li { grid-template-columns:36px 1fr; } li .ru { grid-column:2; } }
+@media print { body { background:#fff; } main { padding:0; } li { break-inside:avoid; } }
+</style></head><body><main>
+
+<h1>შეკეთება EV8 Ops-ში — პლანშეტიდან</h1>
+<p class="sub">Ремонт в EV8 Ops с планшета мастерской — инструкция главного механика на один экран. Слева — на планшете (ka), справа — по-русски.</p>
+
+<ol>
+<li><b class="n">1</b>
+  <div class="ka"><h2 class="ka">შესვლა</h2><p>პლანშეტზე დააჭირეთ თქვენს სახელს და აკრიფეთ PIN → <span class="btn f">შესვლა</span>. წასვლისას — <span class="btn">გასვლა</span>. 10 წუთი თუ არაფერს აჭერთ, სისტემა თვითონ გამოგიყვანთ.</p></div>
+  <div class="ru"><h2>Вход</h2><p>Нажать своё имя, набрать PIN → «Войти». Уходя — «Выйти». Без касаний 10 минут — выход сам.</p></div>
+</li>
+<li><b class="n">2</b>
+  <div class="ka"><h2 class="ka">ახალი შეკეთება</h2><p><span class="btn f">＋ ახალი შეკეთება</span> → მოპედი: VIN-ის ბოლო 4–6 სიმბოლო ან ნომერი სტიკერიდან → გარბენი და ოდომეტრის ფოტო → მიზეზი, რა გაფუჭდა, დაზიანების ფოტო → სამუშაოები ცნობარიდან → <span class="btn f">შეკეთების გახსნა</span>.</p></div>
+  <div class="ru"><h2>Новая заявка</h2><p>«＋ Новая заявка» → мопед по хвосту VIN или номеру с наклейки → пробег и фото одометра → причина, что сломалось, фото поломки → работы из справочника → «Открыть ремонт». Ваша заявка сразу в работе; заявка механика уходит вам на согласование.</p></div>
+</li>
+<li><b class="n">3</b>
+  <div class="ka"><h2 class="ka">დამტკიცება</h2><p>„შეკეთება“ → <b>ელოდება დამტკიცებას</b>. ბარათში ნახეთ ფოტო, მიზეზი, გარბენი და სამუშაოები. სიის გარეთ სამუშაოს ჩაუწერეთ ნორმა (წთ). შემდეგ <span class="btn f">დამტკიცება</span> ან <span class="btn">უარყოფა</span> — უარს მიზეზი აუცილებლად სჭირდება.</p></div>
+  <div class="ru"><h2>Согласование</h2><p>«Ремонт» → «Ждут согласования». В карточке — фото, причина, пробег, работы. Работе «не из списка» впишите норму в минутах. «Согласовать» или «Отклонить» — отказ только с причиной: механик её увидит, мопед вернётся в парк.</p></div>
+</li>
+<li><b class="n">4</b>
+  <div class="ka"><h2 class="ka">ახალი სამუშაო შეკეთების დროს</h2><p>შეკეთების ბარათში <span class="btn">＋ სამუშაო</span> → აირჩიეთ ცნობარიდან ან ჩაწერეთ სიტყვებით → <span class="btn f">დასამტკიცებლად გაგზავნა</span>. დამტკიცებულ სამუშაოს აგრძელებთ; ახალი ცალკე ელოდება.</p></div>
+  <div class="ru"><h2>Нашлась ещё работа</h2><p>В карточке заявки «＋ Работа» → из справочника или словами → «Отправить на согласование». Согласованное продолжаете; новая работа ждёт одна. Ваша собственная работа записывается согласованной сразу.</p></div>
+</li>
+<li><b class="n">5</b>
+  <div class="ka"><h2 class="ka">დახურვა</h2><p>ბარათში <span class="btn f">დახურვა</span> → ფოტო შეკეთების შემდეგ (1-დან 5-მდე) → გარბენი → სად დგას მოპედი → <span class="btn f">შეკეთების დახურვა</span>. მოპედი ბრუნდება ფლოტში „თავისუფალი“.</p></div>
+  <div class="ru"><h2>Закрытие</h2><p>«Закрыть» → фото после ремонта (1–5) → пробег → где стоит мопед → «Закрыть заявку». Мопед снова «Свободен». Без фото «после» заявка не закроется.</p></div>
+</li>
+</ol>
+
+<p class="note"><span class="ka">კლიენტის ხარჯზე შეკეთებას ხურავს მფლობელი — თქვენ მხოლოდ დაამატეთ ფოტო „შემდეგ“.</span><br>
+<span class="ru">Ремонт за счёт клиента закрывает владелец (он решает удержание из залога) — вы только добавляете фото «после».</span></p>
+
+<p class="foot">EV8 Ops, этапы 1–3 плана механика (20.10.2026). Перевод на грузинский — сессии, вычитывает директор. Уведомления о решении в Telegram и выплаты — следующие этапы.</p>
+</main></body></html>

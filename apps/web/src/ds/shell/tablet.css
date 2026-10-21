@@ -1,0 +1,202 @@
+/* The workshop tablet's frame (ADR-0033 §10; prototypes/mechanic-pin-login-options.html,
+   "После входа"). A thumb-wide sign-out and the name of whoever is signed in. */
+
+.tablet-app { min-height: 100%; display: flex; flex-direction: column; background: var(--bg); }
+
+.tablet-bar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space3);
+  padding: 12px 20px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line-soft);
+}
+.tablet-bar-left, .tablet-bar-right { display: flex; align-items: center; gap: var(--space3); }
+.tablet-bar-left { flex: 1; min-width: 0; }
+.tablet-bar-right { flex: none; }
+.tablet-title { display: flex; flex-direction: column; min-width: 0; }
+.tablet-section { font: var(--text-h1); letter-spacing: var(--tracking-tight); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tablet-sub { font: var(--text-label); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* A tablet standing up has no room for the wordmark beside the name and the sign-out. */
+@media (max-width: 899px) { .tablet-logo { display: none; } }
+/* A phone: the bar takes two lines rather than squeezing the sign-out. */
+@media (max-width: 640px) { .tablet-bar { flex-wrap: wrap; } }
+
+.tablet-me { display: flex; align-items: center; gap: 10px; }
+.tablet-me .avatar { width: 44px; height: 44px; font-size: 18px; }
+.tablet-me-text { display: flex; flex-direction: column; line-height: 1.15; min-width: 0; max-width: 190px; }
+.tablet-me-name, .tablet-me-role { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tablet-me-name { font: var(--text-body); font-weight: 600; }
+.tablet-me-role { font: var(--text-body-sm); color: var(--muted); }
+
+.tablet-out {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: var(--control-large);
+  padding: 0 24px;
+  border-radius: var(--radius-pill);
+  border: 2px solid var(--ink);
+  background: var(--surface);
+  color: var(--ink);
+  font: var(--text-cta);
+  cursor: pointer;
+}
+.tablet-out:hover { color: var(--accent); border-color: var(--accent); }
+.tablet-out:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+
+.app-page.tablet-page { padding: 20px 20px 96px; max-width: 1100px; width: 100%; margin: 0 auto; }
+.tablet-idle { margin-top: var(--space4); }
+
+.tablet-warn {
+  position: fixed;
+  left: 20px;
+  right: 20px;
+  bottom: 20px;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space3);
+  padding: 16px 20px;
+  border-radius: var(--radius-card);
+  background: var(--toast);
+  color: var(--toast-ink);
+  font: var(--text-body);
+  font-weight: 500;
+  box-shadow: var(--shadow);
+}
+.tablet-stay {
+  min-height: var(--control-large);
+  padding: 0 24px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--lime);
+  color: var(--ink);
+  font: var(--text-cta);
+  cursor: pointer;
+  flex: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .tablet-warn { animation: tablet-warn-in var(--enter) both; }
+  @keyframes tablet-warn-in { from { transform: translateY(16px); opacity: 0; } }
+}
+
+/* ---- the tablet's sign-in (variant А, chosen 20.10.2026) ---- */
+
+.pin-screen { min-height: 100%; display: flex; flex-direction: column; background: var(--bg); max-width: 900px; margin: 0 auto; }
+.pin-top { display: flex; align-items: center; justify-content: space-between; gap: var(--space3); padding: 24px 28px 0; flex-wrap: wrap; }
+.pin-brand { display: flex; align-items: center; gap: 10px; }
+.pin-device { color: var(--muted); font: var(--text-body); }
+.pin-head { padding: 40px 28px 0; }
+.pin-title { margin: 0; font: 500 40px/1.1 var(--display); letter-spacing: var(--tracking-tight); }
+.pin-sub { margin: 8px 0 0; color: var(--muted); font: 400 19px/1.35 var(--body); }
+
+.pin-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; padding: 32px 28px; }
+@media (max-width: 560px) { .pin-tiles { grid-template-columns: minmax(0, 1fr); } }
+.pin-tile {
+  min-height: 160px;
+  padding: 22px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space3);
+  text-align: left;
+  border-radius: 24px;
+  border: 1.5px solid var(--line-control);
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+  font: inherit;
+}
+.pin-tile:active { border: 3px solid var(--accent); background: var(--accent-soft); }
+.pin-tile:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.pin-tile.locked { background: var(--surface-2); border-color: var(--line-soft); }
+.pin-tile.locked .pin-tile-name { color: var(--muted); }
+.pin-ini {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  display: inline-grid;
+  place-items: center;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font: 600 24px/1 var(--display);
+}
+.pin-tile.locked .pin-ini { background: var(--line-soft); color: var(--muted); }
+.pin-tile-text { display: flex; flex-direction: column; gap: 4px; }
+.pin-tile-name { font: 500 32px/1.1 var(--display); letter-spacing: var(--tracking-tight); overflow-wrap: anywhere; }
+.pin-tile-role { color: var(--muted); font: 400 18px/1.3 var(--body); }
+.pin-tile-lock { display: inline-flex; align-items: center; gap: 6px; color: var(--crit); font: 500 18px/1.3 var(--body); }
+
+.pin-foot { margin: auto 0 0; padding: 24px 28px 32px; color: var(--muted); font: 400 17px/1.4 var(--body); }
+.link-btn {
+  border: 0;
+  padding: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  font-weight: 500;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  cursor: pointer;
+  min-height: 44px;
+}
+.login-back { margin: 14px 0 0; }
+
+.pin-pad { flex: 1; display: flex; flex-direction: column; align-items: center; padding: 24px 28px 32px; }
+.pin-back {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: var(--control-large);
+  padding: 0 24px 0 16px;
+  border-radius: var(--radius-pill);
+  border: 1.5px solid var(--ink);
+  background: var(--surface);
+  color: var(--ink);
+  font: 500 19px/1 var(--display);
+  cursor: pointer;
+}
+.pin-who { margin-top: 28px; text-align: center; }
+.pin-who-name { font: 500 44px/1.1 var(--display); letter-spacing: var(--tracking-tight); overflow-wrap: anywhere; }
+.pin-dots { display: flex; gap: 18px; margin: 30px 0 8px; min-height: 26px; align-items: center; }
+.pin-dot { width: 22px; height: 22px; border-radius: 50%; border: 2.5px solid var(--ink); }
+.pin-dot.extra { border-style: dashed; border-color: var(--line-control); }
+.pin-dot.on { background: var(--ink); border-style: solid; border-color: var(--ink); }
+.pin-msg { min-height: 28px; margin: 0 0 14px; text-align: center; font: 500 18px/1.35 var(--body); }
+.pin-msg.bad { color: var(--crit); }
+.pin-keys { display: grid; grid-template-columns: repeat(3, minmax(0, 120px)); gap: 14px; width: 100%; justify-content: center; }
+.pin-key {
+  height: 88px;
+  border-radius: 24px;
+  border: 1.5px solid var(--line-control);
+  background: var(--surface);
+  color: var(--ink);
+  font: 500 38px/1 var(--display);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  touch-action: manipulation;
+}
+.pin-key:active { background: var(--accent-soft); border-color: var(--accent); }
+.pin-key:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.pin-key:disabled { opacity: 0.4; cursor: default; }
+.pin-key.fn { background: var(--surface-2); border-color: var(--line-soft); color: var(--muted); font: 500 16px/1 var(--body); flex-direction: column; }
+.pin-key-word { font: 500 14px/1 var(--body); }
+.pin-key.go { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font: var(--text-cta); }
+.pin-key.go:disabled { opacity: 0.45; }
+
+.pin-closed { align-items: stretch; padding-top: 56px; gap: 24px; }
+.pin-lockbox { border-radius: 24px; background: var(--crit-soft); padding: 26px; }
+.pin-lockbox p { margin: 10px 0 0; font: 400 18px/1.45 var(--body); }
+.pin-lockbox .pin-lockbox-title { margin: 0; color: var(--crit-ink); font: 500 28px/1.2 var(--display); letter-spacing: -0.01em; }

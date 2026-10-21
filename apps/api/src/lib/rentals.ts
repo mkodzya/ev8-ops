@@ -9,8 +9,10 @@ import { debtOf } from './debt.js';
 import { badRequest, conflict, forbidden, notFound } from './errors.js';
 import { recomputeRental, recordPaymentTx } from './payments.js';
 import { rentalOwed, spreadRental, syncDeposit, writeAllocations } from './rentalMoney.js';
+import { returnServiceParts, unfitTrackers } from './stock.js';
 import { movePool, moveVehicle } from './vehicles.js';
 import { itemLabel } from './pdf/returnAct.js';
+import { restoreOdometer } from './maintenance.js';
 
 // Hand-over and return (RNT-01, RNT-04, RNT-05; redesign wave 3). Each is one
 // transaction: whatever it makes — a new customer, the rental, its weeks, the
@@ -340,6 +342,8 @@ export interface ReturnInput {
   rentalId: string;
   returnedOn: string;
   odometerKm: number | null;
+  /** Why the reading is below the moped's last one (ADR-0038 §4). */
+  odometerReason: string | null;
   condition: string | null;
   /** By what was handed over: moped, key, battery_1…N, charger_1…N (B5-07). */
   items: Record<string, { state: 'ok' | 'damaged' | 'missing'; note: string | null }>;
@@ -372,6 +376,7 @@ export async function returnPreview(input: { rentalId: string; returnedOn: strin
     include: {
       periods: { orderBy: { seq: 'asc' } },
       acts: { where: { kind: 'pickup' }, select: { odometerKm: true } },
+      vehicle: { select: { odometerKm: true } },
       deposit: {
         include: {
           withholdings: { where: { voidedAt: null }, include: { serviceJob: { select: { number: true } } } },
@@ -392,6 +397,8 @@ export async function returnPreview(input: { rentalId: string; returnedOn: strin
     batteries: r.batteries,
     chargers: r.chargers,
     pickupKm: r.acts[0]?.odometerKm ?? null,
+    /** The moped's last reading: below it, the return asks why (ADR-0038 §4). */
+    vehicleKm: r.vehicle?.odometerKm ?? null,
     expectedReturnOn: isoDate(r.expectedReturnOn),
     settlement,
     otherChargesTetri: openCharges,
@@ -428,6 +435,15 @@ export async function returnRental(input: ReturnInput): Promise<{ actId: string;
     const pickupKm = r.acts[0]?.odometerKm ?? null;
     if (pickupKm != null && input.odometerKm! < pickupKm) {
       throw conflict('odometer_below_pickup', 'The mileage is below the hand-over’s.', { field: 'odometerKm', pickupKm });
+    }
+    // Below the moped's last reading — a repair during the rental may have
+    // read it higher — only with the reason, as the hand-over asks it
+    // (ADR-0038 §4): a typo would move the planned maintenance unexplained.
+    const lastKm = r.vehicleId ? ((await tx.vehicle.findUnique({ where: { id: r.vehicleId }, select: { odometerKm: true } }))?.odometerKm ?? null) : null;
+    const odometerReason = input.odometerReason?.trim() || null;
+    const lower = lastKm != null && input.odometerKm! < lastKm;
+    if (lower && !odometerReason) {
+      throw badRequest('odometer_below', 'The mileage is below the moped’s last reading; say why.', { field: 'odometerReason', lastKm });
     }
 
     // The weeks by the return day exist before anything is counted.
@@ -503,10 +519,12 @@ export async function returnRental(input: ReturnInput): Promise<{ actId: string;
         kind: 'return',
         occurredOn: dateFromISO(input.returnedOn)!,
         odometerKm: input.odometerKm,
+        odometerReason: lower ? odometerReason : null,
         condition: input.condition,
         items: input.items,
         locationId: toService ? null : input.locationId,
-        settlement: { ...settlementRecord(settlement), ...applied, serviceJobId } as object,
+        // The moped's figure before this return: a return taken back puts it back (ADR-0038 §1).
+        settlement: { ...settlementRecord(settlement), ...applied, serviceJobId, odometerBeforeKm: lastKm } as object,
         createdById: input.actor.id,
       },
     });
@@ -675,7 +693,13 @@ export async function undoReturn(input: { actor: Actor; rentalId: string; reason
     if (r.status !== 'returned') throw conflict('not_returned', 'This rental is not returned.');
     const act = await tx.act.findFirst({ where: { rentalId: r.id, kind: 'return' }, orderBy: { createdAt: 'desc' } });
     if (!act || Date.now() - act.createdAt.getTime() > UNDO_RETURN_MS) throw conflict('undo_return_too_late', 'A return can be taken back within a day.');
-    const record = (act.settlement ?? {}) as { chargeIds?: string[]; replaced?: { id: string; amountTetri: number }[]; serviceJobId?: string | null; undone?: boolean };
+    const record = (act.settlement ?? {}) as {
+      chargeIds?: string[];
+      replaced?: { id: string; amountTetri: number }[];
+      serviceJobId?: string | null;
+      undone?: boolean;
+      odometerBeforeKm?: number | null;
+    };
     if (record.undone) throw conflict('not_returned', 'This return was already taken back.');
 
     const now = new Date();
@@ -700,13 +724,36 @@ export async function undoReturn(input: { actor: Actor; rentalId: string; reason
       });
     }
     await tx.rental.update({ where: { id: r.id }, data: { status: 'active', returnedOn: null, updatedAt: now } });
+    let calledOffKm: number | null = null;
     if (record.serviceJobId) {
-      await tx.serviceJob.updateMany({ where: { id: record.serviceJobId, status: 'open' }, data: { status: 'cancelled', updatedAt: now } });
+      // The repair the return opened is called off with it, as a repair
+      // cancelled is: dated, its shelf's parts back. Still open — or waiting,
+      // since a mechanic who took it on put it back to waiting (ADR-0035 §1).
+      // One closed already stays closed; the moped goes back to the customer.
+      const called = await tx.serviceJob.updateMany({
+        where: { id: record.serviceJobId, status: { in: ['open', 'draft'] } },
+        data: { status: 'cancelled', closedOn: dateFromISO(input.today)!, closedAt: now, updatedAt: now },
+      });
+      if (called.count === 1) {
+        const job = await tx.serviceJob.findUniqueOrThrow({ where: { id: record.serviceJobId }, select: { id: true, number: true, openedOdometerKm: true } });
+        calledOffKm = job.openedOdometerKm;
+        const why = `return undone: ${input.reason}`;
+        const back = await returnServiceParts(tx, { jobId: job.id, occurredOn: input.today, actorId: input.actor.id, reason: `${job.number}: ${why}`.slice(0, 1000) });
+        await unfitTrackers(tx, job.id);
+        await tx.auditLog.create({ data: { actorId: input.actor.id, action: 'service.cancel', entityType: 'service_job', entityId: job.id, after: { partsBack: back }, note: why } });
+      }
     }
     if (r.vehicleId) {
       await moveVehicle(tx, { vehicleId: r.vehicleId, kind: 'pickup', occurredOn: input.today, actorId: input.actor.id, rentalId: r.id, reason: `return undone: ${input.reason}` });
     }
     await tx.act.update({ where: { id: act.id }, data: { settlement: { ...record, undone: true } as object } });
+    if (r.vehicleId) {
+      // Taken back, the return's reading is no reading (ADR-0038 §1), nor is
+      // that of the repair it opened: the moped's figure goes back with them,
+      // or the next return would have to explain a typo that never stood.
+      if (calledOffKm != null) await restoreOdometer(tx, r.vehicleId, calledOffKm);
+      if (act.odometerKm != null) await restoreOdometer(tx, r.vehicleId, act.odometerKm, 'odometerBeforeKm' in record ? record.odometerBeforeKm : undefined);
+    }
     await tx.storedFile.updateMany({ where: { rentalId: r.id, kind: 'pdf', docKind: 'return_act', archived: false }, data: { archived: true } });
     await recomputeRental(tx, r.id);
     await tx.auditLog.create({ data: { actorId: input.actor.id, action: 'rental.return.undo', entityType: 'rental', entityId: r.id, note: input.reason } });

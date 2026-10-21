@@ -1,4 +1,4 @@
-import { daysBetween, hoursFromMinutes, labourTetri as labourFor, minutesFromHours, parseGel, todayISO } from '@ev8/shared';
+import { AFTER_PHOTOS_MAX, daysBetween, localDateTime, hoursFromMinutes, labourTetri as labourFor, minutesFromHours, normSecFromMinutes, parseGel, todayISO } from '@ev8/shared';
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api.js';
@@ -13,10 +13,16 @@ import { useOperation } from '../ds/form/operation.js';
 import { useMoneyForm } from '../ds/money/MoneyForm.js';
 import { fmtDate, formatGel } from '../format.js';
 import { useLocale, useT } from '../i18n/index.js';
-import { uploadAll, type PreparedPhoto } from '../lib/photos.js';
+import { toBase64, uploadAll, type PreparedPhoto } from '../lib/photos.js';
 import { useLoad } from '../lib/use.js';
 import { useSession } from '../session.js';
-import type { ServiceJob, Workshop } from './ServicePage.js';
+import { groupDigits } from '../lib/workBook.js';
+import { DowntimeText } from '../components/Downtime.js';
+import type { ServiceJob, ServiceWorkLine, Workshop } from './ServicePage.js';
+import { AddWorkSheet, NormTotal, RejectSheet, StatedLines, SuggestCustomer, isRepeat, useDecisionWords, useWhen, waitingLines } from './RepairApproval.js';
+import { PartNote, PartsBlock, TrackerFields } from './RepairParts.js';
+import { Photos } from './WorkshopJobWizard.js';
+import { lastKmOf, refusedLastKm } from './RepairClosePage.js';
 import type { PartRow } from './StockPage.js';
 
 interface Locations {
@@ -30,7 +36,7 @@ interface RentalDeposit {
   };
 }
 
-type Sheet = 'workshop' | 'payer' | 'part' | 'work' | 'close' | 'cancel';
+type Sheet = 'workshop' | 'payer' | 'part' | 'work' | 'close' | 'cancel' | 'reject' | 'addWork';
 
 /**
  * Ремонт (wave 5 §3.7). The head says which moped and how long it has stood;
@@ -43,6 +49,7 @@ type Sheet = 'workshop' | 'payer' | 'part' | 'work' | 'close' | 'cancel';
 export function ServiceJobPage() {
   const { id } = useParams();
   const t = useT();
+  const { locale } = useLocale();
   const { can } = useSession();
   const navigate = useNavigate();
   const toast = useToast();
@@ -50,10 +57,14 @@ export function ServiceJobPage() {
   const { data, failure, reload } = useLoad<{ job: ServiceJob }>(id ? `/api/service/${id}` : null);
   const [sheet, setSheet] = useState<Sheet | null>(null);
   const [photos, setPhotos] = useState<PreparedPhoto[]>([]);
+  const [after, setAfter] = useState<PreparedPhoto[]>([]);
   // A line and a photo are changed in place; one operation at a time, its refusal beside it.
   const lineOp = useOperation();
   const photoOp = useOperation();
   const takeUpOp = useOperation();
+  const afterOp = useOperation();
+  const when = useWhen();
+  const decisionWords = useDecisionWords();
 
   if (!data && failure) return <LoadError failure={failure} onRetry={reload} />;
   if (!data) return <Loading />;
@@ -62,6 +73,23 @@ export function ServiceJobPage() {
   const open = j.status === 'open';
   const mayManage = can('service.manage');
   const mayEdit = open && mayManage;
+  // The approval of ADR-0033 — taking a reported breakdown up — is the chief
+  // mechanic's as well as the owners'; what it costs stays the owners'.
+  const mayApprove = draft && can('service.approve');
+  // Stage 3: the mechanic carries his repair to its end — a work found later,
+  // the photos after, the closing. One the customer pays for an owner closes.
+  const repeat = isRepeat(j);
+  const words = decisionWords(j);
+  // Only a part bought waits — the hint says so, not «a work waits» (stage 4).
+  const partsOnlyWait = repeat && waitingLines(j).length === 0;
+  const workshopHand = can('service.work') && !mayManage && j.mechanic != null;
+  const mayAddWork = can('service.work') && j.mechanic != null && (open || draft);
+  const ownersClose = j.payer === 'customer';
+  const mayCloseHere = workshopHand && open && !ownersClose;
+  const afterHad = j.photos.filter((p) => p.tag === 'after').length;
+  const mayAfter = can('service.work') && j.mechanic != null && (open || draft) && afterHad < AFTER_PHOTOS_MAX;
+  const mayFleet = can('fleet.view');
+  const money = j.totalTetri != null;
   const days = Math.max(0, daysBetween(j.openedOn, j.closedOn ?? todayISO()));
   const hours = hoursFromMinutes(j.labourMinutes);
   // Only what came off the shelf goes back to it when the repair is cancelled.
@@ -79,29 +107,36 @@ export function ServiceJobPage() {
       <PageHead
         wrap
         title={j.number}
-        badge={<span className={draft || open ? 'warn-text' : 'muted'}>{t.repair.statuses[j.status]}</span>}
+        badge={<span className={draft || open ? 'warn-text' : 'muted'}>{j.rejected ? t.wappr.statusRejected : j.paid ? t.wpay.paid : t.repair.statuses[j.status]}</span>}
         sub={
           <>
             {j.vehicle.model} <span className="mono">···{j.vehicle.vin.slice(-4)}</span> · {t.repair.openedOn(fmtDate(j.openedOn))} · {t.repair.days(days)}
           </>
         }
       >
-        {mayManage && (draft || open) && (
+        {(mayApprove || (mayManage && (draft || open))) && (
           <>
-            <RowMenu actions={[{ key: 'cancel', label: t.repair.cancel, onPick: () => setSheet('cancel') }]} />
+            {mayManage && <RowMenu actions={[{ key: 'cancel', label: t.repair.cancel, onPick: () => setSheet('cancel') }]} />}
             {draft ? (
-              <SubmitButton
-                small
-                type="button"
-                state={takeUpOp.state}
-                label={t.repair.takeUp}
-                onClick={async () => {
-                  const res = await takeUpOp.run((key) => api.patch(`/api/service/${j.id}`, { open: true }, { key }));
-                  if (!res.ok) return;
-                  toast({ text: t.repair.takenUp });
-                  reload();
-                }}
-              />
+              mayApprove && (
+                <>
+                  <button type="button" className="pill pill-sm" onClick={() => setSheet('reject')}>
+                    {words.reject}
+                  </button>
+                  <SubmitButton
+                    small
+                    type="button"
+                    state={takeUpOp.state}
+                    label={words.approve}
+                    onClick={async () => {
+                      const res = await takeUpOp.run((key) => api.post(`/api/service/${j.id}/approve`, undefined, { key }));
+                      if (!res.ok) return;
+                      toast({ text: repeat ? t.wappr.approvedWork : t.repair.takenUp });
+                      reload();
+                    }}
+                  />
+                </>
+              )
             ) : (
               <button type="button" className="pill pill-sm pill-accent" onClick={() => setSheet('close')}>
                 {t.repair.close}
@@ -109,28 +144,83 @@ export function ServiceJobPage() {
             )}
           </>
         )}
+        {mayCloseHere && (
+          <Link className="pill pill-accent wappr-close" to={`/service/${j.id}/close`}>
+            {t.wappr.close}
+          </Link>
+        )}
       </PageHead>
 
-      {draft && <p className="hint">{t.repair.reportNote}</p>}
+      {draft && <p className="hint">{partsOnlyWait ? t.wparts.partWaitHint : repeat ? t.wappr.waitHint : j.mechanic ? t.wjob.waitsNote : t.repair.reportNote}</p>}
+      {takeUpOp.failure && (
+        <p className="field-err" role="alert">
+          {takeUpOp.failure.text}
+        </p>
+      )}
+      {j.rejected && (
+        <section className="wappr-reason">
+          <b>{t.wappr.rejectHead}</b>
+          <span className="pre">{j.rejected.reason}</span>
+          <span className="muted">{t.wappr.rejectedBy(j.rejected.by ?? t.common.dash, when(j.rejected.at))}</span>
+        </section>
+      )}
+      {j.approved && !j.rejected && <p className="hint muted">{t.wappr.approvedBy(j.approved.by ?? t.common.dash, when(j.approved.at))}</p>}
+      {workshopHand && open && ownersClose && <p className="hint">{t.wappr.ownersClose}</p>}
+      {j.rejected && workshopHand && j.vehicle.number && (
+        <Link className="wjob-new" to={`/service/new?q=${encodeURIComponent(j.vehicle.number)}`}>
+          + {t.wappr.newJobOn(j.vehicle.number)}
+        </Link>
+      )}
+      <SuggestCustomer job={j} onPick={() => setSheet('payer')} />
 
       <div className="two-col">
         <section className="card">
           <Row
             k={t.repair.vehicle}
             v={
-              <Link to={`/fleet/${j.vehicle.id}`}>
-                <Vin vin={j.vehicle.vin} /> <span className="muted">{j.vehicle.model}</span>
-              </Link>
+              mayFleet ? (
+                <Link to={`/fleet/${j.vehicle.id}`}>
+                  <Vin vin={j.vehicle.vin} /> <span className="muted">{j.vehicle.model}</span>
+                </Link>
+              ) : (
+                <>
+                  <Vin vin={j.vehicle.vin} /> <span className="muted">{j.vehicle.model}</span>
+                </>
+              )
             }
           />
-          <Row k={t.repair.what} v={<span className="pre">{j.reason}</span>} />
+          <Row
+            k={t.repair.what}
+            v={
+              <span className="pre">
+                {j.reasonKind ? `${t.wjob.reasons[j.reasonKind] ?? j.reasonKind} — ` : ''}
+                {j.reason}
+              </span>
+            }
+          />
+          {j.mechanic && <Row k={t.wjob.mechanic} v={j.mechanic.name} />}
+          {j.openedOdometerKm != null && (
+            <Row
+              k={t.wjob.openedKm}
+              v={
+                <>
+                  <span className="mono">{groupDigits(j.openedOdometerKm)}</span>
+                  {j.odometerReason && <span className="muted"> · {j.odometerReason}</span>}
+                </>
+              }
+            />
+          )}
           {j.rental && (
             <Row
               k={t.repair.rental}
               v={
-                <Link to={`/rentals/${j.rental.id}`} className="mono">
-                  {j.rental.number}
-                </Link>
+                mayFleet ? (
+                  <Link to={`/rentals/${j.rental.id}`} className="mono">
+                    {j.rental.number}
+                  </Link>
+                ) : (
+                  <span className="mono">{j.rental.number}</span>
+                )
               }
             />
           )}
@@ -145,8 +235,23 @@ export function ServiceJobPage() {
             />
           )}
           {j.odometerKm != null && <Row k={t.repair.odometer} v={<span className="mono">{j.odometerKm}</span>} />}
-          {j.closedAt && <Row k={t.repair.closedAt} v={j.closedAt.name} />}
-          {j.closedOn && <Row k={t.repair.closedOn} v={<span className="mono">{fmtDate(j.closedOn)}</span>} />}
+          {j.closedLocation && <Row k={t.repair.closedAt} v={j.closedLocation.name} />}
+          {j.closedOn && (
+            <Row
+              k={t.repair.closedOn}
+              v={
+                <span className="mono">
+                  {fmtDate(j.closedOn)}
+                  {j.closedAt ? ` ${localDateTime(j.closedAt).time}` : ''}
+                </span>
+              }
+            />
+          )}
+          {/* Downtime in hours, and the wait for approval within it (ADR-0038): a repair
+              closed before the times were kept says «no data», never days turned into hours. */}
+          {(j.downtime != null || j.status === 'done') && <Row k={t.wmaint.downtime} v={<DowntimeText d={j.downtime ?? null} />} />}
+          {/* Its mechanic is paid for it: the repair is a record now (ADR-0037 §5). */}
+          {j.paid && <Row k={t.wpay.paid} v={t.wpay.paidIn(fmtDate(j.paid.paidOn), j.paid.markedBy.name)} />}
           {j.notes && <Row k={t.repair.notes} v={<span className="pre">{j.notes}</span>} />}
         </section>
 
@@ -154,12 +259,14 @@ export function ServiceJobPage() {
         <section className="card">
           <Choice k={t.repair.workshop} v={j.workshop?.name ?? t.repair.workshopNone} quiet={!j.workshop} onPick={mayEdit ? () => setSheet('workshop') : undefined} />
           <Choice k={t.repair.payer} v={t.repair.payers[j.payer]} onPick={mayEdit ? () => setSheet('payer') : undefined} />
-          <div className="kv kv-total">
-            <span className="kv-k">{t.repair.total}</span>
-            <span className="kv-v mono">{formatGel(j.totalTetri)}</span>
-          </div>
-          {j.withheldTetri > 0 && <Row k={t.repair.withhold} v={<span className="mono">{formatGel(j.withheldTetri)}</span>} />}
-          {j.chargedTetri > 0 && <p className="hint">{t.repair.debtNote(formatGel(j.chargedTetri), j.number)}</p>}
+          {money && (
+            <div className="kv kv-total">
+              <span className="kv-k">{t.repair.total}</span>
+              <span className="kv-v mono">{formatGel(j.totalTetri ?? 0)}</span>
+            </div>
+          )}
+          {(j.withheldTetri ?? 0) > 0 && <Row k={t.repair.withhold} v={<span className="mono">{formatGel(j.withheldTetri ?? 0)}</span>} />}
+          {(j.chargedTetri ?? 0) > 0 && <p className="hint">{t.repair.debtNote(formatGel(j.chargedTetri ?? 0), j.number)}</p>}
           {/* A repair charged to the customer is paid through the one money form (wave 2 §3.1). */}
           {j.payer === 'customer' && j.status === 'done' && j.customer && can('cash.record') && (
             <div className="row-actions">
@@ -175,9 +282,12 @@ export function ServiceJobPage() {
         </section>
       </div>
 
+      {/* Parts and the old single line of work. A mechanic adds neither yet
+          (parts are stage 4), so an empty block is only shown to who can fill it. */}
+      {(mayManage || j.labourMinutes > 0 || (j.labourTetri ?? 0) > 0) && (
       <section className="card">
         <BlockHead title={t.repair.lines} />
-        {j.parts.length === 0 && j.labourTetri === 0 ? (
+        {j.parts.length === 0 && (j.labourTetri ?? 0) === 0 && j.labourMinutes === 0 && (j.worksCostTetri ?? 0) === 0 ? (
           <Empty text={t.repair.noLines} />
         ) : (
           <div className="table-wrap table-flat">
@@ -186,18 +296,22 @@ export function ServiceJobPage() {
                 <tr>
                   <th>{t.repair.lineWhat}</th>
                   <th className="num">{t.repair.lineQty}</th>
-                  <th className="num">{t.repair.lineSum}</th>
+                  {money && <th className="num">{t.repair.lineSum}</th>}
                   {mayEdit && <th />}
                 </tr>
               </thead>
               <tbody>
                 {j.parts.map((p) => (
-                  <tr key={p.id}>
+                  <tr key={p.id} className={p.state === 'rejected' || (j.rejected && p.state) ? 'wparts-struck' : ''}>
                     <td>
-                      {p.name} <span className="muted">· {j.payer === 'customer' ? t.repair.retailWord : t.repair.costWord}</span>
+                      {p.kind !== 'stock' && <span className="wparts-kind">{t.wparts.kinds[p.kind] ?? p.kind}</span>} {p.name}{' '}
+                      {p.kind === 'stock' && <span className="muted">· {j.payer === 'customer' ? t.repair.retailWord : t.repair.costWord}</span>}
+                      {p.kind === 'stock' && p.partId && p.unitCostTetri == null && money && <span className="muted"> · {t.wparts.costUnknown}</span>}
+                      {p.state === 'waiting' && <span className="wjob-wtag">{t.wappr.waitingTag}</span>}
+                      <PartNote p={p} />
                     </td>
                     <td className="num mono">{p.qty}</td>
-                    <td className="num mono">{formatGel(p.qty * p.unitPriceTetri)}</td>
+                    {money && <td className="num mono">{p.lineTetri == null || p.kind === 'removed' || p.state === 'rejected' ? '—' : formatGel(p.lineTetri)}</td>}
                     {mayEdit && (
                       <td className="num">
                         <button
@@ -221,22 +335,35 @@ export function ServiceJobPage() {
                     )}
                   </tr>
                 ))}
-                {j.labourTetri > 0 && (
+                {((j.labourTetri ?? 0) > 0 || j.labourMinutes > 0) && (
                   <tr>
                     <td>
-                      {t.repair.workLine(t.repair.hours(hours))} <span className="muted">· {formatGel(j.labourRateTetri)}</span>
+                      {t.repair.workLine(t.repair.hours(hours))}
+                      {money && <span className="muted"> · {formatGel(j.labourRateTetri ?? 0)}</span>}
                     </td>
                     <td className="num mono">{t.repair.hours(hours)}</td>
-                    <td className="num mono">{formatGel(j.labourTetri)}</td>
+                    {money && <td className="num mono">{formatGel(j.labourTetri ?? 0)}</td>}
                     {mayEdit && <td />}
                   </tr>
                 )}
-                <tr className="row-total">
-                  <td>{t.repair.total}</td>
-                  <td />
-                  <td className="num mono">{formatGel(j.totalTetri)}</td>
-                  {mayEdit && <td />}
-                </tr>
+                {/* The mechanic's approved work is in the company's repair cost (ADR-0037 §6): its own
+                    row, so the lines add up to the total under them. */}
+                {money && (j.worksCostTetri ?? 0) > 0 && (
+                  <tr>
+                    <td>{t.wpay.worksCost}</td>
+                    <td />
+                    <td className="num mono">{formatGel(j.worksCostTetri ?? 0)}</td>
+                    {mayEdit && <td />}
+                  </tr>
+                )}
+                {money && (
+                  <tr className="row-total">
+                    <td>{t.repair.total}</td>
+                    <td />
+                    <td className="num mono">{formatGel(j.totalTetri ?? 0)}</td>
+                    {mayEdit && <td />}
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
@@ -261,14 +388,48 @@ export function ServiceJobPage() {
           </p>
         )}
       </section>
+      )}
+
+      {/* The works a mechanic wrote, with the norm and rate they were written
+          with (stage 2), and where each stands (stage 3). A repair from before
+          has none, and no block. */}
+      {(j.works.length > 0 || mayAddWork) && (
+        <section className="card">
+          <BlockHead title={t.wjob.works} />
+          {j.works.length > 0 && (
+            <>
+              <StatedLines
+                job={j}
+                lines={j.works}
+                tagWaiting={j.approved ? t.wappr.waitingTag : undefined}
+                editNorm={can('service.norms') && j.status !== 'cancelled' && !j.paid ? (l) => <NormEdit job={j} line={l} onSaved={reload} /> : undefined}
+              />
+              <NormTotal lines={j.works} />
+            </>
+          )}
+          {mayAddWork && (
+            <div className="row-actions">
+              <button type="button" className="wjob-btn" onClick={() => setSheet('addWork')}>
+                + {t.wappr.addWork}
+              </button>
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* The parts the workshop writes as the work goes (stage 4, variant A). The
+          owners keep their own form above; anyone else reads them here. */}
+      {!mayManage && <PartsBlock job={j} editable={can('service.work') && j.mechanic != null && (open || draft)} onChanged={reload} />}
+      {mayManage && (j.batteries.length > 0 || j.trackers.fitted.length > 0 || j.trackers.removed.length > 0) && <PartsBlock job={{ ...j, parts: [] }} editable={false} onChanged={reload} />}
 
       <section className="card">
         <BlockHead title={t.repair.photos} sub={t.photos.count(j.photos.length)} />
         {j.photos.length > 0 && (
           <div className="thumbs">
             {j.photos.map((p) => (
-              <a key={p.id} className="thumb" href={`/api/files/${p.id}`} target="_blank" rel="noreferrer">
+              <a key={p.id} className="thumb wjob-thumb" href={`/api/files/${p.id}`} target="_blank" rel="noreferrer">
                 <img src={`/api/files/${p.id}`} alt="" loading="lazy" />
+                {p.tag && <span className="wjob-tag">{t.wjob.photoTags[p.tag] ?? p.tag}</span>}
               </a>
             ))}
           </div>
@@ -298,6 +459,35 @@ export function ServiceJobPage() {
             )}
           </>
         )}
+        {/* Photos after the repair, left before it closes — on one the owner
+            closes, this is where the mechanic puts them (stage 3). */}
+        {mayAfter && (
+          <>
+            <Photos photos={after} onChange={setAfter} label={t.wappr.afterAdd} tag={t.wjob.photoTags.after} max={AFTER_PHOTOS_MAX - afterHad} />
+            {after.length > 0 && (
+              <SubmitButton
+                small
+                type="button"
+                state={afterOp.state}
+                label={t.photos.save}
+                onClick={async () => {
+                  const res = await afterOp.run(async (key) =>
+                    api.post(`/api/service/${j.id}/photos/after`, { photos: await Promise.all(after.map(async (p) => ({ mimeType: p.mimeType, dataBase64: await toBase64(p.blob) }))) }, { key }),
+                  );
+                  if (!res.ok) return;
+                  setAfter([]);
+                  toast({ text: t.wappr.afterSaved });
+                  reload();
+                }}
+              />
+            )}
+            {afterOp.failure && (
+              <p className="field-err" role="alert">
+                {afterOp.failure.fieldText ?? afterOp.failure.text}
+              </p>
+            )}
+          </>
+        )}
       </section>
 
       {sheet === 'workshop' && <WorkshopSheet job={j} onClose={close} onSaved={saved} />}
@@ -305,8 +495,38 @@ export function ServiceJobPage() {
       {sheet === 'part' && <PartSheet job={j} onClose={close} onSaved={saved} />}
       {sheet === 'work' && <WorkSheet job={j} onClose={close} onSaved={saved} />}
       {sheet === 'close' && <CloseSheet job={j} onClose={close} onSaved={saved} />}
+      {sheet === 'reject' && <RejectSheet job={j} onClose={close} onDone={reload} />}
+      {sheet === 'addWork' && <AddWorkSheet job={j} onClose={close} onDone={reload} />}
       {sheet === 'cancel' && <CancelSheet job={j} backCount={backCount} names={fromShelf.map((p) => `${p.name} × ${p.qty}`).join(', ')} onClose={close} onDone={() => navigate('/service')} />}
     </>
+  );
+}
+
+/** The norm of a work not in the book, written in place by whoever keeps norms (stage 3). */
+function NormEdit({ job, line, onSaved }: { job: ServiceJob; line: ServiceWorkLine; onSaved: () => void }) {
+  const t = useT();
+  const toast = useToast();
+  const op = useOperation();
+  const [v, setV] = useState('');
+  return (
+    <span className="wjob-norm">
+      <input className="input mono" inputMode="decimal" aria-label={t.wappr.normLabel} value={v} onChange={(e) => setV(e.target.value.replace(/[^\d.,]/g, ''))} />
+      <span className="muted">{t.wappr.minUnit}</span>
+      <SubmitButton
+        small
+        type="button"
+        state={op.state}
+        label={t.wappr.setNorm}
+        disabled={normSecFromMinutes(v) == null}
+        onClick={async () => {
+          const res = await op.run((key) => api.patch(`/api/service/${job.id}/works/${line.id}`, { normMin: v }, { key }));
+          if (!res.ok) return;
+          toast({ text: t.wappr.normSaved });
+          onSaved();
+        }}
+      />
+      {op.failure && <span className="field-err">{op.failure.fieldText ?? op.failure.text}</span>}
+    </span>
   );
 }
 
@@ -396,7 +616,7 @@ function PayerSheet({ job, onClose, onSaved }: { job: ServiceJob; onClose: () =>
   );
 }
 
-const blankPart = { partId: '', qty: '1', price: '' };
+const blankPart = { partId: '', qty: '1', price: '', imei: '', sim: '' };
 
 /** A part off the shelf. Short stock does not refuse it — the count goes red (`service.md`). */
 function PartSheet({ job, onClose, onSaved }: { job: ServiceJob; onClose: () => void; onSaved: () => void }) {
@@ -421,7 +641,9 @@ function PartSheet({ job, onClose, onSaved }: { job: ServiceJob; onClose: () => 
       summary={() => picked && nameOf(picked)}
       label={t.repair.partAdd}
       submit={async (key) => {
-        await api.post(`/api/service/${job.id}/parts`, { partId: f.partId, qty: qty || 1, ...(typed != null ? { unitPriceTetri: typed } : {}) }, { key });
+        const tracker = picked?.isTracker ? { imei: f.imei, sim: f.sim } : {};
+        const price = typed != null ? { unitPriceTetri: typed } : {};
+        await api.post(`/api/service/${job.id}/parts`, { partId: f.partId, qty: picked?.isTracker ? 1 : qty || 1, ...price, ...tracker }, { key });
         return { toast: { text: t.repair.partAdded } };
       }}
       onDone={onSaved}
@@ -440,6 +662,8 @@ function PartSheet({ job, onClose, onSaved }: { job: ServiceJob; onClose: () => 
         <input className="input input-amount mono" value={f.qty} onChange={(e) => setF({ ...f, qty: e.target.value })} inputMode="numeric" />
       </Field>
       {picked && qty > picked.onHand && <p className="hint hint-bad">{t.repair.partShort(picked.onHand, t.stock.units[picked.unit])}</p>}
+      {/* A tracker fitted asks for its IMEI and SIM, on the owners' form too (ADR-0036). */}
+      {picked?.isTracker && <TrackerFields imei={f.imei} sim={f.sim} vehicle={job.vehicle.number ?? job.vehicle.model} onChange={(imei, sim) => setF({ ...f, imei, sim })} />}
       {/* The price the API will pick is the shelf's or the retail one; it is
           shown only to whoever may see cost, and overtyped only on purpose. */}
       {can('cost.view') && (
@@ -457,7 +681,7 @@ function WorkSheet({ job, onClose, onSaved }: { job: ServiceJob; onClose: () => 
   const initial = { hours: job.labourMinutes > 0 ? String(hoursFromMinutes(job.labourMinutes)) : '' };
   const [f, setF] = useState(initial);
   const hours = Number(f.hours.replace(',', '.')) || 0;
-  const sum = labourFor(minutesFromHours(hours), job.labourRateTetri);
+  const sum = labourFor(minutesFromHours(hours), job.labourRateTetri ?? undefined);
   return (
     <FormSheet
       title={t.repair.workTitle}
@@ -471,10 +695,10 @@ function WorkSheet({ job, onClose, onSaved }: { job: ServiceJob; onClose: () => 
       }}
       onDone={onSaved}
     >
-      <Field label={t.repair.workHours} hint={t.repair.workRate(formatGel(job.labourRateTetri))} name="labourHours">
+      <Field label={t.repair.workHours} hint={t.repair.workRate(formatGel(job.labourRateTetri ?? 0))} name="labourHours">
         <input className="input input-amount mono" value={f.hours} onChange={(e) => setF({ hours: e.target.value })} inputMode="decimal" autoFocus />
       </Field>
-      <p className="hint">{t.repair.workWillBe(t.repair.hours(hours), formatGel(job.labourRateTetri), formatGel(sum))}</p>
+      <p className="hint">{t.repair.workWillBe(t.repair.hours(hours), formatGel(job.labourRateTetri ?? 0), formatGel(sum))}</p>
     </FormSheet>
   );
 }
@@ -490,15 +714,27 @@ function CloseSheet({ job, onClose, onSaved }: { job: ServiceJob; onClose: () =>
   const locations = useLoad<Locations>(job.movedVehicle ? '/api/locations' : null);
   const mayWithhold = can('deposit.decide') && job.payer === 'customer' && job.rental != null;
   const rental = useLoad<RentalDeposit>(mayWithhold ? `/api/rentals/${job.rental!.id}` : null);
-  const initial = { closedOn: todayISO(), odometer: job.odometerKm != null ? String(job.odometerKm) : '', locationId: '', withhold: '' };
+  const initial = { closedOn: todayISO(), odometer: job.odometerKm != null ? String(job.odometerKm) : '', odometerReason: '', locationId: '', withhold: '' };
   const [f, setF] = useState(initial);
+  // Below the opening's or the moped's last reading only with the reason
+  // (ADR-0038 §4) — or below one read since the sheet opened, which the
+  // server names when it refuses: then the reason is asked against that.
+  const [refusedKm, setRefusedKm] = useState<number | null>(null);
+  const lastKm = lastKmOf(job, refusedKm);
+  const km = f.odometer.trim() === '' ? null : Number(f.odometer.replace(/\s/g, ''));
+  const below = km != null && lastKm != null && km < lastKm;
+  // A mechanic's repair closes with a photo after it (stage 3); one may be on it already.
+  const afterHad = job.photos.filter((p) => p.tag === 'after').length;
+  const [after, setAfter] = useState<PreparedPhoto[]>([]);
 
   const deposit = rental.data?.rental.deposit ?? null;
   // The same arithmetic the API does before it agrees: paid in, less what is
   // already kept, less what has gone back out.
   const free = deposit ? deposit.paidTetri - deposit.withholdings.reduce((n, w) => n + w.amountTetri, 0) - deposit.paidOutTetri : null;
-  const withheld = Math.max(0, Math.min(parseGel(f.withhold) ?? 0, job.totalTetri, free ?? job.totalTetri));
-  const debt = Math.max(0, job.totalTetri - withheld);
+  // Closing is an owner's, who sees what the repair cost.
+  const total = job.totalTetri ?? 0;
+  const withheld = Math.max(0, Math.min(parseGel(f.withhold) ?? 0, total, free ?? total));
+  const debt = Math.max(0, total - withheld);
 
   return (
     <FormSheet
@@ -510,24 +746,42 @@ function CloseSheet({ job, onClose, onSaved }: { job: ServiceJob; onClose: () =>
       onRestore={setF}
       label={t.repair.closeCta}
       submit={async (key) => {
-        await api.post(
-          `/api/service/${job.id}/close`,
-          {
-            closedOn: f.closedOn,
-            odometerKm: f.odometer === '' ? null : Number(f.odometer),
-            locationId: f.locationId || null,
-            withheldTetri: parseGel(f.withhold) ?? 0,
-          },
-          { key },
-        );
+        await api
+          .post(
+            `/api/service/${job.id}/close`,
+            {
+              closedOn: f.closedOn,
+              odometerKm: f.odometer === '' ? null : Number(f.odometer),
+              // A draft from before stage 6 has no reason in it.
+              odometerReason: below ? (f.odometerReason ?? '').trim() || null : null,
+              locationId: f.locationId || null,
+              withheldTetri: parseGel(f.withhold) ?? 0,
+              photos: await Promise.all(after.map(async (p) => ({ mimeType: p.mimeType, dataBase64: await toBase64(p.blob) }))),
+            },
+            { key },
+          )
+          .catch((e: unknown) => {
+            const named = refusedLastKm(e);
+            if (named != null) setRefusedKm(named);
+            throw e;
+          });
         return { toast: { text: t.repair.closed } };
       }}
       onDone={onSaved}
     >
       <div className="kv">
         <span className="kv-k">{t.repair.jobTotal}</span>
-        <span className="kv-v mono">{formatGel(job.totalTetri)}</span>
+        <span className="kv-v mono">{formatGel(total)}</span>
       </div>
+      {job.mechanic && afterHad < AFTER_PHOTOS_MAX && (
+        <Photos
+          photos={after}
+          onChange={setAfter}
+          label={t.wappr.afterPhotos(afterHad + after.length, AFTER_PHOTOS_MAX)}
+          tag={t.wjob.photoTags.after}
+          max={AFTER_PHOTOS_MAX - afterHad}
+        />
+      )}
       <div className="two-col two-col-tight">
         <Field label={t.repair.closedOn} name="closedOn">
           <input className="input mono" type="date" value={f.closedOn} onChange={(e) => setF({ ...f, closedOn: e.target.value })} />
@@ -536,6 +790,14 @@ function CloseSheet({ job, onClose, onSaved }: { job: ServiceJob; onClose: () =>
           <input className="input input-amount mono" value={f.odometer} onChange={(e) => setF({ ...f, odometer: e.target.value })} inputMode="numeric" />
         </Field>
       </div>
+      {below && (
+        <>
+          <p className="warn-text">{t.repair.odometerBelow(groupDigits(lastKm!))}</p>
+          <Field label={t.hand.odometerReason} hint={t.hand.odometerReasonHint} name="odometerReason">
+            <input className="input" value={f.odometerReason ?? ''} onChange={(e) => setF({ ...f, odometerReason: e.target.value })} />
+          </Field>
+        </>
+      )}
       {/* A moped that never left the customer keeps no point of ours (§3.7). */}
       {job.movedVehicle && (
         <Field label={t.repair.where} name="locationId">
@@ -593,3 +855,4 @@ function CancelSheet({ job, backCount, names, onClose, onDone }: { job: ServiceJ
     </FormSheet>
   );
 }
+

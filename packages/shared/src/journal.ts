@@ -52,6 +52,11 @@ const EVENT_ACTIONS = new Set<string>([
   'document.sign',
   'act.photo.add',
   'service.photo.add',
+  // Paying the mechanic (ADR-0037): a mark made or voided, nothing edited.
+  'service.paid',
+  'service.unpaid',
+  'mechanic.payout',
+  'mechanic.payout.void',
   'customer.document.add',
   'journal.export',
 ]);
@@ -59,7 +64,7 @@ const EVENT_ACTIONS = new Set<string>([
 const startsWithAny = (action: string, prefixes: readonly string[]) => prefixes.some((p) => action.startsWith(p));
 
 /** Money in the widest sense: what was paid, charged, counted or priced. */
-const MONEY_PREFIXES = ['payment.', 'till.', 'statement.', 'purchase.', 'sale.', 'part.', 'settings.', 'service.'] as const;
+const MONEY_PREFIXES = ['payment.', 'till.', 'statement.', 'purchase.', 'sale.', 'part.', 'settings.', 'service.', 'mechanic.'] as const;
 /** A moped's or a record's state, and who moved it there. */
 const STATE_PREFIXES = ['vehicle.', 'rental.', 'service.close', 'service.cancel'] as const;
 

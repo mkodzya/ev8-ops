@@ -1,10 +1,14 @@
-import { POOL_EVENT, VEHICLE_POOLS, VEHICLE_STATES, readFleetNumber, todayISO, type VehiclePool, type VehicleState } from '@ev8/shared';
+import { POOL_EVENT, VEHICLE_POOLS, VEHICLE_STATES, addDays, downtimeInPeriod, fleetNumber, readFleetNumber, repairTotalTetri, todayISO, type VehiclePool, type VehicleState } from '@ev8/shared';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { isoDate } from '../lib/dates.js';
 import { prisma } from '../lib/db.js';
+import { PART_MONEY, WORK_MONEY } from '../lib/stock.js';
 import { env } from '../lib/env.js';
 import { badRequest, notFound } from '../lib/errors.js';
 import { mayView } from '../lib/guard.js';
+import { OWN_ORIGIN } from '../lib/origin.js';
+import { maintenanceOf } from '../lib/maintenance.js';
+import { clockOf, downtimeOf } from '../lib/downtime.js';
 import { preliminaryOf } from '../lib/purchases.js';
 import { rentStateOf } from '../lib/rentState.js';
 import { renderStickers } from '../lib/pdf/stickers.js';
@@ -124,7 +128,15 @@ export function fleetRoutes(app: FastifyInstance): void {
         },
         serviceJobs: {
           orderBy: { openedOn: 'desc' },
-          include: { parts: { select: { qty: true, unitPriceTetri: true } } },
+          include: { parts: { select: PART_MONEY }, works: { select: WORK_MONEY } },
+        },
+        trackers: {
+          orderBy: [{ installedOn: 'desc' }, { createdAt: 'desc' }],
+          include: { serviceJob: { select: { id: true, number: true } }, removedJob: { select: { id: true, number: true } } },
+        },
+        donatedParts: {
+          orderBy: { createdAt: 'desc' },
+          select: { id: true, name: true, qty: true, createdAt: true, job: { select: { id: true, number: true, vehicle: { select: { id: true, fleetNo: true, vin: true } } } } },
         },
       },
     });
@@ -140,7 +152,10 @@ export function fleetRoutes(app: FastifyInstance): void {
       take: 50,
       include: { actor: { select: { name: true } } },
     });
-    const today = todayISO(new Date(), env.TZ);
+    const now = new Date();
+    const today = todayISO(now, env.TZ);
+    // Its next maintenance, from the mileage EV8 Ops recorded (ADR-0038 §1–2); none for a moped that left the fleet.
+    const [maintenance] = await maintenanceOf(prisma, { vehicleIds: [v.id] });
     return {
       vehicle: {
         id: v.id,
@@ -160,6 +175,9 @@ export function fleetRoutes(app: FastifyInstance): void {
         costPaidPercent: mayView(req, 'cost.view') ? order?.paidPercent ?? null : null,
         currentRentalId: v.currentRentalId,
       },
+      maintenance: maintenance ?? null,
+      /** Hours in repair over the last 30 Tbilisi days, today included (ADR-0038 §5); repairs with no hours counted apart. */
+      downtime30: downtimeInPeriod(v.serviceJobs.map(clockOf), addDays(today, -29), today, now, env.TZ),
       events: v.events.map((e) => ({
         id: e.id,
         kind: e.kind,
@@ -178,10 +196,16 @@ export function fleetRoutes(app: FastifyInstance): void {
         status: j.status,
         payer: j.payer,
         reason: j.reason,
+        /** A planned one moves the next maintenance (ADR-0038 §2). */
+        reasonKind: j.reasonKind,
         openedOn: isoDate(j.openedOn),
         closedOn: isoDate(j.closedOn),
-        totalTetri: j.labourTetri + j.parts.reduce((n, p) => n + p.qty * p.unitPriceTetri, 0),
-        withheldTetri: j.withheldTetri,
+        /** Minutes in repair and waiting for the approval; empty — not known (ADR-0038 §5). */
+        downtime: downtimeOf(j, now),
+        // What a repair cost is the owners' (ADR-0033 §4), on the card as in the repairs.
+        // On the company's own repair, with its mechanic's approved work (ADR-0037 §6).
+        totalTetri: mayView(req, 'cost.view') ? repairTotalTetri(j) : null,
+        withheldTetri: mayView(req, 'cost.view') ? j.withheldTetri : null,
       })),
       rentals: v.rentals.map((r) => ({
         id: r.id,
@@ -193,6 +217,29 @@ export function fleetRoutes(app: FastifyInstance): void {
         returnedOn: isoDate(r.returnedOn),
         paidThrough: isoDate(r.paidThrough),
         weeklyRateTetri: r.weeklyRateTetri,
+      })),
+      // The tracker on it now first, then the ones it had (ADR-0036). The IMEI
+      // and the SIM are what is searched for when a moped is stolen: the
+      // owners' to read, not a manager's.
+      trackers: mayView(req, 'service.manage')
+        ? v.trackers.map((t) => ({
+            id: t.id,
+            imei: t.imei,
+            simPhone: t.simPhone,
+            installedOn: isoDate(t.installedOn),
+            removedOn: isoDate(t.removedOn),
+            job: t.serviceJob,
+            removedJob: t.removedJob,
+          }))
+        : null,
+      /** What was taken off this moped for another, as a donor (ADR-0036). */
+      donated: v.donatedParts.map((p) => ({
+        id: p.id,
+        name: p.name,
+        qty: p.qty,
+        on: todayISO(p.createdAt, env.TZ),
+        job: { id: p.job.id, number: p.job.number },
+        to: { id: p.job.vehicle.id, number: fleetNumber(p.job.vehicle.fleetNo), vin: p.job.vehicle.vin },
       })),
       journal: journal.map((l) => ({
         id: l.id,
@@ -208,9 +255,7 @@ export function fleetRoutes(app: FastifyInstance): void {
   });
 }
 
-/** EV8 Ops' own stands, and a laptop; any other address in a QR would send people elsewhere. */
-const OWN_ORIGIN = /^(https:\/\/(test\.)?ops\.ev8\.ge|http:\/\/(localhost|127\.0\.0\.1)(:\d+)?)$/;
-
+/** EV8 Ops' own stands, and a laptop (lib/origin.ts); any other address in a QR would send people elsewhere. */
 export function stickerOrigin(given: string | undefined): string {
   return given && OWN_ORIGIN.test(given) ? given : 'https://ops.ev8.ge';
 }

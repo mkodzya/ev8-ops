@@ -1,16 +1,34 @@
-import type { Permission, Role } from '@ev8/shared';
+import { DEFAULT_LOCALE, type Permission, type Role } from '@ev8/shared';
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { ApiError, SIGNED_OUT_EVENT, api } from './api.js';
+import { useLocale } from './i18n/index.js';
 import { onReconnect } from './lib/connection.js';
 
 export interface Me {
   id: string;
   name: string;
-  email: string;
+  /** Empty for a mechanic who signs in only with a PIN (ADR-0033). */
+  email: string | null;
   role: Role;
   permissions: Permission[];
   locale: string;
   orgTz: string;
+  /** A PIN on the workshop tablet: repairs only, signed out after `idleMinutes` (ADR-0033 §7). */
+  via: 'password' | 'pin';
+  idleMinutes: number | null;
+}
+
+/**
+ * What a person left on a shared device: the drafts a wizard keeps for its
+ * author (ev8-draft:*) and the recent searches. They go with the session —
+ * on the showroom phone and on the workshop tablet alike (ADR-0033 §9).
+ */
+export function forgetDeviceLeftovers(): void {
+  try {
+    for (const key of Object.keys(localStorage)) if (key.startsWith('ev8-draft:') || key === 'ev8-recent') localStorage.removeItem(key);
+  } catch {
+    /* private mode: nothing was stored */
+  }
 }
 
 interface SessionCtx {
@@ -24,7 +42,7 @@ interface SessionCtx {
    * signed out elsewhere, password changed). The page stays where it is, with
    * what was typed, and the sign-in comes over it (wave 1 §3.8).
    */
-  ended: { email: string } | null;
+  ended: { email: string | null } | null;
   /** Signed out here while the server could not be reached (QA-1-01): the login screen says so once. */
   signedOutOffline: boolean;
   dismissOffline: () => void;
@@ -74,7 +92,8 @@ async function closeOnServer(): Promise<boolean> {
 export function SessionProvider({ children }: { children: ReactNode }) {
   const [me, setMe] = useState<Me | null>(null);
   const [loading, setLoading] = useState(true);
-  const [ended, setEnded] = useState<{ email: string } | null>(null);
+  const [ended, setEnded] = useState<{ email: string | null } | null>(null);
+  const { setLocale } = useLocale();
   const [signedOutOffline, setSignedOutOffline] = useState(false);
   const [unreachable, setUnreachable] = useState(false);
   const meRef = useRef<Me | null>(null);
@@ -128,7 +147,13 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           if (!(e instanceof ApiError && e.status === 401)) return;
           // Someone was working here: keep their screen, sign in over it.
           const was = meRef.current;
-          if (was) setEnded({ email: was.email });
+          // Not on the workshop tablet: the next mechanic must not find the
+          // last one's screen, drafts or language (ADR-0033 §9).
+          if (was?.via === 'pin') {
+            forgetDeviceLeftovers();
+            setLocale(DEFAULT_LOCALE);
+            setMe(null);
+          } else if (was) setEnded({ email: was.email });
           else setMe(null);
         });
     };
@@ -139,11 +164,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(async () => {
     // A phone at the showroom is shared: whatever a wizard kept on this
     // device for its author goes with the session (drafts are ev8-draft:*).
-    try {
-      for (const key of Object.keys(localStorage)) if (key.startsWith('ev8-draft:') || key === 'ev8-recent') localStorage.removeItem(key);
-    } catch {
-      /* private mode: nothing was stored */
-    }
+    forgetDeviceLeftovers();
+    // The workshop tablet goes back to Georgian for whoever comes next.
+    if (meRef.current?.via === 'pin') setLocale(DEFAULT_LOCALE);
     // The device forgets the session first, then tells the server — and if the
     // server cannot be reached, keeps telling it until it can (QA-1-01).
     setPendingSignOut(true);
@@ -151,7 +174,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     setEnded(null);
     if (await closeOnServer()) setPendingSignOut(false);
     else setSignedOutOffline(true);
-  }, []);
+  }, [setLocale]);
 
   const can = useCallback((p: Permission) => !!me && me.permissions.includes(p), [me]);
 

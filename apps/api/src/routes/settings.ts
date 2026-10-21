@@ -1,10 +1,20 @@
+import {
+  MAINTENANCE_INTERVAL_MAX_KM,
+  MAINTENANCE_INTERVAL_MIN_KM,
+  PIN_IDLE_MINUTES,
+  PIN_LOCK_MINUTES,
+  PIN_MAX_DIGITS,
+  PIN_MAX_FAILURES,
+  PIN_MIN_DIGITS,
+} from '@ev8/shared';
 import type { FastifyInstance } from 'fastify';
 import { audit } from '../lib/audit.js';
 import { MAX_ATTEMPTS, SESSION_IDLE_MS, SESSION_TTL_MS } from '../lib/auth.js';
 import { isDevStack } from '../lib/env.js';
 import { prisma } from '../lib/db.js';
-import { conflict, isUniqueViolation, notFound } from '../lib/errors.js';
-import { actorOf } from '../lib/guard.js';
+import { badRequest, conflict, isUniqueViolation, notFound } from '../lib/errors.js';
+import { actorOf, mayView } from '../lib/guard.js';
+import { serviceSettings } from '../lib/serviceSettings.js';
 import { int, str, tetri } from '../lib/validate.js';
 
 // What a hand-over proposes when nobody says otherwise (wave 6 §3.5, R5).
@@ -38,6 +48,8 @@ export function settingsRoutes(app: FastifyInstance): void {
     idleDays: Math.round(SESSION_IDLE_MS / 86_400_000),
     maxAttempts: MAX_ATTEMPTS,
     demoLoginsRefused: !isDevStack(),
+    // The workshop tablet (ADR-0033 §6–7).
+    pin: { minDigits: PIN_MIN_DIGITS, maxDigits: PIN_MAX_DIGITS, maxFailures: PIN_MAX_FAILURES, lockMinutes: PIN_LOCK_MINUTES, idleMinutes: PIN_IDLE_MINUTES },
   }));
 
   /** Read by anyone who hands a moped over; written by an owner. */
@@ -90,6 +102,59 @@ export function settingsRoutes(app: FastifyInstance): void {
       after: { depositTetri },
     });
     return { ok: true, depositTetri };
+  });
+
+  /**
+   * The repair settings (stage 6; ADR-0038 §3): the company rate for an hour
+   * of norm, and the interval and the warning of the planned maintenance.
+   * Read by anyone who works on repairs — the tablet says how far the next
+   * maintenance is — but the rate only by whoever sees the work's money, as a
+   * repair shows it (ADR-0033 §4).
+   */
+  app.get('/api/settings/service', { config: { scope: 'service.view' } }, async (req) => {
+    const row = await serviceSettings();
+    const by = row.updatedById ? await prisma.user.findUnique({ where: { id: row.updatedById }, select: { name: true } }) : null;
+    const seesWork = mayView(req, 'cost.view') || mayView(req, 'service.work');
+    return {
+      defaultRateTetri: seesWork ? row.defaultRateTetri : null,
+      maintenanceIntervalKm: row.maintenanceIntervalKm,
+      maintenanceWarnKm: row.maintenanceWarnKm,
+      updatedAt: row.updatedAt?.toISOString() ?? null,
+      updatedBy: by?.name ?? null,
+    };
+  });
+
+  /** An owner's to change, each change in the journal: a rate decides money. */
+  app.patch<{ Body: Body }>('/api/settings/service', { config: { scope: 'settings.manage' } }, async (req) => {
+    const b = req.body ?? {};
+    const actor = actorOf(req);
+    const before = await serviceSettings();
+    const was = { defaultRateTetri: before.defaultRateTetri, maintenanceIntervalKm: before.maintenanceIntervalKm, maintenanceWarnKm: before.maintenanceWarnKm };
+    const now = {
+      defaultRateTetri: tetri(b, 'defaultRateTetri', { min: 1 }) ?? was.defaultRateTetri,
+      maintenanceIntervalKm: int(b, 'maintenanceIntervalKm', { min: MAINTENANCE_INTERVAL_MIN_KM, max: MAINTENANCE_INTERVAL_MAX_KM }) ?? was.maintenanceIntervalKm,
+      maintenanceWarnKm: int(b, 'maintenanceWarnKm', { min: 0 }) ?? was.maintenanceWarnKm,
+    };
+    // A warning as long as the interval would call every moped all the time.
+    if (now.maintenanceWarnKm >= now.maintenanceIntervalKm) {
+      throw badRequest('bad_field', 'The warning is shorter than the interval.', { field: 'maintenanceWarnKm', maxKm: now.maintenanceIntervalKm - 1 });
+    }
+    const changed = (Object.keys(now) as (keyof typeof now)[]).filter((k) => now[k] !== was[k]);
+    if (changed.length === 0) return { ok: true, ...now };
+    await prisma.serviceSettings.upsert({
+      where: { id: true },
+      create: { id: true, ...now, updatedById: actor.id, updatedAt: new Date() },
+      update: { ...now, updatedById: actor.id, updatedAt: new Date() },
+    });
+    await audit({
+      actorId: actor.id,
+      action: 'settings.service',
+      entityType: 'settings',
+      entityId: 'service',
+      before: Object.fromEntries(changed.map((k) => [k, was[k]])),
+      after: Object.fromEntries(changed.map((k) => [k, now[k]])),
+    });
+    return { ok: true, ...now };
   });
 
   app.post<{ Body: Body }>('/api/settings/rates', { config: { scope: 'settings.manage' } }, async (req, reply) => {

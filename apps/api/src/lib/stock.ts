@@ -21,18 +21,20 @@ export interface PartRow {
   salePriceTetri: number | null;
   notes: string | null;
   archived: boolean;
+  /** A GPS tracker: fitting one asks for its IMEI and SIM (ADR-0036). */
+  isTracker: boolean;
   onHand: number;
   valueTetri: number;
   avgCostTetri: number | null;
   shortBy: number;
 }
 
-/** Every part with what the ledger makes of it. */
-export async function partRows(opts: { includeArchived?: boolean } = {}): Promise<PartRow[]> {
+/** Every part with what the ledger makes of it — or only the ones asked for. */
+export async function partRows(opts: { includeArchived?: boolean; ids?: string[] } = {}): Promise<PartRow[]> {
   const parts = await prisma.part.findMany({
-    where: opts.includeArchived ? {} : { archived: false },
+    where: { ...(opts.includeArchived ? {} : { archived: false }), ...(opts.ids ? { id: { in: opts.ids } } : {}) },
     orderBy: { name: 'asc' },
-    include: { moves: { select: { kind: true, qty: true, unitCostTetri: true, occurredOn: true } } },
+    include: { moves: { select: { kind: true, qty: true, unitCostTetri: true, occurredOn: true, createdAt: true } } },
   });
   return parts.map((p) => {
     const state = stockState(
@@ -41,6 +43,7 @@ export async function partRows(opts: { includeArchived?: boolean } = {}): Promis
         qty: m.qty,
         unitCostTetri: m.unitCostTetri,
         occurredOn: isoDate(m.occurredOn)!,
+        at: m.createdAt.toISOString(),
       })),
     );
     return {
@@ -53,6 +56,7 @@ export async function partRows(opts: { includeArchived?: boolean } = {}): Promis
       salePriceTetri: p.salePriceTetri,
       notes: p.notes,
       archived: p.archived,
+      isTracker: p.isTracker,
       ...state,
       shortBy: shortfall(state.onHand, p.minQty),
     };
@@ -108,7 +112,6 @@ export async function issueForServicePart(
   });
 }
 
-/** A repair line removed while the job is open puts its parts back. */
 /**
  * One line taken off a repair gives its parts back (QA-W5-18, wave 5 §3.7).
  *
@@ -120,8 +123,28 @@ export async function issueForServicePart(
  * entry rather than a movement, and I was wrong.
  */
 export async function returnServicePart(tx: Tx, input: { servicePartId: string; occurredOn: string; actorId: string; reason: string }): Promise<number> {
-  const line = await tx.servicePart.findUnique({ where: { id: input.servicePartId }, select: { id: true, partId: true, qty: true, unitCostTetri: true } });
+  const line = await tx.servicePart.findUnique({ where: { id: input.servicePartId }, select: { id: true, partId: true, qty: true, unitCostTetri: true, kind: true } });
   if (!line?.partId) return 0; // a line typed by hand never touched the shelf
+  // A part that only passed through (bought, off a donor) left the shelf as it
+  // came; taking the line off leaves the shelf alone. A part taken off a moped
+  // onto the shelf, written by mistake, goes off it again at the nought it came
+  // in at (ADR-0036).
+  if (line.kind === 'bought' || line.kind === 'donor') return 0;
+  if (line.kind === 'removed') {
+    await tx.stockMove.create({
+      data: {
+        partId: line.partId,
+        kind: 'issue',
+        qty: -Math.abs(line.qty),
+        unitCostTetri: 0,
+        occurredOn: dateFromISO(input.occurredOn)!,
+        servicePartId: line.id,
+        reason: input.reason,
+        createdById: input.actorId,
+      },
+    });
+    return line.qty;
+  }
   await tx.stockMove.create({
     data: {
       partId: line.partId,
@@ -150,7 +173,9 @@ export async function returnServiceParts(
   tx: Tx,
   input: { jobId: string; occurredOn: string; actorId: string; reason: string },
 ): Promise<number> {
-  const lines = await tx.servicePart.findMany({ where: { jobId: input.jobId, partId: { not: null } }, select: { id: true, partId: true, qty: true, unitCostTetri: true } });
+  // Only what was taken off the shelf goes back to it. A part bought or off a
+  // donor passed through; one taken off the moped is on the shelf already.
+  const lines = await tx.servicePart.findMany({ where: { jobId: input.jobId, partId: { not: null }, kind: 'stock' }, select: { id: true, partId: true, qty: true, unitCostTetri: true } });
   let back = 0;
   for (const l of lines) {
     await tx.stockMove.create({
@@ -172,6 +197,15 @@ export async function returnServiceParts(
 }
 
 /**
+ * A repair called off gives its shelf's parts back, so a tracker it took off
+ * the shelf was never fitted (ADR-0036). One it moved off a donor, or took off
+ * the moped, stays as it is: those parts did not go back anywhere.
+ */
+export async function unfitTrackers(tx: Tx, jobId: string): Promise<void> {
+  await tx.vehicleTracker.deleteMany({ where: { serviceJobId: jobId, removedOn: null, servicePart: { kind: 'stock' } } });
+}
+
+/**
  * The first count of a part that has never moved (B3-05): how many are on the
  * shelf and what one cost. It may happen once — after that the shelf has a
  * history and is corrected by a receipt or a stocktake, not by a new start.
@@ -190,6 +224,59 @@ export async function initialStock(
       unitCostTetri: input.unitCostTetri,
       occurredOn: dateFromISO(input.occurredOn)!,
       reason: 'initial',
+      createdById: input.actorId,
+    },
+  });
+}
+
+/**
+ * What a repair line adds to what the repair cost, as the places that sum a
+ * repair read it (`partLineTetri`, ADR-0036): a select to spread into theirs.
+ */
+export const PART_MONEY = { qty: true, unitPriceTetri: true, kind: true, paidTetri: true, rejectedAt: true } as const;
+
+/**
+ * What a line of the mechanic's work adds to what a company repair cost
+ * (`repairTotalTetri`, ADR-0037 §6): its norm and rate as written, and the
+ * decision on it. The sibling of PART_MONEY.
+ */
+export const WORK_MONEY = { qty: true, normSec: true, rateTetri: true, approvedAt: true, rejectedAt: true } as const;
+
+/**
+ * A part that only passed through the shelf on its way into a moped — bought
+ * by the mechanic, or taken off a donor (ADR-0036): in at what it cost and out
+ * at the same, written as one. The shelf's count and its average are as they
+ * were; the movements are there so the part's history says where it went.
+ */
+export async function passThrough(
+  tx: Tx,
+  input: { servicePartId: string; partId: string; qty: number; unitCostTetri: number; occurredOn: string; actorId: string; reason: string },
+): Promise<void> {
+  const at = new Date();
+  const on = dateFromISO(input.occurredOn)!;
+  const common = { partId: input.partId, unitCostTetri: input.unitCostTetri, occurredOn: on, servicePartId: input.servicePartId, reason: input.reason, createdById: input.actorId, createdAt: at };
+  await tx.stockMove.create({ data: { ...common, kind: 'receipt', qty: Math.abs(input.qty) } });
+  await tx.stockMove.create({ data: { ...common, kind: 'issue', qty: -Math.abs(input.qty) } });
+}
+
+/**
+ * A working part taken off a moped goes onto the shelf at a cost of nought —
+ * a figure somebody named, not one nobody knows — and the shelf's average
+ * falls with it (Mika, 20.10.2026; ADR-0036).
+ */
+export async function receiveRemoved(
+  tx: Tx,
+  input: { servicePartId: string; partId: string; qty: number; occurredOn: string; actorId: string; reason: string },
+): Promise<void> {
+  await tx.stockMove.create({
+    data: {
+      partId: input.partId,
+      kind: 'receipt',
+      qty: Math.abs(input.qty),
+      unitCostTetri: 0,
+      occurredOn: dateFromISO(input.occurredOn)!,
+      servicePartId: input.servicePartId,
+      reason: input.reason,
       createdById: input.actorId,
     },
   });

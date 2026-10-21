@@ -1,7 +1,7 @@
 import { needsConfirming, todayISO } from '@ev8/shared';
 import { useEffect, useRef, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
-import { api } from '../api.js';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { ApiError, api } from '../api.js';
 import { DocumentRow } from '../components/Documents.js';
 import { LoadError } from '../components/LoadError.js';
 import { PhotoPicker } from '../components/PhotoPicker.js';
@@ -50,12 +50,17 @@ export function ReturnWizard() {
   const owner = can('deposit.decide');
   const card = useLoad<RentalCard>(id ? `/api/rentals/${id}` : null);
   const points = useLoad<{ locations: { id: string; name: string }[] }>('/api/locations');
+  // From "Today", a return Drive has: the day is the act's (ADR-0034).
+  const [search] = useSearchParams();
+  const asked = search.get('on');
+  const actOn = asked && /^\d{4}-\d{2}-\d{2}$/.test(asked) && asked <= todayISO() ? asked : null;
   const steps = [t.back.steps.act, owner ? `${t.back.steps.calc} · ${t.back.steps.deposit}` : t.back.steps.calc, t.back.steps.where, t.back.steps.summary];
 
   const start = {
     step: 0,
-    returnedOn: todayISO(),
+    returnedOn: actOn ?? todayISO(),
     odometer: '',
+    odometerReason: '',
     condition: '',
     items: {} as Items,
     lateChoice: null as 'week' | 'late' | null,
@@ -70,6 +75,8 @@ export function ReturnWizard() {
   const [confirming, setConfirming] = useState(false);
   const [progress, setProgress] = useState<string | null>(null);
   const [result, setResult] = useState<{ serviceJobId: string | null; point: string | null } | null>(null);
+  // The last reading the server named when it refused a lower one: read since the preview, maybe.
+  const [refusedKm, setRefusedKm] = useState<number | null>(null);
   const op = useOperation();
   const drafts = useDraft({ id: id ? `return:${id}` : undefined, value: f, initial, hold: result != null });
   // The button that asks the question is pinned to the bottom of the screen;
@@ -89,7 +96,7 @@ export function ReturnWizard() {
   // A refusal goes back to the step whose field it names.
   useEffect(() => {
     const field = op.failure?.field;
-    if (field && ['returnedOn', 'odometerKm', 'condition'].includes(field)) set({ step: 0 });
+    if (field && ['returnedOn', 'odometerKm', 'odometerReason', 'condition'].includes(field)) set({ step: 0 });
     if (field && ['withheldTetri', 'grounds', 'reason', 'returnedTo', 'returnedToReason'].includes(field)) set({ step: 1 });
     if (field === 'locationId') set({ step: 2 });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -123,7 +130,17 @@ export function ReturnWizard() {
   const km = f.odometer.trim() === '' ? null : Number(f.odometer.replace(/\s/g, ''));
   const pickupKm = preview.pickupKm;
   const kmBelow = km != null && pickupKm != null && km < pickupKm;
-  const actOk = km != null && Number.isInteger(km) && km >= 0 && !kmBelow && f.returnedOn <= todayISO();
+  // Below the moped's last reading — a repair during the rental may have read
+  // it — only with the reason, as the hand-over asks it (ADR-0038 §4). The
+  // preview names that reading since stage 6; its shared type does not yet.
+  // A refusal may name a higher one; the reason is asked while the typed
+  // reading is below it, not while the refusal stands.
+  const previewKm = (preview as { vehicleKm?: number | null }).vehicleKm ?? null;
+  const known = [previewKm, refusedKm].filter((k): k is number => k != null);
+  const lastKm = known.length > 0 ? Math.max(...known) : null;
+  const reason = (f.odometerReason ?? '').trim();
+  const kmLower = !kmBelow && km != null && lastKm != null && km < lastKm;
+  const actOk = km != null && Number.isInteger(km) && km >= 0 && !kmBelow && (!kmLower || reason.length > 0) && f.returnedOn <= todayISO();
 
   const claims = claimsOf(preview);
   const held = preview.deposit?.heldTetri ?? 0;
@@ -150,20 +167,26 @@ export function ReturnWizard() {
   const submit = async () => {
     setConfirming(false);
     const res = await op.run(async (key) => {
-      const out = await api.post<{ actId: string; serviceJobId: string | null }>(
-        `/api/rentals/${r.id}/return`,
-        {
-          returnedOn: f.returnedOn,
-          odometerKm: km,
-          condition: f.condition.trim() || null,
-          items: Object.fromEntries(itemKeys.map((k) => [k, { state: item(k).state, note: item(k).note.trim() || null }])),
-          toService,
-          locationId: toService ? null : locationId || null,
-          lateChoice: owner ? preview.settlement.choice : null,
-          deposit: !decides ? undefined : nothingHeld ? { action: 'return_all' } : decisionBody(f.decision, held),
-        },
-        { key },
-      );
+      const out = await api
+        .post<{ actId: string; serviceJobId: string | null }>(
+          `/api/rentals/${r.id}/return`,
+          {
+            returnedOn: f.returnedOn,
+            odometerKm: km,
+            odometerReason: kmLower ? reason : null,
+            condition: f.condition.trim() || null,
+            items: Object.fromEntries(itemKeys.map((k) => [k, { state: item(k).state, note: item(k).note.trim() || null }])),
+            toService,
+            locationId: toService ? null : locationId || null,
+            lateChoice: owner ? preview.settlement.choice : null,
+            deposit: !decides ? undefined : nothingHeld ? { action: 'return_all' } : decisionBody(f.decision, held),
+          },
+          { key },
+        )
+        .catch((e: unknown) => {
+          if (e instanceof ApiError && e.code === 'odometer_below' && typeof e.extra.lastKm === 'number') setRefusedKm(e.extra.lastKm);
+          throw e;
+        });
       drafts.drop();
       if (!toService && locationId) rememberPoint(locationId);
       await uploadAll(`/api/acts/${out.actId}/photos`, photos, (n) => setProgress(t.hand.photosUploading(n, photos.length)), `${key}-photo`).catch(() => undefined);
@@ -205,6 +228,16 @@ export function ReturnWizard() {
               · {t.back.handedOn(fmtDate(r.pickedUpOn))} · {t.back.paidThrough(fmtDate(r.paidThrough))}
             </p>
           </section>
+          {actOn && (
+            <p className="hint">
+              {t.drive.returnOnAct(fmtDate(actOn))}{' '}
+              {r.drive?.returnActUrl && (
+                <a href={r.drive.returnActUrl} target="_blank" rel="noreferrer">
+                  {t.drive.returnAct}
+                </a>
+              )}
+            </p>
+          )}
           <div className="two-col two-col-tight">
             <Field label={t.back.returnedOn} name="returnedOn">
               <input className="input mono" type="date" max={todayISO()} min={r.pickedUpOn ?? undefined} value={f.returnedOn} onChange={(e) => set({ returnedOn: e.target.value })} />
@@ -214,6 +247,14 @@ export function ReturnWizard() {
             </Field>
           </div>
           {kmBelow && <p className="field-err">{t.back.odometerBelow}</p>}
+          {kmLower && (
+            <>
+              {lastKm != null && <p className="warn-text">{t.back.odometerBelowLast(String(lastKm))}</p>}
+              <Field label={t.hand.odometerReason} hint={t.hand.odometerReasonHint} name="odometerReason">
+                <input className="input" value={f.odometerReason ?? ''} onChange={(e) => set({ odometerReason: e.target.value })} />
+              </Field>
+            </>
+          )}
           <ul className="item-list">
             {itemKeys.map((k) => (
               <li key={k}>

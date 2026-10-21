@@ -1,6 +1,7 @@
-import { customerDebt, dueTodayOf, todayISO, type Debt } from '@ev8/shared';
+import { customerDebt, dueTodayOf, partsTetri, todayISO, type Debt } from '@ev8/shared';
 import { isoDate } from './dates.js';
 import { prisma } from './db.js';
+import { PART_MONEY } from './stock.js';
 import { env } from './env.js';
 import { payOffsetOf, rentStateOf } from './rentState.js';
 
@@ -62,7 +63,7 @@ export async function debtsOf(customerIds: string[], today: string = todayISO(ne
         customerId: true,
         labourTetri: true,
         withheldTetri: true,
-        parts: { select: { qty: true, unitPriceTetri: true } },
+        parts: { select: PART_MONEY },
         payments: { where: { voidedAt: null }, select: { grossTetri: true } },
       },
     }),
@@ -102,7 +103,7 @@ export async function debtsOf(customerIds: string[], today: string = todayISO(ne
         repairs: jobs
           .filter((j) => j.customerId === id)
           .map((j) => {
-            const total = j.labourTetri + j.parts.reduce((n, p) => n + p.qty * p.unitPriceTetri, 0);
+            const total = j.labourTetri + partsTetri(j.parts);
             return { id: j.id, number: j.number, chargedTetri: Math.max(0, total - j.withheldTetri), paidTetri: j.payments.reduce((n, p) => n + p.grossTetri, 0) };
           }),
         unplacedTetri: payments

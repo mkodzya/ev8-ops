@@ -5,40 +5,38 @@ import {
   clearLoginFailures,
   createSession,
   destroySession,
+  isSecureRequest,
   loginAllowed,
   permissionsOf,
   recordLoginFailure,
   spendVerifyTime,
   verifyPassword,
+  type SignInKind,
 } from '../lib/auth.js';
 import { prisma } from '../lib/db.js';
 import { demoLoginRefused, env } from '../lib/env.js';
 import { actorOf } from '../lib/guard.js';
-import type { Role } from '@ev8/shared';
+import { PIN_IDLE_MINUTES, type Role } from '@ev8/shared';
 
 /**
- * Is this request on a connection a Secure cookie can survive? Behind a
- * TLS-terminating proxy the hop we see is plain http, so x-forwarded-proto is
- * asked first. Plain http://localhost is left alone on purpose: browsers
- * refuse to store a Secure cookie there.
+ * Who is signed in, and what this session may do. A PIN session on the
+ * workshop tablet says so: its permissions are the repair ones only, and the
+ * screen signs out after the idle minutes given here (ADR-0033 §7).
  */
-function isSecureRequest(req: { protocol?: string; headers: Record<string, unknown> }): boolean {
-  if (process.env.NODE_ENV === 'production') return true;
-  const forwarded = req.headers['x-forwarded-proto'];
-  const first = Array.isArray(forwarded) ? forwarded[0] : forwarded;
-  if (typeof first === 'string' && first.split(',')[0].trim() === 'https') return true;
-  return req.protocol === 'https';
-}
-
-function me(user: { id: string; name: string; email: string; role: string; locale: string }) {
+export function me(
+  user: { id: string; name: string; email: string | null; role: string; locale: string },
+  via: SignInKind = 'password',
+) {
   return {
     id: user.id,
     name: user.name,
     email: user.email,
     role: user.role as Role,
-    permissions: permissionsOf(user.role as Role),
+    permissions: permissionsOf(user.role as Role, via),
     locale: user.locale,
     orgTz: env.TZ,
+    via,
+    idleMinutes: via === 'pin' ? PIN_IDLE_MINUTES : null,
   };
 }
 
@@ -102,7 +100,7 @@ export function authRoutes(app: FastifyInstance): void {
     return { ok: true };
   });
 
-  app.get('/api/me', { config: { scope: 'session' } }, async (req) => me(actorOf(req)));
+  app.get('/api/me', { config: { scope: 'session' } }, async (req) => me(actorOf(req), actorOf(req).via));
 
   // The interface language is a per-person preference; stored so a phone
   // and a laptop agree, and so a new device does not start in the wrong one.

@@ -1,5 +1,5 @@
 import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
-import { ROLE_PERMISSIONS, type Permission, type Role } from '@ev8/shared';
+import { PIN_IDLE_MINUTES, PIN_SESSION_PERMISSIONS, ROLE_PERMISSIONS, type Permission, type Role } from '@ev8/shared';
 import { prisma } from './db.js';
 
 // ---------------------------------------------------------------------------
@@ -12,7 +12,8 @@ export function hashPassword(password: string): string {
   return `s2:${salt}:${hash}`;
 }
 
-export function verifyPassword(password: string, stored: string): boolean {
+export function verifyPassword(password: string, stored: string | null): boolean {
+  if (!stored) return false; // a mechanic who signs in only with a PIN has no password (0055)
   const [scheme, salt, hash] = stored.split(':');
   if (scheme !== 's2' || !salt || !hash) return false;
   const candidate = scryptSync(password, salt, 64);
@@ -73,19 +74,38 @@ export const SESSION_COOKIE = 'ev8_session';
 /** How long a sign-in lasts, and how long it survives without use (Q30, §3.9). */
 export const SESSION_TTL_MS = 30 * 24 * 3600_000;
 export const SESSION_IDLE_MS = 7 * 24 * 3600_000;
+/**
+ * A PIN session on the shared workshop tablet ends after ten idle minutes
+ * (ADR-0033 §7); the browser counts touches and signs out on time, this is
+ * the server's own limit for a tablet left on the bench. A working day is
+ * the outer one.
+ */
+export const PIN_SESSION_IDLE_MS = PIN_IDLE_MINUTES * 60_000;
+export const PIN_SESSION_TTL_MS = 12 * 3600_000;
+
+export type SignInKind = 'password' | 'pin';
 
 export interface Actor {
   id: string;
-  email: string;
+  /** Empty for a mechanic who signs in only with a PIN (0055). */
+  email: string | null;
   name: string;
   role: Role;
   locale: string;
+  /** How this session began: a PIN on the workshop tablet reaches the repairs only. */
+  via: SignInKind;
+  deviceId: string | null;
 }
 
-export async function createSession(userId: string): Promise<{ token: string; expiresAt: Date }> {
+export async function createSession(
+  userId: string,
+  pin?: { deviceId: string },
+): Promise<{ token: string; expiresAt: Date }> {
   const token = randomBytes(32).toString('hex');
-  const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
-  await prisma.session.create({ data: { token, userId, expiresAt } });
+  const expiresAt = new Date(Date.now() + (pin ? PIN_SESSION_TTL_MS : SESSION_TTL_MS));
+  await prisma.session.create({
+    data: { token, userId, expiresAt, kind: pin ? 'pin' : 'password', deviceId: pin?.deviceId ?? null },
+  });
   return { token, expiresAt };
 }
 
@@ -99,7 +119,8 @@ export async function loadActor(token: string | undefined): Promise<Actor | null
   if (!session || session.expiresAt < new Date()) return null;
   // A phone left in a drawer for a week signs in again (Q30). The thirty days
   // are the outer limit; this is the one that usually ends a session.
-  if (Date.now() - session.lastSeenAt.getTime() > SESSION_IDLE_MS) {
+  const idle = session.kind === 'pin' ? PIN_SESSION_IDLE_MS : SESSION_IDLE_MS;
+  if (Date.now() - session.lastSeenAt.getTime() > idle) {
     await prisma.session.deleteMany({ where: { token } });
     return null;
   }
@@ -110,13 +131,41 @@ export async function loadActor(token: string | undefined): Promise<Actor | null
   if (Date.now() - session.lastSeenAt.getTime() > 60_000) {
     void prisma.session.update({ where: { token }, data: { lastSeenAt: new Date() } }).catch(() => {});
   }
-  return { id: u.id, email: u.email, name: u.name, role: u.role as Role, locale: u.locale };
+  return {
+    id: u.id,
+    email: u.email,
+    name: u.name,
+    role: u.role as Role,
+    locale: u.locale,
+    via: session.kind,
+    deviceId: session.deviceId,
+  };
+}
+
+/**
+ * What this person may do in this session: their role's rights, and on the
+ * workshop tablet only the repair ones (ADR-0033 §7) — so the guard, the
+ * fields an answer leaves out and the menu all ask the same question.
+ */
+export function permissionsOf(role: Role, via: SignInKind = 'password'): readonly Permission[] {
+  const mine = ROLE_PERMISSIONS[role];
+  return via === 'pin' ? mine.filter((p) => PIN_SESSION_PERMISSIONS.includes(p)) : mine;
 }
 
 export function hasPerm(actor: Actor, perm: Permission): boolean {
-  return ROLE_PERMISSIONS[actor.role].includes(perm);
+  return permissionsOf(actor.role, actor.via).includes(perm);
 }
 
-export function permissionsOf(role: Role): readonly Permission[] {
-  return ROLE_PERMISSIONS[role];
+/**
+ * Is this request on a connection a Secure cookie can survive? Behind a
+ * TLS-terminating proxy the hop we see is plain http, so x-forwarded-proto is
+ * asked first. Plain http://localhost is left alone on purpose: browsers
+ * refuse to store a Secure cookie there.
+ */
+export function isSecureRequest(req: { protocol?: string; headers: Record<string, unknown> }): boolean {
+  if (process.env.NODE_ENV === 'production') return true;
+  const forwarded = req.headers['x-forwarded-proto'];
+  const first = Array.isArray(forwarded) ? forwarded[0] : forwarded;
+  if (typeof first === 'string' && first.split(',')[0].trim() === 'https') return true;
+  return req.protocol === 'https';
 }

@@ -1,8 +1,9 @@
-import { acquiringFee, paidThrough, periodPayStatus, spreadOverOwed, todayISO, type Allocation } from '@ev8/shared';
+import { acquiringFee, paidThrough, partsTetri, periodPayStatus, spreadOverOwed, todayISO, type Allocation } from '@ev8/shared';
 import type { Prisma } from '../generated/prisma/client.js';
 import { hasPerm, type Actor } from './auth.js';
 import { dateFromISO, isoDate } from './dates.js';
 import { prisma } from './db.js';
+import { PART_MONEY } from './stock.js';
 import { env } from './env.js';
 import { badRequest, conflict, forbidden, notFound } from './errors.js';
 import { recordPaymentTx } from './payments.js';
@@ -246,11 +247,11 @@ async function planRental(tx: Tx, rentalId: string, gross: number): Promise<Pick
 export async function serviceOwed(tx: Tx | typeof prisma, jobId: string): Promise<{ number: string; customerId: string | null; chargedTetri: number; paidTetri: number; openTetri: number }> {
   const job = await tx.serviceJob.findUnique({
     where: { id: jobId },
-    include: { parts: { select: { qty: true, unitPriceTetri: true } }, payments: { where: { voidedAt: null }, select: { grossTetri: true } } },
+    include: { parts: { select: PART_MONEY }, payments: { where: { voidedAt: null }, select: { grossTetri: true } } },
   });
   if (!job) throw notFound('service_not_found', 'No such repair.');
   if (job.payer !== 'customer') throw conflict('not_customer_repair', 'This repair is the company’s, not the customer’s.');
-  const total = job.labourTetri + job.parts.reduce((n, p) => n + p.qty * p.unitPriceTetri, 0);
+  const total = job.labourTetri + partsTetri(job.parts);
   const charged = Math.max(0, total - job.withheldTetri);
   const paid = job.payments.reduce((n, p) => n + p.grossTetri, 0);
   return { number: job.number, customerId: job.customerId, chargedTetri: charged, paidTetri: paid, openTetri: Math.max(0, charged - paid) };

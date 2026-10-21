@@ -476,7 +476,7 @@ describe.skipIf(!HAS_DB)('wave 5 · the shelf and the records', () => {
     const today = json<{ queue: { group: string; rows: { action: string; id: string }[] }[] }>(await call(owner, 'GET', '/api/today'));
     const service = today.queue.find((g) => g.group === 'service');
     expect(service?.rows.some((r) => r.action === 'open_report' && r.id === `report:${id}`) ?? false).toBe(true);
-    expect((await call(owner, 'PATCH', `/api/service/${id}`, { open: true })).statusCode).toBe(200);
+    expect((await call(owner, 'POST', `/api/service/${id}/approve`)).statusCode).toBe(200);
     expect(json<{ job: { status: string } }>(await call(owner, 'GET', `/api/service/${id}`)).job.status).toBe('open');
     void todayISO;
   });

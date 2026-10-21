@@ -38,10 +38,12 @@ export interface Section {
 }
 
 export const SECTIONS: readonly Section[] = [
-  { id: 'today', path: '/', group: 'work', anyOf: [] },
+  // "Today" is the front office's queue — rentals, money, the yard. A mechanic
+  // has none of it; their first screen is the repairs (ADR-0033).
+  { id: 'today', path: '/', group: 'work', anyOf: ['fleet.view'] },
   { id: 'rentals', path: '/rentals', group: 'work', anyOf: ['fleet.view'] },
   { id: 'fleet', path: '/fleet', group: 'work', anyOf: ['fleet.view'] },
-  { id: 'service', path: '/service', group: 'work', anyOf: ['fleet.view'] },
+  { id: 'service', path: '/service', group: 'work', anyOf: ['service.view'] },
   { id: 'money', path: '/money', group: 'money', anyOf: ['payments.view'] },
   { id: 'cash', path: '/money/cash', group: 'money', anyOf: ['cash.record'], noneOf: ['payments.view'] },
   { id: 'sales', path: '/sales', group: 'money', anyOf: ['fleet.view'] },
@@ -68,8 +70,15 @@ export function sectionsFor(permissions: readonly Permission[]): Section[] {
  */
 export function phoneTabsFor(permissions: readonly Permission[]): SectionId[] {
   const mine = new Set(sectionsFor(permissions).map((s) => s.id));
+  // A mechanic has one section, the repairs (ADR-0033).
+  if (!mine.has('today')) return [...mine];
   const order: SectionId[] = mine.has('money') ? ['today', 'rentals', 'money', 'fleet'] : ['today', 'rentals', 'fleet', 'cash'];
   return order.filter((id) => mine.has(id));
+}
+
+/** Where a person lands: "Today" for the front office, the repairs for a mechanic. */
+export function homePathFor(permissions: readonly Permission[]): string {
+  return sectionsFor(permissions)[0]?.path ?? '/';
 }
 
 /** Everything a role has that is not on its bar, for the avatar menu — in rail order, customers first. */
@@ -88,6 +97,7 @@ export type TabId =
   | 'points'
   | 'batteries'
   | 'jobs'
+  | 'works'
   | 'stock'
   | 'sort'
   | 'payments'
@@ -106,10 +116,13 @@ export type TabId =
   | 'expenses'
   | 'drive'
   | 'orders'
-  | 'suppliers';
+  | 'suppliers'
+  | 'payouts'
+  | 'balance'
+  | 'repair';
 
 /** Tabs inside a section, in the address (wave 1 §3.2). */
-export const SECTION_TABS: Partial<Record<SectionId, readonly { id: TabId; path: string; anyOf: readonly Permission[] }[]>> = {
+export const SECTION_TABS: Partial<Record<SectionId, readonly { id: TabId; path: string; anyOf: readonly Permission[]; noneOf?: readonly Permission[] }[]>> = {
   fleet: [
     { id: 'vehicles', path: '/fleet', anyOf: ['fleet.view'] },
     { id: 'models', path: '/fleet/models', anyOf: ['fleet.view'] },
@@ -117,8 +130,15 @@ export const SECTION_TABS: Partial<Record<SectionId, readonly { id: TabId; path:
     { id: 'batteries', path: '/fleet/batteries', anyOf: ['fleet.view'] },
   ],
   service: [
-    { id: 'jobs', path: '/service', anyOf: ['fleet.view'] },
+    { id: 'jobs', path: '/service', anyOf: ['service.view'] },
     { id: 'stock', path: '/service/stock', anyOf: ['fleet.view'] },
+    // The book of works and its norms (stage 2 of the mechanic plan).
+    { id: 'works', path: '/service/works', anyOf: ['service.norms'] },
+    // Paying the mechanic (stage 5, ADR-0037): the owners mark it, the mechanics
+    // read their own balance. An owner carries no repairs of his own, so he has
+    // no balance tab — the same test the repairs screen makes for the workshop.
+    { id: 'payouts', path: '/service/payouts', anyOf: ['service.payout'] },
+    { id: 'balance', path: '/service/balance', anyOf: ['service.work'], noneOf: ['service.manage'] },
   ],
   // Money in one place (wave 2 §3.0): sort the bank lines, the payments,
   // the till by person, the statements, the deposits. The payments calendar
@@ -149,6 +169,8 @@ export const SECTION_TABS: Partial<Record<SectionId, readonly { id: TabId; path:
     // One page on two addresses, so still no copy (designer, 21.09.2026).
     { id: 'points', path: '/settings/points', anyOf: ['settings.manage'] },
     { id: 'rental', path: '/settings/rental', anyOf: ['settings.manage'] },
+    // The workshop's rate and the planned-maintenance interval (stage 6, ADR-0038).
+    { id: 'repair', path: '/settings/repair', anyOf: ['settings.manage'] },
     // What money going out was for (migration 0046).
     { id: 'expenses', path: '/settings/expenses', anyOf: ['settings.manage'] },
     // The rentals folders in Google Drive beside the rentals here (ADR-0031).

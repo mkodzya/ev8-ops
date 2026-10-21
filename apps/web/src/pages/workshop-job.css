@@ -1,0 +1,343 @@
+/* The mechanic's new repair and the book of works on the workshop tablet
+   (stage 2 of the mechanic plan; prototypes/mechanic-job-open-options.html,
+   variants A and A). Targets are the tablet's: a finger with grease on it,
+   not a mouse — 56 px for a choice, 64 px for the loud one. */
+
+.wjob .wizard { max-width: 760px; }
+.wjob-step { display: flex; flex-direction: column; gap: var(--space4); }
+.wjob-q { font: var(--text-display); letter-spacing: var(--tracking-tight); margin: 0; }
+.wjob .wizard-foot .pill { min-height: var(--control-large); padding: 0 24px; font: var(--text-cta); }
+
+.wjob-big { min-height: 72px; font: var(--text-display); font-family: var(--mono); letter-spacing: 0.02em; }
+.wjob-text { min-height: 56px; font: var(--text-body); }
+
+.wjob-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space2);
+  align-self: flex-start;
+  min-height: 56px;
+  padding: 0 24px;
+  border: 1.5px solid var(--ink);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  color: var(--ink);
+  font: var(--text-cta);
+  cursor: pointer;
+}
+.wjob-btn:hover { color: var(--accent); border-color: var(--accent); }
+
+.wjob-chips, .wjob-cats { display: flex; flex-wrap: wrap; gap: var(--space2); }
+.wjob-cats { flex-wrap: nowrap; overflow-x: auto; padding-bottom: var(--space1); }
+.wjob-chip {
+  min-height: 56px;
+  padding: 0 22px;
+  border: 1.5px solid var(--line-control);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  color: var(--ink);
+  font: var(--text-cta);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.wjob-chip.on { background: var(--ink); border-color: var(--ink); color: var(--surface); }
+.wjob-chip-sm { min-height: 48px; padding: 0 16px; font: var(--text-button); }
+
+.wjob-mopeds { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space3); }
+.wjob-moped {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space1);
+  padding: 14px 18px;
+  border: 1.5px solid var(--line-soft);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  color: var(--ink);
+  font: var(--text-body);
+  text-align: left;
+  cursor: pointer;
+}
+.wjob-moped.on { border: 3px solid var(--accent); background: var(--accent-soft); padding: 12px 16px; }
+.wjob-moped:disabled { cursor: default; background: var(--surface-2); }
+.wjob-moped-head { display: flex; justify-content: space-between; align-items: center; gap: var(--space3); font: var(--text-h2); }
+.wjob-has { display: flex; justify-content: space-between; gap: var(--space3); margin-top: var(--space2); padding: 10px 14px; border-radius: var(--radius-card); background: var(--warn-soft); }
+.wjob-link { color: var(--accent); font-weight: 600; text-decoration: underline; text-underline-offset: 4px; }
+.wjob-open-own { display: inline-flex; align-items: center; min-height: var(--control); margin-top: var(--space1); }
+
+.wjob-odo { display: grid; grid-template-columns: 1fr 180px; gap: var(--space4); align-items: start; }
+@media (max-width: 719px) { .wjob-odo { grid-template-columns: 1fr; } }
+.wjob-lower { display: flex; flex-direction: column; gap: var(--space3); padding: 16px 18px; border-radius: var(--radius-card); background: var(--warn-soft); }
+.wjob-lower p { margin: 0; }
+
+.wjob-pics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space3); }
+@media (max-width: 719px) { .wjob-pics { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.wjob-pic {
+  position: relative;
+  aspect-ratio: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space1);
+  border-radius: var(--radius-card);
+  background: var(--surface-2);
+  overflow: hidden;
+  font: var(--text-button);
+}
+.wjob-pic img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.wjob-pic-add { background: var(--surface); border: 2px dashed var(--line-control); color: var(--ink); cursor: pointer; }
+.wjob-pic .thumb-x { position: absolute; top: 6px; right: 6px; width: 36px; height: 36px; border-radius: 50%; border: 0; background: var(--scrim); color: var(--on-scrim); cursor: pointer; }
+.wjob-tag, .wjob-thumb .wjob-tag {
+  position: absolute;
+  left: 6px;
+  bottom: 6px;
+  padding: 1px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--scrim);
+  color: var(--on-scrim);
+  font: var(--text-label);
+}
+.wjob-thumb { position: relative; }
+.wjob-kv .wjob-thumb { width: 96px; height: 96px; }
+
+.wjob .wizard-foot { align-items: center; flex-wrap: wrap; }
+.wjob .wizard-foot-note { flex: 1 1 100%; display: flex; justify-content: space-between; gap: var(--space3); padding: 8px 14px; border-radius: var(--radius-card); background: var(--lime); font: var(--text-body); }
+.wjob-works { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space2); }
+.wjob-work { display: flex; align-items: center; gap: var(--space3); padding: 10px 14px; border: 1.5px solid var(--line-soft); border-radius: var(--radius-card); background: var(--surface); }
+.wjob-work.on { border: 2.5px solid var(--accent); padding: 9px 13px; }
+.wjob-code { font: var(--text-mono); color: var(--muted); width: 56px; flex: none; }
+.wjob-name { flex: 1; min-width: 0; font: var(--text-body); }
+.wjob-min { white-space: nowrap; }
+.wjob-round {
+  width: 52px;
+  height: 52px;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid var(--ink);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+}
+.wjob-qty { display: inline-flex; align-items: center; flex: none; border: 1.5px solid var(--line-control); border-radius: var(--radius-pill); }
+.wjob-qty button { width: 52px; height: 52px; display: inline-flex; align-items: center; justify-content: center; border: 0; background: transparent; color: var(--ink); cursor: pointer; }
+.wjob-qty b { min-width: 28px; text-align: center; font: var(--text-h2); }
+.wjob-nonorm { padding: 2px 10px; border-radius: var(--radius-pill); background: var(--crit-soft); color: var(--crit-ink); font: var(--text-label); font-weight: 600; white-space: nowrap; }
+.wjob-free { display: flex; gap: var(--space2); align-items: center; }
+.wjob-free .input { flex: 1; }
+.wjob-free .pill { min-height: 56px; }
+@media (max-width: 719px) {
+  .wjob-work { flex-wrap: wrap; }
+  .wjob-work .wjob-name { flex-basis: calc(100% - 70px); order: 2; }
+  .wjob-work .wjob-code { order: 1; }
+  .wjob-work .wjob-min { order: 1; margin-left: auto; }
+  .wjob-work .wjob-qty, .wjob-work .wjob-round { order: 3; margin-left: auto; }
+}
+
+.wjob-kv { display: grid; grid-template-columns: 140px 1fr; gap: 10px 16px; margin: 0; }
+.wjob-kv dt { color: var(--muted); }
+.wjob-kv dd { margin: 0; }
+.wjob-sub { display: block; }
+.wjob-lines { list-style: none; margin: 0; padding: 0; }
+.wjob-lines li { display: flex; align-items: baseline; gap: var(--space3); padding: 9px 0; border-bottom: 1px solid var(--line-soft); }
+.wjob-gel { width: 96px; text-align: right; }
+.wjob-total { display: flex; justify-content: space-between; font: var(--text-h2); }
+
+/* The book of works. */
+.wbook-banner { padding: 12px 16px; border-radius: var(--radius-card); background: var(--surface-2); }
+.wbook-tools { display: flex; gap: var(--space2); flex-wrap: wrap; align-items: center; }
+.wbook-tools .input { flex: 1; min-width: 200px; min-height: 52px; }
+.wbook-group { margin: 0; padding: 0; list-style: none; border: 1px solid var(--line-soft); border-radius: var(--radius-card); overflow: hidden; background: var(--surface); }
+.wbook-head {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space3);
+  padding: 12px 16px;
+  border: 0;
+  background: var(--surface-2);
+  color: var(--ink);
+  font: var(--text-h2);
+  text-align: left;
+  cursor: pointer;
+}
+.wbook-head:disabled { cursor: default; }
+.wbook-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--space3);
+  min-height: 56px;
+  padding: 10px 16px;
+  border: 0;
+  border-top: 1px solid var(--line-soft);
+  background: var(--surface);
+  color: var(--ink);
+  font: var(--text-body);
+  text-align: left;
+  cursor: pointer;
+}
+.wbook-row:disabled { cursor: default; }
+.wbook-row.off .wjob-name, .wbook-row.off .wjob-min { color: var(--muted); text-decoration: line-through; }
+.wbook-mark { padding: 1px 8px; border-radius: var(--radius-pill); background: var(--surface-2); color: var(--muted); font: var(--text-label); white-space: nowrap; }
+.wbook-mark.note { background: var(--lime); color: var(--ink); }
+.wbook-empty-field { border-style: dashed; }
+
+/* «＋ Новая заявка» at the top of the workshop's list. */
+.wjob-new {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 64px;
+  margin-bottom: var(--space4);
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  color: var(--on-accent);
+  font: var(--text-cta);
+  text-decoration: none;
+}
+.wjob-new:hover { background: var(--accent-hover); color: var(--on-accent); }
+
+/* Approving and closing (stage 3; prototype mechanic-approval-options.html,
+   variants A and A). The queue decides in the card: the two buttons are the
+   tablet's size, the refusal is never the loud one. */
+.wappr-queue { margin-bottom: var(--space4); }
+.wappr-list { list-style: none; margin: var(--space2) 0 0; padding: 0; display: flex; flex-direction: column; gap: var(--space3); }
+.wappr-card { display: flex; flex-direction: column; gap: var(--space3); padding: 16px 18px; border: 1.5px solid var(--line-soft); border-radius: var(--radius-card); background: var(--surface); }
+.wappr-head { display: flex; justify-content: space-between; align-items: baseline; gap: var(--space3); flex-wrap: wrap; }
+.wappr-head b { font: var(--text-h2); }
+.wappr-head a { color: var(--ink); text-decoration: none; }
+.wappr-why { margin: 0; font: var(--text-body); }
+.wappr-thumb { width: 96px; height: 96px; }
+.wappr-acts { display: flex; justify-content: flex-end; gap: var(--space3); flex-wrap: wrap; }
+.wappr-acts .pill { min-height: var(--control-large); padding: 0 24px; font: var(--text-cta); }
+.wappr-suggest { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space2); margin-bottom: var(--space4); padding: 14px 18px; border-radius: var(--radius-card); background: var(--accent-soft); }
+.wappr-suggest p { margin: 0; }
+.wappr-reason { display: flex; flex-direction: column; gap: var(--space1); margin-bottom: var(--space4); padding: 12px 16px; border-radius: var(--radius-card); background: var(--surface-2); }
+
+/* A line of work and where it stands: approved quietly, waiting shaded,
+   refused struck through with its reason under the name. */
+.wjob-lines li { align-items: center; }
+.wjob-line-approved .wjob-name::after { content: " ✓"; color: var(--accent); font-weight: 600; }
+.wjob-line-approved .wjob-name, .wjob-line-approved .mono { color: var(--muted); }
+.wjob-lines li.wjob-line-waiting { margin: var(--space1) calc(-1 * var(--space2)); padding: 9px var(--space2); border-bottom: 0; border-radius: var(--radius-card); background: var(--warn-soft); }
+.wjob-line-rejected .wjob-name, .wjob-line-rejected .mono { color: var(--muted); text-decoration: line-through; }
+.wjob-line-why { display: block; color: var(--crit-ink); font: var(--text-body-sm); text-decoration: none; }
+.wjob-line-rejected .wjob-line-why { text-decoration: none; }
+.wjob-wtag { padding: 1px 10px; border: 1.5px solid var(--line-control); border-radius: var(--radius-pill); background: var(--surface); font: var(--text-label); font-weight: 600; white-space: nowrap; }
+.wjob-norm { display: inline-flex; align-items: center; gap: var(--space2); flex-wrap: wrap; }
+.wjob-norm .input { width: 96px; min-height: 48px; }
+.wappr-close { min-height: var(--control-large); padding: 0 28px; font: var(--text-cta); }
+/* Parts and trackers in the repair (stage 4; prototype mechanic-parts-options.html, A and A). */
+.wparts-lines li { align-items: center; }
+.wparts-kind { flex: none; padding: 2px 10px; border-radius: var(--radius-pill); background: var(--surface-2); font: var(--text-label); font-weight: 600; white-space: nowrap; }
+.wparts-bat { background: var(--info-soft); color: var(--rented-ink); }
+.wparts-sub { display: block; color: var(--muted); font: var(--text-body-sm); }
+.wparts-qty { white-space: nowrap; }
+.wparts-x { flex: none; width: 44px; height: 44px; border: 1.5px solid var(--line-control); border-radius: 50%; background: var(--surface); color: var(--ink); font: var(--text-h2); cursor: pointer; }
+.wparts-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space3); }
+.wparts-tile { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space1); min-height: 132px; padding: 16px 18px; border: 1.5px solid var(--line-control); border-radius: var(--radius-card); background: var(--surface); color: var(--ink); text-align: left; cursor: pointer; }
+.wparts-tile b { font: var(--text-h2); }
+.wparts-tile:hover { border-color: var(--accent); }
+.wparts-tile-bat { border-style: dashed; }
+.wparts-glyph { font: var(--text-display); line-height: 1; color: var(--accent); }
+.wparts-form { display: flex; flex-direction: column; gap: var(--space4); }
+.wparts-res { list-style: none; margin: var(--space2) 0 0; padding: 0; display: flex; flex-direction: column; gap: var(--space2); }
+.wparts-row { display: flex; align-items: center; gap: var(--space3); width: 100%; min-height: 60px; padding: 10px 16px; border: 1.5px solid var(--line-soft); border-radius: var(--radius-card); background: var(--surface); color: var(--ink); text-align: left; cursor: pointer; }
+.wparts-row.on { border: 3px solid var(--accent); background: var(--accent-soft); padding: 9px 15px; }
+.wparts-row .wjob-code { width: auto; min-width: 56px; max-width: 112px; overflow-wrap: anywhere; }
+.wparts-free { border-style: dashed; color: var(--muted); }
+.wparts-mark { margin-left: var(--space2); padding: 1px 8px; border-radius: var(--radius-pill); background: var(--surface-2); font: var(--text-label); }
+.wparts-on { color: var(--muted); white-space: nowrap; }
+.wparts-on.bad { color: var(--crit-ink); font-weight: 600; }
+.wparts-note { margin: 0; padding: 12px 16px; border-radius: var(--radius-card); background: var(--surface-2); }
+.wparts-ok { margin: 0; color: var(--accent-ink); font-weight: 500; }
+.wparts-imei { letter-spacing: 0.04em; }
+.wparts-q { margin: 0; font: var(--text-h2); }
+.wparts-receipt { flex: none; width: 64px; height: 64px; }
+.wparts-struck td { color: var(--muted); text-decoration: line-through; }
+@media (max-width: 719px) {
+  .wjob-lines li { flex-wrap: wrap; }
+  .wjob-lines .wjob-name { flex: 1 1 calc(100% - 72px); }
+  .wjob-lines .wjob-gel { width: auto; margin-left: auto; }
+  .wappr-acts .pill { flex: 1 1 auto; }
+  .wparts-tiles { grid-template-columns: minmax(0, 1fr); }
+  .wparts-tile { min-height: 96px; }
+}
+
+/* Paying the mechanic (stage 5; prototype mechanic-payouts-options.html,
+   variants A and A). «К оплате»: a card for each mechanic with his repairs,
+   the sum right above the one button; on a laptop the repairs are a table to
+   check against the bot's report line by line. The balance: what is his to
+   be paid, large, then three tiles and the lists. */
+.wpay-person { display: flex; flex-direction: column; gap: var(--space3); margin-bottom: var(--space4); padding: 14px 16px; border: 1.5px solid var(--line-soft); border-radius: var(--radius-card); background: var(--surface); }
+.wpay-head { display: flex; justify-content: space-between; align-items: center; gap: var(--space3); flex-wrap: wrap; }
+.wpay-head b { font: var(--text-h2); }
+.wpay-rows { list-style: none; margin: 0; padding: 0; }
+.wpay-rows > li, .wpay-line { display: flex; align-items: baseline; gap: var(--space3); padding: 8px 0; border-bottom: 1px solid var(--line-soft); }
+.wpay-rows > li.wpay-job { display: block; padding: 0; }
+.wpay-rows > li.wpay-job .wpay-line:last-child { border-bottom: 0; }
+.wpay-rows > li.wpay-job { border-bottom: 1px solid var(--line-soft); }
+.wpay-n { width: 84px; flex: none; }
+.wpay-t { flex: 1; min-width: 0; }
+.wpay-t small { display: block; font: var(--text-body-sm); }
+.wpay-g { white-space: nowrap; text-align: right; }
+.wpay-receipt .wpay-n { font: var(--text-body-sm); }
+.wpay-moped { white-space: nowrap; }
+.wpay-sum { display: flex; flex-direction: column; gap: 2px; margin: 0; }
+.wpay-sum div { display: flex; justify-content: space-between; gap: var(--space3); }
+.wpay-sum dt { color: var(--muted); }
+.wpay-sum dd { margin: 0; white-space: nowrap; }
+.wpay-sum .wpay-all { margin-top: var(--space1); padding-top: var(--space1); border-top: 1px solid var(--line-soft); font-weight: 600; }
+.wpay-sum .wpay-all dt { color: var(--ink); }
+.wpay-pay { min-height: var(--control-large); padding: 0 24px; font: var(--text-cta); }
+.wpay-narrow .wpay-pay { width: 100%; }
+.wpay-state { white-space: nowrap; }
+.wpay-held, .wpay-history { margin-bottom: var(--space4); }
+.wpay-void .wpay-g { color: var(--muted); text-decoration: line-through; }
+.wpay-wide { display: none; }
+@media (min-width: 900px) {
+  .wpay-wide { display: block; }
+  .wpay-head .wpay-wide { display: inline-flex; }
+  .wpay-narrow { display: none; }
+}
+
+/* The mechanic's balance on the tablet and his phone. */
+.wpay-big { display: flex; flex-direction: column; gap: var(--space1); margin-bottom: var(--space3); padding: 18px 20px; border: 1.5px solid var(--line-soft); border-radius: var(--radius-card); background: var(--surface); }
+.wpay-big b { font: var(--text-display); font-family: var(--mono); font-size: 44px; font-variant-numeric: tabular-nums; }
+/* A work's code and its count stay on one line; the list breaks between works. */
+.wpay-code { white-space: nowrap; }
+.wpay-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space3); margin-bottom: var(--space4); }
+.wpay-tile { display: flex; flex-direction: column; gap: var(--space1); min-height: 112px; padding: 14px 16px; border: 1.5px solid var(--line-control); border-radius: var(--radius-card); background: var(--surface); }
+.wpay-tile.quiet { border-color: var(--line-soft); }
+.wpay-tile b { font: var(--text-money-lg); }
+.wpay-tile-jobs { display: flex; flex-wrap: wrap; gap: var(--space2); }
+.wpay-tile-jobs a { min-height: 44px; display: inline-flex; align-items: center; }
+.wpay-mine > li { min-height: 56px; align-items: center; }
+@media (max-width: 719px) {
+  .wpay-tiles { grid-template-columns: 1fr; }
+  .wpay-tile { min-height: 0; }
+  .wpay-n { width: 76px; }
+}
+/* On the tablet the balance is reached from «Ремонт»: a finger's size, not a chip's. */
+.wpay-link { min-height: var(--control-large); padding: 0 20px; }
+
+/* Planned maintenance on the chief mechanic's «Ремонт» (stage 6; prototype
+   mechanic-maintenance-options.html, variant A): a moped a row, what is left
+   on the right, «＋ ТО» at the finger's size. */
+.wmaint-list { list-style: none; margin: var(--space2) 0 0; padding: 0; border: 1.5px solid var(--line-soft); border-radius: var(--radius-card); background: var(--surface); }
+.wmaint-list li { display: flex; align-items: center; gap: var(--space3); min-height: 64px; padding: 10px 16px; border-top: 1px solid var(--line-soft); }
+.wmaint-list li:first-child { border-top: 0; }
+.wmaint-what { flex: 1; min-width: 0; }
+.wmaint-what small { display: block; font: var(--text-body-sm); }
+.wmaint-left { white-space: nowrap; }
+.wmaint-add { min-height: 52px; text-decoration: none; }
+@media (max-width: 719px) {
+  .wmaint-list li { flex-wrap: wrap; }
+  .wmaint-left { order: 3; }
+}

@@ -51,6 +51,13 @@ describe('two kinds of line', () => {
   it('a price, a state and a role are changes', () => {
     for (const a of ['sale.update', 'vehicle.state.manual', 'user.update', 'settings.deposit']) expect(journalKind(a), a).toBe('change');
   });
+
+  it('a mechanic marked paid, and the mark voided, are money events (ADR-0037)', () => {
+    for (const a of ['service.paid', 'service.unpaid', 'mechanic.payout', 'mechanic.payout.void']) {
+      expect(journalKind(a), a).toBe('event');
+      expect(journalGroups(a), a).toEqual(['money']);
+    }
+  });
 });
 
 describe('three looks at one personal number', () => {

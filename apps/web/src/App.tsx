@@ -1,4 +1,4 @@
-import { REDIRECTS, type Permission } from '@ev8/shared';
+import { REDIRECTS, homePathFor, type Permission } from '@ev8/shared';
 import { Navigate, Route, Routes, useLocation, useParams } from 'react-router-dom';
 import { LoginPage } from './LoginPage.js';
 import { AppShell } from './ds/shell/AppShell.js';
@@ -29,6 +29,7 @@ import { ExpenseCategoriesPage } from './pages/ExpenseCategoriesPage.js';
 import { ExpensesReportPage } from './pages/ExpensesReportPage.js';
 import { ProfilePage } from './pages/ProfilePage.js';
 import { LoginSettingsPage, RentalSettingsPage, SettingsPage } from './pages/SettingsPage.js';
+import { RepairSettingsPage } from './pages/RepairSettingsPage.js';
 import { JournalPage } from './pages/JournalPage.js';
 import { MigrationPage } from './pages/MigrationPage.js';
 import { KommoPage } from './pages/KommoPage.js';
@@ -44,6 +45,11 @@ import { SalesPage } from './pages/SalesPage.js';
 import { SaleWizard } from './pages/SaleWizard.js';
 import { ServiceJobPage } from './pages/ServiceJobPage.js';
 import { ServicePage } from './pages/ServicePage.js';
+import { WorkBookPage } from './pages/WorkBookPage.js';
+import { PayoutsPage } from './pages/PayoutsPage.js';
+import { MechanicBalancePage } from './pages/MechanicBalancePage.js';
+import { WorkshopJobWizard } from './pages/WorkshopJobWizard.js';
+import { RepairClosePage } from './pages/RepairClosePage.js';
 import { StatementsPage } from './pages/money/StatementsPage.js';
 import { VehiclePage } from './pages/VehiclePage.js';
 import { ModelPage } from './pages/ModelPage.js';
@@ -99,6 +105,16 @@ function Unreachable() {
   );
 }
 
+/**
+ * "/" is "Today" — the front office's queue. Whoever has none of it, a
+ * mechanic, lands on their own first section instead (ADR-0033).
+ */
+function Home() {
+  const { me, can } = useSession();
+  if (!me || can('fleet.view')) return <TodayPage />;
+  return <Navigate to={homePathFor(me.permissions)} replace />;
+}
+
 /** An old address, with its :id carried over (build plan Р8). */
 function Moved({ to }: { to: string }) {
   const params = useParams();
@@ -121,7 +137,7 @@ export function App() {
           </RequireAuth>
         }
       >
-        <Route index element={<TodayPage />} />
+        <Route index element={<Home />} />
 
         <Route path="rentals" element={<RentalsPage />} />
         <Route path="rentals/new" element={<PickupWizard />} />
@@ -142,6 +158,12 @@ export function App() {
         <Route path="service" element={<ServicePage />} />
         <Route path="service/stock" element={<StockPage />} />
         <Route path="service/stock/parts/:id" element={<PartPage />} />
+        <Route path="service/new" element={<Require perm="service.work"><WorkshopJobWizard /></Require>} />
+        <Route path="service/:id/close" element={<Require perm="service.work"><RepairClosePage /></Require>} />
+        <Route path="service/works" element={<Require perm="service.norms"><WorkBookPage /></Require>} />
+        {/* Paying the mechanic (stage 5, ADR-0037): the owners mark it, a mechanic reads his own. */}
+        <Route path="service/payouts" element={<Require perm="service.payout"><PayoutsPage /></Require>} />
+        <Route path="service/balance" element={<Require perm="service.work"><MechanicBalancePage /></Require>} />
         <Route path="service/:id" element={<ServiceJobPage />} />
 
         {/* Money in one place (wave 2 §3.0). */}
@@ -180,6 +202,7 @@ export function App() {
         {/* Settings is six tabs since wave 6 (§3.4–3.9); the people are first. */}
         <Route path="settings" element={<Require perm="users.manage"><SettingsPage /></Require>} />
         <Route path="settings/rental" element={<Require perm="settings.manage"><RentalSettingsPage /></Require>} />
+        <Route path="settings/repair" element={<Require perm="settings.manage"><RepairSettingsPage /></Require>} />
         <Route path="settings/expenses" element={<Require perm="settings.manage"><ExpenseCategoriesPage /></Require>} />
         <Route path="settings/journal" element={<Require perm="users.manage"><JournalPage /></Require>} />
         <Route path="settings/migration" element={<Require perm="users.manage"><MigrationPage /></Require>} />

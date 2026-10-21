@@ -168,3 +168,70 @@ describe('the battery count (wave 4 §3.8, D16)', () => {
     expect(batteryCount({ inventory: null, movesSince: [], couriersNow: 10 })).toEqual({ total: 0, couriers: 0, repair: 0, showroom: 0 });
   });
 });
+
+// ADR-0034 — Drive beside the rentals, on "Today".
+describe('Drive on "Today"', () => {
+  const drive = {
+    contracts: [{ folderId: 'f-new', who: 'Test Newcomer', datedOn: '2026-09-19' }],
+    returns: [{ rentalId: 'r1', returnedOn: '2026-09-18', paidBackTetri: 18000 }],
+  };
+
+  it('a return Drive has is closed from "Returns", on the act’s day, instead of its planned-day row', () => {
+    const q = dayQueue(input({ drive, rentals: [rental({ expectedReturnOn: '2026-09-15' })] }));
+    const returns = group(q, 'returns')!;
+    expect(returns.rows).toHaveLength(1);
+    expect(returns.rows[0]).toMatchObject({ id: 'drive_return:r1', action: 'close_from_drive', number: 'R-00001', href: '/rentals/r1/return?on=2026-09-18', note: '2026-09-18|18000' });
+  });
+
+  it('an act dated ahead of today opens the return on today, and a moved folder with no act says only that', () => {
+    const later = dayQueue(input({ drive: { contracts: [], returns: [{ rentalId: 'r1', returnedOn: '2026-10-01', paidBackTetri: null }] }, rentals: [rental()] }));
+    expect(group(later, 'returns')!.rows[0]).toMatchObject({ href: '/rentals/r1/return', note: '2026-10-01|' });
+    const moved = dayQueue(input({ drive: { contracts: [], returns: [{ rentalId: 'r1', returnedOn: null, paidBackTetri: null }] }, rentals: [rental()] }));
+    expect(group(moved, 'returns')!.rows[0]).toMatchObject({ href: '/rentals/r1/return', note: '|' });
+  });
+
+  it('a contract in Drive with no rental here is a hand-over to enter, filled in from it', () => {
+    const intake = group(dayQueue(input({ drive })), 'intake')!;
+    expect(intake.rows[0]).toMatchObject({ id: 'drive_contract:f-new', action: 'hand_over_from_drive', who: 'Test Newcomer', href: '/rentals/new?drive=f-new', note: '2026-09-19' });
+  });
+
+  it('with a deal in Kommo for the same person, the row carries the deal’s link, card and phone', () => {
+    const joined = { contracts: [{ ...drive.contracts[0]!, leadId: '777', customerId: 'c9', phone: '+995555000009' }], returns: [] };
+    const row = group(dayQueue(input({ drive: joined })), 'intake')!.rows[0];
+    expect(row).toMatchObject({ href: '/rentals/new?drive=f-new&lead=777&customer=c9', phone: '+995555000009' });
+  });
+
+  it('is an owner’s: a manager’s queue has none of it', () => {
+    const q = dayQueue(input({ owner: false, drive, rentals: [rental()] }));
+    expect(q.flatMap((g) => g.rows).filter((r) => r.action === 'close_from_drive' || r.action === 'hand_over_from_drive')).toEqual([]);
+  });
+});
+
+// Stage 6 of the mechanic plan (ADR-0038; variant A, Mika 21.10.2026).
+describe('planned maintenance on “Today”', () => {
+  const due = [
+    { vehicleId: 'v1', number: 'EV-022', model: 'Test 17C', vin: 'TESTA000000000022', dueKm: 9900, currentKm: 10220, leftKm: -320 },
+    { vehicleId: 'v2', number: 'EV-014', model: 'Test XL', vin: 'TESTA000000000014', dueKm: 5000, currentKm: 4860, leftKm: 140 },
+  ];
+
+  it('is a group of its own right after the repairs, a moped a row, in the order it came', () => {
+    const g = dayQueue(input({ service: { open: 1, longerThanWeek: 0, longestDays: 2 }, maintenance: due }));
+    const groups = g.map((x) => x.group);
+    expect(groups.indexOf('maintenance')).toBe(groups.indexOf('service') + 1);
+    const rows = group(g, 'maintenance')!.rows;
+    expect(rows.map((r) => r.number)).toEqual(['EV-022', 'EV-014']);
+    expect(rows[0]).toMatchObject({ action: 'open_maintenance', href: '/fleet/v1', who: 'Test 17C', note: '9900|10220|-320', amountTetri: null });
+  });
+
+  it('shows the managers too, and every moped, not three', () => {
+    const many = Array.from({ length: 6 }, (_, i) => ({ ...due[1]!, vehicleId: `v${i}`, number: `EV-0${i}` }));
+    const g = group(dayQueue(input({ owner: false, maintenance: many })), 'maintenance')!;
+    expect(g.rows).toHaveLength(6);
+    expect(g.total).toBe(6);
+  });
+
+  it('is not there when nothing is due', () => {
+    expect(group(dayQueue(input({ maintenance: [] })), 'maintenance')).toBeUndefined();
+    expect(group(dayQueue(input()), 'maintenance')).toBeUndefined();
+  });
+});

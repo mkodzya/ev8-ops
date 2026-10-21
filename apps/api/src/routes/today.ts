@@ -4,6 +4,7 @@ import type { Prisma } from '../generated/prisma/client.js';
 import { dateFromISO, isoDate } from '../lib/dates.js';
 import { debtsOf, rentalDebt, rentalDueToday, type CustomerDebt } from '../lib/debt.js';
 import { depositsOverview } from '../lib/deposits.js';
+import { driveTasks, joinKommoDeals } from '../lib/driveScan.js';
 import { prisma } from '../lib/db.js';
 import { partRows } from '../lib/stock.js';
 import { env } from '../lib/env.js';
@@ -11,6 +12,7 @@ import { kommoReconciliation } from '../lib/kommo.js';
 import { hasPerm } from '../lib/auth.js';
 import { actorOf, mayView } from '../lib/guard.js';
 import { onHandOf } from '../lib/till.js';
+import { maintenanceOverview } from '../lib/maintenance.js';
 import { UNDO_RETURN_MS } from '../lib/rentals.js';
 import { payOffsetOf, rentStateOf } from '../lib/rentState.js';
 import { BANKS } from './statements.js';
@@ -87,7 +89,7 @@ export function weekStart(today: string): string {
 }
 
 export function todayRoutes(app: FastifyInstance): void {
-  app.get('/api/today', { config: { scope: 'session' } }, async (req) => {
+  app.get('/api/today', { config: { scope: 'fleet.view' } }, async (req) => {
     const actor = actorOf(req);
     const owner = mayView(req, 'deposit.decide');
     const today = todayISO(new Date(), env.TZ);
@@ -114,7 +116,7 @@ export function todayRoutes(app: FastifyInstance): void {
         ? prisma.serviceJob.findMany({
             where: { status: 'draft' },
             orderBy: { createdAt: 'asc' },
-            select: { id: true, number: true, reason: true, vehicle: { select: { vin: true } }, createdBy: { select: { name: true } }, _count: { select: { photos: true } } },
+            select: { id: true, number: true, reason: true, vehicle: { select: { vin: true } }, createdBy: { select: { name: true } }, mechanic: { select: { name: true } }, _count: { select: { photos: true } } },
           })
         : [],
       owner ? partRows() : [],
@@ -167,7 +169,14 @@ export function todayRoutes(app: FastifyInstance): void {
         }).filter((b) => b.days > STALE_DAYS)
       : [];
 
+    // Drive is read by the owners only (ADR-0031), and so are its rows; a
+    // contract there and a deal in Kommo for one person are one row (ADR-0034).
+    const driveNow = owner && mayView(req, 'users.manage') ? await driveTasks(today) : null;
+    const joined = driveNow ? joinKommoDeals(driveNow.contracts, kommoDeals) : null;
+
     const longest = serviceJobs.reduce((n, j) => Math.max(n, daysBetween(isoDate(j.openedOn)!, today)), 0);
+    // Planned maintenance (ADR-0038): owners and managers alike — whoever brings the moped in.
+    const maintenance = await maintenanceOverview(prisma);
     const groups = dayQueue({
       today,
       owner,
@@ -192,7 +201,8 @@ export function todayRoutes(app: FastifyInstance): void {
         id: j.id,
         number: j.number,
         vin: j.vehicle?.vin ?? null,
-        who: j.createdBy?.name ?? null,
+        // The mechanic who carries it, or whoever reported the breakdown.
+        who: j.mechanic?.name ?? j.createdBy?.name ?? null,
         note: j.reason,
         photos: j._count.photos,
       })),
@@ -211,7 +221,9 @@ export function todayRoutes(app: FastifyInstance): void {
       vehiclesWithoutPoint: vehicles.filter((v) => v.locationId == null && v.state === 'available').length,
       odooDeposits,
       kommo,
-      kommoDeals,
+      kommoDeals: joined?.deals ?? kommoDeals,
+      drive: driveNow && joined ? { contracts: joined.contracts, returns: driveNow.returns } : undefined,
+      maintenance: maintenance.due.map((m) => ({ vehicleId: m.vehicleId, number: m.number, model: m.model, vin: m.vin, dueKm: m.dueKm!, currentKm: m.currentKm!, leftKm: m.leftKm! })),
     });
 
     const fleet = Object.fromEntries(VEHICLE_STATES.map((s) => [s, 0])) as Record<VehicleState, number>;
@@ -264,6 +276,8 @@ export function todayRoutes(app: FastifyInstance): void {
         batteries: await batteriesNow(),
       },
       undoReturnMs: UNDO_RETURN_MS,
+      /** Mopeds with no mileage written in EV8 Ops yet: no maintenance is counted for them (ADR-0038 §1). */
+      maintenanceUnknown: maintenance.unknownCount,
     };
   });
 }

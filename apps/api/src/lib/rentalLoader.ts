@@ -271,14 +271,14 @@ function pickupOf(r: Row, actor: Actor, today: ISODate): PickupInput {
   };
 }
 
-type OwnerRow = { id: string; email: string; name: string; locale: string };
+type OwnerRow = { id: string; email: string | null; name: string; locale: string };
 
 /**
  * Nobody was named: the stand's one owner, if it has one. The env file's
  * OWNER_EMAIL is no answer — it only seeds the first login of an empty
  * database, and on the test stand it holds a placeholder (08.10.2026).
  */
-export function soleOwner<T extends { email: string }>(owners: readonly T[]): { owner: T | null; refused: string | null } {
+export function soleOwner<T extends { email: string | null }>(owners: readonly T[]): { owner: T | null; refused: string | null } {
   if (owners.length === 1) return { owner: owners[0]!, refused: null };
   if (owners.length === 0) return { owner: null, refused: 'На стенде нет ни одного действующего владельца: писать не от чьего имени.' };
   return { owner: null, refused: `На стенде несколько владельцев: ${owners.map((o) => o.email).join(', ')}. Назовите, от чьего имени писать: добавьте к команде --owner и e-mail.` };
@@ -286,7 +286,7 @@ export function soleOwner<T extends { email: string }>(owners: readonly T[]): { 
 
 /** The owner the rentals are written in the name of, or why there is none: the one named by e-mail, else the stand's only one. */
 export async function ownerBy(email: string | null): Promise<{ actor: Actor | null; refused: string | null }> {
-  const actorOf = (u: OwnerRow): Actor => ({ id: u.id, email: u.email, name: u.name, role: 'owner', locale: u.locale });
+  const actorOf = (u: OwnerRow): Actor => ({ id: u.id, email: u.email, name: u.name, role: 'owner', locale: u.locale, via: 'password', deviceId: null });
   const address = (email ?? '').trim().toLowerCase();
   if (!address) {
     const { owner, refused } = soleOwner(await prisma.user.findMany({ where: { role: 'owner', active: true }, orderBy: { createdAt: 'asc' } }));

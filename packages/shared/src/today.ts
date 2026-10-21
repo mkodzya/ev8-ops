@@ -10,12 +10,15 @@ import { overdueDays } from './periods.js';
 // "till" is a manager's last group (§3.1): their own cash, handed over at the
 // end of the day. An owner has no such group — a till handed to them is a
 // decision, and it stands in "decide".
-// "intake" — what Kommo has won and nobody has entered here yet (ADR-0015):
-// it stands right after the rentals' own groups, because it is a rental or a
-// sale waiting to be one.
+// "intake" — what Kommo has won and nobody has entered here yet (ADR-0015),
+// and a contract in Drive with no rental here (ADR-0034): it stands right
+// after the rentals' own groups, because it is a rental or a sale waiting to
+// be one.
 // "due_today" — the rentals whose week began today (ADR-0017): right after
 // the overdue ones, a calm group with the same actions.
-export const TASK_GROUPS = ['decide', 'returns', 'overdue', 'due_today', 'intake', 'money', 'instalments', 'service', 'purchases', 'decisions', 'fill', 'till'] as const;
+// "maintenance" — mopeds whose planned maintenance is near or past (ADR-0038):
+// right after the repairs, a group of its own, every moped in it shown.
+export const TASK_GROUPS = ['decide', 'returns', 'overdue', 'due_today', 'intake', 'money', 'instalments', 'service', 'maintenance', 'purchases', 'decisions', 'fill', 'till'] as const;
 export type TaskGroup = (typeof TASK_GROUPS)[number];
 
 /** What the row's button does; the screen turns it into words and a link. */
@@ -31,6 +34,7 @@ export type TaskAction =
   | 'take_instalment'
   | 'open_service'
   | 'open_report'
+  | 'open_maintenance'
   | 'order_parts'
   | 'open_purchase'
   | 'set_pool'
@@ -40,7 +44,9 @@ export type TaskAction =
   | 'sort_odoo_deposits'
   | 'reconcile_kommo'
   | 'hand_over_from_kommo'
-  | 'sell_from_kommo';
+  | 'sell_from_kommo'
+  | 'hand_over_from_drive'
+  | 'close_from_drive';
 
 export interface TaskRow {
   /** Stable across reloads: the record it is about plus what it asks for. */
@@ -111,6 +117,12 @@ export interface QueueInput {
   reports: { id: string; number: string; vin: string | null; who: string | null; note: string; photos: number }[];
   /** Parts below the level somebody set: one row, and "В заказ" on it (B8-05). */
   lowParts: { count: number; note: string };
+  /**
+   * Mopeds whose planned maintenance is less than the threshold away or past
+   * (ADR-0038), most urgent first; absent where nobody asked. Every moped is a
+   * row — the owners and the managers both see them.
+   */
+  maintenance?: { vehicleId: string; number: string | null; model: string; vin: string; dueKm: number; currentKm: number; leftKm: number }[];
   purchases: { id: string; number: string; who: string; note: string }[];
   vehiclesWithoutPool: number;
   vehiclesWithoutPoint: number;
@@ -135,6 +147,16 @@ export interface QueueInput {
    * sees them too. `customerId` is the card the hand-over starts from.
    */
   kommoDeals: { leadId: string; kind: 'rent' | 'sale'; who: string; customerId: string | null; phone: string | null }[];
+  /**
+   * Drive beside the rentals here (ADR-0034), an owner's: a contract of the
+   * last two weeks with no rental here, and a return Drive has — its act's
+   * day and the deposit paid back by it — while the rental here still runs.
+   */
+  drive?: {
+    /** With a deal in Kommo for the same person: its link, the card it found, the phone (ADR-0034). */
+    contracts: { folderId: string; who: string; datedOn: ISODate | null; leadId?: string; customerId?: string | null; phone?: string | null }[];
+    returns: { rentalId: string; returnedOn: ISODate | null; paidBackTetri: Tetri | null }[];
+  };
 }
 
 export interface TaskGroupRows {
@@ -146,7 +168,10 @@ export interface TaskGroupRows {
 }
 
 const SHOWN = 3;
-/** Deals from Kommo are shown one by one: each is somebody waiting, and there is no list to open them in. */
+/**
+ * Deals from Kommo are shown one by one: each is somebody waiting, and there is no list to open them in.
+ * So are the mopeds due for maintenance (ADR-0038): the group is the list.
+ */
 const SHOWN_INTAKE = 20;
 
 /** The list the Kommo row opens. It is in no menu: with the link off there is nothing on it. */
@@ -209,8 +234,33 @@ export function dayQueue(input: QueueInput): TaskGroupRows[] {
     }
   }
 
-  // 2. Returns — planned for today, or the planned day has passed.
+  // 2. Returns — Drive's first: the moped is back by the act there, and here
+  // the rental still runs (ADR-0034). The return opens on the act's day; its
+  // planned-day row would say the same thing twice.
+  const driveBack = new Map((input.owner ? (input.drive?.returns ?? []) : []).map((d) => [d.rentalId, d]));
   for (const r of open) {
+    const d = driveBack.get(r.id);
+    if (!d) continue;
+    const on = d.returnedOn && d.returnedOn <= input.today ? `?on=${d.returnedOn}` : '';
+    rows.push({
+      id: `drive_return:${r.id}`,
+      group: 'returns',
+      action: 'close_from_drive',
+      who: r.customer.name,
+      number: r.number,
+      vin: r.vin,
+      days: null,
+      amountTetri: null,
+      href: `/rentals/${r.id}/return${on}`,
+      phone: r.customer.phone,
+      note: `${d.returnedOn ?? ''}|${d.paidBackTetri ?? ''}`,
+      ...wa(r),
+    });
+  }
+
+  // Then those planned for today, or whose planned day has passed.
+  for (const r of open) {
+    if (driveBack.has(r.id)) continue;
     if (!r.expectedReturnOn || r.expectedReturnOn > input.today) continue;
     const late = daysBetween(r.expectedReturnOn, input.today);
     rows.push({
@@ -323,6 +373,25 @@ export function dayQueue(input: QueueInput): TaskGroupRows[] {
     });
   }
 
+  // 7a. Planned maintenance (ADR-0038): a row per moped, the overdue first —
+  // the list comes sorted by what is left. The note carries the mark, the
+  // mileage and what is left, for the screen to say in its own words.
+  for (const m of input.maintenance ?? []) {
+    rows.push({
+      id: `maintenance:${m.vehicleId}`,
+      group: 'maintenance',
+      action: 'open_maintenance',
+      who: m.model,
+      number: m.number,
+      vin: m.vin,
+      days: null,
+      amountTetri: null,
+      href: `/fleet/${m.vehicleId}`,
+      phone: null,
+      note: `${m.dueKm}|${m.currentKm}|${m.leftKm}`,
+    });
+  }
+
   // Parts that have run low: one line, and the order it turns into (B8-05).
   if (input.owner && input.lowParts.count > 0) {
     // The note carries the count and then the worst offenders, so the screen
@@ -393,6 +462,26 @@ export function dayQueue(input: QueueInput): TaskGroupRows[] {
     });
   }
 
+  // A contract in Drive with no rental here (ADR-0034): the hand-over, filled in from it.
+  if (input.owner) {
+    for (const c of input.drive?.contracts ?? []) {
+      const query = [`drive=${encodeURIComponent(c.folderId)}`, c.leadId ? `lead=${c.leadId}` : null, c.customerId ? `customer=${c.customerId}` : null].filter(Boolean).join('&');
+      rows.push({
+        id: `drive_contract:${c.folderId}`,
+        group: 'intake',
+        action: 'hand_over_from_drive',
+        who: c.who,
+        number: null,
+        vin: null,
+        days: null,
+        amountTetri: null,
+        href: `/rentals/new?${query}`,
+        phone: c.phone ?? null,
+        note: c.datedOn,
+      });
+    }
+  }
+
   // 10. Fill in — an unsigned contract, a rental without a VIN, a moped without a point.
   for (const r of open.filter((x) => x.contractUnsigned)) {
     rows.push({ id: `sign:${r.id}`, group: 'fill', action: 'sign', who: r.customer.name, number: r.number, vin: r.vin, days: null, amountTetri: null, href: `/rentals/${r.id}`, phone: r.customer.phone, note: null, ...wa(r) });
@@ -413,7 +502,7 @@ export function dayQueue(input: QueueInput): TaskGroupRows[] {
 
   return TASK_GROUPS.map((group) => {
     const all = rows.filter((r) => r.group === group);
-    return { group, rows: all.slice(0, group === 'intake' ? SHOWN_INTAKE : SHOWN), total: all.length, totalTetri: all.reduce((n, r) => n + (r.amountTetri ?? 0), 0) };
+    return { group, rows: all.slice(0, group === 'intake' || group === 'maintenance' ? SHOWN_INTAKE : SHOWN), total: all.length, totalTetri: all.reduce((n, r) => n + (r.amountTetri ?? 0), 0) };
   }).filter((g) => g.total > 0);
 }
 

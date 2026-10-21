@@ -22,6 +22,12 @@
 // hand-entered payment at the same moment: the day's movements every five
 // minutes, and once a night yesterday read whole and checked against the
 // bank's own sums for it.
+//
+// The notices to the workshop's Telegram group (ADR-0038 §6–7) are sent by the
+// API right after each event, where the bot's token is. Every minute the
+// worker asks it to send what did not go; hourly by day it asks it to look for
+// mopeds due for their maintenance and parts below the minimum — from 09:00 to
+// 20:00 Tbilisi time, so the group is not woken at night.
 import { ORG_TZ, todayISO } from '@ev8/shared';
 import cron from 'node-cron';
 
@@ -37,6 +43,8 @@ const TBC_CRON = process.env.TBC_CRON ?? '2-59/5 * * * *';
 const TBC_NIGHT_CRON = process.env.TBC_NIGHT_CRON ?? '47 * * * *';
 // The rentals folders in Drive, read once a night (ADR-0031).
 const DRIVE_CRON = process.env.DRIVE_CRON ?? '23 3 * * *';
+const NOTICES_CRON = process.env.NOTICES_CRON ?? '* * * * *';
+const NOTICES_SCAN_CRON = process.env.NOTICES_SCAN_CRON ?? '0 9-20 * * *';
 const TZ = process.env.TZ ?? ORG_TZ;
 
 interface RollResult {
@@ -170,6 +178,30 @@ async function askBank(bank: Bank, part: 'today' | 'night'): Promise<void> {
   said[job] = line;
 }
 
+type NoticeOutcome = { status: 'off' | 'busy' | 'ok'; sent: number; failed: number; pending: number; maintenance?: number; stock?: number };
+
+/** Counts only: the bot's token is in the address the API asks Telegram at, and it never comes back here. */
+async function sendNotices(job: 'notices' | 'notices-scan'): Promise<void> {
+  let line: string;
+  let always = false;
+  try {
+    const res = await fetch(`${API}/api/jobs/${job}`, { method: 'POST', headers: { 'x-worker-token': TOKEN } });
+    if (!res.ok) throw new Error(`${job}: ${res.status}`);
+    const r = (await res.json()) as NoticeOutcome;
+    if (r.status === 'busy') return;
+    if (r.status === 'off') line = 'the Telegram link is off (no bot token or group on this stand)';
+    else {
+      const found = job === 'notices-scan' ? `; looked again — ${r.maintenance ?? 0} moped(s) newly due for maintenance, ${r.stock ?? 0} part(s) newly below the minimum` : '';
+      line = `Telegram — ${r.sent} notice(s) sent, ${r.failed} not taken, ${r.pending} waiting${found}`;
+      always = r.sent > 0 || r.failed > 0 || (r.maintenance ?? 0) + (r.stock ?? 0) > 0;
+    }
+  } catch (err) {
+    line = `the notices did not reach the API — ${(err as Error).message}`;
+  }
+  if (always || line !== said[job]) console.log(`worker: ${line}`);
+  said[job] = line;
+}
+
 async function waitForApi(): Promise<void> {
   for (let i = 0; i < 60; i++) {
     try {
@@ -211,8 +243,13 @@ async function main(): Promise<void> {
   cron.schedule(TBC_NIGHT_CRON, () => void askBank('tbc', 'night'), { timezone: TZ });
   await readDrive();
   cron.schedule(DRIVE_CRON, () => void readDrive(), { timezone: TZ });
+  // What waits goes on start too; the looking-for is never done on start — a
+  // worker restarted at night would wake the group.
+  await sendNotices('notices');
+  cron.schedule(NOTICES_CRON, () => void sendNotices('notices'), { timezone: TZ });
+  cron.schedule(NOTICES_SCAN_CRON, () => void sendNotices('notices-scan'), { timezone: TZ });
   console.log(
-    `worker: up — weeks roll at "${PERIODS_CRON}" ${TZ}, Kommo is asked at "${KOMMO_CRON}", Bank of Georgia at "${BOG_CRON}" and its statement at "${BOG_NIGHT_CRON}", TBC at "${TBC_CRON}" and its statement at "${TBC_NIGHT_CRON}", Drive is read at "${DRIVE_CRON}"`,
+    `worker: up — weeks roll at "${PERIODS_CRON}" ${TZ}, Kommo is asked at "${KOMMO_CRON}", Bank of Georgia at "${BOG_CRON}" and its statement at "${BOG_NIGHT_CRON}", TBC at "${TBC_CRON}" and its statement at "${TBC_NIGHT_CRON}", Drive is read at "${DRIVE_CRON}", notices go at "${NOTICES_CRON}" and are looked for at "${NOTICES_SCAN_CRON}"`,
   );
 }
 

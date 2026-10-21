@@ -1,4 +1,4 @@
-import { daysBetween, numberMatches, spellingMatches, todayISO, vinMatches } from '@ev8/shared';
+import { daysBetween, numberMatches, spellingMatches, todayISO, vinMatches, type WorkLineState } from '@ev8/shared';
 import { useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
@@ -6,14 +6,16 @@ import { LoadError } from '../components/LoadError.js';
 import { PhotoPicker } from '../components/PhotoPicker.js';
 import { Loading, PageHead, Vin } from '../components/ui.js';
 import { Field } from '../components/Wizard.js';
-import { FormSheet, SubmitButton } from '../ds/form/Form.js';
-import { useOperation } from '../ds/form/operation.js';
+import { FormSheet } from '../ds/form/Form.js';
 import { DataList } from '../ds/list/DataList.js';
-import { fmtDate, formatGel } from '../format.js';
+import { formatGel } from '../format.js';
 import { useT } from '../i18n/index.js';
 import { uploadAll, type PreparedPhoto } from '../lib/photos.js';
 import { useLoad } from '../lib/use.js';
 import { useSession } from '../session.js';
+import { ApprovalCard } from './RepairApproval.js';
+import { kmText, leftText, type Downtime, type MaintenanceList } from '../lib/maintenance.js';
+import './workshop-job.css';
 
 export type ServiceStatus = 'draft' | 'open' | 'done' | 'cancelled';
 
@@ -28,8 +30,36 @@ export interface ServiceJobPart {
   partId: string | null;
   name: string;
   qty: number;
-  unitPriceTetri: number;
-  unitCostTetri: number | null;
+  /** Money is the owners' (ADR-0033 §4): empty for whoever does not see cost. */
+  unitPriceTetri: number | null;
+  unitCostTetri?: number | null;
+  /** Off the shelf, bought, taken off onto the shelf, off a donor (ADR-0036). */
+  kind: 'stock' | 'bought' | 'removed' | 'donor';
+  /** What the line adds to the repair — the owners'. */
+  lineTetri: number | null;
+  /** Bought: what the mechanic paid — his and the approver's to see — and to whom it goes back. */
+  paidTetri: number | null;
+  reimburseTo: { id: string; name: string } | null;
+  /** Bought: paid back to that person in a payout of his (ADR-0037). */
+  reimbursed: boolean;
+  receiptPhotoId: string | null;
+  /** Bought only: waiting, approved or refused. */
+  state: WorkLineState | null;
+  rejectReason: string | null;
+  donor: { id: string; number: string | null; vin: string } | null;
+  isTracker: boolean;
+  /** The tracker this line fitted; the IMEI and SIM come empty to a manager. */
+  tracker: { imei: string | null; simPhone: string | null } | null;
+  addedAt: string;
+}
+
+/** A tracker as a repair shows it (ADR-0036). */
+export interface TrackerRow {
+  id: string;
+  imei: string | null;
+  simPhone: string | null;
+  installedOn: string | null;
+  removedOn: string | null;
 }
 
 export interface ServiceJob {
@@ -40,25 +70,76 @@ export interface ServiceJob {
   closedOn: string | null;
   status: ServiceStatus;
   payer: 'company' | 'customer';
-  labourTetri: number;
+  // What the repair cost is the owners' (ADR-0033 §4): these come empty to
+  // whoever does not see cost — a manager, a mechanic.
+  labourTetri: number | null;
   labourMinutes: number;
-  labourRateTetri: number;
-  partsTetri: number;
-  totalTetri: number;
-  withheldTetri: number;
+  labourRateTetri: number | null;
+  partsTetri: number | null;
+  totalTetri: number | null;
+  withheldTetri: number | null;
   /** What the deposit did not cover and the customer owes (Q26). */
-  chargedTetri: number;
+  chargedTetri: number | null;
   odometerKm: number | null;
   workshop: Workshop | null;
-  closedAt: { id: string; name: string } | null;
+  /** Where the moped was left when the repair closed. */
+  closedLocation: { id: string; name: string } | null;
+  /** The minute it closed; empty on repairs closed before stage 3. */
+  closedAt: string | null;
+  /** Who let the work start, and when (stage 3). */
+  approved: { at: string; by: string | null } | null;
+  /** A refused repair: who refused it, when and why (stage 3). */
+  rejected: { at: string; by: string | null; reason: string } | null;
   notes: string | null;
   /** True when this job is what took the moped out of the yard: only then does closing bring it back. */
   movedVehicle: boolean;
-  vehicle: { id: string; vin: string; model: string };
+  /** The tracker on the moped now, if any (ADR-0036). */
+  vehicle: { id: string; vin: string; number: string | null; model: string; tracker: TrackerRow | null };
   rental: { id: string; number: string } | null;
   customer: { id: string; name: string; nameKa: string | null; nameLat: string | null } | null;
   parts: ServiceJobPart[];
-  photos: { id: string; label: string }[];
+  /** Batteries and chargers this repair took to repair or brought back: their own count (ADR-0036). */
+  batteries: { id: string; item: string; kind: string; qty: number; occurredOn: string | null }[];
+  trackers: { fitted: TrackerRow[]; removed: TrackerRow[] };
+  photos: { id: string; label: string; tag?: string | null }[];
+  /** Who carries the repair; empty on repairs from before stage 2 of the mechanic plan. */
+  mechanic: { id: string; name: string } | null;
+  reasonKind: string | null;
+  openedOdometerKm: number | null;
+  odometerReason: string | null;
+  openedAt: string | null;
+  works: ServiceWorkLine[];
+  /** The mechanic's sum comes empty to whoever neither carries repairs nor sees cost. */
+  worksTotal: { seconds: number; tetri: number | null; unnormed: number };
+  /** Opening to closing, and of it waiting for approval, in minutes (ADR-0038); empty for repairs without the times. */
+  downtime?: Downtime | null;
+  /** The mechanic's approved work in what the company's repair cost (ADR-0037 §6); the owners' alone. */
+  worksCostTetri: number | null;
+  /** The payout that paid its mechanic; the status stays «closed» (ADR-0037 §1). */
+  paid: { payoutId: string; paidOn: string; markedBy: { id: string; name: string } } | null;
+  payState: 'payable' | 'paid' | 'unnormed' | 'waiting' | 'open' | 'cancelled';
+}
+
+export interface ServiceWorkLine {
+  id: string;
+  workTypeId: string | null;
+  code: string | null;
+  category: string | null;
+  nameKa: string | null;
+  nameRu: string | null;
+  nameEn: string | null;
+  freeText: string | null;
+  qty: number;
+  /** The norm the line was written with; empty for a work not in the book. */
+  normSec: number | null;
+  rateTetri: number | null;
+  amountTetri: number | null;
+  mechanicId: string | null;
+  /** Approved with the repair or on its own, waiting, or refused (stage 3). */
+  state: WorkLineState;
+  addedAt: string;
+  decidedAt: string | null;
+  rejectReason: string | null;
 }
 
 export interface ServiceList {
@@ -89,30 +170,61 @@ function daysOf(j: ServiceJob, today: string): number {
  */
 export function ServicePage() {
   const t = useT();
-  const { can } = useSession();
+  const { can, me } = useSession();
   const { data, failure, reload } = useLoad<ServiceList>('/api/service');
   const today = todayISO();
 
   if (!data && failure) return <LoadError failure={failure} onRetry={reload} />;
   if (!data) return <Loading />;
   const mayManage = can('service.manage');
+  // Taking a reported breakdown up is the approval (ADR-0033): the chief mechanic's and the owners'.
+  const mayApprove = can('service.approve');
+  const mayCost = can('cost.view');
+  const mayFleet = can('fleet.view');
   const drafts = data.jobs.filter((j) => j.status === 'draft');
+  // Whoever carries repairs and does not keep the shop's books opens one from
+  // the workshop: the mechanic and the chief mechanic (stage 2). The owners
+  // keep their sheet, with the workshop and who pays on it.
+  const workshop = can('service.work') && !mayManage;
+  const onlyMine = !mayFleet && !mayApprove;
 
   return (
     <>
-      <PageHead wrap title={t.repair.title} sub={t.repair.openCount(data.open)}>
-        {can('service.report') && <NewJob onDone={reload} />}
+      <PageHead wrap title={t.repair.title} sub={onlyMine ? t.wjob.yours(data.jobs.length) : t.repair.openCount(data.open)}>
+        {/* On the tablet there are no section tabs: the book is reached from here. */}
+        {can('service.norms') && me?.via === 'pin' && (
+          <Link className="pill pill-sm" to="/service/works">
+            {t.wbook.title}
+          </Link>
+        )}
+        {/* And so is the mechanic's balance (stage 5, variant A); on a phone it is a tab. */}
+        {workshop && me?.via === 'pin' && <BalanceLink />}
+        {!workshop && can('service.report') && <NewJob onDone={reload} />}
       </PageHead>
 
-      {mayManage && drafts.length > 0 && (
-        <section className="card card-warn queue-card">
+      {/* The workshop's one loud action, first and the width of the screen
+          (stage 2; prototype mechanic-job-open-options.html, «Ремонт у механика»). */}
+      {workshop && (
+        <Link className="wjob-new" to="/service/new">
+          + {t.wjob.newJob}
+        </Link>
+      )}
+
+      {/* «Пора на ТО» for the chief mechanic (stage 6, variant A): the owners
+          read it on «Сегодня», which the workshop does not have. */}
+      {mayApprove && !mayFleet && <MaintenanceBlock />}
+
+      {/* «Ждут согласования» decides in the card itself (stage 3, variant A):
+          the first round of a repair and a work found once it was open alike. */}
+      {mayApprove && drafts.length > 0 && (
+        <section className="wappr-queue">
           <div className="queue-head">
             <h2>{t.repair.draftsHead}</h2>
             <span className="muted">{t.service.jobsCount(drafts.length)}</span>
           </div>
-          <ul className="queue">
+          <ul className="wappr-list">
             {drafts.map((j) => (
-              <Draft key={j.id} job={j} onDone={reload} />
+              <ApprovalCard key={j.id} job={j} onDone={reload} />
             ))}
           </ul>
         </section>
@@ -156,9 +268,9 @@ export function ServicePage() {
             ) : j.status === 'open' ? (
               <span className="warn-text">{t.repair.days(daysOf(j, today))}</span>
             ) : (
-              <span className="muted">{t.repair.statuses[j.status]}</span>
+              <span className="muted">{j.rejected ? t.wappr.statusRejected : j.paid ? t.wpay.paid : t.repair.statuses[j.status]}</span>
             ),
-          rightSub: j.totalTetri > 0 ? <span className="mono">{formatGel(j.totalTetri)}</span> : t.repair.payers[j.payer],
+          rightSub: j.totalTetri != null && j.totalTetri > 0 ? <span className="mono">{formatGel(j.totalTetri)}</span> : t.repair.payers[j.payer],
         })}
         columns={[
           { key: 'number', label: t.repair.cols.number, cell: (j) => <span className="mono">{j.number}</span>, sort: { value: (j) => j.number } },
@@ -167,9 +279,14 @@ export function ServicePage() {
             label: t.repair.cols.vehicle,
             cell: (j) => (
               <>
-                <Link to={`/fleet/${j.vehicle.id}`}>
+                {/* A mechanic sees the repair, not the fleet card behind it. */}
+                {mayFleet ? (
+                  <Link to={`/fleet/${j.vehicle.id}`}>
+                    <Vin vin={j.vehicle.vin} />
+                  </Link>
+                ) : (
                   <Vin vin={j.vehicle.vin} />
-                </Link>{' '}
+                )}{' '}
                 <span className="muted">{j.vehicle.model}</span>
               </>
             ),
@@ -187,7 +304,9 @@ export function ServicePage() {
             sort: { value: (j) => j.workshop?.name ?? '' },
           },
           { key: 'payer', label: t.repair.cols.payer, cell: (j) => t.repair.payers[j.payer], sort: { value: (j) => j.payer } },
-          { key: 'total', label: t.repair.cols.total, num: true, cell: (j) => <span className="mono">{formatGel(j.totalTetri)}</span>, sort: { value: (j) => j.totalTetri, first: 'desc' } },
+          ...(mayCost
+            ? [{ key: 'total', label: t.repair.cols.total, num: true, cell: (j: ServiceJob) => <span className="mono">{formatGel(j.totalTetri ?? 0)}</span>, sort: { value: (j: ServiceJob) => j.totalTetri ?? 0, first: 'desc' as const } }]
+            : []),
           {
             key: 'days',
             label: t.repair.cols.days,
@@ -201,37 +320,55 @@ export function ServicePage() {
   );
 }
 
-/** A breakdown somebody reported: the moped, the words, the photos, one button. */
-function Draft({ job, onDone }: { job: ServiceJob; onDone: () => void }) {
+/**
+ * The mopeds due for planned maintenance (ADR-0038), most urgent first, each
+ * with «＋ ТО»: a new repair of that moped, already planned. One already
+ * under way says so instead of offering a second.
+ */
+function MaintenanceBlock() {
   const t = useT();
-  const navigate = useNavigate();
-  const op = useOperation();
-
+  const { data } = useLoad<MaintenanceList>('/api/service/maintenance');
+  if (!data || data.due.length === 0) return null;
   return (
-    <li className="q-row">
-      <Link className="q-who" to={`/service/${job.id}`}>
-        <span className="q-name">{t.repair.fromManager}</span>
-        <span className="q-sub muted">
-          {job.vehicle.model} <span className="mono">···{job.vehicle.vin.slice(-4)}</span> · «{job.reason}»
-          {job.photos.length > 0 && <> · {t.photos.count(job.photos.length)}</>}
+    <section className="wappr-queue wmaint-block">
+      <div className="queue-head">
+        <h2>{t.today.groups.maintenance}</h2>
+        <span className="muted">
+          {t.wmaint.mopeds(data.due.length)} · {t.wmaint.every(kmText(data.intervalKm))}
         </span>
-      </Link>
-      <span className="q-sum mono muted">{fmtDate(job.openedOn)}</span>
-      <span className="q-acts">
-        <SubmitButton
-          small
-          type="button"
-          state={op.state}
-          label={t.repair.takeUp}
-          onClick={async () => {
-            const res = await op.run((key) => api.patch(`/api/service/${job.id}`, { open: true }, { key }));
-            if (!res.ok) return;
-            onDone();
-            navigate(`/service/${job.id}`);
-          }}
-        />
-      </span>
-    </li>
+      </div>
+      <ul className="wmaint-list">
+        {data.due.map((m) => (
+          <li key={m.vehicleId}>
+            <span className="wmaint-what">
+              <b>{[m.number, m.model].filter(Boolean).join(' · ')}</b>
+              <small className="muted">{t.wmaint.rowSub(kmText(m.dueKm ?? 0), kmText(m.currentKm ?? 0))}</small>
+            </span>
+            <span className={`mono wmaint-left ${(m.leftKm ?? 0) < 0 ? 'crit-text' : ''}`}>{leftText(m, t)}</span>
+            {m.openPlanned ? (
+              <Link className="muted" to={`/service/${m.openPlanned.jobId}`}>
+                {t.wmaint.underway(m.openPlanned.number)}
+              </Link>
+            ) : (
+              <Link className="wjob-btn wmaint-add" to={`/service/new?q=${encodeURIComponent(m.number ?? m.vin.slice(-6))}&reason=planned`}>
+                {t.wmaint.add}
+              </Link>
+            )}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+/** «Баланс · 253.42 ₾»: what is his to be paid, a press away from the work (ADR-0037). */
+function BalanceLink() {
+  const t = useT();
+  const { data } = useLoad<{ payable: { totalTetri: number } }>('/api/service/balance');
+  return (
+    <Link className="pill pill-sm wpay-link" to="/service/balance">
+      {data ? t.wpay.balanceLink(formatGel(data.payable.totalTetri)) : t.shell.tabs.balance}
+    </Link>
   );
 }
 

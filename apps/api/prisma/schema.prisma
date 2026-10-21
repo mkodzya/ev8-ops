@@ -16,6 +16,8 @@ datasource db {
 enum UserRole {
   owner
   manager
+  mechanic
+  chief_mechanic
 
   @@map("user_role")
 }
@@ -203,6 +205,17 @@ enum FileKind {
   @@map("file_kind")
 }
 
+/// What a repair line is (0058): off the shelf, bought by the mechanic, taken
+/// off this moped onto the shelf, or taken off a donor and fitted here.
+enum ServicePartKind {
+  stock
+  bought
+  removed
+  donor
+
+  @@map("service_part_kind")
+}
+
 enum ServiceStatus {
   /// A breakdown a manager reported: an owner turns it into a repair (wave 5 §3.7).
   draft
@@ -220,16 +233,34 @@ enum ServicePayer {
   @@map("service_payer")
 }
 
+/// Why a repair came in — the bot's five reasons (stage 2 of the mechanic plan, 0056).
+enum ServiceReason {
+  wear
+  accident
+  renter_fault
+  warranty
+  planned
+
+  @@map("service_reason")
+}
+
 model User {
-  id           String   @id @default(uuid()) @db.Uuid
-  email        String   @unique
-  name         String
-  passwordHash String   @map("password_hash")
-  role         UserRole
-  locale       String   @default("ka")
-  active       Boolean  @default(true)
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @default(now()) @map("updated_at")
+  id              String    @id @default(uuid()) @db.Uuid
+  /// Empty only for a mechanic who signs in with a PIN on the workshop tablet (0055).
+  email           String?   @unique
+  name            String
+  passwordHash    String?   @map("password_hash")
+  role            UserRole
+  locale          String    @default("ka")
+  active          Boolean   @default(true)
+  /// The workshop PIN, hashed like a password; never returned (ADR-0033).
+  pinHash         String?   @map("pin_hash")
+  pinFailed       Int       @default(0) @map("pin_failed")
+  pinLockedUntil  DateTime? @map("pin_locked_until")
+  /// A mechanic's rate for an hour of norm; empty is the company's rate.
+  labourRateTetri Int?      @map("labour_rate_tetri")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @default(now()) @map("updated_at")
 
   sessions          Session[]
   operationKeys     OperationKey[]
@@ -245,18 +276,38 @@ model User {
   batteryMoves      BatteryMove[]
   paymentsVoided    Payment[]     @relation("payment_voided_by")
   statements        Statement[]
-  serviceJobs       ServiceJob[]
+  serviceJobs       ServiceJob[]   @relation("service_job_created_by")
+  repairsCarried    ServiceJob[]   @relation("service_job_mechanic")
+  worksDone         ServiceWork[]  @relation("service_work_mechanic")
+  worksWritten      ServiceWork[]  @relation("service_work_created_by")
+  repairsApproved   ServiceJob[]   @relation("service_job_approved_by")
+  repairsRejected   ServiceJob[]   @relation("service_job_rejected_by")
+  worksApproved     ServiceWork[]  @relation("service_work_approved_by")
+  worksRejected     ServiceWork[]  @relation("service_work_rejected_by")
+  partsWritten      ServicePart[]  @relation("service_part_created_by")
+  partsReimbursed   ServicePart[]  @relation("service_part_reimburse_to")
+  partsApproved     ServicePart[]  @relation("service_part_approved_by")
+  partsRejected     ServicePart[]  @relation("service_part_rejected_by")
+  trackersFitted    VehicleTracker[] @relation("vehicle_tracker_created_by")
+  trackersRemoved   VehicleTracker[] @relation("vehicle_tracker_removed_by")
+  workTypesAdded    WorkType[]
   sales             Sale[]
   purchases         Purchase[]
   parts             Part[]
   stockMoves        StockMove[]
   locations         Location[]    @relation("location_author")
   rentalSettings    RentalSettings[]
+  serviceSettings   ServiceSettings[]
   quickRates        QuickRate[]
   workshops         Workshop[]
   handoversFrom     CashHandover[] @relation("handover_from")
   handoversDecided  CashHandover[] @relation("handover_decided_by")
   bankDeposits      BankCashDeposit[]
+  devicesRegistered WorkshopDevice[] @relation("device_registered_by")
+  devicesRevoked    WorkshopDevice[] @relation("device_revoked_by")
+  payoutsReceived   MechanicPayout[] @relation("mechanic_payout_mechanic")
+  payoutsMarked     MechanicPayout[] @relation("mechanic_payout_marked_by")
+  payoutsVoided     MechanicPayout[] @relation("mechanic_payout_voided_by")
 
   @@map("users")
 }
@@ -290,15 +341,45 @@ model LoginAttempt {
 }
 
 model Session {
-  token      String   @id
-  userId     String   @map("user_id") @db.Uuid
-  createdAt  DateTime @default(now()) @map("created_at")
-  lastSeenAt DateTime @default(now()) @map("last_seen_at")
-  expiresAt  DateTime @map("expires_at")
+  token      String      @id
+  userId     String      @map("user_id") @db.Uuid
+  createdAt  DateTime    @default(now()) @map("created_at")
+  lastSeenAt DateTime    @default(now()) @map("last_seen_at")
+  expiresAt  DateTime    @map("expires_at")
+  /// How the sign-in began: a PIN session belongs to a workshop device (0055).
+  kind       SessionKind @default(password)
+  deviceId   String?     @map("device_id") @db.Uuid
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user   User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  device WorkshopDevice? @relation(fields: [deviceId], references: [id])
 
   @@map("sessions")
+}
+
+enum SessionKind {
+  password
+  pin
+
+  @@map("session_kind")
+}
+
+/// The workshop's shared tablet (ADR-0033 §5). Its token is the id and a
+/// secret; only the secret's scrypt hash is kept. Revoked, never deleted.
+model WorkshopDevice {
+  id           String    @id @default(uuid()) @db.Uuid
+  name         String
+  secretHash   String    @map("secret_hash")
+  registeredBy String    @map("registered_by") @db.Uuid
+  registeredAt DateTime  @default(now()) @map("registered_at")
+  lastSeenAt   DateTime? @map("last_seen_at")
+  revokedAt    DateTime? @map("revoked_at")
+  revokedBy    String?   @map("revoked_by") @db.Uuid
+
+  registrar User      @relation("device_registered_by", fields: [registeredBy], references: [id])
+  revoker   User?     @relation("device_revoked_by", fields: [revokedBy], references: [id])
+  sessions  Session[]
+
+  @@map("workshop_devices")
 }
 
 model VehicleModel {
@@ -372,6 +453,8 @@ model Vehicle {
   updatedAt       DateTime     @default(now()) @map("updated_at")
 
   serviceJobs   ServiceJob[]
+  donatedParts  ServicePart[]    @relation("service_part_donor")
+  trackers      VehicleTracker[]
   sales         Sale[]
   purchase      Purchase?      @relation(fields: [purchaseId], references: [id])
   model         VehicleModel   @relation(fields: [modelId], references: [id])
@@ -575,6 +658,8 @@ model StoredFile {
   saleId       String?  @map("sale_id") @db.Uuid
   serviceJobId String?  @map("service_job_id") @db.Uuid
   label        String   @default("")
+  /// What a repair photo shows: before, after, odometer, receipt (0056).
+  tag          String?
   docKind      String?  @map("doc_kind")
   mimeType     String   @map("mime_type")
   sizeBytes    Int      @map("size_bytes")
@@ -592,6 +677,7 @@ model StoredFile {
   sale       Sale?       @relation(fields: [saleId], references: [id], onDelete: Cascade)
   serviceJob ServiceJob? @relation(fields: [serviceJobId], references: [id], onDelete: Cascade)
   uploadedBy User?     @relation(fields: [uploadedById], references: [id])
+  receiptOf  ServicePart[] @relation("service_part_receipt")
 
   @@map("files")
 }
@@ -826,6 +912,28 @@ model ServiceJob {
   movedVehicle  Boolean       @default(false) @map("moved_vehicle")
   withheldTetri Int           @default(0) @map("withheld_tetri")
   odooRepairId  Int?          @unique @map("odoo_repair_id")
+  /// Who carries the repair: a mechanic's "own repairs" are these (0056).
+  mechanicId    String?       @map("mechanic_id") @db.Uuid
+  reasonKind    ServiceReason? @map("reason_kind")
+  /// The odometer when the repair was opened; `odometerKm` is the reading at closing.
+  openedOdometerKm Int?       @map("opened_odometer_km")
+  /// Why the odometer reads less than the moped's last reading.
+  odometerReason String?      @map("odometer_reason")
+  /// The minute the repair was opened; empty on repairs from before 0056.
+  openedAt      DateTime?     @default(now()) @map("opened_at")
+  /// The first approval — the one that let the work start (0057).
+  approvedById  String?       @map("approved_by") @db.Uuid
+  approvedAt    DateTime?     @map("approved_at")
+  /// A refused repair is `cancelled` with who refused it, when and why (0057).
+  rejectedById  String?       @map("rejected_by") @db.Uuid
+  rejectedAt    DateTime?     @map("rejected_at")
+  rejectReason  String?       @map("reject_reason")
+  /// The minute it closed; repairs before 0057 have only the day.
+  closedAt      DateTime?     @map("closed_at")
+  /// Why the reading at closing is below the opening's or the moped's last (0060, ADR-0038 §4).
+  closedOdometerReason String? @map("closed_odometer_reason")
+  /// The payout that paid its mechanic for it — only his, only once it is closed; empty — not paid (0059, ADR-0037).
+  paidInPayoutId String?      @map("paid_in_payout_id") @db.Uuid
   createdById   String?       @map("created_by") @db.Uuid
   createdAt     DateTime      @default(now()) @map("created_at")
   updatedAt     DateTime      @default(now()) @map("updated_at")
@@ -833,13 +941,21 @@ model ServiceJob {
   vehicle   Vehicle       @relation(fields: [vehicleId], references: [id])
   rental    Rental?       @relation(fields: [rentalId], references: [id])
   customer  Customer?     @relation(fields: [customerId], references: [id])
-  createdBy User?         @relation(fields: [createdById], references: [id])
+  createdBy User?         @relation("service_job_created_by", fields: [createdById], references: [id])
+  mechanic  User?         @relation("service_job_mechanic", fields: [mechanicId], references: [id])
+  approvedBy User?        @relation("service_job_approved_by", fields: [approvedById], references: [id])
+  rejectedBy User?        @relation("service_job_rejected_by", fields: [rejectedById], references: [id])
+  works     ServiceWork[]
   workshop  Workshop?     @relation(fields: [workshopId], references: [id])
-  closedAt  Location?     @relation(fields: [closedLocationId], references: [id])
+  closedLocation Location? @relation(fields: [closedLocationId], references: [id])
   parts     ServicePart[]
   photos    StoredFile[]
   payments  Payment[]
   withholdings DepositWithholding[]
+  batteryMoves BatteryMove[]
+  trackersFitted  VehicleTracker[] @relation("vehicle_tracker_job")
+  trackersRemoved VehicleTracker[] @relation("vehicle_tracker_removed_job")
+  paidInPayout MechanicPayout? @relation("service_job_paid_in_payout", fields: [paidInPayoutId, mechanicId], references: [id, mechanicId])
 
   @@map("service_jobs")
 }
@@ -854,12 +970,132 @@ model ServicePart {
   unitCostTetri  Int?     @map("unit_cost_tetri")
   partId         String?  @map("part_id") @db.Uuid
   createdAt      DateTime @default(now()) @map("created_at")
+  /// Off the shelf, bought, taken off onto the shelf, or from a donor (0058).
+  kind           ServicePartKind @default(stock)
+  donorVehicleId String?  @map("donor_vehicle_id") @db.Uuid
+  /// Bought: what the mechanic paid for the whole line, by the receipt.
+  paidTetri      Int?     @map("paid_tetri")
+  receiptPhotoId String?  @map("receipt_photo_id") @db.Uuid
+  reimburseToId  String?  @map("reimburse_to") @db.Uuid
+  createdById    String?  @map("created_by") @db.Uuid
+  /// Bought only: neither set — the line waits for approval (0058, as works in 0057).
+  approvedById   String?  @map("approved_by") @db.Uuid
+  approvedAt     DateTime? @map("approved_at")
+  rejectedById   String?  @map("rejected_by") @db.Uuid
+  rejectedAt     DateTime? @map("rejected_at")
+  rejectReason   String?  @map("reject_reason")
+  /// Bought: the payout that paid the receipt back to `reimburseTo` — his payout only (0059, ADR-0037).
+  paidInPayoutId String?  @map("paid_in_payout_id") @db.Uuid
 
-  job   ServiceJob  @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  part  Part?       @relation(fields: [partId], references: [id])
-  moves StockMove[]
+  job          ServiceJob  @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  part         Part?       @relation(fields: [partId], references: [id])
+  moves        StockMove[]
+  donor        Vehicle?    @relation("service_part_donor", fields: [donorVehicleId], references: [id])
+  receiptPhoto StoredFile? @relation("service_part_receipt", fields: [receiptPhotoId], references: [id])
+  reimburseTo  User?       @relation("service_part_reimburse_to", fields: [reimburseToId], references: [id])
+  createdBy    User?       @relation("service_part_created_by", fields: [createdById], references: [id])
+  approvedBy   User?       @relation("service_part_approved_by", fields: [approvedById], references: [id])
+  rejectedBy   User?       @relation("service_part_rejected_by", fields: [rejectedById], references: [id])
+  trackers     VehicleTracker[]
+  paidInPayout MechanicPayout? @relation("service_part_paid_in_payout", fields: [paidInPayoutId, reimburseToId], references: [id, mechanicId])
 
   @@map("service_parts")
+}
+
+/// The owner's mark that a mechanic was paid for closed repairs and receipts (0059, ADR-0037):
+/// not a payment and not an expense. What it paid is the sum of the two figures, never a stored total.
+model MechanicPayout {
+  id             String    @id @default(uuid()) @db.Uuid
+  mechanicId     String    @map("mechanic_id") @db.Uuid
+  /// The Tbilisi day it was marked.
+  paidOn         DateTime  @map("paid_on") @db.Date
+  /// The approved work of its repairs, each repair rounded once (ADR-0037 §8).
+  labourTetri    Int       @map("labour_tetri")
+  /// The receipts it paid back, to the tetri.
+  reimburseTetri Int       @map("reimburse_tetri")
+  markedById     String    @map("marked_by") @db.Uuid
+  markedAt       DateTime  @default(now()) @map("marked_at")
+  /// A payout marked by mistake is voided with a reason; its repairs are payable again (ADR-0037 §5).
+  voidedAt       DateTime? @map("voided_at")
+  voidedById     String?   @map("voided_by") @db.Uuid
+  voidReason     String?   @map("void_reason")
+
+  mechanic User          @relation("mechanic_payout_mechanic", fields: [mechanicId], references: [id])
+  markedBy User          @relation("mechanic_payout_marked_by", fields: [markedById], references: [id])
+  voidedBy User?         @relation("mechanic_payout_voided_by", fields: [voidedById], references: [id])
+  jobs     ServiceJob[]  @relation("service_job_paid_in_payout")
+  parts    ServicePart[] @relation("service_part_paid_in_payout")
+
+  @@unique([id, mechanicId])
+  @@map("mechanic_payouts")
+}
+
+/// A category of the book of works: BR — brakes. Its name is translated once (0056).
+model WorkCategory {
+  code      String   @id
+  nameKa    String?  @map("name_ka")
+  nameRu    String?  @map("name_ru")
+  nameEn    String?  @map("name_en")
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  works WorkType[]
+
+  @@map("work_categories")
+}
+
+/// A work in the book: a permanent code and a norm in seconds (0056).
+model WorkType {
+  id          String   @id @default(uuid()) @db.Uuid
+  code        String   @unique
+  category    String
+  nameKa      String?  @map("name_ka")
+  nameRu      String?  @map("name_ru")
+  nameEn      String?  @map("name_en")
+  normSec     Int      @map("norm_sec")
+  active      Boolean  @default(true)
+  notes       String?
+  /// 'bot-2026-10-11' for the bot's CATALOG_SEED; empty for a work added on the screen.
+  source      String?
+  createdById String?  @map("created_by") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @default(now()) @map("updated_at")
+
+  categoryRow WorkCategory  @relation(fields: [category], references: [code])
+  createdBy   User?         @relation(fields: [createdById], references: [id])
+  lines       ServiceWork[]
+
+  @@map("work_types")
+}
+
+/// A line of work on a repair: the norm and the rate are copies, made when it was written (0056).
+model ServiceWork {
+  id          String   @id @default(uuid()) @db.Uuid
+  jobId       String   @map("job_id") @db.Uuid
+  workTypeId  String?  @map("work_type_id") @db.Uuid
+  freeText    String?  @map("free_text")
+  qty         Int      @default(1)
+  /// Empty — a work not in the book, with no norm yet.
+  normSec     Int?     @map("norm_sec")
+  rateTetri   Int      @map("rate_tetri")
+  mechanicId  String?  @map("mechanic_id") @db.Uuid
+  createdById String?  @map("created_by") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at")
+  /// Neither set — the line waits for approval with its repair (0057).
+  approvedById String?  @map("approved_by") @db.Uuid
+  approvedAt   DateTime? @map("approved_at")
+  rejectedById String?  @map("rejected_by") @db.Uuid
+  rejectedAt   DateTime? @map("rejected_at")
+  rejectReason String?  @map("reject_reason")
+
+  job       ServiceJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  workType  WorkType?  @relation(fields: [workTypeId], references: [id])
+  mechanic  User?      @relation("service_work_mechanic", fields: [mechanicId], references: [id])
+  createdBy User?      @relation("service_work_created_by", fields: [createdById], references: [id])
+  approvedBy User?     @relation("service_work_approved_by", fields: [approvedById], references: [id])
+  rejectedBy User?     @relation("service_work_rejected_by", fields: [rejectedById], references: [id])
+
+  @@map("service_works")
 }
 
 /// One VIN leaving the fleet for one customer (SAL-01). Ending it the other
@@ -1000,6 +1236,8 @@ model Part {
   salePriceTetri Int?     @map("sale_price_tetri")
   notes          String?
   archived       Boolean  @default(false)
+  /// A GPS tracker: fitting one asks for its IMEI and SIM (0058).
+  isTracker      Boolean  @default(false) @map("is_tracker")
   createdById    String?  @map("created_by") @db.Uuid
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @default(now()) @map("updated_at")
@@ -1008,6 +1246,7 @@ model Part {
   moves         StockMove[]
   purchaseLines PurchaseLine[]
   serviceParts  ServicePart[]
+  trackers      VehicleTracker[]
 
   @@map("parts")
 }
@@ -1110,6 +1349,22 @@ model RentalSettings {
   @@map("rental_settings")
 }
 
+/// The repair settings an owner sets (0060, ADR-0038 §3): the company rate for an hour of norm and the planned maintenance.
+model ServiceSettings {
+  id                    Boolean  @id @default(true)
+  /// What a mechanic without a rate of his own is paid for an hour of norm.
+  defaultRateTetri      Int      @default(5000) @map("default_rate_tetri")
+  maintenanceIntervalKm Int      @default(5000) @map("maintenance_interval_km")
+  /// «Пора на ТО» when fewer kilometres than this are left.
+  maintenanceWarnKm     Int      @default(300) @map("maintenance_warn_km")
+  updatedById           String?  @map("updated_by") @db.Uuid
+  updatedAt             DateTime @default(now()) @map("updated_at")
+
+  updatedBy User? @relation(fields: [updatedById], references: [id])
+
+  @@map("service_settings")
+}
+
 /// The weekly rates offered as buttons beside the model's own (R5).
 model QuickRate {
   id          String   @id @default(uuid()) @db.Uuid
@@ -1200,16 +1455,47 @@ model BatteryMove {
   reason      String?
   rentalId    String?  @map("rental_id") @db.Uuid
   actId       String?  @map("act_id") @db.Uuid
+  /// The repair a battery or a charger went to, or came back from (0058).
+  serviceJobId String? @map("service_job_id") @db.Uuid
   occurredOn  DateTime @map("occurred_on") @db.Date
   createdById String?  @map("created_by") @db.Uuid
   createdAt   DateTime @default(now()) @map("created_at")
 
-  rental    Rental? @relation(fields: [rentalId], references: [id])
-  act       Act?    @relation(fields: [actId], references: [id])
-  createdBy User?   @relation(fields: [createdById], references: [id])
+  rental     Rental?     @relation(fields: [rentalId], references: [id])
+  act        Act?        @relation(fields: [actId], references: [id])
+  serviceJob ServiceJob? @relation(fields: [serviceJobId], references: [id])
+  createdBy  User?       @relation(fields: [createdById], references: [id])
 
   @@index([occurredOn, createdAt])
   @@map("battery_moves")
+}
+
+/// The GPS tracker on a moped, by IMEI and SIM, from fitting to removal (0058, ADR-0036).
+model VehicleTracker {
+  id            String    @id @default(uuid()) @db.Uuid
+  vehicleId     String    @map("vehicle_id") @db.Uuid
+  partId        String?   @map("part_id") @db.Uuid
+  imei          String
+  simPhone      String?   @map("sim_phone")
+  installedOn   DateTime  @map("installed_on") @db.Date
+  removedOn     DateTime? @map("removed_on") @db.Date
+  serviceJobId  String?   @map("service_job_id") @db.Uuid
+  servicePartId String?   @map("service_part_id") @db.Uuid
+  removedJobId  String?   @map("removed_job_id") @db.Uuid
+  source        String?
+  createdById   String?   @map("created_by") @db.Uuid
+  removedById   String?   @map("removed_by") @db.Uuid
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  vehicle     Vehicle      @relation(fields: [vehicleId], references: [id])
+  part        Part?        @relation(fields: [partId], references: [id])
+  serviceJob  ServiceJob?  @relation("vehicle_tracker_job", fields: [serviceJobId], references: [id])
+  servicePart ServicePart? @relation(fields: [servicePartId], references: [id])
+  removedJob  ServiceJob?  @relation("vehicle_tracker_removed_job", fields: [removedJobId], references: [id])
+  createdBy   User?        @relation("vehicle_tracker_created_by", fields: [createdById], references: [id])
+  removedBy   User?        @relation("vehicle_tracker_removed_by", fields: [removedById], references: [id])
+
+  @@map("vehicle_trackers")
 }
 
 /// A deal standing in Kommo's "rented" stage at the last poll that worked
@@ -1337,3 +1623,25 @@ model DriveSync {
   @@map("drive_sync")
 }
 
+
+/// A notice to the workshop's Telegram group (migration 0061; ADR-0038 §6–7):
+/// written with its event, sent after it, tried again by the worker. Only
+/// what was asked and how it went; the text is written from `entityId` when
+/// it is sent.
+model Notice {
+  id             String    @id @default(uuid()) @db.Uuid
+  /// job_waiting, job_approved, job_rejected, job_closed, maintenance_due, stock_low.
+  kind           String
+  dedupeKey      String    @unique @map("dedupe_key")
+  entityId       String    @map("entity_id") @db.Uuid
+  createdAt      DateTime  @default(now()) @map("created_at")
+  nextTryAt      DateTime  @default(now()) @map("next_try_at")
+  attempts       Int       @default(0)
+  sentAt         DateTime? @map("sent_at")
+  gaveUpAt       DateTime? @map("gave_up_at")
+  /// Our word for the last failure, never Telegram's answer.
+  lastFailure    String?   @map("last_failure")
+  lastHttpStatus Int?      @map("last_http_status")
+
+  @@map("notices")
+}

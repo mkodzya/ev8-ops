@@ -32,9 +32,15 @@ export async function teardown(): Promise<void> {
   const since = { gte: startedAt };
   try {
     await prisma.auditLog.deleteMany({ where: { createdAt: since } });
+    // The notices a run wrote (0061) point at nothing by a key: they go first.
+    await prisma.notice.deleteMany({ where: { createdAt: since } });
     // What a stand-in for Kommo left behind, should a suite have died before
     // its own cleanup. The one row of `kommo_sync` is a singleton and stays.
     await prisma.kommoLead.deleteMany({ where: { firstSeenAt: since } });
+    // A tracker points at its moped, its repair and its line; a part bought
+    // points at the photo of its receipt (0058). Both go before the files.
+    await prisma.vehicleTracker.deleteMany({ where: { createdAt: since } });
+    await prisma.servicePart.deleteMany({ where: { createdAt: since } });
     await prisma.storedFile.deleteMany({ where: { createdAt: since } });
     // A payment and its statement line cross-reference each other; both
     // sides drop to NULL on delete (migration 0006), so the order here is
@@ -48,14 +54,18 @@ export async function teardown(): Promise<void> {
     // each other; the lines that pointed at them went with their statements.
     await prisma.expenseRule.deleteMany({ where: { createdAt: since } });
     await prisma.expenseCategory.deleteMany({ where: { createdAt: since } });
+    // A battery moved by a repair names it (0058): the movement goes first.
+    await prisma.batteryMove.deleteMany({ where: { createdAt: since } });
     await prisma.serviceJob.deleteMany({ where: { createdAt: since } }); // parts and photos cascade
+    // A paid repair and a receipt paid back name their payout (0059): they go
+    // first, then the payouts, before the people who were paid and who marked them.
+    await prisma.mechanicPayout.deleteMany({ where: { markedAt: since } });
     await prisma.sale.deleteMany({ where: { createdAt: since } }); // instalments cascade
     await prisma.vehicle.updateMany({ where: { createdAt: since }, data: { purchaseId: null } });
     await prisma.purchase.deleteMany({ where: { createdAt: since } }); // lines cascade
     await prisma.vehicleEvent.deleteMany({ where: { createdAt: since } });
     // Batteries are counted, and the count remembers who counted it: the rows
     // go before the rentals they point at and the people who wrote them.
-    await prisma.batteryMove.deleteMany({ where: { createdAt: since } });
     await prisma.batteryInventory.deleteMany({ where: { createdAt: since } });
     // A moped points at its current rental; unpin before the rental goes.
     await prisma.vehicle.updateMany({ where: { createdAt: since }, data: { currentRentalId: null } });
@@ -79,7 +89,16 @@ export async function teardown(): Promise<void> {
     await prisma.quickRate.updateMany({ where: { createdBy: { createdAt: since } }, data: { createdById: null } });
     await prisma.workshop.updateMany({ where: { createdBy: { createdAt: since } }, data: { createdById: null } });
     await prisma.rentalSettings.updateMany({ where: { updatedBy: { createdAt: since } }, data: { updatedById: null } });
+    await prisma.serviceSettings.updateMany({ where: { updatedBy: { createdAt: since } }, data: { updatedById: null } });
     await prisma.customer.deleteMany({ where: { createdAt: since } });
+    // The book of works: what a run wrote into it — the bot's book too, when
+    // the run imported it into an empty database — goes after the repairs
+    // that used it (their lines cascade) and before the people who wrote it.
+    await prisma.workType.deleteMany({ where: { createdAt: since } });
+    await prisma.workCategory.deleteMany({ where: { createdAt: since, works: { none: {} } } });
+    // Workshop devices name the owner who registered them (0055); sessions on them go first.
+    await prisma.session.deleteMany({ where: { device: { registeredAt: since } } });
+    await prisma.workshopDevice.deleteMany({ where: { registeredAt: since } });
     await prisma.user.deleteMany({ where: { createdAt: since } }); // sessions cascade
   } catch (err) {
     // Loudly. A cleanup that fails quietly leaves the next run matching

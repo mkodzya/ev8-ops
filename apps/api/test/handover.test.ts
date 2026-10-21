@@ -2,7 +2,7 @@
 // (docs/redesign/wave-3.md §6). Needs a *_test database.
 import { addDays, todayISO } from '@ev8/shared';
 import { describe, expect, it } from 'vitest';
-import { HAS_DB, call, json, loginAs, uniq } from './helpers.js';
+import { HAS_DB, call, json, login, loginAs, makeUser, uniq } from './helpers.js';
 
 const PNG = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
@@ -337,6 +337,55 @@ describe.skipIf(!HAS_DB)('wave 3 · return', () => {
     await call(owner, 'POST', `/api/rentals/${id}/return`, { odometerKm: 160, items: items() });
     await prisma.act.updateMany({ where: { rentalId: id, kind: 'return' }, data: { createdAt: new Date(Date.now() - 25 * 3600_000) } });
     expect(err(await call(owner, 'POST', `/api/rentals/${id}/return/undo`, { reason: 'late' })).error).toBe('undo_return_too_late');
+  });
+
+  it('a return taken back calls off the repair it opened, taken on by a mechanic or not; the shelf gets its parts back (crit. 35; ADR-0035 §1)', async () => {
+    const { prisma, id, owner, vehicle } = await running(3);
+    const photo = { mimeType: 'image/png', dataBase64: PNG };
+    const damaged = async (odometerKm: number) => {
+      const res = await call(owner, 'POST', `/api/rentals/${id}/return`, { odometerKm, items: items({ moped: { state: 'damaged', note: 'ТЕСТ bent footrest' } as never }) });
+      expect(res.statusCode, res.body).toBe(200);
+      return json<{ serviceJobId: string }>(res).serviceJobId;
+    };
+    const jobRow = (jobId: string) => prisma.serviceJob.findUniqueOrThrow({ where: { id: jobId }, select: { status: true, closedOn: true } });
+
+    // Nobody has taken it on yet.
+    const one = await damaged(150);
+    const undo = await call(owner, 'POST', `/api/rentals/${id}/return/undo`, { reason: 'ТЕСТ wrong moped' });
+    expect(undo.statusCode, undo.body).toBe(200);
+    expect((await jobRow(one)).status).toBe('cancelled');
+    expect((await jobRow(one)).closedOn).not.toBeNull();
+    expect((await prisma.vehicle.findUniqueOrThrow({ where: { id: vehicle.id } })).state).toBe('rented');
+
+    // A mechanic took it on from the tablet — it waits for approval now — and a part off the shelf with it.
+    const two = await damaged(160);
+    const mech = await makeUser('mechanic');
+    const mc = await login(mech.email);
+    const taken = await call(mc, 'POST', '/api/service/workshop', {
+      vehicleId: vehicle.id,
+      jobId: two,
+      reasonKind: 'renter_fault',
+      reason: 'ТЕСТ bent footrest',
+      odometerKm: 160,
+      odometerPhoto: photo,
+      photos: [photo],
+      works: [{ freeText: 'ТЕСТ straighten the footrest' }],
+    });
+    expect(taken.statusCode, taken.body).toBe(200);
+    expect(json<{ status: string }>(taken).status).toBe('draft');
+    const part = json<{ id: string }>(await call(owner, 'POST', '/api/parts', { name: `ТЕСТ footrest ${uniq()}`, salePriceTetri: '35' })).id;
+    await prisma.stockMove.create({ data: { partId: part, kind: 'receipt', qty: 3, unitCostTetri: 2000, occurredOn: new Date('2026-04-01T00:00:00Z') } });
+    const line = await call(mc, 'POST', `/api/service/${two}/parts`, { partId: part, qty: 1 });
+    expect(line.statusCode, line.body).toBe(201);
+    const onHand = async () => json<{ part: { onHand: number } }>(await call(owner, 'GET', `/api/parts/${part}`)).part.onHand;
+    expect(await onHand()).toBe(2);
+
+    const again = await call(owner, 'POST', `/api/rentals/${id}/return/undo`, { reason: 'ТЕСТ wrong day' });
+    expect(again.statusCode, again.body).toBe(200);
+    expect((await jobRow(two)).status).toBe('cancelled');
+    expect(await onHand()).toBe(3);
+    expect((await prisma.vehicle.findUniqueOrThrow({ where: { id: vehicle.id } })).state).toBe('rented');
+    expect(await prisma.auditLog.count({ where: { action: 'service.cancel', entityId: { in: [one, two] } } })).toBe(2);
   });
 
   it('no planned date: the started week in full; planned date missed: the smaller of week and days (crit. 36а, 36б)', async () => {

@@ -25,6 +25,7 @@ import { MoneyProvider } from '../money/MoneyForm.js';
 import { SessionEnded } from '../../LoginPage.js';
 import { ACTION_ICON, ICON, SECTION_ICON } from './icons.js';
 import { SectionTabs, tabStep } from './SectionTabs.js';
+import { TabletFrame } from './TabletFrame.js';
 import './shell.css';
 
 const STORAGE_KEY = 'ev8-lang';
@@ -39,11 +40,10 @@ const STORAGE_KEY = 'ev8-lang';
  * actions a person gets is one rule in @ev8/shared (navigation.ts).
  */
 export function AppShell() {
+  const { me } = useSession();
   return (
     <HeaderProvider>
-      <MoneyProvider>
-        <Frame />
-      </MoneyProvider>
+      <MoneyProvider>{me?.via === 'pin' ? <TabletFrame /> : <Frame />}</MoneyProvider>
     </HeaderProvider>
   );
 }
@@ -76,7 +76,9 @@ function Frame() {
   // The badge counts the rows "Today" lists, from the same request it reads
   // (wave 4 §3.1): one queue, one number, and it moves as soon as a write
   // marks that request stale.
-  const queue = useLoad<{ count: number }>(me ? '/api/today' : null);
+  const queue = useLoad<{ count: number }>(me && can('fleet.view') ? '/api/today' : null);
+  // Search finds mopeds, customers and records of the fleet; a mechanic has none of them.
+  const mayFind = can('fleet.view');
   const badge = queue.data?.count ?? 0;
 
   useEffect(() => {
@@ -85,10 +87,12 @@ function Frame() {
   }, [pathname, search]);
 
   // "/" opens the search from anywhere a person is not typing (wave 1 §3.5).
+  const mayFindRef = useRef(mayFind);
+  mayFindRef.current = mayFind;
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const typing = e.target instanceof HTMLElement && (e.target.closest('input, textarea, select, [contenteditable="true"]') != null);
-      if (e.key === '/' && !typing && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      if (e.key === '/' && !typing && !e.metaKey && !e.ctrlKey && !e.altKey && mayFindRef.current) {
         e.preventDefault();
         setSearching(true);
       }
@@ -148,11 +152,13 @@ function Frame() {
             {t.shell.actions[mainAction.id]}
           </Link>
         )}
-        <button type="button" className="rail-search" onClick={() => setSearching(true)}>
-          <Search size={16} strokeWidth={1.75} aria-hidden="true" />
-          <span>{t.shell.search}</span>
-          <kbd>/</kbd>
-        </button>
+        {mayFind && (
+          <button type="button" className="rail-search" onClick={() => setSearching(true)}>
+            <Search size={16} strokeWidth={1.75} aria-hidden="true" />
+            <span>{t.shell.search}</span>
+            <kbd>/</kbd>
+          </button>
+        )}
         {GROUPS.map((g) => {
           const items = sections.filter((s) => s.group === g);
           if (items.length === 0) return null;
@@ -196,9 +202,11 @@ function Frame() {
           <span className="head-title-text">{header?.title ?? label(current)}</span>
           {header?.sub != null && <span className="head-sub">{header.sub}</span>}
         </div>
-        <button type="button" className="icon-btn" onClick={() => setSearching(true)} aria-label={t.shell.search}>
-          <Search {...ICON} aria-hidden="true" />
-        </button>
+        {mayFind && (
+          <button type="button" className="icon-btn" onClick={() => setSearching(true)} aria-label={t.shell.search}>
+            <Search {...ICON} aria-hidden="true" />
+          </button>
+        )}
         {me && (
           <button type="button" className="icon-btn" onClick={() => setSheet('menu')} aria-label={t.shell.menu}>
             <span className="avatar" aria-hidden="true">
@@ -227,11 +235,14 @@ function Frame() {
         {tabs.slice(0, 2).map((id) => (
           <PhoneTab key={id} id={id} on={current === id} label={label(id)} badge={id === 'today' ? badge : 0} />
         ))}
-        <button type="button" className="tab-plus" onClick={() => setSheet('actions')} aria-label={t.shell.openActions}>
-          <span className="plus">
-            <Plus {...ICON} aria-hidden="true" />
-          </span>
-        </button>
+        {/* A chief mechanic on a phone has repairs and nothing under "+". */}
+        {actions.length > 0 && (
+          <button type="button" className="tab-plus" onClick={() => setSheet('actions')} aria-label={t.shell.openActions}>
+            <span className="plus">
+              <Plus {...ICON} aria-hidden="true" />
+            </span>
+          </button>
+        )}
         {tabs.slice(2).map((id) => (
           <PhoneTab key={id} id={id} on={current === id} label={label(id)} badge={0} />
         ))}
