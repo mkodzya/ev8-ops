@@ -2,7 +2,7 @@ import { addDays, effectiveRentalStatus, payOffsetDays, todayISO, type RentalSta
 import { dateFromISO, isoDate } from './dates.js';
 import { prisma } from './db.js';
 import { DriveError, FOLDER, download, driveConfig, listFolder, type DriveConfig, type DriveFailure, type DriveItem } from './drive.js';
-import { fileDate, fileKind, folderName, kindOfText, matchFolders, pdfText, readContract, readReturnAct, sharedWords, type FolderToMatch, type RentalToMatch } from './driveDocs.js';
+import { fileDate, fileKind, folderName, kindOfText, matchFolders, pdfText, readContract, readReturnAct, sameVin, sharedWords, type FolderToMatch, type RentalToMatch } from './driveDocs.js';
 import { env } from './env.js';
 
 // Reading the rentals folders in Drive, and laying them beside the rentals
@@ -146,9 +146,24 @@ export async function scanDrive(fetchFn: typeof fetch = fetch): Promise<DriveOut
 export async function matchDrive(): Promise<number> {
   const [rows, rentals] = await Promise.all([
     prisma.driveFolder.findMany({ select: { id: true, name: true, section: true, datedOn: true, files: { select: { vin: true } } } }),
-    prisma.rental.findMany({ select: { id: true, pickedUpOn: true, vehicle: { select: { vin: true } }, customer: { select: { name: true, nameKa: true, nameLat: true } } } }),
+    prisma.rental.findMany({
+      select: {
+        id: true,
+        pickedUpOn: true,
+        vehicle: { select: { vin: true } },
+        // The mopeds a swap took out of it: its folder's papers may name them (ADR-0040).
+        acts: { where: { kind: 'swap_out' }, select: { vehicle: { select: { vin: true } } } },
+        customer: { select: { name: true, nameKa: true, nameLat: true } },
+      },
+    }),
   ]);
-  const toMatch: RentalToMatch[] = rentals.map((r) => ({ id: r.id, pickedUpOn: isoDate(r.pickedUpOn), vin: r.vehicle?.vin ?? null, names: [r.customer.nameLat, r.customer.name, r.customer.nameKa] }));
+  const toMatch: RentalToMatch[] = rentals.map((r) => ({
+    id: r.id,
+    pickedUpOn: isoDate(r.pickedUpOn),
+    vin: r.vehicle?.vin ?? null,
+    formerVins: r.acts.flatMap((a) => (a.vehicle ? [a.vehicle.vin] : [])),
+    names: [r.customer.nameLat, r.customer.name, r.customer.nameKa],
+  }));
   const pool = (section: Section): FolderToMatch[] =>
     rows
       .filter((f) => f.section === section)
@@ -166,6 +181,17 @@ export function actAfterPickup(actOn: string | null, pickedUpOn: string | null):
   return !actOn || !pickedUpOn || actOn >= pickedUpOn;
 }
 
+/**
+ * A return act that names a moped this rental gave back at a swap is that
+ * moped's paper — the old contract closed («старый договор закрыть») — and
+ * not the end of the rental, which runs on with another moped (ADR-0040).
+ * The moped it has now is never "swapped away", even if it was once.
+ */
+export function actOfSwappedMoped(actVin: string | null, rental: { vin: string | null; swappedVins: readonly string[] }): boolean {
+  if (!actVin || sameVin(actVin, rental.vin)) return false;
+  return rental.swappedVins.some((v) => sameVin(actVin, v));
+}
+
 /** How long a contract in Drive with no rental here is asked about on "Today": older ones are mostly finished rentals whose folder was not moved. */
 export const DRIVE_NEW_DAYS = 14;
 
@@ -181,7 +207,20 @@ export async function driveReconciliation() {
     orderBy: [{ datedOn: 'desc' }, { name: 'asc' }],
     include: {
       files: { orderBy: [{ datedOn: 'desc' }, { modifiedAt: 'desc' }] },
-      rental: { select: { id: true, number: true, status: true, paidThrough: true, pickedUpOn: true, payWeekday: true, returnedOn: true, customer: { select: { id: true, name: true } } } },
+      rental: {
+        select: {
+          id: true,
+          number: true,
+          status: true,
+          paidThrough: true,
+          pickedUpOn: true,
+          payWeekday: true,
+          returnedOn: true,
+          customer: { select: { id: true, name: true } },
+          vehicle: { select: { vin: true } },
+          acts: { where: { kind: 'swap_out' }, select: { vehicle: { select: { vin: true } } } },
+        },
+      },
     },
   });
   const rentals = await prisma.rental.findMany({
@@ -192,13 +231,28 @@ export async function driveReconciliation() {
   const withFolder = new Set(folders.map((f) => f.rentalId).filter(Boolean));
   const statusOf = (r: NonNullable<(typeof folders)[number]['rental']>) =>
     effectiveRentalStatus(r.status as RentalStatus, isoDate(r.paidThrough), isoDate(r.pickedUpOn), today, payOffsetDays(isoDate(r.pickedUpOn), r.payWeekday));
-  // The folder's return act — the rental's own, not one dated before its pickup.
-  const act = (f: (typeof folders)[number]) => f.files.find((x) => x.kind === 'return_act' && actAfterPickup(isoDate(x.datedOn), isoDate(f.rental?.pickedUpOn ?? null))) ?? null;
+  // The mopeds a swap took out of the folder's rental, beside the one it has (ADR-0040).
+  const swapsOf = (f: (typeof folders)[number]) =>
+    f.rental ? { vin: f.rental.vehicle?.vin ?? null, swappedVins: f.rental.acts.flatMap((a) => (a.vehicle ? [a.vehicle.vin] : [])) } : null;
+  const swappedAct = (f: (typeof folders)[number], vin: string | null) => {
+    const s = swapsOf(f);
+    return !!s && actOfSwappedMoped(vin, s);
+  };
+  // The folder's return act — the rental's own, not one dated before its
+  // pickup, nor the closing paper of a moped a swap took out of it.
+  const act = (f: (typeof folders)[number]) =>
+    f.files.find((x) => x.kind === 'return_act' && actAfterPickup(isoDate(x.datedOn), isoDate(f.rental?.pickedUpOn ?? null)) && !swappedAct(f, x.vin)) ?? null;
+  // A finished folder whose every return act is a swapped moped's holds the
+  // old contract, closed: the rental itself runs on.
+  const onlySwapped = (f: (typeof folders)[number]) => {
+    const acts = f.files.filter((x) => x.kind === 'return_act');
+    return acts.length > 0 && acts.every((x) => swappedAct(f, x.vin));
+  };
   // The moped came back by Drive: the folder was moved among the finished ones,
   // or the return act is in it already while it still stands among the running
   // (ADR-0034). One rental, one row: the one with an act first.
   const back = folders
-    .filter((f) => f.rental && statusOf(f.rental) !== 'returned' && (f.section === 'finished' || act(f) != null))
+    .filter((f) => f.rental && statusOf(f.rental) !== 'returned' && ((f.section === 'finished' && !onlySwapped(f)) || act(f) != null))
     .sort((a, b) => Number(act(b) != null) - Number(act(a) != null))
     .filter((f, i, all) => all.findIndex((x) => x.rentalId === f.rentalId) === i);
   const contract = (f: (typeof folders)[number]) => f.files.find((x) => x.kind === 'contract') ?? f.files.find((x) => x.kind === 'scan') ?? null;

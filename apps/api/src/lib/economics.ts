@@ -4,7 +4,8 @@
 // it — allocations, sale payments, repair lines, events — so a voided payment
 // or a corrected repair changes the answer the moment it is saved, and a
 // number on this screen can always be walked back to the row it came from.
-import { type VehicleEconomics, type VehicleState, repairTotalTetri, todayISO, vehicleEconomics } from '@ev8/shared';
+import { type VehicleEconomics, type VehicleState, mopedLegs, mopedOnDay, repairTotalTetri, todayISO, vehicleEconomics } from '@ev8/shared';
+import { MOPED_ACT, mopedActOf } from './acts.js';
 import { isoDate } from './dates.js';
 import { prisma } from './db.js';
 import { PART_MONEY, WORK_MONEY } from './stock.js';
@@ -34,8 +35,23 @@ export async function fleetEconomics(opts: { vehicleIds?: string[]; until?: stri
   const ids = vehicles.map((v) => v.id);
   if (ids.length === 0) return [];
 
-  const rentals = await prisma.rental.findMany({ where: { vehicleId: { in: ids } }, select: { id: true, vehicleId: true } });
-  const vehicleOfRental = new Map(rentals.map((r) => [r.id, r.vehicleId as string]));
+  // A rental is a moped's when the moped was in it at all: its moped now, or
+  // one its acts name — a swap gives a rental more than one (ADR-0040).
+  const rentals = await prisma.rental.findMany({
+    where: { OR: [{ vehicleId: { in: ids } }, { acts: { some: { vehicleId: { in: ids } } } }] },
+    select: { id: true, vehicleId: true, acts: { select: MOPED_ACT } },
+  });
+  const legsOfRental = new Map(rentals.map((r) => [r.id, { legs: mopedLegs(r.acts.map(mopedActOf), r.vehicleId), vehicleId: r.vehicleId }]));
+  /**
+   * Which moped a week's rent belongs to: the one the rental had on the
+   * week's first day. A week a swap fell in is not split by days — the money
+   * goes to the moped the week began with (ADR-0040).
+   */
+  const vehicleOfWeek = (rentalId: string, startsOn: Date): string | null => {
+    const r = legsOfRental.get(rentalId);
+    if (!r) return null;
+    return mopedOnDay(r.legs, isoDate(startsOn)!) ?? r.vehicleId;
+  };
 
   // Rent only. A deposit is the customer's money held, not income, so
   // allocations to deposits are deliberately left out; what is kept back on
@@ -45,7 +61,7 @@ export async function fleetEconomics(opts: { vehicleIds?: string[]; until?: stri
       ? []
       : await prisma.paymentAllocation.findMany({
           where: { target: 'period', period: { rentalId: { in: rentals.map((r) => r.id) } } },
-          select: { amountTetri: true, period: { select: { rentalId: true } } },
+          select: { amountTetri: true, period: { select: { rentalId: true, startsOn: true } } },
         });
 
   const sales = await prisma.sale.findMany({
@@ -70,7 +86,7 @@ export async function fleetEconomics(opts: { vehicleIds?: string[]; until?: stri
   const zero = () => ({ rent: 0, saleIn: 0, saleOut: 0, company: 0, charged: 0 });
   const acc = new Map(ids.map((id) => [id, zero()]));
   for (const a of rentAllocations) {
-    const vid = a.period ? vehicleOfRental.get(a.period.rentalId) : undefined;
+    const vid = a.period ? vehicleOfWeek(a.period.rentalId, a.period.startsOn) : null;
     if (vid) (acc.get(vid) ?? zero()).rent += a.amountTetri;
   }
   for (const s of sales) {

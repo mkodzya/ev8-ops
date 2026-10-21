@@ -164,7 +164,8 @@ export function opsRoutes(app: FastifyInstance): void {
     const vehicleId = str(b, 'vehicleId');
     await prisma.$transaction(async (tx) => {
       if (vehicleId) {
-        if (r.vehicleId) throw conflict('vehicle_already_set', 'This rental already has a moped.');
+        // A moped already given is changed by a swap, with its two acts (ADR-0040), not here.
+        if (r.vehicleId) throw conflict('vehicle_already_set', 'This rental already has a moped; change it with a swap.');
         const v = await tx.vehicle.findUnique({ where: { id: vehicleId } });
         if (!v) throw notFound('vehicle_not_found', 'No such moped.');
         if (v.state !== 'available') throw conflict('vehicle_not_available', 'This moped cannot be handed over in its current state.', { state: v.state });
@@ -182,6 +183,9 @@ export function opsRoutes(app: FastifyInstance): void {
           actorId: actor.id,
           rentalId: r.id,
         });
+        // Its hand-over act was written without a moped: this is the one the
+        // mileage in it was read off (migration 0063 did the same for the old ones).
+        await tx.act.updateMany({ where: { rentalId: r.id, kind: 'pickup', vehicleId: null }, data: { vehicleId } });
       }
       await tx.rental.update({ where: { id: r.id }, data: { ...data, updatedAt: new Date() } });
       await tx.auditLog.create({

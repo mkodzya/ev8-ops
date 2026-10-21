@@ -28,6 +28,9 @@ describe('which filter a line answers to', () => {
     expect(journalGroups('till.handover')).toEqual(['money']);
     expect(journalGroups('vehicle.state.manual')).toEqual(['states']);
     expect(journalGroups('vehicle.cost')).toEqual(['money', 'states']);
+    // A swap changes the rental's moped (ADR-0040): a state, with its before and after.
+    expect(journalGroups('rental.swap')).toEqual(['states']);
+    expect(journalKind('rental.swap')).toBe('change');
   });
 
   it('files sign-ins, roles and views under "входы и просмотры"', () => {

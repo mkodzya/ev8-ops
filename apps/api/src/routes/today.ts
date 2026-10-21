@@ -41,6 +41,8 @@ export const QUEUE_RENTAL = {
   vehicle: { select: { vin: true } },
   deposit: { select: { paidTetri: true, status: true, decidedById: true, migrationDecision: true } },
   documents: { where: { kind: 'pdf', docKind: 'contract', archived: false }, select: { signedAt: true } },
+  // The latest swap: the contract is drawn again from it and signed again (ADR-0040).
+  acts: { where: { kind: 'swap_in' }, select: { occurredOn: true }, orderBy: [{ occurredOn: 'desc' }, { createdAt: 'desc' }], take: 1 },
 } satisfies Prisma.RentalSelect;
 
 /**
@@ -55,7 +57,11 @@ export function queueRental(r: Prisma.RentalGetPayload<{ select: typeof QUEUE_RE
   const pickedUpOn = isoDate(r.pickedUpOn);
   const { status } = rentStateOf(r, today);
   const signed = r.documents.some((d) => d.signedAt != null);
-  const handedOverAgo = pickedUpOn ? daysBetween(pickedUpOn, today) : 0;
+  // The contract to sign is the one of the moped the customer has: after a
+  // swap it is a new paper from the swap's day, for a rental brought over too.
+  const swappedOn = isoDate(r.acts[0]?.occurredOn);
+  const handedOverOn = swappedOn ?? pickedUpOn;
+  const handedOverAgo = handedOverOn ? daysBetween(handedOverOn, today) : 0;
   return {
     id: r.id,
     number: r.number,
@@ -75,8 +81,9 @@ export function queueRental(r: Prisma.RentalGetPayload<{ select: typeof QUEUE_RE
     depositUndecided: r.status === 'returned' && r.deposit?.status === 'held' && !r.deposit.decidedById && !r.deposit.migrationDecision && r.odooOrderId == null,
     vinUnconfirmed: r.vinUnconfirmed,
     // A rental brought over has its contract from before EV8 Ops, kept outside
-    // it: nobody is asked to sign that one here (Mika, 08.10.2026).
-    contractUnsigned: !signed && !r.transferredAt && handedOverAgo >= 1 && r.status !== 'returned',
+    // it: nobody is asked to sign that one here (Mika, 08.10.2026) — until a
+    // swap replaces it with one of EV8 Ops (ADR-0040).
+    contractUnsigned: !signed && (!r.transferredAt || swappedOn != null) && handedOverAgo >= 1 && r.status !== 'returned',
   };
 }
 

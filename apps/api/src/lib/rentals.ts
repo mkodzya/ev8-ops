@@ -1,4 +1,4 @@
-import { acquiringFee, canPickUp, handOverBlockTetri, nameSpellings, periodsThrough, returnSettlement, type Settlement, type VehicleState } from '@ev8/shared';
+import { KEY_FEE_TETRI, acquiringFee, canPickUp, fleetNumber, handOverActOf, handOverBlockTetri, nameSpellings, periodsThrough, returnSettlement, type Settlement, type VehicleState } from '@ev8/shared';
 import { createHash } from 'node:crypto';
 import type { Prisma } from '../generated/prisma/client.js';
 import { audit } from './audit.js';
@@ -11,6 +11,7 @@ import { recomputeRental, recordPaymentTx } from './payments.js';
 import { rentalOwed, spreadRental, syncDeposit, writeAllocations } from './rentalMoney.js';
 import { returnServiceParts, unfitTrackers } from './stock.js';
 import { movePool, moveVehicle } from './vehicles.js';
+import { HANDS_OUT, MOPED_ACT, mopedActOf } from './acts.js';
 import { itemLabel } from './pdf/returnAct.js';
 import { restoreOdometer } from './maintenance.js';
 
@@ -242,6 +243,8 @@ export async function pickUp(input: PickupInput, within?: Tx): Promise<PickupRes
     const act = await tx.act.create({
       data: {
         rentalId: rental.id,
+        // The moped the act is about (migration 0063); none for a hand-over without a VIN.
+        vehicleId: input.vehicleId,
         kind: 'pickup',
         occurredOn: dateFromISO(input.pickedUpOn)!,
         odometerKm: input.odometerKm,
@@ -375,7 +378,7 @@ export async function returnPreview(input: { rentalId: string; returnedOn: strin
     where: { id: input.rentalId },
     include: {
       periods: { orderBy: { seq: 'asc' } },
-      acts: { where: { kind: 'pickup' }, select: { odometerKm: true } },
+      acts: { where: { kind: { in: HANDS_OUT } }, select: { ...MOPED_ACT, odometerKm: true } },
       vehicle: { select: { odometerKm: true } },
       deposit: {
         include: {
@@ -393,10 +396,14 @@ export async function returnPreview(input: { rentalId: string; returnedOn: strin
   const withheld = d?.withholdings.reduce((n, w) => n + w.amountTetri, 0) ?? 0;
   const paidOut = d ? d.paidOutBeforeTetri + d.payouts.reduce((n, p) => n + p.grossTetri, 0) : 0;
   const openCharges = r.charges.reduce((n, c) => n + Math.max(0, c.amountTetri - c.allocations.reduce((m, a) => m + a.amountTetri, 0)), 0);
+  // The act that handed out the moped coming back: after a swap, the swap's (ADR-0040).
+  const handOver = handOverActOf(r.acts.map(mopedActOf), r.vehicleId);
   return {
     batteries: r.batteries,
     chargers: r.chargers,
-    pickupKm: r.acts[0]?.odometerKm ?? null,
+    pickupKm: handOver?.row.odometerKm ?? null,
+    /** The day that moped was handed out: the hand-over, or the swap that brought it. */
+    pickupOn: handOver?.occurredOn ?? isoDate(r.pickedUpOn),
     /** The moped's last reading: below it, the return asks why (ADR-0038 §4). */
     vehicleKm: r.vehicle?.odometerKm ?? null,
     expectedReturnOn: isoDate(r.expectedReturnOn),
@@ -425,14 +432,17 @@ export async function returnRental(input: ReturnInput): Promise<{ actId: string;
   return prisma.$transaction(async (tx) => {
     const r = await tx.rental.findUnique({
       where: { id: input.rentalId },
-      include: { deposit: true, acts: { where: { kind: 'pickup' }, select: { odometerKm: true } }, periods: { orderBy: { seq: 'asc' } } },
+      include: { deposit: true, acts: { where: { kind: { in: HANDS_OUT } }, select: { ...MOPED_ACT, odometerKm: true } }, periods: { orderBy: { seq: 'asc' } } },
     });
     if (!r) throw notFound('rental_not_found', 'No such rental.');
     if (r.status === 'returned') throw conflict('already_returned', 'This rental is already closed.');
-    const pickedUpOn = isoDate(r.pickedUpOn);
+    // The moped coming back was handed out by the hand-over, or by the swap
+    // that brought it (ADR-0040): its day and its mileage are the ones to check.
+    const handOver = handOverActOf(r.acts.map(mopedActOf), r.vehicleId);
+    const pickedUpOn = handOver?.occurredOn ?? isoDate(r.pickedUpOn);
     if (pickedUpOn && input.returnedOn < pickedUpOn) throw conflict('return_before_pickup', 'Return date is before the pickup date.', { field: 'returnedOn' });
     // Less than at the hand-over is a mistake, not a moped that went backwards (B5-05).
-    const pickupKm = r.acts[0]?.odometerKm ?? null;
+    const pickupKm = handOver?.row.odometerKm ?? null;
     if (pickupKm != null && input.odometerKm! < pickupKm) {
       throw conflict('odometer_below_pickup', 'The mileage is below the hand-over’s.', { field: 'odometerKm', pickupKm });
     }
@@ -516,6 +526,7 @@ export async function returnRental(input: ReturnInput): Promise<{ actId: string;
     const act = await tx.act.create({
       data: {
         rentalId: r.id,
+        vehicleId: r.vehicleId,
         kind: 'return',
         occurredOn: dateFromISO(input.returnedOn)!,
         odometerKm: input.odometerKm,
@@ -757,6 +768,252 @@ export async function undoReturn(input: { actor: Actor; rentalId: string; reason
     await tx.storedFile.updateMany({ where: { rentalId: r.id, kind: 'pdf', docKind: 'return_act', archived: false }, data: { archived: true } });
     await recomputeRental(tx, r.id);
     await tx.auditLog.create({ data: { actorId: input.actor.id, action: 'rental.return.undo', entityType: 'rental', entityId: r.id, note: input.reason } });
+  });
+}
+
+// ---------------------------------------------------------------------------
+// A swap: the same rental, another moped (ADR-0040)
+// ---------------------------------------------------------------------------
+
+export interface SwapInput {
+  actor: Actor;
+  today: string;
+  rentalId: string;
+  swappedOn: string;
+  /** Why the moped is changed: a breakdown, the customer's request. */
+  reason: string;
+  /** The moped the customer gives back. */
+  out: {
+    odometerKm: number | null;
+    /** Why the reading is below the moped's last one (ADR-0038 §4). */
+    odometerReason: string | null;
+    condition: string | null;
+    /** The moped and its key, as a return act has them; batteries and chargers stay with the customer. */
+    items: Record<string, { state: 'ok' | 'damaged' | 'missing'; note: string | null }>;
+    toService: boolean;
+    locationId: string | null;
+  };
+  /** The moped handed out in its place. */
+  in: {
+    vehicleId: string;
+    /** An owner agreed to move a moped from the sale park (Q9). */
+    moveFromSale: boolean;
+    odometerKm: number | null;
+    odometerReason: string | null;
+    condition: string | null;
+  };
+}
+
+export interface SwapResult {
+  outActId: string;
+  inActId: string;
+  /** The repair the moped given back went into: opened now, or one already open on it. */
+  serviceJobId: string | null;
+  /** That repair was open already — reported while the customer had the moped — and was taken up. */
+  adoptedJob: boolean;
+}
+
+/**
+ * The customer gives one moped back and takes another; the rental goes on
+ * (ADR-0040). Its number, weeks, deposit, debt, pay day and tariff stay as
+ * they are (Q12); what changes is the moped. Two acts — the moped given back,
+ * the moped handed out — and two events, each with the rental; the old moped
+ * to a point or to a repair, the new one out. The contract named the old
+ * moped's VIN: the copy made is archived, and the contract is drawn again
+ * with the new one and waits for a signature. One transaction, one operation
+ * key. There is no undo: a wrong swap is put right by a second one, and both
+ * stay in the journal.
+ */
+export async function swapVehicle(input: SwapInput): Promise<SwapResult> {
+  // A return and a hand-over in one: whoever may do both — a manager and an owner.
+  if (!hasPerm(input.actor, 'rental.create') || !hasPerm(input.actor, 'rental.return')) throw forbidden('forbidden', 'A swap is a return and a hand-over; it takes the rights of both.');
+  const owner = hasPerm(input.actor, 'deposit.decide');
+  const reason = input.reason.trim();
+  if (!reason) throw badRequest('missing_field', 'Say why the moped is changed.', { field: 'reason' });
+  if (input.swappedOn > input.today) throw badRequest('future_date', 'A swap is not dated in the future.', { field: 'swappedOn' });
+  if (input.out.odometerKm == null) throw badRequest('missing_field', 'The mileage of the moped given back goes into its act.', { field: 'outOdometerKm' });
+  if (input.in.odometerKm == null) throw badRequest('missing_field', 'The mileage of the moped handed out goes into its act.', { field: 'inOdometerKm' });
+  const outKm = input.out.odometerKm;
+  const inKm = input.in.odometerKm;
+
+  return prisma.$transaction(async (tx) => {
+    const found = await tx.rental.findUnique({ where: { id: input.rentalId }, select: { id: true, vehicleId: true } });
+    if (!found) throw notFound('rental_not_found', 'No such rental.');
+    const freshFound = await tx.vehicle.findUnique({ where: { id: input.in.vehicleId }, select: { id: true } });
+    if (!freshFound) throw notFound('vehicle_not_found', 'No such moped.');
+    // One swap at a time on a rental and on each of its mopeds; what is
+    // checked below is read again under the lock, never from before it.
+    // The mopeds in one order, whoever asks: two swaps crossing never wait on each other.
+    await tx.$queryRaw`SELECT 1 FROM rentals WHERE id = ${found.id}::uuid FOR UPDATE`;
+    for (const id of [freshFound.id, found.vehicleId].filter((x): x is string => !!x).sort()) {
+      await tx.$queryRaw`SELECT 1 FROM vehicles WHERE id = ${id}::uuid FOR UPDATE`;
+    }
+
+    const r = await tx.rental.findUniqueOrThrow({ where: { id: found.id }, include: { acts: { select: { ...MOPED_ACT, odometerKm: true } } } });
+    if (r.status === 'returned') throw conflict('already_returned', 'This rental is already closed.');
+    // A rental handed over without a VIN gets its moped through "Change terms"; there is nothing to give back.
+    if (!r.vehicleId) throw conflict('swap_no_vehicle', 'This rental has no moped to give back; confirm its VIN first.', { field: 'vehicleId' });
+    if (input.in.vehicleId === r.vehicleId) throw conflict('same_vehicle', 'This is the moped the customer already has.', { field: 'vehicleId' });
+    const oldId = r.vehicleId;
+    const old = await tx.vehicle.findUniqueOrThrow({ where: { id: oldId } });
+    const fresh = await tx.vehicle.findUniqueOrThrow({ where: { id: freshFound.id } });
+    if (fresh.archived) throw notFound('vehicle_not_found', 'No such moped.');
+    if (!canPickUp(fresh.state as VehicleState)) {
+      throw conflict('vehicle_not_available', 'This moped cannot be handed over in its current state.', { state: fresh.state, field: 'vehicleId' });
+    }
+    // The same rule as a hand-over (Q9): a moped of the sale park goes to rent by an owner who says so.
+    if (fresh.pool === 'sale') {
+      if (!owner) throw forbidden('vehicle_in_sale_pool', 'A moped of the sale park goes to rent by an owner.', { field: 'vehicleId' });
+      if (!input.in.moveFromSale) throw conflict('vehicle_in_sale_pool', 'This moped is in the sale park; confirm the move to rent.', { field: 'vehicleId' });
+    }
+
+    // Not into a stretch of either moped's history that is already written:
+    // a swap dated before the old moped was handed out, or before the last
+    // thing that happened to either of them, would make a timeline read
+    // pickup, pickup, return (the rule ops.ts keeps for a VIN confirmed later).
+    const handOver = handOverActOf(r.acts.map(mopedActOf), oldId);
+    const lastEventOn = async (vehicleId: string) =>
+      isoDate((await tx.vehicleEvent.findFirst({ where: { vehicleId }, orderBy: [{ occurredOn: 'desc' }, { createdAt: 'desc' }], select: { occurredOn: true } }))?.occurredOn);
+    for (const lastOn of [handOver?.occurredOn ?? isoDate(r.pickedUpOn), await lastEventOn(oldId), await lastEventOn(fresh.id)]) {
+      if (lastOn && input.swappedOn < lastOn) {
+        throw conflict('swap_before_last_event', 'The swap is dated before something already written in a moped’s history.', { field: 'swappedOn', lastOn });
+      }
+    }
+
+    // The moped given back: less than when it was handed out is a mistake
+    // (B5-05); below its last reading only with the reason (ADR-0038 §4).
+    const pickupKm = handOver?.row.odometerKm ?? null;
+    if (pickupKm != null && outKm < pickupKm) throw conflict('odometer_below_pickup', 'The mileage is below the hand-over’s.', { field: 'outOdometerKm', pickupKm });
+    const outReason = input.out.odometerReason?.trim() || null;
+    const outLower = old.odometerKm != null && outKm < old.odometerKm;
+    if (outLower && !outReason) throw badRequest('odometer_below', 'The mileage is below the moped’s last reading; say why.', { field: 'outOdometerReason', lastKm: old.odometerKm });
+    // The moped handed out: below its last reading only with the reason, as a hand-over asks (B4-06).
+    const inReason = input.in.odometerReason?.trim() || null;
+    const inLower = fresh.odometerKm != null && inKm < fresh.odometerKm;
+    if (inLower && !inReason) throw badRequest('odometer_below', 'The mileage is below the moped’s last reading; say why.', { field: 'inOdometerReason', lastKm: fresh.odometerKm });
+
+    const why = reason.slice(0, 1000);
+    // (a) The moped given back is back: free, with its mileage.
+    await moveVehicle(tx, { vehicleId: oldId, kind: 'return', occurredOn: input.swappedOn, actorId: input.actor.id, rentalId: r.id, reason: why });
+    await tx.vehicle.update({ where: { id: oldId }, data: { odometerKm: outKm } });
+
+    // (b) Where it goes. A repair opened on it while the customer had it did
+    // not move it (service.ts, `movedVehicle`), and its closing would not
+    // bring it out of service: that repair is taken up now, and no second one
+    // is opened. Otherwise damage in the act — or the choice — opens a draft,
+    // as a return does; or it stands at a point.
+    const damaged = Object.entries(input.out.items).filter(([, v]) => v.state === 'damaged');
+    const open = await tx.serviceJob.findFirst({ where: { vehicleId: oldId, status: { in: ['open', 'draft'] } }, orderBy: { createdAt: 'desc' }, select: { id: true, number: true } });
+    let serviceJobId: string | null = null;
+    if (open) {
+      await tx.serviceJob.update({ where: { id: open.id }, data: { movedVehicle: true, updatedAt: new Date() } });
+      await moveVehicle(tx, { vehicleId: oldId, kind: 'service_in', occurredOn: input.swappedOn, actorId: input.actor.id, reason: open.number });
+      serviceJobId = open.id;
+    } else if (input.out.toService || damaged.length > 0) {
+      // What the act says was damaged, in the act's own words; else why the moped was changed.
+      const what = damaged.map(([k, v]) => (k === 'moped' ? v.note?.trim() || itemLabel(k).ka : [itemLabel(k).ka, v.note?.trim()].filter(Boolean).join(': '))).join('; ') || why;
+      const job = await tx.serviceJob.create({
+        data: {
+          vehicleId: oldId,
+          rentalId: r.id,
+          customerId: r.customerId,
+          reason: `${r.number}: ${what}`.slice(0, 1000),
+          openedOn: dateFromISO(input.swappedOn)!,
+          payer: 'company',
+          movedVehicle: true,
+          createdById: input.actor.id,
+        },
+        select: { id: true, number: true },
+      });
+      serviceJobId = job.id;
+      await moveVehicle(tx, { vehicleId: oldId, kind: 'service_in', occurredOn: input.swappedOn, actorId: input.actor.id, reason: job.number });
+    } else if (input.out.locationId) {
+      const loc = await tx.location.findUnique({ where: { id: input.out.locationId }, select: { id: true, archived: true } });
+      if (!loc || loc.archived) throw notFound('location_not_found', 'No such point.');
+      await tx.vehicle.update({ where: { id: oldId }, data: { locationId: loc.id } });
+    }
+
+    // (c) A key not brought back is the contract's 250 (§6), as at a return.
+    // The batteries and chargers stay with the customer; a changed count is "Change terms".
+    const keyCharge =
+      input.out.items.key?.state === 'missing'
+        ? await tx.rentalCharge.create({ data: { rentalId: r.id, kind: 'key', amountTetri: KEY_FEE_TETRI, note: 'contract §6', createdById: input.actor.id }, select: { id: true } })
+        : null;
+
+    // (d) The moped handed out: a rental moped from now (ADR-0005, Q9), with the customer, with its mileage.
+    await movePool(tx, { vehicleId: fresh.id, pool: 'rent', occurredOn: input.swappedOn, actorId: input.actor.id, reason: `swap ${r.number}` });
+    await moveVehicle(tx, { vehicleId: fresh.id, kind: 'pickup', occurredOn: input.swappedOn, actorId: input.actor.id, rentalId: r.id, reason: why });
+    await tx.vehicle.update({ where: { id: fresh.id }, data: { odometerKm: inKm } });
+
+    // (e) The rental has the new moped. Weeks, payments, deposit, pay day and tariff are untouched.
+    await tx.rental.update({ where: { id: r.id }, data: { vehicleId: fresh.id, vinUnconfirmed: false, updatedAt: new Date() } });
+
+    // (f) Two acts, the moped given back first; each names its moped.
+    const outAct = await tx.act.create({
+      data: {
+        rentalId: r.id,
+        vehicleId: oldId,
+        kind: 'swap_out',
+        occurredOn: dateFromISO(input.swappedOn)!,
+        odometerKm: outKm,
+        odometerReason: outLower ? outReason : null,
+        condition: input.out.condition,
+        items: input.out.items,
+        locationId: serviceJobId ? null : input.out.locationId,
+        // What the swap did, as a return keeps its settlement: the moped that
+        // replaced this one, the repair it went into, the key charged, and
+        // the moped's figure before this reading (ADR-0038 §1).
+        settlement: { toVehicleId: fresh.id, serviceJobId, adoptedJob: !!open, keyChargeId: keyCharge?.id ?? null, odometerBeforeKm: old.odometerKm } as object,
+        createdById: input.actor.id,
+      },
+    });
+    const inAct = await tx.act.create({
+      data: {
+        rentalId: r.id,
+        vehicleId: fresh.id,
+        kind: 'swap_in',
+        occurredOn: dateFromISO(input.swappedOn)!,
+        odometerKm: inKm,
+        odometerReason: inLower ? inReason : null,
+        condition: input.in.condition,
+        settlement: { fromVehicleId: oldId, odometerBeforeKm: fresh.odometerKm, movedFromSale: fresh.pool === 'sale' } as object,
+        createdById: input.actor.id,
+      },
+    });
+
+    // (g) The contract named the old moped. The copy made — signed or not —
+    // is archived and kept; the next one is drawn with the new VIN, the
+    // swap's day and mileage, and waits for the customer's signature again
+    // («старый договор закрыть, новый выдать», 21.10.2026).
+    const contractSignedBefore = (await tx.storedFile.count({ where: { rentalId: r.id, kind: 'pdf', docKind: 'contract', archived: false, signedAt: { not: null } } })) > 0;
+    await tx.storedFile.updateMany({ where: { rentalId: r.id, kind: 'pdf', docKind: 'contract', archived: false }, data: { archived: true } });
+
+    // (h) One line in the journal: the moped before and after, and why.
+    await tx.auditLog.create({
+      data: {
+        actorId: input.actor.id,
+        action: 'rental.swap',
+        entityType: 'rental',
+        entityId: r.id,
+        before: { vehicleId: oldId, vin: old.vin, moped: fleetNumber(old.fleetNo) },
+        after: {
+          vehicleId: fresh.id,
+          vin: fresh.vin,
+          moped: fleetNumber(fresh.fleetNo),
+          swappedOn: input.swappedOn,
+          outKm,
+          inKm,
+          serviceJobId,
+          adoptedJob: !!open,
+          locationId: serviceJobId ? null : input.out.locationId,
+          keyCharged: keyCharge != null,
+          movedFromSale: fresh.pool === 'sale',
+          contractSignedBefore,
+        },
+        note: why,
+      },
+    });
+    return { outActId: outAct.id, inActId: inAct.id, serviceJobId, adoptedJob: !!open };
   });
 }
 

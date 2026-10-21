@@ -1,6 +1,7 @@
-import { localDateTime } from '@ev8/shared';
+import { handOverActOf, localDateTime } from '@ev8/shared';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { createHash } from 'node:crypto';
+import { mopedActOf } from '../lib/acts.js';
 import { audit } from '../lib/audit.js';
 import { hasPerm } from '../lib/auth.js';
 import { isoDate } from '../lib/dates.js';
@@ -38,7 +39,7 @@ async function loadRental(id: string) {
       customer: true,
       vehicle: { include: { model: true } },
       deposit: true,
-      acts: { orderBy: { occurredOn: 'asc' }, include: { _count: { select: { photos: true } } } },
+      acts: { orderBy: [{ occurredOn: 'asc' }, { createdAt: 'asc' }], include: { _count: { select: { photos: true } } } },
     },
   });
   if (!r) throw notFound('rental_not_found', 'No such rental.');
@@ -64,8 +65,14 @@ function vehicleOf(r: Rental) {
 }
 
 async function render(kind: DocKind, r: Rental, signature: DrawnSignature | null = null): Promise<Buffer> {
-  const pickup = r.acts.find((a) => a.kind === 'pickup');
-  const contractDate = isoDate(r.pickedUpOn) ?? isoDate(r.createdAt)!;
+  // The act that handed out the moped the customer has: the hand-over, or —
+  // after a swap — the swap's (ADR-0040). The contract is drawn for that
+  // moped: its VIN, the day it went out, its mileage, condition and photos.
+  // Before any swap that is the hand-over, as it always was.
+  const handOver = handOverActOf(r.acts.map(mopedActOf), r.vehicleId);
+  const pickup = handOver?.row ?? null;
+  const swappedOn = handOver?.kind === 'swap_in' ? handOver.occurredOn : null;
+  const contractDate = swappedOn ?? isoDate(r.pickedUpOn) ?? isoDate(r.createdAt)!;
   if (kind === 'contract') {
     return renderContract({
       number: r.number,
@@ -79,7 +86,7 @@ async function render(kind: DocKind, r: Rental, signature: DrawnSignature | null
       batteries: r.batteries,
       chargers: r.chargers,
       nightParkingAddress: r.nightParkingAddress,
-      pickedUpOn: isoDate(r.pickedUpOn),
+      pickedUpOn: swappedOn ?? isoDate(r.pickedUpOn),
       condition: pickup?.condition ?? null,
       odometerKm: pickup?.odometerKm ?? null,
       hasPhotos: (pickup?._count.photos ?? 0) > 0,
