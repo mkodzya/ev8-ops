@@ -297,6 +297,7 @@ model User {
   stockMoves        StockMove[]
   locations         Location[]    @relation("location_author")
   rentalSettings    RentalSettings[]
+  serviceSettings   ServiceSettings[]
   quickRates        QuickRate[]
   workshops         Workshop[]
   handoversFrom     CashHandover[] @relation("handover_from")
@@ -929,6 +930,8 @@ model ServiceJob {
   rejectReason  String?       @map("reject_reason")
   /// The minute it closed; repairs before 0057 have only the day.
   closedAt      DateTime?     @map("closed_at")
+  /// Why the reading at closing is below the opening's or the moped's last (0060, ADR-0038 §4).
+  closedOdometerReason String? @map("closed_odometer_reason")
   /// The payout that paid its mechanic for it — only his, only once it is closed; empty — not paid (0059, ADR-0037).
   paidInPayoutId String?      @map("paid_in_payout_id") @db.Uuid
   createdById   String?       @map("created_by") @db.Uuid
@@ -1344,6 +1347,22 @@ model RentalSettings {
   updatedBy User? @relation(fields: [updatedById], references: [id])
 
   @@map("rental_settings")
+}
+
+/// The repair settings an owner sets (0060, ADR-0038 §3): the company rate for an hour of norm and the planned maintenance.
+model ServiceSettings {
+  id                    Boolean  @id @default(true)
+  /// What a mechanic without a rate of his own is paid for an hour of norm.
+  defaultRateTetri      Int      @default(5000) @map("default_rate_tetri")
+  maintenanceIntervalKm Int      @default(5000) @map("maintenance_interval_km")
+  /// «Пора на ТО» when fewer kilometres than this are left.
+  maintenanceWarnKm     Int      @default(300) @map("maintenance_warn_km")
+  updatedById           String?  @map("updated_by") @db.Uuid
+  updatedAt             DateTime @default(now()) @map("updated_at")
+
+  updatedBy User? @relation(fields: [updatedById], references: [id])
+
+  @@map("service_settings")
 }
 
 /// The weekly rates offered as buttons beside the model's own (R5).

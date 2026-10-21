@@ -30,3 +30,4 @@ export * from './calendar-view.js';
 export * from './journal.js';
 export * from './deposit-decision.js';
 export * from './kommo.js';
+export * from './maintenance.js';

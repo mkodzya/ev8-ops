@@ -1,7 +1,6 @@
 import {
   AFTER_PHOTOS_MAX,
   JOB_PHOTOS_MAX,
-  LABOUR_RATE_TETRI,
   SERVICE_PART_KINDS,
   SERVICE_REASONS,
   WORK_QTY_MAX,
@@ -41,6 +40,7 @@ import { actorOf, mayView } from '../lib/guard.js';
 import { date, int, oneOf, str, tetri } from '../lib/validate.js';
 import { syncDeposit } from '../lib/rentalMoney.js';
 import { moveVehicle } from '../lib/vehicles.js';
+import { rateOf } from '../lib/serviceSettings.js';
 
 // Repair jobs (SRV-01, SRV-02).
 //
@@ -802,7 +802,8 @@ export function serviceRoutes(app: FastifyInstance): void {
     // A repair with no mechanic is an owner's, kept with the old line of hours.
     if (!job.mechanicId) throw conflict('job_no_mechanic', 'This repair has no mechanic to do the work.');
     const types = await bookWorks(lines);
-    const rateTetri = job.mechanic?.labourRateTetri ?? LABOUR_RATE_TETRI;
+    // His own rate, or the company's the owner set (ADR-0038 §3).
+    const rateTetri = await rateOf(prisma, job.mechanic);
     const approvedNow = job.status === 'open' && hasPerm(actor, 'service.approve');
     const now = new Date();
     const status = approvedNow ? job.status : 'draft';
@@ -1018,7 +1019,7 @@ export function serviceRoutes(app: FastifyInstance): void {
     }
     const types = await bookWorks(lines);
     const me = await prisma.user.findUniqueOrThrow({ where: { id: actor.id }, select: { labourRateTetri: true } });
-    const rateTetri = me.labourRateTetri ?? LABOUR_RATE_TETRI;
+    const rateTetri = await rateOf(prisma, me);
 
     const open = await prisma.serviceJob.findFirst({
       where: { vehicleId, status: { in: ['open', 'draft'] } },

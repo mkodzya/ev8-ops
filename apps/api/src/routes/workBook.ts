@@ -1,9 +1,10 @@
-import { LABOUR_RATE_TETRI, nextWorkCode, normSecFromMinutes } from '@ev8/shared';
+import { nextWorkCode, normSecFromMinutes } from '@ev8/shared';
 import type { FastifyInstance } from 'fastify';
 import { audit } from '../lib/audit.js';
 import { prisma } from '../lib/db.js';
 import { badRequest, isUniqueViolation, notFound } from '../lib/errors.js';
 import { actorOf } from '../lib/guard.js';
+import { serviceSettings } from '../lib/serviceSettings.js';
 import { BOT_SOURCE } from '../lib/workBook.js';
 import { str } from '../lib/validate.js';
 
@@ -48,15 +49,16 @@ const nameless = (n: { nameKa?: string | null; nameRu?: string | null; nameEn?: 
 
 export function workBookRoutes(app: FastifyInstance): void {
   app.get('/api/work-book', { config: { scope: 'service.work' } }, async (req) => {
-    const [categories, works, me] = await Promise.all([
+    const [categories, works, me, settings] = await Promise.all([
       prisma.workCategory.findMany({ orderBy: [{ sortOrder: 'asc' }, { code: 'asc' }], select: { code: true, nameKa: true, nameRu: true, nameEn: true } }),
       prisma.workType.findMany({ orderBy: { code: 'asc' }, select: WORK }),
       prisma.user.findUnique({ where: { id: actorOf(req).id }, select: { labourRateTetri: true } }),
+      serviceSettings(),
     ]);
     // The mark on the screen: how much of the book is still the bot's, not yet set against the director's sheet.
     const fromBot = works.filter((w) => w.source === BOT_SOURCE).length;
     // The reader's own rate, so the screen can show a mechanic what the works he picks come to.
-    return { categories, works, fromBot, botSource: BOT_SOURCE, rateTetri: me?.labourRateTetri ?? LABOUR_RATE_TETRI };
+    return { categories, works, fromBot, botSource: BOT_SOURCE, rateTetri: me?.labourRateTetri ?? settings.defaultRateTetri };
   });
 
   app.post<{ Body: Body }>('/api/work-book/works', { config: { scope: 'service.norms' } }, async (req, reply) => {
