@@ -1,7 +1,7 @@
 import { KEY_FEE_TETRI, handOverActOf, readFleetNumber, todayISO } from '@ev8/shared';
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ApiError, api } from '../api.js';
+import { ApiError, api, markStale } from '../api.js';
 import { DocumentRow } from '../components/Documents.js';
 import { LoadError } from '../components/LoadError.js';
 import { PhotoPicker } from '../components/PhotoPicker.js';
@@ -208,7 +208,8 @@ export function SwapWizard() {
             inOdometerReason: inLower ? f.inOdometerReason.trim() : null,
             inCondition: f.inCondition.trim() || null,
           },
-          { key },
+          // Quiet, with the photos after it: every screen refetches once, when the last photo is in (QA 21.10.2026).
+          { key, quiet: true },
         )
         .catch((e: unknown) => {
           if (e instanceof ApiError && e.code === 'odometer_below' && typeof e.extra.lastKm === 'number') {
@@ -218,15 +219,20 @@ export function SwapWizard() {
           }
           throw e;
         });
-      drafts.drop();
-      if (!openJob && !toService && locationId) rememberPoint(locationId);
-      const total = outPhotos.length + inPhotos.length;
-      const failed = () => {
-        setPhotoTrouble(true);
-        return [];
-      };
-      await uploadAll(`/api/acts/${out.outActId}/photos`, outPhotos, (n) => setProgress(t.hand.photosUploading(n, total)), `${key}-out`).catch(failed);
-      await uploadAll(`/api/acts/${out.inActId}/photos`, inPhotos, (n) => setProgress(t.hand.photosUploading(outPhotos.length + n, total)), `${key}-in`).catch(failed);
+      try {
+        drafts.drop();
+        if (!openJob && !toService && locationId) rememberPoint(locationId);
+        const total = outPhotos.length + inPhotos.length;
+        const failed = () => {
+          setPhotoTrouble(true);
+          return [];
+        };
+        await uploadAll(`/api/acts/${out.outActId}/photos`, outPhotos, (n) => setProgress(t.hand.photosUploading(n, total)), `${key}-out`, { quiet: true }).catch(failed);
+        await uploadAll(`/api/acts/${out.inActId}/photos`, inPhotos, (n) => setProgress(t.hand.photosUploading(outPhotos.length + n, total)), `${key}-in`, { quiet: true }).catch(failed);
+      } finally {
+        // The swap is written whatever became of the photos: the screens learn of it now, once.
+        markStale();
+      }
       return out;
     });
     setProgress(null);

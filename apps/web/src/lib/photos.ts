@@ -3,7 +3,7 @@
 // 1600 px before it goes anywhere: the upload is a few hundred kilobytes and
 // the server never has to decode HEIC (Safari does that for us on the way
 // into the canvas).
-import { api } from '../api.js';
+import { api, markStale } from '../api.js';
 
 export const PHOTO_MAX_SIDE = 1600;
 export const PHOTO_QUALITY = 0.82;
@@ -68,19 +68,30 @@ export async function uploadFile(
   file: { name: string; mimeType: string; blob: Blob },
   extra: Record<string, unknown> = {},
   key?: string,
+  quiet = false,
 ): Promise<string> {
-  const { id } = await api.post<{ id: string }>(url, { mimeType: file.mimeType, label: file.name, dataBase64: await toBase64(file.blob), ...extra }, { key });
+  const { id } = await api.post<{ id: string }>(url, { mimeType: file.mimeType, label: file.name, dataBase64: await toBase64(file.blob), ...extra }, { key, quiet });
   return id;
 }
 
-/** Sequential, so a phone on a weak link is not asked to push four uploads at once. */
-export async function uploadAll(url: string, files: PreparedPhoto[], onDone?: (n: number) => void, key?: string): Promise<string[]> {
+/**
+ * Sequential, so a phone on a weak link is not asked to push four uploads at
+ * once. The photos mark the screens' data stale once, after the last of them
+ * (or after the one that failed) — not once each (QA 21.10.2026). `quiet`:
+ * not even then, because the caller has more of its batch to send and marks
+ * it stale itself.
+ */
+export async function uploadAll(url: string, files: PreparedPhoto[], onDone?: (n: number) => void, key?: string, opts: { quiet?: boolean } = {}): Promise<string[]> {
   const ids: string[] = [];
-  // With a key, each photo gets its own derived from it: a retry after a lost
-  // answer finds the ones already stored instead of storing them twice.
-  for (const [i, f] of files.entries()) {
-    ids.push(await uploadFile(url, f, {}, key ? `${key}-${i}` : undefined));
-    onDone?.(ids.length);
+  try {
+    // With a key, each photo gets its own derived from it: a retry after a lost
+    // answer finds the ones already stored instead of storing them twice.
+    for (const [i, f] of files.entries()) {
+      ids.push(await uploadFile(url, f, {}, key ? `${key}-${i}` : undefined, true));
+      onDone?.(ids.length);
+    }
+  } finally {
+    if (ids.length > 0 && !opts.quiet) markStale();
   }
   return ids;
 }
