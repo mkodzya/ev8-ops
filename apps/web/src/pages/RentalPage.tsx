@@ -337,7 +337,7 @@ export function RentalPage() {
 
       <section className="card">
         <BlockHead title={t.rentalMenu.documents} />
-        <DocumentRow rentalId={r.id} kind="contract" title={t.hand.contract} state={data.documents.contract} customerId={r.customer.id} onChanged={reload} />
+        <DocumentRow rentalId={r.id} kind="contract" title={t.hand.contract} state={data.documents.contract} customerId={r.customer.id} driveUrl={r.drive?.contractUrl} onChanged={reload} />
         {data.documents.returnAct && (
           <DocumentRow
             rentalId={r.id}

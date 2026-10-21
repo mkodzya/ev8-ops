@@ -948,7 +948,8 @@ function PickupDone({ id, number, photoTrouble }: { id: string; number: string; 
         {photoTrouble && <p className="warn-text">{t.hand.photosFailed}</p>}
       </section>
       <section className="card">
-        <DocumentRow rentalId={id} kind="contract" title={t.hand.contract} state={data.documents.contract} customerId={r.customer.id} onChanged={reload} />
+        {/* Signed in Signify rather than here: marked in one sheet right away (ADR-0039). */}
+        <DocumentRow rentalId={id} kind="contract" title={t.hand.contract} state={data.documents.contract} customerId={r.customer.id} driveUrl={r.drive?.contractUrl} onChanged={reload} />
       </section>
       <div className="row-actions">
         {phone && (

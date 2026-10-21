@@ -61,6 +61,10 @@ describe('two kinds of line', () => {
       expect(journalGroups(a), a).toEqual(['money']);
     }
   });
+
+  it('a contract marked signed in Signify, and the mark taken back, are events (ADR-0039)', () => {
+    for (const a of ['document.signed_elsewhere', 'document.signed_elsewhere.undo']) expect(journalKind(a), a).toBe('event');
+  });
 });
 
 describe('three looks at one personal number', () => {

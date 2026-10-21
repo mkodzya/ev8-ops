@@ -1,0 +1,3 @@
+/* The tracker on the moped's card (ADR-0036, addendum 21.10.2026): a number
+   and its one action on a line, centred on each other, wrapping on a phone. */
+.vtrack-line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space2); }

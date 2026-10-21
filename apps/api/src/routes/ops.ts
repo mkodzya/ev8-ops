@@ -1,19 +1,33 @@
-import { CONTACT_KINDS, CUSTOMER_KINDS, CUSTOMER_SOURCES, VEHICLE_POOLS, VEHICLE_STATES, isoWeekday, nameSpellings, normalizeVin, todayISO, vinFault } from '@ev8/shared';
+import { CONTACT_KINDS, CUSTOMER_KINDS, CUSTOMER_SOURCES, VEHICLE_POOLS, VEHICLE_STATES, isoWeekday, manualMoveRefusal, nameSpellings, normalizeVin, todayISO, trackerCorrection, trackerDayFault, trackerTails, vinFault, type ManualMoveRefusal, type VehicleState } from '@ev8/shared';
 import type { FastifyInstance } from 'fastify';
 import { audit } from '../lib/audit.js';
 import { hasPerm } from '../lib/auth.js';
 import { dateFromISO, isoDate } from '../lib/dates.js';
 import { prisma } from '../lib/db.js';
 import { env } from '../lib/env.js';
-import { badRequest, conflict, forbidden, isUniqueViolation, notFound } from '../lib/errors.js';
+import { badRequest, conflict, forbidden, isUniqueViolation, notFound, type ApiError } from '../lib/errors.js';
 import { actorOf } from '../lib/guard.js';
 import { date, int, oneOf, str, strList, tetri } from '../lib/validate.js';
 import { movePool, moveVehicle } from '../lib/vehicles.js';
+import { fitTracker, imeiInUse, imeiOpenElsewhere, readImeiOf, readSimOf, readTracker } from '../lib/trackers.js';
 
 type Body = Record<string, unknown>;
 
 /** How long a park move stays a slip that can be taken back rather than a decision. */
 const UNDO_WINDOW_MS = 10 * 60 * 1000;
+
+/**
+ * A move by hand refused, in the API's words (the screen has its own in
+ * `errors.codes`). Which refusal it is comes from the shared rule the sheet
+ * offers its states by, so the two cannot drift apart again.
+ */
+const MANUAL_MOVE_REFUSED: Record<ManualMoveRefusal, () => ApiError> = {
+  vehicle_rented_move: () => conflict('vehicle_rented_move', 'Close the rental first; a rented moped does not move by hand.'),
+  sold_by_sale: () => conflict('sold_by_sale', 'A moped is sold by a sale and comes back by a buy-back.'),
+  owner_only: () => forbidden('owner_only', 'A manager moves a moped between free and service.'),
+  use_rental: () => conflict('use_rental', 'A moped becomes rented through a hand-over, not by hand.'),
+  same_state: () => conflict('same_state', 'The moped is already in this state.'),
+};
 
 // Writes. Every one goes through the change journal.
 
@@ -204,13 +218,13 @@ export function opsRoutes(app: FastifyInstance): void {
     const occurredOn = date(b, 'occurredOn') ?? todayISO(new Date(), env.TZ);
     const v = await prisma.vehicle.findUnique({ where: { id: req.params.id } });
     if (!v) throw notFound('vehicle_not_found', 'No such moped.');
-    if (v.state === 'rented' && v.currentRentalId) throw conflict('vehicle_rented_move', 'Close the rental first; a rented moped does not move by hand.');
-    // Sold is what a sale says, not what a hand says; a buy-back brings it
-    // back. Writing one off is an owner's (Q22, §3.6).
-    if (toState === 'sold' || v.state === 'sold') throw conflict('sold_by_sale', 'A moped is sold by a sale and comes back by a buy-back.');
-    if (!hasPerm(actor, 'deposit.decide') && toState !== 'available' && toState !== 'service') {
-      throw forbidden('owner_only', 'A manager moves a moped between free and service.');
-    }
+    // One rule with the sheet that offers the states (manualMoveRefusal):
+    // a rented moped moves through its rental; sold is what a sale says, not
+    // what a hand says, and a buy-back brings it back; writing one off is an
+    // owner's (Q22, §3.6); and the state it is already in is no move at all —
+    // it used to be written as an X → X event with a reason (21.10.2026).
+    const refusal = manualMoveRefusal(v.state as VehicleState, toState, { mayWriteOff: hasPerm(actor, 'deposit.decide'), hasRental: !!v.currentRentalId });
+    if (refusal) throw MANUAL_MOVE_REFUSED[refusal]();
     const moved = await prisma.$transaction(async (tx) => {
       const m = await moveVehicle(tx, { vehicleId: v.id, kind: 'manual', occurredOn, actorId: actor.id, reason, toState });
       await tx.auditLog.create({ data: { actorId: actor.id, action: 'vehicle.state.manual', entityType: 'vehicle', entityId: v.id, before: { state: m.from }, after: { state: m.to }, note: reason } });
@@ -270,6 +284,73 @@ export function opsRoutes(app: FastifyInstance): void {
       });
     });
     return { pool: back };
+  });
+
+  // ---- fleet: the tracker already on a moped (ADR-0036, addendum 21.10.2026) ----
+  // An owner writes one that is on the moped without opening a repair, and
+  // corrects a digit typed wrong or a SIM changed. Whoever reads the IMEI on
+  // the card may write it (service.manage); the moped's journal, which
+  // managers read too, keeps the last four digits and no more (§7). Taking a
+  // tracker off stays the repair's: «снять трекер».
+  app.post<{ Params: { id: string }; Body: Body }>('/api/fleet/:id/tracker', { config: { scope: 'service.manage' } }, async (req, reply) => {
+    const b = req.body ?? {};
+    const actor = actorOf(req);
+    const v = await prisma.vehicle.findUnique({ where: { id: req.params.id }, select: { id: true, state: true, arrivedOn: true } });
+    if (!v) throw notFound('vehicle_not_found', 'No such moped.');
+    if (v.state === 'sold' || v.state === 'out') throw conflict('vehicle_gone', 'This moped has left the fleet; no tracker is written onto it.');
+    const { imei, simPhone } = readTracker(b);
+    const today = todayISO(new Date(), env.TZ);
+    // Not the day it was fitted, which nobody may know and which is never
+    // made up, but a day it was on the moped: today, unless somebody knows.
+    const on = date(b, 'installedOn') ?? today;
+    const lastOff = await prisma.vehicleTracker.findFirst({
+      where: { vehicleId: v.id, removedOn: { not: null } },
+      orderBy: { removedOn: 'desc' },
+      select: { removedOn: true },
+    });
+    const fault = trackerDayFault({ on, today, arrivedOn: isoDate(v.arrivedOn), lastRemovedOn: isoDate(lastOff?.removedOn) });
+    if (fault) throw badRequest('tracker_date_bad', 'A day the tracker was on the moped: not after today, not before the moped came or its last tracker came off.', { field: 'installedOn', fault });
+    await prisma.$transaction(async (tx) => {
+      await fitTracker(tx, { vehicleId: v.id, jobId: null, partId: null, servicePartId: null, donorVehicleId: null, imei, simPhone, on, actorId: actor.id, source: 'card' });
+      await tx.auditLog.create({
+        data: { actorId: actor.id, action: 'tracker.write', entityType: 'vehicle', entityId: v.id, after: { ...trackerTails({ imei, simPhone }), installedOn: on } },
+      });
+    });
+    return reply.code(201).send({ ok: true });
+  });
+
+  // The tracker on the moped now, whoever wrote it — a repair's too: a SIM
+  // changed is not a repair. The same numbers again change nothing and leave
+  // no line in the history.
+  app.patch<{ Params: { id: string }; Body: Body }>('/api/fleet/:id/tracker', { config: { scope: 'service.manage' } }, async (req) => {
+    const b = req.body ?? {};
+    const actor = actorOf(req);
+    const v = await prisma.vehicle.findUnique({ where: { id: req.params.id }, select: { id: true } });
+    if (!v) throw notFound('vehicle_not_found', 'No such moped.');
+    const asked = { imei: 'imei' in b ? readImeiOf(b) : null, simPhone: 'sim' in b ? readSimOf(b) : null };
+    if (asked.imei == null && asked.simPhone == null) throw badRequest('missing_field', 'Say the IMEI or the SIM number to correct.', { field: 'imei' });
+    const tracker = await prisma.vehicleTracker.findFirst({ where: { vehicleId: v.id, removedOn: null }, select: { id: true, imei: true, simPhone: true } });
+    if (!tracker) throw notFound('tracker_none', 'No tracker is on this moped.');
+    const change = trackerCorrection(tracker, asked);
+    if (!change) return { ok: true, changed: false };
+    if (change.imei) {
+      const elsewhere = await imeiOpenElsewhere(prisma, change.imei, tracker.id);
+      if (elsewhere) throw imeiInUse(elsewhere);
+    }
+    await prisma.$transaction(async (tx) => {
+      try {
+        await tx.vehicleTracker.update({ where: { id: tracker.id }, data: change });
+      } catch (e) {
+        // Another moped took this IMEI a moment ago: the database says so.
+        if (isUniqueViolation(e)) throw imeiInUse(null);
+        throw e;
+      }
+      const was = trackerTails({ imei: change.imei ? tracker.imei : null, simPhone: change.simPhone ? tracker.simPhone : null });
+      await tx.auditLog.create({
+        data: { actorId: actor.id, action: 'tracker.correct', entityType: 'vehicle', entityId: v.id, before: was, after: trackerTails(change) },
+      });
+    });
+    return { ok: true, changed: true };
   });
 
   // ---- reference data: mopeds (owner); models live in routes/models.ts ----

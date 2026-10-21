@@ -28,7 +28,10 @@ interface Rental {
   debtTetri: number;
   /** Of debtTetri: awaited today and not late — nought unless the rental is due today (ADR-0017). */
   dueTodayTetri: number;
-  /** Signed on the screen (wave 3 §3.2). Null: a rental brought over, which is not asked to. */
+  /**
+   * Signed on the screen (wave 3 §3.2) or marked signed in Signify (ADR-0039).
+   * Null: a rental brought over, or returned, which is not asked to.
+   */
   contractSigned?: boolean | null;
 }
 

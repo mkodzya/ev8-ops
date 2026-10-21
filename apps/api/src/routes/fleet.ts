@@ -1,4 +1,4 @@
-import { POOL_EVENT, VEHICLE_POOLS, VEHICLE_STATES, addDays, downtimeInPeriod, fleetNumber, mopedLegs, mopedSpan, readFleetNumber, repairTotalTetri, todayISO, type VehiclePool, type VehicleState } from '@ev8/shared';
+import { POOL_EVENT, VEHICLE_POOLS, VEHICLE_STATES, addDays, downtimeInPeriod, fleetNumber, mopedLegs, mopedSpan, parkOf, readFleetNumber, repairTotalTetri, serviceWhyOf, todayISO, type ParkKey, type VehicleState } from '@ev8/shared';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { MOPED_ACT, mopedActOf } from '../lib/acts.js';
 import { isoDate } from '../lib/dates.js';
@@ -30,27 +30,34 @@ export function fleetRoutes(app: FastifyInstance): void {
         // day it arrived — and for the mopeds Odoo never dated, nothing at
         // all, which the screen shows as a dash and not as a zero. A park move
         // is paper, not a ride: it does not break the silence.
+        // The same last event answers why a moped stands in service when no
+        // repair says so: a move by hand carries its reason (21.10.2026).
         events: {
           where: { kind: { notIn: Object.values(POOL_EVENT) } },
-          select: { occurredOn: true },
+          select: { occurredOn: true, kind: true, toState: true, reason: true },
           orderBy: [{ occurredOn: 'desc' }, { createdAt: 'desc' }],
           take: 1,
         },
         currentRental: {
           select: { id: true, number: true, paidThrough: true, customer: { select: { id: true, name: true, nameKa: true, nameLat: true } } },
         },
+        // The repair it is in, open or waiting for an owner — never more than
+        // one (`job_already_open`); `take` only keeps a broken row from
+        // doubling the answer.
+        serviceJobs: {
+          where: { status: { in: ['open', 'draft'] } },
+          select: { reasonKind: true, reason: true },
+          orderBy: [{ openedOn: 'desc' }, { createdAt: 'desc' }],
+          take: 1,
+        },
       },
     });
     const byState = Object.fromEntries(VEHICLE_STATES.map((s) => [s, 0])) as Record<VehicleState, number>;
     for (const v of vehicles) byState[v.state as VehicleState]++;
-    // Counted the way the screen groups them: a moped that has left the fleet
-    // is neither park's, and one nobody has decided on is its own answer.
-    const byPool = { ...Object.fromEntries(VEHICLE_POOLS.map((p) => [p, 0])), none: 0, gone: 0 } as Record<VehiclePool | 'none' | 'gone', number>;
-    for (const v of vehicles) {
-      if (v.state === 'sold' || v.state === 'out') byPool.gone++;
-      else if (v.pool) byPool[v.pool as VehiclePool]++;
-      else byPool.none++;
-    }
+    // Counted the way the screen groups them (`parkOf`): a moped that has left
+    // the fleet is neither park's, and one nobody has decided on is its own answer.
+    const byPool = { ...Object.fromEntries(VEHICLE_POOLS.map((p) => [p, 0])), none: 0, gone: 0 } as Record<ParkKey, number>;
+    for (const v of vehicles) byPool[parkOf(v)]++;
     return {
       byState,
       byPool,
@@ -78,6 +85,8 @@ export function fleetRoutes(app: FastifyInstance): void {
               customer: v.currentRental.customer,
             }
           : null,
+        // Why it stands in service, as recorded; null for every other state.
+        serviceWhy: serviceWhyOf(v.state, v.serviceJobs[0] ?? null, v.events[0] ?? null),
       })),
     };
   });
@@ -245,6 +254,8 @@ export function fleetRoutes(app: FastifyInstance): void {
             removedOn: isoDate(t.removedOn),
             job: t.serviceJob,
             removedJob: t.removedJob,
+            /** `card`: written by an owner on the moped's card, already on it, with no repair behind it (ADR-0036, addendum 21.10.2026). */
+            source: t.source,
           }))
         : null,
       /** What was taken off this moped for another, as a donor (ADR-0036). */

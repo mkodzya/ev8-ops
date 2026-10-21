@@ -1,9 +1,9 @@
-import { VEHICLE_POOLS, VEHICLE_STATES, isPoolEvent, localDateTime, type RentalStatus, type VehicleEventKind, type VehiclePool, type VehicleState } from '@ev8/shared';
+import { VEHICLE_POOLS, isPoolEvent, localDateTime, manualStateTargets, type RentalStatus, type VehicleEventKind, type VehiclePool, type VehicleState } from '@ev8/shared';
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api, ApiError } from '../api.js';
 import { LoadError } from '../components/LoadError.js';
-import { FormSheet } from '../ds/form/Form.js';
+import { FormSheet, useFieldError } from '../ds/form/Form.js';
 import { useOperation } from '../ds/form/operation.js';
 import { useToast } from '../ds/feedback/Toast.js';
 import { BlockHead, ColorText, Empty, FleetNo, Loading, PageHead, PlaceText, RentalBadge, StateBadge, Vin } from '../components/ui.js';
@@ -17,6 +17,7 @@ import { useLoad } from '../lib/use.js';
 import { useSession } from '../session.js';
 import { VehicleEconomics } from './EconomicsPage.js';
 import { NewJob } from './ServicePage.js';
+import { TrackerHistory, TrackerRows, type CardTracker } from './VehicleTracker.js';
 import { formatGel } from '../format.js';
 
 interface Card {
@@ -70,7 +71,7 @@ interface Card {
     withThisMoped?: { from: string; to: string | null; swappedIn: boolean; swappedOut: boolean } | null;
   }[];
   /** The tracker on it and the ones it had (ADR-0036); empty to whoever may not read an IMEI. */
-  trackers?: { id: string; imei: string; simPhone: string | null; installedOn: string; removedOn: string | null; job: { id: string; number: string } | null; removedJob: { id: string; number: string } | null }[] | null;
+  trackers?: CardTracker[] | null;
   /** What was taken off this moped for another, as a donor (ADR-0036). */
   donated?: { id: string; name: string; qty: number; on: string; job: { id: string; number: string }; to: { id: string; number: string | null; vin: string } }[];
   /** Corrections: what was changed by hand, from what to what, and why. */
@@ -83,10 +84,8 @@ export function VehiclePage() {
   const { locale } = useLocale();
   const { can } = useSession();
   const { data, failure, reload } = useLoad<Card>(id ? `/api/fleet/${id}` : null);
-  const [open, setOpen] = useState(false);
-  const [move, setMove] = useState<{ toState: VehicleState; reason: string }>({ toState: 'service', reason: '' });
-  // Writing a moped off is the one state change that is confirmed as well as explained (crit. 26).
-  const [writeOff, setWriteOff] = useState(false);
+  // The state sheet, open or not; «Вернуть в парк» opens it on «Свободен».
+  const [stateSheet, setStateSheet] = useState<{ prefer?: VehicleState } | null>(null);
   const [fixing, setFixing] = useState(false);
 
   if (failure) return <LoadError failure={failure} onRetry={reload} />;
@@ -94,13 +93,25 @@ export function VehiclePage() {
   const v = data.vehicle;
   const current = data.rentals.find((r) => r.id === v.currentRentalId) ?? null;
   const locked = v.state === 'rented' && !!v.currentRentalId;
+  // What the sheet may offer — the rule the server refuses by (21.10.2026).
+  // Empty for a moped out on a rental and for a sold one: nothing to open.
+  const targets = manualStateTargets(v.state, { mayWriteOff: can('deposit.decide'), hasRental: !!v.currentRentalId });
   const openJob = data.serviceJobs.find((j) => j.status === 'open') ?? null;
 
   // One action, and which one depends on where the moped is (U4). A card
   // that offers every verb makes the reader pick; a card that offers the
-  // next one makes the state readable from the button alone.
+  // next one makes the state readable from the button alone. A free moped of
+  // the sale park waits to be sold, so selling is its next step; renting it
+  // out moves it to the other park, which is an owner's decision, and steps
+  // back to a plain pill (21.10.2026). A manager gets no button here: the
+  // hand-over would refuse him (`vehicle_in_sale_pool`).
+  const forSale = v.state === 'available' && v.pool === 'sale';
   const primary: { label: string; to?: string; onClick?: () => void } | null =
-    v.state === 'available' && can('rental.create')
+    forSale
+      ? can('sales.manage')
+        ? { label: t.sales.newSale, to: `/sales/new?vehicle=${v.id}` }
+        : null
+      : v.state === 'available' && can('rental.create')
       ? { label: t.actions.newRental, to: `/rentals/new?vehicle=${v.id}` }
       : v.state === 'rented' && current && can('rental.return')
         ? { label: t.actions.returnRental, to: `/rentals/${current.id}/return` }
@@ -109,10 +120,7 @@ export function VehiclePage() {
           : v.state === 'service' && can('fleet.state.manual')
             ? {
                 label: t.vehicle.backToFleet,
-                onClick: () => {
-                  setMove({ ...move, toState: 'available' });
-                  setOpen(true);
-                },
+                onClick: () => setStateSheet({ prefer: 'available' }),
               }
             : null;
 
@@ -121,17 +129,29 @@ export function VehiclePage() {
       {/* The number people say and the sticker carries; the VIN goes to the card below (Mika, 15.10.2026). */}
       <PageHead wrap title={v.fleetNo ? <FleetNo n={v.fleetNo} /> : <Vin vin={v.vin} />} badge={<StateBadge state={v.state} />} sub={<Link to={`/fleet/models/${v.model.id}`}>{`${v.model.brand} ${v.model.name}`}</Link>}>
         {can('fleet.state.manual') && (
-          <button type="button" className="pill pill-sm" onClick={() => setOpen(true)} disabled={locked} title={locked ? t.vehicle.rentedLock : undefined}>
+          <button
+            type="button"
+            className="pill pill-sm"
+            onClick={() => setStateSheet({})}
+            disabled={targets.length === 0}
+            title={locked ? t.vehicle.rentedLock : v.state === 'sold' ? t.vehicleW4.soldNote : undefined}
+          >
             {t.actions.changeState}
           </button>
         )}
         {can('service.report') && v.state !== 'sold' && v.state !== 'out' && !data.serviceJobs.some((j) => j.status === 'open') && (
           <NewJob vehicleId={v.id} onDone={reload} />
         )}
-        {/* Selling starts from the moped as often as from the "+" (§3.1). */}
-        {v.state === 'available' && can('sales.manage') && (
+        {/* Selling starts from the moped as often as from the "+" (§3.1); on a
+            moped for sale the two trade places with the main button. */}
+        {v.state === 'available' && !forSale && can('sales.manage') && (
           <Link className="pill pill-sm" to={`/sales/new?vehicle=${v.id}`}>
             {t.sell.title}
+          </Link>
+        )}
+        {forSale && can('rental.create') && can('fleet.pool.set') && (
+          <Link className="pill pill-sm" to={`/rentals/new?vehicle=${v.id}`}>
+            {t.actions.newRental}
           </Link>
         )}
         {can('settings.manage') && <RowMenu actions={[{ key: 'vin', label: t.vinFix.title, onPick: () => setFixing(true) }]} />}
@@ -159,51 +179,7 @@ export function VehiclePage() {
         />
       )}
 
-      {open && (
-        <FormSheet
-          title={t.actions.changeState}
-          onClose={() => setOpen(false)}
-          value={move}
-          initial={{ toState: move.toState, reason: '' }}
-          label={t.vehicle.changeStateCta}
-          submit={async (key) => {
-            // A refusal the screen makes itself brings its own words to the
-            // box it is about: a code the error dictionary has never heard of
-            // would otherwise read as «Не получилось» (QA-W4-10).
-            if (move.toState === 'out' && !writeOff) {
-              throw new ApiError(400, 'missing_field', 'Write-off is not confirmed.', { field: 'writeOff', fieldText: t.vehicleW4.writeOffAsk });
-            }
-            await api.post(`/api/fleet/${v.id}/state`, move, { key });
-            return { toast: { text: t.vehicle.stateChanged(t.states[move.toState]) } };
-          }}
-          onDone={() => {
-            setMove({ ...move, reason: '' });
-            reload();
-          }}
-        >
-          <p className="hint muted">{t.vehicleW4.soldNote}</p>
-          <Field label={t.vehicle.toState} name="toState">
-            <div className="chips">
-              {VEHICLE_STATES.filter((s) => s !== 'rented' && s !== 'sold' && s !== v.state && (s !== 'out' || can('deposit.decide'))).map((s) => (
-                <button key={s} type="button" className={`pill pill-sm ${move.toState === s ? 'on' : ''}`} onClick={() => setMove({ ...move, toState: s })}>
-                  {t.states[s]}
-                </button>
-              ))}
-            </div>
-          </Field>
-          {move.toState === 'out' && (
-            <Field label={t.vehicleW4.writeOffTitle} name="writeOff">
-              <label className="check">
-                <input type="checkbox" checked={writeOff} onChange={(e) => setWriteOff(e.target.checked)} />
-                <span>{t.vehicleW4.writeOffConfirm}</span>
-              </label>
-            </Field>
-          )}
-          <Field label={t.vehicle.reason} hint={t.vehicle.reasonHint} name="reason">
-            <input className="input" value={move.reason} onChange={(e) => setMove({ ...move, reason: e.target.value })} />
-          </Field>
-        </FormSheet>
-      )}
+      {stateSheet && <StateSheet v={v} targets={targets} prefer={stateSheet.prefer} onClose={() => setStateSheet(null)} onDone={reload} />}
 
       {/* On a phone the one action lives at the bottom, over the tab bar,
           where a thumb already is (ux.md, principle 2). */}
@@ -235,6 +211,8 @@ export function VehiclePage() {
           <Row k={t.fleet.pool} v={<PoolRow v={v} onDone={reload} />} />
           <Row k={t.points.place} v={<PlaceRow v={v} onDone={reload} />} />
           <Row k={t.vehicle.odometer} v={<span className="mono">{v.odometerKm ?? t.common.dash}</span>} />
+          {/* The tracker's IMEI and SIM: the owners' (ADR-0036 §7), written here without a repair (addendum 21.10.2026). */}
+          {data.trackers && <TrackerRows v={v} trackers={data.trackers} onDone={reload} />}
           {v.costTetri != null && (
             <Row
               k={t.purchases.cost}
@@ -341,7 +319,7 @@ export function VehiclePage() {
         )}
       </section>
 
-      {data.trackers && data.trackers.length > 0 && <TrackerBlock trackers={data.trackers} />}
+      {data.trackers && <TrackerHistory trackers={data.trackers} />}
       {(data.donated?.length ?? 0) > 0 && (
         <section className="card">
           <BlockHead title={t.wparts.donatedBlock} sub={t.wparts.lines(data.donated!.length)} />
@@ -459,6 +437,96 @@ function PlaceRow({ v, onDone }: { v: Card['vehicle']; onDone: () => void }) {
 }
 
 /**
+ * A moped's state by hand (FLT-03, wave 4 §3.6): the state it is in now, then
+ * the ones it may go to — the list the server accepts (manualStateTargets),
+ * so nothing is offered only to be refused. Each opening starts afresh on the
+ * first state on offer: a sheet that kept the last choice once held the state
+ * the moped had just been moved to, lit nowhere, and sent it (21.10.2026).
+ */
+function StateSheet({ v, targets, prefer, onClose, onDone }: { v: Card['vehicle']; targets: VehicleState[]; prefer?: VehicleState; onClose: () => void; onDone: () => void }) {
+  const t = useT();
+  const first = prefer && targets.includes(prefer) ? prefer : (targets[0] ?? null);
+  const [move, setMove] = useState<{ toState: VehicleState | null; reason: string }>({ toState: first, reason: '' });
+  // Writing a moped off is the one state change that is confirmed as well as explained (crit. 26).
+  const [writeOff, setWriteOff] = useState(false);
+  // A choice the list no longer holds — the card reloaded under the sheet — is no choice at all.
+  const toState = move.toState && targets.includes(move.toState) ? move.toState : null;
+  return (
+    <FormSheet
+      title={t.actions.changeState}
+      onClose={onClose}
+      value={move}
+      initial={{ toState: move.toState, reason: '' }}
+      label={t.vehicle.changeStateCta}
+      // The server's «already in this state» is about the choice, so it stands under it.
+      fieldOf={{ same_state: 'toState' }}
+      submit={async (key) => {
+        // A refusal the screen makes itself brings its own words to the
+        // box it is about: a code the error dictionary has never heard of
+        // would otherwise read as «Не получилось» (QA-W4-10).
+        if (!toState) throw new ApiError(400, 'missing_field', 'No state is chosen.', { field: 'toState' });
+        if (toState === 'out' && !writeOff) {
+          throw new ApiError(400, 'missing_field', 'Write-off is not confirmed.', { field: 'writeOff', fieldText: t.vehicleW4.writeOffAsk });
+        }
+        await api.post(`/api/fleet/${v.id}/state`, { toState, reason: move.reason }, { key });
+        return { toast: { text: t.vehicle.stateChanged(t.states[toState]) } };
+      }}
+      onDone={onDone}
+    >
+      <StatePick now={v.state} targets={targets} value={toState} onPick={(s) => setMove({ ...move, toState: s })} />
+      {toState === 'out' && (
+        <Field label={t.vehicleW4.writeOffTitle} name="writeOff">
+          <label className="check">
+            <input type="checkbox" checked={writeOff} onChange={(e) => setWriteOff(e.target.checked)} />
+            <span>{t.vehicleW4.writeOffConfirm}</span>
+          </label>
+        </Field>
+      )}
+      <Field label={t.vehicle.reason} hint={t.vehicle.reasonHint} name="reason">
+        <input className="input" value={move.reason} onChange={(e) => setMove({ ...move, reason: e.target.value })} />
+      </Field>
+    </FormSheet>
+  );
+}
+
+/**
+ * «◆ В сервисе · сейчас → [Свободен] [Списан]» (variant A, Mika 21.10.2026).
+ * The state it is in is the same badge as in the head of the card and in the
+ * list (ux.md, principle 9), and it is not a button: it is never a choice. A
+ * plain block rather than a <Field>, whose <label> would hand a tap on the
+ * badge to the first pill. Sold and rented are never on offer; the line
+ * under the pills says why.
+ */
+function StatePick({ now, targets, value, onPick }: { now: VehicleState; targets: VehicleState[]; value: VehicleState | null; onPick: (s: VehicleState) => void }) {
+  const t = useT();
+  const error = useFieldError('toState');
+  return (
+    <div className={`field ${error ? 'field-bad' : ''}`} data-field="toState">
+      <span className="lbl">{t.fleet.state}</span>
+      <div className="state-pick">
+        <span className="state-now" aria-current="true">
+          <StateBadge state={now} />
+          <span className="muted">{t.stateSheet.now}</span>
+        </span>
+        <span className="state-to">
+          <span className="muted" aria-hidden="true">
+            →
+          </span>
+          <span className="chips" role="radiogroup" aria-label={t.vehicle.toState}>
+            {targets.map((s) => (
+              <button key={s} type="button" role="radio" aria-checked={value === s} className={`pill pill-sm ${value === s ? 'on' : ''}`} onClick={() => onPick(s)}>
+                {t.states[s]}
+              </button>
+            ))}
+          </span>
+        </span>
+      </div>
+      {error ? <span className="field-err">{error}</span> : <span className="hint muted">{t.vehicleW4.soldNote}</span>}
+    </div>
+  );
+}
+
+/**
  * Which park this moped is in, and the one click that moves it to the other.
  * A moped that has left the fleet is in neither, and says so; deciding what a
  * sold moped is for would be a decision about somebody else's property.
@@ -529,45 +597,6 @@ function VinSheet({ id, vin, onClose, onDone }: { id: string; vin: string; onClo
         <input className="input" value={f.reason} onChange={(e) => setF({ ...f, reason: e.target.value })} />
       </Field>
     </FormSheet>
-  );
-}
-
-/** The tracker on the moped now, then the ones it had (ADR-0036): what to look for when it is stolen. */
-function TrackerBlock({ trackers }: { trackers: NonNullable<Card['trackers']> }) {
-  const t = useT();
-  const now = trackers.find((x) => x.removedOn == null) ?? null;
-  const before = trackers.filter((x) => x.removedOn != null);
-  return (
-    <section className="card">
-      <BlockHead title={t.wparts.trackerBlock} />
-      {now ? (
-        <dl className="wjob-kv">
-          <dt>{t.wparts.imeiLabel}</dt>
-          <dd className="mono">{now.imei.replace(/(\d{3})(?=\d)/g, '$1 ')}</dd>
-          <dt>{t.wparts.simLabel}</dt>
-          <dd className="mono">{now.simPhone ?? '—'}</dd>
-          <dt>{t.wparts.trackerSince}</dt>
-          <dd>
-            {fmtDate(now.installedOn)}
-            {now.job && (
-              <>
-                {' · '}
-                <Link to={`/service/${now.job.id}`} className="mono">
-                  {now.job.number}
-                </Link>
-              </>
-            )}
-          </dd>
-        </dl>
-      ) : (
-        <Empty text={t.wparts.noTrackerCard} />
-      )}
-      {before.map((x) => (
-        <p key={x.id} className="hint muted">
-          {t.wparts.trackerEarlier(x.imei.slice(-4), fmtDate(x.installedOn), fmtDate(x.removedOn))}
-        </p>
-      ))}
-    </section>
   );
 }
 

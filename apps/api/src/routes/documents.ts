@@ -7,7 +7,9 @@ import { hasPerm } from '../lib/auth.js';
 import { isoDate } from '../lib/dates.js';
 import { prisma } from '../lib/db.js';
 import { conflict, notFound } from '../lib/errors.js';
+import { driveOfRental } from '../lib/driveScan.js';
 import { actorOf } from '../lib/guard.js';
+import { str } from '../lib/validate.js';
 import { renderContract } from '../lib/pdf/contract.js';
 import type { DrawnSignature } from '../lib/pdf/layout.js';
 import { contractGaps } from './rentals.js';
@@ -350,6 +352,94 @@ export function signRoutes(app: FastifyInstance): void {
       },
     );
   }
+
+  /**
+   * "Подписан в Signify" (ADR-0039): the contract was signed outside EV8 Ops —
+   * in Signify, or on paper — and a person says so. From then on nobody is
+   * asked to sign it here: neither the list's "Не подписан" nor "Today" counts
+   * it. Nothing is read from Drive to decide it (ADR-0034 §5); the Drive
+   * contract, if one is filed, goes into the journal beside the mark as what
+   * the person had in front of them. Whoever hands a moped over may mark it.
+   */
+  app.post<{ Params: { id: string }; Body: Record<string, unknown> }>(
+    '/api/rentals/:id/contract/signed-elsewhere',
+    { config: { scope: 'rental.create' } },
+    async (req, reply) => {
+      const actor = actorOf(req);
+      const note = str(req.body ?? {}, 'note', { max: 500 });
+      const rental = await prisma.rental.findUnique({
+        where: { id: req.params.id },
+        select: {
+          id: true,
+          contractSignedElsewhereAt: true,
+          documents: { where: { kind: 'pdf', docKind: 'contract', archived: false, signedAt: { not: null } }, select: { id: true } },
+        },
+      });
+      if (!rental) throw notFound('rental_not_found', 'No such rental.');
+      if (rental.documents.length > 0 || rental.contractSignedElsewhereAt) throw conflict('already_signed', 'The contract is signed already, here or in Signify.');
+      const drive = await driveOfRental(rental.id);
+      const at = new Date();
+      await prisma.$transaction(async (tx) => {
+        // One mark, however many phones press at once: only an unmarked rental is marked.
+        const marked = await tx.rental.updateMany({
+          where: { id: rental.id, contractSignedElsewhereAt: null },
+          data: { contractSignedElsewhereAt: at, contractSignedElsewhereById: actor.id, contractSignedElsewhereNote: note },
+        });
+        if (marked.count === 0) throw conflict('already_signed', 'The contract is signed already, here or in Signify.');
+        await tx.auditLog.create({
+          data: {
+            actorId: actor.id,
+            action: 'document.signed_elsewhere',
+            entityType: 'rental',
+            entityId: rental.id,
+            after: { docKind: 'contract', driveContractUrl: drive?.contractUrl ?? null },
+            note,
+          },
+        });
+      });
+      return reply.code(201).send({ signedElsewhereAt: at.toISOString() });
+    },
+  );
+
+  /**
+   * The mark taken back — an owner's, with a reason (ADR-0039): marked on the
+   * wrong rental, or the Signify contract turned out unsigned. The contract is
+   * asked for again; the journal keeps who marked it and when.
+   */
+  app.post<{ Params: { id: string }; Body: Record<string, unknown> }>(
+    '/api/rentals/:id/contract/signed-elsewhere/undo',
+    { config: { scope: 'deposit.decide' } },
+    async (req) => {
+      const actor = actorOf(req);
+      const reason = str(req.body ?? {}, 'reason', { max: 500 });
+      if (!reason) throw badRequest('missing_field', 'Say why the mark is taken back.', { field: 'reason' });
+      const rental = await prisma.rental.findUnique({
+        where: { id: req.params.id },
+        select: { id: true, contractSignedElsewhereAt: true, contractSignedElsewhereById: true, contractSignedElsewhereNote: true },
+      });
+      if (!rental) throw notFound('rental_not_found', 'No such rental.');
+      const markedAt = rental.contractSignedElsewhereAt;
+      if (!markedAt) throw conflict('contract_not_marked', 'The contract is not marked signed in Signify.');
+      await prisma.$transaction(async (tx) => {
+        const undone = await tx.rental.updateMany({
+          where: { id: rental.id, contractSignedElsewhereAt: markedAt },
+          data: { contractSignedElsewhereAt: null, contractSignedElsewhereById: null, contractSignedElsewhereNote: null },
+        });
+        if (undone.count === 0) throw conflict('contract_not_marked', 'The contract is not marked signed in Signify.');
+        await tx.auditLog.create({
+          data: {
+            actorId: actor.id,
+            action: 'document.signed_elsewhere.undo',
+            entityType: 'rental',
+            entityId: rental.id,
+            before: { docKind: 'contract', markedAt: markedAt.toISOString(), markedById: rental.contractSignedElsewhereById, markNote: rental.contractSignedElsewhereNote },
+            note: reason,
+          },
+        });
+      });
+      return { ok: true };
+    },
+  );
 }
 
 function sendPdf(reply: FastifyReply, name: string, bytes: Buffer) {

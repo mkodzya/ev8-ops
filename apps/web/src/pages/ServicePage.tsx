@@ -93,8 +93,12 @@ export interface ServiceJob {
   notes: string | null;
   /** True when this job is what took the moped out of the yard: only then does closing bring it back. */
   movedVehicle: boolean;
-  /** The tracker on the moped now, if any (ADR-0036). */
-  vehicle: { id: string; vin: string; number: string | null; model: string; tracker: TrackerRow | null };
+  /**
+   * The tracker on the moped now, if any (ADR-0036); `fromShelf` — whether it
+   * came off a shelf (one written on the moped's card did not), absent while an
+   * older API answers.
+   */
+  vehicle: { id: string; vin: string; number: string | null; model: string; tracker: (TrackerRow & { fromShelf?: boolean }) | null };
   rental: { id: string; number: string } | null;
   customer: { id: string; name: string; nameKa: string | null; nameLat: string | null } | null;
   parts: ServiceJobPart[];
@@ -406,6 +410,10 @@ export function NewJob({ vehicleId, onDone }: { vehicleId?: string; onDone: () =
   // Only a moped that is out with somebody can be repaired at their expense.
   const rented = chosen?.state === 'rented';
   const label = mayManage ? t.repair.newJob : t.repair.report;
+  // A draft may remember a workshop taken off the list since: the select then
+  // says «не указана», and that is what is sent — what is seen is what goes.
+  const offered = workshops.data?.workshops;
+  const workshopId = offered && !offered.some((w) => w.id === f.workshopId) ? '' : f.workshopId;
 
   return (
     <>
@@ -428,7 +436,7 @@ export function NewJob({ vehicleId, onDone }: { vehicleId?: string; onDone: () =
               {
                 vehicleId: f.vehicleId || vehicleId,
                 reason: f.reason,
-                ...(mayManage ? { workshopId: f.workshopId || null, payer: rented ? f.payer : 'company' } : {}),
+                ...(mayManage ? { workshopId: workshopId || null, payer: rented ? f.payer : 'company' } : {}),
               },
               { key },
             );
@@ -475,7 +483,7 @@ export function NewJob({ vehicleId, onDone }: { vehicleId?: string; onDone: () =
           {mayManage && (
             <>
               <Field label={t.repair.workshop} name="workshopId">
-                <select className="input" value={f.workshopId} onChange={(e) => setF({ ...f, workshopId: e.target.value })}>
+                <select className="input" value={workshopId} onChange={(e) => setF({ ...f, workshopId: e.target.value })}>
                   <option value="">{t.repair.workshopNone}</option>
                   {(workshops.data?.workshops ?? []).map((w) => (
                     <option key={w.id} value={w.id}>
@@ -484,6 +492,15 @@ export function NewJob({ vehicleId, onDone }: { vehicleId?: string; onDone: () =
                   ))}
                 </select>
               </Field>
+              {/* The list is kept in one place (session default for task #1 of 21.10.2026);
+                  what is typed here waits in the draft and comes back. */}
+              {can('settings.manage') && (
+                <p className="hint">
+                  <Link className="muted" to="/settings/repair">
+                    {t.wshop.editList}
+                  </Link>
+                </p>
+              )}
               {rented && (
                 <>
                   <p className="hint muted">{t.repair.rentedNote}</p>
