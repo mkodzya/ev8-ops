@@ -1,5 +1,6 @@
-import { POOL_EVENT, VEHICLE_POOLS, VEHICLE_STATES, addDays, downtimeInPeriod, fleetNumber, readFleetNumber, repairTotalTetri, todayISO, type VehiclePool, type VehicleState } from '@ev8/shared';
+import { POOL_EVENT, VEHICLE_POOLS, VEHICLE_STATES, addDays, downtimeInPeriod, fleetNumber, mopedLegs, mopedSpan, parkOf, readFleetNumber, repairTotalTetri, serviceWhyOf, todayISO, type ParkKey, type VehicleState } from '@ev8/shared';
 import type { FastifyInstance, FastifyReply } from 'fastify';
+import { MOPED_ACT, mopedActOf } from '../lib/acts.js';
 import { isoDate } from '../lib/dates.js';
 import { prisma } from '../lib/db.js';
 import { PART_MONEY, WORK_MONEY } from '../lib/stock.js';
@@ -29,27 +30,34 @@ export function fleetRoutes(app: FastifyInstance): void {
         // day it arrived — and for the mopeds Odoo never dated, nothing at
         // all, which the screen shows as a dash and not as a zero. A park move
         // is paper, not a ride: it does not break the silence.
+        // The same last event answers why a moped stands in service when no
+        // repair says so: a move by hand carries its reason (21.10.2026).
         events: {
           where: { kind: { notIn: Object.values(POOL_EVENT) } },
-          select: { occurredOn: true },
+          select: { occurredOn: true, kind: true, toState: true, reason: true },
           orderBy: [{ occurredOn: 'desc' }, { createdAt: 'desc' }],
           take: 1,
         },
         currentRental: {
           select: { id: true, number: true, paidThrough: true, customer: { select: { id: true, name: true, nameKa: true, nameLat: true } } },
         },
+        // The repair it is in, open or waiting for an owner — never more than
+        // one (`job_already_open`); `take` only keeps a broken row from
+        // doubling the answer.
+        serviceJobs: {
+          where: { status: { in: ['open', 'draft'] } },
+          select: { reasonKind: true, reason: true },
+          orderBy: [{ openedOn: 'desc' }, { createdAt: 'desc' }],
+          take: 1,
+        },
       },
     });
     const byState = Object.fromEntries(VEHICLE_STATES.map((s) => [s, 0])) as Record<VehicleState, number>;
     for (const v of vehicles) byState[v.state as VehicleState]++;
-    // Counted the way the screen groups them: a moped that has left the fleet
-    // is neither park's, and one nobody has decided on is its own answer.
-    const byPool = { ...Object.fromEntries(VEHICLE_POOLS.map((p) => [p, 0])), none: 0, gone: 0 } as Record<VehiclePool | 'none' | 'gone', number>;
-    for (const v of vehicles) {
-      if (v.state === 'sold' || v.state === 'out') byPool.gone++;
-      else if (v.pool) byPool[v.pool as VehiclePool]++;
-      else byPool.none++;
-    }
+    // Counted the way the screen groups them (`parkOf`): a moped that has left
+    // the fleet is neither park's, and one nobody has decided on is its own answer.
+    const byPool = { ...Object.fromEntries(VEHICLE_POOLS.map((p) => [p, 0])), none: 0, gone: 0 } as Record<ParkKey, number>;
+    for (const v of vehicles) byPool[parkOf(v)]++;
     return {
       byState,
       byPool,
@@ -77,6 +85,8 @@ export function fleetRoutes(app: FastifyInstance): void {
               customer: v.currentRental.customer,
             }
           : null,
+        // Why it stands in service, as recorded; null for every other state.
+        serviceWhy: serviceWhyOf(v.state, v.serviceJobs[0] ?? null, v.events[0] ?? null),
       })),
     };
   });
@@ -122,10 +132,6 @@ export function fleetRoutes(app: FastifyInstance): void {
         model: true,
         location: { select: { id: true, name: true } },
         events: { orderBy: [{ occurredOn: 'asc' }, { createdAt: 'asc' }], include: { actor: { select: { name: true } } } },
-        rentals: {
-          orderBy: { pickedUpOn: 'desc' },
-          include: { customer: { select: { id: true, name: true, nameKa: true, nameLat: true } } },
-        },
         serviceJobs: {
           orderBy: { openedOn: 'desc' },
           include: { parts: { select: PART_MONEY }, works: { select: WORK_MONEY } },
@@ -141,6 +147,14 @@ export function fleetRoutes(app: FastifyInstance): void {
       },
     });
     if (!v) throw notFound('vehicle_not_found', 'No such vehicle.');
+    // Its rentals: the one it is in now and every one it was ever in — after
+    // a swap the rental has another moped, and this one keeps its part of it
+    // (ADR-0040). Its acts say from when to when it was with the customer.
+    const rentals = await prisma.rental.findMany({
+      where: { OR: [{ vehicleId: v.id }, { acts: { some: { vehicleId: v.id } } }] },
+      orderBy: { pickedUpOn: 'desc' },
+      include: { customer: { select: { id: true, name: true, nameKa: true, nameLat: true } }, acts: { select: MOPED_ACT } },
+    });
     // What it cost is still moving while its shipment is unpaid (§7, QA-W5-11).
     const order = v.purchaseId ? (await preliminaryOf([v.purchaseId])).get(v.purchaseId) ?? null : null;
     // Corrections live in the journal and nowhere else, so until now a VIN
@@ -207,17 +221,27 @@ export function fleetRoutes(app: FastifyInstance): void {
         totalTetri: mayView(req, 'cost.view') ? repairTotalTetri(j) : null,
         withheldTetri: mayView(req, 'cost.view') ? j.withheldTetri : null,
       })),
-      rentals: v.rentals.map((r) => ({
-        id: r.id,
-        number: r.number,
-        // As the rentals list calls it — never the stored status (ADR-0017).
-        status: rentStateOf(r, today).status,
-        customer: r.customer,
-        pickedUpOn: isoDate(r.pickedUpOn),
-        returnedOn: isoDate(r.returnedOn),
-        paidThrough: isoDate(r.paidThrough),
-        weeklyRateTetri: r.weeklyRateTetri,
-      })),
+      rentals: rentals
+        .map((r) => {
+          const span = mopedSpan(mopedLegs(r.acts.map(mopedActOf), r.vehicleId), v.id);
+          return {
+            id: r.id,
+            number: r.number,
+            // As the rentals list calls it — never the stored status (ADR-0017).
+            status: rentStateOf(r, today).status,
+            customer: r.customer,
+            pickedUpOn: isoDate(r.pickedUpOn),
+            returnedOn: isoDate(r.returnedOn),
+            paidThrough: isoDate(r.paidThrough),
+            weeklyRateTetri: r.weeklyRateTetri,
+            // This moped's part of a rental a swap went through (ADR-0040): from
+            // when to when it was with the customer, and which end the swap was.
+            // Null for a rental that had this moped and no other.
+            withThisMoped: span && (span.swappedIn || span.swappedOut) ? span : null,
+          };
+        })
+        // The latest first, by the day this moped went out in it.
+        .sort((a, b) => (b.withThisMoped?.from ?? b.pickedUpOn ?? '').localeCompare(a.withThisMoped?.from ?? a.pickedUpOn ?? '')),
       // The tracker on it now first, then the ones it had (ADR-0036). The IMEI
       // and the SIM are what is searched for when a moped is stolen: the
       // owners' to read, not a manager's.
@@ -230,6 +254,8 @@ export function fleetRoutes(app: FastifyInstance): void {
             removedOn: isoDate(t.removedOn),
             job: t.serviceJob,
             removedJob: t.removedJob,
+            /** `card`: written by an owner on the moped's card, already on it, with no repair behind it (ADR-0036, addendum 21.10.2026). */
+            source: t.source,
           }))
         : null,
       /** What was taken off this moped for another, as a donor (ADR-0036). */

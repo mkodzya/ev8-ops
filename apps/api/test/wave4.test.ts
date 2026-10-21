@@ -131,6 +131,49 @@ describe.skipIf(!HAS_DB)('wave 4 · a moped’s state by role (§3.6)', () => {
     const off = await call(owner, 'POST', `/api/fleet/${vehicle.id}/state`, { toState: 'out', reason: 'ТЕСТ: после аварии' });
     expect(off.statusCode, off.body).toBe(200);
   });
+
+  it('refuses the state the moped is already in, and writes nothing (21.10.2026)', async () => {
+    const { prisma, vehicle } = await fixtures();
+    const manager = await loginAs('manager');
+    const toService = await call(manager, 'POST', `/api/fleet/${vehicle.id}/state`, { toState: 'service', reason: 'ТЕСТ: не заводится' });
+    expect(toService.statusCode, toService.body).toBe(200);
+    const events = await prisma.vehicleEvent.count({ where: { vehicleId: vehicle.id } });
+    const audits = await prisma.auditLog.count({ where: { entityType: 'vehicle', entityId: vehicle.id } });
+
+    // Before, this was written as a «service → service» event with a reason.
+    const again = await call(manager, 'POST', `/api/fleet/${vehicle.id}/state`, { toState: 'service', reason: 'ТЕСТ: ещё раз' });
+    expect(again.statusCode, again.body).toBe(409);
+    expect(json<{ error: string }>(again).error).toBe('same_state');
+    const owner = await loginAs('owner');
+    expect(json<{ error: string }>(await call(owner, 'POST', `/api/fleet/${vehicle.id}/state`, { toState: 'service', reason: 'ТЕСТ' })).error).toBe('same_state');
+
+    expect(await prisma.vehicleEvent.count({ where: { vehicleId: vehicle.id } })).toBe(events);
+    expect(await prisma.auditLog.count({ where: { entityType: 'vehicle', entityId: vehicle.id } })).toBe(audits);
+    expect((await prisma.vehicle.findUniqueOrThrow({ where: { id: vehicle.id } })).state).toBe('service');
+  });
+
+  it('a manager still brings a written-off moped back: who may do what did not change (Mika, 21.10.2026)', async () => {
+    const { vehicle } = await fixtures();
+    const owner = await loginAs('owner');
+    const off = await call(owner, 'POST', `/api/fleet/${vehicle.id}/state`, { toState: 'out', reason: 'ТЕСТ: после аварии' });
+    expect(off.statusCode, off.body).toBe(200);
+    const manager = await loginAs('manager');
+    const back = await call(manager, 'POST', `/api/fleet/${vehicle.id}/state`, { toState: 'available', reason: 'ТЕСТ: восстановили' });
+    expect(back.statusCode, back.body).toBe(200);
+    expect(json<{ from: string; to: string }>(back)).toEqual({ from: 'out', to: 'available' });
+  });
+
+  it('a sold moped takes no state by hand, whoever asks — the sheet offers it none', async () => {
+    const { prisma, vehicle } = await fixtures();
+    // A test moped marked sold directly: the sale itself is not what is tested here.
+    await prisma.vehicle.update({ where: { id: vehicle.id }, data: { state: 'sold' } });
+    const owner = await loginAs('owner');
+    const manager = await loginAs('manager');
+    for (const toState of ['available', 'service', 'out']) {
+      expect(json<{ error: string }>(await call(owner, 'POST', `/api/fleet/${vehicle.id}/state`, { toState, reason: 'ТЕСТ' })).error).toBe('sold_by_sale');
+    }
+    expect(json<{ error: string }>(await call(manager, 'POST', `/api/fleet/${vehicle.id}/state`, { toState: 'available', reason: 'ТЕСТ' })).error).toBe('sold_by_sale');
+  });
 });
 
 describe.skipIf(!HAS_DB)('wave 4 · the customer card (§3.5)', () => {

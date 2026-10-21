@@ -1,0 +1,144 @@
+<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Изменить состояние мопеда — вариант А · EV8 Ops, прототип</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=Inter:wght@400;500;600&family=Noto+Sans+Georgian:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+/* Static prototype: no JavaScript (Mika's viewer runs none). Colours are the
+   product's tokens (packages/shared/tokens.json). Fleet numbers, models and
+   reasons are invented examples. */
+:root { --bg:#fbfbfb; --surface:#fff; --surface-2:#f3f3f3; --ink:#0b0b0b; --muted:#5d5d5d; --line:#dbe4de; --line-soft:#ebebeb; --line-control:#7a7a7a; --accent:#557553; --accent-soft:#e3ebe3; --accent-ink:#4d6a4b; --lime:#e0ffa2; --crit:#c8402f; --crit-soft:#f9e3df; --crit-ink:#b3392a; --warn-soft:#fdeadf; --service-deep:#b2450f; --info-soft:#e4ecfb; --rented-ink:#2f63c0; --grey-ink:#666; --toast:#0b0b0b;
+  --sans:"Be Vietnam Pro","Inter","Noto Sans Georgian",system-ui,sans-serif; --mono:"IBM Plex Mono","Noto Sans Georgian",ui-monospace,monospace; }
+* { box-sizing:border-box; }
+body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.5 var(--sans); }
+main { max-width:1240px; margin:0 auto; padding:32px 16px 64px; }
+h1 { font-size:28px; line-height:1.2; margin:0 0 8px; font-weight:500; letter-spacing:-.02em; }
+h2 { font-size:21px; margin:40px 0 4px; font-weight:500; letter-spacing:-.02em; }
+.lead { color:var(--muted); margin:0 0 8px; max-width:860px; }
+.demo { display:inline-block; font-size:12px; font-weight:600; padding:2px 10px; border-radius:99px; background:var(--lime); margin-right:8px; vertical-align:middle; }
+.common { background:var(--surface); border:1px solid var(--line-soft); border-radius:16px; padding:14px 18px; margin-top:16px; max-width:1000px; }
+.common ul { margin:6px 0 0; padding-left:20px; } .common li { margin:4px 0; }
+.row { display:flex; flex-wrap:wrap; gap:22px; margin-top:16px; align-items:flex-start; }
+.cap { font-size:13px; color:var(--muted); margin:8px 0 0; max-width:375px; }
+.cap b { color:var(--ink); font-weight:600; }
+code { font-family:var(--mono); font-size:13px; background:var(--surface-2); padding:1px 5px; border-radius:4px; }
+.ka { font-family:"Noto Sans Georgian","Be Vietnam Pro",sans-serif; }
+
+/* a phone at 1:1 — the sheet comes up from the bottom over the card */
+.phone { width:375px; border-radius:28px; background:rgba(11,11,11,.42); padding:120px 0 0; overflow:hidden; box-shadow:0 2px 14px rgba(0,0,0,.18); }
+.sheet { background:var(--surface); border-radius:22px 22px 0 0; padding:14px 16px 22px; }
+.grab { width:40px; height:4px; border-radius:99px; background:var(--line); margin:0 auto 12px; }
+.sh-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; }
+.sh-head b { font-size:19px; font-weight:500; letter-spacing:-.01em; }
+.x { width:44px; height:44px; border-radius:50%; border:1px solid var(--line-control); display:flex; align-items:center; justify-content:center; font-size:20px; }
+.field { margin-bottom:14px; }
+.lbl { display:block; font:400 13px/1.4 var(--sans); color:var(--muted); margin-bottom:6px; }
+.hint { display:block; font:400 13px/1.4 var(--sans); color:var(--muted); margin-top:6px; }
+.err { display:block; font:400 13px/1.4 var(--sans); color:var(--crit-ink); margin-top:6px; }
+.input { min-height:44px; border:1px solid var(--line-control); border-radius:12px; padding:10px 14px; background:var(--surface); }
+.check { display:flex; gap:10px; align-items:flex-start; font-size:14px; }
+.box { width:20px; height:20px; border:1.5px solid var(--line-control); border-radius:4px; flex:none; margin-top:1px; }
+.submit { min-height:52px; border-radius:99px; background:var(--accent); color:#fff; display:flex; align-items:center; justify-content:center; font-weight:500; font-size:16px; margin-top:6px; }
+
+/* the row this prototype is about — app.css .state-pick, .state-now, .state-to */
+.state-pick { display:flex; flex-wrap:wrap; align-items:center; gap:8px 10px; }
+.state-now { display:inline-flex; align-items:center; gap:6px; font:400 13px/1.4 var(--sans); color:var(--muted); }
+.state-to { display:flex; align-items:center; gap:8px; min-width:0; color:var(--muted); }
+.chips { display:flex; flex-wrap:wrap; gap:6px; min-width:0; }
+.pill { min-height:44px; padding:0 12px; border-radius:99px; border:.82px solid var(--ink); background:var(--surface); display:inline-flex; align-items:center; font:500 13px/1 var(--sans); color:var(--ink); white-space:nowrap; }
+.pill.on { background:var(--lime); border-color:var(--lime); }
+.pill.off { opacity:.5; }
+.st { display:inline-flex; align-items:center; gap:5px; padding:3px 9px; border-radius:99px; font:500 12px/1.3 var(--sans); white-space:nowrap; }
+.st::before { content:""; width:8px; height:8px; background:currentColor; border-radius:50%; flex:none; }
+.st-av { background:var(--accent-soft); color:var(--accent-ink); }
+.st-serv { background:var(--warn-soft); color:var(--service-deep); } .st-serv::before { border-radius:0; transform:rotate(45deg); width:7px; height:7px; }
+.st-out { background:var(--crit-soft); color:var(--crit-ink); } .st-out::before { border-radius:0; }
+.st-sold { background:var(--surface-2); color:var(--grey-ink); } .st-sold::before { background:transparent; border:2px solid currentColor; }
+
+/* the card head of a sold moped */
+.card-phone { width:375px; border-radius:28px; background:var(--bg); padding:18px 16px 22px; box-shadow:0 2px 14px rgba(0,0,0,.18); }
+.head { display:flex; flex-wrap:wrap; align-items:center; gap:8px 10px; }
+.head .no { font-family:var(--mono); font-size:24px; font-weight:500; }
+.sub { color:var(--muted); font-size:14px; margin:2px 0 12px; }
+.tip { position:relative; margin-top:12px; background:var(--toast); color:#fff; font-size:13px; line-height:1.4; padding:8px 12px; border-radius:10px; max-width:300px; }
+</style></head><body><main>
+<h1>Изменить состояние мопеда — вариант А</h1>
+<p class="lead"><span class="demo">ПРИМЕР</span>Лист «Изменить состояние» в карточке мопеда: сначала состояние, в котором мопед <b>сейчас</b> — той же
+пилюлей, что в шапке и в списке, — затем стрелка и состояния, в которые его можно перевести. Выбрал Mika 21.10.2026
+(звонок с Kardu, задача № 3). Это утверждённый лист волны 4 (<code>wave-4-cards.html</code>) с отметкой текущего, а не новый дизайн.</p>
+<div class="common"><b>Что поменялось против волны 4</b><ul>
+<li>Текущее состояние видно в самом листе: пилюля с формой и словом и тихое «сейчас». Это не кнопка — выбрать его нельзя.</li>
+<li>При открытии выбрано первое доступное состояние: из сервиса — «Свободен», из свободного — «В сервисе», из списанного — «Свободен». Раньше
+лист мог помнить состояние, в которое мопед только что перевели, ничего не подсвечивать и отправить его.</li>
+<li>Список — одно правило с сервером (<code>manualStateTargets</code>): лист не предлагает того, что сервер отклонит. Кто что может — как было:
+менеджер переводит «свободен ↔ в сервисе» и возвращает списанный; «Списан» ставит владелец.</li>
+<li>Тот же самый переход сервер отклоняет: «Мопед уже в этом состоянии» — под выбором, пустой записи в истории больше нет.</li>
+<li>У проданного мопеда кнопка «Изменить состояние» закрыта, подсказка на ней — «Продан — только продажей; вернуть проданный — только выкупом».</li>
+</ul></div>
+
+<h2>Телефон, 375 px</h2>
+<div class="row">
+<figure style="margin:0"><div class="phone"><div class="sheet"><div class="grab"></div>
+<div class="sh-head"><b>Изменить состояние</b><span class="x">✕</span></div>
+<div class="field"><span class="lbl">Состояние</span>
+<div class="state-pick"><span class="state-now"><span class="st st-serv">В сервисе</span>сейчас</span><span class="state-to">→<span class="chips"><span class="pill on">Свободен</span><span class="pill">Списан</span></span></span></div>
+<span class="hint">Продан — только продажей; вернуть проданный — только выкупом.</span></div>
+<div class="field"><span class="lbl">Причина</span><div class="input">Заменили контроллер</div><span class="hint">Причина обязательна и попадает в журнал.</span></div>
+<div class="submit">Сменить состояние</div>
+</div></div>
+<figcaption class="cap"><b>Владелец, мопед в сервисе.</b> Открыто кнопкой «Вернуть в парк» или «Изменить состояние» — выбрано «Свободен».</figcaption></figure>
+
+<figure style="margin:0"><div class="phone"><div class="sheet"><div class="grab"></div>
+<div class="sh-head"><b>Изменить состояние</b><span class="x">✕</span></div>
+<div class="field"><span class="lbl">Состояние</span>
+<div class="state-pick"><span class="state-now"><span class="st st-av">Свободен</span>сейчас</span><span class="state-to">→<span class="chips"><span class="pill on">В сервисе</span></span></span></div>
+<span class="hint">Продан — только продажей; вернуть проданный — только выкупом.</span></div>
+<div class="field"><span class="lbl">Причина</span><div class="input">Не заводится</div><span class="hint">Причина обязательна и попадает в журнал.</span></div>
+<div class="submit">Сменить состояние</div>
+</div></div>
+<figcaption class="cap"><b>Менеджер, свободный мопед.</b> Одно доступное состояние — «В сервисе» (приёмка волны 4, п. 34).</figcaption></figure>
+
+<figure style="margin:0"><div class="phone"><div class="sheet"><div class="grab"></div>
+<div class="sh-head"><b>Изменить состояние</b><span class="x">✕</span></div>
+<div class="field"><span class="lbl">Состояние</span>
+<div class="state-pick"><span class="state-now"><span class="st st-serv">В сервисе</span>сейчас</span><span class="state-to">→<span class="chips"><span class="pill">Свободен</span><span class="pill on">Списан</span></span></span></div>
+<span class="hint">Продан — только продажей; вернуть проданный — только выкупом.</span></div>
+<div class="field"><span class="lbl">Списание</span><div class="check"><span class="box"></span><span>Да, мопед списывается и в парк не вернётся.</span></div></div>
+<div class="field"><span class="lbl">Причина</span><div class="input">После ДТП, рама не восстанавливается</div><span class="hint">Причина обязательна и попадает в журнал.</span></div>
+<div class="submit">Сменить состояние</div>
+</div></div>
+<figcaption class="cap"><b>Владелец выбрал «Списан».</b> Списание, как и раньше, подтверждается отметкой и объясняется причиной (крит. 26).</figcaption></figure>
+</div>
+
+<h2>Грузинский и отказ сервера</h2>
+<div class="row">
+<figure style="margin:0"><div class="phone ka"><div class="sheet"><div class="grab"></div>
+<div class="sh-head"><b>მდგომარეობის შეცვლა</b><span class="x">✕</span></div>
+<div class="field"><span class="lbl">მდგომარეობა</span>
+<div class="state-pick"><span class="state-now"><span class="st st-serv">სერვისში</span>ახლა</span><span class="state-to">→<span class="chips"><span class="pill on">თავისუფალი</span><span class="pill">ჩამოწერილი</span></span></span></div>
+<span class="hint">გაყიდვა ფორმდება გაყიდვით; უკან აბრუნებს გამოსყიდვა.</span></div>
+<div class="field"><span class="lbl">მიზეზი</span><div class="input">კონტროლერი შეიცვალა</div></div>
+<div class="submit">სტატუსის შეცვლა</div>
+</div></div>
+<figcaption class="cap"><b>KA, владелец, мопед в сервисе.</b> Стрелка и выбор переносятся на следующую строку вместе; «ახლა» [akhla] — «сейчас»,
+новое слово, на вычитку Kardu. Остальные подписи — из словаря продукта.</figcaption></figure>
+
+<figure style="margin:0"><div class="phone"><div class="sheet"><div class="grab"></div>
+<div class="sh-head"><b>Изменить состояние</b><span class="x">✕</span></div>
+<div class="field"><span class="lbl">Состояние</span>
+<div class="state-pick"><span class="state-now"><span class="st st-av">Свободен</span>сейчас</span><span class="state-to">→<span class="chips"><span class="pill on">В сервисе</span></span></span></div>
+<span class="err">Мопед уже в этом состоянии.</span></div>
+<div class="field"><span class="lbl">Причина</span><div class="input">Не заводится</div></div>
+<div class="submit">Сменить состояние</div>
+</div></div>
+<figcaption class="cap"><b>Редкий случай.</b> Пока лист был открыт, мопед перевели с другого телефона. Сервер отвечает <code>same_state</code>,
+слова встают под выбором, а кнопка остаётся прежней: отказ про поле исправляется в поле. В историю ничего не пишется.</figcaption></figure>
+
+<figure style="margin:0"><div class="card-phone">
+<div class="head"><span class="no">EV-0XX</span><span class="st st-sold">Продан</span></div>
+<div class="sub">Пример · модель</div>
+<div class="head"><span class="pill off">Изменить состояние</span></div>
+<div class="tip">Продан — только продажей; вернуть проданный — только выкупом.</div>
+</div>
+<figcaption class="cap"><b>Проданный мопед.</b> Выбирать нечего, поэтому кнопка закрыта, а подсказка на ней объясняет почему. У мопеда в аренде —
+так же, с подсказкой «Мопед в аренде двигается только через аренду».</figcaption></figure>
+</div>
+</main></body></html>

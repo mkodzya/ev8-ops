@@ -32,3 +32,6 @@ export * from './deposit-decision.js';
 export * from './kommo.js';
 export * from './maintenance.js';
 export * from './downtime.js';
+export * from './contract.js';
+export * from './workshops.js';
+export * from './rental-mopeds.js';

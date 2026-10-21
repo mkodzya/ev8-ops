@@ -39,7 +39,8 @@ interface CustomerRow {
   dueTodayRentTetri: number;
   debtIn: DebtPart[];
 }
-interface FleetRow {
+/** A moped as the hand-over and the swap pick one from the fleet. */
+export interface FleetRow {
   id: string;
   vin: string;
   /** EV-007 on the sticker (migration 0043); absent while an older API answers. */
@@ -888,7 +889,8 @@ function Stepper({ label, value, onChange }: { label: string; value: number; onC
   );
 }
 
-function VehicleList({ list, chosen, disabled, onPick }: { list: FleetRow[]; chosen: string | null; disabled: boolean; onPick: (id: string) => void }) {
+/** The free mopeds to pick from — the hand-over's, and the swap's (ADR-0040). */
+export function VehicleList({ list, chosen, disabled, onPick }: { list: FleetRow[]; chosen: string | null; disabled: boolean; onPick: (id: string) => void }) {
   const t = useT();
   return (
     <ul className={`pick-list ${disabled ? 'dim' : ''}`}>
@@ -946,7 +948,8 @@ function PickupDone({ id, number, photoTrouble }: { id: string; number: string; 
         {photoTrouble && <p className="warn-text">{t.hand.photosFailed}</p>}
       </section>
       <section className="card">
-        <DocumentRow rentalId={id} kind="contract" title={t.hand.contract} state={data.documents.contract} customerId={r.customer.id} onChanged={reload} />
+        {/* Signed in Signify rather than here: marked in one sheet right away (ADR-0039). */}
+        <DocumentRow rentalId={id} kind="contract" title={t.hand.contract} state={data.documents.contract} customerId={r.customer.id} driveUrl={r.drive?.contractUrl} onChanged={reload} />
       </section>
       <div className="row-actions">
         {phone && (

@@ -278,6 +278,14 @@ a { color: var(--accent); text-decoration: none; }
    the calendar's mark as a pill. No tint, a thin outline, the word in ink and
    a round ink dot (the default mark). Calm on purpose: it is not lateness. */
 .rstatus-due_today { background: transparent; color: var(--ink); box-shadow: inset 0 0 0 1px var(--line-control); }
+/* The sheet that changes a state by hand (21.10.2026): the state the moped is
+   in, as the same pill as everywhere with «now» beside it, then an arrow and
+   the states it may go to. At 375 px and in Georgian the arrow and its
+   choices drop to the next line together; the pills wrap among themselves. */
+.state-pick { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
+.state-now { display: inline-flex; align-items: center; gap: 6px; font: var(--text-label); }
+.state-to { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.state-to > .chips { min-width: 0; }
 
 /* ---- login ---------------------------------------------------------- */
 .login-wrap { min-height: 100%; display: grid; place-items: center; padding: 24px; }
@@ -906,6 +914,13 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
    park under the state, "paid through" under the name it is about. One class,
    because they are one idea. */
 .v-sub { display: block; font: var(--text-label); color: var(--muted); }
+/* Why a moped is in service (21.10.2026): one line, the rest behind an
+   ellipsis and in the tooltip. A long note must not stretch every row of the
+   table, and on a phone it must not push the card's title off its line —
+   there it sits under the state, below "For sale" when there is one, never
+   after it on the same line. */
+.v-why { display: inline-block; max-width: 28ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
+.lc-sub .v-why { max-width: 18ch; }
 .v-where { grid-area: where; font: var(--text-label); color: var(--muted); margin-top: 2px; }
 /* A point nobody has named is still a question, but it is asked once — by the
    orange number above the list. Thirty-five orange cells in a column answer
