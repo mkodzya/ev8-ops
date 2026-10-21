@@ -29,6 +29,7 @@ import { workshopsEn } from './workshops.js';
 import { driveEn } from './drive.js';
 import { expEn } from './expenses.js';
 import { inBankEn } from './in-bank.js';
+import { fleetListEn } from './fleet-list.js';
 import { contractSignedEn } from './contract-signed.js';
 export const en = {
   lang: { label: 'Language', ka: 'ქართული', ru: 'Русский', en: 'English' },
@@ -1398,6 +1399,7 @@ export const en = {
   ...driveEn,
   ...expEn,
   ...inBankEn,
+  ...fleetListEn,
   ...contractSignedEn,
 };
 

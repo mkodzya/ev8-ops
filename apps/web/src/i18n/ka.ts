@@ -20,6 +20,7 @@ import { workshopsKa } from './workshops.js';
 import { driveKa } from './drive.js';
 import { expKa } from './expenses.js';
 import { inBankKa } from './in-bank.js';
+import { fleetListKa } from './fleet-list.js';
 import { contractSignedKa } from './contract-signed.js';
 import type { Dict } from './en.js';
 
@@ -1384,5 +1385,6 @@ export const ka: Dict = {
   ...driveKa,
   ...expKa,
   ...inBankKa,
+  ...fleetListKa,
   ...contractSignedKa,
 };

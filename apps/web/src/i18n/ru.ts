@@ -20,6 +20,7 @@ import { workshopsRu } from './workshops.js';
 import { driveRu } from './drive.js';
 import { expRu } from './expenses.js';
 import { inBankRu } from './in-bank.js';
+import { fleetListRu } from './fleet-list.js';
 import { contractSignedRu } from './contract-signed.js';
 import type { Dict } from './en.js';
 
@@ -1395,5 +1396,6 @@ export const ru: Dict = {
   ...driveRu,
   ...expRu,
   ...inBankRu,
+  ...fleetListRu,
   ...contractSignedRu,
 };
