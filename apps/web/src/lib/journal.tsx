@@ -69,6 +69,9 @@ function said(t: Dict, field: string, raw: string): string {
       return from(t.migrationPage.decide) ?? raw;
     case 'payer':
       return from(t.service.payers) ?? raw;
+    case 'reasonKind':
+      // A repair's kind, in the tablet's words wherever it was picked (Mika, 21.10.2026).
+      return from(t.wjob.reasons) ?? raw;
     default:
       return raw;
   }
@@ -86,7 +89,10 @@ function value(field: string, raw: unknown, shifted = false): string | null {
   }
   // The days a week gained, with their unit (ADR-0041).
   if (field === 'extraDays' && typeof raw === 'number') return t.weekShift.journal.days(raw);
-  if (raw == null) return null;
+  // A repair's kind may be given, changed and taken away again (Mika,
+  // 21.10.2026): there «none» is an answer — «не указана → ДТП» — and not a
+  // gap that hides the line.
+  if (raw == null) return field === 'reasonKind' ? t.rkind.none : null;
   if (isReference(field)) return null;
   if (isMoney(field)) return typeof raw === 'number' ? formatGel(raw) : String(raw);
   if (typeof raw === 'boolean') return raw ? t.common.yes : t.common.dash;
