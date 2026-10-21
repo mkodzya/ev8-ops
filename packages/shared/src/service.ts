@@ -311,3 +311,30 @@ export function workLineState(line: { approvedAt: unknown; rejectedAt: unknown }
 export function suggestsCustomerPays(job: { reasonKind: string | null; payer: string; rental: unknown; status: string }): boolean {
   return job.reasonKind === 'renter_fault' && job.payer === 'company' && job.rental != null && (job.status === 'draft' || job.status === 'open');
 }
+
+/** One of the five, or not: a kind read from a body, a draft or a URL is checked before it is used. */
+export function isServiceReason(value: unknown): value is ServiceReason {
+  return typeof value === 'string' && (SERVICE_REASONS as readonly string[]).includes(value);
+}
+
+/** Why a repair's kind cannot become what was asked. */
+export type ReasonKindRefusal = 'job_closed' | 'reason_kind_kept';
+
+/**
+ * Whether a repair's kind may become `next` now (Mika, 21.10.2026). The
+ * office forms give one or none — the five have no «other», and «what
+ * happened» stays the words — and the owner sets or changes it while the
+ * repair waits or is in work, so the repairs already open can be named once.
+ * A closed or called-off repair is a record. A repair a mechanic carries keeps
+ * a kind: the tablet asks for one on every repair it opens (stage 2), so there
+ * it is changed for another, never taken away.
+ *
+ * What a kind sets going is the same wherever it was picked: «Плановое ТО»
+ * closed with a reading moves the next maintenance (ADR-0038 §2), «Вина
+ * арендатора» offers the owner «за счёт клиента» (`suggestsCustomerPays`).
+ */
+export function reasonKindRefusal(job: { status: string; byMechanic: boolean }, next: ServiceReason | null): ReasonKindRefusal | null {
+  if (job.status !== 'open' && job.status !== 'draft') return 'job_closed';
+  if (next == null && job.byMechanic) return 'reason_kind_kept';
+  return null;
+}
