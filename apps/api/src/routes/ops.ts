@@ -1,4 +1,4 @@
-import { CONTACT_KINDS, CUSTOMER_KINDS, CUSTOMER_SOURCES, VEHICLE_POOLS, VEHICLE_STATES, isoWeekday, manualMoveRefusal, nameSpellings, normalizeVin, todayISO, trackerCorrection, trackerDayFault, trackerTails, vinFault, weeksAnchor, type ManualMoveRefusal, type VehicleState } from '@ev8/shared';
+import { CONTACT_KINDS, CUSTOMER_KINDS, CUSTOMER_SOURCES, VEHICLE_POOLS, VEHICLE_STATES, isoWeekday, manualMoveRefusal, nameSpellings, normalizeVin, todayISO, trackerCorrection, trackerDayFault, trackerEarliestDay, trackerTails, vinFault, weeksAnchor, type ManualMoveRefusal, type VehicleState } from '@ev8/shared';
 import type { FastifyInstance } from 'fastify';
 import { audit } from '../lib/audit.js';
 import { hasPerm } from '../lib/auth.js';
@@ -313,8 +313,19 @@ export function opsRoutes(app: FastifyInstance): void {
       orderBy: { removedOn: 'desc' },
       select: { removedOn: true },
     });
-    const fault = trackerDayFault({ on, today, arrivedOn: isoDate(v.arrivedOn), lastRemovedOn: isoDate(lastOff?.removedOn) });
-    if (fault) throw badRequest('tracker_date_bad', 'A day the tracker was on the moped: not after today, not before the moped came or its last tracker came off.', { field: 'installedOn', fault });
+    const bounds = { arrivedOn: isoDate(v.arrivedOn), lastRemovedOn: isoDate(lastOff?.removedOn) };
+    const fault = trackerDayFault({ on, today, ...bounds });
+    if (fault) {
+      // The refusal names the first day it would take and what sets it, as
+      // the sheet does under the field (QA, 22.10.2026).
+      const earliest = trackerEarliestDay(bounds);
+      throw badRequest('tracker_date_bad', 'A day the tracker was on the moped: not after today, not before the moped came or its last tracker came off.', {
+        field: 'installedOn',
+        fault,
+        earliest: earliest?.on ?? null,
+        earliestBy: earliest?.by ?? null,
+      });
+    }
     await prisma.$transaction(async (tx) => {
       await fitTracker(tx, { vehicleId: v.id, jobId: null, partId: null, servicePartId: null, donorVehicleId: null, imei, simPhone, on, actorId: actor.id, source: 'card' });
       await tx.auditLog.create({

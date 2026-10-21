@@ -1,5 +1,5 @@
 import { isISODate, parseGel, redateSale, saleState, scheduleGap, todayISO, type ISODate } from '@ev8/shared';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { api, ApiError } from '../api.js';
 import { LoadError } from '../components/LoadError.js';
@@ -9,7 +9,7 @@ import { RowMenu } from '../components/RowMenu.js';
 import { SignScreen, signedAtText } from '../components/Documents.js';
 import { Empty, Loading, PageHead, Vin } from '../components/ui.js';
 import { Field, Row } from '../components/Wizard.js';
-import { FormSheet } from '../ds/form/Form.js';
+import { FormSheet, useFieldError } from '../ds/form/Form.js';
 import { useMoneyForm } from '../ds/money/MoneyForm.js';
 import { fmtDate, formatGel } from '../format.js';
 import { useT } from '../i18n/index.js';
@@ -35,6 +35,8 @@ interface SaleCard {
   sale: Sale & { aheadTetri: number; lateDays: number; transferred: boolean; paidBeforeTetri: number; kommoRef: string | null };
   /** The sale date on the signed sale document; null while nothing is signed (B4-06). */
   signedSoldOn: ISODate | null;
+  /** The earliest day the sale may be dated: the last event in the moped's history before it; null — none. Absent while an older API answers. */
+  earliestSoldOn?: { date: ISODate; kind: string } | null;
   documents: { id: string; docKind: string | null; signedAt: string | null; signedBy: string | null }[];
   feed: FeedRow[];
   payments: { id: string; occurredOn: string; channel: 'transfer' | 'acquiring' | 'cash'; direction: 'in' | 'out'; grossTetri: number }[];
@@ -260,6 +262,7 @@ export function SalePage() {
         <DateSheet
           sale={s}
           signedSoldOn={data.signedSoldOn}
+          earliest={data.earliestSoldOn?.date ?? null}
           onClose={() => setSheet(null)}
           onDone={() => {
             setSheet(null);
@@ -364,13 +367,31 @@ function ScheduleSheet({
  * history and the debt — by the same rule the server writes (`redateSale`),
  * so nothing moves by surprise.
  */
-function DateSheet({ sale, signedSoldOn, onClose, onDone }: { sale: SaleCard['sale']; signedSoldOn: ISODate | null; onClose: () => void; onDone: () => void }) {
+function DateSheet({
+  sale,
+  signedSoldOn,
+  earliest,
+  onClose,
+  onDone,
+}: {
+  sale: SaleCard['sale'];
+  signedSoldOn: ISODate | null;
+  /** The first day the server takes (`saleDateFloor`); null — no bound but today. */
+  earliest: ISODate | null;
+  onClose: () => void;
+  onDone: () => void;
+}) {
   const t = useT();
   const today = todayISO();
   const initial = { soldOn: sale.soldOn, reason: '' };
   const [f, setF] = useState(initial);
   const valid = isISODate(f.soldOn);
-  const plan = valid && f.soldOn !== sale.soldOn ? redateSale({ soldOn: sale.soldOn, warrantyUntil: sale.warrantyUntil, transferred: sale.transferred, instalments: sale.instalments }, f.soldOn) : null;
+  // A day the server will refuse draws no «what changes»: the words under the
+  // field say why instead (QA, 22.10.2026). The day the sale has is never
+  // refused, whatever its history: nothing changes.
+  const fault =
+    !valid || f.soldOn === sale.soldOn ? null : f.soldOn > today ? t.errors.codes.sale_date_future : earliest && f.soldOn < earliest ? t.saleDate.beforeHistory(fmtDate(earliest)) : null;
+  const plan = valid && !fault && f.soldOn !== sale.soldOn ? redateSale({ soldOn: sale.soldOn, warrantyUntil: sale.warrantyUntil, transferred: sale.transferred, instalments: sale.instalments }, f.soldOn) : null;
   const moved = new Map((plan?.instalments ?? []).map((m) => [m.seq, m.to]));
   // An unpaid line that moves can fall due, or stop being due, the moment this is saved.
   const debt = (rows: SaleCard['sale']['instalments']) => saleState({ today, status: 'active', instalments: rows }).owesTetri;
@@ -398,11 +419,16 @@ function DateSheet({ sale, signedSoldOn, onClose, onDone }: { sale: SaleCard['sa
       }}
       onDone={onDone}
     >
-      <Field label={t.sell.soldOn} hint={t.saleDate.recorded(fmtDate(sale.soldOn))} name="soldOn" error={valid && f.soldOn > today ? t.errors.codes.sale_date_future : null}>
-        <input className="input mono" type="date" max={today} value={f.soldOn} onChange={(e) => setF({ ...f, soldOn: e.target.value })} />
+      <Field
+        label={t.sell.soldOn}
+        hint={earliest ? `${t.saleDate.recorded(fmtDate(sale.soldOn))} · ${t.saleDate.notBefore(fmtDate(earliest))}` : t.saleDate.recorded(fmtDate(sale.soldOn))}
+        name="soldOn"
+        error={fault}
+      >
+        <input className="input mono" type="date" min={earliest ?? undefined} max={today} value={f.soldOn} onChange={(e) => setF({ ...f, soldOn: e.target.value })} />
       </Field>
       {plan && (
-        <div>
+        <DatePreview>
           <span className="lbl">{t.saleDate.changes}</span>
           <Row k={t.sell.soldOn} v={<FromTo from={sale.soldOn} to={f.soldOn} />} />
           {sale.vehicle && <Row k={t.saleDate.history} v={<FromTo from={sale.soldOn} to={f.soldOn} />} />}
@@ -421,7 +447,7 @@ function DateSheet({ sale, signedSoldOn, onClose, onDone }: { sale: SaleCard['sa
             />
           )}
           {sale.transferred && <p className="hint muted">{t.saleDate.stays}</p>}
-        </div>
+        </DatePreview>
       )}
       {/* What the buyer signed does not change (B4-06). */}
       {signedSoldOn && <p className="hint muted">{t.saleDate.paperKeeps(fmtDate(signedSoldOn))}</p>}
@@ -430,6 +456,17 @@ function DateSheet({ sale, signedSoldOn, onClose, onDone }: { sale: SaleCard['sa
       </Field>
     </FormSheet>
   );
+}
+
+/**
+ * «Что изменится», unless the server has just refused the date: a preview of a
+ * day that was not taken stayed on screen beside the refusal (QA, 22.10.2026).
+ * The refusal goes once the date is changed, and the preview comes back.
+ */
+function DatePreview({ children }: { children: ReactNode }) {
+  const refused = useFieldError('soldOn');
+  if (refused) return null;
+  return <div>{children}</div>;
 }
 
 /** Two days, "was → becomes", the way the journal writes them. */

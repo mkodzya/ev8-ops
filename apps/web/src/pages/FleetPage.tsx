@@ -182,12 +182,20 @@ export function FleetPage() {
                 <StateBadge state={v.state} />
                 {/* The word the line turns into once the offer to undo runs out: "For sale", not the park's dictionary name. */}
                 {moved?.id === v.id ? <span className="v-sub v-pool-new">→ {moved.to === 'sale' ? t.fleetList.forSale : t.pools[moved.to]}</span> : <ParkLine v={v} />}
+                {/* On a laptop too narrow for the reason column, the reason stands here, as on a phone. */}
+                {v.serviceWhy && (
+                  <span className={`v-sub v-why-line${v.serviceWhy.kind ? ' v-why-line-kind' : ''}`}>
+                    <Why v={v} />
+                  </span>
+                )}
               </span>
             ),
             sort: { value: (v) => VEHICLE_STATES.indexOf(v.state) },
           },
           // Only a moped in service has a reason; every other row leaves the cell empty rather than forty dashes.
-          { key: 'why', label: t.wjob.reason, cell: (v) => <Why v={v} />, sort: { value: (v) => whyText(v, t, shownWords) } },
+          // A narrow column, a typed note on one line with an ellipsis; below 1360 px it gives way
+          // to a line under the state, or the row's dots fall off a 1280 px laptop (QA, 22.10.2026).
+          { key: 'why', label: t.wjob.reason, className: 'col-why', cell: (v) => <Why v={v} />, sort: { value: (v) => whyText(v, t, shownWords) } },
           {
             key: 'where',
             label: t.fleet.where,
@@ -229,19 +237,23 @@ function ParkLine({ v }: { v: Vehicle }) {
 }
 
 /**
- * Why it is in service, on one line: a long note ends in an ellipsis and is
- * read whole under the pointer, so it never stretches every row of the list.
- * Nothing at all for a moped in any other state.
+ * Why it is in service: a typed note on one line, ending in an ellipsis and
+ * read whole under the pointer, so it never stretches every row of the list;
+ * the repair's kind whole, on two lines if it must. Nothing at all for a
+ * moped in any other state.
  */
 function Why({ v, quiet = false }: { v: Vehicle; quiet?: boolean }) {
   const t = useT();
   const why = v.serviceWhy;
   if (!why) return null;
-  // The repair's kind is the product's own word, already in the reader's language.
+  // The repair's kind is the product's own word, already in the reader's
+  // language: it wraps and is never cut (ux.md 12). What the repair says
+  // happened follows it under the pointer, after the word and not instead of it.
   if (why.kind) {
+    const word = t.wjob.reasons[why.kind];
     return (
-      <span className="v-why" title={why.text ?? t.wjob.reasons[why.kind]}>
-        {t.wjob.reasons[why.kind]}
+      <span className="v-why v-why-kind" title={why.text ? `${word} — ${why.text}` : word}>
+        {word}
       </span>
     );
   }

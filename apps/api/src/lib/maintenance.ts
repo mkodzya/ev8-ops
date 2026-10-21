@@ -35,6 +35,12 @@ export interface VehicleMaintenance {
   currentKm: number | null;
   currentAt: string | null;
   readingSource: ReadingSource | null;
+  /**
+   * The reading was one of a swap's two acts (ADR-0040): it counts as the
+   * hand-over or the return it is for this moped, and the card says it was a
+   * swap — «(возврат, …)» read as if the rental had ended (QA, 22.10.2026).
+   */
+  readingBySwap: boolean;
   dueKm: number | null;
   leftKm: number | null;
   /** The closed planned repair the mark is counted from; none — the first mark. */
@@ -53,7 +59,7 @@ export interface MaintenanceOverview {
   knownCount: number;
 }
 
-type Reading = MileageReading & { source: ReadingSource };
+type Reading = MileageReading & { source: ReadingSource; swap?: boolean };
 
 const ms = (at: Date | string): number => (typeof at === 'string' ? Date.parse(at) : at.getTime());
 
@@ -113,7 +119,7 @@ async function readingsOf(db: Db, ids: string[]) {
     if (!vehicleId || a.odometerKm == null) continue;
     // A return taken back is not a reading: the rental ran on (B5-08).
     if (a.kind === 'return' && (a.settlement as { undone?: boolean } | null)?.undone) continue;
-    add(vehicleId, { km: a.odometerKm, at: a.createdAt, source: a.kind === 'pickup' || a.kind === 'swap_in' ? 'pickup' : 'return' });
+    add(vehicleId, { km: a.odometerKm, at: a.createdAt, source: a.kind === 'pickup' || a.kind === 'swap_in' ? 'pickup' : 'return', swap: a.kind === 'swap_out' || a.kind === 'swap_in' });
   }
   for (const j of jobs) {
     // Called off by mistake — cancelled, not refused — it is not a reading
@@ -166,6 +172,7 @@ export async function maintenanceOf(db: Db = prisma, opts: { vehicleIds?: string
       currentKm: m.currentKm,
       currentAt: m.currentAt,
       readingSource: current?.source ?? null,
+      readingBySwap: current?.swap ?? false,
       dueKm: m.dueKm,
       leftKm: m.leftKm,
       lastPlanned: planned ? { jobId: planned.id, number: planned.number, km: lastPlannedKm!, closedOn: isoDate(planned.closedOn) } : null,

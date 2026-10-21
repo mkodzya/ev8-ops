@@ -15,6 +15,7 @@ import { Typed, useShownWords } from '../lib/typed.js';
 import { useLoad } from '../lib/use.js';
 import { useSession } from '../session.js';
 import { ApprovalCard } from './RepairApproval.js';
+import { WORKSHOPS_ANCHOR } from './WorkshopsBlock.js';
 import { kmText, leftText, type Downtime, type MaintenanceList } from '../lib/maintenance.js';
 import './workshop-job.css';
 
@@ -538,7 +539,8 @@ export function NewJob({ vehicleId, onDone }: { vehicleId?: string; onDone: () =
                   what is typed here waits in the draft and comes back. */}
               {can('settings.manage') && (
                 <p className="hint">
-                  <Link className="muted" to="/settings/repair">
+                  {/* To the list itself: on a phone it is below the first screen of the page (QA, 22.10.2026). */}
+                  <Link className="muted" to={`/settings/repair#${WORKSHOPS_ANCHOR}`}>
                     {t.wshop.editList}
                   </Link>
                 </p>

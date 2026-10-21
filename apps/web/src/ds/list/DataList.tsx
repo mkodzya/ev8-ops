@@ -15,7 +15,12 @@ export interface Column<T> {
   /** Sortable when given; the same key is offered in the phone's sort sheet. */
   sort?: SortColumn<T>;
   num?: boolean;
+  /** A class on the column's heading and cells: a column a narrow laptop hides (Fleet, «Причина»). */
+  className?: string;
 }
+
+/** The heading's and the cells' classes: a number column's alignment and the column's own. */
+const colClass = <T,>(c: Column<T>): string | undefined => [c.num ? 'num' : '', c.className ?? ''].filter(Boolean).join(' ') || undefined;
 
 export interface Card {
   title: ReactNode;
@@ -201,7 +206,7 @@ export function DataList<T>({
               <thead>
                 <tr>
                   {columns.map((c) => (
-                    <th key={c.key} className={c.num ? 'num' : undefined}>
+                    <th key={c.key} className={colClass(c)}>
                       {c.sort ? <SortHead k={c.key} label={c.label} {...sorted} /> : c.label}
                     </th>
                   ))}
@@ -211,7 +216,7 @@ export function DataList<T>({
                 {shown.map((r) => (
                   <tr key={rowKey(r)} className={`${href ? 'row-go' : ''} ${lit === rowKey(r) ? 'lit' : ''}`} onClick={href ? rowClick(() => navigate(href(r))) : undefined}>
                     {columns.map((c) => (
-                      <td key={c.key} className={c.num ? 'num' : undefined}>
+                      <td key={c.key} className={colClass(c)}>
                         {c.cell(r)}
                       </td>
                     ))}

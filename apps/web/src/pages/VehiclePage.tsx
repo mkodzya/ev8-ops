@@ -1,4 +1,4 @@
-import { TRANSLATED_EVENT_KINDS, VEHICLE_POOLS, isPoolEvent, localDateTime, manualStateTargets, type RentalStatus, type VehicleEventKind, type VehiclePool, type VehicleState } from '@ev8/shared';
+import { TRANSLATED_EVENT_KINDS, VEHICLE_POOLS, isPoolEvent, localDateTime, manualStateTargets, newestFirst, type RentalStatus, type VehicleEventKind, type VehiclePool, type VehicleState } from '@ev8/shared';
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api, ApiError } from '../api.js';
@@ -10,6 +10,7 @@ import { BlockHead, ColorText, Empty, FleetNo, Loading, PageHead, PlaceText, Ren
 import { RowMenu } from '../components/RowMenu.js';
 import { Field, Row } from '../components/Wizard.js';
 import { fmtDate } from '../format.js';
+import type { Dict } from '../i18n/en.js';
 import { useLocale, useT } from '../i18n/index.js';
 import { kmText, leftText, spanText, type Downtime, type RepairHours, type VehicleMaintenance } from '../lib/maintenance.js';
 import { ChangedFromTo, JournalNote, noteWords } from '../lib/journal.js';
@@ -41,7 +42,22 @@ interface Card {
     notes: string | null;
     currentRentalId: string | null;
   };
-  events: { id: string; kind: VehicleEventKind; occurredOn: string; fromState: VehicleState | null; toState: VehicleState; fromPool: VehiclePool | null; toPool: VehiclePool | null; rentalId: string | null; reason: string | null; actor: string | null }[];
+  events: {
+    id: string;
+    kind: VehicleEventKind;
+    occurredOn: string;
+    /** When it was written; absent while an older API answers. */
+    at?: string;
+    fromState: VehicleState | null;
+    toState: VehicleState;
+    fromPool: VehiclePool | null;
+    toPool: VehiclePool | null;
+    rentalId: string | null;
+    reason: string | null;
+    actor: string | null;
+    /** `out` — given back in a swap, `in` — handed out by one (ADR-0040); absent while an older API answers. */
+    swap?: 'out' | 'in' | null;
+  }[];
   serviceJobs: {
     id: string;
     number: string;
@@ -85,6 +101,21 @@ interface Card {
  * and not a sale's or an arrival's.
  */
 const typedEvent = (e: { kind: VehicleEventKind; rentalId: string | null }): boolean => e.rentalId == null && (TRANSLATED_EVENT_KINDS as readonly string[]).includes(e.kind);
+
+type HistoryRow = { day: string | null; at: string | null } & ({ kind: 'event'; event: Card['events'][number] } | { kind: 'journal'; line: Card['journal'][number] });
+
+/**
+ * The card's «История»: what happened to the moped and what was corrected by
+ * hand, in one list, the newest on top (QA, 22.10.2026). The events come
+ * oldest first and are turned round, so two written in one moment keep their
+ * order, the later on top.
+ */
+function historyOf(data: Card): HistoryRow[] {
+  return newestFirst<HistoryRow>([
+    ...[...data.events].reverse().map((event): HistoryRow => ({ kind: 'event', day: event.occurredOn, at: event.at ?? null, event })),
+    ...data.journal.map((line): HistoryRow => ({ kind: 'journal', day: line.occurredOn, at: line.at, line })),
+  ]);
+}
 
 export function VehiclePage() {
   const { id } = useParams();
@@ -262,48 +293,62 @@ export function VehiclePage() {
           ) : (
             <ul className="timeline">
               {/* What was corrected by hand belongs in the same history as
-                  what happened to the moped (crit. 32, QA-W5-01). */}
-              {data.journal.map((l) => (
-                <li key={l.id}>
-                  <span className="mono muted">{fmtDate(l.occurredOn)}</span>
-                  <span>
-                    {t.feedWords[l.action] ?? l.action}
-                    <ChangedFromTo action={l.action} before={l.before} after={l.after} />
-                    {noteWords(t, l.note) && (
-                      <span className="muted">
-                        {' · '}
-                        <JournalNote note={l.note} />
+                  what happened to the moped (crit. 32, QA-W5-01), and in the
+                  same order (QA, 22.10.2026). */}
+              {historyOf(data).map((row) => {
+                if (row.kind === 'journal') {
+                  const l = row.line;
+                  return (
+                    <li key={`j-${l.id}`}>
+                      <span className="mono muted">{fmtDate(l.occurredOn)}</span>
+                      <span>
+                        {t.feedWords[l.action] ?? l.action}
+                        <ChangedFromTo action={l.action} before={l.before} after={l.after} />
+                        {noteWords(t, l.note) && (
+                          <span className="muted">
+                            {' · '}
+                            <JournalNote note={l.note} />
+                          </span>
+                        )}
+                        {l.by && <span className="muted"> · {l.by}</span>}
                       </span>
-                    )}
-                    {l.by && <span className="muted"> · {l.by}</span>}
-                  </span>
-                </li>
-              ))}
-              {data.events.map((e) => (
-                <li key={e.id}>
-                  <span className="mono muted">{fmtDate(e.occurredOn)}</span>
-                  <span>
-                    {t.vehicle.events[e.kind]}{' '}
-                    {isPoolEvent(e.kind) ? <span className="pool-mark">{e.toPool ? t.pools[e.toPool] : t.common.dash}</span> : <StateBadge state={e.toState} />}
-                    {e.rentalId && (
-                      <>
-                        {' '}
-                        <Link to={`/rentals/${e.rentalId}`} className="mono">
-                          {data.rentals.find((r) => r.id === e.rentalId)?.number ?? ''}
-                        </Link>
-                      </>
-                    )}
-                    {e.reason && (
-                      <span className="muted">
-                        {' · '}
-                        {/* A state change's reason in the reader's language (ADR-0042); a rental's, a sale's or an arrival's stays as written. */}
-                        {typedEvent(e) ? <Typed text={e.reason} /> : e.reason}
-                      </span>
-                    )}
-                    {e.actor && <span className="muted"> · {e.actor}</span>}
-                  </span>
-                </li>
-              ))}
+                    </li>
+                  );
+                }
+                const e = row.event;
+                const rental = e.rentalId ? (
+                  <Link to={`/rentals/${e.rentalId}`} className="mono">
+                    {data.rentals.find((r) => r.id === e.rentalId)?.number ?? ''}
+                  </Link>
+                ) : null;
+                return (
+                  <li key={`e-${e.id}`}>
+                    <span className="mono muted">{fmtDate(e.occurredOn)}</span>
+                    <span>
+                      {/* Half of a swap is not the rental's start or end: «Заменён в аренде R-…» (ADR-0040; QA, 22.10.2026). */}
+                      {e.swap ? (
+                        <>
+                          {e.swap === 'out' ? t.vcard.swappedOut : t.vcard.swappedIn} {rental} <StateBadge state={e.toState} />
+                        </>
+                      ) : (
+                        <>
+                          {t.vehicle.events[e.kind]}{' '}
+                          {isPoolEvent(e.kind) ? <span className="pool-mark">{e.toPool ? t.pools[e.toPool] : t.common.dash}</span> : <StateBadge state={e.toState} />}
+                          {rental && <> {rental}</>}
+                        </>
+                      )}
+                      {e.reason && (
+                        <span className="muted">
+                          {' · '}
+                          {/* A state change's reason in the reader's language (ADR-0042); a rental's, a sale's or an arrival's stays as written. */}
+                          {typedEvent(e) ? <Typed text={e.reason} /> : e.reason}
+                        </span>
+                      )}
+                      {e.actor && <span className="muted"> · {e.actor}</span>}
+                    </span>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </section>
@@ -629,6 +674,16 @@ function VinSheet({ id, vin, onClose, onDone }: { id: string; vin: string; onClo
 }
 
 /**
+ * Where the card's mileage was read. One of a swap's acts counts as the return
+ * or the hand-over it is, and says it was a swap: «(возврат, …)» alone read as
+ * if the rental had ended (QA, 22.10.2026).
+ */
+function sourceWords(m: VehicleMaintenance, t: Dict): string {
+  const source = m.readingSource ?? '';
+  return (m.readingBySwap ? t.vcard.swapSources[source] : undefined) ?? t.wmaint.sources[source] ?? '';
+}
+
+/**
  * Planned maintenance of the moped (ADR-0038): what is left to the mark, the
  * mark, and where the mileage came from; a moped with no mileage written in
  * EV8 Ops says so instead of guessing.
@@ -645,7 +700,7 @@ function MaintenanceCard({ m }: { m: VehicleMaintenance }) {
         <>
           <p className={`t-money ${m.state === 'overdue' ? 'crit-text' : ''}`}>{leftText(m, t)}</p>
           <p className="hint">
-            {t.wmaint.next(kmText(m.dueKm))} · {t.wmaint.mileageFrom(kmText(m.currentKm), t.wmaint.sources[m.readingSource ?? ''] ?? '', m.currentAt ? localDateTime(m.currentAt).date : '')}
+            {t.wmaint.next(kmText(m.dueKm))} · {t.wmaint.mileageFrom(kmText(m.currentKm), sourceWords(m, t), m.currentAt ? localDateTime(m.currentAt).date : '')}
           </p>
           <p className="hint muted">
             {m.lastPlanned ? (
