@@ -20,6 +20,7 @@ import { workshopsRu } from './workshops.js';
 import { driveRu } from './drive.js';
 import { expRu } from './expenses.js';
 import { inBankRu } from './in-bank.js';
+import { contractSignedRu } from './contract-signed.js';
 import type { Dict } from './en.js';
 
 // Typed as Dict: a missing or misspelled key fails the build.
@@ -1171,6 +1172,7 @@ export const ru: Dict = {
       already_matched: 'Эта строка выписки уже привязана к платежу.',
       already_merged: 'Эта карточка уже в архиве — она объединена с другой.',
       already_returned: 'Эта аренда уже закрыта.',
+      already_signed: 'Договор уже подписан — на экране или в Signify.',
       already_voided: 'Этот платёж уже отменён.',
       bad_channel: 'Залог возвращают наличными или переводом.',
       bad_field: 'Поле заполнено неверно. Проверьте форму и попробуйте ещё раз.',
@@ -1191,6 +1193,7 @@ export const ru: Dict = {
       category_not_found: 'Такой категории расходов нет.',
       charge_not_found: 'Такого штрафа или начисления у аренды нет — возможно, его уже сняли.',
       closed_before_opened: 'Ремонт не может закрыться раньше дня открытия.',
+      contract_not_marked: 'Договор не отмечен как подписанный в Signify. Обновите экран.',
       customer_archived: 'Эта карточка объединена с другой — работайте в той, в которую она вошла.',
       customer_in_debt: 'У клиента долг. Выдать мопед может только владелец, с причиной.',
       customer_mismatch: 'Эта аренда другого клиента. Выберите аренду этого клиента.',
@@ -1392,4 +1395,5 @@ export const ru: Dict = {
   ...driveRu,
   ...expRu,
   ...inBankRu,
+  ...contractSignedRu,
 };

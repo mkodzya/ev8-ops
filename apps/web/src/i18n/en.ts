@@ -29,6 +29,7 @@ import { workshopsEn } from './workshops.js';
 import { driveEn } from './drive.js';
 import { expEn } from './expenses.js';
 import { inBankEn } from './in-bank.js';
+import { contractSignedEn } from './contract-signed.js';
 export const en = {
   lang: { label: 'Language', ka: 'ქართული', ru: 'Русский', en: 'English' },
 
@@ -1174,6 +1175,7 @@ export const en = {
       already_matched: 'This bank line is already attached to a payment.',
       already_merged: 'This card is already in the archive: it was merged into another.',
       already_returned: 'This rental is already closed.',
+      already_signed: 'The contract is already signed — on the screen or in Signify.',
       already_voided: 'This payment is already cancelled.',
       bad_channel: 'A deposit goes back in cash or by transfer.',
       bad_field: 'A field is filled in wrongly. Check the form and try again.',
@@ -1194,6 +1196,7 @@ export const en = {
       category_not_found: 'No such expense category.',
       charge_not_found: 'No such fine or charge on the rental — it may have been taken back.',
       closed_before_opened: 'A repair cannot close before the day it was opened.',
+      contract_not_marked: 'The contract is not marked as signed in Signify. Refresh the screen.',
       customer_archived: 'This card was merged into another one. Work on the card it went into.',
       customer_in_debt: 'This customer owes money. Only an owner can hand over a moped, with a reason.',
       customer_mismatch: 'That rental belongs to a different customer. Pick this customer’s own rental.',
@@ -1395,6 +1398,7 @@ export const en = {
   ...driveEn,
   ...expEn,
   ...inBankEn,
+  ...contractSignedEn,
 };
 
 export type Dict = typeof en;
