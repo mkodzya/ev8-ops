@@ -1,7 +1,7 @@
 import { KEY_FEE_TETRI, handOverActOf, readFleetNumber, todayISO } from '@ev8/shared';
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ApiError, api } from '../api.js';
+import { ApiError, api, markStale } from '../api.js';
 import { DocumentRow } from '../components/Documents.js';
 import { LoadError } from '../components/LoadError.js';
 import { PhotoPicker } from '../components/PhotoPicker.js';
@@ -104,7 +104,12 @@ export function SwapWizard() {
   if (result && card.data) return <SwapDone rentalId={card.data.rental.id} serviceJobId={result.serviceJobId} point={result.point} photoTrouble={photoTrouble} />;
   if (!card.data || (oldId && !oldMoped.data)) return <Loading />;
   const r = card.data.rental;
-  const title = `${t.swap.title} · ${r.number}`;
+  // The rental's number holds together: at 375 px it broke at its hyphen, «R-» / «00480» (QA 21.10.2026).
+  const title = (
+    <>
+      {t.swap.title} · <span className="nobr">{r.number}</span>
+    </>
+  );
 
   // Nothing to change: a closed rental, or one handed over without a VIN — its moped is given in «Изменить условия».
   const old = r.vehicle;
@@ -140,6 +145,8 @@ export function SwapWizard() {
   );
   const handedOn = handOver?.occurredOn ?? r.pickedUpOn;
   const pickupKm = handOver?.odometerKm ?? null;
+  // The contract as it stands before the swap: signed on the screen, marked signed in Signify, or neither.
+  const contract = card.data.documents.contract;
   const openJob = oldMoped.data?.serviceJobs.find((j) => j.status === 'open' || j.status === 'draft') ?? null;
 
   // ---- the moped given back -------------------------------------------------
@@ -201,7 +208,8 @@ export function SwapWizard() {
             inOdometerReason: inLower ? f.inOdometerReason.trim() : null,
             inCondition: f.inCondition.trim() || null,
           },
-          { key },
+          // Quiet, with the photos after it: every screen refetches once, when the last photo is in (QA 21.10.2026).
+          { key, quiet: true },
         )
         .catch((e: unknown) => {
           if (e instanceof ApiError && e.code === 'odometer_below' && typeof e.extra.lastKm === 'number') {
@@ -211,15 +219,20 @@ export function SwapWizard() {
           }
           throw e;
         });
-      drafts.drop();
-      if (!openJob && !toService && locationId) rememberPoint(locationId);
-      const total = outPhotos.length + inPhotos.length;
-      const failed = () => {
-        setPhotoTrouble(true);
-        return [];
-      };
-      await uploadAll(`/api/acts/${out.outActId}/photos`, outPhotos, (n) => setProgress(t.hand.photosUploading(n, total)), `${key}-out`).catch(failed);
-      await uploadAll(`/api/acts/${out.inActId}/photos`, inPhotos, (n) => setProgress(t.hand.photosUploading(outPhotos.length + n, total)), `${key}-in`).catch(failed);
+      try {
+        drafts.drop();
+        if (!openJob && !toService && locationId) rememberPoint(locationId);
+        const total = outPhotos.length + inPhotos.length;
+        const failed = () => {
+          setPhotoTrouble(true);
+          return [];
+        };
+        await uploadAll(`/api/acts/${out.outActId}/photos`, outPhotos, (n) => setProgress(t.hand.photosUploading(n, total)), `${key}-out`, { quiet: true }).catch(failed);
+        await uploadAll(`/api/acts/${out.inActId}/photos`, inPhotos, (n) => setProgress(t.hand.photosUploading(outPhotos.length + n, total)), `${key}-in`, { quiet: true }).catch(failed);
+      } finally {
+        // The swap is written whatever became of the photos: the screens learn of it now, once.
+        markStale();
+      }
       return out;
     });
     setProgress(null);
@@ -422,8 +435,12 @@ export function SwapWizard() {
             go={() => set({ step: 2 })}
           />
           {keyMissing && <p className="warn-text">{t.swap.sumKey(formatGel(KEY_FEE_TETRI, { decimals: false }))}</p>}
+          {/* What happens to this rental's contract, and only that: the copy signed on the
+              screen is archived, a Signify mark comes off — said where it is so (QA 21.10.2026). */}
           <p className="hint muted">
             {t.swap.sumContract}: {t.swap.contractNote}
+            {contract.signedAt && <> {t.swap.contractSignedKept}</>}
+            {contract.signedElsewhere && <> {t.swap.contractMarkOff}</>}
           </p>
           <p className="hint muted">{t.swap.stays}</p>
           {progress && <p className="hint muted">{progress}</p>}

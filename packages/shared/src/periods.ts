@@ -179,6 +179,17 @@ export function weeksAnchor(pickedUpOn: ISODate | null, shiftDays = 0): ISODate 
   return shiftDays > 0 ? addDays(pickedUpOn, shiftDays) : pickedUpOn;
 }
 
+/**
+ * The weekday a rental's rent falls due on, ISO 1–7: its own pay day, or —
+ * none of its own — the weekday its weeks start on, the pickup's moved by
+ * every day the weeks gained (ADR-0022, ADR-0041). A rental with no pay day
+ * of its own still has its pay day moved by a shift: Thursday → Sunday after
+ * three days. The journal of a moved week names it on both sides.
+ */
+export function rentWeekday(pickedUpOn: ISODate, shiftDays: number, payWeekday: number | null): number {
+  return payWeekday ?? isoWeekday(weeksAnchor(pickedUpOn, shiftDays)!);
+}
+
 /** A weekday moved round the week: Saturday (6) + 3 = Tuesday (2). */
 export function rotateWeekday(day: number, by: number): number {
   return ((((day - 1 + by) % 7) + 7) % 7) + 1;

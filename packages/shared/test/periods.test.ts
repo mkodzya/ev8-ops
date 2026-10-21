@@ -10,6 +10,7 @@ import {
   periodSeqOf,
   periodsThrough,
   rentDueOn,
+  rentWeekday,
   rotateWeekday,
   shiftExtraTetri,
   shiftDaysOffered,
@@ -166,6 +167,15 @@ describe('a week made longer (ADR-0041)', () => {
     // No pay day stays none; the weeks' own weekday is kept as none.
     expect(shiftedPayWeekday(null, 3, '2026-10-04')).toBeNull();
     expect(shiftedPayWeekday(4, 3, '2026-10-04')).toBeNull();
+  });
+
+  it('names the day the rent falls due on, own or the weeks’ — and with none of its own it moves too (QA 21.10.2026)', () => {
+    // No pay day of its own: Thursday, the pickup's; three days later the weeks run from Sunday.
+    expect(rentWeekday(PICKUP, 0, null)).toBe(4);
+    expect(rentWeekday(PICKUP, 3, null)).toBe(7);
+    // Its own pay day is the answer whatever the weeks do: Friday, then Monday once moved with them.
+    expect(rentWeekday(PICKUP, 0, 5)).toBe(5);
+    expect(rentWeekday(PICKUP, 3, shiftedPayWeekday(5, 3, weeksAnchor(PICKUP, 3)!))).toBe(1);
   });
 
   it('suggests rate ÷ 7 × days in whole lari: 150 a week, 3 days → 64', () => {

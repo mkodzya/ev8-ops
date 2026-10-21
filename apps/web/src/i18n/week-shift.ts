@@ -22,8 +22,12 @@ export const weekShiftEn = {
     undone: 'Move taken back',
     /** Why the sheet offers the days it offers (ux.md №15). */
     daysHint: 'Offered: the days he is late, so the next pay day is a week from today. If the money came on another day, choose so the pay day falls a week after it.',
-    /** Beside the price of a week made longer, in the table of weeks. */
-    short: (days: number, sum: string) => `+${days} d · extra ${sum}`,
+    /**
+     * Beside the price of a week made longer, in the table of weeks: two pieces
+     * that never break inside, wrapping between them in a narrow column (QA 21.10.2026).
+     */
+    shortDays: (days: number) => `+${days} d`,
+    shortExtra: (sum: string) => `extra ${sum}`,
     /** The journal's line of a move: which week, and each figure by its name. */
     journal: {
       week: (seq: number) => `week ${seq}`,
@@ -56,7 +60,8 @@ export const weekShiftRu: typeof weekShiftEn = {
     undoAction: 'Убрать сдвиг',
     undone: 'Сдвиг убран',
     daysHint: 'Предложено столько дней, на сколько он опоздал: следующий день оплаты — через 7 дней от сегодня. Если деньги пришли в другой день, выберите так, чтобы день оплаты был через неделю после него.',
-    short: (days: number, sum: string) => `+${days} дн. · доплата ${sum}`,
+    shortDays: (days: number) => `+${days} дн.`,
+    shortExtra: (sum: string) => `доплата ${sum}`,
     journal: {
       week: (seq: number) => `неделя ${seq}`,
       endsOn: 'конец',
@@ -88,7 +93,8 @@ export const weekShiftKa: typeof weekShiftEn = {
     undoAction: 'გადაწევის გაუქმება',
     undone: 'გადაწევა გაუქმდა',
     daysHint: 'შემოთავაზებულია დაგვიანების დღეები: შემდეგი გადახდის დღე — დღეიდან 7 დღეში. თუ თანხა სხვა დღეს შემოვიდა, აირჩიეთ ისე, რომ გადახდის დღე ამ დღიდან ერთი კვირის შემდეგ იყოს.',
-    short: (days: number, sum: string) => `+${days} დღე · დამატებით ${sum}`,
+    shortDays: (days: number) => `+${days} დღე`,
+    shortExtra: (sum: string) => `დამატებით ${sum}`,
     journal: {
       week: (seq: number) => `კვირა ${seq}`,
       endsOn: 'დასასრული',

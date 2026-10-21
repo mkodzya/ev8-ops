@@ -1,5 +1,7 @@
 // «Заменить мопед» in a running rental (ADR-0040). One file, so the Georgian
-// goes to proofreading as one list (docs/qa/rental-swap-ka-strings.md).
+// goes to proofreading as one list (docs/qa/rental-swap-ka-strings.md; the
+// polish of 21.10.2026 — docs/qa/rental-polish-ka-strings.md).
+import { SIGNIFY_IN_KA } from './contract-signed.js';
 
 export const rentalSwapEn = {
   swap: {
@@ -22,7 +24,15 @@ export const rentalSwapEn = {
     inCondition: 'Condition of the moped handed out, damage',
     openJob: (n: string) => `Repair ${n} is already open on this moped: it goes into it, there is nothing to choose.`,
     stays: 'Stay the same: the rental number, its weeks, the deposit, the debt and the pay day.',
-    contractNote: 'The contract is drawn again with the new VIN and waits for the customer’s signature; the signed copy stays in the archive, and a “Signed in Signify” mark is taken off.',
+    /**
+     * After «Contract:» in the summary, so the word is not said twice; then only
+     * what is true of this rental's contract (QA 21.10.2026).
+     */
+    contractNote: 'drawn again with the new VIN, it waits for the customer’s signature again.',
+    /** The contract was signed on the screen. */
+    contractSignedKept: 'The signed copy stays in the archive.',
+    /** The contract was marked signed in Signify (ADR-0039). */
+    contractMarkOff: 'The “Signed in Signify” mark is taken off.',
     sumDate: 'Date',
     sumReason: 'Why',
     sumOut: 'Gives back',
@@ -45,6 +55,8 @@ export const rentalSwapEn = {
     /** Instead of the rental's status, in the list of the moped a swap took away. */
     changed: 'changed',
     editHint: 'The moped of a running rental is changed with «Change the moped» in the menu.',
+    /** In the journal's «Moped changed» line: the swap took the mark off; when it was made and by whom, if known. */
+    markCleared: (made: string | null) => (made ? `“Signed in Signify” mark taken off (${made})` : '“Signed in Signify” mark taken off'),
   },
 };
 
@@ -69,7 +81,9 @@ export const rentalSwapRu: typeof rentalSwapEn = {
     inCondition: 'Состояние выдаваемого мопеда, повреждения',
     openJob: (n: string) => `На этом мопеде уже открыт ремонт ${n}: мопед уходит в него, выбирать не нужно.`,
     stays: 'Не меняются: номер аренды, её недели, залог, долг и день оплаты.',
-    contractNote: 'Договор будет нарисован заново с новым VIN и снова ждёт подписи клиента; подписанная копия остаётся в архиве, отметка «Подписан в Signify» снимается.',
+    contractNote: 'будет нарисован заново с новым VIN и снова ждёт подписи клиента.',
+    contractSignedKept: 'Подписанная копия остаётся в архиве.',
+    contractMarkOff: 'Отметка «Подписан в Signify» снимается.',
     sumDate: 'Дата',
     sumReason: 'Почему',
     sumOut: 'Сдаёт',
@@ -90,6 +104,7 @@ export const rentalSwapRu: typeof rentalSwapEn = {
     mark: 'замена',
     changed: 'заменён',
     editHint: 'Мопед идущей аренды меняется через «Заменить мопед» в меню.',
+    markCleared: (made: string | null) => (made ? `снята отметка «Подписан в Signify» (${made})` : 'снята отметка «Подписан в Signify»'),
   },
 };
 
@@ -114,7 +129,9 @@ export const rentalSwapKa: typeof rentalSwapEn = {
     inCondition: 'გაცემული მოპედის მდგომარეობა, დაზიანებები',
     openJob: (n: string) => `ამ მოპედზე უკვე გახსნილია რემონტი ${n}: მოპედი მასში გადადის, არჩევა საჭირო არ არის.`,
     stays: 'არ იცვლება: ქირის ნომერი, მისი კვირები, დეპოზიტი, ვალი და გადახდის დღე.',
-    contractNote: 'ხელშეკრულება თავიდან შედგება ახალი VIN-ით და კვლავ ელოდება კლიენტის ხელმოწერას; ხელმოწერილი ასლი არქივში რჩება, მონიშვნა „ხელმოწერილია Signify-ში“ იხსნება.',
+    contractNote: 'თავიდან შედგება ახალი VIN-ით და კვლავ ელოდება კლიენტის ხელმოწერას.',
+    contractSignedKept: 'ხელმოწერილი ასლი არქივში რჩება.',
+    contractMarkOff: `მონიშვნა „ხელმოწერილია ${SIGNIFY_IN_KA}“ იხსნება.`,
     sumDate: 'თარიღი',
     sumReason: 'რატომ',
     sumOut: 'აბრუნებს',
@@ -135,5 +152,6 @@ export const rentalSwapKa: typeof rentalSwapEn = {
     mark: 'შეცვლა',
     changed: 'შეცვლილია',
     editHint: 'მიმდინარე ქირის მოპედი იცვლება მენიუში — «მოპედის შეცვლა».',
+    markCleared: (made: string | null) => (made ? `მოიხსნა მონიშვნა „ხელმოწერილია ${SIGNIFY_IN_KA}“ (${made})` : `მოიხსნა მონიშვნა „ხელმოწერილია ${SIGNIFY_IN_KA}“`),
   },
 };

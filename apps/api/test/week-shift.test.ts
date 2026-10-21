@@ -125,6 +125,9 @@ describe.skipIf(!HAS_DB)('a rental week made longer (ADR-0041)', () => {
     expect(log?.note).toBe(REASON);
     expect(log?.before).toMatchObject({ seq: 2, endsOn: addDays(t, 3), amountTetri: 15000, extraDays: 0, extraTetri: 0 });
     expect(log?.after).toMatchObject({ seq: 2, endsOn: addDays(t, 6), amountTetri: 21400, extraDays: 3, extraTetri: 6400 });
+    // No pay day of its own, and still it moved — the pickup's weekday to the weeks' new one (QA 21.10.2026).
+    expect(log?.before).toMatchObject({ payWeekday: null, payDay: isoWeekday(addDays(t, -10)) });
+    expect(log?.after).toMatchObject({ payWeekday: null, payDay: isoWeekday(addDays(t, -7)) });
   });
 
   it('the other order — the week moved first, the money after — comes out the same', async () => {
@@ -419,8 +422,8 @@ describe.skipIf(!HAS_DB)('a rental week made longer (ADR-0041)', () => {
     // Week 3 runs from a week after today and is due a day into it.
     expect(c.rental).toMatchObject({ payWeekday: isoWeekday(addDays(t, 1)), payOffsetDays: 1, dueOn: addDays(t, 8), status: 'active' });
     const log = await r.prisma.auditLog.findFirst({ where: { entityType: 'rental', entityId: r.id, action: 'rental.week.shift' }, orderBy: { createdAt: 'desc' } });
-    expect(log?.before).toMatchObject({ payWeekday: isoWeekday(addDays(t, -2)) });
-    expect(log?.after).toMatchObject({ payWeekday: isoWeekday(addDays(t, 1)) });
+    expect(log?.before).toMatchObject({ payWeekday: isoWeekday(addDays(t, -2)), payDay: isoWeekday(addDays(t, -2)) });
+    expect(log?.after).toMatchObject({ payWeekday: isoWeekday(addDays(t, 1)), payDay: isoWeekday(addDays(t, 1)) });
 
     // The weekday the weeks now start on is no pay day of its own — not the pickup's weekday any more.
     expect((await call(r.owner, 'PATCH', `/api/rentals/${r.id}`, { payWeekday: isoWeekday(t), reason: 'test: back to the week’s first day' })).statusCode).toBe(200);

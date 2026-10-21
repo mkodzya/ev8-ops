@@ -543,9 +543,20 @@ export function RentalPage() {
                       <td className="mono">{fmtDate(p.endsOn)}</td>
                       <td className="num mono" title={why || undefined}>
                         {formatGel(p.amountTetri, { decimals: false })}
-                        {/* On lines of their own: inline, they stretched a phone's table wider still (ux.md №12). */}
-                        {(p.discountTetri ?? 0) > 0 && <span className="muted cell-note">{t.rental.discountShort(formatGel(p.discountTetri ?? 0, { decimals: false }))}</span>}
-                        {(p.extraDays ?? 0) > 0 && <span className="muted cell-note">{t.weekShift.short(p.extraDays ?? 0, formatGel(p.extraTetri ?? 0, { decimals: false }))}</span>}
+                        {/* On lines of their own: inline, they stretched a phone's table wider still (ux.md №12).
+                            Each phrase holds together and the line breaks between them, after the dot: in a
+                            75 px column «+3 дн. · доплата 64 ₾» fell into three lines (QA 21.10.2026). */}
+                        {(p.discountTetri ?? 0) > 0 && (
+                          <span className="muted cell-note">
+                            <span className="nobr">{t.rental.discountShort(formatGel(p.discountTetri ?? 0, { decimals: false }))}</span>
+                          </span>
+                        )}
+                        {(p.extraDays ?? 0) > 0 && (
+                          <span className="muted cell-note">
+                            <span className="nobr">{t.weekShift.shortDays(p.extraDays ?? 0)}&nbsp;·</span>{' '}
+                            <span className="nobr">{t.weekShift.shortExtra(formatGel(p.extraTetri ?? 0, { decimals: false }))}</span>
+                          </span>
+                        )}
                       </td>
                       <td className="num mono">{formatGel(p.paidTetri, { decimals: false })}</td>
                       <WeekState kind={weekKind(p)} partPaid={p.paidTetri > 0} overdue={r.status === 'overdue'} />
@@ -765,8 +776,10 @@ function RentalEdit({ rental, owner, onClose, onSaved }: { rental: RentalCard['r
           body.reason = f.payReason.trim();
         }
         if (f.target !== initial.target || f.per !== initial.per) {
-          body.buyoutTargetTetri = f.target ? parseGel(f.target) : null;
-          body.buyoutPerPaymentTetri = f.per ? parseGel(f.per) : null;
+          // As typed: the server reads the sum, and refuses one it cannot read
+          // under its field — it no longer turns into «no buy-out» on the way.
+          body.buyoutTargetTetri = f.target.trim() || null;
+          body.buyoutPerPaymentTetri = f.per.trim() || null;
         }
         await api.patch(`/api/rentals/${rental.id}`, body, { key });
         return { toast: { text: t.form.changesSaved } };
@@ -886,7 +899,8 @@ function DiscountSheet({ rentalId, week, onClose, onDone }: { rentalId: string; 
       initial={initial}
       label={t.rental.discount}
       submit={async (key) => {
-        await api.post(`/api/rentals/${rentalId}/weeks/${week.seq}/discount`, { discountTetri: f.amount.trim() || '0', reason: f.reason.trim() }, { key });
+        // Empty is no figure: 0 is typed to take a discount away, as the hint says (QA 21.10.2026).
+        await api.post(`/api/rentals/${rentalId}/weeks/${week.seq}/discount`, { discountTetri: f.amount.trim(), reason: f.reason.trim() }, { key });
         return { toast: { text: t.rental.discountDone } };
       }}
       onDone={onDone}

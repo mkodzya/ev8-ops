@@ -995,8 +995,12 @@ export async function swapVehicle(input: SwapInput): Promise<SwapResult> {
     // "Не подписан" again until the customer signs — here or in Signify, and a
     // person marks it once more. Who marked the old one and when stays in this
     // swap's journal line, beside the mark's own.
+    // The name beside the id: the journal line shows who made the mark the swap took off (QA 21.10.2026).
+    const markedBy = r.contractSignedElsewhereById
+      ? ((await tx.user.findUnique({ where: { id: r.contractSignedElsewhereById }, select: { name: true } }))?.name ?? null)
+      : null;
     const contractMark = r.contractSignedElsewhereAt
-      ? { markedAt: r.contractSignedElsewhereAt.toISOString(), markedById: r.contractSignedElsewhereById, markNote: r.contractSignedElsewhereNote }
+      ? { markedAt: r.contractSignedElsewhereAt.toISOString(), markedById: r.contractSignedElsewhereById, markedBy, markNote: r.contractSignedElsewhereNote }
       : null;
     if (contractMark) {
       await tx.rental.update({ where: { id: r.id }, data: { contractSignedElsewhereAt: null, contractSignedElsewhereById: null, contractSignedElsewhereNote: null } });

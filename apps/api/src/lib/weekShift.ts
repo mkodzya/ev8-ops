@@ -1,4 +1,4 @@
-import { MAX_SHIFT_DAYS, shiftedPayWeekday, weekShiftPlan, weeksAnchor } from '@ev8/shared';
+import { MAX_SHIFT_DAYS, rentWeekday, shiftedPayWeekday, weekShiftPlan, weeksAnchor } from '@ev8/shared';
 import { dateFromISO, isoDate } from './dates.js';
 import { prisma } from './db.js';
 import { badRequest, conflict, notFound } from './errors.js';
@@ -77,6 +77,12 @@ export async function shiftWeek(input: {
     // Every week of the rental, this one as it will be: the weekday the weeks run on after the move.
     const shiftDays = r.periods.reduce((n, p) => n + (p.seq === week.seq ? input.days : p.extraDays), 0);
     const payWeekday = shiftedPayWeekday(r.payWeekday, input.days - week.extraDays, weeksAnchor(pickedUpOn, shiftDays)!);
+    // The day the rent falls due on, before and after, whether the rental has
+    // one of its own or not: with none, the weeks' new weekday is the new pay
+    // day, and the journal says so (QA 21.10.2026: «день оплаты: пятница →
+    // понедельник» was missing on a rental with no pay day of its own).
+    const payDayBefore = rentWeekday(pickedUpOn, r.periods.reduce((n, p) => n + p.extraDays, 0), r.payWeekday);
+    const payDayAfter = rentWeekday(pickedUpOn, shiftDays, payWeekday);
     const moved = input.days > 0;
 
     await tx.rentalPeriod.update({
@@ -102,8 +108,9 @@ export async function shiftWeek(input: {
         action: moved ? 'rental.week.shift' : 'rental.week.shift.undo',
         entityType: 'rental',
         entityId: r.id,
-        before: { seq: week.seq, startsOn, endsOn: isoDate(week.endsOn), amountTetri: week.amountTetri, extraDays: week.extraDays, extraTetri: week.extraTetri, payWeekday: r.payWeekday },
-        after: { seq: week.seq, startsOn, endsOn: plan.endsOn, amountTetri: amount, extraDays: input.days, extraTetri: extra, payWeekday },
+        // `payWeekday` as stored (null — none of its own); `payDay` the weekday it falls due on, which the screen reads.
+        before: { seq: week.seq, startsOn, endsOn: isoDate(week.endsOn), amountTetri: week.amountTetri, extraDays: week.extraDays, extraTetri: week.extraTetri, payWeekday: r.payWeekday, payDay: payDayBefore },
+        after: { seq: week.seq, startsOn, endsOn: plan.endsOn, amountTetri: amount, extraDays: input.days, extraTetri: extra, payWeekday, payDay: payDayAfter },
         note: input.reason,
       },
     });
