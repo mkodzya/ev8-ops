@@ -20,6 +20,7 @@ import { kommoLinkEn } from './kommo-link.js';
 import { bankApiEn } from './bank-api.js';
 import { calendarEn } from './payments-calendar.js';
 import { payDayEn } from './pay-day.js';
+import { weekShiftEn } from './week-shift.js';
 import { workshopEn } from './workshop.js';
 import { workshopJobsEn } from './workshop-jobs.js';
 import { workshopApprovalEn } from './workshop-approval.js';
@@ -1329,6 +1330,7 @@ export const en = {
       reconcile_required: 'Only an owner enters bank payments.',
       regenerate_forbidden: 'Only an owner can replace a document already issued.',
       rental_not_found: 'Rental not found.',
+      rental_not_running: 'Only the week of a running rental is moved — not of one paused, disputed or returned.',
       return_before_pickup: 'The return date is before the pickup date.',
       rule_not_found: 'That remembered payee is gone already.',
       sale_before_history: 'A sale cannot be dated before the last event in the moped’s history. Pick that day or a later one.',
@@ -1340,6 +1342,8 @@ export const en = {
       same_state: 'The moped is already in this state.',
       same_vehicle: 'This is the moped the customer already has. Pick another one.',
       service_not_found: 'No such repair.',
+      shift_days_range: 'A week is made 1 to 6 days longer. Seven more days is simply the next week.',
+      shift_over_paid: 'That much of the week is paid already: its price cannot go below it.',
       sold_by_sale: 'A moped is sold by a sale, and comes back by a buy-back.',
       split_bad_amount: 'Every part needs a sum above zero.',
       split_bad_target: 'Every part pays exactly one record.',
@@ -1377,10 +1381,12 @@ export const en = {
       vin_or_note: 'Pick a moped from the fleet, or write why the VIN is not confirmed.',
       vins_count: 'The number of VINs in a line does not match the quantity ordered. Check each line.',
       vins_missing: 'A line has no VINs. Enter one VIN per row for every model line.',
+      week_at_nothing: 'This week costs nothing — there is nothing to make longer.',
       week_has_bank_money: 'This week already has its bank money.',
       week_not_carried: 'This week was not carried over as paid.',
       week_not_found: 'No such week in this rental.',
-      week_paid_before_transfer: 'This week was paid before the rental was carried over — it cannot be discounted.',
+      week_not_last: 'Only the last week is moved: the next one has already begun.',
+      week_paid_before_transfer: 'This week was paid before the rental was carried over — it stays as it was.',
       withheld_over_total: 'You cannot withhold more than the repair costs.',
       workshop_archived: 'This workshop was taken off the list. Choose another, or put it back in Settings → Repair.',
       workshop_archived_exists: 'A workshop by that name was taken off the list. Put it back instead: «…» → «Put back».',
@@ -1402,6 +1408,7 @@ export const en = {
   ...bankApiEn,
   ...calendarEn,
   ...payDayEn,
+  ...weekShiftEn,
   ...workshopEn,
   ...workshopJobsEn,
   ...workshopApprovalEn,

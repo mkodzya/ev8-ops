@@ -1064,3 +1064,38 @@ describe('a rental with its own pay day (ADR-0022)', () => {
     expect(entryOf(cal, 'P', '2026-10-14')).toMatchObject({ state: 'paid_ahead', creditTetri: RATE, paidOn: '2026-10-12' });
   });
 });
+
+describe('payments calendar · a week made longer (ADR-0041)', () => {
+  // Picked up on Thursday 01.10; its week 2 (from Thursday 08.10) was made
+  // three days longer for 64 on top: it ends on Saturday 17.10, and week 3
+  // runs from Sunday 18.10 instead of Thursday 15.10. Made-up rental.
+  const EXTRA = 6400;
+  const stretched = (paidTetri: number): CalendarPeriodRow => ({
+    ...row(2, '2026-10-08', RATE + EXTRA, paidTetri, paidTetri > 0 ? by('2026-10-11') : null),
+    endsOn: '2026-10-17',
+    extraDays: 3,
+  });
+  const moved = (paidTetri: number, over: { debtTetri?: number } = {}) =>
+    rental({ id: 'MV', pickedUpOn: '2026-10-01', rows: [paidRow(1, '2026-10-01'), stretched(paidTetri)], ...over });
+
+  it('shows the next week on its moved day, and none on the old one', () => {
+    const cal = calendar({ rentals: [moved(RATE + EXTRA)] });
+    identities(cal);
+    expect(entryOf(cal, 'MV', '2026-10-08')).toMatchObject({ seq: 2, endsOn: '2026-10-17', amountTetri: RATE + EXTRA, state: 'paid' });
+    expect(cal.entries.some((e) => e.rentalId === 'MV' && (e.dueOn === '2026-10-15' || e.dueOn === '2026-10-22'))).toBe(false);
+    expect(entryOf(cal, 'MV', '2026-10-18')).toMatchObject({ seq: 3, endsOn: '2026-10-24', amountTetri: RATE, projected: true, state: 'expected' });
+    expect(entryOf(cal, 'MV', '2026-10-25')).toMatchObject({ seq: 4, projected: true });
+  });
+
+  it('owes the extra days with the week, and the night puts money held for the rental on them', () => {
+    const owed = calendar({ rentals: [moved(RATE, { debtTetri: EXTRA })] });
+    identities(owed);
+    expect(entryOf(owed, 'MV', '2026-10-08')).toMatchObject({ amountTetri: RATE + EXTRA, paidTetri: RATE, leftTetri: EXTRA, state: 'overdue' });
+
+    const held = credit({ paymentId: 'extra', occurredOn: '2026-10-11', creditTetri: EXTRA, customerId: 'c-MV', rentalId: 'MV' });
+    const cal = calendar({ rentals: [moved(RATE, { debtTetri: EXTRA })], credits: [held] });
+    identities(cal);
+    expect(entryOf(cal, 'MV', '2026-10-08')).toMatchObject({ paidTetri: RATE + EXTRA, leftTetri: 0, creditTetri: EXTRA, state: 'paid' });
+    expect(entryOf(cal, 'MV', '2026-10-18')).toMatchObject({ creditTetri: 0, state: 'expected' });
+  });
+});

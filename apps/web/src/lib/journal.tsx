@@ -77,8 +77,18 @@ function said(t: Dict, field: string, raw: string): string {
   }
 }
 
-function value(field: string, raw: unknown): string | null {
+function value(field: string, raw: unknown, shifted = false): string | null {
   const t = currentDict();
+  // A rental's pay day is a weekday, ISO 1–7, and none of its own is the
+  // weeks' first day (ADR-0022, ADR-0041): «6 → 2» told nobody anything.
+  // None is said as the card says it: the pickup's weekday, or the week's
+  // first day once weeks were moved.
+  if (field === 'payWeekday') {
+    if (raw == null) return shifted ? t.payDay.asWeekStart : t.payDay.asPickup;
+    return typeof raw === 'number' && raw >= 1 && raw <= 7 ? t.calendar.weekdaysIn[raw % 7] : String(raw);
+  }
+  // The days a week gained, with their unit (ADR-0041).
+  if (field === 'extraDays' && typeof raw === 'number') return t.weekShift.journal.days(raw);
   // A repair's kind may be given, changed and taken away again (Mika,
   // 21.10.2026): there «none» is an answer — «не указана → ДТП» — and not a
   // gap that hides the line.
@@ -112,23 +122,30 @@ export function noteWords(t: { feedNotes: Record<string, string> }, note: string
  * "было → стало" for the fields both sides name. A journal entry whose sides
  * say nothing legible shows nothing rather than a line of JSON.
  */
-export function ChangedFromTo({ before, after }: { before: unknown; after: unknown }) {
+export function ChangedFromTo({ action, before, after }: { action?: string; before: unknown; after: unknown }) {
   const was = (before ?? null) as Bag;
   const now = (after ?? null) as Bag;
   if (!was || !now || typeof was !== 'object' || typeof now !== 'object') return null;
   const t = currentDict();
   const pairs: { field: string; label: string | null; from: string; to: string }[] = [];
+  // Whether the rental's weeks had been moved, which a pay day change keeps
+  // beside it (ADR-0041); a line from before the move had none to keep.
+  const shifted = typeof now.weekShiftDays === 'number' && now.weekShiftDays > 0;
   for (const field of Object.keys(was)) {
     if (!(field in now)) continue;
-    const from = value(field, was[field]);
-    const to = value(field, now[field]);
+    const from = value(field, was[field], shifted);
+    const to = value(field, now[field], shifted);
     if (from == null || to == null || from === to) continue;
-    pairs.push({ field, label: named(t, field), from, to });
+    pairs.push({ field, label: named(t, field, action), from, to });
   }
   const moved = movedLines(was.schedule, now.schedule);
+  // Which week a move was made on: the number is the same on both sides, so
+  // no pair carries it (ADR-0041).
+  const week = action && WEEK_SHIFT.has(action) && typeof now.seq === 'number' ? t.weekShift.journal.week(now.seq) : null;
   if (pairs.length === 0 && moved === 0) return null;
   return (
     <>
+      {week && <span className="muted">{` · ${week}`}</span>}
       {pairs.map((p) => (
         <span key={p.field} className="muted">
           {' · '}
@@ -146,9 +163,24 @@ export function ChangedFromTo({ before, after }: { before: unknown; after: unkno
  * 19.05.2026 → 16.05.2026 · 19.05.2027 → 16.05.2027» left the reader to guess
  * that the second pair was the warranty (review of the sale date, 21.10.2026).
  */
-function named(t: Dict, field: string): string | null {
-  return field === 'warrantyUntil' ? t.saleCard.warranty : null;
+function named(t: Dict, field: string, action?: string): string | null {
+  if (field === 'warrantyUntil') return t.saleCard.warranty;
+  // A rental's own pay day, whichever action moved it (ADR-0022, ADR-0041).
+  if (field === 'payWeekday') return t.weekShift.journal.payDay;
+  // A week moved: its end, its price, the days and their extra, each by name —
+  // three bare pairs of dates and numbers side by side said nothing (review, 21.10.2026).
+  if (action && WEEK_SHIFT.has(action)) {
+    const words = t.weekShift.journal;
+    if (field === 'endsOn') return words.endsOn;
+    if (field === 'amountTetri') return words.amountTetri;
+    if (field === 'extraDays') return words.extraDays;
+    if (field === 'extraTetri') return words.extraTetri;
+  }
+  return null;
 }
+
+/** A week made longer, and the move taken back (ADR-0041). */
+const WEEK_SHIFT = new Set(['rental.week.shift', 'rental.week.shift.undo']);
 
 /**
  * A schedule is a list, and a list has no "было → стало" of its own, so the
