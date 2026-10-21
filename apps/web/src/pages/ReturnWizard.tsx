@@ -60,6 +60,7 @@ export function ReturnWizard() {
     step: 0,
     returnedOn: actOn ?? todayISO(),
     odometer: '',
+    odometerReason: '',
     condition: '',
     items: {} as Items,
     lateChoice: null as 'week' | 'late' | null,
@@ -93,7 +94,7 @@ export function ReturnWizard() {
   // A refusal goes back to the step whose field it names.
   useEffect(() => {
     const field = op.failure?.field;
-    if (field && ['returnedOn', 'odometerKm', 'condition'].includes(field)) set({ step: 0 });
+    if (field && ['returnedOn', 'odometerKm', 'odometerReason', 'condition'].includes(field)) set({ step: 0 });
     if (field && ['withheldTetri', 'grounds', 'reason', 'returnedTo', 'returnedToReason'].includes(field)) set({ step: 1 });
     if (field === 'locationId') set({ step: 2 });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -127,7 +128,13 @@ export function ReturnWizard() {
   const km = f.odometer.trim() === '' ? null : Number(f.odometer.replace(/\s/g, ''));
   const pickupKm = preview.pickupKm;
   const kmBelow = km != null && pickupKm != null && km < pickupKm;
-  const actOk = km != null && Number.isInteger(km) && km >= 0 && !kmBelow && f.returnedOn <= todayISO();
+  // Below the moped's last reading — a repair during the rental may have read
+  // it — only with the reason, as the hand-over asks it (ADR-0038 §4). The
+  // preview names that reading since stage 6; its shared type does not yet.
+  const lastKm = (preview as { vehicleKm?: number | null }).vehicleKm ?? null;
+  const reason = (f.odometerReason ?? '').trim();
+  const kmLower = !kmBelow && ((km != null && lastKm != null && km < lastKm) || op.failure?.field === 'odometerReason');
+  const actOk = km != null && Number.isInteger(km) && km >= 0 && !kmBelow && (!kmLower || reason.length > 0) && f.returnedOn <= todayISO();
 
   const claims = claimsOf(preview);
   const held = preview.deposit?.heldTetri ?? 0;
@@ -159,6 +166,7 @@ export function ReturnWizard() {
         {
           returnedOn: f.returnedOn,
           odometerKm: km,
+          odometerReason: kmLower ? reason : null,
           condition: f.condition.trim() || null,
           items: Object.fromEntries(itemKeys.map((k) => [k, { state: item(k).state, note: item(k).note.trim() || null }])),
           toService,
@@ -228,6 +236,14 @@ export function ReturnWizard() {
             </Field>
           </div>
           {kmBelow && <p className="field-err">{t.back.odometerBelow}</p>}
+          {kmLower && (
+            <>
+              {lastKm != null && <p className="warn-text">{t.back.odometerBelowLast(String(lastKm))}</p>}
+              <Field label={t.hand.odometerReason} hint={t.hand.odometerReasonHint} name="odometerReason">
+                <input className="input" value={f.odometerReason ?? ''} onChange={(e) => set({ odometerReason: e.target.value })} />
+              </Field>
+            </>
+          )}
           <ul className="item-list">
             {itemKeys.map((k) => (
               <li key={k}>

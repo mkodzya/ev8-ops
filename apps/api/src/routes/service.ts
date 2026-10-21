@@ -125,6 +125,7 @@ function serialize(job: {
     id: string;
     vin: string;
     fleetNo: number | null;
+    odometerKm: number | null;
     model: { brand: string; name: string };
     trackers: { id: string; imei: string; simPhone: string | null; installedOn: Date; partId: string | null }[];
   };
@@ -158,6 +159,7 @@ function serialize(job: {
   reasonKind: string | null;
   openedOdometerKm: number | null;
   odometerReason: string | null;
+  closedOdometerReason: string | null;
   openedAt: Date | null;
   works: {
     id: string;
@@ -239,6 +241,8 @@ function serialize(job: {
       vin: job.vehicle.vin,
       number: fleetNumber(job.vehicle.fleetNo),
       model: `${job.vehicle.model.brand} ${job.vehicle.model.name}`,
+      /** The moped's last reading: a lower one at closing asks for its reason (ADR-0038 §4). */
+      odometerKm: job.vehicle.odometerKm,
       /** The tracker on the moped now, if any (ADR-0036): what «снять трекер» takes off. */
       tracker: job.vehicle.trackers[0] ? trackerOut(job.vehicle.trackers[0]) : null,
     },
@@ -280,6 +284,8 @@ function serialize(job: {
     reasonKind: job.reasonKind,
     openedOdometerKm: job.openedOdometerKm,
     odometerReason: job.odometerReason,
+    /** Why the reading at closing is below the last one (ADR-0038 §4). */
+    closedOdometerReason: job.closedOdometerReason,
     openedAt: job.openedAt?.toISOString() ?? null,
     works,
     worksTotal: { seconds: total.seconds, tetri: total.tetri as number | null, unnormed: total.unnormed },
@@ -1544,7 +1550,10 @@ export function serviceRoutes(app: FastifyInstance): void {
     const b = req.body ?? {};
     const actor = actorOf(req);
     const owner = hasPerm(actor, 'service.manage');
-    const job = await prisma.serviceJob.findFirst({ where: { id: req.params.id, ...(owner ? {} : mine(actor)) }, include: { parts: true, works: { select: WORK_MONEY } } });
+    const job = await prisma.serviceJob.findFirst({
+      where: { id: req.params.id, ...(owner ? {} : mine(actor)) },
+      include: { parts: true, works: { select: WORK_MONEY }, vehicle: { select: { odometerKm: true } } },
+    });
     if (!job) throw notFound('job_not_found', 'No such repair job.');
     if (job.status === 'draft') throw conflict('job_waits_approval', 'This repair waits for approval; it closes after.');
     if (job.status !== 'open') throw conflict('job_closed', 'This job is already closed.');
@@ -1567,6 +1576,13 @@ export function serviceRoutes(app: FastifyInstance): void {
       if (odometerKm == null) throw badRequest('missing_field', 'Say what the odometer reads.', { field: 'odometerKm' });
       if (!closedLocationId) throw badRequest('missing_field', 'Say where the moped stands now.', { field: 'locationId' });
     }
+    // Less than at the opening, or than the moped's last reading, only with
+    // the reason — as the opening asks it (ADR-0038 §4): a typo would move the
+    // planned maintenance with nobody saying why.
+    const odometerReason = str(b, 'odometerReason', { max: 500 });
+    const lastKm = [job.openedOdometerKm, job.vehicle.odometerKm].reduce<number | null>((m, k) => (k == null ? m : Math.max(m ?? k, k)), null);
+    const lower = odometerKm != null && lastKm != null && odometerKm < lastKm;
+    if (lower && !odometerReason) throw badRequest('odometer_below', 'The mileage is below the last recorded one; say why.', { field: 'odometerReason', lastKm });
     if (closedLocationId && !(await prisma.location.findFirst({ where: { id: closedLocationId, archived: false }, select: { id: true } }))) {
       throw notFound('location_not_found', 'No such point.');
     }
@@ -1622,6 +1638,7 @@ export function serviceRoutes(app: FastifyInstance): void {
           withheldTetri,
           chargedTetri: charge.debtTetri,
           odometerKm: odometerKm ?? job.odometerKm,
+          closedOdometerReason: lower ? odometerReason : null,
           closedLocationId: closedLocationId ?? job.closedLocationId,
           notes: owner && 'notes' in b ? str(b, 'notes', { max: 4000 }) : job.notes,
           updatedAt: new Date(),
@@ -1642,7 +1659,7 @@ export function serviceRoutes(app: FastifyInstance): void {
           action: 'service.close',
           entityType: 'service_job',
           entityId: job.id,
-          after: { closedOn, totalTetri: total, withheldTetri, payer: job.payer, odometerKm, locationId: closedLocationId, photosAfter: had + photos.length },
+          after: { closedOn, totalTetri: total, withheldTetri, payer: job.payer, odometerKm, odometerReason: lower ? odometerReason : undefined, locationId: closedLocationId, photosAfter: had + photos.length },
         },
       });
     });

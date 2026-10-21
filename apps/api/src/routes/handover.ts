@@ -150,6 +150,7 @@ export function handoverRoutes(app: FastifyInstance): void {
       rentalId: req.params.id,
       returnedOn: date(b, 'returnedOn') ?? today,
       odometerKm: int(b, 'odometerKm', { min: 0 }),
+      odometerReason: str(b, 'odometerReason', { max: 500 }),
       condition: str(b, 'condition', { max: 4000 }),
       items: itemsOf(b),
       toService: b.toService === true,

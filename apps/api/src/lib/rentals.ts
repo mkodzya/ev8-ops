@@ -341,6 +341,8 @@ export interface ReturnInput {
   rentalId: string;
   returnedOn: string;
   odometerKm: number | null;
+  /** Why the reading is below the moped's last one (ADR-0038 §4). */
+  odometerReason: string | null;
   condition: string | null;
   /** By what was handed over: moped, key, battery_1…N, charger_1…N (B5-07). */
   items: Record<string, { state: 'ok' | 'damaged' | 'missing'; note: string | null }>;
@@ -373,6 +375,7 @@ export async function returnPreview(input: { rentalId: string; returnedOn: strin
     include: {
       periods: { orderBy: { seq: 'asc' } },
       acts: { where: { kind: 'pickup' }, select: { odometerKm: true } },
+      vehicle: { select: { odometerKm: true } },
       deposit: {
         include: {
           withholdings: { where: { voidedAt: null }, include: { serviceJob: { select: { number: true } } } },
@@ -393,6 +396,8 @@ export async function returnPreview(input: { rentalId: string; returnedOn: strin
     batteries: r.batteries,
     chargers: r.chargers,
     pickupKm: r.acts[0]?.odometerKm ?? null,
+    /** The moped's last reading: below it, the return asks why (ADR-0038 §4). */
+    vehicleKm: r.vehicle?.odometerKm ?? null,
     expectedReturnOn: isoDate(r.expectedReturnOn),
     settlement,
     otherChargesTetri: openCharges,
@@ -429,6 +434,15 @@ export async function returnRental(input: ReturnInput): Promise<{ actId: string;
     const pickupKm = r.acts[0]?.odometerKm ?? null;
     if (pickupKm != null && input.odometerKm! < pickupKm) {
       throw conflict('odometer_below_pickup', 'The mileage is below the hand-over’s.', { field: 'odometerKm', pickupKm });
+    }
+    // Below the moped's last reading — a repair during the rental may have
+    // read it higher — only with the reason, as the hand-over asks it
+    // (ADR-0038 §4): a typo would move the planned maintenance unexplained.
+    const lastKm = r.vehicleId ? ((await tx.vehicle.findUnique({ where: { id: r.vehicleId }, select: { odometerKm: true } }))?.odometerKm ?? null) : null;
+    const odometerReason = input.odometerReason?.trim() || null;
+    const lower = lastKm != null && input.odometerKm! < lastKm;
+    if (lower && !odometerReason) {
+      throw badRequest('odometer_below', 'The mileage is below the moped’s last reading; say why.', { field: 'odometerReason', lastKm });
     }
 
     // The weeks by the return day exist before anything is counted.
@@ -504,6 +518,7 @@ export async function returnRental(input: ReturnInput): Promise<{ actId: string;
         kind: 'return',
         occurredOn: dateFromISO(input.returnedOn)!,
         odometerKm: input.odometerKm,
+        odometerReason: lower ? odometerReason : null,
         condition: input.condition,
         items: input.items,
         locationId: toService ? null : input.locationId,

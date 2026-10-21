@@ -24,6 +24,20 @@ interface Point {
   kind: string;
 }
 
+type Lower = '' | 'replaced' | 'mistake' | 'other';
+
+/**
+ * The reading a closing does not go below without its reason: the opening's or
+ * the moped's last, whichever is higher (ADR-0038 §4). The server stays the
+ * judge; this only asks on the screen before it is asked.
+ */
+export function lastKmOf(job: ServiceJob): number | null {
+  // The moped's own reading came with stage 6; the shared type does not name it yet.
+  const moped = (job.vehicle as { odometerKm?: number | null }).odometerKm ?? null;
+  const known = [job.openedOdometerKm, moped].filter((k): k is number => k != null);
+  return known.length > 0 ? Math.max(...known) : null;
+}
+
 /**
  * The mechanic closes his repair (stage 3; prototype mechanic-approval-options.html,
  * closing variant A — one screen): photos after the repair, the odometer, where
@@ -41,6 +55,8 @@ export function RepairClosePage() {
   const points = useLoad<{ locations: Point[] }>(moved ? '/api/service/locations' : null);
   const [photos, setPhotos] = useState<PreparedPhoto[]>([]);
   const [km, setKm] = useState('');
+  const [lower, setLower] = useState<Lower>('');
+  const [lowerWords, setLowerWords] = useState('');
   const [where, setWhere] = useState<string | null>(null);
   const [shown, setShown] = useState<Record<string, string>>({});
   const op = useOperation();
@@ -58,12 +74,17 @@ export function RepairClosePage() {
   const chosen = where ?? (workshops.length === 1 ? workshops[0]!.id : null);
   const kmValue = km.trim() === '' ? null : Number(km.replace(/\s/g, ''));
   const moped = j.vehicle.number ?? j.vehicle.model;
+  const lastKm = lastKmOf(j);
+  // Asked as the opening asks it; shown too when the server asks for a reason the screen did not expect.
+  const below = (kmValue != null && lastKm != null && kmValue < lastKm) || op.failure?.field === 'odometerReason';
+  const lowerText = lower === 'other' ? lowerWords.trim() : lower ? t.wjob.lowerReasons[lower] : '';
 
   const close = async () => {
     const p: Record<string, string> = {};
     if (had.length + photos.length === 0) p.photos = t.wappr.needAfter;
     if (moved && (kmValue == null || !Number.isInteger(kmValue) || kmValue < 0)) p.km = t.wappr.needKm;
     if (moved && !chosen) p.where = t.wappr.needWhere;
+    if (below && !lowerText) p.lower = t.wjob.needWhy;
     setShown(p);
     if (Object.keys(p).length > 0) return;
     const res = await op.run(async (key) =>
@@ -71,6 +92,7 @@ export function RepairClosePage() {
         `/api/service/${j.id}/close`,
         {
           odometerKm: kmValue,
+          odometerReason: below ? lowerText : null,
           locationId: moved ? chosen : null,
           photos: await Promise.all(photos.map(async (ph) => ({ mimeType: ph.mimeType, dataBase64: await toBase64(ph.blob) }))),
         },
@@ -121,6 +143,26 @@ export function RepairClosePage() {
                   <input className="input wjob-big" inputMode="numeric" value={km} onChange={(e) => setKm(e.target.value.replace(/[^\d\s]/g, ''))} />
                 </Field>
               </div>
+              {below && (
+                <div className="wjob-lower" data-field="odometerReason">
+                  {lastKm != null && <p>{t.wjob.lowerKm(groupDigits(lastKm))}</p>}
+                  <div className="wjob-chips">
+                    {(['replaced', 'mistake', 'other'] as const).map((k) => (
+                      <button key={k} type="button" className={`wjob-chip wjob-chip-sm ${lower === k ? 'on' : ''}`} aria-pressed={lower === k} onClick={() => setLower(k)}>
+                        {t.wjob.lowerReasons[k]}
+                      </button>
+                    ))}
+                  </div>
+                  {lower === 'other' && (
+                    <Field label={t.wjob.lowerWords}>
+                      <input className="input" value={lowerWords} onChange={(e) => setLowerWords(e.target.value)} />
+                    </Field>
+                  )}
+                  {(shown.lower ?? (op.failure?.field === 'odometerReason' ? op.failure.fieldText : null)) && (
+                    <span className="field-err">{shown.lower ?? op.failure?.fieldText}</span>
+                  )}
+                </div>
+              )}
               {moved && (
                 <div className={`field ${shown.where ? 'field-bad' : ''}`} data-field="locationId">
                   <span className="lbl">{t.wappr.where}</span>

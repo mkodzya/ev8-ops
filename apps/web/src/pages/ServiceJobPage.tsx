@@ -21,6 +21,7 @@ import type { ServiceJob, ServiceWorkLine, Workshop } from './ServicePage.js';
 import { AddWorkSheet, NormTotal, RejectSheet, StatedLines, SuggestCustomer, isRepeat, useDecisionWords, useWhen, waitingLines } from './RepairApproval.js';
 import { PartNote, PartsBlock, TrackerFields } from './RepairParts.js';
 import { Photos } from './WorkshopJobWizard.js';
+import { lastKmOf } from './RepairClosePage.js';
 import type { PartRow } from './StockPage.js';
 
 interface Locations {
@@ -709,8 +710,12 @@ function CloseSheet({ job, onClose, onSaved }: { job: ServiceJob; onClose: () =>
   const locations = useLoad<Locations>(job.movedVehicle ? '/api/locations' : null);
   const mayWithhold = can('deposit.decide') && job.payer === 'customer' && job.rental != null;
   const rental = useLoad<RentalDeposit>(mayWithhold ? `/api/rentals/${job.rental!.id}` : null);
-  const initial = { closedOn: todayISO(), odometer: job.odometerKm != null ? String(job.odometerKm) : '', locationId: '', withhold: '' };
+  const initial = { closedOn: todayISO(), odometer: job.odometerKm != null ? String(job.odometerKm) : '', odometerReason: '', locationId: '', withhold: '' };
   const [f, setF] = useState(initial);
+  // Below the opening's or the moped's last reading only with the reason (ADR-0038 §4).
+  const lastKm = lastKmOf(job);
+  const km = f.odometer.trim() === '' ? null : Number(f.odometer.replace(/\s/g, ''));
+  const below = km != null && lastKm != null && km < lastKm;
   // A mechanic's repair closes with a photo after it (stage 3); one may be on it already.
   const afterHad = job.photos.filter((p) => p.tag === 'after').length;
   const [after, setAfter] = useState<PreparedPhoto[]>([]);
@@ -739,6 +744,8 @@ function CloseSheet({ job, onClose, onSaved }: { job: ServiceJob; onClose: () =>
           {
             closedOn: f.closedOn,
             odometerKm: f.odometer === '' ? null : Number(f.odometer),
+            // A draft from before stage 6 has no reason in it.
+            odometerReason: below ? (f.odometerReason ?? '').trim() || null : null,
             locationId: f.locationId || null,
             withheldTetri: parseGel(f.withhold) ?? 0,
             photos: await Promise.all(after.map(async (p) => ({ mimeType: p.mimeType, dataBase64: await toBase64(p.blob) }))),
@@ -770,6 +777,14 @@ function CloseSheet({ job, onClose, onSaved }: { job: ServiceJob; onClose: () =>
           <input className="input input-amount mono" value={f.odometer} onChange={(e) => setF({ ...f, odometer: e.target.value })} inputMode="numeric" />
         </Field>
       </div>
+      {below && (
+        <>
+          <p className="warn-text">{t.repair.odometerBelow(groupDigits(lastKm!))}</p>
+          <Field label={t.hand.odometerReason} hint={t.hand.odometerReasonHint} name="odometerReason">
+            <input className="input" value={f.odometerReason ?? ''} onChange={(e) => setF({ ...f, odometerReason: e.target.value })} />
+          </Field>
+        </>
+      )}
       {/* A moped that never left the customer keeps no point of ours (§3.7). */}
       {job.movedVehicle && (
         <Field label={t.repair.where} name="locationId">
