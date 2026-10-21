@@ -1,11 +1,11 @@
-import { CONTACT_KINDS, CUSTOMER_KINDS, CUSTOMER_SOURCES, VEHICLE_POOLS, VEHICLE_STATES, isoWeekday, nameSpellings, normalizeVin, todayISO, vinFault } from '@ev8/shared';
+import { CONTACT_KINDS, CUSTOMER_KINDS, CUSTOMER_SOURCES, VEHICLE_POOLS, VEHICLE_STATES, isoWeekday, manualMoveRefusal, nameSpellings, normalizeVin, todayISO, vinFault, type ManualMoveRefusal, type VehicleState } from '@ev8/shared';
 import type { FastifyInstance } from 'fastify';
 import { audit } from '../lib/audit.js';
 import { hasPerm } from '../lib/auth.js';
 import { dateFromISO, isoDate } from '../lib/dates.js';
 import { prisma } from '../lib/db.js';
 import { env } from '../lib/env.js';
-import { badRequest, conflict, forbidden, isUniqueViolation, notFound } from '../lib/errors.js';
+import { badRequest, conflict, forbidden, isUniqueViolation, notFound, type ApiError } from '../lib/errors.js';
 import { actorOf } from '../lib/guard.js';
 import { date, int, oneOf, str, strList, tetri } from '../lib/validate.js';
 import { movePool, moveVehicle } from '../lib/vehicles.js';
@@ -14,6 +14,19 @@ type Body = Record<string, unknown>;
 
 /** How long a park move stays a slip that can be taken back rather than a decision. */
 const UNDO_WINDOW_MS = 10 * 60 * 1000;
+
+/**
+ * A move by hand refused, in the API's words (the screen has its own in
+ * `errors.codes`). Which refusal it is comes from the shared rule the sheet
+ * offers its states by, so the two cannot drift apart again.
+ */
+const MANUAL_MOVE_REFUSED: Record<ManualMoveRefusal, () => ApiError> = {
+  vehicle_rented_move: () => conflict('vehicle_rented_move', 'Close the rental first; a rented moped does not move by hand.'),
+  sold_by_sale: () => conflict('sold_by_sale', 'A moped is sold by a sale and comes back by a buy-back.'),
+  owner_only: () => forbidden('owner_only', 'A manager moves a moped between free and service.'),
+  use_rental: () => conflict('use_rental', 'A moped becomes rented through a hand-over, not by hand.'),
+  same_state: () => conflict('same_state', 'The moped is already in this state.'),
+};
 
 // Writes. Every one goes through the change journal.
 
@@ -200,13 +213,13 @@ export function opsRoutes(app: FastifyInstance): void {
     const occurredOn = date(b, 'occurredOn') ?? todayISO(new Date(), env.TZ);
     const v = await prisma.vehicle.findUnique({ where: { id: req.params.id } });
     if (!v) throw notFound('vehicle_not_found', 'No such moped.');
-    if (v.state === 'rented' && v.currentRentalId) throw conflict('vehicle_rented_move', 'Close the rental first; a rented moped does not move by hand.');
-    // Sold is what a sale says, not what a hand says; a buy-back brings it
-    // back. Writing one off is an owner's (Q22, §3.6).
-    if (toState === 'sold' || v.state === 'sold') throw conflict('sold_by_sale', 'A moped is sold by a sale and comes back by a buy-back.');
-    if (!hasPerm(actor, 'deposit.decide') && toState !== 'available' && toState !== 'service') {
-      throw forbidden('owner_only', 'A manager moves a moped between free and service.');
-    }
+    // One rule with the sheet that offers the states (manualMoveRefusal):
+    // a rented moped moves through its rental; sold is what a sale says, not
+    // what a hand says, and a buy-back brings it back; writing one off is an
+    // owner's (Q22, §3.6); and the state it is already in is no move at all —
+    // it used to be written as an X → X event with a reason (21.10.2026).
+    const refusal = manualMoveRefusal(v.state as VehicleState, toState, { mayWriteOff: hasPerm(actor, 'deposit.decide'), hasRental: !!v.currentRentalId });
+    if (refusal) throw MANUAL_MOVE_REFUSED[refusal]();
     const moved = await prisma.$transaction(async (tx) => {
       const m = await moveVehicle(tx, { vehicleId: v.id, kind: 'manual', occurredOn, actorId: actor.id, reason, toState });
       await tx.auditLog.create({ data: { actorId: actor.id, action: 'vehicle.state.manual', entityType: 'vehicle', entityId: v.id, before: { state: m.from }, after: { state: m.to }, note: reason } });

@@ -1324,6 +1324,7 @@ export const en = {
       sale_has_payments: 'Cancel the payments on this sale first.',
       sale_not_found: 'Sale not found.',
       same_customer: 'A card cannot be merged into itself.',
+      same_state: 'The moped is already in this state.',
       service_not_found: 'No such repair.',
       sold_by_sale: 'A moped is sold by a sale, and comes back by a buy-back.',
       split_bad_amount: 'Every part needs a sum above zero.',
