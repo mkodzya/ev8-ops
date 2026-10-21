@@ -1,4 +1,4 @@
-import { AFTER_PHOTOS_MAX, daysBetween, localDateTime, hoursFromMinutes, labourTetri as labourFor, minutesFromHours, normSecFromMinutes, parseGel, todayISO } from '@ev8/shared';
+import { AFTER_PHOTOS_MAX, daysBetween, localDateTime, hoursFromMinutes, labourTetri as labourFor, minutesFromHours, normSecFromMinutes, parseGel, todayISO, workshopChoices } from '@ev8/shared';
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api.js';
@@ -544,12 +544,19 @@ function Choice({ k, v, quiet, onPick }: { k: string; v: string; quiet?: boolean
   );
 }
 
-/** The workshop that has it: a list the owner keeps, never free text (§8). */
+/**
+ * The workshop that has it: a list the owner keeps, never free text (§8). One
+ * taken off the list since is still this repair's, so it is shown first and
+ * marked, to be kept or changed — not left unmarked and cleared by accident
+ * (owner's decision of 21.10.2026).
+ */
 function WorkshopSheet({ job, onClose, onSaved }: { job: ServiceJob; onClose: () => void; onSaved: () => void }) {
   const t = useT();
   const workshops = useLoad<{ workshops: Workshop[] }>('/api/workshops');
   const initial = job.workshop?.id ?? '';
   const [v, setV] = useState(initial);
+  // Until the list has come, nothing is known to be off it.
+  const choices = workshops.data ? workshopChoices(workshops.data.workshops, job.workshop) : [];
   return (
     <FormSheet
       title={t.repair.workshopPick}
@@ -567,9 +574,10 @@ function WorkshopSheet({ job, onClose, onSaved }: { job: ServiceJob; onClose: ()
         <button type="button" className={`pill pill-sm ${v === '' ? 'on' : ''}`} onClick={() => setV('')}>
           {t.repair.workshopNone}
         </button>
-        {(workshops.data?.workshops ?? []).map((w) => (
+        {choices.map((w) => (
           <button key={w.id} type="button" className={`pill pill-sm ${v === w.id ? 'on' : ''}`} onClick={() => setV(w.id)}>
             {w.name}
+            {w.off && ` · ${t.wshop.archived}`}
           </button>
         ))}
       </div>
