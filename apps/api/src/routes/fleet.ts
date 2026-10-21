@@ -230,6 +230,8 @@ export function fleetRoutes(app: FastifyInstance): void {
             removedOn: isoDate(t.removedOn),
             job: t.serviceJob,
             removedJob: t.removedJob,
+            /** `card`: written by an owner on the moped's card, already on it, with no repair behind it (ADR-0036, addendum 21.10.2026). */
+            source: t.source,
           }))
         : null,
       /** What was taken off this moped for another, as a donor (ADR-0036). */

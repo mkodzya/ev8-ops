@@ -16,9 +16,7 @@ import {
   partPriceTetri,
   partsTetri,
   readFleetNumber,
-  readImei,
   readQuery,
-  readSimPhone,
   repairTotalTetri,
   seesEveryRepair,
   todayISO,
@@ -37,6 +35,7 @@ import { env } from '../lib/env.js';
 import { badRequest, conflict, forbidden, isUniqueViolation, notFound } from '../lib/errors.js';
 import { WORK_MONEY, issueForServicePart, partRows, passThrough, receiveRemoved, returnServiceParts, returnServicePart, unfitTrackers } from '../lib/stock.js';
 import { actorOf, mayView } from '../lib/guard.js';
+import { fitTracker, readTracker } from '../lib/trackers.js';
 import { date, int, oneOf, str, tetri } from '../lib/validate.js';
 import { syncDeposit } from '../lib/rentalMoney.js';
 import { moveVehicle } from '../lib/vehicles.js';
@@ -518,60 +517,6 @@ async function shelfPrice(partId: string, payer: Payer): Promise<{ unitPriceTetr
   }
   const part = await prisma.part.findUnique({ where: { id: partId }, select: { salePriceTetri: true } });
   return { unitPriceTetri: partPriceTetri(payer, { avgCostTetri: cost, salePriceTetri: part?.salePriceTetri ?? null }), unitCostTetri: cost };
-}
-
-/** The IMEI and the SIM of a tracker being fitted — one tracker, one line (ADR-0036). */
-function readTracker(b: Body, qty: number): { imei: string; simPhone: string } {
-  if (qty !== 1) throw badRequest('bad_field', 'A tracker is fitted one at a time: its IMEI is its own.', { field: 'qty' });
-  const imei = readImei(str(b, 'imei', { required: true, max: 40 }));
-  if (!imei) throw badRequest('imei_bad', 'An IMEI is fifteen digits off the sticker; the last one checks the rest.', { field: 'imei' });
-  const simPhone = readSimPhone(str(b, 'sim', { required: true, max: 40 }));
-  if (!simPhone) throw badRequest('sim_bad', 'A SIM number is its digits.', { field: 'sim' });
-  return { imei, simPhone };
-}
-
-/**
- * A tracker goes onto the moped (ADR-0036). One at a time on a moped, and an
- * IMEI on one moped at a time — the database refuses the second open row of
- * an IMEI whatever this says. Off a donor, the tracker moves with the part:
- * closed on the donor, opened here.
- */
-async function fitTracker(
-  tx: Tx,
-  input: { job: { id: string; vehicleId: string }; partId: string; servicePartId: string; donorVehicleId: string | null; imei: string; simPhone: string; on: string; actorId: string },
-): Promise<void> {
-  const onMoped = await tx.vehicleTracker.findFirst({ where: { vehicleId: input.job.vehicleId, removedOn: null }, select: { imei: true } });
-  if (onMoped) throw conflict('tracker_on_vehicle', 'This moped has a tracker; take that one off first.', { imei: `···${onMoped.imei.slice(-4)}` });
-  const elsewhere = await tx.vehicleTracker.findFirst({
-    where: { imei: input.imei, removedOn: null },
-    select: { id: true, vehicleId: true, installedOn: true, vehicle: { select: { fleetNo: true, vin: true } } },
-  });
-  if (elsewhere) {
-    if (input.donorVehicleId == null || elsewhere.vehicleId !== input.donorVehicleId) {
-      throw conflict('tracker_imei_in_use', 'This IMEI is on another moped; take it off there first.', {
-        vehicle: fleetNumber(elsewhere.vehicle.fleetNo) ?? `···${elsewhere.vehicle.vin.slice(-6)}`,
-        since: isoDate(elsewhere.installedOn),
-      });
-    }
-    await tx.vehicleTracker.update({ where: { id: elsewhere.id }, data: { removedOn: dateFromISO(input.on)!, removedJobId: input.job.id, removedById: input.actorId } });
-  }
-  try {
-    await tx.vehicleTracker.create({
-      data: {
-        vehicleId: input.job.vehicleId,
-        partId: input.partId,
-        imei: input.imei,
-        simPhone: input.simPhone,
-        installedOn: dateFromISO(input.on)!,
-        serviceJobId: input.job.id,
-        servicePartId: input.servicePartId,
-        createdById: input.actorId,
-      },
-    });
-  } catch (e) {
-    if (isUniqueViolation(e)) throw conflict('tracker_imei_in_use', 'This IMEI is on another moped; take it off there first.');
-    throw e;
-  }
 }
 
 /** A repair that waited only for a line just taken off goes back to work. */
@@ -1363,7 +1308,8 @@ export function serviceRoutes(app: FastifyInstance): void {
     // A tracker fitted is somebody's: its IMEI and SIM, one per moped (ADR-0036).
     const fitsTracker = catalogue?.isTracker === true && kind !== 'removed';
     if (catalogue?.isTracker && kind === 'removed') throw conflict('tracker_remove_apart', 'A tracker comes off by «снять трекер», which closes it on the moped.');
-    const tracker = fitsTracker ? readTracker(b, qty) : null;
+    if (fitsTracker && qty !== 1) throw badRequest('bad_field', 'A tracker is fitted one at a time: its IMEI is its own.', { field: 'qty' });
+    const tracker = fitsTracker ? readTracker(b) : null;
 
     let donor: { id: string; fleetNo: number | null; vin: string } | null = null;
     if (kind === 'donor') {
@@ -1456,7 +1402,9 @@ export function serviceRoutes(app: FastifyInstance): void {
           await boughtThrough(tx, { id: created.id, partId: catalogue.id, qty, paidTetri, createdAt: created.createdAt }, job.number, actor.id);
         }
       }
-      if (tracker) await fitTracker(tx, { job, partId: catalogue!.id, servicePartId: created.id, donorVehicleId: donor?.id ?? null, imei: tracker.imei, simPhone: tracker.simPhone, on: today, actorId: actor.id });
+      if (tracker) {
+        await fitTracker(tx, { vehicleId: job.vehicleId, jobId: job.id, partId: catalogue!.id, servicePartId: created.id, donorVehicleId: donor?.id ?? null, imei: tracker.imei, simPhone: tracker.simPhone, on: today, actorId: actor.id });
+      }
       if (waits && job.status !== 'draft') await tx.serviceJob.update({ where: { id: job.id }, data: { status: 'draft', updatedAt: new Date() } });
       const logged = await tx.auditLog.create({
         data: {
