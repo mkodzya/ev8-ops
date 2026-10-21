@@ -88,6 +88,10 @@ function value(field: string, raw: unknown, shifted = false): string | null {
     if (raw == null) return shifted ? t.payDay.asWeekStart : t.payDay.asPickup;
     return typeof raw === 'number' && raw >= 1 && raw <= 7 ? t.calendar.weekdaysIn[raw % 7] : String(raw);
   }
+  // The weekday the rent falls due on, its own or the weeks' — what a moved
+  // week writes on both sides (QA 21.10.2026), so a rental with none of its
+  // own reads «пятница → понедельник» too.
+  if (field === 'payDay') return typeof raw === 'number' && raw >= 1 && raw <= 7 ? t.calendar.weekdaysIn[raw % 7] : null;
   // The days a week gained, with their unit (ADR-0041).
   if (field === 'extraDays' && typeof raw === 'number') return t.weekShift.journal.days(raw);
   // A repair's kind may be given, changed and taken away again (Mika,
@@ -154,8 +158,11 @@ export function ChangedFromTo({ action, before, after }: { action?: string; befo
   // Whether the rental's weeks had been moved, which a pay day change keeps
   // beside it (ADR-0041); a line from before the move had none to keep.
   const shifted = typeof now.weekShiftDays === 'number' && now.weekShiftDays > 0;
+  // A line that names the day the rent falls due on says it once, by that day.
+  const payDayNamed = typeof was.payDay === 'number' && typeof now.payDay === 'number';
   for (const field of Object.keys(was)) {
     if (!(field in now)) continue;
+    if (field === 'payWeekday' && payDayNamed) continue;
     const from = value(field, was[field], shifted);
     const to = value(field, now[field], shifted);
     if (from == null || to == null || from === to) continue;
@@ -188,8 +195,8 @@ export function ChangedFromTo({ action, before, after }: { action?: string; befo
  */
 function named(t: Dict, field: string, action?: string): string | null {
   if (field === 'warrantyUntil') return t.saleCard.warranty;
-  // A rental's own pay day, whichever action moved it (ADR-0022, ADR-0041).
-  if (field === 'payWeekday') return t.weekShift.journal.payDay;
+  // A rental's own pay day, whichever action moved it (ADR-0022, ADR-0041), and the day it falls due on.
+  if (field === 'payWeekday' || field === 'payDay') return t.weekShift.journal.payDay;
   // A week moved: its end, its price, the days and their extra, each by name —
   // three bare pairs of dates and numbers side by side said nothing (review, 21.10.2026).
   if (action && WEEK_SHIFT.has(action)) {
