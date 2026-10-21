@@ -199,11 +199,10 @@ export function ChangedFromTo({ action, before, after }: { action?: string; befo
  */
 function markCleared(t: Dict, action: string | undefined, was: Bag, now: Bag): string | null {
   if (action !== 'rental.swap' || now?.contractMarkCleared !== true) return null;
-  const mark = (was?.contractMark ?? null) as { markedAt?: unknown; markedBy?: unknown } | null;
-  const made = [typeof mark?.markedAt === 'string' ? signedAtText(mark.markedAt) : null, typeof mark?.markedBy === 'string' ? mark.markedBy : null].filter(
-    (x): x is string => !!x,
-  );
-  return t.swap.markCleared(made.length > 0 ? made.join(', ') : null);
+  const mark = (was?.contractMark ?? {}) as { markedAt?: unknown; markedBy?: unknown };
+  const at = typeof mark.markedAt === 'string' ? signedAtText(mark.markedAt) : null;
+  const by = typeof mark.markedBy === 'string' && mark.markedBy.trim() ? mark.markedBy : null;
+  return t.swap.markCleared(at && by ? `${at}, ${by}` : (at ?? by));
 }
 
 /**
