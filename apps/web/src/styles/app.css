@@ -1418,7 +1418,7 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
 /* What a person typed, shown translated, carries a quiet mark that says so;
    a tap on it shows the original, marked «оригинал» in the accent's tint.
    The mark sits in a line of text, so it stays the line's height and its
-   target reaches past it to 44 px (principle 13). Muted ink on the soft fill
+   target reaches past it to 44 px, `--control` (principle 13). Muted ink on the soft fill
    is 6.0:1, the accent ink on its tint 4.96:1. */
 .typed-mark {
   position: relative;
@@ -1435,6 +1435,13 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
   white-space: nowrap;
 }
 button.typed-mark { cursor: pointer; }
-button.typed-mark::after { content: ''; position: absolute; inset: -12px -4px; }
+button.typed-mark::after { content: ''; position: absolute; left: -4px; right: -4px; top: 50%; height: var(--control); transform: translateY(-50%); }
+/* A refusal's mark sits on the line under its work's: its target reaches down
+   only, so it never lies over the mark above it, and each pill answers to
+   its own tap. */
+.wjob-line-why button.typed-mark::after { top: 0; transform: none; }
 button.typed-mark:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .typed-mark.on { background: var(--accent-soft); color: var(--accent-ink); }
+/* On a block filled with the mark's own grey — a repair's refusal — the mark
+   takes the card's fill, or it reads as one more word of the refusal. */
+.wappr-reason .typed-mark:not(.on) { background: var(--surface); }

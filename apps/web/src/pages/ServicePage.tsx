@@ -11,7 +11,7 @@ import { DataList } from '../ds/list/DataList.js';
 import { formatGel } from '../format.js';
 import { useT } from '../i18n/index.js';
 import { uploadAll, type PreparedPhoto } from '../lib/photos.js';
-import { Typed } from '../lib/typed.js';
+import { Typed, useShownWords } from '../lib/typed.js';
 import { useLoad } from '../lib/use.js';
 import { useSession } from '../session.js';
 import { ApprovalCard } from './RepairApproval.js';
@@ -177,6 +177,7 @@ export function ServicePage() {
   const t = useT();
   const { can, me } = useSession();
   const { data, failure, reload } = useLoad<ServiceList>('/api/service');
+  const shownWords = useShownWords();
   const today = todayISO();
 
   if (!data && failure) return <LoadError failure={failure} onRetry={reload} />;
@@ -243,7 +244,8 @@ export function ServicePage() {
         byDefault="days"
         search={{
           placeholder: t.repair.searchHint,
-          match: (j, q) => numberMatches(q, j.number) || vinMatches(q, j.vehicle.vin) || spellingMatches(q, [j.reason, j.vehicle.model, j.workshop?.name, j.customer?.name]),
+          // The reason is found by the words it was typed in and by the translation the list shows (ADR-0042).
+          match: (j, q) => numberMatches(q, j.number) || vinMatches(q, j.vehicle.vin) || spellingMatches(q, [j.reason, shownWords(j.reason), j.vehicle.model, j.workshop?.name, j.customer?.name]),
         }}
         chips={[
           { key: 'open', label: t.repair.chips.working, test: (j) => j.status === 'open' },
@@ -263,7 +265,7 @@ export function ServicePage() {
               {/* The breakdown a manager wrote is what an owner decides by,
                   so the row says it; "от менеджера" is the badge on the
                   right, not a replacement for the words (QA-W5-19). */}
-              <span className="mono">{j.number}</span> · <Typed text={j.reason} />
+              <span className="mono">{j.number}</span> · <Typed text={j.reason} quiet />
             </>
           ),
           sub2: j.workshop?.name ?? undefined,

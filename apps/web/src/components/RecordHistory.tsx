@@ -73,9 +73,8 @@ export function RecordHistory({ kind, id, search }: { kind: 'rental' | 'sale' | 
                     {l.actorName && <span className="muted"> · {l.actorName}</span>}
                     {noteWords(t, l.note, l.after) && (
                       <span className="muted">
-                        {' · «'}
-                        <JournalNote note={l.note} after={l.after} />
-                        {'»'}
+                        {' · '}
+                        <JournalNote note={l.note} after={l.after} quoted />
                       </span>
                     )}
                   </span>

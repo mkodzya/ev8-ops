@@ -115,12 +115,14 @@ function ownNote(note: string | null | undefined, after?: unknown): string {
  * reader's language, marked as a translation with the original one tap away
  * (ADR-0042). QA-W5-21 still holds: what was typed is what is kept.
  */
-export function JournalNote({ note, after }: { note: string | null | undefined; after?: unknown }) {
+export function JournalNote({ note, after, quoted = false }: { note: string | null | undefined; after?: unknown; quoted?: boolean }) {
   const t = useT();
   const own = ownNote(note, after);
   if (!own) return null;
   const coded = t.feedNotes[own];
-  return coded ? <>{coded}</> : <Typed text={own} />;
+  if (coded) return <>{quoted ? `«${coded}»` : coded}</>;
+  // In «» the quotes close around the words; the translation's mark stands after them.
+  return <Typed text={own} quoted={quoted} />;
 }
 
 /**
