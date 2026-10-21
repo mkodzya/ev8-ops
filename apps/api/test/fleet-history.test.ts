@@ -131,7 +131,7 @@ describe.skipIf(!HAS_DB)('a swap in each moped’s history (ADR-0040; QA, 22.10.
     expect(freshCard.maintenance).toMatchObject({ readingSource: 'pickup', readingBySwap: true });
   });
 
-  it('leaves a plain return a return, its mileage too', async () => {
+  it('leaves a plain hand-over plain, its mileage too', async () => {
     const { prisma } = await import('../src/lib/db.js');
     const owner = await loginAs('owner');
     const v = await moped();
