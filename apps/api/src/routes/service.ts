@@ -728,6 +728,10 @@ export function serviceRoutes(app: FastifyInstance): void {
       throw e;
     }
     const openJobs = await prisma.serviceJob.count({ where: { workshopId: row.id, status: { in: ['open', 'draft'] } } });
+    // The flag alone reads «— → Да» in the journal with no field named, so
+    // taking it off the list and putting it back say so in the note, which
+    // the journal translates (`feedNotes`).
+    const moved = data.archived === undefined || data.archived === row.archived ? null : data.archived ? 'taken off the list' : 'put back on the list';
     await audit({
       actorId: actor.id,
       action: 'workshop.update',
@@ -735,6 +739,7 @@ export function serviceRoutes(app: FastifyInstance): void {
       entityId: row.id,
       before: { name: row.name, phone: row.phone, note: row.note, sortOrder: row.sortOrder, archived: row.archived },
       after: data as object,
+      note: moved,
     });
     return { ok: true, openJobs };
   });

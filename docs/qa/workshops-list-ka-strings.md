@@ -39,5 +39,7 @@ sheketeba»-shi] в отказе и «პარამეტრები → ხ�
 | `wshop.editList` | Изменить список | სიის შეცვლა | siis shetsvla |
 | `errors.codes.workshop_archived` | Эта мастерская убрана из списка. Выберите другую или верните её в «Настройки → Ремонт». | ეს სახელოსნო სიიდან მოხსნილია. აირჩიეთ სხვა ან დააბრუნეთ «პარამეტრები → შეკეთება»-ში. | es sakhelosno siidan mokhsnilia. airchiet skhva an daabrunet «parametrebi → sheketeba»-shi |
 | `errors.codes.workshop_archived_exists` | Мастерская с таким названием убрана из списка. Верните её: «…» → «Вернуть». | ამ სახელით სახელოსნო სიიდან მოხსნილია. დააბრუნეთ ის: «…» → «დაბრუნება». | am sakhelit sakhelosno siidan mokhsnilia. daabrunet is: «…» → «dabruneba» |
+| `feedNotes['taken off the list']` (журнал, «почему») | убрана из списка | სიიდან მოიხსნა | siidan moikhsna |
+| `feedNotes['put back on the list']` (журнал, «почему») | возвращена в список | სიაში დაბრუნდა | siashi dabrunda |
 
 Название «ТЕСТ мастерская» в примере выдумано; настоящие мастерские в репозитории не пишутся.

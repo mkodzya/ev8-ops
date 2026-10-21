@@ -146,6 +146,15 @@ describe.skipIf(!HAS_DB)('the owner keeps the list of workshops', () => {
     const entry = await prisma.auditLog.findFirst({ where: { action: 'workshop.update', entityId: w.id }, orderBy: { createdAt: 'desc' } });
     expect(entry?.before).toMatchObject({ name: w.name, archived: false });
     expect(entry?.after).toMatchObject({ archived: true });
+    // The flag alone reads «— → Да»: the note says what happened.
+    expect(entry?.note).toBe('taken off the list');
+
+    await call(owner, 'PATCH', `/api/workshops/${w.id}`, { archived: false });
+    const back = await prisma.auditLog.findFirst({ where: { action: 'workshop.update', entityId: w.id }, orderBy: { createdAt: 'desc' } });
+    expect(back?.note).toBe('put back on the list');
+    await call(owner, 'PATCH', `/api/workshops/${w.id}`, { note: 'ТЕСТ заметка', archived: false });
+    const plain = await prisma.auditLog.findFirst({ where: { action: 'workshop.update', entityId: w.id }, orderBy: { createdAt: 'desc' } });
+    expect(plain?.note).toBeNull();
 
     const lines = json<{ rows: { action: string; number: string | null }[] }>(await call(owner, 'GET', `/api/journal?q=${encodeURIComponent(w.name)}`)).rows;
     expect(lines.map((l) => l.action)).toEqual(expect.arrayContaining(['workshop.create', 'workshop.update']));
