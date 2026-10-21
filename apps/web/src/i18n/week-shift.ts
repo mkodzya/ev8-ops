@@ -21,7 +21,7 @@ export const weekShiftEn = {
     undoAction: 'Take the move back',
     undone: 'Move taken back',
     /** Why the sheet offers the days it offers (ux.md №15). */
-    daysHint: 'Offered: the next week a week from today. If the money came on another day, choose a week after that day.',
+    daysHint: 'Offered: the days he is late, so the next pay day is a week from today. If the money came on another day, choose so the pay day falls a week after it.',
     /** Beside the price of a week made longer, in the table of weeks. */
     short: (days: number, sum: string) => `+${days} d · extra ${sum}`,
     /** The journal's line of a move: which week, and each figure by its name. */
@@ -55,7 +55,7 @@ export const weekShiftRu: typeof weekShiftEn = {
     done: 'Неделя сдвинута',
     undoAction: 'Убрать сдвиг',
     undone: 'Сдвиг убран',
-    daysHint: 'Предложено: следующая неделя — через 7 дней от сегодня. Если деньги пришли в другой день, выберите день через неделю после него.',
+    daysHint: 'Предложено столько дней, на сколько он опоздал: следующий день оплаты — через 7 дней от сегодня. Если деньги пришли в другой день, выберите так, чтобы день оплаты был через неделю после него.',
     short: (days: number, sum: string) => `+${days} дн. · доплата ${sum}`,
     journal: {
       week: (seq: number) => `неделя ${seq}`,
@@ -87,7 +87,7 @@ export const weekShiftKa: typeof weekShiftEn = {
     done: 'კვირა გადაიწია',
     undoAction: 'გადაწევის გაუქმება',
     undone: 'გადაწევა გაუქმდა',
-    daysHint: 'შემოთავაზებულია: შემდეგი კვირა — დღეიდან 7 დღეში. თუ თანხა სხვა დღეს შემოვიდა, აირჩიეთ ამ დღიდან ერთი კვირის შემდეგ.',
+    daysHint: 'შემოთავაზებულია დაგვიანების დღეები: შემდეგი გადახდის დღე — დღეიდან 7 დღეში. თუ თანხა სხვა დღეს შემოვიდა, აირჩიეთ ისე, რომ გადახდის დღე ამ დღიდან ერთი კვირის შემდეგ იყოს.',
     short: (days: number, sum: string) => `+${days} დღე · დამატებით ${sum}`,
     journal: {
       week: (seq: number) => `კვირა ${seq}`,

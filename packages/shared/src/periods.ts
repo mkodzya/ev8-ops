@@ -236,3 +236,16 @@ export function weekShiftPlan(input: { startsOn: ISODate; days: number; weeklyRa
     suggestedExtraTetri: shiftExtraTetri(input.weeklyRateTetri, input.days),
   };
 }
+
+/**
+ * The days the sheet offers first for a week not yet moved: as many as the
+ * renter is late today, counted from the week's pay day, as lateness is
+ * (ADR-0017, ADR-0022) — so the next pay day falls a week after the day he
+ * paid. Counting from the week's first day offered the pay day's offset on
+ * top (review, 21.10.2026). `exact` is false when he is not 1–6 days late and
+ * the offer is only the nearest end of the range.
+ */
+export function shiftDaysOffered(input: { startsOn: ISODate; payOffsetDays?: number; today: ISODate }): { days: number; exact: boolean } {
+  const late = daysBetween(weekDueOn(input.startsOn, input.payOffsetDays ?? 0), input.today);
+  return { days: Math.min(MAX_SHIFT_DAYS, Math.max(1, late)), exact: late >= 1 && late <= MAX_SHIFT_DAYS };
+}

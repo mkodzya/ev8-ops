@@ -12,6 +12,7 @@ import {
   rentDueOn,
   rotateWeekday,
   shiftExtraTetri,
+  shiftDaysOffered,
   shiftedPayWeekday,
   shiftsOf,
   weekShiftPlan,
@@ -190,6 +191,21 @@ describe('a week made longer (ADR-0041)', () => {
     expect(() => weekShiftPlan({ startsOn: '2026-10-08', days: 7, weeklyRateTetri: 15000 })).toThrow();
     expect(() => weekShiftPlan({ startsOn: '2026-10-08', days: -1, weeklyRateTetri: 15000 })).toThrow();
     expect(() => weekShiftPlan({ startsOn: '2026-10-08', days: 1.5, weeklyRateTetri: 15000 })).toThrow();
+  });
+
+  it('offers the days he is late, from the week’s pay day: the next pay day a week after he paid', () => {
+    // Invented: a week from Thursday 08.10, 150 a week.
+    // No pay day of its own: due on the week's first day, paid on Sunday 11.10 — 3 days late.
+    expect(shiftDaysOffered({ startsOn: '2026-10-08', today: '2026-10-11' })).toEqual({ days: 3, exact: true });
+    expect(weekShiftPlan({ startsOn: '2026-10-08', days: 3, weeklyRateTetri: 15000 }).nextDueOn).toBe('2026-10-18');
+    // Pay day Saturday, two days into the week (due 10.10), paid on Tuesday 13.10: 3 days late, not 5.
+    expect(shiftDaysOffered({ startsOn: '2026-10-08', payOffsetDays: 2, today: '2026-10-13' })).toEqual({ days: 3, exact: true });
+    const plan = weekShiftPlan({ startsOn: '2026-10-08', days: 3, weeklyRateTetri: 15000, payOffsetDays: 2 });
+    expect(plan).toMatchObject({ nextStartsOn: '2026-10-18', nextDueOn: '2026-10-20', suggestedExtraTetri: 6400 });
+    // Not late yet, or later than a week can move: the nearest end, and not called exact.
+    expect(shiftDaysOffered({ startsOn: '2026-10-08', payOffsetDays: 3, today: '2026-10-10' })).toEqual({ days: 1, exact: false });
+    expect(shiftDaysOffered({ startsOn: '2026-10-08', payOffsetDays: 3, today: '2026-10-11' })).toEqual({ days: 1, exact: false });
+    expect(shiftDaysOffered({ startsOn: '2026-10-08', today: '2026-10-17' })).toEqual({ days: 6, exact: false });
   });
 
   it('the week made longer is in the debt from its own due day at its new price, and paid off by it', () => {

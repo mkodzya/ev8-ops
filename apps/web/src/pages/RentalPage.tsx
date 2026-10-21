@@ -1,6 +1,6 @@
 import type { ActKind, DepositStatus, PeriodPayStatus, RentalStatus, WeekDue } from '@ev8/shared';
 import { useState } from 'react';
-import { MAX_SHIFT_DAYS, daysBetween, isoWeekday, parseGel, todayISO, waOffered, weekDue, weekShiftPlan, type VehicleState } from '@ev8/shared';
+import { MAX_SHIFT_DAYS, isoWeekday, parseGel, shiftDaysOffered, todayISO, waOffered, weekDue, weekShiftPlan, type VehicleState } from '@ev8/shared';
 import { DocumentRow, signedAtText, type DocState } from '../components/Documents.js';
 import { KommoField } from '../components/Kommo.js';
 import { RecordHistory } from '../components/RecordHistory.js';
@@ -914,12 +914,12 @@ function ShiftSheet({ rental, week, onClose, onDone }: { rental: RentalCard['ren
   const had = week.extraDays ?? 0;
   const plan = (days: number) => weekShiftPlan({ startsOn: week.startsOn, days, weeklyRateTetri: rental.weeklyRateTetri, payOffsetDays: rental.payOffsetDays });
   const gel = (tetri: number) => String(tetri / 100);
-  // Offered first: as many days as the week has run today — the next week a
-  // week after the day he paid. A week already moved keeps its own.
-  const ran = daysBetween(week.startsOn, todayISO());
-  const guess = had || Math.min(MAX_SHIFT_DAYS, Math.max(1, ran));
+  // Offered first: the days he is late today, from the week's pay day — the
+  // next pay day a week after the day he paid. A week already moved keeps its own.
+  const offered = shiftDaysOffered({ startsOn: week.startsOn, payOffsetDays: rental.payOffsetDays, today: todayISO() });
+  const guess = had || offered.days;
   // The sheet says why it offers that day, where the reason holds (ux.md №15).
-  const guessed = had === 0 && ran >= 1 && ran <= MAX_SHIFT_DAYS;
+  const guessed = had === 0 && offered.exact;
   const initial = { days: String(guess), extra: gel(had ? (week.extraTetri ?? 0) : plan(guess).suggestedExtraTetri), reason: '' };
   const [f, setF] = useState(initial);
   const days = Number(f.days);
@@ -927,6 +927,9 @@ function ShiftSheet({ rental, week, onClose, onDone }: { rental: RentalCard['ren
   const price = week.amountTetri - (week.extraTetri ?? 0) + (days === 0 ? 0 : (parseGel(f.extra) ?? 0));
   // Weekdays inside a sentence, Sunday first.
   const weekday = (date: string) => t.calendar.weekdaysIn[isoWeekday(date) % 7];
+  // A pay day of its own falls inside the week: its date too, so the choice
+  // can be checked against the day he paid.
+  const nextPayDay = p.nextDueOn === p.nextStartsOn ? weekday(p.nextDueOn) : [weekday(p.nextDueOn), fmtDayMonth(p.nextDueOn)].join(', ');
   const choices = Array.from({ length: MAX_SHIFT_DAYS + 1 }, (_, n) => n).filter((n) => n !== 0 || had !== 0);
   const pick = (value: string) => {
     // A suggestion left as it was follows the days; a sum typed by hand stays.
@@ -975,7 +978,7 @@ function ShiftSheet({ rental, week, onClose, onDone }: { rental: RentalCard['ren
       </Field>
       <p className="hint">
         {days === 0 ? t.weekShift.undo : t.weekShift.summary(week.seq, fmtDayMonth(week.startsOn), fmtDayMonth(p.endsOn), p.lengthDays, formatGel(price, { decimals: false }))}{' '}
-        {t.weekShift.next(fmtDayMonth(p.nextStartsOn), weekday(p.nextStartsOn), weekday(p.nextDueOn))}
+        {t.weekShift.next(fmtDayMonth(p.nextStartsOn), weekday(p.nextStartsOn), nextPayDay)}
       </p>
     </FormSheet>
   );
