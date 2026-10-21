@@ -210,7 +210,9 @@ async function sendNotices(job: 'notices' | 'notices-scan'): Promise<void> {
 }
 
 type TranslateOutcome = {
-  status: 'off' | 'busy' | 'ok';
+  status: 'off' | 'busy' | 'paused' | 'ok';
+  /** Our word for why the queue pauses (no money, a key that is not one, the service down…); never the service's text. */
+  pausedFor: string | null;
   found: number;
   translated: number;
   failed: number;
@@ -230,9 +232,10 @@ async function translate(): Promise<void> {
     const r = (await res.json()) as TranslateOutcome;
     if (r.status === 'busy') return;
     if (r.status === 'off') line = `the translator is off (no key on this stand) — ${r.pending} text(s) waiting`;
+    else if (r.status === 'paused') line = `the translator waits after a failure (${r.pausedFor ?? 'unknown'}) — ${r.pending} text(s) waiting`;
     else {
       const spent = `today ${r.today.requests} request(s), ${r.today.inputTokens} input and ${r.today.outputTokens} output tokens`;
-      line = `translator — ${r.translated} text(s) translated, ${r.failed} not, ${r.gaveUp} given up, ${r.pending} waiting${r.capped ? ', the day’s cap reached' : ''}; ${spent}`;
+      line = `translator — ${r.translated} text(s) translated, ${r.failed} not, ${r.gaveUp} given up, ${r.pending} waiting${r.capped ? ', the day’s cap reached' : ''}${r.pausedFor ? `, paused (${r.pausedFor})` : ''}; ${spent}`;
       always = r.translated > 0 || r.failed > 0;
     }
   } catch (err) {

@@ -97,11 +97,21 @@ describe.skipIf(!HAS_DB)('typed text in the reader’s language (ADR-0042)', () 
     await prisma.stockMove.create({ data: { partId: part.id, kind: 'issue', qty: -1, occurredOn: new Date('2026-10-21'), servicePartId: line.id, reason: `${job.number}: ${said('сняли со склада')}` } });
     await prisma.batteryInventory.create({ data: { countedOn: new Date('2026-10-21'), showroomQty: 1, repairQty: 0, couriersQty: 0, totalQty: 1, reason: said('одна потерялась') } });
     await prisma.workshop.create({ data: { name: `Test workshop ${m}`, note: said('закрыто по воскресеньям') } });
+    // Allowed, but no screen shows it as text: not paid for.
     await prisma.location.create({ data: { name: `ТЕСТ point ${m}`, note: said('ключ у охраны') } });
     // Never: a customer's notes, a rental's words in a moped's record, a sale called off, a payout undone, a customer's journal line.
     await prisma.customer.create({ data: { name: `Тест Клиент ${m}`, notes: said('клиентская заметка') } });
     await reasonOn(v.id, `return undone: ${said('клиент вернулся')}`, 'pickup');
     await reasonOn(v.id, `sale SL-00007 cancelled: ${said('покупатель передумал')}`);
+    // A return's act behind the rental's number, on the repair it opened and in the moped's history when the repair ends.
+    await prisma.serviceJob.create({ data: { vehicleId: v.id, reason: `R-00012: ${said('царапина на крыле')}`, openedOn: new Date('2026-10-21') } });
+    await prisma.vehicleEvent.create({ data: { vehicleId: v.id, kind: 'service_out', occurredOn: new Date('2026-10-21'), toState: 'available', reason: `R-00012: ${said('царапина на крыле')}` } });
+    // A moped joining the rental park by a hand-over or a swap carries the rental's number.
+    const handOver = `hand-over R-${digits().slice(-5)}`;
+    const swapIn = `swap R-${digits().slice(-5)}`;
+    for (const reason of [handOver, swapIn]) {
+      await prisma.vehicleEvent.create({ data: { vehicleId: v.id, kind: 'to_rent', occurredOn: new Date('2026-10-21'), toState: 'available', toPool: 'rent', reason } });
+    }
     await prisma.auditLog.create({ data: { action: 'service.unpaid', entityType: 'service_job', entityId: job.id, note: said('выплата ошибочна') } });
     await prisma.auditLog.create({ data: { action: 'customer.update', entityType: 'customer', note: said('исправили имя') } });
     // Not words at all: a lone code.
@@ -109,7 +119,7 @@ describe.skipIf(!HAS_DB)('typed text in the reader’s language (ADR-0042)', () 
     await reasonOn(v.id, code);
 
     const first = await scanTexts({ full: true });
-    expect(first.found).toBeGreaterThanOrEqual(9);
+    expect(first.found).toBeGreaterThanOrEqual(8);
     const rows = await prisma.textTranslation.findMany({ where: { sourceText: { contains: m } } });
     expect(rows.map((r) => r.sourceText).sort()).toEqual(
       [
@@ -122,11 +132,12 @@ describe.skipIf(!HAS_DB)('typed text in the reader’s language (ADR-0042)', () 
         said('сняли со склада'),
         said('одна потерялась'),
         said('закрыто по воскресеньям'),
-        said('ключ у охраны'),
       ].sort(),
     );
     for (const r of rows) expect(r).toMatchObject({ lang: null, translatedAt: null, gaveUpAt: null, attempts: 0 });
     expect(await rowOf(code)).toBeNull();
+    expect(await rowOf(handOver)).toBeNull();
+    expect(await rowOf(swapIn)).toBeNull();
     // A second look finds nothing new.
     expect((await scanTexts({ full: true })).found).toBe(0);
   });
@@ -181,9 +192,11 @@ describe.skipIf(!HAS_DB)('typed text in the reader’s language (ADR-0042)', () 
     expect(day[0]).toMatchObject({ requests: 1, translated: 1, failed: 0, ...USAGE });
   });
 
-  it('backs a text off when the service fails — a minute, then five — and stops the run; gives up at once what the model declines', async () => {
-    const { scanTexts, translateWaiting } = await import('../src/lib/translations.js');
+  it('charges a text with no answer — a minute, then five — stops the run and pauses the queue; gives up at once what the model declines', async () => {
+    const { scanTexts, setTranslationClockForTests, translateWaiting } = await import('../src/lib/translations.js');
     const { TranslatorError } = await import('../src/lib/translator.js');
+    // The run's own clock held: a failure is dated by the run's `now`, to the millisecond.
+    setTranslationClockForTests(() => 0);
     const v = await moped();
     const [a, b] = [`первая заметка ${uniq()}`, `вторая заметка ${uniq()}`];
     await reasonOn(v.id, a);
@@ -194,7 +207,7 @@ describe.skipIf(!HAS_DB)('typed text in the reader’s language (ADR-0042)', () 
 
     // No answer: the run stops at the first failure, and the other text is not asked about.
     const down = await useTranslator([new TranslatorError('network')]);
-    expect(await translateWaiting(now)).toMatchObject({ status: 'ok', translated: 0, failed: 1, gaveUp: 0, pending: 2, today: { requests: 0 } });
+    expect(await translateWaiting(now)).toMatchObject({ status: 'ok', pausedFor: 'network', translated: 0, failed: 1, gaveUp: 0, pending: 2, today: { requests: 0 } });
     expect(down.asked).toHaveLength(1);
     const [x, y] = down.asked[0] === a ? [a, b] : [b, a];
     const failed = (await rowOf(x))!;
@@ -202,21 +215,72 @@ describe.skipIf(!HAS_DB)('typed text in the reader’s language (ADR-0042)', () 
     expect(failed.nextTryAt.getTime()).toBe(now.getTime() + 60_000);
     expect(await rowOf(y)).toMatchObject({ attempts: 0, lastFailure: null });
 
-    // The model declines the other one: given up at once, and counted as the paid request it was.
-    const declines = await useTranslator([{ ok: false, failure: 'refused', usage: USAGE }]);
-    expect(await translateWaiting(now)).toMatchObject({ translated: 0, failed: 1, gaveUp: 1, pending: 1, today: { requests: 1, ...USAGE } });
-    expect(declines.asked).toEqual([y]);
+    // Within the minute the queue waits: nothing is asked, nobody is charged.
+    const waits = await useTranslator();
+    expect(await translateWaiting(new Date(now.getTime() + 30_000))).toMatchObject({ status: 'paused', pausedFor: 'network', translated: 0, failed: 0, pending: 2 });
+    expect(waits.asked).toHaveLength(0);
+
+    // A minute on, the text that has waited longer comes first: the model declines it — given up at
+    // once, and counted as the paid request it was. The first one is then told to wait by the
+    // service: that is the account's, not the text's, so its attempts stay as they were.
+    const later = new Date(now.getTime() + 60_000);
+    const mixed = await useTranslator([{ ok: false, failure: 'refused', usage: USAGE }, new TranslatorError('rate_limited', 429)]);
+    expect(await translateWaiting(later)).toMatchObject({ translated: 0, failed: 2, gaveUp: 1, pending: 1, pausedFor: 'rate_limited', today: { requests: 1, ...USAGE } });
+    expect(mixed.asked).toEqual([y, x]);
     expect(await rowOf(y)).toMatchObject({ attempts: 1, lastFailure: 'refused' });
     expect((await rowOf(y))!.gaveUpAt).not.toBeNull();
+    const told = (await rowOf(x))!;
+    expect(told).toMatchObject({ attempts: 1, lastFailure: 'network', gaveUpAt: null });
+    expect(told.nextTryAt.getTime()).toBe(now.getTime() + 60_000);
 
-    // A minute on, the first one is due again and fails again: five minutes this time.
-    const busy = await useTranslator([new TranslatorError('rate_limited', 429)]);
-    const later = new Date(now.getTime() + 61_000);
-    await translateWaiting(later);
-    expect(busy.asked).toEqual([x]);
+    // Past that pause the service's own fault: the text's second attempt, five minutes this time.
+    const muchLater = new Date(later.getTime() + 61_000);
+    const broken = await useTranslator([new TranslatorError('http', 500)]);
+    await translateWaiting(muchLater);
+    expect(broken.asked).toEqual([x]);
     const twice = (await rowOf(x))!;
-    expect(twice).toMatchObject({ attempts: 2, lastFailure: 'rate_limited', lastHttpStatus: 429, gaveUpAt: null });
-    expect(twice.nextTryAt.getTime()).toBe(later.getTime() + 5 * 60_000);
+    expect(twice).toMatchObject({ attempts: 2, lastFailure: 'http', lastHttpStatus: 500, gaveUpAt: null });
+    expect(twice.nextTryAt.getTime()).toBe(muchLater.getTime() + 5 * 60_000);
+  });
+
+  it('charges no text with a failure of the account or of the request: ten in a row leave it waiting, and it is translated once the service answers', async () => {
+    const { scanTexts, setTranslationClockForTests, translateWaiting } = await import('../src/lib/translations.js');
+    const { TranslatorError } = await import('../src/lib/translator.js');
+    setTranslationClockForTests(() => 0);
+    const v = await moped();
+    const text = `не заводится утром ${uniq()}`;
+    await reasonOn(v.id, text);
+    await scanTexts({ full: true });
+    await onlyFor(text);
+    const failures = [
+      ['billing', 400],
+      ['unauthorized', 401],
+      ['no_model', 404],
+      ['bad_request', 400],
+      ['rate_limited', 429],
+      ['overloaded', 529],
+      ['billing', 402],
+      ['billing', 402],
+      ['billing', 402],
+      ['billing', 402],
+    ] as const;
+    let at = soon().getTime();
+    for (const [failure, status] of failures) {
+      const s = await useTranslator([new TranslatorError(failure, status)]);
+      expect(await translateWaiting(new Date(at)), failure).toMatchObject({ status: 'ok', failed: 1, gaveUp: 0, pending: 1, pausedFor: failure });
+      expect(s.asked).toEqual([text]);
+      // Until the pause is over nothing is asked: a key that is not one is not tried every minute.
+      expect(await translateWaiting(new Date(at + 30_000))).toMatchObject({ status: 'paused', pausedFor: failure });
+      expect(s.asked).toHaveLength(1);
+      at += 61 * 60_000;
+    }
+    expect(await rowOf(text)).toMatchObject({ attempts: 0, lastFailure: null, gaveUpAt: null, translatedAt: null });
+
+    // Mika tops the account up: the next look translates it, and the pause is over.
+    const back = await useTranslator();
+    expect(await translateWaiting(new Date(at))).toMatchObject({ status: 'ok', translated: 1, pausedFor: null, pending: 0 });
+    expect(back.asked).toEqual([text]);
+    expect(await rowOf(text)).toMatchObject({ attempts: 1, gaveUpAt: null, lastFailure: null, lang: 'ru' });
   });
 
   it('holds the day’s cap: past it the rest wait for tomorrow', async () => {
@@ -273,7 +337,7 @@ describe.skipIf(!HAS_DB)('typed text in the reader’s language (ADR-0042)', () 
     try {
       const res = await app.inject({ method: 'POST', url: '/api/jobs/translate', headers: { 'x-worker-token': env.WORKER_TOKEN } });
       expect(res.statusCode, res.body).toBe(200);
-      expect(json<{ status: string; failed: number }>(res)).toMatchObject({ status: 'ok', failed: 1 });
+      expect(json<{ status: string; failed: number }>(res)).toMatchObject({ status: 'ok', failed: 1, pausedFor: 'unauthorized' });
       expect(logged.some((l) => l.includes('the translator did not translate every text'))).toBe(true);
       for (const said of [res.body, logged.join('\n')]) {
         expect(said).not.toContain(KEY);
@@ -282,8 +346,9 @@ describe.skipIf(!HAS_DB)('typed text in the reader’s language (ADR-0042)', () 
     } finally {
       await app.close();
     }
+    // A key that is not one is the account's failure, not this text's: the row is not charged with it.
     const row = await rowOf(reason);
-    expect(row).toMatchObject({ lastFailure: 'unauthorized', lastHttpStatus: 401 });
+    expect(row).toMatchObject({ attempts: 0, lastFailure: null, gaveUpAt: null });
     expect(JSON.stringify(row)).not.toContain(KEY);
     expect(JSON.stringify(await prisma.translationDay.findMany({}))).not.toContain(reason);
   });

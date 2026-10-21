@@ -17,10 +17,15 @@
 // also forgets translations of texts nobody keeps any more — then asks the
 // translator about what waits, one text a request, a few a run. A day in
 // Tbilisi takes at most TRANSLATE_DAILY_LIMIT texts (500); the rest wait for
-// the next day. A failure of the service backs the text off (1, 5, 15, 60
-// minutes) and stops the run; a text the model declines, cannot fit or
-// answers wrongly is given up, and its original is what everyone reads. The
-// outcome is counts and token usage, never a text.
+// the next day. A failure of the service stops the run and pauses the queue
+// (1, 5, 15, 60 minutes). A failure of the account or of the request — no
+// key, no money, no such model, a request the service does not take, too
+// many requests, a busy service — is nobody's text's: every text keeps its
+// place and its attempts, and is translated once the cause is put right. No
+// answer at all, or the service's own fault, may be the text's and costs it
+// one of its eight attempts. A text the model declines, cannot fit or answers
+// wrongly is given up, and its original is what everyone reads. The outcome
+// is counts, token usage and our word for a pause — never a text.
 //
 // **A screen asks** POST /api/texts/translations with the texts it shows and
 // gets back what is ready. Asking never creates a row and never calls the
@@ -50,7 +55,7 @@ export const textHash = (text: string): string => createHash('sha256').update(te
 /** Rows written or changed since then; null — every row. */
 type Since = Date | null;
 
-/** One look at the sources: since when, and the repairs' texts read once for the five columns that need them. */
+/** One look at the sources: since when, and the repairs' texts read once for the four columns that need them. */
 interface Look {
   at: Since;
   jobs: () => Promise<JobTexts[]>;
@@ -61,7 +66,6 @@ interface JobTexts {
   notes: string | null;
   rejectReason: string | null;
   odometerReason: string | null;
-  closedOdometerReason: string | null;
 }
 
 function look(at: Since): Look {
@@ -71,7 +75,7 @@ function look(at: Since): Look {
     jobs: () =>
       (jobs ??= prisma.serviceJob.findMany({
         where: at ? { OR: [{ createdAt: { gte: at } }, { updatedAt: { gte: at } }, { rejectedAt: { gte: at } }, { closedAt: { gte: at } }] } : {},
-        select: { reason: true, notes: true, rejectReason: true, odometerReason: true, closedOdometerReason: true },
+        select: { reason: true, notes: true, rejectReason: true, odometerReason: true },
       })),
   };
 }
@@ -99,7 +103,6 @@ const SOURCES: Record<TranslatedSource, (l: Look) => Promise<(string | null)[]>>
   'service_jobs.notes': async (l) => (await l.jobs()).map((r) => r.notes),
   'service_jobs.reject_reason': async (l) => (await l.jobs()).map((r) => r.rejectReason),
   'service_jobs.odometer_reason': async (l) => (await l.jobs()).map((r) => r.odometerReason),
-  'service_jobs.closed_odometer_reason': async (l) => (await l.jobs()).map((r) => r.closedOdometerReason),
   'service_works.free_text': async ({ at }) =>
     (
       await prisma.serviceWork.findMany({
@@ -147,8 +150,6 @@ const SOURCES: Record<TranslatedSource, (l: Look) => Promise<(string | null)[]>>
     ),
   'workshops.note': async ({ at }) =>
     (await prisma.workshop.findMany({ where: { note: { not: null }, ...(at ? { updatedAt: { gte: at } } : {}) }, select: { note: true }, distinct: ['note'] })).map((r) => r.note),
-  'locations.note': async ({ at }) =>
-    (await prisma.location.findMany({ where: { note: { not: null }, ...(at ? { updatedAt: { gte: at } } : {}) }, select: { note: true }, distinct: ['note'] })).map((r) => r.note),
   // The journal lines that carry a moped's, a repair's or a battery count's reason — never a customer's or money's.
   'audit_log.note': async ({ at }) =>
     (
@@ -230,7 +231,9 @@ export async function scanTexts(opts: { full?: boolean; now?: Date } = {}): Prom
  * `today` is the day's spend so far, for measuring what a day costs.
  */
 export interface TranslateOutcome {
-  status: 'off' | 'busy' | 'ok';
+  status: 'off' | 'busy' | 'paused' | 'ok';
+  /** Why the queue pauses, in our word, while it does; null otherwise. */
+  pausedFor: TranslatorFailure | null;
   /** Texts newly listed by this run's look. */
   found: number;
   translated: number;
@@ -253,8 +256,24 @@ const RUN_BUDGET_MS = 45_000;
 const MAX_ATTEMPTS = 8;
 /** Minutes to wait after the first, second, third and every later failure. */
 const BACKOFF_MIN = [1, 5, 15, 60];
-/** The rest of the run would fail the same way: it stops. A request the service did not take may be this text's alone. */
-const STOPS = new Set<TranslatorFailure>(['unauthorized', 'billing', 'rate_limited', 'overloaded', 'no_model', 'http', 'network']);
+const backoffMs = (n: number): number => BACKOFF_MIN[Math.min(Math.max(n, 1), BACKOFF_MIN.length) - 1]! * 60_000;
+/**
+ * Failures of the account or of the request, never of the text in it: the key
+ * is not one, the account cannot pay, the model is not this key's, the
+ * service does not take the request's shape, too many requests, the service
+ * is busy. Every text would meet the same, so none is charged with it.
+ */
+const NOT_THE_TEXT = new Set<TranslatorFailure>(['unauthorized', 'billing', 'no_model', 'bad_request', 'rate_limited', 'overloaded']);
+
+/**
+ * The queue's pause after a failure of the service: until when, how many
+ * failures in a row, and our word for the last. Any failure stops the run —
+ * the next text would meet the same — and the queue waits 1, 5, 15, then 60
+ * minutes before it asks again, so an outage of hours costs a few requests,
+ * not one a minute. An answer of any kind ends the pause. In this process
+ * only: a restart — Mika putting a new key on the stand — asks at once.
+ */
+let pause: { until: number; streak: number; failure: TranslatorFailure | null } = { until: 0, streak: 0, failure: null };
 
 const WAITING = { translatedAt: null, gaveUpAt: null } as const;
 const countPending = () => prisma.textTranslation.count({ where: WAITING });
@@ -268,6 +287,7 @@ export function resetTranslationsForTests(): void {
   lastFullAt = 0;
   lastLookAt = null;
   clockMs = Date.now;
+  pause = { until: 0, streak: 0, failure: null };
 }
 
 /** Tests hold the run's clock, or move it. */
@@ -304,7 +324,7 @@ async function tally(day: Date, d: { requests?: number; translated?: number; fai
  * while one runs answers `busy`. Never throws for the translator's sake.
  */
 export function runTranslations(now: Date = new Date()): Promise<TranslateOutcome> {
-  if (running) return Promise.resolve(idle('busy', 0, 0, { requests: 0, inputTokens: 0, outputTokens: 0 }));
+  if (running) return Promise.resolve(idle('busy', 0, 0, { requests: 0, inputTokens: 0, outputTokens: 0 }, false, null));
   running = (async () => {
     const { found } = await scanTexts({ now });
     return translateWaiting(now, found);
@@ -314,8 +334,9 @@ export function runTranslations(now: Date = new Date()): Promise<TranslateOutcom
   return running;
 }
 
-const idle = (status: TranslateOutcome['status'], found: number, pending: number, today: TranslateOutcome['today'], capped = false): TranslateOutcome => ({
+const idle = (status: TranslateOutcome['status'], found: number, pending: number, today: TranslateOutcome['today'], capped = false, pausedFor: TranslatorFailure | null = null): TranslateOutcome => ({
   status,
+  pausedFor,
   found,
   translated: 0,
   failed: 0,
@@ -332,6 +353,7 @@ const idle = (status: TranslateOutcome['status'], found: number, pending: number
 export async function translateWaiting(now: Date = new Date(), found = 0, cfg: TranslatorConfig | null = translatorConfig()): Promise<TranslateOutcome> {
   const day = dayOf(now);
   if (!cfg) return idle('off', found, await countPending(), await spentOn(day));
+  if (now.getTime() < pause.until) return idle('paused', found, await countPending(), await spentOn(day), false, pause.failure);
   const room = Math.max(0, cfg.dailyLimit - (await spentOn(day)).requests);
   if (room === 0) return idle('ok', found, await countPending(), await spentOn(day), true);
   const due = await prisma.textTranslation.findMany({
@@ -360,10 +382,14 @@ export async function translateWaiting(now: Date = new Date(), found = 0, cfg: T
       if (!(err instanceof TranslatorError)) throw err;
       failed++;
       await tally(day, { failed: 1 });
-      if (await retryLater(row, at(), err.failure, err.httpStatus)) gaveUp++;
-      if (STOPS.has(err.failure)) break;
-      continue;
+      const failedAt = at();
+      // The text is charged only with what may be its own: no answer, or the service's fault.
+      if (!NOT_THE_TEXT.has(err.failure) && (await retryLater(row, failedAt, err.failure, err.httpStatus))) gaveUp++;
+      const streak = pause.streak + 1;
+      pause = { until: failedAt.getTime() + backoffMs(streak), streak, failure: err.failure };
+      break;
     }
+    pause = { until: 0, streak: 0, failure: null };
     await tally(day, { requests: 1, translated: answer.ok ? 1 : 0, failed: answer.ok ? 0 : 1, inputTokens: answer.usage.inputTokens, outputTokens: answer.usage.outputTokens });
     if (answer.ok) {
       await prisma.textTranslation.update({
@@ -379,14 +405,14 @@ export async function translateWaiting(now: Date = new Date(), found = 0, cfg: T
     }
   }
   const today = await spentOn(day);
-  return { status: 'ok', found, translated, failed, gaveUp, pending: await countPending(), capped: today.requests >= cfg.dailyLimit, today };
+  return { status: 'ok', pausedFor: pause.failure, found, translated, failed, gaveUp, pending: await countPending(), capped: today.requests >= cfg.dailyLimit, today };
 }
 
 /** Back off from the moment it failed — or, tried too often, give it up. True when given up. */
 async function retryLater(row: { sourceHash: string; attempts: number }, failedAt: Date, failure: string, httpStatus: number | null): Promise<boolean> {
   const attempts = row.attempts + 1;
   const over = attempts >= MAX_ATTEMPTS;
-  const next = new Date(failedAt.getTime() + BACKOFF_MIN[Math.min(attempts, BACKOFF_MIN.length) - 1]! * 60_000);
+  const next = new Date(failedAt.getTime() + backoffMs(attempts));
   await prisma.textTranslation.update({
     where: { sourceHash: row.sourceHash },
     data: { attempts, lastFailure: failure, lastHttpStatus: httpStatus, ...(over ? { gaveUpAt: failedAt } : { nextTryAt: next }) },
