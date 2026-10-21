@@ -3,7 +3,8 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { LoadError } from '../components/LoadError.js';
 import { BlockHead, Empty, Loading, PageHead, Vin } from '../components/ui.js';
 import { fmtDate } from '../format.js';
-import { useT } from '../i18n/index.js';
+import { useLocale, useT } from '../i18n/index.js';
+import { repairHoursText, type RepairHours } from '../lib/maintenance.js';
 import { useLoad } from '../lib/use.js';
 
 // "Отчёты → Загрузка парка аренды" (wave 6 §3.2, B10-01). The arithmetic is
@@ -43,10 +44,12 @@ interface Answer {
   vehicles: number;
   byModel: { modelId: string; model: string; vehicles: number; rentedDays: number; poolDays: number; percent: number | null }[];
   blockers: { inRepairAllPeriod: BlockerVehicle[]; freeTooLong: BlockerVehicle[]; batteriesHolding: null };
+  repairs?: RepairHours;
 }
 
 export function UtilisationPage() {
   const t = useT();
+  const { locale } = useLocale();
   const [params, setParams] = useSearchParams();
   const today = todayISO();
   const thisWeek = weekOf(today);
@@ -148,6 +151,15 @@ export function UtilisationPage() {
       <section className="card">
         <BlockHead title={t.utilisationReport.blockers} />
         <Blocker label={t.utilisationReport.inRepairAllPeriod} rows={u.blockers.inRepairAllPeriod} />
+        {/* Hours in repair over the period, from the repairs' own minutes (ADR-0038). */}
+        {u.repairs && (
+          <dl className="figures">
+            <div className="figure">
+              <dt>{t.wmaint.repairsLine}</dt>
+              <dd className="mono">{repairHoursText(u.repairs, t, locale)}</dd>
+            </div>
+          </dl>
+        )}
         <Blocker label={t.utilisationReport.freeTooLong(FREE_TOO_LONG_DAYS)} rows={u.blockers.freeTooLong} />
         {/* No record ties a repair to a battery, so this is words, not a number. */}
         <dl className="figures">

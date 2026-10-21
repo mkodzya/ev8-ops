@@ -1,4 +1,4 @@
-import { VEHICLE_POOLS, VEHICLE_STATES, isPoolEvent, type RentalStatus, type VehicleEventKind, type VehiclePool, type VehicleState } from '@ev8/shared';
+import { VEHICLE_POOLS, VEHICLE_STATES, isPoolEvent, localDateTime, type RentalStatus, type VehicleEventKind, type VehiclePool, type VehicleState } from '@ev8/shared';
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api, ApiError } from '../api.js';
@@ -10,7 +10,8 @@ import { BlockHead, ColorText, Empty, FleetNo, Loading, PageHead, PlaceText, Ren
 import { RowMenu } from '../components/RowMenu.js';
 import { Field, Row } from '../components/Wizard.js';
 import { fmtDate } from '../format.js';
-import { useT } from '../i18n/index.js';
+import { useLocale, useT } from '../i18n/index.js';
+import { kmText, leftText, spanText, type Downtime, type RepairHours, type VehicleMaintenance } from '../lib/maintenance.js';
 import { ChangedFromTo, noteWords } from '../lib/journal.js';
 import { useLoad } from '../lib/use.js';
 import { useSession } from '../session.js';
@@ -39,7 +40,23 @@ interface Card {
     currentRentalId: string | null;
   };
   events: { id: string; kind: VehicleEventKind; occurredOn: string; fromState: VehicleState | null; toState: VehicleState; fromPool: VehiclePool | null; toPool: VehiclePool | null; rentalId: string | null; reason: string | null; actor: string | null }[];
-  serviceJobs: { id: string; number: string; status: 'open' | 'done' | 'cancelled'; payer: 'company' | 'customer'; reason: string; openedOn: string; closedOn: string | null; totalTetri: number | null; withheldTetri: number | null }[];
+  serviceJobs: {
+    id: string;
+    number: string;
+    status: 'draft' | 'open' | 'done' | 'cancelled';
+    payer: 'company' | 'customer';
+    reason: string;
+    openedOn: string;
+    closedOn: string | null;
+    totalTetri: number | null;
+    withheldTetri: number | null;
+    /** Opening to closing in minutes (ADR-0038); empty for repairs without the times. */
+    downtime?: Downtime | null;
+  }[];
+  /** Planned maintenance (ADR-0038); null for a moped sold, written off or archived. */
+  maintenance?: VehicleMaintenance | null;
+  /** Downtime of its repairs over the last 30 days. */
+  downtime30?: RepairHours;
   rentals: { id: string; number: string; status: RentalStatus; customer: { id: string; name: string }; pickedUpOn: string | null; returnedOn: string | null; paidThrough: string | null; weeklyRateTetri: number }[];
   /** The tracker on it and the ones it had (ADR-0036); empty to whoever may not read an IMEI. */
   trackers?: { id: string; imei: string; simPhone: string | null; installedOn: string; removedOn: string | null; job: { id: string; number: string } | null; removedJob: { id: string; number: string } | null }[] | null;
@@ -52,6 +69,7 @@ interface Card {
 export function VehiclePage() {
   const { id } = useParams();
   const t = useT();
+  const { locale } = useLocale();
   const { can } = useSession();
   const { data, failure, reload } = useLoad<Card>(id ? `/api/fleet/${id}` : null);
   const [open, setOpen] = useState(false);
@@ -274,10 +292,19 @@ export function VehiclePage() {
         </section>
       </div>
 
+      {data.maintenance && <MaintenanceCard m={data.maintenance} />}
+
       {can('reports.view') && <VehicleEconomics vehicleId={data.vehicle.id} />}
 
       <section className="card">
-        <BlockHead title={t.service.history} sub={t.service.jobsCount(data.serviceJobs.length)} />
+        <BlockHead
+          title={t.service.history}
+          sub={
+            data.downtime30 && data.downtime30.counted > 0
+              ? `${t.service.jobsCount(data.serviceJobs.length)} · ${t.wmaint.period30(spanText(data.downtime30.minutes, t, locale))}`
+              : t.service.jobsCount(data.serviceJobs.length)
+          }
+        />
         {data.serviceJobs.length === 0 ? (
           <Empty text={t.service.none} />
         ) : (
@@ -292,7 +319,10 @@ export function VehiclePage() {
                   {j.reason} <span className="muted">· {t.service.payers[j.payer]}</span>
                   {/* What it cost is the owners' (ADR-0033 §4). */}
                   {j.totalTetri != null && <span className="muted"> · {formatGel(j.totalTetri)}</span>}
-                  <span className={j.status === 'open' ? 'warn-text' : 'muted'}> · {t.service.statuses[j.status]}</span>
+                  {/* A repair waiting for approval has no word among the old statuses: the repairs' own says it. */}
+                  <span className={j.status === 'open' || j.status === 'draft' ? 'warn-text' : 'muted'}> · {j.status === 'draft' ? t.repair.statuses.draft : t.service.statuses[j.status]}</span>
+                  {/* Downtime in hours where the repair kept its times (ADR-0038). */}
+                  {j.downtime && <span className="muted mono"> · {spanText(j.downtime.minutes, t, locale)}</span>}
                 </span>
               </li>
             ))}
@@ -521,6 +551,48 @@ function TrackerBlock({ trackers }: { trackers: NonNullable<Card['trackers']> })
           {t.wparts.trackerEarlier(x.imei.slice(-4), fmtDate(x.installedOn), fmtDate(x.removedOn))}
         </p>
       ))}
+    </section>
+  );
+}
+
+/**
+ * Planned maintenance of the moped (ADR-0038): what is left to the mark, the
+ * mark, and where the mileage came from; a moped with no mileage written in
+ * EV8 Ops says so instead of guessing.
+ */
+function MaintenanceCard({ m }: { m: VehicleMaintenance }) {
+  const t = useT();
+  const tone = m.state === 'overdue' ? 'crit-text' : m.state === 'soon' ? 'warn-text' : 'muted';
+  return (
+    <section className="card">
+      <BlockHead title={t.wmaint.block} sub={<span className={tone}>{t.wmaint.states[m.state]}</span>} />
+      {m.state === 'unknown' || m.dueKm == null || m.currentKm == null ? (
+        <p className="hint muted">{t.wmaint.noMileage}</p>
+      ) : (
+        <>
+          <p className={`t-money ${m.state === 'overdue' ? 'crit-text' : ''}`}>{leftText(m, t)}</p>
+          <p className="hint">
+            {t.wmaint.next(kmText(m.dueKm))} · {t.wmaint.mileageFrom(kmText(m.currentKm), t.wmaint.sources[m.readingSource ?? ''] ?? '', m.currentAt ? localDateTime(m.currentAt).date : '')}
+          </p>
+          <p className="hint muted">
+            {m.lastPlanned ? (
+              <>
+                <Link to={`/service/${m.lastPlanned.jobId}`} className="mono">
+                  {m.lastPlanned.number}
+                </Link>{' '}
+                {t.wmaint.lastPlannedAt(kmText(m.lastPlanned.km), fmtDate(m.lastPlanned.closedOn))}
+              </>
+            ) : (
+              t.wmaint.firstMark
+            )}
+          </p>
+          {m.openPlanned && (
+            <p className="hint">
+              <Link to={`/service/${m.openPlanned.jobId}`}>{t.wmaint.underway(m.openPlanned.number)}</Link>
+            </p>
+          )}
+        </>
+      )}
     </section>
   );
 }

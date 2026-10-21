@@ -17,6 +17,7 @@ import { depositsOverview } from './deposits.js';
 import { env } from './env.js';
 import { overdueTotals } from './overdue.js';
 import { utilisationVehicles } from './utilisation.js';
+import { periodDowntime } from './downtime.js';
 
 // The data side of "Отчёты → Неделя" (wave 6 §3.1). The arithmetic of the
 // money is in `packages/shared/src/week.ts`; here we only read the rows it
@@ -53,6 +54,12 @@ export interface WeekAnswer {
     inService: number;
     /** The longest a moped in repair has been there, in days. */
     serviceLongestDays: number | null;
+    /**
+     * Hours in repair within the week by Tbilisi days, in minutes, and of
+     * them the wait for approval (ADR-0038 §5); `unknown` repairs have no
+     * hours to give and are not in the sums.
+     */
+    repairs: { minutes: number; waitMinutes: number; counted: number; unknown: number };
   };
   /** `overdue*` is now, and is the same pair of figures "Today" shows (crit. 1в). */
   rentals: { started: number; returned: number; overdueCount: number; overdueTetri: number };
@@ -111,7 +118,7 @@ export async function weekReport(from: string, to: string): Promise<WeekAnswer> 
   const fromDate = dateFromISO(from)!;
   const toDate = dateFromISO(to)!;
 
-  const [{ input: vehicles }, started, returned, overdue, payments, withheld, deposits, transferPeriods, transferDeposits, unmatchedLines, batteries] =
+  const [{ input: vehicles }, started, returned, overdue, payments, withheld, deposits, transferPeriods, transferDeposits, unmatchedLines, batteries, repairs] =
     await Promise.all([
       utilisationVehicles(),
       prisma.rental.count({ where: { pickedUpOn: { gte: fromDate, lte: toDate } } }),
@@ -128,9 +135,10 @@ export async function weekReport(from: string, to: string): Promise<WeekAnswer> 
       prisma.deposit.aggregate({ _sum: { receivedBeforeTransferTetri: true } }),
       prisma.statementLine.count({ where: { status: 'unmatched', occurredOn: { gte: fromDate, lte: toDate } } }),
       batteriesNow(),
+      periodDowntime(from, to),
     ]);
 
-  const fleet = { rented: 0, freeInRentPool: 0, inService: 0, serviceLongestDays: null as number | null };
+  const fleet = { rented: 0, freeInRentPool: 0, inService: 0, serviceLongestDays: null as number | null, repairs };
   for (const v of vehicles) {
     const on = vehicleOn(v, asOf);
     if (!on) continue;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addDays, daysBetween, localDateTime, todayISO } from '../src/index.js';
+import { addDays, dayStart, daysBetween, localDateTime, minutesBetween, todayISO } from '../src/index.js';
 
 // The company's day is Tbilisi's (CLAUDE.md). Everything the product records
 // happened on that day, whoever is reading about it and from where.
@@ -47,5 +47,30 @@ describe('the company clock', () => {
     expect(addDays('2026-03-28', 1)).toBe('2026-03-29');
     expect(addDays('2026-10-25', 1)).toBe('2026-10-26');
     expect(daysBetween('2026-03-28', '2026-03-29')).toBe(1);
+  });
+});
+
+// Stage 6 (ADR-0038 §5): repair hours are minutes between two instants, cut
+// to the company's days only when a period asks for them.
+describe('minutes and the start of a day', () => {
+  it('counts whole minutes, never below nought', () => {
+    expect(minutesBetween('2026-10-18T23:30:00+04:00', '2026-10-19T01:30:00+04:00')).toBe(120);
+    expect(minutesBetween(new Date('2026-10-19T10:00:00Z'), new Date('2026-10-19T10:00:59Z'))).toBe(0);
+    expect(minutesBetween('2026-10-19T10:00:00Z', '2026-10-19T10:01:59Z')).toBe(1);
+    expect(minutesBetween('2026-10-19T10:00:00Z', '2026-10-19T09:00:00Z')).toBe(0);
+  });
+
+  it('a Tbilisi day starts at 20:00 UTC the evening before', () => {
+    expect(dayStart('2026-10-19').toISOString()).toBe('2026-10-18T20:00:00.000Z');
+    expect(dayStart('2026-01-01', 'Asia/Tbilisi').toISOString()).toBe('2025-12-31T20:00:00.000Z');
+    expect(todayISO(dayStart('2026-10-19'))).toBe('2026-10-19');
+    expect(todayISO(new Date(dayStart('2026-10-19').getTime() - 1))).toBe('2026-10-18');
+  });
+
+  it('reads the offset from the zone, so a zone that moves its clock gets its own midnight', () => {
+    expect(dayStart('2026-10-19', 'UTC').toISOString()).toBe('2026-10-19T00:00:00.000Z');
+    // London at midnight is GMT on the morning the clocks go forward, BST on the one they go back.
+    expect(dayStart('2026-03-29', 'Europe/London').toISOString()).toBe('2026-03-29T00:00:00.000Z');
+    expect(dayStart('2026-10-25', 'Europe/London').toISOString()).toBe('2026-10-24T23:00:00.000Z');
   });
 });

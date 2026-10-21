@@ -14,6 +14,7 @@ import { uploadAll, type PreparedPhoto } from '../lib/photos.js';
 import { useLoad } from '../lib/use.js';
 import { useSession } from '../session.js';
 import { ApprovalCard } from './RepairApproval.js';
+import { kmText, leftText, type Downtime, type MaintenanceList } from '../lib/maintenance.js';
 import './workshop-job.css';
 
 export type ServiceStatus = 'draft' | 'open' | 'done' | 'cancelled';
@@ -110,6 +111,8 @@ export interface ServiceJob {
   works: ServiceWorkLine[];
   /** The mechanic's sum comes empty to whoever neither carries repairs nor sees cost. */
   worksTotal: { seconds: number; tetri: number | null; unnormed: number };
+  /** Opening to closing, and of it waiting for approval, in minutes (ADR-0038); empty for repairs without the times. */
+  downtime?: Downtime | null;
   /** The mechanic's approved work in what the company's repair cost (ADR-0037 §6); the owners' alone. */
   worksCostTetri: number | null;
   /** The payout that paid its mechanic; the status stays «closed» (ADR-0037 §1). */
@@ -206,6 +209,10 @@ export function ServicePage() {
           + {t.wjob.newJob}
         </Link>
       )}
+
+      {/* «Пора на ТО» for the chief mechanic (stage 6, variant A): the owners
+          read it on «Сегодня», which the workshop does not have. */}
+      {mayApprove && !mayFleet && <MaintenanceBlock />}
 
       {/* «Ждут согласования» decides in the card itself (stage 3, variant A):
           the first round of a repair and a work found once it was open alike. */}
@@ -310,6 +317,47 @@ export function ServicePage() {
         ]}
       />
     </>
+  );
+}
+
+/**
+ * The mopeds due for planned maintenance (ADR-0038), most urgent first, each
+ * with «＋ ТО»: a new repair of that moped, already planned. One already
+ * under way says so instead of offering a second.
+ */
+function MaintenanceBlock() {
+  const t = useT();
+  const { data } = useLoad<MaintenanceList>('/api/service/maintenance');
+  if (!data || data.due.length === 0) return null;
+  return (
+    <section className="wappr-queue wmaint-block">
+      <div className="queue-head">
+        <h2>{t.today.groups.maintenance}</h2>
+        <span className="muted">
+          {t.wmaint.mopeds(data.due.length)} · {t.wmaint.every(kmText(data.intervalKm))}
+        </span>
+      </div>
+      <ul className="wmaint-list">
+        {data.due.map((m) => (
+          <li key={m.vehicleId}>
+            <span className="wmaint-what">
+              <b>{[m.number, m.model].filter(Boolean).join(' · ')}</b>
+              <small className="muted">{t.wmaint.rowSub(kmText(m.dueKm ?? 0), kmText(m.currentKm ?? 0))}</small>
+            </span>
+            <span className={`mono wmaint-left ${(m.leftKm ?? 0) < 0 ? 'crit-text' : ''}`}>{leftText(m, t)}</span>
+            {m.openPlanned ? (
+              <Link className="muted" to={`/service/${m.openPlanned.jobId}`}>
+                {t.wmaint.underway(m.openPlanned.number)}
+              </Link>
+            ) : (
+              <Link className="wjob-btn wmaint-add" to={`/service/new?q=${encodeURIComponent(m.number ?? m.vin.slice(-6))}&reason=planned`}>
+                {t.wmaint.add}
+              </Link>
+            )}
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 

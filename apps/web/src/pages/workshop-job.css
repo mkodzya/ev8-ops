@@ -326,3 +326,18 @@
 }
 /* On the tablet the balance is reached from «Ремонт»: a finger's size, not a chip's. */
 .wpay-link { min-height: var(--control-large); padding: 0 20px; }
+
+/* Planned maintenance on the chief mechanic's «Ремонт» (stage 6; prototype
+   mechanic-maintenance-options.html, variant A): a moped a row, what is left
+   on the right, «＋ ТО» at the finger's size. */
+.wmaint-list { list-style: none; margin: var(--space2) 0 0; padding: 0; border: 1.5px solid var(--line-soft); border-radius: var(--radius-card); background: var(--surface); }
+.wmaint-list li { display: flex; align-items: center; gap: var(--space3); min-height: 64px; padding: 10px 16px; border-top: 1px solid var(--line-soft); }
+.wmaint-list li:first-child { border-top: 0; }
+.wmaint-what { flex: 1; min-width: 0; }
+.wmaint-what small { display: block; font: var(--text-body-sm); }
+.wmaint-left { white-space: nowrap; }
+.wmaint-add { min-height: 52px; text-decoration: none; }
+@media (max-width: 719px) {
+  .wmaint-list li { flex-wrap: wrap; }
+  .wmaint-left { order: 3; }
+}

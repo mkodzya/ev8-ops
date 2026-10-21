@@ -83,7 +83,9 @@ export function WorkshopJobWizard() {
   const toast = useToast();
   const [params] = useSearchParams();
   const book = useLoad<WorkBook>('/api/work-book');
-  const initial = useMemo<Draft>(() => ({ ...BLANK, q: params.get('q') ?? '' }), [params]);
+  // «＋ ТО» and the workshop group's «Пора на ТО» open the repair planned (ADR-0038).
+  const planned = params.get('reason') === 'planned';
+  const initial = useMemo<Draft>(() => ({ ...BLANK, q: params.get('q') ?? '', reasonKind: params.get('reason') === 'planned' ? 'planned' : '' }), [params]);
   const [f, setF] = useState<Draft>(initial);
   const [step, setStep] = useState(0);
   const [odoPhoto, setOdoPhoto] = useState<PreparedPhoto | null>(null);
@@ -98,6 +100,14 @@ export function WorkshopJobWizard() {
     const field = op.failure?.field;
     if (field && STEP_OF[field] != null) setStep(STEP_OF[field]!);
   }, [op.failure]);
+
+  // What a planned maintenance is, by the spec: the fleet's diagnostics, DG-03 — put on the
+  // list once, for the mechanic to keep or change.
+  useEffect(() => {
+    if (!planned || !book.data) return;
+    const dg = book.data.works.find((w) => w.code === 'DG-03' && w.active);
+    if (dg) setF((x) => (x.lines.length === 0 ? { ...x, lines: [{ workTypeId: dg.id, freeText: null, qty: 1 }] } : x));
+  }, [planned, book.data]);
 
   if (drafts.offer) {
     return (

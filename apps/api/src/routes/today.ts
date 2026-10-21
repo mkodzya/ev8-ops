@@ -12,6 +12,7 @@ import { kommoReconciliation } from '../lib/kommo.js';
 import { hasPerm } from '../lib/auth.js';
 import { actorOf, mayView } from '../lib/guard.js';
 import { onHandOf } from '../lib/till.js';
+import { maintenanceOverview } from '../lib/maintenance.js';
 import { UNDO_RETURN_MS } from '../lib/rentals.js';
 import { payOffsetOf, rentStateOf } from '../lib/rentState.js';
 import { BANKS } from './statements.js';
@@ -174,6 +175,8 @@ export function todayRoutes(app: FastifyInstance): void {
     const joined = driveNow ? joinKommoDeals(driveNow.contracts, kommoDeals) : null;
 
     const longest = serviceJobs.reduce((n, j) => Math.max(n, daysBetween(isoDate(j.openedOn)!, today)), 0);
+    // Planned maintenance (ADR-0038): owners and managers alike — whoever brings the moped in.
+    const maintenance = await maintenanceOverview(prisma);
     const groups = dayQueue({
       today,
       owner,
@@ -220,6 +223,7 @@ export function todayRoutes(app: FastifyInstance): void {
       kommo,
       kommoDeals: joined?.deals ?? kommoDeals,
       drive: driveNow && joined ? { contracts: joined.contracts, returns: driveNow.returns } : undefined,
+      maintenance: maintenance.due.map((m) => ({ vehicleId: m.vehicleId, number: m.number, model: m.model, vin: m.vin, dueKm: m.dueKm!, currentKm: m.currentKm!, leftKm: m.leftKm! })),
     });
 
     const fleet = Object.fromEntries(VEHICLE_STATES.map((s) => [s, 0])) as Record<VehicleState, number>;
@@ -272,6 +276,8 @@ export function todayRoutes(app: FastifyInstance): void {
         batteries: await batteriesNow(),
       },
       undoReturnMs: UNDO_RETURN_MS,
+      /** Mopeds with no mileage written in EV8 Ops yet: no maintenance is counted for them (ADR-0038 §1). */
+      maintenanceUnknown: maintenance.unknownCount,
     };
   });
 }

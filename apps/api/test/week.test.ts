@@ -16,7 +16,13 @@ interface Week {
   to: string;
   asOf: string;
   today: string;
-  fleet: { rented: number; freeInRentPool: number; inService: number; serviceLongestDays: number | null };
+  fleet: {
+    rented: number;
+    freeInRentPool: number;
+    inService: number;
+    serviceLongestDays: number | null;
+    repairs: { minutes: number; waitMinutes: number; counted: number; unknown: number };
+  };
   rentals: { started: number; returned: number; overdueCount: number; overdueTetri: number };
   money: {
     totalTetri: number;
@@ -79,6 +85,8 @@ describe.skipIf(!HAS_DB)('wave 6 · the week', () => {
         freeInRentPool: expect.any(Number),
         inService: expect.any(Number),
         serviceLongestDays: w.fleet.inService > 0 ? expect.any(Number) : null,
+        // Stage 6 (ADR-0038 §5): repair hours in minutes, the repairs with none counted apart.
+        repairs: { minutes: expect.any(Number), waitMinutes: expect.any(Number), counted: expect.any(Number), unknown: expect.any(Number) },
       },
       rentals: { started: expect.any(Number), returned: expect.any(Number), overdueCount: expect.any(Number), overdueTetri: expect.any(Number) },
       money: {

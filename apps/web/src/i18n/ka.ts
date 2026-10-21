@@ -15,6 +15,7 @@ import { workshopJobsKa } from './workshop-jobs.js';
 import { workshopApprovalKa } from './workshop-approval.js';
 import { workshopPartsKa } from './workshop-parts.js';
 import { workshopPayoutsKa } from './workshop-payouts.js';
+import { workshopMaintenanceKa } from './workshop-maintenance.js';
 import { driveKa } from './drive.js';
 import { expKa } from './expenses.js';
 import { inBankKa } from './in-bank.js';
@@ -105,6 +106,7 @@ export const ka: Dict = {
       works: 'სამუშაოების ცნობარი',
       payouts: 'გადასახდელი',
       balance: 'ბალანსი',
+      repair: 'შეკეთება',
       payments: 'გადახდები',
       statements: 'ამონაწერები',
       week: 'კვირა',
@@ -1371,6 +1373,7 @@ export const ka: Dict = {
   ...workshopApprovalKa,
   ...workshopPartsKa,
   ...workshopPayoutsKa,
+  ...workshopMaintenanceKa,
   ...driveKa,
   ...expKa,
   ...inBankKa,

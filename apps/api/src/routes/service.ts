@@ -1,7 +1,6 @@
 import {
   AFTER_PHOTOS_MAX,
   JOB_PHOTOS_MAX,
-  LABOUR_RATE_TETRI,
   SERVICE_PART_KINDS,
   SERVICE_REASONS,
   WORK_QTY_MAX,
@@ -41,6 +40,10 @@ import { actorOf, mayView } from '../lib/guard.js';
 import { date, int, oneOf, str, tetri } from '../lib/validate.js';
 import { syncDeposit } from '../lib/rentalMoney.js';
 import { moveVehicle } from '../lib/vehicles.js';
+import { rateOf } from '../lib/serviceSettings.js';
+import { maintenanceOverview, restoreOdometer } from '../lib/maintenance.js';
+import { downtimeOf } from '../lib/downtime.js';
+import { enqueueJobNotice, enqueueNotice, kickNotices, noticeKey } from '../lib/notices.js';
 
 // Repair jobs (SRV-01, SRV-02).
 //
@@ -125,6 +128,7 @@ function serialize(job: {
     id: string;
     vin: string;
     fleetNo: number | null;
+    odometerKm: number | null;
     model: { brand: string; name: string };
     trackers: { id: string; imei: string; simPhone: string | null; installedOn: Date; partId: string | null }[];
   };
@@ -158,6 +162,7 @@ function serialize(job: {
   reasonKind: string | null;
   openedOdometerKm: number | null;
   odometerReason: string | null;
+  closedOdometerReason: string | null;
   openedAt: Date | null;
   works: {
     id: string;
@@ -222,6 +227,12 @@ function serialize(job: {
     closedLocation: job.closedLocation ?? null,
     /** The minute it closed; empty on repairs closed before stage 3. */
     closedAt: job.closedAt?.toISOString() ?? null,
+    /**
+     * How long the moped stood in it, and of that how long it waited for the
+     * approval, in minutes (ADR-0038 §5); empty — not known: no minute of
+     * opening, or a day written in afterwards.
+     */
+    downtime: downtimeOf(job),
     /** Who let the work start, and when (stage 3); empty on repairs never waited for. */
     approved: job.approvedAt ? { at: job.approvedAt.toISOString(), by: job.approvedBy?.name ?? null } : null,
     /** A refused repair says who refused it and why (stage 3). */
@@ -239,6 +250,8 @@ function serialize(job: {
       vin: job.vehicle.vin,
       number: fleetNumber(job.vehicle.fleetNo),
       model: `${job.vehicle.model.brand} ${job.vehicle.model.name}`,
+      /** The moped's last reading: a lower one at closing asks for its reason (ADR-0038 §4). */
+      odometerKm: job.vehicle.odometerKm,
       /** The tracker on the moped now, if any (ADR-0036): what «снять трекер» takes off. */
       tracker: job.vehicle.trackers[0] ? trackerOut(job.vehicle.trackers[0]) : null,
     },
@@ -280,6 +293,8 @@ function serialize(job: {
     reasonKind: job.reasonKind,
     openedOdometerKm: job.openedOdometerKm,
     odometerReason: job.odometerReason,
+    /** Why the reading at closing is below the last one (ADR-0038 §4). */
+    closedOdometerReason: job.closedOdometerReason,
     openedAt: job.openedAt?.toISOString() ?? null,
     works,
     worksTotal: { seconds: total.seconds, tetri: total.tetri as number | null, unnormed: total.unnormed },
@@ -653,6 +668,21 @@ export function serviceRoutes(app: FastifyInstance): void {
     return { open, drafts, workshops, jobs: jobs.map((j) => present(req, serialize(j))) };
   });
 
+  /**
+   * «Пора на ТО» (stage 6; ADR-0038 §1–3): the mopeds with less than the
+   * warning left or past the mark, the most urgent first, and how many have
+   * no mileage recorded in EV8 Ops at all — those have no maintenance yet.
+   * Read by whoever sees every repair: the chief mechanic opens the planned
+   * repair from it, an owner and a manager see it on «Сегодня». A mechanic
+   * sees his own repairs and not the fleet (ADR-0033 §2): in the variant the
+   * owner chose, «Механик без права согласования блока не видит».
+   */
+  app.get('/api/service/maintenance', { config: { scope: 'service.view' } }, async (req) => {
+    const actor = actorOf(req);
+    if (!seesEveryRepair(permissionsOf(actor.role, actor.via))) throw forbidden('forbidden', 'The fleet’s maintenance is read by whoever sees every repair.', { permission: 'service.approve' });
+    return maintenanceOverview();
+  });
+
   app.get<{ Params: { id: string } }>('/api/service/:id', { config: { scope: 'service.view' } }, async (req) => {
     const job = await prisma.serviceJob.findFirst({
       where: { id: req.params.id, ...mine(actorOf(req)) },
@@ -708,7 +738,7 @@ export function serviceRoutes(app: FastifyInstance): void {
         where: { id: job.id },
         data: { status: 'open', ...(first ? { approvedById: actor.id, approvedAt: now } : {}), updatedAt: now },
       });
-      await tx.auditLog.create({
+      const logged = await tx.auditLog.create({
         data: {
           actorId: actor.id,
           action: 'service.approve',
@@ -717,7 +747,10 @@ export function serviceRoutes(app: FastifyInstance): void {
           after: { number: job.number, status: 'open', works: waiting.length, parts: bought.length || undefined, again: !first, norms: norms.length > 0 ? norms : undefined },
         },
       });
+      // The workshop's group hears it, the first time and every time after (ADR-0038 §6).
+      await enqueueJobNotice(tx, 'job_approved', job.id, logged.id);
     });
+    kickNotices();
     return { ok: true, works: waiting.length, parts: bought.length };
   });
 
@@ -760,10 +793,12 @@ export function serviceRoutes(app: FastifyInstance): void {
           data: { status: 'cancelled', closedOn: dateFromISO(today)!, closedAt: now, rejectedById: actor.id, rejectedAt: now, rejectReason: reason, updatedAt: now },
         });
         if (job.movedVehicle) await moveVehicle(tx, { vehicleId: job.vehicleId, kind: 'service_out', occurredOn: today, actorId: actor.id, reason });
-        await tx.auditLog.create({
+        const logged = await tx.auditLog.create({
           data: { actorId: actor.id, action: 'service.reject', entityType: 'service_job', entityId: job.id, after: { number: job.number, status: 'cancelled', partsBack: back }, note: reason },
         });
+        await enqueueJobNotice(tx, 'job_rejected', job.id, logged.id);
       });
+      kickNotices();
       return { ok: true, status: 'cancelled', partsBack: back };
     }
     const waiting = job.works.filter((w) => workLineState(w) === 'waiting').map((w) => w.id);
@@ -774,10 +809,12 @@ export function serviceRoutes(app: FastifyInstance): void {
       await tx.serviceWork.updateMany({ where: { id: { in: waiting } }, data: { rejectedById: actor.id, rejectedAt: now, rejectReason: reason } });
       await tx.servicePart.updateMany({ where: { id: { in: bought } }, data: { rejectedById: actor.id, rejectedAt: now, rejectReason: reason } });
       await tx.serviceJob.update({ where: { id: job.id }, data: { status: 'open', updatedAt: now } });
-      await tx.auditLog.create({
+      const logged = await tx.auditLog.create({
         data: { actorId: actor.id, action: 'service.reject', entityType: 'service_job', entityId: job.id, after: { number: job.number, status: 'open', works: waiting.length, parts: bought.length || undefined }, note: reason },
       });
+      await enqueueJobNotice(tx, 'job_rejected', job.id, logged.id);
     });
+    kickNotices();
     return { ok: true, status: 'open', works: waiting.length, parts: bought.length };
   });
 
@@ -802,7 +839,8 @@ export function serviceRoutes(app: FastifyInstance): void {
     // A repair with no mechanic is an owner's, kept with the old line of hours.
     if (!job.mechanicId) throw conflict('job_no_mechanic', 'This repair has no mechanic to do the work.');
     const types = await bookWorks(lines);
-    const rateTetri = job.mechanic?.labourRateTetri ?? LABOUR_RATE_TETRI;
+    // His own rate, or the company's the owner set (ADR-0038 §3).
+    const rateTetri = await rateOf(prisma, job.mechanic);
     const approvedNow = job.status === 'open' && hasPerm(actor, 'service.approve');
     const now = new Date();
     const status = approvedNow ? job.status : 'draft';
@@ -824,7 +862,7 @@ export function serviceRoutes(app: FastifyInstance): void {
         });
       }
       if (status !== job.status) await tx.serviceJob.update({ where: { id: job.id }, data: { status, updatedAt: now } });
-      await tx.auditLog.create({
+      const logged = await tx.auditLog.create({
         data: {
           actorId: actor.id,
           action: 'service.work.add',
@@ -833,7 +871,10 @@ export function serviceRoutes(app: FastifyInstance): void {
           after: { number: job.number, works: lines.map((l) => ({ code: types.find((x) => x.id === l.workTypeId)?.code ?? null, freeText: l.workTypeId ? null : l.freeText, qty: l.qty })), waits: !approvedNow },
         },
       });
+      // Back to waiting: the group is asked again. Added to one that already waits, it was asked already.
+      if (status === 'draft' && job.status !== 'draft') await enqueueJobNotice(tx, 'job_waiting', job.id, logged.id);
     });
+    kickNotices();
     return reply.code(201).send({ ok: true, status });
   });
 
@@ -1018,7 +1059,7 @@ export function serviceRoutes(app: FastifyInstance): void {
     }
     const types = await bookWorks(lines);
     const me = await prisma.user.findUniqueOrThrow({ where: { id: actor.id }, select: { labourRateTetri: true } });
-    const rateTetri = me.labourRateTetri ?? LABOUR_RATE_TETRI;
+    const rateTetri = await rateOf(prisma, me);
 
     const open = await prisma.serviceJob.findFirst({
       where: { vehicleId, status: { in: ['open', 'draft'] } },
@@ -1137,7 +1178,7 @@ export function serviceRoutes(app: FastifyInstance): void {
           },
         });
       }
-      await tx.auditLog.create({
+      const logged = await tx.auditLog.create({
         data: {
           actorId: actor.id,
           action: open ? 'service.take' : made.status === 'draft' ? 'service.request' : 'service.open',
@@ -1154,11 +1195,15 @@ export function serviceRoutes(app: FastifyInstance): void {
             works: lines.map((l) => ({ code: types.find((x) => x.id === l.workTypeId)?.code ?? null, freeText: l.workTypeId ? null : l.freeText, qty: l.qty })),
             movedVehicle: open ? undefined : !rented,
           },
-          before: open ? { reason: open.reason, mechanicId: open.mechanicId } : undefined,
+          // The moped's figure before this reading: a repair called off by mistake puts it back (ADR-0038 §1).
+          before: { odometerKm: vehicle.odometerKm, ...(open ? { reason: open.reason, mechanicId: open.mechanicId } : {}) },
         },
       });
+      // His repair, or his works on one taken over, wait: the group is asked (ADR-0038 §6).
+      if (made.status === 'draft') await enqueueJobNotice(tx, 'job_waiting', made.id, logged.id);
       return made;
     });
+    kickNotices();
     return reply.code(open ? 200 : 201).send(job);
   });
 
@@ -1219,7 +1264,7 @@ export function serviceRoutes(app: FastifyInstance): void {
       if (!rented) {
         await moveVehicle(tx, { vehicleId, kind: 'service_in', occurredOn: openedOn, actorId: actor.id, reason });
       }
-      await tx.auditLog.create({
+      const logged = await tx.auditLog.create({
         data: {
           actorId: actor.id,
           action: reported ? 'service.report' : 'service.open',
@@ -1228,8 +1273,10 @@ export function serviceRoutes(app: FastifyInstance): void {
           after: { number: created.number, vehicleId, reason, payer, movedVehicle: !rented, draft: reported },
         },
       });
+      if (reported) await enqueueJobNotice(tx, 'job_waiting', created.id, logged.id);
       return created;
     });
+    kickNotices();
     return reply.code(201).send(job);
   });
 
@@ -1411,7 +1458,7 @@ export function serviceRoutes(app: FastifyInstance): void {
       }
       if (tracker) await fitTracker(tx, { job, partId: catalogue!.id, servicePartId: created.id, donorVehicleId: donor?.id ?? null, imei: tracker.imei, simPhone: tracker.simPhone, on: today, actorId: actor.id });
       if (waits && job.status !== 'draft') await tx.serviceJob.update({ where: { id: job.id }, data: { status: 'draft', updatedAt: new Date() } });
-      await tx.auditLog.create({
+      const logged = await tx.auditLog.create({
         data: {
           actorId: actor.id,
           action: 'service.part.add',
@@ -1430,8 +1477,11 @@ export function serviceRoutes(app: FastifyInstance): void {
           },
         },
       });
+      // A bought part sends a repair in work back to waiting: the group is asked again.
+      if (waits && job.status !== 'draft') await enqueueJobNotice(tx, 'job_waiting', job.id, logged.id);
       return created;
     });
+    kickNotices();
     return reply.code(201).send({ id: line.id, status: waits ? 'draft' : job.status });
   });
 
@@ -1543,7 +1593,10 @@ export function serviceRoutes(app: FastifyInstance): void {
     const b = req.body ?? {};
     const actor = actorOf(req);
     const owner = hasPerm(actor, 'service.manage');
-    const job = await prisma.serviceJob.findFirst({ where: { id: req.params.id, ...(owner ? {} : mine(actor)) }, include: { parts: true, works: { select: WORK_MONEY } } });
+    const job = await prisma.serviceJob.findFirst({
+      where: { id: req.params.id, ...(owner ? {} : mine(actor)) },
+      include: { parts: true, works: { select: WORK_MONEY }, vehicle: { select: { odometerKm: true } } },
+    });
     if (!job) throw notFound('job_not_found', 'No such repair job.');
     if (job.status === 'draft') throw conflict('job_waits_approval', 'This repair waits for approval; it closes after.');
     if (job.status !== 'open') throw conflict('job_closed', 'This job is already closed.');
@@ -1566,6 +1619,13 @@ export function serviceRoutes(app: FastifyInstance): void {
       if (odometerKm == null) throw badRequest('missing_field', 'Say what the odometer reads.', { field: 'odometerKm' });
       if (!closedLocationId) throw badRequest('missing_field', 'Say where the moped stands now.', { field: 'locationId' });
     }
+    // Less than at the opening, or than the moped's last reading, only with
+    // the reason — as the opening asks it (ADR-0038 §4): a typo would move the
+    // planned maintenance with nobody saying why.
+    const odometerReason = str(b, 'odometerReason', { max: 500 });
+    const lastKm = [job.openedOdometerKm, job.vehicle.odometerKm].reduce<number | null>((m, k) => (k == null ? m : Math.max(m ?? k, k)), null);
+    const lower = odometerKm != null && lastKm != null && odometerKm < lastKm;
+    if (lower && !odometerReason) throw badRequest('odometer_below', 'The mileage is below the last recorded one; say why.', { field: 'odometerReason', lastKm });
     if (closedLocationId && !(await prisma.location.findFirst({ where: { id: closedLocationId, archived: false }, select: { id: true } }))) {
       throw notFound('location_not_found', 'No such point.');
     }
@@ -1621,6 +1681,7 @@ export function serviceRoutes(app: FastifyInstance): void {
           withheldTetri,
           chargedTetri: charge.debtTetri,
           odometerKm: odometerKm ?? job.odometerKm,
+          closedOdometerReason: lower ? odometerReason : null,
           closedLocationId: closedLocationId ?? job.closedLocationId,
           notes: owner && 'notes' in b ? str(b, 'notes', { max: 4000 }) : job.notes,
           updatedAt: new Date(),
@@ -1641,10 +1702,13 @@ export function serviceRoutes(app: FastifyInstance): void {
           action: 'service.close',
           entityType: 'service_job',
           entityId: job.id,
-          after: { closedOn, totalTetri: total, withheldTetri, payer: job.payer, odometerKm, locationId: closedLocationId, photosAfter: had + photos.length },
+          after: { closedOn, totalTetri: total, withheldTetri, payer: job.payer, odometerKm, odometerReason: lower ? odometerReason : undefined, locationId: closedLocationId, photosAfter: had + photos.length },
         },
       });
+      // A repair closes once; told twice it is still one notice.
+      await enqueueNotice(tx, { kind: 'job_closed', entityId: job.id, dedupeKey: noticeKey.closed(job.id) });
     });
+    kickNotices();
     // What it came to is the owners' to read (ADR-0033 §4); the mechanic is told it is closed.
     return mayView(req, 'cost.view') ? { ok: true, totalTetri: total, withheldTetri } : { ok: true };
   });
@@ -1663,6 +1727,18 @@ export function serviceRoutes(app: FastifyInstance): void {
       back = await returnServiceParts(tx, { jobId: job.id, occurredOn: today, actorId: actor.id, reason: `${job.number}: ${reason}`.slice(0, 1000) });
       await unfitTrackers(tx, job.id);
       await tx.serviceJob.update({ where: { id: job.id }, data: { status: 'cancelled', closedOn: dateFromISO(today)!, closedAt: new Date(), updatedAt: new Date() } });
+      // Opened by mistake, its reading is no reading (ADR-0038 §1): the moped's
+      // figure goes back with it — to the latest reading still standing, or to
+      // the one the opening found.
+      if (job.openedOdometerKm != null) {
+        const opening = await tx.auditLog.findFirst({
+          where: { entityType: 'service_job', entityId: job.id, action: { in: ['service.open', 'service.request', 'service.take'] } },
+          orderBy: { createdAt: 'desc' },
+          select: { before: true },
+        });
+        const before = (opening?.before ?? {}) as { odometerKm?: number | null };
+        await restoreOdometer(tx, job.vehicleId, job.openedOdometerKm, 'odometerKm' in before ? before.odometerKm : undefined);
+      }
       if (job.movedVehicle) {
         await moveVehicle(tx, { vehicleId: job.vehicleId, kind: 'service_out', occurredOn: today, actorId: actor.id, reason });
       }

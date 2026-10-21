@@ -1,4 +1,4 @@
-import { LABOUR_RATE_TETRI, fleetNumber, jobPayState, partLineState, todayISO, workLineState, worksTotal, type PayState } from '@ev8/shared';
+import { fleetNumber, jobPayState, partLineState, todayISO, workLineState, worksTotal, type PayState } from '@ev8/shared';
 import type { FastifyInstance } from 'fastify';
 import type { Prisma } from '../generated/prisma/client.js';
 import { dateFromISO, isoDate } from '../lib/dates.js';
@@ -6,6 +6,7 @@ import { prisma } from '../lib/db.js';
 import { env } from '../lib/env.js';
 import { badRequest, conflict, notFound } from '../lib/errors.js';
 import { actorOf } from '../lib/guard.js';
+import { serviceSettings } from '../lib/serviceSettings.js';
 import { int, str } from '../lib/validate.js';
 
 // Paying the mechanic (stage 5 of docs/spec/mechanic-in-erp-plan.md; ADR-0037).
@@ -175,7 +176,8 @@ async function payableFor(db: Db, mechanicId: string): Promise<MechanicDue | nul
     id: person.id,
     name: person.name,
     role: person.role,
-    rateTetri: person.labourRateTetri ?? LABOUR_RATE_TETRI,
+    // The rate the screen names; what is paid is the rates copied into the lines.
+    rateTetri: person.labourRateTetri ?? (await serviceSettings(db)).defaultRateTetri,
     jobs: out,
     otherReceipts,
     seconds: out.reduce((n, j) => n + j.seconds, 0),
@@ -188,12 +190,12 @@ async function payableFor(db: Db, mechanicId: string): Promise<MechanicDue | nul
 }
 
 /** Nothing owed: the same shape, empty — a mechanic's balance always has one. */
-function nothingDue(person: { id: string; name: string; role: string; labourRateTetri: number | null }): MechanicDue {
+function nothingDue(person: { id: string; name: string; role: string; labourRateTetri: number | null }, companyRateTetri: number): MechanicDue {
   return {
     id: person.id,
     name: person.name,
     role: person.role,
-    rateTetri: person.labourRateTetri ?? LABOUR_RATE_TETRI,
+    rateTetri: person.labourRateTetri ?? companyRateTetri,
     jobs: [],
     otherReceipts: [],
     seconds: 0,
@@ -436,7 +438,7 @@ export function payoutRoutes(app: FastifyInstance): void {
   app.get('/api/service/balance', { config: { scope: 'service.work' } }, async (req) => {
     const actor = actorOf(req);
     const me = await prisma.user.findUniqueOrThrow({ where: { id: actor.id }, select: { id: true, name: true, role: true, labourRateTetri: true } });
-    const [due, jobs, receipts, payouts] = await Promise.all([
+    const [due, jobs, receipts, payouts, settings] = await Promise.all([
       payableFor(prisma, me.id),
       prisma.serviceJob.findMany({
         where: { mechanicId: me.id, paidInPayoutId: null, status: { in: ['draft', 'open', 'done'] } },
@@ -458,6 +460,7 @@ export function payoutRoutes(app: FastifyInstance): void {
         select: { paidTetri: true, job: { select: PAY_STATE } },
       }),
       prisma.mechanicPayout.findMany({ where: { mechanicId: me.id }, orderBy: [{ markedAt: 'desc' }, { id: 'asc' }], take: 20, select: PAYOUT }),
+      serviceSettings(),
     ]);
     const own = new Set(jobs.map((j) => j.id));
     const elsewhere = new Map<string, { id: string; number: string; state: PayState; amountTetri: number }>();
@@ -482,8 +485,8 @@ export function payoutRoutes(app: FastifyInstance): void {
       return { jobs: list, tetri: list.reduce((n, j) => n + j.amountTetri, 0) };
     };
     return {
-      mechanic: { id: me.id, name: me.name, rateTetri: me.labourRateTetri ?? LABOUR_RATE_TETRI },
-      payable: due ?? nothingDue(me),
+      mechanic: { id: me.id, name: me.name, rateTetri: me.labourRateTetri ?? settings.defaultRateTetri },
+      payable: due ?? nothingDue(me, settings.defaultRateTetri),
       waiting: bucket('waiting'),
       open: bucket('open'),
       unnormed: bucket('unnormed'),

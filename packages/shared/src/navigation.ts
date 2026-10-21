@@ -118,7 +118,8 @@ export type TabId =
   | 'orders'
   | 'suppliers'
   | 'payouts'
-  | 'balance';
+  | 'balance'
+  | 'repair';
 
 /** Tabs inside a section, in the address (wave 1 §3.2). */
 export const SECTION_TABS: Partial<Record<SectionId, readonly { id: TabId; path: string; anyOf: readonly Permission[]; noneOf?: readonly Permission[] }[]>> = {
@@ -168,6 +169,8 @@ export const SECTION_TABS: Partial<Record<SectionId, readonly { id: TabId; path:
     // One page on two addresses, so still no copy (designer, 21.09.2026).
     { id: 'points', path: '/settings/points', anyOf: ['settings.manage'] },
     { id: 'rental', path: '/settings/rental', anyOf: ['settings.manage'] },
+    // The workshop's rate and the planned-maintenance interval (stage 6, ADR-0038).
+    { id: 'repair', path: '/settings/repair', anyOf: ['settings.manage'] },
     // What money going out was for (migration 0046).
     { id: 'expenses', path: '/settings/expenses', anyOf: ['settings.manage'] },
     // The rentals folders in Google Drive beside the rentals here (ADR-0031).

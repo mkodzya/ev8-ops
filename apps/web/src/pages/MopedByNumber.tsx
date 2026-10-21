@@ -1,4 +1,4 @@
-import { Navigate, useParams } from 'react-router-dom';
+import { Navigate, useParams, useSearchParams } from 'react-router-dom';
 import { LoadError } from '../components/LoadError.js';
 import { Empty, Loading, PageHead } from '../components/ui.js';
 import { useT } from '../i18n/index.js';
@@ -15,11 +15,14 @@ import { useSession } from '../session.js';
  */
 export function MopedByNumber() {
   const { code = '' } = useParams();
+  const [params] = useSearchParams();
   const t = useT();
   const { can } = useSession();
   const workshop = !can('fleet.view') && can('service.work');
   const { data, failure, reload } = useLoad<{ id: string }>(workshop ? null : `/api/fleet/by-number/${encodeURIComponent(code)}`);
-  if (workshop) return <Navigate to={`/service/new?q=${encodeURIComponent(code)}`} replace />;
+  // «Пора на ТО» in the workshop's group links here with ?reason=planned (ADR-0038): the repair opens planned.
+  const planned = params.get('reason') === 'planned' ? '&reason=planned' : '';
+  if (workshop) return <Navigate to={`/service/new?q=${encodeURIComponent(code)}${planned}`} replace />;
   if (data) return <Navigate to={`/fleet/${data.id}`} replace />;
   if (failure?.status === 404) {
     return (

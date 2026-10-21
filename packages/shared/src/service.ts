@@ -4,7 +4,11 @@
 // and the total is the sum, never a stored number.
 import type { Tetri } from './money.js';
 
-/** An hour of work, until the book has norms per job (register #33). */
+/**
+ * An hour of work, until the book has norms per job (register #33). Since
+ * stage 6 it is only where the company rate starts (`service_settings`,
+ * ADR-0038 §3) and the rate of the owner's old line of hours.
+ */
 export const LABOUR_RATE_TETRI = 5000;
 
 export type ServicePayer = 'company' | 'customer';

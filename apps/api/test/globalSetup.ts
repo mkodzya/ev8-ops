@@ -32,6 +32,8 @@ export async function teardown(): Promise<void> {
   const since = { gte: startedAt };
   try {
     await prisma.auditLog.deleteMany({ where: { createdAt: since } });
+    // The notices a run wrote (0061) point at nothing by a key: they go first.
+    await prisma.notice.deleteMany({ where: { createdAt: since } });
     // What a stand-in for Kommo left behind, should a suite have died before
     // its own cleanup. The one row of `kommo_sync` is a singleton and stays.
     await prisma.kommoLead.deleteMany({ where: { firstSeenAt: since } });
@@ -87,6 +89,7 @@ export async function teardown(): Promise<void> {
     await prisma.quickRate.updateMany({ where: { createdBy: { createdAt: since } }, data: { createdById: null } });
     await prisma.workshop.updateMany({ where: { createdBy: { createdAt: since } }, data: { createdById: null } });
     await prisma.rentalSettings.updateMany({ where: { updatedBy: { createdAt: since } }, data: { updatedById: null } });
+    await prisma.serviceSettings.updateMany({ where: { updatedBy: { createdAt: since } }, data: { updatedById: null } });
     await prisma.customer.deleteMany({ where: { createdAt: since } });
     // The book of works: what a run wrote into it — the bot's book too, when
     // the run imported it into an empty database — goes after the repairs
