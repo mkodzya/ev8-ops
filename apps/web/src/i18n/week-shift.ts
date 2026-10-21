@@ -17,8 +17,23 @@ export const weekShiftEn = {
     next: (date: string, weekday: string, payDay: string) => `The next one from ${date}, ${weekday}; pay day — ${payDay}.`,
     undo: 'Back to 7 days, without the extra.',
     done: 'Week moved',
+    /** Taking a move back has its own words, not those of making one. */
+    undoAction: 'Take the move back',
+    undone: 'Move taken back',
+    /** Why the sheet offers the days it offers (ux.md №15). */
+    daysHint: 'Offered: the next week a week from today. If the money came on another day, choose a week after that day.',
     /** Beside the price of a week made longer, in the table of weeks. */
     short: (days: number, sum: string) => `+${days} d · extra ${sum}`,
+    /** The journal's line of a move: which week, and each figure by its name. */
+    journal: {
+      week: (seq: number) => `week ${seq}`,
+      endsOn: 'ends',
+      amountTetri: 'price',
+      extraDays: 'moved by',
+      extraTetri: 'extra',
+      days: (n: number) => (n === 0 ? 'none' : `+${n} d`),
+      payDay: 'pay day',
+    },
   },
 };
 
@@ -38,7 +53,19 @@ export const weekShiftRu: typeof weekShiftEn = {
     next: (date: string, weekday: string, payDay: string) => `Следующая — с ${date}, ${weekday}; день оплаты — ${payDay}.`,
     undo: 'Снова 7 дней, без доплаты.',
     done: 'Неделя сдвинута',
+    undoAction: 'Убрать сдвиг',
+    undone: 'Сдвиг убран',
+    daysHint: 'Предложено: следующая неделя — через 7 дней от сегодня. Если деньги пришли в другой день, выберите день через неделю после него.',
     short: (days: number, sum: string) => `+${days} дн. · доплата ${sum}`,
+    journal: {
+      week: (seq: number) => `неделя ${seq}`,
+      endsOn: 'конец',
+      amountTetri: 'сумма',
+      extraDays: 'сдвиг',
+      extraTetri: 'доплата',
+      days: (n: number) => (n === 0 ? 'нет' : `+${n} дн.`),
+      payDay: 'день оплаты',
+    },
   },
 };
 
@@ -58,6 +85,18 @@ export const weekShiftKa: typeof weekShiftEn = {
     next: (date: string, weekday: string, payDay: string) => `შემდეგი — ${date}-დან, ${weekday}; გადახდის დღე — ${payDay}.`,
     undo: 'ისევ 7 დღე, დამატებითი თანხის გარეშე.',
     done: 'კვირა გადაიწია',
+    undoAction: 'გადაწევის გაუქმება',
+    undone: 'გადაწევა გაუქმდა',
+    daysHint: 'შემოთავაზებულია: შემდეგი კვირა — დღეიდან 7 დღეში. თუ თანხა სხვა დღეს შემოვიდა, აირჩიეთ ამ დღიდან ერთი კვირის შემდეგ.',
     short: (days: number, sum: string) => `+${days} დღე · დამატებით ${sum}`,
+    journal: {
+      week: (seq: number) => `კვირა ${seq}`,
+      endsOn: 'დასასრული',
+      amountTetri: 'თანხა',
+      extraDays: 'გადაწევა',
+      extraTetri: 'დამატებით',
+      days: (n: number) => (n === 0 ? 'არა' : `+${n} დღე`),
+      payDay: 'გადახდის დღე',
+    },
   },
 };

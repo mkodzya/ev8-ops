@@ -171,7 +171,10 @@ export function RentalPage() {
   const lastSeq = data.periods.reduce((n, p) => Math.max(n, p.seq), 0);
   const weekActions = (p: RentalCard['periods'][number]) => [
     ...(!p.paidBeforeTransfer && (p.paidTetri < p.amountTetri || (p.discountTetri ?? 0) > 0) ? [{ key: 'discount', label: t.rental.discount, onPick: () => setDiscounting(p) }] : []),
-    ...(running && p.seq === lastSeq && !p.paidBeforeTransfer && p.amountTetri - (p.extraTetri ?? 0) > 0 ? [{ key: 'shift', label: t.weekShift.action, onPick: () => setShifting(p) }] : []),
+    // A week at nothing is not made longer; one moved already can always have its move changed or taken back.
+    ...(running && p.seq === lastSeq && !p.paidBeforeTransfer && ((p.extraDays ?? 0) > 0 || p.amountTetri - (p.extraTetri ?? 0) > 0)
+      ? [{ key: 'shift', label: t.weekShift.action, onPick: () => setShifting(p) }]
+      : []),
   ];
   const menu = [
     ...(open && can('rental.create') ? [{ key: 'edit', label: t.rentalMenu.edit, onPick: () => setSheet('edit') }] : []),
@@ -525,7 +528,7 @@ export function RentalPage() {
                   <th className="num">{t.rental.amount}</th>
                   <th className="num">{t.rental.paid}</th>
                   <th>{t.fleet.state}</th>
-                  {owner && <th aria-label={t.rental.discount} />}
+                  {owner && <th aria-label={t.shell.openActions} />}
                 </tr>
               </thead>
               <tbody>
@@ -540,8 +543,9 @@ export function RentalPage() {
                       <td className="mono">{fmtDate(p.endsOn)}</td>
                       <td className="num mono" title={why || undefined}>
                         {formatGel(p.amountTetri, { decimals: false })}
-                        {(p.discountTetri ?? 0) > 0 && <span className="muted"> · {t.rental.discountShort(formatGel(p.discountTetri ?? 0, { decimals: false }))}</span>}
-                        {(p.extraDays ?? 0) > 0 && <span className="muted"> · {t.weekShift.short(p.extraDays ?? 0, formatGel(p.extraTetri ?? 0, { decimals: false }))}</span>}
+                        {/* On lines of their own: inline, they stretched a phone's table wider still (ux.md №12). */}
+                        {(p.discountTetri ?? 0) > 0 && <span className="muted cell-note">{t.rental.discountShort(formatGel(p.discountTetri ?? 0, { decimals: false }))}</span>}
+                        {(p.extraDays ?? 0) > 0 && <span className="muted cell-note">{t.weekShift.short(p.extraDays ?? 0, formatGel(p.extraTetri ?? 0, { decimals: false }))}</span>}
                       </td>
                       <td className="num mono">{formatGel(p.paidTetri, { decimals: false })}</td>
                       <WeekState kind={weekKind(p)} partPaid={p.paidTetri > 0} overdue={r.status === 'overdue'} />
@@ -914,6 +918,8 @@ function ShiftSheet({ rental, week, onClose, onDone }: { rental: RentalCard['ren
   // week after the day he paid. A week already moved keeps its own.
   const ran = daysBetween(week.startsOn, todayISO());
   const guess = had || Math.min(MAX_SHIFT_DAYS, Math.max(1, ran));
+  // The sheet says why it offers that day, where the reason holds (ux.md №15).
+  const guessed = had === 0 && ran >= 1 && ran <= MAX_SHIFT_DAYS;
   const initial = { days: String(guess), extra: gel(had ? (week.extraTetri ?? 0) : plan(guess).suggestedExtraTetri), reason: '' };
   const [f, setF] = useState(initial);
   const days = Number(f.days);
@@ -933,16 +939,17 @@ function ShiftSheet({ rental, week, onClose, onDone }: { rental: RentalCard['ren
       onClose={onClose}
       value={f}
       initial={initial}
-      label={t.weekShift.action}
+      label={days === 0 ? t.weekShift.undoAction : t.weekShift.action}
       submit={async (key) => {
         const body = days === 0 ? { days, reason: f.reason.trim() } : { days, extraTetri: f.extra.trim(), reason: f.reason.trim() };
         await api.post(`/api/rentals/${rental.id}/weeks/${week.seq}/shift`, body, { key });
-        return { toast: { text: t.weekShift.done } };
+        // Taking a move back is said in its own words.
+        return { toast: { text: days === 0 ? t.weekShift.undone : t.weekShift.done } };
       }}
       onDone={onDone}
     >
       <p className="hint muted">{t.weekShift.intro}</p>
-      <Field label={t.weekShift.nextFrom} name="days">
+      <Field label={t.weekShift.nextFrom} hint={guessed ? t.weekShift.daysHint : undefined} name="days">
         <select className="input" value={f.days} onChange={(e) => pick(e.target.value)}>
           {choices.map((n) => {
             const next = plan(n).nextStartsOn;
