@@ -716,7 +716,7 @@ export function serviceRoutes(app: FastifyInstance): void {
     if ('note' in b) data.note = str(b, 'note', { max: 1000 });
     if ('sortOrder' in b) data.sortOrder = int(b, 'sortOrder', { required: true, min: 0, max: 999 });
     if ('archived' in b) {
-      // `"no"` read as true and `1` as false: a flag is a flag.
+      // `"yes"` used to be read as false: a flag is a flag.
       if (typeof b.archived !== 'boolean') throw badRequest('bad_field', 'archived is true or false', { field: 'archived' });
       data.archived = b.archived;
     }
