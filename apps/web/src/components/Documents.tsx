@@ -2,17 +2,28 @@ import { localDateTime } from '@ev8/shared';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { api } from '../api.js';
-import { SubmitButton } from '../ds/form/Form.js';
+import { FormSheet, SubmitButton } from '../ds/form/Form.js';
 import { useOperation } from '../ds/form/operation.js';
 import { useT } from '../i18n/index.js';
+import { useSession } from '../session.js';
+import { RowMenu } from './RowMenu.js';
 import { Field } from './Wizard.js';
 
 export type DocKind = 'contract' | 'return-act';
+
+/** A contract marked signed in Signify or on paper (ADR-0039): when, who marked it, what they added. */
+export interface SignedElsewhere {
+  at: string;
+  by: string | null;
+  note: string | null;
+}
 
 export interface DocState {
   signedAt: string | null;
   signedBy: string | null;
   gaps: string[];
+  /** The contract only; null — not marked. Absent on the return act and from an older API. */
+  signedElsewhere?: SignedElsewhere | null;
 }
 
 /** 18.09 14:32 — when a document was signed, in the shape the prototype shows. */
@@ -23,9 +34,12 @@ export function signedAtText(iso: string): string {
 
 /**
  * One document of a rental with its signature (wave 3 §3.2, D17): signed or
- * not, "Sign on the screen", Signify waiting for its API key, and — when the
- * contract lacks something the customer must give — that field, filled here,
- * after which the contract is built again (B4-06).
+ * not, "Sign on the screen", and — when the contract lacks something the
+ * customer must give — that field, filled here, after which the contract is
+ * built again (B4-06). A contract signed in Signify is marked so beside "Sign
+ * on the screen" by whoever hands mopeds over, and an owner takes the mark
+ * back with a reason (ADR-0039); the return act keeps Signify waiting for
+ * its API key.
  */
 export function DocumentRow({
   rentalId,
@@ -34,6 +48,7 @@ export function DocumentRow({
   sub,
   state,
   customerId,
+  driveUrl,
   onChanged,
 }: {
   rentalId: string;
@@ -42,11 +57,25 @@ export function DocumentRow({
   sub?: string;
   state: DocState;
   customerId: string;
+  /** The contract filed in Drive, as last read (ADR-0031): shown in the sheet as what the mark rests on. */
+  driveUrl?: string | null;
   onChanged: () => void;
 }) {
   const t = useT();
+  const { can } = useSession();
   const [signing, setSigning] = useState(false);
+  const [sheet, setSheet] = useState<null | 'mark' | 'unmark'>(null);
   const gaps = state.gaps;
+  const elsewhere = kind === 'contract' ? (state.signedElsewhere ?? null) : null;
+  const signed = !!state.signedAt || !!elsewhere;
+  let stateText = t.hand.unsigned;
+  if (state.signedAt) stateText = t.hand.signed(signedAtText(state.signedAt));
+  else if (elsewhere) stateText = t.signedElsewhere.state(signedAtText(elsewhere.at), elsewhere.by);
+  const done = (after: 'signing' | 'sheet') => {
+    if (after === 'signing') setSigning(false);
+    else setSheet(null);
+    onChanged();
+  };
   return (
     <div className="doc-row">
       <div className="doc-head">
@@ -54,32 +83,98 @@ export function DocumentRow({
           {title}
         </a>
         <span className="muted">{sub ?? t.hand.lang}</span>
-        <span className={`doc-state ${state.signedAt ? 'ok-text' : 'warn-text'}`}>{state.signedAt ? t.hand.signed(signedAtText(state.signedAt)) : t.hand.unsigned}</span>
+        <span className={`doc-state ${signed ? 'ok-text' : 'warn-text'}`}>{stateText}</span>
+        {elsewhere && !state.signedAt && can('deposit.decide') && <RowMenu actions={[{ key: 'unmark', label: t.signedElsewhere.undo, onPick: () => setSheet('unmark') }]} />}
       </div>
-      {gaps.length > 0 && !state.signedAt && <GapFill customerId={customerId} gaps={gaps} onSaved={onChanged} />}
-      {!state.signedAt && (
+      {elsewhere?.note && !state.signedAt && <p className="hint muted">{elsewhere.note}</p>}
+      {gaps.length > 0 && !signed && <GapFill customerId={customerId} gaps={gaps} onSaved={onChanged} />}
+      {!signed && (
         <div className="row-actions">
           <button type="button" className="pill pill-sm pill-accent" disabled={gaps.length > 0} onClick={() => setSigning(true)}>
             {t.hand.signOnScreen}
           </button>
-          <button type="button" className="pill pill-sm" disabled title={t.hand.signifyHint}>
-            {t.hand.signify}
-          </button>
-          <span className="hint muted">{t.hand.signifyHint}</span>
+          {kind === 'contract' && can('rental.create') ? (
+            <button type="button" className="pill pill-sm" onClick={() => setSheet('mark')}>
+              {t.signedElsewhere.mark}
+            </button>
+          ) : (
+            <>
+              <button type="button" className="pill pill-sm" disabled title={t.hand.signifyHint}>
+                {t.hand.signify}
+              </button>
+              <span className="hint muted">{t.hand.signifyHint}</span>
+            </>
+          )}
         </div>
       )}
-      {signing && (
-        <SignScreen
-          rentalId={rentalId}
-          kind={kind}
-          onClose={() => setSigning(false)}
-          onSigned={() => {
-            setSigning(false);
-            onChanged();
-          }}
-        />
-      )}
+      {signing && <SignScreen rentalId={rentalId} kind={kind} onClose={() => setSigning(false)} onSigned={() => done('signing')} />}
+      {sheet === 'mark' && <MarkSignedSheet rentalId={rentalId} driveUrl={driveUrl ?? null} onClose={() => setSheet(null)} onDone={() => done('sheet')} />}
+      {sheet === 'unmark' && <UnmarkSignedSheet rentalId={rentalId} onClose={() => setSheet(null)} onDone={() => done('sheet')} />}
     </div>
+  );
+}
+
+/**
+ * "Подписан в Signify" (ADR-0039): the customer signed the contract outside
+ * EV8 Ops, and the person who knows says so. The contract in Drive, when it
+ * was found, is one tap away — what the mark rests on; nothing reads it for
+ * the person (ADR-0034 §5).
+ */
+function MarkSignedSheet({ rentalId, driveUrl, onClose, onDone }: { rentalId: string; driveUrl: string | null; onClose: () => void; onDone: () => void }) {
+  const t = useT();
+  const initial = { note: '' };
+  const [f, setF] = useState(initial);
+  return (
+    <FormSheet
+      title={t.signedElsewhere.title}
+      onClose={onClose}
+      value={f}
+      initial={initial}
+      label={t.signedElsewhere.submit}
+      submit={async (key) => {
+        await api.post(`/api/rentals/${rentalId}/contract/signed-elsewhere`, { note: f.note.trim() }, { key });
+        return { toast: { text: t.signedElsewhere.done } };
+      }}
+      onDone={onDone}
+    >
+      <p className="hint muted">{t.signedElsewhere.hint}</p>
+      {driveUrl && (
+        <p>
+          <a href={driveUrl} target="_blank" rel="noreferrer">
+            {t.signedElsewhere.drive}
+          </a>
+        </p>
+      )}
+      <Field label={t.signedElsewhere.note} hint={t.signedElsewhere.noteHint} name="note">
+        <input className="input" maxLength={500} value={f.note} onChange={(e) => setF({ note: e.target.value })} />
+      </Field>
+    </FormSheet>
+  );
+}
+
+/** The mark taken back — an owner's, with a reason (ADR-0039): the contract is asked for again. */
+function UnmarkSignedSheet({ rentalId, onClose, onDone }: { rentalId: string; onClose: () => void; onDone: () => void }) {
+  const t = useT();
+  const initial = { reason: '' };
+  const [f, setF] = useState(initial);
+  return (
+    <FormSheet
+      title={t.signedElsewhere.undoTitle}
+      onClose={onClose}
+      value={f}
+      initial={initial}
+      label={t.signedElsewhere.undo}
+      submit={async (key) => {
+        await api.post(`/api/rentals/${rentalId}/contract/signed-elsewhere/undo`, { reason: f.reason.trim() }, { key });
+        return { toast: { text: t.signedElsewhere.undone } };
+      }}
+      onDone={onDone}
+    >
+      <p className="hint muted">{t.signedElsewhere.undoHint}</p>
+      <Field label={t.signedElsewhere.reason} hint={t.signedElsewhere.reasonHint} name="reason">
+        <input className="input" autoFocus maxLength={500} value={f.reason} onChange={(e) => setF({ reason: e.target.value })} />
+      </Field>
+    </FormSheet>
   );
 }
 

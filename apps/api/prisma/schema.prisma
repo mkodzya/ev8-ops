@@ -265,6 +265,7 @@ model User {
   sessions          Session[]
   operationKeys     OperationKey[]
   rentalsCreated    Rental[]       @relation("rental_created_by")
+  contractsMarkedSigned Rental[]   @relation("rental_contract_signed_elsewhere_by")
   depositsDecided   Deposit[]      @relation("deposit_decided_by")
   depositsConfirmed Deposit[]      @relation("deposit_confirmed_by")
   actsCreated       Act[]
@@ -538,6 +539,11 @@ model Rental {
   odooName              String?      @map("odoo_name")
   transferredAt         DateTime?    @map("transferred_at")
   transferredById       String?      @map("transferred_by") @db.Uuid
+  /// The contract was signed in Signify (or on paper), as a person marked it
+  /// here; null — not marked (migration 0062, ADR-0039). Never inferred.
+  contractSignedElsewhereAt   DateTime? @map("contract_signed_elsewhere_at")
+  contractSignedElsewhereById String?   @map("contract_signed_elsewhere_by") @db.Uuid
+  contractSignedElsewhereNote String?   @map("contract_signed_elsewhere_note")
   debtOverrideReason    String?      @map("debt_override_reason")
   createdById           String?      @map("created_by") @db.Uuid
   createdAt             DateTime     @default(now()) @map("created_at")
@@ -547,6 +553,7 @@ model Rental {
   vehicle   Vehicle?       @relation("rental_vehicle", fields: [vehicleId], references: [id])
   driveFolders DriveFolder[]
   createdBy User?          @relation("rental_created_by", fields: [createdById], references: [id])
+  contractSignedElsewhereBy User? @relation("rental_contract_signed_elsewhere_by", fields: [contractSignedElsewhereById], references: [id])
   periods   RentalPeriod[]
   deposit   Deposit?
   acts      Act[]

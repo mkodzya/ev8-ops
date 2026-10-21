@@ -1,4 +1,4 @@
-import { readFleetNumber, vinMatches, VEHICLE_COLORS, VEHICLE_POOLS, VEHICLE_STATES, colorOf, daysBetween, tokens, todayISO, type VehiclePool, type VehicleState } from '@ev8/shared';
+import { parkOf, readFleetNumber, vinMatches, VEHICLE_COLORS, VEHICLE_POOLS, VEHICLE_STATES, colorOf, daysBetween, tokens, todayISO, type ServiceWhy, type VehiclePool, type VehicleState } from '@ev8/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -13,6 +13,7 @@ import { Field } from '../components/Wizard.js';
 import { FormSheet } from '../ds/form/Form.js';
 import { DataList } from '../ds/list/DataList.js';
 import { fmtDate } from '../format.js';
+import type { Dict } from '../i18n/en.js';
 import { useT } from '../i18n/index.js';
 import { placeOf } from '../lib/place.js';
 import { useLoad } from '../lib/use.js';
@@ -34,6 +35,8 @@ interface Vehicle {
   location: { id: string; name: string } | null;
   lastSeenOn: string | null;
   currentRental: { id: string; number: string; paidThrough: string | null; customer: { id: string; name: string; nameKa: string | null; nameLat: string | null } } | null;
+  /** Why it stands in service, as recorded (21.10.2026); null in any other state, absent while an older API answers. */
+  serviceWhy?: ServiceWhy | null;
 }
 
 interface Fleet {
@@ -43,8 +46,17 @@ interface Fleet {
 
 const UNDO_WINDOW_MS = Number.parseFloat(tokens.undoWindow) * 1000;
 
-type PoolKey = VehiclePool | 'none' | 'gone';
-const poolOf = (v: Vehicle): PoolKey => (v.state === 'sold' || v.state === 'out' ? 'gone' : (v.pool ?? 'none'));
+/**
+ * Why a moped is in service, in the words somebody wrote (ADR-0005, addendum
+ * 21.10.2026): the repair's kind when one was picked, else what happened, else
+ * the reason of the move by hand. Null when nothing was written — the screen
+ * says so with a quiet dash — and for a moped that is not in service.
+ */
+function whyText(v: Vehicle, t: Dict): string | null {
+  const why = v.serviceWhy;
+  if (!why) return null;
+  return why.kind ? t.wjob.reasons[why.kind] : why.text;
+}
 
 /**
  * How long this moped has been quiet: days since the last thing that happened
@@ -127,7 +139,9 @@ export function FleetPage() {
           { key: 'available', label: t.states.available, test: (v) => v.state === 'available' },
           { key: 'rented', label: t.states.rented, test: (v) => v.state === 'rented' },
           { key: 'service', label: t.states.service, test: (v) => v.state === 'service' },
-          { key: 'nopool', label: t.pools.none, test: (v) => poolOf(v) === 'none' },
+          // The whole sale park, new stock and used mopeds alike, whatever is happening to them (21.10.2026).
+          { key: 'sale', label: t.fleetList.forSale, test: (v) => parkOf(v) === 'sale' },
+          { key: 'nopool', label: t.pools.none, test: (v) => parkOf(v) === 'none' },
           { key: 'nopoint', label: t.points.unset, test: (v) => placeOf(v).kind === 'unset' },
         ]}
         empty={{ text: t.fleet.empty }}
@@ -139,11 +153,7 @@ export function FleetPage() {
           ),
           sub: <Vin vin={v.vin} />,
           right: <StateBadge state={v.state} />,
-          rightSub: (
-            <span className="muted">
-              {v.currentRental ? <CustomerName of={v.currentRental.customer} second={false} /> : <PlaceText of={v} />}
-            </span>
-          ),
+          rightSub: <StateSub v={v} />,
         })}
         columns={[
           { key: 'no', label: t.fleet.no, cell: (v) => <FleetNo n={v.fleetNo} />, sort: { value: (v) => v.fleetNo ?? Number.MAX_SAFE_INTEGER } },
@@ -166,11 +176,14 @@ export function FleetPage() {
             cell: (v) => (
               <span className="v-state">
                 <StateBadge state={v.state} />
-                {moved?.id === v.id ? <span className="v-sub v-pool-new">→ {t.pools[moved.to]}</span> : poolOf(v) === 'none' && <span className="v-sub">{t.pools.none}</span>}
+                {/* The word the line turns into once the offer to undo runs out: "For sale", not the park's dictionary name. */}
+                {moved?.id === v.id ? <span className="v-sub v-pool-new">→ {moved.to === 'sale' ? t.fleetList.forSale : t.pools[moved.to]}</span> : <ParkLine v={v} />}
               </span>
             ),
             sort: { value: (v) => VEHICLE_STATES.indexOf(v.state) },
           },
+          // Only a moped in service has a reason; every other row leaves the cell empty rather than forty dashes.
+          { key: 'why', label: t.wjob.reason, cell: (v) => <Why v={v} />, sort: { value: (v) => whyText(v, t) } },
           {
             key: 'where',
             label: t.fleet.where,
@@ -197,6 +210,60 @@ export function FleetPage() {
   );
 }
 
+
+/**
+ * The quiet line under the state in the table: "For sale" for the sale park,
+ * "Not decided" for a moped in neither, nothing for the rental park and for
+ * a moped that has left the fleet.
+ */
+function ParkLine({ v }: { v: Vehicle }) {
+  const t = useT();
+  const park = parkOf(v);
+  if (park === 'sale') return <span className="v-sub">{t.fleetList.forSale}</span>;
+  if (park === 'none') return <span className="v-sub">{t.pools.none}</span>;
+  return null;
+}
+
+/**
+ * Why it is in service, on one line: a long note ends in an ellipsis and is
+ * read whole under the pointer, so it never stretches every row of the list.
+ * Nothing at all for a moped in any other state.
+ */
+function Why({ v }: { v: Vehicle }) {
+  const t = useT();
+  if (!v.serviceWhy) return null;
+  const text = whyText(v, t);
+  if (!text) return <span className="muted">{t.common.dash}</span>;
+  return (
+    <span className="v-why" title={v.serviceWhy.text ?? text}>
+      {text}
+    </span>
+  );
+}
+
+/**
+ * The quiet lines under the state on a phone: "For sale" on a line of its own
+ * when the moped waits in the sale park, as under the state in the table, then
+ * the one fact that state is about — who has the moped, why it is in the
+ * workshop, or where it stands (21.10.2026). Two lines and not one, because a
+ * prefix would widen the card's right column and squeeze its title.
+ */
+function StateSub({ v }: { v: Vehicle }) {
+  const t = useT();
+  const fact = v.currentRental ? (
+    <CustomerName of={v.currentRental.customer} second={false} />
+  ) : v.serviceWhy ? (
+    <Why v={v} />
+  ) : (
+    <PlaceText of={v} />
+  );
+  return (
+    <>
+      {parkOf(v) === 'sale' && <span className="v-sub">{t.fleetList.forSale}</span>}
+      <span className="muted">{fact}</span>
+    </>
+  );
+}
 
 /** Days of silence, loud once they run past half a year. */
 function Quiet({ v, today }: { v: Vehicle; today: string }) {
@@ -254,7 +321,7 @@ function Actions({
     );
   }
 
-  const where = poolOf(v);
+  const where = parkOf(v);
   const actions: RowAction[] = [];
   if (can && where !== 'gone') {
     for (const p of VEHICLE_POOLS) {

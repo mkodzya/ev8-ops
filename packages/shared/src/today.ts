@@ -97,7 +97,11 @@ export interface QueueRental {
   dueTodayTetri: Tetri;
   depositUndecided: boolean;
   vinUnconfirmed: boolean;
-  /** Handed over more than a day ago and the contract is still unsigned (D17). Never a rental brought over. */
+  /**
+   * Handed over more than a day ago and the contract is still unsigned (D17):
+   * `asksForSignature` of `contractState`. Never a rental brought over, nor
+   * one marked signed in Signify (ADR-0039).
+   */
   contractUnsigned: boolean;
 }
 
