@@ -56,7 +56,12 @@ export type PeriodPayStatus = (typeof PERIOD_PAY_STATUSES)[number];
 export const DEPOSIT_STATUSES = ['held', 'returned', 'withheld', 'partial'] as const;
 export type DepositStatus = (typeof DEPOSIT_STATUSES)[number];
 
-export const ACT_KINDS = ['pickup', 'return'] as const;
+/**
+ * A hand-over, a return, and the two halves of a swap in a running rental
+ * (ADR-0040): `swap_out` — the moped given back, `swap_in` — the one handed
+ * out in its place. Each act names its moped (migration 0063).
+ */
+export const ACT_KINDS = ['pickup', 'return', 'swap_out', 'swap_in'] as const;
 export type ActKind = (typeof ACT_KINDS)[number];
 
 export const CUSTOMER_KINDS = ['person', 'sole_trader', 'company'] as const;

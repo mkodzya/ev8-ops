@@ -98,6 +98,9 @@ enum DepositMigrationDecision {
 enum ActKind {
   pickup
   return
+  /// A swap in a running rental (migration 0063, ADR-0040): the moped given back, and the one handed out in its place.
+  swap_out
+  swap_in
 
   @@map("act_kind")
 }
@@ -462,6 +465,8 @@ model Vehicle {
   currentRental Rental?        @relation("vehicle_current_rental", fields: [currentRentalId], references: [id])
   rentals       Rental[]       @relation("rental_vehicle")
   events        VehicleEvent[]
+  /// The acts written about this moped, in whichever rental (migration 0063).
+  acts          Act[]
 
   @@map("vehicles")
 }
@@ -636,10 +641,13 @@ model Act {
   settlement   Json?
   signatureUrl String?  @map("signature_url")
   pdfUrl       String?  @map("pdf_url")
+  /// The moped the act is about (migration 0063): a swap gives a rental more than one.
+  vehicleId    String?  @map("vehicle_id") @db.Uuid
   createdById  String?  @map("created_by") @db.Uuid
   createdAt    DateTime @default(now()) @map("created_at")
 
   rental    Rental       @relation(fields: [rentalId], references: [id], onDelete: Cascade)
+  vehicle   Vehicle?     @relation(fields: [vehicleId], references: [id])
   createdBy User?        @relation(fields: [createdById], references: [id])
   photos    StoredFile[]
   batteryMoves BatteryMove[]
