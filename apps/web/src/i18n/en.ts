@@ -9,6 +9,7 @@
 // Money keeps ONE format in every language (formatGel in @ev8/shared).
 import { wave3En } from './wave3.js';
 import { wave4En } from './wave4.js';
+import { vehicleStateEn } from './vehicle-state.js';
 import { wave5salesEn } from './wave5-sales.js';
 import { wave5purchasesEn } from './wave5-purchases.js';
 import { wave5serviceEn } from './wave5-service.js';
@@ -1332,6 +1333,7 @@ export const en = {
       sale_has_payments: 'Cancel the payments on this sale first.',
       sale_not_found: 'Sale not found.',
       same_customer: 'A card cannot be merged into itself.',
+      same_state: 'The moped is already in this state.',
       service_not_found: 'No such repair.',
       sold_by_sale: 'A moped is sold by a sale, and comes back by a buy-back.',
       split_bad_amount: 'Every part needs a sum above zero.',
@@ -1382,6 +1384,7 @@ export const en = {
   },
   ...wave3En,
   ...wave4En,
+  ...vehicleStateEn,
   ...wave5salesEn,
   ...wave5purchasesEn,
   ...wave5serviceEn,

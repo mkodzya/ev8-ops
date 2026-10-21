@@ -1,5 +1,6 @@
 import { wave3Ka } from './wave3.js';
 import { wave4Ka } from './wave4.js';
+import { vehicleStateKa } from './vehicle-state.js';
 import { wave5salesKa } from './wave5-sales.js';
 import { wave5purchasesKa } from './wave5-purchases.js';
 import { wave5serviceKa } from './wave5-service.js';
@@ -1318,6 +1319,7 @@ export const ka: Dict = {
       sale_has_payments: 'ჯერ გააუქმეთ ამ გაყიდვის გადახდები.',
       sale_not_found: 'გაყიდვა ვერ მოიძებნა.',
       same_customer: 'ბარათი საკუთარ თავს ვერ შეუერთდება.',
+      same_state: 'მოპედი უკვე ამ მდგომარეობაშია.',
       service_not_found: 'ასეთი შეკეთება არ არის.',
       sold_by_sale: 'მოპედი იყიდება გაყიდვით და ბრუნდება უკან გამოსყიდვით.',
       split_bad_amount: 'თითოეულ ნაწილს ნულზე მეტი თანხა უნდა ჰქონდეს.',
@@ -1368,6 +1370,7 @@ export const ka: Dict = {
   },
   ...wave3Ka,
   ...wave4Ka,
+  ...vehicleStateKa,
   ...wave5salesKa,
   ...wave5purchasesKa,
   ...wave5serviceKa,
