@@ -69,16 +69,22 @@ function said(t: Dict, field: string, raw: string): string {
       return from(t.migrationPage.decide) ?? raw;
     case 'payer':
       return from(t.service.payers) ?? raw;
+    case 'reasonKind':
+      // A repair's kind, in the tablet's words wherever it was picked (Mika, 21.10.2026).
+      return from(t.wjob.reasons) ?? raw;
     default:
       return raw;
   }
 }
 
 function value(field: string, raw: unknown): string | null {
-  if (raw == null) return null;
+  const t = currentDict();
+  // A repair's kind may be given, changed and taken away again (Mika,
+  // 21.10.2026): there «none» is an answer — «не указана → ДТП» — and not a
+  // gap that hides the line.
+  if (raw == null) return field === 'reasonKind' ? t.rkind.none : null;
   if (isReference(field)) return null;
   if (isMoney(field)) return typeof raw === 'number' ? formatGel(raw) : String(raw);
-  const t = currentDict();
   if (typeof raw === 'boolean') return raw ? t.common.yes : t.common.dash;
   if (typeof raw === 'string') return ISO_DAY.test(raw) ? fmtDate(raw) : said(t, field, raw);
   if (typeof raw === 'number') return String(raw);

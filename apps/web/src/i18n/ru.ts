@@ -17,6 +17,7 @@ import { workshopApprovalRu } from './workshop-approval.js';
 import { workshopPartsRu } from './workshop-parts.js';
 import { workshopPayoutsRu } from './workshop-payouts.js';
 import { workshopMaintenanceRu } from './workshop-maintenance.js';
+import { repairKindRu } from './repair-kind.js';
 import { workshopsRu } from './workshops.js';
 import { driveRu } from './drive.js';
 import { expRu } from './expenses.js';
@@ -1320,6 +1321,7 @@ export const ru: Dict = {
       purchase_not_found: 'Заказ не найден.',
       rate_for_mechanics: 'Ставка за нормо-час бывает только у механика.',
       rate_not_found: 'Такого тарифа нет — возможно, его уже убрали.',
+      reason_kind_kept: 'У ремонта механика причина остаётся: выберите другую вместо неё.',
       reason_required: 'Для удержания нужна причина.',
       reconcile_required: 'Банковские платежи вносит владелец.',
       regenerate_forbidden: 'Заменить уже выданный документ может только владелец.',
@@ -1403,6 +1405,7 @@ export const ru: Dict = {
   ...workshopPartsRu,
   ...workshopPayoutsRu,
   ...workshopMaintenanceRu,
+  ...repairKindRu,
   ...workshopsRu,
   ...driveRu,
   ...expRu,

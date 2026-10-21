@@ -1,4 +1,4 @@
-import { daysBetween, numberMatches, spellingMatches, todayISO, vinMatches, type WorkLineState } from '@ev8/shared';
+import { SERVICE_REASONS, daysBetween, numberMatches, spellingMatches, todayISO, vinMatches, type ServiceReason, type WorkLineState } from '@ev8/shared';
 import { useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
@@ -158,6 +158,8 @@ interface FleetVehicle {
   vin: string;
   model: string;
   state: 'available' | 'rented' | 'service' | 'out' | 'sold';
+  /** The rental it is out on: «Вина арендатора» names it in the hint (Mika, 21.10.2026). */
+  currentRental?: { number: string } | null;
 }
 
 /** How long this repair has been standing: until it closed, or until today. */
@@ -242,7 +244,10 @@ export function ServicePage() {
         byDefault="days"
         search={{
           placeholder: t.repair.searchHint,
-          match: (j, q) => numberMatches(q, j.number) || vinMatches(q, j.vehicle.vin) || spellingMatches(q, [j.reason, j.vehicle.model, j.workshop?.name, j.customer?.name]),
+          match: (j, q) =>
+            numberMatches(q, j.number) ||
+            vinMatches(q, j.vehicle.vin) ||
+            spellingMatches(q, [j.reason, j.reasonKind ? t.wjob.reasons[j.reasonKind] : null, j.vehicle.model, j.workshop?.name, j.customer?.name]),
         }}
         chips={[
           { key: 'open', label: t.repair.chips.working, test: (j) => j.status === 'open' },
@@ -262,7 +267,8 @@ export function ServicePage() {
               {/* The breakdown a manager wrote is what an owner decides by,
                   so the row says it; "от менеджера" is the badge on the
                   right, not a replacement for the words (QA-W5-19). */}
-              <span className="mono">{j.number}</span> · {j.reason}
+              <span className="mono">{j.number}</span> · {j.reasonKind ? `${t.wjob.reasons[j.reasonKind] ?? j.reasonKind} — ` : ''}
+              {j.reason}
             </>
           ),
           sub2: j.workshop?.name ?? undefined,
@@ -299,7 +305,8 @@ export function ServicePage() {
           {
             key: 'reason',
             label: t.repair.cols.what,
-            cell: (j) => j.reason,
+            // ТО or an accident first, as the repair card says it (Mika, 21.10.2026).
+            cell: (j) => (j.reasonKind ? `${t.wjob.reasons[j.reasonKind] ?? j.reasonKind} — ${j.reason}` : j.reason),
           },
           {
             key: 'workshop',
@@ -376,7 +383,7 @@ function BalanceLink() {
   );
 }
 
-const blankJob = (vehicleId?: string) => ({ vehicleId: vehicleId ?? '', reason: '', workshopId: '', payer: 'company' });
+const blankJob = (vehicleId?: string) => ({ vehicleId: vehicleId ?? '', reason: '', reasonKind: '' as ServiceReason | '', workshopId: '', payer: 'company' });
 
 /**
  * «Сообщить о поломке» and «Открыть ремонт» — one sheet, told apart by who
@@ -436,6 +443,8 @@ export function NewJob({ vehicleId, onDone }: { vehicleId?: string; onDone: () =
               {
                 vehicleId: f.vehicleId || vehicleId,
                 reason: f.reason,
+                // A draft kept from before the kinds came has none: none is sent.
+                reasonKind: f.reasonKind || null,
                 ...(mayManage ? { workshopId: workshopId || null, payer: rented ? f.payer : 'company' } : {}),
               },
               { key },
@@ -480,6 +489,29 @@ export function NewJob({ vehicleId, onDone }: { vehicleId?: string; onDone: () =
           <Field label={t.repair.what} name="reason">
             <input className="input" value={f.reason} onChange={(e) => setF({ ...f, reason: e.target.value })} required autoFocus />
           </Field>
+          {/* The tablet's five, for the office too (Mika, 21.10.2026): a pick
+              and not a must — there is no «other», and the words above say
+              what happened. Pressed again, a pill lets go. Not a <label>: a
+              label sends a press on its text to the first pill. */}
+          <div className="field" data-field="reasonKind">
+            <span className="lbl">
+              {t.wjob.reason} · {t.wbook.optional}
+            </span>
+            <div className="chips">
+              {SERVICE_REASONS.map((r) => (
+                <button
+                  key={r}
+                  type="button"
+                  className={`pill pill-sm ${f.reasonKind === r ? 'on' : ''}`}
+                  aria-pressed={f.reasonKind === r}
+                  onClick={() => setF({ ...f, reasonKind: f.reasonKind === r ? '' : r })}
+                >
+                  {t.wjob.reasons[r]}
+                </button>
+              ))}
+            </div>
+            {f.reasonKind === 'planned' && <span className="hint muted">{t.rkind.plannedNote}</span>}
+          </div>
           {mayManage && (
             <>
               <Field label={t.repair.workshop} name="workshopId">
@@ -504,6 +536,12 @@ export function NewJob({ vehicleId, onDone }: { vehicleId?: string; onDone: () =
               {rented && (
                 <>
                   <p className="hint muted">{t.repair.rentedNote}</p>
+                  {/* The hint the repair card gives (ADR-0035 §7), here where who pays is chosen. */}
+                  {f.reasonKind === 'renter_fault' && f.payer === 'company' && chosen?.currentRental && (
+                    <p className="hint">
+                      <b>{t.wappr.suggest(chosen.currentRental.number)}</b> {t.wappr.suggestNote}
+                    </p>
+                  )}
                   <Field label={t.repair.payer} name="payer">
                     <div className="chips">
                       {(['company', 'customer'] as const).map((p) => (

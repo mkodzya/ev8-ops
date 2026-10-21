@@ -17,6 +17,7 @@ import { workshopApprovalKa } from './workshop-approval.js';
 import { workshopPartsKa } from './workshop-parts.js';
 import { workshopPayoutsKa } from './workshop-payouts.js';
 import { workshopMaintenanceKa } from './workshop-maintenance.js';
+import { repairKindKa } from './repair-kind.js';
 import { workshopsKa } from './workshops.js';
 import { driveKa } from './drive.js';
 import { expKa } from './expenses.js';
@@ -1309,6 +1310,7 @@ export const ka: Dict = {
       purchase_not_found: 'შეკვეთა ვერ მოიძებნა.',
       rate_for_mechanics: 'ნორმა-საათის განაკვეთი მხოლოდ მექანიკოსს აქვს.',
       rate_not_found: 'ასეთი ტარიფი არ არის — შესაძლოა უკვე მოხსნილია.',
+      reason_kind_kept: 'მექანიკოსის შეკეთებას მიზეზი რჩება: აირჩიეთ სხვა.',
       reason_required: 'დაკავებისთვის საჭიროა მიზეზი.',
       reconcile_required: 'საბანკო გადახდებს შეიყვანს მფლობელი.',
       regenerate_forbidden: 'უკვე გაცემული დოკუმენტის ჩანაცვლება შეუძლია მხოლოდ მფლობელს.',
@@ -1392,6 +1394,7 @@ export const ka: Dict = {
   ...workshopPartsKa,
   ...workshopPayoutsKa,
   ...workshopMaintenanceKa,
+  ...repairKindKa,
   ...workshopsKa,
   ...driveKa,
   ...expKa,
