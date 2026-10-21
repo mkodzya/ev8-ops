@@ -169,7 +169,8 @@ export const SECTION_TABS: Partial<Record<SectionId, readonly { id: TabId; path:
     // One page on two addresses, so still no copy (designer, 21.09.2026).
     { id: 'points', path: '/settings/points', anyOf: ['settings.manage'] },
     { id: 'rental', path: '/settings/rental', anyOf: ['settings.manage'] },
-    // The workshop's rate and the planned-maintenance interval (stage 6, ADR-0038).
+    // The workshop's rate and the planned-maintenance interval (stage 6, ADR-0038),
+    // and the workshops that do the repairs (task #1 of 21.10.2026).
     { id: 'repair', path: '/settings/repair', anyOf: ['settings.manage'] },
     // What money going out was for (migration 0046).
     { id: 'expenses', path: '/settings/expenses', anyOf: ['settings.manage'] },

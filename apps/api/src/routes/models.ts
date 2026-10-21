@@ -1,3 +1,4 @@
+import { parkOf, type ParkKey } from '@ev8/shared';
 import type { FastifyInstance } from 'fastify';
 import { audit } from '../lib/audit.js';
 import { isoDate } from '../lib/dates.js';
@@ -56,11 +57,10 @@ async function describe(models: ModelRow[]) {
   const settled = await preliminaryOf(lines.map((l) => l.purchase.id));
 
   return models.map((m) => {
-    const fleet = { rent: 0, sale: 0, none: 0, gone: 0 };
+    // Grouped by the fleet list's own rule, so a model's card and the list's chips agree.
+    const fleet: Record<ParkKey, number> = { rent: 0, sale: 0, none: 0, gone: 0 };
     for (const v of vehicles) {
-      if (v.modelId !== m.id) continue;
-      if (v.state === 'sold' || v.state === 'out') fleet.gone++;
-      else fleet[v.pool ?? 'none']++;
+      if (v.modelId === m.id) fleet[parkOf(v)]++;
     }
     const mine = lines.filter((l) => l.modelId === m.id);
     const ordered = mine.filter((l) => l.purchase.status === 'ordered');

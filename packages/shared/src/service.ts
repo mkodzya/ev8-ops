@@ -4,7 +4,7 @@
 // and the total is the sum, never a stored number.
 import { phoneKey } from './kommo.js';
 import type { Tetri } from './money.js';
-import type { ISODate } from './types.js';
+import type { ISODate, VehicleState } from './types.js';
 
 /**
  * An hour of work, until the book has norms per job (register #33). Since
@@ -202,6 +202,49 @@ export function closeCharge(input: { totalTetri: Tetri; withholdTetri: Tetri; de
 /** Why a repair came in: the bot's five reasons, one of them on every repair a mechanic opens. */
 export const SERVICE_REASONS = ['wear', 'accident', 'renter_fault', 'warranty', 'planned'] as const;
 export type ServiceReason = (typeof SERVICE_REASONS)[number];
+
+/**
+ * Why a moped stands in service, as somebody wrote it down — never guessed
+ * (the call of 21.10.2026; ADR-0005, addendum 21.10.2026). `from` says where
+ * the words come from: the open repair, the move into service by hand, or
+ * nowhere at all.
+ */
+export interface ServiceWhy {
+  /** The open repair's kind, when one was picked. */
+  kind: ServiceReason | null;
+  /** What happened, in the words and the language it was typed in. */
+  text: string | null;
+  from: 'job' | 'manual' | null;
+}
+
+/**
+ * The answer, in this order (the session's default of 21.10.2026, named
+ * to the owner at release): the open repair's kind if one was
+ * recorded; else what the repair says happened; else the reason of the
+ * manual move into service, when that move is the last thing that happened
+ * to the moped; else nothing, which the screen shows as a quiet dash. A
+ * moped that is not in service gets no answer — a repair at a renter's
+ * leaves the moped rented, and the question is about the ones standing in
+ * the workshop. A repair that is open and one that waits for an owner both
+ * count: a moped never has more than one of them (`job_already_open`).
+ */
+export function serviceWhyOf(
+  state: VehicleState,
+  openJob: { reasonKind: string | null; reason: string | null } | null,
+  lastMove: { kind: string; toState: string; reason: string | null } | null,
+): ServiceWhy | null {
+  if (state !== 'service') return null;
+  if (openJob) {
+    const kind = SERVICE_REASONS.find((k) => k === openJob.reasonKind) ?? null;
+    const text = openJob.reason?.trim() || null;
+    if (kind || text) return { kind, text, from: 'job' };
+  }
+  if (lastMove?.kind === 'manual' && lastMove.toState === 'service') {
+    const text = lastMove.reason?.trim() || null;
+    if (text) return { kind: null, text, from: 'manual' };
+  }
+  return { kind: null, text: null, from: null };
+}
 
 /**
  * Photos of the damage a new repair carries, besides the odometer's: at least

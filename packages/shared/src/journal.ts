@@ -52,6 +52,9 @@ const EVENT_ACTIONS = new Set<string>([
   'tracker.write',
   'workshop.create',
   'document.sign',
+  // A contract marked signed in Signify, and the mark taken back (ADR-0039): nothing edited.
+  'document.signed_elsewhere',
+  'document.signed_elsewhere.undo',
   'act.photo.add',
   'service.photo.add',
   // Paying the mechanic (ADR-0037): a mark made or voided, nothing edited.

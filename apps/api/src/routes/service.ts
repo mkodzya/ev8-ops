@@ -10,6 +10,7 @@ import {
   jobPayState,
   labourTetri as labourFor,
   minutesFromHours,
+  nextWorkshopOrder,
   normSecFromMinutes,
   partLineState,
   partLineTetri,
@@ -23,6 +24,7 @@ import {
   vinMatches,
   workLineState,
   workLineTetri,
+  workshopRefusal,
   worksTotal,
 } from '@ev8/shared';
 import { createHash } from 'node:crypto';
@@ -551,40 +553,107 @@ async function boughtThrough(tx: Tx, line: { id: string; partId: string | null; 
   });
 }
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * The workshop a repair is given (workshops list, task #1 of 21.10.2026). An
+ * id that names no workshop was a 500 from the foreign key, and one taken off
+ * the list was taken. Now the first is not found and the second refused — unless
+ * the repair already has it, which it keeps (`workshopRefusal`).
+ */
+async function workshopOf(b: Body, current: string | null = null): Promise<string | null> {
+  const id = str(b, 'workshopId', { max: 64 });
+  if (id == null) return null;
+  const kept = id === current;
+  const found = !kept && UUID.test(id) ? await prisma.workshop.findUnique({ where: { id }, select: { archived: true } }) : null;
+  const refusal = workshopRefusal(found, kept);
+  if (refusal === 'workshop_not_found') throw notFound('workshop_not_found', 'No such workshop.');
+  if (refusal === 'workshop_archived') throw conflict('workshop_archived', 'This workshop was taken off the list.', { field: 'workshopId' });
+  return id;
+}
+
+/**
+ * A name another workshop has. The unique index on lower(name) covers those
+ * taken off the list as well, so the clash may be one the owner no longer
+ * sees: then the answer names it, so the screen can say to put it back
+ * rather than leave the owner at a dead end.
+ */
+async function nameClash(name: string, except?: string) {
+  const other = await prisma.workshop.findFirst({
+    where: { name: { equals: name, mode: 'insensitive' }, ...(except ? { id: { not: except } } : {}) },
+    select: { id: true, archived: true },
+  });
+  if (other?.archived) return conflict('workshop_archived_exists', 'A workshop by that name was taken off the list: put it back instead.', { field: 'name', id: other.id });
+  return conflict('workshop_exists', 'A workshop by that name is already on the list.', { field: 'name' });
+}
+
 export function serviceRoutes(app: FastifyInstance): void {
-  /** The workshops that do the repairs — a list the owner keeps (`service.md`). */
-  app.get('/api/workshops', { config: { scope: 'fleet.view' } }, async () => {
-    const workshops = await prisma.workshop.findMany({
-      where: { archived: false },
-      orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
-      select: { id: true, name: true, phone: true, note: true },
-    });
-    return { workshops };
+  /**
+   * The workshops that do the repairs — a list the owner keeps in Settings →
+   * Repair (`service.md`; task #1 of 21.10.2026). Plain, it is what
+   * the pickers offer: the live ones in the owner's order. With `?all=1` it is
+   * the list as the owner keeps it: those taken off it too, last, with how
+   * many repairs each has and how many of them are still under way.
+   */
+  app.get<{ Querystring: { all?: string } }>('/api/workshops', { config: { scope: 'fleet.view' } }, async (req) => {
+    if (req.query.all !== '1') {
+      const workshops = await prisma.workshop.findMany({
+        where: { archived: false },
+        orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+        select: { id: true, name: true, phone: true, note: true },
+      });
+      return { workshops };
+    }
+    const [rows, underWay] = await Promise.all([
+      prisma.workshop.findMany({
+        orderBy: [{ archived: 'asc' }, { sortOrder: 'asc' }, { name: 'asc' }],
+        include: { _count: { select: { jobs: true } } },
+      }),
+      prisma.serviceJob.groupBy({ by: ['workshopId'], where: { workshopId: { not: null }, status: { in: ['open', 'draft'] } }, _count: { _all: true } }),
+    ]);
+    const open = new Map(underWay.map((g) => [g.workshopId, g._count._all]));
+    return {
+      workshops: rows.map((w) => ({
+        id: w.id,
+        name: w.name,
+        phone: w.phone,
+        note: w.note,
+        sortOrder: w.sortOrder,
+        archived: w.archived,
+        jobs: w._count.jobs,
+        openJobs: open.get(w.id) ?? 0,
+      })),
+    };
   });
 
   app.post<{ Body: Body }>('/api/workshops', { config: { scope: 'settings.manage' } }, async (req, reply) => {
     const b = req.body ?? {};
     const actor = actorOf(req);
     const name = str(b, 'name', { required: true, max: 200 })!;
+    const phone = str(b, 'phone', { max: 40 });
+    const note = str(b, 'note', { max: 1000 });
+    // A new one goes to the end, after those the owner already ordered; at
+    // nought it sorted ahead of them.
+    const last = await prisma.workshop.aggregate({ _max: { sortOrder: true } });
     try {
       const row = await prisma.workshop.create({
-        data: {
-          name,
-          phone: str(b, 'phone', { max: 40 }),
-          note: str(b, 'note', { max: 1000 }),
-          sortOrder: int(b, 'sortOrder', { min: 0 }) ?? 0,
-          createdById: actor.id,
-        },
+        data: { name, phone, note, sortOrder: int(b, 'sortOrder', { min: 0, max: 999 }) ?? nextWorkshopOrder(last._max.sortOrder), createdById: actor.id },
         select: { id: true, name: true },
       });
-      await audit({ actorId: actor.id, action: 'workshop.create', entityType: 'workshop', entityId: row.id, after: { name } });
+      await audit({ actorId: actor.id, action: 'workshop.create', entityType: 'workshop', entityId: row.id, after: { name, phone, note } });
       return reply.code(201).send(row);
     } catch (e) {
-      if (isUniqueViolation(e)) throw conflict('workshop_exists', 'A workshop by that name is already on the list.', { field: 'name' });
+      if (isUniqueViolation(e)) throw await nameClash(name);
       throw e;
     }
   });
 
+  /**
+   * Rename, a phone or a note, its place in the list, or off the list and
+   * back. Nothing is deleted (ADR-0011): a workshop taken off the list keeps
+   * its repairs, open ones included — the answer says how many are still
+   * under way, so the screen can say they stay with it.
+   */
   app.patch<{ Params: { id: string }; Body: Body }>('/api/workshops/:id', { config: { scope: 'settings.manage' } }, async (req) => {
     const b = req.body ?? {};
     const actor = actorOf(req);
@@ -594,10 +663,34 @@ export function serviceRoutes(app: FastifyInstance): void {
     if ('name' in b) data.name = str(b, 'name', { required: true, max: 200 });
     if ('phone' in b) data.phone = str(b, 'phone', { max: 40 });
     if ('note' in b) data.note = str(b, 'note', { max: 1000 });
-    if ('archived' in b) data.archived = b.archived === true;
-    await prisma.workshop.update({ where: { id: row.id }, data: { ...data, updatedAt: new Date() } });
-    await audit({ actorId: actor.id, action: 'workshop.update', entityType: 'workshop', entityId: row.id, before: { name: row.name }, after: data as object });
-    return { ok: true };
+    if ('sortOrder' in b) data.sortOrder = int(b, 'sortOrder', { required: true, min: 0, max: 999 });
+    if ('archived' in b) {
+      // `"yes"` used to be read as false: a flag is a flag.
+      if (typeof b.archived !== 'boolean') throw badRequest('bad_field', 'archived is true or false', { field: 'archived' });
+      data.archived = b.archived;
+    }
+    try {
+      await prisma.workshop.update({ where: { id: row.id }, data: { ...data, updatedAt: new Date() } });
+    } catch (e) {
+      // A rename onto another workshop's name was a 500.
+      if (isUniqueViolation(e)) throw await nameClash(String(data.name ?? row.name), row.id);
+      throw e;
+    }
+    const openJobs = await prisma.serviceJob.count({ where: { workshopId: row.id, status: { in: ['open', 'draft'] } } });
+    // The flag alone reads «— → Да» in the journal with no field named, so
+    // taking it off the list and putting it back say so in the note, which
+    // the journal translates (`feedNotes`).
+    const moved = data.archived === undefined || data.archived === row.archived ? null : data.archived ? 'taken off the list' : 'put back on the list';
+    await audit({
+      actorId: actor.id,
+      action: 'workshop.update',
+      entityType: 'workshop',
+      entityId: row.id,
+      before: { name: row.name, phone: row.phone, note: row.note, sortOrder: row.sortOrder, archived: row.archived },
+      after: data as object,
+      note: moved,
+    });
+    return { ok: true, openJobs };
   });
 
   app.get<{ Querystring: { status?: string } }>('/api/service', { config: { scope: 'service.view' } }, async (req) => {
@@ -1185,7 +1278,7 @@ export function serviceRoutes(app: FastifyInstance): void {
     // repair opens as a draft for an owner to take up, and what it will cost
     // or who pays is not a manager's to decide.
     const reported = !hasPerm(actor, 'service.manage');
-    const workshopId = str(b, 'workshopId');
+    const workshopId = await workshopOf(b);
     const minutes = 'labourHours' in b ? minutesFromHours(Number(b.labourHours) || 0) : (int(b, 'labourMinutes', { min: 0 }) ?? 0);
     if (payer === 'customer' && !rented) {
       throw conflict('no_renter', 'Only a moped that is out with somebody can be repaired at their expense.');
@@ -1239,7 +1332,7 @@ export function serviceRoutes(app: FastifyInstance): void {
 
     const data: Record<string, unknown> = {};
     if ('reason' in b) data.reason = str(b, 'reason', { required: true, max: 2000 });
-    if ('workshopId' in b) data.workshopId = str(b, 'workshopId');
+    if ('workshopId' in b) data.workshopId = await workshopOf(b, job.workshopId);
     // Work is hours at a rate; the money follows from them (§3.7, crit. 24).
     if ('labourHours' in b || 'labourMinutes' in b) {
       const minutes = 'labourHours' in b ? minutesFromHours(Number(b.labourHours) || 0) : (int(b, 'labourMinutes', { min: 0 }) ?? 0);
