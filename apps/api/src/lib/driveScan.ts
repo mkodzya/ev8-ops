@@ -1,9 +1,10 @@
-import { addDays, effectiveRentalStatus, payOffsetDays, todayISO, type RentalStatus } from '@ev8/shared';
+import { addDays, effectiveRentalStatus, todayISO, type RentalStatus } from '@ev8/shared';
 import { dateFromISO, isoDate } from './dates.js';
 import { prisma } from './db.js';
 import { DriveError, FOLDER, download, driveConfig, listFolder, type DriveConfig, type DriveFailure, type DriveItem } from './drive.js';
 import { fileDate, fileKind, folderName, kindOfText, matchFolders, pdfText, readContract, readReturnAct, sharedWords, type FolderToMatch, type RentalToMatch } from './driveDocs.js';
 import { env } from './env.js';
+import { payOffsetOf } from './rentState.js';
 
 // Reading the rentals folders in Drive, and laying them beside the rentals
 // here (ADR-0031). Read only: nothing is written to Drive, moved or deleted.
@@ -181,7 +182,7 @@ export async function driveReconciliation() {
     orderBy: [{ datedOn: 'desc' }, { name: 'asc' }],
     include: {
       files: { orderBy: [{ datedOn: 'desc' }, { modifiedAt: 'desc' }] },
-      rental: { select: { id: true, number: true, status: true, paidThrough: true, pickedUpOn: true, payWeekday: true, returnedOn: true, customer: { select: { id: true, name: true } } } },
+      rental: { select: { id: true, number: true, status: true, paidThrough: true, pickedUpOn: true, payWeekday: true, weekShiftDays: true, returnedOn: true, customer: { select: { id: true, name: true } } } },
     },
   });
   const rentals = await prisma.rental.findMany({
@@ -191,7 +192,7 @@ export async function driveReconciliation() {
   });
   const withFolder = new Set(folders.map((f) => f.rentalId).filter(Boolean));
   const statusOf = (r: NonNullable<(typeof folders)[number]['rental']>) =>
-    effectiveRentalStatus(r.status as RentalStatus, isoDate(r.paidThrough), isoDate(r.pickedUpOn), today, payOffsetDays(isoDate(r.pickedUpOn), r.payWeekday));
+    effectiveRentalStatus(r.status as RentalStatus, isoDate(r.paidThrough), isoDate(r.pickedUpOn), today, payOffsetOf(r));
   // The folder's return act — the rental's own, not one dated before its pickup.
   const act = (f: (typeof folders)[number]) => f.files.find((x) => x.kind === 'return_act' && actAfterPickup(isoDate(x.datedOn), isoDate(f.rental?.pickedUpOn ?? null))) ?? null;
   // The moped came back by Drive: the folder was moved among the finished ones,

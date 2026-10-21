@@ -10,6 +10,7 @@ import { settingsRow } from './settings.js';
 import { decideDeposit, pickUp, returnPreview, returnRental, setRentalStatus, undoReturn, type DepositDecision, type NewCustomer, type PickupInput } from '../lib/rentals.js';
 import { WITHHOLD_GROUNDS } from '../lib/pdf/returnAct.js';
 import { discountWeek } from '../lib/discount.js';
+import { shiftWeek } from '../lib/weekShift.js';
 import { addFine, voidFine } from '../lib/fines.js';
 import { date, int, oneOf, str, strList, tetri } from '../lib/validate.js';
 
@@ -200,6 +201,27 @@ export function handoverRoutes(app: FastifyInstance): void {
       reason: str(b, 'reason', { max: 500 }),
     });
     return { ok: true, amountTetri: r.amountTetri };
+  });
+
+  /**
+   * The running week made 1–6 days longer, an owner's, with a reason
+   * (ADR-0041): the extra days and their price, typed by a person; every
+   * later week and the pay day follow. 0 days takes the move back.
+   */
+  app.post<{ Params: { id: string; seq: string }; Body: Body }>('/api/rentals/:id/weeks/:seq/shift', { config: { scope: 'deposit.decide' } }, async (req) => {
+    const b = req.body ?? {};
+    const seq = Number(req.params.seq);
+    if (!Number.isInteger(seq) || seq < 1) throw notFound('week_not_found', 'No such week in this rental.');
+    const r = await shiftWeek({
+      actorId: actorOf(req).id,
+      rentalId: req.params.id,
+      seq,
+      days: int(b, 'days', { required: true })!,
+      extraTetri: tetri(b, 'extraTetri', { min: 0 }),
+      reason: str(b, 'reason', { max: 500 }),
+      today: todayISO(new Date(), env.TZ),
+    });
+    return { ok: true, ...r };
   });
 
   /** A fine on the rental — damage, a dirty moped — an owner's, with a reason (ADR-0023). */

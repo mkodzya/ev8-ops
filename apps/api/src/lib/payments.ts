@@ -38,7 +38,8 @@ export async function recomputeSale(tx: Tx, saleId: string): Promise<void> {
 
 /**
  * Re-derive everything a rental's money says about it: each period's paid
- * amount and status, and the rental's "paid through" date.
+ * amount and status, and the rental's "paid through" date. And the days its
+ * weeks were made longer (ADR-0041), which say the weekday they now start on.
  *
  * Derived, never stored by hand. A payment can be added, corrected or
  * voided, and the answer has to come out the same either way — which it
@@ -51,7 +52,9 @@ export async function recomputeRental(tx: Tx, rentalId: string): Promise<void> {
     include: { allocations: { where: { payment: { voidedAt: null } }, select: { amountTetri: true } } },
   });
   const rows: { seq: number; endsOn: string; payStatus: PeriodPayStatus }[] = [];
+  let shiftDays = 0;
   for (const p of periods) {
+    shiftDays += p.extraDays;
     // A week brought over as paid before the transfer is paid without a payment (B3-02, Q3).
     const paid = p.paidBeforeTransfer ? p.amountTetri : p.allocations.reduce((n, a) => n + a.amountTetri, 0);
     // The shared rule: a week at nothing is paid, so "paid through" walks over it (ADR-0017).
@@ -72,7 +75,7 @@ export async function recomputeRental(tx: Tx, rentalId: string): Promise<void> {
     }
   }
   const through = paidThrough(rows);
-  await tx.rental.update({ where: { id: rentalId }, data: { paidThrough: dateFromISO(through), updatedAt: new Date() } });
+  await tx.rental.update({ where: { id: rentalId }, data: { paidThrough: dateFromISO(through), weekShiftDays: shiftDays, updatedAt: new Date() } });
 }
 
 export interface RecordPaymentInput {

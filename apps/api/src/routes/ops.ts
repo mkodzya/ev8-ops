@@ -1,4 +1,4 @@
-import { CONTACT_KINDS, CUSTOMER_KINDS, CUSTOMER_SOURCES, VEHICLE_POOLS, VEHICLE_STATES, isoWeekday, nameSpellings, normalizeVin, todayISO, vinFault } from '@ev8/shared';
+import { CONTACT_KINDS, CUSTOMER_KINDS, CUSTOMER_SOURCES, VEHICLE_POOLS, VEHICLE_STATES, isoWeekday, nameSpellings, normalizeVin, todayISO, vinFault, weeksAnchor } from '@ev8/shared';
 import type { FastifyInstance } from 'fastify';
 import { audit } from '../lib/audit.js';
 import { hasPerm } from '../lib/auth.js';
@@ -138,13 +138,14 @@ export function opsRoutes(app: FastifyInstance): void {
     if ('chargers' in b) data.chargers = int(b, 'chargers', { min: 0 });
     // The weekday the rent is due on (ADR-0022): an owner's, with a reason —
     // it decides the day a renter is called late. ISO 1–7; null, or the
-    // pickup's own weekday, is the rule of every other rental, kept as null.
+    // weeks' own weekday, is the rule of every other rental, kept as null.
+    // The weeks' weekday is the pickup's until a week was made longer (ADR-0041).
     if ('payWeekday' in b) {
       if (!hasPerm(actor, 'deposit.decide')) throw forbidden('owner_only', 'The pay day of a rental is an owner\'s decision.');
       if (!str(b, 'reason', { max: 1000 })) throw badRequest('missing_field', 'Say why the pay day changes.', { field: 'reason' });
       const day = int(b, 'payWeekday', { min: 1, max: 7 });
-      const pickedUpOn = isoDate(r.pickedUpOn);
-      data.payWeekday = day == null || (pickedUpOn && isoWeekday(pickedUpOn) === day) ? null : day;
+      const weeksFrom = weeksAnchor(isoDate(r.pickedUpOn), r.weekShiftDays);
+      data.payWeekday = day == null || (weeksFrom && isoWeekday(weeksFrom) === day) ? null : day;
     }
     // The front office's deal, one way only until the webhook tariff
     // (B10-03, register #5): a link or an id, kept as typed.

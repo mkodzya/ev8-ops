@@ -1,4 +1,4 @@
-import { acquiringFee, canPickUp, handOverBlockTetri, nameSpellings, periodsThrough, returnSettlement, type Settlement, type VehicleState } from '@ev8/shared';
+import { acquiringFee, canPickUp, handOverBlockTetri, nameSpellings, periodsThrough, returnSettlement, shiftsOf, type Settlement, type VehicleState } from '@ev8/shared';
 import { createHash } from 'node:crypto';
 import type { Prisma } from '../generated/prisma/client.js';
 import { audit } from './audit.js';
@@ -355,15 +355,18 @@ export interface ReturnInput {
   decision: DepositDecision | null;
 }
 
-type PeriodRow = { id: string; seq: number; startsOn: Date; endsOn: Date; amountTetri: number; paidTetri: number };
+type PeriodRow = { id: string; seq: number; startsOn: Date; endsOn: Date; amountTetri: number; paidTetri: number; extraDays: number };
 
-/** The weeks there are, plus any the nightly run has not opened yet by the return day. */
+/**
+ * The weeks there are, plus any the nightly run has not opened yet by the
+ * return day — on the grid the night uses, moved by any week made longer (ADR-0041).
+ */
 function withWeeksThrough(r: { pickedUpOn: Date | null; weeklyRateTetri: number; periods: PeriodRow[] }, returnedOn: string) {
   const have = r.periods.map((p) => ({ id: p.id, seq: p.seq, startsOn: isoDate(p.startsOn)!, endsOn: isoDate(p.endsOn)!, amountTetri: p.amountTetri, paidTetri: p.paidTetri }));
   const pickedUpOn = isoDate(r.pickedUpOn);
   if (!pickedUpOn) return have;
   const seqs = new Set(have.map((p) => p.seq));
-  for (const p of periodsThrough(pickedUpOn, returnedOn)) {
+  for (const p of periodsThrough(pickedUpOn, returnedOn, null, shiftsOf(r.periods))) {
     if (!seqs.has(p.seq)) have.push({ id: `new-${p.seq}`, seq: p.seq, startsOn: p.startsOn, endsOn: p.endsOn, amountTetri: r.weeklyRateTetri, paidTetri: 0 });
   }
   return have.filter((p) => p.startsOn <= returnedOn || p.paidTetri > 0).sort((a, b) => a.seq - b.seq);
@@ -768,15 +771,16 @@ export async function setRentalStatus(input: { actor: Actor; rentalId: string; s
   if (!hasPerm(input.actor, 'deposit.decide')) throw forbidden('owner_only', 'Only an owner pauses or disputes a rental.');
   if (!input.reason.trim()) throw badRequest('missing_field', 'Say why.', { field: 'reason' });
   await prisma.$transaction(async (tx) => {
-    const r = await tx.rental.findUnique({ where: { id: input.rentalId }, include: { periods: { select: { seq: true } } } });
+    const r = await tx.rental.findUnique({ where: { id: input.rentalId }, include: { periods: { select: { seq: true, extraDays: true } } } });
     if (!r) throw notFound('rental_not_found', 'No such rental.');
     if (r.status === 'returned') throw conflict('already_returned', 'A closed rental does not change status.');
     const pickedUpOn = isoDate(r.pickedUpOn);
     if (input.status === 'active' && (r.status === 'paused' || r.status === 'disputed') && pickedUpOn) {
       // The weeks that began while it stood are not charged, and resuming
-      // does not open them after the fact (Q11): they exist at nothing.
+      // does not open them after the fact (Q11): they exist at nothing —
+      // on the grid moved by any week made longer (ADR-0041).
       const have = new Set(r.periods.map((p) => p.seq));
-      for (const p of periodsThrough(pickedUpOn, input.today)) {
+      for (const p of periodsThrough(pickedUpOn, input.today, null, shiftsOf(r.periods))) {
         if (have.has(p.seq)) continue;
         await tx.rentalPeriod.create({ data: { rentalId: r.id, seq: p.seq, startsOn: dateFromISO(p.startsOn)!, endsOn: dateFromISO(p.endsOn)!, amountTetri: 0 } });
       }

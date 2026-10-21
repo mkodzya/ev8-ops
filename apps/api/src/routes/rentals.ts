@@ -1,4 +1,4 @@
-import { rentDueOn, todayISO } from '@ev8/shared';
+import { rentDueOn, todayISO, weeksAnchor } from '@ev8/shared';
 import type { FastifyInstance } from 'fastify';
 import { dayOf, isoDate } from '../lib/dates.js';
 import { debtsOf, rentalDueToday } from '../lib/debt.js';
@@ -129,9 +129,13 @@ export function rentalRoutes(app: FastifyInstance): void {
         expectedReturnOn: isoDate(r.expectedReturnOn),
         returnedOn: isoDate(r.returnedOn),
         paidThrough,
-        // The weekday its rent is due on (ISO 1–7); null — the pickup's weekday (ADR-0022).
+        // The weekday its rent is due on (ISO 1–7); null — the weekday the weeks start on (ADR-0022).
         payWeekday: r.payWeekday,
         payOffsetDays: payOffsetOf(r),
+        // The days its weeks were made longer, and the day they run from now:
+        // the pickup moved by them (ADR-0041). Its weekday is the weeks' weekday.
+        weekShiftDays: r.weekShiftDays,
+        weeksFromOn: weeksAnchor(pickedUpOn, r.weekShiftDays),
         // The day the next rent is due, for a running rental: the WhatsApp text names it.
         dueOn: pickedUpOn && (r.status === 'active' || r.status === 'overdue') ? rentDueOn(paidThrough, pickedUpOn, payOffsetOf(r)) : null,
         buyoutTargetTetri: r.buyoutTargetTetri,
@@ -181,6 +185,10 @@ export function rentalRoutes(app: FastifyInstance): void {
         payStatus: p.payStatus,
         discountTetri: p.discountTetri,
         discountReason: p.discountReason,
+        // Made longer by an owner, and what the days cost (ADR-0041).
+        extraDays: p.extraDays,
+        extraTetri: p.extraTetri,
+        shiftReason: p.shiftReason,
         paidBeforeTransfer: p.paidBeforeTransfer,
       })),
       payments: r.payments.map((p) => ({

@@ -34,6 +34,7 @@ export const QUEUE_RENTAL = {
   expectedReturnOn: true,
   paidThrough: true,
   payWeekday: true,
+  weekShiftDays: true,
   vinUnconfirmed: true,
   odooOrderId: true,
   transferredAt: true,
