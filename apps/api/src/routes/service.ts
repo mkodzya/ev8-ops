@@ -41,6 +41,7 @@ import { date, int, oneOf, str, tetri } from '../lib/validate.js';
 import { syncDeposit } from '../lib/rentalMoney.js';
 import { moveVehicle } from '../lib/vehicles.js';
 import { rateOf } from '../lib/serviceSettings.js';
+import { maintenanceOverview } from '../lib/maintenance.js';
 
 // Repair jobs (SRV-01, SRV-02).
 //
@@ -658,6 +659,15 @@ export function serviceRoutes(app: FastifyInstance): void {
     ]);
     return { open, drafts, workshops, jobs: jobs.map((j) => present(req, serialize(j))) };
   });
+
+  /**
+   * «Пора на ТО» (stage 6; ADR-0038 §1–3): the mopeds with less than the
+   * warning left or past the mark, the most urgent first, and how many have
+   * no mileage recorded in EV8 Ops at all — those have no maintenance yet.
+   * Read by whoever works on repairs: the chief mechanic opens the planned
+   * repair from it.
+   */
+  app.get('/api/service/maintenance', { config: { scope: 'service.view' } }, async () => maintenanceOverview());
 
   app.get<{ Params: { id: string } }>('/api/service/:id', { config: { scope: 'service.view' } }, async (req) => {
     const job = await prisma.serviceJob.findFirst({

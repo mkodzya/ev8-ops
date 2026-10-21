@@ -6,6 +6,7 @@ import { PART_MONEY, WORK_MONEY } from '../lib/stock.js';
 import { env } from '../lib/env.js';
 import { badRequest, notFound } from '../lib/errors.js';
 import { mayView } from '../lib/guard.js';
+import { maintenanceOf } from '../lib/maintenance.js';
 import { preliminaryOf } from '../lib/purchases.js';
 import { rentStateOf } from '../lib/rentState.js';
 import { renderStickers } from '../lib/pdf/stickers.js';
@@ -150,6 +151,8 @@ export function fleetRoutes(app: FastifyInstance): void {
       include: { actor: { select: { name: true } } },
     });
     const today = todayISO(new Date(), env.TZ);
+    // Its next maintenance, from the mileage EV8 Ops recorded (ADR-0038 §1–2); none for a moped that left the fleet.
+    const [maintenance] = await maintenanceOf(prisma, { vehicleIds: [v.id] });
     return {
       vehicle: {
         id: v.id,
@@ -169,6 +172,7 @@ export function fleetRoutes(app: FastifyInstance): void {
         costPaidPercent: mayView(req, 'cost.view') ? order?.paidPercent ?? null : null,
         currentRentalId: v.currentRentalId,
       },
+      maintenance: maintenance ?? null,
       events: v.events.map((e) => ({
         id: e.id,
         kind: e.kind,
@@ -187,6 +191,8 @@ export function fleetRoutes(app: FastifyInstance): void {
         status: j.status,
         payer: j.payer,
         reason: j.reason,
+        /** A planned one moves the next maintenance (ADR-0038 §2). */
+        reasonKind: j.reasonKind,
         openedOn: isoDate(j.openedOn),
         closedOn: isoDate(j.closedOn),
         // What a repair cost is the owners' (ADR-0033 §4), on the card as in the repairs.
