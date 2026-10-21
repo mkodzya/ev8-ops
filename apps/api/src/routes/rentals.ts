@@ -1,4 +1,4 @@
-import { rentDueOn, todayISO } from '@ev8/shared';
+import { contractSignedOf, contractState, rentDueOn, todayISO } from '@ev8/shared';
 import type { FastifyInstance } from 'fastify';
 import { dayOf, isoDate } from '../lib/dates.js';
 import { debtsOf, rentalDueToday } from '../lib/debt.js';
@@ -64,7 +64,11 @@ export function rentalRoutes(app: FastifyInstance): void {
           buyoutPerPaymentTetri: r.buyoutPerPaymentTetri,
           // Null: not asked. A rental brought over keeps its contract from before
           // EV8 Ops, so it is neither signed here nor waiting to be (Mika, 08.10.2026).
-          contractSigned: r.transferredAt ? null : r.documents.length > 0,
+          // True: signed on the screen, or marked signed in Signify (ADR-0039) —
+          // the same rule "Today" asks, so the chip and the row agree.
+          contractSigned: contractSignedOf(
+            contractState({ signedHere: r.documents.length > 0, signedElsewhereAt: r.contractSignedElsewhereAt, transferredAt: r.transferredAt, returned: r.status === 'returned' }),
+          ),
         };
       }),
     };
@@ -84,6 +88,7 @@ export function rentalRoutes(app: FastifyInstance): void {
         },
         charges: { where: { voidedAt: null }, orderBy: { createdAt: 'asc' }, include: { allocations: { where: { payment: { voidedAt: null } }, select: { amountTetri: true } } } },
         documents: { where: { kind: 'pdf', archived: false }, select: { docKind: true, signedAt: true, signedBy: true, createdAt: true } },
+        contractSignedElsewhereBy: { select: { name: true } },
         periods: { orderBy: { seq: 'asc' } },
         payments: { where: { voidedAt: null }, orderBy: { occurredOn: 'asc' }, select: { id: true, occurredOn: true, channel: true, grossTetri: true, feeTetri: true } },
         acts: { orderBy: { occurredOn: 'asc' }, include: { photos: { where: { archived: false }, select: { id: true, label: true, sizeBytes: true }, orderBy: { createdAt: 'asc' } } } },
@@ -151,8 +156,14 @@ export function rentalRoutes(app: FastifyInstance): void {
       // What the return charged beyond the weeks, and what is still open (§3.7, B5-08).
       charges: r.charges.map((c) => ({ id: c.id, kind: c.kind, amountTetri: c.amountTetri, note: c.note, paidTetri: c.allocations.reduce((n, a) => n + a.amountTetri, 0) })),
       // The contract and the return act: signed or not, and what the contract lacks (D17, B4-06).
+      // The contract may also be marked signed in Signify, by whom and when (ADR-0039).
       documents: {
-        contract: docState(r.documents, 'contract', contractGaps(r.customer)),
+        contract: {
+          ...docState(r.documents, 'contract', contractGaps(r.customer)),
+          signedElsewhere: r.contractSignedElsewhereAt
+            ? { at: r.contractSignedElsewhereAt.toISOString(), by: r.contractSignedElsewhereBy?.name ?? null, note: r.contractSignedElsewhereNote }
+            : null,
+        },
         returnAct: r.acts.some((a) => a.kind === 'return') ? docState(r.documents, 'return_act', []) : null,
       },
       deposit: r.deposit
@@ -213,8 +224,14 @@ export function contractGaps(c: { personalId: string | null; name: string; phone
   return gaps;
 }
 
-function docState(files: { docKind: string | null; signedAt: Date | null; signedBy: string | null }[], kind: string, gaps: string[]) {
-  const f = files.find((x) => x.docKind === kind);
+/**
+ * A document's signature as the card shows it. Two copies may stand side by
+ * side unarchived; the signed one speaks — the latest of them — and only then
+ * the latest copy, as the list counts "signed" by any signed copy (ADR-0039).
+ */
+function docState(files: { docKind: string | null; signedAt: Date | null; signedBy: string | null; createdAt: Date }[], kind: string, gaps: string[]) {
+  const mine = files.filter((x) => x.docKind === kind).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  const f = mine.find((x) => x.signedAt != null) ?? mine[0];
   return { signedAt: f?.signedAt?.toISOString() ?? null, signedBy: f?.signedBy ?? null, gaps };
 }
 
