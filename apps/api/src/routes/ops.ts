@@ -203,8 +203,12 @@ export function opsRoutes(app: FastifyInstance): void {
         await tx.act.updateMany({ where: { rentalId: r.id, kind: 'pickup', vehicleId: null }, data: { vehicleId } });
       }
       await tx.rental.update({ where: { id: r.id }, data: { ...data, updatedAt: new Date() } });
+      // An empty pay day is the weeks' own weekday: the journal calls it «as
+      // the pickup day», or «as the week's first day» once weeks were moved
+      // (ADR-0041), as the card does — so the line keeps which, the same on both sides.
+      const weeks = 'payWeekday' in data ? { weekShiftDays: r.weekShiftDays } : {};
       await tx.auditLog.create({
-        data: { actorId: actor.id, action: 'rental.update', entityType: 'rental', entityId: r.id, before: pickKeys(r, data) as object, after: data as object, note: str(b, 'reason', { max: 1000 }) },
+        data: { actorId: actor.id, action: 'rental.update', entityType: 'rental', entityId: r.id, before: { ...pickKeys(r, data), ...weeks } as object, after: { ...data, ...weeks } as object, note: str(b, 'reason', { max: 1000 }) },
       });
     });
     return { ok: true };

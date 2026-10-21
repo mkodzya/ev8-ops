@@ -74,12 +74,14 @@ function said(t: Dict, field: string, raw: string): string {
   }
 }
 
-function value(field: string, raw: unknown): string | null {
+function value(field: string, raw: unknown, shifted = false): string | null {
   const t = currentDict();
   // A rental's pay day is a weekday, ISO 1–7, and none of its own is the
   // weeks' first day (ADR-0022, ADR-0041): «6 → 2» told nobody anything.
+  // None is said as the card says it: the pickup's weekday, or the week's
+  // first day once weeks were moved.
   if (field === 'payWeekday') {
-    if (raw == null) return t.payDay.asWeekStart;
+    if (raw == null) return shifted ? t.payDay.asWeekStart : t.payDay.asPickup;
     return typeof raw === 'number' && raw >= 1 && raw <= 7 ? t.calendar.weekdaysIn[raw % 7] : String(raw);
   }
   // The days a week gained, with their unit (ADR-0041).
@@ -120,10 +122,13 @@ export function ChangedFromTo({ action, before, after }: { action?: string; befo
   if (!was || !now || typeof was !== 'object' || typeof now !== 'object') return null;
   const t = currentDict();
   const pairs: { field: string; label: string | null; from: string; to: string }[] = [];
+  // Whether the rental's weeks had been moved, which a pay day change keeps
+  // beside it (ADR-0041); a line from before the move had none to keep.
+  const shifted = typeof now.weekShiftDays === 'number' && now.weekShiftDays > 0;
   for (const field of Object.keys(was)) {
     if (!(field in now)) continue;
-    const from = value(field, was[field]);
-    const to = value(field, now[field]);
+    const from = value(field, was[field], shifted);
+    const to = value(field, now[field], shifted);
     if (from == null || to == null || from === to) continue;
     pairs.push({ field, label: named(t, field, action), from, to });
   }

@@ -426,6 +426,10 @@ describe.skipIf(!HAS_DB)('a rental week made longer (ADR-0041)', () => {
     expect((await call(r.owner, 'PATCH', `/api/rentals/${r.id}`, { payWeekday: isoWeekday(t), reason: 'test: back to the week’s first day' })).statusCode).toBe(200);
     c = await card(r.owner, r.id);
     expect(c.rental).toMatchObject({ payWeekday: null, payOffsetDays: 0, dueOn: addDays(t, 7) });
+    // The journal line keeps that the weeks were moved, so «none» reads «as the week's first day», not «as the pickup day».
+    const edit = await r.prisma.auditLog.findFirst({ where: { entityType: 'rental', entityId: r.id, action: 'rental.update' }, orderBy: { createdAt: 'desc' } });
+    expect(edit?.before).toMatchObject({ payWeekday: isoWeekday(addDays(t, 1)), weekShiftDays: 3 });
+    expect(edit?.after).toMatchObject({ payWeekday: null, weekShiftDays: 3 });
     expect((await call(r.owner, 'PATCH', `/api/rentals/${r.id}`, { payWeekday: isoWeekday(addDays(t, -10)), reason: 'test: the pickup’s weekday' })).statusCode).toBe(200);
     expect((await card(r.owner, r.id)).rental).toMatchObject({ payWeekday: isoWeekday(addDays(t, -10)), payOffsetDays: 4 });
   });
