@@ -27,6 +27,7 @@ import { workshopApprovalEn } from './workshop-approval.js';
 import { workshopPartsEn } from './workshop-parts.js';
 import { workshopPayoutsEn } from './workshop-payouts.js';
 import { workshopMaintenanceEn } from './workshop-maintenance.js';
+import { typedTextEn } from './typed-text.js';
 import { repairKindEn } from './repair-kind.js';
 import { workshopsEn } from './workshops.js';
 import { driveEn } from './drive.js';
@@ -1415,6 +1416,7 @@ export const en = {
   ...workshopPartsEn,
   ...workshopPayoutsEn,
   ...workshopMaintenanceEn,
+  ...typedTextEn,
   ...repairKindEn,
   ...workshopsEn,
   ...driveEn,

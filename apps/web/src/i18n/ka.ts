@@ -18,6 +18,7 @@ import { workshopApprovalKa } from './workshop-approval.js';
 import { workshopPartsKa } from './workshop-parts.js';
 import { workshopPayoutsKa } from './workshop-payouts.js';
 import { workshopMaintenanceKa } from './workshop-maintenance.js';
+import { typedTextKa } from './typed-text.js';
 import { repairKindKa } from './repair-kind.js';
 import { workshopsKa } from './workshops.js';
 import { driveKa } from './drive.js';
@@ -1401,6 +1402,7 @@ export const ka: Dict = {
   ...workshopPartsKa,
   ...workshopPayoutsKa,
   ...workshopMaintenanceKa,
+  ...typedTextKa,
   ...repairKindKa,
   ...workshopsKa,
   ...driveKa,

@@ -1416,3 +1416,43 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
 /* The mopeds behind a line of "что мешает" — short lists, named in place. */
 .util-list { list-style: none; margin: 0 0 10px; padding: 0 0 0 2px; font: var(--text-body-sm); }
 .util-list li { padding: 4px 0; }
+
+/* ---- typed text in the reader's language (ADR-0042) ----------------------- */
+/* What a person typed, shown translated, carries a quiet mark that says so;
+   a tap on it shows the original, marked «оригинал» in the accent's tint.
+   The mark sits in a line of text, so it stays the line's height and its
+   target reaches past it to 44 px, `--control` (principle 13). Muted ink on the soft fill
+   is 6.0:1, the accent ink on its tint 4.96:1. */
+.typed-mark {
+  position: relative;
+  display: inline-block;
+  margin: 0;
+  padding: 0 var(--space2);
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+  color: var(--muted);
+  font: var(--text-label);
+  line-height: 1.5;
+  vertical-align: baseline;
+  white-space: nowrap;
+}
+button.typed-mark { cursor: pointer; }
+button.typed-mark::after { content: ''; position: absolute; left: -4px; right: -4px; top: 50%; height: var(--control); transform: translateY(-50%); }
+/* A refusal's mark sits on the line under its work's: its target reaches down
+   only, so it never lies over the mark above it, and each pill answers to
+   its own tap. */
+.wjob-line-why button.typed-mark::after { top: 0; transform: none; }
+/* A one-line clipped text and its mark share the width the words alone had:
+   the words give way and end in their ellipsis, the mark keeps its own. On a
+   phone card a translated reason would otherwise widen the right column by
+   the mark and squeeze the title into four lines (Fleet, KA, 375 px). */
+.typed-clip { display: inline-flex; align-items: baseline; gap: var(--space1); max-width: 100%; vertical-align: bottom; }
+.typed-clip > * { flex: none; }
+.typed-clip > :first-child { flex: 0 1 auto; min-width: 0; }
+.lc-sub .typed-clip { max-width: 18ch; }
+button.typed-mark:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.typed-mark.on { background: var(--accent-soft); color: var(--accent-ink); }
+/* On a block filled with the mark's own grey — a repair's refusal — the mark
+   takes the card's fill, or it reads as one more word of the refusal. */
+.wappr-reason .typed-mark:not(.on) { background: var(--surface); }

@@ -7,6 +7,7 @@ import { syncKommo } from '../lib/kommo.js';
 import { deliverNotices, scanNotices } from '../lib/notices.js';
 import { rollPeriods } from '../lib/periods.js';
 import { reconcileTbcNight, syncTbcToday } from '../lib/tbc.js';
+import { runTranslations } from '../lib/translations.js';
 
 // The worker is the clock; this is where it knocks.
 //
@@ -16,8 +17,9 @@ import { reconcileTbcNight, syncTbcToday } from '../lib/tbc.js';
 //
 // The Kommo poll knocks here for a different reason: the Kommo token and the
 // database both live in this process, and the worker has neither. So do the
-// two jobs of each bank read by its API (B11-03), for the bank's keys, and
-// the notices to the workshop's Telegram group (ADR-0032 §2), for the bot's.
+// two jobs of each bank read by its API (B11-03), for the bank's keys, the
+// notices to the workshop's Telegram group (ADR-0032 §2), for the bot's, and
+// the translation of typed texts (ADR-0042), for the translator's key.
 
 function workerOnly(req: FastifyRequest, reply: FastifyReply): boolean {
   const given = req.headers['x-worker-token'];
@@ -105,6 +107,18 @@ export function jobRoutes(app: FastifyInstance): void {
     const outcome = await deliverNotices();
     if (outcome.failed > 0) app.log.warn(outcome, 'telegram did not take every notice');
     return { ...outcome, maintenance: found.maintenance, stock: found.stock };
+  });
+
+  // Typed texts about mopeds and repairs, in the reader's language (ADR-0042):
+  // every minute the texts written since are listed, and what waits is put to
+  // the translator, within the day's cap. The outcome is counts and tokens —
+  // no text, nothing of the service's answer, never the key. With no key it
+  // says `off`, lists the texts and sends nothing.
+  app.post('/api/jobs/translate', { config: { scope: 'public' } }, async (req, reply) => {
+    if (!workerOnly(req, reply)) return reply;
+    const outcome = await runTranslations();
+    if (outcome.failed > 0) app.log.warn(outcome, 'the translator did not translate every text');
+    return outcome;
   });
 
   app.post('/api/jobs/tbc-night', { config: { scope: 'public' } }, async (req, reply) => {

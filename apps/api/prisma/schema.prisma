@@ -1670,3 +1670,42 @@ model Notice {
 
   @@map("notices")
 }
+
+/// A typed text about a moped or a repair, and its translation (migration 0065;
+/// ADR-0042): one row per distinct text, found by the sha256 of its UTF-8
+/// bytes in hex. The original stays the record; this is a view of it, filled
+/// by the worker's clock through the API. The text's own language is empty.
+model TextTranslation {
+  sourceHash     String    @id @map("source_hash")
+  sourceText     String    @map("source_text")
+  /// ka, ru, en, or other; empty until translated.
+  lang           String?
+  textKa         String?   @map("text_ka")
+  textRu         String?   @map("text_ru")
+  textEn         String?   @map("text_en")
+  model          String?
+  firstSeenAt    DateTime  @default(now()) @map("first_seen_at")
+  nextTryAt      DateTime  @default(now()) @map("next_try_at")
+  attempts       Int       @default(0)
+  translatedAt   DateTime? @map("translated_at")
+  gaveUpAt       DateTime? @map("gave_up_at")
+  /// Our word for the last failure, never the service's answer.
+  lastFailure    String?   @map("last_failure")
+  lastHttpStatus Int?      @map("last_http_status")
+
+  @@map("text_translations")
+}
+
+/// What the translator was asked on one day in Tbilisi (migration 0065): counts
+/// and tokens only, never a text — the cost, and the daily cap.
+model TranslationDay {
+  day          DateTime @id @db.Date
+  requests     Int      @default(0)
+  translated   Int      @default(0)
+  failed       Int      @default(0)
+  inputTokens  Int      @default(0) @map("input_tokens")
+  outputTokens Int      @default(0) @map("output_tokens")
+  updatedAt    DateTime @default(now()) @map("updated_at")
+
+  @@map("translation_days")
+}

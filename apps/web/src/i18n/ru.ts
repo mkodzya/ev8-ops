@@ -18,6 +18,7 @@ import { workshopApprovalRu } from './workshop-approval.js';
 import { workshopPartsRu } from './workshop-parts.js';
 import { workshopPayoutsRu } from './workshop-payouts.js';
 import { workshopMaintenanceRu } from './workshop-maintenance.js';
+import { typedTextRu } from './typed-text.js';
 import { repairKindRu } from './repair-kind.js';
 import { workshopsRu } from './workshops.js';
 import { driveRu } from './drive.js';
@@ -1412,6 +1413,7 @@ export const ru: Dict = {
   ...workshopPartsRu,
   ...workshopPayoutsRu,
   ...workshopMaintenanceRu,
+  ...typedTextRu,
   ...repairKindRu,
   ...workshopsRu,
   ...driveRu,

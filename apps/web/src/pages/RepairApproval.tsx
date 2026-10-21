@@ -9,6 +9,7 @@ import { FormSheet, SubmitButton } from '../ds/form/Form.js';
 import { useOperation } from '../ds/form/operation.js';
 import { formatGel } from '../format.js';
 import { useLocale, useT } from '../i18n/index.js';
+import { Typed, TypedIn } from '../lib/typed.js';
 import { useLoad } from '../lib/use.js';
 import { groupDigits, nameIn, normText, type WorkBook } from '../lib/workBook.js';
 import { useSession } from '../session.js';
@@ -105,8 +106,12 @@ export function StatedLines({
           <li key={l.id} className={shade}>
             <span className="wjob-code">{l.code ?? '—'}</span>
             <span className="wjob-name">
-              {l.code ? nameIn(l, locale) : l.freeText} × {l.qty}
-              {state === 'rejected' && !whole && l.rejectReason && <span className="wjob-line-why">{t.wappr.lineRejected(l.rejectReason)}</span>}
+              {l.code ? nameIn(l, locale) : <Typed text={l.freeText} />} × {l.qty}
+              {state === 'rejected' && !whole && l.rejectReason && (
+                <span className="wjob-line-why">
+                  <TypedIn words={t.wappr.lineRejected} text={l.rejectReason} />
+                </span>
+              )}
             </span>
             {state === 'waiting' && tagWaiting && <span className="wjob-wtag">{tagWaiting}</span>}
             {l.normSec == null && onNorm && state === 'waiting' ? (
@@ -218,9 +223,15 @@ export function ApprovalCard({ job, onDone }: { job: ServiceJob; onDone: () => v
       {!repeat && (
         <p className="wappr-why">
           {job.reasonKind ? `${t.wjob.reasons[job.reasonKind] ?? job.reasonKind} — ` : ''}
-          {job.reason}
+          <Typed text={job.reason} />
           {job.openedOdometerKm != null && <span className="mono"> · {t.wappr.km(groupDigits(job.openedOdometerKm))}</span>}
-          {job.odometerReason && <span className="muted"> ({job.odometerReason})</span>}
+          {job.odometerReason && (
+            <span className="muted">
+              {' ('}
+              <Typed text={job.odometerReason} />
+              {')'}
+            </span>
+          )}
         </p>
       )}
       {!repeat && photos.length > 0 && (
@@ -371,7 +382,11 @@ export function BoughtLines({ job }: { job: ServiceJob }) {
             <span className="wjob-name">
               {p.name} × {p.qty}
               {p.reimburseTo && <small className="wparts-sub">{t.wparts.payBackTo(formatGel(p.paidTetri ?? 0), p.reimburseTo.name)}</small>}
-              {state === 'rejected' && !whole && p.rejectReason && <span className="wjob-line-why">{t.wappr.lineRejected(p.rejectReason)}</span>}
+              {state === 'rejected' && !whole && p.rejectReason && (
+                <span className="wjob-line-why">
+                  <TypedIn words={t.wappr.lineRejected} text={p.rejectReason} />
+                </span>
+              )}
             </span>
             {state === 'waiting' && job.approved != null && <span className="wjob-wtag">{t.wappr.newTag}</span>}
             {p.receiptPhotoId && (

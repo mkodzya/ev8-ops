@@ -7,6 +7,7 @@ import { Field } from '../components/Wizard.js';
 import { FormSheet } from '../ds/form/Form.js';
 import { fmtDate } from '../format.js';
 import { useT } from '../i18n/index.js';
+import { Typed } from '../lib/typed.js';
 import { useLoad } from '../lib/use.js';
 import { useSession } from '../session.js';
 
@@ -96,7 +97,12 @@ export function BatteriesPage() {
                 <span>
                   <span className="mono">{m.kind === 'lost' || m.kind === 'to_repair' || m.kind === 'handed_out' ? `−${m.qty}` : `+${m.qty}`}</span> {t.bat.kinds[m.kind] ?? t.batWords[m.kind] ?? m.kind}
                   {m.number && <span className="muted"> · {m.kind === 'lost' ? t.bat.lostOn(m.number) : m.number}</span>}
-                  {m.reason && <span className="muted"> · {m.reason}</span>}
+                  {m.reason && (
+                    <span className="muted">
+                      {' · '}
+                      <Typed text={m.reason} />
+                    </span>
+                  )}
                   {m.by && <span className="muted"> · {m.by}</span>}
                 </span>
               </li>
@@ -110,7 +116,12 @@ export function BatteriesPage() {
                     {' '}
                     ({t.bat.showroom} {i.showroomQty} · {t.bat.repair} {i.repairQty} · {t.bat.couriers} {i.couriersQty})
                   </span>
-                  {i.reason && <span className="muted"> · {i.reason}</span>}
+                  {i.reason && (
+                    <span className="muted">
+                      {' · '}
+                      <Typed text={i.reason} />
+                    </span>
+                  )}
                   {i.by && <span className="muted"> · {i.by}</span>}
                 </span>
               </li>

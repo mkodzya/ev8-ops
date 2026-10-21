@@ -11,6 +11,7 @@ import { DataList } from '../ds/list/DataList.js';
 import { formatGel } from '../format.js';
 import { useT } from '../i18n/index.js';
 import { uploadAll, type PreparedPhoto } from '../lib/photos.js';
+import { Typed, useShownWords } from '../lib/typed.js';
 import { useLoad } from '../lib/use.js';
 import { useSession } from '../session.js';
 import { ApprovalCard } from './RepairApproval.js';
@@ -178,6 +179,7 @@ export function ServicePage() {
   const t = useT();
   const { can, me } = useSession();
   const { data, failure, reload } = useLoad<ServiceList>('/api/service');
+  const shownWords = useShownWords();
   const today = todayISO();
 
   if (!data && failure) return <LoadError failure={failure} onRetry={reload} />;
@@ -244,10 +246,12 @@ export function ServicePage() {
         byDefault="days"
         search={{
           placeholder: t.repair.searchHint,
+          // The reason is found by the words it was typed in and by the translation the list shows (ADR-0042),
+          // and by its kind as the list names it.
           match: (j, q) =>
             numberMatches(q, j.number) ||
             vinMatches(q, j.vehicle.vin) ||
-            spellingMatches(q, [j.reason, j.reasonKind ? t.wjob.reasons[j.reasonKind] : null, j.vehicle.model, j.workshop?.name, j.customer?.name]),
+            spellingMatches(q, [j.reason, shownWords(j.reason), j.reasonKind ? t.wjob.reasons[j.reasonKind] : null, j.vehicle.model, j.workshop?.name, j.customer?.name]),
         }}
         chips={[
           { key: 'open', label: t.repair.chips.working, test: (j) => j.status === 'open' },
@@ -268,7 +272,7 @@ export function ServicePage() {
                   so the row says it; "от менеджера" is the badge on the
                   right, not a replacement for the words (QA-W5-19). */}
               <span className="mono">{j.number}</span> · {j.reasonKind ? `${t.wjob.reasons[j.reasonKind] ?? j.reasonKind} — ` : ''}
-              {j.reason}
+              <Typed text={j.reason} quiet />
             </>
           ),
           sub2: j.workshop?.name ?? undefined,
@@ -305,8 +309,14 @@ export function ServicePage() {
           {
             key: 'reason',
             label: t.repair.cols.what,
-            // ТО or an accident first, as the repair card says it (Mika, 21.10.2026).
-            cell: (j) => (j.reasonKind ? `${t.wjob.reasons[j.reasonKind] ?? j.reasonKind} — ${j.reason}` : j.reason),
+            // ТО or an accident first, as the repair card says it (Mika, 21.10.2026);
+            // the words typed after it read in the reader's language (ADR-0042).
+            cell: (j) => (
+              <>
+                {j.reasonKind ? `${t.wjob.reasons[j.reasonKind] ?? j.reasonKind} — ` : ''}
+                <Typed text={j.reason} />
+              </>
+            ),
           },
           {
             key: 'workshop',

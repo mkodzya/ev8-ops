@@ -8,6 +8,7 @@ import { useToast } from '../ds/feedback/Toast.js';
 import { FormSheet } from '../ds/form/Form.js';
 import { useOperation } from '../ds/form/operation.js';
 import { useT } from '../i18n/index.js';
+import { Typed } from '../lib/typed.js';
 import { useLoad } from '../lib/use.js';
 import './workshops.css';
 
@@ -85,7 +86,12 @@ export function WorkshopsBlock() {
                   {t.wshop.jobs(w.jobs)}
                   {w.archived && ` · ${t.wshop.archived}`}
                 </span>
-                {w.note && <span className="wshop-note muted">{w.note}</span>}
+                {/* The note in the reader's language when a translation is ready (ADR-0042); the form edits the original. */}
+                {w.note && (
+                  <span className="wshop-note muted">
+                    <Typed text={w.note} />
+                  </span>
+                )}
               </div>
               <RowMenu actions={menuOf(w)} />
             </li>

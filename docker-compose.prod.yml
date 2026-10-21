@@ -133,6 +133,16 @@ services:
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN-}
       TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID-}
       PUBLIC_URL: ${PUBLIC_URL-}
+      # The translator of typed texts about mopeds and repairs (ADR-0042):
+      # Claude, through Anthropic's API. Optional on purpose: without the key
+      # nothing is sent and every screen shows the originals. Mika creates the
+      # key in his own Anthropic account and writes it through
+      # deploy/set-anthropic-key.sh — never through a session, a commit or a
+      # log. The model (claude-haiku-5-5 when blank) and the texts a day
+      # (500 when blank) change without a release.
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY-}
+      TRANSLATE_MODEL: ${TRANSLATE_MODEL-}
+      TRANSLATE_DAILY_LIMIT: ${TRANSLATE_DAILY_LIMIT-}
     # No ports either. The browser reaches /api through the web container,
     # which is the same origin the page came from.
     depends_on:
@@ -172,6 +182,8 @@ services:
       # to 20:00 — the group is not woken at night (ADR-0038 §6).
       NOTICES_CRON: ${NOTICES_CRON:-* * * * *}
       NOTICES_SCAN_CRON: ${NOTICES_SCAN_CRON:-0 9-20 * * *}
+      # Typed texts listed and translated, every minute (ADR-0042).
+      TRANSLATE_CRON: ${TRANSLATE_CRON:-* * * * *}
       TZ: ${TZ:-Asia/Tbilisi}
     depends_on:
       api:
