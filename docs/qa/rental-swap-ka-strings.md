@@ -32,7 +32,7 @@
 | `swap.inCondition` | Состояние выдаваемого мопеда, повреждения | გაცემული მოპედის მდგომარეობა, დაზიანებები | gatsemuli mopedis mdgomareoba, dazianebebi | поле, шаг 2 |
 | `swap.openJob(№)` | На этом мопеде уже открыт ремонт SV-00001: мопед уходит в него, выбирать не нужно. | ამ მოპედზე უკვე გახსნილია რემონტი SV-00001: მოპედი მასში გადადის, არჩევა საჭირო არ არის. | am mopedze ukve gakhsnilia remonti …: mopedi mashi gadadis, archeva sachiro ar aris. | шаг 3 |
 | `swap.stays` | Не меняются: номер аренды, её недели, залог, долг и день оплаты. | არ იცვლება: ქირის ნომერი, მისი კვირები, დეპოზიტი, ვალი და გადახდის დღე. | ar itsvleba: kiris nomeri, misi kvirebi, depoziti, vali da gadakhdis dghe. | итог |
-| `swap.contractNote` | Договор будет нарисован заново с новым VIN и снова ждёт подписи клиента; подписанная копия остаётся в архиве. | ხელშეკრულება თავიდან შედგება ახალი VIN-ით და კვლავ ელოდება კლიენტის ხელმოწერას; ხელმოწერილი ასლი არქივში რჩება. | khelshekruleba tavidan shedgeba akhali VIN-it da kvlav elodeba klientis khelmotseras; khelmotserili asli arkivshi rcheba. | итог |
+| `swap.contractNote` | Договор будет нарисован заново с новым VIN и снова ждёт подписи клиента; подписанная копия остаётся в архиве, отметка «Подписан в Signify» снимается. | ხელშეკრულება თავიდან შედგება ახალი VIN-ით და კვლავ ელოდება კლიენტის ხელმოწერას; ხელმოწერილი ასლი არქივში რჩება, მონიშვნა „ხელმოწერილია Signify-ში“ იხსნება. | khelshekruleba tavidan shedgeba akhali VIN-it da kvlav elodeba klientis khelmotseras; khelmotserili asli arkivshi rcheba, monishvna „khelmotserilia Signify-shi“ ikhsneba. | итог |
 | `swap.sumDate` | Дата | თარიღი | tarighi | итог |
 | `swap.sumReason` | Почему | რატომ | ratom | итог |
 | `swap.sumOut` | Сдаёт | აბრუნებს | abrunebs | итог |

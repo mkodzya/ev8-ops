@@ -987,6 +987,17 @@ export async function swapVehicle(input: SwapInput): Promise<SwapResult> {
     // («старый договор закрыть, новый выдать», 21.10.2026).
     const contractSignedBefore = (await tx.storedFile.count({ where: { rentalId: r.id, kind: 'pdf', docKind: 'contract', archived: false, signedAt: { not: null } } })) > 0;
     await tx.storedFile.updateMany({ where: { rentalId: r.id, kind: 'pdf', docKind: 'contract', archived: false }, data: { archived: true } });
+    // A "signed in Signify" mark (ADR-0039) was about that contract too: the
+    // new one is not signed anywhere yet, so the mark goes, and the rental is
+    // "Не подписан" again until the customer signs — here or in Signify, and a
+    // person marks it once more. Who marked the old one and when stays in this
+    // swap's journal line, beside the mark's own.
+    const contractMark = r.contractSignedElsewhereAt
+      ? { markedAt: r.contractSignedElsewhereAt.toISOString(), markedById: r.contractSignedElsewhereById, markNote: r.contractSignedElsewhereNote }
+      : null;
+    if (contractMark) {
+      await tx.rental.update({ where: { id: r.id }, data: { contractSignedElsewhereAt: null, contractSignedElsewhereById: null, contractSignedElsewhereNote: null } });
+    }
 
     // (h) One line in the journal: the moped before and after, and why.
     await tx.auditLog.create({
@@ -995,7 +1006,8 @@ export async function swapVehicle(input: SwapInput): Promise<SwapResult> {
         action: 'rental.swap',
         entityType: 'rental',
         entityId: r.id,
-        before: { vehicleId: oldId, vin: old.vin, moped: fleetNumber(old.fleetNo) },
+        // The mark taken off sits on this side only: the journal's "было → стало" pairs fields both sides name.
+        before: { vehicleId: oldId, vin: old.vin, moped: fleetNumber(old.fleetNo), ...(contractMark ? { contractMark } : {}) },
         after: {
           vehicleId: fresh.id,
           vin: fresh.vin,
@@ -1009,6 +1021,7 @@ export async function swapVehicle(input: SwapInput): Promise<SwapResult> {
           keyCharged: keyCharge != null,
           movedFromSale: fresh.pool === 'sale',
           contractSignedBefore,
+          contractMarkCleared: contractMark != null,
         },
         note: why,
       },

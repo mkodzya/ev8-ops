@@ -272,6 +272,42 @@ describe.skipIf(!HAS_DB)('a swap in a running rental (ADR-0040)', () => {
     expect(log.after).toMatchObject({ contractSignedBefore: true });
   });
 
+  it('a contract marked signed in Signify loses the mark with its moped, and the new one is marked anew (ADR-0039)', async () => {
+    const f = await running();
+    const manager = await loginAs('manager');
+    const marked = await call(manager, 'POST', `/api/rentals/${f.rentalId}/contract/signed-elsewhere`, { note: 'test: signed in Signify' });
+    expect(marked.statusCode, marked.body).toBe(201);
+    type Contract = { documents: { contract: { signedAt: string | null; signedElsewhere: { at: string } | null } } };
+    const contractOf = async () => json<Contract>(await call(f.owner, 'GET', `/api/rentals/${f.rentalId}`)).documents.contract;
+    const signedOf = async () => json<{ rentals: { id: string; contractSigned: boolean | null }[] }>(await call(f.owner, 'GET', '/api/rentals')).rentals.find((r) => r.id === f.rentalId)?.contractSigned;
+    expect((await contractOf()).signedElsewhere).not.toBeNull();
+    expect(await signedOf()).toBe(true);
+
+    // «Старый договор закрыть, новый выдать»: the mark was about the old moped's paper.
+    expect((await call(manager, 'POST', `/api/rentals/${f.rentalId}/swap`, swapBody(f))).statusCode).toBe(200);
+    expect((await contractOf()).signedElsewhere).toBeNull();
+    expect(await signedOf()).toBe(false);
+    const row = await f.prisma.rental.findUniqueOrThrow({ where: { id: f.rentalId }, select: { contractSignedElsewhereAt: true, contractSignedElsewhereById: true, contractSignedElsewhereNote: true } });
+    expect(row).toEqual({ contractSignedElsewhereAt: null, contractSignedElsewhereById: null, contractSignedElsewhereNote: null });
+    // Who marked the old one stays in the swap's journal line.
+    const log = await f.prisma.auditLog.findFirstOrThrow({ where: { entityId: f.rentalId, action: 'rental.swap' } });
+    expect(log.after).toMatchObject({ contractSignedBefore: false, contractMarkCleared: true });
+    expect(log.before).toMatchObject({ contractMark: { markNote: 'test: signed in Signify' } });
+
+    // The new contract signed in Signify is marked like the first.
+    const again = await call(manager, 'POST', `/api/rentals/${f.rentalId}/contract/signed-elsewhere`, {});
+    expect(again.statusCode, again.body).toBe(201);
+    expect(await signedOf()).toBe(true);
+  });
+
+  it('a swap without a mark leaves nothing about one in the journal', async () => {
+    const f = await running();
+    expect((await call(f.owner, 'POST', `/api/rentals/${f.rentalId}/swap`, swapBody(f))).statusCode).toBe(200);
+    const log = await f.prisma.auditLog.findFirstOrThrow({ where: { entityId: f.rentalId, action: 'rental.swap' } });
+    expect(log.after).toMatchObject({ contractMarkCleared: false });
+    expect(log.before).not.toHaveProperty('contractMark');
+  });
+
   it('a rental brought over gets a contract of EV8 Ops to sign once a swap replaces its moped', async () => {
     const { prisma } = await import('../src/lib/db.js');
     const { debtsOf } = await import('../src/lib/debt.js');
