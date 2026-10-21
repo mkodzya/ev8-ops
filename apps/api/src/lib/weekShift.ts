@@ -53,14 +53,21 @@ export async function shiftWeek(input: {
     if (r.periods.some((p) => p.seq > week.seq)) throw conflict('week_not_last', 'Only the last week is moved: the next one has begun.');
     if (week.paidBeforeTransfer) throw conflict('week_paid_before_transfer', 'This week was paid before the rental was carried over.');
     // The week's own price, without the extra days: a week at nothing — a
-    // pause lifted, a discount of all of it — has nothing to lengthen.
-    if (week.amountTetri - week.extraTetri <= 0) throw conflict('week_at_nothing', 'A week at nothing is not moved.');
+    // pause lifted, a discount of all of it — has nothing to lengthen. A week
+    // moved already may always have its move changed or taken back, even
+    // after a discount ate into it.
+    if (week.extraDays === 0 && week.amountTetri - week.extraTetri <= 0) throw conflict('week_at_nothing', 'A week at nothing is not moved.');
     if (input.days === 0 && week.extraDays === 0) {
       throw badRequest('shift_days_range', `A week is made 1 to ${MAX_SHIFT_DAYS} days longer.`, { field: 'days' });
     }
     const extra = input.days === 0 ? 0 : input.extraTetri;
     if (extra == null) throw badRequest('missing_field', 'Say what the extra days cost.', { field: 'extraTetri' });
     const amount = week.amountTetri - week.extraTetri + extra;
+    // A discount given on the longer week may cover part of its extra: with
+    // less extra it would be more than the week itself.
+    if (amount < 0) {
+      throw conflict('discount_over_week', 'The week\'s discount would be more than the week.', { field: 'extraTetri', discountTetri: week.discountTetri });
+    }
     if (amount < week.paidTetri) {
       throw conflict('shift_over_paid', 'That much of the week is paid already.', { field: 'extraTetri', paidTetri: week.paidTetri });
     }
@@ -91,7 +98,8 @@ export async function shiftWeek(input: {
     await tx.auditLog.create({
       data: {
         actorId: input.actorId,
-        action: 'rental.week.shift',
+        // Taking a move back is its own line, not one more «week moved».
+        action: moved ? 'rental.week.shift' : 'rental.week.shift.undo',
         entityType: 'rental',
         entityId: r.id,
         before: { seq: week.seq, startsOn, endsOn: isoDate(week.endsOn), amountTetri: week.amountTetri, extraDays: week.extraDays, extraTetri: week.extraTetri, payWeekday: r.payWeekday },

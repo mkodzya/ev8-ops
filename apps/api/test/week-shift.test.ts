@@ -191,12 +191,100 @@ describe.skipIf(!HAS_DB)('a rental week made longer (ADR-0041)', () => {
     c = await card(r.owner, r.id);
     expect(weekNo(c, 2)).toMatchObject({ endsOn: addDays(t, 3), amountTetri: 15000, extraDays: 0, extraTetri: 0, shiftReason: null });
     expect(c.rental).toMatchObject({ weekShiftDays: 0, weeksFromOn: addDays(t, -10) });
-    expect(await r.prisma.auditLog.count({ where: { entityType: 'rental', entityId: r.id, action: 'rental.week.shift' } })).toBe(3);
+    // Two moves and one taken back — the last in its own words, not a third «week moved».
+    expect(await r.prisma.auditLog.count({ where: { entityType: 'rental', entityId: r.id, action: 'rental.week.shift' } })).toBe(2);
+    const undone = await r.prisma.auditLog.findFirstOrThrow({ where: { entityType: 'rental', entityId: r.id, action: 'rental.week.shift.undo' } });
+    expect(undone.note).toBe('test: entered by mistake');
+    expect(undone.before).toMatchObject({ seq: 2, extraDays: 2, extraTetri: 4300 });
+    expect(undone.after).toMatchObject({ seq: 2, extraDays: 0, extraTetri: 0, endsOn: addDays(t, 3) });
 
     // Nothing to take back any more.
     const again = await shift(r.owner, r.id, 2, { days: 0, reason: 'test: again' });
     expect(again.statusCode).toBe(400);
     expect(err(again)).toMatchObject({ error: 'shift_days_range', field: 'days' });
+  });
+
+  it('a discount on a moved week does not lock the move: it is changed and taken back, never below the discount', async () => {
+    const r = await running(10);
+    expect((await shift(r.owner, r.id, 2, { days: 3, extraTetri: '64', reason: REASON })).statusCode).toBe(200);
+    // The whole of the week's own price taken off: 64 is left, the extra days.
+    const discount = (gel: string) => call(r.owner, 'POST', `/api/rentals/${r.id}/weeks/2/discount`, { discountTetri: gel, reason: 'test: the moped stood' });
+    expect((await discount('150')).statusCode).toBe(200);
+    expect(weekNo(await card(r.owner, r.id), 2)).toMatchObject({ amountTetri: 6400, extraTetri: 6400 });
+
+    // Still changed: two days for 43, and the discount stays.
+    const fewer = await shift(r.owner, r.id, 2, { days: 2, extraTetri: '43', reason: 'test: two days, not three' });
+    expect(fewer.statusCode, fewer.body).toBe(200);
+    expect(weekNo(await card(r.owner, r.id), 2)).toMatchObject({ amountTetri: 4300, extraDays: 2, extraTetri: 4300 });
+    // And taken back: the week at nothing, as the discount left its own price.
+    const back = await shift(r.owner, r.id, 2, { days: 0, reason: 'test: entered by mistake' });
+    expect(back.statusCode, back.body).toBe(200);
+    expect(weekNo(await card(r.owner, r.id), 2)).toMatchObject({ amountTetri: 0, extraDays: 0, extraTetri: 0 });
+    // A week at nothing is not moved anew.
+    expect(err(await shift(r.owner, r.id, 2, { days: 3, extraTetri: '64', reason: REASON })).error).toBe('week_at_nothing');
+
+    // A discount that eats into the extra: less extra would leave the discount above the week.
+    const other = await running(10);
+    expect((await shift(other.owner, other.id, 2, { days: 3, extraTetri: '64', reason: REASON })).statusCode).toBe(200);
+    expect((await call(other.owner, 'POST', `/api/rentals/${other.id}/weeks/2/discount`, { discountTetri: '200', reason: 'test: the moped stood' })).statusCode).toBe(200);
+    const under = await shift(other.owner, other.id, 2, { days: 0, reason: 'test: entered by mistake' });
+    expect(under.statusCode).toBe(409);
+    expect(err(under)).toMatchObject({ error: 'discount_over_week', field: 'extraTetri' });
+    expect(weekNo(await card(other.owner, other.id), 2)).toMatchObject({ amountTetri: 1400, extraDays: 3, extraTetri: 6400 });
+  });
+
+  it('a swap keeps the moved weeks, and a week is moved after a swap; the contract mark is the contract’s, not the weeks’', async () => {
+    const r = await running(10);
+    const t = today();
+    const url = `/api/rentals/${r.id}`;
+    await pay(r.owner, r.id, 21400);
+
+    // The contract signed in Signify (ADR-0039): moving the week does not touch it.
+    expect((await call(r.owner, 'POST', `${url}/contract/signed-elsewhere`, { note: 'test: signed in Signify' })).statusCode).toBe(201);
+    expect((await shift(r.owner, r.id, 2, { days: 3, extraTetri: '64', reason: REASON })).statusCode).toBe(200);
+    type Signed = { documents: { contract: { signedElsewhere: { at: string } | null } } };
+    expect((await call(r.owner, 'GET', url).then((res) => json<Signed>(res))).documents.contract.signedElsewhere).not.toBeNull();
+    const before = await card(r.owner, r.id);
+
+    // A swap (ADR-0040): another moped, the same rental — its moved weeks, pay day and "paid through" untouched.
+    const point = await r.prisma.location.create({ data: { name: `ТЕСТ point ${uniq()}` }, select: { id: true } });
+    const model = await r.prisma.vehicleModel.create({ data: { brand: 'Test', name: `Model ${uniq()}`, weeklyRateTetri: 15000, forRent: true } });
+    const fresh = await r.prisma.vehicle.create({ data: { vin: `TESTWS${digits().slice(-11).padStart(11, '0')}`, modelId: model.id, pool: 'rent' } });
+    const swapped = await call(r.owner, 'POST', `${url}/swap`, {
+      swappedOn: t,
+      reason: 'test: the battery went',
+      outOdometerKm: 150,
+      items: { moped: { state: 'ok' }, key: { state: 'ok' } },
+      toService: false,
+      locationId: point.id,
+      vehicleId: fresh.id,
+      inOdometerKm: 10,
+    });
+    expect(swapped.statusCode, swapped.body).toBe(200);
+    const after = await card(r.owner, r.id);
+    expect(after.periods).toEqual(before.periods);
+    expect(after.rental).toMatchObject({
+      paidThrough: addDays(t, 6),
+      dueOn: addDays(t, 7),
+      weekShiftDays: 3,
+      weeksFromOn: addDays(t, -7),
+      payWeekday: before.rental.payWeekday,
+      payOffsetDays: before.rental.payOffsetDays,
+      status: 'active',
+    });
+    // The swap's own rule takes the mark off with the old contract.
+    expect((await call(r.owner, 'GET', url).then((res) => json<Signed>(res))).documents.contract.signedElsewhere).toBeNull();
+
+    // On the new moped the week is still the last one, and its move is changed as before
+    // (for the same 64: the week cannot become cheaper than the 214 paid on it).
+    const again = await shift(r.owner, r.id, 2, { days: 2, extraTetri: '64', reason: 'test: two days for the same money' });
+    expect(again.statusCode, again.body).toBe(200);
+    expect((await card(r.owner, r.id)).rental).toMatchObject({ weekShiftDays: 2, weeksFromOn: addDays(t, -8), paidThrough: addDays(t, 5), vehicle: { id: fresh.id } });
+    // The calendar follows the move, whichever moped the rental has.
+    const range = { from: weekOf(addDays(t, -21)).from, to: weekOf(addDays(t, 14)).to };
+    const res = await call(r.owner, 'GET', `/api/money/calendar?from=${range.from}&to=${range.to}`);
+    const entries = json<PaymentsCalendarAnswer>(res).entries.filter((e) => e.rentalId === r.id);
+    expect(entries.find((e) => e.seq === 3)).toMatchObject({ dueOn: addDays(t, 6), projected: true });
   });
 
   it('refuses: a manager, no reason, days out of range, no price, a week not there or not the last', async () => {
