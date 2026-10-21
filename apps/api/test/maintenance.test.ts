@@ -1,6 +1,7 @@
 // The planned maintenance on live rows (stage 6; ADR-0038 §1–3): only the
 // mileage EV8 Ops recorded counts, a closed planned repair moves the mark, a
-// refused or called-off one does not, a return taken back is no reading.
+// refused or called-off one does not, a return taken back and a repair called
+// off by mistake are no readings, a repair taken over is read when it is taken.
 // The suites share one database, so «Пора на ТО» is read for this file's own
 // mopeds only. Mopeds, people and photos are invented.
 import { todayISO } from '@ev8/shared';
@@ -134,11 +135,58 @@ describe.skipIf(!HAS_DB)('the planned maintenance (stage 6)', () => {
     expect((await overview(owner)).due.some((x) => x.vehicleId === v.id)).toBe(false);
   });
 
-  it('a planned repair called off or refused moves nothing — but the reading at its opening still counts', async () => {
-    const v = await moped();
-    const { owner, id } = await planned(v.id, 4980);
+  it('a planned repair called off by mistake is no reading at all, and the moped’s figure goes back', async () => {
+    const { prisma } = await import('../src/lib/db.js');
+    // Opened on the wrong moped with another one's 12 300 km, then called off.
+    const v = await moped(100);
+    const { owner, id } = await planned(v.id, 12_300);
+    expect((await prisma.vehicle.findUniqueOrThrow({ where: { id: v.id } })).odometerKm).toBe(12_300);
     expect((await call(owner, 'POST', `/api/service/${id}/cancel`, { reason: 'ТЕСТ opened by mistake' })).statusCode).toBe(200);
+    expect(await card(owner, v.id)).toMatchObject({ state: 'unknown', currentKm: null, dueKm: null, lastPlanned: null, openPlanned: null });
+    expect((await prisma.vehicle.findUniqueOrThrow({ where: { id: v.id } })).odometerKm).toBe(100);
+    // Its real mileage at the next hand-over asks for no reason, and the first mark is 5 000, not 15 000.
+    await pickedUp(v.id, 1200);
+    expect(await card(owner, v.id)).toMatchObject({ state: 'ok', currentKm: 1200, readingSource: 'pickup', dueKm: 5000 });
+  });
+
+  it('a planned repair refused moves nothing — but the reading at its opening counts: it was read on this moped', async () => {
+    const v = await moped();
+    const { importWorkBook } = await import('../src/lib/workBook.js');
+    await importWorkBook();
+    const owner = await loginAs('owner');
+    const work = await call(owner, 'POST', '/api/work-book/works', { category: 'OT', nameRu: `Тестовое ТО ${uniq()}`, normMin: 75 });
+    const mechanic = await login((await makeUser('mechanic')).email);
+    const asked = await call(mechanic, 'POST', '/api/service/workshop', {
+      vehicleId: v.id, reasonKind: 'planned', reason: 'planned maintenance', odometerKm: 4980, odometerPhoto: PHOTO, photos: [PHOTO],
+      works: [{ workTypeId: json<{ id: string }>(work).id, qty: 1 }],
+    });
+    expect(asked.statusCode, asked.body).toBe(201);
+    const chief = await login((await makeUser('chief_mechanic')).email);
+    expect((await call(chief, 'POST', `/api/service/${json<{ id: string }>(asked).id}/reject`, { reason: 'ТЕСТ not now' })).statusCode).toBe(200);
     expect(await card(owner, v.id)).toMatchObject({ state: 'soon', currentKm: 4980, readingSource: 'repair_open', dueKm: 5000, lastPlanned: null, openPlanned: null });
+  });
+
+  it('a repair taken over is read when it is taken, not when the office opened it', async () => {
+    const { owner, rentalId } = await pickedUp((await moped()).id, 4100);
+    const { prisma } = await import('../src/lib/db.js');
+    const vehicleId = (await prisma.rental.findUniqueOrThrow({ where: { id: rentalId } })).vehicleId!;
+    // Reported from the office while the moped is out: waiting, with no reading.
+    const reported = await call(await loginAs('manager'), 'POST', '/api/service', { vehicleId, reason: 'ТЕСТ does not start' });
+    expect(reported.statusCode, reported.body).toBe(201);
+    const jobId = json<{ id: string }>(reported).id;
+    expect((await call(owner, 'POST', `/api/rentals/${rentalId}/return`, { odometerKm: 4650, items: ITEMS })).statusCode).toBe(200);
+    // A mechanic takes it on after the return, reading 4 720.
+    const { importWorkBook } = await import('../src/lib/workBook.js');
+    await importWorkBook();
+    const work = await call(owner, 'POST', '/api/work-book/works', { category: 'OT', nameRu: `Тестовая работа ${uniq()}`, normMin: 30 });
+    const mechanic = await login((await makeUser('mechanic')).email);
+    const taken = await call(mechanic, 'POST', '/api/service/workshop', {
+      vehicleId, jobId, reasonKind: 'wear', reason: 'does not start', odometerKm: 4720, odometerPhoto: PHOTO, photos: [PHOTO],
+      works: [{ workTypeId: json<{ id: string }>(work).id, qty: 1 }],
+    });
+    expect(taken.statusCode, taken.body).toBe(200);
+    // Read later than the return, it is the reading now: 280 km to the mark, «Пора на ТО».
+    expect(await card(owner, vehicleId)).toMatchObject({ state: 'soon', currentKm: 4720, readingSource: 'repair_open', dueKm: 5000, leftKm: 280 });
   });
 
   it('a return taken back is no reading', async () => {
@@ -178,10 +226,14 @@ describe.skipIf(!HAS_DB)('the planned maintenance (stage 6)', () => {
     }
   });
 
-  it('is read by whoever works on repairs, not without a session', async () => {
-    for (const role of ['mechanic', 'chief_mechanic', 'manager'] as const) {
+  it('is read by whoever sees every repair — the chief mechanic, a manager, an owner — not by a mechanic', async () => {
+    for (const role of ['chief_mechanic', 'manager', 'owner'] as const) {
       expect((await call(await loginAs(role), 'GET', '/api/service/maintenance')).statusCode, role).toBe(200);
     }
+    // The variant the owner chose: «Механик без права согласования блока не видит» (ADR-0038; ADR-0033 §2).
+    const mechanic = await call(await loginAs('mechanic'), 'GET', '/api/service/maintenance');
+    expect(mechanic.statusCode, mechanic.body).toBe(403);
+    expect(mechanic.body).not.toContain('vin');
     expect((await call(null, 'GET', '/api/service/maintenance')).statusCode).toBe(401);
   });
 });

@@ -3,7 +3,7 @@
 // moves the next one, no mileage — no maintenance, overdue after passing the
 // mark, the interval and the warning from the settings.
 import { describe, expect, it } from 'vitest';
-import { MAINTENANCE_INTERVAL_KM, MAINTENANCE_WARN_KM, maintenanceDue, nextMaintenance, type MileageReading } from '../src/index.js';
+import { MAINTENANCE_INTERVAL_KM, MAINTENANCE_WARN_KM, latestReading, maintenanceDue, nextMaintenance, type MileageReading } from '../src/index.js';
 
 const at = (day: string, time = '12:00') => `${day}T${time}:00+04:00`;
 const next = (readings: MileageReading[], lastPlannedKm: number | null = null, intervalKm = MAINTENANCE_INTERVAL_KM, warnKm = MAINTENANCE_WARN_KM) =>
@@ -68,6 +68,19 @@ describe('a closed planned repair moves the next maintenance', () => {
 
   it('is overdue again once that mark is passed', () => {
     expect(next([{ km: 10_100, at: at('2026-11-30') }], 4980)).toMatchObject({ state: 'overdue', dueKm: 9980, leftKm: -120 });
+  });
+});
+
+describe('the reading now', () => {
+  it('is the latest by time, not the highest; at the same moment the higher one', () => {
+    const r = [
+      { km: 5300, at: at('2026-10-15', '10:00'), source: 'return' },
+      { km: 5360, at: at('2026-10-16', '09:00'), source: 'repair_open' },
+      { km: 9000, at: at('2026-10-14'), source: 'pickup' },
+    ];
+    expect(latestReading(r)).toEqual(r[1]);
+    expect(latestReading([...r, { km: 5400, at: at('2026-10-16', '09:00'), source: 'repair_close' }])?.km).toBe(5400);
+    expect(latestReading([])).toBeNull();
   });
 });
 

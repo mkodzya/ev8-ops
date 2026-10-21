@@ -41,6 +41,16 @@ const UNKNOWN: NextMaintenance = { state: 'unknown', currentKm: null, currentAt:
 const ms = (at: Date | string): number => (typeof at === 'string' ? Date.parse(at) : at.getTime());
 
 /**
+ * The moped's reading now: the latest by time; two at the same minute — the
+ * higher one. None without a reading.
+ */
+export function latestReading<R extends MileageReading>(readings: readonly R[]): R | null {
+  const usable = readings.filter((r) => Number.isFinite(r.km) && Number.isFinite(ms(r.at)));
+  if (usable.length === 0) return null;
+  return usable.reduce((a, b) => (ms(b.at) > ms(a.at) || (ms(b.at) === ms(a.at) && b.km > a.km) ? b : a));
+}
+
+/**
  * The next planned maintenance (ADR-0038 §2): the mileage of the last closed
  * planned repair plus the interval; before there is one, the first multiple of
  * the interval not below the first reading and not below the interval itself —
@@ -57,8 +67,7 @@ export function nextMaintenance(input: {
 }): NextMaintenance {
   const readings = input.readings.filter((r) => Number.isFinite(r.km) && Number.isFinite(ms(r.at)));
   if (readings.length === 0) return UNKNOWN;
-  // The latest by time; two at the same minute — the higher one.
-  const current = readings.reduce((a, b) => (ms(b.at) > ms(a.at) || (ms(b.at) === ms(a.at) && b.km > a.km) ? b : a));
+  const current = latestReading(readings)!;
   // The earliest by time; two at the same minute — the lower one.
   const first = readings.reduce((a, b) => (ms(b.at) < ms(a.at) || (ms(b.at) === ms(a.at) && b.km < a.km) ? b : a));
   const interval = input.intervalKm;

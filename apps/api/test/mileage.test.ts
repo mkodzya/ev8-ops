@@ -119,6 +119,42 @@ describe.skipIf(!HAS_DB)('a lower reading at the return of a rental (ADR-0038 §
     expect((await prisma.vehicle.findUniqueOrThrow({ where: { id: vehicle.id } })).odometerKm).toBe(120);
   });
 
+  it('a return taken back leaves no figure behind to explain: the next return is checked against what stood before', async () => {
+    const { prisma, vehicle } = await moped(null);
+    const customer = await prisma.customer.create({ data: { name: `ТЕСТ Пробег ${uniq()}`, phone: `+9955${digits().slice(-8)}`, personalId: digits().slice(-11) } });
+    const owner = await loginAs('owner');
+    const res = await call(owner, 'POST', '/api/pickups', {
+      customerId: customer.id, vehicleId: vehicle.id, weeklyRateTetri: 15000, depositTetri: 18000, pickedUpOn: todayISO(),
+      nightParkingAddress: 'Test street 1', batteries: 2, chargers: 2, odometerKm: 5000, payment: { later: true },
+    });
+    expect(res.statusCode, res.body).toBe(201);
+    const { id } = json<{ id: string }>(res);
+    // 51 000 typed for 5 100, and the return taken back.
+    expect((await call(owner, 'POST', `/api/rentals/${id}/return`, { odometerKm: 51_000, items })).statusCode).toBe(200);
+    expect((await prisma.vehicle.findUniqueOrThrow({ where: { id: vehicle.id } })).odometerKm).toBe(51_000);
+    const undone = await call(owner, 'POST', `/api/rentals/${id}/return/undo`, { reason: 'ТЕСТ typo in the mileage' });
+    expect(undone.statusCode, undone.body).toBe(200);
+    expect((await prisma.vehicle.findUniqueOrThrow({ where: { id: vehicle.id } })).odometerKm).toBe(5000);
+    const again = await call(await loginAs('manager'), 'POST', `/api/rentals/${id}/return`, { odometerKm: 5100, items });
+    expect(again.statusCode, again.body).toBe(200);
+  });
+
+  it('a figure written since the return is left as it is when the return is taken back', async () => {
+    const { prisma, vehicle } = await moped(null);
+    const customer = await prisma.customer.create({ data: { name: `ТЕСТ Пробег ${uniq()}`, phone: `+9955${digits().slice(-8)}`, personalId: digits().slice(-11) } });
+    const owner = await loginAs('owner');
+    const res = await call(owner, 'POST', '/api/pickups', {
+      customerId: customer.id, vehicleId: vehicle.id, weeklyRateTetri: 15000, depositTetri: 18000, pickedUpOn: todayISO(),
+      nightParkingAddress: 'Test street 1', batteries: 2, chargers: 2, odometerKm: 200, payment: { later: true },
+    });
+    const { id } = json<{ id: string }>(res);
+    expect((await call(owner, 'POST', `/api/rentals/${id}/return`, { odometerKm: 300, items })).statusCode).toBe(200);
+    // Something else read the moped after the return.
+    await prisma.vehicle.update({ where: { id: vehicle.id }, data: { odometerKm: 320 } });
+    expect((await call(owner, 'POST', `/api/rentals/${id}/return/undo`, { reason: 'ТЕСТ returned by mistake' })).statusCode).toBe(200);
+    expect((await prisma.vehicle.findUniqueOrThrow({ where: { id: vehicle.id } })).odometerKm).toBe(320);
+  });
+
   it('at the moped’s reading or above needs no reason and keeps none', async () => {
     const { prisma, vehicle } = await moped(null);
     const customer = await prisma.customer.create({ data: { name: `ТЕСТ Пробег ${uniq()}`, phone: `+9955${digits().slice(-8)}`, personalId: digits().slice(-11) } });

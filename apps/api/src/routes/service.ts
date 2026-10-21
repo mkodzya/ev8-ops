@@ -41,7 +41,7 @@ import { date, int, oneOf, str, tetri } from '../lib/validate.js';
 import { syncDeposit } from '../lib/rentalMoney.js';
 import { moveVehicle } from '../lib/vehicles.js';
 import { rateOf } from '../lib/serviceSettings.js';
-import { maintenanceOverview } from '../lib/maintenance.js';
+import { maintenanceOverview, restoreOdometer } from '../lib/maintenance.js';
 import { downtimeOf } from '../lib/downtime.js';
 import { enqueueJobNotice, enqueueNotice, kickNotices, noticeKey } from '../lib/notices.js';
 
@@ -672,10 +672,16 @@ export function serviceRoutes(app: FastifyInstance): void {
    * «Пора на ТО» (stage 6; ADR-0038 §1–3): the mopeds with less than the
    * warning left or past the mark, the most urgent first, and how many have
    * no mileage recorded in EV8 Ops at all — those have no maintenance yet.
-   * Read by whoever works on repairs: the chief mechanic opens the planned
-   * repair from it.
+   * Read by whoever sees every repair: the chief mechanic opens the planned
+   * repair from it, an owner and a manager see it on «Сегодня». A mechanic
+   * sees his own repairs and not the fleet (ADR-0033 §2): in the variant the
+   * owner chose, «Механик без права согласования блока не видит».
    */
-  app.get('/api/service/maintenance', { config: { scope: 'service.view' } }, async () => maintenanceOverview());
+  app.get('/api/service/maintenance', { config: { scope: 'service.view' } }, async (req) => {
+    const actor = actorOf(req);
+    if (!seesEveryRepair(permissionsOf(actor.role, actor.via))) throw forbidden('forbidden', 'The fleet’s maintenance is read by whoever sees every repair.', { permission: 'service.approve' });
+    return maintenanceOverview();
+  });
 
   app.get<{ Params: { id: string } }>('/api/service/:id', { config: { scope: 'service.view' } }, async (req) => {
     const job = await prisma.serviceJob.findFirst({
@@ -1189,7 +1195,8 @@ export function serviceRoutes(app: FastifyInstance): void {
             works: lines.map((l) => ({ code: types.find((x) => x.id === l.workTypeId)?.code ?? null, freeText: l.workTypeId ? null : l.freeText, qty: l.qty })),
             movedVehicle: open ? undefined : !rented,
           },
-          before: open ? { reason: open.reason, mechanicId: open.mechanicId } : undefined,
+          // The moped's figure before this reading: a repair called off by mistake puts it back (ADR-0038 §1).
+          before: { odometerKm: vehicle.odometerKm, ...(open ? { reason: open.reason, mechanicId: open.mechanicId } : {}) },
         },
       });
       // His repair, or his works on one taken over, wait: the group is asked (ADR-0038 §6).
@@ -1720,6 +1727,18 @@ export function serviceRoutes(app: FastifyInstance): void {
       back = await returnServiceParts(tx, { jobId: job.id, occurredOn: today, actorId: actor.id, reason: `${job.number}: ${reason}`.slice(0, 1000) });
       await unfitTrackers(tx, job.id);
       await tx.serviceJob.update({ where: { id: job.id }, data: { status: 'cancelled', closedOn: dateFromISO(today)!, closedAt: new Date(), updatedAt: new Date() } });
+      // Opened by mistake, its reading is no reading (ADR-0038 §1): the moped's
+      // figure goes back with it — to the latest reading still standing, or to
+      // the one the opening found.
+      if (job.openedOdometerKm != null) {
+        const opening = await tx.auditLog.findFirst({
+          where: { entityType: 'service_job', entityId: job.id, action: { in: ['service.open', 'service.request', 'service.take'] } },
+          orderBy: { createdAt: 'desc' },
+          select: { before: true },
+        });
+        const before = (opening?.before ?? {}) as { odometerKm?: number | null };
+        await restoreOdometer(tx, job.vehicleId, job.openedOdometerKm, 'odometerKm' in before ? before.odometerKm : undefined);
+      }
       if (job.movedVehicle) {
         await moveVehicle(tx, { vehicleId: job.vehicleId, kind: 'service_out', occurredOn: today, actorId: actor.id, reason });
       }
