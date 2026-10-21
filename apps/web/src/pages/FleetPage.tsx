@@ -247,10 +247,17 @@ function Why({ v }: { v: Vehicle }) {
  */
 function StateSub({ v }: { v: Vehicle }) {
   const t = useT();
+  const fact = v.currentRental ? (
+    <CustomerName of={v.currentRental.customer} second={false} />
+  ) : v.serviceWhy ? (
+    <Why v={v} />
+  ) : (
+    <PlaceText of={v} />
+  );
   return (
     <span className="muted">
       {parkOf(v) === 'sale' && <>{t.fleetList.forSale} · </>}
-      {v.currentRental ? <CustomerName of={v.currentRental.customer} second={false} /> : v.serviceWhy ? <Why v={v} /> : <PlaceText of={v} />}
+      {fact}
     </span>
   );
 }
