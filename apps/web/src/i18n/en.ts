@@ -31,6 +31,7 @@ import { expEn } from './expenses.js';
 import { inBankEn } from './in-bank.js';
 import { fleetListEn } from './fleet-list.js';
 import { contractSignedEn } from './contract-signed.js';
+import { saleDateEn } from './sale-date.js';
 export const en = {
   lang: { label: 'Language', ka: 'ქართული', ru: 'Русский', en: 'English' },
 
@@ -1325,7 +1326,9 @@ export const en = {
       rental_not_found: 'Rental not found.',
       return_before_pickup: 'The return date is before the pickup date.',
       rule_not_found: 'That remembered payee is gone already.',
+      sale_before_history: 'A sale cannot be dated before the last event in the moped’s history. Pick that day or a later one.',
       sale_closed: 'This sale is closed.',
+      sale_date_future: 'A sale cannot be dated in the future.',
       sale_has_payments: 'Cancel the payments on this sale first.',
       sale_not_found: 'Sale not found.',
       same_customer: 'A card cannot be merged into itself.',
@@ -1401,6 +1404,7 @@ export const en = {
   ...inBankEn,
   ...fleetListEn,
   ...contractSignedEn,
+  ...saleDateEn,
 };
 
 export type Dict = typeof en;

@@ -1,4 +1,4 @@
-import { acquiringFee, acquiringNet, instalmentSchedule, parseGel, scheduleGap, todayISO, warrantyUntil, type ISODate } from '@ev8/shared';
+import { acquiringFee, acquiringNet, instalmentSchedule, isISODate, parseGel, redateSale, scheduleGap, todayISO, warrantyUntil, type ISODate } from '@ev8/shared';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api, ApiError } from '../api.js';
@@ -75,6 +75,28 @@ const blank = (vehicleId: string) => ({
   why: '',
   movePool: false,
 });
+
+type SaleForm = ReturnType<typeof blank>;
+
+/**
+ * A draft started on an earlier day, taken back today (call of 21.10.2026).
+ * The day of an ordinary sale is not a field — it is the day the sale is
+ * made — so a draft from yesterday would date today's sale yesterday and
+ * nobody would see it. It is made today; lines edited by hand move with it by
+ * the rule a correction on the sale's card uses (`redateSale`). A sale
+ * carried over keeps the day it was given: that one is a field.
+ */
+function madeToday(v: SaleForm): SaleForm {
+  const today = todayISO();
+  if (v.transfer || v.soldOn === today) return v;
+  if (!isISODate(v.soldOn)) return { ...v, soldOn: today };
+  const plan = redateSale(
+    { soldOn: v.soldOn, warrantyUntil: null, transferred: false, instalments: v.rows.flatMap((r, i) => (isISODate(r.dueOn) ? [{ seq: i + 1, dueOn: r.dueOn }] : [])) },
+    today,
+  );
+  const to = new Map(plan.instalments.map((m) => [m.seq, m.to]));
+  return { ...v, soldOn: today, rows: v.rows.map((r, i) => ({ ...r, dueOn: to.get(i + 1) ?? r.dueOn })) };
+}
 
 export function SaleWizard() {
   const t = useT();
@@ -257,7 +279,7 @@ export function SaleWizard() {
   if (drafts.offer) {
     return (
       <Wizard title={t.sell.title} steps={t.sell.steps} step={0}>
-        <DraftOffer at={drafts.offer.at} words={null} onContinue={() => drafts.accept(setF)} onDiscard={drafts.discard} />
+        <DraftOffer at={drafts.offer.at} words={null} onContinue={() => drafts.accept((v) => setF(madeToday(v)))} onDiscard={drafts.discard} />
       </Wizard>
     );
   }
@@ -527,6 +549,8 @@ export function SaleWizard() {
         <section className="card">
           <SumRow k={t.sell.moped} v={vehicle ? `${vehicle.model} ···${vehicle.vin.slice(-4)}` : ''} go={() => set({ step: 0 })} />
           <SumRow k={t.sell.buyer} v={customer?.name ?? ''} go={() => set({ step: 1 })} />
+          {/* The day the sale is dated, said before it is made (call of 21.10.2026). */}
+          <SumRow k={t.sell.soldOn} v={<span className="mono">{fmtDate(f.soldOn)}</span>} go={() => set({ step: 2 })} />
           <SumRow k={t.sell.price} v={<span className="mono">{formatGel(totalTetri)}</span>} go={() => set({ step: 2 })} />
           <SumRow
             k={t.sell.schedule}

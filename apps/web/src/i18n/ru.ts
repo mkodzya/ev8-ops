@@ -22,6 +22,7 @@ import { expRu } from './expenses.js';
 import { inBankRu } from './in-bank.js';
 import { fleetListRu } from './fleet-list.js';
 import { contractSignedRu } from './contract-signed.js';
+import { saleDateRu } from './sale-date.js';
 import type { Dict } from './en.js';
 
 // Typed as Dict: a missing or misspelled key fails the build.
@@ -1322,7 +1323,9 @@ export const ru: Dict = {
       rental_not_found: 'Аренда не найдена.',
       return_before_pickup: 'Дата возврата раньше даты выдачи.',
       rule_not_found: 'Этого правила уже нет.',
+      sale_before_history: 'Продажа не может быть раньше последнего события в истории мопеда. Выберите тот день или позже.',
       sale_closed: 'Эта продажа закрыта.',
+      sale_date_future: 'Продажу нельзя записать будущей датой.',
       sale_has_payments: 'Сначала отмените платежи по этой продаже.',
       sale_not_found: 'Продажа не найдена.',
       same_customer: 'Карточку нельзя объединить с самой собой.',
@@ -1398,4 +1401,5 @@ export const ru: Dict = {
   ...inBankRu,
   ...fleetListRu,
   ...contractSignedRu,
+  ...saleDateRu,
 };

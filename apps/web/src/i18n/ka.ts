@@ -22,6 +22,7 @@ import { expKa } from './expenses.js';
 import { inBankKa } from './in-bank.js';
 import { fleetListKa } from './fleet-list.js';
 import { contractSignedKa } from './contract-signed.js';
+import { saleDateKa } from './sale-date.js';
 import type { Dict } from './en.js';
 
 // Typed as Dict: a missing or misspelled key fails the build.
@@ -1311,7 +1312,9 @@ export const ka: Dict = {
       rental_not_found: 'იჯარა ვერ მოიძებნა.',
       return_before_pickup: 'დაბრუნების თარიღი გაცემის თარიღამდეა.',
       rule_not_found: 'ეს წესი უკვე აღარ არის.',
+      sale_before_history: 'გაყიდვა ვერ იქნება მოპედის ისტორიის ბოლო მოვლენამდე. აირჩიეთ ის დღე ან უფრო გვიანდელი.',
       sale_closed: 'ეს გაყიდვა დახურულია.',
+      sale_date_future: 'გაყიდვას მომავალი თარიღით ვერ ჩაწერთ.',
       sale_has_payments: 'ჯერ გააუქმეთ ამ გაყიდვის გადახდები.',
       sale_not_found: 'გაყიდვა ვერ მოიძებნა.',
       same_customer: 'ბარათი საკუთარ თავს ვერ შეუერთდება.',
@@ -1387,4 +1390,5 @@ export const ka: Dict = {
   ...inBankKa,
   ...fleetListKa,
   ...contractSignedKa,
+  ...saleDateKa,
 };
