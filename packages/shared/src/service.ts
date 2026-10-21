@@ -149,7 +149,8 @@ export interface ServiceWhy {
 }
 
 /**
- * The answer, in the owner's order: the open repair's kind if one was
+ * The answer, in this order (the session's default of 21.10.2026, named
+ * to the owner at release): the open repair's kind if one was
  * recorded; else what the repair says happened; else the reason of the
  * manual move into service, when that move is the last thing that happened
  * to the moped; else nothing, which the screen shows as a quiet dash. A
