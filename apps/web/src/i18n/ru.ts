@@ -15,6 +15,7 @@ import { workshopJobsRu } from './workshop-jobs.js';
 import { workshopApprovalRu } from './workshop-approval.js';
 import { workshopPartsRu } from './workshop-parts.js';
 import { workshopPayoutsRu } from './workshop-payouts.js';
+import { workshopMaintenanceRu } from './workshop-maintenance.js';
 import { driveRu } from './drive.js';
 import { expRu } from './expenses.js';
 import { inBankRu } from './in-bank.js';
@@ -116,6 +117,7 @@ export const ru: Dict = {
       works: 'Справочник работ',
       payouts: 'К оплате',
       balance: 'Баланс',
+      repair: 'Ремонт',
       payments: 'Платежи',
       statements: 'Выписки',
       week: 'Неделя',
@@ -1382,6 +1384,7 @@ export const ru: Dict = {
   ...workshopApprovalRu,
   ...workshopPartsRu,
   ...workshopPayoutsRu,
+  ...workshopMaintenanceRu,
   ...driveRu,
   ...expRu,
   ...inBankRu,

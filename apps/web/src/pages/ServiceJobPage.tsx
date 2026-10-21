@@ -17,6 +17,7 @@ import { toBase64, uploadAll, type PreparedPhoto } from '../lib/photos.js';
 import { useLoad } from '../lib/use.js';
 import { useSession } from '../session.js';
 import { groupDigits } from '../lib/workBook.js';
+import { DowntimeText } from '../components/Downtime.js';
 import type { ServiceJob, ServiceWorkLine, Workshop } from './ServicePage.js';
 import { AddWorkSheet, NormTotal, RejectSheet, StatedLines, SuggestCustomer, isRepeat, useDecisionWords, useWhen, waitingLines } from './RepairApproval.js';
 import { PartNote, PartsBlock, TrackerFields } from './RepairParts.js';
@@ -246,6 +247,9 @@ export function ServiceJobPage() {
               }
             />
           )}
+          {/* Downtime in hours, and the wait for approval within it (ADR-0038): a repair
+              closed before the times were kept says «no data», never days turned into hours. */}
+          {(j.downtime != null || j.status === 'done') && <Row k={t.wmaint.downtime} v={<DowntimeText d={j.downtime ?? null} />} />}
           {/* Its mechanic is paid for it: the repair is a record now (ADR-0037 §5). */}
           {j.paid && <Row k={t.wpay.paid} v={t.wpay.paidIn(fmtDate(j.paid.paidOn), j.paid.markedBy.name)} />}
           {j.notes && <Row k={t.repair.notes} v={<span className="pre">{j.notes}</span>} />}
@@ -851,3 +855,4 @@ function CancelSheet({ job, backCount, names, onClose, onDone }: { job: ServiceJ
     </FormSheet>
   );
 }
+

@@ -170,7 +170,11 @@ async function composeMaintenance(n: NoticeRow, e: NodeJS.ProcessEnv): Promise<s
   if (!m || !maintenanceDue(m.state) || m.openPlanned != null || String(m.dueKm) !== keyPart(n.dedupeKey)) return null;
   const moped = escapeHtml(m.number ?? `···${m.vin.slice(-6)}`);
   const [due, current, left] = [km(m.dueKm!), km(m.currentKm!), km(m.leftKm!)];
-  return message((w) => (m.state === 'overdue' ? w.maintenanceOverdue(moped, due, current, left) : w.maintenanceSoon(moped, due, current, left)), `/fleet/${m.vehicleId}`, e);
+  // The sticker's address: the owners land on the moped's card, the chief mechanic — who
+  // does not see the fleet — in a new planned repair of it (MopedByNumber). A moped with no
+  // number of its own is only the owners' card.
+  const path = m.number ? `/m/${encodeURIComponent(m.number)}?reason=planned` : `/fleet/${m.vehicleId}`;
+  return message((w) => (m.state === 'overdue' ? w.maintenanceOverdue(moped, due, current, left) : w.maintenanceSoon(moped, due, current, left)), path, e);
 }
 
 async function composeStock(n: NoticeRow, e: NodeJS.ProcessEnv): Promise<string | null> {

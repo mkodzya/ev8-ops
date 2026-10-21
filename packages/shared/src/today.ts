@@ -16,7 +16,9 @@ import { overdueDays } from './periods.js';
 // be one.
 // "due_today" — the rentals whose week began today (ADR-0017): right after
 // the overdue ones, a calm group with the same actions.
-export const TASK_GROUPS = ['decide', 'returns', 'overdue', 'due_today', 'intake', 'money', 'instalments', 'service', 'purchases', 'decisions', 'fill', 'till'] as const;
+// "maintenance" — mopeds whose planned maintenance is near or past (ADR-0038):
+// right after the repairs, a group of its own, every moped in it shown.
+export const TASK_GROUPS = ['decide', 'returns', 'overdue', 'due_today', 'intake', 'money', 'instalments', 'service', 'maintenance', 'purchases', 'decisions', 'fill', 'till'] as const;
 export type TaskGroup = (typeof TASK_GROUPS)[number];
 
 /** What the row's button does; the screen turns it into words and a link. */
@@ -32,6 +34,7 @@ export type TaskAction =
   | 'take_instalment'
   | 'open_service'
   | 'open_report'
+  | 'open_maintenance'
   | 'order_parts'
   | 'open_purchase'
   | 'set_pool'
@@ -114,6 +117,12 @@ export interface QueueInput {
   reports: { id: string; number: string; vin: string | null; who: string | null; note: string; photos: number }[];
   /** Parts below the level somebody set: one row, and "В заказ" on it (B8-05). */
   lowParts: { count: number; note: string };
+  /**
+   * Mopeds whose planned maintenance is less than the threshold away or past
+   * (ADR-0038), most urgent first; absent where nobody asked. Every moped is a
+   * row — the owners and the managers both see them.
+   */
+  maintenance?: { vehicleId: string; number: string | null; model: string; vin: string; dueKm: number; currentKm: number; leftKm: number }[];
   purchases: { id: string; number: string; who: string; note: string }[];
   vehiclesWithoutPool: number;
   vehiclesWithoutPoint: number;
@@ -159,7 +168,10 @@ export interface TaskGroupRows {
 }
 
 const SHOWN = 3;
-/** Deals from Kommo are shown one by one: each is somebody waiting, and there is no list to open them in. */
+/**
+ * Deals from Kommo are shown one by one: each is somebody waiting, and there is no list to open them in.
+ * So are the mopeds due for maintenance (ADR-0038): the group is the list.
+ */
 const SHOWN_INTAKE = 20;
 
 /** The list the Kommo row opens. It is in no menu: with the link off there is nothing on it. */
@@ -361,6 +373,25 @@ export function dayQueue(input: QueueInput): TaskGroupRows[] {
     });
   }
 
+  // 7a. Planned maintenance (ADR-0038): a row per moped, the overdue first —
+  // the list comes sorted by what is left. The note carries the mark, the
+  // mileage and what is left, for the screen to say in its own words.
+  for (const m of input.maintenance ?? []) {
+    rows.push({
+      id: `maintenance:${m.vehicleId}`,
+      group: 'maintenance',
+      action: 'open_maintenance',
+      who: m.model,
+      number: m.number,
+      vin: m.vin,
+      days: null,
+      amountTetri: null,
+      href: `/fleet/${m.vehicleId}`,
+      phone: null,
+      note: `${m.dueKm}|${m.currentKm}|${m.leftKm}`,
+    });
+  }
+
   // Parts that have run low: one line, and the order it turns into (B8-05).
   if (input.owner && input.lowParts.count > 0) {
     // The note carries the count and then the worst offenders, so the screen
@@ -471,7 +502,7 @@ export function dayQueue(input: QueueInput): TaskGroupRows[] {
 
   return TASK_GROUPS.map((group) => {
     const all = rows.filter((r) => r.group === group);
-    return { group, rows: all.slice(0, group === 'intake' ? SHOWN_INTAKE : SHOWN), total: all.length, totalTetri: all.reduce((n, r) => n + (r.amountTetri ?? 0), 0) };
+    return { group, rows: all.slice(0, group === 'intake' || group === 'maintenance' ? SHOWN_INTAKE : SHOWN), total: all.length, totalTetri: all.reduce((n, r) => n + (r.amountTetri ?? 0), 0) };
   }).filter((g) => g.total > 0);
 }
 

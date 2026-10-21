@@ -8,6 +8,7 @@ import { useMoneyForm } from '../ds/money/MoneyForm.js';
 import { fmtDate, formatGel } from '../format.js';
 import { useT } from '../i18n/index.js';
 import { useLoad } from '../lib/use.js';
+import { kmText, leftText } from '../lib/maintenance.js';
 import { useSession } from '../session.js';
 
 // "Today" is the queue (wave 4 §3.1): group by group, three rows and what is
@@ -27,6 +28,8 @@ export interface TodayData {
     myTillTetri: number | null;
     batteries?: { showroom: number; total: number } | null;
   };
+  /** Mopeds with no mileage written in EV8 Ops: no maintenance is counted for them (ADR-0038). */
+  maintenanceUnknown?: number;
 }
 
 /**
@@ -61,6 +64,13 @@ const SEGMENT: Record<string, string> = {
   till: '/money/cash',
 };
 
+/** «осталось 140 км», or red «просрочено на 320 км» — first in the group, by the API's order. */
+function MaintenanceLeft({ note }: { note: string | null }) {
+  const t = useT();
+  const left = Number((note ?? '0|0|0').split('|')[2]);
+  return <span className={`t-money q-sum ${left < 0 ? 'crit-text' : ''}`}>{leftText({ leftKm: left }, t)}</span>;
+}
+
 export function TodayPage() {
   const t = useT();
   const { can } = useSession();
@@ -93,6 +103,11 @@ export function TodayPage() {
     // A reported breakdown says what broke; the shelf row names the parts.
     else if (r.action === 'open_report') bits.push(r.note ?? '');
     else if (r.action === 'order_parts') return (r.note ?? '').split('|')[1] ?? '';
+    // Planned maintenance (ADR-0038): the mark and the mileage; what is left is the row's own figure.
+    else if (r.action === 'open_maintenance') {
+      const [due, current] = (r.note ?? '0|0|0').split('|').map(Number);
+      return t.wmaint.rowSub(kmText(due ?? 0), kmText(current ?? 0));
+    }
     // Kommo's row says how old its answer is; when Kommo has gone silent the
     // title already says so, and this is the time of its last word.
     else if (r.action === 'reconcile_kommo') {
@@ -133,6 +148,8 @@ export function TodayPage() {
         return t.today.reported;
       case 'order_parts':
         return t.today.lowParts(Number((r.note ?? '0|').split('|')[0]));
+      case 'open_maintenance':
+        return [r.number, r.who].filter(Boolean).join(' · ');
       case 'set_pool':
         return t.today.noPool(Number(r.note ?? 0));
       case 'set_point':
@@ -227,6 +244,7 @@ export function TodayPage() {
                     <span className="q-sub muted">{r.action === 'open_service' ? t.today.inRepairSub(Number((r.note ?? '0/0').split('/')[1]), r.days ?? 0) : rowSub(r)}</span>
                   </Link>
                   {r.amountTetri != null && r.amountTetri > 0 && <span className={`t-money q-sum ${sumIsDebt(r) ? 'crit-text' : ''}`}>{formatGel(r.amountTetri, { decimals: false })}</span>}
+                  {r.action === 'open_maintenance' && <MaintenanceLeft note={r.note} />}
                   <span className="q-acts">
                     {r.phone && (
                       <>
@@ -263,6 +281,7 @@ export function TodayPage() {
                 </li>
               ))}
             </ul>
+            {g.group === 'maintenance' && (data.maintenanceUnknown ?? 0) > 0 && <p className="hint muted">{t.wmaint.unknown(data.maintenanceUnknown ?? 0)}</p>}
             {g.total > g.rows.length && (
               <Link className="queue-more" to={SEGMENT[g.group] ?? '/rentals'}>
                 {g.totalTetri > 0 ? t.today.more(g.total - g.rows.length, formatGel(g.totalTetri, { decimals: false })) : t.today.morePlain(g.total - g.rows.length)}

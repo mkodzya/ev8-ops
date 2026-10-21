@@ -437,7 +437,7 @@ function UserRow({ user: u, onRole, onDone }: { user: Users['users'][number]; on
           </span>
         ) : editing === 'rate' ? (
           <span className="inline-form">
-            <input className="input input-inline mono" inputMode="decimal" value={rate} onChange={(e) => setRate(e.target.value)} autoFocus aria-label={t.workshop.rate} title={t.workshop.rateHint} placeholder="50" />
+            <input className="input input-inline mono" inputMode="decimal" value={rate} onChange={(e) => setRate(e.target.value)} autoFocus aria-label={t.workshop.rate} title={t.workshop.rateHint} />
             <SubmitButton small type="button" state={op.state} label={t.actions.save} onClick={() => void saveRate()} />
             <button type="button" className="pill pill-sm" onClick={stopEditing}>
               {t.actions.cancel}

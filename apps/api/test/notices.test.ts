@@ -563,7 +563,8 @@ describe.skipIf(!HAS_DB)('the notices to the workshop’s group (ADR-0038 §6–
     // Thousands apart by a space that does not break.
     expect(ka).toBe(`🛠 მოპედი <b>${label(v)}</b>: გეგმიური მომსახურების დროა — ნიშნული 5\u00a0000 კმ, ახლა 4\u00a0850 კმ, დარჩა 150 კმ`);
     expect(ru).toBe(`Мопед <b>${label(v)}</b>: пора на ТО — отметка 5\u00a0000 км, сейчас 4\u00a0850 км, осталось 150 км`);
-    expect(link).toBe(`${STAND}/fleet/${v.id}`);
+    // The sticker's address where the moped has a number: the card for the owners, a planned repair for the chief mechanic.
+    expect(link).toBe(v.fleetNo != null ? `${STAND}/m/${encodeURIComponent(fleetNumber(v.fleetNo)!)}?reason=planned` : `${STAND}/fleet/${v.id}`);
     await scanNotices();
     await deliverNotices(soon());
     expect(tg.asked).toHaveLength(1);

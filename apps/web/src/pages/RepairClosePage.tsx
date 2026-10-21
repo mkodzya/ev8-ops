@@ -17,6 +17,7 @@ import { PartLines } from './RepairParts.js';
 import type { ServiceJob } from './ServicePage.js';
 import { Photos } from './WorkshopJobWizard.js';
 import './workshop-job.css';
+import { DowntimeText } from '../components/Downtime.js';
 
 interface Point {
   id: string;
@@ -198,6 +199,12 @@ export function RepairClosePage() {
                   <StatedLines job={j} lines={j.works} />
                   <NormTotal lines={j.works} />
                   {j.openedAt && <p className="hint muted">{t.wappr.timeline(when(j.openedAt), j.approved ? when(j.approved.at) : null)}</p>}
+                  {/* The spec's «Итог: … простой» (ADR-0038): downtime at this minute. */}
+                  {j.downtime && (
+                    <p className="hint">
+                      <DowntimeText d={j.downtime} />
+                    </p>
+                  )}
                 </section>
               )}
               {/* The parts as a last look, not a form (stage 4, variant A): forgotten ones show here. */}

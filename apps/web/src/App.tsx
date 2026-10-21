@@ -29,6 +29,7 @@ import { ExpenseCategoriesPage } from './pages/ExpenseCategoriesPage.js';
 import { ExpensesReportPage } from './pages/ExpensesReportPage.js';
 import { ProfilePage } from './pages/ProfilePage.js';
 import { LoginSettingsPage, RentalSettingsPage, SettingsPage } from './pages/SettingsPage.js';
+import { RepairSettingsPage } from './pages/RepairSettingsPage.js';
 import { JournalPage } from './pages/JournalPage.js';
 import { MigrationPage } from './pages/MigrationPage.js';
 import { KommoPage } from './pages/KommoPage.js';
@@ -201,6 +202,7 @@ export function App() {
         {/* Settings is six tabs since wave 6 (§3.4–3.9); the people are first. */}
         <Route path="settings" element={<Require perm="users.manage"><SettingsPage /></Require>} />
         <Route path="settings/rental" element={<Require perm="settings.manage"><RentalSettingsPage /></Require>} />
+        <Route path="settings/repair" element={<Require perm="settings.manage"><RepairSettingsPage /></Require>} />
         <Route path="settings/expenses" element={<Require perm="settings.manage"><ExpenseCategoriesPage /></Require>} />
         <Route path="settings/journal" element={<Require perm="users.manage"><JournalPage /></Require>} />
         <Route path="settings/migration" element={<Require perm="users.manage"><MigrationPage /></Require>} />

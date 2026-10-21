@@ -206,3 +206,32 @@ describe('Drive on "Today"', () => {
     expect(q.flatMap((g) => g.rows).filter((r) => r.action === 'close_from_drive' || r.action === 'hand_over_from_drive')).toEqual([]);
   });
 });
+
+// Stage 6 of the mechanic plan (ADR-0038; variant A, Mika 21.10.2026).
+describe('planned maintenance on “Today”', () => {
+  const due = [
+    { vehicleId: 'v1', number: 'EV-022', model: 'Test 17C', vin: 'TESTA000000000022', dueKm: 9900, currentKm: 10220, leftKm: -320 },
+    { vehicleId: 'v2', number: 'EV-014', model: 'Test XL', vin: 'TESTA000000000014', dueKm: 5000, currentKm: 4860, leftKm: 140 },
+  ];
+
+  it('is a group of its own right after the repairs, a moped a row, in the order it came', () => {
+    const g = dayQueue(input({ service: { open: 1, longerThanWeek: 0, longestDays: 2 }, maintenance: due }));
+    const groups = g.map((x) => x.group);
+    expect(groups.indexOf('maintenance')).toBe(groups.indexOf('service') + 1);
+    const rows = group(g, 'maintenance')!.rows;
+    expect(rows.map((r) => r.number)).toEqual(['EV-022', 'EV-014']);
+    expect(rows[0]).toMatchObject({ action: 'open_maintenance', href: '/fleet/v1', who: 'Test 17C', note: '9900|10220|-320', amountTetri: null });
+  });
+
+  it('shows the managers too, and every moped, not three', () => {
+    const many = Array.from({ length: 6 }, (_, i) => ({ ...due[1]!, vehicleId: `v${i}`, number: `EV-0${i}` }));
+    const g = group(dayQueue(input({ owner: false, maintenance: many })), 'maintenance')!;
+    expect(g.rows).toHaveLength(6);
+    expect(g.total).toBe(6);
+  });
+
+  it('is not there when nothing is due', () => {
+    expect(group(dayQueue(input({ maintenance: [] })), 'maintenance')).toBeUndefined();
+    expect(group(dayQueue(input()), 'maintenance')).toBeUndefined();
+  });
+});
