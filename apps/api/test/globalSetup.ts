@@ -34,6 +34,9 @@ export async function teardown(): Promise<void> {
     await prisma.auditLog.deleteMany({ where: { createdAt: since } });
     // The notices a run wrote (0061) point at nothing by a key: they go first.
     await prisma.notice.deleteMany({ where: { createdAt: since } });
+    // The translations a run listed, and the days it counted (0065): copies and counts, keyed by nothing else.
+    await prisma.textTranslation.deleteMany({ where: { firstSeenAt: since } });
+    await prisma.translationDay.deleteMany({ where: { updatedAt: since } });
     // What a stand-in for Kommo left behind, should a suite have died before
     // its own cleanup. The one row of `kommo_sync` is a singleton and stays.
     await prisma.kommoLead.deleteMany({ where: { firstSeenAt: since } });
