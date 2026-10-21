@@ -1,4 +1,5 @@
-// The workshops list in Settings → Repair (owner's decision of 21.10.2026):
+// The workshops list in Settings → Repair (task #1 of 21.10.2026; its shape is
+// the session's default, not yet confirmed by Mika):
 // add, rename, take off the list, put back. One file, so the Georgian goes to
 // proofreading as one list (docs/qa/workshops-list-ka-strings.md). The
 // Georgian is the session's translation; the director proofreads it. It says

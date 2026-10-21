@@ -607,9 +607,9 @@ async function boughtThrough(tx: Tx, line: { id: string; partId: string | null; 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
- * The workshop a repair is given (owner's decision of 21.10.2026). An id that
- * names no workshop was a 500 from the foreign key, and one taken off the
- * list was taken. Now the first is not found and the second refused — unless
+ * The workshop a repair is given (workshops list, task #1 of 21.10.2026). An
+ * id that names no workshop was a 500 from the foreign key, and one taken off
+ * the list was taken. Now the first is not found and the second refused — unless
  * the repair already has it, which it keeps (`workshopRefusal`).
  */
 async function workshopOf(b: Body, current: string | null = null): Promise<string | null> {
@@ -641,7 +641,7 @@ async function nameClash(name: string, except?: string) {
 export function serviceRoutes(app: FastifyInstance): void {
   /**
    * The workshops that do the repairs — a list the owner keeps in Settings →
-   * Repair (`service.md`; owner's decision of 21.10.2026). Plain, it is what
+   * Repair (`service.md`; task #1 of 21.10.2026). Plain, it is what
    * the pickers offer: the live ones in the owner's order. With `?all=1` it is
    * the list as the owner keeps it: those taken off it too, last, with how
    * many repairs each has and how many of them are still under way.

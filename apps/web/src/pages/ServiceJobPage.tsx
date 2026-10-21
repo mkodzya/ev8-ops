@@ -548,7 +548,7 @@ function Choice({ k, v, quiet, onPick }: { k: string; v: string; quiet?: boolean
  * The workshop that has it: a list the owner keeps, never free text (§8). One
  * taken off the list since is still this repair's, so it is shown first and
  * marked, to be kept or changed — not left unmarked and cleared by accident
- * (owner's decision of 21.10.2026).
+ * (workshops list, task #1 of 21.10.2026).
  */
 function WorkshopSheet({ job, onClose, onSaved }: { job: ServiceJob; onClose: () => void; onSaved: () => void }) {
   const t = useT();

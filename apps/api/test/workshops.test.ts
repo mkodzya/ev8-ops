@@ -1,5 +1,5 @@
-// The workshops list in Settings → Repair (owner's decision of 21.10.2026):
-// the owner adds, renames, takes off the list and puts back; nothing is
+// The workshops list in Settings → Repair (task #1 of 21.10.2026; its shape is
+// the session's default, not yet confirmed by Mika): the owner adds, renames, takes off the list and puts back; nothing is
 // deleted, and a repair keeps the workshop it had. Every name and the phone
 // here are invented — the two real workshops are in migration 0023 and stay there.
 import { describe, expect, it } from 'vitest';

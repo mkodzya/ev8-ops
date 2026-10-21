@@ -15,8 +15,8 @@ import { WorkshopsBlock } from './WorkshopsBlock.js';
 // norm, the planned-maintenance interval and when a moped is called for it.
 // The owners' alone; each field saves on its own when it is left, the way
 // the deposit does on Settings → Rental, and the journal keeps the change.
-// Under them, the workshops that do the repairs (owner's decision of
-// 21.10.2026): the list «Открыть ремонт» offers.
+// Under them, the workshops that do the repairs (task #1 of 21.10.2026):
+// the list «Открыть ремонт» offers.
 
 interface ServiceSettings {
   defaultRateTetri: number | null;

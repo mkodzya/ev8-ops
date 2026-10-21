@@ -12,7 +12,7 @@ import { useLoad } from '../lib/use.js';
 import './workshops.css';
 
 /**
- * Settings → Repair: the workshops that do the repairs (owner's decision of
+ * Settings → Repair: the workshops that do the repairs (task #1 of
  * 21.10.2026). The owner adds one, renames it, takes it off the list and puts
  * it back. Nothing is deleted (ADR-0011): a workshop taken off the list leaves
  * «Открыть ремонт» and the repair card's choice, and stays named on every

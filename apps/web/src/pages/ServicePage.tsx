@@ -488,7 +488,7 @@ export function NewJob({ vehicleId, onDone }: { vehicleId?: string; onDone: () =
                   ))}
                 </select>
               </Field>
-              {/* The list is kept in one place (owner's decision of 21.10.2026);
+              {/* The list is kept in one place (session default for task #1 of 21.10.2026);
                   what is typed here waits in the draft and comes back. */}
               {can('settings.manage') && (
                 <p className="hint">

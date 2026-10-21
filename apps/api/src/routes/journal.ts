@@ -39,7 +39,7 @@ async function numbersFor(rows: { entityType: string; entityId: string | null }[
     prisma.user.findMany({ where: { id: { in: [...ids('user'), ...ids('login')] } }, select: { id: true, name: true } }),
     prisma.part.findMany({ where: { id: { in: ids('part') } }, select: { id: true, name: true } }),
     prisma.location.findMany({ where: { id: { in: ids('location') } }, select: { id: true, name: true } }),
-    // «Мастерская изменена» said which one only in its JSON (owner's decision of 21.10.2026).
+    // «Мастерская изменена» said which one only in its JSON (workshops list, task #1 of 21.10.2026).
     prisma.workshop.findMany({ where: { id: { in: ids('workshop') } }, select: { id: true, name: true } }),
     // A deposit, a payment and an act are written under ids of their own.
     // In the journal they answer for the record they belong to, or the

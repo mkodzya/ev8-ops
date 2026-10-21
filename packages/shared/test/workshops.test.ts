@@ -1,4 +1,4 @@
-// The workshops list (owner's decision of 21.10.2026): taking one off the
+// The workshops list (task #1 of 21.10.2026): taking one off the
 // list hides it from the pickers and keeps it on the repairs that had it.
 // The names below are invented.
 import { describe, expect, it } from 'vitest';

@@ -1,7 +1,10 @@
 // The workshops that do the repairs: a list the owner keeps in Settings →
-// Repair (`service.md`; owner's decision of 21.10.2026). A workshop is never
-// deleted. Taken off the list it leaves the pickers and stays named on every
-// repair that had it, and it can be put back (ADR-0011, «Скрыть, а не удалить»).
+// Repair (`service.md`; task #1 of 21.10.2026). Where it lives, that only the
+// owner changes it and that «delete» means taking it off the list are the
+// session's defaults for that task, to be confirmed by Mika at release —
+// not a decision yet. A workshop is never deleted. Taken off the list it
+// leaves the pickers and stays named on every repair that had it, and it can
+// be put back (ADR-0011, «Скрыть, а не удалить»).
 
 export interface WorkshopRef {
   id: string;
