@@ -19,7 +19,7 @@
 //
 // The debt beside a late rental is not worked out here: it is the product's
 // one figure (`debt.ts`), passed in and passed through.
-import { periodBounds, periodSeqOf, weekDueOn } from './periods.js';
+import { periodBounds, periodSeqOf, shiftsOf, weekDueOn } from './periods.js';
 import { addDays, daysBetween } from './time.js';
 import { inPeriod, monthOf, paymentInRow, weekOf, type Period, type WeekPayment } from './week.js';
 import type { Tetri } from './money.js';
@@ -61,6 +61,8 @@ export interface CalendarPeriodRow {
   /** `rental_periods.paid_tetri` as stored — what the debt figure reads. */
   paidTetri: Tetri;
   paidBeforeTransfer: boolean;
+  /** Days an owner made this week longer (ADR-0041): every later week starts as many days later. Absent — none. */
+  extraDays?: number;
   /**
    * The latest live payment allocated to this week, by (occurredOn, createdAt).
    * Null: none — unpaid, or paid before the transfer. May be left null for
@@ -379,13 +381,16 @@ const fromRow = (row: CalendarPeriodRow, offsetDays: number): Slot => ({
 function walkOf(rental: CalendarRental, pickedUpOn: ISODate, horizon: ISODate): Walk {
   const rows = new Map(rental.periods.map((p) => [p.seq, p]));
   const offset = rental.payOffsetDays ?? 0;
-  const last = periodSeqOf(pickedUpOn, horizon);
+  // A week made longer moves every week after it (ADR-0041): the projected
+  // ones are placed where the roll will open them.
+  const shifts = shiftsOf(rental.periods);
+  const last = periodSeqOf(pickedUpOn, horizon, shifts);
   const slots: Slot[] = [];
   for (let seq = 1; seq <= last; seq++) {
     const row = rows.get(seq);
     if (row) slots.push(fromRow(row, offset));
     else {
-      const b = periodBounds(pickedUpOn, seq);
+      const b = periodBounds(pickedUpOn, seq, shifts);
       slots.push({ seq, startsOn: b.startsOn, dueOn: weekDueOn(b.startsOn, offset), endsOn: b.endsOn, amount: rental.weeklyRateTetri, paid: 0, row: null, credit: 0, purse: null });
     }
   }
