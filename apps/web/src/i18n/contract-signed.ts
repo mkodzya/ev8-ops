@@ -6,8 +6,11 @@ export const contractSignedEn = {
   signedElsewhere: {
     /** The button beside "Sign on the screen". */
     mark: 'Signed in Signify',
-    /** The state of the row once marked: when, and who marked it. */
-    state: (at: string, by: string | null) => (by ? `signed in Signify ${at} · ${by}` : `signed in Signify ${at}`),
+    /**
+     * The state of the row once marked. The time and the name are the mark's,
+     * not the signature's: when Signify signed it is not known here.
+     */
+    state: (at: string, by: string | null) => (by ? `marked signed in Signify ${at} · ${by}` : `marked signed in Signify ${at}`),
     title: 'The contract is signed in Signify',
     hint: 'The customer signed the contract in Signify or on paper. EV8 Ops stops asking for a signature: the rental leaves “Not signed” and “Today”. The mark goes to the journal under your name.',
     drive: 'Open the contract in Drive',
@@ -27,7 +30,7 @@ export const contractSignedEn = {
 export const contractSignedRu: typeof contractSignedEn = {
   signedElsewhere: {
     mark: 'Подписан в Signify',
-    state: (at, by) => (by ? `подписан в Signify ${at} · ${by}` : `подписан в Signify ${at}`),
+    state: (at, by) => (by ? `отмечен подписанным в Signify ${at} · ${by}` : `отмечен подписанным в Signify ${at}`),
     title: 'Договор подписан в Signify',
     hint: 'Клиент подписал договор в Signify или на бумаге. EV8 Ops больше не просит подпись: аренда уходит из «Не подписан» и с «Сегодня». Отметка попадёт в журнал с вашим именем.',
     drive: 'Открыть договор в Drive',
@@ -47,7 +50,7 @@ export const contractSignedRu: typeof contractSignedEn = {
 export const contractSignedKa: typeof contractSignedEn = {
   signedElsewhere: {
     mark: 'ხელმოწერილია Signify-ში',
-    state: (at, by) => (by ? `ხელმოწერილია Signify-ში ${at} · ${by}` : `ხელმოწერილია Signify-ში ${at}`),
+    state: (at, by) => (by ? `მონიშნულია Signify-ში ხელმოწერილად ${at} · ${by}` : `მონიშნულია Signify-ში ხელმოწერილად ${at}`),
     title: 'ხელშეკრულება ხელმოწერილია Signify-ში',
     hint: 'კლიენტმა ხელშეკრულებას ხელი მოაწერა Signify-ში ან ქაღალდზე. EV8 Ops აღარ მოითხოვს ხელმოწერას: ქირა აღარ გამოჩნდება „ხელმოუწერელში“ და „დღეს“-ზე. მონიშვნა ჩაიწერება ჟურნალში თქვენი სახელით.',
     drive: 'ხელშეკრულების გახსნა Drive-ში',
