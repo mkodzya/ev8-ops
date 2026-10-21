@@ -176,7 +176,8 @@ export function FleetPage() {
             cell: (v) => (
               <span className="v-state">
                 <StateBadge state={v.state} />
-                {moved?.id === v.id ? <span className="v-sub v-pool-new">→ {t.pools[moved.to]}</span> : <ParkLine v={v} />}
+                {/* The word the line turns into once the offer to undo runs out: "For sale", not the park's dictionary name. */}
+                {moved?.id === v.id ? <span className="v-sub v-pool-new">→ {moved.to === 'sale' ? t.fleetList.forSale : t.pools[moved.to]}</span> : <ParkLine v={v} />}
               </span>
             ),
             sort: { value: (v) => VEHICLE_STATES.indexOf(v.state) },
@@ -241,9 +242,11 @@ function Why({ v }: { v: Vehicle }) {
 }
 
 /**
- * The quiet line under the state on a phone: the one fact that state is
- * about — who has the moped, why it is in the workshop, or where it stands —
- * after "For sale" when it waits in the sale park (21.10.2026).
+ * The quiet lines under the state on a phone: "For sale" on a line of its own
+ * when the moped waits in the sale park, as under the state in the table, then
+ * the one fact that state is about — who has the moped, why it is in the
+ * workshop, or where it stands (21.10.2026). Two lines and not one, because a
+ * prefix would widen the card's right column and squeeze its title.
  */
 function StateSub({ v }: { v: Vehicle }) {
   const t = useT();
@@ -255,10 +258,10 @@ function StateSub({ v }: { v: Vehicle }) {
     <PlaceText of={v} />
   );
   return (
-    <span className="muted">
-      {parkOf(v) === 'sale' && <>{t.fleetList.forSale} · </>}
-      {fact}
-    </span>
+    <>
+      {parkOf(v) === 'sale' && <span className="v-sub">{t.fleetList.forSale}</span>}
+      <span className="muted">{fact}</span>
+    </>
   );
 }
 

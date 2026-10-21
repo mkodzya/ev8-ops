@@ -909,7 +909,8 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
 /* Why a moped is in service (21.10.2026): one line, the rest behind an
    ellipsis and in the tooltip. A long note must not stretch every row of the
    table, and on a phone it must not push the card's title off its line —
-   there it sits under the state, after "For sale" when there is one. */
+   there it sits under the state, below "For sale" when there is one, never
+   after it on the same line. */
 .v-why { display: inline-block; max-width: 28ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
 .lc-sub .v-why { max-width: 18ch; }
 .v-where { grid-area: where; font: var(--text-label); color: var(--muted); margin-top: 2px; }
