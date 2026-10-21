@@ -187,6 +187,8 @@ describe.skipIf(!HAS_DB)('the planned maintenance (stage 6)', () => {
     expect(taken.statusCode, taken.body).toBe(200);
     // Read later than the return, it is the reading now: 280 km to the mark, «Пора на ТО».
     expect(await card(owner, vehicleId)).toMatchObject({ state: 'soon', currentKm: 4720, readingSource: 'repair_open', dueKm: 5000, leftKm: 280 });
+    // Not left waiting: «Сегодня» of the suites after this one shows the first three waiting repairs.
+    expect((await call(owner, 'POST', `/api/service/${jobId}/cancel`, { reason: 'ТЕСТ done' })).statusCode).toBe(200);
   });
 
   it('a return taken back is no reading', async () => {

@@ -324,6 +324,8 @@ describe.skipIf(!HAS_DB)('the notices to the workshop’s group (ADR-0038 §6–
     // The reason the mechanic picked is named; what he wrote is not.
     expect(texts[0]).toContain('მოიჯარის ბრალი');
     expect(texts[0]).toContain('вина арендатора');
+    // Not left waiting: «Сегодня» of the suites after this one shows the first three waiting repairs.
+    await prisma.serviceJob.delete({ where: { id: waiting.id } });
   });
 
   it('does not announce a repair as waiting once it was decided, and sends what is still true', async () => {
@@ -382,6 +384,8 @@ describe.skipIf(!HAS_DB)('the notices to the workshop’s group (ADR-0038 §6–
     // The one wait told is the work found later, said once.
     expect(tg.texts().filter((t) => t.includes('ждёт'))).toHaveLength(1);
     expect(tg.texts().find((t) => t.includes('ждёт'))).toContain('новая работа ждёт согласования');
+    // Not left waiting: «Сегодня» of the suites after this one shows the first three waiting repairs.
+    expect((await call(owner.cookie, 'POST', `/api/service/${id}/cancel`, { reason: 'ТЕСТ done' })).statusCode).toBe(200);
   });
 
   it('waits as long as Telegram asks on 429, and the rest of the run waits with it', async () => {
