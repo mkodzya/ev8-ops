@@ -14,6 +14,7 @@ import { useMoneyForm } from '../ds/money/MoneyForm.js';
 import { fmtDate, formatGel } from '../format.js';
 import { useLocale, useT } from '../i18n/index.js';
 import { toBase64, uploadAll, type PreparedPhoto } from '../lib/photos.js';
+import { Typed } from '../lib/typed.js';
 import { useLoad } from '../lib/use.js';
 import { useSession } from '../session.js';
 import { groupDigits } from '../lib/workBook.js';
@@ -160,7 +161,9 @@ export function ServiceJobPage() {
       {j.rejected && (
         <section className="wappr-reason">
           <b>{t.wappr.rejectHead}</b>
-          <span className="pre">{j.rejected.reason}</span>
+          <span className="pre">
+            <Typed text={j.rejected.reason} />
+          </span>
           <span className="muted">{t.wappr.rejectedBy(j.rejected.by ?? t.common.dash, when(j.rejected.at))}</span>
         </section>
       )}
@@ -194,7 +197,7 @@ export function ServiceJobPage() {
             v={
               <span className="pre">
                 {j.reasonKind ? `${t.wjob.reasons[j.reasonKind] ?? j.reasonKind} — ` : ''}
-                {j.reason}
+                <Typed text={j.reason} />
               </span>
             }
           />
@@ -205,7 +208,12 @@ export function ServiceJobPage() {
               v={
                 <>
                   <span className="mono">{groupDigits(j.openedOdometerKm)}</span>
-                  {j.odometerReason && <span className="muted"> · {j.odometerReason}</span>}
+                  {j.odometerReason && (
+                    <span className="muted">
+                      {' · '}
+                      <Typed text={j.odometerReason} />
+                    </span>
+                  )}
                 </>
               }
             />
@@ -252,7 +260,16 @@ export function ServiceJobPage() {
           {(j.downtime != null || j.status === 'done') && <Row k={t.wmaint.downtime} v={<DowntimeText d={j.downtime ?? null} />} />}
           {/* Its mechanic is paid for it: the repair is a record now (ADR-0037 §5). */}
           {j.paid && <Row k={t.wpay.paid} v={t.wpay.paidIn(fmtDate(j.paid.paidOn), j.paid.markedBy.name)} />}
-          {j.notes && <Row k={t.repair.notes} v={<span className="pre">{j.notes}</span>} />}
+          {j.notes && (
+            <Row
+              k={t.repair.notes}
+              v={
+                <span className="pre">
+                  <Typed text={j.notes} />
+                </span>
+              }
+            />
+          )}
         </section>
 
         {/* Two decisions, not a form: each opens its own sheet and writes on its own (§3.7). */}

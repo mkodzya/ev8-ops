@@ -1,4 +1,4 @@
-import { parseGel, todayISO } from '@ev8/shared';
+import { parseGel, stockReasonText, todayISO } from '@ev8/shared';
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../api.js';
@@ -8,6 +8,7 @@ import { Field, Row } from '../components/Wizard.js';
 import { FormSheet } from '../ds/form/Form.js';
 import { fmtDate, formatGel } from '../format.js';
 import { useLocale, useT } from '../i18n/index.js';
+import { Typed } from '../lib/typed.js';
 import { useLoad } from '../lib/use.js';
 import { useSession } from '../session.js';
 import { OrderButton, type PartRow } from './StockPage.js';
@@ -41,14 +42,12 @@ type Sheet = 'initial' | 'receipt' | 'count' | 'edit';
 /**
  * The words of a movement's reason, when they add anything. `initial` is the
  * shelf's own code for an opening balance — the row already says "Приход" —
- * and a receipt carries the order number, which is linked beside it.
+ * and a receipt carries the order number, which is linked beside it. Read by
+ * the rule the translator reads them by (ADR-0042), so the words on the card
+ * are the words that were translated.
  */
 function reasonOf(m: Move): string | null {
-  const reason = (m.reason ?? '').trim();
-  if (!reason || reason === 'initial') return null;
-  if (m.purchase && reason === m.purchase.number) return null;
-  if (m.job && reason.startsWith(`${m.job.number}: `)) return reason.slice(m.job.number.length + 2);
-  return reason;
+  return stockReasonText(m.reason, { job: m.job?.number ?? null, purchase: m.purchase?.number ?? null });
 }
 
 export function PartPage() {
@@ -179,7 +178,12 @@ export function PartPage() {
                   {/* `initial` is a code the shelf writes for itself, and a
                       receipt's reason is the order number already linked
                       beside it: neither is worth printing twice (QA-W5-02). */}
-                  {reasonOf(m) && <span className="muted"> · {reasonOf(m)}</span>}
+                  {reasonOf(m) && (
+                    <span className="muted">
+                      {' · '}
+                      <Typed text={reasonOf(m)} />
+                    </span>
+                  )}
                   {m.actor && <span className="muted"> · {m.actor}</span>}
                 </span>
               </li>

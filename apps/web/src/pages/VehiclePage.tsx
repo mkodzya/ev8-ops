@@ -12,7 +12,8 @@ import { Field, Row } from '../components/Wizard.js';
 import { fmtDate } from '../format.js';
 import { useLocale, useT } from '../i18n/index.js';
 import { kmText, leftText, spanText, type Downtime, type RepairHours, type VehicleMaintenance } from '../lib/maintenance.js';
-import { ChangedFromTo, noteWords } from '../lib/journal.js';
+import { ChangedFromTo, JournalNote, noteWords } from '../lib/journal.js';
+import { Typed } from '../lib/typed.js';
 import { useLoad } from '../lib/use.js';
 import { useSession } from '../session.js';
 import { VehicleEconomics } from './EconomicsPage.js';
@@ -246,7 +247,16 @@ export function VehiclePage() {
             v={current ? <Link to={`/customers/${current.customer.id}`}>{current.customer.name}</Link> : t.common.dash}
           />
           <Row k={t.fleet.paidThrough} v={<span className="mono">{current ? fmtDate(current.paidThrough) : t.common.dash}</span>} />
-          {v.notes && <Row k={t.vehicle.notes} v={<span className="pre">{v.notes}</span>} />}
+          {v.notes && (
+            <Row
+              k={t.vehicle.notes}
+              v={
+                <span className="pre">
+                  <Typed text={v.notes} />
+                </span>
+              }
+            />
+          )}
         </section>
 
         <section className="card">
@@ -263,7 +273,12 @@ export function VehiclePage() {
                   <span>
                     {t.feedWords[l.action] ?? l.action}
                     <ChangedFromTo before={l.before} after={l.after} />
-                    {noteWords(t, l.note) && <span className="muted"> · {noteWords(t, l.note)}</span>}
+                    {noteWords(t, l.note) && (
+                      <span className="muted">
+                        {' · '}
+                        <JournalNote note={l.note} />
+                      </span>
+                    )}
                     {l.by && <span className="muted"> · {l.by}</span>}
                   </span>
                 </li>
@@ -282,7 +297,12 @@ export function VehiclePage() {
                         </Link>
                       </>
                     )}
-                    {e.reason && <span className="muted"> · {e.reason}</span>}
+                    {e.reason && (
+                      <span className="muted">
+                        {' · '}
+                        <Typed text={e.reason} />
+                      </span>
+                    )}
                     {e.actor && <span className="muted"> · {e.actor}</span>}
                   </span>
                 </li>
@@ -316,7 +336,7 @@ export function VehiclePage() {
                   <Link to={`/service/${j.id}`} className="mono">
                     {j.number}
                   </Link>{' '}
-                  {j.reason} <span className="muted">· {t.service.payers[j.payer]}</span>
+                  <Typed text={j.reason} /> <span className="muted">· {t.service.payers[j.payer]}</span>
                   {/* What it cost is the owners' (ADR-0033 §4). */}
                   {j.totalTetri != null && <span className="muted"> · {formatGel(j.totalTetri)}</span>}
                   {/* A repair waiting for approval has no word among the old statuses: the repairs' own says it. */}

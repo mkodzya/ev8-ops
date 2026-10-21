@@ -16,6 +16,7 @@ import { workshopApprovalRu } from './workshop-approval.js';
 import { workshopPartsRu } from './workshop-parts.js';
 import { workshopPayoutsRu } from './workshop-payouts.js';
 import { workshopMaintenanceRu } from './workshop-maintenance.js';
+import { typedTextRu } from './typed-text.js';
 import { driveRu } from './drive.js';
 import { expRu } from './expenses.js';
 import { inBankRu } from './in-bank.js';
@@ -1385,6 +1386,7 @@ export const ru: Dict = {
   ...workshopPartsRu,
   ...workshopPayoutsRu,
   ...workshopMaintenanceRu,
+  ...typedTextRu,
   ...driveRu,
   ...expRu,
   ...inBankRu,

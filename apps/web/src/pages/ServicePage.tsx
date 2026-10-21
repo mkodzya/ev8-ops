@@ -11,6 +11,7 @@ import { DataList } from '../ds/list/DataList.js';
 import { formatGel } from '../format.js';
 import { useT } from '../i18n/index.js';
 import { uploadAll, type PreparedPhoto } from '../lib/photos.js';
+import { Typed } from '../lib/typed.js';
 import { useLoad } from '../lib/use.js';
 import { useSession } from '../session.js';
 import { ApprovalCard } from './RepairApproval.js';
@@ -258,7 +259,7 @@ export function ServicePage() {
               {/* The breakdown a manager wrote is what an owner decides by,
                   so the row says it; "от менеджера" is the badge on the
                   right, not a replacement for the words (QA-W5-19). */}
-              <span className="mono">{j.number}</span> · {j.reason}
+              <span className="mono">{j.number}</span> · <Typed text={j.reason} />
             </>
           ),
           sub2: j.workshop?.name ?? undefined,
@@ -295,7 +296,7 @@ export function ServicePage() {
           {
             key: 'reason',
             label: t.repair.cols.what,
-            cell: (j) => j.reason,
+            cell: (j) => <Typed text={j.reason} />,
           },
           {
             key: 'workshop',

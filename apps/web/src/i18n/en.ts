@@ -25,6 +25,7 @@ import { workshopApprovalEn } from './workshop-approval.js';
 import { workshopPartsEn } from './workshop-parts.js';
 import { workshopPayoutsEn } from './workshop-payouts.js';
 import { workshopMaintenanceEn } from './workshop-maintenance.js';
+import { typedTextEn } from './typed-text.js';
 import { driveEn } from './drive.js';
 import { expEn } from './expenses.js';
 import { inBankEn } from './in-bank.js';
@@ -1388,6 +1389,7 @@ export const en = {
   ...workshopPartsEn,
   ...workshopPayoutsEn,
   ...workshopMaintenanceEn,
+  ...typedTextEn,
   ...driveEn,
   ...expEn,
   ...inBankEn,

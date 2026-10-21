@@ -11,6 +11,7 @@ import { useOperation } from '../ds/form/operation.js';
 import { formatGel } from '../format.js';
 import { useLocale, useT } from '../i18n/index.js';
 import { toBase64, type PreparedPhoto } from '../lib/photos.js';
+import { TypedIn } from '../lib/typed.js';
 import { useLoad } from '../lib/use.js';
 import { useSession } from '../session.js';
 import type { ServiceJob, ServiceJobPart } from './ServicePage.js';
@@ -64,7 +65,11 @@ export function PartLines({ job, onRemove }: { job: ServiceJob; onRemove?: (p: S
             <span className="wjob-name">
               {p.name}
               <PartNote p={p} />
-              {state === 'rejected' && !whole && p.rejectReason && <span className="wjob-line-why">{t.wappr.lineRejected(p.rejectReason)}</span>}
+              {state === 'rejected' && !whole && p.rejectReason && (
+                <span className="wjob-line-why">
+                  <TypedIn words={t.wappr.lineRejected} text={p.rejectReason} />
+                </span>
+              )}
             </span>
             {state === 'waiting' && job.approved != null && <span className="wjob-wtag">{t.wappr.waitingTag}</span>}
             <span className="mono wparts-qty">× {p.qty}</span>

@@ -1,6 +1,7 @@
 import type { Dict } from '../i18n/en.js';
-import { currentDict } from '../i18n/index.js';
+import { currentDict, useT } from '../i18n/index.js';
 import { fmtDate, formatGel } from '../format.js';
+import { Typed } from './typed.js';
 
 // The journal on a screen (crit. 13, 19, 32 — QA-W5-01).
 //
@@ -96,10 +97,30 @@ function value(field: string, raw: unknown): string | null {
  * (QA-W6-15). The reason is read from either place.
  */
 export function noteWords(t: { feedNotes: Record<string, string> }, note: string | null | undefined, after?: unknown): string | null {
-  const inside = (after as { reason?: unknown } | null | undefined)?.reason;
-  const own = ((note ?? (typeof inside === 'string' ? inside : '')) || '').trim();
+  const own = ownNote(note, after);
   if (!own) return null;
   return t.feedNotes[own] ?? own;
+}
+
+/** The note as written, from the note or from the reason kept inside what was written. */
+function ownNote(note: string | null | undefined, after?: unknown): string {
+  const inside = (after as { reason?: unknown } | null | undefined)?.reason;
+  return ((note ?? (typeof inside === 'string' ? inside : '')) || '').trim();
+}
+
+/**
+ * A journal note on a screen. The code's own words come from the dictionary,
+ * already in the reader's language; a person's words are shown as typed — or,
+ * when they are about a moped or a repair and a translation is ready, in the
+ * reader's language, marked as a translation with the original one tap away
+ * (ADR-0042). QA-W5-21 still holds: what was typed is what is kept.
+ */
+export function JournalNote({ note, after }: { note: string | null | undefined; after?: unknown }) {
+  const t = useT();
+  const own = ownNote(note, after);
+  if (!own) return null;
+  const coded = t.feedNotes[own];
+  return coded ? <>{coded}</> : <Typed text={own} />;
 }
 
 /**

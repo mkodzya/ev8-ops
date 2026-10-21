@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { LoadError } from '../components/LoadError.js';
 import { Empty, Loading, PageHead } from '../components/ui.js';
 import { useT } from '../i18n/index.js';
-import { ChangedFromTo, noteWords } from '../lib/journal.js';
+import { ChangedFromTo, JournalNote, noteWords } from '../lib/journal.js';
 import { useLoad } from '../lib/use.js';
 
 // Settings → Journal (wave 6 §3.8, B9-01, X3).
@@ -136,7 +136,7 @@ export function JournalPage() {
                         missing value (§3.8). */}
                     {l.kind === 'event' ? <span className="muted">{t.common.dash}</span> : <ChangedFromTo before={l.before} after={l.after} />}
                   </td>
-                  <td>{noteWords(t, l.note, l.after) ?? <span className="muted">{t.common.dash}</span>}</td>
+                  <td>{noteWords(t, l.note, l.after) ? <JournalNote note={l.note} after={l.after} /> : <span className="muted">{t.common.dash}</span>}</td>
                 </tr>
               ))}
             </tbody>
