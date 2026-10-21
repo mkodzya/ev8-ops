@@ -16,7 +16,7 @@ import { fmtDate } from '../format.js';
 import type { Dict } from '../i18n/en.js';
 import { useT } from '../i18n/index.js';
 import { placeOf } from '../lib/place.js';
-import { Typed } from '../lib/typed.js';
+import { Typed, useShownWords } from '../lib/typed.js';
 import { useLoad } from '../lib/use.js';
 import { useSession } from '../session.js';
 
@@ -51,12 +51,14 @@ const UNDO_WINDOW_MS = Number.parseFloat(tokens.undoWindow) * 1000;
  * Why a moped is in service, in the words somebody wrote (ADR-0005, addendum
  * 21.10.2026): the repair's kind when one was picked, else what happened, else
  * the reason of the move by hand. Null when nothing was written — the screen
- * says so with a quiet dash — and for a moped that is not in service.
+ * says so with a quiet dash — and for a moped that is not in service. A typed
+ * text is taken as the screen shows it — its translation when one is on
+ * screen (ADR-0042) — so the column sorts by the words the reader sees.
  */
-function whyText(v: Vehicle, t: Dict): string | null {
+function whyText(v: Vehicle, t: Dict, shownWords: (text: string | null | undefined) => string | null): string | null {
   const why = v.serviceWhy;
   if (!why) return null;
-  return why.kind ? t.wjob.reasons[why.kind] : why.text;
+  return why.kind ? t.wjob.reasons[why.kind] : (shownWords(why.text) ?? why.text);
 }
 
 /**
@@ -94,6 +96,7 @@ export function FleetPage() {
   // is still on offer, so nothing disappears under the finger.
   const [moved, setMoved] = useState<{ id: string; to: VehiclePool } | null>(null);
   const today = todayISO();
+  const shownWords = useShownWords();
 
   useEffect(() => {
     if (!moved) return;
@@ -184,7 +187,7 @@ export function FleetPage() {
             sort: { value: (v) => VEHICLE_STATES.indexOf(v.state) },
           },
           // Only a moped in service has a reason; every other row leaves the cell empty rather than forty dashes.
-          { key: 'why', label: t.wjob.reason, cell: (v) => <Why v={v} />, sort: { value: (v) => whyText(v, t) } },
+          { key: 'why', label: t.wjob.reason, cell: (v) => <Why v={v} />, sort: { value: (v) => whyText(v, t, shownWords) } },
           {
             key: 'where',
             label: t.fleet.where,
@@ -261,7 +264,7 @@ function StateSub({ v }: { v: Vehicle }) {
   const fact = v.currentRental ? (
     <CustomerName of={v.currentRental.customer} second={false} />
   ) : v.serviceWhy ? (
-    // The card is a link to the moped: the mark only says it is a translation, the card shows the original.
+    // The card is a link to the moped: the mark only says it is a translation; the moped's card turns it to the original.
     <Why v={v} quiet />
   ) : (
     <PlaceText of={v} />
