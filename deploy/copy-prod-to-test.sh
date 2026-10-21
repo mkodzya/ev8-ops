@@ -23,8 +23,13 @@
 # Nothing is sent to anyone afterwards: the test stand's worker only rolls
 # rental weeks and reads Kommo and Bank of Georgia, and production's notices
 # still waiting for Telegram come over given up (ADR-0038 §7) — production
-# sends them, the test stand never again. A Claude session does not run this
-# script on the server: the owner does.
+# sends them, the test stand never again. The one exception is the
+# translator (ADR-0042): with a key on the test stand, the copied notes about
+# mopeds and repairs that wait for a translation go to it, as they would have
+# from the test stand's own database — the key is put there on purpose. The
+# translator's spend per day is each stand's own: production's counts are not
+# carried, and the test stand counts afresh from the copy. A Claude session
+# does not run this script on the server: the owner does.
 set -euo pipefail
 
 OPS=/srv/ev8-ops
@@ -86,6 +91,8 @@ echo "copy: 4/4 the test stand's logins come back"
   echo "DELETE FROM sessions;"
   # Production's notices that had not gone yet are production's to send.
   echo "DO \$\$ BEGIN IF to_regclass('public.notices') IS NOT NULL THEN UPDATE notices SET gave_up_at = now(), last_failure = 'copied' WHERE sent_at IS NULL AND gave_up_at IS NULL; END IF; END \$\$;"
+  # What production's translator spent is production's (ADR-0042): the test stand counts its own from here.
+  echo "DO \$\$ BEGIN IF to_regclass('public.translation_days') IS NOT NULL THEN DELETE FROM translation_days; END IF; END \$\$;"
   echo "UPDATE users u SET password_hash = k.password_hash FROM keep_users k WHERE u.email = k.email;"
   echo "INSERT INTO sessions (token, user_id, created_at, last_seen_at, expires_at)
           SELECT k.token, u.id, k.created_at, k.last_seen_at, k.expires_at FROM keep_sessions k JOIN users u ON u.email = k.email;"
