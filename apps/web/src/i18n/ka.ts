@@ -19,6 +19,7 @@ import { workshopMaintenanceKa } from './workshop-maintenance.js';
 import { driveKa } from './drive.js';
 import { expKa } from './expenses.js';
 import { inBankKa } from './in-bank.js';
+import { contractSignedKa } from './contract-signed.js';
 import type { Dict } from './en.js';
 
 // Typed as Dict: a missing or misspelled key fails the build.
@@ -1159,6 +1160,7 @@ export const ka: Dict = {
       already_matched: 'ამონაწერის ეს ხაზი უკვე გადახდას მიბმულია.',
       already_merged: 'ეს ბარათი უკვე არქივშია — ის სხვას შეუერთდა.',
       already_returned: 'ეს იჯარა უკვე დახურულია.',
+      already_signed: 'ხელშეკრულება უკვე ხელმოწერილია — ეკრანზე ან Signify-ში.',
       already_voided: 'ეს გადახდა უკვე გაუქმებულია.',
       bad_channel: 'დეპოზიტი ბრუნდება ნაღდით ან გადარიცხვით.',
       bad_field: 'ველი არასწორად არის შევსებული. შეამოწმეთ ფორმა და სცადეთ ხელახლა.',
@@ -1179,6 +1181,7 @@ export const ka: Dict = {
       category_not_found: 'ხარჯების ასეთი კატეგორია არ არის.',
       charge_not_found: 'ქირაობას ასეთი ჯარიმა ან დარიცხვა არ აქვს — შესაძლოა, უკვე მოიხსნა.',
       closed_before_opened: 'რემონტი არ შეიძლება დაიხუროს გახსნის დღემდე.',
+      contract_not_marked: 'ხელშეკრულება არ არის მონიშნული Signify-ში ხელმოწერილად. განაახლეთ ეკრანი.',
       customer_archived: 'ეს ბარათი გაერთიანდა სხვასთან — იმუშავეთ იმ ბარათში.',
       customer_in_debt: 'კლიენტს აქვს დავალიანება. მოპედის გაცემა შეუძლია მხოლოდ მფლობელს, მიზეზით.',
       customer_mismatch: 'ეს იჯარა სხვა კლიენტისაა. აირჩიეთ ამ კლიენტის იჯარა.',
@@ -1377,4 +1380,5 @@ export const ka: Dict = {
   ...driveKa,
   ...expKa,
   ...inBankKa,
+  ...contractSignedKa,
 };
