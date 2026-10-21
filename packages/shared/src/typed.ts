@@ -43,6 +43,11 @@ export interface TextTranslation {
  * The API reads the texts by this list and by nothing else: its sources are
  * keyed by these names, so a source missing here does not compile. A rental's
  * notes are one line away (Mika was told so) — and only Mika adds that line.
+ *
+ * A point's note and a closed repair's odometer reason are allowed by the
+ * answer too, but no screen shows them as text yet (a point's note is only
+ * the input it is edited in), so sending them would pay for words nobody
+ * reads. Each comes back here with the screen that shows it.
  */
 export const TRANSLATED_SOURCES = [
   'vehicle_events.reason',
@@ -51,7 +56,6 @@ export const TRANSLATED_SOURCES = [
   'service_jobs.notes',
   'service_jobs.reject_reason',
   'service_jobs.odometer_reason',
-  'service_jobs.closed_odometer_reason',
   'service_works.free_text',
   'service_works.reject_reason',
   'service_parts.reject_reason',
@@ -59,7 +63,6 @@ export const TRANSLATED_SOURCES = [
   'battery_moves.reason',
   'battery_inventories.reason',
   'workshops.note',
-  'locations.note',
   'audit_log.note',
 ] as const;
 export type TranslatedSource = (typeof TRANSLATED_SOURCES)[number];
@@ -123,11 +126,17 @@ export const TRANSLATED_JOURNAL_LINES: readonly { action: string; entityType: st
 
 /**
  * Reasons the code writes into a moped's or a repair's record with a rental's
- * or a sale's words inside: a return undone carries the rental's reason, a
- * sale called off the sale's. They sit in sources above and still never go
- * out.
+ * or a sale's words inside. They sit in sources above and still never go out:
+ * - a return undone carries the rental's reason, a sale called off the sale's,
+ *   a buy-back the sale's number;
+ * - a moped handed to a renter for the first time, or into a rental by a swap,
+ *   joins the rental park «hand-over R-00012» / «swap R-00012»;
+ * - a repair a return or a swap opens says what the act found, behind the
+ *   rental's number — «R-00012: …»: the act's words are the rental's
+ *   (`acts` never leaves), and so is the swap's reason it falls back on. The
+ *   same words reach the moped's history when the repair takes it out.
  */
-const NEVER_PREFIXES = ['return undone:', 'sale SL-', 'bought back under SL-'];
+const NEVER_STARTS = [/^return undone:/, /^sale SL-/, /^bought back under SL-/, /^hand-over R-\d/, /^swap R-\d/, /^R-\d+: /];
 
 /** Longer than this is not a note; it stays as typed rather than run up a bill. */
 export const MAX_TRANSLATED_CHARS = 2000;
@@ -145,7 +154,7 @@ const DIGIT = /\d/;
 export function translatable(text: string | null | undefined): boolean {
   const s = (text ?? '').trim();
   if (s.length < 3 || s.length > MAX_TRANSLATED_CHARS) return false;
-  if (NEVER_PREFIXES.some((p) => s.startsWith(p))) return false;
+  if (NEVER_STARTS.some((p) => p.test(s))) return false;
   if (!A_WORD.test(s)) return false;
   if (!SPACE.test(s) && DIGIT.test(s)) return false;
   return true;

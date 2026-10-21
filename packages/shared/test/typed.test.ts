@@ -16,9 +16,14 @@ describe('what may be sent to the translator (Mika, 21.10.2026, answer A)', () =
   it('lists only mopeds and repairs, and no table of customers, rentals, money, sales or purchases', () => {
     const tables = new Set(TRANSLATED_SOURCES.map((s) => s.split('.')[0]));
     expect([...tables].sort()).toEqual(
-      ['audit_log', 'battery_inventories', 'battery_moves', 'locations', 'service_jobs', 'service_parts', 'service_works', 'stock_moves', 'vehicle_events', 'vehicles', 'workshops'].sort(),
+      ['audit_log', 'battery_inventories', 'battery_moves', 'service_jobs', 'service_parts', 'service_works', 'stock_moves', 'vehicle_events', 'vehicles', 'workshops'].sort(),
     );
     for (const never of NEVER_TRANSLATED_TABLES) expect(tables.has(never), never).toBe(false);
+  });
+
+  it('sends nothing no screen shows as text: a point’s note, a closed repair’s odometer reason', () => {
+    expect(TRANSLATED_SOURCES).not.toContain('locations.note');
+    expect(TRANSLATED_SOURCES).not.toContain('service_jobs.closed_odometer_reason');
   });
 
   it('takes no rental, sale or arrival reason of a moped, and no journal line about money or a customer', () => {
@@ -50,6 +55,16 @@ describe('which texts are worth a translation', () => {
     expect(translatable('return undone: клиент вернулся за мопедом')).toBe(false);
     expect(translatable('sale SL-00007 cancelled: покупатель передумал')).toBe(false);
     expect(translatable('bought back under SL-00007, needs work')).toBe(false);
+  });
+
+  it('never sends a rental’s number with its words: a hand-over, a swap, an act’s damage behind the rental’s number', () => {
+    expect(translatable('hand-over R-00012')).toBe(false);
+    expect(translatable('swap R-00012')).toBe(false);
+    // A return's or a swap's act, as the repair it opened says what happened.
+    expect(translatable('R-00012: царапина на крыле; ключ: погнут')).toBe(false);
+    expect(translatable('R-00012: after return R-00012')).toBe(false);
+    // A repair's own words that only mention a rental are still a repair's.
+    expect(translatable('после аренды R-00012 стучит двигатель')).toBe(true);
   });
 
   it('skips a text too long to be a note', () => {
