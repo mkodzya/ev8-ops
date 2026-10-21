@@ -1,6 +1,7 @@
 import type { Dict } from '../i18n/en.js';
 import { currentDict, useT } from '../i18n/index.js';
 import { fmtDate, formatGel } from '../format.js';
+import { signedAtText } from '../components/Documents.js';
 import { Typed } from './typed.js';
 
 // The journal on a screen (crit. 13, 19, 32 — QA-W5-01).
@@ -172,7 +173,8 @@ export function ChangedFromTo({ action, before, after }: { action?: string; befo
   // Which week a move was made on: the number is the same on both sides, so
   // no pair carries it (ADR-0041).
   const week = action && WEEK_SHIFT.has(action) && typeof now.seq === 'number' ? t.weekShift.journal.week(now.seq) : null;
-  if (pairs.length === 0 && moved === 0) return null;
+  const markOff = markCleared(t, action, was, now);
+  if (pairs.length === 0 && moved === 0 && !markOff) return null;
   return (
     <>
       {week && <span className="muted">{` · ${week}`}</span>}
@@ -184,8 +186,24 @@ export function ChangedFromTo({ action, before, after }: { action?: string; befo
         </span>
       ))}
       {moved > 0 && <span className="muted">{` · ${t.saleDate.linesMoved(moved)}`}</span>}
+      {markOff && <span className="muted">{` · ${markOff}`}</span>}
     </>
   );
+}
+
+/**
+ * A swap that took the «Подписан в Signify» mark off (ADR-0040, ADR-0039).
+ * The line kept `contractMarkCleared` and the mark itself on its «before»
+ * side, and the screen said nothing of either (QA 21.10.2026): now it says
+ * the mark came off, with when it was made and by whom where that was kept.
+ */
+function markCleared(t: Dict, action: string | undefined, was: Bag, now: Bag): string | null {
+  if (action !== 'rental.swap' || now?.contractMarkCleared !== true) return null;
+  const mark = (was?.contractMark ?? null) as { markedAt?: unknown; markedBy?: unknown } | null;
+  const made = [typeof mark?.markedAt === 'string' ? signedAtText(mark.markedAt) : null, typeof mark?.markedBy === 'string' ? mark.markedBy : null].filter(
+    (x): x is string => !!x,
+  );
+  return t.swap.markCleared(made.length > 0 ? made.join(', ') : null);
 }
 
 /**

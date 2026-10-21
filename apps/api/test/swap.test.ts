@@ -293,6 +293,9 @@ describe.skipIf(!HAS_DB)('a swap in a running rental (ADR-0040)', () => {
     const log = await f.prisma.auditLog.findFirstOrThrow({ where: { entityId: f.rentalId, action: 'rental.swap' } });
     expect(log.after).toMatchObject({ contractSignedBefore: false, contractMarkCleared: true });
     expect(log.before).toMatchObject({ contractMark: { markNote: 'test: signed in Signify' } });
+    // With the name of whoever marked it, which the journal line shows beside the time (QA 21.10.2026).
+    const marker = await f.prisma.user.findFirstOrThrow({ where: { id: (log.before as { contractMark: { markedById: string } }).contractMark.markedById }, select: { name: true } });
+    expect(log.before).toMatchObject({ contractMark: { markedBy: marker.name, markedAt: expect.any(String) } });
 
     // The new contract signed in Signify is marked like the first.
     const again = await call(manager, 'POST', `/api/rentals/${f.rentalId}/contract/signed-elsewhere`, {});

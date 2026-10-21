@@ -145,6 +145,8 @@ export function SwapWizard() {
   );
   const handedOn = handOver?.occurredOn ?? r.pickedUpOn;
   const pickupKm = handOver?.odometerKm ?? null;
+  // The contract as it stands before the swap: signed on the screen, marked signed in Signify, or neither.
+  const contract = card.data.documents.contract;
   const openJob = oldMoped.data?.serviceJobs.find((j) => j.status === 'open' || j.status === 'draft') ?? null;
 
   // ---- the moped given back -------------------------------------------------
@@ -427,8 +429,12 @@ export function SwapWizard() {
             go={() => set({ step: 2 })}
           />
           {keyMissing && <p className="warn-text">{t.swap.sumKey(formatGel(KEY_FEE_TETRI, { decimals: false }))}</p>}
+          {/* What happens to this rental's contract, and only that: the copy signed on the
+              screen is archived, a Signify mark comes off — said where it is so (QA 21.10.2026). */}
           <p className="hint muted">
             {t.swap.sumContract}: {t.swap.contractNote}
+            {contract.signedAt && <> {t.swap.contractSignedKept}</>}
+            {contract.signedElsewhere && <> {t.swap.contractMarkOff}</>}
           </p>
           <p className="hint muted">{t.swap.stays}</p>
           {progress && <p className="hint muted">{progress}</p>}
