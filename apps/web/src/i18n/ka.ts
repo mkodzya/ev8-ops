@@ -16,6 +16,7 @@ import { workshopApprovalKa } from './workshop-approval.js';
 import { workshopPartsKa } from './workshop-parts.js';
 import { workshopPayoutsKa } from './workshop-payouts.js';
 import { workshopMaintenanceKa } from './workshop-maintenance.js';
+import { workshopsKa } from './workshops.js';
 import { driveKa } from './drive.js';
 import { expKa } from './expenses.js';
 import { inBankKa } from './in-bank.js';
@@ -1351,6 +1352,8 @@ export const ka: Dict = {
       week_not_found: 'ასეთი კვირა ამ იჯარაში არ არის.',
       week_paid_before_transfer: 'ეს კვირა იჯარის გადმოტანამდეა გადახდილი — ფასდაკლება შეუძლებელია.',
       withheld_over_total: 'რემონტის ღირებულებაზე მეტის დაკავება შეუძლებელია.',
+      workshop_archived: 'ეს სახელოსნო სიიდან მოხსნილია. აირჩიეთ სხვა ან დააბრუნეთ «პარამეტრები → შეკეთება»-ში.',
+      workshop_archived_exists: 'ამ სახელით სახელოსნო სიიდან მოხსნილია. დააბრუნეთ ის: «…» → «დაბრუნება».',
       workshop_exists: 'ამ სახელით სახელოსნო უკვე სიაშია.',
       workshop_not_found: 'ასეთი სახელოსნო არ არის.',
       wrong_password: 'მიმდინარე პაროლი არასწორია.',
@@ -1374,6 +1377,7 @@ export const ka: Dict = {
   ...workshopPartsKa,
   ...workshopPayoutsKa,
   ...workshopMaintenanceKa,
+  ...workshopsKa,
   ...driveKa,
   ...expKa,
   ...inBankKa,
