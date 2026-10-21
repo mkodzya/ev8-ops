@@ -1,6 +1,6 @@
 import { FailureProvider, SubmitButton, useFieldError } from '../ds/form/Form.js';
 import type { Failure, SubmitState } from '../ds/form/operation.js';
-import { useEffect, type ReactNode } from 'react';
+import { cloneElement, isValidElement, useEffect, useId, type ReactNode } from 'react';
 import { useT } from '../i18n/index.js';
 
 // One step per screen, one button at the bottom, reachable with a thumb
@@ -73,6 +73,11 @@ export function Wizard(props: {
   );
 }
 
+/** The controls a field names by its label: one of them, alone inside the field. */
+const CONTROLS = new Set(['input', 'select', 'textarea']);
+
+type ControlProps = { 'aria-label'?: string; 'aria-labelledby'?: string; 'aria-describedby'?: string; 'aria-invalid'?: boolean };
+
 /**
  * A labelled field. `name` is the API's name for it: when the server refuses
  * the form naming that field, the words come under it (QA-1-08).
@@ -80,11 +85,41 @@ export function Wizard(props: {
 export function Field({ label, children, hint, name, error: own }: { label: string; children: ReactNode; hint?: string; name?: string; error?: string | null }) {
   // The server's words, or the form's own when it already knows the value will not pass (QA-W3-05).
   const error = useFieldError(name) ?? own ?? null;
+  const id = useId();
+  const labelId = `${id}-label`;
+  const noteId = `${id}-note`;
+  const note = error ?? hint ?? null;
+  // The wrapping <label> alone gave a screen reader the label, the value typed
+  // and the hint run together as the field's name — the workshop's «Название»
+  // read as what was typed in it — or no name at all (QA, 22.10.2026). A lone
+  // control is tied to the label by id and to the words under it as its
+  // description; one that names itself keeps its own name.
+  let control = children;
+  if (isValidElement<ControlProps>(children) && typeof children.type === 'string' && CONTROLS.has(children.type)) {
+    const given = children.props;
+    control = cloneElement(children, {
+      'aria-labelledby': given['aria-label'] ? given['aria-labelledby'] : (given['aria-labelledby'] ?? labelId),
+      'aria-describedby': [given['aria-describedby'], note ? noteId : null].filter(Boolean).join(' ') || undefined,
+      'aria-invalid': error ? true : given['aria-invalid'],
+    });
+  }
   return (
     <label className={`field ${error ? 'field-bad' : ''}`} data-field={name}>
-      <span className="lbl">{label}</span>
-      {children}
-      {error ? <span className="field-err">{error}</span> : hint && <span className="hint muted">{hint}</span>}
+      <span className="lbl" id={labelId}>
+        {label}
+      </span>
+      {control}
+      {error ? (
+        <span className="field-err" id={noteId}>
+          {error}
+        </span>
+      ) : (
+        hint && (
+          <span className="hint muted" id={noteId}>
+            {hint}
+          </span>
+        )
+      )}
     </label>
   );
 }

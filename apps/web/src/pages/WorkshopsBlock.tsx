@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { api } from '../api.js';
 import { LoadError } from '../components/LoadError.js';
 import { RowMenu } from '../components/RowMenu.js';
@@ -31,12 +32,28 @@ export interface KeptWorkshop {
   openJobs: number;
 }
 
+/** The block's place on Settings → Repair: «Изменить список» in «Открыть ремонт» leads to it. */
+export const WORKSHOPS_ANCHOR = 'workshops';
+
 export function WorkshopsBlock() {
   const t = useT();
   const { data, failure, reload } = useLoad<{ workshops: KeptWorkshop[] }>('/api/workshops?all=1');
   const toast = useToast();
   const op = useOperation();
   const [editing, setEditing] = useState<KeptWorkshop | 'new' | null>(null);
+
+  // Arrived by «Изменить список»: on a phone the block is below the first
+  // screen, and the page opened at its top (QA, 22.10.2026). Brought into view
+  // once, when the list is drawn, and without moving under reduced motion.
+  const { hash } = useLocation();
+  const block = useRef<HTMLElement>(null);
+  const brought = useRef(false);
+  useEffect(() => {
+    if (hash !== `#${WORKSHOPS_ANCHOR}` || !data || brought.current) return;
+    brought.current = true;
+    const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    block.current?.scrollIntoView({ block: 'start', behavior: still ? 'auto' : 'smooth' });
+  }, [hash, data]);
 
   // Reversible, so it is undone from the message rather than confirmed first (ux.md, principle 14).
   const setArchived = async (w: KeptWorkshop, archived: boolean) => {
@@ -58,7 +75,7 @@ export function WorkshopsBlock() {
   const onList = data ? data.workshops.filter((w) => !w.archived).length : 0;
 
   return (
-    <section className="card">
+    <section className="card wshop-block" id={WORKSHOPS_ANCHOR} ref={block}>
       <BlockHead title={t.wshop.title} sub={data ? t.wshop.count(onList) : undefined} note={t.wshop.hint}>
         <button type="button" className="pill pill-sm" onClick={() => setEditing('new')}>
           + {t.wshop.add}
