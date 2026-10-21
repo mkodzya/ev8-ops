@@ -124,6 +124,15 @@ services:
       # by deploy/set-drive-key.sh. Blank — the link is off.
       DRIVE_SA_KEY: ${DRIVE_SA_KEY-}
       DRIVE_ROOT: ${DRIVE_ROOT-}
+      # The notices to the workshop's Telegram group (ADR-0038 §6–7): the API
+      # only sends — no webhook, no updates. Optional on purpose: without the
+      # bot's token or the group the notices wait and nothing is sent. Mika
+      # registers the bot himself and writes both, with this stand's own
+      # address for the links under each notice (PUBLIC_URL), through
+      # deploy/set-telegram.sh — never through a session, a commit or a log.
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN-}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID-}
+      PUBLIC_URL: ${PUBLIC_URL-}
     # No ports either. The browser reaches /api through the web container,
     # which is the same origin the page came from.
     depends_on:
@@ -158,6 +167,11 @@ services:
       TBC_NIGHT_CRON: ${TBC_NIGHT_CRON:-47 * * * *}
       # The rentals folders in Drive, once a night (ADR-0031).
       DRIVE_CRON: ${DRIVE_CRON:-23 3 * * *}
+      # The Telegram notices: what did not go, every minute; mopeds due for
+      # maintenance and parts below the minimum, looked for hourly from 09:00
+      # to 20:00 — the group is not woken at night (ADR-0038 §6).
+      NOTICES_CRON: ${NOTICES_CRON:-* * * * *}
+      NOTICES_SCAN_CRON: ${NOTICES_SCAN_CRON:-0 9-20 * * *}
       TZ: ${TZ:-Asia/Tbilisi}
     depends_on:
       api:

@@ -13,6 +13,8 @@
 // repair is its number and its moped, a person is the mechanic or whoever
 // decided.
 
+import { publicUrl } from './origin.js';
+
 export type NoticeLang = 'ka' | 'ru';
 
 /** A repair as a notice names it: its number and its moped's. */
@@ -40,6 +42,8 @@ export interface NoticeWords {
   maintenanceSoon: (moped: string, dueKm: string, currentKm: string, leftKm: string) => string;
   maintenanceOverdue: (moped: string, dueKm: string, currentKm: string, overKm: string) => string;
   stockLow: (name: string, onHand: string, minQty: string) => string;
+  /** The one test message deploy/set-telegram.sh sends when the bot is put on a stand. */
+  probe: string;
   /** The repair's reason, as the mechanic picked it (SERVICE_REASONS). */
   reasons: Record<string, string>;
   minutes: string;
@@ -64,6 +68,8 @@ const ka: NoticeWords = {
   maintenanceOverdue: (moped, due, current, over) =>
     `🛠 მოპედი <b>${moped}</b>: გეგმიური მომსახურება ვადაგადაცილებულია — ნიშნული ${due} კმ, ახლა ${current} კმ, გადაცილება ${over} კმ`,
   stockLow: (name, onHand, min) => `📦 <b>${name}</b> მინიმუმზე ნაკლებია: ნაშთი ${onHand}, გვქონდეს არანაკლებ ${min}`,
+  probe:
+    '🔔 EV8 Ops — საცდელი შეტყობინება. ამ ჯგუფში მოვა: შეკეთება ელოდება დამტკიცებას, დამტკიცდა, უარყოფილია, დაიხურა; გეგმიური მომსახურების დრო; ნაწილი მინიმუმზე ნაკლებია.',
   reasons: { wear: 'ცვეთა', accident: 'ავარია', renter_fault: 'მოიჯარის ბრალი', warranty: 'გარანტია', planned: 'გეგმიური მომსახურება' },
   minutes: 'წთ',
   hours: 'სთ',
@@ -83,6 +89,7 @@ const ru: NoticeWords = {
   maintenanceSoon: (moped, due, current, left) => `Мопед <b>${moped}</b>: пора на ТО — отметка ${due} км, сейчас ${current} км, осталось ${left} км`,
   maintenanceOverdue: (moped, due, current, over) => `Мопед <b>${moped}</b>: ТО просрочено — отметка ${due} км, сейчас ${current} км, перепробег ${over} км`,
   stockLow: (name, onHand, min) => `Деталь <b>${name}</b> ниже минимума: остаток ${onHand}, держать не меньше ${min}`,
+  probe: 'EV8 Ops — тестовое сообщение. В эту группу будут приходить: ремонт ждёт согласования, согласован, отклонён, закрыт; пора на ТО; деталь ниже минимума.',
   reasons: { wear: 'износ', accident: 'ДТП', renter_fault: 'вина арендатора', warranty: 'гарантия', planned: 'плановое ТО' },
   minutes: 'мин',
   hours: 'ч',
@@ -91,3 +98,13 @@ const ru: NoticeWords = {
 /** Georgian first, Russian under it. */
 export const NOTICE_LANGS: readonly NoticeLang[] = ['ka', 'ru'];
 export const NOTICE_WORDS: Record<NoticeLang, NoticeWords> = { ka, ru };
+
+/**
+ * Both lines, Georgian first, and the link under them when the stand knows
+ * its own address (`PUBLIC_URL`, lib/origin.ts); without it, no link — the
+ * number is enough to find the record, and a guessed address is not.
+ */
+export function twoLanguages(line: (w: NoticeWords, lang: NoticeLang) => string, path: string, e: NodeJS.ProcessEnv = process.env): string {
+  const origin = publicUrl(e);
+  return [...NOTICE_LANGS.map((l) => line(NOTICE_WORDS[l], l)), ...(origin ? [`${origin}${path}`] : [])].join('\n');
+}

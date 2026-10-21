@@ -97,6 +97,14 @@ describe('the Telegram link, without a database', () => {
     }
   });
 
+  it('writes the test message deploy/set-telegram.sh sends in both languages, Georgian first, with the stand’s link', async () => {
+    const { twoLanguages } = await import('../src/lib/noticeWords.js');
+    const [ka, ru, link] = twoLanguages((w) => w.probe, '/service', { PUBLIC_URL: STAND }).split('\n');
+    expect(ka).toMatch(/^🔔 EV8 Ops — საცდელი შეტყობინება/);
+    expect(ru).toMatch(/^EV8 Ops — тестовое сообщение/);
+    expect(link).toBe(`${STAND}/service`);
+  });
+
   it('escapes what Telegram would read as HTML', async () => {
     const { escapeHtml } = await import('../src/lib/notices.js');
     expect(escapeHtml('A <b> & "c"')).toBe('A &lt;b&gt; &amp; "c"');

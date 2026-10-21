@@ -23,8 +23,7 @@ import type { Prisma } from '../generated/prisma/client.js';
 import { prisma } from './db.js';
 import { downtimeOf } from './downtime.js';
 import { maintenanceOf } from './maintenance.js';
-import { NOTICE_LANGS, NOTICE_WORDS, type JobPeople, type JobRef, type NoticeLang, type NoticeWords, type Waiting } from './noticeWords.js';
-import { publicUrl } from './origin.js';
+import { twoLanguages as message, type JobPeople, type JobRef, type NoticeLang, type NoticeWords, type Waiting } from './noticeWords.js';
 import { partRows } from './stock.js';
 import { TelegramError, telegramClient, telegramConfig, type TelegramConfig, type TelegramFailure } from './telegram.js';
 
@@ -84,12 +83,6 @@ function span(min: number, w: NoticeWords): string {
 
 /** A moped by its number; one not numbered yet by the tail of its VIN. */
 const mopedOf = (v: { fleetNo: number | null; vin: string }): string => fleetNumber(v.fleetNo) ?? `···${v.vin.slice(-6)}`;
-
-/** Both lines, Georgian first, and the link under them when the stand knows its address. */
-function message(line: (w: NoticeWords, lang: NoticeLang) => string, path: string, e: NodeJS.ProcessEnv): string {
-  const origin = publicUrl(e);
-  return [...NOTICE_LANGS.map((l) => line(NOTICE_WORDS[l], l)), ...(origin ? [`${origin}${path}`] : [])].join('\n');
-}
 
 type NoticeRow = { kind: string; entityId: string; dedupeKey: string };
 
