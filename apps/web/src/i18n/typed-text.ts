@@ -14,8 +14,8 @@ export const typedTextEn = {
     writtenIn: { ka: 'in Georgian', ru: 'in Russian', en: 'in English', other: 'in another language' } as Record<string, string>,
     showOriginal: (from: string) => `Translated ${from}. Show the original`,
     showTranslation: (inLang: string) => `The original, ${inLang}. Show the translation`,
-    /** Beside a translation inside a link: the record it opens shows the original. */
-    quietHint: (from: string) => `Translated ${from}; the record shows the original`,
+    /** Beside a translation inside a link: the record it opens is translated too, and a tap on its mark shows the original. */
+    quietHint: (from: string) => `Translated ${from}; in the record, tap its mark for the original`,
   },
 };
 
@@ -29,7 +29,7 @@ export const typedTextRu: TypedText = {
     writtenIn: { ka: 'на грузинском', ru: 'на русском', en: 'на английском', other: 'на другом языке' },
     showOriginal: (from) => `Переведено ${from}. Показать оригинал`,
     showTranslation: (inLang) => `Оригинал ${inLang}. Показать перевод`,
-    quietHint: (from) => `Переведено ${from}; оригинал — в записи`,
+    quietHint: (from) => `Переведено ${from}; оригинал — в записи, касанием пометки`,
   },
 };
 
@@ -41,6 +41,6 @@ export const typedTextKa: TypedText = {
     writtenIn: { ka: 'ქართულად', ru: 'რუსულად', en: 'ინგლისურად', other: 'სხვა ენაზე' },
     showOriginal: (from) => `ნათარგმნია ${from}. ორიგინალის ჩვენება`,
     showTranslation: (inLang) => `ორიგინალი ${inLang}. თარგმანის ჩვენება`,
-    quietHint: (from) => `ნათარგმნია ${from}; ორიგინალი — ჩანაწერში`,
+    quietHint: (from) => `ნათარგმნია ${from}; ორიგინალი — ჩანაწერში, ნიშანზე შეხებით`,
   },
 };
