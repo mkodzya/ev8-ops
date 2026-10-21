@@ -359,6 +359,8 @@ export const wave4En = {
     'supplier payment voided': 'a payment to the supplier was annulled',
     'logistics corrected': 'the logistics were corrected',
     'money paid before the move': 'money paid before the move was stated',
+    'taken off the list': 'taken off the list',
+    'put back on the list': 'put back on the list',
   } as Record<string, string>,
   batWords: { handed_out: 'Handed out', came_back: 'Came back' } as Record<string, string>,
   seg: {
@@ -688,6 +690,8 @@ export const wave4Ru: Wave4 = {
     'supplier payment voided': 'платёж поставщику отменён',
     'logistics corrected': 'правка логистики',
     'money paid before the move': 'указана оплата до переноса',
+    'taken off the list': 'убрана из списка',
+    'put back on the list': 'возвращена в список',
   },
   batWords: { handed_out: 'Выдано', came_back: 'Вернулось' },
   seg: {
@@ -1011,6 +1015,8 @@ export const wave4Ka: Wave4 = {
     'supplier payment voided': 'მომწოდებლის გადახდა გაუქმდა',
     'logistics corrected': 'ლოგისტიკის შესწორება',
     'money paid before the move': 'მითითებულია გადმოტანამდე გადახდილი',
+    'taken off the list': 'სიიდან მოიხსნა',
+    'put back on the list': 'სიაში დაბრუნდა',
   },
   batWords: { handed_out: 'გაიცა', came_back: 'დაბრუნდა' },
   seg: {

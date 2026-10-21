@@ -25,6 +25,7 @@ import { workshopApprovalEn } from './workshop-approval.js';
 import { workshopPartsEn } from './workshop-parts.js';
 import { workshopPayoutsEn } from './workshop-payouts.js';
 import { workshopMaintenanceEn } from './workshop-maintenance.js';
+import { workshopsEn } from './workshops.js';
 import { driveEn } from './drive.js';
 import { expEn } from './expenses.js';
 import { inBankEn } from './in-bank.js';
@@ -1368,6 +1369,8 @@ export const en = {
       week_not_found: 'No such week in this rental.',
       week_paid_before_transfer: 'This week was paid before the rental was carried over — it cannot be discounted.',
       withheld_over_total: 'You cannot withhold more than the repair costs.',
+      workshop_archived: 'This workshop was taken off the list. Choose another, or put it back in Settings → Repair.',
+      workshop_archived_exists: 'A workshop by that name was taken off the list. Put it back instead: «…» → «Put back».',
       workshop_exists: 'A workshop by that name is already on the list.',
       workshop_not_found: 'No such workshop.',
       wrong_password: 'The current password is wrong.',
@@ -1391,6 +1394,7 @@ export const en = {
   ...workshopPartsEn,
   ...workshopPayoutsEn,
   ...workshopMaintenanceEn,
+  ...workshopsEn,
   ...driveEn,
   ...expEn,
   ...inBankEn,

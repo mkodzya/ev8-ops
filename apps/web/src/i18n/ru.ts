@@ -16,6 +16,7 @@ import { workshopApprovalRu } from './workshop-approval.js';
 import { workshopPartsRu } from './workshop-parts.js';
 import { workshopPayoutsRu } from './workshop-payouts.js';
 import { workshopMaintenanceRu } from './workshop-maintenance.js';
+import { workshopsRu } from './workshops.js';
 import { driveRu } from './drive.js';
 import { expRu } from './expenses.js';
 import { inBankRu } from './in-bank.js';
@@ -1365,6 +1366,8 @@ export const ru: Dict = {
       week_not_found: 'Такой недели в аренде нет.',
       week_paid_before_transfer: 'Эта неделя оплачена до переноса аренды — скидку на неё дать нельзя.',
       withheld_over_total: 'Удержать больше стоимости ремонта нельзя.',
+      workshop_archived: 'Эта мастерская убрана из списка. Выберите другую или верните её в «Настройки → Ремонт».',
+      workshop_archived_exists: 'Мастерская с таким названием убрана из списка. Верните её: «…» → «Вернуть».',
       workshop_exists: 'Мастерская с таким названием уже есть в списке.',
       workshop_not_found: 'Такой мастерской нет.',
       wrong_password: 'Текущий пароль неверный.',
@@ -1388,6 +1391,7 @@ export const ru: Dict = {
   ...workshopPartsRu,
   ...workshopPayoutsRu,
   ...workshopMaintenanceRu,
+  ...workshopsRu,
   ...driveRu,
   ...expRu,
   ...inBankRu,
