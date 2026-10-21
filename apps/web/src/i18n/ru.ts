@@ -1,5 +1,6 @@
 import { wave3Ru } from './wave3.js';
 import { wave4Ru } from './wave4.js';
+import { vehicleStateRu } from './vehicle-state.js';
 import { wave5salesRu } from './wave5-sales.js';
 import { wave5purchasesRu } from './wave5-purchases.js';
 import { wave5serviceRu } from './wave5-service.js';
@@ -1370,6 +1371,7 @@ export const ru: Dict = {
   },
   ...wave3Ru,
   ...wave4Ru,
+  ...vehicleStateRu,
   ...wave5salesRu,
   ...wave5purchasesRu,
   ...wave5serviceRu,

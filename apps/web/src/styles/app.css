@@ -278,6 +278,14 @@ a { color: var(--accent); text-decoration: none; }
    the calendar's mark as a pill. No tint, a thin outline, the word in ink and
    a round ink dot (the default mark). Calm on purpose: it is not lateness. */
 .rstatus-due_today { background: transparent; color: var(--ink); box-shadow: inset 0 0 0 1px var(--line-control); }
+/* The sheet that changes a state by hand (21.10.2026): the state the moped is
+   in, as the same pill as everywhere with «now» beside it, then an arrow and
+   the states it may go to. At 375 px and in Georgian the arrow and its
+   choices drop to the next line together; the pills wrap among themselves. */
+.state-pick { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
+.state-now { display: inline-flex; align-items: center; gap: 6px; font: var(--text-label); }
+.state-to { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.state-to > .chips { min-width: 0; }
 
 /* ---- login ---------------------------------------------------------- */
 .login-wrap { min-height: 100%; display: grid; place-items: center; padding: 24px; }

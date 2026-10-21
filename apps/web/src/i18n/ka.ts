@@ -1,5 +1,6 @@
 import { wave3Ka } from './wave3.js';
 import { wave4Ka } from './wave4.js';
+import { vehicleStateKa } from './vehicle-state.js';
 import { wave5salesKa } from './wave5-sales.js';
 import { wave5purchasesKa } from './wave5-purchases.js';
 import { wave5serviceKa } from './wave5-service.js';
@@ -1359,6 +1360,7 @@ export const ka: Dict = {
   },
   ...wave3Ka,
   ...wave4Ka,
+  ...vehicleStateKa,
   ...wave5salesKa,
   ...wave5purchasesKa,
   ...wave5serviceKa,

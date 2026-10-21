@@ -9,6 +9,7 @@
 // Money keeps ONE format in every language (formatGel in @ev8/shared).
 import { wave3En } from './wave3.js';
 import { wave4En } from './wave4.js';
+import { vehicleStateEn } from './vehicle-state.js';
 import { wave5salesEn } from './wave5-sales.js';
 import { wave5purchasesEn } from './wave5-purchases.js';
 import { wave5serviceEn } from './wave5-service.js';
@@ -1373,6 +1374,7 @@ export const en = {
   },
   ...wave3En,
   ...wave4En,
+  ...vehicleStateEn,
   ...wave5salesEn,
   ...wave5purchasesEn,
   ...wave5serviceEn,
