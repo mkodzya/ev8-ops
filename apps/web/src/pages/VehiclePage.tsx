@@ -43,7 +43,7 @@ interface Card {
   serviceJobs: {
     id: string;
     number: string;
-    status: 'open' | 'done' | 'cancelled';
+    status: 'draft' | 'open' | 'done' | 'cancelled';
     payer: 'company' | 'customer';
     reason: string;
     openedOn: string;
@@ -319,7 +319,8 @@ export function VehiclePage() {
                   {j.reason} <span className="muted">· {t.service.payers[j.payer]}</span>
                   {/* What it cost is the owners' (ADR-0033 §4). */}
                   {j.totalTetri != null && <span className="muted"> · {formatGel(j.totalTetri)}</span>}
-                  <span className={j.status === 'open' ? 'warn-text' : 'muted'}> · {t.service.statuses[j.status]}</span>
+                  {/* A repair waiting for approval has no word among the old statuses: the repairs' own says it. */}
+                  <span className={j.status === 'open' || j.status === 'draft' ? 'warn-text' : 'muted'}> · {j.status === 'draft' ? t.repair.statuses.draft : t.service.statuses[j.status]}</span>
                   {/* Downtime in hours where the repair kept its times (ADR-0038). */}
                   {j.downtime && <span className="muted mono"> · {spanText(j.downtime.minutes, t, locale)}</span>}
                 </span>
