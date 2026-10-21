@@ -398,7 +398,7 @@ function DateSheet({ sale, signedSoldOn, onClose, onDone }: { sale: SaleCard['sa
       }}
       onDone={onDone}
     >
-      <Field label={t.sell.soldOn} hint={t.saleDate.now(fmtDate(sale.soldOn))} name="soldOn" error={valid && f.soldOn > today ? t.errors.codes.sale_date_future : null}>
+      <Field label={t.sell.soldOn} hint={t.saleDate.recorded(fmtDate(sale.soldOn))} name="soldOn" error={valid && f.soldOn > today ? t.errors.codes.sale_date_future : null}>
         <input className="input mono" type="date" max={today} value={f.soldOn} onChange={(e) => setF({ ...f, soldOn: e.target.value })} />
       </Field>
       {plan && (

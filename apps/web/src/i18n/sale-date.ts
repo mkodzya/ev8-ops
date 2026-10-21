@@ -8,7 +8,7 @@ export const saleDateEn = {
   saleDate: {
     menu: 'Change the sale date',
     title: 'Change the sale date',
-    now: (date: string) => `Now: ${date}`,
+    recorded: (date: string) => `Recorded: ${date}`,
     changes: 'What changes',
     history: 'Moped history: sold',
     line: (seq: number) => `Instalment #${seq}`,
@@ -20,6 +20,7 @@ export const saleDateEn = {
     save: 'Save the date',
     beforeHistory: (date: string) => `The last event in the moped’s history is on ${date}. Date the sale on that day or later.`,
     unchanged: 'The sale already has this date.',
+    linesMoved: (n: number) => `Instalments moved: ${n}`,
   },
 };
 
@@ -27,7 +28,7 @@ export const saleDateRu: typeof saleDateEn = {
   saleDate: {
     menu: 'Изменить дату продажи',
     title: 'Изменить дату продажи',
-    now: (date: string) => `Сейчас: ${date}`,
+    recorded: (date: string) => `Записано: ${date}`,
     changes: 'Что изменится',
     history: 'История мопеда: продан',
     line: (seq: number) => `Взнос №${seq}`,
@@ -39,6 +40,7 @@ export const saleDateRu: typeof saleDateEn = {
     save: 'Сохранить дату',
     beforeHistory: (date: string) => `Последнее событие в истории мопеда — ${date}. Продажа — в этот день или позже.`,
     unchanged: 'У продажи уже эта дата.',
+    linesMoved: (n: number) => `Сдвинуто взносов: ${n}`,
   },
 };
 
@@ -46,7 +48,7 @@ export const saleDateKa: typeof saleDateEn = {
   saleDate: {
     menu: 'გაყიდვის თარიღის შეცვლა',
     title: 'გაყიდვის თარიღის შეცვლა',
-    now: (date: string) => `ახლა: ${date}`,
+    recorded: (date: string) => `ჩაწერილია: ${date}`,
     changes: 'რა შეიცვლება',
     history: 'მოპედის ისტორია: გაყიდულია',
     line: (seq: number) => `შენატანი №${seq}`,
@@ -58,5 +60,6 @@ export const saleDateKa: typeof saleDateEn = {
     save: 'თარიღის შენახვა',
     beforeHistory: (date: string) => `მოპედის ისტორიის ბოლო მოვლენა: ${date}. გაყიდვა — ამ დღეს ან უფრო გვიან.`,
     unchanged: 'გაყიდვას უკვე ეს თარიღი აქვს.',
+    linesMoved: (n: number) => `გადატანილი შენატანები: ${n}`,
   },
 };

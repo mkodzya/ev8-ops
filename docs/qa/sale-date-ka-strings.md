@@ -13,7 +13,7 @@
 | Ключ | RU | EN | KA | Чтение | Где видно |
 |---|---|---|---|---|---|
 | `saleDate.menu`, `saleDate.title` | Изменить дату продажи | Change the sale date | გაყიდვის თარიღის შეცვლა | gaqidvis tarighis shetsvla | пункт меню «⋯» на карточке продажи; заголовок листа |
-| `saleDate.now(дата)` | Сейчас: 14.10.2026 | Now: 14.10.2026 | ახლა: 14.10.2026 | akhla | подсказка под полем даты |
+| `saleDate.recorded(дата)` | Записано: 14.10.2026 | Recorded: 14.10.2026 | ჩაწერილია: 14.10.2026 | chatserilia | подсказка под полем даты: какая дата у продажи записана сейчас |
 | `saleDate.changes` | Что изменится | What changes | რა შეიცვლება | ra sheitsvleba | заголовок списка «было → стало» в листе |
 | `saleDate.history` | История мопеда: продан | Moped history: sold | მოპედის ისტორია: გაყიდულია | mopedis istoria: gaqidulia | строка списка: событие «продан» у мопеда |
 | `saleDate.line(№)` | Взнос №2 | Instalment #2 | შენატანი №2 | shenatani | строка списка: какой взнос графика сдвигается |
@@ -25,6 +25,7 @@
 | `saleDate.save` | Сохранить дату | Save the date | თარიღის შენახვა | tarighis shenakhva | кнопка листа |
 | `saleDate.beforeHistory(дата)` | Последнее событие в истории мопеда — 12.10.2026. Продажа — в этот день или позже. | The last event in the moped’s history is on 12.10.2026. Date the sale on that day or later. | მოპედის ისტორიის ბოლო მოვლენა: 12.10.2026. გაყიდვა — ამ დღეს ან უფრო გვიან. | mopedis istoriis bolo movlena: 12.10.2026. gaqidva — am dghes an upro gvian. | под полем даты, когда день раньше истории мопеда |
 | `saleDate.unchanged` | У продажи уже эта дата. | The sale already has this date. | გაყიდვას უკვე ეს თარიღი აქვს. | gaqidvas ukve es tarighi akvs. | сообщение, если дату не меняли |
+| `saleDate.linesMoved(n)` | Сдвинуто взносов: 3 | Instalments moved: 3 | გადატანილი შენატანები: 3 | gadatanili shenatanebi | строка журнала и истории продажи: сколько взносов графика легли на другие дни |
 | `feedWords['sale.date']` | Изменена дата продажи | The sale date was changed | შეიცვალა გაყიდვის თარიღი | sheitsvala gaqidvis tarighi | строка журнала и истории продажи |
 | `errors.codes.sale_before_history` | Продажа не может быть раньше последнего события в истории мопеда. Выберите тот день или позже. | A sale cannot be dated before the last event in the moped’s history. Pick that day or a later one. | გაყიდვა ვერ იქნება მოპედის ისტორიის ბოლო მოვლენამდე. აირჩიეთ ის დღე ან უფრო გვიანდელი. | gaqidva ver iqneba mopedis istoriis bolo movlenamde. airchiet is dghe an upro gviandeli. | отказ, если сервер не назвал дня |
 | `errors.codes.sale_date_future` | Продажу нельзя записать будущей датой. | A sale cannot be dated in the future. | გაყიდვას მომავალი თარიღით ვერ ჩაწერთ. | gaqidvas momavali tarighit ver chatsert. | под полем даты: день позже сегодняшнего |
