@@ -16,6 +16,7 @@ import { fmtDate } from '../format.js';
 import type { Dict } from '../i18n/en.js';
 import { useT } from '../i18n/index.js';
 import { placeOf } from '../lib/place.js';
+import { Typed } from '../lib/typed.js';
 import { useLoad } from '../lib/use.js';
 import { useSession } from '../session.js';
 
@@ -229,16 +230,23 @@ function ParkLine({ v }: { v: Vehicle }) {
  * read whole under the pointer, so it never stretches every row of the list.
  * Nothing at all for a moped in any other state.
  */
-function Why({ v }: { v: Vehicle }) {
+function Why({ v, quiet = false }: { v: Vehicle; quiet?: boolean }) {
   const t = useT();
-  if (!v.serviceWhy) return null;
-  const text = whyText(v, t);
-  if (!text) return <span className="muted">{t.common.dash}</span>;
-  return (
-    <span className="v-why" title={v.serviceWhy.text ?? text}>
-      {text}
-    </span>
-  );
+  const why = v.serviceWhy;
+  if (!why) return null;
+  // The repair's kind is the product's own word, already in the reader's language.
+  if (why.kind) {
+    return (
+      <span className="v-why" title={why.text ?? t.wjob.reasons[why.kind]}>
+        {t.wjob.reasons[why.kind]}
+      </span>
+    );
+  }
+  if (!why.text) return <span className="muted">{t.common.dash}</span>;
+  // What somebody typed — the repair's «что случилось» or the reason of the
+  // move by hand — in the reader's language when a translation is ready
+  // (ADR-0042). A return's act behind the rental's number stays as written.
+  return <Typed text={why.text} clip="v-why" quiet={quiet} />;
 }
 
 /**
@@ -253,7 +261,8 @@ function StateSub({ v }: { v: Vehicle }) {
   const fact = v.currentRental ? (
     <CustomerName of={v.currentRental.customer} second={false} />
   ) : v.serviceWhy ? (
-    <Why v={v} />
+    // The card is a link to the moped: the mark only says it is a translation, the card shows the original.
+    <Why v={v} quiet />
   ) : (
     <PlaceText of={v} />
   );

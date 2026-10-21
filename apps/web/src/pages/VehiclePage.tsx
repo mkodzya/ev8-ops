@@ -1,4 +1,4 @@
-import { VEHICLE_POOLS, isPoolEvent, localDateTime, manualStateTargets, type RentalStatus, type VehicleEventKind, type VehiclePool, type VehicleState } from '@ev8/shared';
+import { TRANSLATED_EVENT_KINDS, VEHICLE_POOLS, isPoolEvent, localDateTime, manualStateTargets, type RentalStatus, type VehicleEventKind, type VehiclePool, type VehicleState } from '@ev8/shared';
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api, ApiError } from '../api.js';
@@ -78,6 +78,13 @@ interface Card {
   /** Corrections: what was changed by hand, from what to what, and why. */
   journal: { id: string; at: string; occurredOn: string | null; action: string; by: string | null; note: string | null; before: unknown; after: unknown }[];
 }
+
+/**
+ * Is this event's reason a person's words about the moped, the kind that is
+ * shown translated (ADR-0042)? Not a rental's — a pickup, a return, a swap —
+ * and not a sale's or an arrival's.
+ */
+const typedEvent = (e: { kind: VehicleEventKind; rentalId: string | null }): boolean => e.rentalId == null && (TRANSLATED_EVENT_KINDS as readonly string[]).includes(e.kind);
 
 export function VehiclePage() {
   const { id } = useParams();
@@ -289,7 +296,8 @@ export function VehiclePage() {
                     {e.reason && (
                       <span className="muted">
                         {' · '}
-                        <Typed text={e.reason} />
+                        {/* A state change's reason in the reader's language (ADR-0042); a rental's, a sale's or an arrival's stays as written. */}
+                        {typedEvent(e) ? <Typed text={e.reason} /> : e.reason}
                       </span>
                     )}
                     {e.actor && <span className="muted"> · {e.actor}</span>}
