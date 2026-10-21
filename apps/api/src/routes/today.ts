@@ -1,4 +1,4 @@
-import { dayQueue, queueCount, todayISO, VEHICLE_STATES, type QueueRental, type VehicleState } from '@ev8/shared';
+import { asksForSignature, contractState, dayQueue, queueCount, todayISO, VEHICLE_STATES, type QueueRental, type VehicleState } from '@ev8/shared';
 import type { FastifyInstance } from 'fastify';
 import type { Prisma } from '../generated/prisma/client.js';
 import { dateFromISO, isoDate } from '../lib/dates.js';
@@ -37,6 +37,8 @@ export const QUEUE_RENTAL = {
   vinUnconfirmed: true,
   odooOrderId: true,
   transferredAt: true,
+  // Marked signed in Signify (ADR-0039): no longer asked for on "Today".
+  contractSignedElsewhereAt: true,
   customer: { select: { id: true, name: true, nameKa: true, nameLat: true, phone: true } },
   vehicle: { select: { vin: true } },
   deposit: { select: { paidTetri: true, status: true, decidedById: true, migrationDecision: true } },
@@ -54,7 +56,8 @@ export function queueRental(r: Prisma.RentalGetPayload<{ select: typeof QUEUE_RE
   const paidThrough = isoDate(r.paidThrough);
   const pickedUpOn = isoDate(r.pickedUpOn);
   const { status } = rentStateOf(r, today);
-  const signed = r.documents.some((d) => d.signedAt != null);
+  // The list's rule too (ADR-0039): signed here, marked signed in Signify, brought over, or waiting.
+  const contract = contractState({ signedHere: r.documents.some((d) => d.signedAt != null), signedElsewhereAt: r.contractSignedElsewhereAt, transferredAt: r.transferredAt, returned: r.status === 'returned' });
   const handedOverAgo = pickedUpOn ? daysBetween(pickedUpOn, today) : 0;
   return {
     id: r.id,
@@ -75,8 +78,9 @@ export function queueRental(r: Prisma.RentalGetPayload<{ select: typeof QUEUE_RE
     depositUndecided: r.status === 'returned' && r.deposit?.status === 'held' && !r.deposit.decidedById && !r.deposit.migrationDecision && r.odooOrderId == null,
     vinUnconfirmed: r.vinUnconfirmed,
     // A rental brought over has its contract from before EV8 Ops, kept outside
-    // it: nobody is asked to sign that one here (Mika, 08.10.2026).
-    contractUnsigned: !signed && !r.transferredAt && handedOverAgo >= 1 && r.status !== 'returned',
+    // it: nobody is asked to sign that one here (Mika, 08.10.2026). Nor one a
+    // person marked signed in Signify (ADR-0039). A day of grace after the hand-over.
+    contractUnsigned: asksForSignature(contract, handedOverAgo),
   };
 }
 

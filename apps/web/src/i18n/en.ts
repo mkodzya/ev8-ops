@@ -26,9 +26,13 @@ import { workshopApprovalEn } from './workshop-approval.js';
 import { workshopPartsEn } from './workshop-parts.js';
 import { workshopPayoutsEn } from './workshop-payouts.js';
 import { workshopMaintenanceEn } from './workshop-maintenance.js';
+import { workshopsEn } from './workshops.js';
 import { driveEn } from './drive.js';
 import { expEn } from './expenses.js';
 import { inBankEn } from './in-bank.js';
+import { fleetListEn } from './fleet-list.js';
+import { contractSignedEn } from './contract-signed.js';
+import { saleDateEn } from './sale-date.js';
 export const en = {
   lang: { label: 'Language', ka: 'ქართული', ru: 'Русский', en: 'English' },
 
@@ -1174,6 +1178,7 @@ export const en = {
       already_matched: 'This bank line is already attached to a payment.',
       already_merged: 'This card is already in the archive: it was merged into another.',
       already_returned: 'This rental is already closed.',
+      already_signed: 'The contract is already signed — on the screen or in Signify.',
       already_voided: 'This payment is already cancelled.',
       bad_channel: 'A deposit goes back in cash or by transfer.',
       bad_field: 'A field is filled in wrongly. Check the form and try again.',
@@ -1194,6 +1199,7 @@ export const en = {
       category_not_found: 'No such expense category.',
       charge_not_found: 'No such fine or charge on the rental — it may have been taken back.',
       closed_before_opened: 'A repair cannot close before the day it was opened.',
+      contract_not_marked: 'The contract is not marked as signed in Signify. Refresh the screen.',
       customer_archived: 'This card was merged into another one. Work on the card it went into.',
       customer_in_debt: 'This customer owes money. Only an owner can hand over a moped, with a reason.',
       customer_mismatch: 'That rental belongs to a different customer. Pick this customer’s own rental.',
@@ -1321,7 +1327,9 @@ export const en = {
       rental_not_found: 'Rental not found.',
       return_before_pickup: 'The return date is before the pickup date.',
       rule_not_found: 'That remembered payee is gone already.',
+      sale_before_history: 'A sale cannot be dated before the last event in the moped’s history. Pick that day or a later one.',
       sale_closed: 'This sale is closed.',
+      sale_date_future: 'A sale cannot be dated in the future.',
       sale_has_payments: 'Cancel the payments on this sale first.',
       sale_not_found: 'Sale not found.',
       same_customer: 'A card cannot be merged into itself.',
@@ -1367,6 +1375,8 @@ export const en = {
       week_not_found: 'No such week in this rental.',
       week_paid_before_transfer: 'This week was paid before the rental was carried over — it cannot be discounted.',
       withheld_over_total: 'You cannot withhold more than the repair costs.',
+      workshop_archived: 'This workshop was taken off the list. Choose another, or put it back in Settings → Repair.',
+      workshop_archived_exists: 'A workshop by that name was taken off the list. Put it back instead: «…» → «Put back».',
       workshop_exists: 'A workshop by that name is already on the list.',
       workshop_not_found: 'No such workshop.',
       wrong_password: 'The current password is wrong.',
@@ -1391,9 +1401,13 @@ export const en = {
   ...workshopPartsEn,
   ...workshopPayoutsEn,
   ...workshopMaintenanceEn,
+  ...workshopsEn,
   ...driveEn,
   ...expEn,
   ...inBankEn,
+  ...fleetListEn,
+  ...contractSignedEn,
+  ...saleDateEn,
 };
 
 export type Dict = typeof en;

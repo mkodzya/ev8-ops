@@ -88,9 +88,18 @@ export function VehiclePage() {
 
   // One action, and which one depends on where the moped is (U4). A card
   // that offers every verb makes the reader pick; a card that offers the
-  // next one makes the state readable from the button alone.
+  // next one makes the state readable from the button alone. A free moped of
+  // the sale park waits to be sold, so selling is its next step; renting it
+  // out moves it to the other park, which is an owner's decision, and steps
+  // back to a plain pill (21.10.2026). A manager gets no button here: the
+  // hand-over would refuse him (`vehicle_in_sale_pool`).
+  const forSale = v.state === 'available' && v.pool === 'sale';
   const primary: { label: string; to?: string; onClick?: () => void } | null =
-    v.state === 'available' && can('rental.create')
+    forSale
+      ? can('sales.manage')
+        ? { label: t.sales.newSale, to: `/sales/new?vehicle=${v.id}` }
+        : null
+      : v.state === 'available' && can('rental.create')
       ? { label: t.actions.newRental, to: `/rentals/new?vehicle=${v.id}` }
       : v.state === 'rented' && current && can('rental.return')
         ? { label: t.actions.returnRental, to: `/rentals/${current.id}/return` }
@@ -121,10 +130,16 @@ export function VehiclePage() {
         {can('service.report') && v.state !== 'sold' && v.state !== 'out' && !data.serviceJobs.some((j) => j.status === 'open') && (
           <NewJob vehicleId={v.id} onDone={reload} />
         )}
-        {/* Selling starts from the moped as often as from the "+" (§3.1). */}
-        {v.state === 'available' && can('sales.manage') && (
+        {/* Selling starts from the moped as often as from the "+" (§3.1); on a
+            moped for sale the two trade places with the main button. */}
+        {v.state === 'available' && !forSale && can('sales.manage') && (
           <Link className="pill pill-sm" to={`/sales/new?vehicle=${v.id}`}>
             {t.sell.title}
+          </Link>
+        )}
+        {forSale && can('rental.create') && can('fleet.pool.set') && (
+          <Link className="pill pill-sm" to={`/rentals/new?vehicle=${v.id}`}>
+            {t.actions.newRental}
           </Link>
         )}
         {can('settings.manage') && <RowMenu actions={[{ key: 'vin', label: t.vinFix.title, onPick: () => setFixing(true) }]} />}

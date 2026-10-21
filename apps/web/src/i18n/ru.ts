@@ -17,9 +17,13 @@ import { workshopApprovalRu } from './workshop-approval.js';
 import { workshopPartsRu } from './workshop-parts.js';
 import { workshopPayoutsRu } from './workshop-payouts.js';
 import { workshopMaintenanceRu } from './workshop-maintenance.js';
+import { workshopsRu } from './workshops.js';
 import { driveRu } from './drive.js';
 import { expRu } from './expenses.js';
 import { inBankRu } from './in-bank.js';
+import { fleetListRu } from './fleet-list.js';
+import { contractSignedRu } from './contract-signed.js';
+import { saleDateRu } from './sale-date.js';
 import type { Dict } from './en.js';
 
 // Typed as Dict: a missing or misspelled key fails the build.
@@ -1171,6 +1175,7 @@ export const ru: Dict = {
       already_matched: 'Эта строка выписки уже привязана к платежу.',
       already_merged: 'Эта карточка уже в архиве — она объединена с другой.',
       already_returned: 'Эта аренда уже закрыта.',
+      already_signed: 'Договор уже подписан — на экране или в Signify.',
       already_voided: 'Этот платёж уже отменён.',
       bad_channel: 'Залог возвращают наличными или переводом.',
       bad_field: 'Поле заполнено неверно. Проверьте форму и попробуйте ещё раз.',
@@ -1191,6 +1196,7 @@ export const ru: Dict = {
       category_not_found: 'Такой категории расходов нет.',
       charge_not_found: 'Такого штрафа или начисления у аренды нет — возможно, его уже сняли.',
       closed_before_opened: 'Ремонт не может закрыться раньше дня открытия.',
+      contract_not_marked: 'Договор не отмечен как подписанный в Signify. Обновите экран.',
       customer_archived: 'Эта карточка объединена с другой — работайте в той, в которую она вошла.',
       customer_in_debt: 'У клиента долг. Выдать мопед может только владелец, с причиной.',
       customer_mismatch: 'Эта аренда другого клиента. Выберите аренду этого клиента.',
@@ -1318,7 +1324,9 @@ export const ru: Dict = {
       rental_not_found: 'Аренда не найдена.',
       return_before_pickup: 'Дата возврата раньше даты выдачи.',
       rule_not_found: 'Этого правила уже нет.',
+      sale_before_history: 'Продажа не может быть раньше последнего события в истории мопеда. Выберите тот день или позже.',
       sale_closed: 'Эта продажа закрыта.',
+      sale_date_future: 'Продажу нельзя записать будущей датой.',
       sale_has_payments: 'Сначала отмените платежи по этой продаже.',
       sale_not_found: 'Продажа не найдена.',
       same_customer: 'Карточку нельзя объединить с самой собой.',
@@ -1364,6 +1372,8 @@ export const ru: Dict = {
       week_not_found: 'Такой недели в аренде нет.',
       week_paid_before_transfer: 'Эта неделя оплачена до переноса аренды — скидку на неё дать нельзя.',
       withheld_over_total: 'Удержать больше стоимости ремонта нельзя.',
+      workshop_archived: 'Эта мастерская убрана из списка. Выберите другую или верните её в «Настройки → Ремонт».',
+      workshop_archived_exists: 'Мастерская с таким названием убрана из списка. Верните её: «…» → «Вернуть».',
       workshop_exists: 'Мастерская с таким названием уже есть в списке.',
       workshop_not_found: 'Такой мастерской нет.',
       wrong_password: 'Текущий пароль неверный.',
@@ -1388,7 +1398,11 @@ export const ru: Dict = {
   ...workshopPartsRu,
   ...workshopPayoutsRu,
   ...workshopMaintenanceRu,
+  ...workshopsRu,
   ...driveRu,
   ...expRu,
   ...inBankRu,
+  ...fleetListRu,
+  ...contractSignedRu,
+  ...saleDateRu,
 };
