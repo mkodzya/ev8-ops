@@ -44,7 +44,9 @@ Signify. Без подписи — только первое предложен�
 
 ## «Signify-ში» не рвётся на дефисе
 
-Во всех грузинских строках листа «Подписан в Signify» (`contract-signed.ts`) и в двух строках замены выше «Signify-ში»
+Во всех грузинских строках листа «Подписан в Signify» (`contract-signed.ts`), в двух строках замены выше, в двух
+строках журнала (`document.signed_elsewhere`, `document.signed_elsewhere.undo`) и в двух отказах (`already_signed`,
+`contract_not_marked`) «Signify-ში»
 [Signify-shi] пишется через невидимый «соединитель слов» (U+2060) после дефиса — константа `SIGNIFY_IN_KA`. Заголовок
 листа «ხელშეკრულება ხელმოწერილია Signify-ში» на 375 px больше не делится на «Signify-» / «ში». Слова не менялись.
 

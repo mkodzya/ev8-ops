@@ -2,6 +2,8 @@
 // the rentals list, the cards and the battery count (docs/redesign/wave-4.md).
 // One file again, so the Georgian goes to proofreading as one list.
 
+import { SIGNIFY_IN_KA } from './contract-signed.js';
+
 const ruPlural = (n: number, one: string, few: string, many: string): string => {
   const m10 = n % 10;
   const m100 = n % 100;
@@ -906,8 +908,8 @@ export const wave4Ka: Wave4 = {
     'document.regenerate': 'დოკუმენტი თავიდან შეიქმნა',
     'document.render': 'დოკუმენტი შეიქმნა',
     'document.sign': 'ხელი მოეწერა ეკრანზე',
-    'document.signed_elsewhere': 'ხელშეკრულება მოინიშნა Signify-ში ხელმოწერილად',
-    'document.signed_elsewhere.undo': 'მოიხსნა მონიშვნა „ხელმოწერილია Signify-ში“',
+    'document.signed_elsewhere': `ხელშეკრულება მოინიშნა ${SIGNIFY_IN_KA} ხელმოწერილად`,
+    'document.signed_elsewhere.undo': `მოიხსნა მონიშვნა „ხელმოწერილია ${SIGNIFY_IN_KA}“`,
     'drive.prefill': 'Drive-ის ხელშეკრულება წაკითხულია გაცემისთვის',
     'expense.category.add': 'დაემატა ხარჯების კატეგორია',
     'expense.category.edit': 'შეიცვალა ხარჯების კატეგორია',
