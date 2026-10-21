@@ -177,6 +177,50 @@ export function redateSale(
   return { warrantyUntil: warranty, instalments };
 }
 
+/** A moped's event as a sale's date reads it. */
+export interface SaleHistoryEvent {
+  id: string;
+  kind: string;
+  occurredOn: ISODate;
+  /** When it was written: what came before the sale was written before it. */
+  createdAt: Date | string;
+}
+
+export interface SaleDateFloor {
+  /** The sale's own `sold` event, which moves with its date; none for a sale that wrote none. */
+  soldEventId: string | null;
+  /** The last thing that happened to the moped before the sale, and its day: the sale is dated on it or later. None — no floor. */
+  floor: { on: ISODate; kind: string } | null;
+}
+
+const instant = (at: Date | string): number => (at instanceof Date ? at.getTime() : Date.parse(at));
+
+/**
+ * The earliest day a sale may be dated (call of 21.10.2026). The moped's own
+ * history decides it. Its `sold` event is the last one on the day the sale
+ * says — nothing else is written on a sold moped while the sale stands, and a
+ * moped sold, bought back and sold again has one per sale. What happened to
+ * the moped before that — it arrived, came back from a renter or a buyer,
+ * moved park — is not moved by a new date, and the sale cannot go before the
+ * last of it: the days in each state are counted from the events in their
+ * order, and a sale dated before the moped came back would count it as sold
+ * and free at once. A sale that names only a VIN has no history and no floor.
+ *
+ * One rule for the server, which refuses an earlier day, and for the sheet,
+ * which offers no earlier day and names the one it starts at (QA, 22.10.2026).
+ */
+export function saleDateFloor(events: readonly SaleHistoryEvent[], sale: { soldOn: ISODate; createdAt: Date | string }): SaleDateFloor {
+  const written = [...events].sort((a, b) => instant(a.createdAt) - instant(b.createdAt));
+  const own = [...written].reverse().find((e) => e.kind === 'sold' && e.occurredOn === sale.soldOn) ?? null;
+  const cutoff = instant(own?.createdAt ?? sale.createdAt);
+  let floor: SaleDateFloor['floor'] = null;
+  for (const e of written) {
+    if (e.id === own?.id || instant(e.createdAt) >= cutoff) continue;
+    if (!floor || e.occurredOn > floor.on) floor = { on: e.occurredOn, kind: e.kind };
+  }
+  return { soldEventId: own?.id ?? null, floor };
+}
+
 /**
  * A sale carried over from the old way of working (B3-03): the schedule is
  * copied from the paper contract and one figure says what had been paid by

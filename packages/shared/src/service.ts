@@ -144,6 +144,22 @@ export function trackerDayFault(input: { on: ISODate; today: ISODate; arrivedOn:
   return null;
 }
 
+/**
+ * The first day «Стоит с» may say, and what sets it: the day the last tracker
+ * came off or the day the moped came, whichever is later — the two bounds
+ * `trackerDayFault` checks. The sheet offers no earlier day and names this
+ * one, and the refusal names it too: «не раньше прихода мопеда и снятия
+ * прежнего трекера» left the reader to find the day at the bottom of the
+ * card (QA, 22.10.2026). Null when neither is known: any past day will do.
+ */
+export function trackerEarliestDay(input: { arrivedOn: ISODate | null; lastRemovedOn: ISODate | null }): { on: ISODate; by: 'arrival' | 'last_removed' } | null {
+  const { arrivedOn, lastRemovedOn } = input;
+  // The same day for both: the tracker that came off says more than the arrival.
+  if (lastRemovedOn != null && (arrivedOn == null || lastRemovedOn >= arrivedOn)) return { on: lastRemovedOn, by: 'last_removed' };
+  if (arrivedOn != null) return { on: arrivedOn, by: 'arrival' };
+  return null;
+}
+
 /** A tracker's two numbers as they are kept. */
 export interface TrackerNumbers {
   imei: string;
