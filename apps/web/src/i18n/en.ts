@@ -1314,6 +1314,7 @@ export const en = {
       purchase_not_found: 'Order not found.',
       rate_for_mechanics: 'Only a mechanic has a rate for an hour of norm.',
       rate_not_found: 'No such rate — it may have been taken off already.',
+      reason_kind_kept: 'A repair a mechanic carries keeps its reason: choose another one instead.',
       reason_required: 'Withholding needs a reason.',
       reconcile_required: 'Only an owner enters bank payments.',
       regenerate_forbidden: 'Only an owner can replace a document already issued.',

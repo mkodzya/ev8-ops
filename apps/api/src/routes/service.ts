@@ -19,6 +19,7 @@ import {
   readImei,
   readQuery,
   readSimPhone,
+  reasonKindRefusal,
   repairTotalTetri,
   seesEveryRepair,
   todayISO,
@@ -1217,6 +1218,12 @@ export function serviceRoutes(app: FastifyInstance): void {
     const actor = actorOf(req);
     const vehicleId = str(b, 'vehicleId', { required: true })!;
     const reason = str(b, 'reason', { required: true, max: 2000 })!;
+    // The tablet's kind, picked in the office too (Mika, 21.10.2026) — and
+    // only if somebody picks one: the five have no «other», and what happened
+    // is still said in words. «Плановое ТО» closed with a reading moves the
+    // next maintenance and «Вина арендатора» offers the customer's expense,
+    // as they do from the tablet.
+    const reasonKind = oneOf(b, 'reasonKind', SERVICE_REASONS);
     const openedOn = date(b, 'openedOn') ?? todayISO(new Date(), env.TZ);
 
     const vehicle = await prisma.vehicle.findUnique({
@@ -1249,6 +1256,7 @@ export function serviceRoutes(app: FastifyInstance): void {
           rentalId: rented ? vehicle.currentRental!.id : null,
           customerId: payer === 'customer' ? vehicle.currentRental!.customerId : null,
           reason,
+          reasonKind,
           openedOn: dateFromISO(openedOn)!,
           status: reported ? 'draft' : 'open',
           payer,
@@ -1270,7 +1278,7 @@ export function serviceRoutes(app: FastifyInstance): void {
           action: reported ? 'service.report' : 'service.open',
           entityType: 'service_job',
           entityId: created.id,
-          after: { number: created.number, vehicleId, reason, payer, movedVehicle: !rented, draft: reported },
+          after: { number: created.number, vehicleId, reasonKind, reason, payer, movedVehicle: !rented, draft: reported },
         },
       });
       if (reported) await enqueueJobNotice(tx, 'job_waiting', created.id, logged.id);
@@ -1298,6 +1306,16 @@ export function serviceRoutes(app: FastifyInstance): void {
       data.labourTetri = labourFor(minutes);
     } else if ('labourTetri' in b) data.labourTetri = tetri(b, 'labourTetri', { min: 0 }) ?? 0;
     if ('notes' in b) data.notes = str(b, 'notes', { max: 4000 });
+    // The kind of repair, set, changed or taken away by the owner while it is
+    // under way (Mika, 21.10.2026), so the repairs already open can be named
+    // once. One a mechanic carries is changed for another, never left without.
+    if ('reasonKind' in b) {
+      const next = oneOf(b, 'reasonKind', SERVICE_REASONS);
+      if (reasonKindRefusal({ status: job.status, byMechanic: job.mechanicId != null }, next) === 'reason_kind_kept') {
+        throw badRequest('reason_kind_kept', 'A repair a mechanic carries keeps a kind: pick another one.', { field: 'reasonKind' });
+      }
+      data.reasonKind = next;
+    }
     // Who pays decides what a catalogue part costs (B8-04, crit. 22, 23), so
     // changing the payer repriced nothing and the lines already on the job
     // kept the other side's price: a customer was billed at what the shelf
@@ -1321,11 +1339,16 @@ export function serviceRoutes(app: FastifyInstance): void {
         await tx.servicePart.update({ where: { id: line.id }, data: { unitPriceTetri: line.to } });
       }
     });
+    // «было → стало» (ux.md №14): what each field written held before. The
+    // journal printed only the new values, so a kind changed from «ДТП» to
+    // «Износ» could not say what it had been.
+    const was = job as unknown as Record<string, unknown>;
     await audit({
       actorId: actor.id,
       action: 'service.update',
       entityType: 'service_job',
       entityId: job.id,
+      before: Object.fromEntries(Object.keys(data).map((k) => [k, was[k] ?? null])),
       after: repriced.length > 0 ? { ...(data as object), repriced } : (data as object),
     });
     return { ok: true, repriced: repriced.length };
