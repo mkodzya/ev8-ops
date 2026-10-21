@@ -1,7 +1,7 @@
 import { AFTER_PHOTOS_MAX } from '@ev8/shared';
 import { useState } from 'react';
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
-import { api } from '../api.js';
+import { ApiError, api } from '../api.js';
 import { LoadError } from '../components/LoadError.js';
 import { BlockHead, Loading } from '../components/ui.js';
 import { Field } from '../components/Wizard.js';
@@ -31,11 +31,21 @@ type Lower = '' | 'replaced' | 'mistake' | 'other';
  * the moped's last, whichever is higher (ADR-0038 §4). The server stays the
  * judge; this only asks on the screen before it is asked.
  */
-export function lastKmOf(job: ServiceJob): number | null {
+export function lastKmOf(job: ServiceJob, refusedAt: number | null = null): number | null {
   // The moped's own reading came with stage 6; the shared type does not name it yet.
   const moped = (job.vehicle as { odometerKm?: number | null }).odometerKm ?? null;
-  const known = [job.openedOdometerKm, moped].filter((k): k is number => k != null);
+  const known = [job.openedOdometerKm, moped, refusedAt].filter((k): k is number => k != null);
   return known.length > 0 ? Math.max(...known) : null;
+}
+
+/**
+ * The last reading the server named when it refused a lower one — read since
+ * the screen was loaded, maybe — or null for any other refusal. The screen
+ * then asks against that reading: for as long as the typed one is below it,
+ * not for as long as the refusal stands.
+ */
+export function refusedLastKm(e: unknown): number | null {
+  return e instanceof ApiError && e.code === 'odometer_below' && typeof e.extra.lastKm === 'number' ? e.extra.lastKm : null;
 }
 
 /**
@@ -59,6 +69,7 @@ export function RepairClosePage() {
   const [lowerWords, setLowerWords] = useState('');
   const [where, setWhere] = useState<string | null>(null);
   const [shown, setShown] = useState<Record<string, string>>({});
+  const [refusedKm, setRefusedKm] = useState<number | null>(null);
   const op = useOperation();
 
   if (!data && failure) return <LoadError failure={failure} onRetry={reload} />;
@@ -74,9 +85,9 @@ export function RepairClosePage() {
   const chosen = where ?? (workshops.length === 1 ? workshops[0]!.id : null);
   const kmValue = km.trim() === '' ? null : Number(km.replace(/\s/g, ''));
   const moped = j.vehicle.number ?? j.vehicle.model;
-  const lastKm = lastKmOf(j);
-  // Asked as the opening asks it; shown too when the server asks for a reason the screen did not expect.
-  const below = (kmValue != null && lastKm != null && kmValue < lastKm) || op.failure?.field === 'odometerReason';
+  // Asked as the opening asks it, against the higher of what the screen knew and what a refusal named.
+  const lastKm = lastKmOf(j, refusedKm);
+  const below = kmValue != null && lastKm != null && kmValue < lastKm;
   const lowerText = lower === 'other' ? lowerWords.trim() : lower ? t.wjob.lowerReasons[lower] : '';
 
   const close = async () => {
@@ -88,16 +99,22 @@ export function RepairClosePage() {
     setShown(p);
     if (Object.keys(p).length > 0) return;
     const res = await op.run(async (key) =>
-      api.post(
-        `/api/service/${j.id}/close`,
-        {
-          odometerKm: kmValue,
-          odometerReason: below ? lowerText : null,
-          locationId: moved ? chosen : null,
-          photos: await Promise.all(photos.map(async (ph) => ({ mimeType: ph.mimeType, dataBase64: await toBase64(ph.blob) }))),
-        },
-        { key },
-      ),
+      api
+        .post(
+          `/api/service/${j.id}/close`,
+          {
+            odometerKm: kmValue,
+            odometerReason: below ? lowerText : null,
+            locationId: moved ? chosen : null,
+            photos: await Promise.all(photos.map(async (ph) => ({ mimeType: ph.mimeType, dataBase64: await toBase64(ph.blob) }))),
+          },
+          { key },
+        )
+        .catch((e: unknown) => {
+          const named = refusedLastKm(e);
+          if (named != null) setRefusedKm(named);
+          throw e;
+        }),
     );
     if (!res.ok) return;
     toast({ text: t.wappr.closed(j.number, moved ? moped : null) });

@@ -1,7 +1,7 @@
 import { needsConfirming, todayISO } from '@ev8/shared';
 import { useEffect, useRef, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
-import { api } from '../api.js';
+import { ApiError, api } from '../api.js';
 import { DocumentRow } from '../components/Documents.js';
 import { LoadError } from '../components/LoadError.js';
 import { PhotoPicker } from '../components/PhotoPicker.js';
@@ -75,6 +75,8 @@ export function ReturnWizard() {
   const [confirming, setConfirming] = useState(false);
   const [progress, setProgress] = useState<string | null>(null);
   const [result, setResult] = useState<{ serviceJobId: string | null; point: string | null } | null>(null);
+  // The last reading the server named when it refused a lower one: read since the preview, maybe.
+  const [refusedKm, setRefusedKm] = useState<number | null>(null);
   const op = useOperation();
   const drafts = useDraft({ id: id ? `return:${id}` : undefined, value: f, initial, hold: result != null });
   // The button that asks the question is pinned to the bottom of the screen;
@@ -131,9 +133,13 @@ export function ReturnWizard() {
   // Below the moped's last reading — a repair during the rental may have read
   // it — only with the reason, as the hand-over asks it (ADR-0038 §4). The
   // preview names that reading since stage 6; its shared type does not yet.
-  const lastKm = (preview as { vehicleKm?: number | null }).vehicleKm ?? null;
+  // A refusal may name a higher one; the reason is asked while the typed
+  // reading is below it, not while the refusal stands.
+  const previewKm = (preview as { vehicleKm?: number | null }).vehicleKm ?? null;
+  const known = [previewKm, refusedKm].filter((k): k is number => k != null);
+  const lastKm = known.length > 0 ? Math.max(...known) : null;
   const reason = (f.odometerReason ?? '').trim();
-  const kmLower = !kmBelow && ((km != null && lastKm != null && km < lastKm) || op.failure?.field === 'odometerReason');
+  const kmLower = !kmBelow && km != null && lastKm != null && km < lastKm;
   const actOk = km != null && Number.isInteger(km) && km >= 0 && !kmBelow && (!kmLower || reason.length > 0) && f.returnedOn <= todayISO();
 
   const claims = claimsOf(preview);
@@ -161,21 +167,26 @@ export function ReturnWizard() {
   const submit = async () => {
     setConfirming(false);
     const res = await op.run(async (key) => {
-      const out = await api.post<{ actId: string; serviceJobId: string | null }>(
-        `/api/rentals/${r.id}/return`,
-        {
-          returnedOn: f.returnedOn,
-          odometerKm: km,
-          odometerReason: kmLower ? reason : null,
-          condition: f.condition.trim() || null,
-          items: Object.fromEntries(itemKeys.map((k) => [k, { state: item(k).state, note: item(k).note.trim() || null }])),
-          toService,
-          locationId: toService ? null : locationId || null,
-          lateChoice: owner ? preview.settlement.choice : null,
-          deposit: !decides ? undefined : nothingHeld ? { action: 'return_all' } : decisionBody(f.decision, held),
-        },
-        { key },
-      );
+      const out = await api
+        .post<{ actId: string; serviceJobId: string | null }>(
+          `/api/rentals/${r.id}/return`,
+          {
+            returnedOn: f.returnedOn,
+            odometerKm: km,
+            odometerReason: kmLower ? reason : null,
+            condition: f.condition.trim() || null,
+            items: Object.fromEntries(itemKeys.map((k) => [k, { state: item(k).state, note: item(k).note.trim() || null }])),
+            toService,
+            locationId: toService ? null : locationId || null,
+            lateChoice: owner ? preview.settlement.choice : null,
+            deposit: !decides ? undefined : nothingHeld ? { action: 'return_all' } : decisionBody(f.decision, held),
+          },
+          { key },
+        )
+        .catch((e: unknown) => {
+          if (e instanceof ApiError && e.code === 'odometer_below' && typeof e.extra.lastKm === 'number') setRefusedKm(e.extra.lastKm);
+          throw e;
+        });
       drafts.drop();
       if (!toService && locationId) rememberPoint(locationId);
       await uploadAll(`/api/acts/${out.actId}/photos`, photos, (n) => setProgress(t.hand.photosUploading(n, photos.length)), `${key}-photo`).catch(() => undefined);

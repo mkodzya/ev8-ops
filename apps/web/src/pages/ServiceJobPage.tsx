@@ -21,7 +21,7 @@ import type { ServiceJob, ServiceWorkLine, Workshop } from './ServicePage.js';
 import { AddWorkSheet, NormTotal, RejectSheet, StatedLines, SuggestCustomer, isRepeat, useDecisionWords, useWhen, waitingLines } from './RepairApproval.js';
 import { PartNote, PartsBlock, TrackerFields } from './RepairParts.js';
 import { Photos } from './WorkshopJobWizard.js';
-import { lastKmOf } from './RepairClosePage.js';
+import { lastKmOf, refusedLastKm } from './RepairClosePage.js';
 import type { PartRow } from './StockPage.js';
 
 interface Locations {
@@ -712,8 +712,11 @@ function CloseSheet({ job, onClose, onSaved }: { job: ServiceJob; onClose: () =>
   const rental = useLoad<RentalDeposit>(mayWithhold ? `/api/rentals/${job.rental!.id}` : null);
   const initial = { closedOn: todayISO(), odometer: job.odometerKm != null ? String(job.odometerKm) : '', odometerReason: '', locationId: '', withhold: '' };
   const [f, setF] = useState(initial);
-  // Below the opening's or the moped's last reading only with the reason (ADR-0038 §4).
-  const lastKm = lastKmOf(job);
+  // Below the opening's or the moped's last reading only with the reason
+  // (ADR-0038 §4) — or below one read since the sheet opened, which the
+  // server names when it refuses: then the reason is asked against that.
+  const [refusedKm, setRefusedKm] = useState<number | null>(null);
+  const lastKm = lastKmOf(job, refusedKm);
   const km = f.odometer.trim() === '' ? null : Number(f.odometer.replace(/\s/g, ''));
   const below = km != null && lastKm != null && km < lastKm;
   // A mechanic's repair closes with a photo after it (stage 3); one may be on it already.
@@ -739,19 +742,25 @@ function CloseSheet({ job, onClose, onSaved }: { job: ServiceJob; onClose: () =>
       onRestore={setF}
       label={t.repair.closeCta}
       submit={async (key) => {
-        await api.post(
-          `/api/service/${job.id}/close`,
-          {
-            closedOn: f.closedOn,
-            odometerKm: f.odometer === '' ? null : Number(f.odometer),
-            // A draft from before stage 6 has no reason in it.
-            odometerReason: below ? (f.odometerReason ?? '').trim() || null : null,
-            locationId: f.locationId || null,
-            withheldTetri: parseGel(f.withhold) ?? 0,
-            photos: await Promise.all(after.map(async (p) => ({ mimeType: p.mimeType, dataBase64: await toBase64(p.blob) }))),
-          },
-          { key },
-        );
+        await api
+          .post(
+            `/api/service/${job.id}/close`,
+            {
+              closedOn: f.closedOn,
+              odometerKm: f.odometer === '' ? null : Number(f.odometer),
+              // A draft from before stage 6 has no reason in it.
+              odometerReason: below ? (f.odometerReason ?? '').trim() || null : null,
+              locationId: f.locationId || null,
+              withheldTetri: parseGel(f.withhold) ?? 0,
+              photos: await Promise.all(after.map(async (p) => ({ mimeType: p.mimeType, dataBase64: await toBase64(p.blob) }))),
+            },
+            { key },
+          )
+          .catch((e: unknown) => {
+            const named = refusedLastKm(e);
+            if (named != null) setRefusedKm(named);
+            throw e;
+          });
         return { toast: { text: t.repair.closed } };
       }}
       onDone={onSaved}
