@@ -9,7 +9,7 @@ import { DecideSheet } from '../components/ReturnMoney.js';
 import { RowMenu } from '../components/RowMenu.js';
 import { WhatsappSheet } from '../components/Whatsapp.js';
 import { Field } from '../components/Wizard.js';
-import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { FormSheet, SubmitButton } from '../ds/form/Form.js';
 import { BlockHead, Empty, FleetNo, Loading, PageHead, RentalBadge, Vin } from '../components/ui.js';
@@ -73,6 +73,8 @@ export interface RentalCard {
     undoReturnUntil?: string | null;
     /** The renter's folder, contract and return act in Drive, as last read (ADR-0031). */
     drive?: { folderUrl: string | null; contractUrl: string | null; returnActUrl: string | null } | null;
+    /** The mopeds it had, in order; the last is the one it has (ADR-0040). Absent while an older API answers. */
+    mopeds?: { vehicle: { id: string; vin: string | null; fleetNo: number | null }; from: string; to: string | null; began: 'pickup' | 'swap_in'; ended: 'return' | 'swap_out' | null }[];
   };
   /** What a return charged beyond the weeks: a key, days of delay (wave 3 §3.4). */
   charges: { id: string; kind: string; amountTetri: number; note: string | null; paidTetri: number }[];
@@ -93,7 +95,17 @@ export interface RentalCard {
     discountReason?: string | null;
     paidBeforeTransfer?: boolean;
   }[];
-  acts: { id: string; kind: ActKind; occurredOn: string; odometerKm: number | null; condition: string | null; photos: { id: string; label: string }[]; pdfUrl: string | null }[];
+  acts: {
+    id: string;
+    kind: ActKind;
+    /** The moped the act is about (migration 0063): after a swap they are two. */
+    vehicle?: { id: string; number: string | null; vin: string } | null;
+    occurredOn: string;
+    odometerKm: number | null;
+    condition: string | null;
+    photos: { id: string; label: string }[];
+    pdfUrl: string | null;
+  }[];
 }
 
 export function RentalPage() {
@@ -102,6 +114,7 @@ export function RentalPage() {
   const openMoney = useMoneyForm();
   const { can } = useSession();
   const { data, failure, reload } = useLoad<RentalCard>(id ? `/api/rentals/${id}` : null);
+  const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const [sheet, setSheet] = useState<null | 'edit' | 'status' | 'undo' | 'decide' | 'fine'>(params.get('decide') === '1' ? 'decide' : null);
   const [wa, setWa] = useState(false);
@@ -140,8 +153,13 @@ export function RentalPage() {
   const d = data.deposit;
   const open = r.status !== 'returned';
   const owner = can('deposit.decide');
+  const swappable = open && !!r.vehicle && can('rental.create') && can('rental.return');
+  // The mopeds it had before the one it has, newest first (ADR-0040).
+  const earlier = (r.mopeds ?? []).slice(0, -1).reverse();
   const menu = [
     ...(open && can('rental.create') ? [{ key: 'edit', label: t.rentalMenu.edit, onPick: () => setSheet('edit') }] : []),
+    // Another moped in the same rental (ADR-0040): a return and a hand-over in one, so both rights.
+    ...(swappable ? [{ key: 'swap', label: t.swap.menu, onPick: () => navigate(`/rentals/${r.id}/swap`) }] : []),
     ...(open && owner ? [{ key: 'status', label: t.rentalMenu.status, onPick: () => setSheet('status') }] : []),
     // A fine — damage, a dirty moped — while the rental runs or after it (ADR-0023).
     ...(owner ? [{ key: 'fine', label: t.rental.fine, onPick: () => setSheet('fine') }] : []),
@@ -319,7 +337,7 @@ export function RentalPage() {
 
       <section className="card">
         <BlockHead title={t.rentalMenu.documents} />
-        <DocumentRow rentalId={r.id} kind="contract" title={t.hand.contract} state={data.documents.contract} customerId={r.customer.id} onChanged={reload} />
+        <DocumentRow rentalId={r.id} kind="contract" title={t.hand.contract} state={data.documents.contract} customerId={r.customer.id} driveUrl={r.drive?.contractUrl} onChanged={reload} />
         {data.documents.returnAct && (
           <DocumentRow
             rentalId={r.id}
@@ -351,6 +369,24 @@ export function RentalPage() {
               )
             }
           />
+          {earlier.length > 0 && (
+            <Row
+              k={t.swap.earlier}
+              v={
+                <span>
+                  {earlier.map((m, i) => (
+                    <span key={`${m.vehicle.id}-${m.from}`}>
+                      {i > 0 && <br />}
+                      <Link to={`/fleet/${m.vehicle.id}`}>
+                        <FleetNo n={m.vehicle.fleetNo} /> {m.vehicle.vin && <Vin vin={m.vehicle.vin} />}
+                      </Link>{' '}
+                      <span className="muted mono">{t.swap.span(fmtDate(m.from), fmtDate(m.to))}</span>
+                    </span>
+                  ))}
+                </span>
+              }
+            />
+          )}
           <Row k={t.rentals.rate} v={<span className="mono">{formatGel(r.weeklyRateTetri, { decimals: false })}{t.rentals.perWeek}</span>} />
           <Row k={t.rentals.pickedUp} v={<span className="mono">{fmtDate(r.pickedUpOn)}</span>} />
           <Row k={t.pickup.expectedReturnOn} v={<span className="mono">{fmtDate(r.expectedReturnOn)}</span>} />
@@ -586,6 +622,8 @@ export function RentalPage() {
                 <span className="mono muted">{fmtDate(a.occurredOn)}</span>
                 <span>
                   {t.rental.actKind[a.kind]}
+                  {/* Which moped: after a swap a rental's acts are about two (ADR-0040). */}
+                  {a.vehicle && <span className="mono"> · {a.vehicle.number ?? `···${a.vehicle.vin.slice(-6)}`}</span>}
                   {a.odometerKm != null && <span className="muted"> · {a.odometerKm} km</span>}
                   {a.condition && <span className="muted"> · {a.condition}</span>}
                   {a.photos.length > 0 && (
@@ -731,6 +769,8 @@ function RentalEdit({ rental, owner, onClose, onSaved }: { rental: RentalCard['r
           <input className="input" value={f.payReason} onChange={(e) => setF({ ...f, payReason: e.target.value })} />
         </Field>
       )}
+      {/* A moped given already is changed by a swap, with its two acts (ADR-0040). */}
+      {rental.vehicle && <p className="hint muted">{t.swap.editHint}</p>}
       {rental.vinUnconfirmed && (
         <Field label={t.rentalEdit.assignVehicle} hint={t.rentalEdit.assignHint} name="vehicleId">
           <select className="input" value={f.vehicleId} onChange={(e) => setF({ ...f, vehicleId: e.target.value })}>

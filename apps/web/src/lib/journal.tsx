@@ -131,23 +131,62 @@ export function ChangedFromTo({ before, after }: { before: unknown; after: unkno
   const was = (before ?? null) as Bag;
   const now = (after ?? null) as Bag;
   if (!was || !now || typeof was !== 'object' || typeof now !== 'object') return null;
-  const pairs: { field: string; from: string; to: string }[] = [];
+  const t = currentDict();
+  const pairs: { field: string; label: string | null; from: string; to: string }[] = [];
   for (const field of Object.keys(was)) {
     if (!(field in now)) continue;
     const from = value(field, was[field]);
     const to = value(field, now[field]);
     if (from == null || to == null || from === to) continue;
-    pairs.push({ field, from, to });
+    pairs.push({ field, label: named(t, field), from, to });
   }
-  if (pairs.length === 0) return null;
+  const moved = movedLines(was.schedule, now.schedule);
+  if (pairs.length === 0 && moved === 0) return null;
   return (
     <>
       {pairs.map((p) => (
         <span key={p.field} className="muted">
           {' · '}
+          {p.label && `${p.label}: `}
           <span className="mono">{p.from}</span> → <span className="mono">{p.to}</span>
         </span>
       ))}
+      {moved > 0 && <span className="muted">{` · ${t.saleDate.linesMoved(moved)}`}</span>}
     </>
   );
+}
+
+/**
+ * A field the action's own words do not name. «Изменена дата продажи ·
+ * 19.05.2026 → 16.05.2026 · 19.05.2027 → 16.05.2027» left the reader to guess
+ * that the second pair was the warranty (review of the sale date, 21.10.2026).
+ */
+function named(t: Dict, field: string): string | null {
+  return field === 'warrantyUntil' ? t.saleCard.warranty : null;
+}
+
+/**
+ * A schedule is a list, and a list has no "было → стало" of its own, so the
+ * line dropped it: a sale was re-dated, its instalments fell due on other days
+ * — which can change the debt — and the journal said nothing of it (ux.md №14).
+ * The line now says how many instalments moved; each one's days stay in the
+ * row. Lines are matched by their number, or by their place where a side
+ * wrote none (`sale.schedule` keeps the rows as they were sent).
+ */
+function movedLines(was: unknown, now: unknown): number {
+  if (!Array.isArray(was) || !Array.isArray(now)) return 0;
+  const days = (rows: unknown[]) =>
+    new Map(
+      rows.map((raw, i) => {
+        const row = (raw ?? {}) as { seq?: unknown; dueOn?: unknown };
+        return [typeof row.seq === 'number' ? row.seq : i + 1, row.dueOn] as const;
+      }),
+    );
+  const before = days(was);
+  let moved = 0;
+  for (const [seq, dueOn] of days(now)) {
+    const had = before.get(seq);
+    if (typeof had === 'string' && typeof dueOn === 'string' && had !== dueOn) moved += 1;
+  }
+  return moved;
 }

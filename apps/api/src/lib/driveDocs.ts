@@ -247,7 +247,15 @@ export interface RentalToMatch {
   id: string;
   pickedUpOn: string | null;
   vin: string | null;
+  /** The mopeds a swap took out of the rental (ADR-0040): the papers in its folder may name them. */
+  formerVins?: string[];
   names: (string | null)[];
+}
+
+/** A VIN read off a document is this moped's: the same, or its end typed a letter or two short. */
+export function sameVin(read: string | null | undefined, vin: string | null | undefined): boolean {
+  if (!read || !vin) return false;
+  return read === vin || (read.length >= 11 && vin.endsWith(read));
 }
 
 /** Edits between two words, to forgive a letter typed wrong in a folder's name («gulovani»). */
@@ -312,8 +320,11 @@ export function matchFolders(
   for (const f of folders) {
     for (const r of rentals) {
       const words = sharedWords(f.person, r.names);
-      // A VIN typed a letter or two short is the end of the moped's.
-      const vin = !!r.vin && f.vins.some((v) => v === r.vin || (v.length >= 11 && r.vin!.endsWith(v)));
+      // A VIN typed a letter or two short is the end of the moped's. Any
+      // moped the rental had speaks for it: after a swap the old contract
+      // still names the first one (ADR-0040).
+      const rentalVins = [r.vin, ...(r.formerVins ?? [])];
+      const vin = f.vins.some((v) => rentalVins.some((rv) => sameVin(v, rv)));
       const day = !!f.datedOn && f.datedOn === r.pickedUpOn;
       // A VIN without the person's name is the moped, not the renter — the
       // same moped goes from hand to hand — so it counts only with the day.

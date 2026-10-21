@@ -9,6 +9,7 @@
 // schedule — nothing is stored that can be derived, so a row knows only what
 // it asked for and what has been paid against it.
 import type { Tetri } from './money.js';
+import { addDays, daysBetween } from './time.js';
 import type { ISODate } from './types.js';
 
 /** A moped is under warranty for a year from the day it was sold (`sales.md`). */
@@ -113,7 +114,68 @@ export function saleState(input: {
   };
 }
 
-const daysBetween = (a: ISODate, b: ISODate) => Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000);
+/**
+ * How many whole months after `from` a day falls on the same day of the month
+ * as `from` — the way `addMonths` and the schedule count, a short month's
+ * last day standing in for a day it does not have — or null when it does not.
+ */
+function monthsAfter(from: ISODate, day: ISODate): number | null {
+  const [fy, fm] = from.split('-').map(Number);
+  const [dy, dm] = day.split('-').map(Number);
+  const months = (dy - fy) * 12 + (dm - fm);
+  return months >= 0 && addMonths(from, months) === day ? months : null;
+}
+
+export interface SaleRedate {
+  /** The warranty after the move: the twelve months follow the date, a warranty set by hand stays. */
+  warrantyUntil: ISODate | null;
+  /** The instalments whose day moves, and from what to what. A line that stays is not listed. */
+  instalments: { seq: number; from: ISODate; to: ISODate }[];
+}
+
+/**
+ * A sale entered on the wrong day, put right (call of 21.10.2026). What was
+ * worked out from the day of the sale follows it, and nothing else does:
+ *
+ *  - the warranty, when it is the twelve months the sale gave it; one an
+ *    owner set by hand stays where it was put;
+ *  - an instalment on the day of the sale, or on the same day of a later
+ *    month, moves to that day counted from the new date — the schedule a
+ *    sale entered on the right day would have built, month ends included
+ *    (a sale on the 31st instals on the 28th in February, one on the 28th
+ *    does too, and in March they part again);
+ *  - a line somebody moved by hand moves by the same number of days;
+ *  - a sale carried over from paper keeps its schedule: those dates are the
+ *    contract's (B3-03), not ours to work out.
+ *
+ * Paid lines move with the rest. Money hangs on the instalment, not on its
+ * date, so nothing paid changes — only the day the line reads as due.
+ *
+ * The API writes this and the date sheet shows it before anything is sent,
+ * so the two cannot disagree about what moves.
+ */
+export function redateSale(
+  input: {
+    soldOn: ISODate;
+    warrantyUntil: ISODate | null;
+    transferred: boolean;
+    instalments: readonly { seq: number; dueOn: ISODate }[];
+  },
+  newSoldOn: ISODate,
+): SaleRedate {
+  const old = input.soldOn;
+  const shift = daysBetween(old, newSoldOn);
+  const warranty = input.warrantyUntil != null && input.warrantyUntil === warrantyUntil(old) ? warrantyUntil(newSoldOn) : input.warrantyUntil;
+  if (shift === 0 || input.transferred) return { warrantyUntil: warranty, instalments: [] };
+  const instalments = [...input.instalments]
+    .sort((a, b) => a.seq - b.seq)
+    .map((i) => {
+      const months = monthsAfter(old, i.dueOn);
+      return { seq: i.seq, from: i.dueOn, to: months != null ? addMonths(newSoldOn, months) : addDays(i.dueOn, shift) };
+    })
+    .filter((i) => i.from !== i.to);
+  return { warrantyUntil: warranty, instalments };
+}
 
 /**
  * A sale carried over from the old way of working (B3-03): the schedule is

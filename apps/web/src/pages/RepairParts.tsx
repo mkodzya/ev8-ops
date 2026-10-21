@@ -483,11 +483,16 @@ function DonorPicker({ job, chosen, onPick }: { job: ServiceJob; chosen: DonorMo
   );
 }
 
-/** The tracker comes off: working — onto the shelf; broken — only closed on the moped. */
+/**
+ * The tracker comes off: working — onto the shelf; broken — only closed on the
+ * moped. One written on the moped's card never came off a shelf, so it goes
+ * back to none, working or not (ADR-0036, addendum 21.10.2026, item 6).
+ */
 function TrackerOffForm({ job, onBack, onDone }: { job: ServiceJob; onBack: () => void; onDone: () => void }) {
   const t = useT();
   const [working, setWorking] = useState<boolean | null>(null);
   const tr = job.vehicle.tracker;
+  const offHint = (yes: boolean) => (!yes ? t.wparts.trackerOffBroken : tr?.fromShelf === false ? t.wparts.trackerOffNoShelf : t.wparts.trackerOffWorking);
   if (!tr) {
     return (
       <div className="wparts-form">
@@ -527,7 +532,7 @@ function TrackerOffForm({ job, onBack, onDone }: { job: ServiceJob; onBack: () =
             {t.wparts.no}
           </button>
         </div>
-        {working != null && <span className="hint muted">{working ? t.wparts.trackerOffWorking : t.wparts.trackerOffBroken}</span>}
+        {working != null && <span className="hint muted">{offHint(working)}</span>}
         <FieldErr name="working" />
       </div>
     </Form>

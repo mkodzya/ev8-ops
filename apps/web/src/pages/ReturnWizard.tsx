@@ -25,14 +25,15 @@ const ITEM_STATES: ItemState[] = ['ok', 'damaged', 'missing'];
 type Items = Record<string, { state: ItemState; note: string }>;
 const LAST_POINT = 'ev8-last-point';
 
-function lastPoint(): string {
+/** The point a moped was last left at on this device — the return's and the swap's (ADR-0040). */
+export function lastPoint(): string {
   try {
     return localStorage.getItem(LAST_POINT) ?? '';
   } catch {
     return '';
   }
 }
-function rememberPoint(id: string) {
+export function rememberPoint(id: string) {
   try {
     localStorage.setItem(LAST_POINT, id);
   } catch {
@@ -129,6 +130,8 @@ export function ReturnWizard() {
 
   const km = f.odometer.trim() === '' ? null : Number(f.odometer.replace(/\s/g, ''));
   const pickupKm = preview.pickupKm;
+  // The day the moped coming back was handed out: after a swap, the swap's (ADR-0040).
+  const handedOn = preview.pickupOn ?? r.pickedUpOn;
   const kmBelow = km != null && pickupKm != null && km < pickupKm;
   // Below the moped's last reading — a repair during the rental may have read
   // it — only with the reason, as the hand-over asks it (ADR-0038 §4). The
@@ -225,7 +228,7 @@ export function ReturnWizard() {
               ) : (
                 t.rentals.vinUnconfirmed
               )}{' '}
-              · {t.back.handedOn(fmtDate(r.pickedUpOn))} · {t.back.paidThrough(fmtDate(r.paidThrough))}
+              · {t.back.handedOn(fmtDate(handedOn))} · {t.back.paidThrough(fmtDate(r.paidThrough))}
             </p>
           </section>
           {actOn && (
@@ -240,9 +243,9 @@ export function ReturnWizard() {
           )}
           <div className="two-col two-col-tight">
             <Field label={t.back.returnedOn} name="returnedOn">
-              <input className="input mono" type="date" max={todayISO()} min={r.pickedUpOn ?? undefined} value={f.returnedOn} onChange={(e) => set({ returnedOn: e.target.value })} />
+              <input className="input mono" type="date" max={todayISO()} min={handedOn ?? undefined} value={f.returnedOn} onChange={(e) => set({ returnedOn: e.target.value })} />
             </Field>
-            <Field label={t.back.odometer} hint={pickupKm != null ? t.back.odometerMin(String(pickupKm), fmtDate(r.pickedUpOn)) : undefined} name="odometerKm">
+            <Field label={t.back.odometer} hint={pickupKm != null ? t.back.odometerMin(String(pickupKm), fmtDate(handedOn)) : undefined} name="odometerKm">
               <input className="input mono" value={f.odometer} onChange={(e) => set({ odometer: e.target.value })} inputMode="numeric" />
             </Field>
           </div>

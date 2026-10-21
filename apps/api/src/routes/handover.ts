@@ -7,7 +7,7 @@ import { actorOf } from '../lib/guard.js';
 import { audit } from '../lib/audit.js';
 import { prisma } from '../lib/db.js';
 import { settingsRow } from './settings.js';
-import { decideDeposit, pickUp, returnPreview, returnRental, setRentalStatus, undoReturn, type DepositDecision, type NewCustomer, type PickupInput } from '../lib/rentals.js';
+import { decideDeposit, pickUp, returnPreview, returnRental, setRentalStatus, swapVehicle, undoReturn, type DepositDecision, type NewCustomer, type PickupInput } from '../lib/rentals.js';
 import { WITHHOLD_GROUNDS } from '../lib/pdf/returnAct.js';
 import { discountWeek } from '../lib/discount.js';
 import { addFine, voidFine } from '../lib/fines.js';
@@ -157,6 +157,41 @@ export function handoverRoutes(app: FastifyInstance): void {
       locationId: str(b, 'locationId'),
       lateChoice: oneOf(b, 'lateChoice', ['week', 'late'] as const),
       decision: decisionOf(b.deposit ?? b.decision),
+    });
+  });
+
+  /**
+   * "Заменить мопед" (ADR-0040): the customer gives one moped back and takes
+   * another, and the rental goes on. A return and a hand-over in one — the
+   * route asks for the return's right, the function for both. The photos of
+   * the two acts follow through /api/acts/:id/photos, as after a return.
+   */
+  app.post<{ Params: { id: string }; Body: Body }>('/api/rentals/:id/swap', { config: { scope: 'rental.return' } }, async (req) => {
+    const b = req.body ?? {};
+    const today = todayISO(new Date(), env.TZ);
+    // The act of the moped given back lists the moped and its key; the batteries and chargers stay with the customer.
+    const items = Object.fromEntries(Object.entries(itemsOf(b)).filter(([k]) => k === 'moped' || k === 'key'));
+    return swapVehicle({
+      actor: actorOf(req),
+      today,
+      rentalId: req.params.id,
+      swappedOn: date(b, 'swappedOn') ?? today,
+      reason: str(b, 'reason', { max: 1000 }) ?? '',
+      out: {
+        odometerKm: int(b, 'outOdometerKm', { min: 0 }),
+        odometerReason: str(b, 'outOdometerReason', { max: 500 }),
+        condition: str(b, 'outCondition', { max: 4000 }),
+        items,
+        toService: b.toService === true,
+        locationId: str(b, 'locationId'),
+      },
+      in: {
+        vehicleId: str(b, 'vehicleId', { required: true })!,
+        moveFromSale: b.moveFromSale === true,
+        odometerKm: int(b, 'inOdometerKm', { min: 0 }),
+        odometerReason: str(b, 'inOdometerReason', { max: 500 }),
+        condition: str(b, 'inCondition', { max: 4000 }),
+      },
     });
   });
 

@@ -45,7 +45,7 @@ describe.skipIf(!HAS_DB)('documents', () => {
     // A field the contract needs, emptied: it is named and signing waits for it.
     await prisma.customer.update({ where: { id: customer.id }, data: { personalId: null } });
     const card = json<{ documents: { contract: { gaps: string[]; signedAt: string | null } } }>(await call(owner, 'GET', `/api/rentals/${id}`));
-    expect(card.documents.contract).toEqual({ gaps: ['personalId'], signedAt: null, signedBy: null });
+    expect(card.documents.contract).toEqual({ gaps: ['personalId'], signedAt: null, signedBy: null, signedElsewhere: null });
     const refused = await call(owner, 'POST', `/api/rentals/${id}/contract/sign`, { agree: true, signaturePng: PNG });
     expect(json<{ error: string }>(refused).error).toBe('document_gaps');
     await prisma.customer.update({ where: { id: customer.id }, data: { personalId: `T${uniq().replace(/\D/g, '')}` } });
@@ -73,6 +73,77 @@ describe.skipIf(!HAS_DB)('documents', () => {
     expect(all.filter((f) => !f.archived)).toHaveLength(1);
     const journal = await prisma.auditLog.findFirst({ where: { entityId: id, action: 'document.regenerate' } });
     expect(journal).not.toBeNull();
+  });
+
+  it('a contract signed in Signify is marked, not signed again; the mark survives a rebuild (ADR-0039)', async () => {
+    const { prisma, owner, id } = await rentalWithEverything();
+    type Card = { documents: { contract: { signedAt: string | null; signedElsewhere: { at: string; by: string | null; note: string | null } | null } } };
+
+    const manager = await loginAs('manager');
+    const marked = await call(manager, 'POST', `/api/rentals/${id}/contract/signed-elsewhere`, { note: 'ТЕСТ: договор в Signify' });
+    expect(marked.statusCode, marked.body).toBe(201);
+    const card = json<Card>(await call(owner, 'GET', `/api/rentals/${id}`));
+    expect(card.documents.contract.signedAt).toBeNull();
+    expect(card.documents.contract.signedElsewhere).toMatchObject({ by: 'Test manager', note: 'ТЕСТ: договор в Signify' });
+    expect(Date.parse(card.documents.contract.signedElsewhere!.at)).not.toBeNaN();
+    const journal = await prisma.auditLog.findFirst({ where: { entityId: id, action: 'document.signed_elsewhere' } });
+    expect(journal?.note).toBe('ТЕСТ: договор в Signify');
+
+    // One mark: the second press is refused, not written twice.
+    const twice = await call(manager, 'POST', `/api/rentals/${id}/contract/signed-elsewhere`, {});
+    expect(twice.statusCode).toBe(409);
+    expect(json<{ error: string }>(twice).error).toBe('already_signed');
+    expect(await prisma.auditLog.count({ where: { entityId: id, action: 'document.signed_elsewhere' } })).toBe(1);
+
+    // Rebuilding EV8 Ops' own copy does not change what was signed in Signify.
+    expect((await call(owner, 'GET', `/api/rentals/${id}/contract.pdf?fresh=1`)).statusCode).toBe(200);
+    expect(json<Card>(await call(owner, 'GET', `/api/rentals/${id}`)).documents.contract.signedElsewhere).not.toBeNull();
+
+    expect((await call(manager, 'POST', '/api/rentals/00000000-0000-4000-8000-000000000000/contract/signed-elsewhere', {})).statusCode).toBe(404);
+  });
+
+  it('a contract signed on the screen is not marked on top (ADR-0039)', async () => {
+    const { owner, id } = await rentalWithEverything();
+    expect((await call(owner, 'POST', `/api/rentals/${id}/contract/sign`, { agree: true, signaturePng: PNG })).statusCode).toBe(201);
+    const refused = await call(owner, 'POST', `/api/rentals/${id}/contract/signed-elsewhere`, {});
+    expect(refused.statusCode).toBe(409);
+    expect(json<{ error: string }>(refused).error).toBe('already_signed');
+  });
+
+  it('the card speaks of the signed copy when an unsigned one stands beside it, as the list does', async () => {
+    const { prisma, owner, id } = await rentalWithEverything();
+    expect((await call(owner, 'POST', `/api/rentals/${id}/contract/sign`, { agree: true, signaturePng: PNG })).statusCode).toBe(201);
+    // A second, later copy left unarchived beside the signed one — as an old
+    // rebuild could leave it. The list counts any signed copy; so does the card.
+    const signed = await prisma.storedFile.findFirstOrThrow({ where: { rentalId: id, docKind: 'contract', archived: false, signedAt: { not: null } } });
+    await prisma.storedFile.create({
+      data: { kind: 'pdf', docKind: 'contract', rentalId: id, label: 'test-unsigned.pdf', mimeType: 'application/pdf', sizeBytes: 4, sha256: 'test', bytes: new Uint8Array(Buffer.from('%PDF')), createdAt: new Date(signed.createdAt.getTime() + 60_000) },
+    });
+    const card = json<{ documents: { contract: { signedAt: string | null } } }>(await call(owner, 'GET', `/api/rentals/${id}`));
+    expect(card.documents.contract.signedAt).toBe(signed.signedAt!.toISOString());
+    const listed = json<{ rentals: { id: string; contractSigned: boolean | null }[] }>(await call(owner, 'GET', '/api/rentals')).rentals.find((r) => r.id === id)!;
+    expect(listed.contractSigned).toBe(true);
+  });
+
+  it('the card finds the signed copy in whatever order the copies come back (ADR-0039)', async () => {
+    // The card's query has no ORDER BY, and the test above most likely gets the
+    // signed copy back first. Here the unsigned copy comes first, the order the
+    // old "first copy found" rule read wrong.
+    const { docState } = await import('../src/routes/rentals.js');
+    const at = (time: string) => new Date(`2026-09-01T${time}:00+04:00`);
+    const signed = { docKind: 'contract', signedAt: at('10:05'), signedBy: 'Test owner', createdAt: at('10:05') };
+    const unsignedLater = { docKind: 'contract', signedAt: null, signedBy: null, createdAt: at('10:06') };
+    const unsignedEarlier = { docKind: 'contract', signedAt: null, signedBy: null, createdAt: at('10:01') };
+
+    expect(docState([unsignedLater, signed], 'contract', [])).toMatchObject({ signedAt: signed.signedAt.toISOString(), signedBy: 'Test owner' });
+    expect(docState([signed, unsignedLater], 'contract', []).signedAt).toBe(signed.signedAt.toISOString());
+    // Two signed copies: the later one speaks, whatever comes first.
+    const signedLater = { docKind: 'contract', signedAt: at('10:09'), signedBy: 'Test manager', createdAt: at('10:09') };
+    expect(docState([signed, unsignedLater, signedLater], 'contract', []).signedBy).toBe('Test manager');
+    // None signed: the latest copy, which is unsigned.
+    expect(docState([unsignedEarlier, unsignedLater], 'contract', [])).toMatchObject({ signedAt: null, signedBy: null });
+    // A signed copy of another document does not sign this one.
+    expect(docState([unsignedLater, { ...signed, docKind: 'return_act' }], 'contract', []).signedAt).toBeNull();
   });
 
   it('the return act exists only once the rental is closed, and carries the deposit decision', async () => {

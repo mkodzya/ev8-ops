@@ -9,6 +9,7 @@
 // Money keeps ONE format in every language (formatGel in @ev8/shared).
 import { wave3En } from './wave3.js';
 import { wave4En } from './wave4.js';
+import { vehicleStateEn } from './vehicle-state.js';
 import { wave5salesEn } from './wave5-sales.js';
 import { wave5purchasesEn } from './wave5-purchases.js';
 import { wave5serviceEn } from './wave5-service.js';
@@ -26,9 +27,14 @@ import { workshopPartsEn } from './workshop-parts.js';
 import { workshopPayoutsEn } from './workshop-payouts.js';
 import { workshopMaintenanceEn } from './workshop-maintenance.js';
 import { typedTextEn } from './typed-text.js';
+import { workshopsEn } from './workshops.js';
 import { driveEn } from './drive.js';
 import { expEn } from './expenses.js';
 import { inBankEn } from './in-bank.js';
+import { fleetListEn } from './fleet-list.js';
+import { contractSignedEn } from './contract-signed.js';
+import { saleDateEn } from './sale-date.js';
+import { rentalSwapEn } from './rental-swap.js';
 export const en = {
   lang: { label: 'Language', ka: 'ქართული', ru: 'Русский', en: 'English' },
 
@@ -361,7 +367,7 @@ export const en = {
     /** After a week's pay status in the table of weeks, on a rental that is overdue (ADR-0017). */
     weekLate: 'late',
     acts: 'Acts',
-    actKind: { pickup: 'Hand-over act', return: 'Return act' },
+    actKind: { pickup: 'Hand-over act', return: 'Return act', swap_out: 'Swap act: moped given back', swap_in: 'Swap act: moped handed out' },
     returnedTo: 'Returned to',
     buyout: 'Buy-out',
     buyoutProgress: (target: string, per: string) => `${per} of each payment towards ${target}`,
@@ -1174,6 +1180,7 @@ export const en = {
       already_matched: 'This bank line is already attached to a payment.',
       already_merged: 'This card is already in the archive: it was merged into another.',
       already_returned: 'This rental is already closed.',
+      already_signed: 'The contract is already signed — on the screen or in Signify.',
       already_voided: 'This payment is already cancelled.',
       bad_channel: 'A deposit goes back in cash or by transfer.',
       bad_field: 'A field is filled in wrongly. Check the form and try again.',
@@ -1194,6 +1201,7 @@ export const en = {
       category_not_found: 'No such expense category.',
       charge_not_found: 'No such fine or charge on the rental — it may have been taken back.',
       closed_before_opened: 'A repair cannot close before the day it was opened.',
+      contract_not_marked: 'The contract is not marked as signed in Signify. Refresh the screen.',
       customer_archived: 'This card was merged into another one. Work on the card it went into.',
       customer_in_debt: 'This customer owes money. Only an owner can hand over a moped, with a reason.',
       customer_mismatch: 'That rental belongs to a different customer. Pick this customer’s own rental.',
@@ -1263,6 +1271,7 @@ export const en = {
       tracker_none: 'This moped has no tracker in EV8 Ops.',
       tracker_removed_before_fitted: 'A tracker cannot come off before the day it was fitted.',
       tracker_remove_apart: 'A tracker comes off by «Take the tracker off».',
+      tracker_date_bad: 'A day the tracker was on the moped: not after today, not before the moped came, not before its last tracker came off. Not sure — leave today.',
       donor_is_this_moped: 'A donor is another moped, not this one.',
       line_approved: 'This part is approved: the chief mechanic or an owner takes it off.',
       job_no_mechanic: 'This repair has no mechanic: the owners keep it on the old form.',
@@ -1321,10 +1330,14 @@ export const en = {
       rental_not_found: 'Rental not found.',
       return_before_pickup: 'The return date is before the pickup date.',
       rule_not_found: 'That remembered payee is gone already.',
+      sale_before_history: 'A sale cannot be dated before the last event in the moped’s history. Pick that day or a later one.',
       sale_closed: 'This sale is closed.',
+      sale_date_future: 'A sale cannot be dated in the future.',
       sale_has_payments: 'Cancel the payments on this sale first.',
       sale_not_found: 'Sale not found.',
       same_customer: 'A card cannot be merged into itself.',
+      same_state: 'The moped is already in this state.',
+      same_vehicle: 'This is the moped the customer already has. Pick another one.',
       service_not_found: 'No such repair.',
       sold_by_sale: 'A moped is sold by a sale, and comes back by a buy-back.',
       split_bad_amount: 'Every part needs a sum above zero.',
@@ -1338,6 +1351,8 @@ export const en = {
       split_too_many: 'Too many parts: nine at most.',
       stock_started: 'This part has movements already: an opening balance comes before them.',
       supplier_not_found: 'No such supplier.',
+      swap_before_last_event: 'The swap date is before something already recorded in the history of one of the mopeds. Pick a later date.',
+      swap_no_vehicle: 'This rental has no moped yet. Give it one in «Change terms» first.',
       too_late: 'It is too late to undo. Move the moped to the other park again instead.',
       too_many_attempts: 'Too many attempts. Wait 15 minutes and try again.',
       transfer_date: 'A rental brought over must start before today, and paid weeks must end on a week boundary.',
@@ -1348,7 +1363,7 @@ export const en = {
       use_rental: 'A moped becomes rented only through a hand-over.',
       use_status_route: 'The status is changed through its own action, with a reason.',
       user_not_found: 'User not found.',
-      vehicle_already_set: 'This rental already has a moped.',
+      vehicle_already_set: 'This rental already has a moped. Change it with «Change the moped» in the menu.',
       vehicle_gone: 'This moped has left the fleet. A buy-back brings it back.',
       vehicle_in_rent_pool: 'This moped is kept for renting; selling it moves it to the sale park.',
       vehicle_in_sale_pool: 'This moped is in the sale park. Only an owner can hand it over.',
@@ -1366,6 +1381,8 @@ export const en = {
       week_not_found: 'No such week in this rental.',
       week_paid_before_transfer: 'This week was paid before the rental was carried over — it cannot be discounted.',
       withheld_over_total: 'You cannot withhold more than the repair costs.',
+      workshop_archived: 'This workshop was taken off the list. Choose another, or put it back in Settings → Repair.',
+      workshop_archived_exists: 'A workshop by that name was taken off the list. Put it back instead: «…» → «Put back».',
       workshop_exists: 'A workshop by that name is already on the list.',
       workshop_not_found: 'No such workshop.',
       wrong_password: 'The current password is wrong.',
@@ -1373,6 +1390,7 @@ export const en = {
   },
   ...wave3En,
   ...wave4En,
+  ...vehicleStateEn,
   ...wave5salesEn,
   ...wave5purchasesEn,
   ...wave5serviceEn,
@@ -1390,9 +1408,14 @@ export const en = {
   ...workshopPayoutsEn,
   ...workshopMaintenanceEn,
   ...typedTextEn,
+  ...workshopsEn,
   ...driveEn,
   ...expEn,
   ...inBankEn,
+  ...fleetListEn,
+  ...contractSignedEn,
+  ...saleDateEn,
+  ...rentalSwapEn,
 };
 
 export type Dict = typeof en;
