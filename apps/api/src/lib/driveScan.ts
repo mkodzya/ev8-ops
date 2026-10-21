@@ -1,9 +1,10 @@
-import { addDays, effectiveRentalStatus, payOffsetDays, todayISO, type RentalStatus } from '@ev8/shared';
+import { addDays, effectiveRentalStatus, todayISO, type RentalStatus } from '@ev8/shared';
 import { dateFromISO, isoDate } from './dates.js';
 import { prisma } from './db.js';
 import { DriveError, FOLDER, download, driveConfig, listFolder, type DriveConfig, type DriveFailure, type DriveItem } from './drive.js';
 import { fileDate, fileKind, folderName, kindOfText, matchFolders, pdfText, readContract, readReturnAct, sameVin, sharedWords, type FolderToMatch, type RentalToMatch } from './driveDocs.js';
 import { env } from './env.js';
+import { payOffsetOf } from './rentState.js';
 
 // Reading the rentals folders in Drive, and laying them beside the rentals
 // here (ADR-0031). Read only: nothing is written to Drive, moved or deleted.
@@ -215,6 +216,7 @@ export async function driveReconciliation() {
           paidThrough: true,
           pickedUpOn: true,
           payWeekday: true,
+          weekShiftDays: true,
           returnedOn: true,
           customer: { select: { id: true, name: true } },
           vehicle: { select: { vin: true } },
@@ -230,7 +232,7 @@ export async function driveReconciliation() {
   });
   const withFolder = new Set(folders.map((f) => f.rentalId).filter(Boolean));
   const statusOf = (r: NonNullable<(typeof folders)[number]['rental']>) =>
-    effectiveRentalStatus(r.status as RentalStatus, isoDate(r.paidThrough), isoDate(r.pickedUpOn), today, payOffsetDays(isoDate(r.pickedUpOn), r.payWeekday));
+    effectiveRentalStatus(r.status as RentalStatus, isoDate(r.paidThrough), isoDate(r.pickedUpOn), today, payOffsetOf(r));
   // The mopeds a swap took out of the folder's rental, beside the one it has (ADR-0040).
   const swapsOf = (f: (typeof folders)[number]) =>
     f.rental ? { vin: f.rental.vehicle?.vin ?? null, swappedVins: f.rental.acts.flatMap((a) => (a.vehicle ? [a.vehicle.vin] : [])) } : null;

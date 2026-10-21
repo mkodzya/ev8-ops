@@ -11,6 +11,7 @@ import { kommoLinkKa } from './kommo-link.js';
 import { bankApiKa } from './bank-api.js';
 import { calendarKa } from './payments-calendar.js';
 import { payDayKa } from './pay-day.js';
+import { weekShiftKa } from './week-shift.js';
 import { workshopKa } from './workshop.js';
 import { workshopJobsKa } from './workshop-jobs.js';
 import { workshopApprovalKa } from './workshop-approval.js';
@@ -18,6 +19,7 @@ import { workshopPartsKa } from './workshop-parts.js';
 import { workshopPayoutsKa } from './workshop-payouts.js';
 import { workshopMaintenanceKa } from './workshop-maintenance.js';
 import { typedTextKa } from './typed-text.js';
+import { repairKindKa } from './repair-kind.js';
 import { workshopsKa } from './workshops.js';
 import { driveKa } from './drive.js';
 import { expKa } from './expenses.js';
@@ -1310,10 +1312,12 @@ export const ka: Dict = {
       purchase_not_found: 'შეკვეთა ვერ მოიძებნა.',
       rate_for_mechanics: 'ნორმა-საათის განაკვეთი მხოლოდ მექანიკოსს აქვს.',
       rate_not_found: 'ასეთი ტარიფი არ არის — შესაძლოა უკვე მოხსნილია.',
+      reason_kind_kept: 'მექანიკოსის შეკეთებას მიზეზი რჩება: აირჩიეთ სხვა.',
       reason_required: 'დაკავებისთვის საჭიროა მიზეზი.',
       reconcile_required: 'საბანკო გადახდებს შეიყვანს მფლობელი.',
       regenerate_forbidden: 'უკვე გაცემული დოკუმენტის ჩანაცვლება შეუძლია მხოლოდ მფლობელს.',
       rental_not_found: 'იჯარა ვერ მოიძებნა.',
+      rental_not_running: 'კვირის გადაწევა შეიძლება მხოლოდ მიმდინარე იჯარაში — არა შეჩერებულში, სადავოში ან დაბრუნებულში.',
       return_before_pickup: 'დაბრუნების თარიღი გაცემის თარიღამდეა.',
       rule_not_found: 'ეს წესი უკვე აღარ არის.',
       sale_before_history: 'გაყიდვა ვერ იქნება მოპედის ისტორიის ბოლო მოვლენამდე. აირჩიეთ ის დღე ან უფრო გვიანდელი.',
@@ -1325,6 +1329,8 @@ export const ka: Dict = {
       same_state: 'მოპედი უკვე ამ მდგომარეობაშია.',
       same_vehicle: 'ეს მოპედი უკვე კლიენტთანაა. აირჩიეთ სხვა.',
       service_not_found: 'ასეთი შეკეთება არ არის.',
+      shift_days_range: 'კვირა 1–6 დღით გრძელდება. კიდევ 7 დღე — უბრალოდ შემდეგი კვირაა.',
+      shift_over_paid: 'კვირისთვის ამდენი უკვე გადახდილია: გადახდილზე იაფი ვერ გახდება.',
       sold_by_sale: 'მოპედი იყიდება გაყიდვით და ბრუნდება უკან გამოსყიდვით.',
       split_bad_amount: 'თითოეულ ნაწილს ნულზე მეტი თანხა უნდა ჰქონდეს.',
       split_bad_target: 'თითო ნაწილი ზუსტად ერთ ჩანაწერს იხდის.',
@@ -1362,10 +1368,12 @@ export const ka: Dict = {
       vin_or_note: 'აირჩიეთ მოპედი პარკიდან ან დაწერეთ, რატომ არ არის VIN დადასტურებული.',
       vins_count: 'ხაზში VIN-ების რაოდენობა არ ემთხვევა შეკვეთილს. შეამოწმეთ ყოველი ხაზი.',
       vins_missing: 'ხაზში VIN-ები არ არის. ყოველი მოდელისთვის ჩაწერეთ თითო VIN თითო სტრიქონზე.',
+      week_at_nothing: 'ეს კვირა არაფერი ღირს — გასაგრძელებელი არაფერია.',
       week_has_bank_money: 'ამ კვირას ბანკის თანხა უკვე აქვს.',
       week_not_carried: 'ეს კვირა გადმოტანისას გადახდილად არ არის მონიშნული.',
       week_not_found: 'ასეთი კვირა ამ იჯარაში არ არის.',
-      week_paid_before_transfer: 'ეს კვირა იჯარის გადმოტანამდეა გადახდილი — ფასდაკლება შეუძლებელია.',
+      week_not_last: 'გადაიწევა მხოლოდ ბოლო კვირა: შემდეგი უკვე დაიწყო.',
+      week_paid_before_transfer: 'ეს კვირა იჯარის გადმოტანამდეა გადახდილი — ის უცვლელი რჩება.',
       withheld_over_total: 'რემონტის ღირებულებაზე მეტის დაკავება შეუძლებელია.',
       workshop_archived: 'ეს სახელოსნო სიიდან მოხსნილია. აირჩიეთ სხვა ან დააბრუნეთ «პარამეტრები → შეკეთება»-ში.',
       workshop_archived_exists: 'ამ სახელით სახელოსნო სიიდან მოხსნილია. დააბრუნეთ ის: «…» → «დაბრუნება».',
@@ -1387,6 +1395,7 @@ export const ka: Dict = {
   ...bankApiKa,
   ...calendarKa,
   ...payDayKa,
+  ...weekShiftKa,
   ...workshopKa,
   ...workshopJobsKa,
   ...workshopApprovalKa,
@@ -1394,6 +1403,7 @@ export const ka: Dict = {
   ...workshopPayoutsKa,
   ...workshopMaintenanceKa,
   ...typedTextKa,
+  ...repairKindKa,
   ...workshopsKa,
   ...driveKa,
   ...expKa,

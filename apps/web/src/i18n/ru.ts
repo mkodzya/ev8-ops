@@ -11,6 +11,7 @@ import { kommoLinkRu } from './kommo-link.js';
 import { bankApiRu } from './bank-api.js';
 import { calendarRu } from './payments-calendar.js';
 import { payDayRu } from './pay-day.js';
+import { weekShiftRu } from './week-shift.js';
 import { workshopRu } from './workshop.js';
 import { workshopJobsRu } from './workshop-jobs.js';
 import { workshopApprovalRu } from './workshop-approval.js';
@@ -18,6 +19,7 @@ import { workshopPartsRu } from './workshop-parts.js';
 import { workshopPayoutsRu } from './workshop-payouts.js';
 import { workshopMaintenanceRu } from './workshop-maintenance.js';
 import { typedTextRu } from './typed-text.js';
+import { repairKindRu } from './repair-kind.js';
 import { workshopsRu } from './workshops.js';
 import { driveRu } from './drive.js';
 import { expRu } from './expenses.js';
@@ -1321,10 +1323,12 @@ export const ru: Dict = {
       purchase_not_found: 'Заказ не найден.',
       rate_for_mechanics: 'Ставка за нормо-час бывает только у механика.',
       rate_not_found: 'Такого тарифа нет — возможно, его уже убрали.',
+      reason_kind_kept: 'У ремонта механика причина остаётся: выберите другую вместо неё.',
       reason_required: 'Для удержания нужна причина.',
       reconcile_required: 'Банковские платежи вносит владелец.',
       regenerate_forbidden: 'Заменить уже выданный документ может только владелец.',
       rental_not_found: 'Аренда не найдена.',
+      rental_not_running: 'Сдвинуть можно только неделю идущей аренды — не на паузе, не в споре и не возвращённой.',
       return_before_pickup: 'Дата возврата раньше даты выдачи.',
       rule_not_found: 'Этого правила уже нет.',
       sale_before_history: 'Продажа не может быть раньше последнего события в истории мопеда. Выберите тот день или позже.',
@@ -1336,6 +1340,8 @@ export const ru: Dict = {
       same_state: 'Мопед уже в этом состоянии.',
       same_vehicle: 'Этот мопед уже у клиента. Выберите другой.',
       service_not_found: 'Такого ремонта нет.',
+      shift_days_range: 'Неделю удлиняют на 1–6 дней. Ещё 7 дней — это просто следующая неделя.',
+      shift_over_paid: 'Столько за неделю уже оплачено: дешевле оплаченного она стать не может.',
       sold_by_sale: 'Мопед продаётся продажей, а возвращается выкупом.',
       split_bad_amount: 'У каждой части должна быть сумма больше нуля.',
       split_bad_target: 'Каждая часть оплачивает ровно одну запись.',
@@ -1373,10 +1379,12 @@ export const ru: Dict = {
       vin_or_note: 'Выберите мопед из парка или напишите, почему VIN не подтверждён.',
       vins_count: 'Число VIN в строке не совпадает с заказанным. Проверьте каждую строку.',
       vins_missing: 'В строке нет VIN. Впишите по одному VIN в строке для каждой модели.',
+      week_at_nothing: 'Эта неделя ничего не стоит — удлинять нечего.',
       week_has_bank_money: 'У этой недели уже есть деньги из банка.',
       week_not_carried: 'Эта неделя не отмечена оплаченной при переносе.',
       week_not_found: 'Такой недели в аренде нет.',
-      week_paid_before_transfer: 'Эта неделя оплачена до переноса аренды — скидку на неё дать нельзя.',
+      week_not_last: 'Сдвинуть можно только последнюю неделю: следующая уже началась.',
+      week_paid_before_transfer: 'Эта неделя оплачена до переноса аренды — она остаётся как есть.',
       withheld_over_total: 'Удержать больше стоимости ремонта нельзя.',
       workshop_archived: 'Эта мастерская убрана из списка. Выберите другую или верните её в «Настройки → Ремонт».',
       workshop_archived_exists: 'Мастерская с таким названием убрана из списка. Верните её: «…» → «Вернуть».',
@@ -1398,6 +1406,7 @@ export const ru: Dict = {
   ...bankApiRu,
   ...calendarRu,
   ...payDayRu,
+  ...weekShiftRu,
   ...workshopRu,
   ...workshopJobsRu,
   ...workshopApprovalRu,
@@ -1405,6 +1414,7 @@ export const ru: Dict = {
   ...workshopPayoutsRu,
   ...workshopMaintenanceRu,
   ...typedTextRu,
+  ...repairKindRu,
   ...workshopsRu,
   ...driveRu,
   ...expRu,

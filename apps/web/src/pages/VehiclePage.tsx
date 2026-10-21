@@ -268,7 +268,7 @@ export function VehiclePage() {
                   <span className="mono muted">{fmtDate(l.occurredOn)}</span>
                   <span>
                     {t.feedWords[l.action] ?? l.action}
-                    <ChangedFromTo before={l.before} after={l.after} />
+                    <ChangedFromTo action={l.action} before={l.before} after={l.after} />
                     {noteWords(t, l.note) && (
                       <span className="muted">
                         {' · '}

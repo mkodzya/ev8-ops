@@ -1,4 +1,5 @@
-import { periodsThrough, todayISO } from '@ev8/shared';
+import { periodsThrough, shiftsOf, todayISO } from '@ev8/shared';
+import type { Prisma } from '../generated/prisma/client.js';
 import { audit } from './audit.js';
 import { dateFromISO, isoDate } from './dates.js';
 import { prisma } from './db.js';
@@ -82,6 +83,46 @@ async function repairDerived(): Promise<number> {
   return repaired;
 }
 
+/** What opening a rental's weeks reads of it: the weeks it has, and the days any of them gained (ADR-0041). */
+const WEEKS_OF = { id: true, pickedUpOn: true, weeklyRateTetri: true, periods: { select: { seq: true, extraDays: true } } } satisfies Prisma.RentalSelect;
+
+/**
+ * Open the weeks of one running rental that have begun by `asOf`, at its
+ * rate. They run from the pickup, each later by the days the weeks before it
+ * were made longer (ADR-0041) — the grid the payments calendar projects.
+ */
+async function openWeeksOf(r: Prisma.RentalGetPayload<{ select: typeof WEEKS_OF }>, asOf: string): Promise<number> {
+  const have = new Set(r.periods.map((p) => p.seq));
+  let added = 0;
+  for (const p of periodsThrough(isoDate(r.pickedUpOn)!, asOf, null, shiftsOf(r.periods))) {
+    if (have.has(p.seq)) continue;
+    await prisma.rentalPeriod.create({
+      data: {
+        rentalId: r.id,
+        seq: p.seq,
+        startsOn: dateFromISO(p.startsOn)!,
+        endsOn: dateFromISO(p.endsOn)!,
+        amountTetri: r.weeklyRateTetri,
+      },
+    });
+    added++;
+  }
+  return added;
+}
+
+/**
+ * The night's step for one rental, run by day: a week made shorter again may
+ * have let the next one begin (ADR-0041). Only a running rental — the roll's
+ * own filter. How many weeks it opened.
+ */
+export async function openWeeks(rentalId: string, asOf: string): Promise<number> {
+  const r = await prisma.rental.findFirst({
+    where: { id: rentalId, status: { in: ['active', 'overdue'] }, pickedUpOn: { not: null }, returnedOn: null },
+    select: WEEKS_OF,
+  });
+  return r ? openWeeksOf(r, asOf) : 0;
+}
+
 /**
  * Open every week that should exist by `asOf`, then let any credit pay for
  * it. Idempotent: a period that is already there is left alone, so this can
@@ -94,29 +135,13 @@ export async function rollPeriods(asOf: string = todayISO(new Date(), env.TZ)): 
     // tied to neither must not depend on how Postgres returns the rows — the
     // payments calendar shows beforehand what this night will do.
     orderBy: [{ pickedUpOn: 'asc' }, { number: 'asc' }],
-    select: { id: true, pickedUpOn: true, weeklyRateTetri: true, periods: { select: { seq: true } } },
+    select: WEEKS_OF,
   });
 
   let created = 0;
   let settledTetri = 0;
   for (const r of open) {
-    const have = new Set(r.periods.map((p) => p.seq));
-    const wanted = periodsThrough(isoDate(r.pickedUpOn)!, asOf);
-    let added = 0;
-    for (const p of wanted) {
-      if (have.has(p.seq)) continue;
-      await prisma.rentalPeriod.create({
-        data: {
-          rentalId: r.id,
-          seq: p.seq,
-          startsOn: dateFromISO(p.startsOn)!,
-          endsOn: dateFromISO(p.endsOn)!,
-          amountTetri: r.weeklyRateTetri,
-        },
-      });
-      added++;
-    }
-    created += added;
+    created += await openWeeksOf(r, asOf);
     // Even with no new week, a correction elsewhere may have freed credit.
     settledTetri += await settleCredit(r.id);
   }

@@ -46,7 +46,8 @@ describe.skipIf(!HAS_DB)('the pay day of a rental (ADR-0022)', () => {
 
     const log = await prisma.auditLog.findFirst({ where: { entityType: 'rental', entityId: id, action: 'rental.update' }, orderBy: { createdAt: 'desc' } });
     expect(log?.note).toBe('agreed with the customer');
-    expect(log?.after).toMatchObject({ payWeekday: day });
+    // Weeks never moved: the journal says an empty pay day «as the pickup day» (ADR-0041).
+    expect(log?.after).toMatchObject({ payWeekday: day, weekShiftDays: 0 });
     expect(log?.before).toMatchObject({ payWeekday: null });
   });
 

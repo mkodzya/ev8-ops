@@ -134,7 +134,7 @@ export function JournalPage() {
                   <td>
                     {/* An event has no "было": the dash is the answer, not a
                         missing value (§3.8). */}
-                    {l.kind === 'event' ? <span className="muted">{t.common.dash}</span> : <ChangedFromTo before={l.before} after={l.after} />}
+                    {l.kind === 'event' ? <span className="muted">{t.common.dash}</span> : <ChangedFromTo action={l.action} before={l.before} after={l.after} />}
                   </td>
                   <td>{noteWords(t, l.note, l.after) ? <JournalNote note={l.note} after={l.after} /> : <span className="muted">{t.common.dash}</span>}</td>
                 </tr>

@@ -401,6 +401,9 @@ select.input { appearance: auto; }
 
 /* Numbers, dates and codes never wrap inside a cell; the row grows instead. */
 .table td.mono, .table td.num, .table td .mono { white-space: nowrap; }
+/* A note under a figure — a week's discount, the days it was moved by — sits
+   on its own line and may wrap, so a phone's table does not grow wider (ux.md №12). */
+.table td .cell-note { display: block; white-space: normal; font: var(--text-label); }
 
 /* Grid items default to min-width:auto, so one wide table could push the
    whole page past the viewport on a phone. Let them shrink and scroll inside. */

@@ -64,6 +64,20 @@ describe.skipIf(!HAS_DB)('the fleet says why a moped is in service', () => {
     expect((await rowOf(owner, vehicle.id)).serviceWhy).toEqual({ kind: 'accident', text: 'invented: hit from behind', from: 'job' });
   });
 
+  it('names the kind the office picked, and the kind the owner changed it to (Mika, 21.10.2026)', async () => {
+    const { vehicle } = await freeVehicle();
+    const owner = await loginAs('owner');
+    const opened = await call(owner, 'POST', '/api/service', { vehicleId: vehicle.id, reason: 'invented: bent fork', reasonKind: 'accident' });
+    expect(opened.statusCode, opened.body).toBe(201);
+    const { id } = json<{ id: string }>(opened);
+    expect((await rowOf(owner, vehicle.id)).serviceWhy).toEqual({ kind: 'accident', text: 'invented: bent fork', from: 'job' });
+
+    const changed = await call(owner, 'PATCH', `/api/service/${id}`, { reasonKind: 'wear' });
+    expect(changed.statusCode, changed.body).toBe(200);
+    expect((await rowOf(owner, vehicle.id)).serviceWhy).toEqual({ kind: 'wear', text: 'invented: bent fork', from: 'job' });
+    expect((await call(owner, 'POST', `/api/service/${id}/cancel`, { reason: 'invented: done' })).statusCode).toBe(200);
+  });
+
   it('reads a manager’s reported breakdown while it waits for an owner', async () => {
     const { vehicle } = await freeVehicle();
     const manager = await loginAs('manager');
