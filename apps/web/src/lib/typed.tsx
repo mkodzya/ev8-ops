@@ -1,6 +1,6 @@
 import { translatable, translationFor, type TextTranslation } from '@ev8/shared';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState, type MouseEvent } from 'react';
+import { useState, type MouseEvent, type ReactNode } from 'react';
 import { api } from '../api.js';
 import { useLocale, useT } from '../i18n/index.js';
 
@@ -99,13 +99,17 @@ const langAttr = (l: string): string | undefined => (l === 'ka' || l === 'ru' ||
  * ready, with the mark that says so; one tap shows the original.
  *
  * - `quiet` is for a text inside a link that opens its record — a queue row
- *   on «Сегодня», a card in a list: the mark only says it is a translation,
- *   and the record, one tap away, shows the original.
+ *   on «Сегодня», a card in a list: the mark only says it is a translation.
+ *   The record, one tap away, shows the translation again with a mark of its
+ *   own, and a tap on that one shows the original — two taps, and the hint
+ *   says so.
  * - `quoted` puts the words in «», and the mark after them: the mark is not
  *   part of what was typed.
  * - `clip` is the class of a one-line cell that ends a long text in an
  *   ellipsis: the words are clipped and read whole under the pointer, and the
- *   mark stays outside the clip.
+ *   mark stays outside the clip. Words and mark share one width (`.typed-clip`):
+ *   the words give way to the mark, so a translation never widens the column
+ *   it sits in — on a phone card that would squeeze the title beside it.
  */
 export function Typed({ text, quiet = false, quoted = false, clip }: { text: string | null | undefined; quiet?: boolean; quoted?: boolean; clip?: string }) {
   const { locale } = useLocale();
@@ -118,17 +122,27 @@ export function Typed({ text, quiet = false, quoted = false, clip }: { text: str
       {quoted ? `«${w}»` : w}
     </span>
   );
+  // The words and their mark, side by side; under `clip`, in one box of one width.
+  const pair = (w: ReactNode, mark: ReactNode) =>
+    clip ? (
+      <span className="typed-clip">
+        {w}
+        {mark}
+      </span>
+    ) : (
+      <>
+        {w} {mark}
+      </>
+    );
   if (!text) return null;
   if (!found || !words) return clip || quoted ? shown(text) : <>{text}</>;
   const from = t.typed.from[found.lang] ?? '';
   if (quiet) {
-    return (
-      <>
-        {shown(words, locale)}{' '}
-        <span className="typed-mark" title={t.typed.quietHint(from)}>
-          {t.typed.translated}
-        </span>
-      </>
+    return pair(
+      shown(words, locale),
+      <span className="typed-mark" title={t.typed.quietHint(from)}>
+        {t.typed.translated}
+      </span>,
     );
   }
   const toggle = (e: MouseEvent) => {
@@ -138,13 +152,11 @@ export function Typed({ text, quiet = false, quoted = false, clip }: { text: str
     setOriginal(!original);
   };
   const hint = original ? t.typed.showTranslation(t.typed.writtenIn[found.lang] ?? '') : t.typed.showOriginal(from);
-  return (
-    <>
-      {shown(original ? text : words, original ? langAttr(found.lang) : locale)}{' '}
-      <button type="button" className={original ? 'typed-mark on' : 'typed-mark'} aria-pressed={original} title={hint} aria-label={hint} onClick={toggle}>
-        {original ? t.typed.original : t.typed.translated}
-      </button>
-    </>
+  return pair(
+    shown(original ? text : words, original ? langAttr(found.lang) : locale),
+    <button type="button" className={original ? 'typed-mark on' : 'typed-mark'} aria-pressed={original} title={hint} aria-label={hint} onClick={toggle}>
+      {original ? t.typed.original : t.typed.translated}
+    </button>,
   );
 }
 
