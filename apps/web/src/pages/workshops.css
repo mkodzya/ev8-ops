@@ -7,3 +7,6 @@
 .wshop-main .item-name { min-width: 0; overflow-wrap: anywhere; }
 .wshop-sub, .wshop-note { font: var(--text-label); overflow-wrap: anywhere; }
 .wshop-list .row-dots { min-width: 44px; min-height: 44px; padding: 0 10px 6px; }
+/* Reached by «Изменить список» (#workshops): the block's head stops below the
+   phone's sticky header, not under it. */
+.wshop-block { scroll-margin-top: calc(var(--header-h) + var(--space3)); }

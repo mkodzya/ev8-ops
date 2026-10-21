@@ -37,6 +37,7 @@ import { fleetListEn } from './fleet-list.js';
 import { contractSignedEn } from './contract-signed.js';
 import { saleDateEn } from './sale-date.js';
 import { rentalSwapEn } from './rental-swap.js';
+import { vehicleCardEn } from './vehicle-card.js';
 export const en = {
   lang: { label: 'Language', ka: 'ქართული', ru: 'Русский', en: 'English' },
 
@@ -1426,6 +1427,7 @@ export const en = {
   ...contractSignedEn,
   ...saleDateEn,
   ...rentalSwapEn,
+  ...vehicleCardEn,
 };
 
 export type Dict = typeof en;

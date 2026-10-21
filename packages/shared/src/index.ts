@@ -36,3 +36,4 @@ export * from './typed.js';
 export * from './contract.js';
 export * from './workshops.js';
 export * from './rental-mopeds.js';
+export * from './vehicle-history.js';

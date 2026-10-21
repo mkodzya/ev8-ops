@@ -23,6 +23,9 @@ export const workshopsEn = {
     archive: 'Take off the list',
     restore: 'Put back',
     archived: 'off the list',
+    /** The journal's «was → became» for a workshop taken off the list or put back, instead of «— → Yes» (QA, 22.10.2026). */
+    journalOn: 'on the list',
+    journalOff: 'taken off the list',
     archivedToast: (name: string, open: number) =>
       open > 0 ? `«${name}» is off the list. ${open} open ${open === 1 ? 'repair stays' : 'repairs stay'} with it` : `«${name}» is off the list`,
     restoredToast: (name: string) => `«${name}» is back on the list`,
@@ -60,6 +63,8 @@ export const workshopsRu: Workshops = {
     archive: 'Убрать из списка',
     restore: 'Вернуть',
     archived: 'убрана',
+    journalOn: 'в списке',
+    journalOff: 'убрана из списка',
     archivedToast: (name, open) =>
       open > 0
         ? `«${name}» убрана из списка. ${open} ${ruPlural(open, 'открытый ремонт остаётся', 'открытых ремонта остаются', 'открытых ремонтов остаются')} за ней`
@@ -88,6 +93,8 @@ export const workshopsKa: Workshops = {
     archive: 'სიიდან მოხსნა',
     restore: 'დაბრუნება',
     archived: 'მოხსნილია',
+    journalOn: 'სიაშია',
+    journalOff: 'სიიდან მოხსნილია',
     archivedToast: (name, open) => (open > 0 ? `«${name}» სიიდან მოიხსნა. ${open} ღია შეკეთება მასთან რჩება` : `«${name}» სიიდან მოიხსნა`),
     restoredToast: (name) => `«${name}» ისევ სიაშია`,
     added: (name) => `«${name}» სიაშია`,

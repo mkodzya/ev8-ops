@@ -2,7 +2,7 @@
 // (ADR-0036, addendum 21.10.2026). The IMEIs and SIMs are invented: the IMEIs
 // begin with 99 and are made valid by their check digit, not read off a tracker.
 import { describe, expect, it } from 'vitest';
-import { imeiGroups, journalKind, readImei, trackerCorrection, trackerDayFault, trackerTails } from '../src/index.js';
+import { imeiGroups, journalKind, readImei, trackerCorrection, trackerDayFault, trackerEarliestDay, trackerTails } from '../src/index.js';
 
 const A = '990000000000010';
 const B = '990000000000028';
@@ -42,6 +42,32 @@ describe('the day a tracker was on the moped', () => {
   it('is not before the last tracker came off: one tracker on a moped at a time, the same day allowed', () => {
     expect(day('2026-10-14', { lastRemovedOn: '2026-10-15' })).toBe('before_last_removed');
     expect(day('2026-10-15', { lastRemovedOn: '2026-10-15' })).toBeNull();
+  });
+});
+
+describe('the first day the sheet offers, and names (QA, 22.10.2026)', () => {
+  it('is the day the last tracker came off when that is later than the arrival', () => {
+    expect(trackerEarliestDay({ arrivedOn: '2026-09-01', lastRemovedOn: '2026-10-20' })).toEqual({ on: '2026-10-20', by: 'last_removed' });
+  });
+
+  it('is the arrival when no tracker came off, or one came off before the moped was dated', () => {
+    expect(trackerEarliestDay({ arrivedOn: '2026-09-01', lastRemovedOn: null })).toEqual({ on: '2026-09-01', by: 'arrival' });
+    expect(trackerEarliestDay({ arrivedOn: '2026-09-01', lastRemovedOn: '2026-08-15' })).toEqual({ on: '2026-09-01', by: 'arrival' });
+  });
+
+  it('names the tracker taken off when both fall on one day', () => {
+    expect(trackerEarliestDay({ arrivedOn: '2026-10-20', lastRemovedOn: '2026-10-20' })).toEqual({ on: '2026-10-20', by: 'last_removed' });
+  });
+
+  it('is none for a moped nobody dated and that never had a tracker: any past day will do', () => {
+    expect(trackerEarliestDay({ arrivedOn: null, lastRemovedOn: null })).toBeNull();
+  });
+
+  it('is exactly the bound the day is checked against: a day before it is refused, the day itself is not', () => {
+    const bounds = { arrivedOn: '2026-09-01', lastRemovedOn: '2026-10-20' };
+    const first = trackerEarliestDay(bounds)!.on;
+    expect(trackerDayFault({ on: first, today: '2026-10-21', ...bounds })).toBeNull();
+    expect(trackerDayFault({ on: '2026-10-19', today: '2026-10-21', ...bounds })).toBe('before_last_removed');
   });
 });
 

@@ -1,4 +1,4 @@
-import { applyPaidBefore, instalmentSchedule, redateSale, saleState, todayISO, warrantyUntil as warrantyFrom } from '@ev8/shared';
+import { applyPaidBefore, instalmentSchedule, redateSale, saleDateFloor, saleState, todayISO, warrantyUntil as warrantyFrom, type SaleDateFloor } from '@ev8/shared';
 import type { FastifyInstance } from 'fastify';
 import { audit } from '../lib/audit.js';
 import { dateFromISO, dayOf, isoDate } from '../lib/dates.js';
@@ -147,10 +147,15 @@ export function saleRoutes(app: FastifyInstance): void {
     const signed = documents.find((d) => d.docKind === 'sale' && d.signedAt) ?? null;
     const redatedAfter = signed ? log.find((l) => l.action === 'sale.date' && l.createdAt > signed.signedAt!) : undefined;
     const signedSoldOn = signed ? (soldOnIn(redatedAfter?.before) ?? isoDate(sale.soldOn)) : null;
+    // The first day the date sheet may offer: the server refuses an earlier
+    // one, and the sheet used to learn it only from the refusal (QA, 22.10.2026).
+    const floor = sale.status === 'active' ? (await saleFloorOf(sale)).floor : null;
     return {
       sale: serialize(sale, todayISO(new Date(), env.TZ)),
       /** The sale date on the signed document; null while nothing is signed. */
       signedSoldOn,
+      /** The earliest day the sale may be dated, and what in the moped's history sets it; null — no bound but today. */
+      earliestSoldOn: floor ? { date: floor.on, kind: floor.kind } : null,
       documents: documents.map((d) => ({ id: d.id, docKind: d.docKind, signedAt: d.signedAt?.toISOString() ?? null, signedBy: d.signedBy })),
       feed,
       payments: payments.map((p) => ({
@@ -435,28 +440,13 @@ export function saleRoutes(app: FastifyInstance): void {
     // stands (no manual state, no park move, no repair), and a moped sold,
     // bought back and sold again has one per sale. A sale that names only a
     // VIN, or was carried over with no event, has nothing here to move —
-    // utilisation reads the sale's own date for those.
-    let soldEvent: { id: string } | null = null;
-    if (sale.vehicleId) {
-      const events = await prisma.vehicleEvent.findMany({
-        where: { vehicleId: sale.vehicleId },
-        orderBy: { createdAt: 'asc' },
-        select: { id: true, kind: true, occurredOn: true, createdAt: true },
-      });
-      const own = [...events].reverse().find((e) => e.kind === 'sold' && isoDate(e.occurredOn) === was) ?? null;
-      soldEvent = own;
-      // What happened to the moped before this sale — it arrived, came back
-      // from a renter or a buyer, moved park — is not moved, and the sale
-      // cannot go before the last of it: the days in each state are counted
-      // from the events in their order, and a sale dated before the moped
-      // came back would count it as sold and free at once.
-      const cutoff = own?.createdAt ?? sale.createdAt;
-      const latest = events
-        .filter((e) => e.id !== own?.id && e.createdAt < cutoff)
-        .reduce<{ kind: string; occurredOn: Date } | null>((m, e) => (!m || e.occurredOn > m.occurredOn ? e : m), null);
-      if (latest && soldOn < isoDate(latest.occurredOn)!) {
-        throw conflict('sale_before_history', 'The moped’s history has a later event than this day.', { field: 'soldOn', date: isoDate(latest.occurredOn), kind: latest.kind });
-      }
+    // utilisation reads the sale's own date for those. What happened to the
+    // moped before this sale is not moved, and the sale cannot go before the
+    // last of it (`saleDateFloor` — the rule the card's sheet offers its days by).
+    const { soldEventId, floor } = await saleFloorOf(sale);
+    const soldEvent = soldEventId ? { id: soldEventId } : null;
+    if (floor && soldOn < floor.on) {
+      throw conflict('sale_before_history', 'The moped’s history has a later event than this day.', { field: 'soldOn', date: floor.on, kind: floor.kind });
     }
 
     const plan = redateSale(
@@ -486,4 +476,22 @@ export function saleRoutes(app: FastifyInstance): void {
     });
     return { ok: true, changed: true, soldOn, warrantyUntil: plan.warrantyUntil, moved: plan.instalments.length, history: soldEvent != null };
   });
+}
+
+/**
+ * The moped's history around a sale: its own `sold` event and the earliest day
+ * the sale may be dated (`saleDateFloor`). A sale that names only a VIN, or
+ * was carried over with no event, has nothing here to move and no bound.
+ */
+async function saleFloorOf(sale: { vehicleId: string | null; soldOn: Date; createdAt: Date }): Promise<SaleDateFloor> {
+  if (!sale.vehicleId) return { soldEventId: null, floor: null };
+  const events = await prisma.vehicleEvent.findMany({
+    where: { vehicleId: sale.vehicleId },
+    orderBy: { createdAt: 'asc' },
+    select: { id: true, kind: true, occurredOn: true, createdAt: true },
+  });
+  return saleDateFloor(
+    events.map((e) => ({ id: e.id, kind: e.kind, occurredOn: isoDate(e.occurredOn)!, createdAt: e.createdAt })),
+    { soldOn: isoDate(sale.soldOn)!, createdAt: sale.createdAt },
+  );
 }

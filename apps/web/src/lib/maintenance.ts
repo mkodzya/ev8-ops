@@ -17,6 +17,8 @@ export interface VehicleMaintenance {
   currentKm: number | null;
   currentAt: string | null;
   readingSource: 'pickup' | 'return' | 'repair_open' | 'repair_close' | null;
+  /** The reading was one of a swap's two acts (ADR-0040); absent while an older API answers. */
+  readingBySwap?: boolean;
   dueKm: number | null;
   leftKm: number | null;
   lastPlanned: { jobId: string; number: string; km: number; closedOn: string | null } | null;

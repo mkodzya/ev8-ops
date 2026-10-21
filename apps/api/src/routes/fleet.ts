@@ -1,7 +1,7 @@
-import { POOL_EVENT, VEHICLE_POOLS, VEHICLE_STATES, addDays, downtimeInPeriod, fleetNumber, mopedLegs, mopedSpan, parkOf, readFleetNumber, repairTotalTetri, serviceWhyOf, todayISO, type ParkKey, type VehicleState } from '@ev8/shared';
+import { POOL_EVENT, VEHICLE_POOLS, VEHICLE_STATES, addDays, downtimeInPeriod, fleetNumber, mopedLegs, mopedSpan, parkOf, readFleetNumber, repairTotalTetri, serviceWhyOf, swapSideOf, todayISO, type ParkKey, type VehicleState } from '@ev8/shared';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { MOPED_ACT, mopedActOf } from '../lib/acts.js';
-import { isoDate } from '../lib/dates.js';
+import { dayOf, isoDate } from '../lib/dates.js';
 import { prisma } from '../lib/db.js';
 import { PART_MONEY, WORK_MONEY } from '../lib/stock.js';
 import { env } from '../lib/env.js';
@@ -155,6 +155,9 @@ export function fleetRoutes(app: FastifyInstance): void {
       orderBy: { pickedUpOn: 'desc' },
       include: { customer: { select: { id: true, name: true, nameKa: true, nameLat: true } }, acts: { select: MOPED_ACT } },
     });
+    // Each rental's acts as the shared rules read them: a swap's two halves are
+    // told from a plain hand-over and return by them (ADR-0040).
+    const actsOf = new Map(rentals.map((r) => [r.id, r.acts.map(mopedActOf)]));
     // What it cost is still moving while its shipment is unpaid (§7, QA-W5-11).
     const order = v.purchaseId ? (await preliminaryOf([v.purchaseId])).get(v.purchaseId) ?? null : null;
     // Corrections live in the journal and nowhere else, so until now a VIN
@@ -196,6 +199,8 @@ export function fleetRoutes(app: FastifyInstance): void {
         id: e.id,
         kind: e.kind,
         occurredOn: isoDate(e.occurredOn),
+        /** When it was written: the card puts its events and its journal in one order, newest first. */
+        at: e.createdAt.toISOString(),
         fromState: e.fromState,
         toState: e.toState,
         fromPool: e.fromPool,
@@ -203,6 +208,12 @@ export function fleetRoutes(app: FastifyInstance): void {
         rentalId: e.rentalId,
         reason: e.reason,
         actor: e.actor?.name ?? null,
+        /**
+         * `out` — this moped was given back in a swap, `in` — a swap handed it
+         * out (ADR-0040); null for anything else. Its return is not the end of
+         * the rental, and the card says so (QA, 22.10.2026).
+         */
+        swap: e.rentalId ? swapSideOf({ kind: e.kind, occurredOn: isoDate(e.occurredOn)!, rentalId: e.rentalId }, actsOf.get(e.rentalId) ?? [], v.id) : null,
       })),
       serviceJobs: v.serviceJobs.map((j) => ({
         id: j.id,
@@ -270,7 +281,9 @@ export function fleetRoutes(app: FastifyInstance): void {
       journal: journal.map((l) => ({
         id: l.id,
         at: l.createdAt.toISOString(),
-        occurredOn: isoDate(l.createdAt),
+        // The company's day the row was written on: the UTC one named
+        // yesterday between midnight and four in Tbilisi (QA, 22.10.2026).
+        occurredOn: dayOf(l.createdAt),
         action: l.action,
         by: l.actor?.name ?? null,
         note: l.note,

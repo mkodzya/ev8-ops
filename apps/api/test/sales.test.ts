@@ -311,6 +311,25 @@ describe.skipIf(!HAS_DB)('a sale dated wrong', () => {
     expect(json<{ error: string }>(await call(other.owner, 'POST', `/api/sales/${cancelled}/date`, { soldOn: '2026-05-16', reason: 'typo' })).error).toBe('sale_closed');
   });
 
+  it('names on its card the earliest day the date sheet may offer — the day the server refuses below (QA, 22.10.2026)', async () => {
+    const { vehicle, customer, owner } = await fixtures();
+    await arrived(vehicle.id, '2026-05-01');
+    const { id } = json<{ id: string }>(await call(owner, 'POST', '/api/sales', { customerId: customer.id, vehicleId: vehicle.id, priceTetri: '2900', soldOn: '2026-05-19' }));
+    type Floor = { earliestSoldOn: { date: string; kind: string } | null };
+    const floorOf = async (saleId: string) => json<Floor>(await call(owner, 'GET', `/api/sales/${saleId}`)).earliestSoldOn;
+    expect(await floorOf(id)).toEqual({ date: '2026-05-01', kind: 'arrived' });
+    // The same day the refusal names.
+    const early = await call(owner, 'POST', `/api/sales/${id}/date`, { soldOn: '2026-04-30', reason: 'typo' });
+    expect(json(early)).toMatchObject({ error: 'sale_before_history', date: '2026-05-01' });
+    // Moving the sale does not move the bound: its own `sold` is not history before it.
+    expect((await call(owner, 'POST', `/api/sales/${id}/date`, { soldOn: '2026-05-03', reason: 'entered late' })).statusCode).toBe(200);
+    expect(await floorOf(id)).toEqual({ date: '2026-05-01', kind: 'arrived' });
+
+    // A sale that names only what the papers show has no history to keep to.
+    const { id: paper } = json<{ id: string }>(await call(owner, 'POST', '/api/sales', { customerId: customer.id, vinNote: 'VIN not confirmed (test)', priceTetri: '2900', soldOn: '2026-05-19' }));
+    expect(await floorOf(paper)).toBeNull();
+  });
+
   it('moves only this sale’s `sold` on a moped sold twice, and never before it came back', async () => {
     const { vehicle, customer, owner } = await fixtures();
     await arrived(vehicle.id, '2026-04-01');
