@@ -125,6 +125,27 @@ describe.skipIf(!HAS_DB)('documents', () => {
     expect(listed.contractSigned).toBe(true);
   });
 
+  it('the card finds the signed copy in whatever order the copies come back (ADR-0039)', async () => {
+    // The card's query has no ORDER BY, and the test above most likely gets the
+    // signed copy back first. Here the unsigned copy comes first, the order the
+    // old "first copy found" rule read wrong.
+    const { docState } = await import('../src/routes/rentals.js');
+    const at = (time: string) => new Date(`2026-09-01T${time}:00+04:00`);
+    const signed = { docKind: 'contract', signedAt: at('10:05'), signedBy: 'Test owner', createdAt: at('10:05') };
+    const unsignedLater = { docKind: 'contract', signedAt: null, signedBy: null, createdAt: at('10:06') };
+    const unsignedEarlier = { docKind: 'contract', signedAt: null, signedBy: null, createdAt: at('10:01') };
+
+    expect(docState([unsignedLater, signed], 'contract', [])).toMatchObject({ signedAt: signed.signedAt.toISOString(), signedBy: 'Test owner' });
+    expect(docState([signed, unsignedLater], 'contract', []).signedAt).toBe(signed.signedAt.toISOString());
+    // Two signed copies: the later one speaks, whatever comes first.
+    const signedLater = { docKind: 'contract', signedAt: at('10:09'), signedBy: 'Test manager', createdAt: at('10:09') };
+    expect(docState([signed, unsignedLater, signedLater], 'contract', []).signedBy).toBe('Test manager');
+    // None signed: the latest copy, which is unsigned.
+    expect(docState([unsignedEarlier, unsignedLater], 'contract', [])).toMatchObject({ signedAt: null, signedBy: null });
+    // A signed copy of another document does not sign this one.
+    expect(docState([unsignedLater, { ...signed, docKind: 'return_act' }], 'contract', []).signedAt).toBeNull();
+  });
+
   it('the return act exists only once the rental is closed, and carries the deposit decision', async () => {
     const { prisma, owner, id } = await rentalWithEverything();
     const early = await call(owner, 'GET', `/api/rentals/${id}/return-act.pdf`);

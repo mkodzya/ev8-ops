@@ -228,8 +228,10 @@ export function contractGaps(c: { personalId: string | null; name: string; phone
  * A document's signature as the card shows it. Two copies may stand side by
  * side unarchived; the signed one speaks — the latest of them — and only then
  * the latest copy, as the list counts "signed" by any signed copy (ADR-0039).
+ * The database hands the copies back in no promised order. Exported for the
+ * test that feeds it the unsigned copy first.
  */
-function docState(files: { docKind: string | null; signedAt: Date | null; signedBy: string | null; createdAt: Date }[], kind: string, gaps: string[]) {
+export function docState(files: { docKind: string | null; signedAt: Date | null; signedBy: string | null; createdAt: Date }[], kind: string, gaps: string[]) {
   const mine = files.filter((x) => x.docKind === kind).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   const f = mine.find((x) => x.signedAt != null) ?? mine[0];
   return { signedAt: f?.signedAt?.toISOString() ?? null, signedBy: f?.signedBy ?? null, gaps };
