@@ -29,7 +29,7 @@ async function numbersFor(rows: { entityType: string; entityId: string | null }[
       if (n) out.set(x.id, n);
     }
   };
-  const [rentals, sales, purchases, jobs, vehicles, customers, users, parts, locations, deposits, payments, acts] = await Promise.all([
+  const [rentals, sales, purchases, jobs, vehicles, customers, users, parts, locations, workshops, deposits, payments, acts] = await Promise.all([
     prisma.rental.findMany({ where: { id: { in: ids('rental') } }, select: { id: true, number: true } }),
     prisma.sale.findMany({ where: { id: { in: ids('sale') } }, select: { id: true, number: true } }),
     prisma.purchase.findMany({ where: { id: { in: ids('purchase') } }, select: { id: true, number: true } }),
@@ -39,6 +39,8 @@ async function numbersFor(rows: { entityType: string; entityId: string | null }[
     prisma.user.findMany({ where: { id: { in: [...ids('user'), ...ids('login')] } }, select: { id: true, name: true } }),
     prisma.part.findMany({ where: { id: { in: ids('part') } }, select: { id: true, name: true } }),
     prisma.location.findMany({ where: { id: { in: ids('location') } }, select: { id: true, name: true } }),
+    // «Мастерская изменена» said which one only in its JSON (owner's decision of 21.10.2026).
+    prisma.workshop.findMany({ where: { id: { in: ids('workshop') } }, select: { id: true, name: true } }),
     // A deposit, a payment and an act are written under ids of their own.
     // In the journal they answer for the record they belong to, or the
     // column "запись" reads "—" beside a line about R-00504 (QA-W6-10).
@@ -58,6 +60,7 @@ async function numbersFor(rows: { entityType: string; entityId: string | null }[
   put(users, (x: { name: string }) => x.name);
   put(parts, (x: { name: string }) => x.name);
   put(locations, (x: { name: string }) => x.name);
+  put(workshops, (x: { name: string }) => x.name);
   put(deposits, (x: { rental: { number: string } }) => x.rental.number);
   put(payments, (x: { rental: { number: string } | null; sale: { number: string } | null; purchase: { number: string } | null; serviceJob: { number: string } | null }) =>
     x.rental?.number ?? x.sale?.number ?? x.purchase?.number ?? x.serviceJob?.number ?? null,
@@ -133,12 +136,14 @@ async function idsMatching(query: string): Promise<{ ids: string[]; emails: stri
     ]);
     return { ids: parts.flat(), emails: [] };
   }
-  const [vehicles, customers, users] = await Promise.all([
+  const [vehicles, customers, users, workshops] = await Promise.all([
     prisma.vehicle.findMany({ where: { vin: like }, select: { id: true } }),
     prisma.customer.findMany({ where: { name: like }, select: { id: true } }),
     prisma.user.findMany({ where: { OR: [{ name: like }, { email: like }] }, select: { id: true, email: true } }),
+    // A workshop is named in the «запись» column, so its name finds it too.
+    prisma.workshop.findMany({ where: { name: like }, select: { id: true } }),
   ]);
-  return { ids: [...vehicles, ...customers, ...users].map((x) => x.id), emails: users.flatMap((u) => (u.email ? [u.email] : [])) };
+  return { ids: [...vehicles, ...customers, ...users, ...workshops].map((x) => x.id), emails: users.flatMap((u) => (u.email ? [u.email] : [])) };
 }
 
 async function read(query: { q?: string; filter?: string; from?: string; to?: string; record?: string }): Promise<JournalRow[]> {
