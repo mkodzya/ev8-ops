@@ -495,7 +495,7 @@ export function NewJob({ vehicleId, onDone }: { vehicleId?: string; onDone: () =
               label sends a press on its text to the first pill. */}
           <div className="field" data-field="reasonKind">
             <span className="lbl">
-              {t.wjob.reason} · {t.wjob.optional}
+              {t.wjob.reason} · {t.wbook.optional}
             </span>
             <div className="chips">
               {SERVICE_REASONS.map((r) => (
