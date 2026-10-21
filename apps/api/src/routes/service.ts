@@ -42,6 +42,7 @@ import { syncDeposit } from '../lib/rentalMoney.js';
 import { moveVehicle } from '../lib/vehicles.js';
 import { rateOf } from '../lib/serviceSettings.js';
 import { maintenanceOverview } from '../lib/maintenance.js';
+import { downtimeOf } from '../lib/downtime.js';
 
 // Repair jobs (SRV-01, SRV-02).
 //
@@ -225,6 +226,12 @@ function serialize(job: {
     closedLocation: job.closedLocation ?? null,
     /** The minute it closed; empty on repairs closed before stage 3. */
     closedAt: job.closedAt?.toISOString() ?? null,
+    /**
+     * How long the moped stood in it, and of that how long it waited for the
+     * approval, in minutes (ADR-0038 §5); empty — not known: no minute of
+     * opening, or a day written in afterwards.
+     */
+    downtime: downtimeOf(job),
     /** Who let the work start, and when (stage 3); empty on repairs never waited for. */
     approved: job.approvedAt ? { at: job.approvedAt.toISOString(), by: job.approvedBy?.name ?? null } : null,
     /** A refused repair says who refused it and why (stage 3). */

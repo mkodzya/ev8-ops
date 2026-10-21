@@ -10,6 +10,7 @@ import {
 } from '@ev8/shared';
 import { isoDate } from './dates.js';
 import { prisma } from './db.js';
+import { periodDowntime } from './downtime.js';
 import { env } from './env.js';
 
 // The data side of M-10 (wave 6 §3.2). The arithmetic lives in
@@ -39,6 +40,12 @@ export interface UtilisationAnswer extends Utilisation {
    * nothing in the data ties a repair to a missing battery.
    */
   blockers: { inRepairAllPeriod: BlockerVehicle[]; freeTooLong: BlockerVehicle[]; batteriesHolding: null };
+  /**
+   * Hours in repair over the period by Tbilisi days, in minutes, and of them
+   * the wait for approval (ADR-0038 §5) — beside the blockers, not one of
+   * them: those count days from events, this counts the repairs' minutes.
+   */
+  repairs: { minutes: number; waitMinutes: number; counted: number; unknown: number };
 }
 
 /**
@@ -109,7 +116,7 @@ export async function utilisationVehicles(): Promise<{ input: UtilisationVehicle
 }
 
 export async function utilisationOf(from: string, to: string): Promise<UtilisationAnswer> {
-  const { input, names, vins } = await utilisationVehicles();
+  const [{ input, names, vins }, repairs] = await Promise.all([utilisationVehicles(), periodDowntime(from, to)]);
   const u = fleetUtilisation({ vehicles: input, from, to });
   const perModel = utilisationModelVehicles(u);
   const blockers = fleetBlockers({ vehicles: input, from, to });
@@ -129,6 +136,7 @@ export async function utilisationOf(from: string, to: string): Promise<Utilisati
       freeTooLong: named(blockers.freeTooLong),
       batteriesHolding: blockers.batteriesHolding,
     },
+    repairs,
   };
 }
 
