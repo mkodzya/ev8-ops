@@ -17,6 +17,7 @@ import { useLoad } from '../lib/use.js';
 import { useSession } from '../session.js';
 import { VehicleEconomics } from './EconomicsPage.js';
 import { NewJob } from './ServicePage.js';
+import { TrackerHistory, TrackerRows, type CardTracker } from './VehicleTracker.js';
 import { formatGel } from '../format.js';
 
 interface Card {
@@ -59,7 +60,7 @@ interface Card {
   downtime30?: RepairHours;
   rentals: { id: string; number: string; status: RentalStatus; customer: { id: string; name: string }; pickedUpOn: string | null; returnedOn: string | null; paidThrough: string | null; weeklyRateTetri: number }[];
   /** The tracker on it and the ones it had (ADR-0036); empty to whoever may not read an IMEI. */
-  trackers?: { id: string; imei: string; simPhone: string | null; installedOn: string; removedOn: string | null; job: { id: string; number: string } | null; removedJob: { id: string; number: string } | null }[] | null;
+  trackers?: CardTracker[] | null;
   /** What was taken off this moped for another, as a donor (ADR-0036). */
   donated?: { id: string; name: string; qty: number; on: string; job: { id: string; number: string }; to: { id: string; number: string | null; vin: string } }[];
   /** Corrections: what was changed by hand, from what to what, and why. */
@@ -224,6 +225,8 @@ export function VehiclePage() {
           <Row k={t.fleet.pool} v={<PoolRow v={v} onDone={reload} />} />
           <Row k={t.points.place} v={<PlaceRow v={v} onDone={reload} />} />
           <Row k={t.vehicle.odometer} v={<span className="mono">{v.odometerKm ?? t.common.dash}</span>} />
+          {/* The tracker's IMEI and SIM: the owners' (ADR-0036 §7), written here without a repair (addendum 21.10.2026). */}
+          {data.trackers && <TrackerRows v={v} trackers={data.trackers} onDone={reload} />}
           {v.costTetri != null && (
             <Row
               k={t.purchases.cost}
@@ -330,7 +333,7 @@ export function VehiclePage() {
         )}
       </section>
 
-      {data.trackers && data.trackers.length > 0 && <TrackerBlock trackers={data.trackers} />}
+      {data.trackers && <TrackerHistory trackers={data.trackers} />}
       {(data.donated?.length ?? 0) > 0 && (
         <section className="card">
           <BlockHead title={t.wparts.donatedBlock} sub={t.wparts.lines(data.donated!.length)} />
@@ -513,45 +516,6 @@ function VinSheet({ id, vin, onClose, onDone }: { id: string; vin: string; onClo
         <input className="input" value={f.reason} onChange={(e) => setF({ ...f, reason: e.target.value })} />
       </Field>
     </FormSheet>
-  );
-}
-
-/** The tracker on the moped now, then the ones it had (ADR-0036): what to look for when it is stolen. */
-function TrackerBlock({ trackers }: { trackers: NonNullable<Card['trackers']> }) {
-  const t = useT();
-  const now = trackers.find((x) => x.removedOn == null) ?? null;
-  const before = trackers.filter((x) => x.removedOn != null);
-  return (
-    <section className="card">
-      <BlockHead title={t.wparts.trackerBlock} />
-      {now ? (
-        <dl className="wjob-kv">
-          <dt>{t.wparts.imeiLabel}</dt>
-          <dd className="mono">{now.imei.replace(/(\d{3})(?=\d)/g, '$1 ')}</dd>
-          <dt>{t.wparts.simLabel}</dt>
-          <dd className="mono">{now.simPhone ?? '—'}</dd>
-          <dt>{t.wparts.trackerSince}</dt>
-          <dd>
-            {fmtDate(now.installedOn)}
-            {now.job && (
-              <>
-                {' · '}
-                <Link to={`/service/${now.job.id}`} className="mono">
-                  {now.job.number}
-                </Link>
-              </>
-            )}
-          </dd>
-        </dl>
-      ) : (
-        <Empty text={t.wparts.noTrackerCard} />
-      )}
-      {before.map((x) => (
-        <p key={x.id} className="hint muted">
-          {t.wparts.trackerEarlier(x.imei.slice(-4), fmtDate(x.installedOn), fmtDate(x.removedOn))}
-        </p>
-      ))}
-    </section>
   );
 }
 
