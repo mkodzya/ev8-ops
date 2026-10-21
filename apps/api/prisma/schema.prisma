@@ -1678,8 +1678,8 @@ model TranslationDay {
   requests     Int      @default(0)
   translated   Int      @default(0)
   failed       Int      @default(0)
-  inputTokens  BigInt   @default(0) @map("input_tokens")
-  outputTokens BigInt   @default(0) @map("output_tokens")
+  inputTokens  Int      @default(0) @map("input_tokens")
+  outputTokens Int      @default(0) @map("output_tokens")
   updatedAt    DateTime @default(now()) @map("updated_at")
 
   @@map("translation_days")

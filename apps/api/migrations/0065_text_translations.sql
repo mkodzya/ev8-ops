@@ -53,7 +53,7 @@ CREATE TABLE IF NOT EXISTS translation_days (
   requests      integer NOT NULL DEFAULT 0 CHECK (requests >= 0),
   translated    integer NOT NULL DEFAULT 0 CHECK (translated >= 0),
   failed        integer NOT NULL DEFAULT 0 CHECK (failed >= 0),
-  input_tokens  bigint NOT NULL DEFAULT 0 CHECK (input_tokens >= 0),
-  output_tokens bigint NOT NULL DEFAULT 0 CHECK (output_tokens >= 0),
+  input_tokens  integer NOT NULL DEFAULT 0 CHECK (input_tokens >= 0),
+  output_tokens integer NOT NULL DEFAULT 0 CHECK (output_tokens >= 0),
   updated_at    timestamptz NOT NULL DEFAULT now()
 );
