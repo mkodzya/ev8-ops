@@ -387,8 +387,10 @@ function DateSheet({
   const [f, setF] = useState(initial);
   const valid = isISODate(f.soldOn);
   // A day the server will refuse draws no «what changes»: the words under the
-  // field say why instead (QA, 22.10.2026).
-  const fault = !valid ? null : f.soldOn > today ? t.errors.codes.sale_date_future : earliest && f.soldOn < earliest ? t.saleDate.beforeHistory(fmtDate(earliest)) : null;
+  // field say why instead (QA, 22.10.2026). The day the sale has is never
+  // refused, whatever its history: nothing changes.
+  const fault =
+    !valid || f.soldOn === sale.soldOn ? null : f.soldOn > today ? t.errors.codes.sale_date_future : earliest && f.soldOn < earliest ? t.saleDate.beforeHistory(fmtDate(earliest)) : null;
   const plan = valid && !fault && f.soldOn !== sale.soldOn ? redateSale({ soldOn: sale.soldOn, warrantyUntil: sale.warrantyUntil, transferred: sale.transferred, instalments: sale.instalments }, f.soldOn) : null;
   const moved = new Map((plan?.instalments ?? []).map((m) => [m.seq, m.to]));
   // An unpaid line that moves can fall due, or stop being due, the moment this is saved.
