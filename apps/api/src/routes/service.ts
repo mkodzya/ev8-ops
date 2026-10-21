@@ -678,9 +678,11 @@ export function serviceRoutes(app: FastifyInstance): void {
       throw e;
     }
     const openJobs = await prisma.serviceJob.count({ where: { workshopId: row.id, status: { in: ['open', 'draft'] } } });
-    // The flag alone reads «— → Да» in the journal with no field named, so
-    // taking it off the list and putting it back say so in the note, which
-    // the journal translates (`feedNotes`).
+    // Taking it off the list and putting it back are said in the note too.
+    // The journal on screen reads the flag itself in words — «в списке →
+    // убрана из списка», no longer «— → Да» — and leaves this note out, since
+    // it would say the same twice (web lib/journal.tsx, QA 22.10.2026); the
+    // CSV export prints the flag raw, and there the note is the words.
     const moved = data.archived === undefined || data.archived === row.archived ? null : data.archived ? 'taken off the list' : 'put back on the list';
     await audit({
       actorId: actor.id,

@@ -118,10 +118,19 @@ export function noteWords(t: { feedNotes: Record<string, string> }, note: string
   return t.feedNotes[own] ?? own;
 }
 
+/**
+ * Notes the code wrote only to say what a flag meant: a workshop taken off the
+ * list or put back (`workshop.update`). The «было → стало» says it now, in
+ * words (`listWords`), so the note would say it twice; it is not a reason
+ * anybody gave, and the reason column keeps its dash (QA, 22.10.2026).
+ */
+const FLAG_NOTES = new Set(['taken off the list', 'put back on the list']);
+
 /** The note as written, from the note or from the reason kept inside what was written. */
 function ownNote(note: string | null | undefined, after?: unknown): string {
   const inside = (after as { reason?: unknown } | null | undefined)?.reason;
-  return ((note ?? (typeof inside === 'string' ? inside : '')) || '').trim();
+  const own = ((note ?? (typeof inside === 'string' ? inside : '')) || '').trim();
+  return FLAG_NOTES.has(own) ? '' : own;
 }
 
 /**
@@ -156,8 +165,8 @@ export function ChangedFromTo({ action, before, after }: { action?: string; befo
   const shifted = typeof now.weekShiftDays === 'number' && now.weekShiftDays > 0;
   for (const field of Object.keys(was)) {
     if (!(field in now)) continue;
-    const from = value(field, was[field], shifted);
-    const to = value(field, now[field], shifted);
+    const from = listWords(t, action, field, was[field]) ?? value(field, was[field], shifted);
+    const to = listWords(t, action, field, now[field]) ?? value(field, now[field], shifted);
     if (from == null || to == null || from === to) continue;
     pairs.push({ field, label: named(t, field, action), from, to });
   }
@@ -187,6 +196,9 @@ export function ChangedFromTo({ action, before, after }: { action?: string; befo
  * that the second pair was the warranty (review of the sale date, 21.10.2026).
  */
 function named(t: Dict, field: string, action?: string): string | null {
+  // «Изменена дата продажи · 21.09.2026 → 23.09.2026 · Гарантия до: …» named
+  // the second pair and not the first (QA, 22.10.2026).
+  if (field === 'soldOn') return t.sell.soldOn;
   if (field === 'warrantyUntil') return t.saleCard.warranty;
   // A rental's own pay day, whichever action moved it (ADR-0022, ADR-0041).
   if (field === 'payWeekday') return t.weekShift.journal.payDay;
@@ -200,6 +212,16 @@ function named(t: Dict, field: string, action?: string): string | null {
     if (field === 'extraTetri') return words.extraTetri;
   }
   return null;
+}
+
+/**
+ * A workshop taken off the list and put back (task #1 of 21.10.2026): «в
+ * списке → убрана из списка», where the flag read «— → Да» (QA, 22.10.2026).
+ * Null for every other field and action: their flags keep the general words.
+ */
+function listWords(t: Dict, action: string | undefined, field: string, raw: unknown): string | null {
+  if (action !== 'workshop.update' || field !== 'archived' || typeof raw !== 'boolean') return null;
+  return raw ? t.wshop.journalOff : t.wshop.journalOn;
 }
 
 /** A week made longer, and the move taken back (ADR-0041). */
