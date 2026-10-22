@@ -1376,7 +1376,7 @@ export const en = {
       user_not_found: 'User not found.',
       vehicle_already_set: 'This rental already has a moped. Change it with «Change the moped» in the menu.',
       vehicle_gone: 'This moped has left the fleet. A buy-back brings it back.',
-      vehicle_in_rent_pool: 'This moped is assigned to rental; selling it assigns it to sale.',
+      vehicle_in_rent_pool: 'This moped is assigned to rental; selling it changes its assignment to sale.',
       vehicle_in_sale_pool: 'This moped is assigned to sale. Only an owner can hand it over.',
       vehicle_not_available: 'This moped cannot be handed over now: it is not free. Open the moped and check its status.',
       vehicle_not_found: 'Moped not found.',
