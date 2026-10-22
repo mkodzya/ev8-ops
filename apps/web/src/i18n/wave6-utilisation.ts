@@ -19,7 +19,7 @@ export const wave6utilEn = {
     basis: (rented: number, pool: number) => `${rented} days out with customers of ${pool} in the park`,
     vehicles: (n: number) => `${n} ${n === 1 ? 'moped' : 'mopeds'}`,
     noFigure: 'no figure: no moped stood in the rental park over this period',
-    unassigned: (n: number) => `${n} ${n === 1 ? 'moped is' : 'mopeds are'} outside the figure: no park has claimed ${n === 1 ? 'it' : 'them'}`,
+    unassigned: (n: number) => `${n} ${n === 1 ? 'moped is' : 'mopeds are'} outside the figure: not assigned`,
     unassignedLink: (n: number) => `Standing idle now: ${n}`,
 
     byModel: 'By model',
@@ -51,7 +51,7 @@ export const wave6utilRu: typeof wave6utilEn = {
     basis: (rented: number, pool: number) => `дни в аренде ${rented} из ${pool}`,
     vehicles: (n: number) => `${n} ${ruPlural(n, 'мопед', 'мопеда', 'мопедов')}`,
     noFigure: 'цифры нет: в парке аренды за этот период не стояло ни одного мопеда',
-    unassigned: (n: number) => `${n} ${ruPlural(n, 'мопед', 'мопеда', 'мопедов')} без парка не в счёте`,
+    unassigned: (n: number) => `${n} ${ruPlural(n, 'мопед', 'мопеда', 'мопедов')} без назначения не в счёте`,
     unassignedLink: (n: number) => `Простаивают сейчас: ${n}`,
 
     byModel: 'По моделям',
@@ -83,7 +83,7 @@ export const wave6utilKa: typeof wave6utilEn = {
     basis: (rented: number, pool: number) => `${rented} დღე ქირაში ${pool}-დან`,
     vehicles: (n: number) => `${n} მოპედი`,
     noFigure: 'ციფრი არ არის: ამ პერიოდში საქირავო პარკში არცერთი მოპედი არ მდგარა',
-    unassigned: (n: number) => `${n} მოპედი პარკის გარეშე — ანგარიშში არ შედის`,
+    unassigned: (n: number) => `${n} მოპედი დანიშნულების გარეშე — ანგარიშში არ შედის`,
     unassignedLink: (n: number) => `ახლა დგას უქმად: ${n}`,
 
     byModel: 'მოდელების მიხედვით',

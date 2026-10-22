@@ -21,7 +21,7 @@ export const workshopMaintenanceEn = {
     states: { ok: 'On schedule', soon: 'Time for maintenance', overdue: 'Maintenance overdue', unknown: 'No mileage written' } as Record<string, string>,
     next: (km: string) => `Next at ${km} km`,
     mileageFrom: (km: string, source: string, day: string) => `mileage ${km} (${source}, ${day})`,
-    sources: { pickup: 'pickup', return: 'return', repair_open: 'repair opened', repair_close: 'repair closed' } as Record<string, string>,
+    sources: { pickup: 'hand-over', return: 'return', repair_open: 'repair opened', repair_close: 'repair closed' } as Record<string, string>,
     lastPlannedAt: (km: string, day: string) => `— the last planned maintenance, ${km} km, ${day}`,
     firstMark: 'No planned maintenance in EV8 Ops yet: the mark is the nearest multiple of the interval from the first mileage written',
     noMileage: 'Maintenance is counted once a pickup, a return or a repair writes the mileage.',

@@ -12,7 +12,7 @@ export const vehicleCardEn = {
     /** In the history, instead of «Handed out»: the moped a swap brought into a running rental. */
     swappedIn: 'Swapped into rental',
     /** Where the card's mileage was read, when it was one of a swap's two acts: «mileage 1 150 (return in a swap, 22.10.2026)». */
-    swapSources: { pickup: 'pickup in a swap', return: 'return in a swap' } as Record<string, string>,
+    swapSources: { pickup: 'hand-over in a swap', return: 'return in a swap' } as Record<string, string>,
     /** Under «On the moped since», and under it again when the day is earlier. */
     trackerFromArrival: (day: string) => `Not before ${day}: the moped came that day.`,
     trackerFromRemoved: (day: string) => `Not before ${day}: the last tracker came off that day.`,

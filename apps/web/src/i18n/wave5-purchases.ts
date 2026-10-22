@@ -113,7 +113,7 @@ export const wave5purchasesEn = {
 
     pay: 'Pay the supplier',
     receive: 'Receive the shipment',
-    menu: { paidBefore: 'Paid before the move', cancel: 'Cancel the order' },
+    menu: { paidBefore: 'Paid before EV8 Ops', cancel: 'Cancel the order' },
 
     vehicles: 'Mopeds from this shipment',
     cost: 'Cost',
@@ -122,12 +122,12 @@ export const wave5purchasesEn = {
     words: {
       created: 'Order placed',
       payment: 'Paid the supplier',
-      paidBefore: 'Paid before the move',
+      paidBefore: 'Paid before EV8 Ops',
       received: 'Shipment received',
     } as Record<string, string>,
     feedUnits: (n: number) => `${n} moped${n === 1 ? '' : 's'}`,
 
-    paidBeforeTitle: 'Paid before the move',
+    paidBeforeTitle: 'Paid before EV8 Ops',
     paidBeforeAmount: 'Left the account, GEL',
     paidBeforeForeign: (currency: string) => `That, in the invoice currency, ${currency}`,
     paidBeforeOn: 'Date',
@@ -324,7 +324,7 @@ export const wave5purchasesRu: Wave5purchases = {
 
     pay: 'Оплатить поставщику',
     receive: 'Принять партию',
-    menu: { paidBefore: 'Оплачено до переноса', cancel: 'Отменить заказ' },
+    menu: { paidBefore: 'Оплачено до EV8 Ops', cancel: 'Отменить заказ' },
 
     vehicles: 'Мопеды этой партии',
     cost: 'Себестоимость',
@@ -333,12 +333,12 @@ export const wave5purchasesRu: Wave5purchases = {
     words: {
       created: 'Заказ создан',
       payment: 'Оплата поставщику',
-      paidBefore: 'Оплачено до переноса',
+      paidBefore: 'Оплачено до EV8 Ops',
       received: 'Партия принята',
     },
     feedUnits: (n) => `${n} ${plural(n, 'мопед', 'мопеда', 'мопедов')}`,
 
-    paidBeforeTitle: 'Оплачено до переноса',
+    paidBeforeTitle: 'Оплачено до EV8 Ops',
     paidBeforeAmount: 'Ушло со счёта, ₾',
     paidBeforeForeign: (currency) => `Это в валюте инвойса, ${currency}`,
     paidBeforeOn: 'Дата',
@@ -524,7 +524,7 @@ export const wave5purchasesKa: Wave5purchases = {
 
     pay: 'მომწოდებლის გადახდა',
     receive: 'პარტიის მიღება',
-    menu: { paidBefore: 'გადატანამდე გადახდილი', cancel: 'შეკვეთის გაუქმება' },
+    menu: { paidBefore: 'EV8 Ops-მდე გადახდილი', cancel: 'შეკვეთის გაუქმება' },
 
     vehicles: 'ამ პარტიის მოპედები',
     cost: 'თვითღირებულება',
@@ -533,12 +533,12 @@ export const wave5purchasesKa: Wave5purchases = {
     words: {
       created: 'შეკვეთა შეიქმნა',
       payment: 'გადახდა მომწოდებელს',
-      paidBefore: 'გადატანამდე გადახდილი',
+      paidBefore: 'EV8 Ops-მდე გადახდილი',
       received: 'პარტია მიღებულია',
     },
     feedUnits: (n) => `${n} მოპედი`,
 
-    paidBeforeTitle: 'გადატანამდე გადახდილი',
+    paidBeforeTitle: 'EV8 Ops-მდე გადახდილი',
     paidBeforeAmount: 'ანგარიშიდან გავიდა, ₾',
     paidBeforeForeign: (currency) => `ეს ინვოისის ვალუტაში, ${currency}`,
     paidBeforeOn: 'თარიღი',
@@ -571,7 +571,7 @@ export const wave5purchasesKa: Wave5purchases = {
     batch: 'ერთი მნიშვნელობა მთელ პარტიაზე',
     year: 'წელი',
     pool: 'პარკი',
-    point: 'წერტილი',
+    point: 'ადგილი',
     perRow: 'სტრიქონის შესწორება',
     perRowHide: 'სტრიქონების დაკეცვა',
     rowVin: 'VIN',
