@@ -1,4 +1,5 @@
 // M-10 on live rows (wave 6 §3.2, criteria 5–7).
+import { fleetChipOf, type VehiclePool, type VehicleState } from '@ev8/shared';
 import { describe, expect, it } from 'vitest';
 import { HAS_DB, call, json, loginAs, uniq } from './helpers.js';
 
@@ -41,6 +42,34 @@ describe.skipIf(!HAS_DB)('utilisation of the rental fleet', () => {
     const wrong = await call(owner, 'GET', '/api/reports/utilisation?from=2026-09-14&to=2026-09-01');
     expect(wrong.statusCode).toBe(400);
     expect(json<{ error: string }>(wrong).error).toBe('bad_period');
+  });
+
+  // ADR-0005, addendum 22.10.2026 (Mika, answer «А»): a number beside a link is the list it opens.
+  it('gives its link into «Не назначен» that list’s number, not the period’s mopeds with no park', async () => {
+    const { prisma } = await import('../src/lib/db.js');
+    const owner = await loginAs('owner');
+    const model = await prisma.vehicleModel.create({ data: { brand: 'Test', name: `Unclaimed ${uniq()}`, weeklyRateTetri: 15000 } });
+    type Answer = { unassigned: number; unassignedIdle: number };
+    const period = '/api/reports/utilisation?from=2026-09-01&to=2026-09-14';
+    const before = json<Answer>(await call(owner, 'GET', period));
+
+    // Two mopeds no park has claimed: one standing idle, one out with a
+    // renter, as the mopeds brought over from Odoo stood.
+    const idle = await prisma.vehicle.create({ data: { vin: vin(uniq()), modelId: model.id } });
+    const out = await prisma.vehicle.create({ data: { vin: vin(uniq()), modelId: model.id, state: 'rented' } });
+    for (const v of [idle, out]) {
+      await prisma.vehicleEvent.create({ data: { vehicleId: v.id, kind: 'arrived', occurredOn: new Date('2026-08-01'), toState: 'available' } });
+    }
+    const after = json<Answer>(await call(owner, 'GET', period));
+
+    // Both are outside the figure; only the idle one is behind the link.
+    expect(after.unassigned - before.unassigned).toBe(2);
+    expect(after.unassignedIdle - before.unassignedIdle).toBe(1);
+    const fleet = json<{ vehicles: { state: VehicleState; pool: VehiclePool | null; location: unknown }[] }>(await call(owner, 'GET', '/api/fleet')).vehicles;
+    expect(after.unassignedIdle).toBe(fleet.filter((v) => fleetChipOf(v, v.location != null) === 'nopool').length);
+
+    // A rented moped with no rental behind it is not left for the suites after this one.
+    await prisma.vehicle.update({ where: { id: out.id }, data: { state: 'available' } });
   });
 
   it('is an owner’s figure', async () => {

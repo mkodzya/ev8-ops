@@ -129,6 +129,12 @@ export interface QueueInput {
    */
   maintenance?: { vehicleId: string; number: string | null; model: string; vin: string; dueKm: number; currentKm: number; leftKm: number }[];
   purchases: { id: string; number: string; who: string; note: string }[];
+  /**
+   * The mopeds under the chips the two rows open, «Не назначен» (`nopool`)
+   * and «Не указана» (`nopoint`) — counted by `fleetChipOf`, the list's own
+   * rule (Mika, answer «А», 22.10.2026): idle ones only, and one with neither
+   * park nor point is a park to decide before it is a point to set.
+   */
   vehiclesWithoutPool: number;
   vehiclesWithoutPoint: number;
   /**

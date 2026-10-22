@@ -1,7 +1,9 @@
 // What the fleet list says beside a moped's state (the call of 21.10.2026;
-// ADR-0005, addendum 21.10.2026): why it stands in service, as recorded, and
-// the sale park it may be waiting in. Needs a *_test database; the teardown
-// removes everything it made. Every reason and name here is invented.
+// ADR-0005, addenda 21.10.2026 and 22.10.2026): why it stands in service, as
+// recorded, the sale park it may be waiting in, and the one chip it is
+// counted under. Needs a *_test database; the teardown removes everything it
+// made. Every reason and name here is invented.
+import { FLEET_CHIPS, fleetChipOf, type FleetChip, type VehiclePool, type VehicleState } from '@ev8/shared';
 import { describe, expect, it } from 'vitest';
 import { HAS_DB, call, json, loginAs, uniq } from './helpers.js';
 
@@ -145,5 +147,119 @@ describe.skipIf(!HAS_DB)('the sale park on the fleet list', () => {
     expect(await rowOf(owner, vehicle.id)).toMatchObject({ state: 'sold', serviceWhy: null });
     const card = json<{ events: { kind: string }[] }>(await call(owner, 'GET', `/api/fleet/${vehicle.id}`));
     expect(card.events.map((e) => e.kind)).toEqual(['to_sale', 'service_in', 'service_out', 'sold']);
+  });
+});
+
+describe.skipIf(!HAS_DB)('the chips over the fleet list (Mika, answer «Б», 22.10.2026)', () => {
+  interface ChipRow {
+    id: string;
+    state: VehicleState;
+    pool: VehiclePool | null;
+    location: { id: string; name: string } | null;
+  }
+  const chipOf = (v: ChipRow) => fleetChipOf(v, v.location != null);
+
+  it('count «В аренде» and «В сервисе» as «Сегодня» does, and every moped still in the fleet once', async () => {
+    const { prisma, vehicle: forSale } = await freeVehicle({ salePriceTetri: 290000 });
+    const { vehicle: noPark } = await freeVehicle();
+    const owner = await loginAs('owner');
+    // Made ready for sale in the workshop: the state is asked before the park.
+    expect((await call(owner, 'POST', `/api/fleet/${forSale.id}/pool`, { pool: 'sale' })).statusCode).toBe(200);
+    const repair = await call(owner, 'POST', '/api/service', { vehicleId: forSale.id, reason: 'invented: new tyres before the sale' });
+    expect(repair.statusCode, repair.body).toBe(201);
+    // Out with a renter and in no park, as the mopeds brought over from Odoo stood.
+    await prisma.vehicle.update({ where: { id: noPark.id }, data: { state: 'rented' } });
+
+    const fleet = json<{ vehicles: ChipRow[] }>(await call(owner, 'GET', '/api/fleet')).vehicles;
+    const today = json<{ numbers: { fleet: Record<string, number> } }>(await call(owner, 'GET', '/api/today')).numbers.fleet;
+
+    expect(chipOf(fleet.find((v) => v.id === forSale.id)!)).toBe('service');
+    expect(chipOf(fleet.find((v) => v.id === noPark.id)!)).toBe('rented');
+
+    // Asked two ways — the list's chips and the numbers on «Сегодня» — the two states answer alike.
+    const counts = Object.fromEntries(FLEET_CHIPS.map((c) => [c, 0])) as Record<FleetChip, number>;
+    for (const v of fleet) {
+      const chip = chipOf(v);
+      if (chip) counts[chip]++;
+    }
+    expect(counts.rented).toBe(today.rented);
+    expect(counts.service).toBe(today.service);
+    // The chips add up to «Все» less the sold and the written off, which are under none.
+    const gone = fleet.filter((v) => v.state === 'sold' || v.state === 'out').length;
+    expect(Object.values(counts).reduce((a, b) => a + b, 0)).toBe(fleet.length - gone);
+
+    // A rented moped with no rental behind it is not left for the suites after this one.
+    await prisma.vehicle.update({ where: { id: noPark.id }, data: { state: 'available' } });
+  });
+
+  // Mika, answer «А», 22.10.2026: «Сегодня» counts by the chips' rule, so each
+  // number that opens a chip is the list it opens (docs/design/ux.md, principle 10).
+  interface TodayRow {
+    id: string;
+    href: string;
+    note: string | null;
+  }
+  interface TodayChips {
+    queue: { group: string; rows: TodayRow[]; total: number }[];
+    numbers: { fleet: Record<VehicleState, number>; chips: Record<FleetChip, number> };
+  }
+
+  it('give «Сегодня» the number of the chip each of its links opens', async () => {
+    const { prisma, vehicle: rentedNoPark } = await freeVehicle();
+    // Neither park nor point: a park to decide first.
+    const { vehicle: lost } = await freeVehicle();
+    // In the rental park and free, but nobody has said where it stands.
+    const { vehicle: noPoint } = await freeVehicle();
+    // In the rental park, on a point: ready to hand out.
+    const { vehicle: ready } = await freeVehicle();
+    const owner = await loginAs('owner');
+    const manager = await loginAs('manager');
+    for (const v of [noPoint, ready]) expect((await call(owner, 'POST', `/api/fleet/${v.id}/pool`, { pool: 'rent' })).statusCode).toBe(200);
+    await prisma.vehicle.update({ where: { id: ready.id }, data: { locationId: await point() } });
+    // Out with a renter and in no park, nor on a point.
+    await prisma.vehicle.update({ where: { id: rentedNoPark.id }, data: { state: 'rented' } });
+
+    const fleet = json<{ vehicles: ChipRow[] }>(await call(owner, 'GET', '/api/fleet')).vehicles;
+    const mine = json<TodayChips>(await call(owner, 'GET', '/api/today'));
+    const theirs = json<TodayChips>(await call(manager, 'GET', '/api/today'));
+    const under = (chip: FleetChip) => fleet.filter((v) => chipOf(v) === chip).length;
+    const chipOfMoped = (id: string) => chipOf(fleet.find((v) => v.id === id)!);
+
+    expect(chipOfMoped(rentedNoPark.id)).toBe('rented');
+    expect(chipOfMoped(lost.id)).toBe('nopool');
+    expect(chipOfMoped(noPoint.id)).toBe('nopoint');
+    expect(chipOfMoped(ready.id)).toBe('available');
+
+    // The tiles: «В аренде» and «Свободно» open /fleet?f=rented and /fleet?f=available.
+    for (const t of [mine, theirs]) {
+      for (const chip of FLEET_CHIPS) expect(t.numbers.chips[chip], chip).toBe(under(chip));
+      // «В аренде» is still the state's own number; «Свободно» is no longer.
+      expect(t.numbers.chips.rented).toBe(t.numbers.fleet.rented);
+      expect(t.numbers.chips.available).toBeLessThan(t.numbers.fleet.available);
+    }
+
+    // The rows: «N мопедов без парка» (the owners'), «N мопедов без точки» (everybody's).
+    const rowOfToday = (t: TodayChips, id: string) => t.queue.flatMap((g) => g.rows).find((r) => r.id === id);
+    const pool = rowOfToday(mine, 'pool')!;
+    expect(pool.href).toBe('/fleet?f=nopool');
+    expect(Number(pool.note)).toBe(under('nopool'));
+    // A rented moped with no park is not counted there; it would have been before.
+    expect(Number(pool.note)).toBeLessThan(fleet.filter((v) => v.pool == null && v.state !== 'sold' && v.state !== 'out').length);
+    expect(rowOfToday(theirs, 'pool')).toBeUndefined();
+    for (const t of [mine, theirs]) {
+      // A group shows three rows and counts the rest: the row is either among
+      // them, saying the chip's number, or behind the "more" line.
+      const fill = t.queue.find((g) => g.group === 'fill')!;
+      const row = rowOfToday(t, 'point');
+      if (row) {
+        expect(row.href).toBe('/fleet?f=nopoint');
+        expect(Number(row.note)).toBe(under('nopoint'));
+      } else {
+        expect(fill.total).toBeGreaterThan(fill.rows.length);
+      }
+      expect(t.numbers.chips.nopoint).toBe(under('nopoint'));
+    }
+
+    await prisma.vehicle.update({ where: { id: rentedNoPark.id }, data: { state: 'available' } });
   });
 });
