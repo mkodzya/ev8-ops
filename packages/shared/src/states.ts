@@ -16,15 +16,68 @@ export function isPoolEvent(kind: VehicleEventKind): kind is 'to_rent' | 'to_sal
  * chose, `none` when nobody has, and `gone` once it is sold or written off —
  * those have left both parks, whatever the column still holds. A moped of
  * the sale park stays `sale` in repair or out on a buy-out: the park says
- * what it is for, not what is happening to it. The fleet list's chips, the
- * fleet's counts and a model's card group by this one rule, so the chip
- * "For sale" and the number beside it cannot disagree (addendum 21.10.2026).
+ * what it is for, not what is happening to it. The fleet's counts, a model's
+ * card and the quiet line under the state group by this one rule (addendum
+ * 21.10.2026). The list's chips ask it too, but only of a moped standing
+ * idle: since 22.10.2026 the state is asked first (`fleetChipOf` below).
  */
 export type ParkKey = VehiclePool | 'none' | 'gone';
 
 export function parkOf(v: { state: VehicleState; pool: VehiclePool | null }): ParkKey {
   if (v.state === 'sold' || v.state === 'out') return 'gone';
   return v.pool ?? 'none';
+}
+
+/**
+ * The filter chips over Парк → Мопеды, in the order their questions are
+ * asked (Mika, answer «Б», 22.10.2026; GitHub issue #6). Every moped is
+ * counted under exactly one: the overlap — one moped under «Свободен» and
+ * «На продажу» at once — read as mopeds counted twice.
+ *
+ *   1. rented and 2. service first, so those two chips stay exact — the
+ *      state's own number, as on «Сегодня», whatever park or point the moped
+ *      has or lacks;
+ *   3. for sale, 4. no park, 5. no point — what is still to be done with a
+ *      moped standing idle;
+ *   6. free — the rest: in the rental park, on a known point, ready to go.
+ *
+ * Sold and written-off mopeds have left the fleet and are under none: they
+ * are seen only under «Все». The order here is the order of the questions;
+ * the screen lays its chips out in an order of its own.
+ */
+export const FLEET_CHIPS = ['rented', 'service', 'sale', 'nopool', 'nopoint', 'available'] as const;
+export type FleetChip = (typeof FLEET_CHIPS)[number];
+
+/**
+ * The one chip a moped is counted under (see FLEET_CHIPS), or null for one
+ * that has left the fleet. `hasPoint`: somebody has said where it stands.
+ * One rule for each chip, the count beside it, and every number elsewhere
+ * that opens a chip — «Свободно», «N мопедов без парка» and «N мопедов без
+ * точки» on «Сегодня» (`countFleetChips`; Mika, answer «А», 22.10.2026), so
+ * a number is always the list it opens (`docs/design/ux.md`, principle 10).
+ */
+export function fleetChipOf(v: { state: VehicleState; pool: VehiclePool | null }, hasPoint: boolean): FleetChip | null {
+  if (v.state === 'rented' || v.state === 'service') return v.state;
+  if (v.state !== 'available') return null;
+  const park = parkOf(v);
+  if (park === 'sale') return 'sale';
+  if (park === 'none') return 'nopool';
+  if (!hasPoint) return 'nopoint';
+  return 'available';
+}
+
+/**
+ * How many mopeds stand under each chip — `fleetChipOf` asked of every one,
+ * sold and written-off ones counted nowhere. What «Сегодня» shows beside a
+ * link into the list is read from here, never counted on its own.
+ */
+export function countFleetChips<T extends { state: VehicleState; pool: VehiclePool | null }>(vehicles: readonly T[], hasPoint: (v: T) => boolean): Record<FleetChip, number> {
+  const counts = Object.fromEntries(FLEET_CHIPS.map((c) => [c, 0])) as Record<FleetChip, number>;
+  for (const v of vehicles) {
+    const chip = fleetChipOf(v, hasPoint(v));
+    if (chip) counts[chip]++;
+  }
+  return counts;
 }
 
 /**

@@ -1,4 +1,4 @@
-import { asksForSignature, contractState, dayQueue, queueCount, todayISO, VEHICLE_STATES, type QueueRental, type VehicleState } from '@ev8/shared';
+import { asksForSignature, contractState, countFleetChips, dayQueue, queueCount, todayISO, VEHICLE_STATES, type QueueRental, type VehicleState } from '@ev8/shared';
 import type { FastifyInstance } from 'fastify';
 import type { Prisma } from '../generated/prisma/client.js';
 import { dateFromISO, isoDate } from '../lib/dates.js';
@@ -192,6 +192,11 @@ export function todayRoutes(app: FastifyInstance): void {
     const driveNow = owner && mayView(req, 'users.manage') ? await driveTasks(today) : null;
     const joined = driveNow ? joinKommoDeals(driveNow.contracts, kommoDeals) : null;
 
+    // The mopeds under each chip of «Парк → Мопеды», by the list's own rule
+    // (Mika, answer «А», 22.10.2026): «Свободно» and the two rows below open
+    // those chips, and each says the number of the list it opens.
+    const chips = countFleetChips(vehicles, (v) => v.locationId != null);
+
     const longest = serviceJobs.reduce((n, j) => Math.max(n, daysBetween(isoDate(j.openedOn)!, today)), 0);
     // Planned maintenance (ADR-0038): owners and managers alike — whoever brings the moped in.
     const maintenance = await maintenanceOverview(prisma);
@@ -235,8 +240,8 @@ export function todayRoutes(app: FastifyInstance): void {
         };
       })(),
       purchases: purchaseRows.map((p) => ({ id: p.id, number: p.number, who: p.supplier.name, note: 'ordered' })),
-      vehiclesWithoutPool: vehicles.filter((v) => v.pool == null && v.state !== 'sold' && v.state !== 'out').length,
-      vehiclesWithoutPoint: vehicles.filter((v) => v.locationId == null && v.state === 'available').length,
+      vehiclesWithoutPool: chips.nopool,
+      vehiclesWithoutPoint: chips.nopoint,
       odooDeposits,
       kommo,
       kommoDeals: joined?.deals ?? kommoDeals,
@@ -286,7 +291,10 @@ export function todayRoutes(app: FastifyInstance): void {
       queue: groups,
       count: queueCount(groups),
       numbers: {
+        // By state — what the fleet holds; «В сервисе» opens the repairs.
         fleet,
+        // By chip — what a number opening «Парк → Мопеды» says («В аренде», «Свободно»).
+        chips,
         overdueTetri: owner ? overdueTetri : null,
         depositsHeldTetri,
         week: weekMoney,

@@ -1,6 +1,6 @@
 // The queue of "Today" (wave 4 §3.1, criteria 1–6, 10, 11).
 import { describe, expect, it } from 'vitest';
-import { dayQueue, queueCount, type QueueInput, type QueueRental } from '../src/index.js';
+import { countFleetChips, dayQueue, queueCount, type FleetChip, type QueueInput, type QueueRental, type VehiclePool, type VehicleState } from '../src/index.js';
 
 const TODAY = '2026-09-20';
 
@@ -139,6 +139,33 @@ describe('the queue of “Today”', () => {
     const fill = group(q, 'fill')!;
     expect(fill.rows.map((r) => r.action)).toEqual(['sign', 'set_vin', 'set_point']);
     expect(fill.rows[2].note).toBe('3');
+  });
+
+  it('says in the two fleet rows the number of the chip each opens, to its own audience (Mika, answer «А», 22.10.2026)', () => {
+    // Invented: a rented moped with no park, one with neither park nor point, one in the rental park with no point.
+    const fleet: { state: VehicleState; pool: VehiclePool | null; point: boolean }[] = [
+      { state: 'rented', pool: null, point: false },
+      { state: 'service', pool: null, point: false },
+      { state: 'available', pool: null, point: false },
+      { state: 'available', pool: 'rent', point: false },
+      { state: 'available', pool: 'sale', point: false },
+      { state: 'available', pool: 'rent', point: true },
+    ];
+    const chips = countFleetChips(fleet, (v) => v.point);
+    const rows = (owner: boolean) =>
+      dayQueue(input({ owner, vehiclesWithoutPool: chips.nopool, vehiclesWithoutPoint: chips.nopoint }))
+        .flatMap((g) => g.rows)
+        .filter((r) => r.href.startsWith('/fleet?f='));
+    const chipOfRow = (href: string) => new URLSearchParams(href.split('?')[1]).get('f') as FleetChip;
+
+    // An owner: «без парка» and «без точки», each the count of the chip its link opens.
+    const owners = rows(true);
+    expect(owners.map((r) => r.action)).toEqual(['set_pool', 'set_point']);
+    for (const r of owners) expect(Number(r.note)).toBe(chips[chipOfRow(r.href)]);
+    expect(owners.map((r) => r.note)).toEqual(['1', '1']);
+    // A manager: «без точки» only, as before.
+    const managers = rows(false);
+    expect(managers.map((r) => [r.action, r.note])).toEqual([['set_point', '1']]);
   });
 
   it('says the repairs in one line (В8, crit. 9)', () => {

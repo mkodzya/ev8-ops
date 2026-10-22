@@ -1,4 +1,5 @@
 import {
+  countFleetChips,
   fleetBlockers,
   fleetUtilisation,
   todayISO,
@@ -34,6 +35,14 @@ export interface UtilisationAnswer extends Utilisation {
   to: string;
   /** Mopeds that stood in the rental park at all over the period. */
   vehicles: number;
+  /**
+   * The mopeds under «Не назначен» on «Парк → Мопеды» now — `fleetChipOf`,
+   * idle ones with no park — the number of the list the report's link opens
+   * (ADR-0005, addendum 22.10.2026; Mika, answer «А»). Not `unassigned`:
+   * that one is the period's and counts a moped with no park in any state,
+   * one out with a renter too, which the chip lists under «В аренде».
+   */
+  unassignedIdle: number;
   byModel: { modelId: string; model: string; vehicles: number; rentedDays: number; poolDays: number; percent: number | null }[];
   /**
    * What kept the figure down (§3.2). `batteriesHolding` is null, not 0:
@@ -116,7 +125,11 @@ export async function utilisationVehicles(): Promise<{ input: UtilisationVehicle
 }
 
 export async function utilisationOf(from: string, to: string): Promise<UtilisationAnswer> {
-  const [{ input, names, vins }, repairs] = await Promise.all([utilisationVehicles(), periodDowntime(from, to)]);
+  const [{ input, names, vins }, repairs, now] = await Promise.all([
+    utilisationVehicles(),
+    periodDowntime(from, to),
+    prisma.vehicle.findMany({ where: { archived: false }, select: { state: true, pool: true, locationId: true } }),
+  ]);
   const u = fleetUtilisation({ vehicles: input, from, to });
   const perModel = utilisationModelVehicles(u);
   const blockers = fleetBlockers({ vehicles: input, from, to });
@@ -128,6 +141,7 @@ export async function utilisationOf(from: string, to: string): Promise<Utilisati
     from,
     to,
     vehicles: u.rows.length,
+    unassignedIdle: countFleetChips(now, (v) => v.locationId != null).nopool,
     byModel: utilisationByModel(u)
       .map((m) => ({ ...m, model: names.get(m.modelId) ?? '', vehicles: perModel.get(m.modelId) ?? 0 }))
       .sort((a, b) => (b.percent ?? -1) - (a.percent ?? -1) || a.model.localeCompare(b.model)),

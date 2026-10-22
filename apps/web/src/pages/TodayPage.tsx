@@ -1,4 +1,4 @@
-import { localDateTime, type TaskGroupRows, type TaskRow, type VehicleState } from '@ev8/shared';
+import { localDateTime, type FleetChip, type TaskGroupRows, type TaskRow, type VehicleState } from '@ev8/shared';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { LoadError } from '../components/LoadError.js';
@@ -23,6 +23,8 @@ export interface TodayData {
   count: number;
   numbers: {
     fleet: Record<VehicleState, number>;
+    /** The mopeds under each chip of «Парк → Мопеды» (`fleetChipOf`): a number that opens a chip is read here. */
+    chips: Record<FleetChip, number>;
     overdueTetri: number | null;
     depositsHeldTetri: number | null;
     week: { rentTetri: number; saleTetri: number; serviceTetri: number; depositTetri: number; feeTetri: number; from: string } | null;
@@ -199,8 +201,9 @@ export function TodayPage() {
       </header>
 
       <div className="num-strip">
-        <Num to="/fleet?f=rented" value={String(n.fleet.rented ?? 0)} label={t.today.numbers.rented ?? ''} />
-        <Num to="/fleet?f=available" value={String(n.fleet.available ?? 0)} label={t.today.numbers.available ?? ''} />
+        {/* Each says the number of the chip it opens (Mika, answer «А», 22.10.2026): «Свободно» is ready to hand out — the rental park, on a point. */}
+        <Num to="/fleet?f=rented" value={String(n.chips.rented ?? 0)} label={t.today.numbers.rented ?? ''} />
+        <Num to="/fleet?f=available" value={String(n.chips.available ?? 0)} label={t.today.numbers.available ?? ''} />
         <Num to="/service" value={String(n.fleet.service ?? 0)} label={t.today.numbers.service ?? ''} />
         {n.overdueTetri != null && <Num to="/rentals?s=overdue" value={formatGel(n.overdueTetri, { decimals: false })} label={t.today.numbers.overdue ?? ''} tone="crit" />}
         {n.depositsHeldTetri != null && <Num to="/money/deposits" value={formatGel(n.depositsHeldTetri, { decimals: false })} label={t.today.numbers.deposits ?? ''} />}
