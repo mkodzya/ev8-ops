@@ -69,7 +69,7 @@ export async function renderWeekReport(d: WeekDocData): Promise<Buffer> {
   h1(doc, { ka: 'კვირის ციფრები', en: 'The week in figures' });
   write(doc, `${dmy(d.from)} — ${dmy(d.to)}`, { align: 'center', size: 9, bold: true });
   if (d.asOf) {
-    write(doc, `მონაცემები ${dmy(d.asOf)}-ის მდგომარეობით · as at ${dmy(d.asOf)}`, { align: 'center', size: 7, color: EN });
+    write(doc, `მონაცემები ${dmy(d.asOf)}-ის ჩათვლით · as at ${dmy(d.asOf)}`, { align: 'center', size: 7, color: EN });
   }
   rule(doc);
 
