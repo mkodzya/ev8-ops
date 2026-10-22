@@ -122,6 +122,24 @@
 | `drive.subtitle` | … Drive-ში არაფერი იწერება, გადაადგილდება ან იშლება. | … Drive-shi araperi its'ereba, gadaadgildeba an ishleba | … в Drive ничего не пишется, не переносится и не удаляется. |
 | `drive.missingHereNote` | ან ქირაობა აქ არ არის შეყვანილი, ან დასრულდა და საქაღალდე ჯერ არ არის დასრულებულებში. | … an dasrulda da sakaghalde jer ar aris dasrulebulebshi | Либо аренда здесь не заведена, либо она закончилась, а папка ещё не в завершённых. |
 
+## Вне словарей: PDF недели, уведомления мастерской, переводчик заметок
+
+Те же слова печатает сервер — в PDF «Неделя», в уведомлениях группе мастерской в Telegram и в списке слов, который
+получает переводчик заметок. Они выровнены по экрану:
+
+| Где | KA | Чтение | RU / EN |
+|---|---|---|---|
+| PDF недели, строка | თავისუფალია ქირავნობისთვის | tavisupalia kiravnobistvis | Free for rent |
+| PDF недели, примечание | EV8 Ops-მდე გადახდილი: 120 ₾ — კვირის შემოსავალში არ შედის | EV8 Ops-mde gadakhdili: … — k'viris shemosavalshi ar shedis | Paid before EV8 Ops, not part of any week’s takings |
+| PDF недели, примечание | 2 მოპედი დანიშნულების გარეშე დატვირთვაში არ ითვლება | 2 mop'edi danishnulebis gareshe dat'virtvashi ar itvleba | mopeds not assigned are outside the utilisation figure |
+| PDF недели, примечание | ბატარეების რაოდენობა — დღევანდელი ციფრი, და არა კვირის ბოლოს | bat'areebis raodenoba — dghevandeli tsipri, da ara k'viris bolos | The battery count is today’s, not the week’s |
+| PDF недели, шапка | მონაცემები 20.10.2026-ის ჩათვლით | monatsemebi 20.10.2026-is chatvlit | as at 20.10.2026 |
+| Telegram мастерской, причина | მოქირავის ბრალი | mokiravis brali | вина арендатора |
+| переводчик заметок | Вина арендатора = Renter's fault = მოქირავის ბრალი | — | слово, которое переводчик ставит в перевод |
+
+Подписанные документы — договор и акты — не менялись: это юридический текст, а не интерфейс. В договоре раздел 7
+по-прежнему «გამოსყიდვის უფლება» [gamosq'idvis upleba] («право выкупа»); менять ли его — решение Mika с юристом.
+
 ## Где патч разошёлся с issue #8 — оставлены слова issue #8
 
 Патч собран на `099622e`, до слияния issue #8 (ответ Mika «А» 22.10.2026). В трёх местах оба меняли одну строку;

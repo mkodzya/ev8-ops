@@ -23,7 +23,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const DIR = 'apps/web/src/i18n';
-const ALPHABET = { ka: /[Ⴀ-ჿ]/u, ru: /[Ѐ-ӿ]/u };
+const ALPHABET = { ka: /[\u10A0-\u10FF]/u, ru: /[\u0400-\u04FF]/u };
 
 /**
  * `word` is the retired word (any of its forms), `use` what the glossary says
