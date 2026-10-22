@@ -963,9 +963,12 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
   .list-table .col-why .typed-clip { width: 24ch; max-width: 24ch; }
 }
 /* «Где» in the table: "paid through" may break after its colon, so the column
-   is as wide as the customer's name or the date, not as the whole phrase. The
-   date itself never breaks: numbers and dates never wrap inside a cell. */
+   is as wide as the customer's name or the date, not as the whole phrase. It
+   breaks there and nowhere else: «Оплачено по» and "Paid through" are two
+   words that stay on one line with their colon, and the date never breaks —
+   numbers and dates never wrap inside a cell. */
 .list-table .v-where .v-paid { white-space: normal; }
+.list-table .v-where .v-paid-label,
 .list-table .v-where .v-paid-date { white-space: nowrap; }
 /* Only what somebody typed ends in an ellipsis. The repair's kind is one of
    five product words, and a product word is never cut (ux.md 12): at 12ch,

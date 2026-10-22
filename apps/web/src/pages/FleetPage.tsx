@@ -92,8 +92,10 @@ export function FleetPage() {
   const setData = (update: (d: Fleet | null) => Fleet | null) => client.setQueryData<Fleet>(['/api/fleet'], (d) => update(d ?? null) ?? undefined);
   const models = useLoad<Models>(can('settings.manage') ? '/api/models' : null);
   // The row a park move has just touched: it keeps its place while the undo
-  // is still on offer, so nothing disappears under the finger.
-  const [moved, setMoved] = useState<{ id: string; to: VehiclePool } | null>(null);
+  // is still on offer, so nothing disappears under the finger — and that
+  // place is the chip it was under before the move (`chip`), since a new park
+  // can be a new chip («Свободен» → «На продажу»).
+  const [moved, setMoved] = useState<{ id: string; to: VehiclePool; chip: FleetChip | null } | null>(null);
   const today = todayISO();
   const shownWords = useShownWords();
 
@@ -106,8 +108,11 @@ export function FleetPage() {
   const movePool = async (v: Vehicle, pool: VehiclePool) => {
     await api.post(`/api/fleet/${v.id}/pool`, { pool });
     setData((d) => (d ? { ...d, vehicles: d.vehicles.map((x) => (x.id === v.id ? { ...x, pool } : x)) } : d));
-    setMoved({ id: v.id, to: pool });
+    setMoved({ id: v.id, to: pool, chip: chipOf(v) });
   };
+  // The chip a row is filtered and counted under: the one it was under before
+  // a park move while the undo is on offer, its own after that.
+  const listedUnder = (v: Vehicle): FleetChip | null => (moved?.id === v.id ? moved.chip : chipOf(v));
   const undoPool = async (id: string) => {
     const back = await api.post<{ pool: VehiclePool | null }>(`/api/fleet/${id}/pool/undo`, {});
     setData((d) => (d ? { ...d, vehicles: d.vehicles.map((x) => (x.id === id ? { ...x, pool: back.pool } : x)) } : d));
@@ -143,13 +148,14 @@ export function FleetPage() {
           // state first, so «В аренде» and «В сервисе» are the states' own numbers, then what is
           // still to be done with an idle moped — for sale, no park, no point — and the rest free.
           // The order the questions are asked in is `fleetChipOf`'s; the chips keep their places.
-          { key: 'available', label: t.states.available, test: (v) => chipOf(v) === 'available' },
-          { key: 'rented', label: t.states.rented, test: (v) => chipOf(v) === 'rented' },
-          { key: 'service', label: t.states.service, test: (v) => chipOf(v) === 'service' },
+          // A row just moved between parks stays under its chip until the undo runs out.
+          { key: 'available', label: t.states.available, test: (v) => listedUnder(v) === 'available' },
+          { key: 'rented', label: t.states.rented, test: (v) => listedUnder(v) === 'rented' },
+          { key: 'service', label: t.states.service, test: (v) => listedUnder(v) === 'service' },
           // The sale park's idle mopeds, new stock and used alike; one in repair or out on a buy-out is under its state.
-          { key: 'sale', label: t.fleetList.forSale, test: (v) => chipOf(v) === 'sale' },
-          { key: 'nopool', label: t.pools.none, test: (v) => chipOf(v) === 'nopool' },
-          { key: 'nopoint', label: t.points.unset, test: (v) => chipOf(v) === 'nopoint' },
+          { key: 'sale', label: t.fleetList.forSale, test: (v) => listedUnder(v) === 'sale' },
+          { key: 'nopool', label: t.pools.none, test: (v) => listedUnder(v) === 'nopool' },
+          { key: 'nopoint', label: t.points.unset, test: (v) => listedUnder(v) === 'nopoint' },
         ]}
         empty={{ text: t.fleet.empty }}
         card={(v) => ({
@@ -208,9 +214,9 @@ export function FleetPage() {
                   <Link to={`/customers/${v.currentRental.customer.id}`} onClick={(e) => e.stopPropagation()}>
                     <CustomerName of={v.currentRental.customer} second={false} />
                   </Link>
-                  {/* May break after the colon, never inside the date: «Где» stays narrow (director, issue #6). */}
+                  {/* May break after the colon only — never inside the words or the date: «Где» stays narrow (director, issue #6). */}
                   <span className="v-sub mono v-paid">
-                    {t.fleet.paidThrough}: <span className="v-paid-date">{fmtDate(v.currentRental.paidThrough)}</span>
+                    <span className="v-paid-label">{t.fleet.paidThrough}:</span> <span className="v-paid-date">{fmtDate(v.currentRental.paidThrough)}</span>
                   </span>
                 </span>
               ) : (
