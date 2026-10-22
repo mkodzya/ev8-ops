@@ -52,7 +52,8 @@ names — is read by anybody, at once and for good: the history cannot be taken 
   server's `.env`. The laptop's defaults in `.env.example` are public knowledge and must never
   be a stand's values.
 - What is already in the history and cannot be removed: three customers' names (a type specimen
-  since September, a QA report, a comment of 12.10.2026), the server's address with its deploy
+  since September, a QA report, a comment of 12.10.2026), two more customers' surnames (the
+  handoff since 20.10.2026, taken out of the file on 22.10.2026), the server's address with its deploy
   commands, the Kommo account's address, debts by rental number. `docs/handoff.md` item 16.
 
 ## Non-negotiable rules (from the owner)
