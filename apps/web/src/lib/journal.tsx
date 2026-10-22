@@ -100,7 +100,10 @@ function value(field: string, raw: unknown, shifted = false): string | null {
   // A repair's kind may be given, changed and taken away again (Mika,
   // 21.10.2026): there «none» is an answer — «не указана → ДТП» — and not a
   // gap that hides the line.
-  if (raw == null) return field === 'reasonKind' ? t.rkind.none : null;
+  // A moped's first assignment, and an undone one, come from or go back to
+  // none: «Не назначен → Аренда», where the line said only «Изменено
+  // назначение» and not to what (QA after issue #9).
+  if (raw == null) return field === 'reasonKind' ? t.rkind.none : field === 'pool' ? t.pools.none : null;
   if (isReference(field)) return null;
   if (isMoney(field)) return typeof raw === 'number' ? formatGel(raw) : String(raw);
   if (typeof raw === 'boolean') return raw ? t.common.yes : t.common.dash;

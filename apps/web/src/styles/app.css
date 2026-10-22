@@ -684,8 +684,6 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
   .k-n { font: var(--text-h3); }
   .k-s { display: none; }
 }
-/* Which park a row is in, said only where both are on screen at once. */
-.pool-mark { font: var(--text-label); color: var(--accent); }
 /* A footnote to the state, not a second heading beside it: the same quiet
    label the model line uses, no shouting in capitals. */
 .v-pool {
