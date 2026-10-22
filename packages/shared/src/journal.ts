@@ -15,6 +15,8 @@
  * collapse on screen. They are here, and not in the route, because the
  * screen, the card's history and the CSV must agree about all three.
  */
+import { todayISO } from './time.js';
+import type { ISODate } from './types.js';
 
 export const JOURNAL_FILTERS = ['all', 'money', 'deposits', 'states', 'logins'] as const;
 export type JournalFilter = (typeof JOURNAL_FILTERS)[number];
@@ -117,7 +119,13 @@ export interface JournalLine extends JournalRow {
   times: number;
 }
 
-const dayOf = (at: string) => at.slice(0, 10);
+/**
+ * The company's day a line was written on. Its first ten characters name the
+ * UTC day, and between 00:00 and 04:00 in Tbilisi that is yesterday: a look
+ * at 23:30 and one at 00:30 folded into one day's line (QA after issue #7,
+ * 23.10.2026, the same cut as on the payment's page).
+ */
+const dayOf = (at: string): ISODate => todayISO(new Date(at));
 
 /**
  * What the screen shows. Repeated views by one person of one record on one

@@ -68,6 +68,17 @@ const READER_CLOCK = /\.toLocale(?:Date|Time|)String\s*\(/g;
  */
 const UTC_DAY = /toISOString\(\)\.slice\(0, ?10\)/g;
 /**
+ * The same cut made on a timestamp as the API hands it over, a string already:
+ * `p.createdAt.slice(0, 10)`, `j.at.slice(0, 10)`. The payment's page said
+ * «Внёс …, 22.10.2026 01:08» for a payment made at 01:08 on the 23rd in
+ * Tbilisi, and had since 18.09 (QA after issue #7, 23.10.2026). A moment's
+ * field is named `…At` or `at`; a day's is `…On` and is cut by nobody.
+ * `fmtDateAt()`/`localDateTime()` on a screen, `todayISO(new Date(at))` in
+ * shared code, `dayOf()` in the API. No file is excused: a timestamp's first
+ * ten characters are the UTC day everywhere.
+ */
+const UTC_DAY_OF_MOMENT = /\b(?:[a-z]\w*At|at)\??\.slice\(0, ?10\)/g;
+/**
  * Where a UTC day is the answer: `isoDate` reads `date` columns, which Prisma
  * hands back at UTC midnight and which carry no time to get wrong, and the
  * shared modules do calendar arithmetic on date-only values in UTC on purpose.
@@ -120,6 +131,9 @@ for (const root of ROOTS) {
         for (const m of line.matchAll(UTC_DAY)) {
           problems.push(`${where}  ${m[0]} names the UTC day, not the company's — dayOf() in the API, localDateTime() on a screen`);
         }
+      }
+      for (const m of line.matchAll(UTC_DAY_OF_MOMENT)) {
+        problems.push(`${where}  ${m[0]} cuts the UTC day out of a timestamp — fmtDateAt() or localDateTime() on a screen, dayOf() in the API`);
       }
     });
   }

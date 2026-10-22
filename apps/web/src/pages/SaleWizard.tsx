@@ -8,7 +8,7 @@ import { Field, Wizard } from '../components/Wizard.js';
 import { DraftOffer } from '../ds/form/Form.js';
 import { useDraft } from '../ds/form/drafts.js';
 import { useOperation } from '../ds/form/operation.js';
-import { fmtDate, formatGel } from '../format.js';
+import { fmtDate, fmtDateAt, formatGel } from '../format.js';
 import { useT } from '../i18n/index.js';
 import { useLoad } from '../lib/use.js';
 import { useSession } from '../session.js';
@@ -591,7 +591,7 @@ function SaleDone({ id, number, rows, payTrouble }: { id: string; number: string
       <section className="card">
         <div className="queue-head">
           <h2>{t.sell.document}</h2>
-          <span className="muted">{signed ? t.saleCard.signedOn(fmtDate(card.data?.documents.find((d) => d.signedAt)?.signedAt?.slice(0, 10) ?? null)) : t.sell.unsigned}</span>
+          <span className="muted">{signed ? t.saleCard.signedOn(fmtDateAt(card.data?.documents.find((d) => d.signedAt)?.signedAt)) : t.sell.unsigned}</span>
         </div>
         <p className="hint muted">{t.sell.documentSub}</p>
         <div className="row-actions">
