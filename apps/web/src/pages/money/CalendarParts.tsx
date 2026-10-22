@@ -662,13 +662,17 @@ export function LateLine({ late, open, onToggle, children }: { late: CalendarLat
       <div className="cal-late-in">
         <StateMark state="overdue" />
         <span className="cal-late-text">
-          {/* The space stands between the two pieces, not inside one: each is `nowrap`, and the line breaks only there. */}
+          {/* The space stands between the two pieces, not inside one: each is `nowrap`, and the line breaks only there.
+              The «·» stays with the piece before it, so a second line starts with the debt, not with «·» (QA after issue #9). */}
           <b>
-            <span>{t.calendar.late(late.count)}</span>
+            <span>
+              {t.calendar.late(late.count)}
+              {debt && ' ·'}
+            </span>
             {debt && (
               <>
                 {' '}
-                <span>· {debt}</span>
+                <span>{debt}</span>
               </>
             )}
           </b>

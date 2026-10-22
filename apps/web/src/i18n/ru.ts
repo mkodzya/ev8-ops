@@ -331,7 +331,7 @@ export const ru: Dict = {
 
   vehicle: {
     stateChanged: (state: string) => `Статус: ${state}`,
-    changeStateCta: 'Сменить статус',
+    changeStateCta: 'Изменить статус',
     eventsCount: counted('событие', 'события', 'событий'),
     backToFleet: 'Вернуть в парк',
     title: 'Мопед',

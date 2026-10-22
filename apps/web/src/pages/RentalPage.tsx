@@ -674,7 +674,12 @@ export function RentalPage() {
                   {t.rental.actKind[a.kind]}
                   {/* Which moped: after a swap a rental's acts are about two (ADR-0040). */}
                   {a.vehicle && <span className="mono"> · {a.vehicle.number ?? `···${a.vehicle.vin.slice(-6)}`}</span>}
-                  {a.odometerKm != null && <span className="muted"> · {a.odometerKm} km</span>}
+                  {a.odometerKm != null && (
+                    <span className="muted">
+                      {' · '}
+                      {a.odometerKm} {t.back.km}
+                    </span>
+                  )}
                   {a.condition && <span className="muted"> · {a.condition}</span>}
                   {a.photos.length > 0 && (
                     <span className="thumbs">
