@@ -296,7 +296,7 @@ export const calendarKa: typeof calendarEn = {
     colWaiting: 'მოსალოდნელი',
     monthTotal: 'სულ თვეში',
     partWeek: 'კვირის ნაწილი',
-    monthShortNote: 'დააკლდა — გადახდები, რომელთა დღეც უკვე გავიდა. დღევანდელი და მომდევნო — „ჯერ ველოდებით“.',
+    monthShortNote: 'აკლია — გადახდები, რომელთა დღეც უკვე გავიდა. დღევანდელი და მომდევნო — „მოსალოდნელი“.',
     debt: (sum) => `ვალი ${sum}`,
     debtLabel: 'ვალი',
     // «ორშაბათიდან დღევანდელის ჩათვლით» — from Monday, today's included.

@@ -9,16 +9,16 @@
 export const wave6utilEn = {
   utilisationReport: {
     title: 'Rental fleet utilisation',
-    subtitle: 'Days the mopeds were out, against the days they stood in the rental park.',
+    subtitle: 'Days the mopeds were out, against the days they were assigned to rental.',
     week: 'Week',
     month: 'Month',
     from: 'From',
     to: 'To',
     period: (from: string, to: string) => `${from} — ${to}`,
 
-    basis: (rented: number, pool: number) => `${rented} days out with customers of ${pool} in the park`,
+    basis: (rented: number, pool: number) => `${rented} days out with customers of ${pool} assigned to rental`,
     vehicles: (n: number) => `${n} ${n === 1 ? 'moped' : 'mopeds'}`,
-    noFigure: 'no figure: no moped stood in the rental park over this period',
+    noFigure: 'no figure: no moped was assigned to rental over this period',
     unassigned: (n: number) => `${n} ${n === 1 ? 'moped is' : 'mopeds are'} outside the figure: not assigned`,
     unassignedLink: (n: number) => `Standing idle now: ${n}`,
 
@@ -40,8 +40,8 @@ export const wave6utilEn = {
 
 export const wave6utilRu: typeof wave6utilEn = {
   utilisationReport: {
-    title: 'Загрузка парка аренды',
-    subtitle: 'Дни, когда мопеды были в аренде, против дней, когда они стояли в парке аренды.',
+    title: 'Загрузка парка',
+    subtitle: 'Дни, когда мопеды были в аренде, против дней, когда они были назначены в аренду.',
     week: 'Неделя',
     month: 'Месяц',
     from: 'С',
@@ -50,7 +50,7 @@ export const wave6utilRu: typeof wave6utilEn = {
 
     basis: (rented: number, pool: number) => `дни в аренде ${rented} из ${pool}`,
     vehicles: (n: number) => `${n} ${ruPlural(n, 'мопед', 'мопеда', 'мопедов')}`,
-    noFigure: 'цифры нет: в парке аренды за этот период не стояло ни одного мопеда',
+    noFigure: 'цифры нет: за этот период ни один мопед не был назначен в аренду',
     unassigned: (n: number) => `${n} ${ruPlural(n, 'мопед', 'мопеда', 'мопедов')} без назначения не в счёте`,
     unassignedLink: (n: number) => `Простаивают сейчас: ${n}`,
 
@@ -73,7 +73,7 @@ export const wave6utilRu: typeof wave6utilEn = {
 export const wave6utilKa: typeof wave6utilEn = {
   utilisationReport: {
     title: 'პარკის დატვირთვა',
-    subtitle: 'დღეები, როცა მოპედები ქირაში იყო, იმ დღეებთან შედარებით, როცა საქირავო პარკში იდგა.',
+    subtitle: 'დღეები, როცა მოპედები ქირაში იყო, იმ დღეებთან შედარებით, როცა მათი დანიშნულება ქირავნობა იყო.',
     week: 'კვირა',
     month: 'თვე',
     from: 'დან',
@@ -82,7 +82,7 @@ export const wave6utilKa: typeof wave6utilEn = {
 
     basis: (rented: number, pool: number) => `${rented} დღე ქირაში ${pool}-დან`,
     vehicles: (n: number) => `${n} მოპედი`,
-    noFigure: 'ციფრი არ არის: ამ პერიოდში საქირავო პარკში არცერთი მოპედი არ მდგარა',
+    noFigure: 'ციფრი არ არის: ამ პერიოდში არცერთი მოპედის დანიშნულება ქირავნობა არ ყოფილა',
     unassigned: (n: number) => `${n} მოპედი დანიშნულების გარეშე — ანგარიშში არ შედის`,
     unassignedLink: (n: number) => `ახლა დგას უქმად: ${n}`,
 

@@ -159,7 +159,7 @@ export const wave5purchasesEn = {
 
     batch: 'The same for the whole shipment',
     year: 'Year',
-    pool: 'Park',
+    pool: 'Assigned to',
     point: 'Point',
     perRow: 'Correct a row',
     perRowHide: 'Hide the rows',
@@ -370,7 +370,7 @@ export const wave5purchasesRu: Wave5purchases = {
 
     batch: 'Одним значением на всю партию',
     year: 'Год',
-    pool: 'Парк',
+    pool: 'Назначение',
     point: 'Точка',
     perRow: 'Правка по строке',
     perRowHide: 'Свернуть строки',
@@ -570,7 +570,7 @@ export const wave5purchasesKa: Wave5purchases = {
 
     batch: 'ერთი მნიშვნელობა მთელ პარტიაზე',
     year: 'წელი',
-    pool: 'პარკი',
+    pool: 'დანიშნულება',
     point: 'ადგილი',
     perRow: 'სტრიქონის შესწორება',
     perRowHide: 'სტრიქონების დაკეცვა',
