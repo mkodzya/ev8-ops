@@ -274,7 +274,9 @@ function MoneySheet({ opening, onClose }: { opening: Opening; onClose: () => voi
           throw e;
         });
         const how = t.money.how[s.channel];
-        const text = OUT.includes(s.target.kind) ? t.money.paidOut(amountText, how) : t.money.recorded(amountText, how);
+        // «Returned» is the deposit's word (issue #9, item 5); a supplier paid or a
+        // moped bought back is recorded like any other payment.
+        const text = s.target.kind === 'deposit_payout' ? t.money.paidOut(amountText, how) : t.money.recorded(amountText, how);
         return {
           toast: {
             text,
