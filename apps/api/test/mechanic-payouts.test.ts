@@ -347,6 +347,7 @@ interface Due {
   totalTetri: number;
   jobIds: string[];
   partIds: string[];
+  rent: { customerId: string; rentalId: string; number: string; owedTetri: number; offsetTetri: number; cashTetri: number } | null;
 }
 
 interface Payout {
@@ -356,6 +357,8 @@ interface Payout {
   labourTetri: number;
   reimburseTetri: number;
   totalTetri: number;
+  offsetTetri: number;
+  cashTetri: number;
   jobs: { id: string; number: string }[];
   receiptsCount: number;
   markedBy: { id: string; name: string };
@@ -382,7 +385,7 @@ async function dueOf(owner: string, mechanicId: string): Promise<Due | undefined
 }
 
 /** «Оплачено» for exactly what the screen showed. */
-const markOf = (m: Due) => ({ mechanicId: m.id, jobIds: m.jobIds, partIds: m.partIds, totalTetri: m.totalTetri });
+const markOf = (m: Due) => ({ mechanicId: m.id, jobIds: m.jobIds, partIds: m.partIds, totalTetri: m.totalTetri, offsetTetri: m.rent?.offsetTetri ?? 0 });
 
 async function pay(owner: string, m: Due): Promise<Payout> {
   const res = await call(owner, 'POST', '/api/service/payouts', markOf(m));
@@ -939,5 +942,91 @@ describe.skipIf(!HAS_DB)('who marks a payout, and whose balance (ADR-0037; ADR-0
     b = await balanceOf(chief.cookie);
     expect([b.waiting, b.open, b.unnormed]).toEqual([none, none, none]);
     expect(b.payable).toMatchObject({ partIds: [part], reimburseTetri: 450, otherReceipts: [{ id: part, jobId: id, paidTetri: 450 }] });
+  });
+});
+
+describe.skipIf(!HAS_DB)('a mechanic who rents a moped (director, 22.10.2026; 0066)', () => {
+  it('the payout pays his rent first, never more than it owes; voided, the rent is owed again', async () => {
+    const { prisma } = await import('../src/lib/db.js');
+    const owner = await person('owner');
+    const chief = await person('chief_mechanic');
+    const mech = await person('mechanic');
+    const w = await ownWork(owner.cookie, 30);
+    // His own card, invented, and a moped handed over to it today: the deposit and the first week are owed.
+    const customer = await prisma.customer.create({ data: { name: `ТЕСТ механик-арендатор ${uniq()}` } });
+    const { vehicle } = await freeVehicle();
+    const made = await call(owner.cookie, 'POST', '/api/rentals', { customerId: customer.id, vehicleId: vehicle.id, weeklyRateTetri: 15000, pickedUpOn: todayISO(new Date(), 'Asia/Tbilisi') });
+    expect(made.statusCode, made.body).toBe(201);
+    const rentalId = json<{ id: string }>(made).id;
+    const linked = await call(owner.cookie, 'PATCH', `/api/users/${mech.id}`, { customerId: customer.id });
+    expect(linked.statusCode, linked.body).toBe(200);
+
+    await closedRepair(mech.cookie, chief.cookie, [{ workTypeId: w.id }]);
+    const due = (await dueOf(owner.cookie, mech.id))!;
+    expect(due.rent).toMatchObject({ customerId: customer.id, rentalId });
+    const rent = due.rent!;
+    expect(rent.owedTetri).toBeGreaterThan(0);
+    expect(rent.offsetTetri).toBe(Math.min(due.totalTetri, rent.owedTetri));
+    expect(rent.cashTetri).toBe(due.totalTetri - rent.offsetTetri);
+
+    // A screen that did not show the rent does not mark.
+    const blind = await call(owner.cookie, 'POST', '/api/service/payouts', { ...markOf(due), offsetTetri: 0 });
+    expect(blind.statusCode).toBe(409);
+    expect(errorOf(blind)).toBe('payout_changed');
+
+    const payout = await pay(owner.cookie, due);
+    expect(payout).toMatchObject({ totalTetri: due.totalTetri, offsetTetri: rent.offsetTetri, cashTetri: rent.cashTetri });
+    const row = await prisma.mechanicPayout.findUniqueOrThrow({ where: { id: payout.id } });
+    const paid = await prisma.payment.findUniqueOrThrow({ where: { id: row.offsetPaymentId! }, include: { allocations: true } });
+    expect(paid).toMatchObject({ channel: 'offset', kind: 'rent', rentalId, customerId: customer.id, grossTetri: rent.offsetTetri, voidedAt: null });
+    expect(paid.allocations.reduce((n, a) => n + a.amountTetri, 0)).toBe(rent.offsetTetri);
+    // Nothing waits for a bank line or a till: it is in neither.
+    expect(paid.statementLineId).toBeNull();
+    // It pays the first week, oldest first, and never the deposit (ADR-0043).
+    const firstWeek = () => prisma.rentalPeriod.findFirstOrThrow({ where: { rentalId }, orderBy: { seq: 'asc' }, select: { paidTetri: true } });
+    expect((await firstWeek()).paidTetri).toBe(rent.offsetTetri);
+    expect(paid.allocations.every((a) => a.target === 'period')).toBe(true);
+    expect((await prisma.deposit.findUnique({ where: { rentalId }, select: { paidTetri: true } }))?.paidTetri ?? 0).toBe(0);
+    // «Платежи» finds it under «Зачёт работ», and counts no money in for it.
+    const listed = await call(owner.cookie, 'GET', `/api/payments?rentalId=${rentalId}&channel=offset`);
+    expect(listed.statusCode, listed.body).toBe(200);
+    const list = json<{ totals: { inTetri: number }; payments: { id: string; channel: string }[] }>(listed);
+    expect(list.payments.map((p) => p.id)).toEqual([paid.id]);
+    expect(list.totals.inTetri).toBe(0);
+    // Its own page offers no «Аннулировать»: the payout is what is voided.
+    const card = json<{ canVoid: boolean }>(await call(owner.cookie, 'GET', `/api/payments/${paid.id}`));
+    expect(card.canVoid).toBe(false);
+
+    // Voided alone from «Платежи», it is refused: the payout still says it.
+    const alone = await call(owner.cookie, 'POST', `/api/payments/${paid.id}/void`, { reason: 'ТЕСТ alone' });
+    expect(alone.statusCode).toBe(409);
+    expect(errorOf(alone)).toBe('offset_of_payout');
+
+    // The payout voided takes it with it, and the rent is owed again.
+    const voided = await call(owner.cookie, 'POST', `/api/service/payouts/${payout.id}/void`, { reason: 'ТЕСТ wrong mark' });
+    expect(voided.statusCode, voided.body).toBe(200);
+    expect((await prisma.payment.findUniqueOrThrow({ where: { id: paid.id } })).voidedAt).not.toBeNull();
+    expect(await prisma.paymentAllocation.count({ where: { paymentId: paid.id } })).toBe(0);
+    expect((await firstWeek()).paidTetri).toBe(0);
+    expect((await dueOf(owner.cookie, mech.id))?.rent).toMatchObject({ rentalId, owedTetri: rent.owedTetri });
+  });
+
+  it('only a mechanic’s payouts pay a rent, and one card is one person’s', async () => {
+    const { prisma } = await import('../src/lib/db.js');
+    const owner = await person('owner');
+    const manager = await person('manager');
+    const mech = await person('mechanic');
+    const other = await person('mechanic');
+    const customer = await prisma.customer.create({ data: { name: `ТЕСТ карточка ${uniq()}` } });
+    const notMechanic = await call(owner.cookie, 'PATCH', `/api/users/${manager.id}`, { customerId: customer.id });
+    expect(notMechanic.statusCode).toBe(409);
+    expect(errorOf(notMechanic)).toBe('renter_for_mechanics');
+    expect((await call(owner.cookie, 'PATCH', `/api/users/${mech.id}`, { customerId: customer.id })).statusCode).toBe(200);
+    const taken = await call(owner.cookie, 'PATCH', `/api/users/${other.id}`, { customerId: customer.id });
+    expect(taken.statusCode).toBe(409);
+    expect(errorOf(taken)).toBe('customer_taken');
+    // Unlinked, the card is free again.
+    expect((await call(owner.cookie, 'PATCH', `/api/users/${mech.id}`, { customerId: null })).statusCode).toBe(200);
+    expect((await call(owner.cookie, 'PATCH', `/api/users/${other.id}`, { customerId: customer.id })).statusCode).toBe(200);
   });
 });

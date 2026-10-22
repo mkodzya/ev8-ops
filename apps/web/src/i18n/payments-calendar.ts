@@ -33,7 +33,7 @@ const halves = (a: string | null, b: string | null): string => [a, b].filter((s)
 
 const stateEn: Record<CalendarState, string> = { paid: 'Paid', paid_ahead: 'Paid ahead', due_today: 'Due today', expected: 'Expected', overdue: 'Overdue' };
 const saidEn: Record<CalendarState, string> = { paid: 'paid', paid_ahead: 'paid ahead', due_today: 'due today', expected: 'expected', overdue: 'overdue' };
-const channelsEn: Record<CalendarChannel, string> = { cash: 'cash', acquiring: 'card', transfer: 'transfer', deposit: 'from the deposit' };
+const channelsEn: Record<CalendarChannel, string> = { cash: 'cash', acquiring: 'card', transfer: 'transfer', deposit: 'from the deposit', offset: 'offset against repairs' };
 
 export const calendarEn = {
   calendar: {
@@ -215,7 +215,7 @@ export const calendarRu: typeof calendarEn = {
     state: { paid: 'Оплачено', paid_ahead: 'Оплачено заранее', due_today: 'Ждём сегодня', expected: 'Ожидается', overdue: 'Просрочено' },
     said: { paid: 'оплачено', paid_ahead: 'оплачено заранее', due_today: 'ждём сегодня', expected: 'ожидается', overdue: 'просрочено' },
     withPayment: (word, when, how) => `${word} · ${when}, ${how}`,
-    channels: { cash: 'наличные', acquiring: 'карта', transfer: 'перевод', deposit: 'из залога' },
+    channels: { cash: 'наличные', acquiring: 'карта', transfer: 'перевод', deposit: 'из залога', offset: 'зачёт работ' },
     overdueLine: (days, debt) => `Просрочено · ${days}${debt === null ? '' : ` · долг ${debt}`}`,
     daysShort: (n) => `${n}\u00a0дн.`,
     // Accusative after «за»: «за 2 недели», «за 5 недель», «за 21 неделю».
@@ -312,7 +312,7 @@ export const calendarKa: typeof calendarEn = {
     state: { paid: 'გადახდილია', paid_ahead: 'წინასწარ გადახდილია', due_today: 'დღეს ველოდებით', expected: 'მოსალოდნელია', overdue: 'ვადაგადაცილებულია' },
     said: { paid: 'გადახდილია', paid_ahead: 'წინასწარ გადახდილია', due_today: 'დღეს ველოდებით', expected: 'მოსალოდნელია', overdue: 'ვადაგადაცილებულია' },
     withPayment: (word, when, how) => `${word} · ${when}, ${how}`,
-    channels: { cash: 'ნაღდი', acquiring: 'ბარათი', transfer: 'გადარიცხვა', deposit: 'დეპოზიტიდან' },
+    channels: { cash: 'ნაღდი', acquiring: 'ბარათი', transfer: 'გადარიცხვა', deposit: 'დეპოზიტიდან', offset: 'სამუშაოთი ჩათვლა' },
     overdueLine: (days, debt) => `ვადაგადაცილებულია · ${days}${debt === null ? '' : ` · ვალი ${debt}`}`,
     daysShort: (n) => `${n}\u00a0დღე`,
     forWeeks: (n) => `${n}\u00a0კვირისთვის`,

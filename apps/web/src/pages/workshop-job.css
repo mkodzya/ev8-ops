@@ -295,6 +295,8 @@
 .wpay-sum dd { margin: 0; white-space: nowrap; }
 .wpay-sum .wpay-all { margin-top: var(--space1); padding-top: var(--space1); border-top: 1px solid var(--line-soft); font-weight: 600; }
 .wpay-sum .wpay-all dt { color: var(--ink); }
+/* The rent a payout pays first (0066): under the total on every width, the table's too. */
+.wpay-rent { margin-top: var(--space2); }
 .wpay-pay { min-height: var(--control-large); padding: 0 24px; font: var(--text-cta); }
 .wpay-narrow .wpay-pay { width: 100%; }
 .wpay-state { white-space: nowrap; }

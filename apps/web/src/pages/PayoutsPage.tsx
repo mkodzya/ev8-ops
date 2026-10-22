@@ -46,6 +46,8 @@ export interface PayMechanic {
   totalTetri: number;
   jobIds: string[];
   partIds: string[];
+  /** A mechanic who rents a moped (0066): the part of this payout that goes into his rent, and what is handed over. */
+  rent: { rentalId: string; number: string; owedTetri: number; offsetTetri: number; cashTetri: number } | null;
 }
 
 export interface PayoutRow {
@@ -55,6 +57,9 @@ export interface PayoutRow {
   labourTetri: number;
   reimburseTetri: number;
   totalTetri: number;
+  /** What of it went into the mechanic's rent (0066). */
+  offsetTetri: number;
+  cashTetri: number;
   jobs: { id: string; number: string }[];
   receiptsCount: number;
   markedBy: { id: string; name: string } | null;
@@ -293,9 +298,35 @@ function MechanicToPay({ m, onDone }: { m: PayMechanic; onDone: () => void }) {
           <dd className="mono">{formatGel(m.totalTetri)}</dd>
         </div>
       </dl>
+      {m.rent && m.rent.offsetTetri > 0 && <RentLines rent={m.rent} />}
       <div className="wpay-narrow">{pay}</div>
       {asking && <PaySheet m={m} receipts={receipts} onClose={() => setAsking(false)} onDone={onDone} />}
     </section>
+  );
+}
+
+/**
+ * The rent a payout pays first (director, 22.10.2026; 0066): how much goes
+ * into the mechanic's rent and what is handed over. Under the total, on every
+ * screen width.
+ */
+function RentLines({ rent }: { rent: NonNullable<PayMechanic['rent']> }) {
+  const t = useT();
+  return (
+    <dl className="wpay-sum wpay-rent">
+      <div>
+        <dt>
+          <Link className="mono" to={`/rentals/${rent.rentalId}`}>
+            {t.wpay.rentOffset(rent.number, formatGel(rent.owedTetri))}
+          </Link>
+        </dt>
+        <dd className="mono">−{formatGel(rent.offsetTetri)}</dd>
+      </div>
+      <div className="wpay-all">
+        <dt>{t.wpay.toHand}</dt>
+        <dd className="mono">{formatGel(rent.cashTetri)}</dd>
+      </div>
+    </dl>
   );
 }
 
@@ -318,7 +349,7 @@ function PaySheet({ m, receipts, onClose, onDone }: { m: PayMechanic; receipts: 
       onCancel={onClose}
       submit={async (key) => {
         try {
-          await api.post('/api/service/payouts', { mechanicId: m.id, jobIds: m.jobIds, partIds: m.partIds, totalTetri: m.totalTetri }, { key });
+          await api.post('/api/service/payouts', { mechanicId: m.id, jobIds: m.jobIds, partIds: m.partIds, totalTetri: m.totalTetri, offsetTetri: m.rent?.offsetTetri ?? 0 }, { key });
         } catch (e) {
           if (e instanceof ApiError && e.status === 409) onDone();
           throw e;
@@ -328,6 +359,7 @@ function PaySheet({ m, receipts, onClose, onDone }: { m: PayMechanic; receipts: 
       onDone={onDone}
     >
       <p>{t.wpay.confirmWhat(m.jobs.length, formatGel(m.workTetri), receipts === 0 ? null : formatGel(m.reimburseTetri))}</p>
+      {m.rent && m.rent.offsetTetri > 0 && <p>{t.wpay.confirmOffset(formatGel(m.rent.offsetTetri), m.rent.number, formatGel(m.rent.cashTetri))}</p>}
       <p className="hint">{t.wpay.confirmNote}</p>
     </FormSheet>
   );
@@ -349,6 +381,7 @@ function PayoutHistory({ rows, onDone }: { rows: PayoutRow[]; onDone: () => void
               <span className="mono wpay-n">{fmtDayMonth(p.paidOn)}</span>
               <span className="wpay-t">
                 {p.mechanic.name} · {t.wpay.jobsN(p.jobs.length)}
+                {p.offsetTetri > 0 && <> · {t.wpay.offsetIn(formatGel(p.offsetTetri))}</>}
                 <small className="muted">
                   {p.voided ? t.wpay.voided(p.voided.reason) : p.markedBy ? t.wpay.markedBy(p.markedBy.name) : ''}
                 </small>
@@ -385,6 +418,7 @@ function VoidSheet({ p, onClose, onDone }: { p: PayoutRow; onClose: () => void; 
         <textarea className="input" rows={3} value={reason} onChange={(e) => setReason(e.target.value)} required autoFocus />
       </Field>
       <p className="hint">{t.wpay.voidNote(p.jobs.length)}</p>
+      {p.offsetTetri > 0 && <p className="hint">{t.wpay.voidOffset}</p>}
     </FormSheet>
   );
 }

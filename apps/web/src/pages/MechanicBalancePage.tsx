@@ -23,7 +23,7 @@ interface Bucket {
 
 export interface Balance {
   mechanic: { id: string; name: string; rateTetri: number };
-  payable: Pick<PayMechanic, 'jobs' | 'otherReceipts' | 'seconds' | 'workTetri' | 'reimburseTetri' | 'totalTetri'>;
+  payable: Pick<PayMechanic, 'jobs' | 'otherReceipts' | 'seconds' | 'workTetri' | 'reimburseTetri' | 'totalTetri'> & { rent?: PayMechanic['rent'] };
   waiting: Bucket;
   open: Bucket;
   unnormed: { jobs: { id: string; number: string }[] };
@@ -52,6 +52,12 @@ export function MechanicBalancePage() {
         <span className="muted">
           {p.jobs.length > 0 || receipts > 0 ? t.wpay.toPaySub(p.jobs.length, formatGel(p.workTetri), formatGel(p.reimburseTetri)) : t.wpay.nothingYet}
         </span>
+        {/* His own rent is paid out of it first (0066): he sees how much, and what he will be handed. */}
+        {p.rent && p.rent.offsetTetri > 0 && (
+          <span className="muted">
+            {t.wpay.rentOffset(p.rent.number, formatGel(p.rent.owedTetri))}: −{formatGel(p.rent.offsetTetri)} · {t.wpay.toHand} {formatGel(p.rent.cashTetri)}
+          </span>
+        )}
       </section>
 
       <div className="wpay-tiles">

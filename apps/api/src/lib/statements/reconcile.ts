@@ -112,7 +112,8 @@ export async function loadCtx(): Promise<Ctx> {
     }),
     prisma.customer.findMany({ where: { archived: false }, select: { id: true, name: true, nameKa: true, nameLat: true } }),
     prisma.payment.findMany({
-      where: { statementLineId: null, voidedAt: null, source: 'manual', channel: { not: 'cash' } },
+      // Cash and rent closed by work (0066) never reach a bank: no line is theirs.
+      where: { statementLineId: null, voidedAt: null, source: 'manual', channel: { notIn: ['cash', 'offset'] } },
       select: {
         id: true,
         direction: true,

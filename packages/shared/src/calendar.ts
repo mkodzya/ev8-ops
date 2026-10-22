@@ -28,7 +28,7 @@ import type { ISODate, RentalStatus } from './types.js';
 export const CALENDAR_STATES = ['paid', 'paid_ahead', 'due_today', 'overdue', 'expected'] as const;
 export type CalendarState = (typeof CALENDAR_STATES)[number];
 /** The database's payment_channel. */
-export type CalendarChannel = 'cash' | 'acquiring' | 'transfer' | 'deposit';
+export type CalendarChannel = 'cash' | 'acquiring' | 'transfer' | 'deposit' | 'offset';
 /** Six Monday–Sunday weeks hold any month. */
 export const CALENDAR_MAX_DAYS = 42;
 /** How far ahead a schedule is drawn. */
