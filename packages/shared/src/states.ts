@@ -53,8 +53,8 @@ export type FleetChip = (typeof FLEET_CHIPS)[number];
  * that has left the fleet. `hasPoint`: somebody has said where it stands.
  * One rule for each chip and the count beside it. «Сегодня» still counts
  * its own way — the state's number under «Свободен», every moped with no
- * park or no point in its two rows — so those may be larger than the chip
- * they open (an open question to Mika, 22.10.2026).
+ * park and every free one with no point in its two rows — so those may be
+ * larger than the chip they open (an open question to Mika, 22.10.2026).
  */
 export function fleetChipOf(v: { state: VehicleState; pool: VehiclePool | null }, hasPoint: boolean): FleetChip | null {
   if (v.state === 'rented' || v.state === 'service') return v.state;
