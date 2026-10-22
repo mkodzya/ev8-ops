@@ -85,10 +85,17 @@ export const calendarEn = {
     monthTotal: 'Month in total',
     /** Under an edge row of the month's table: its figures are the month's days only. */
     partWeek: 'part of the week',
+    /**
+     * Under the month's table (QA after issue #7, 23.10.2026): what «short» counts, so that the red figure above —
+     * which counts today too — is not read as the same thing.
+     */
+    monthShortNote: 'Short: payments whose day has passed. Today’s and later ones are still to come.',
     debt: (sum: string) => `debt ${sum}`,
     debtLabel: 'debt',
-    ofThemThisWeek: (sum: string) => `of these ${sum} — this week`,
-    lateSplit: (week: string | null, earlier: string | null) => halves(week && `${week} — this week`, earlier && `${earlier} — earlier`),
+    // The red figure's week is today's, Monday through today — today's payment of a rental already late included —
+    // whatever week the card shows (QA after issue #7, 23.10.2026): not «this week», which read as the week chosen.
+    ofThemThisWeek: (sum: string) => `of these ${sum} — Monday through today`,
+    lateSplit: (week: string | null, earlier: string | null) => halves(week && `${week} — Monday through today`, earlier && `${earlier} — earlier`),
     lateWholeDebt: (n: number) => `Overdue · the whole debt on ${n} ${n === 1 ? 'rental' : 'rentals'}`,
     noLate: 'Nobody is overdue',
     show: 'Show',
@@ -188,10 +195,12 @@ export const calendarRu: typeof calendarEn = {
     colWaiting: 'Ещё ждём',
     monthTotal: 'Итого за месяц',
     partWeek: 'часть недели',
+    monthShortNote: 'Недоплачено — оплаты, чей день уже прошёл. Сегодняшние и следующие — «ещё ждём».',
     debt: (sum) => `долг ${sum}`,
     debtLabel: 'долг',
-    ofThemThisWeek: (sum) => `из них ${sum} — эта неделя`,
-    lateSplit: (week, earlier) => halves(week && `${week} — эта неделя`, earlier && `${earlier} — раньше`),
+    // «по сегодня» — today included, as «по» says in Russian.
+    ofThemThisWeek: (sum) => `из них ${sum} — с понедельника по сегодня`,
+    lateSplit: (week, earlier) => halves(week && `${week} — с понедельника по сегодня`, earlier && `${earlier} — раньше`),
     lateWholeDebt: (n) => `Просрочено · весь долг по ${n} ${ruPlural(n, 'аренде', 'арендам', 'арендам')}`,
     noLate: 'Просрочек нет',
     show: 'Показать',
@@ -287,10 +296,12 @@ export const calendarKa: typeof calendarEn = {
     colWaiting: 'ჯერ ველოდებით',
     monthTotal: 'სულ თვეში',
     partWeek: 'კვირის ნაწილი',
+    monthShortNote: 'დააკლდა — გადახდები, რომელთა დღეც უკვე გავიდა. დღევანდელი და მომდევნო — „ჯერ ველოდებით“.',
     debt: (sum) => `ვალი ${sum}`,
     debtLabel: 'ვალი',
-    ofThemThisWeek: (sum) => `აქედან ${sum} — ეს კვირა`,
-    lateSplit: (week, earlier) => halves(week && `${week} — ეს კვირა`, earlier && `${earlier} — უფრო ადრე`),
+    // «ორშაბათიდან დღევანდელის ჩათვლით» — from Monday, today's included.
+    ofThemThisWeek: (sum) => `აქედან ${sum} — ორშაბათიდან დღევანდელის ჩათვლით`,
+    lateSplit: (week, earlier) => halves(week && `${week} — ორშაბათიდან დღევანდელის ჩათვლით`, earlier && `${earlier} — უფრო ადრე`),
     lateWholeDebt: (n) => `ვადაგადაცილებულია · მთელი ვალი ${n} ქირაობაზე`,
     noLate: 'ვადაგადაცილება არ არის',
     show: 'ჩვენება',
