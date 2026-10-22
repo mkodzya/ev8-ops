@@ -3,12 +3,11 @@
 // proofreading as one list. The tab's own name is in `shell.tabs.calendar`,
 // where the shell reads it.
 //
-// The Georgian here was written by a non-native and has not been read by one
-// yet. Two things for whoever reads it: «კვირა» is both "week" and "Sunday",
-// and it stands for both on this screen; and the screen holds two words for a
-// rental — the empty state reuses `returnPick.none`, which says «იჯარა», while
-// the new lines below say «ქირაობა». Both live in the product; one of them is
-// the native reader's to choose.
+// The Georgian here was written by a non-native; the director's glossary
+// (issue #9, 23.10.2026) settled its words — a rental is «ქირაობა» everywhere,
+// the empty state's `returnPick.none` included, and «აკლია», «მოსალოდნელი»,
+// «მისაღები», «ჯამი» are his. One thing stays for whoever reads it: «კვირა»
+// is both "week" and "Sunday", and it stands for both on this screen.
 //
 // `state`, `said` and `channels` are keyed by the shared enums' own members,
 // so the screen looks a word up by the state itself and a state added in
