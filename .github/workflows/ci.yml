@@ -36,6 +36,7 @@ jobs:
       - run: npm run guard:i18n
       - run: npm run guard:tokens
       - run: npm run guard:code
+      - run: npm run guard:words
       - run: npm run test:shared
       - run: npm run test:api
       - run: npm -w @ev8/web run build
