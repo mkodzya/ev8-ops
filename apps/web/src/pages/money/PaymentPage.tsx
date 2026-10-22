@@ -96,7 +96,7 @@ export function PaymentPage() {
 
       {p.closed.length > 0 && (
         <section className="card">
-          <BlockHead title={t.paymentPage.closed} />
+          <BlockHead title={t.paymentPage.settled} />
           {p.closed.map((c, i) => (
             <Row
               key={i}

@@ -17,10 +17,10 @@
  * the rule's alphabet. Comments are not read: they may name the old word to
  * say why it went.
  *
- * Most rules read the text alone. Two concepts are named by short labels that
- * do not say what they are about — «Вернуть», «К возврату», «Назначение» — so
- * those rules read the key the string is the value of (`deposits.handBack`)
- * and refuse the old word there whatever the string says.
+ * Most rules read the text alone. Three concepts are named by short labels that
+ * do not say what they are about — «Вернуть», «К возврату», «Назначение»,
+ * «Погашено» — so those rules read the key the string is the value of
+ * (`deposits.handBack`) and refuse the old word there whatever the string says.
  *
  *   node scripts/words-guard.mjs
  */
@@ -72,6 +72,14 @@ const ASSIGNMENT = new RegExp(
     ')$',
   'u',
 );
+
+/**
+ * The keys that name what a payment pays off (item 30): the money form's block
+ * and the hand-over's line before it is taken, the payment page's block and the
+ * toast after. «Закрыть» / «დახურვა» stays a repair's, a rental's and a sale's
+ * word, so the rule reads these keys and no others (QA after issue #9).
+ */
+const SETTLED = /^(?:money\.settles|hand\.settles|paymentPage\.settled|payments\.(?:allocated|recorded))$/u;
 
 /**
  * `word` is the retired word (any of its forms), `use` what the glossary says
@@ -135,6 +143,12 @@ const RULES = [
   },
   {
     lang: 'ka',
+    at: SETTLED,
+    word: /დახურ/u,
+    use: 'what a payment pays off is «დაფარულია», before it is taken «დაფარავს» (item 30)',
+  },
+  {
+    lang: 'ka',
     word: /(?<!ხელზე )გასაცემ/u,
     // Batteries handed out with a moped, not money.
     keeps: (text) => text.includes('ვიდრე გასაცემია'),
@@ -162,6 +176,12 @@ const RULES = [
     at: ASSIGNMENT,
     word: /парк(?!ов)/iu,
     use: 'a moped’s assignment is «Назначение: аренда / продажа»; «парк» is the whole fleet only (item 9)',
+  },
+  {
+    lang: 'ru',
+    at: SETTLED,
+    word: /закр/iu,
+    use: 'what a payment pays off is «Погашено», before it is taken «Погасит» (item 30)',
   },
   {
     lang: 'ru',

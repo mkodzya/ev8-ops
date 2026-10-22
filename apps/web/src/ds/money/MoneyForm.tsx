@@ -577,7 +577,8 @@ function useAwaitedTetri(target: MoneyTarget | null): number {
 }
 
 /**
- * "Закроет": what the payment takes, and the new "paid through" (§3.1).
+ * «Погасит»: what the payment takes, and the new "paid through" (§3.1) —
+ * the future of issue #9's «Погашено» (item 30), not «Закроет».
  * What stays after a part payment is still «due today», in ink, while all of
  * it is money awaited today (`awaitedTetri`); anything older in it — a debt,
  * in red, as before.
@@ -588,7 +589,7 @@ function Closing({ plan, awaitedTetri }: { plan: Plan | null; awaitedTetri: numb
   const owed = plan.closes.reduce((n, c) => n + Math.max(0, c.openTetri - c.amountTetri), 0);
   return (
     <section className="money-closes" aria-live="polite">
-      <h3 className="t-overline">{t.money.closes}</h3>
+      <h3 className="t-overline">{t.money.settles}</h3>
       <ul>
         {plan.closes.map((c, i) => (
           <li key={i}>
