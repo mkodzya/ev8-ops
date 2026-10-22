@@ -1,4 +1,4 @@
-import { parkOf, readFleetNumber, vinMatches, VEHICLE_COLORS, VEHICLE_POOLS, VEHICLE_STATES, colorOf, daysBetween, tokens, todayISO, type ServiceWhy, type VehiclePool, type VehicleState } from '@ev8/shared';
+import { fleetChipOf, parkOf, readFleetNumber, vinMatches, VEHICLE_COLORS, VEHICLE_POOLS, VEHICLE_STATES, colorOf, daysBetween, tokens, todayISO, type FleetChip, type ServiceWhy, type VehiclePool, type VehicleState } from '@ev8/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -15,7 +15,6 @@ import { DataList } from '../ds/list/DataList.js';
 import { fmtDate } from '../format.js';
 import type { Dict } from '../i18n/en.js';
 import { useT } from '../i18n/index.js';
-import { placeOf } from '../lib/place.js';
 import { Typed, useShownWords } from '../lib/typed.js';
 import { useLoad } from '../lib/use.js';
 import { useSession } from '../session.js';
@@ -140,13 +139,17 @@ export function FleetPage() {
           match: (v, q) => (v.fleetNo != null && readFleetNumber(q.text, { digitsToo: true }) === v.fleetNo) || vinMatches(q, v.vin) || v.model.toLowerCase().includes(q.text),
         }}
         chips={[
-          { key: 'available', label: t.states.available, test: (v) => v.state === 'available' },
-          { key: 'rented', label: t.states.rented, test: (v) => v.state === 'rented' },
-          { key: 'service', label: t.states.service, test: (v) => v.state === 'service' },
-          // The whole sale park, new stock and used mopeds alike, whatever is happening to them (21.10.2026).
-          { key: 'sale', label: t.fleetList.forSale, test: (v) => parkOf(v) === 'sale' },
-          { key: 'nopool', label: t.pools.none, test: (v) => parkOf(v) === 'none' },
-          { key: 'nopoint', label: t.points.unset, test: (v) => placeOf(v).kind === 'unset' },
+          // Every moped under one chip only (director, issue #6; Mika, answer «Б», 22.10.2026): the
+          // state first, so «В аренде» and «В сервисе» are the states' own numbers, then what is
+          // still to be done with an idle moped — for sale, no park, no point — and the rest free.
+          // The order the questions are asked in is `fleetChipOf`'s; the chips keep their places.
+          { key: 'available', label: t.states.available, test: (v) => chipOf(v) === 'available' },
+          { key: 'rented', label: t.states.rented, test: (v) => chipOf(v) === 'rented' },
+          { key: 'service', label: t.states.service, test: (v) => chipOf(v) === 'service' },
+          // The sale park's idle mopeds, new stock and used alike; one in repair or out on a buy-out is under its state.
+          { key: 'sale', label: t.fleetList.forSale, test: (v) => chipOf(v) === 'sale' },
+          { key: 'nopool', label: t.pools.none, test: (v) => chipOf(v) === 'nopool' },
+          { key: 'nopoint', label: t.points.unset, test: (v) => chipOf(v) === 'nopoint' },
         ]}
         empty={{ text: t.fleet.empty }}
         card={(v) => ({
@@ -205,8 +208,9 @@ export function FleetPage() {
                   <Link to={`/customers/${v.currentRental.customer.id}`} onClick={(e) => e.stopPropagation()}>
                     <CustomerName of={v.currentRental.customer} second={false} />
                   </Link>
-                  <span className="v-sub mono">
-                    {t.fleet.paidThrough}: {fmtDate(v.currentRental.paidThrough)}
+                  {/* May break after the colon, never inside the date: «Где» stays narrow (director, issue #6). */}
+                  <span className="v-sub mono v-paid">
+                    {t.fleet.paidThrough}: <span className="v-paid-date">{fmtDate(v.currentRental.paidThrough)}</span>
                   </span>
                 </span>
               ) : (
@@ -222,6 +226,10 @@ export function FleetPage() {
   );
 }
 
+/** The one chip this moped is counted under; a point is "said" when the moped stands on one. */
+function chipOf(v: Vehicle): FleetChip | null {
+  return fleetChipOf(v, v.location != null);
+}
 
 /**
  * The quiet line under the state in the table: "For sale" for the sale park,

@@ -944,6 +944,29 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
   .list-table .v-why-line .v-why,
   .list-table .v-why-line .typed-clip { max-width: 100%; }
 }
+/* Two lines, not one (director, GitHub issue #6, 22.10.2026: the notes in the
+   reason column were not seen to their end). The typed note wraps and is cut
+   after its second line, the tooltip keeps the whole of it. At 1360 px the
+   column stays as wide as it was (12ch), so the measured fit above still
+   holds and the note simply shows twice as much; under 1360 px the line under
+   the state keeps the state's width and takes a second line too. From
+   1600 px, where the table has room to spare, the column widens to 24ch and
+   «Где» gives back the width its "paid through" line used to hold. */
+.list-table .col-why .v-why:not(.v-why-kind),
+.list-table .v-why-line .v-why:not(.v-why-kind) {
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2;
+  white-space: normal; overflow-wrap: anywhere;
+}
+.list-table .col-why .v-why:not(.v-why-kind) { width: 12ch; }
+@media (min-width: 1600px) {
+  .list-table .col-why .v-why:not(.v-why-kind),
+  .list-table .col-why .typed-clip { width: 24ch; max-width: 24ch; }
+}
+/* «Где» in the table: "paid through" may break after its colon, so the column
+   is as wide as the customer's name or the date, not as the whole phrase. The
+   date itself never breaks: numbers and dates never wrap inside a cell. */
+.list-table .v-where .v-paid { white-space: normal; }
+.list-table .v-where .v-paid-date { white-space: nowrap; }
 /* Only what somebody typed ends in an ellipsis. The repair's kind is one of
    five product words, and a product word is never cut (ux.md 12): at 12ch,
    or at the width of the state's badge, «გეგმიური მომსახურება» lost half of
