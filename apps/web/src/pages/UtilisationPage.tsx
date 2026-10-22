@@ -41,6 +41,8 @@ interface Answer {
   rentedDays: number;
   poolDays: number;
   unassigned: number;
+  /** The mopeds under «Не назначен» now: the number of the list the link opens. */
+  unassignedIdle: number;
   vehicles: number;
   byModel: { modelId: string; model: string; vehicles: number; rentedDays: number; poolDays: number; percent: number | null }[];
   blockers: { inRepairAllPeriod: BlockerVehicle[]; freeTooLong: BlockerVehicle[]; batteriesHolding: null };
@@ -112,10 +114,18 @@ export function UtilisationPage() {
             </p>
           </>
         )}
-        {/* Without this line the percentage would be quietly wrong (§3.2). */}
+        {/* Without this line the percentage would be quietly wrong (§3.2). The link says the
+            number of the list it opens, «Не назначен» — idle mopeds with no park now — and not
+            the period's figure, which counts one out with a renter too (Mika, answer «А», 22.10.2026). */}
         {u.unassigned > 0 && (
           <p className="hint util-aside">
-            {t.utilisationReport.unassigned(u.unassigned)} · <Link to="/fleet?f=nopool">{t.utilisationReport.unassignedLink}</Link>
+            {t.utilisationReport.unassigned(u.unassigned)}
+            {u.unassignedIdle > 0 && (
+              <>
+                {' · '}
+                <Link to="/fleet?f=nopool">{t.utilisationReport.unassignedLink(u.unassignedIdle)}</Link>
+              </>
+            )}
           </p>
         )}
       </section>
