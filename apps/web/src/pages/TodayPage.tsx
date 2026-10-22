@@ -9,6 +9,7 @@ import { fmtDate, formatGel } from '../format.js';
 import { useT } from '../i18n/index.js';
 import { useLoad } from '../lib/use.js';
 import { kmText, leftText } from '../lib/maintenance.js';
+import { Typed } from '../lib/typed.js';
 import { useSession } from '../session.js';
 
 // "Today" is the queue (wave 4 §3.1): group by group, three rows and what is
@@ -100,8 +101,9 @@ export function TodayPage() {
     // A deal Kommo has won and nobody has entered here yet (ADR-0015).
     else if (r.action === 'hand_over_from_kommo') bits.push(t.today.kommoRented);
     else if (r.action === 'sell_from_kommo') bits.push(t.today.kommoWon);
-    // A reported breakdown says what broke; the shelf row names the parts.
-    else if (r.action === 'open_report') bits.push(r.note ?? '');
+    // A reported breakdown says what broke: the words follow this line, in the
+    // reader's language where a translation is ready (ADR-0042). The shelf row names the parts.
+    else if (r.action === 'open_report') return bits.join(' · ');
     else if (r.action === 'order_parts') return (r.note ?? '').split('|')[1] ?? '';
     // Planned maintenance (ADR-0038): the mark and the mileage; what is left is the row's own figure.
     else if (r.action === 'open_maintenance') {
@@ -241,7 +243,15 @@ export function TodayPage() {
                 <li key={r.id} className="q-row">
                   <Link to={r.href} className="q-who">
                     <span className="q-name">{rowTitle(r)}</span>
-                    <span className="q-sub muted">{r.action === 'open_service' ? t.today.inRepairSub(Number((r.note ?? '0/0').split('/')[1]), r.days ?? 0) : rowSub(r)}</span>
+                    <span className="q-sub muted">
+                      {r.action === 'open_service' ? t.today.inRepairSub(Number((r.note ?? '0/0').split('/')[1]), r.days ?? 0) : rowSub(r)}
+                      {r.action === 'open_report' && r.note && (
+                        <>
+                          {' · '}
+                          <Typed text={r.note} quiet />
+                        </>
+                      )}
+                    </span>
                   </Link>
                   {r.amountTetri != null && r.amountTetri > 0 && <span className={`t-money q-sum ${sumIsDebt(r) ? 'crit-text' : ''}`}>{formatGel(r.amountTetri, { decimals: false })}</span>}
                   {r.action === 'open_maintenance' && <MaintenanceLeft note={r.note} />}

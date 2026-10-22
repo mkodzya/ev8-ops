@@ -21,9 +21,26 @@ export function onWrite(listener: () => void): () => void {
   return () => writeListeners.delete(listener);
 }
 
+/**
+ * Mark every screen's data stale at once, as a write does. For a batch of
+ * writes sent `quiet`: the batch calls this once, at its end.
+ */
+export function markStale(): void {
+  for (const l of writeListeners) l();
+}
+
 /** A write's options. `key` is the form's operation key (build plan Р5): the same key on a retry never writes twice. */
 export interface WriteOptions {
   key?: string;
+  /** A POST that only reads — too much to put in an address — and so marks nothing stale. */
+  read?: boolean;
+  /**
+   * One write of a batch — the photos of an act — that marks nothing stale by
+   * itself: the batch calls `markStale` once when it is done. Each photo used
+   * to refetch every screen's data, some 40 requests after a swap with 4 + 4
+   * photos (QA 21.10.2026).
+   */
+  quiet?: boolean;
 }
 
 async function request<T>(method: string, url: string, body?: unknown, opts: WriteOptions = {}): Promise<T> {
@@ -69,7 +86,7 @@ async function request<T>(method: string, url: string, body?: unknown, opts: Wri
     const { error, message, ...extra } = data as { error?: string; message?: string };
     throw new ApiError(res.status, error ?? 'error', message ?? `Request failed (${res.status})`, extra);
   }
-  if (method !== 'GET') for (const l of writeListeners) l();
+  if (method !== 'GET' && !opts.read && !opts.quiet) markStale();
   return data as T;
 }
 
@@ -78,6 +95,8 @@ export const api = {
   post: <T>(url: string, body?: unknown, opts?: WriteOptions) => request<T>('POST', url, body ?? {}, opts),
   patch: <T>(url: string, body?: unknown, opts?: WriteOptions) => request<T>('PATCH', url, body ?? {}, opts),
   del: <T>(url: string, opts?: WriteOptions) => request<T>('DELETE', url, undefined, opts),
+  /** Ask with a body and change nothing: every screen's data stays fresh (the translations of typed text, ADR-0042). */
+  ask: <T>(url: string, body: unknown) => request<T>('POST', url, body, { read: true }),
 };
 
 /**

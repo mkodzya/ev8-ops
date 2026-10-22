@@ -1,5 +1,6 @@
 import { wave3Ka } from './wave3.js';
 import { wave4Ka } from './wave4.js';
+import { vehicleStateKa } from './vehicle-state.js';
 import { wave5salesKa } from './wave5-sales.js';
 import { wave5purchasesKa } from './wave5-purchases.js';
 import { wave5serviceKa } from './wave5-service.js';
@@ -10,15 +11,24 @@ import { kommoLinkKa } from './kommo-link.js';
 import { bankApiKa } from './bank-api.js';
 import { calendarKa } from './payments-calendar.js';
 import { payDayKa } from './pay-day.js';
+import { weekShiftKa } from './week-shift.js';
 import { workshopKa } from './workshop.js';
 import { workshopJobsKa } from './workshop-jobs.js';
 import { workshopApprovalKa } from './workshop-approval.js';
 import { workshopPartsKa } from './workshop-parts.js';
 import { workshopPayoutsKa } from './workshop-payouts.js';
 import { workshopMaintenanceKa } from './workshop-maintenance.js';
+import { typedTextKa } from './typed-text.js';
+import { repairKindKa } from './repair-kind.js';
+import { workshopsKa } from './workshops.js';
 import { driveKa } from './drive.js';
 import { expKa } from './expenses.js';
 import { inBankKa } from './in-bank.js';
+import { fleetListKa } from './fleet-list.js';
+import { contractSignedKa, SIGNIFY_IN_KA } from './contract-signed.js';
+import { saleDateKa } from './sale-date.js';
+import { rentalSwapKa } from './rental-swap.js';
+import { vehicleCardKa } from './vehicle-card.js';
 import type { Dict } from './en.js';
 
 // Typed as Dict: a missing or misspelled key fails the build.
@@ -309,8 +319,8 @@ export const ka: Dict = {
   },
 
   vehicle: {
-    stateChanged: (state: string) => `სტატუსი: ${state}`,
-    changeStateCta: 'სტატუსის შეცვლა',
+    stateChanged: (state: string) => `მდგომარეობა: ${state}`,
+    changeStateCta: 'მდგომარეობის შეცვლა',
     eventsCount: (n: number) => `${n} მოვლენა`,
     backToFleet: 'პარკში დაბრუნება',
     title: 'მოპედი',
@@ -351,7 +361,7 @@ export const ka: Dict = {
     payStatus: { unpaid: 'გადაუხდელი', partial: 'ნაწილობრივ', paid: 'გადახდილი' },
     weekLate: 'ვადაგადაცილებული',
     acts: 'აქტები',
-    actKind: { pickup: 'გაცემის აქტი', return: 'დაბრუნების აქტი' },
+    actKind: { pickup: 'გაცემის აქტი', return: 'დაბრუნების აქტი', swap_out: 'შეცვლის აქტი: მოპედი დაბრუნდა', swap_in: 'შეცვლის აქტი: მოპედი გაიცა' },
     returnedTo: 'ვის დაუბრუნდა',
     buyout: 'გამოსყიდვა',
     buyoutProgress: (target: string, per: string) => `თითო გადახდიდან ${per} ${target}-ის ანგარიშში`,
@@ -1159,6 +1169,7 @@ export const ka: Dict = {
       already_matched: 'ამონაწერის ეს ხაზი უკვე გადახდას მიბმულია.',
       already_merged: 'ეს ბარათი უკვე არქივშია — ის სხვას შეუერთდა.',
       already_returned: 'ეს იჯარა უკვე დახურულია.',
+      already_signed: `ხელშეკრულება უკვე ხელმოწერილია — ეკრანზე ან ${SIGNIFY_IN_KA}.`,
       already_voided: 'ეს გადახდა უკვე გაუქმებულია.',
       bad_channel: 'დეპოზიტი ბრუნდება ნაღდით ან გადარიცხვით.',
       bad_field: 'ველი არასწორად არის შევსებული. შეამოწმეთ ფორმა და სცადეთ ხელახლა.',
@@ -1179,6 +1190,7 @@ export const ka: Dict = {
       category_not_found: 'ხარჯების ასეთი კატეგორია არ არის.',
       charge_not_found: 'ქირაობას ასეთი ჯარიმა ან დარიცხვა არ აქვს — შესაძლოა, უკვე მოიხსნა.',
       closed_before_opened: 'რემონტი არ შეიძლება დაიხუროს გახსნის დღემდე.',
+      contract_not_marked: `ხელშეკრულება არ არის მონიშნული ${SIGNIFY_IN_KA} ხელმოწერილად. განაახლეთ ეკრანი.`,
       customer_archived: 'ეს ბარათი გაერთიანდა სხვასთან — იმუშავეთ იმ ბარათში.',
       customer_in_debt: 'კლიენტს აქვს დავალიანება. მოპედის გაცემა შეუძლია მხოლოდ მფლობელს, მიზეზით.',
       customer_mismatch: 'ეს იჯარა სხვა კლიენტისაა. აირჩიეთ ამ კლიენტის იჯარა.',
@@ -1248,6 +1260,7 @@ export const ka: Dict = {
       tracker_none: 'ამ მოპედზე EV8 Ops-ში ტრეკერი არ არის.',
       tracker_removed_before_fitted: 'ტრეკერს დაყენების დღემდე ვერ მოხსნი.',
       tracker_remove_apart: 'ტრეკერი იხსნება ღილაკით „ტრეკერის მოხსნა“.',
+      tracker_date_bad: 'დღე, როცა ტრეკერი იდგა: არა დღევანდელზე გვიან, არა მოპედის მოსვლამდე და წინა ტრეკერის მოხსნამდე. არ ხარ დარწმუნებული — დატოვე დღევანდელი.',
       donor_is_this_moped: 'დონორი სხვა მოპედია, არა ეს.',
       line_approved: 'ნაწილი დამტკიცებულია: მისი მოხსნა მთავარ მექანიკოსს ან მფლობელს შეუძლია.',
       job_no_mechanic: 'ამ შეკეთებას მექანიკოსი არ ჰყავს: მას მფლობელები ძველი ფორმით აწარმოებენ.',
@@ -1300,17 +1313,25 @@ export const ka: Dict = {
       purchase_not_found: 'შეკვეთა ვერ მოიძებნა.',
       rate_for_mechanics: 'ნორმა-საათის განაკვეთი მხოლოდ მექანიკოსს აქვს.',
       rate_not_found: 'ასეთი ტარიფი არ არის — შესაძლოა უკვე მოხსნილია.',
+      reason_kind_kept: 'მექანიკოსის შეკეთებას მიზეზი რჩება: აირჩიეთ სხვა.',
       reason_required: 'დაკავებისთვის საჭიროა მიზეზი.',
       reconcile_required: 'საბანკო გადახდებს შეიყვანს მფლობელი.',
       regenerate_forbidden: 'უკვე გაცემული დოკუმენტის ჩანაცვლება შეუძლია მხოლოდ მფლობელს.',
       rental_not_found: 'იჯარა ვერ მოიძებნა.',
+      rental_not_running: 'კვირის გადაწევა შეიძლება მხოლოდ მიმდინარე იჯარაში — არა შეჩერებულში, სადავოში ან დაბრუნებულში.',
       return_before_pickup: 'დაბრუნების თარიღი გაცემის თარიღამდეა.',
       rule_not_found: 'ეს წესი უკვე აღარ არის.',
+      sale_before_history: 'გაყიდვა ვერ იქნება მოპედის ისტორიის ბოლო მოვლენამდე. აირჩიეთ ის დღე ან უფრო გვიანდელი.',
       sale_closed: 'ეს გაყიდვა დახურულია.',
+      sale_date_future: 'გაყიდვას მომავალი თარიღით ვერ ჩაწერთ.',
       sale_has_payments: 'ჯერ გააუქმეთ ამ გაყიდვის გადახდები.',
       sale_not_found: 'გაყიდვა ვერ მოიძებნა.',
       same_customer: 'ბარათი საკუთარ თავს ვერ შეუერთდება.',
+      same_state: 'მოპედი უკვე ამ მდგომარეობაშია.',
+      same_vehicle: 'ეს მოპედი უკვე კლიენტთანაა. აირჩიეთ სხვა.',
       service_not_found: 'ასეთი შეკეთება არ არის.',
+      shift_days_range: 'კვირა 1–6 დღით გრძელდება. კიდევ 7 დღე — უბრალოდ შემდეგი კვირაა.',
+      shift_over_paid: 'კვირისთვის ამდენი უკვე გადახდილია: გადახდილზე იაფი ვერ გახდება.',
       sold_by_sale: 'მოპედი იყიდება გაყიდვით და ბრუნდება უკან გამოსყიდვით.',
       split_bad_amount: 'თითოეულ ნაწილს ნულზე მეტი თანხა უნდა ჰქონდეს.',
       split_bad_target: 'თითო ნაწილი ზუსტად ერთ ჩანაწერს იხდის.',
@@ -1323,6 +1344,8 @@ export const ka: Dict = {
       split_too_many: 'ზედმეტად ბევრი ნაწილია: მაქსიმუმ ცხრა.',
       stock_started: 'ამ ნაწილს უკვე აქვს მოძრაობები — საწყისი ნაშთი მხოლოდ მათამდეა.',
       supplier_not_found: 'ასეთი მომწოდებელი არ არის.',
+      swap_before_last_event: 'შეცვლის თარიღი უფრო ადრეა, ვიდრე ერთ-ერთი მოპედის ისტორიაში უკვე ჩაწერილი. აირჩიეთ უფრო გვიანი თარიღი.',
+      swap_no_vehicle: 'ამ ქირას ჯერ მოპედი არ აქვს. ჯერ მიუთითეთ ის «პირობების შეცვლაში».',
       too_late: 'გაუქმება ახლა შეუძლებელია — მოპედი ხელახლა გადაიყვანეთ სხვა პარკში.',
       too_many_attempts: 'ძალიან ბევრი მცდელობა. დაიცადეთ 15 წუთი და სცადეთ ხელახლა.',
       transfer_date: 'გადმოტანილი ქირა უნდა იწყებოდეს დღევანდელ დღემდე, ხოლო გადახდილი კვირები უნდა მთავრდებოდეს კვირის საზღვარზე.',
@@ -1333,7 +1356,7 @@ export const ka: Dict = {
       use_rental: 'მოპედი იჯარაში გადადის მხოლოდ გაცემის გზით.',
       use_status_route: 'სტატუსი იცვლება ცალკე მოქმედებით, მიზეზით.',
       user_not_found: 'მომხმარებელი ვერ მოიძებნა.',
-      vehicle_already_set: 'ამ იჯარას მოპედი უკვე აქვს.',
+      vehicle_already_set: 'ამ იჯარას მოპედი უკვე აქვს. მის შესაცვლელად — «მოპედის შეცვლა» მენიუში.',
       vehicle_gone: 'მოპედი პარკიდან გავიდა. დაბრუნება შესაძლებელია უკან შიდვით.',
       vehicle_in_rent_pool: 'მოპედი ქირის პარკშია: გაყიდვა მას გაყიდვის პარკში გადაიტანს.',
       vehicle_in_sale_pool: 'მოპედი გასაყიდ პარკშია. მისი გაცემა შეუძლია მხოლოდ მფლობელს.',
@@ -1346,11 +1369,15 @@ export const ka: Dict = {
       vin_or_note: 'აირჩიეთ მოპედი პარკიდან ან დაწერეთ, რატომ არ არის VIN დადასტურებული.',
       vins_count: 'ხაზში VIN-ების რაოდენობა არ ემთხვევა შეკვეთილს. შეამოწმეთ ყოველი ხაზი.',
       vins_missing: 'ხაზში VIN-ები არ არის. ყოველი მოდელისთვის ჩაწერეთ თითო VIN თითო სტრიქონზე.',
+      week_at_nothing: 'ეს კვირა არაფერი ღირს — გასაგრძელებელი არაფერია.',
       week_has_bank_money: 'ამ კვირას ბანკის თანხა უკვე აქვს.',
       week_not_carried: 'ეს კვირა გადმოტანისას გადახდილად არ არის მონიშნული.',
       week_not_found: 'ასეთი კვირა ამ იჯარაში არ არის.',
-      week_paid_before_transfer: 'ეს კვირა იჯარის გადმოტანამდეა გადახდილი — ფასდაკლება შეუძლებელია.',
+      week_not_last: 'გადაიწევა მხოლოდ ბოლო კვირა: შემდეგი უკვე დაიწყო.',
+      week_paid_before_transfer: 'ეს კვირა იჯარის გადმოტანამდეა გადახდილი — ის უცვლელი რჩება.',
       withheld_over_total: 'რემონტის ღირებულებაზე მეტის დაკავება შეუძლებელია.',
+      workshop_archived: 'ეს სახელოსნო სიიდან მოხსნილია. აირჩიეთ სხვა ან დააბრუნეთ «პარამეტრები → შეკეთება»-ში.',
+      workshop_archived_exists: 'ამ სახელით სახელოსნო სიიდან მოხსნილია. დააბრუნეთ ის: «…» → «დაბრუნება».',
       workshop_exists: 'ამ სახელით სახელოსნო უკვე სიაშია.',
       workshop_not_found: 'ასეთი სახელოსნო არ არის.',
       wrong_password: 'მიმდინარე პაროლი არასწორია.',
@@ -1358,6 +1385,7 @@ export const ka: Dict = {
   },
   ...wave3Ka,
   ...wave4Ka,
+  ...vehicleStateKa,
   ...wave5salesKa,
   ...wave5purchasesKa,
   ...wave5serviceKa,
@@ -1368,13 +1396,22 @@ export const ka: Dict = {
   ...bankApiKa,
   ...calendarKa,
   ...payDayKa,
+  ...weekShiftKa,
   ...workshopKa,
   ...workshopJobsKa,
   ...workshopApprovalKa,
   ...workshopPartsKa,
   ...workshopPayoutsKa,
   ...workshopMaintenanceKa,
+  ...typedTextKa,
+  ...repairKindKa,
+  ...workshopsKa,
   ...driveKa,
   ...expKa,
   ...inBankKa,
+  ...fleetListKa,
+  ...contractSignedKa,
+  ...saleDateKa,
+  ...rentalSwapKa,
+  ...vehicleCardKa,
 };

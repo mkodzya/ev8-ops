@@ -43,6 +43,7 @@ export async function rentalsNow(): Promise<RentalsNow> {
       pickedUpOn: true,
       paidThrough: true,
       payWeekday: true,
+      weekShiftDays: true,
       vinUnconfirmed: true,
       customer: { select: { id: true, name: true, nameKa: true, nameLat: true, phone: true } },
     },

@@ -1,6 +1,6 @@
 {
   "name": "@ev8/api",
-  "version": "1.10.0",
+  "version": "1.11.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -13,6 +13,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "0.137.0",
     "@ev8/shared": "*",
     "@fastify/cookie": "^11.0.0",
     "@prisma/adapter-pg": "^7.0.0",

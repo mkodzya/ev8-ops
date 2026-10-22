@@ -1,22 +1,25 @@
-import { VEHICLE_POOLS, VEHICLE_STATES, isPoolEvent, localDateTime, type RentalStatus, type VehicleEventKind, type VehiclePool, type VehicleState } from '@ev8/shared';
+import { TRANSLATED_EVENT_KINDS, VEHICLE_POOLS, isPoolEvent, localDateTime, manualStateTargets, newestFirst, type RentalStatus, type VehicleEventKind, type VehiclePool, type VehicleState } from '@ev8/shared';
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api, ApiError } from '../api.js';
 import { LoadError } from '../components/LoadError.js';
-import { FormSheet } from '../ds/form/Form.js';
+import { FormSheet, useFieldError } from '../ds/form/Form.js';
 import { useOperation } from '../ds/form/operation.js';
 import { useToast } from '../ds/feedback/Toast.js';
 import { BlockHead, ColorText, Empty, FleetNo, Loading, PageHead, PlaceText, RentalBadge, StateBadge, Vin } from '../components/ui.js';
 import { RowMenu } from '../components/RowMenu.js';
 import { Field, Row } from '../components/Wizard.js';
 import { fmtDate } from '../format.js';
+import type { Dict } from '../i18n/en.js';
 import { useLocale, useT } from '../i18n/index.js';
 import { kmText, leftText, spanText, type Downtime, type RepairHours, type VehicleMaintenance } from '../lib/maintenance.js';
-import { ChangedFromTo, noteWords } from '../lib/journal.js';
+import { ChangedFromTo, JournalNote, noteWords } from '../lib/journal.js';
+import { Typed } from '../lib/typed.js';
 import { useLoad } from '../lib/use.js';
 import { useSession } from '../session.js';
 import { VehicleEconomics } from './EconomicsPage.js';
 import { NewJob } from './ServicePage.js';
+import { TrackerHistory, TrackerRows, type CardTracker } from './VehicleTracker.js';
 import { formatGel } from '../format.js';
 
 interface Card {
@@ -39,7 +42,22 @@ interface Card {
     notes: string | null;
     currentRentalId: string | null;
   };
-  events: { id: string; kind: VehicleEventKind; occurredOn: string; fromState: VehicleState | null; toState: VehicleState; fromPool: VehiclePool | null; toPool: VehiclePool | null; rentalId: string | null; reason: string | null; actor: string | null }[];
+  events: {
+    id: string;
+    kind: VehicleEventKind;
+    occurredOn: string;
+    /** When it was written; absent while an older API answers. */
+    at?: string;
+    fromState: VehicleState | null;
+    toState: VehicleState;
+    fromPool: VehiclePool | null;
+    toPool: VehiclePool | null;
+    rentalId: string | null;
+    reason: string | null;
+    actor: string | null;
+    /** `out` — given back in a swap, `in` — handed out by one (ADR-0040); absent while an older API answers. */
+    swap?: 'out' | 'in' | null;
+  }[];
   serviceJobs: {
     id: string;
     number: string;
@@ -57,13 +75,46 @@ interface Card {
   maintenance?: VehicleMaintenance | null;
   /** Downtime of its repairs over the last 30 days. */
   downtime30?: RepairHours;
-  rentals: { id: string; number: string; status: RentalStatus; customer: { id: string; name: string }; pickedUpOn: string | null; returnedOn: string | null; paidThrough: string | null; weeklyRateTetri: number }[];
+  rentals: {
+    id: string;
+    number: string;
+    status: RentalStatus;
+    customer: { id: string; name: string };
+    pickedUpOn: string | null;
+    returnedOn: string | null;
+    paidThrough: string | null;
+    weeklyRateTetri: number;
+    /** This moped's part of a rental a swap went through (ADR-0040); null — the rental had no other moped. */
+    withThisMoped?: { from: string; to: string | null; swappedIn: boolean; swappedOut: boolean } | null;
+  }[];
   /** The tracker on it and the ones it had (ADR-0036); empty to whoever may not read an IMEI. */
-  trackers?: { id: string; imei: string; simPhone: string | null; installedOn: string; removedOn: string | null; job: { id: string; number: string } | null; removedJob: { id: string; number: string } | null }[] | null;
+  trackers?: CardTracker[] | null;
   /** What was taken off this moped for another, as a donor (ADR-0036). */
   donated?: { id: string; name: string; qty: number; on: string; job: { id: string; number: string }; to: { id: string; number: string | null; vin: string } }[];
   /** Corrections: what was changed by hand, from what to what, and why. */
   journal: { id: string; at: string; occurredOn: string | null; action: string; by: string | null; note: string | null; before: unknown; after: unknown }[];
+}
+
+/**
+ * Is this event's reason a person's words about the moped, the kind that is
+ * shown translated (ADR-0042)? Not a rental's — a pickup, a return, a swap —
+ * and not a sale's or an arrival's.
+ */
+const typedEvent = (e: { kind: VehicleEventKind; rentalId: string | null }): boolean => e.rentalId == null && (TRANSLATED_EVENT_KINDS as readonly string[]).includes(e.kind);
+
+type HistoryRow = { day: string | null; at: string | null } & ({ kind: 'event'; event: Card['events'][number] } | { kind: 'journal'; line: Card['journal'][number] });
+
+/**
+ * The card's «История»: what happened to the moped and what was corrected by
+ * hand, in one list, the newest on top (QA, 22.10.2026). The events come
+ * oldest first and are turned round, so two written in one moment keep their
+ * order, the later on top.
+ */
+function historyOf(data: Card): HistoryRow[] {
+  return newestFirst<HistoryRow>([
+    ...[...data.events].reverse().map((event): HistoryRow => ({ kind: 'event', day: event.occurredOn, at: event.at ?? null, event })),
+    ...data.journal.map((line): HistoryRow => ({ kind: 'journal', day: line.occurredOn, at: line.at, line })),
+  ]);
 }
 
 export function VehiclePage() {
@@ -72,10 +123,8 @@ export function VehiclePage() {
   const { locale } = useLocale();
   const { can } = useSession();
   const { data, failure, reload } = useLoad<Card>(id ? `/api/fleet/${id}` : null);
-  const [open, setOpen] = useState(false);
-  const [move, setMove] = useState<{ toState: VehicleState; reason: string }>({ toState: 'service', reason: '' });
-  // Writing a moped off is the one state change that is confirmed as well as explained (crit. 26).
-  const [writeOff, setWriteOff] = useState(false);
+  // The state sheet, open or not; «Вернуть в парк» opens it on «Свободен».
+  const [stateSheet, setStateSheet] = useState<{ prefer?: VehicleState } | null>(null);
   const [fixing, setFixing] = useState(false);
 
   if (failure) return <LoadError failure={failure} onRetry={reload} />;
@@ -83,13 +132,25 @@ export function VehiclePage() {
   const v = data.vehicle;
   const current = data.rentals.find((r) => r.id === v.currentRentalId) ?? null;
   const locked = v.state === 'rented' && !!v.currentRentalId;
+  // What the sheet may offer — the rule the server refuses by (21.10.2026).
+  // Empty for a moped out on a rental and for a sold one: nothing to open.
+  const targets = manualStateTargets(v.state, { mayWriteOff: can('deposit.decide'), hasRental: !!v.currentRentalId });
   const openJob = data.serviceJobs.find((j) => j.status === 'open') ?? null;
 
   // One action, and which one depends on where the moped is (U4). A card
   // that offers every verb makes the reader pick; a card that offers the
-  // next one makes the state readable from the button alone.
+  // next one makes the state readable from the button alone. A free moped of
+  // the sale park waits to be sold, so selling is its next step; renting it
+  // out moves it to the other park, which is an owner's decision, and steps
+  // back to a plain pill (21.10.2026). A manager gets no button here: the
+  // hand-over would refuse him (`vehicle_in_sale_pool`).
+  const forSale = v.state === 'available' && v.pool === 'sale';
   const primary: { label: string; to?: string; onClick?: () => void } | null =
-    v.state === 'available' && can('rental.create')
+    forSale
+      ? can('sales.manage')
+        ? { label: t.sales.newSale, to: `/sales/new?vehicle=${v.id}` }
+        : null
+      : v.state === 'available' && can('rental.create')
       ? { label: t.actions.newRental, to: `/rentals/new?vehicle=${v.id}` }
       : v.state === 'rented' && current && can('rental.return')
         ? { label: t.actions.returnRental, to: `/rentals/${current.id}/return` }
@@ -98,10 +159,7 @@ export function VehiclePage() {
           : v.state === 'service' && can('fleet.state.manual')
             ? {
                 label: t.vehicle.backToFleet,
-                onClick: () => {
-                  setMove({ ...move, toState: 'available' });
-                  setOpen(true);
-                },
+                onClick: () => setStateSheet({ prefer: 'available' }),
               }
             : null;
 
@@ -110,17 +168,29 @@ export function VehiclePage() {
       {/* The number people say and the sticker carries; the VIN goes to the card below (Mika, 15.10.2026). */}
       <PageHead wrap title={v.fleetNo ? <FleetNo n={v.fleetNo} /> : <Vin vin={v.vin} />} badge={<StateBadge state={v.state} />} sub={<Link to={`/fleet/models/${v.model.id}`}>{`${v.model.brand} ${v.model.name}`}</Link>}>
         {can('fleet.state.manual') && (
-          <button type="button" className="pill pill-sm" onClick={() => setOpen(true)} disabled={locked} title={locked ? t.vehicle.rentedLock : undefined}>
+          <button
+            type="button"
+            className="pill pill-sm"
+            onClick={() => setStateSheet({})}
+            disabled={targets.length === 0}
+            title={locked ? t.vehicle.rentedLock : v.state === 'sold' ? t.vehicleW4.soldNote : undefined}
+          >
             {t.actions.changeState}
           </button>
         )}
         {can('service.report') && v.state !== 'sold' && v.state !== 'out' && !data.serviceJobs.some((j) => j.status === 'open') && (
           <NewJob vehicleId={v.id} onDone={reload} />
         )}
-        {/* Selling starts from the moped as often as from the "+" (§3.1). */}
-        {v.state === 'available' && can('sales.manage') && (
+        {/* Selling starts from the moped as often as from the "+" (§3.1); on a
+            moped for sale the two trade places with the main button. */}
+        {v.state === 'available' && !forSale && can('sales.manage') && (
           <Link className="pill pill-sm" to={`/sales/new?vehicle=${v.id}`}>
             {t.sell.title}
+          </Link>
+        )}
+        {forSale && can('rental.create') && can('fleet.pool.set') && (
+          <Link className="pill pill-sm" to={`/rentals/new?vehicle=${v.id}`}>
+            {t.actions.newRental}
           </Link>
         )}
         {can('settings.manage') && <RowMenu actions={[{ key: 'vin', label: t.vinFix.title, onPick: () => setFixing(true) }]} />}
@@ -148,51 +218,7 @@ export function VehiclePage() {
         />
       )}
 
-      {open && (
-        <FormSheet
-          title={t.actions.changeState}
-          onClose={() => setOpen(false)}
-          value={move}
-          initial={{ toState: move.toState, reason: '' }}
-          label={t.vehicle.changeStateCta}
-          submit={async (key) => {
-            // A refusal the screen makes itself brings its own words to the
-            // box it is about: a code the error dictionary has never heard of
-            // would otherwise read as «Не получилось» (QA-W4-10).
-            if (move.toState === 'out' && !writeOff) {
-              throw new ApiError(400, 'missing_field', 'Write-off is not confirmed.', { field: 'writeOff', fieldText: t.vehicleW4.writeOffAsk });
-            }
-            await api.post(`/api/fleet/${v.id}/state`, move, { key });
-            return { toast: { text: t.vehicle.stateChanged(t.states[move.toState]) } };
-          }}
-          onDone={() => {
-            setMove({ ...move, reason: '' });
-            reload();
-          }}
-        >
-          <p className="hint muted">{t.vehicleW4.soldNote}</p>
-          <Field label={t.vehicle.toState} name="toState">
-            <div className="chips">
-              {VEHICLE_STATES.filter((s) => s !== 'rented' && s !== 'sold' && s !== v.state && (s !== 'out' || can('deposit.decide'))).map((s) => (
-                <button key={s} type="button" className={`pill pill-sm ${move.toState === s ? 'on' : ''}`} onClick={() => setMove({ ...move, toState: s })}>
-                  {t.states[s]}
-                </button>
-              ))}
-            </div>
-          </Field>
-          {move.toState === 'out' && (
-            <Field label={t.vehicleW4.writeOffTitle} name="writeOff">
-              <label className="check">
-                <input type="checkbox" checked={writeOff} onChange={(e) => setWriteOff(e.target.checked)} />
-                <span>{t.vehicleW4.writeOffConfirm}</span>
-              </label>
-            </Field>
-          )}
-          <Field label={t.vehicle.reason} hint={t.vehicle.reasonHint} name="reason">
-            <input className="input" value={move.reason} onChange={(e) => setMove({ ...move, reason: e.target.value })} />
-          </Field>
-        </FormSheet>
-      )}
+      {stateSheet && <StateSheet v={v} targets={targets} prefer={stateSheet.prefer} onClose={() => setStateSheet(null)} onDone={reload} />}
 
       {/* On a phone the one action lives at the bottom, over the tab bar,
           where a thumb already is (ux.md, principle 2). */}
@@ -224,6 +250,8 @@ export function VehiclePage() {
           <Row k={t.fleet.pool} v={<PoolRow v={v} onDone={reload} />} />
           <Row k={t.points.place} v={<PlaceRow v={v} onDone={reload} />} />
           <Row k={t.vehicle.odometer} v={<span className="mono">{v.odometerKm ?? t.common.dash}</span>} />
+          {/* The tracker's IMEI and SIM: the owners' (ADR-0036 §7), written here without a repair (addendum 21.10.2026). */}
+          {data.trackers && <TrackerRows v={v} trackers={data.trackers} onDone={reload} />}
           {v.costTetri != null && (
             <Row
               k={t.purchases.cost}
@@ -246,7 +274,16 @@ export function VehiclePage() {
             v={current ? <Link to={`/customers/${current.customer.id}`}>{current.customer.name}</Link> : t.common.dash}
           />
           <Row k={t.fleet.paidThrough} v={<span className="mono">{current ? fmtDate(current.paidThrough) : t.common.dash}</span>} />
-          {v.notes && <Row k={t.vehicle.notes} v={<span className="pre">{v.notes}</span>} />}
+          {v.notes && (
+            <Row
+              k={t.vehicle.notes}
+              v={
+                <span className="pre">
+                  <Typed text={v.notes} />
+                </span>
+              }
+            />
+          )}
         </section>
 
         <section className="card">
@@ -256,37 +293,62 @@ export function VehiclePage() {
           ) : (
             <ul className="timeline">
               {/* What was corrected by hand belongs in the same history as
-                  what happened to the moped (crit. 32, QA-W5-01). */}
-              {data.journal.map((l) => (
-                <li key={l.id}>
-                  <span className="mono muted">{fmtDate(l.occurredOn)}</span>
-                  <span>
-                    {t.feedWords[l.action] ?? l.action}
-                    <ChangedFromTo before={l.before} after={l.after} />
-                    {noteWords(t, l.note) && <span className="muted"> · {noteWords(t, l.note)}</span>}
-                    {l.by && <span className="muted"> · {l.by}</span>}
-                  </span>
-                </li>
-              ))}
-              {data.events.map((e) => (
-                <li key={e.id}>
-                  <span className="mono muted">{fmtDate(e.occurredOn)}</span>
-                  <span>
-                    {t.vehicle.events[e.kind]}{' '}
-                    {isPoolEvent(e.kind) ? <span className="pool-mark">{e.toPool ? t.pools[e.toPool] : t.common.dash}</span> : <StateBadge state={e.toState} />}
-                    {e.rentalId && (
-                      <>
-                        {' '}
-                        <Link to={`/rentals/${e.rentalId}`} className="mono">
-                          {data.rentals.find((r) => r.id === e.rentalId)?.number ?? ''}
-                        </Link>
-                      </>
-                    )}
-                    {e.reason && <span className="muted"> · {e.reason}</span>}
-                    {e.actor && <span className="muted"> · {e.actor}</span>}
-                  </span>
-                </li>
-              ))}
+                  what happened to the moped (crit. 32, QA-W5-01), and in the
+                  same order (QA, 22.10.2026). */}
+              {historyOf(data).map((row) => {
+                if (row.kind === 'journal') {
+                  const l = row.line;
+                  return (
+                    <li key={`j-${l.id}`}>
+                      <span className="mono muted">{fmtDate(l.occurredOn)}</span>
+                      <span>
+                        {t.feedWords[l.action] ?? l.action}
+                        <ChangedFromTo action={l.action} before={l.before} after={l.after} />
+                        {noteWords(t, l.note) && (
+                          <span className="muted">
+                            {' · '}
+                            <JournalNote note={l.note} />
+                          </span>
+                        )}
+                        {l.by && <span className="muted"> · {l.by}</span>}
+                      </span>
+                    </li>
+                  );
+                }
+                const e = row.event;
+                const rental = e.rentalId ? (
+                  <Link to={`/rentals/${e.rentalId}`} className="mono">
+                    {data.rentals.find((r) => r.id === e.rentalId)?.number ?? ''}
+                  </Link>
+                ) : null;
+                return (
+                  <li key={`e-${e.id}`}>
+                    <span className="mono muted">{fmtDate(e.occurredOn)}</span>
+                    <span>
+                      {/* Half of a swap is not the rental's start or end: «Заменён в аренде R-…» (ADR-0040; QA, 22.10.2026). */}
+                      {e.swap ? (
+                        <>
+                          {e.swap === 'out' ? t.vcard.swappedOut : t.vcard.swappedIn} {rental} <StateBadge state={e.toState} />
+                        </>
+                      ) : (
+                        <>
+                          {t.vehicle.events[e.kind]}{' '}
+                          {isPoolEvent(e.kind) ? <span className="pool-mark">{e.toPool ? t.pools[e.toPool] : t.common.dash}</span> : <StateBadge state={e.toState} />}
+                          {rental && <> {rental}</>}
+                        </>
+                      )}
+                      {e.reason && (
+                        <span className="muted">
+                          {' · '}
+                          {/* A state change's reason in the reader's language (ADR-0042); a rental's, a sale's or an arrival's stays as written. */}
+                          {typedEvent(e) ? <Typed text={e.reason} /> : e.reason}
+                        </span>
+                      )}
+                      {e.actor && <span className="muted"> · {e.actor}</span>}
+                    </span>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </section>
@@ -316,7 +378,7 @@ export function VehiclePage() {
                   <Link to={`/service/${j.id}`} className="mono">
                     {j.number}
                   </Link>{' '}
-                  {j.reason} <span className="muted">· {t.service.payers[j.payer]}</span>
+                  <Typed text={j.reason} /> <span className="muted">· {t.service.payers[j.payer]}</span>
                   {/* What it cost is the owners' (ADR-0033 §4). */}
                   {j.totalTetri != null && <span className="muted"> · {formatGel(j.totalTetri)}</span>}
                   {/* A repair waiting for approval has no word among the old statuses: the repairs' own says it. */}
@@ -330,7 +392,7 @@ export function VehiclePage() {
         )}
       </section>
 
-      {data.trackers && data.trackers.length > 0 && <TrackerBlock trackers={data.trackers} />}
+      {data.trackers && <TrackerHistory trackers={data.trackers} />}
       {(data.donated?.length ?? 0) > 0 && (
         <section className="card">
           <BlockHead title={t.wparts.donatedBlock} sub={t.wparts.lines(data.donated!.length)} />
@@ -382,12 +444,17 @@ export function VehiclePage() {
                     <td>
                       <Link to={`/customers/${r.customer.id}`}>{r.customer.name}</Link>
                     </td>
-                    <td className="mono">{fmtDate(r.pickedUpOn)}</td>
-                    <td className="mono">{fmtDate(r.returnedOn)}</td>
-                    <td className="num mono">{formatGel(r.weeklyRateTetri, { decimals: false })}</td>
-                    <td>
-                      <RentalBadge status={r.status} />
+                    {/* With this moped: after a swap, from and to the swap's day, and so marked (ADR-0040). */}
+                    <td className="mono">
+                      {fmtDate(r.withThisMoped ? r.withThisMoped.from : r.pickedUpOn)}
+                      {r.withThisMoped?.swappedIn && <span className="muted"> · {t.swap.mark}</span>}
                     </td>
+                    <td className="mono">
+                      {fmtDate(r.withThisMoped ? r.withThisMoped.to : r.returnedOn)}
+                      {r.withThisMoped?.swappedOut && <span className="muted"> · {t.swap.mark}</span>}
+                    </td>
+                    <td className="num mono">{formatGel(r.weeklyRateTetri, { decimals: false })}</td>
+                    <td>{r.withThisMoped?.swappedOut ? <span className="muted">{t.swap.changed}</span> : <RentalBadge status={r.status} />}</td>
                   </tr>
                 ))}
               </tbody>
@@ -439,6 +506,96 @@ function PlaceRow({ v, onDone }: { v: Card['vehicle']; onDone: () => void }) {
       </select>
       {op.failure && <div className="field-err">{op.failure.text}</div>}
     </>
+  );
+}
+
+/**
+ * A moped's state by hand (FLT-03, wave 4 §3.6): the state it is in now, then
+ * the ones it may go to — the list the server accepts (manualStateTargets),
+ * so nothing is offered only to be refused. Each opening starts afresh on the
+ * first state on offer: a sheet that kept the last choice once held the state
+ * the moped had just been moved to, lit nowhere, and sent it (21.10.2026).
+ */
+function StateSheet({ v, targets, prefer, onClose, onDone }: { v: Card['vehicle']; targets: VehicleState[]; prefer?: VehicleState; onClose: () => void; onDone: () => void }) {
+  const t = useT();
+  const first = prefer && targets.includes(prefer) ? prefer : (targets[0] ?? null);
+  const [move, setMove] = useState<{ toState: VehicleState | null; reason: string }>({ toState: first, reason: '' });
+  // Writing a moped off is the one state change that is confirmed as well as explained (crit. 26).
+  const [writeOff, setWriteOff] = useState(false);
+  // A choice the list no longer holds — the card reloaded under the sheet — is no choice at all.
+  const toState = move.toState && targets.includes(move.toState) ? move.toState : null;
+  return (
+    <FormSheet
+      title={t.actions.changeState}
+      onClose={onClose}
+      value={move}
+      initial={{ toState: move.toState, reason: '' }}
+      label={t.vehicle.changeStateCta}
+      // The server's «already in this state» is about the choice, so it stands under it.
+      fieldOf={{ same_state: 'toState' }}
+      submit={async (key) => {
+        // A refusal the screen makes itself brings its own words to the
+        // box it is about: a code the error dictionary has never heard of
+        // would otherwise read as «Не получилось» (QA-W4-10).
+        if (!toState) throw new ApiError(400, 'missing_field', 'No state is chosen.', { field: 'toState' });
+        if (toState === 'out' && !writeOff) {
+          throw new ApiError(400, 'missing_field', 'Write-off is not confirmed.', { field: 'writeOff', fieldText: t.vehicleW4.writeOffAsk });
+        }
+        await api.post(`/api/fleet/${v.id}/state`, { toState, reason: move.reason }, { key });
+        return { toast: { text: t.vehicle.stateChanged(t.states[toState]) } };
+      }}
+      onDone={onDone}
+    >
+      <StatePick now={v.state} targets={targets} value={toState} onPick={(s) => setMove({ ...move, toState: s })} />
+      {toState === 'out' && (
+        <Field label={t.vehicleW4.writeOffTitle} name="writeOff">
+          <label className="check">
+            <input type="checkbox" checked={writeOff} onChange={(e) => setWriteOff(e.target.checked)} />
+            <span>{t.vehicleW4.writeOffConfirm}</span>
+          </label>
+        </Field>
+      )}
+      <Field label={t.vehicle.reason} hint={t.vehicle.reasonHint} name="reason">
+        <input className="input" value={move.reason} onChange={(e) => setMove({ ...move, reason: e.target.value })} />
+      </Field>
+    </FormSheet>
+  );
+}
+
+/**
+ * «◆ В сервисе · сейчас → [Свободен] [Списан]» (variant A, Mika 21.10.2026).
+ * The state it is in is the same badge as in the head of the card and in the
+ * list (ux.md, principle 9), and it is not a button: it is never a choice. A
+ * plain block rather than a <Field>, whose <label> would hand a tap on the
+ * badge to the first pill. Sold and rented are never on offer; the line
+ * under the pills says why.
+ */
+function StatePick({ now, targets, value, onPick }: { now: VehicleState; targets: VehicleState[]; value: VehicleState | null; onPick: (s: VehicleState) => void }) {
+  const t = useT();
+  const error = useFieldError('toState');
+  return (
+    <div className={`field ${error ? 'field-bad' : ''}`} data-field="toState">
+      <span className="lbl">{t.fleet.state}</span>
+      <div className="state-pick">
+        <span className="state-now" aria-current="true">
+          <StateBadge state={now} />
+          <span className="muted">{t.stateSheet.now}</span>
+        </span>
+        <span className="state-to">
+          <span className="muted" aria-hidden="true">
+            →
+          </span>
+          <span className="chips" role="radiogroup" aria-label={t.vehicle.toState}>
+            {targets.map((s) => (
+              <button key={s} type="button" role="radio" aria-checked={value === s} className={`pill pill-sm ${value === s ? 'on' : ''}`} onClick={() => onPick(s)}>
+                {t.states[s]}
+              </button>
+            ))}
+          </span>
+        </span>
+      </div>
+      {error ? <span className="field-err">{error}</span> : <span className="hint muted">{t.vehicleW4.soldNote}</span>}
+    </div>
   );
 }
 
@@ -516,43 +673,14 @@ function VinSheet({ id, vin, onClose, onDone }: { id: string; vin: string; onClo
   );
 }
 
-/** The tracker on the moped now, then the ones it had (ADR-0036): what to look for when it is stolen. */
-function TrackerBlock({ trackers }: { trackers: NonNullable<Card['trackers']> }) {
-  const t = useT();
-  const now = trackers.find((x) => x.removedOn == null) ?? null;
-  const before = trackers.filter((x) => x.removedOn != null);
-  return (
-    <section className="card">
-      <BlockHead title={t.wparts.trackerBlock} />
-      {now ? (
-        <dl className="wjob-kv">
-          <dt>{t.wparts.imeiLabel}</dt>
-          <dd className="mono">{now.imei.replace(/(\d{3})(?=\d)/g, '$1 ')}</dd>
-          <dt>{t.wparts.simLabel}</dt>
-          <dd className="mono">{now.simPhone ?? '—'}</dd>
-          <dt>{t.wparts.trackerSince}</dt>
-          <dd>
-            {fmtDate(now.installedOn)}
-            {now.job && (
-              <>
-                {' · '}
-                <Link to={`/service/${now.job.id}`} className="mono">
-                  {now.job.number}
-                </Link>
-              </>
-            )}
-          </dd>
-        </dl>
-      ) : (
-        <Empty text={t.wparts.noTrackerCard} />
-      )}
-      {before.map((x) => (
-        <p key={x.id} className="hint muted">
-          {t.wparts.trackerEarlier(x.imei.slice(-4), fmtDate(x.installedOn), fmtDate(x.removedOn))}
-        </p>
-      ))}
-    </section>
-  );
+/**
+ * Where the card's mileage was read. One of a swap's acts counts as the return
+ * or the hand-over it is, and says it was a swap: «(возврат, …)» alone read as
+ * if the rental had ended (QA, 22.10.2026).
+ */
+function sourceWords(m: VehicleMaintenance, t: Dict): string {
+  const source = m.readingSource ?? '';
+  return (m.readingBySwap ? t.vcard.swapSources[source] : undefined) ?? t.wmaint.sources[source] ?? '';
 }
 
 /**
@@ -572,7 +700,7 @@ function MaintenanceCard({ m }: { m: VehicleMaintenance }) {
         <>
           <p className={`t-money ${m.state === 'overdue' ? 'crit-text' : ''}`}>{leftText(m, t)}</p>
           <p className="hint">
-            {t.wmaint.next(kmText(m.dueKm))} · {t.wmaint.mileageFrom(kmText(m.currentKm), t.wmaint.sources[m.readingSource ?? ''] ?? '', m.currentAt ? localDateTime(m.currentAt).date : '')}
+            {t.wmaint.next(kmText(m.dueKm))} · {t.wmaint.mileageFrom(kmText(m.currentKm), sourceWords(m, t), m.currentAt ? localDateTime(m.currentAt).date : '')}
           </p>
           <p className="hint muted">
             {m.lastPlanned ? (

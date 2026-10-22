@@ -1,5 +1,6 @@
 import { wave3Ru } from './wave3.js';
 import { wave4Ru } from './wave4.js';
+import { vehicleStateRu } from './vehicle-state.js';
 import { wave5salesRu } from './wave5-sales.js';
 import { wave5purchasesRu } from './wave5-purchases.js';
 import { wave5serviceRu } from './wave5-service.js';
@@ -10,15 +11,24 @@ import { kommoLinkRu } from './kommo-link.js';
 import { bankApiRu } from './bank-api.js';
 import { calendarRu } from './payments-calendar.js';
 import { payDayRu } from './pay-day.js';
+import { weekShiftRu } from './week-shift.js';
 import { workshopRu } from './workshop.js';
 import { workshopJobsRu } from './workshop-jobs.js';
 import { workshopApprovalRu } from './workshop-approval.js';
 import { workshopPartsRu } from './workshop-parts.js';
 import { workshopPayoutsRu } from './workshop-payouts.js';
 import { workshopMaintenanceRu } from './workshop-maintenance.js';
+import { typedTextRu } from './typed-text.js';
+import { repairKindRu } from './repair-kind.js';
+import { workshopsRu } from './workshops.js';
 import { driveRu } from './drive.js';
 import { expRu } from './expenses.js';
 import { inBankRu } from './in-bank.js';
+import { fleetListRu } from './fleet-list.js';
+import { contractSignedRu } from './contract-signed.js';
+import { saleDateRu } from './sale-date.js';
+import { rentalSwapRu } from './rental-swap.js';
+import { vehicleCardRu } from './vehicle-card.js';
 import type { Dict } from './en.js';
 
 // Typed as Dict: a missing or misspelled key fails the build.
@@ -362,7 +372,7 @@ export const ru: Dict = {
     payStatus: { unpaid: 'Не оплачен', partial: 'Частично', paid: 'Оплачен' },
     weekLate: 'просрочен',
     acts: 'Акты',
-    actKind: { pickup: 'Акт выдачи', return: 'Акт возврата' },
+    actKind: { pickup: 'Акт выдачи', return: 'Акт возврата', swap_out: 'Акт замены: мопед сдан', swap_in: 'Акт замены: мопед выдан' },
     returnedTo: 'Кому возвращён',
     buyout: 'Выкуп',
     buyoutProgress: (target: string, per: string) => `${per} с каждого платежа в счёт ${target}`,
@@ -1170,6 +1180,7 @@ export const ru: Dict = {
       already_matched: 'Эта строка выписки уже привязана к платежу.',
       already_merged: 'Эта карточка уже в архиве — она объединена с другой.',
       already_returned: 'Эта аренда уже закрыта.',
+      already_signed: 'Договор уже подписан — на экране или в Signify.',
       already_voided: 'Этот платёж уже отменён.',
       bad_channel: 'Залог возвращают наличными или переводом.',
       bad_field: 'Поле заполнено неверно. Проверьте форму и попробуйте ещё раз.',
@@ -1190,6 +1201,7 @@ export const ru: Dict = {
       category_not_found: 'Такой категории расходов нет.',
       charge_not_found: 'Такого штрафа или начисления у аренды нет — возможно, его уже сняли.',
       closed_before_opened: 'Ремонт не может закрыться раньше дня открытия.',
+      contract_not_marked: 'Договор не отмечен как подписанный в Signify. Обновите экран.',
       customer_archived: 'Эта карточка объединена с другой — работайте в той, в которую она вошла.',
       customer_in_debt: 'У клиента долг. Выдать мопед может только владелец, с причиной.',
       customer_mismatch: 'Эта аренда другого клиента. Выберите аренду этого клиента.',
@@ -1259,6 +1271,7 @@ export const ru: Dict = {
       tracker_none: 'На этом мопеде трекера в EV8 Ops нет.',
       tracker_removed_before_fitted: 'Трекер не снять раньше дня, когда его поставили.',
       tracker_remove_apart: 'Трекер снимается кнопкой «Снять трекер».',
+      tracker_date_bad: 'День, когда трекер стоял: не позже сегодня, не раньше прихода мопеда и снятия прежнего трекера. Не уверен — оставь сегодня.',
       donor_is_this_moped: 'Донор — другой мопед, не этот.',
       line_approved: 'Деталь согласована: убрать её может главный механик или владелец.',
       job_no_mechanic: 'У этого ремонта нет механика: его ведут владельцы прежней формой.',
@@ -1311,17 +1324,25 @@ export const ru: Dict = {
       purchase_not_found: 'Заказ не найден.',
       rate_for_mechanics: 'Ставка за нормо-час бывает только у механика.',
       rate_not_found: 'Такого тарифа нет — возможно, его уже убрали.',
+      reason_kind_kept: 'У ремонта механика причина остаётся: выберите другую вместо неё.',
       reason_required: 'Для удержания нужна причина.',
       reconcile_required: 'Банковские платежи вносит владелец.',
       regenerate_forbidden: 'Заменить уже выданный документ может только владелец.',
       rental_not_found: 'Аренда не найдена.',
+      rental_not_running: 'Сдвинуть можно только неделю идущей аренды — не на паузе, не в споре и не возвращённой.',
       return_before_pickup: 'Дата возврата раньше даты выдачи.',
       rule_not_found: 'Этого правила уже нет.',
+      sale_before_history: 'Продажа не может быть раньше последнего события в истории мопеда. Выберите тот день или позже.',
       sale_closed: 'Эта продажа закрыта.',
+      sale_date_future: 'Продажу нельзя записать будущей датой.',
       sale_has_payments: 'Сначала отмените платежи по этой продаже.',
       sale_not_found: 'Продажа не найдена.',
       same_customer: 'Карточку нельзя объединить с самой собой.',
+      same_state: 'Мопед уже в этом состоянии.',
+      same_vehicle: 'Этот мопед уже у клиента. Выберите другой.',
       service_not_found: 'Такого ремонта нет.',
+      shift_days_range: 'Неделю удлиняют на 1–6 дней. Ещё 7 дней — это просто следующая неделя.',
+      shift_over_paid: 'Столько за неделю уже оплачено: дешевле оплаченного она стать не может.',
       sold_by_sale: 'Мопед продаётся продажей, а возвращается выкупом.',
       split_bad_amount: 'У каждой части должна быть сумма больше нуля.',
       split_bad_target: 'Каждая часть оплачивает ровно одну запись.',
@@ -1334,6 +1355,8 @@ export const ru: Dict = {
       split_too_many: 'Слишком много частей: не больше девяти.',
       stock_started: 'По этой запчасти уже были движения — начальный остаток доступен только до них.',
       supplier_not_found: 'Такого поставщика нет.',
+      swap_before_last_event: 'Дата замены раньше того, что уже записано в истории одного из мопедов. Выберите дату позже.',
+      swap_no_vehicle: 'У этой аренды ещё нет мопеда. Сначала укажите его в «Изменить условия».',
       too_late: 'Отменить уже нельзя — переведите мопед в другой парк заново.',
       too_many_attempts: 'Слишком много попыток. Подождите 15 минут и попробуйте снова.',
       transfer_date: 'Перенесённая аренда должна начинаться раньше сегодняшнего дня, а оплаченные недели — заканчиваться на границе недели.',
@@ -1344,7 +1367,7 @@ export const ru: Dict = {
       use_rental: 'Мопед становится «в аренде» только через выдачу.',
       use_status_route: 'Статус меняется отдельным действием, с причиной.',
       user_not_found: 'Пользователь не найден.',
-      vehicle_already_set: 'У этой аренды уже есть мопед.',
+      vehicle_already_set: 'У этой аренды уже есть мопед. Сменить его — «Заменить мопед» в меню.',
       vehicle_gone: 'Мопед выбыл из парка. Вернуть его можно выкупом обратно.',
       vehicle_in_rent_pool: 'Мопед стоит в парке аренды: продажа переведёт его в парк продажи.',
       vehicle_in_sale_pool: 'Мопед в парке продажи. Выдать его может только владелец.',
@@ -1357,11 +1380,15 @@ export const ru: Dict = {
       vin_or_note: 'Выберите мопед из парка или напишите, почему VIN не подтверждён.',
       vins_count: 'Число VIN в строке не совпадает с заказанным. Проверьте каждую строку.',
       vins_missing: 'В строке нет VIN. Впишите по одному VIN в строке для каждой модели.',
+      week_at_nothing: 'Эта неделя ничего не стоит — удлинять нечего.',
       week_has_bank_money: 'У этой недели уже есть деньги из банка.',
       week_not_carried: 'Эта неделя не отмечена оплаченной при переносе.',
       week_not_found: 'Такой недели в аренде нет.',
-      week_paid_before_transfer: 'Эта неделя оплачена до переноса аренды — скидку на неё дать нельзя.',
+      week_not_last: 'Сдвинуть можно только последнюю неделю: следующая уже началась.',
+      week_paid_before_transfer: 'Эта неделя оплачена до переноса аренды — она остаётся как есть.',
       withheld_over_total: 'Удержать больше стоимости ремонта нельзя.',
+      workshop_archived: 'Эта мастерская убрана из списка. Выберите другую или верните её в «Настройки → Ремонт».',
+      workshop_archived_exists: 'Мастерская с таким названием убрана из списка. Верните её: «…» → «Вернуть».',
       workshop_exists: 'Мастерская с таким названием уже есть в списке.',
       workshop_not_found: 'Такой мастерской нет.',
       wrong_password: 'Текущий пароль неверный.',
@@ -1369,6 +1396,7 @@ export const ru: Dict = {
   },
   ...wave3Ru,
   ...wave4Ru,
+  ...vehicleStateRu,
   ...wave5salesRu,
   ...wave5purchasesRu,
   ...wave5serviceRu,
@@ -1379,13 +1407,22 @@ export const ru: Dict = {
   ...bankApiRu,
   ...calendarRu,
   ...payDayRu,
+  ...weekShiftRu,
   ...workshopRu,
   ...workshopJobsRu,
   ...workshopApprovalRu,
   ...workshopPartsRu,
   ...workshopPayoutsRu,
   ...workshopMaintenanceRu,
+  ...typedTextRu,
+  ...repairKindRu,
+  ...workshopsRu,
   ...driveRu,
   ...expRu,
   ...inBankRu,
+  ...fleetListRu,
+  ...contractSignedRu,
+  ...saleDateRu,
+  ...rentalSwapRu,
+  ...vehicleCardRu,
 };

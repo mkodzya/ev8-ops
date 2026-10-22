@@ -38,6 +38,9 @@ a { color: var(--accent); text-decoration: none; }
 
 .muted { color: var(--muted); }
 .num { text-align: right; }
+/* A phrase that holds together: a record number (R-00480 broke at its hyphen),
+   «+3 дн.» or «доплата 64 ₾» — the line breaks beside it, never inside. */
+.nobr { white-space: nowrap; }
 .warn-text { color: var(--service-ink); font-weight: 500; }
 .crit-text { color: var(--crit); font-weight: 500; }
 
@@ -278,6 +281,14 @@ a { color: var(--accent); text-decoration: none; }
    the calendar's mark as a pill. No tint, a thin outline, the word in ink and
    a round ink dot (the default mark). Calm on purpose: it is not lateness. */
 .rstatus-due_today { background: transparent; color: var(--ink); box-shadow: inset 0 0 0 1px var(--line-control); }
+/* The sheet that changes a state by hand (21.10.2026): the state the moped is
+   in, as the same pill as everywhere with «now» beside it, then an arrow and
+   the states it may go to. At 375 px and in Georgian the arrow and its
+   choices drop to the next line together; the pills wrap among themselves. */
+.state-pick { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
+.state-now { display: inline-flex; align-items: center; gap: 6px; font: var(--text-label); }
+.state-to { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.state-to > .chips { min-width: 0; }
 
 /* ---- login ---------------------------------------------------------- */
 .login-wrap { min-height: 100%; display: grid; place-items: center; padding: 24px; }
@@ -393,6 +404,9 @@ select.input { appearance: auto; }
 
 /* Numbers, dates and codes never wrap inside a cell; the row grows instead. */
 .table td.mono, .table td.num, .table td .mono { white-space: nowrap; }
+/* A note under a figure — a week's discount, the days it was moved by — sits
+   on its own line and may wrap, so a phone's table does not grow wider (ux.md №12). */
+.table td .cell-note { display: block; white-space: normal; font: var(--text-label); }
 
 /* Grid items default to min-width:auto, so one wide table could push the
    whole page past the viewport on a phone. Let them shrink and scroll inside. */
@@ -906,6 +920,43 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
    park under the state, "paid through" under the name it is about. One class,
    because they are one idea. */
 .v-sub { display: block; font: var(--text-label); color: var(--muted); }
+/* Why a moped is in service (21.10.2026): one line, the rest behind an
+   ellipsis and in the tooltip. A long note must not stretch every row of the
+   table, and on a phone it must not push the card's title off its line —
+   there it sits under the state, below "For sale" when there is one, never
+   after it on the same line. */
+.v-why { display: inline-block; max-width: 28ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
+.lc-sub .v-why { max-width: 18ch; }
+/* The table's reason column (QA, 22.10.2026). At 28ch it took 289 px and
+   pushed «Где», «Тишина» and the row's dots off a 1280 px laptop: the table
+   needs 872 px without it in RU and 900 px in KA, inside 994 px. So the column
+   is narrow — 12ch, one line, the rest in the tooltip — and is shown only from
+   1360 px, where it fits in both (1038 of 1074 px in KA, measured on the QA
+   stand). Narrower, the reason stands under the state as a quiet line, as on
+   a phone, as wide as the state's column and never wider: the line takes the
+   cell's width without adding to it (width 0, min-width 100%). */
+.list-table .col-why .v-why,
+.list-table .col-why .typed-clip { max-width: 12ch; }
+.list-table .v-why-line { display: none; }
+@media (max-width: 1359px) {
+  .list-table .col-why { display: none; }
+  .list-table .v-why-line { display: block; width: 0; min-width: 100%; overflow: hidden; }
+  .list-table .v-why-line .v-why,
+  .list-table .v-why-line .typed-clip { max-width: 100%; }
+}
+/* Only what somebody typed ends in an ellipsis. The repair's kind is one of
+   five product words, and a product word is never cut (ux.md 12): at 12ch,
+   or at the width of the state's badge, «გეგმიური მომსახურება» lost half of
+   itself and the tooltip showed the typed note instead (review, 22.10.2026).
+   So the kind wraps between its words: in the column and in the line under
+   the state it is as narrow as its longest word and adds that much at most;
+   on a phone card it keeps the card's 18ch and takes a second line there. */
+.v-why.v-why-kind { white-space: normal; overflow: visible; }
+.list-table .col-why .v-why-kind { max-width: none; }
+@media (max-width: 1359px) {
+  .list-table .v-why-line.v-why-line-kind { width: auto; min-width: 0; overflow: visible; }
+  .list-table .v-why-line .v-why-kind { max-width: none; }
+}
 .v-where { grid-area: where; font: var(--text-label); color: var(--muted); margin-top: 2px; }
 /* A point nobody has named is still a question, but it is asked once — by the
    orange number above the list. Thirty-five orange cells in a column answer
@@ -1239,6 +1290,13 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
 .card-warn { border-color: var(--service); background: var(--warn-soft); }
 .pick-list button { justify-content: space-between; }
 .pick-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; text-align: left; }
+/* A long VIN gives way at its head — the four digits of its tail stay whole —
+   and never runs over the park or point on the right (QA 21.10.2026: EV-056
+   at 375 px, RU and KA). The words on the right wrap between them instead. */
+.pick-main > .vin { display: flex; min-width: 0; }
+.pick-main > .vin .vin-head { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.pick-main > .vin .vin-tail { flex: none; }
+.pick-list button > .pick-main + .muted { flex: 0 1 auto; text-align: right; }
 .stepper { display: flex; align-items: center; gap: 10px; }
 .stepper-n { min-width: 2ch; text-align: center; font: var(--text-money); }
 .due-card { display: flex; flex-direction: column; gap: 4px; }
@@ -1398,3 +1456,43 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
 /* The mopeds behind a line of "что мешает" — short lists, named in place. */
 .util-list { list-style: none; margin: 0 0 10px; padding: 0 0 0 2px; font: var(--text-body-sm); }
 .util-list li { padding: 4px 0; }
+
+/* ---- typed text in the reader's language (ADR-0042) ----------------------- */
+/* What a person typed, shown translated, carries a quiet mark that says so;
+   a tap on it shows the original, marked «оригинал» in the accent's tint.
+   The mark sits in a line of text, so it stays the line's height and its
+   target reaches past it to 44 px, `--control` (principle 13). Muted ink on the soft fill
+   is 6.0:1, the accent ink on its tint 4.96:1. */
+.typed-mark {
+  position: relative;
+  display: inline-block;
+  margin: 0;
+  padding: 0 var(--space2);
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+  color: var(--muted);
+  font: var(--text-label);
+  line-height: 1.5;
+  vertical-align: baseline;
+  white-space: nowrap;
+}
+button.typed-mark { cursor: pointer; }
+button.typed-mark::after { content: ''; position: absolute; left: -4px; right: -4px; top: 50%; height: var(--control); transform: translateY(-50%); }
+/* A refusal's mark sits on the line under its work's: its target reaches down
+   only, so it never lies over the mark above it, and each pill answers to
+   its own tap. */
+.wjob-line-why button.typed-mark::after { top: 0; transform: none; }
+/* A one-line clipped text and its mark share the width the words alone had:
+   the words give way and end in their ellipsis, the mark keeps its own. On a
+   phone card a translated reason would otherwise widen the right column by
+   the mark and squeeze the title into four lines (Fleet, KA, 375 px). */
+.typed-clip { display: inline-flex; align-items: baseline; gap: var(--space1); max-width: 100%; vertical-align: bottom; }
+.typed-clip > * { flex: none; }
+.typed-clip > :first-child { flex: 0 1 auto; min-width: 0; }
+.lc-sub .typed-clip { max-width: 18ch; }
+button.typed-mark:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.typed-mark.on { background: var(--accent-soft); color: var(--accent-ink); }
+/* On a block filled with the mark's own grey — a repair's refusal — the mark
+   takes the card's fill, or it reads as one more word of the refusal. */
+.wappr-reason .typed-mark:not(.on) { background: var(--surface); }

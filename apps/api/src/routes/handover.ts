@@ -7,9 +7,10 @@ import { actorOf } from '../lib/guard.js';
 import { audit } from '../lib/audit.js';
 import { prisma } from '../lib/db.js';
 import { settingsRow } from './settings.js';
-import { decideDeposit, pickUp, returnPreview, returnRental, setRentalStatus, undoReturn, type DepositDecision, type NewCustomer, type PickupInput } from '../lib/rentals.js';
+import { decideDeposit, pickUp, returnPreview, returnRental, setRentalStatus, swapVehicle, undoReturn, type DepositDecision, type NewCustomer, type PickupInput } from '../lib/rentals.js';
 import { WITHHOLD_GROUNDS } from '../lib/pdf/returnAct.js';
 import { discountWeek } from '../lib/discount.js';
+import { shiftWeek } from '../lib/weekShift.js';
 import { addFine, voidFine } from '../lib/fines.js';
 import { date, int, oneOf, str, strList, tetri } from '../lib/validate.js';
 
@@ -160,6 +161,41 @@ export function handoverRoutes(app: FastifyInstance): void {
     });
   });
 
+  /**
+   * "Заменить мопед" (ADR-0040): the customer gives one moped back and takes
+   * another, and the rental goes on. A return and a hand-over in one — the
+   * route asks for the return's right, the function for both. The photos of
+   * the two acts follow through /api/acts/:id/photos, as after a return.
+   */
+  app.post<{ Params: { id: string }; Body: Body }>('/api/rentals/:id/swap', { config: { scope: 'rental.return' } }, async (req) => {
+    const b = req.body ?? {};
+    const today = todayISO(new Date(), env.TZ);
+    // The act of the moped given back lists the moped and its key; the batteries and chargers stay with the customer.
+    const items = Object.fromEntries(Object.entries(itemsOf(b)).filter(([k]) => k === 'moped' || k === 'key'));
+    return swapVehicle({
+      actor: actorOf(req),
+      today,
+      rentalId: req.params.id,
+      swappedOn: date(b, 'swappedOn') ?? today,
+      reason: str(b, 'reason', { max: 1000 }) ?? '',
+      out: {
+        odometerKm: int(b, 'outOdometerKm', { min: 0 }),
+        odometerReason: str(b, 'outOdometerReason', { max: 500 }),
+        condition: str(b, 'outCondition', { max: 4000 }),
+        items,
+        toService: b.toService === true,
+        locationId: str(b, 'locationId'),
+      },
+      in: {
+        vehicleId: str(b, 'vehicleId', { required: true })!,
+        moveFromSale: b.moveFromSale === true,
+        odometerKm: int(b, 'inOdometerKm', { min: 0 }),
+        odometerReason: str(b, 'inOdometerReason', { max: 500 }),
+        condition: str(b, 'inCondition', { max: 4000 }),
+      },
+    });
+  });
+
   /** "Решить": a deposit a manager's return left waiting (§3.5). */
   app.post<{ Params: { id: string }; Body: Body }>('/api/rentals/:id/deposit/decide', { config: { scope: 'deposit.decide' } }, async (req) => {
     const decision = decisionOf(req.body ?? {});
@@ -200,6 +236,27 @@ export function handoverRoutes(app: FastifyInstance): void {
       reason: str(b, 'reason', { max: 500 }),
     });
     return { ok: true, amountTetri: r.amountTetri };
+  });
+
+  /**
+   * The running week made 1–6 days longer, an owner's, with a reason
+   * (ADR-0041): the extra days and their price, typed by a person; every
+   * later week and the pay day follow. 0 days takes the move back.
+   */
+  app.post<{ Params: { id: string; seq: string }; Body: Body }>('/api/rentals/:id/weeks/:seq/shift', { config: { scope: 'deposit.decide' } }, async (req) => {
+    const b = req.body ?? {};
+    const seq = Number(req.params.seq);
+    if (!Number.isInteger(seq) || seq < 1) throw notFound('week_not_found', 'No such week in this rental.');
+    const r = await shiftWeek({
+      actorId: actorOf(req).id,
+      rentalId: req.params.id,
+      seq,
+      days: int(b, 'days', { required: true })!,
+      extraTetri: tetri(b, 'extraTetri', { min: 0 }),
+      reason: str(b, 'reason', { max: 500 }),
+      today: todayISO(new Date(), env.TZ),
+    });
+    return { ok: true, ...r };
   });
 
   /** A fine on the rental — damage, a dirty moped — an owner's, with a reason (ADR-0023). */

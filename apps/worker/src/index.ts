@@ -28,6 +28,12 @@
 // worker asks it to send what did not go; hourly by day it asks it to look for
 // mopeds due for their maintenance and parts below the minimum — from 09:00 to
 // 20:00 Tbilisi time, so the group is not woken at night.
+//
+// Typed texts about mopeds and repairs are translated into the reader's
+// language (ADR-0042) by the API, where the translator's key is. Every minute
+// the worker asks it to list what was written and to translate what waits,
+// within the day's cap; what it logs is counts and the day's tokens, so what
+// a day costs can be read off the log — never a text.
 import { ORG_TZ, todayISO } from '@ev8/shared';
 import cron from 'node-cron';
 
@@ -45,6 +51,7 @@ const TBC_NIGHT_CRON = process.env.TBC_NIGHT_CRON ?? '47 * * * *';
 const DRIVE_CRON = process.env.DRIVE_CRON ?? '23 3 * * *';
 const NOTICES_CRON = process.env.NOTICES_CRON ?? '* * * * *';
 const NOTICES_SCAN_CRON = process.env.NOTICES_SCAN_CRON ?? '0 9-20 * * *';
+const TRANSLATE_CRON = process.env.TRANSLATE_CRON ?? '* * * * *';
 const TZ = process.env.TZ ?? ORG_TZ;
 
 interface RollResult {
@@ -202,6 +209,42 @@ async function sendNotices(job: 'notices' | 'notices-scan'): Promise<void> {
   said[job] = line;
 }
 
+type TranslateOutcome = {
+  status: 'off' | 'busy' | 'paused' | 'ok';
+  /** Our word for why the queue pauses (no money, a key that is not one, the service down…); never the service's text. */
+  pausedFor: string | null;
+  found: number;
+  translated: number;
+  failed: number;
+  gaveUp: number;
+  pending: number;
+  capped: boolean;
+  today: { requests: number; inputTokens: number; outputTokens: number };
+};
+
+/** Counts and tokens only: the texts and the translator's key stay in the API. */
+async function translate(): Promise<void> {
+  let line: string;
+  let always = false;
+  try {
+    const res = await fetch(`${API}/api/jobs/translate`, { method: 'POST', headers: { 'x-worker-token': TOKEN } });
+    if (!res.ok) throw new Error(`translate: ${res.status}`);
+    const r = (await res.json()) as TranslateOutcome;
+    if (r.status === 'busy') return;
+    if (r.status === 'off') line = `the translator is off (no key on this stand) — ${r.pending} text(s) waiting`;
+    else if (r.status === 'paused') line = `the translator waits after a failure (${r.pausedFor ?? 'unknown'}) — ${r.pending} text(s) waiting`;
+    else {
+      const spent = `today ${r.today.requests} request(s), ${r.today.inputTokens} input and ${r.today.outputTokens} output tokens`;
+      line = `translator — ${r.translated} text(s) translated, ${r.failed} not, ${r.gaveUp} given up, ${r.pending} waiting${r.capped ? ', the day’s cap reached' : ''}${r.pausedFor ? `, paused (${r.pausedFor})` : ''}; ${spent}`;
+      always = r.translated > 0 || r.failed > 0;
+    }
+  } catch (err) {
+    line = `the translation did not reach the API — ${(err as Error).message}`;
+  }
+  if (always || line !== said.translate) console.log(`worker: ${line}`);
+  said.translate = line;
+}
+
 async function waitForApi(): Promise<void> {
   for (let i = 0; i < 60; i++) {
     try {
@@ -248,8 +291,10 @@ async function main(): Promise<void> {
   await sendNotices('notices');
   cron.schedule(NOTICES_CRON, () => void sendNotices('notices'), { timezone: TZ });
   cron.schedule(NOTICES_SCAN_CRON, () => void sendNotices('notices-scan'), { timezone: TZ });
+  await translate();
+  cron.schedule(TRANSLATE_CRON, () => void translate(), { timezone: TZ });
   console.log(
-    `worker: up — weeks roll at "${PERIODS_CRON}" ${TZ}, Kommo is asked at "${KOMMO_CRON}", Bank of Georgia at "${BOG_CRON}" and its statement at "${BOG_NIGHT_CRON}", TBC at "${TBC_CRON}" and its statement at "${TBC_NIGHT_CRON}", Drive is read at "${DRIVE_CRON}", notices go at "${NOTICES_CRON}" and are looked for at "${NOTICES_SCAN_CRON}"`,
+    `worker: up — weeks roll at "${PERIODS_CRON}" ${TZ}, Kommo is asked at "${KOMMO_CRON}", Bank of Georgia at "${BOG_CRON}" and its statement at "${BOG_NIGHT_CRON}", TBC at "${TBC_CRON}" and its statement at "${TBC_NIGHT_CRON}", Drive is read at "${DRIVE_CRON}", notices go at "${NOTICES_CRON}" and are looked for at "${NOTICES_SCAN_CRON}", typed texts are translated at "${TRANSLATE_CRON}"`,
   );
 }
 

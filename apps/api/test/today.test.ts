@@ -87,6 +87,37 @@ describe.skipIf(!HAS_DB)('“Today” (wave 4)', () => {
     expect((await listed(id)).contractSigned).toBe(false);
   });
 
+  it('stops asking once the contract is marked signed in Signify, and asks again when an owner takes the mark back (ADR-0039)', async () => {
+    const owner = await loginAs('owner');
+    const manager = await loginAs('manager');
+    const fill = async () => json<Today>(await call(owner, 'GET', '/api/today')).queue.find((g) => g.group === 'fill')?.total ?? 0;
+    const listed = async (id: string) => json<{ rentals: { id: string; contractSigned: boolean | null }[] }>(await call(owner, 'GET', '/api/rentals')).rentals.find((r) => r.id === id)!;
+    const { id } = await overdueRental();
+    const asked = await fill();
+    expect((await listed(id)).contractSigned).toBe(false);
+
+    // Whoever hands a moped over marks it: the list and "Today" both let it go.
+    const marked = await call(manager, 'POST', `/api/rentals/${id}/contract/signed-elsewhere`, { note: 'ТЕСТ: подписан в Signify' });
+    expect(marked.statusCode, marked.body).toBe(201);
+    expect(await fill()).toBe(asked - 1);
+    expect((await listed(id)).contractSigned).toBe(true);
+
+    // Taking it back is an owner's, and only with a reason.
+    expect((await call(manager, 'POST', `/api/rentals/${id}/contract/signed-elsewhere/undo`, { reason: 'ТЕСТ' })).statusCode).toBe(403);
+    const bare = await call(owner, 'POST', `/api/rentals/${id}/contract/signed-elsewhere/undo`, {});
+    expect(bare.statusCode).toBe(400);
+    expect(json<{ error: string }>(bare).error).toBe('missing_field');
+    const undone = await call(owner, 'POST', `/api/rentals/${id}/contract/signed-elsewhere/undo`, { reason: 'ТЕСТ: отмечена не та аренда' });
+    expect(undone.statusCode, undone.body).toBe(200);
+    expect(await fill()).toBe(asked);
+    expect((await listed(id)).contractSigned).toBe(false);
+
+    // Nothing to take back twice.
+    const again = await call(owner, 'POST', `/api/rentals/${id}/contract/signed-elsewhere/undo`, { reason: 'ТЕСТ' });
+    expect(again.statusCode).toBe(409);
+    expect(json<{ error: string }>(again).error).toBe('contract_not_marked');
+  });
+
   it('asks an owner to take a till in before the deposits, and names a manager’s own cash for what it is (crit. 4)', async () => {
     const { id } = await overdueRental();
     const manager = await loginAs('manager');

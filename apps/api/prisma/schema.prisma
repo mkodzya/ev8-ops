@@ -98,6 +98,9 @@ enum DepositMigrationDecision {
 enum ActKind {
   pickup
   return
+  /// A swap in a running rental (migration 0063, ADR-0040): the moped given back, and the one handed out in its place.
+  swap_out
+  swap_in
 
   @@map("act_kind")
 }
@@ -265,6 +268,7 @@ model User {
   sessions          Session[]
   operationKeys     OperationKey[]
   rentalsCreated    Rental[]       @relation("rental_created_by")
+  contractsMarkedSigned Rental[]   @relation("rental_contract_signed_elsewhere_by")
   depositsDecided   Deposit[]      @relation("deposit_decided_by")
   depositsConfirmed Deposit[]      @relation("deposit_confirmed_by")
   actsCreated       Act[]
@@ -462,6 +466,8 @@ model Vehicle {
   currentRental Rental?        @relation("vehicle_current_rental", fields: [currentRentalId], references: [id])
   rentals       Rental[]       @relation("rental_vehicle")
   events        VehicleEvent[]
+  /// The acts written about this moped, in whichever rental (migration 0063).
+  acts          Act[]
 
   @@map("vehicles")
 }
@@ -527,6 +533,9 @@ model Rental {
   /// The weekday a week's rent is due on, ISO 1 = Monday … 7 = Sunday; null =
   /// the pickup's weekday (ADR-0022). The weeks still run from the pickup.
   payWeekday            Int?         @map("pay_weekday") @db.SmallInt
+  /// The days all its weeks were made longer by an owner (ADR-0041, migration 0064):
+  /// the weeks now run from the pickup plus this. Derived — only recomputeRental writes it.
+  weekShiftDays         Int          @default(0) @map("week_shift_days")
   buyoutTargetTetri     Int?         @map("buyout_target_tetri")
   buyoutPerPaymentTetri Int?         @map("buyout_per_payment_tetri")
   nightParkingAddress   String?      @map("night_parking_address")
@@ -538,6 +547,11 @@ model Rental {
   odooName              String?      @map("odoo_name")
   transferredAt         DateTime?    @map("transferred_at")
   transferredById       String?      @map("transferred_by") @db.Uuid
+  /// The contract was signed in Signify (or on paper), as a person marked it
+  /// here; null — not marked (migration 0062, ADR-0039). Never inferred.
+  contractSignedElsewhereAt   DateTime? @map("contract_signed_elsewhere_at")
+  contractSignedElsewhereById String?   @map("contract_signed_elsewhere_by") @db.Uuid
+  contractSignedElsewhereNote String?   @map("contract_signed_elsewhere_note")
   debtOverrideReason    String?      @map("debt_override_reason")
   createdById           String?      @map("created_by") @db.Uuid
   createdAt             DateTime     @default(now()) @map("created_at")
@@ -547,6 +561,7 @@ model Rental {
   vehicle   Vehicle?       @relation("rental_vehicle", fields: [vehicleId], references: [id])
   driveFolders DriveFolder[]
   createdBy User?          @relation("rental_created_by", fields: [createdById], references: [id])
+  contractSignedElsewhereBy User? @relation("rental_contract_signed_elsewhere_by", fields: [contractSignedElsewhereById], references: [id])
   periods   RentalPeriod[]
   deposit   Deposit?
   acts      Act[]
@@ -578,6 +593,13 @@ model RentalPeriod {
   discountReason String?   @map("discount_reason")
   discountedById String?   @map("discounted_by") @db.Uuid
   discountedAt   DateTime? @map("discounted_at")
+  /// Days an owner made the week longer, and what they cost, with a reason (ADR-0041,
+  /// migration 0064): endsOn = startsOn + 6 + extraDays; amountTetri includes extraTetri.
+  extraDays      Int       @default(0) @map("extra_days") @db.SmallInt
+  extraTetri     Int       @default(0) @map("extra_tetri")
+  shiftReason    String?   @map("shift_reason")
+  shiftedById    String?   @map("shifted_by") @db.Uuid
+  shiftedAt      DateTime? @map("shifted_at")
   payStatus   PeriodPayStatus @default(unpaid) @map("pay_status")
   createdAt   DateTime        @default(now()) @map("created_at")
   updatedAt   DateTime        @default(now()) @map("updated_at")
@@ -636,10 +658,13 @@ model Act {
   settlement   Json?
   signatureUrl String?  @map("signature_url")
   pdfUrl       String?  @map("pdf_url")
+  /// The moped the act is about (migration 0063): a swap gives a rental more than one.
+  vehicleId    String?  @map("vehicle_id") @db.Uuid
   createdById  String?  @map("created_by") @db.Uuid
   createdAt    DateTime @default(now()) @map("created_at")
 
   rental    Rental       @relation(fields: [rentalId], references: [id], onDelete: Cascade)
+  vehicle   Vehicle?     @relation(fields: [vehicleId], references: [id])
   createdBy User?        @relation(fields: [createdById], references: [id])
   photos    StoredFile[]
   batteryMoves BatteryMove[]
@@ -1644,4 +1669,43 @@ model Notice {
   lastHttpStatus Int?      @map("last_http_status")
 
   @@map("notices")
+}
+
+/// A typed text about a moped or a repair, and its translation (migration 0065;
+/// ADR-0042): one row per distinct text, found by the sha256 of its UTF-8
+/// bytes in hex. The original stays the record; this is a view of it, filled
+/// by the worker's clock through the API. The text's own language is empty.
+model TextTranslation {
+  sourceHash     String    @id @map("source_hash")
+  sourceText     String    @map("source_text")
+  /// ka, ru, en, or other; empty until translated.
+  lang           String?
+  textKa         String?   @map("text_ka")
+  textRu         String?   @map("text_ru")
+  textEn         String?   @map("text_en")
+  model          String?
+  firstSeenAt    DateTime  @default(now()) @map("first_seen_at")
+  nextTryAt      DateTime  @default(now()) @map("next_try_at")
+  attempts       Int       @default(0)
+  translatedAt   DateTime? @map("translated_at")
+  gaveUpAt       DateTime? @map("gave_up_at")
+  /// Our word for the last failure, never the service's answer.
+  lastFailure    String?   @map("last_failure")
+  lastHttpStatus Int?      @map("last_http_status")
+
+  @@map("text_translations")
+}
+
+/// What the translator was asked on one day in Tbilisi (migration 0065): counts
+/// and tokens only, never a text — the cost, and the daily cap.
+model TranslationDay {
+  day          DateTime @id @db.Date
+  requests     Int      @default(0)
+  translated   Int      @default(0)
+  failed       Int      @default(0)
+  inputTokens  Int      @default(0) @map("input_tokens")
+  outputTokens Int      @default(0) @map("output_tokens")
+  updatedAt    DateTime @default(now()) @map("updated_at")
+
+  @@map("translation_days")
 }

@@ -2,7 +2,9 @@
 // parts off the shelf and hours of work. Both are priced by who is paying —
 // the company pays what a part cost it, a customer pays what it is sold for —
 // and the total is the sum, never a stored number.
+import { phoneKey } from './kommo.js';
 import type { Tetri } from './money.js';
+import type { ISODate, VehicleState } from './types.js';
 
 /**
  * An hour of work, until the book has norms per job (register #33). Since
@@ -116,6 +118,90 @@ export function readSimPhone(raw: string | null | undefined): string | null {
   return plus + digits;
 }
 
+// A tracker already on a moped, written or corrected by an owner from the
+// moped's card without a repair (ADR-0036, addendum 21.10.2026).
+
+/** `990 000 000 000 010` — an IMEI as it is read aloud and held against a sticker. */
+export function imeiGroups(imei: string): string {
+  return imei.replace(/(\d{3})(?=\d)/g, '$1 ');
+}
+
+/** Why a day cannot be the day a tracker was on the moped. */
+export type TrackerDayFault = 'future' | 'before_arrival' | 'before_last_removed';
+
+/**
+ * «Стоит с» on the card says the tracker was on the moped that day — not
+ * necessarily the day it was fitted, which nobody may know and which is never
+ * made up. Today, the default, is always true. A day still has to be
+ * possible: not after today, not before the moped came, and not before the
+ * tracker it had last came off — one tracker on a moped at a time. Null when
+ * the day will do.
+ */
+export function trackerDayFault(input: { on: ISODate; today: ISODate; arrivedOn: ISODate | null; lastRemovedOn: ISODate | null }): TrackerDayFault | null {
+  if (input.on > input.today) return 'future';
+  if (input.arrivedOn != null && input.on < input.arrivedOn) return 'before_arrival';
+  if (input.lastRemovedOn != null && input.on < input.lastRemovedOn) return 'before_last_removed';
+  return null;
+}
+
+/**
+ * The first day «Стоит с» may say, and what sets it: the day the last tracker
+ * came off or the day the moped came, whichever is later — the two bounds
+ * `trackerDayFault` checks. The sheet offers no earlier day and names this
+ * one, and the refusal names it too: «не раньше прихода мопеда и снятия
+ * прежнего трекера» left the reader to find the day at the bottom of the
+ * card (QA, 22.10.2026). Null when neither is known: any past day will do.
+ */
+export function trackerEarliestDay(input: { arrivedOn: ISODate | null; lastRemovedOn: ISODate | null }): { on: ISODate; by: 'arrival' | 'last_removed' } | null {
+  const { arrivedOn, lastRemovedOn } = input;
+  // The same day for both: the tracker that came off says more than the arrival.
+  if (lastRemovedOn != null && (arrivedOn == null || lastRemovedOn >= arrivedOn)) return { on: lastRemovedOn, by: 'last_removed' };
+  if (arrivedOn != null) return { on: arrivedOn, by: 'arrival' };
+  return null;
+}
+
+/** A tracker's two numbers as they are kept. */
+export interface TrackerNumbers {
+  imei: string;
+  simPhone: string | null;
+}
+
+/**
+ * One SIM written two ways — `555010203` and `+995555010203` are the same
+ * Georgian number, compared as the Kommo link compares phones — so putting one
+ * in place of the other corrects nothing.
+ */
+function sameSim(kept: string | null, asked: string): boolean {
+  if (kept == null) return false;
+  const a = phoneKey(kept);
+  const b = phoneKey(asked);
+  return a != null && b != null ? a === b : kept === asked;
+}
+
+/**
+ * What a correction changes: the numbers asked for that differ from the ones
+ * kept. Null when nothing does — then nothing is written, and the journal gets
+ * no empty line.
+ */
+export function trackerCorrection(kept: TrackerNumbers, asked: { imei?: string | null; simPhone?: string | null }): Partial<TrackerNumbers> | null {
+  const out: Partial<TrackerNumbers> = {};
+  if (asked.imei != null && asked.imei !== kept.imei) out.imei = asked.imei;
+  if (asked.simPhone != null && !sameSim(kept.simPhone, asked.simPhone)) out.simPhone = asked.simPhone;
+  return Object.keys(out).length > 0 ? out : null;
+}
+
+/**
+ * What of a tracker the journal may keep: the last four digits of each
+ * number, named. A moped's history is read by managers too, and the IMEI and
+ * the SIM are the owners' and the workshop's (ADR-0036 §7).
+ */
+export function trackerTails(n: { imei?: string | null; simPhone?: string | null }): { imei?: string; sim?: string } {
+  const out: { imei?: string; sim?: string } = {};
+  if (n.imei) out.imei = `IMEI ···${n.imei.replace(/\D/g, '').slice(-4)}`;
+  if (n.simPhone) out.sim = `SIM ···${n.simPhone.replace(/\D/g, '').slice(-4)}`;
+  return out;
+}
+
 /**
  * Closing a repair charged to a customer (§3.7, `service.md`, Q26): what can
  * be kept from the deposit is never more than the repair cost and never more
@@ -132,6 +218,49 @@ export function closeCharge(input: { totalTetri: Tetri; withholdTetri: Tetri; de
 /** Why a repair came in: the bot's five reasons, one of them on every repair a mechanic opens. */
 export const SERVICE_REASONS = ['wear', 'accident', 'renter_fault', 'warranty', 'planned'] as const;
 export type ServiceReason = (typeof SERVICE_REASONS)[number];
+
+/**
+ * Why a moped stands in service, as somebody wrote it down — never guessed
+ * (the call of 21.10.2026; ADR-0005, addendum 21.10.2026). `from` says where
+ * the words come from: the open repair, the move into service by hand, or
+ * nowhere at all.
+ */
+export interface ServiceWhy {
+  /** The open repair's kind, when one was picked. */
+  kind: ServiceReason | null;
+  /** What happened, in the words and the language it was typed in. */
+  text: string | null;
+  from: 'job' | 'manual' | null;
+}
+
+/**
+ * The answer, in this order (the session's default of 21.10.2026, named
+ * to the owner at release): the open repair's kind if one was
+ * recorded; else what the repair says happened; else the reason of the
+ * manual move into service, when that move is the last thing that happened
+ * to the moped; else nothing, which the screen shows as a quiet dash. A
+ * moped that is not in service gets no answer — a repair at a renter's
+ * leaves the moped rented, and the question is about the ones standing in
+ * the workshop. A repair that is open and one that waits for an owner both
+ * count: a moped never has more than one of them (`job_already_open`).
+ */
+export function serviceWhyOf(
+  state: VehicleState,
+  openJob: { reasonKind: string | null; reason: string | null } | null,
+  lastMove: { kind: string; toState: string; reason: string | null } | null,
+): ServiceWhy | null {
+  if (state !== 'service') return null;
+  if (openJob) {
+    const kind = SERVICE_REASONS.find((k) => k === openJob.reasonKind) ?? null;
+    const text = openJob.reason?.trim() || null;
+    if (kind || text) return { kind, text, from: 'job' };
+  }
+  if (lastMove?.kind === 'manual' && lastMove.toState === 'service') {
+    const text = lastMove.reason?.trim() || null;
+    if (text) return { kind: null, text, from: 'manual' };
+  }
+  return { kind: null, text: null, from: null };
+}
 
 /**
  * Photos of the damage a new repair carries, besides the odometer's: at least
@@ -310,4 +439,31 @@ export function workLineState(line: { approvedAt: unknown; rejectedAt: unknown }
  */
 export function suggestsCustomerPays(job: { reasonKind: string | null; payer: string; rental: unknown; status: string }): boolean {
   return job.reasonKind === 'renter_fault' && job.payer === 'company' && job.rental != null && (job.status === 'draft' || job.status === 'open');
+}
+
+/** One of the five, or not: a kind read from a body, a draft or a URL is checked before it is used. */
+export function isServiceReason(value: unknown): value is ServiceReason {
+  return typeof value === 'string' && (SERVICE_REASONS as readonly string[]).includes(value);
+}
+
+/** Why a repair's kind cannot become what was asked. */
+export type ReasonKindRefusal = 'job_closed' | 'reason_kind_kept';
+
+/**
+ * Whether a repair's kind may become `next` now (Mika, 21.10.2026). The
+ * office forms give one or none — the five have no «other», and «what
+ * happened» stays the words — and the owner sets or changes it while the
+ * repair waits or is in work, so the repairs already open can be named once.
+ * A closed or called-off repair is a record. A repair a mechanic carries keeps
+ * a kind: the tablet asks for one on every repair it opens (stage 2), so there
+ * it is changed for another, never taken away.
+ *
+ * What a kind sets going is the same wherever it was picked: «Плановое ТО»
+ * closed with a reading moves the next maintenance (ADR-0038 §2), «Вина
+ * арендатора» offers the owner «за счёт клиента» (`suggestsCustomerPays`).
+ */
+export function reasonKindRefusal(job: { status: string; byMechanic: boolean }, next: ServiceReason | null): ReasonKindRefusal | null {
+  if (job.status !== 'open' && job.status !== 'draft') return 'job_closed';
+  if (next == null && job.byMechanic) return 'reason_kind_kept';
+  return null;
 }

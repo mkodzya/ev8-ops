@@ -2,7 +2,7 @@ import { localDateTime } from '@ev8/shared';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useT } from '../i18n/index.js';
-import { ChangedFromTo, noteWords } from '../lib/journal.js';
+import { ChangedFromTo, JournalNote, noteWords } from '../lib/journal.js';
 import { useLoad } from '../lib/use.js';
 import { useSession } from '../session.js';
 
@@ -69,9 +69,14 @@ export function RecordHistory({ kind, id, search }: { kind: 'rental' | 'sale' | 
                   <span className="mono muted">{when(l.at)}</span>
                   <span>
                     {t.feedWords[l.action] ?? l.action}
-                    {l.kind === 'change' && <ChangedFromTo before={l.before} after={l.after} />}
+                    {l.kind === 'change' && <ChangedFromTo action={l.action} before={l.before} after={l.after} />}
                     {l.actorName && <span className="muted"> · {l.actorName}</span>}
-                    {noteWords(t, l.note, l.after) && <span className="muted"> · «{noteWords(t, l.note, l.after)}»</span>}
+                    {noteWords(t, l.note, l.after) && (
+                      <span className="muted">
+                        {' · '}
+                        <JournalNote note={l.note} after={l.after} quoted />
+                      </span>
+                    )}
                   </span>
                 </li>
               ))}

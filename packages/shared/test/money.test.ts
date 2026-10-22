@@ -24,6 +24,14 @@ describe('tetri', () => {
     expect(parseGel('1.234')).toBeNull();
   });
 
+  it('reads an empty field as no figure, and a typed 0 as nought (QA 21.10.2026)', () => {
+    // The hand-over once fell back to '0' for an empty rate and recorded a week at 0 ₾.
+    expect(parseGel('')).toBeNull();
+    expect(parseGel('   ')).toBeNull();
+    expect(parseGel('0')).toBe(0);
+    expect(parseGel('0.00')).toBe(0);
+  });
+
   it('formats one way for every language', () => {
     expect(formatGel(123456)).toBe('1\u00a0234.56\u00a0₾'); // no-break space: a sum never wraps
     expect(formatGel(-4200)).toBe('-42.00\u00a0₾');

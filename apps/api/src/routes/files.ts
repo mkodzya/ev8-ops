@@ -52,7 +52,8 @@ export function fileRoutes(app: FastifyInstance): void {
       });
       // Damage in a return act opened a repair: its photos are that repair's photos too (wave 3, crit. 28) —
       // unless its mechanic has been paid for it: a paid repair is not changed (ADR-0037 §5); the act keeps the photo.
-      const opened = act.kind === 'return' ? (act.settlement as { serviceJobId?: string | null } | null)?.serviceJobId : null;
+      // So do the photos of a moped given back at a swap that went into a repair (ADR-0040).
+      const opened = act.kind === 'return' || act.kind === 'swap_out' ? (act.settlement as { serviceJobId?: string | null } | null)?.serviceJobId : null;
       const paid = opened ? await prisma.serviceJob.count({ where: { id: opened, paidInPayoutId: { not: null } } }) : 0;
       const serviceJobId = paid > 0 ? null : opened;
       if (serviceJobId) {

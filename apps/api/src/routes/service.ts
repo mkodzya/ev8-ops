@@ -10,21 +10,22 @@ import {
   jobPayState,
   labourTetri as labourFor,
   minutesFromHours,
+  nextWorkshopOrder,
   normSecFromMinutes,
   partLineState,
   partLineTetri,
   partPriceTetri,
   partsTetri,
   readFleetNumber,
-  readImei,
   readQuery,
-  readSimPhone,
+  reasonKindRefusal,
   repairTotalTetri,
   seesEveryRepair,
   todayISO,
   vinMatches,
   workLineState,
   workLineTetri,
+  workshopRefusal,
   worksTotal,
 } from '@ev8/shared';
 import { createHash } from 'node:crypto';
@@ -37,6 +38,7 @@ import { env } from '../lib/env.js';
 import { badRequest, conflict, forbidden, isUniqueViolation, notFound } from '../lib/errors.js';
 import { WORK_MONEY, issueForServicePart, partRows, passThrough, receiveRemoved, returnServiceParts, returnServicePart, unfitTrackers } from '../lib/stock.js';
 import { actorOf, mayView } from '../lib/guard.js';
+import { fitTracker, readTracker } from '../lib/trackers.js';
 import { date, int, oneOf, str, tetri } from '../lib/validate.js';
 import { syncDeposit } from '../lib/rentalMoney.js';
 import { moveVehicle } from '../lib/vehicles.js';
@@ -252,8 +254,12 @@ function serialize(job: {
       model: `${job.vehicle.model.brand} ${job.vehicle.model.name}`,
       /** The moped's last reading: a lower one at closing asks for its reason (ADR-0038 §4). */
       odometerKm: job.vehicle.odometerKm,
-      /** The tracker on the moped now, if any (ADR-0036): what «снять трекер» takes off. */
-      tracker: job.vehicle.trackers[0] ? trackerOut(job.vehicle.trackers[0]) : null,
+      /**
+       * The tracker on the moped now, if any (ADR-0036): what «снять трекер»
+       * takes off. `fromShelf` says whether it came off a shelf — one written
+       * on the moped's card did not, and goes back to none (addendum 21.10.2026, item 6).
+       */
+      tracker: job.vehicle.trackers[0] ? { ...trackerOut(job.vehicle.trackers[0]), fromShelf: job.vehicle.trackers[0].partId != null } : null,
     },
     rental: job.rental,
     customer: job.customer as { id: string; name: string } | null,
@@ -520,60 +526,6 @@ async function shelfPrice(partId: string, payer: Payer): Promise<{ unitPriceTetr
   return { unitPriceTetri: partPriceTetri(payer, { avgCostTetri: cost, salePriceTetri: part?.salePriceTetri ?? null }), unitCostTetri: cost };
 }
 
-/** The IMEI and the SIM of a tracker being fitted — one tracker, one line (ADR-0036). */
-function readTracker(b: Body, qty: number): { imei: string; simPhone: string } {
-  if (qty !== 1) throw badRequest('bad_field', 'A tracker is fitted one at a time: its IMEI is its own.', { field: 'qty' });
-  const imei = readImei(str(b, 'imei', { required: true, max: 40 }));
-  if (!imei) throw badRequest('imei_bad', 'An IMEI is fifteen digits off the sticker; the last one checks the rest.', { field: 'imei' });
-  const simPhone = readSimPhone(str(b, 'sim', { required: true, max: 40 }));
-  if (!simPhone) throw badRequest('sim_bad', 'A SIM number is its digits.', { field: 'sim' });
-  return { imei, simPhone };
-}
-
-/**
- * A tracker goes onto the moped (ADR-0036). One at a time on a moped, and an
- * IMEI on one moped at a time — the database refuses the second open row of
- * an IMEI whatever this says. Off a donor, the tracker moves with the part:
- * closed on the donor, opened here.
- */
-async function fitTracker(
-  tx: Tx,
-  input: { job: { id: string; vehicleId: string }; partId: string; servicePartId: string; donorVehicleId: string | null; imei: string; simPhone: string; on: string; actorId: string },
-): Promise<void> {
-  const onMoped = await tx.vehicleTracker.findFirst({ where: { vehicleId: input.job.vehicleId, removedOn: null }, select: { imei: true } });
-  if (onMoped) throw conflict('tracker_on_vehicle', 'This moped has a tracker; take that one off first.', { imei: `···${onMoped.imei.slice(-4)}` });
-  const elsewhere = await tx.vehicleTracker.findFirst({
-    where: { imei: input.imei, removedOn: null },
-    select: { id: true, vehicleId: true, installedOn: true, vehicle: { select: { fleetNo: true, vin: true } } },
-  });
-  if (elsewhere) {
-    if (input.donorVehicleId == null || elsewhere.vehicleId !== input.donorVehicleId) {
-      throw conflict('tracker_imei_in_use', 'This IMEI is on another moped; take it off there first.', {
-        vehicle: fleetNumber(elsewhere.vehicle.fleetNo) ?? `···${elsewhere.vehicle.vin.slice(-6)}`,
-        since: isoDate(elsewhere.installedOn),
-      });
-    }
-    await tx.vehicleTracker.update({ where: { id: elsewhere.id }, data: { removedOn: dateFromISO(input.on)!, removedJobId: input.job.id, removedById: input.actorId } });
-  }
-  try {
-    await tx.vehicleTracker.create({
-      data: {
-        vehicleId: input.job.vehicleId,
-        partId: input.partId,
-        imei: input.imei,
-        simPhone: input.simPhone,
-        installedOn: dateFromISO(input.on)!,
-        serviceJobId: input.job.id,
-        servicePartId: input.servicePartId,
-        createdById: input.actorId,
-      },
-    });
-  } catch (e) {
-    if (isUniqueViolation(e)) throw conflict('tracker_imei_in_use', 'This IMEI is on another moped; take it off there first.');
-    throw e;
-  }
-}
-
 /** A repair that waited only for a line just taken off goes back to work. */
 async function settleIfNothingWaits(tx: Tx, jobId: string): Promise<void> {
   const job = await tx.serviceJob.findUnique({ where: { id: jobId }, select: { status: true, approvedAt: true } });
@@ -602,40 +554,107 @@ async function boughtThrough(tx: Tx, line: { id: string; partId: string | null; 
   });
 }
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * The workshop a repair is given (workshops list, task #1 of 21.10.2026). An
+ * id that names no workshop was a 500 from the foreign key, and one taken off
+ * the list was taken. Now the first is not found and the second refused — unless
+ * the repair already has it, which it keeps (`workshopRefusal`).
+ */
+async function workshopOf(b: Body, current: string | null = null): Promise<string | null> {
+  const id = str(b, 'workshopId', { max: 64 });
+  if (id == null) return null;
+  const kept = id === current;
+  const found = !kept && UUID.test(id) ? await prisma.workshop.findUnique({ where: { id }, select: { archived: true } }) : null;
+  const refusal = workshopRefusal(found, kept);
+  if (refusal === 'workshop_not_found') throw notFound('workshop_not_found', 'No such workshop.');
+  if (refusal === 'workshop_archived') throw conflict('workshop_archived', 'This workshop was taken off the list.', { field: 'workshopId' });
+  return id;
+}
+
+/**
+ * A name another workshop has. The unique index on lower(name) covers those
+ * taken off the list as well, so the clash may be one the owner no longer
+ * sees: then the answer names it, so the screen can say to put it back
+ * rather than leave the owner at a dead end.
+ */
+async function nameClash(name: string, except?: string) {
+  const other = await prisma.workshop.findFirst({
+    where: { name: { equals: name, mode: 'insensitive' }, ...(except ? { id: { not: except } } : {}) },
+    select: { id: true, archived: true },
+  });
+  if (other?.archived) return conflict('workshop_archived_exists', 'A workshop by that name was taken off the list: put it back instead.', { field: 'name', id: other.id });
+  return conflict('workshop_exists', 'A workshop by that name is already on the list.', { field: 'name' });
+}
+
 export function serviceRoutes(app: FastifyInstance): void {
-  /** The workshops that do the repairs — a list the owner keeps (`service.md`). */
-  app.get('/api/workshops', { config: { scope: 'fleet.view' } }, async () => {
-    const workshops = await prisma.workshop.findMany({
-      where: { archived: false },
-      orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
-      select: { id: true, name: true, phone: true, note: true },
-    });
-    return { workshops };
+  /**
+   * The workshops that do the repairs — a list the owner keeps in Settings →
+   * Repair (`service.md`; task #1 of 21.10.2026). Plain, it is what
+   * the pickers offer: the live ones in the owner's order. With `?all=1` it is
+   * the list as the owner keeps it: those taken off it too, last, with how
+   * many repairs each has and how many of them are still under way.
+   */
+  app.get<{ Querystring: { all?: string } }>('/api/workshops', { config: { scope: 'fleet.view' } }, async (req) => {
+    if (req.query.all !== '1') {
+      const workshops = await prisma.workshop.findMany({
+        where: { archived: false },
+        orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+        select: { id: true, name: true, phone: true, note: true },
+      });
+      return { workshops };
+    }
+    const [rows, underWay] = await Promise.all([
+      prisma.workshop.findMany({
+        orderBy: [{ archived: 'asc' }, { sortOrder: 'asc' }, { name: 'asc' }],
+        include: { _count: { select: { jobs: true } } },
+      }),
+      prisma.serviceJob.groupBy({ by: ['workshopId'], where: { workshopId: { not: null }, status: { in: ['open', 'draft'] } }, _count: { _all: true } }),
+    ]);
+    const open = new Map(underWay.map((g) => [g.workshopId, g._count._all]));
+    return {
+      workshops: rows.map((w) => ({
+        id: w.id,
+        name: w.name,
+        phone: w.phone,
+        note: w.note,
+        sortOrder: w.sortOrder,
+        archived: w.archived,
+        jobs: w._count.jobs,
+        openJobs: open.get(w.id) ?? 0,
+      })),
+    };
   });
 
   app.post<{ Body: Body }>('/api/workshops', { config: { scope: 'settings.manage' } }, async (req, reply) => {
     const b = req.body ?? {};
     const actor = actorOf(req);
     const name = str(b, 'name', { required: true, max: 200 })!;
+    const phone = str(b, 'phone', { max: 40 });
+    const note = str(b, 'note', { max: 1000 });
+    // A new one goes to the end, after those the owner already ordered; at
+    // nought it sorted ahead of them.
+    const last = await prisma.workshop.aggregate({ _max: { sortOrder: true } });
     try {
       const row = await prisma.workshop.create({
-        data: {
-          name,
-          phone: str(b, 'phone', { max: 40 }),
-          note: str(b, 'note', { max: 1000 }),
-          sortOrder: int(b, 'sortOrder', { min: 0 }) ?? 0,
-          createdById: actor.id,
-        },
+        data: { name, phone, note, sortOrder: int(b, 'sortOrder', { min: 0, max: 999 }) ?? nextWorkshopOrder(last._max.sortOrder), createdById: actor.id },
         select: { id: true, name: true },
       });
-      await audit({ actorId: actor.id, action: 'workshop.create', entityType: 'workshop', entityId: row.id, after: { name } });
+      await audit({ actorId: actor.id, action: 'workshop.create', entityType: 'workshop', entityId: row.id, after: { name, phone, note } });
       return reply.code(201).send(row);
     } catch (e) {
-      if (isUniqueViolation(e)) throw conflict('workshop_exists', 'A workshop by that name is already on the list.', { field: 'name' });
+      if (isUniqueViolation(e)) throw await nameClash(name);
       throw e;
     }
   });
 
+  /**
+   * Rename, a phone or a note, its place in the list, or off the list and
+   * back. Nothing is deleted (ADR-0011): a workshop taken off the list keeps
+   * its repairs, open ones included — the answer says how many are still
+   * under way, so the screen can say they stay with it.
+   */
   app.patch<{ Params: { id: string }; Body: Body }>('/api/workshops/:id', { config: { scope: 'settings.manage' } }, async (req) => {
     const b = req.body ?? {};
     const actor = actorOf(req);
@@ -645,10 +664,36 @@ export function serviceRoutes(app: FastifyInstance): void {
     if ('name' in b) data.name = str(b, 'name', { required: true, max: 200 });
     if ('phone' in b) data.phone = str(b, 'phone', { max: 40 });
     if ('note' in b) data.note = str(b, 'note', { max: 1000 });
-    if ('archived' in b) data.archived = b.archived === true;
-    await prisma.workshop.update({ where: { id: row.id }, data: { ...data, updatedAt: new Date() } });
-    await audit({ actorId: actor.id, action: 'workshop.update', entityType: 'workshop', entityId: row.id, before: { name: row.name }, after: data as object });
-    return { ok: true };
+    if ('sortOrder' in b) data.sortOrder = int(b, 'sortOrder', { required: true, min: 0, max: 999 });
+    if ('archived' in b) {
+      // `"yes"` used to be read as false: a flag is a flag.
+      if (typeof b.archived !== 'boolean') throw badRequest('bad_field', 'archived is true or false', { field: 'archived' });
+      data.archived = b.archived;
+    }
+    try {
+      await prisma.workshop.update({ where: { id: row.id }, data: { ...data, updatedAt: new Date() } });
+    } catch (e) {
+      // A rename onto another workshop's name was a 500.
+      if (isUniqueViolation(e)) throw await nameClash(String(data.name ?? row.name), row.id);
+      throw e;
+    }
+    const openJobs = await prisma.serviceJob.count({ where: { workshopId: row.id, status: { in: ['open', 'draft'] } } });
+    // Taking it off the list and putting it back are said in the note too.
+    // The journal on screen reads the flag itself in words — «в списке →
+    // убрана из списка», no longer «— → Да» — and leaves this note out, since
+    // it would say the same twice (web lib/journal.tsx, QA 22.10.2026); the
+    // CSV export prints the flag raw, and there the note is the words.
+    const moved = data.archived === undefined || data.archived === row.archived ? null : data.archived ? 'taken off the list' : 'put back on the list';
+    await audit({
+      actorId: actor.id,
+      action: 'workshop.update',
+      entityType: 'workshop',
+      entityId: row.id,
+      before: { name: row.name, phone: row.phone, note: row.note, sortOrder: row.sortOrder, archived: row.archived },
+      after: data as object,
+      note: moved,
+    });
+    return { ok: true, openJobs };
   });
 
   app.get<{ Querystring: { status?: string } }>('/api/service', { config: { scope: 'service.view' } }, async (req) => {
@@ -978,7 +1023,7 @@ export function serviceRoutes(app: FastifyInstance): void {
         model: { select: { brand: true, name: true } },
         serviceJobs: {
           where: { status: { in: ['open', 'draft'] } },
-          select: { id: true, number: true, status: true, reason: true, mechanicId: true, mechanic: { select: { name: true } } },
+          select: { id: true, number: true, status: true, reason: true, reasonKind: true, mechanicId: true, mechanic: { select: { name: true } } },
           take: 1,
         },
       },
@@ -1006,6 +1051,8 @@ export function serviceRoutes(app: FastifyInstance): void {
                 number: job.number,
                 status: job.status,
                 reason: job.reason,
+                /** The kind the office named, if it did (Mika, 21.10.2026): the tablet starts from it, as from the words. */
+                reasonKind: job.reasonKind,
                 mechanic: job.mechanic?.name ?? null,
                 /** Nobody carries it yet — a manager's breakdown, a return's damage: he may take it on. */
                 takeable: job.mechanicId == null,
@@ -1068,6 +1115,7 @@ export function serviceRoutes(app: FastifyInstance): void {
         number: true,
         status: true,
         reason: true,
+        reasonKind: true,
         mechanicId: true,
         mechanic: { select: { name: true } },
         approvedAt: true,
@@ -1196,7 +1244,10 @@ export function serviceRoutes(app: FastifyInstance): void {
             movedVehicle: open ? undefined : !rented,
           },
           // The moped's figure before this reading: a repair called off by mistake puts it back (ADR-0038 §1).
-          before: { odometerKm: vehicle.odometerKm, ...(open ? { reason: open.reason, mechanicId: open.mechanicId } : {}) },
+          // A repair taken over keeps what it said before — its kind too, which
+          // the office or an owner may have named (Mika, 21.10.2026): the
+          // mechanic's pick is «было → стало», never a silent overwrite.
+          before: { odometerKm: vehicle.odometerKm, ...(open ? { reason: open.reason, reasonKind: open.reasonKind, mechanicId: open.mechanicId } : {}) },
         },
       });
       // His repair, or his works on one taken over, wait: the group is asked (ADR-0038 §6).
@@ -1217,6 +1268,12 @@ export function serviceRoutes(app: FastifyInstance): void {
     const actor = actorOf(req);
     const vehicleId = str(b, 'vehicleId', { required: true })!;
     const reason = str(b, 'reason', { required: true, max: 2000 })!;
+    // The tablet's kind, picked in the office too (Mika, 21.10.2026) — and
+    // only if somebody picks one: the five have no «other», and what happened
+    // is still said in words. «Плановое ТО» closed with a reading moves the
+    // next maintenance and «Вина арендатора» offers the customer's expense,
+    // as they do from the tablet.
+    const reasonKind = oneOf(b, 'reasonKind', SERVICE_REASONS);
     const openedOn = date(b, 'openedOn') ?? todayISO(new Date(), env.TZ);
 
     const vehicle = await prisma.vehicle.findUnique({
@@ -1236,7 +1293,7 @@ export function serviceRoutes(app: FastifyInstance): void {
     // repair opens as a draft for an owner to take up, and what it will cost
     // or who pays is not a manager's to decide.
     const reported = !hasPerm(actor, 'service.manage');
-    const workshopId = str(b, 'workshopId');
+    const workshopId = await workshopOf(b);
     const minutes = 'labourHours' in b ? minutesFromHours(Number(b.labourHours) || 0) : (int(b, 'labourMinutes', { min: 0 }) ?? 0);
     if (payer === 'customer' && !rented) {
       throw conflict('no_renter', 'Only a moped that is out with somebody can be repaired at their expense.');
@@ -1249,6 +1306,7 @@ export function serviceRoutes(app: FastifyInstance): void {
           rentalId: rented ? vehicle.currentRental!.id : null,
           customerId: payer === 'customer' ? vehicle.currentRental!.customerId : null,
           reason,
+          reasonKind,
           openedOn: dateFromISO(openedOn)!,
           status: reported ? 'draft' : 'open',
           payer,
@@ -1270,7 +1328,7 @@ export function serviceRoutes(app: FastifyInstance): void {
           action: reported ? 'service.report' : 'service.open',
           entityType: 'service_job',
           entityId: created.id,
-          after: { number: created.number, vehicleId, reason, payer, movedVehicle: !rented, draft: reported },
+          after: { number: created.number, vehicleId, reasonKind, reason, payer, movedVehicle: !rented, draft: reported },
         },
       });
       if (reported) await enqueueJobNotice(tx, 'job_waiting', created.id, logged.id);
@@ -1290,7 +1348,7 @@ export function serviceRoutes(app: FastifyInstance): void {
 
     const data: Record<string, unknown> = {};
     if ('reason' in b) data.reason = str(b, 'reason', { required: true, max: 2000 });
-    if ('workshopId' in b) data.workshopId = str(b, 'workshopId');
+    if ('workshopId' in b) data.workshopId = await workshopOf(b, job.workshopId);
     // Work is hours at a rate; the money follows from them (§3.7, crit. 24).
     if ('labourHours' in b || 'labourMinutes' in b) {
       const minutes = 'labourHours' in b ? minutesFromHours(Number(b.labourHours) || 0) : (int(b, 'labourMinutes', { min: 0 }) ?? 0);
@@ -1298,6 +1356,16 @@ export function serviceRoutes(app: FastifyInstance): void {
       data.labourTetri = labourFor(minutes);
     } else if ('labourTetri' in b) data.labourTetri = tetri(b, 'labourTetri', { min: 0 }) ?? 0;
     if ('notes' in b) data.notes = str(b, 'notes', { max: 4000 });
+    // The kind of repair, set, changed or taken away by the owner while it is
+    // under way (Mika, 21.10.2026), so the repairs already open can be named
+    // once. One a mechanic carries is changed for another, never left without.
+    if ('reasonKind' in b) {
+      const next = oneOf(b, 'reasonKind', SERVICE_REASONS);
+      if (reasonKindRefusal({ status: job.status, byMechanic: job.mechanicId != null }, next) === 'reason_kind_kept') {
+        throw badRequest('reason_kind_kept', 'A repair a mechanic carries keeps a kind: pick another one.', { field: 'reasonKind' });
+      }
+      data.reasonKind = next;
+    }
     // Who pays decides what a catalogue part costs (B8-04, crit. 22, 23), so
     // changing the payer repriced nothing and the lines already on the job
     // kept the other side's price: a customer was billed at what the shelf
@@ -1321,11 +1389,18 @@ export function serviceRoutes(app: FastifyInstance): void {
         await tx.servicePart.update({ where: { id: line.id }, data: { unitPriceTetri: line.to } });
       }
     });
+    // «было → стало» (ux.md №14): what each field written held before. The
+    // journal printed only the new values, so a kind changed from «ДТП» to
+    // «Износ» could not say what it had been.
+    // The minutes stay out of it: a bare «0 → 90» read as nothing, and the
+    // labour's money beside them says the same change in lari.
+    const was = job as unknown as Record<string, unknown>;
     await audit({
       actorId: actor.id,
       action: 'service.update',
       entityType: 'service_job',
       entityId: job.id,
+      before: Object.fromEntries(Object.keys(data).filter((k) => k !== 'labourMinutes').map((k) => [k, was[k] ?? null])),
       after: repriced.length > 0 ? { ...(data as object), repriced } : (data as object),
     });
     return { ok: true, repriced: repriced.length };
@@ -1363,7 +1438,8 @@ export function serviceRoutes(app: FastifyInstance): void {
     // A tracker fitted is somebody's: its IMEI and SIM, one per moped (ADR-0036).
     const fitsTracker = catalogue?.isTracker === true && kind !== 'removed';
     if (catalogue?.isTracker && kind === 'removed') throw conflict('tracker_remove_apart', 'A tracker comes off by «снять трекер», which closes it on the moped.');
-    const tracker = fitsTracker ? readTracker(b, qty) : null;
+    if (fitsTracker && qty !== 1) throw badRequest('bad_field', 'A tracker is fitted one at a time: its IMEI is its own.', { field: 'qty' });
+    const tracker = fitsTracker ? readTracker(b) : null;
 
     let donor: { id: string; fleetNo: number | null; vin: string } | null = null;
     if (kind === 'donor') {
@@ -1456,7 +1532,9 @@ export function serviceRoutes(app: FastifyInstance): void {
           await boughtThrough(tx, { id: created.id, partId: catalogue.id, qty, paidTetri, createdAt: created.createdAt }, job.number, actor.id);
         }
       }
-      if (tracker) await fitTracker(tx, { job, partId: catalogue!.id, servicePartId: created.id, donorVehicleId: donor?.id ?? null, imei: tracker.imei, simPhone: tracker.simPhone, on: today, actorId: actor.id });
+      if (tracker) {
+        await fitTracker(tx, { vehicleId: job.vehicleId, jobId: job.id, partId: catalogue!.id, servicePartId: created.id, donorVehicleId: donor?.id ?? null, imei: tracker.imei, simPhone: tracker.simPhone, on: today, actorId: actor.id });
+      }
       if (waits && job.status !== 'draft') await tx.serviceJob.update({ where: { id: job.id }, data: { status: 'draft', updatedAt: new Date() } });
       const logged = await tx.auditLog.create({
         data: {
@@ -1618,6 +1696,13 @@ export function serviceRoutes(app: FastifyInstance): void {
     if (job.movedVehicle) {
       if (odometerKm == null) throw badRequest('missing_field', 'Say what the odometer reads.', { field: 'odometerKm' });
       if (!closedLocationId) throw badRequest('missing_field', 'Say where the moped stands now.', { field: 'locationId' });
+    }
+    // «Плановое ТО» is counted from a reading (ADR-0038 §2). The tablet takes
+    // one at the opening; the office does not, and a repair at the renter's
+    // closed without one would never move the next maintenance, which is what
+    // the office's «Плановое ТО» promises (Mika, 21.10.2026).
+    if (odometerKm == null && job.reasonKind === 'planned' && job.openedOdometerKm == null) {
+      throw badRequest('missing_field', 'A planned maintenance counts from what the odometer reads: say it.', { field: 'odometerKm' });
     }
     // Less than at the opening, or than the moped's last reading, only with
     // the reason — as the opening asks it (ADR-0038 §4): a typo would move the

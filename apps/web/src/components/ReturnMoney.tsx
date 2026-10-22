@@ -19,6 +19,8 @@ export interface ReturnPreview {
   batteries: number | null;
   chargers: number | null;
   pickupKm: number | null;
+  /** The day the moped coming back was handed out — the hand-over, or the swap that brought it (ADR-0040); absent while an older API answers. */
+  pickupOn?: string | null;
   expectedReturnOn: string | null;
   settlement: {
     weeks: { id: string; seq: number; startsOn: string; endsOn: string; owesTetri: number }[];

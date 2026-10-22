@@ -39,7 +39,8 @@ interface CustomerRow {
   dueTodayRentTetri: number;
   debtIn: DebtPart[];
 }
-interface FleetRow {
+/** A moped as the hand-over and the swap pick one from the fleet. */
+export interface FleetRow {
   id: string;
   vin: string;
   /** EV-007 on the sticker (migration 0043); absent while an older API answers. */
@@ -250,9 +251,13 @@ export function PickupWizard() {
   const forSale = free.filter((v) => v.pool === 'sale');
 
   // ---- money --------------------------------------------------------------
-  const rateTetri = parseGel(f.rate || '0') ?? -1;
-  const depositTetri = parseGel(f.deposit || '0') ?? -1;
-  const depositBeforeTetri = parseGel(f.depositBefore || '0') ?? -1;
+  // An empty field is no figure, not a nought (QA 21.10.2026): a rate left
+  // blank was recorded as a week at 0 ₾, and «К оплате» asked 180 instead of
+  // 330. A 0 typed on purpose is a figure, as the server takes it.
+  const rateTetri = parseGel(f.rate) ?? -1;
+  const depositTetri = parseGel(f.deposit) ?? -1;
+  const depositBeforeTetri = parseGel(f.depositBefore) ?? -1;
+  const amountError = (text: string) => (text.trim() === '' ? t.hand.amountMissing : parseGel(text) == null ? t.hand.amountUnread : null);
   const transfer = owner && f.transfer;
   const weeksTotal = f.pickedUpOn <= today ? Math.floor(days(f.pickedUpOn, today) / 7) + 1 : 1;
   const paidWeeks = transfer && f.paidThrough ? Math.round((days(f.pickedUpOn, f.paidThrough) + 1) / 7) : 0;
@@ -644,7 +649,7 @@ export function PickupWizard() {
             </label>
           )}
           <div className="two-col two-col-tight">
-            <Field label={t.hand.rate} hint={t.hand.rateHint} name="weeklyRateTetri">
+            <Field label={t.hand.rate} hint={t.hand.rateHint} name="weeklyRateTetri" error={amountError(f.rate)}>
               <input className="input input-amount mono" value={f.rate} onChange={(e) => set({ rate: e.target.value, rateTouched: true })} inputMode="decimal" />
               {/* The buttons an owner keeps in the settings; the model's own
                   rate is already in the field (§3.5). */}
@@ -654,7 +659,7 @@ export function PickupWizard() {
                     <button
                       key={r.id}
                       type="button"
-                      className={`pill pill-sm ${parseGel(f.rate || '0') === r.rateTetri ? 'on' : ''}`}
+                      className={`pill pill-sm ${parseGel(f.rate) === r.rateTetri ? 'on' : ''}`}
                       onClick={() => set({ rate: gel(r.rateTetri), rateTouched: true })}
                     >
                       <span className="mono">{formatGel(r.rateTetri, { decimals: false })}</span>
@@ -663,7 +668,7 @@ export function PickupWizard() {
                 </div>
               )}
             </Field>
-            <Field label={t.hand.deposit} name="depositTetri">
+            <Field label={t.hand.deposit} name="depositTetri" error={amountError(f.deposit)}>
               <input
                 className="input input-amount mono"
                 value={f.deposit}
@@ -697,7 +702,7 @@ export function PickupWizard() {
                   ))}
                 </select>
               </Field>
-              <Field label={t.hand.depositBefore} name="depositReceivedTetri">
+              <Field label={t.hand.depositBefore} name="depositReceivedTetri" error={amountError(f.depositBefore)}>
                 <input className="input input-amount mono" value={f.depositBefore} onChange={(e) => set({ depositBefore: e.target.value })} inputMode="decimal" />
               </Field>
               <section className="card">
@@ -888,7 +893,8 @@ function Stepper({ label, value, onChange }: { label: string; value: number; onC
   );
 }
 
-function VehicleList({ list, chosen, disabled, onPick }: { list: FleetRow[]; chosen: string | null; disabled: boolean; onPick: (id: string) => void }) {
+/** The free mopeds to pick from — the hand-over's, and the swap's (ADR-0040). */
+export function VehicleList({ list, chosen, disabled, onPick }: { list: FleetRow[]; chosen: string | null; disabled: boolean; onPick: (id: string) => void }) {
   const t = useT();
   return (
     <ul className={`pick-list ${disabled ? 'dim' : ''}`}>
@@ -946,7 +952,8 @@ function PickupDone({ id, number, photoTrouble }: { id: string; number: string; 
         {photoTrouble && <p className="warn-text">{t.hand.photosFailed}</p>}
       </section>
       <section className="card">
-        <DocumentRow rentalId={id} kind="contract" title={t.hand.contract} state={data.documents.contract} customerId={r.customer.id} onChanged={reload} />
+        {/* Signed in Signify rather than here: marked in one sheet right away (ADR-0039). */}
+        <DocumentRow rentalId={id} kind="contract" title={t.hand.contract} state={data.documents.contract} customerId={r.customer.id} driveUrl={r.drive?.contractUrl} onChanged={reload} />
       </section>
       <div className="row-actions">
         {phone && (

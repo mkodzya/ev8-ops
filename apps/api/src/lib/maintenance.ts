@@ -9,15 +9,20 @@ import { serviceSettings } from './serviceSettings.js';
 // mileage EV8 Ops recorded at every read — nothing about it is stored.
 //
 // A reading counts only when EV8 Ops wrote it down with its moment: a pickup
-// act, a return act that was not taken back, the opening of a repair that was
-// not called off by mistake and the closing of a finished one. The figure a
+// act, a return act that was not taken back, the two acts of a swap (each of
+// its own moped, ADR-0040), the opening of a repair that was not called off
+// by mistake and the closing of a finished one. The figure a
 // moped's card carries from Odoo or from the static copy, with no such reading
 // behind it, is not one (§1): a moped with none is not on «Пора на ТО», and
 // its card says so.
 
 type Db = Prisma.TransactionClient;
 
-/** Where the latest reading was written. */
+/**
+ * Where the latest reading was written. A swap's two acts read as what they
+ * are for the moped: the one handed out — a hand-over, the one given back —
+ * a return (ADR-0040).
+ */
 export type ReadingSource = 'pickup' | 'return' | 'repair_open' | 'repair_close';
 
 export interface VehicleMaintenance {
@@ -30,6 +35,12 @@ export interface VehicleMaintenance {
   currentKm: number | null;
   currentAt: string | null;
   readingSource: ReadingSource | null;
+  /**
+   * The reading was one of a swap's two acts (ADR-0040): it counts as the
+   * hand-over or the return it is for this moped, and the card says it was a
+   * swap — «(возврат, …)» read as if the rental had ended (QA, 22.10.2026).
+   */
+  readingBySwap: boolean;
   dueKm: number | null;
   leftKm: number | null;
   /** The closed planned repair the mark is counted from; none — the first mark. */
@@ -48,7 +59,7 @@ export interface MaintenanceOverview {
   knownCount: number;
 }
 
-type Reading = MileageReading & { source: ReadingSource };
+type Reading = MileageReading & { source: ReadingSource; swap?: boolean };
 
 const ms = (at: Date | string): number => (typeof at === 'string' ? Date.parse(at) : at.getTime());
 
@@ -58,9 +69,16 @@ const ms = (at: Date | string): number => (typeof at === 'string' ? Date.parse(a
  * own). Three queries, whatever the number of mopeds.
  */
 async function readingsOf(db: Db, ids: string[]) {
+  // An act's reading is its own moped's (migration 0063): after a swap the
+  // rental's moped is another, and the old one's mileage is not the new one's.
+  // An act that names no moped is its rental's, as every act was before.
   const acts = await db.act.findMany({
-    where: { odometerKm: { not: null }, kind: { in: ['pickup', 'return'] }, rental: { vehicleId: { in: ids } } },
-    select: { kind: true, odometerKm: true, createdAt: true, settlement: true, rental: { select: { vehicleId: true } } },
+    where: {
+      odometerKm: { not: null },
+      kind: { in: ['pickup', 'return', 'swap_out', 'swap_in'] },
+      OR: [{ vehicleId: { in: ids } }, { vehicleId: null, rental: { vehicleId: { in: ids } } }],
+    },
+    select: { kind: true, odometerKm: true, createdAt: true, settlement: true, vehicleId: true, rental: { select: { vehicleId: true } } },
   });
   const jobs = await db.serviceJob.findMany({
     where: {
@@ -97,10 +115,11 @@ async function readingsOf(db: Db, ids: string[]) {
   const readings = new Map<string, Reading[]>();
   const add = (vehicleId: string, r: Reading) => readings.set(vehicleId, [...(readings.get(vehicleId) ?? []), r]);
   for (const a of acts) {
-    if (!a.rental.vehicleId || a.odometerKm == null) continue;
+    const vehicleId = a.vehicleId ?? a.rental.vehicleId;
+    if (!vehicleId || a.odometerKm == null) continue;
     // A return taken back is not a reading: the rental ran on (B5-08).
     if (a.kind === 'return' && (a.settlement as { undone?: boolean } | null)?.undone) continue;
-    add(a.rental.vehicleId, { km: a.odometerKm, at: a.createdAt, source: a.kind === 'pickup' ? 'pickup' : 'return' });
+    add(vehicleId, { km: a.odometerKm, at: a.createdAt, source: a.kind === 'pickup' || a.kind === 'swap_in' ? 'pickup' : 'return', swap: a.kind === 'swap_out' || a.kind === 'swap_in' });
   }
   for (const j of jobs) {
     // Called off by mistake — cancelled, not refused — it is not a reading
@@ -153,6 +172,7 @@ export async function maintenanceOf(db: Db = prisma, opts: { vehicleIds?: string
       currentKm: m.currentKm,
       currentAt: m.currentAt,
       readingSource: current?.source ?? null,
+      readingBySwap: current?.swap ?? false,
       dueKm: m.dueKm,
       leftKm: m.leftKm,
       lastPlanned: planned ? { jobId: planned.id, number: planned.number, km: lastPlannedKm!, closedOn: isoDate(planned.closedOn) } : null,

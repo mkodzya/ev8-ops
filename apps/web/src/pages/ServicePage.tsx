@@ -1,4 +1,4 @@
-import { daysBetween, numberMatches, spellingMatches, todayISO, vinMatches, type WorkLineState } from '@ev8/shared';
+import { SERVICE_REASONS, daysBetween, numberMatches, spellingMatches, todayISO, vinMatches, type ServiceReason, type WorkLineState } from '@ev8/shared';
 import { useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
@@ -11,9 +11,11 @@ import { DataList } from '../ds/list/DataList.js';
 import { formatGel } from '../format.js';
 import { useT } from '../i18n/index.js';
 import { uploadAll, type PreparedPhoto } from '../lib/photos.js';
+import { Typed, useShownWords } from '../lib/typed.js';
 import { useLoad } from '../lib/use.js';
 import { useSession } from '../session.js';
 import { ApprovalCard } from './RepairApproval.js';
+import { WORKSHOPS_ANCHOR } from './WorkshopsBlock.js';
 import { kmText, leftText, type Downtime, type MaintenanceList } from '../lib/maintenance.js';
 import './workshop-job.css';
 
@@ -93,8 +95,12 @@ export interface ServiceJob {
   notes: string | null;
   /** True when this job is what took the moped out of the yard: only then does closing bring it back. */
   movedVehicle: boolean;
-  /** The tracker on the moped now, if any (ADR-0036). */
-  vehicle: { id: string; vin: string; number: string | null; model: string; tracker: TrackerRow | null };
+  /**
+   * The tracker on the moped now, if any (ADR-0036); `fromShelf` — whether it
+   * came off a shelf (one written on the moped's card did not), absent while an
+   * older API answers.
+   */
+  vehicle: { id: string; vin: string; number: string | null; model: string; tracker: (TrackerRow & { fromShelf?: boolean }) | null };
   rental: { id: string; number: string } | null;
   customer: { id: string; name: string; nameKa: string | null; nameLat: string | null } | null;
   parts: ServiceJobPart[];
@@ -154,6 +160,8 @@ interface FleetVehicle {
   vin: string;
   model: string;
   state: 'available' | 'rented' | 'service' | 'out' | 'sold';
+  /** The rental it is out on: «Вина арендатора» names it in the hint (Mika, 21.10.2026). */
+  currentRental?: { number: string } | null;
 }
 
 /** How long this repair has been standing: until it closed, or until today. */
@@ -172,6 +180,7 @@ export function ServicePage() {
   const t = useT();
   const { can, me } = useSession();
   const { data, failure, reload } = useLoad<ServiceList>('/api/service');
+  const shownWords = useShownWords();
   const today = todayISO();
 
   if (!data && failure) return <LoadError failure={failure} onRetry={reload} />;
@@ -238,7 +247,12 @@ export function ServicePage() {
         byDefault="days"
         search={{
           placeholder: t.repair.searchHint,
-          match: (j, q) => numberMatches(q, j.number) || vinMatches(q, j.vehicle.vin) || spellingMatches(q, [j.reason, j.vehicle.model, j.workshop?.name, j.customer?.name]),
+          // The reason is found by the words it was typed in and by the translation the list shows (ADR-0042),
+          // and by its kind as the list names it.
+          match: (j, q) =>
+            numberMatches(q, j.number) ||
+            vinMatches(q, j.vehicle.vin) ||
+            spellingMatches(q, [j.reason, shownWords(j.reason), j.reasonKind ? t.wjob.reasons[j.reasonKind] : null, j.vehicle.model, j.workshop?.name, j.customer?.name]),
         }}
         chips={[
           { key: 'open', label: t.repair.chips.working, test: (j) => j.status === 'open' },
@@ -258,7 +272,8 @@ export function ServicePage() {
               {/* The breakdown a manager wrote is what an owner decides by,
                   so the row says it; "от менеджера" is the badge on the
                   right, not a replacement for the words (QA-W5-19). */}
-              <span className="mono">{j.number}</span> · {j.reason}
+              <span className="mono">{j.number}</span> · {j.reasonKind ? `${t.wjob.reasons[j.reasonKind] ?? j.reasonKind} — ` : ''}
+              <Typed text={j.reason} quiet />
             </>
           ),
           sub2: j.workshop?.name ?? undefined,
@@ -295,7 +310,14 @@ export function ServicePage() {
           {
             key: 'reason',
             label: t.repair.cols.what,
-            cell: (j) => j.reason,
+            // ТО or an accident first, as the repair card says it (Mika, 21.10.2026);
+            // the words typed after it read in the reader's language (ADR-0042).
+            cell: (j) => (
+              <>
+                {j.reasonKind ? `${t.wjob.reasons[j.reasonKind] ?? j.reasonKind} — ` : ''}
+                <Typed text={j.reason} />
+              </>
+            ),
           },
           {
             key: 'workshop',
@@ -372,7 +394,7 @@ function BalanceLink() {
   );
 }
 
-const blankJob = (vehicleId?: string) => ({ vehicleId: vehicleId ?? '', reason: '', workshopId: '', payer: 'company' });
+const blankJob = (vehicleId?: string) => ({ vehicleId: vehicleId ?? '', reason: '', reasonKind: '' as ServiceReason | '', workshopId: '', payer: 'company' });
 
 /**
  * «Сообщить о поломке» and «Открыть ремонт» — one sheet, told apart by who
@@ -406,6 +428,10 @@ export function NewJob({ vehicleId, onDone }: { vehicleId?: string; onDone: () =
   // Only a moped that is out with somebody can be repaired at their expense.
   const rented = chosen?.state === 'rented';
   const label = mayManage ? t.repair.newJob : t.repair.report;
+  // A draft may remember a workshop taken off the list since: the select then
+  // says «не указана», and that is what is sent — what is seen is what goes.
+  const offered = workshops.data?.workshops;
+  const workshopId = offered && !offered.some((w) => w.id === f.workshopId) ? '' : f.workshopId;
 
   return (
     <>
@@ -428,7 +454,9 @@ export function NewJob({ vehicleId, onDone }: { vehicleId?: string; onDone: () =
               {
                 vehicleId: f.vehicleId || vehicleId,
                 reason: f.reason,
-                ...(mayManage ? { workshopId: f.workshopId || null, payer: rented ? f.payer : 'company' } : {}),
+                // A draft kept from before the kinds came has none: none is sent.
+                reasonKind: f.reasonKind || null,
+                ...(mayManage ? { workshopId: workshopId || null, payer: rented ? f.payer : 'company' } : {}),
               },
               { key },
             );
@@ -472,10 +500,33 @@ export function NewJob({ vehicleId, onDone }: { vehicleId?: string; onDone: () =
           <Field label={t.repair.what} name="reason">
             <input className="input" value={f.reason} onChange={(e) => setF({ ...f, reason: e.target.value })} required autoFocus />
           </Field>
+          {/* The tablet's five, for the office too (Mika, 21.10.2026): a pick
+              and not a must — there is no «other», and the words above say
+              what happened. Pressed again, a pill lets go. Not a <label>: a
+              label sends a press on its text to the first pill. */}
+          <div className="field" data-field="reasonKind">
+            <span className="lbl">
+              {t.wjob.reason} · {t.wbook.optional}
+            </span>
+            <div className="chips">
+              {SERVICE_REASONS.map((r) => (
+                <button
+                  key={r}
+                  type="button"
+                  className={`pill pill-sm ${f.reasonKind === r ? 'on' : ''}`}
+                  aria-pressed={f.reasonKind === r}
+                  onClick={() => setF({ ...f, reasonKind: f.reasonKind === r ? '' : r })}
+                >
+                  {t.wjob.reasons[r]}
+                </button>
+              ))}
+            </div>
+            {f.reasonKind === 'planned' && <span className="hint muted">{t.rkind.plannedNote}</span>}
+          </div>
           {mayManage && (
             <>
               <Field label={t.repair.workshop} name="workshopId">
-                <select className="input" value={f.workshopId} onChange={(e) => setF({ ...f, workshopId: e.target.value })}>
+                <select className="input" value={workshopId} onChange={(e) => setF({ ...f, workshopId: e.target.value })}>
                   <option value="">{t.repair.workshopNone}</option>
                   {(workshops.data?.workshops ?? []).map((w) => (
                     <option key={w.id} value={w.id}>
@@ -484,9 +535,25 @@ export function NewJob({ vehicleId, onDone }: { vehicleId?: string; onDone: () =
                   ))}
                 </select>
               </Field>
+              {/* The list is kept in one place (session default for task #1 of 21.10.2026);
+                  what is typed here waits in the draft and comes back. */}
+              {can('settings.manage') && (
+                <p className="hint">
+                  {/* To the list itself: on a phone it is below the first screen of the page (QA, 22.10.2026). */}
+                  <Link className="muted" to={`/settings/repair#${WORKSHOPS_ANCHOR}`}>
+                    {t.wshop.editList}
+                  </Link>
+                </p>
+              )}
               {rented && (
                 <>
                   <p className="hint muted">{t.repair.rentedNote}</p>
+                  {/* The hint the repair card gives (ADR-0035 §7), here where who pays is chosen. */}
+                  {f.reasonKind === 'renter_fault' && f.payer === 'company' && chosen?.currentRental && (
+                    <p className="hint">
+                      <b>{t.wappr.suggest(chosen.currentRental.number)}</b> {t.wappr.suggestNote}
+                    </p>
+                  )}
                   <Field label={t.repair.payer} name="payer">
                     <div className="chips">
                       {(['company', 'customer'] as const).map((p) => (

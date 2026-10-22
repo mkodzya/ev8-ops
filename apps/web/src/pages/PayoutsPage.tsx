@@ -8,6 +8,7 @@ import { Field } from '../components/Wizard.js';
 import { FormSheet } from '../ds/form/Form.js';
 import { fmtDate, fmtDayMonth, formatGel } from '../format.js';
 import { useLocale, useT } from '../i18n/index.js';
+import { Typed } from '../lib/typed.js';
 import { useLoad } from '../lib/use.js';
 import { normText } from '../lib/workBook.js';
 import './workshop-job.css';
@@ -87,7 +88,8 @@ export function WorksOf({ j }: { j: PayJob }) {
         <Fragment key={i}>
           {i > 0 ? ', ' : ''}
           <span className={w.code ? 'wpay-code' : undefined}>
-            {w.code ?? w.freeText ?? '—'}
+            {/* A work not in the book in the reader's language, as on the approval card (ADR-0042). */}
+            {w.code ?? (w.freeText ? <Typed text={w.freeText} /> : '—')}
             {w.qty > 1 ? ` × ${w.qty}` : ''}
           </span>
         </Fragment>

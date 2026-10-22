@@ -51,7 +51,7 @@ export function customerRoutes(app: FastifyInstance): void {
         // Every rental: the list counts them; only open ones are named, each
         // by the status the rentals list gives it (ADR-0017).
         rentals: {
-          select: { id: true, number: true, status: true, paidThrough: true, pickedUpOn: true, payWeekday: true },
+          select: { id: true, number: true, status: true, paidThrough: true, pickedUpOn: true, payWeekday: true, weekShiftDays: true },
         },
         _count: { select: { sales: { where: { status: { not: 'cancelled' } } } } },
       },

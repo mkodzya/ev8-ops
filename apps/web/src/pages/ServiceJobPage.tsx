@@ -1,4 +1,19 @@
-import { AFTER_PHOTOS_MAX, daysBetween, localDateTime, hoursFromMinutes, labourTetri as labourFor, minutesFromHours, normSecFromMinutes, parseGel, todayISO } from '@ev8/shared';
+import {
+  AFTER_PHOTOS_MAX,
+  SERVICE_REASONS,
+  daysBetween,
+  isServiceReason,
+  localDateTime,
+  hoursFromMinutes,
+  labourTetri as labourFor,
+  minutesFromHours,
+  normSecFromMinutes,
+  parseGel,
+  reasonKindRefusal,
+  todayISO,
+  workshopChoices,
+  type ServiceReason,
+} from '@ev8/shared';
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api.js';
@@ -14,6 +29,7 @@ import { useMoneyForm } from '../ds/money/MoneyForm.js';
 import { fmtDate, formatGel } from '../format.js';
 import { useLocale, useT } from '../i18n/index.js';
 import { toBase64, uploadAll, type PreparedPhoto } from '../lib/photos.js';
+import { Typed } from '../lib/typed.js';
 import { useLoad } from '../lib/use.js';
 import { useSession } from '../session.js';
 import { groupDigits } from '../lib/workBook.js';
@@ -36,7 +52,7 @@ interface RentalDeposit {
   };
 }
 
-type Sheet = 'workshop' | 'payer' | 'part' | 'work' | 'close' | 'cancel' | 'reject' | 'addWork';
+type Sheet = 'workshop' | 'payer' | 'kind' | 'part' | 'work' | 'close' | 'cancel' | 'reject' | 'addWork';
 
 /**
  * Ремонт (wave 5 §3.7). The head says which moped and how long it has stood;
@@ -73,6 +89,9 @@ export function ServiceJobPage() {
   const open = j.status === 'open';
   const mayManage = can('service.manage');
   const mayEdit = open && mayManage;
+  // The kind is the owner's to set or change while the repair waits or is in
+  // work (Mika, 21.10.2026), so the repairs open today can be named once.
+  const mayKind = mayManage && (open || draft);
   // The approval of ADR-0033 — taking a reported breakdown up — is the chief
   // mechanic's as well as the owners'; what it costs stays the owners'.
   const mayApprove = draft && can('service.approve');
@@ -160,7 +179,9 @@ export function ServiceJobPage() {
       {j.rejected && (
         <section className="wappr-reason">
           <b>{t.wappr.rejectHead}</b>
-          <span className="pre">{j.rejected.reason}</span>
+          <span className="pre">
+            <Typed text={j.rejected.reason} />
+          </span>
           <span className="muted">{t.wappr.rejectedBy(j.rejected.by ?? t.common.dash, when(j.rejected.at))}</span>
         </section>
       )}
@@ -189,12 +210,22 @@ export function ServiceJobPage() {
               )
             }
           />
+          {/* ТО, an accident, wear… — a row of its own, which the owner opens to
+              set or change (Mika, 21.10.2026); the words of what happened stay below,
+              in the reader's language (ADR-0042). */}
+          {(j.reasonKind || mayKind) && (
+            <Choice
+              k={t.wjob.reason}
+              v={j.reasonKind ? (t.wjob.reasons[j.reasonKind] ?? j.reasonKind) : t.rkind.none}
+              quiet={!j.reasonKind}
+              onPick={mayKind ? () => setSheet('kind') : undefined}
+            />
+          )}
           <Row
             k={t.repair.what}
             v={
               <span className="pre">
-                {j.reasonKind ? `${t.wjob.reasons[j.reasonKind] ?? j.reasonKind} — ` : ''}
-                {j.reason}
+                <Typed text={j.reason} />
               </span>
             }
           />
@@ -205,7 +236,12 @@ export function ServiceJobPage() {
               v={
                 <>
                   <span className="mono">{groupDigits(j.openedOdometerKm)}</span>
-                  {j.odometerReason && <span className="muted"> · {j.odometerReason}</span>}
+                  {j.odometerReason && (
+                    <span className="muted">
+                      {' · '}
+                      <Typed text={j.odometerReason} />
+                    </span>
+                  )}
                 </>
               }
             />
@@ -252,7 +288,16 @@ export function ServiceJobPage() {
           {(j.downtime != null || j.status === 'done') && <Row k={t.wmaint.downtime} v={<DowntimeText d={j.downtime ?? null} />} />}
           {/* Its mechanic is paid for it: the repair is a record now (ADR-0037 §5). */}
           {j.paid && <Row k={t.wpay.paid} v={t.wpay.paidIn(fmtDate(j.paid.paidOn), j.paid.markedBy.name)} />}
-          {j.notes && <Row k={t.repair.notes} v={<span className="pre">{j.notes}</span>} />}
+          {j.notes && (
+            <Row
+              k={t.repair.notes}
+              v={
+                <span className="pre">
+                  <Typed text={j.notes} />
+                </span>
+              }
+            />
+          )}
         </section>
 
         {/* Two decisions, not a form: each opens its own sheet and writes on its own (§3.7). */}
@@ -492,6 +537,7 @@ export function ServiceJobPage() {
 
       {sheet === 'workshop' && <WorkshopSheet job={j} onClose={close} onSaved={saved} />}
       {sheet === 'payer' && <PayerSheet job={j} onClose={close} onSaved={saved} />}
+      {sheet === 'kind' && <KindSheet job={j} onClose={close} onSaved={saved} />}
       {sheet === 'part' && <PartSheet job={j} onClose={close} onSaved={saved} />}
       {sheet === 'work' && <WorkSheet job={j} onClose={close} onSaved={saved} />}
       {sheet === 'close' && <CloseSheet job={j} onClose={close} onSaved={saved} />}
@@ -544,12 +590,19 @@ function Choice({ k, v, quiet, onPick }: { k: string; v: string; quiet?: boolean
   );
 }
 
-/** The workshop that has it: a list the owner keeps, never free text (§8). */
+/**
+ * The workshop that has it: a list the owner keeps, never free text (§8). One
+ * taken off the list since is still this repair's, so it is shown first and
+ * marked, to be kept or changed — not left unmarked and cleared by accident
+ * (workshops list, task #1 of 21.10.2026).
+ */
 function WorkshopSheet({ job, onClose, onSaved }: { job: ServiceJob; onClose: () => void; onSaved: () => void }) {
   const t = useT();
   const workshops = useLoad<{ workshops: Workshop[] }>('/api/workshops');
   const initial = job.workshop?.id ?? '';
   const [v, setV] = useState(initial);
+  // Until the list has come, nothing is known to be off it.
+  const choices = workshops.data ? workshopChoices(workshops.data.workshops, job.workshop) : [];
   return (
     <FormSheet
       title={t.repair.workshopPick}
@@ -567,9 +620,10 @@ function WorkshopSheet({ job, onClose, onSaved }: { job: ServiceJob; onClose: ()
         <button type="button" className={`pill pill-sm ${v === '' ? 'on' : ''}`} onClick={() => setV('')}>
           {t.repair.workshopNone}
         </button>
-        {(workshops.data?.workshops ?? []).map((w) => (
+        {choices.map((w) => (
           <button key={w.id} type="button" className={`pill pill-sm ${v === w.id ? 'on' : ''}`} onClick={() => setV(w.id)}>
             {w.name}
+            {w.off && ` · ${t.wshop.archived}`}
           </button>
         ))}
       </div>
@@ -612,6 +666,53 @@ function PayerSheet({ job, onClose, onSaved }: { job: ServiceJob; onClose: () =>
       <p className="hint muted">{v === 'customer' ? t.repair.payerCustomerNote : t.repair.payerCompanyNote}</p>
       {/* Only the person who has the moped can be charged for it (`no_renter`). */}
       {job.rental && <p className="hint muted">{t.repair.rentedNote}</p>}
+    </FormSheet>
+  );
+}
+
+/**
+ * The kind of a repair in the tablet's words (Mika, 21.10.2026). «Не указана»
+ * is offered on a repair the office opened — the five have no «other» — and
+ * not on one a mechanic carries: the tablet asks every repair for a kind, so
+ * there it is changed for another, never taken away (`reasonKindRefusal`).
+ * What a kind sets going follows on the card: «Вина арендатора» brings the
+ * «за счёт клиента?» hint, «Плановое ТО» closed with a reading moves the next
+ * maintenance.
+ */
+function KindSheet({ job, onClose, onSaved }: { job: ServiceJob; onClose: () => void; onSaved: () => void }) {
+  const t = useT();
+  const initial: ServiceReason | '' = isServiceReason(job.reasonKind) ? job.reasonKind : '';
+  const [v, setV] = useState<ServiceReason | ''>(initial);
+  const mayClear = reasonKindRefusal({ status: job.status, byMechanic: job.mechanic != null }, null) == null;
+  return (
+    <FormSheet
+      title={t.rkind.pick}
+      onClose={onClose}
+      value={v}
+      initial={initial}
+      label={t.actions.save}
+      submit={async (key) => {
+        await api.patch(`/api/service/${job.id}`, { reasonKind: v || null }, { key });
+        return { toast: { text: t.form.changesSaved } };
+      }}
+      onDone={onSaved}
+    >
+      <div className="field" data-field="reasonKind">
+        <div className="chips">
+          {mayClear && (
+            <button type="button" className={`pill pill-sm ${v === '' ? 'on' : ''}`} aria-pressed={v === ''} onClick={() => setV('')}>
+              {t.rkind.none}
+            </button>
+          )}
+          {SERVICE_REASONS.map((r) => (
+            <button key={r} type="button" className={`pill pill-sm ${v === r ? 'on' : ''}`} aria-pressed={v === r} onClick={() => setV(r)}>
+              {t.wjob.reasons[r]}
+            </button>
+          ))}
+        </div>
+        {v === 'planned' && <span className="hint muted">{t.rkind.plannedNote}</span>}
+      </div>
+      <p className="hint muted">{job.reason}</p>
     </FormSheet>
   );
 }

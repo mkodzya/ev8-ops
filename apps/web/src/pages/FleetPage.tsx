@@ -1,4 +1,4 @@
-import { readFleetNumber, vinMatches, VEHICLE_COLORS, VEHICLE_POOLS, VEHICLE_STATES, colorOf, daysBetween, tokens, todayISO, type VehiclePool, type VehicleState } from '@ev8/shared';
+import { parkOf, readFleetNumber, vinMatches, VEHICLE_COLORS, VEHICLE_POOLS, VEHICLE_STATES, colorOf, daysBetween, tokens, todayISO, type ServiceWhy, type VehiclePool, type VehicleState } from '@ev8/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -13,8 +13,10 @@ import { Field } from '../components/Wizard.js';
 import { FormSheet } from '../ds/form/Form.js';
 import { DataList } from '../ds/list/DataList.js';
 import { fmtDate } from '../format.js';
+import type { Dict } from '../i18n/en.js';
 import { useT } from '../i18n/index.js';
 import { placeOf } from '../lib/place.js';
+import { Typed, useShownWords } from '../lib/typed.js';
 import { useLoad } from '../lib/use.js';
 import { useSession } from '../session.js';
 
@@ -34,6 +36,8 @@ interface Vehicle {
   location: { id: string; name: string } | null;
   lastSeenOn: string | null;
   currentRental: { id: string; number: string; paidThrough: string | null; customer: { id: string; name: string; nameKa: string | null; nameLat: string | null } } | null;
+  /** Why it stands in service, as recorded (21.10.2026); null in any other state, absent while an older API answers. */
+  serviceWhy?: ServiceWhy | null;
 }
 
 interface Fleet {
@@ -43,8 +47,19 @@ interface Fleet {
 
 const UNDO_WINDOW_MS = Number.parseFloat(tokens.undoWindow) * 1000;
 
-type PoolKey = VehiclePool | 'none' | 'gone';
-const poolOf = (v: Vehicle): PoolKey => (v.state === 'sold' || v.state === 'out' ? 'gone' : (v.pool ?? 'none'));
+/**
+ * Why a moped is in service, in the words somebody wrote (ADR-0005, addendum
+ * 21.10.2026): the repair's kind when one was picked, else what happened, else
+ * the reason of the move by hand. Null when nothing was written — the screen
+ * says so with a quiet dash — and for a moped that is not in service. A typed
+ * text is taken as the screen shows it — its translation when one is on
+ * screen (ADR-0042) — so the column sorts by the words the reader sees.
+ */
+function whyText(v: Vehicle, t: Dict, shownWords: (text: string | null | undefined) => string | null): string | null {
+  const why = v.serviceWhy;
+  if (!why) return null;
+  return why.kind ? t.wjob.reasons[why.kind] : (shownWords(why.text) ?? why.text);
+}
 
 /**
  * How long this moped has been quiet: days since the last thing that happened
@@ -81,6 +96,7 @@ export function FleetPage() {
   // is still on offer, so nothing disappears under the finger.
   const [moved, setMoved] = useState<{ id: string; to: VehiclePool } | null>(null);
   const today = todayISO();
+  const shownWords = useShownWords();
 
   useEffect(() => {
     if (!moved) return;
@@ -127,7 +143,9 @@ export function FleetPage() {
           { key: 'available', label: t.states.available, test: (v) => v.state === 'available' },
           { key: 'rented', label: t.states.rented, test: (v) => v.state === 'rented' },
           { key: 'service', label: t.states.service, test: (v) => v.state === 'service' },
-          { key: 'nopool', label: t.pools.none, test: (v) => poolOf(v) === 'none' },
+          // The whole sale park, new stock and used mopeds alike, whatever is happening to them (21.10.2026).
+          { key: 'sale', label: t.fleetList.forSale, test: (v) => parkOf(v) === 'sale' },
+          { key: 'nopool', label: t.pools.none, test: (v) => parkOf(v) === 'none' },
           { key: 'nopoint', label: t.points.unset, test: (v) => placeOf(v).kind === 'unset' },
         ]}
         empty={{ text: t.fleet.empty }}
@@ -139,11 +157,7 @@ export function FleetPage() {
           ),
           sub: <Vin vin={v.vin} />,
           right: <StateBadge state={v.state} />,
-          rightSub: (
-            <span className="muted">
-              {v.currentRental ? <CustomerName of={v.currentRental.customer} second={false} /> : <PlaceText of={v} />}
-            </span>
-          ),
+          rightSub: <StateSub v={v} />,
         })}
         columns={[
           { key: 'no', label: t.fleet.no, cell: (v) => <FleetNo n={v.fleetNo} />, sort: { value: (v) => v.fleetNo ?? Number.MAX_SAFE_INTEGER } },
@@ -166,11 +180,22 @@ export function FleetPage() {
             cell: (v) => (
               <span className="v-state">
                 <StateBadge state={v.state} />
-                {moved?.id === v.id ? <span className="v-sub v-pool-new">→ {t.pools[moved.to]}</span> : poolOf(v) === 'none' && <span className="v-sub">{t.pools.none}</span>}
+                {/* The word the line turns into once the offer to undo runs out: "For sale", not the park's dictionary name. */}
+                {moved?.id === v.id ? <span className="v-sub v-pool-new">→ {moved.to === 'sale' ? t.fleetList.forSale : t.pools[moved.to]}</span> : <ParkLine v={v} />}
+                {/* On a laptop too narrow for the reason column, the reason stands here, as on a phone. */}
+                {v.serviceWhy && (
+                  <span className={`v-sub v-why-line${v.serviceWhy.kind ? ' v-why-line-kind' : ''}`}>
+                    <Why v={v} />
+                  </span>
+                )}
               </span>
             ),
             sort: { value: (v) => VEHICLE_STATES.indexOf(v.state) },
           },
+          // Only a moped in service has a reason; every other row leaves the cell empty rather than forty dashes.
+          // A narrow column, a typed note on one line with an ellipsis; below 1360 px it gives way
+          // to a line under the state, or the row's dots fall off a 1280 px laptop (QA, 22.10.2026).
+          { key: 'why', label: t.wjob.reason, className: 'col-why', cell: (v) => <Why v={v} />, sort: { value: (v) => whyText(v, t, shownWords) } },
           {
             key: 'where',
             label: t.fleet.where,
@@ -197,6 +222,72 @@ export function FleetPage() {
   );
 }
 
+
+/**
+ * The quiet line under the state in the table: "For sale" for the sale park,
+ * "Not decided" for a moped in neither, nothing for the rental park and for
+ * a moped that has left the fleet.
+ */
+function ParkLine({ v }: { v: Vehicle }) {
+  const t = useT();
+  const park = parkOf(v);
+  if (park === 'sale') return <span className="v-sub">{t.fleetList.forSale}</span>;
+  if (park === 'none') return <span className="v-sub">{t.pools.none}</span>;
+  return null;
+}
+
+/**
+ * Why it is in service: a typed note on one line, ending in an ellipsis and
+ * read whole under the pointer, so it never stretches every row of the list;
+ * the repair's kind whole, on two lines if it must. Nothing at all for a
+ * moped in any other state.
+ */
+function Why({ v, quiet = false }: { v: Vehicle; quiet?: boolean }) {
+  const t = useT();
+  const why = v.serviceWhy;
+  if (!why) return null;
+  // The repair's kind is the product's own word, already in the reader's
+  // language: it wraps and is never cut (ux.md 12). What the repair says
+  // happened follows it under the pointer, after the word and not instead of it.
+  if (why.kind) {
+    const word = t.wjob.reasons[why.kind];
+    return (
+      <span className="v-why v-why-kind" title={why.text ? `${word} — ${why.text}` : word}>
+        {word}
+      </span>
+    );
+  }
+  if (!why.text) return <span className="muted">{t.common.dash}</span>;
+  // What somebody typed — the repair's «что случилось» or the reason of the
+  // move by hand — in the reader's language when a translation is ready
+  // (ADR-0042). A return's act behind the rental's number stays as written.
+  return <Typed text={why.text} clip="v-why" quiet={quiet} />;
+}
+
+/**
+ * The quiet lines under the state on a phone: "For sale" on a line of its own
+ * when the moped waits in the sale park, as under the state in the table, then
+ * the one fact that state is about — who has the moped, why it is in the
+ * workshop, or where it stands (21.10.2026). Two lines and not one, because a
+ * prefix would widen the card's right column and squeeze its title.
+ */
+function StateSub({ v }: { v: Vehicle }) {
+  const t = useT();
+  const fact = v.currentRental ? (
+    <CustomerName of={v.currentRental.customer} second={false} />
+  ) : v.serviceWhy ? (
+    // The card is a link to the moped: the mark only says it is a translation; the moped's card turns it to the original.
+    <Why v={v} quiet />
+  ) : (
+    <PlaceText of={v} />
+  );
+  return (
+    <>
+      {parkOf(v) === 'sale' && <span className="v-sub">{t.fleetList.forSale}</span>}
+      <span className="muted">{fact}</span>
+    </>
+  );
+}
 
 /** Days of silence, loud once they run past half a year. */
 function Quiet({ v, today }: { v: Vehicle; today: string }) {
@@ -254,7 +345,7 @@ function Actions({
     );
   }
 
-  const where = poolOf(v);
+  const where = parkOf(v);
   const actions: RowAction[] = [];
   if (can && where !== 'gone') {
     for (const p of VEHICLE_POOLS) {

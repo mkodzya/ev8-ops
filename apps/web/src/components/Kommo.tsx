@@ -9,8 +9,9 @@ import { useT } from '../i18n/index.js';
 //
 // A link or a deal id, kept as typed, opening in Kommo. The link is one way
 // by decision: Kommo is the CRM, EV8 Ops reads it and writes nothing there
-// (ADR-0014). The comparison with Kommo's rented stage matches by this field. A moped has no tracker field — no moped has a
-// tracker (Kardu, `incidents.md`, Q31).
+// (ADR-0014). The comparison with Kommo's rented stage matches by this field.
+// The moped's tracker is not among these fields: Q31 («no moped has a
+// tracker») was replaced by ADR-0036, and the IMEI and SIM are on the moped's card.
 
 const looksLikeUrl = (s: string) => /^https?:\/\//i.test(s.trim());
 
