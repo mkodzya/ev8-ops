@@ -10,6 +10,7 @@ import { FormSheet } from '../../ds/form/Form.js';
 import '../../ds/money/money.css';
 import { fmtDate, fmtDateAt, formatGel } from '../../format.js';
 import { useT } from '../../i18n/index.js';
+import { chargeWords } from '../../lib/charges.js';
 import { useLoad } from '../../lib/use.js';
 
 type Kind = 'rent' | 'sale' | 'service' | 'on_account' | 'deposit_payout' | 'buyback' | 'supplier';
@@ -44,7 +45,10 @@ interface Card {
     statementLine: { id: string; bank: 'bog' | 'tbc' | 'credo'; occurredOn: string; amountTetri: number; payer: string | null; purpose: string | null; matchedRule: string | null } | null;
     /** The other parts of a split bank line; absent while an older API answers. */
     splitWith?: { id: string; grossTetri: number; number: string | null; customer: string | null }[];
-    closed: { target: string; amountTetri: number; seq: number | null; startsOn: string | null; endsOn: string | null; dueOn: string | null }[];
+    /** What it settled; a charge's kind and note are absent while an older API answers. */
+    closed: { target: string; amountTetri: number; seq: number | null; startsOn: string | null; endsOn: string | null; dueOn: string | null; chargeKind?: string | null; chargeNote?: string | null }[];
+    /** The rest, which nothing has taken yet: rent credit (PAY-06). Absent while an older API answers. */
+    creditTetri?: number;
   };
   journal: { at: string; action: string; who: string | null; note: string | null }[];
   canVoid: boolean;
@@ -66,6 +70,7 @@ export function PaymentPage() {
   const p = data.payment;
   const signed = `${p.direction === 'out' ? '−' : '+'}${formatGel(p.grossTetri)}`;
   const record = recordLink(p);
+  const credit = p.creditTetri ?? 0;
 
   return (
     <>
@@ -94,16 +99,14 @@ export function PaymentPage() {
         {p.voided && <Row k={t.paymentPage.voided} v={`${p.voidReason ?? ''}${p.voidedBy ? ` · ${p.voidedBy}` : ''}`} />}
       </section>
 
-      {p.closed.length > 0 && (
+      {(p.closed.length > 0 || credit > 0) && (
         <section className="card">
-          <BlockHead title={t.paymentPage.closed} />
+          <BlockHead title={t.paymentPage.settled} />
           {p.closed.map((c, i) => (
-            <Row
-              key={i}
-              k={c.target === 'deposit' ? t.money.closeDeposit : c.target === 'period' ? t.money.closeWeek(dm(c.startsOn), dm(c.endsOn)) : t.money.closeInstalment(c.seq ?? 0, fmtDate(c.dueOn))}
-              v={<span className="mono">{formatGel(c.amountTetri)}</span>}
-            />
+            <Row key={i} k={settledLabel(t, c)} v={<span className="mono">{formatGel(c.amountTetri)}</span>} />
           ))}
+          {/* The rest of the money, beside what it settled: 170 in, 150 settled, 20 left as rent credit (QA after issue #9). */}
+          {credit > 0 && <Row k={t.payments.leftover} v={<span className="mono">{formatGel(credit)}</span>} />}
         </section>
       )}
 
@@ -152,6 +155,14 @@ export function PaymentPage() {
       {voiding && <VoidSheet id={p.id} amount={signed} parts={(p.splitWith ?? []).length + 1} onClose={() => setVoiding(false)} />}
     </>
   );
+}
+
+/** What a payment settled, in the money form's words (§3.1); a charge by its kind and note. */
+function settledLabel(t: ReturnType<typeof useT>, c: Card['payment']['closed'][number]): string {
+  if (c.target === 'deposit') return t.money.closeDeposit;
+  if (c.target === 'period') return t.money.closeWeek(dm(c.startsOn), dm(c.endsOn));
+  if (c.target === 'charge') return chargeWords(t, c.chargeKind, c.chargeNote);
+  return t.money.closeInstalment(c.seq ?? 0, fmtDate(c.dueOn));
 }
 
 /** A journal entry in words: written, annulled, undone. */

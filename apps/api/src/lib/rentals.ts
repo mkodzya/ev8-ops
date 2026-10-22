@@ -1,4 +1,4 @@
-import { KEY_FEE_TETRI, acquiringFee, canPickUp, fleetNumber, handOverActOf, handOverBlockTetri, nameSpellings, periodsThrough, returnSettlement, shiftsOf, type Settlement, type VehicleState } from '@ev8/shared';
+import { CHARGE_NOTES, KEY_FEE_TETRI, acquiringFee, canPickUp, fleetNumber, handOverActOf, handOverBlockTetri, nameSpellings, periodsThrough, returnSettlement, shiftsOf, type Settlement, type VehicleState } from '@ev8/shared';
 import { createHash } from 'node:crypto';
 import type { Prisma } from '../generated/prisma/client.js';
 import { audit } from './audit.js';
@@ -568,7 +568,7 @@ async function applyCharges(tx: Tx, actorId: string, rentalId: string, s: Settle
   const chargeIds: string[] = [];
   const replaced: { id: string; amountTetri: number }[] = [];
   if (s.keyTetri > 0) {
-    chargeIds.push((await tx.rentalCharge.create({ data: { rentalId, kind: 'key', amountTetri: s.keyTetri, note: 'contract §6', createdById: actorId } })).id);
+    chargeIds.push((await tx.rentalCharge.create({ data: { rentalId, kind: 'key', amountTetri: s.keyTetri, note: CHARGE_NOTES.keyContract, createdById: actorId } })).id);
   }
   if (s.choice === 'late' && s.late) {
     for (const w of s.replacedWeeks) {
@@ -940,7 +940,7 @@ export async function swapVehicle(input: SwapInput): Promise<SwapResult> {
     // The batteries and chargers stay with the customer; a changed count is "Change terms".
     const keyCharge =
       input.out.items.key?.state === 'missing'
-        ? await tx.rentalCharge.create({ data: { rentalId: r.id, kind: 'key', amountTetri: KEY_FEE_TETRI, note: 'contract §6', createdById: input.actor.id }, select: { id: true } })
+        ? await tx.rentalCharge.create({ data: { rentalId: r.id, kind: 'key', amountTetri: KEY_FEE_TETRI, note: CHARGE_NOTES.keyContract, createdById: input.actor.id }, select: { id: true } })
         : null;
 
     // (d) The moped handed out: a rental moped from now (ADR-0005, Q9), with the customer, with its mileage.

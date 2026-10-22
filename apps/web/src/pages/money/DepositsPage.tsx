@@ -78,20 +78,7 @@ export function DepositsPage() {
             empty={{ text: t.deposits.none }}
             card={(d) => ({
               title: d.customer.name,
-              sub: (
-                <>
-                  {d.number} ·{' '}
-                  {d.segment === 'undecided'
-                    ? t.w3.undecidedSub(fmtDate(d.returnedOn))
-                    : d.segment === 'to_hand_back'
-                    ? `${t.deposits.returnedOn(fmtDate(d.returnedOn))} · ${d.returnedTetri >= d.paidTetri ? t.deposits.decidedAll : t.deposits.decidedPart(formatGel(d.returnedTetri))}`
-                    : d.segment === 'short'
-                      ? t.deposits.shortOf(formatGel(d.paidTetri, { decimals: false }), formatGel(d.amountTetri, { decimals: false }), formatGel(d.shortTetri, { decimals: false }))
-                      : d.returnedOn
-                        ? t.deposits.returnedOn(fmtDate(d.returnedOn))
-                        : ''}
-                </>
-              ),
+              sub: depositSub(t, d),
               right: <span className="t-money">{formatGel(d.segment === 'to_hand_back' ? d.toHandBackTetri : d.heldTetri)}</span>,
               rightSub:
                 d.segment === 'undecided' ? (
@@ -147,4 +134,23 @@ export function DepositsPage() {
       )}
     </>
   );
+}
+
+/**
+ * The quiet line under a deposit: the rental's number, then what is known of
+ * it. A deposit on hand with no return yet has nothing after the number, and
+ * the line ended in a hanging «·» — «R-00494 · » (QA after issue #9).
+ */
+function depositSub(t: ReturnType<typeof useT>, d: DepositRow): string {
+  const tail =
+    d.segment === 'undecided'
+      ? t.w3.undecidedSub(fmtDate(d.returnedOn))
+      : d.segment === 'to_hand_back'
+        ? `${t.deposits.returnedOn(fmtDate(d.returnedOn))} · ${d.returnedTetri >= d.paidTetri ? t.deposits.decidedAll : t.deposits.decidedPart(formatGel(d.returnedTetri))}`
+        : d.segment === 'short'
+          ? t.deposits.shortOf(formatGel(d.paidTetri, { decimals: false }), formatGel(d.amountTetri, { decimals: false }), formatGel(d.shortTetri, { decimals: false }))
+          : d.returnedOn
+            ? t.deposits.returnedOn(fmtDate(d.returnedOn))
+            : '';
+  return tail ? `${d.number} · ${tail}` : d.number;
 }

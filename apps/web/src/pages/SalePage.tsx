@@ -143,7 +143,7 @@ export function SalePage() {
         <Row k={t.sell.soldOn} v={<span className="mono">{fmtDate(s.soldOn)}</span>} />
         <Row k={t.saleCard.warranty} v={<span className="mono">{fmtDate(s.warrantyUntil)}</span>} />
         {s.transferred && <Row k={t.saleCard.transferred} v={t.saleCard.paidBefore(formatGel(s.paidBeforeTetri))} />}
-        {s.boughtBackOn && <Row k={t.saleCard.menu.buyback} v={<span className="mono">{fmtDate(s.boughtBackOn)}</span>} />}
+        {s.boughtBackOn && <Row k={t.saleCard.boughtBack} v={<span className="mono">{fmtDate(s.boughtBackOn)}</span>} />}
         {/* The front office's deal, one way only until the webhook tariff (B10-03). */}
         <Row k={t.kommo.label} v={<KommoField url={`/api/sales/${s.id}`} value={s.kommoRef ?? null} onDone={reload} />} />
       </section>

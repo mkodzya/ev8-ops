@@ -331,7 +331,7 @@ export const ru: Dict = {
 
   vehicle: {
     stateChanged: (state: string) => `Статус: ${state}`,
-    changeStateCta: 'Сменить статус',
+    changeStateCta: 'Изменить статус',
     eventsCount: counted('событие', 'события', 'событий'),
     backToFleet: 'Вернуть в парк',
     title: 'Мопед',
@@ -761,7 +761,7 @@ export const ru: Dict = {
     date: 'Дата',
     backdateReason: 'Почему прошлой датой',
     managerDay: (d: string) => `Сегодня, ${d} · попадёт в вашу кассу`,
-    closes: 'Закроет',
+    settles: 'Погасит',
     closeDeposit: 'Залог',
     closeWeek: (from: string, to: string) => `Неделя ${from}–${to}`,
     closeInstalment: (seq: number, due: string) => `Взнос ${seq} · ${due}`,
@@ -965,7 +965,7 @@ export const ru: Dict = {
     feeExpense: 'Комиссия — расход',
     date: 'Дата',
     by: 'Внёс',
-    closed: 'Закрыл',
+    settled: 'Погашено',
     line: 'Строка выписки',
     byRule: 'привязана правилом',
     byHand: 'привязана вручную',
