@@ -97,7 +97,8 @@ Georgian in every font stack (Be Vietnam Pro and Inter have no Georgian glyphs).
 
 ## Domain facts that shape the code
 - Money in GEL, stored in tetri as integers; VAT 18 % added on top of net prices.
-- Time zone Asia/Tbilisi; rental periods are 7 calendar days from pickup.
+- Time zone Asia/Tbilisi; rental periods are 7 calendar days from pickup; an owner may make
+  the running week 1–6 days longer, and every later week follows (Mika, 21.10.2026; ADR-0041).
 - Vehicle state is derived from events (pickup, return, service job, sale),
   never set by hand without a reason.
 - Acquiring payments arrive without payer name; net = gross − 1.5 %
