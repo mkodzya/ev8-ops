@@ -359,6 +359,8 @@ interface Payout {
   totalTetri: number;
   offsetTetri: number;
   cashTetri: number;
+  /** The rental its offset paid; null with none, and once voided. */
+  rental: { id: string; number: string } | null;
   jobs: { id: string; number: string }[];
   receiptsCount: number;
   markedBy: { id: string; name: string };
@@ -893,7 +895,7 @@ describe.skipIf(!HAS_DB)('who marks a payout, and whose balance (ADR-0037; ADR-0
     const theirs = await balanceOf(other.cookie);
     expect(theirs.payable).toMatchObject({ jobs: [], totalTetri: 0, jobIds: [], partIds: [] });
     expect(theirs.payouts.map((p) => p.id)).toEqual([paidBefore.id]);
-    expect(theirs.payouts[0]).toMatchObject({ labourTetri: 1667, jobs: [{ id: others }], markedBy: { id: owner.id } });
+    expect(theirs.payouts[0]).toMatchObject({ labourTetri: 1667, jobs: [{ id: others }], markedBy: { id: owner.id }, offsetTetri: 0, cashTetri: 1667, rental: null });
     for (const id of [payable, unnormed, waiting, open]) expect(JSON.stringify(theirs)).not.toContain(id);
 
     const owners = await balanceOf(owner.cookie);
@@ -976,6 +978,11 @@ describe.skipIf(!HAS_DB)('a mechanic who rents a moped (director, 22.10.2026; 00
 
     const payout = await pay(owner.cookie, due);
     expect(payout).toMatchObject({ totalTetri: due.totalTetri, offsetTetri: rent.offsetTetri, cashTetri: rent.cashTetri });
+    // Both histories name the rental and what was handed over, never the whole sum as if paid out (QA after issue #7).
+    const named = { id: payout.id, offsetTetri: rent.offsetTetri, cashTetri: rent.cashTetri, rental: { id: rentalId, number: rent.number } };
+    expect(payout).toMatchObject(named);
+    expect((await payoutsScreen(owner.cookie)).payouts.find((p) => p.id === payout.id)).toMatchObject(named);
+    expect((await balanceOf(mech.cookie)).payouts[0]).toMatchObject(named);
     const row = await prisma.mechanicPayout.findUniqueOrThrow({ where: { id: payout.id } });
     const paid = await prisma.payment.findUniqueOrThrow({ where: { id: row.offsetPaymentId! }, include: { allocations: true } });
     expect(paid).toMatchObject({ channel: 'offset', kind: 'rent', rentalId, customerId: customer.id, grossTetri: rent.offsetTetri, voidedAt: null });
@@ -1005,6 +1012,8 @@ describe.skipIf(!HAS_DB)('a mechanic who rents a moped (director, 22.10.2026; 00
     // The payout voided takes it with it, and the rent is owed again.
     const voided = await call(owner.cookie, 'POST', `/api/service/payouts/${payout.id}/void`, { reason: 'ТЕСТ wrong mark' });
     expect(voided.statusCode, voided.body).toBe(200);
+    // Voided, nothing of it is in rent: the history says the whole sum and no rental.
+    expect(json<{ payout: Payout }>(voided).payout).toMatchObject({ offsetTetri: 0, cashTetri: due.totalTetri, rental: null });
     expect((await prisma.payment.findUniqueOrThrow({ where: { id: paid.id } })).voidedAt).not.toBeNull();
     expect(await prisma.paymentAllocation.count({ where: { paymentId: paid.id } })).toBe(0);
     expect((await firstWeek()).paidTetri).toBe(0);

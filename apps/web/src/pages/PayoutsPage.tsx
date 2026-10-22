@@ -7,6 +7,7 @@ import { BlockHead, Empty, Loading, PageHead } from '../components/ui.js';
 import { Field } from '../components/Wizard.js';
 import { FormSheet } from '../ds/form/Form.js';
 import { fmtDate, fmtDayMonth, formatGel } from '../format.js';
+import type { Dict } from '../i18n/en.js';
 import { useLocale, useT } from '../i18n/index.js';
 import { Typed } from '../lib/typed.js';
 import { useLoad } from '../lib/use.js';
@@ -60,6 +61,8 @@ export interface PayoutRow {
   /** What of it went into the mechanic's rent (0066). */
   offsetTetri: number;
   cashTetri: number;
+  /** The rental the offset paid; null with none and once voided, absent while an older API answers. */
+  rental?: { id: string; number: string } | null;
   jobs: { id: string; number: string }[];
   receiptsCount: number;
   markedBy: { id: string; name: string } | null;
@@ -149,9 +152,11 @@ function MechanicToPay({ m, onDone }: { m: PayMechanic; onDone: () => void }) {
   const folded = !open && m.jobs.length > FOLD + 1;
   const shown = folded ? m.jobs.slice(0, FOLD) : m.jobs;
   const receipts = m.jobs.reduce((n, j) => n + j.receipts.length, 0) + m.otherReceipts.length;
+  const rent = m.rent && m.rent.offsetTetri > 0 ? m.rent : null;
+  // The button names the cash to hand over, never the whole sum, when part of it pays his rent (QA after issue #7).
   const pay = (
     <button type="button" className="pill pill-accent wpay-pay" onClick={() => setAsking(true)}>
-      {t.wpay.pay(formatGel(m.totalTetri))}
+      {payLabel(t, m)}
     </button>
   );
   return (
@@ -164,7 +169,11 @@ function MechanicToPay({ m, onDone }: { m: PayMechanic; onDone: () => void }) {
             {t.wpay.roles[m.role] ?? m.role} · {t.wpay.rate(formatGel(m.rateTetri, { decimals: false }))}
           </span>
         </div>
-        <span className="wpay-wide">{pay}</span>
+        <span className="wpay-wide">
+          {/* On a laptop the rent lines stand under the table, far from the button: the offset is said beside it too. */}
+          {rent && <span className="muted wpay-beside">{t.wpay.offsetInRent(formatGel(rent.offsetTetri), rent.number)}</span>}
+          {pay}
+        </span>
       </div>
 
       {/* Phone and tablet: rows, the first few unfolded. */}
@@ -298,7 +307,7 @@ function MechanicToPay({ m, onDone }: { m: PayMechanic; onDone: () => void }) {
           <dd className="mono">{formatGel(m.totalTetri)}</dd>
         </div>
       </dl>
-      {m.rent && m.rent.offsetTetri > 0 && <RentLines rent={m.rent} />}
+      {rent && <RentLines rent={rent} link />}
       <div className="wpay-narrow">{pay}</div>
       {asking && <PaySheet m={m} receipts={receipts} onClose={() => setAsking(false)} onDone={onDone} />}
     </section>
@@ -306,19 +315,34 @@ function MechanicToPay({ m, onDone }: { m: PayMechanic; onDone: () => void }) {
 }
 
 /**
+ * «Оплачено · к выдаче 30.50 ₾» when part of the payout pays the mechanic's
+ * rent, «Оплачено · 130.50 ₾» when none does: the button says the cash the
+ * owner hands over, so the whole sum is never handed over by mistake.
+ */
+function payLabel(t: Dict, m: PayMechanic): string {
+  return m.rent && m.rent.offsetTetri > 0 ? t.wpay.payCash(formatGel(m.rent.cashTetri)) : t.wpay.pay(formatGel(m.totalTetri));
+}
+
+/**
  * The rent a payout pays first (director, 22.10.2026; 0066): how much goes
  * into the mechanic's rent and what is handed over. Under the total, on every
- * screen width.
+ * screen width — and on the mechanic's balance, where the rental is not his
+ * to open (`link` off).
  */
-function RentLines({ rent }: { rent: NonNullable<PayMechanic['rent']> }) {
+export function RentLines({ rent, link = false }: { rent: NonNullable<PayMechanic['rent']>; link?: boolean }) {
   const t = useT();
+  const words = t.wpay.rentOffset(rent.number, formatGel(rent.owedTetri));
   return (
     <dl className="wpay-sum wpay-rent">
       <div>
         <dt>
-          <Link className="mono" to={`/rentals/${rent.rentalId}`}>
-            {t.wpay.rentOffset(rent.number, formatGel(rent.owedTetri))}
-          </Link>
+          {link ? (
+            <Link className="mono" to={`/rentals/${rent.rentalId}`}>
+              {words}
+            </Link>
+          ) : (
+            words
+          )}
         </dt>
         <dd className="mono">−{formatGel(rent.offsetTetri)}</dd>
       </div>
@@ -339,13 +363,18 @@ function RentLines({ rent }: { rent: NonNullable<PayMechanic['rent']> }) {
  */
 function PaySheet({ m, receipts, onClose, onDone }: { m: PayMechanic; receipts: number; onClose: () => void; onDone: () => void }) {
   const t = useT();
+  const rent = m.rent && m.rent.offsetTetri > 0 ? m.rent : null;
+  // With an offset the title names the cash first and the rent beside it; the button says the cash (QA after issue #7).
+  const title = rent
+    ? t.wpay.confirmTitleOffset(m.name, formatGel(rent.cashTetri), formatGel(rent.offsetTetri), rent.number)
+    : t.wpay.confirmTitle(m.name, formatGel(m.totalTetri));
   return (
     <FormSheet
-      title={t.wpay.confirmTitle(m.name, formatGel(m.totalTetri))}
+      title={title}
       onClose={onClose}
       value={m.totalTetri}
       initial={m.totalTetri}
-      label={t.wpay.pay(formatGel(m.totalTetri))}
+      label={payLabel(t, m)}
       onCancel={onClose}
       submit={async (key) => {
         try {
@@ -354,21 +383,39 @@ function PaySheet({ m, receipts, onClose, onDone }: { m: PayMechanic; receipts: 
           if (e instanceof ApiError && e.status === 409) onDone();
           throw e;
         }
-        return { toast: { text: t.wpay.marked(m.name, formatGel(m.totalTetri)) } };
+        return { toast: { text: rent ? t.wpay.markedOffset(m.name, formatGel(rent.cashTetri), formatGel(rent.offsetTetri)) : t.wpay.marked(m.name, formatGel(m.totalTetri)) } };
       }}
       onDone={onDone}
     >
       <p>{t.wpay.confirmWhat(m.jobs.length, formatGel(m.workTetri), receipts === 0 ? null : formatGel(m.reimburseTetri))}</p>
-      {m.rent && m.rent.offsetTetri > 0 ? (
+      {rent ? (
         <>
-          <p>{t.wpay.confirmOffset(formatGel(m.rent.offsetTetri), m.rent.number, formatGel(m.rent.cashTetri))}</p>
+          <p>{t.wpay.confirmOffset(formatGel(rent.offsetTetri), rent.number, formatGel(rent.cashTetri))}</p>
           {/* The rent payment does appear in «Деньги»: the note says so, and that only the cash handed over is an expense. */}
-          <p className="hint">{t.wpay.confirmNoteOffset(m.rent.number, m.rent.cashTetri > 0 ? formatGel(m.rent.cashTetri) : null)}</p>
+          <p className="hint">{t.wpay.confirmNoteOffset(rent.number, rent.cashTetri > 0 ? formatGel(rent.cashTetri) : null)}</p>
         </>
       ) : (
         <p className="hint">{t.wpay.confirmNote}</p>
       )}
     </FormSheet>
+  );
+}
+
+/**
+ * « · 100.00 ₾ в аренду R-00511 · выдано 30.50 ₾» after a payout that paid
+ * rent (QA after issue #7, 23.10.2026): the same words in the owner's
+ * «Выплаты» and in the mechanic's balance, so neither reads the whole sum as
+ * handed over. Nothing with no offset.
+ */
+export function OffsetWords({ p }: { p: PayoutRow }) {
+  const t = useT();
+  if (p.offsetTetri <= 0) return null;
+  const offset = formatGel(p.offsetTetri);
+  return (
+    <>
+      {' · '}
+      {p.rental ? t.wpay.offsetInRent(offset, p.rental.number) : t.wpay.offsetIn(offset)} · {t.wpay.handedOut(formatGel(p.cashTetri))}
+    </>
   );
 }
 
@@ -388,7 +435,7 @@ function PayoutHistory({ rows, onDone }: { rows: PayoutRow[]; onDone: () => void
               <span className="mono wpay-n">{fmtDayMonth(p.paidOn)}</span>
               <span className="wpay-t">
                 {p.mechanic.name} · {t.wpay.jobsN(p.jobs.length)}
-                {p.offsetTetri > 0 && <> · {t.wpay.offsetIn(formatGel(p.offsetTetri))}</>}
+                <OffsetWords p={p} />
                 <small className="muted">
                   {p.voided ? t.wpay.voided(p.voided.reason) : p.markedBy ? t.wpay.markedBy(p.markedBy.name) : ''}
                 </small>
