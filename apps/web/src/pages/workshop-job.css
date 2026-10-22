@@ -303,9 +303,11 @@
 .wpay-held, .wpay-history { margin-bottom: var(--space4); }
 .wpay-void .wpay-g { color: var(--muted); text-decoration: line-through; }
 .wpay-wide { display: none; }
+/* Beside the laptop's button: what of the payout goes into the mechanic's rent (QA after issue #7). */
+.wpay-beside { font: var(--text-label); }
 @media (min-width: 900px) {
   .wpay-wide { display: block; }
-  .wpay-head .wpay-wide { display: inline-flex; }
+  .wpay-head .wpay-wide { display: inline-flex; align-items: center; gap: var(--space3); }
   .wpay-narrow { display: none; }
 }
 

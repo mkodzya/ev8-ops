@@ -9,7 +9,7 @@ import '../../ds/form/form.css';
 import { useOperation } from '../../ds/form/operation.js';
 import '../../ds/money/money.css';
 import { Skeleton } from '../../ds/state/Skeleton.js';
-import { fmtDate } from '../../format.js';
+import { fmtDate, fmtDateAt } from '../../format.js';
 import { useT } from '../../i18n/index.js';
 import { errorText, useLoad } from '../../lib/use.js';
 
@@ -152,7 +152,7 @@ export function StatementsPage() {
               ) : (
                 <>
                   <span>
-                    {t.statements.lastUpload(fmtDate(b.lastUploadAt?.slice(0, 10)))}, {t.statements.through(fmtDate(b.throughOn))}
+                    {t.statements.lastUpload(fmtDateAt(b.lastUploadAt))}, {t.statements.through(fmtDate(b.throughOn))}
                   </span>
                   <span className={b.stale ? 'warn-text' : 'muted'}>{b.daysOld != null ? t.statements.daysAgo(b.daysOld) : ''}</span>
                   {b.stale && <span className="warn-text">{t.statements.staleNote(data.staleDays)}</span>}
@@ -238,7 +238,7 @@ export function StatementsPage() {
                 {t.statements.banks[s.bank]} · {s.fileName}
                 <span className="muted">
                   {' '}
-                  · {[s.periodFrom ? `${fmtDate(s.periodFrom)}–${fmtDate(s.periodTo)}` : null, s.uploadedBy, fmtDate(s.createdAt.slice(0, 10))].filter(Boolean).join(' · ')}
+                  · {[s.periodFrom ? `${fmtDate(s.periodFrom)}–${fmtDate(s.periodTo)}` : null, s.uploadedBy, fmtDateAt(s.createdAt)].filter(Boolean).join(' · ')}
                 </span>
               </span>
               <span className="mono">

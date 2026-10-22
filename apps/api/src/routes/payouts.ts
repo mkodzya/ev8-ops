@@ -73,6 +73,8 @@ const PAYOUT = {
   voidedAt: true,
   voidReason: true,
   offsetTetri: true,
+  // The rental its offset paid, for the history to name it (QA after issue #7, 23.10.2026).
+  offsetPayment: { select: { rental: { select: { id: true, number: true } } } },
   mechanic: { select: { id: true, name: true } },
   markedBy: { select: { id: true, name: true } },
   voidedBy: { select: { id: true, name: true } },
@@ -295,6 +297,13 @@ async function payoutsOut(rows: PayoutRow[]) {
       // A voided payout took its offset back: nothing of it is in rent any more.
       offsetTetri: r.voidedAt ? 0 : r.offsetTetri,
       cashTetri: r.labourTetri + r.reimburseTetri - (r.voidedAt ? 0 : r.offsetTetri),
+      /**
+       * The rental the offset paid, so that the owner's «Выплаты» and the
+       * mechanic's balance both say «… в аренду R-… · выдано …» rather than
+       * the whole sum as if handed over (QA after issue #7, 23.10.2026). Null
+       * with no offset, and once voided.
+       */
+      rental: !r.voidedAt && r.offsetTetri > 0 && r.offsetPayment?.rental ? { id: r.offsetPayment.rental.id, number: r.offsetPayment.rental.number } : null,
       jobs: was ? was.jobs : r.jobs,
       receiptsCount: was ? was.receipts : r._count.parts,
       markedBy: r.markedBy,

@@ -90,6 +90,16 @@ describe('three looks at one personal number', () => {
     expect(collapseViews(rows)).toHaveLength(4);
   });
 
+  it('fold by the company’s day, not by the UTC one (QA after issue #7)', () => {
+    // 23:30 and 00:30 in Tbilisi: one UTC day, two of the company's.
+    expect(collapseViews([row({ at: '2026-09-17T20:30:00.000Z' }), row({ at: '2026-09-17T19:30:00.000Z' })])).toHaveLength(2);
+    // 00:30 and 09:00 in Tbilisi on the 18th: two UTC days, one of the company's.
+    const one = collapseViews([row({ at: '2026-09-18T05:00:00.000Z' }), row({ at: '2026-09-17T20:30:00.000Z' })]);
+    expect(one).toHaveLength(1);
+    expect(one[0].times).toBe(2);
+    expect(one[0].at).toBe('2026-09-18T05:00:00.000Z');
+  });
+
   it('leave changes alone — two edits of one sale are two lines', () => {
     const rows = [
       row({ action: 'sale.update', at: '2026-09-18T12:03:00.000Z', entityId: 's1', before: { priceTetri: 518800 }, after: { priceTetri: 500000 } }),

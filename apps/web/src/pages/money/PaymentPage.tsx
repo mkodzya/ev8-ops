@@ -8,7 +8,7 @@ import { BlockHead, Loading, PageHead } from '../../components/ui.js';
 import { Field, Row } from '../../components/Wizard.js';
 import { FormSheet } from '../../ds/form/Form.js';
 import '../../ds/money/money.css';
-import { fmtDate, formatGel } from '../../format.js';
+import { fmtDate, fmtDateAt, formatGel } from '../../format.js';
 import { useT } from '../../i18n/index.js';
 import { useLoad } from '../../lib/use.js';
 
@@ -90,7 +90,7 @@ export function PaymentPage() {
         <Row k={t.paymentPage.date} v={<span className="mono">{fmtDate(p.occurredOn)}</span>} />
         {p.backdateReason && <Row k={t.paymentPage.backdate} v={p.backdateReason} />}
         {p.paidTo && <Row k={t.paymentPage.paidTo} v={`${p.paidTo} · ${p.paidToReason ?? ''}`} />}
-        <Row k={t.paymentPage.by} v={`${p.createdBy ?? t.common.dash}, ${fmtDate(p.createdAt.slice(0, 10))} ${hhmm(p.createdAt)}`} />
+        <Row k={t.paymentPage.by} v={`${p.createdBy ?? t.common.dash}, ${fmtDateAt(p.createdAt)} ${hhmm(p.createdAt)}`} />
         {p.voided && <Row k={t.paymentPage.voided} v={`${p.voidReason ?? ''}${p.voidedBy ? ` · ${p.voidedBy}` : ''}`} />}
       </section>
 
@@ -144,7 +144,7 @@ export function PaymentPage() {
         <section className="card">
           <BlockHead title={t.paymentPage.journal} />
           {data.journal.map((j, i) => (
-            <Row key={i} k={`${fmtDate(j.at.slice(0, 10))} ${hhmm(j.at)}`} v={`${j.who ?? ''} · ${actWord(t, j.action)}${j.note ? ` · ${j.note}` : ''}`} />
+            <Row key={i} k={`${fmtDateAt(j.at)} ${hhmm(j.at)}`} v={`${j.who ?? ''} · ${actWord(t, j.action)}${j.note ? ` · ${j.note}` : ''}`} />
           ))}
         </section>
       )}

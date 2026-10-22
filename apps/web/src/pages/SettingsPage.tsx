@@ -85,7 +85,8 @@ export function SettingsPage() {
           users.failure ? <LoadError failure={users.failure} onRetry={users.reload} /> : <Loading />
         ) : (
           <div className="table-wrap table-flat">
-            <table className="table">
+            {/* On a phone a person is a card and the buttons wrap (QA after issue #7): the row was wider than the screen. */}
+            <table className="table people-table">
               <thead>
                 <tr>
                   <th>{t.users.name}</th>
@@ -421,8 +422,9 @@ function UserRow({ user: u, onRole, onDone }: { user: Users['users'][number]; on
           ))}
         </select>
       </td>
-      <td>{u.active ? t.common.yes : t.users.off}</td>
-      <td className="num">
+      {/* «Да» says nothing on a phone's card, where there is no heading over it: there only «Отключён» is written. */}
+      <td className={u.active ? 'people-on' : undefined}>{u.active ? t.common.yes : t.users.off}</td>
+      <td className="num people-acts">
         {editing === 'password' ? (
           <span className="inline-form">
             {!u.email && (
@@ -461,20 +463,26 @@ function UserRow({ user: u, onRole, onDone }: { user: Users['users'][number]; on
             </button>
           </span>
         ) : editing === 'renter' ? (
-          <span className="inline-form">
-            <select className="input input-inline" value={renter} onChange={(e) => setRenter(e.target.value)} autoFocus aria-label={t.wpay.renterPick} title={t.wpay.renterHint}>
-              <option value="">{t.wpay.renterNone}</option>
-              {renters.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {[c.name, ...c.openRentals.map((r) => r.number)].join(' · ')}
-                </option>
-              ))}
-            </select>
-            <SubmitButton small type="button" state={op.state} label={t.actions.save} onClick={() => void saveRenter()} />
-            <button type="button" className="pill pill-sm" onClick={stopEditing}>
-              {t.actions.cancel}
-            </button>
-          </span>
+          <>
+            <span className="inline-form">
+              <select className="input input-inline" value={renter} onChange={(e) => setRenter(e.target.value)} autoFocus aria-label={t.wpay.renterPick} aria-describedby={`renter-hint-${u.id}`}>
+                <option value="">{t.wpay.renterNone}</option>
+                {renters.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {[c.name, ...c.openRentals.map((r) => r.number)].join(' · ')}
+                  </option>
+                ))}
+              </select>
+              <SubmitButton small type="button" state={op.state} label={t.actions.save} onClick={() => void saveRenter()} />
+              <button type="button" className="pill pill-sm" onClick={stopEditing}>
+                {t.actions.cancel}
+              </button>
+            </span>
+            {/* What the link does, as text: a select's title is never seen on a phone (QA after issue #7). */}
+            <p className="hint muted people-hint" id={`renter-hint-${u.id}`}>
+              {t.wpay.renterHint}
+            </p>
+          </>
         ) : (
           <>
             <button type="button" className="pill pill-sm" onClick={() => void toggle()} disabled={u.id === me?.id || op.state === 'busy'}>

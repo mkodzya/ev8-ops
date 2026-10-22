@@ -444,6 +444,25 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
 @media (max-width: 719px) {
   .input-inline { max-width: 140px; }
 }
+/* What linking a mechanic to a customer card does, said under the picker (QA after issue #7, 23.10.2026). In the
+   actions cell, which is right-aligned and never wraps on a laptop, it is a block of its own that does. */
+.people-hint { max-width: 340px; margin: 6px 0 0 auto; white-space: normal; text-align: left; }
+/* Settings → People on a phone: a person is a card, not a row wider than the screen — «Арендует мопед» stood at
+   x≈1300 px behind sideways scroll. Name, address, role, then the buttons, which wrap 8 px apart (ux.md №13). */
+@media (max-width: 719px) {
+  .table.people-table thead { display: none; }
+  .table.people-table, .table.people-table tbody, .table.people-table tr, .table.people-table td { display: block; }
+  .table.people-table tr { padding: 10px 0; border-top: 1px solid var(--line-soft); }
+  .table.people-table tbody tr:first-child { border-top: 0; }
+  .table.people-table td { padding: 2px 0; border-top: 0; text-align: left; white-space: normal; overflow-wrap: anywhere; }
+  .table.people-table td.people-on { display: none; }
+  .table.people-table td.people-acts { display: flex; flex-wrap: wrap; align-items: center; gap: var(--touch-gap); padding-top: 8px; }
+  .table.people-table td.people-acts .inline-form { flex-wrap: wrap; gap: var(--touch-gap); }
+  /* A field takes the card's width — «Главный механик» and a card's name are not cut at 140 px; the buttons go under it. */
+  .table.people-table .input-inline { max-width: 100%; min-height: var(--control); }
+  .table.people-table td.people-acts .inline-form > .input { flex: 1 1 100%; }
+  .table.people-table td.people-acts > .people-hint, .table.people-table td.people-acts > .field-err { flex-basis: 100%; max-width: none; margin: 0; }
+}
 
 /* ---- the unmatched queue -------------------------------------------- */
 .queue { list-style: none; margin: 0; padding: 0; }

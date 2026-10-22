@@ -400,23 +400,33 @@ button.cal-cell { cursor: pointer; }
 .cal-month { margin: 16px 0 0; }
 .cal-month-title { margin: 0 0 6px; font: var(--text-overline); color: var(--muted); }
 .cal-month .table-wrap { background: var(--surface); border-radius: var(--radius-card); }
-.cal-month-table { font: var(--text-label); }
-.cal-month-table th, .cal-month-table td { padding: 6px 6px; }
-/* The headings may take two lines, the sums never: five columns fit the 448 px month and a 375 px phone. */
-.cal-month-table thead th { white-space: normal; vertical-align: bottom; line-height: 1.2; }
-.cal-month-table tfoot th { white-space: normal; text-transform: none; letter-spacing: 0; font: inherit; font-weight: 600; color: var(--ink); }
-.cal-month-table td.num, .cal-month-table tfoot .num { white-space: nowrap; font-variant-numeric: tabular-nums; }
-.cal-month-table tfoot th, .cal-month-table tfoot td { font-weight: 600; border-top: 1px solid var(--line-soft); }
-.cal-month-table tfoot th { text-align: left; }
-.cal-month-now td { font-weight: 600; }
-.cal-month-table .cal-short { color: var(--crit-ink); }
+/* Every rule of the table carries `.table` twice over (QA after issue #7,
+   23.10.2026): the bundle reads this file BEFORE app.css, so a rule of the
+   same weight as `.table th` / `.table td` lost to it — the cells kept
+   app.css's 12 px sides and 14 px text, and the table came out 387 px wide in
+   a 343 px phone and 466 px in the 448 px month, cutting «Недоплачено» off. */
+.table.cal-month-table { font: var(--text-label); }
+.table.cal-month-table th, .table.cal-month-table td { padding: 6px; }
+/* The headings may take two lines, the sums never. Written as they are said,
+   not in capitals: «НЕДОПЛАЧЕНО» is the widest word of the table, and the
+   capitals of a heading cost this table its fourth column on a phone. */
+.table.cal-month-table thead th { white-space: normal; vertical-align: bottom; line-height: 1.2; text-transform: none; letter-spacing: 0; }
+/* The foot's heading is a row's name, not a column's: no heading rule under it. */
+.table.cal-month-table tfoot th { white-space: normal; text-transform: none; letter-spacing: 0; font: inherit; font-weight: 600; color: var(--ink); text-align: left; border-bottom: 0; }
+.table.cal-month-table td.num, .table.cal-month-table tfoot .num { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.table.cal-month-table tfoot th, .table.cal-month-table tfoot td { font-weight: 600; border-top: 1px solid var(--line-soft); }
+.table.cal-month-table .cal-month-now td { font-weight: 600; }
+.table.cal-month-table .cal-short { color: var(--crit-ink); }
 /* The week's cell is the tap target, the whole of it: 44 px tall on a phone (--control-dense is the thumb's there), 34 px for a pointer. */
-.cal-month-table td.cal-month-wk { padding-block: 0; }
+.table.cal-month-table td.cal-month-wk { padding-block: 0; }
 .cal-month-pick { display: flex; flex-direction: column; justify-content: center; align-items: flex-start; width: 100%; min-height: var(--control-dense); background: none; border: 0; padding: 4px 0; font: inherit; color: inherit; text-align: left; cursor: pointer; }
-.cal-month-pick > span { text-decoration: underline; text-decoration-color: var(--line-soft); text-underline-offset: 3px; }
+/* «19–25.10» never breaks at its dash; «часть недели» under it may. */
+.cal-month-pick > span { white-space: nowrap; text-decoration: underline; text-decoration-color: var(--line-soft); text-underline-offset: 3px; }
 .cal-month-pick:hover > span { text-decoration-color: currentColor; }
 .cal-month-pick small { font: var(--text-overline); font-weight: 400; color: var(--muted); }
+/* What the columns count, under the table: «недоплачено» is the days gone, today is still awaited. */
+.cal-month-note { margin: 6px 0 0; font: var(--text-label); color: var(--muted); }
 /* A phone keeps four columns: «ещё ждём» is the line under the month's figures there. */
 @media (max-width: 479px) {
-  .cal-month-table .cal-wait { display: none; }
+  .table.cal-month-table .cal-wait { display: none; }
 }

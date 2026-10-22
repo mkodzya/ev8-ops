@@ -50,6 +50,17 @@ export const weekdayTitle = (t: Dict, day: ISODate): string => t.today.weekdays[
 export const weekdayIn = (t: Dict, day: ISODate): string => t.calendar.weekdaysIn[(calendarWeekday(day) + 1) % 7] ?? '';
 export const monthTitle = (t: Dict, day: ISODate): string => t.calendar.monthTitle(t.calendar.months[Number(day.slice(5, 7)) - 1] ?? '', day.slice(0, 4));
 export const rangeText = (t: Dict, period: Period): string => t.calendar.range(fmtDayMonth(period.from), fmtDayMonth(period.to));
+/**
+ * A row of the month's table: «19–25.10» — the table's title names the month,
+ * and the short form keeps «Недоплачено» on a 375 px phone (QA after issue #7,
+ * 23.10.2026). A row is cut to its month, so both ends share it; one day alone
+ * is «31.08». The same in every language, like the dates themselves.
+ */
+export const monthRowText = (period: Period): string => {
+  if (period.from === period.to) return fmtDayMonth(period.to);
+  const sameMonth = period.from.slice(0, 7) === period.to.slice(0, 7);
+  return `${sameMonth ? period.from.slice(8, 10) : fmtDayMonth(period.from)}–${fmtDayMonth(period.to)}`;
+};
 
 /** What a row can do. Both open something the product already has: the money form, the WhatsApp sheet. */
 export interface Actions {
@@ -509,7 +520,7 @@ export function MonthTable({ totals, title, today, onPick }: { totals: CalendarM
               <tr key={w.from} className={w.from <= today && today <= w.to ? 'cal-month-now' : undefined}>
                 <td className="cal-month-wk">
                   <button type="button" className="cal-month-pick" onClick={() => onPick(w.from)}>
-                    <span>{rangeText(t, w)}</span>
+                    <span>{monthRowText(w)}</span>
                     {/* An edge row holds the month's days only; the card it opens shows the whole week. */}
                     {w.part && <small>{t.calendar.partWeek}</small>}
                   </button>
@@ -526,6 +537,8 @@ export function MonthTable({ totals, title, today, onPick }: { totals: CalendarM
           </tfoot>
         </table>
       </div>
+      {/* «Недоплачено» stops at yesterday; the red figure above counts today too — this says which is which. */}
+      <p className="cal-month-note">{t.calendar.monthShortNote}</p>
     </section>
   );
 }

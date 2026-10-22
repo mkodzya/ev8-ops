@@ -63,6 +63,13 @@ export const workshopPayoutsEn = {
     confirmNoteOffset: (rental: string, cash: string | null) =>
       `This is a mark: only the rent payment for ${rental}, «Offset against repairs», appears in Money. ${cash ? `Sort the ${cash} handed over in «Sort» as «Expense ▸».` : 'Nothing is handed over.'}`,
     offsetIn: (sum: string) => `${sum} into rent`,
+    // When part of a payout pays the mechanic's rent, the button, the sheet and both histories name the cash handed
+    // over, never the whole sum (QA after issue #7, 23.10.2026).
+    payCash: (cash: string) => `Paid · to hand over ${cash}`,
+    confirmTitleOffset: (who: string, cash: string, offset: string, rental: string) => `Mark ${who} paid — hand over ${cash}, ${offset} into rent ${rental}?`,
+    markedOffset: (who: string, cash: string, offset: string) => `${who}: payout marked — ${cash} to hand over, ${offset} into rent`,
+    offsetInRent: (sum: string, rental: string) => `${sum} into rent ${rental}`,
+    handedOut: (sum: string) => `handed over ${sum}`,
     voidOffset: 'The rent it paid is owed again.',
     renter: 'Rents a moped',
     renterNone: 'Rents nothing',
@@ -128,6 +135,11 @@ export const workshopPayoutsRu: WorkshopPayouts = {
     confirmNoteOffset: (rental, cash) =>
       `Это отметка: в «Деньгах» появится только оплата аренды ${rental} способом «Зачёт работ». ${cash ? `Выданные ${cash} разбери в «Разобрать» как «Расход ▸».` : 'На руки ничего не выдаётся.'}`,
     offsetIn: (sum) => `${sum} в аренду`,
+    payCash: (cash) => `Оплачено · к выдаче ${cash}`,
+    confirmTitleOffset: (who, cash, offset, rental) => `Отметить выплату ${who}: к выдаче ${cash}, ${offset} — в аренду ${rental}?`,
+    markedOffset: (who, cash, offset) => `${who}: выплата отмечена — к выдаче ${cash}, ${offset} в аренду`,
+    offsetInRent: (sum, rental) => `${sum} в аренду ${rental}`,
+    handedOut: (sum) => `выдано ${sum}`,
     voidOffset: 'Зачёт в аренду тоже отменится: недели снова станут долгом.',
     renter: 'Арендует мопед',
     renterNone: 'Не арендует',
@@ -199,6 +211,11 @@ export const workshopPayoutsKa: WorkshopPayouts = {
     confirmNoteOffset: (rental, cash) =>
       `ეს მონიშვნაა: „ფულში“ გაჩნდება მხოლოდ ქირის ${rental} გადახდა — „სამუშაოთი ჩათვლა“. ${cash ? `გაცემული ${cash} „დასახარისხებელში“ მონიშნე როგორც „ხარჯი ▸“.` : 'ხელზე არაფერი გაიცემა.'}`,
     offsetIn: (sum) => `${sum} ქირაში`,
+    payCash: (cash) => `გადახდილია · გასაცემი ${cash}`,
+    confirmTitleOffset: (who, cash, offset, rental) => `${who}: გადახდის მონიშვნა — გასაცემი ${cash}, ${offset} ქირაში ${rental}?`,
+    markedOffset: (who, cash, offset) => `${who}: გადახდა მონიშნულია — გასაცემი ${cash}, ${offset} ქირაში`,
+    offsetInRent: (sum, rental) => `${sum} ქირაში ${rental}`,
+    handedOut: (sum) => `გაცემულია ${sum}`,
     voidOffset: 'ქირაში ჩათვლაც გაუქმდება: კვირები ისევ ვალად იქცევა.',
     renter: 'ქირაობს მოპედს',
     renterNone: 'არ ქირაობს',
