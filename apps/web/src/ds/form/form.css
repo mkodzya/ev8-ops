@@ -48,5 +48,14 @@
 
 /* On a phone the sheet's one action is the wide button at its foot. */
 @media (max-width: 899px) {
-  .drawer-body .row-actions > .submit { flex: 1; justify-content: center; min-height: var(--control-large); }
+  /* A label longer than the phone is wide — «გადახდილია · ხელზე გასაცემი 30.50 ₾» (issue #9) — wraps,
+     centred and with air between its lines; one line keeps the height it had. */
+  .drawer-body .row-actions > .submit {
+    flex: 1;
+    justify-content: center;
+    min-height: var(--control-large);
+    padding-block: 6px;
+    line-height: 1.2;
+    text-align: center;
+  }
 }
