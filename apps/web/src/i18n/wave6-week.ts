@@ -28,7 +28,7 @@ export const wave6weekEn = {
     asOf: (day: string) => `figures as at ${day}`,
 
     rented: 'Mopeds out with customers',
-    free: 'Free in the rental park',
+    free: 'Free for rent',
     inService: 'In repair',
     serviceDays: (n: number) => `up to ${n} ${n === 1 ? 'day' : 'days'}`,
     startedReturned: 'New rentals · returns',
@@ -46,8 +46,8 @@ export const wave6weekEn = {
     held: 'Deposits held',
 
     utilisation: 'Rental fleet utilisation',
-    basis: (rented: number, pool: number) => `${rented} days out of ${pool} in the park`,
-    unassigned: (n: number) => `${n} ${n === 1 ? 'moped is' : 'mopeds are'} outside the figure: no park has claimed ${n === 1 ? 'it' : 'them'}`,
+    basis: (rented: number, pool: number) => `${rented} days out of ${pool} assigned to rental`,
+    unassigned: (n: number) => `${n} ${n === 1 ? 'moped is' : 'mopeds are'} outside the figure: not assigned`,
 
     batteries: 'Batteries: showroom · couriers · repair',
     batteriesToday: 'The battery count is today’s, not the week’s.',
@@ -56,7 +56,7 @@ export const wave6weekEn = {
     swaps: 'Battery swaps',
     noRecord: 'no data — no record is kept',
 
-    beforeTransfer: 'Paid before the transfer',
+    beforeTransfer: 'Paid before EV8 Ops',
     beforeTransferNote: 'Not part of the week’s takings: this money carries neither a day nor a payment.',
 
     print: 'Print · PDF',
@@ -87,7 +87,7 @@ export const wave6weekRu: typeof wave6weekEn = {
     asOf: (day: string) => `данные на ${day}`,
 
     rented: 'Мопедов в аренде',
-    free: 'Свободных в парке аренды',
+    free: 'Свободных для аренды',
     inService: 'В ремонте',
     serviceDays: (n: number) => `до ${n} ${ruPlural(n, 'дня', 'дней', 'дней')}`,
     startedReturned: 'Новые аренды · возвраты',
@@ -100,13 +100,13 @@ export const wave6weekRu: typeof wave6weekEn = {
     depositsIn: 'Получено залогов',
     inRepairs: 'Поступило — ремонт',
     acquiringFee: 'Комиссия эквайринга',
-    depositsOut: 'Выдано залогов',
+    depositsOut: 'Возвращено залогов',
     withheld: 'Удержано из залогов',
     held: 'Залоги на руках',
 
-    utilisation: 'Загрузка парка аренды',
+    utilisation: 'Загрузка парка',
     basis: (rented: number, pool: number) => `дни в аренде ${rented} из ${pool}`,
-    unassigned: (n: number) => `${n} ${ruPlural(n, 'мопед', 'мопеда', 'мопедов')} без парка не в счёте`,
+    unassigned: (n: number) => `${n} ${ruPlural(n, 'мопед', 'мопеда', 'мопедов')} без назначения не в счёте`,
 
     batteries: 'Батареи: шоурум · курьеры · ремонт',
     batteriesToday: 'Количество батарей — на сегодня, а не на конец недели.',
@@ -115,7 +115,7 @@ export const wave6weekRu: typeof wave6weekEn = {
     swaps: 'Замены батарей',
     noRecord: 'нет данных — учёта нет',
 
-    beforeTransfer: 'Оплачено до переноса',
+    beforeTransfer: 'Оплачено до EV8 Ops',
     beforeTransferNote: 'В поступления недели не входит: у этих денег нет ни дня, ни платежа.',
 
     print: 'Печать · PDF',
@@ -132,7 +132,7 @@ export const wave6weekKa: typeof wave6weekEn = {
     rowTotals: {
       rent: 'აქედან „ქირაში“ კვირის განმავლობაში',
       sale: 'აქედან „გაყიდვებში“ კვირის განმავლობაში',
-      deposits: 'აქედან „გირაოში“ კვირის განმავლობაში',
+      deposits: 'აქედან „დეპოზიტებში“ კვირის განმავლობაში',
       service: 'აქედან „რემონტში“ კვირის განმავლობაში',
     },
     title: 'კვირა',
@@ -143,10 +143,10 @@ export const wave6weekKa: typeof wave6weekEn = {
     from: 'დან',
     to: 'მდე',
     period: (from: string, to: string) => `კვირა ${from} — ${to}`,
-    asOf: (day: string) => `მონაცემები ${day}-ის მდგომარეობით`,
+    asOf: (day: string) => `მონაცემები ${day}-ის ჩათვლით`,
 
     rented: 'მოპედი ქირაშია',
-    free: 'თავისუფალია საქირავო პარკში',
+    free: 'თავისუფალია ქირავნობისთვის',
     inService: 'რემონტშია',
     serviceDays: (n: number) => `${n} დღემდე`,
     startedReturned: 'ახალი ქირაობა · დაბრუნება',
@@ -165,16 +165,16 @@ export const wave6weekKa: typeof wave6weekEn = {
 
     utilisation: 'პარკის დატვირთვა',
     basis: (rented: number, pool: number) => `${rented} დღე ქირაში ${pool}-დან`,
-    unassigned: (n: number) => `${n} მოპედი პარკის გარეშე — ანგარიშში არ შედის`,
+    unassigned: (n: number) => `${n} მოპედი დანიშნულების გარეშე — ანგარიშში არ შედის`,
 
     batteries: 'ბატარეები: შოურუმი · კურიერები · რემონტი',
-    batteriesToday: 'ბატარეების რაოდენობა დღევანდელი მდგომარეობითაა, არა კვირის ბოლოს.',
-    heldToday: 'გირაოები ხელზე — დღევანდელი ციფრი, და არა იმ კვირის ბოლოს.',
+    batteriesToday: 'ბატარეების რაოდენობა — დღევანდელი ციფრი, და არა კვირის ბოლოს.',
+    heldToday: 'დეპოზიტები ხელზე — დღევანდელი ციფრი, და არა იმ კვირის ბოლოს.',
     unmatched: 'ამონაწერის დაუხარისხებელი ხაზები',
     swaps: 'ბატარეის შეცვლა',
     noRecord: 'მონაცემები არ არის — აღრიცხვა არ იწარმოება',
 
-    beforeTransfer: 'გადმოტანამდე გადახდილი',
+    beforeTransfer: 'EV8 Ops-მდე გადახდილი',
     beforeTransferNote: 'კვირის შემოსავალში არ შედის: ამ ფულს არც დღე აქვს და არც გადახდა.',
 
     print: 'ბეჭდვა · PDF',

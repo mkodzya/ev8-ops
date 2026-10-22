@@ -3,12 +3,11 @@
 // proofreading as one list. The tab's own name is in `shell.tabs.calendar`,
 // where the shell reads it.
 //
-// The Georgian here was written by a non-native and has not been read by one
-// yet. Two things for whoever reads it: «კვირა» is both "week" and "Sunday",
-// and it stands for both on this screen; and the screen holds two words for a
-// rental — the empty state reuses `returnPick.none`, which says «იჯარა», while
-// the new lines below say «ქირაობა». Both live in the product; one of them is
-// the native reader's to choose.
+// The Georgian here was written by a non-native; the director's glossary
+// (issue #9, 23.10.2026) settled its words — a rental is «ქირაობა» everywhere,
+// the empty state's `returnPick.none` included, and «აკლია», «მოსალოდნელი»,
+// «მისაღები», «ჯამი» are his. One thing stays for whoever reads it: «კვირა»
+// is both "week" and "Sunday", and it stands for both on this screen.
 //
 // `state`, `said` and `channels` are keyed by the shared enums' own members,
 // so the screen looks a word up by the state itself and a state added in
@@ -269,7 +268,7 @@ export const calendarKa: typeof calendarEn = {
     paidOf: (paid, all) => `გადახდილია ${paid} / ${all}`,
     left: (sum) => `დარჩა ${sum}`,
     noneThisWeek: 'ამ კვირაში გადახდები არ არის',
-    toCome: 'უნდა შემოვიდეს',
+    toCome: 'მისაღები',
     paidLabel: 'გადახდილია',
     leftLabel: 'დარჩა',
     // No plural after a number in Georgian.
@@ -284,19 +283,19 @@ export const calendarKa: typeof calendarEn = {
     recordByHand: 'ხელით გატარება',
     scopeWeek: 'კვირა',
     scopeMonth: 'თვე',
-    scopeAria: 'შედეგები',
-    shortLabel: 'დააკლდა',
-    waitingLabel: 'ჯერ ველოდებით',
+    scopeAria: 'ჯამი',
+    shortLabel: 'აკლია',
+    waitingLabel: 'მოსალოდნელი',
     noneThisMonth: 'ამ თვეში გადახდები არ არის',
     monthTable: (month) => `${month} კვირების მიხედვით`,
     colWeek: 'კვირა',
-    colDue: 'უნდა შემოვიდეს',
+    colDue: 'მისაღები',
     colPaid: 'გადახდილია',
-    colShort: 'დააკლდა',
-    colWaiting: 'ჯერ ველოდებით',
+    colShort: 'აკლია',
+    colWaiting: 'მოსალოდნელი',
     monthTotal: 'სულ თვეში',
     partWeek: 'კვირის ნაწილი',
-    monthShortNote: 'დააკლდა — გადახდები, რომელთა დღეც უკვე გავიდა. დღევანდელი და მომდევნო — „ჯერ ველოდებით“.',
+    monthShortNote: 'აკლია — გადახდები, რომელთა დღეც უკვე გავიდა. დღევანდელი და მომდევნო — „მოსალოდნელი“.',
     debt: (sum) => `ვალი ${sum}`,
     debtLabel: 'ვალი',
     // «ორშაბათიდან დღევანდელის ჩათვლით» — from Monday, today's included.
@@ -327,11 +326,11 @@ export const calendarKa: typeof calendarEn = {
     state: { paid: 'გადახდილია', paid_ahead: 'წინასწარ გადახდილია', due_today: 'დღეს ველოდებით', expected: 'მოსალოდნელია', overdue: 'ვადაგადაცილებულია' },
     said: { paid: 'გადახდილია', paid_ahead: 'წინასწარ გადახდილია', due_today: 'დღეს ველოდებით', expected: 'მოსალოდნელია', overdue: 'ვადაგადაცილებულია' },
     withPayment: (word, when, how) => `${word} · ${when}, ${how}`,
-    channels: { cash: 'ნაღდი', acquiring: 'ბარათი', transfer: 'გადარიცხვა', deposit: 'დეპოზიტიდან', offset: 'სამუშაოთი ჩათვლა' },
+    channels: { cash: 'ნაღდი', acquiring: 'ბარათი', transfer: 'გადარიცხვა', deposit: 'დეპოზიტიდან', offset: 'სამუშაოს ჩათვლა' },
     overdueLine: (days, debt) => `ვადაგადაცილებულია · ${days}${debt === null ? '' : ` · ვალი ${debt}`}`,
     daysShort: (n) => `${n}\u00a0დღე`,
     forWeeks: (n) => `${n}\u00a0კვირისთვის`,
-    partPaid: (paid, all) => `შეტანილია ${paid} / ${all}`,
+    partPaid: (paid, all) => `გადახდილია ${paid} / ${all}`,
     paidFold: (n) => `გადახდილია · ${n}`,
     noneThisDay: 'ამ დღეს გადახდები არ არის.',
     tomorrowLine: (weekday, date) => `ხვალ, ${weekday} ${date}`,

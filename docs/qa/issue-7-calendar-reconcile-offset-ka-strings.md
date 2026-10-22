@@ -69,3 +69,26 @@
    «взаимозачёт»?
 2. «შედეგები» для подписи «Итоги за» — или «ჯამი»?
 3. «კლიენტის ბარათი» — не путается с банковской картой («ბარათი» — способ оплаты «Карта»)?
+
+## Заменено issue #9 (23.10.2026)
+
+Терминология интерфейса выровнена по issue #9: одно понятие — одно слово (слова Kardu, патч принят Mika
+23.10.2026; список и правило — `docs/qa/issue-9-one-word-one-thing-ka-strings.md`). Строки выше, которые
+изменились:
+
+| Ключ | Было | Стало | Чтение |
+|---|---|---|---|
+| `calendar.scopeAria` | შედეგები | ჯამი | jami |
+| `calendar.shortLabel`, `calendar.colShort` | დააკლდა | აკლია | ak'lia |
+| `calendar.waitingLabel`, `calendar.colWaiting` | ჯერ ველოდებით | მოსალოდნელი | mosalodneli |
+| `calendar.colDue` | უნდა შემოვიდეს | მისაღები | misaghebi |
+| `calendar.channels.offset`, `payments.channels.offset` | სამუშაოთი ჩათვლა | სამუშაოს ჩათვლა | samushaos chatvla |
+| `wpay.rentOffset(№, недели)` | ქირის ანგარიშში R-00099 · გადასახდელი კვირები 150 ₾ | ქირაში R-00099 · გადასახდელი კვირები 150 ₾ | kirashi R-00099 · gadasakhdeli k'virebi … |
+| `wpay.toHand` | გასაცემი | ხელზე გასაცემი | khelze gasatsemi |
+| `wpay.confirmOffset(сумма, №, к выдаче)` | … კვირები სამუშაოთი ჩაითვლება. გასაცემი: 0 ₾. | … კვირები სამუშაოთი ჩაითვლება. ხელზე გასაცემი: 0 ₾. | … khelze gasatsemi: … |
+| `wpay.confirmNoteOffset(№, выдано)` | … „სამუშაოთი ჩათვლა“. გაცემული 100 ₾ … | … „სამუშაოს ჩათვლა“. ხელზე გაცემული 100 ₾ … | … „samushaos chatvla“. khelze gatsemuli … |
+| `errors.renter_for_mechanics` | ქირის სამუშაოთი ჩათვლა მხოლოდ მექანიკოსს შეუძლია. | ქირაში სამუშაოს ჩათვლა მხოლოდ მექანიკოსს შეუძლია. | kirashi samushaos chatvla mkholod mekanik'oss sheudzlia |
+
+Ответы Kardu на вопросы выше (issue #9): 1 — «სამუშაოს ჩათვლა» [samushaos chatvla]; «ურთიერთჩათვლა» — взаимозачёт
+двух долгов, а здесь сторона одна. 2 — «ჯამი» [jami]. 3 — «კლიენტის ბარათი» не путается с банковской картой: рядом
+нет способа оплаты.

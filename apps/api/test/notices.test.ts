@@ -344,7 +344,7 @@ describe.skipIf(!HAS_DB)('the notices to the workshop’s group (ADR-0038 §6–
       expect(t).not.toMatch(/₾|GEL|ლარ|лари|123[.,]45|67[.,]89|987[.,]65|432[.,]10/);
     }
     // The reason the mechanic picked is named; what he wrote is not.
-    expect(texts[0]).toContain('მოიჯარის ბრალი');
+    expect(texts[0]).toContain('მოქირავის ბრალი');
     expect(texts[0]).toContain('вина арендатора');
     // Not left waiting: «Сегодня» of the suites after this one shows the first three waiting repairs.
     await prisma.serviceJob.delete({ where: { id: waiting.id } });

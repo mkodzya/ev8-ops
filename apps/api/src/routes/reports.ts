@@ -30,7 +30,7 @@ function pdfRows(w: WeekAnswer): { groups: { title: { ka: string; en: string }; 
   const absent = { ka: 'აღრიცხვა არ არსებობს', en: 'no record is kept' };
   const fleet: WeekRow[] = [
     { label: { ka: 'მოპედი ქირაშია', en: 'Mopeds out with customers' }, value: String(w.fleet.rented) },
-    { label: { ka: 'თავისუფალია საქირავო პარკში', en: 'Free in the rental park' }, value: String(w.fleet.freeInRentPool) },
+    { label: { ka: 'თავისუფალია ქირავნობისთვის', en: 'Free for rent' }, value: String(w.fleet.freeInRentPool) },
     {
       label: { ka: 'რემონტშია', en: 'In repair' },
       value: w.fleet.serviceLongestDays == null ? String(w.fleet.inService) : `${w.fleet.inService} · ${w.fleet.serviceLongestDays} დღემდე`,
@@ -71,11 +71,11 @@ function pdfRows(w: WeekAnswer): { groups: { title: { ka: string; en: string }; 
   ];
 
   const notes = [
-    'ბატარეების რაოდენობა დღევანდელი მდგომარეობით · The battery count is today’s, not the week’s.',
-    `გადმოტანამდე გადახდილი: ${money(w.money.paidBeforeTransferTetri)} — კვირის შემოსავალში არ შედის · Paid before the transfer, not part of any week’s takings.`,
+    'ბატარეების რაოდენობა — დღევანდელი ციფრი, და არა კვირის ბოლოს · The battery count is today’s, not the week’s.',
+    `EV8 Ops-მდე გადახდილი: ${money(w.money.paidBeforeTransferTetri)} — კვირის შემოსავალში არ შედის · Paid before EV8 Ops, not part of any week’s takings.`,
   ];
   if (w.utilisation.unassigned > 0) {
-    notes.push(`${w.utilisation.unassigned} მოპედი პარკის გარეშე დატვირთვაში არ ითვლება · mopeds with no park are outside the utilisation figure.`);
+    notes.push(`${w.utilisation.unassigned} მოპედი დანიშნულების გარეშე დატვირთვაში არ ითვლება · mopeds not assigned are outside the utilisation figure.`);
   }
 
   return {
