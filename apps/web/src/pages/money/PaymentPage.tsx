@@ -20,7 +20,7 @@ interface Card {
     occurredOn: string;
     direction: 'in' | 'out';
     kind: Kind;
-    channel: 'cash' | 'acquiring' | 'transfer';
+    channel: 'cash' | 'acquiring' | 'transfer' | 'deposit' | 'offset';
     grossTetri: number;
     feeTetri: number;
     netTetri: number;

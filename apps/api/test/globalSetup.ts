@@ -48,6 +48,8 @@ export async function teardown(): Promise<void> {
     // A payment and its statement line cross-reference each other; both
     // sides drop to NULL on delete (migration 0006), so the order here is
     // free. Payments first, then the statements that carried them.
+    // A payout's rent offset (0066) points at its payment: let go of it first; the payout itself goes below.
+    await prisma.mechanicPayout.updateMany({ where: { markedAt: since, offsetPaymentId: { not: null } }, data: { offsetTetri: 0, offsetPaymentId: null } });
     await prisma.payment.deleteMany({ where: { createdAt: since } }); // allocations cascade
     // The till's own rows point at people: they go before the people do.
     await prisma.cashHandover.deleteMany({ where: { handedAt: since } });

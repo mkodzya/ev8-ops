@@ -16,6 +16,8 @@ import { date, oneOf, str, strList, tetri } from '../lib/validate.js';
 // payment has a page of its own with what it closed.
 
 const CHANNELS = ['transfer', 'acquiring', 'cash'] as const;
+/** What the list filters by: the form's channels and rent closed by a mechanic's work, which only a payout writes (0066). */
+const LIST_CHANNELS = [...CHANNELS, 'offset'] as const;
 /** "Undo" in the message after a write: seconds on screen, a minute of room for a slow phone. */
 const UNDO_MS = 60_000;
 type Body = Record<string, unknown>;
@@ -63,7 +65,7 @@ function paymentWhere(req: FastifyRequest<{ Querystring: Query }>) {
     ...(q.rentalId ? { rentalId: q.rentalId } : {}),
     ...(q.saleId ? { saleId: q.saleId } : {}),
     ...(q.from || q.to ? { occurredOn: { ...(q.from ? { gte: dateFromISO(q.from)! } : {}), ...(q.to ? { lte: dateFromISO(q.to)! } : {}) } } : {}),
-    ...(q.channel && (CHANNELS as readonly string[]).includes(q.channel) ? { channel: q.channel as (typeof CHANNELS)[number] } : {}),
+    ...(q.channel && (LIST_CHANNELS as readonly string[]).includes(q.channel) ? { channel: q.channel as (typeof LIST_CHANNELS)[number] } : {}),
     ...(q.direction === 'in' || q.direction === 'out' ? { direction: q.direction as 'in' | 'out' } : {}),
     ...(q.kind && (MONEY_KINDS as readonly string[]).includes(q.kind) ? { kind: q.kind as (typeof MONEY_KINDS)[number] } : {}),
     ...(q.by ? { createdById: q.by } : {}),
@@ -99,7 +101,7 @@ export function paymentRoutes(app: FastifyInstance): void {
         {
           occurredOn: isoDate(p.occurredOn) as string,
           direction: p.direction as 'in' | 'out',
-          channel: p.channel as 'cash' | 'acquiring' | 'transfer' | 'deposit',
+          channel: p.channel as 'cash' | 'acquiring' | 'transfer' | 'deposit' | 'offset',
           kind: p.kind as WeekPaymentKind,
           grossTetri: p.grossTetri,
           feeTetri: p.feeTetri,
@@ -115,7 +117,8 @@ export function paymentRoutes(app: FastifyInstance): void {
       // not the whole of every payment that touches it.
       rowTetri: row ? live.reduce((n, p) => n + inRow(p), 0) : null,
       // Money kept from a deposit came in once already, as the deposit: it is not counted twice.
-      inTetri: live.filter((p) => p.direction === 'in' && p.channel !== 'deposit').reduce((n, p) => n + p.grossTetri, 0),
+      // Rent closed by a mechanic's work never came in (0066).
+      inTetri: live.filter((p) => p.direction === 'in' && p.channel !== 'deposit' && p.channel !== 'offset').reduce((n, p) => n + p.grossTetri, 0),
       outTetri: live.filter((p) => p.direction === 'out').reduce((n, p) => n + p.grossTetri, 0),
       acquiringFeeTetri: live.filter((p) => p.channel === 'acquiring' && p.direction === 'in').reduce((n, p) => n + p.feeTetri, 0),
     };
@@ -235,7 +238,8 @@ export function paymentRoutes(app: FastifyInstance): void {
         })),
       },
       journal: journal.map((j) => ({ at: j.createdAt.toISOString(), action: j.action, who: j.actor?.name ?? null, note: j.note, before: j.before, after: j.after })),
-      canVoid: hasPerm(actor, 'payments.reconcile') && !p.voidedAt && p.kind !== 'buyback',
+      // Rent closed by a mechanic's payout goes with the payout, never alone (0066).
+      canVoid: hasPerm(actor, 'payments.reconcile') && !p.voidedAt && p.kind !== 'buyback' && !(await prisma.mechanicPayout.findFirst({ where: { offsetPaymentId: p.id, voidedAt: null }, select: { id: true } })),
     };
   });
 

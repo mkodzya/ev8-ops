@@ -108,6 +108,15 @@ describe('what came in over a week', () => {
     expect(incomeRows(m)).toBe(0);
   });
 
+  it('leaves out rent closed by a mechanic’s work: no money came in at all (ADR-0043)', () => {
+    const offset = pay({ occurredOn: '2026-09-16', grossTetri: 150_00, channel: 'offset', allocations: [{ target: 'period', amountTetri: 150_00 }] });
+    const m = weekIncome([offset, pay({ occurredOn: '2026-09-16', grossTetri: 150_00 })], week);
+    expect(m.totalTetri).toBe(150_00);
+    expect(m.rentTetri).toBe(150_00);
+    expect(incomeRows(m)).toBe(m.totalTetri);
+    expect(paymentInRow(offset, 'rent')).toBe(0);
+  });
+
   it('ignores a payment outside the period on either side', () => {
     const m = weekIncome(
       [pay({ occurredOn: '2026-09-13', grossTetri: 150_00 }), pay({ occurredOn: '2026-09-21', grossTetri: 150_00 })],

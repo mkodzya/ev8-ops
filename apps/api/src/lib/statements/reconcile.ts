@@ -112,7 +112,8 @@ export async function loadCtx(): Promise<Ctx> {
     }),
     prisma.customer.findMany({ where: { archived: false }, select: { id: true, name: true, nameKa: true, nameLat: true } }),
     prisma.payment.findMany({
-      where: { statementLineId: null, voidedAt: null, source: 'manual', channel: { not: 'cash' } },
+      // Cash and rent closed by work (0066) never reach a bank: no line is theirs.
+      where: { statementLineId: null, voidedAt: null, source: 'manual', channel: { notIn: ['cash', 'offset'] } },
       select: {
         id: true,
         direction: true,
@@ -236,6 +237,18 @@ const near = (a: string, b: string) => Math.abs(daysBetween(a, b)) <= WINDOW_DAY
 export const beforeTransfer = (r: { transferredOn: string | null }, occurredOn: string): boolean => r.transferredOn != null && occurredOn <= r.transferredOn;
 
 /**
+ * An incoming transfer whose bank writes a payer, and the payer is none of our
+ * customers by any of their names. A card line names the terminal, not a
+ * person, a line with no payer names nobody, and an outgoing line names its
+ * recipient — a supplier, not a customer: none of them is a stranger.
+ */
+function namesStranger(line: Line, ctx: Ctx): boolean {
+  if (line.direction !== 'in' || line.channel !== 'transfer' || !line.payer?.trim()) return false;
+  const text = [line.payer, line.purpose].filter(Boolean).join(' ');
+  return !ctx.customers.some((c) => nameMatches(text, c.names));
+}
+
+/**
  * Payments entered by hand this line may already be (B2-03): the amount,
  * gross or net, within ±3 days. When the line names a customer, only that
  * customer's payments — the same sum from somebody else is somebody else's.
@@ -310,7 +323,14 @@ export function decide(line: Line, ctx: Ctx): Decision {
   // Linked to what was entered by hand only when nothing else could be this
   // money: a second record with a debt of this sum on that day is a question
   // for a person (designer's answer 3 to wave 2 round 1; ADR-0004).
-  if (recorded.length === 1 && otherCandidates(line, ctx, recorded[0].rentalId).length === 0) return { type: 'recorded', paymentId: recorded[0].id };
+  // Nor when the bank names a payer who is none of our customers (director,
+  // 22.10.2026): a transfer of 150 from one customer, whose bank spells his
+  // name differently from his card, was taken for another customer's 150
+  // entered by hand that day, and his own week stayed overdue. The line waits
+  // under «already recorded», where a person says "yes, it is this" in a tap.
+  if (recorded.length === 1 && !namesStranger(line, ctx) && otherCandidates(line, ctx, recorded[0].rentalId).length === 0) {
+    return { type: 'recorded', paymentId: recorded[0].id };
+  }
   if (recorded.length > 0) return { type: 'queue' };
   if (line.direction === 'out') return { type: 'queue' };
 

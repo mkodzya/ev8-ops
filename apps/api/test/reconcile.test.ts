@@ -74,6 +74,18 @@ describe.skipIf(!HAS_DB)('money entered by hand, then the statement (B2-03)', ()
     expect(payments[0].statementLineId).not.toBeNull();
   });
 
+  it('a transfer from a payer who is none of our customers is asked about, not linked to a hand entry (director, 22.10.2026)', async () => {
+    const { prisma, owner, customer, rentalId, tag: t } = await rental({ pickedUpOn: addDays(today(), -2) });
+    await byHand(owner, '/api/money', { kind: 'rent', rentalId, amountTetri: '150', channel: 'transfer', occurredOn: today(), backdateReason: 'x' });
+    // An invented payer: another customer whose bank spells him in a way no card holds.
+    await call(owner, 'POST', '/api/statements', { fileName: 's.csv', text: file(inRow(today(), '150.00', `Caricxva: gadmomricxavi: ucnobi gamgzavni ${t}; daniSnuleba: Transfer`)) });
+    const entered = await prisma.payment.findFirstOrThrow({ where: { customerId: customer.id, source: 'manual' } });
+    expect(entered.statementLineId).toBeNull();
+    const line = await queued(owner, t);
+    expect(line?.group).toBe('recorded');
+    expect(line?.recorded.map((p) => p.id)).toContain(entered.id);
+  });
+
   it('the same line a week later is not that payment (crit. 12)', async () => {
     const { prisma, owner, customer, rentalId, tag: t } = await rental({ pickedUpOn: addDays(today(), -9) });
     await byHand(owner, '/api/money', { kind: 'rent', rentalId, amountTetri: '150', channel: 'transfer', occurredOn: addDays(today(), -8), backdateReason: 'x' });

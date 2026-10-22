@@ -34,6 +34,13 @@ function periodTone(kind: WeekDue, paidTetri: number): string {
   return 'ahead';
 }
 
+/**
+ * How a rental's payment came: the money form's three, `deposit` — kept out of
+ * the deposit at the return — and `offset`, rent closed by a mechanic's work
+ * at his payout (0066).
+ */
+type Channel = 'transfer' | 'acquiring' | 'cash' | 'deposit' | 'offset';
+
 export interface RentalCard {
   rental: {
     id: string;
@@ -84,7 +91,7 @@ export interface RentalCard {
   /** One timeline of the rental: money, acts, documents, the journal (ux №7). */
   feed: { at: string; kind: 'payment' | 'act' | 'document' | 'log'; by: string | null; text: string; amountTetri: number | null; note: string | null }[];
   documents: { contract: DocState; returnAct: DocState | null };
-  payments: { id: string; occurredOn: string; channel: 'transfer' | 'acquiring' | 'cash'; grossTetri: number; feeTetri: number }[];
+  payments: { id: string; occurredOn: string; channel: Channel; grossTetri: number; feeTetri: number }[];
   deposit: { amountTetri: number; paidTetri: number; status: DepositStatus; returnedTetri: number; withheldTetri: number; withheldReason: string | null; withheldGrounds: string[]; returnedTo: string | null; returnedOn: string | null; decided: boolean; paidOutTetri: number; withholdings: { source: string; amountTetri: number; number: string; reason: string }[] } | null;
   periods: {
     seq: number;
