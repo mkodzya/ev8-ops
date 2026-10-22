@@ -57,8 +57,11 @@ export type WeekAllocationTarget = 'period' | 'deposit' | 'instalment' | 'charge
 export interface WeekPayment {
   occurredOn: ISODate;
   direction: 'in' | 'out';
-  /** `deposit` is money kept out of a deposit: it came in once already, as the deposit. */
-  channel: 'cash' | 'acquiring' | 'transfer' | 'deposit';
+  /**
+   * `deposit` is money kept out of a deposit: it came in once already, as the deposit.
+   * `offset` is rent closed by a mechanic's work (0066): no money came in at all.
+   */
+  channel: 'cash' | 'acquiring' | 'transfer' | 'deposit' | 'offset';
   kind: WeekPaymentKind;
   /** What the customer paid — a card at its face value, before the acquirer's cut. */
   grossTetri: Tetri;
@@ -127,8 +130,9 @@ export type IncomeRow = (typeof INCOME_ROWS)[number];
  * week by the deposits inside it (QA-W6-01).
  */
 export function paymentInRow(p: WeekPayment, row: IncomeRow): Tetri {
-  // Money kept out of a deposit came in once already, as the deposit.
-  if (p.channel === 'deposit' || p.direction !== 'in') return 0;
+  // Money kept out of a deposit came in once already, as the deposit; rent
+  // closed by a mechanic's work never came in.
+  if (p.channel === 'deposit' || p.channel === 'offset' || p.direction !== 'in') return 0;
   let out = 0;
   let placed = 0;
   for (const a of p.allocations) {
@@ -155,6 +159,8 @@ export function weekIncome(payments: readonly WeekPayment[], period: Period): We
     // Money kept out of a deposit is written as a payment so the repair it
     // paid for has one; nothing came through the door for it.
     if (p.channel === 'deposit') continue;
+    // Rent closed by a mechanic's work: no money came through the door either (0066).
+    if (p.channel === 'offset') continue;
     if (p.direction === 'out') {
       if (p.kind === 'deposit_payout') out.depositsOutTetri += p.grossTetri;
       continue;

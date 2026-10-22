@@ -142,7 +142,7 @@ export function todayRoutes(app: FastifyInstance): void {
       prisma.vehicle.findMany({ where: { archived: false }, select: { state: true, pool: true, locationId: true } }),
       owner
         ? prisma.payment.findMany({
-            where: { voidedAt: null, occurredOn: { gte: monday }, channel: { not: 'deposit' } },
+            where: { voidedAt: null, occurredOn: { gte: monday }, channel: { notIn: ['deposit', 'offset'] } },
             select: { direction: true, kind: true, grossTetri: true, feeTetri: true },
           })
         : [],
@@ -263,7 +263,7 @@ export function todayRoutes(app: FastifyInstance): void {
     const depositsHeldTetri = owner ? (await depositsOverview()).totals.heldTetri : null;
     // Deposit money of the week is what payments put on deposits, not a kind of payment.
     const depositsIn = owner
-      ? await prisma.paymentAllocation.aggregate({ where: { target: 'deposit', payment: { voidedAt: null, occurredOn: { gte: monday }, channel: { not: 'deposit' } } }, _sum: { amountTetri: true } })
+      ? await prisma.paymentAllocation.aggregate({ where: { target: 'deposit', payment: { voidedAt: null, occurredOn: { gte: monday }, channel: { notIn: ['deposit', 'offset'] } } }, _sum: { amountTetri: true } })
       : null;
 
     // What came in this week, by what it was for (`weekly.md`): the fee and

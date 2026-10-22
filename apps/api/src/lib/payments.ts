@@ -82,7 +82,8 @@ export interface RecordPaymentInput {
   /** Null when the stand wrote it by itself: a Bank of Georgia line its rule attached (B11-03). */
   actorId: string | null;
   occurredOn: string;
-  channel: 'transfer' | 'acquiring' | 'cash';
+  /** `offset`: rent closed by a mechanic's work at his payout (0066) — written only by the payout. */
+  channel: 'transfer' | 'acquiring' | 'cash' | 'offset';
   /** What the customer handed over. One of gross or net is given; see the route. */
   grossTetri: number;
   feeTetri: number;
@@ -99,6 +100,8 @@ export interface RecordPaymentInput {
   /** Which part of that line, when the line is split (migration 0039). */
   statementPart?: number;
   backdateReason?: string | null;
+  /** Leave the deposit alone: rent closed by a mechanic's work (0066) pays weeks, never a deposit handed back in cash later. */
+  noDeposit?: boolean;
   /** Bank lines of the same sum the person said this payment is not (B11-03): kept in the journal. */
   notBankLines?: string[];
 }
@@ -201,7 +204,7 @@ export async function recordPaymentTx(tx: Tx, input: RecordPaymentInput): Promis
   let left = input.grossTetri;
   for (const id of rentalIds) {
     if (left <= 0) break;
-    const spread = spreadRental(left, await rentalOwed(tx, id));
+    const spread = spreadRental(left, await rentalOwed(tx, id), input.noDeposit ? { deposit: false } : {});
     await writeAllocations(tx, payment.id, spread.allocations);
     left = spread.leftoverTetri;
     await recomputeRental(tx, id);
@@ -240,20 +243,29 @@ type VoidInput = { actorId: string; paymentId: string; reason: string; kind?: 'v
  */
 export async function voidPayment(input: VoidInput): Promise<void> {
   await prisma.$transaction(async (tx) => {
-    const first = await tx.payment.findUnique({ where: { id: input.paymentId }, select: { id: true, voidedAt: true, statementLineId: true, source: true } });
-    if (!first) throw notFound('payment_not_found', 'No such payment.');
-    if (first.voidedAt) throw conflict('already_voided', 'This payment is already void.');
-    const ids = [first.id];
-    if (first.statementLineId && first.source === 'statement') {
-      const parts = await tx.payment.findMany({
-        where: { statementLineId: first.statementLineId, source: 'statement', voidedAt: null, id: { not: first.id } },
-        orderBy: { statementPart: 'asc' },
-        select: { id: true },
-      });
-      ids.push(...parts.map((x) => x.id));
-    }
-    for (const id of ids) await voidOne(tx, { ...input, paymentId: id });
+    // Rent closed by a mechanic's work belongs to his payout (0066): it goes
+    // when the payout is voided, never alone — the payout would still say it.
+    const payout = await tx.mechanicPayout.findFirst({ where: { offsetPaymentId: input.paymentId, voidedAt: null }, select: { id: true } });
+    if (payout) throw conflict('offset_of_payout', 'This rent was closed by a mechanic payout; void the payout instead.', { payoutId: payout.id });
+    await voidPaymentTx(tx, input);
   });
+}
+
+/** The same inside a transaction the caller holds: a payout voided takes its rent offset with it (0066). */
+export async function voidPaymentTx(tx: Tx, input: VoidInput): Promise<void> {
+  const first = await tx.payment.findUnique({ where: { id: input.paymentId }, select: { id: true, voidedAt: true, statementLineId: true, source: true } });
+  if (!first) throw notFound('payment_not_found', 'No such payment.');
+  if (first.voidedAt) throw conflict('already_voided', 'This payment is already void.');
+  const ids = [first.id];
+  if (first.statementLineId && first.source === 'statement') {
+    const parts = await tx.payment.findMany({
+      where: { statementLineId: first.statementLineId, source: 'statement', voidedAt: null, id: { not: first.id } },
+      orderBy: { statementPart: 'asc' },
+      select: { id: true },
+    });
+    ids.push(...parts.map((x) => x.id));
+  }
+  for (const id of ids) await voidOne(tx, { ...input, paymentId: id });
 }
 
 async function voidOne(tx: Tx, input: VoidInput): Promise<void> {

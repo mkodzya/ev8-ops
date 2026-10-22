@@ -160,6 +160,11 @@ export function contactRoutes(app: FastifyInstance): void {
     if (drop.archived) throw conflict('already_merged', 'That card is already in the archive.', { field: 'fromId' });
 
     const moved = await prisma.$transaction(async (tx) => {
+      // A mechanic who rents a moped is linked to his card (0066, ADR-0043):
+      // the link goes where his rentals go, or his payouts would stop paying
+      // his rent. Two cards linked to two people are not one person.
+      const linked = await tx.user.findMany({ where: { customerId: { in: [keepId, dropId] } }, select: { customerId: true } });
+      if (linked.length > 1) throw conflict('merge_two_renters', 'Both cards are linked to a mechanic each; unlink one first.', { field: 'fromId' });
       const where = { customerId: dropId };
       const counts = {
         rentals: (await tx.rental.updateMany({ where, data: { customerId: keepId } })).count,
@@ -168,6 +173,7 @@ export function contactRoutes(app: FastifyInstance): void {
         documents: (await tx.storedFile.updateMany({ where, data: { customerId: keepId } })).count,
         repairs: (await tx.serviceJob.updateMany({ where, data: { customerId: keepId } })).count,
       };
+      await tx.user.updateMany({ where, data: { customerId: keepId, updatedAt: new Date() } });
       // A personal number is unique: the duplicate gives it up, because two
       // cards cannot hold one, and the card that stays already has its own.
       await tx.customer.update({

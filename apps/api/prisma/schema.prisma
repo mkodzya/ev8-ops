@@ -118,6 +118,8 @@ enum PaymentChannel {
   acquiring
   cash
   deposit
+  /// Rent closed by a mechanic's work: no money changed hands (0066).
+  offset
 
   @@map("payment_channel")
 }
@@ -262,6 +264,8 @@ model User {
   pinLockedUntil  DateTime? @map("pin_locked_until")
   /// A mechanic's rate for an hour of norm; empty is the company's rate.
   labourRateTetri Int?      @map("labour_rate_tetri")
+  /// A mechanic who rents a moped: his card as a customer, whose rent his payouts pay first (0066).
+  customerId      String?   @unique @map("customer_id") @db.Uuid
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @default(now()) @map("updated_at")
 
@@ -774,6 +778,7 @@ model Payment {
   createdBy   User?               @relation("payment_created_by", fields: [createdById], references: [id])
   voidedBy    User?               @relation("payment_voided_by", fields: [voidedById], references: [id])
   allocations PaymentAllocation[]
+  offsetOf    MechanicPayout[]    @relation("mechanic_payout_offset")
 
   @@map("payments")
 }
@@ -1044,8 +1049,13 @@ model MechanicPayout {
   voidedAt       DateTime? @map("voided_at")
   voidedById     String?   @map("voided_by") @db.Uuid
   voidReason     String?   @map("void_reason")
+  /// What of it went into the mechanic's rent, never more than the rent owed then (0066).
+  offsetTetri     Int      @default(0) @map("offset_tetri")
+  /// The rent payment that carried it; voided with the payout.
+  offsetPaymentId String?  @map("offset_payment_id") @db.Uuid
 
   mechanic User          @relation("mechanic_payout_mechanic", fields: [mechanicId], references: [id])
+  offsetPayment Payment? @relation("mechanic_payout_offset", fields: [offsetPaymentId], references: [id])
   markedBy User          @relation("mechanic_payout_marked_by", fields: [markedById], references: [id])
   voidedBy User?         @relation("mechanic_payout_voided_by", fields: [voidedById], references: [id])
   jobs     ServiceJob[]  @relation("service_job_paid_in_payout")
