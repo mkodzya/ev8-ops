@@ -3,7 +3,7 @@
 // which one chip it is filtered under, and why it stands in service. Every
 // reason here is invented.
 import { describe, expect, it } from 'vitest';
-import { FLEET_CHIPS, VEHICLE_POOLS, VEHICLE_STATES, fleetChipOf, parkOf, serviceWhyOf, type FleetChip, type VehiclePool, type VehicleState } from '../src/index.js';
+import { FLEET_CHIPS, VEHICLE_POOLS, VEHICLE_STATES, countFleetChips, fleetChipOf, parkOf, serviceWhyOf, type FleetChip, type VehiclePool, type VehicleState } from '../src/index.js';
 
 describe('which park a moped counts in', () => {
   it('is the park somebody chose, whatever is happening to the moped', () => {
@@ -84,6 +84,60 @@ describe('the one chip a moped is counted under (Mika, answer «Б», 22.10.2026
   it('lets every chip be reached', () => {
     const reached = new Set(every.map((x) => fleetChipOf(x.v, x.hasPoint)));
     for (const chip of FLEET_CHIPS) expect(reached.has(chip)).toBe(true);
+  });
+});
+
+describe('the numbers that open a chip (Mika, answer «А», 22.10.2026)', () => {
+  // A small invented fleet: each moped is a state, a park or none, and a point said or not.
+  const fleet: { state: VehicleState; pool: VehiclePool | null; point: boolean }[] = [
+    { state: 'available', pool: 'rent', point: true },
+    { state: 'available', pool: 'rent', point: true },
+    // Free by its state, but not yet ready to hand out: no point said.
+    { state: 'available', pool: 'rent', point: false },
+    { state: 'available', pool: 'sale', point: false },
+    // Neither park nor point: a park to decide first.
+    { state: 'available', pool: null, point: false },
+    { state: 'available', pool: null, point: true },
+    // Out with a renter and in no park: counted as rented, not as a park to decide.
+    { state: 'rented', pool: null, point: false },
+    { state: 'rented', pool: 'rent', point: true },
+    { state: 'service', pool: null, point: false },
+    { state: 'service', pool: 'sale', point: true },
+    { state: 'sold', pool: 'sale', point: false },
+    { state: 'out', pool: null, point: false },
+  ];
+  const counts = countFleetChips(fleet, (v) => v.point);
+
+  it('are the chips’ own counts, moped by moped', () => {
+    for (const chip of FLEET_CHIPS) {
+      expect(counts[chip]).toBe(fleet.filter((v) => fleetChipOf(v, v.point) === chip).length);
+    }
+    expect(counts).toEqual({ rented: 2, service: 2, sale: 1, nopool: 2, nopoint: 1, available: 2 });
+  });
+
+  it('make «Свободно» the mopeds ready to hand out: the rental park, on a point', () => {
+    const freeByState = fleet.filter((v) => v.state === 'available').length;
+    expect(counts.available).toBe(2);
+    expect(counts.available).toBeLessThan(freeByState);
+  });
+
+  it('leave a rented or serviced moped with no park out of «без парка» until it stands idle', () => {
+    const noParkAtAll = fleet.filter((v) => parkOf(v) === 'none').length;
+    expect(noParkAtAll).toBe(4);
+    expect(counts.nopool).toBe(2);
+    // Back from the renter, it is a park to decide again.
+    const back = fleet.map((v) => (v.state === 'rented' && v.pool == null ? { ...v, state: 'available' as const } : v));
+    expect(countFleetChips(back, (v) => v.point).nopool).toBe(3);
+  });
+
+  it('count a moped with neither park nor point under «без парка» only, and under «без точки» once it has a park', () => {
+    const lost = { state: 'available' as const, pool: null, point: false };
+    expect(countFleetChips([lost], (v) => v.point)).toMatchObject({ nopool: 1, nopoint: 0 });
+    expect(countFleetChips([{ ...lost, pool: 'rent' as const }], (v) => v.point)).toMatchObject({ nopool: 0, nopoint: 1 });
+  });
+
+  it('count nothing for an empty fleet, and every chip at zero', () => {
+    expect(countFleetChips([], () => true)).toEqual(Object.fromEntries(FLEET_CHIPS.map((c) => [c, 0])));
   });
 });
 

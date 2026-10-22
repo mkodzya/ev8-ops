@@ -51,10 +51,10 @@ export type FleetChip = (typeof FLEET_CHIPS)[number];
 /**
  * The one chip a moped is counted under (see FLEET_CHIPS), or null for one
  * that has left the fleet. `hasPoint`: somebody has said where it stands.
- * One rule for each chip and the count beside it. «Сегодня» still counts
- * its own way — the state's number under «Свободен», every moped with no
- * park and every free one with no point in its two rows — so those may be
- * larger than the chip they open (an open question to Mika, 22.10.2026).
+ * One rule for each chip, the count beside it, and every number elsewhere
+ * that opens a chip — «Свободно», «N мопедов без парка» and «N мопедов без
+ * точки» on «Сегодня» (`countFleetChips`; Mika, answer «А», 22.10.2026), so
+ * a number is always the list it opens (`docs/design/ux.md`, principle 10).
  */
 export function fleetChipOf(v: { state: VehicleState; pool: VehiclePool | null }, hasPoint: boolean): FleetChip | null {
   if (v.state === 'rented' || v.state === 'service') return v.state;
@@ -64,6 +64,20 @@ export function fleetChipOf(v: { state: VehicleState; pool: VehiclePool | null }
   if (park === 'none') return 'nopool';
   if (!hasPoint) return 'nopoint';
   return 'available';
+}
+
+/**
+ * How many mopeds stand under each chip — `fleetChipOf` asked of every one,
+ * sold and written-off ones counted nowhere. What «Сегодня» shows beside a
+ * link into the list is read from here, never counted on its own.
+ */
+export function countFleetChips<T extends { state: VehicleState; pool: VehiclePool | null }>(vehicles: readonly T[], hasPoint: (v: T) => boolean): Record<FleetChip, number> {
+  const counts = Object.fromEntries(FLEET_CHIPS.map((c) => [c, 0])) as Record<FleetChip, number>;
+  for (const v of vehicles) {
+    const chip = fleetChipOf(v, hasPoint(v));
+    if (chip) counts[chip]++;
+  }
+  return counts;
 }
 
 /**

@@ -713,10 +713,12 @@ describe.skipIf(!HAS_DB)('the due day · who sees what', () => {
     const order = mine.queue.map((g) => g.group);
     expect(order.indexOf('due_today')).toBe(order.indexOf('overdue') + 1);
 
-    // The overdue total stays an owner's, and "Today" has no new number for anybody.
+    // The overdue total stays an owner's, and "Today" has no new number for
+    // anybody. `chips` is no new tile: it is what «В аренде» and «Свободно»
+    // say since 22.10.2026, the counts of the chips they open (answer «А»).
     expect(mine.numbers.overdueTetri).toBeNull();
-    expect(Object.keys(mine.numbers).sort()).toEqual(['batteries', 'depositsHeldTetri', 'fleet', 'myTillTetri', 'overdueTetri', 'week']);
-    expect(Object.keys(theirs.numbers).sort()).toEqual(['batteries', 'depositsHeldTetri', 'fleet', 'myTillTetri', 'overdueTetri', 'week']);
+    expect(Object.keys(mine.numbers).sort()).toEqual(['batteries', 'chips', 'depositsHeldTetri', 'fleet', 'myTillTetri', 'overdueTetri', 'week']);
+    expect(Object.keys(theirs.numbers).sort()).toEqual(['batteries', 'chips', 'depositsHeldTetri', 'fleet', 'myTillTetri', 'overdueTetri', 'week']);
 
     // The calendar and the week's report stay behind their permissions.
     expect(err(await call(manager, 'GET', '/api/money/calendar'))).toMatchObject({ error: 'forbidden', permission: 'payments.view' });

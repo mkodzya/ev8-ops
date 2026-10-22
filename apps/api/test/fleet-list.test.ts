@@ -191,4 +191,75 @@ describe.skipIf(!HAS_DB)('the chips over the fleet list (Mika, answer «Б», 22
     // A rented moped with no rental behind it is not left for the suites after this one.
     await prisma.vehicle.update({ where: { id: noPark.id }, data: { state: 'available' } });
   });
+
+  // Mika, answer «А», 22.10.2026: «Сегодня» counts by the chips' rule, so each
+  // number that opens a chip is the list it opens (docs/design/ux.md, principle 10).
+  interface TodayRow {
+    id: string;
+    href: string;
+    note: string | null;
+  }
+  interface TodayChips {
+    queue: { group: string; rows: TodayRow[]; total: number }[];
+    numbers: { fleet: Record<VehicleState, number>; chips: Record<FleetChip, number> };
+  }
+
+  it('give «Сегодня» the number of the chip each of its links opens', async () => {
+    const { prisma, vehicle: rentedNoPark } = await freeVehicle();
+    // Neither park nor point: a park to decide first.
+    const { vehicle: lost } = await freeVehicle();
+    // In the rental park and free, but nobody has said where it stands.
+    const { vehicle: noPoint } = await freeVehicle();
+    // In the rental park, on a point: ready to hand out.
+    const { vehicle: ready } = await freeVehicle();
+    const owner = await loginAs('owner');
+    const manager = await loginAs('manager');
+    for (const v of [noPoint, ready]) expect((await call(owner, 'POST', `/api/fleet/${v.id}/pool`, { pool: 'rent' })).statusCode).toBe(200);
+    await prisma.vehicle.update({ where: { id: ready.id }, data: { locationId: await point() } });
+    // Out with a renter and in no park, nor on a point.
+    await prisma.vehicle.update({ where: { id: rentedNoPark.id }, data: { state: 'rented' } });
+
+    const fleet = json<{ vehicles: ChipRow[] }>(await call(owner, 'GET', '/api/fleet')).vehicles;
+    const mine = json<TodayChips>(await call(owner, 'GET', '/api/today'));
+    const theirs = json<TodayChips>(await call(manager, 'GET', '/api/today'));
+    const under = (chip: FleetChip) => fleet.filter((v) => chipOf(v) === chip).length;
+    const chipOfMoped = (id: string) => chipOf(fleet.find((v) => v.id === id)!);
+
+    expect(chipOfMoped(rentedNoPark.id)).toBe('rented');
+    expect(chipOfMoped(lost.id)).toBe('nopool');
+    expect(chipOfMoped(noPoint.id)).toBe('nopoint');
+    expect(chipOfMoped(ready.id)).toBe('available');
+
+    // The tiles: «В аренде» and «Свободно» open /fleet?f=rented and /fleet?f=available.
+    for (const t of [mine, theirs]) {
+      for (const chip of FLEET_CHIPS) expect(t.numbers.chips[chip], chip).toBe(under(chip));
+      // «В аренде» is still the state's own number; «Свободно» is no longer.
+      expect(t.numbers.chips.rented).toBe(t.numbers.fleet.rented);
+      expect(t.numbers.chips.available).toBeLessThan(t.numbers.fleet.available);
+    }
+
+    // The rows: «N мопедов без парка» (the owners'), «N мопедов без точки» (everybody's).
+    const rowOfToday = (t: TodayChips, id: string) => t.queue.flatMap((g) => g.rows).find((r) => r.id === id);
+    const pool = rowOfToday(mine, 'pool')!;
+    expect(pool.href).toBe('/fleet?f=nopool');
+    expect(Number(pool.note)).toBe(under('nopool'));
+    // A rented moped with no park is not counted there; it would have been before.
+    expect(Number(pool.note)).toBeLessThan(fleet.filter((v) => v.pool == null && v.state !== 'sold' && v.state !== 'out').length);
+    expect(rowOfToday(theirs, 'pool')).toBeUndefined();
+    for (const t of [mine, theirs]) {
+      // A group shows three rows and counts the rest: the row is either among
+      // them, saying the chip's number, or behind the "more" line.
+      const fill = t.queue.find((g) => g.group === 'fill')!;
+      const row = rowOfToday(t, 'point');
+      if (row) {
+        expect(row.href).toBe('/fleet?f=nopoint');
+        expect(Number(row.note)).toBe(under('nopoint'));
+      } else {
+        expect(fill.total).toBeGreaterThan(fill.rows.length);
+      }
+      expect(t.numbers.chips.nopoint).toBe(under('nopoint'));
+    }
+
+    await prisma.vehicle.update({ where: { id: rentedNoPark.id }, data: { state: 'available' } });
+  });
 });
