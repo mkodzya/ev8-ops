@@ -359,8 +359,15 @@ function PaySheet({ m, receipts, onClose, onDone }: { m: PayMechanic; receipts: 
       onDone={onDone}
     >
       <p>{t.wpay.confirmWhat(m.jobs.length, formatGel(m.workTetri), receipts === 0 ? null : formatGel(m.reimburseTetri))}</p>
-      {m.rent && m.rent.offsetTetri > 0 && <p>{t.wpay.confirmOffset(formatGel(m.rent.offsetTetri), m.rent.number, formatGel(m.rent.cashTetri))}</p>}
-      <p className="hint">{t.wpay.confirmNote}</p>
+      {m.rent && m.rent.offsetTetri > 0 ? (
+        <>
+          <p>{t.wpay.confirmOffset(formatGel(m.rent.offsetTetri), m.rent.number, formatGel(m.rent.cashTetri))}</p>
+          {/* The rent payment does appear in «Деньги»: the note says so, and that only the cash handed over is an expense. */}
+          <p className="hint">{t.wpay.confirmNoteOffset(m.rent.number, m.rent.cashTetri > 0 ? formatGel(m.rent.cashTetri) : null)}</p>
+        </>
+      ) : (
+        <p className="hint">{t.wpay.confirmNote}</p>
+      )}
     </FormSheet>
   );
 }

@@ -167,13 +167,26 @@ export function userRoutes(app: FastifyInstance): void {
     // Out of the workshop, the tablet's sessions end with the PIN.
     else if (leavesWorkshop) await closePinSessions(before.id);
     const { pinHash: _cleared, ...shown } = data;
+    // The journal hides ids: a rent link set, changed or taken off is said by
+    // the card's name on both sides, none being null (0066).
+    const renterChanged = 'customerId' in data && data.customerId !== before.customerId;
+    const cardName = async (id: string | null | undefined) =>
+      id ? ((await prisma.customer.findUnique({ where: { id }, select: { name: true } }))?.name ?? null) : null;
+    const renter = renterChanged ? { was: await cardName(before.customerId), now: await cardName(data.customerId) } : null;
     await audit({
       actorId: actor.id,
       action: 'user.update',
       entityType: 'user',
       entityId: before.id,
-      before: { name: before.name, role: before.role, active: before.active, labourRateTetri: before.labourRateTetri, customerId: before.customerId },
-      after: leavesWorkshop ? { ...shown, pin: 'cleared' } : shown,
+      before: {
+        name: before.name,
+        role: before.role,
+        active: before.active,
+        labourRateTetri: before.labourRateTetri,
+        customerId: before.customerId,
+        ...(renter ? { renter: renter.was } : {}),
+      },
+      after: { ...shown, ...(renter ? { renter: renter.now } : {}), ...(leavesWorkshop ? { pin: 'cleared' } : {}) },
     });
     return { ok: true };
   });

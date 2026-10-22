@@ -1257,6 +1257,7 @@ export const en = {
       nothing_to_pay: 'Nothing is owed to this mechanic now.',
       renter_for_mechanics: 'Only a mechanic’s payouts can pay a rent.',
       customer_taken: 'That customer is already linked to another person.',
+      merge_two_renters: 'Both cards are linked to a mechanic who rents a moped. Unlink one in Settings → People first.',
       offset_of_payout: 'This rent was closed by a mechanic’s payout. Void the payout instead: its rent goes with it.',
       payout_changed: 'What is owed to this mechanic changed while the screen was open. Refresh it and check again.',
       already_paid: 'Some of this has just been paid. Refresh the screen.',

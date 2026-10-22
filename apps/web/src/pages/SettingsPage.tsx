@@ -368,7 +368,7 @@ function UserRow({ user: u, onRole, onDone }: { user: Users['users'][number]; on
     const res = await op.run((key) => api.patch(`/api/users/${u.id}`, { customerId: renter === '' ? null : renter }, { key }), `renter:${renter}`);
     if (!res.ok) return;
     stopEditing();
-    toast({ text: t.wpay.renterSaved(u.name) });
+    toast({ text: renter === '' ? t.wpay.renterCleared(u.name) : t.wpay.renterSaved(u.name) });
     onDone();
   };
   /** A phone left somewhere: every device signs in again, the password stays theirs (§3.4). */

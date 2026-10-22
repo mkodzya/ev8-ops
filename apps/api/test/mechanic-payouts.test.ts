@@ -7,7 +7,7 @@
 // below; the first suites write a payout straight into the database to test
 // what the database itself refuses. Mopeds, people, parts and photos are
 // invented test values.
-import { todayISO } from '@ev8/shared';
+import { isoWeekday, todayISO } from '@ev8/shared';
 import { describe, expect, it } from 'vitest';
 import { HAS_DB, call, json, login, makeUser, uniq } from './helpers.js';
 
@@ -1025,8 +1025,59 @@ describe.skipIf(!HAS_DB)('a mechanic who rents a moped (director, 22.10.2026; 00
     const taken = await call(owner.cookie, 'PATCH', `/api/users/${other.id}`, { customerId: customer.id });
     expect(taken.statusCode).toBe(409);
     expect(errorOf(taken)).toBe('customer_taken');
+    // The journal says the link by the card's name, ids being hidden there.
+    const setLine = await prisma.auditLog.findFirstOrThrow({ where: { entityId: mech.id, action: 'user.update' }, orderBy: { createdAt: 'desc' } });
+    expect(setLine.before).toMatchObject({ renter: null });
+    expect(setLine.after).toMatchObject({ renter: customer.name });
     // Unlinked, the card is free again.
     expect((await call(owner.cookie, 'PATCH', `/api/users/${mech.id}`, { customerId: null })).statusCode).toBe(200);
+    const offLine = await prisma.auditLog.findFirstOrThrow({ where: { entityId: mech.id, action: 'user.update' }, orderBy: { createdAt: 'desc' } });
+    expect(offLine.before).toMatchObject({ renter: customer.name });
+    expect(offLine.after).toMatchObject({ renter: null });
     expect((await call(owner.cookie, 'PATCH', `/api/users/${other.id}`, { customerId: customer.id })).statusCode).toBe(200);
+  });
+
+  it('a week is put work on from its pay day, as the customer’s debt counts it (ADR-0022)', async () => {
+    const { prisma } = await import('../src/lib/db.js');
+    const owner = await person('owner');
+    const chief = await person('chief_mechanic');
+    const mech = await person('mechanic');
+    const w = await ownWork(owner.cookie, 30);
+    const customer = await prisma.customer.create({ data: { name: `ТЕСТ механик с днём оплаты ${uniq()}` } });
+    const { vehicle } = await freeVehicle();
+    const today = todayISO(new Date(), 'Asia/Tbilisi');
+    const made = await call(owner.cookie, 'POST', '/api/rentals', { customerId: customer.id, vehicleId: vehicle.id, weeklyRateTetri: 15000, pickedUpOn: today });
+    expect(made.statusCode, made.body).toBe(201);
+    const rentalId = json<{ id: string }>(made).id;
+    // Its rent is due three days into each week: the week that began today is not owed yet.
+    await prisma.rental.update({ where: { id: rentalId }, data: { payWeekday: ((isoWeekday(today) + 2) % 7) + 1 } });
+    expect((await call(owner.cookie, 'PATCH', `/api/users/${mech.id}`, { customerId: customer.id })).statusCode).toBe(200);
+    await closedRepair(mech.cookie, chief.cookie, [{ workTypeId: w.id }]);
+    expect((await dueOf(owner.cookie, mech.id))?.rent).toBeNull();
+    // Due on its first day again, the week is owed, and the payout pays it.
+    await prisma.rental.update({ where: { id: rentalId }, data: { payWeekday: null } });
+    expect((await dueOf(owner.cookie, mech.id))?.rent).toMatchObject({ rentalId, owedTetri: 15000 });
+  });
+
+  it('two cards merged into one keep the mechanic’s link; two linked cards are not merged', async () => {
+    const { prisma } = await import('../src/lib/db.js');
+    const owner = await person('owner');
+    const mech = await person('mechanic');
+    const other = await person('mechanic');
+    const kept = await prisma.customer.create({ data: { name: `ТЕСТ остаётся ${uniq()}` } });
+    const dropped = await prisma.customer.create({ data: { name: `ТЕСТ дубль ${uniq()}` } });
+    expect((await call(owner.cookie, 'PATCH', `/api/users/${mech.id}`, { customerId: dropped.id })).statusCode).toBe(200);
+    const merged = await call(owner.cookie, 'POST', `/api/customers/${kept.id}/merge`, { fromId: dropped.id, reason: 'ТЕСТ one person' });
+    expect(merged.statusCode, merged.body).toBe(200);
+    expect((await prisma.user.findUniqueOrThrow({ where: { id: mech.id }, select: { customerId: true } })).customerId).toBe(kept.id);
+
+    // A third card linked to another mechanic does not fold into his.
+    const third = await prisma.customer.create({ data: { name: `ТЕСТ третья ${uniq()}` } });
+    expect((await call(owner.cookie, 'PATCH', `/api/users/${other.id}`, { customerId: third.id })).statusCode).toBe(200);
+    const refused = await call(owner.cookie, 'POST', `/api/customers/${kept.id}/merge`, { fromId: third.id, reason: 'ТЕСТ two people' });
+    expect(refused.statusCode).toBe(409);
+    expect(errorOf(refused)).toBe('merge_two_renters');
+    expect((await prisma.customer.findUniqueOrThrow({ where: { id: third.id }, select: { archived: true } })).archived).toBe(false);
+    expect((await prisma.user.findUniqueOrThrow({ where: { id: other.id }, select: { customerId: true } })).customerId).toBe(third.id);
   });
 });

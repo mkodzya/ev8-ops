@@ -1,4 +1,4 @@
-import { fleetNumber, jobPayState, partLineState, todayISO, workLineState, worksTotal, type PayState } from '@ev8/shared';
+import { fleetNumber, jobPayState, partLineState, todayISO, weekDueOn, workLineState, worksTotal, type PayState } from '@ev8/shared';
 import type { FastifyInstance } from 'fastify';
 import type { Prisma } from '../generated/prisma/client.js';
 import { dateFromISO, isoDate } from '../lib/dates.js';
@@ -8,6 +8,7 @@ import { badRequest, conflict, notFound } from '../lib/errors.js';
 import { actorOf } from '../lib/guard.js';
 import { recordPaymentTx, voidPaymentTx } from '../lib/payments.js';
 import { rentalOwed } from '../lib/rentalMoney.js';
+import { payOffsetOf } from '../lib/rentState.js';
 import { serviceSettings } from '../lib/serviceSettings.js';
 import { int, str } from '../lib/validate.js';
 
@@ -126,16 +127,18 @@ export interface MechanicDue {
 
 /**
  * The rent a payout pays first (director, 22.10.2026; 0066): the mechanic's
- * oldest running rental, what its weeks owe now — begun and not paid; never
- * the deposit, which is handed back in cash one day and must have come in as
- * cash — and the part of the payout that goes there:
- * everything owed to him, never more than the debt. The rest is handed over;
- * a debt larger than the payout stays a debt.
+ * oldest running rental, what its weeks owe now — due and not paid, a week
+ * due on its pay day as the customer's debt counts it (ADR-0022, ADR-0041);
+ * never the deposit, which is handed back in cash one day and must have come
+ * in as cash, nor a return's charges — and the part of the payout that goes
+ * there: everything owed to him, never more than those weeks. The rest is
+ * handed over; weeks owing more than the payout stay owed.
  */
 export interface RentOffset {
   customerId: string;
   rentalId: string;
   number: string;
+  /** The weeks due and unpaid — not the customer's whole debt, which counts a deposit and charges too. */
   owedTetri: number;
   offsetTetri: number;
   /** totalTetri − offsetTetri: what is handed over. */
@@ -148,12 +151,14 @@ async function rentOffsetFor(db: Db, mechanicId: string, totalTetri: number, tod
   const rentals = await db.rental.findMany({
     where: { customerId: person.customerId, status: { in: ['active', 'overdue'] }, pickedUpOn: { not: null }, returnedOn: null },
     orderBy: [{ pickedUpOn: 'asc' }, { number: 'asc' }],
-    select: { id: true, number: true },
+    select: { id: true, number: true, pickedUpOn: true, payWeekday: true, weekShiftDays: true },
   });
   for (const r of rentals) {
     const owed = await rentalOwed(db, r.id);
-    // Weeks begun by today: a week not begun is not a debt, and money is not put on it ahead.
-    const owedTetri = owed.periods.filter((p) => isoDate(p.startsOn)! <= today).reduce((n, p) => n + Math.max(0, p.amountTetri - p.paidTetri), 0);
+    // Weeks due by today, by the rental's pay day as debt.ts counts them: a
+    // week not due is not a debt, and work is not put on it ahead.
+    const offset = payOffsetOf(r);
+    const owedTetri = owed.periods.filter((p) => weekDueOn(isoDate(p.startsOn)!, offset) <= today).reduce((n, p) => n + Math.max(0, p.amountTetri - p.paidTetri), 0);
     if (owedTetri <= 0) continue;
     const offsetTetri = Math.min(totalTetri, owedTetri);
     return { customerId: person.customerId, rentalId: r.id, number: r.number, owedTetri, offsetTetri, cashTetri: totalTetri - offsetTetri };
