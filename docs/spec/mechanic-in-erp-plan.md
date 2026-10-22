@@ -38,6 +38,7 @@ Claude Docs, вкладка «Задание для Claude Code», версия 
 План работы и правила для тебя: ~/Downloads/<файл вкладки «Задание для Claude Code»>.md.
 Образец логики — прототип бота: ветка feature/mechanic-bot-prototype, папка tools/mechanic-bot/
 (README с картой «лист → модель EV8 Ops»). Это образец, не код продукта.
+[22.10.2026: ветка удалена с GitHub, искать её не нужно — механик работает в EV8 Ops с 1.10.0.]
 
 Если docs/spec/mechanic-in-erp.md ещё нет — это этап 0 из плана, начни с него.
 Если есть — скажи по docs/handoff.md, какой этап следующий, покажи план этапа в 5–10 строк
@@ -236,4 +237,5 @@ Claude Docs, вкладка «Задание для Claude Code», версия 
 
 **Чего Claude не делает в этой задаче:** не трогает работающий Telegram-бот, его Apps Script и
 таблицы в Google (их ведёт директор); не выключает бота — это решение по критериям ТЗ; не вливает
-`feature/mechanic-bot-prototype` в develop.
+`feature/mechanic-bot-prototype` в develop. (22.10.2026: ветку Mika удалил с GitHub; в develop из неё
+ничего не попало, поток механика — в EV8 Ops с 1.10.0.)
