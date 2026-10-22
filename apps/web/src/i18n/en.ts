@@ -727,7 +727,7 @@ export const en = {
     takeCash: 'Take cash',
     takeFor: (n: string) => `Take payment · ${n}`,
     payOutFor: (n: string) => `Hand back the deposit · ${n}`,
-    payInstalment: (n: string) => `Take an instalment · ${n}`,
+    payInstalment: (n: string) => `Take the payment · ${n}`,
     paySupplier: (n: string) => `Pay the supplier · ${n}`,
     payService: (n: string) => `Repair payment · ${n}`,
     buyBack: (n: string) => `Buy back · ${n}`,

@@ -717,7 +717,7 @@ export const ka: Dict = {
     takeCash: 'ნაღდის მიღება',
     takeFor: (n: string) => `გადახდის მიღება · ${n}`,
     payOutFor: (n: string) => `დეპოზიტის დაბრუნება · ${n}`,
-    payInstalment: (n: string) => `შენატანის მიღება · ${n}`,
+    payInstalment: (n: string) => `გადახდის მიღება · ${n}`,
     paySupplier: (n: string) => `მომწოდებლისთვის გადახდა · ${n}`,
     payService: (n: string) => `შეკეთების გადახდა · ${n}`,
     buyBack: (n: string) => `უკან გამოსყიდვა · ${n}`,

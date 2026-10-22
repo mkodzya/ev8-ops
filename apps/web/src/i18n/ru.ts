@@ -728,7 +728,7 @@ export const ru: Dict = {
     takeCash: 'Принять наличные',
     takeFor: (n: string) => `Принять оплату · ${n}`,
     payOutFor: (n: string) => `Выдать залог · ${n}`,
-    payInstalment: (n: string) => `Принять взнос · ${n}`,
+    payInstalment: (n: string) => `Принять оплату · ${n}`,
     paySupplier: (n: string) => `Оплатить поставщику · ${n}`,
     payService: (n: string) => `Оплата ремонта · ${n}`,
     buyBack: (n: string) => `Выкуп · ${n}`,
