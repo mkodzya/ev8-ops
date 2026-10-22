@@ -75,11 +75,12 @@ const ASSIGNMENT = new RegExp(
 
 /**
  * The keys that name what a payment pays off (item 30): the money form's block
- * and the hand-over's line before it is taken, the payment page's block and the
- * toast after. «Закрыть» / «დახურვა» stays a repair's, a rental's and a sale's
- * word, so the rule reads these keys and no others (QA after issue #9).
+ * and the hand-over's lines before it is taken (what it pays off, and what an
+ * overpayment will pay off next), the payment page's block and the toast
+ * after. «Закрыть» / «დახურვა» stays a repair's, a rental's and a sale's word,
+ * so the rule reads these keys and no others (QA after issue #9).
  */
-const SETTLED = /^(?:money\.settles|hand\.settles|paymentPage\.settled|payments\.(?:allocated|recorded))$/u;
+const SETTLED = /^(?:money\.settles|hand\.(?:settles|overpay)|paymentPage\.settled|payments\.(?:allocated|recorded))$/u;
 
 /**
  * `word` is the retired word (any of its forms), `use` what the glossary says

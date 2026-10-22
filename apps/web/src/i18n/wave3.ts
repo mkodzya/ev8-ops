@@ -112,7 +112,7 @@ export const wave3En = {
     laterNote: 'The rental is “Due today”; from tomorrow it is “Overdue”.',
     paid: 'The customer paid',
     partialHint: 'Less — in part: the deposit first, then the week.',
-    overpay: (n: string) => `${n} more than is due today: it stays as rent credit and closes the next week.`,
+    overpay: (n: string) => `${n} more than is due today: it stays as rent credit and settles the next week.`,
     settles: (dep: string, depOf: string, week: string, weekOf: string) => `Will settle: deposit ${dep} of ${depOf} · weeks ${week} of ${weekOf}`,
     chooseHow: 'Choose how they pay — there is no default.',
     toSummary: 'To the summary',
@@ -259,7 +259,10 @@ export const wave3En = {
   },
   rentalMoney: {
     charges: { key: 'Key not returned', late: 'Delay', withheld: 'Kept beyond the claims', other: 'Other', fine: 'Fine' } as Record<string, string>,
-    /** The notes the code writes on a charge (`CHARGE_NOTES`), in words: «Key not returned · contract §6». */
+    /**
+     * The notes the code writes on a charge (`CHARGE_NOTES`), in words: «Key not returned · contract §6».
+     * Spelled as `back.keyFee` spells the clause in each language, so the return and its charge agree.
+     */
     notes: { keyContract: 'contract §6' },
     rest: (n: string) => `rest ${n}`,
     receivedOf: (a: string, b: string) => `${a} of ${b}`,
@@ -376,7 +379,7 @@ export const wave3Ru: Wave3 = {
     laterNote: 'Аренда — «Ждём сегодня», с завтра — «Просрочена».',
     paid: 'Клиент заплатил',
     partialHint: 'Меньше — частично: сначала залог, потом неделя.',
-    overpay: (n) => `На ${n} больше, чем к оплате сегодня: останется авансом по аренде и закроет следующую неделю.`,
+    overpay: (n) => `На ${n} больше, чем к оплате сегодня: останется авансом по аренде и погасит следующую неделю.`,
     settles: (dep, depOf, week, weekOf) => `Погасит: залог ${dep} из ${depOf} · недели ${week} из ${weekOf}`,
     chooseHow: 'Выберите, как платит — умолчания нет.',
     toSummary: 'К итогу',
@@ -523,7 +526,7 @@ export const wave3Ru: Wave3 = {
   },
   rentalMoney: {
     charges: { key: 'Потеря ключа', late: 'Опоздание', withheld: 'Удержано сверх претензий', other: 'Другое', fine: 'Штраф' },
-    notes: { keyContract: 'договор, п. 6' },
+    notes: { keyContract: 'договор п.6' },
     rest: (n) => `остаток ${n}`,
     receivedOf: (a, b) => `${a} из ${b}`,
     keptRepair: (n) => `Удержано · ремонт ${n}`,
@@ -784,7 +787,7 @@ export const wave3Ka: Wave3 = {
   },
   rentalMoney: {
     charges: { key: 'გასაღების დაკარგვა', late: 'დაგვიანება', withheld: 'პრეტენზიებზე მეტი დაკავება', other: 'სხვა', fine: 'ჯარიმა' },
-    notes: { keyContract: 'ხელშეკრულება, პ. 6' },
+    notes: { keyContract: 'ხელშეკრულება §6' },
     rest: (n) => `ნაშთი ${n}`,
     receivedOf: (a, b) => `${a} / ${b}`,
     keptRepair: (n) => `დაკავებულია · რემონტი ${n}`,

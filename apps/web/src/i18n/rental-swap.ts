@@ -89,7 +89,7 @@ export const rentalSwapRu: typeof rentalSwapEn = {
     sumOut: 'Сдаёт',
     sumIn: 'Берёт',
     sumWhere: 'Старый мопед',
-    sumKey: (n: string) => `Ключ не вернули: ${n} по договору (§6)`,
+    sumKey: (n: string) => `Ключ не вернули: ${n} по договору (п.6)`,
     sumContract: 'Договор',
     finish: 'Заменить мопед',
     done: 'Мопед заменён',
