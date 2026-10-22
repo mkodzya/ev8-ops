@@ -1,6 +1,6 @@
 // Wave 3: the hand-over and return wizards' operations, criterion by criterion
 // (docs/redesign/wave-3.md §6). Needs a *_test database.
-import { addDays, todayISO } from '@ev8/shared';
+import { CHARGE_NOTES, addDays, todayISO } from '@ev8/shared';
 import { describe, expect, it } from 'vitest';
 import { HAS_DB, call, json, login, loginAs, makeUser, uniq } from './helpers.js';
 
@@ -41,7 +41,7 @@ function pickup(customerId: string, vehicleId: string, over: Record<string, unkn
 interface Card {
   rental: { status: string; paidThrough: string | null; debtTetri: number; transferredAt: string | null; undoReturnUntil: string | null };
   periods: { seq: number; paidTetri: number; amountTetri: number }[];
-  charges: { kind: string; amountTetri: number; paidTetri: number }[];
+  charges: { kind: string; amountTetri: number; paidTetri: number; note: string | null }[];
   deposit: { paidTetri: number; status: string; withheldTetri: number; returnedTetri: number; decided: boolean; withholdings: { source: string; amountTetri: number }[] };
   payments: { grossTetri: number; feeTetri: number; channel: string }[];
 }
@@ -242,6 +242,20 @@ describe.skipIf(!HAS_DB)('wave 3 · return', () => {
     expect(summary.depositsUndecided.map((r) => r.id)).toContain(id);
     const pdf = await call(owner, 'GET', `/api/rentals/${id}/return-act.pdf`);
     expect(pdf.statusCode).toBe(200);
+  });
+
+  it('the key’s charge carries the code’s own note, and the payment that settles it names the charge (QA after issue #9)', async () => {
+    const { id } = await running(3);
+    const owner = await loginAs('owner');
+    expect((await call(owner, 'POST', `/api/rentals/${id}/return`, { odometerKm: 150, items: items({ key: { state: 'missing' } }) })).statusCode).toBe(200);
+    // Written from the one constant, which a screen turns into the reader's words.
+    expect((await card(owner, id)).charges).toEqual([expect.objectContaining({ kind: 'key', note: CHARGE_NOTES.keyContract })]);
+    const paid = await call(owner, 'POST', '/api/money', { kind: 'rent', rentalId: id, amountTetri: '250', channel: 'cash' });
+    expect(paid.statusCode, paid.body).toBe(201);
+    type Page = { payment: { closed: { target: string; amountTetri: number; chargeKind: string | null; chargeNote: string | null }[]; creditTetri: number } };
+    const page = json<Page>(await call(owner, 'GET', `/api/payments/${json<{ id: string }>(paid).id}`));
+    expect(page.payment.closed).toEqual([{ target: 'charge', amountTetri: 25000, seq: null, startsOn: null, endsOn: null, dueOn: null, chargeKind: 'key', chargeNote: CHARGE_NOTES.keyContract }]);
+    expect(page.payment.creditTetri).toBe(0);
   });
 
   it('refuses a mileage below the hand-over (crit. 22) and a manager deciding the deposit', async () => {

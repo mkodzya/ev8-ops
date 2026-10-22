@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { acquiringNet, instalmentSchedule, spreadOverOwed, spreadPayment } from '../src/index.js';
+import { acquiringNet, instalmentSchedule, rentCreditTetri, spreadOverOwed, spreadPayment } from '../src/index.js';
 
 const period = (seq: number, amountTetri: number, paidTetri = 0) => ({ id: `p${seq}`, seq, amountTetri, paidTetri });
 
@@ -102,5 +102,25 @@ describe('spreading over instalments', () => {
   it('skips what is settled', () => {
     const { allocations } = spreadOverOwed(10000, [inst(1, 30000, 30000), inst(2, 30000)], 'instalment');
     expect(allocations).toEqual([{ target: 'instalment', id: 'i2', amountTetri: 10000 }]);
+  });
+});
+
+describe('a payment’s rent credit (PAY-06; QA after issue #9)', () => {
+  const pay = (over: Partial<Parameters<typeof rentCreditTetri>[0]> = {}) => rentCreditTetri({ direction: 'in', kind: 'rent', voided: false, grossTetri: 17000, allocatedTetri: 15000, ...over });
+
+  it('is what came in for rent and nothing has taken yet', () => {
+    expect(pay()).toBe(2000);
+    expect(pay({ kind: 'on_account', allocatedTetri: 0 })).toBe(17000);
+  });
+
+  it('is nothing once all of it is placed', () => {
+    expect(pay({ allocatedTetri: 17000 })).toBe(0);
+  });
+
+  it('is nothing for a sale’s, a repair’s, an outgoing or an annulled payment', () => {
+    expect(pay({ kind: 'sale' })).toBe(0);
+    expect(pay({ kind: 'service' })).toBe(0);
+    expect(pay({ direction: 'out', kind: 'deposit_payout' })).toBe(0);
+    expect(pay({ voided: true, allocatedTetri: 0 })).toBe(0);
   });
 });

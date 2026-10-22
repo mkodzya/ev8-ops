@@ -57,10 +57,14 @@ describe.skipIf(!HAS_DB)('the money form (§3.1)', () => {
     const { owner, customer, rentalId } = await freshRental();
     const plan = json<Plan>(await call(owner, 'POST', '/api/money/preview', { kind: 'rent', rentalId, amountTetri: '350', channel: 'cash' }));
     expect(plan.leftoverTetri).toBe(2000);
-    await call(owner, 'POST', '/api/money', { kind: 'rent', rentalId, amountTetri: '350', channel: 'cash' });
+    const res = await call(owner, 'POST', '/api/money', { kind: 'rent', rentalId, amountTetri: '350', channel: 'cash' });
     const d = await debt(owner, customer.id);
     expect(d.owesTetri).toBe(0);
     expect(d.creditTetri).toBe(2000);
+    // The payment's page says where the rest went, beside what it settled (QA after issue #9).
+    const page = json<{ payment: { closed: { target: string; amountTetri: number }[]; creditTetri: number } }>(await call(owner, 'GET', `/api/payments/${json<{ id: string }>(res).id}`));
+    expect(page.payment.closed.reduce((n, c) => n + c.amountTetri, 0)).toBe(33000);
+    expect(page.payment.creditTetri).toBe(2000);
   });
 
   it('a manager takes cash, today, and nothing else (crit. 5)', async () => {
@@ -131,8 +135,9 @@ describe.skipIf(!HAS_DB)('the money form (§3.1)', () => {
     const other = await loginAs('owner');
     expect(json<{ error: string }>(await call(other, 'POST', `/api/payments/${id}/undo`)).error).toBe('undo_too_late');
     expect((await call(owner, 'POST', `/api/payments/${id}/undo`)).statusCode).toBe(200);
-    const page = json<{ payment: { voided: boolean; voidKind: string }; journal: { action: string }[] }>(await call(owner, 'GET', `/api/payments/${id}`));
-    expect(page.payment).toMatchObject({ voided: true, voidKind: 'undo' });
+    const page = json<{ payment: { voided: boolean; voidKind: string; creditTetri: number }; journal: { action: string }[] }>(await call(owner, 'GET', `/api/payments/${id}`));
+    // An undone payment is nobody's credit, whatever its allocations became.
+    expect(page.payment).toMatchObject({ voided: true, voidKind: 'undo', creditTetri: 0 });
     expect(page.journal.map((j) => j.action)).toContain('payment.undo');
     expect((await debt(owner, customer.id)).owesTetri).toBe(33000);
   });

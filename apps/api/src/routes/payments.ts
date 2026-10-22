@@ -1,4 +1,4 @@
-import { INCOME_ROWS, acquiringGross, paymentInRow, todayISO, type IncomeRow, type WeekAllocationTarget, type WeekPaymentKind } from '@ev8/shared';
+import { INCOME_ROWS, acquiringGross, paymentInRow, rentCreditTetri, todayISO, type IncomeRow, type WeekAllocationTarget, type WeekPaymentKind } from '@ev8/shared';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { hasPerm } from '../lib/auth.js';
 import { dateFromISO, isoDate } from '../lib/dates.js';
@@ -177,6 +177,7 @@ export function paymentRoutes(app: FastifyInstance): void {
             amountTetri: true,
             period: { select: { seq: true, startsOn: true, endsOn: true } },
             instalment: { select: { seq: true, dueOn: true } },
+            charge: { select: { kind: true, note: true } },
           },
         },
       },
@@ -235,7 +236,18 @@ export function paymentRoutes(app: FastifyInstance): void {
           startsOn: a.period ? isoDate(a.period.startsOn) : null,
           endsOn: a.period ? isoDate(a.period.endsOn) : null,
           dueOn: a.instalment ? isoDate(a.instalment.dueOn) : null,
+          // What a return charged, by its kind and note: the page took a key for an instalment (QA after issue #9).
+          chargeKind: a.charge?.kind ?? null,
+          chargeNote: a.charge?.note ?? null,
         })),
+        // The rest of the money, which no week, deposit or charge has taken yet: rent credit (PAY-06).
+        creditTetri: rentCreditTetri({
+          direction: p.direction,
+          kind: p.kind,
+          voided: p.voidedAt != null,
+          grossTetri: p.grossTetri,
+          allocatedTetri: p.allocations.reduce((n, a) => n + a.amountTetri, 0),
+        }),
       },
       journal: journal.map((j) => ({ at: j.createdAt.toISOString(), action: j.action, who: j.actor?.name ?? null, note: j.note, before: j.before, after: j.after })),
       // Rent closed by a mechanic's payout goes with the payout, never alone (0066).

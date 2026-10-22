@@ -5,6 +5,7 @@ import { api, ApiError } from '../../api.js';
 import { Field } from '../../components/Wizard.js';
 import { fmtDate } from '../../format.js';
 import { useT } from '../../i18n/index.js';
+import { chargeWords } from '../../lib/charges.js';
 import { useLoad } from '../../lib/use.js';
 import { useSession } from '../../session.js';
 import { FormSheet, useFieldError } from '../form/Form.js';
@@ -87,7 +88,8 @@ interface State {
 }
 
 interface Closes {
-  target: 'deposit' | 'period' | 'instalment' | 'service' | 'sale' | 'purchase';
+  /** `charge`: what a return charged — a key, days of delay; its kind comes as `number` (B5-08). */
+  target: 'deposit' | 'period' | 'instalment' | 'charge' | 'service' | 'sale' | 'purchase';
   amountTetri: number;
   fullTetri: number;
   openTetri: number;
@@ -618,6 +620,9 @@ function closeLabel(t: ReturnType<typeof useT>, c: Closes): string {
       return t.money.closeWeek(dm(c.startsOn), dm(c.endsOn));
     case 'instalment':
       return t.money.closeInstalment(c.seq ?? 0, fmtDate(c.dueOn));
+    case 'charge':
+      // The plan sends a charge's kind and no note: «Потеря ключа», where the line had no words (QA after issue #9).
+      return chargeWords(t, c.number);
     case 'service':
       return t.money.closeService(c.number ?? '');
     case 'purchase':
