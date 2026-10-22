@@ -85,6 +85,8 @@ export function CalendarPage() {
   const [wa, setWa] = useState<{ target: WaTarget; kind: WaKind } | null>(null);
   // The totals' stretch: the chosen day's week, or its month (director, 22.10.2026). Not in the address: a view, not a place.
   const [scope, setScope] = useState<TotalsScope>('week');
+  // The totals' card, brought into view when a week is picked in the month's table.
+  const totals = useRef<HTMLElement>(null);
   // The server's day, once an answer has said it. State and not a ref: the
   // request below is made from it, and a ref written while rendering would
   // leave the request one render behind the cells — over a month's last
@@ -209,8 +211,16 @@ export function CalendarPage() {
     return card ? <DebtorRow key={late.rentalId} late={late} card={card} dense={laptop} actions={actions} /> : null;
   };
   const pick = (day: ISODate) => go(day, view.all);
-  // A week's row picks its first day, and the card shows that week.
-  const table = month && <MonthTable totals={month} title={title} today={today} onPick={pick} />;
+  // A week's row picks its first day and turns the totals to that week — in
+  // «Месяц» too, where the card would keep the month — and brings them into
+  // view: the table is under the grid, the totals at the top.
+  const pickWeek = (day: ISODate) => {
+    setScope('week');
+    pick(day);
+    const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    totals.current?.scrollIntoView({ block: 'nearest', behavior: still ? 'auto' : 'smooth' });
+  };
+  const table = month && <MonthTable totals={month} title={title} today={today} onPick={pickWeek} />;
   const toToday = () => go(today, view.all);
   const togglePaid = (day: ISODate) => () => {
     const next = new Set(paidOpen);
@@ -228,7 +238,7 @@ export function CalendarPage() {
       <>
         {head}
         <div className="cal">
-          <section className="cal-sum-card">
+          <section className="cal-sum-card" ref={totals}>
             <WeekLine week={week} isCurrent={isCurrent} failed={failed !== null} scope={scope} onScope={setScope} month={month} monthName={title} />
             <LateLine late={now.late} open={lateOpen} onToggle={() => setLateOpen(!lateOpen)}>
               {now.late.rentals.map(debtor)}
@@ -273,7 +283,18 @@ export function CalendarPage() {
     <>
       {head}
       <div className="cal">
-        <WeekCard week={week} isCurrent={isCurrent} late={now.late} received={received} failed={failed !== null} scope={scope} onScope={setScope} month={month} monthName={title} />
+        <WeekCard
+          week={week}
+          isCurrent={isCurrent}
+          late={now.late}
+          received={received}
+          failed={failed !== null}
+          scope={scope}
+          onScope={setScope}
+          month={month}
+          monthName={title}
+          cardRef={totals}
+        />
         <div className="cal-desk">
           <div className="cal-left">
             <PeriodBar dense title={title} prev={arrow(-1)} next={arrow(1)} onToday={toToday} />

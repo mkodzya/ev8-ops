@@ -21,7 +21,7 @@ import {
   type Tetri,
 } from '@ev8/shared';
 import { Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, MessageCircle, Phone } from 'lucide-react';
-import type { ReactNode } from 'react';
+import type { ReactNode, Ref } from 'react';
 import { Link } from 'react-router-dom';
 import type { WaKind } from '../../components/Whatsapp.js';
 import { useSkeletonDelay } from '../../ds/state/Skeleton.js';
@@ -477,7 +477,8 @@ function MonthFigs({ total }: { total: CalendarTotals }) {
  * The month week by week, under the grid (director, 22.10.2026): one row a
  * week, cut to the month, and the month's line at the foot. Weeks are counted
  * by the day they are due, as the card above counts them. A row picks its
- * first day, so the card shows that week.
+ * first day and turns the card to that week (the page does both); a row cut
+ * to the month says it is part of a week, since the card shows all seven days.
  */
 export function MonthTable({ totals, title, today, onPick }: { totals: CalendarMonthTotals; title: string; today: ISODate; onPick: (day: ISODate) => void }) {
   const t = useT();
@@ -506,9 +507,11 @@ export function MonthTable({ totals, title, today, onPick }: { totals: CalendarM
           <tbody>
             {totals.weeks.map((w) => (
               <tr key={w.from} className={w.from <= today && today <= w.to ? 'cal-month-now' : undefined}>
-                <td>
+                <td className="cal-month-wk">
                   <button type="button" className="cal-month-pick" onClick={() => onPick(w.from)}>
-                    {rangeText(t, w)}
+                    <span>{rangeText(t, w)}</span>
+                    {/* An edge row holds the month's days only; the card it opens shows the whole week. */}
+                    {w.part && <small>{t.calendar.partWeek}</small>}
                   </button>
                 </td>
                 {cells(w)}
@@ -722,6 +725,7 @@ export function WeekCard({
   onScope,
   month,
   monthName,
+  cardRef,
 }: {
   week: CalendarWeek | null;
   isCurrent: boolean;
@@ -732,6 +736,8 @@ export function WeekCard({
   onScope: (s: TotalsScope) => void;
   month: CalendarMonthTotals | null;
   monthName: string;
+  /** The card itself, for the page to bring into view when a week is picked in the month's table. */
+  cardRef?: Ref<HTMLElement>;
 }) {
   const t = useT();
   // The month needs the month's answer; while it loads, the card shows the week it has, as before.
@@ -740,7 +746,7 @@ export function WeekCard({
   const split = t.calendar.lateSplit(late.thisWeekTetri !== 0 ? gel(late.thisWeekTetri) : null, late.earlierTetri !== 0 ? gel(late.earlierTetri) : null);
   const pending = !week && !failed;
   return (
-    <section className="cal-card">
+    <section className="cal-card" ref={cardRef}>
       {byMonth && (
         <div className="cal-card-head">
           <span>

@@ -66,6 +66,8 @@ describe('calendarMonthTotals', () => {
       ['2026-10-19', '2026-10-25'],
       ['2026-10-26', '2026-10-31'],
     ]);
+    // The cut ones say so: the week a row opens runs past the month.
+    expect(m.weeks.map((w) => w.part)).toEqual([true, false, false, false, true]);
     expect(m.weeks[0].due.tetri).toBe(15000);
     expect(m.weeks[3].short.tetri).toBe(10000);
     expect(m.weeks[4].due.count).toBe(0);

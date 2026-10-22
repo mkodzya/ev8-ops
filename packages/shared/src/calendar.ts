@@ -338,8 +338,12 @@ export interface CalendarMonthTotals {
   /** The month's first and last day. */
   month: Period;
   total: CalendarTotals;
-  /** Its Monday–Sunday weeks cut to the month: the first may start on a Wednesday, the last end on a Friday. */
-  weeks: (Period & CalendarTotals)[];
+  /**
+   * Its Monday–Sunday weeks cut to the month: the first may start on a
+   * Wednesday, the last end on a Friday. `part` marks a week cut so: its row
+   * holds only the month's days, while the week it opens holds all seven.
+   */
+  weeks: (Period & CalendarTotals & { part: boolean })[];
 }
 
 function totalsOf(entries: readonly CalendarEntry[], today: ISODate): CalendarTotals {
@@ -369,7 +373,7 @@ export function calendarMonthTotals(cal: Pick<PaymentsCalendar, 'entries' | 'wee
     .map((w) => {
       const from = w.from < first ? first : w.from;
       const to = w.to > last ? last : w.to;
-      return { from, to, ...totalsOf(mine.filter((e) => e.dueOn >= from && e.dueOn <= to), today) };
+      return { from, to, part: from !== w.from || to !== w.to, ...totalsOf(mine.filter((e) => e.dueOn >= from && e.dueOn <= to), today) };
     });
   return { month: { from: first, to: last }, total: totalsOf(mine, today), weeks };
 }

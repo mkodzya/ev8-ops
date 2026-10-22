@@ -386,8 +386,17 @@ button.cal-cell { cursor: pointer; }
    table under the grid is the month week by week, by the day weeks are due.
    Under the 448 px month the table keeps its five columns: sums never wrap,
    the week's dates may. */
-.cal-scope { display: inline-flex; gap: 4px; margin-left: 8px; vertical-align: middle; }
-.cal-scope .pill-sm { min-height: 26px; padding: 0 10px; font: var(--text-label); }
+/* A thumb's pills on a phone — 44 px, 8 px apart (ux.md, principle 13), as
+   every .pill-sm below 900 px; compact only for a pointer. */
+.cal-scope { display: inline-flex; gap: 8px; margin-left: 8px; vertical-align: middle; }
+.cal-scope .pill-sm { padding: 0 12px; font: var(--text-label); }
+/* A week picked in the month's table brings the totals into view: on a phone clear of the sticky header. */
+.cal-sum-card, .cal-card { scroll-margin-top: calc(var(--header-h) + 8px); }
+@media (min-width: 900px) {
+  .cal-sum-card, .cal-card { scroll-margin-top: 16px; }
+  .cal-scope { gap: 4px; }
+  .cal-scope .pill-sm { min-height: 26px; padding: 0 10px; }
+}
 .cal-month { margin: 16px 0 0; }
 .cal-month-title { margin: 0 0 6px; font: var(--text-overline); color: var(--muted); }
 .cal-month .table-wrap { background: var(--surface); border-radius: var(--radius-card); }
@@ -401,8 +410,12 @@ button.cal-cell { cursor: pointer; }
 .cal-month-table tfoot th { text-align: left; }
 .cal-month-now td { font-weight: 600; }
 .cal-month-table .cal-short { color: var(--crit-ink); }
-.cal-month-pick { background: none; border: 0; padding: 0; font: inherit; color: inherit; text-align: left; cursor: pointer; text-decoration: underline; text-decoration-color: var(--line-soft); text-underline-offset: 3px; }
-.cal-month-pick:hover { text-decoration-color: currentColor; }
+/* The week's cell is the tap target, the whole of it: 44 px tall on a phone (--control-dense is the thumb's there), 34 px for a pointer. */
+.cal-month-table td.cal-month-wk { padding-block: 0; }
+.cal-month-pick { display: flex; flex-direction: column; justify-content: center; align-items: flex-start; width: 100%; min-height: var(--control-dense); background: none; border: 0; padding: 4px 0; font: inherit; color: inherit; text-align: left; cursor: pointer; }
+.cal-month-pick > span { text-decoration: underline; text-decoration-color: var(--line-soft); text-underline-offset: 3px; }
+.cal-month-pick:hover > span { text-decoration-color: currentColor; }
+.cal-month-pick small { font: var(--text-overline); font-weight: 400; color: var(--muted); }
 /* A phone keeps four columns: «ещё ждём» is the line under the month's figures there. */
 @media (max-width: 479px) {
   .cal-month-table .cal-wait { display: none; }
