@@ -97,7 +97,8 @@ Georgian in every font stack (Be Vietnam Pro and Inter have no Georgian glyphs).
 - Report failures faithfully (red tests, skipped steps).
 
 ## Domain facts that shape the code
-- Money in GEL, stored in tetri as integers; VAT 18 % added on top of net prices.
+- Money in GEL, stored in tetri as integers; VAT 18 % added on top of net prices — except goods
+  (parts, chargers): their price is final with VAT inside (Mika, 23.10.2026; issue #11).
 - Time zone Asia/Tbilisi; rental periods are 7 calendar days from pickup; an owner may make
   the running week 1–6 days longer, and every later week follows (Mika, 21.10.2026; ADR-0041).
 - Vehicle state is derived from events (pickup, return, service job, sale),
@@ -137,3 +138,9 @@ End commit messages with `Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.co
   механик» добавляются к двум ролям 17.09.2026 (ADR-0032, 0033); «Зарплаты и
   HR» в ТЗ v1.1 вынесены за границы v1 — выплаты механику расходятся с ним
   осознанно.
+- **Продажа товаров** (запрос директора 23.10.2026, GitHub issue #11; принято
+  Микой 23.10.2026). Запчасти со склада и зарядки продаются клиентам и
+  розничному покупателю: списание с остатков, оплата из «Разобрать», кассой
+  и картой, счёт с НДС, отдельная строка «Товары / Запчасти» в отчётах
+  (`docs/spec/goods-sales.md`). В ТЗ v1.1 продажи товаров нет — это место
+  расходится с ним осознанно.
