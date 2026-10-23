@@ -1,4 +1,4 @@
-import { customerDebt, dueTodayOf, partsTetri, todayISO, type Debt } from '@ev8/shared';
+import { customerDebt, dueTodayOf, goodsTotals, partsTetri, todayISO, type Debt } from '@ev8/shared';
 import { isoDate } from './dates.js';
 import { prisma } from './db.js';
 import { PART_MONEY } from './stock.js';
@@ -31,7 +31,7 @@ export async function debtsOf(customerIds: string[], today: string = todayISO(ne
   if (customerIds.length === 0) return new Map();
   const ids = [...new Set(customerIds)];
 
-  const [rentals, sales, jobs, payments] = await Promise.all([
+  const [rentals, sales, jobs, goods, payments] = await Promise.all([
     prisma.rental.findMany({
       where: { customerId: { in: ids } },
       select: {
@@ -67,6 +67,11 @@ export async function debtsOf(customerIds: string[], today: string = todayISO(ne
         parts: { select: PART_MONEY },
         payments: { where: { voidedAt: null }, select: { grossTetri: true } },
       },
+    }),
+    // Goods sold to them over the counter and not cancelled (ADR-0045): owed whole from the day of the sale.
+    prisma.goodsSale.findMany({
+      where: { customerId: { in: ids }, status: 'active' },
+      select: { id: true, number: true, customerId: true, lines: { select: { qty: true, unitPriceTetri: true } }, payments: { where: { voidedAt: null, kind: 'goods' }, select: { grossTetri: true } } },
     }),
     // Money in that nothing has taken yet: rent and on-account payments less
     // their allocations. A sale's or a repair's payment is that record's own.
@@ -107,6 +112,9 @@ export async function debtsOf(customerIds: string[], today: string = todayISO(ne
             const total = j.labourTetri + partsTetri(j.parts);
             return { id: j.id, number: j.number, chargedTetri: Math.max(0, total - j.withheldTetri), paidTetri: j.payments.reduce((n, p) => n + p.grossTetri, 0) };
           }),
+        goods: goods
+          .filter((g) => g.customerId === id)
+          .map((g) => ({ id: g.id, number: g.number, chargedTetri: goodsTotals(g.lines).grossTetri, paidTetri: g.payments.reduce((n, p) => n + p.grossTetri, 0) })),
         unplacedTetri: payments
           .filter((p) => p.customerId === id)
           .reduce((n, p) => n + Math.max(0, p.grossTetri - p.allocations.reduce((m, a) => m + a.amountTetri, 0)), 0),

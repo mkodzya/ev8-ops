@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { LoadError } from '../components/LoadError.js';
 import { Empty, Loading, PageHead } from '../components/ui.js';
@@ -24,7 +24,8 @@ interface Batteries {
   showroom: number;
   couriersByActs: number;
   lastInventory: { countedOn: string; showroomQty: number; repairQty: number; couriersQty: number; totalQty: number; by: string | null; reason: string | null } | null;
-  moves: { id: string; kind: string; qty: number; reason: string | null; number: string | null; occurredOn: string; by: string | null }[];
+  /** `goodsSaleId`: a goods sale's sold, back after its cancellation, or found when sold beyond the count (ADR-0045). */
+  moves: { id: string; kind: string; qty: number; reason: string | null; number: string | null; goodsSaleId?: string | null; occurredOn: string; by: string | null }[];
   inventories: { id: string; countedOn: string; totalQty: number; showroomQty: number; repairQty: number; couriersQty: number; reason: string | null; by: string | null }[];
 }
 
@@ -51,6 +52,12 @@ export function BatteriesPage() {
   return (
     <>
       <PageHead title={t.bat.items[item]} sub={data.lastInventory ? t.bat.counted(fmtDate(data.lastInventory.countedOn), data.lastInventory.by ?? '') : t.bat.never}>
+        {/* A charger sold over the counter (ADR-0045); a battery waits for Mika's word. */}
+        {item === 'charger' && can('goods.sell') && (
+          <Link className="pill pill-sm" to="/sales/goods/new?item=charger">
+            {t.goods.batteries.sell}
+          </Link>
+        )}
         {mayCount && (
           <>
             <button type="button" className="pill pill-sm" onClick={() => setSheet('move')}>
@@ -95,9 +102,16 @@ export function BatteriesPage() {
               <li key={m.id}>
                 <span className="mono muted">{fmtDate(m.occurredOn)}</span>
                 <span>
-                  <span className="mono">{m.kind === 'lost' || m.kind === 'to_repair' || m.kind === 'handed_out' ? `−${m.qty}` : `+${m.qty}`}</span> {t.bat.kinds[m.kind] ?? t.batWords[m.kind] ?? m.kind}
-                  {m.number && <span className="muted"> · {m.kind === 'lost' ? t.bat.lostOn(m.number) : m.number}</span>}
-                  {m.reason && (
+                  <span className="mono">{m.kind === 'lost' || m.kind === 'to_repair' || m.kind === 'handed_out' || m.kind === 'sold' ? `−${m.qty}` : `+${m.qty}`}</span>{' '}
+                  {m.goodsSaleId && m.number ? (
+                    <Link to={`/sales/goods/${m.goodsSaleId}`}>
+                      {m.kind === 'sold' ? t.goods.moves.sold(m.number) : m.kind === 'sale_cancelled' ? t.goods.moves.returned(m.number) : t.goods.moves.found(m.number)}
+                    </Link>
+                  ) : (
+                    t.bat.kinds[m.kind] ?? t.batWords[m.kind] ?? m.kind
+                  )}
+                  {m.number && !m.goodsSaleId && <span className="muted"> · {m.kind === 'lost' ? t.bat.lostOn(m.number) : m.number}</span>}
+                  {m.reason && !m.goodsSaleId && (
                     <span className="muted">
                       {' · '}
                       <Typed text={m.reason} />

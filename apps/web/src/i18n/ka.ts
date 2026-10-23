@@ -30,6 +30,7 @@ import { saleDateKa } from './sale-date.js';
 import { rentalSwapKa } from './rental-swap.js';
 import { vehicleCardKa } from './vehicle-card.js';
 import { pickupDateKa } from './pickup-date.js';
+import { goodsKa } from './goods.js';
 import type { Dict } from './en.js';
 
 // Typed as Dict: a missing or misspelled key fails the build.
@@ -99,6 +100,7 @@ export const ka: Dict = {
       openRepair: 'რემონტის გახსნა',
       reportBreak: 'გაუმართაობის შეტყობინება',
       sell: 'მოპედის გაყიდვა',
+      sellGoods: 'საქონლის გაყიდვა',
     },
     tabs: {
       calendar: 'კალენდარი',
@@ -130,12 +132,13 @@ export const ka: Dict = {
       login: 'შესვლა',
       expenses: 'ხარჯები',
       drive: 'Drive',
+      goods: 'საქონელი',
     },
   },
 
   searchUi: {
     placeholder: 'VIN, სახელი, ტელეფონი, ნომერი, თანხა',
-    hint: 'VIN-ის ბოლო 4 · სახელი ლათინურად ან ქართულად · ტელეფონის ციფრები · R-, SL-, PO-, SV-ნომერი · გადახდის თანხა',
+    hint: 'VIN-ის ბოლო 4 · სახელი ლათინურად ან ქართულად · ტელეფონის ციფრები · R-, SL-, TS-, PO-, SV-ნომერი · გადახდის თანხა',
     recent: 'ბოლოს გახსნილი',
     recentNone: 'ამ მოწყობილობაზე ჯერ არაფერი გაიხსნა.',
     offline: 'კავშირი არ არის — ვეძებთ ამ მოწყობილობაზე ბოლოს გახსნილებში.',
@@ -143,7 +146,7 @@ export const ka: Dict = {
     nothing: (q: string) => `„${q}“ — არაფერი მოიძებნა`,
     newCustomerWith: (phone: string) => `ახალი კლიენტი ნომრით ${phone}`,
     more: (n: number) => `კიდევ ${n}`,
-    groups: { customers: 'კლიენტები', vehicles: 'მოპედები', rentals: 'ქირაობები', sales: 'გაყიდვები', payments: 'გადახდები', purchases: 'შესყიდვები', jobs: 'რემონტები' },
+    groups: { customers: 'კლიენტები', vehicles: 'მოპედები', rentals: 'ქირაობები', sales: 'გაყიდვები', goods: 'საქონელი', payments: 'გადახდები', purchases: 'შესყიდვები', jobs: 'რემონტები' },
   },
 
   form: {
@@ -721,6 +724,7 @@ export const ka: Dict = {
     payInstalment: (n: string) => `გადახდის მიღება · ${n}`,
     paySupplier: (n: string) => `მომწოდებლისთვის გადახდა · ${n}`,
     payService: (n: string) => `შეკეთების გადახდა · ${n}`,
+    payGoods: (n: string) => `საქონლის გადახდა · ${n}`,
     buyBack: (n: string) => `უკან შესყიდვა · ${n}`,
     in: 'შემოსავალი',
     out: 'გასავალი',
@@ -756,6 +760,7 @@ export const ka: Dict = {
     closeWeek: (from: string, to: string) => `კვირა ${from}–${to}`,
     closeInstalment: (seq: number, due: string) => `განვადების გადახდა ${seq} · ${due}`,
     closeService: (n: string) => `შეკეთება ${n}`,
+    closeGoods: (n: string) => `საქონელი ${n}`,
     closePurchase: (n: string) => `გადახდა ${n}`,
     closeSale: (n: string) => `${n}: გაყიდვაზე ვალი 0 გახდება`,
     ofFull: (a: string, full: string) => `${a} / ${full}`,
@@ -789,7 +794,7 @@ export const ka: Dict = {
     bankFeeHint: 'თუ იყო · კომპანიის ხარჯი, თვითღირებულებაში არ შედის',
     toState: 'სად მიდის მოპედი',
     nothingOwed: 'ვალი არ არის — თანხა თავად შეიყვანეთ.',
-    kinds: { rent: 'ქირა', sale: 'გაყიდვა', service: 'შეკეთება', on_account: 'ქირის ავანსი', deposit_payout: 'დეპოზიტის დაბრუნება', buyback: 'უკან შესყიდვა', supplier: 'მომწოდებლისთვის გადახდა' },
+    kinds: { rent: 'ქირა', sale: 'გაყიდვა', service: 'შეკეთება', on_account: 'ქირის ავანსი', deposit_payout: 'დეპოზიტის დაბრუნება', buyback: 'უკან შესყიდვა', supplier: 'მომწოდებლისთვის გადახდა', goods: 'საქონელი' },
   },
 
   sort: {
@@ -947,7 +952,7 @@ export const ka: Dict = {
 
   paymentPage: {
     wasLinked: 'იყო მიბმული; ანულირების შემდეგ ხაზი «დასახარისხებელში» დაბრუნდა',
-    acts: { record: 'ჩაიწერა', void: 'ანულირდა', undo: 'მაშინვე გაუქმდა' },
+    acts: { record: 'ჩაიწერა', void: 'ანულირდა', undo: 'მაშინვე გაუქმდა', rebook: 'გახდა ავანსი საქონლის გაყიდვის გაუქმებისას' },
     title: (n: string) => `გადახდა ${n}`,
     customer: 'კლიენტი',
     channel: 'არხი',
@@ -1127,7 +1132,7 @@ export const ka: Dict = {
     unit: 'ერთეული',
     units: { pcs: 'ცალი', set: 'კომპლ', l: 'ლ', kg: 'კგ', m: 'მ' },
     minQty: 'მინიმუმ გვქონდეს',
-    salePrice: 'ფასი კლიენტისთვის',
+    salePrice: 'ფასი კლიენტისთვის, დღგ-ით',
     notes: 'შენიშვნები',
     addPart: 'ნაწილის დამატება',
     partAdded: 'ნაწილი დაემატა',
@@ -1166,6 +1171,24 @@ export const ka: Dict = {
     loadFailed: 'არ ჩაიტვირდა.',
     retry: 'ხელახლა',
     codes: {
+      goods_no_lines: 'მიუთითეთ, რას ვყიდით.',
+      goods_too_many_lines: 'ერთ გაყიდვაში არაუმეტეს 20 ხაზისა.',
+      goods_line_bad: 'ხაზი არის საწყობის პოზიცია ან დამტენი — ერთ-ერთი.',
+      goods_bad_qty: 'რაოდენობა — 1-დან 999-მდე.',
+      goods_same_item: 'ერთი და იგივე საქონელი ორჯერ: გააერთიანეთ ერთ ხაზად.',
+      goods_item_not_found: 'ასეთი პოზიცია არ არის.',
+      goods_item_archived: 'პოზიცია არქივშია, არ იყიდება.',
+      goods_item_not_sellable: 'ეს საქონელი ჯერ არ იყიდება.',
+      goods_count_answer: 'თქვით, ნახა თუ არა ინვენტარიზაციამ ეს საქონელი.',
+      goods_short: 'ამდენი არ არის. ნაშთზე მეტს მხოლოდ მფლობელი ყიდის.',
+      retail_must_pay: 'საცალო მყიდველი იხდის მაშინვე ან ელოდება ბანკს.',
+      goods_paid_over: 'ეს მეტია, ვიდრე გაყიდვის ღირებულება.',
+      goods_sale_not_found: 'საქონლის ასეთი გაყიდვა არ არის.',
+      goods_sale_closed: 'საქონლის ეს გაყიდვა გაუქმებულია.',
+      goods_over_open: 'ეს მეტია, ვიდრე საქონლისთვის დარჩა გადასახდელი.',
+      split_over_goods: 'ეს ნაწილი მეტია, ვიდრე საქონლისთვის დარჩა გადასახდელი.',
+      goods_payment_in_split: 'მისი გადახდა ბანკის განაწილებული ხაზის ნაწილია: ჯერ ხაზი მოხსენით «დასახარისხებელში».',
+      goods_undo_too_late: 'მაშინვე გაუქმება უკვე გვიანია: გაყიდვას მფლობელი გააუქმებს მიზეზით.',
       act_not_found: 'დოკუმენტი ვერ მოიძებნა.',
       already_matched: 'ამონაწერის ეს ხაზი უკვე გადახდას მიბმულია.',
       already_merged: 'ეს ბარათი უკვე არქივშია — ის სხვას შეუერთდა.',
@@ -1431,4 +1454,5 @@ export const ka: Dict = {
   ...rentalSwapKa,
   ...vehicleCardKa,
   ...pickupDateKa,
+  ...goodsKa,
 };

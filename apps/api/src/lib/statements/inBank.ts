@@ -54,7 +54,7 @@ export async function inBankAlready(
       payments: {
         where: { voidedAt: null },
         orderBy: { statementPart: 'asc' },
-        select: { id: true, customerId: true, grossTetri: true, rental: { select: { number: true } }, sale: { select: { number: true } }, serviceJob: { select: { number: true } } },
+        select: { id: true, customerId: true, grossTetri: true, rental: { select: { number: true } }, sale: { select: { number: true } }, serviceJob: { select: { number: true } }, goodsSale: { select: { number: true } } },
       },
     },
   });
@@ -81,7 +81,7 @@ export async function inBankAlready(
       // Cash taken to the bank is matched without a payment: not a customer's money.
       const own = row.payments.find((p) => input.customerId != null && p.customerId === input.customerId);
       if (!own) continue;
-      payment = { id: own.id, number: own.rental?.number ?? own.sale?.number ?? own.serviceJob?.number ?? null, grossTetri: own.grossTetri };
+      payment = { id: own.id, number: own.rental?.number ?? own.sale?.number ?? own.serviceJob?.number ?? own.goodsSale?.number ?? null, grossTetri: own.grossTetri };
     } else if (namesSomebodyElse([row.payer, row.purpose].filter(Boolean).join(' '))) {
       continue;
     }

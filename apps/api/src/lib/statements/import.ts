@@ -6,6 +6,7 @@ import { dateFromISO, isoDate } from '../dates.js';
 import { prisma } from '../db.js';
 import { recomputeRental, recordPaymentTx } from '../payments.js';
 import { serviceOwed } from '../money.js';
+import { goodsOwed } from '../goods.js';
 import { cardOf, parseStatement, type ParsedLine } from './parse.js';
 import { decide, lineGross, loadCtx, type Ctx, type Decision, type Line } from './reconcile.js';
 import { expenseKey, liveRules, sortByRule } from './expenses.js';
@@ -203,7 +204,17 @@ export async function ingest(input: { statementId: string; bank: 'bog' | 'tbc'; 
         await linkBankDeposit(tx, input.actorId, row.id, d.bankDepositId);
         recorded++;
       } else if (d.type === 'rule') {
-        await attach(tx, { actorId: input.actorId, lineId: row.id, rule: d.rule, rentalId: d.target.rentalId ?? null, saleId: d.target.saleId ?? null, customerId: d.customerId, reason: d.reason });
+        // A goods sale's money names the sale, never the customer's account (ADR-0045).
+        await attach(tx, {
+          actorId: input.actorId,
+          lineId: row.id,
+          rule: d.rule,
+          rentalId: d.target.rentalId ?? null,
+          saleId: d.target.saleId ?? null,
+          goodsSaleId: d.target.goodsSaleId ?? null,
+          customerId: d.target.goodsSaleId ? null : d.customerId,
+          reason: d.reason,
+        });
         matched++;
       } else if (line.direction === 'out') {
         const key = expenseKey(line);
@@ -256,6 +267,8 @@ export interface LineTarget {
   rentalId?: string | null;
   saleId?: string | null;
   serviceJobId?: string | null;
+  /** A goods sale (ADR-0045): paid like a repair, never beyond what is open. */
+  goodsSaleId?: string | null;
   customerId?: string | null;
   /** One fine or other charge of a rental: the money goes on it alone (ADR-0023). */
   chargeId?: string | null;
@@ -388,6 +401,32 @@ async function paymentOf(
   part: number,
 ): Promise<string> {
   if (target.chargeId || target.carriedPeriodId) return placedPayment(tx, actorId, line, money, target, part);
+  if (target.goodsSaleId) {
+    // Never beyond what is open: neither by hand nor by a rule (ADR-0045 §7).
+    const sale = await goodsOwed(tx, target.goodsSaleId);
+    if (sale.status !== 'active') throw conflict('goods_sale_closed', 'This goods sale is cancelled.');
+    if (money.grossTetri > sale.openTetri) throw conflict('goods_over_open', 'That is more than the goods sale still asks for.', { number: sale.number, openTetri: sale.openTetri });
+    const p = await tx.payment.create({
+      data: {
+        occurredOn: line.occurredOn,
+        direction: 'in',
+        channel: money.channel,
+        grossTetri: money.grossTetri,
+        feeTetri: money.feeTetri,
+        netTetri: money.grossTetri - money.feeTetri,
+        customerId: sale.customerId,
+        goodsSaleId: target.goodsSaleId,
+        kind: 'goods',
+        bankText: line.raw.slice(0, 500),
+        source: 'statement',
+        createdById: actorId,
+        statementLineId: line.id,
+        statementPart: part,
+      },
+      select: { id: true },
+    });
+    return p.id;
+  }
   if (target.serviceJobId) {
     const job = await serviceOwed(tx, target.serviceJobId);
     const p = await tx.payment.create({
@@ -457,6 +496,7 @@ export async function attach(
         rentalId: input.rentalId ?? null,
         saleId: input.saleId ?? null,
         serviceJobId: input.serviceJobId ?? null,
+        ...(input.goodsSaleId ? { goodsSaleId: input.goodsSaleId } : {}),
         customerId: input.customerId ?? null,
         reason: (input.reason ?? null) as object | null,
       },
@@ -492,6 +532,7 @@ export async function split(
         ['rental', p.rentalId],
         ['sale', p.saleId],
         ['repair', p.serviceJobId],
+        ['goods', p.goodsSaleId],
         ['account', p.customerId],
         ['charge', p.chargeId],
         ['week', p.carriedPeriodId],
@@ -514,6 +555,11 @@ export async function split(
     if (p.serviceJobId) {
       const job = await serviceOwed(tx, p.serviceJobId);
       if (p.grossTetri > job.openTetri) throw conflict('split_over_repair', 'That part is more than the repair still owes.', { number: job.number, openTetri: job.openTetri });
+    }
+    if (p.goodsSaleId) {
+      const sale = await goodsOwed(tx, p.goodsSaleId);
+      if (sale.status !== 'active') throw conflict('goods_sale_closed', 'This goods sale is cancelled.');
+      if (p.grossTetri > sale.openTetri) throw conflict('split_over_goods', 'That part is more than the goods sale still owes.', { number: sale.number, openTetri: sale.openTetri });
     }
     if (p.chargeId) {
       const charge = await chargeOwed(tx, p.chargeId);
@@ -562,6 +608,7 @@ export async function split(
           rentalId: p.rentalId ?? null,
           saleId: p.saleId ?? null,
           serviceJobId: p.serviceJobId ?? null,
+          ...(p.goodsSaleId ? { goodsSaleId: p.goodsSaleId } : {}),
           customerId: p.customerId ?? null,
           chargeId: p.chargeId ?? null,
           carriedPeriodId: p.carriedPeriodId ?? null,

@@ -1,0 +1,44 @@
+/* Goods sold over the counter (issue #11): the wizard's lines and the card's figures. Tokens only. */
+
+.goods-chips { margin: var(--space3) 0; }
+
+.goods-line .queue-head h2 { overflow-wrap: anywhere; }
+.goods-line > .hint { margin-bottom: var(--space2); }
+
+/* Quantity and price side by side; on a narrow phone the price wraps under the quantity. */
+.goods-line-row { display: flex; flex-wrap: wrap; gap: var(--space3); align-items: flex-start; }
+.goods-line-row > .field { margin-bottom: var(--space3); }
+.goods-line-row > .field:last-child { flex: 1 1 140px; min-width: 0; }
+
+/* «− 1 +»: 44 px targets at the least (ux, outdoors with a glove). */
+.goods-qty { display: inline-flex; align-items: center; border: 1.5px solid var(--line-control); border-radius: var(--radius-pill); }
+.goods-qty button {
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+}
+.goods-qty button:disabled { color: var(--muted); cursor: default; }
+.goods-qty b { min-width: 28px; text-align: center; font: var(--text-h2); }
+
+.goods-total { margin: var(--space3) 0 var(--space1); font: var(--text-money-lg); overflow-wrap: anywhere; }
+
+.goods-lines { list-style: none; margin: 0; padding: 0; }
+.goods-lines > li { padding: var(--space2) 0; border-top: 1px solid var(--line-soft); }
+.goods-lines > li:first-child { border-top: 0; }
+.goods-line-head { display: flex; justify-content: space-between; gap: var(--space3); align-items: baseline; }
+.goods-line-head > span:first-child { min-width: 0; overflow-wrap: anywhere; }
+.goods-line-head > .mono { flex: none; }
+.goods-line-notes { display: flex; flex-wrap: wrap; gap: var(--space1) var(--space3); font: var(--text-label); color: var(--muted); }
+
+.goods-sums { display: grid; grid-template-columns: 1fr auto; gap: var(--space1) var(--space3); font: var(--text-body-sm); margin: var(--space2) 0; }
+.goods-sums > .mono { text-align: right; }
+.goods-sums > .goods-sums-strong { font: var(--text-h3); }
+
+.goods-plan { margin: var(--space2) 0 0; padding-left: var(--space4); font: var(--text-body-sm); }
+.goods-plan > li { margin: var(--space1) 0; }

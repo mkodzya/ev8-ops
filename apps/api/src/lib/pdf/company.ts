@@ -53,3 +53,11 @@ export function gel(tetri: number | null | undefined): string {
   const frac = Math.abs(tetri % 100);
   return frac === 0 ? String(whole) : `${whole}.${String(frac).padStart(2, '0')}`;
 }
+
+/** Money on an invoice, always with its tetri: "100.00", "84.75" (ADR-0045 §8) — `gel` prints "100". */
+export function gel2(tetri: number): string {
+  const sign = tetri < 0 ? '-' : '';
+  const abs = Math.abs(tetri);
+  const whole = String(Math.trunc(abs / 100)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+  return `${sign}${whole}.${String(abs % 100).padStart(2, '0')}`;
+}

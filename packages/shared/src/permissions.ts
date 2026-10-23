@@ -30,7 +30,8 @@ export const PERMISSIONS = [
   'service.norms', // the book of works and their norm times
   'service.payout', // mark a mechanic's work paid
   'stock.count', // correct a count by hand — a stock-take
-  'sales.manage', // sales and buy-backs (SAL-01..03)
+  'sales.manage', // sales and buy-backs (SAL-01..03); a goods sale dated back, cancelled or its buyer edited
+  'goods.sell', // sell a part or a charger over the counter, print its invoice (issue #11, ADR-0045)
   // Return or keep a deposit. One owner decides; there is no second confirmation (D18).
   'deposit.decide',
   'reports.view',
@@ -41,11 +42,11 @@ export type Permission = (typeof PERMISSIONS)[number];
 
 /**
  * A manager hands mopeds over and takes them back, opens a customer, takes
- * cash and says where a moped stands. Deciding a deposit, repairs, money
+ * cash, says where a moped stands and sells goods over the counter (ADR-0045). Deciding a deposit, repairs, money
  * beyond their own cash, cost, purchases, reports and settings are the
  * owners' (redesign blueprint §2.1, Mika 17.09.2026).
  */
-const MANAGER: Permission[] = ['fleet.view', 'fleet.location.set', 'fleet.state.manual', 'rental.create', 'rental.return', 'customer.create', 'cash.record', 'service.report', 'service.view'];
+const MANAGER: Permission[] = ['fleet.view', 'fleet.location.set', 'fleet.state.manual', 'rental.create', 'rental.return', 'customer.create', 'cash.record', 'service.report', 'service.view', 'goods.sell'];
 
 /**
  * A mechanic opens, carries and closes their own repairs and sees no one

@@ -18,10 +18,22 @@ describe('the structure each role sees (wave 1 §3.2)', () => {
     expect(sectionsForRole('owner').map((s) => s.id)).not.toContain('cash');
   });
 
-  it('offers the owner six actions under + and the manager five (wave 5 §3.7)', () => {
-    expect(actionsForRole('owner').map((a) => a.id)).toEqual(['pickup', 'return', 'takeMoney', 'newCustomer', 'openRepair', 'sell']);
+  it('offers the owner seven actions under + and the manager six (wave 5 §3.7; issue #11)', () => {
+    expect(actionsForRole('owner').map((a) => a.id)).toEqual(['pickup', 'return', 'takeMoney', 'newCustomer', 'openRepair', 'sell', 'sellGoods']);
     // A manager reports a breakdown; opening the repair itself is an owner's.
-    expect(actionsForRole('manager').map((a) => a.id)).toEqual(['pickup', 'return', 'takeCash', 'newCustomer', 'reportBreak']);
+    // He sells a part or a charger over the counter, never a moped (ADR-0045).
+    expect(actionsForRole('manager').map((a) => a.id)).toEqual(['pickup', 'return', 'takeCash', 'newCustomer', 'reportBreak', 'sellGoods']);
+  });
+
+  it('splits Sales into the mopeds and the goods, for both roles (issue #11)', () => {
+    for (const role of ['owner', 'manager'] as const) {
+      expect(tabsForRole('sales', role)).toEqual([
+        { id: 'vehicles', path: '/sales', anyOf: ['fleet.view'] },
+        { id: 'goods', path: '/sales/goods', anyOf: ['fleet.view'] },
+      ]);
+    }
+    expect(sectionOfPath('/sales/goods/new')).toBe('sales');
+    expect(tabsForRole('sales', 'mechanic')).toEqual([]);
   });
 
   it('shows the points tab and statements only to the owner', () => {

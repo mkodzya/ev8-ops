@@ -1,8 +1,8 @@
 // Per-moped economics (DSH-03) and how busy the rental fleet was (M-10).
-import { todayISO } from '@ev8/shared';
+import { goodsEconomics, monthOf, todayISO } from '@ev8/shared';
 import type { FastifyInstance } from 'fastify';
 import { isoDate } from '../lib/dates.js';
-import { fleetEconomics } from '../lib/economics.js';
+import { fleetEconomics, goodsLinesOf } from '../lib/economics.js';
 import { env } from '../lib/env.js';
 import { badRequest, notFound } from '../lib/errors.js';
 import { lifetimeUtilisation, utilisationOf } from '../lib/utilisation.js';
@@ -19,6 +19,18 @@ export function economicsRoutes(app: FastifyInstance): void {
     const from = date(req.query, 'from') ?? isoDate(new Date(Date.parse(`${to}T00:00:00Z`) - 29 * 86_400_000))!;
     if (from > to) throw badRequest('bad_period', 'The period starts after it ends.', { field: 'from' });
     return utilisationOf(from, to);
+  });
+
+  /**
+   * Goods sold over the counter (issue #11, ADR-0045): revenue with its VAT,
+   * the net, the cost and the margin of the lines whose cost is known, by the
+   * day of the sale. This month unless a period is asked; `all=1` — all time.
+   */
+  app.get<{ Querystring: { from?: string; to?: string; all?: string } }>('/api/economics/goods', { config: { scope: 'reports.view' } }, async (req) => {
+    const month = monthOf(todayISO(new Date(), env.TZ));
+    const period = req.query.all === '1' ? null : { from: date(req.query, 'from') ?? month.from, to: date(req.query, 'to') ?? month.to };
+    if (period && period.from > period.to) throw badRequest('bad_period', 'The period starts after it ends.', { field: 'from' });
+    return { period, ...goodsEconomics(await goodsLinesOf(), period) };
   });
 
   app.get('/api/economics', { config: { scope: 'reports.view' } }, async () => {

@@ -31,7 +31,7 @@ interface Line {
   times: number;
 }
 
-export function RecordHistory({ kind, id, search }: { kind: 'rental' | 'sale' | 'purchase' | 'service_job' | 'vehicle' | 'customer'; id: string; search: string }) {
+export function RecordHistory({ kind, id, search }: { kind: 'rental' | 'sale' | 'goods_sale' | 'purchase' | 'service_job' | 'vehicle' | 'customer'; id: string; search: string }) {
   const t = useT();
   const { can } = useSession();
   const [open, setOpen] = useState(false);

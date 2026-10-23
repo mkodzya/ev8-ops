@@ -57,7 +57,10 @@ function said(t: Dict, field: string, raw: string): string {
     case 'status':
       // A rental's status and a repair's share the column and not the
       // vocabulary; where they overlap they mean the same thing.
-      return from(t.rentalStatus, t.service.statuses) ?? raw;
+      return from(t.rentalStatus, t.service.statuses, t.goods.values.status) ?? raw;
+    case 'stockFrom':
+      // A goods sale's line: taken off the shelf, or already seen gone by a count (ADR-0045).
+      return from(t.goods.values.stockFrom) ?? raw;
     case 'pool':
     case 'toPool':
       return from(t.pools) ?? raw;
@@ -233,6 +236,8 @@ function named(t: Dict, field: string, action?: string): string | null {
   if (field === 'payWeekday' || field === 'payDay') return t.weekShift.journal.payDay;
   // A mechanic's rent link, set or taken off (0066): «Арендует мопед: — → card».
   if (field === 'renter') return t.wpay.renter;
+  // Goods sold beyond the count: what there was, and what was sold (ADR-0045 §5).
+  if (action === 'goods_sale.minus' && field === 'qty') return t.goods.journal.qty;
   // A new hand-over date and a deposit marked received earlier (ADR-0044):
   // the dates, the weeks, the debt and «оплачено по» side by side, each by name.
   if (action === 'rental.pickup.date') {

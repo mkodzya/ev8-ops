@@ -8,6 +8,7 @@ import { env } from '../lib/env.js';
 import { notFound } from '../lib/errors.js';
 import { actorOf, mayView } from '../lib/guard.js';
 import { payOffsetOf, rentStateOf } from '../lib/rentState.js';
+import { purchasesOf } from './goodsSales.js';
 
 // Customers, read side (CST-01). Personal numbers are shown only to roles
 // that may see documents (CST-03): a manager sees the card, not the number.
@@ -108,7 +109,7 @@ export function customerRoutes(app: FastifyInstance): void {
     // One clock for the figure and for the statuses of the rentals below.
     const today = todayISO(new Date(), env.TZ);
     const debt = await debtOf(c.id, today);
-    const [sales, payments, log] = await Promise.all([
+    const [sales, payments, log, goodsSales] = await Promise.all([
       prisma.sale.findMany({
         where: { customerId: c.id, status: { not: 'cancelled' } },
         orderBy: { createdAt: 'desc' },
@@ -118,16 +119,18 @@ export function customerRoutes(app: FastifyInstance): void {
         where: { customerId: c.id, voidedAt: null },
         orderBy: { occurredOn: 'desc' },
         take: 50,
-        select: { id: true, occurredOn: true, channel: true, kind: true, direction: true, grossTetri: true, rental: { select: { number: true } }, sale: { select: { number: true } } },
+        select: { id: true, occurredOn: true, channel: true, kind: true, direction: true, grossTetri: true, rental: { select: { number: true } }, sale: { select: { number: true } }, goodsSale: { select: { number: true } } },
       }),
       prisma.auditLog.findMany({ where: { entityType: 'customer', entityId: c.id }, orderBy: { createdAt: 'desc' }, take: 50, include: { actor: { select: { name: true } } } }),
+      // What he bought over the counter (issue #11, ADR-0045): «Покупки».
+      purchasesOf(c.id),
     ]);
     const feed = [
       ...payments.map((p) => ({
         at: isoDate(p.occurredOn)!,
         kind: 'payment' as const,
         text: p.channel,
-        number: p.rental?.number ?? p.sale?.number ?? null,
+        number: p.rental?.number ?? p.sale?.number ?? p.goodsSale?.number ?? null,
         amountTetri: p.direction === 'out' ? -p.grossTetri : p.grossTetri,
         by: null as string | null,
         note: null as string | null,
@@ -146,6 +149,7 @@ export function customerRoutes(app: FastifyInstance): void {
         instalments: s2.instalments.length,
         instalmentsPaid: s2.instalments.filter((i) => i.payStatus === 'paid').length,
       })),
+      goodsSales,
       feed,
       customer: {
         id: c.id,

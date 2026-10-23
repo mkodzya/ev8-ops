@@ -43,6 +43,8 @@ const EVENT_ACTIONS = new Set<string>([
   'purchase.create',
   'rental.whatsapp',
   'sale.create',
+  'goods_sale.create',
+  'goods_sale.invoice',
   'statement.import',
   'supplier.create',
   'user.create',
@@ -71,7 +73,7 @@ const EVENT_ACTIONS = new Set<string>([
 const startsWithAny = (action: string, prefixes: readonly string[]) => prefixes.some((p) => action.startsWith(p));
 
 /** Money in the widest sense: what was paid, charged, counted or priced. */
-const MONEY_PREFIXES = ['payment.', 'till.', 'statement.', 'purchase.', 'sale.', 'part.', 'settings.', 'service.', 'mechanic.'] as const;
+const MONEY_PREFIXES = ['payment.', 'till.', 'statement.', 'purchase.', 'sale.', 'goods_sale.', 'part.', 'settings.', 'service.', 'mechanic.'] as const;
 /** A moped's or a record's state, and who moved it there. */
 const STATE_PREFIXES = ['vehicle.', 'rental.', 'service.close', 'service.cancel'] as const;
 
@@ -160,5 +162,5 @@ export function collapseViews(rows: readonly JournalRow[]): JournalLine[] {
 
 /** The search box takes a record's number, a VIN or a name — one field, no syntax (§3.8). */
 export function looksLikeNumber(query: string): boolean {
-  return /^(R|SL|PO|SV)-\d+$/i.test(query.trim());
+  return /^(R|SL|TS|PO|SV)-\d+$/i.test(query.trim());
 }

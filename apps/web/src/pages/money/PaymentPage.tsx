@@ -13,7 +13,7 @@ import { useT } from '../../i18n/index.js';
 import { chargeWords } from '../../lib/charges.js';
 import { useLoad } from '../../lib/use.js';
 
-type Kind = 'rent' | 'sale' | 'service' | 'on_account' | 'deposit_payout' | 'buyback' | 'supplier';
+type Kind = 'rent' | 'sale' | 'service' | 'on_account' | 'deposit_payout' | 'buyback' | 'supplier' | 'goods';
 
 interface Card {
   payment: {
@@ -30,6 +30,8 @@ interface Card {
     sale: { id: string; number: string } | null;
     purchase: { id: string; number: string; currency: string } | null;
     serviceJob: { id: string; number: string } | null;
+    /** A goods sale (ADR-0045) — also the one a cancelled sale's credit came from. */
+    goodsSale?: { id: string; number: string } | null;
     note: string | null;
     paidTo: string | null;
     paidToReason: string | null;
@@ -169,6 +171,7 @@ function settledLabel(t: ReturnType<typeof useT>, c: Card['payment']['closed'][n
 function actWord(t: ReturnType<typeof useT>, action: string): string {
   if (action === 'payment.void') return t.paymentPage.acts.void;
   if (action === 'payment.undo') return t.paymentPage.acts.undo;
+  if (action === 'payment.rebook') return t.paymentPage.acts.rebook;
   return t.paymentPage.acts.record;
 }
 
@@ -178,6 +181,7 @@ function recordLink(p: Card['payment']): { to: string; n: string } | null {
   if (p.sale) return { to: `/sales/${p.sale.id}`, n: p.sale.number };
   if (p.purchase) return { to: `/purchases/${p.purchase.id}`, n: p.purchase.number };
   if (p.serviceJob) return { to: `/service/${p.serviceJob.id}`, n: p.serviceJob.number };
+  if (p.goodsSale) return { to: `/sales/goods/${p.goodsSale.id}`, n: p.goodsSale.number };
   return null;
 }
 

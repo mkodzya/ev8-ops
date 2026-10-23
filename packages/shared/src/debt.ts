@@ -4,7 +4,8 @@
 //
 // Owes = rent that is due and unpaid + sale instalments that are due and
 //        unpaid + deposit not yet paid in full + repairs charged to the
-//        customer and not yet paid.
+//        customer and not yet paid + goods sold to them and not yet paid
+//        (issue #11, ADR-0045).
 // Future instalments are not owed yet: they are shown as "ahead" (Q21).
 // A deposit we hold is not a debt, and is shown on its own (money.md).
 // A sale bought back owes nothing (M8).
@@ -42,11 +43,22 @@ export interface DebtRepair {
   paidTetri: Tetri;
 }
 
+/** Goods sold over the counter to this customer (ADR-0045): owed from the day of the sale, whole. */
+export interface DebtGoods {
+  id: string;
+  number: string;
+  /** The lines' total, VAT inside. Only live sales are given: a cancelled one owes nothing. */
+  chargedTetri: Tetri;
+  paidTetri: Tetri;
+}
+
 export interface DebtInput {
   today: ISODate;
   rentals: DebtRental[];
   sales: DebtSale[];
   repairs: DebtRepair[];
+  /** Goods sales of this customer, the cancelled left out. Absent: none. */
+  goods?: DebtGoods[];
   /** Paid in and not yet taken by any week, instalment or repair. */
   unplacedTetri: Tetri;
   /** Deposits we hold for this customer: received − kept − handed back. */
@@ -54,7 +66,7 @@ export interface DebtInput {
 }
 
 export interface DebtPart {
-  kind: 'rent' | 'deposit' | 'charge' | 'sale' | 'service';
+  kind: 'rent' | 'deposit' | 'charge' | 'sale' | 'service' | 'goods';
   id: string;
   number: string;
   owesTetri: Tetri;
@@ -107,6 +119,11 @@ export function customerDebt(input: DebtInput): Debt {
   for (const j of input.repairs) {
     const left = open(j.chargedTetri, j.paidTetri);
     if (left > 0) parts.push({ kind: 'service', id: j.id, number: j.number, owesTetri: left });
+  }
+
+  for (const g of input.goods ?? []) {
+    const left = open(g.chargedTetri, g.paidTetri);
+    if (left > 0) parts.push({ kind: 'goods', id: g.id, number: g.number, owesTetri: left });
   }
 
   const gross = parts.reduce((n, p) => n + p.owesTetri, 0);

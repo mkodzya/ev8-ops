@@ -43,6 +43,9 @@ import { SupplierPage } from './pages/SupplierPage.js';
 import { SuppliersPage } from './pages/SuppliersPage.js';
 import { SalePage } from './pages/SalePage.js';
 import { SalesPage } from './pages/SalesPage.js';
+import { GoodsSalesPage } from './pages/goods/GoodsSalesPage.js';
+import { GoodsSaleWizard } from './pages/goods/GoodsSaleWizard.js';
+import { GoodsSalePage } from './pages/goods/GoodsSalePage.js';
 import { SaleWizard } from './pages/SaleWizard.js';
 import { ServiceJobPage } from './pages/ServiceJobPage.js';
 import { ServicePage } from './pages/ServicePage.js';
@@ -184,6 +187,10 @@ export function App() {
 
         <Route path="sales" element={<SalesPage />} />
         <Route path="sales/new" element={<Require perm="sales.manage"><SaleWizard /></Require>} />
+        {/* Goods sold over the counter (issue #11, ADR-0045): a static segment, so it wins over sales/:id. */}
+        <Route path="sales/goods" element={<GoodsSalesPage />} />
+        <Route path="sales/goods/new" element={<Require perm="goods.sell"><GoodsSaleWizard /></Require>} />
+        <Route path="sales/goods/:id" element={<GoodsSalePage />} />
         <Route path="sales/:id" element={<SalePage />} />
         <Route path="purchases" element={<Require perm="purchases.view"><PurchasesPage /></Require>} />
         <Route path="purchases/suppliers" element={<Require perm="purchases.view"><SuppliersPage /></Require>} />

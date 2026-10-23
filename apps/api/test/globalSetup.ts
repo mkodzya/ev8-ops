@@ -61,6 +61,13 @@ export async function teardown(): Promise<void> {
     await prisma.expenseCategory.deleteMany({ where: { createdAt: since } });
     // A battery moved by a repair names it (0058): the movement goes first.
     await prisma.batteryMove.deleteMany({ where: { createdAt: since } });
+    // A goods sale (0067): its shelf movements name its lines, its payments went
+    // above; then the sales themselves, lines and invoices cascading.
+    // A sale is the run's when it was made in the run or by somebody the run made:
+    // a suite that dates one back to test the undo's minute still owns it.
+    const goodsOfRun = { OR: [{ createdAt: since }, { createdBy: { createdAt: since } }] };
+    await prisma.stockMove.deleteMany({ where: { goodsSaleLine: { sale: goodsOfRun } } });
+    await prisma.goodsSale.deleteMany({ where: goodsOfRun });
     await prisma.serviceJob.deleteMany({ where: { createdAt: since } }); // parts and photos cascade
     // A paid repair and a receipt paid back name their payout (0059): they go
     // first, then the payouts, before the people who were paid and who marked them.

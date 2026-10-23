@@ -36,7 +36,7 @@ import { dateFromISO, isoDate } from '../lib/dates.js';
 import { prisma } from '../lib/db.js';
 import { env } from '../lib/env.js';
 import { badRequest, conflict, forbidden, isUniqueViolation, notFound } from '../lib/errors.js';
-import { WORK_MONEY, issueForServicePart, partRows, passThrough, receiveRemoved, returnServiceParts, returnServicePart, unfitTrackers } from '../lib/stock.js';
+import { WORK_MONEY, issueForServicePart, partRows, passThrough, shelfCost, receiveRemoved, returnServiceParts, returnServicePart, unfitTrackers } from '../lib/stock.js';
 import { actorOf, mayView } from '../lib/guard.js';
 import { fitTracker, readTracker } from '../lib/trackers.js';
 import { date, int, oneOf, str, tetri } from '../lib/validate.js';
@@ -512,16 +512,8 @@ async function writableJob(actor: Actor, id: string) {
  * nobody ever paid for has no cost, and the line says so by an empty one.
  */
 async function shelfPrice(partId: string, payer: Payer): Promise<{ unitPriceTetri: number | null; unitCostTetri: number | null }> {
-  const row = (await partRows({ includeArchived: true })).find((r) => r.id === partId) ?? null;
-  let cost = row?.avgCostTetri ?? null;
-  if (cost == null) {
-    const last = await prisma.stockMove.findFirst({
-      where: { partId, kind: 'receipt', servicePartId: null, unitCostTetri: { gt: 0 } },
-      orderBy: [{ occurredOn: 'desc' }, { createdAt: 'desc' }],
-      select: { unitCostTetri: true },
-    });
-    cost = last?.unitCostTetri ?? null;
-  }
+  // The cost a goods sale takes too (lib/stock.ts, issue #11).
+  const cost = await shelfCost(prisma, partId);
   const part = await prisma.part.findUnique({ where: { id: partId }, select: { salePriceTetri: true } });
   return { unitPriceTetri: partPriceTetri(payer, { avgCostTetri: cost, salePriceTetri: part?.salePriceTetri ?? null }), unitCostTetri: cost };
 }

@@ -41,7 +41,17 @@ export function tillRoutes(app: FastifyInstance): void {
     const mine = await prisma.payment.findMany({
       where: { createdById: actor.id, channel: 'cash', voidedAt: null, createdAt: { gte: since, lte: p.to } },
       orderBy: { createdAt: 'desc' },
-      select: { id: true, direction: true, grossTetri: true, createdAt: true, kind: true, customer: { select: { name: true } }, rental: { select: { number: true } }, sale: { select: { number: true } } },
+      select: {
+        id: true,
+        direction: true,
+        grossTetri: true,
+        createdAt: true,
+        kind: true,
+        customer: { select: { name: true } },
+        rental: { select: { number: true } },
+        sale: { select: { number: true } },
+        goodsSale: { select: { id: true, number: true } },
+      },
     });
     return {
       from: p.fromISO,
@@ -49,7 +59,17 @@ export function tillRoutes(app: FastifyInstance): void {
       owner,
       me: actor.id,
       rows: owner ? rows.filter((r) => r.cashInTetri || r.cashOutTetri || r.handedTetri || r.acceptedTetri || r.bankTetri || r.onHandTetri || r.pendingTetri || r.userId === actor.id) : rows,
-      mine: mine.map((m) => ({ id: m.id, direction: m.direction, grossTetri: m.grossTetri, at: m.createdAt.toISOString(), kind: m.kind, customer: m.customer?.name ?? null, number: m.rental?.number ?? m.sale?.number ?? null })),
+      mine: mine.map((m) => ({
+        id: m.id,
+        direction: m.direction,
+        grossTetri: m.grossTetri,
+        at: m.createdAt.toISOString(),
+        kind: m.kind,
+        customer: m.customer?.name ?? null,
+        number: m.rental?.number ?? m.sale?.number ?? m.goodsSale?.number ?? null,
+        // A retail buyer's cash names no card: the screen says «Розничный покупатель» (ADR-0045).
+        goodsSaleId: m.goodsSale?.id ?? null,
+      })),
     };
   });
 
