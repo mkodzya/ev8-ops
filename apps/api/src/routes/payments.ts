@@ -132,7 +132,9 @@ export function paymentRoutes(app: FastifyInstance): void {
       totals,
       people,
       row,
-      payments: (row ? payments.filter((p) => p.voidedAt || inRow(p) > 0) : payments).map((p) => ({
+      // A voided payment is listed, not counted — and only under the row of its own kind: its allocations went
+      // with it, so `paymentInRow` names it by what it was for. It used to show under every row (QA 23.10.2026).
+      payments: (row ? payments.filter((p) => inRow(p) > 0) : payments).map((p) => ({
         id: p.id,
         occurredOn: isoDate(p.occurredOn),
         direction: p.direction,

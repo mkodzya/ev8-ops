@@ -167,6 +167,37 @@ describe.skipIf(!HAS_DB)('a part for cash at the counter (acceptance 2)', () => 
   });
 });
 
+describe.skipIf(!HAS_DB)('«Платежи» by «Основание» (QA 23.10.2026)', () => {
+  it('lists a voided payment only under the row of its own kind, and counts it under none', async () => {
+    const owner = await loginAs('owner');
+    const r = await renter(owner);
+    const partId = await newPart(owner, { qty: 2 });
+    // A goods payment voided by the seller's undo, and a rent payment voided by an owner.
+    const sold = json<Sold>(await sell(owner, { lines: [{ partId, qty: 1, unitPriceTetri: 35_00 }], paidNow: { channel: 'cash', amountTetri: 35_00 } }));
+    expect((await call(owner, 'POST', `/api/goods-sales/${sold.id}/undo`)).statusCode).toBe(200);
+    const rent = await call(owner, 'POST', '/api/payments', { rentalId: r.rentalId, channel: 'cash', grossTetri: 140_00 });
+    expect(rent.statusCode, rent.body).toBe(201);
+    const rentId = json<{ id: string }>(rent).id;
+    expect((await call(owner, 'POST', `/api/payments/${rentId}/void`, { reason: 'test: entered twice' })).statusCode).toBe(200);
+
+    const w = await week(owner);
+    type List = { totals: { rowTetri: number }; payments: { id: string; voided: boolean }[] };
+    const listed = async (row: string) => json<List>(await call(owner, 'GET', `/api/payments?from=${w.from}&to=${w.to}&row=${row}`));
+    const goods = await listed('goods');
+    const rentRow = await listed('rent');
+    const deposits = await listed('deposits');
+    expect(goods.payments.map((p) => p.id)).toContain(sold.paymentId);
+    expect(goods.payments.map((p) => p.id)).not.toContain(rentId);
+    expect(rentRow.payments.map((p) => p.id)).toContain(rentId);
+    expect(rentRow.payments.map((p) => p.id)).not.toContain(sold.paymentId);
+    expect(deposits.payments.map((p) => p.id)).not.toContain(rentId);
+    expect(deposits.payments.map((p) => p.id)).not.toContain(sold.paymentId);
+    // Shown, not counted: each list still adds up to its figure of the week.
+    expect(goods.totals.rowTetri).toBe(w.money.goodsTetri);
+    expect(rentRow.totals.rowTetri).toBe(w.money.rentTetri);
+  });
+});
+
 describe.skipIf(!HAS_DB)('a cancellation', () => {
   it('an own customer\'s: the part comes back at its cost, his cash becomes his credit and pays his weeks, the journal says both (acceptance 4)', async () => {
     const owner = await loginAs('owner');
