@@ -39,6 +39,13 @@ describe('roles and permissions (redesign §2.1, Mika 17.09.2026; ADR-0033, 20.1
     expect(PIN_SESSION_PERMISSIONS).not.toContain('goods.sell');
   });
 
+  it('a manager moves a renter’s latest week too; a mechanic does not (ADR-0041, addendum of 23.10.2026)', () => {
+    expect(roleCan('owner', 'rental.week.shift')).toBe(true);
+    expect(roleCan('manager', 'rental.week.shift')).toBe(true);
+    for (const role of ['mechanic', 'chief_mechanic'] as const) expect(roleCan(role, 'rental.week.shift'), role).toBe(false);
+    expect(PIN_SESSION_PERMISSIONS).not.toContain('rental.week.shift');
+  });
+
   it('a manager never sees cost, purchases, reports, documents or other people\'s money, and decides no deposit', () => {
     for (const p of ['cost.view', 'purchases.view', 'reports.view', 'customer.documents.view', 'payments.view', 'payments.reconcile', 'deposit.decide', 'service.manage', 'settings.manage', 'users.manage'] as const) {
       expect(roleCan('manager', p), p).toBe(false);

@@ -61,7 +61,7 @@ export interface CalendarPeriodRow {
   /** `rental_periods.paid_tetri` as stored — what the debt figure reads. */
   paidTetri: Tetri;
   paidBeforeTransfer: boolean;
-  /** Days an owner made this week longer (ADR-0041): every later week starts as many days later. Absent — none. */
+  /** Days this week was made longer — below nought, shorter (ADR-0041): every later week starts as many days later or earlier. Absent — none. */
   extraDays?: number;
   /**
    * The latest live payment allocated to this week, by (occurredOn, createdAt).
