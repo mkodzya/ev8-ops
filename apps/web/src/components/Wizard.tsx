@@ -23,6 +23,8 @@ export function Wizard(props: {
   failure?: Failure | null;
   /** A line that stays beside the buttons, in sight while the step scrolls: what has been picked so far. */
   footNote?: ReactNode;
+  /** A wizard's own layout on top of the frame's (`goods-wizard`). */
+  className?: string;
 }) {
   const t = useT();
   const last = props.step >= props.steps.length - 1;
@@ -31,7 +33,7 @@ export function Wizard(props: {
     window.scrollTo(0, 0);
   }, [props.step]);
   return (
-    <div className="wizard">
+    <div className={`wizard ${props.className ?? ''}`}>
       <header className="wizard-head">
         <h1>{props.title}</h1>
         <span className="muted">{t.pickup.stepOf(props.step + 1, props.steps.length)}</span>

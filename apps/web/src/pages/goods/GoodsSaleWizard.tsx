@@ -1,4 +1,4 @@
-import { countedName, formatGel, goodsLineNets, goodsTotals, parseGel, todayISO } from '@ev8/shared';
+import { countedName, debtAfterSale, formatGel, goodsLineNets, goodsTotals, parseGel, todayISO } from '@ev8/shared';
 import { Minus, Plus } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -46,6 +46,8 @@ interface CustomerRow {
   name: string;
   phone: string | null;
   debtTetri: number;
+  /** His money nothing has taken yet: it comes off a new debt first (B7-02). */
+  creditTetri?: number;
   dueTodayTetri?: number;
   archived?: boolean;
 }
@@ -291,7 +293,7 @@ export function GoodsSaleWizard() {
 
   if (drafts.offer) {
     return (
-      <Wizard title={t.goods.sell} steps={t.goods.wizard.steps} step={0}>
+      <Wizard className="goods-wizard" title={t.goods.sell} steps={t.goods.wizard.steps} step={0}>
         <DraftOffer at={drafts.offer.at} words={null} onContinue={() => drafts.accept((v) => setF({ ...v, soldOn: v.soldOn < todayISO() && !backdates ? todayISO() : v.soldOn }))} onDiscard={drafts.discard} />
       </Wizard>
     );
@@ -303,9 +305,17 @@ export function GoodsSaleWizard() {
   const chosenLine = bankChosen ? (preview?.inBank ?? []).find((l) => l.lineId === f.bankLineId) : undefined;
   const restTetri = Math.max(0, totals.grossTetri - (bankChosen ? (chosenLine?.grossTetri ?? 0) : cashTetri));
   const asking = (preview?.lines ?? []).filter((p) => p.needsCountAnswer);
+  // What is left after the counter: on an own customer's credit, awaited from the bank, or — a retail
+  // buyer's cash short of the total, which the field refuses — simply open (QA 23.10.2026: it said «0»).
+  const onCredit = !retail && (f.how === 'later' || (f.how === 'cash' && restTetri > 0));
+  const toBank = (f.how === 'acquiring' || f.how === 'transfer') && restTetri > 0;
+  // On credit, his whole figure as his card will say it: 750 → 850, not this sale's 100 alone.
+  const debtWas = customer?.debtTetri ?? 0;
+  const debtWill = customer ? debtAfterSale({ owesTetri: customer.debtTetri, creditTetri: customer.creditTetri ?? 0 }, restTetri) : 0;
 
   return (
     <Wizard
+      className="goods-wizard"
       title={t.goods.sell}
       steps={w.steps}
       step={f.step}
@@ -390,7 +400,7 @@ export function GoodsSaleWizard() {
                     <input className="input input-amount mono" inputMode="decimal" value={l.cost} onChange={(e) => editLine(l.key, { cost: e.target.value })} />
                   </Field>
                 )}
-                {margin != null && <p className={`hint ${margin < 0 ? 'warn-text' : 'muted'}`}>{margin < 0 ? w.belowCost : w.margin(formatGel(margin))}</p>}
+                {margin != null && <p className={`hint ${margin < 0 ? 'warn-text' : 'muted'}`}>{margin < 0 ? w.belowCost : w.margin(formatGel(margin), l.qty)}</p>}
                 {decision === 'refuse' && <p className="warn-text">{w.shortManager(pv?.available ?? 0)}</p>}
                 {(decision === 'need_reason' || ((decision === 'minus' || decision === 'found_then_sold') && owner)) && (
                   <Field label={w.shortReason} name={`lines[${i}].shortReason`}>
@@ -518,20 +528,36 @@ export function GoodsSaleWizard() {
             </section>
           )}
 
-          <section className="card">
+          {/* Rows the width of the card, so the dividers and the «›» line up; an item's name wraps between its words and its count stays with it (QA 23.10.2026). */}
+          <section className="card summary-card">
             <span className="lbl">{w.lines}</span>
             {f.lines.map((l) => (
-              <SumRow key={l.key} k={`${lineName(l)} ×${l.qty}`} v={<span className="mono">{formatGel(l.qty * (parseGel(l.price) ?? 0))}</span>} go={() => set({ step: 0 })} />
+              <SumRow
+                key={l.key}
+                className="goods-sum-line"
+                k={
+                  <>
+                    {lineName(l)} <span className="nobr">×{l.qty}</span>
+                  </>
+                }
+                v={<span className="mono">{formatGel(l.qty * (parseGel(l.price) ?? 0))}</span>}
+                go={() => set({ step: 0 })}
+              />
             ))}
             <SumRow k={t.goods.cols.buyer} v={retail ? [t.goods.retail, f.buyerName.trim()].filter(Boolean).join(' · ') : customer?.name ?? ''} go={() => set({ step: 1 })} />
             <p className="t-money goods-total">{w.total(sum, formatGel(totals.vatTetri))}</p>
             <p className="hint">
-              {f.how === 'later' || (!retail && f.how === 'cash' && restTetri > 0)
-                ? <span className="crit-text">{w.restDebt(formatGel(restTetri))}</span>
-                : (f.how === 'acquiring' || f.how === 'transfer') && restTetri > 0
-                  ? w.restBank(formatGel(restTetri))
-                  : w.restNone}
+              {onCredit ? (
+                <span className="crit-text">{w.restDebt(formatGel(restTetri))}</span>
+              ) : toBank ? (
+                w.restBank(formatGel(restTetri))
+              ) : restTetri === 0 ? (
+                w.restNone
+              ) : (
+                <span className="crit-text">{w.restOpen(formatGel(restTetri))}</span>
+              )}
             </p>
+            {onCredit && customer && <p className="hint muted">{debtWill === debtWas ? t.sort.resDebtSame(formatGel(debtWas)) : t.sort.resDebt(formatGel(debtWas), formatGel(debtWill))}</p>}
           </section>
         </>
       )}

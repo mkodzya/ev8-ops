@@ -912,9 +912,10 @@ export function PickupWizard() {
   );
 }
 
-export function SumRow({ k, v, go }: { k: string; v: ReactNode; go: () => void }) {
+/** One line of a wizard's summary: what, its value, and the way back to the step that owns it. `className` lays a row out its own way (`goods-sum-line`). */
+export function SumRow({ k, v, go, className }: { k: ReactNode; v: ReactNode; go: () => void; className?: string }) {
   return (
-    <button type="button" className="sum-row" onClick={go}>
+    <button type="button" className={`sum-row ${className ?? ''}`} onClick={go}>
       <span className="kv-k">{k}</span>
       <span className="kv-v">{v}</span>
       <span className="sum-go" aria-hidden="true">

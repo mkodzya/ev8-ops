@@ -1,6 +1,7 @@
 import { Check } from 'lucide-react';
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { holdNumbers } from '../../format.js';
 import { useT } from '../../i18n/index.js';
 import { errorText } from '../../lib/use.js';
 import './feedback.css';
@@ -86,7 +87,8 @@ export function ToastCard({ text, life = LIFE_MS, onOpen, onUndo, still = false 
   return (
     <div className={`toast ${still ? 'toast-still' : ''}`} role="status" aria-live="polite">
       <Check size={18} strokeWidth={2} aria-hidden="true" />
-      <span className="toast-text">{text}</span>
+      {/* A record's number named in the message stays on one line (QA 23.10.2026). */}
+      <span className="toast-text">{holdNumbers(text)}</span>
       {onOpen && (
         <button type="button" className="toast-act" onClick={onOpen}>
           {t.form.open}
