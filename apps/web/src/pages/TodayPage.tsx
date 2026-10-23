@@ -27,7 +27,7 @@ export interface TodayData {
     chips: Record<FleetChip, number>;
     overdueTetri: number | null;
     depositsHeldTetri: number | null;
-    week: { rentTetri: number; saleTetri: number; serviceTetri: number; depositTetri: number; feeTetri: number; from: string } | null;
+    week: { rentTetri: number; saleTetri: number; serviceTetri: number; goodsTetri?: number; depositTetri: number; feeTetri: number; from: string } | null;
     myTillTetri: number | null;
     batteries?: { showroom: number; total: number } | null;
   };
@@ -207,7 +207,7 @@ export function TodayPage() {
         <Num to="/service" value={String(n.fleet.service ?? 0)} label={t.today.numbers.service ?? ''} />
         {n.overdueTetri != null && <Num to="/rentals?s=overdue" value={formatGel(n.overdueTetri, { decimals: false })} label={t.today.numbers.overdue ?? ''} tone="crit" />}
         {n.depositsHeldTetri != null && <Num to="/money/deposits" value={formatGel(n.depositsHeldTetri, { decimals: false })} label={t.today.numbers.deposits ?? ''} />}
-        {n.week && <Num to="/money/payments" value={formatGel(n.week.rentTetri + n.week.saleTetri + n.week.serviceTetri, { decimals: false })} label={t.today.numbers.week ?? ''} />}
+        {n.week && <Num to="/money/payments" value={formatGel(n.week.rentTetri + n.week.saleTetri + n.week.serviceTetri + (n.week.goodsTetri ?? 0), { decimals: false })} label={t.today.numbers.week ?? ''} />}
         {n.batteries && <Num to="/fleet/batteries" value={t.today.batteriesOf(n.batteries.showroom, n.batteries.total)} label={t.today.numbers.batteries ?? ''} />}
         {n.myTillTetri != null && <Num to="/money/cash" value={formatGel(n.myTillTetri, { decimals: false })} label={t.today.numbers.myTill ?? ''} />}
       </div>
@@ -313,6 +313,7 @@ export function TodayPage() {
           <WeekRow k={t.today.weekRent} v={n.week.rentTetri} />
           <WeekRow k={t.today.weekSale} v={n.week.saleTetri} />
           <WeekRow k={t.today.weekService} v={n.week.serviceTetri} />
+          {(n.week.goodsTetri ?? 0) > 0 && <WeekRow k={t.money.kinds.goods} v={n.week.goodsTetri ?? 0} />}
           <WeekRow k={t.today.weekDeposit} v={n.week.depositTetri} />
           <WeekRow k={t.today.weekFee} v={-n.week.feeTetri} />
         </section>

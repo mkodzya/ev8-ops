@@ -57,7 +57,10 @@ function said(t: Dict, field: string, raw: string): string {
     case 'status':
       // A rental's status and a repair's share the column and not the
       // vocabulary; where they overlap they mean the same thing.
-      return from(t.rentalStatus, t.service.statuses) ?? raw;
+      return from(t.rentalStatus, t.service.statuses, t.goods.values.status) ?? raw;
+    case 'stockFrom':
+      // A goods sale's line: taken off the shelf, or already seen gone by a count (ADR-0045).
+      return from(t.goods.values.stockFrom) ?? raw;
     case 'pool':
     case 'toPool':
       return from(t.pools) ?? raw;

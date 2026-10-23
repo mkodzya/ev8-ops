@@ -9,7 +9,7 @@ import { fmtDate, formatGel } from '../../format.js';
 import { useT } from '../../i18n/index.js';
 import { useLoad } from '../../lib/use.js';
 
-type Kind = 'rent' | 'sale' | 'service' | 'on_account' | 'deposit_payout' | 'buyback' | 'supplier';
+type Kind = 'rent' | 'sale' | 'service' | 'on_account' | 'deposit_payout' | 'buyback' | 'supplier' | 'goods';
 /** `deposit`: kept from a deposit; `offset`: rent closed by a mechanic's work at his payout (0066). */
 type Channel = 'transfer' | 'acquiring' | 'cash' | 'deposit' | 'offset';
 /** What the list filters by: the form's channels and «Зачёт работ», which only a payout writes (Mika, 22.10.2026). */
@@ -29,6 +29,8 @@ export interface PaymentRow {
   sale: { id: string; number: string } | null;
   purchase: { id: string; number: string } | null;
   serviceJob: { id: string; number: string } | null;
+  /** A goods sale (ADR-0045); absent while an older API answers. */
+  goodsSale?: { id: string; number: string } | null;
   bankText: string | null;
   note: string | null;
   fromStatement: boolean;
@@ -40,7 +42,7 @@ export interface PaymentRow {
 interface Answer {
   totals: { inTetri: number; outTetri: number; acquiringFeeTetri: number; rowTetri: number | null };
   /** Set when a figure of the week's report asked for its own rows (QA-W6-01). */
-  row: 'rent' | 'sale' | 'deposits' | 'service' | null;
+  row: 'rent' | 'sale' | 'deposits' | 'service' | 'goods' | null;
   people: { id: string; name: string }[];
   payments: PaymentRow[];
 }
@@ -68,8 +70,8 @@ function range(period: Period, today: string): { from?: string; to?: string } {
 }
 
 /** A payment's number and what it was for, in words (§3.3 "основание словами"). */
-export function recordOf(p: Pick<PaymentRow, 'rental' | 'sale' | 'purchase' | 'serviceJob'>): string | null {
-  return p.rental?.number ?? p.sale?.number ?? p.purchase?.number ?? p.serviceJob?.number ?? null;
+export function recordOf(p: Pick<PaymentRow, 'rental' | 'sale' | 'purchase' | 'serviceJob' | 'goodsSale'>): string | null {
+  return p.rental?.number ?? p.sale?.number ?? p.purchase?.number ?? p.serviceJob?.number ?? p.goodsSale?.number ?? null;
 }
 
 /**

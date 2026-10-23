@@ -481,10 +481,13 @@ export function PickupWizard() {
                       onClick={() =>
                         openMoney({
                           target: {
-                            kind: firstDebt.kind === 'sale' ? 'sale' : firstDebt.kind === 'service' ? 'service' : 'rent',
-                            rentalId: firstDebt.kind === 'sale' || firstDebt.kind === 'service' ? undefined : firstDebt.id,
+                            // A goods sale's debt is paid as its own (ADR-0045), not as rent.
+                            kind: firstDebt.kind === 'sale' ? 'sale' : firstDebt.kind === 'service' ? 'service' : firstDebt.kind === 'goods' ? 'goods' : 'rent',
+                            rentalId: firstDebt.kind === 'sale' || firstDebt.kind === 'service' || firstDebt.kind === 'goods' ? undefined : firstDebt.id,
                             saleId: firstDebt.kind === 'sale' ? firstDebt.id : undefined,
                             serviceJobId: firstDebt.kind === 'service' ? firstDebt.id : undefined,
+                            goodsSaleId: firstDebt.kind === 'goods' ? firstDebt.id : undefined,
+                            openTetri: firstDebt.kind === 'goods' ? firstDebt.owesTetri : undefined,
                             number: firstDebt.number,
                             customerId: debt.id,
                             customer: debt.name,

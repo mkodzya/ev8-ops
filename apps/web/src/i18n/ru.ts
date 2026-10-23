@@ -29,6 +29,7 @@ import { contractSignedRu } from './contract-signed.js';
 import { saleDateRu } from './sale-date.js';
 import { rentalSwapRu } from './rental-swap.js';
 import { vehicleCardRu } from './vehicle-card.js';
+import { goodsRu } from './goods.js';
 import type { Dict } from './en.js';
 
 // Typed as Dict: a missing or misspelled key fails the build.
@@ -109,6 +110,7 @@ export const ru: Dict = {
       openRepair: 'Открыть ремонт',
       reportBreak: 'Сообщить о поломке',
       sell: 'Продать мопед',
+      sellGoods: 'Продать товар',
     },
     tabs: {
       calendar: 'Календарь',
@@ -140,12 +142,13 @@ export const ru: Dict = {
       login: 'Вход',
       expenses: 'Расходы',
       drive: 'Drive',
+      goods: 'Товары',
     },
   },
 
   searchUi: {
     placeholder: 'VIN, имя, телефон, номер, сумма',
-    hint: '4 последних знака VIN · имя латиницей или по-грузински · цифры телефона · R-, SL-, PO-, SV-номер · сумма платежа',
+    hint: '4 последних знака VIN · имя латиницей или по-грузински · цифры телефона · R-, SL-, TS-, PO-, SV-номер · сумма платежа',
     recent: 'Недавно открытые',
     recentNone: 'На этом устройстве пока ничего не открывали.',
     offline: 'Нет связи — ищем среди недавно открытых на этом устройстве.',
@@ -153,7 +156,7 @@ export const ru: Dict = {
     nothing: (q: string) => `Ничего по «${q}»`,
     newCustomerWith: (phone: string) => `Новый клиент с номером ${phone}`,
     more: (n: number) => `Ещё ${n}`,
-    groups: { customers: 'Клиенты', vehicles: 'Мопеды', rentals: 'Аренды', sales: 'Продажи', payments: 'Платежи', purchases: 'Закупки', jobs: 'Ремонты' },
+    groups: { customers: 'Клиенты', vehicles: 'Мопеды', rentals: 'Аренды', sales: 'Продажи', goods: 'Товары', payments: 'Платежи', purchases: 'Закупки', jobs: 'Ремонты' },
   },
 
   form: {
@@ -731,6 +734,7 @@ export const ru: Dict = {
     payInstalment: (n: string) => `Принять оплату · ${n}`,
     paySupplier: (n: string) => `Оплатить поставщику · ${n}`,
     payService: (n: string) => `Оплата ремонта · ${n}`,
+    payGoods: (n: string) => `Оплата товаров · ${n}`,
     buyBack: (n: string) => `Обратный выкуп · ${n}`,
     in: 'Приход',
     out: 'Расход',
@@ -766,6 +770,7 @@ export const ru: Dict = {
     closeWeek: (from: string, to: string) => `Неделя ${from}–${to}`,
     closeInstalment: (seq: number, due: string) => `Взнос ${seq} · ${due}`,
     closeService: (n: string) => `Ремонт ${n}`,
+    closeGoods: (n: string) => `Товары ${n}`,
     closePurchase: (n: string) => `Оплата ${n}`,
     closeSale: (n: string) => `${n}: долг по продаже станет 0`,
     ofFull: (a: string, full: string) => `${a} из ${full}`,
@@ -799,7 +804,7 @@ export const ru: Dict = {
     bankFeeHint: 'если была · расход компании, в себестоимость не входит',
     toState: 'Куда мопед',
     nothingOwed: 'Долгов нет — сумму введите сами.',
-    kinds: { rent: 'Аренда', sale: 'Продажа', service: 'Ремонт', on_account: 'Аванс по аренде', deposit_payout: 'Возврат залога', buyback: 'Обратный выкуп', supplier: 'Оплата поставщику' },
+    kinds: { rent: 'Аренда', sale: 'Продажа', service: 'Ремонт', on_account: 'Аванс по аренде', deposit_payout: 'Возврат залога', buyback: 'Обратный выкуп', supplier: 'Оплата поставщику', goods: 'Товары' },
   },
 
   sort: {
@@ -957,7 +962,7 @@ export const ru: Dict = {
 
   paymentPage: {
     wasLinked: 'была привязана; после аннулирования строка вернулась в «Разобрать»',
-    acts: { record: 'записан', void: 'аннулирован', undo: 'отменён сразу' },
+    acts: { record: 'записан', void: 'аннулирован', undo: 'отменён сразу', rebook: 'стал авансом после отмены продажи товаров' },
     title: (n: string) => `Платёж ${n}`,
     customer: 'Клиент',
     channel: 'Канал',
@@ -1137,7 +1142,7 @@ export const ru: Dict = {
     unit: 'Единица',
     units: { pcs: 'шт', set: 'компл', l: 'л', kg: 'кг', m: 'м' },
     minQty: 'Держать не меньше',
-    salePrice: 'Цена для клиента',
+    salePrice: 'Цена для клиента с НДС',
     notes: 'Заметки',
     addPart: 'Добавить запчасть',
     partAdded: 'Запчасть добавлена',
@@ -1176,6 +1181,24 @@ export const ru: Dict = {
     loadFailed: 'Не загрузилось.',
     retry: 'Повторить',
     codes: {
+      goods_no_lines: 'Укажите, что продаём.',
+      goods_too_many_lines: 'В одной продаже не больше 20 строк.',
+      goods_line_bad: 'Строка — это позиция склада или зарядка, что-то одно.',
+      goods_bad_qty: 'Количество — от 1 до 999.',
+      goods_same_item: 'Один товар дважды: сведите в одну строку.',
+      goods_item_not_found: 'Такой позиции нет.',
+      goods_item_archived: 'Позиция в архиве, её не продают.',
+      goods_item_not_sellable: 'Этот товар пока не продаётся.',
+      goods_count_answer: 'Скажите, видел ли пересчёт этот товар.',
+      goods_short: 'Столько нет. Продать сверх остатка может только владелец.',
+      retail_must_pay: 'Розничный покупатель платит сразу или ждёт банк.',
+      goods_paid_over: 'Это больше, чем стоит продажа.',
+      goods_sale_not_found: 'Такой продажи товаров нет.',
+      goods_sale_closed: 'Эта продажа товаров отменена.',
+      goods_over_open: 'Это больше, чем осталось заплатить за товары.',
+      split_over_goods: 'Эта часть больше, чем осталось заплатить за товары.',
+      goods_payment_in_split: 'Её платёж — часть разнесённой строки банка: сначала отвяжите строку в «Разобрать».',
+      goods_undo_too_late: 'Отменить сразу уже поздно: продажу отменит владелец с причиной.',
       act_not_found: 'Документ не найден.',
       already_matched: 'Эта строка выписки уже привязана к платежу.',
       already_merged: 'Эта карточка уже в архиве — она объединена с другой.',
@@ -1429,4 +1452,5 @@ export const ru: Dict = {
   ...saleDateRu,
   ...rentalSwapRu,
   ...vehicleCardRu,
+  ...goodsRu,
 };
