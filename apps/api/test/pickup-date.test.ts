@@ -237,6 +237,37 @@ describe.skipIf(!HAS_DB)('the pickup date of an open rental put right (ADR-0044 
     expect(after.periods.find((p) => p.seq === 2)).toMatchObject({ startsOn: addDays(t, 2), paidTetri: 15000 });
   });
 
+  it('a date changed and changed back: the weeks, their money and the moped’s history are as they were', async () => {
+    const r = await running(12);
+    const t = today();
+    expect((await pay(r.owner, r.id, 15000)).statusCode).toBe(201);
+    const before = await card(r.owner, r.id);
+    expect(before.periods.map((p) => [p.seq, p.startsOn, p.paidTetri])).toEqual([
+      [1, addDays(t, -12), 15000],
+      [2, addDays(t, -5), 15000],
+    ]);
+
+    // Four days later: each week keeps its number and what was paid on it.
+    expect((await redate(r.owner, r.id, { pickedUpOn: addDays(t, -8), reason: REASON })).statusCode).toBe(200);
+    const moved = await card(r.owner, r.id);
+    expect(moved.periods.map((p) => [p.seq, p.startsOn, p.paidTetri])).toEqual([
+      [1, addDays(t, -8), 15000],
+      [2, addDays(t, -1), 15000],
+    ]);
+    expect(moved.rental).toMatchObject({ paidThrough: addDays(t, 5), debtTetri: 0 });
+
+    // Taken back the same way, with a reason.
+    expect((await redate(r.owner, r.id, { pickedUpOn: addDays(t, -12), reason: 'test: entered by mistake' })).statusCode).toBe(200);
+    const back = await card(r.owner, r.id);
+    expect(back.periods).toEqual(before.periods);
+    expect(back.rental).toMatchObject({ pickedUpOn: addDays(t, -12), paidThrough: before.rental.paidThrough, debtTetri: before.rental.debtTetri, payWeekday: before.rental.payWeekday });
+    expect(back.acts.find((a) => a.kind === 'pickup')?.occurredOn).toBe(addDays(t, -12));
+    const event = await r.prisma.vehicleEvent.findFirstOrThrow({ where: { vehicleId: r.vehicle.id, kind: 'pickup', rentalId: r.id } });
+    expect(event.occurredOn).toEqual(date(addDays(t, -12)));
+    const lines = await r.prisma.auditLog.findMany({ where: { entityType: 'rental', entityId: r.id, action: 'rental.pickup.date' }, orderBy: { createdAt: 'asc' }, select: { note: true } });
+    expect(lines.map((l) => l.note)).toEqual([REASON, 'test: entered by mistake']);
+  });
+
   it('an earlier day opens the weeks begun since, at once', async () => {
     const r = await running(3);
     const t = today();
