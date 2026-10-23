@@ -23,6 +23,8 @@ interface Users {
     hasPin: boolean;
     pinLockedUntil: string | null;
     labourRateTetri: number | null;
+    /** A mechanic who rents a moped: his card as a customer (0066); absent while an older API answers. */
+    customer?: { id: string; name: string } | null;
     sessions: number;
     lastLoginAt: string | null;
     lastSeenAt: string | null;
@@ -83,7 +85,8 @@ export function SettingsPage() {
           users.failure ? <LoadError failure={users.failure} onRetry={users.reload} /> : <Loading />
         ) : (
           <div className="table-wrap table-flat">
-            <table className="table">
+            {/* On a phone a person is a card and the buttons wrap (QA after issue #7): the row was wider than the screen. */}
+            <table className="table people-table">
               <thead>
                 <tr>
                   <th>{t.users.name}</th>
@@ -303,12 +306,17 @@ function UserRow({ user: u, onRole, onDone }: { user: Users['users'][number]; on
   const toast = useToast();
   const op = useOperation();
   // One thing typed at a time in a row: a password, a PIN or a rate (ADR-0033).
-  const [editing, setEditing] = useState<'password' | 'pin' | 'rate' | null>(null);
+  const [editing, setEditing] = useState<'password' | 'pin' | 'rate' | 'renter' | null>(null);
   const [pw, setPw] = useState('');
   const [email, setEmail] = useState('');
   const [pin, setPin] = useState('');
   const [rate, setRate] = useState('');
+  const [renter, setRenter] = useState('');
   const mechanic = isPinRole(u.role);
+  // The customers to pick the mechanic's own card from — read only while the picker is open.
+  const customers = useLoad<{ customers: { id: string; name: string; openRentals: { number: string }[] }[] }>(editing === 'renter' ? '/api/customers' : null);
+  // Only a card with a rental running has rent to pay, and the card linked now stays on the list to be seen.
+  const renters = (customers.data?.customers ?? []).filter((c) => c.openRentals.length > 0 || c.id === u.customer?.id);
 
   const stopEditing = () => {
     setEditing(null);
@@ -316,6 +324,7 @@ function UserRow({ user: u, onRole, onDone }: { user: Users['users'][number]; on
     setEmail('');
     setPin('');
     setRate('');
+    setRenter('');
     op.reset();
   };
   const toggle = async () => {
@@ -355,6 +364,14 @@ function UserRow({ user: u, onRole, onDone }: { user: Users['users'][number]; on
     toast({ text: t.workshop.rateSaved(u.name) });
     onDone();
   };
+  /** A mechanic who rents a moped: his payouts pay that customer's rent first (0066). Empty unlinks. */
+  const saveRenter = async () => {
+    const res = await op.run((key) => api.patch(`/api/users/${u.id}`, { customerId: renter === '' ? null : renter }, { key }), `renter:${renter}`);
+    if (!res.ok) return;
+    stopEditing();
+    toast({ text: renter === '' ? t.wpay.renterCleared(u.name) : t.wpay.renterSaved(u.name) });
+    onDone();
+  };
   /** A phone left somewhere: every device signs in again, the password stays theirs (§3.4). */
   const closeSessions = async () => {
     const res = await op.run((key) => api.post<{ closed: number }>(`/api/users/${u.id}/sessions/close`, {}, { key }), 'sessions');
@@ -380,6 +397,7 @@ function UserRow({ user: u, onRole, onDone }: { user: Users['users'][number]; on
             )}
             {' · '}
             {u.labourRateTetri != null ? t.workshop.rateValue(formatGel(u.labourRateTetri)) : t.workshop.rateCompany}
+            {u.customer && ` · ${t.wpay.renter}: ${u.customer.name}`}
           </div>
         )}
       </td>
@@ -404,8 +422,9 @@ function UserRow({ user: u, onRole, onDone }: { user: Users['users'][number]; on
           ))}
         </select>
       </td>
-      <td>{u.active ? t.common.yes : t.users.off}</td>
-      <td className="num">
+      {/* «Да» says nothing on a phone's card, where there is no heading over it: there only «Отключён» is written. */}
+      <td className={u.active ? 'people-on' : undefined}>{u.active ? t.common.yes : t.users.off}</td>
+      <td className="num people-acts">
         {editing === 'password' ? (
           <span className="inline-form">
             {!u.email && (
@@ -443,6 +462,27 @@ function UserRow({ user: u, onRole, onDone }: { user: Users['users'][number]; on
               {t.actions.cancel}
             </button>
           </span>
+        ) : editing === 'renter' ? (
+          <>
+            <span className="inline-form">
+              <select className="input input-inline" value={renter} onChange={(e) => setRenter(e.target.value)} autoFocus aria-label={t.wpay.renterPick} aria-describedby={`renter-hint-${u.id}`}>
+                <option value="">{t.wpay.renterNone}</option>
+                {renters.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {[c.name, ...c.openRentals.map((r) => r.number)].join(' · ')}
+                  </option>
+                ))}
+              </select>
+              <SubmitButton small type="button" state={op.state} label={t.actions.save} onClick={() => void saveRenter()} />
+              <button type="button" className="pill pill-sm" onClick={stopEditing}>
+                {t.actions.cancel}
+              </button>
+            </span>
+            {/* What the link does, as text: a select's title is never seen on a phone (QA after issue #7). */}
+            <p className="hint muted people-hint" id={`renter-hint-${u.id}`}>
+              {t.wpay.renterHint}
+            </p>
+          </>
         ) : (
           <>
             <button type="button" className="pill pill-sm" onClick={() => void toggle()} disabled={u.id === me?.id || op.state === 'busy'}>
@@ -473,6 +513,17 @@ function UserRow({ user: u, onRole, onDone }: { user: Users['users'][number]; on
                   }}
                 >
                   {t.workshop.rate}
+                </button>{' '}
+                <button
+                  type="button"
+                  className="pill pill-sm"
+                  title={t.wpay.renterHint}
+                  onClick={() => {
+                    setRenter(u.customer?.id ?? '');
+                    setEditing('renter');
+                  }}
+                >
+                  {t.wpay.renter}
                 </button>{' '}
               </>
             )}

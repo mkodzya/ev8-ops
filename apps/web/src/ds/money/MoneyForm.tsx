@@ -5,6 +5,7 @@ import { api, ApiError } from '../../api.js';
 import { Field } from '../../components/Wizard.js';
 import { fmtDate } from '../../format.js';
 import { useT } from '../../i18n/index.js';
+import { chargeWords } from '../../lib/charges.js';
 import { useLoad } from '../../lib/use.js';
 import { useSession } from '../../session.js';
 import { FormSheet, useFieldError } from '../form/Form.js';
@@ -87,7 +88,8 @@ interface State {
 }
 
 interface Closes {
-  target: 'deposit' | 'period' | 'instalment' | 'service' | 'sale' | 'purchase';
+  /** `charge`: what a return charged — a key, days of delay; its kind comes as `number` (B5-08). */
+  target: 'deposit' | 'period' | 'instalment' | 'charge' | 'service' | 'sale' | 'purchase';
   amountTetri: number;
   fullTetri: number;
   openTetri: number;
@@ -274,7 +276,9 @@ function MoneySheet({ opening, onClose }: { opening: Opening; onClose: () => voi
           throw e;
         });
         const how = t.money.how[s.channel];
-        const text = OUT.includes(s.target.kind) ? t.money.paidOut(amountText, how) : t.money.recorded(amountText, how);
+        // «Returned» is the deposit's word (issue #9, item 5); a supplier paid or a
+        // moped bought back is recorded like any other payment.
+        const text = s.target.kind === 'deposit_payout' ? t.money.paidOut(amountText, how) : t.money.recorded(amountText, how);
         return {
           toast: {
             text,
@@ -575,7 +579,8 @@ function useAwaitedTetri(target: MoneyTarget | null): number {
 }
 
 /**
- * "Закроет": what the payment takes, and the new "paid through" (§3.1).
+ * «Погасит»: what the payment takes, and the new "paid through" (§3.1) —
+ * the future of issue #9's «Погашено» (item 30), not «Закроет».
  * What stays after a part payment is still «due today», in ink, while all of
  * it is money awaited today (`awaitedTetri`); anything older in it — a debt,
  * in red, as before.
@@ -586,7 +591,7 @@ function Closing({ plan, awaitedTetri }: { plan: Plan | null; awaitedTetri: numb
   const owed = plan.closes.reduce((n, c) => n + Math.max(0, c.openTetri - c.amountTetri), 0);
   return (
     <section className="money-closes" aria-live="polite">
-      <h3 className="t-overline">{t.money.closes}</h3>
+      <h3 className="t-overline">{t.money.settles}</h3>
       <ul>
         {plan.closes.map((c, i) => (
           <li key={i}>
@@ -615,6 +620,9 @@ function closeLabel(t: ReturnType<typeof useT>, c: Closes): string {
       return t.money.closeWeek(dm(c.startsOn), dm(c.endsOn));
     case 'instalment':
       return t.money.closeInstalment(c.seq ?? 0, fmtDate(c.dueOn));
+    case 'charge':
+      // The plan sends a charge's kind and no note: «Потеря ключа», where the line had no words (QA after issue #9).
+      return chargeWords(t, c.number);
     case 'service':
       return t.money.closeService(c.number ?? '');
     case 'purchase':

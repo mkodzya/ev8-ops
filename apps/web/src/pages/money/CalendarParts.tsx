@@ -11,15 +11,17 @@ import {
   type CalendarEntry,
   type CalendarLate,
   type CalendarLateList,
+  type CalendarMonthTotals,
   type CalendarRentalCard,
   type CalendarState,
+  type CalendarTotals,
   type CalendarWeek,
   type ISODate,
   type Period,
   type Tetri,
 } from '@ev8/shared';
 import { Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, MessageCircle, Phone } from 'lucide-react';
-import type { ReactNode } from 'react';
+import type { ReactNode, Ref } from 'react';
 import { Link } from 'react-router-dom';
 import type { WaKind } from '../../components/Whatsapp.js';
 import { useSkeletonDelay } from '../../ds/state/Skeleton.js';
@@ -48,6 +50,17 @@ export const weekdayTitle = (t: Dict, day: ISODate): string => t.today.weekdays[
 export const weekdayIn = (t: Dict, day: ISODate): string => t.calendar.weekdaysIn[(calendarWeekday(day) + 1) % 7] ?? '';
 export const monthTitle = (t: Dict, day: ISODate): string => t.calendar.monthTitle(t.calendar.months[Number(day.slice(5, 7)) - 1] ?? '', day.slice(0, 4));
 export const rangeText = (t: Dict, period: Period): string => t.calendar.range(fmtDayMonth(period.from), fmtDayMonth(period.to));
+/**
+ * A row of the month's table: «19–25.10» — the table's title names the month,
+ * and the short form keeps «Недоплачено» on a 375 px phone (QA after issue #7,
+ * 23.10.2026). A row is cut to its month, so both ends share it; one day alone
+ * is «31.08». The same in every language, like the dates themselves.
+ */
+export const monthRowText = (period: Period): string => {
+  if (period.from === period.to) return fmtDayMonth(period.to);
+  const sameMonth = period.from.slice(0, 7) === period.to.slice(0, 7);
+  return `${sameMonth ? period.from.slice(8, 10) : fmtDayMonth(period.from)}–${fmtDayMonth(period.to)}`;
+};
 
 /** What a row can do. Both open something the product already has: the money form, the WhatsApp sheet. */
 export interface Actions {
@@ -419,6 +432,117 @@ function WeekSkel({ shape }: { shape: 'line' | 'figs' }) {
   return <span className={`cal-skel-${shape}${shown ? ' skel' : ''}`} />;
 }
 
+/** What the totals are about: the chosen day's week, or its whole month (director, 22.10.2026). */
+export type TotalsScope = 'week' | 'month';
+
+/** «Неделя | Месяц» — two pills, the chosen one filled; the address is not touched. */
+export function ScopeSwitch({ scope, onScope }: { scope: TotalsScope; onScope: (s: TotalsScope) => void }) {
+  const t = useT();
+  return (
+    <span className="cal-scope" role="group" aria-label={t.calendar.scopeAria}>
+      {(['week', 'month'] as const).map((s) => (
+        <button key={s} type="button" className={`pill pill-sm${scope === s ? ' on' : ''}`} aria-pressed={scope === s} onClick={() => onScope(s)}>
+          {s === 'week' ? t.calendar.scopeWeek : t.calendar.scopeMonth}
+        </button>
+      ))}
+    </span>
+  );
+}
+
+/** The month's three figures in the card's own shape: what should come in, what is paid, what is short — and what is still awaited under it. */
+function MonthFigs({ total }: { total: CalendarTotals }) {
+  const t = useT();
+  if (total.due.count === 0) return <p className="cal-none">{t.calendar.noneThisMonth}</p>;
+  return (
+    <>
+      <div className="cal-fig">
+        <span className="cal-fig-v">{gel(total.due.tetri)}</span>
+        <span className="cal-fig-l">
+          {t.calendar.toCome} · {t.calendar.pays(total.due.count)}
+        </span>
+      </div>
+      <div className="cal-fig">
+        <span className="cal-fig-v">{gel(total.paid.tetri)}</span>
+        <span className="cal-fig-l">
+          <StateMark state="paid" small />
+          {t.calendar.paidLabel} · {t.calendar.pays(total.paid.count)}
+        </span>
+      </div>
+      <div className="cal-fig">
+        <span className="cal-fig-v">{gel(total.short.tetri)}</span>
+        <span className="cal-fig-l">
+          {total.short.tetri !== 0 && <StateMark state="overdue" small />}
+          {t.calendar.shortLabel} · {t.calendar.pays(total.short.count)}
+        </span>
+        {total.waiting.tetri !== 0 && (
+          <span className="cal-fig-s">
+            {t.calendar.waitingLabel} · {gel(total.waiting.tetri)}
+          </span>
+        )}
+      </div>
+    </>
+  );
+}
+
+/**
+ * The month week by week, under the grid (director, 22.10.2026): one row a
+ * week, cut to the month, and the month's line at the foot. Weeks are counted
+ * by the day they are due, as the card above counts them. A row picks its
+ * first day and turns the card to that week (the page does both); a row cut
+ * to the month says it is part of a week, since the card shows all seven days.
+ */
+export function MonthTable({ totals, title, today, onPick }: { totals: CalendarMonthTotals; title: string; today: ISODate; onPick: (day: ISODate) => void }) {
+  const t = useT();
+  const cells = (x: CalendarTotals) => (
+    <>
+      <td className="num">{gel(x.due.tetri)}</td>
+      <td className="num">{gel(x.paid.tetri)}</td>
+      <td className={`num${x.short.tetri !== 0 ? ' cal-short' : ''}`}>{gel(x.short.tetri)}</td>
+      <td className="num muted cal-wait">{gel(x.waiting.tetri)}</td>
+    </>
+  );
+  return (
+    <section className="cal-month">
+      <h3 className="cal-month-title">{t.calendar.monthTable(title)}</h3>
+      <div className="table-wrap">
+        <table className="table cal-month-table">
+          <thead>
+            <tr>
+              <th>{t.calendar.colWeek}</th>
+              <th className="num">{t.calendar.colDue}</th>
+              <th className="num">{t.calendar.colPaid}</th>
+              <th className="num">{t.calendar.colShort}</th>
+              <th className="num cal-wait">{t.calendar.colWaiting}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {totals.weeks.map((w) => (
+              <tr key={w.from} className={w.from <= today && today <= w.to ? 'cal-month-now' : undefined}>
+                <td className="cal-month-wk">
+                  <button type="button" className="cal-month-pick" onClick={() => onPick(w.from)}>
+                    <span>{monthRowText(w)}</span>
+                    {/* An edge row holds the month's days only; the card it opens shows the whole week. */}
+                    {w.part && <small>{t.calendar.partWeek}</small>}
+                  </button>
+                </td>
+                {cells(w)}
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr>
+              <th scope="row">{t.calendar.monthTotal}</th>
+              {cells(totals.total)}
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      {/* «Недоплачено» stops at yesterday; the red figure above counts today too — this says which is which. */}
+      <p className="cal-month-note">{t.calendar.monthShortNote}</p>
+    </section>
+  );
+}
+
 /**
  * The phone's line of the week. Text, not a link: no list in "Платежи" adds
  * up to these sums — they count weeks by the day they are due, the list
@@ -426,8 +550,56 @@ function WeekSkel({ shape }: { shape: 'line' | 'figs' }) {
  * loads, and after it failed to: then there is no line at all — the message
  * under the bar speaks for the screen, and nothing here pretends to load.
  */
-export function WeekLine({ week, isCurrent, failed }: { week: CalendarWeek | null; isCurrent: boolean; failed: boolean }) {
+export function WeekLine({
+  week,
+  isCurrent,
+  failed,
+  scope,
+  onScope,
+  month,
+  monthName,
+}: {
+  week: CalendarWeek | null;
+  isCurrent: boolean;
+  failed: boolean;
+  scope: TotalsScope;
+  onScope: (s: TotalsScope) => void;
+  month: CalendarMonthTotals | null;
+  monthName: string;
+}) {
   const t = useT();
+  if (scope === 'month' && month) {
+    const m = month.total;
+    const paid = gel(m.paid.tetri);
+    const all = gel(m.due.tetri);
+    const short = gel(m.short.tetri);
+    return (
+      <div className="cal-week">
+        <div className="cal-week-text">
+          <span className="cal-over">
+            {monthName} <ScopeSwitch scope={scope} onScope={onScope} />
+          </span>
+          {m.due.count === 0 ? (
+            <span className="cal-week-line">{t.calendar.noneThisMonth}</span>
+          ) : (
+            <span className="cal-week-line">
+              <span>
+                <Emph text={t.calendar.paidOf(paid, all)} parts={[paid, all]} />
+              </span>
+              <span>
+                · {t.calendar.shortLabel} <b>{short}</b>
+              </span>
+              {m.waiting.tetri !== 0 && (
+                <span>
+                  · {t.calendar.waitingLabel} {gel(m.waiting.tetri)}
+                </span>
+              )}
+            </span>
+          )}
+        </div>
+      </div>
+    );
+  }
   if (!week) {
     if (failed) return null;
     return (
@@ -442,7 +614,9 @@ export function WeekLine({ week, isCurrent, failed }: { week: CalendarWeek | nul
   return (
     <div className="cal-week">
       <div className="cal-week-text">
-        <span className="cal-over">{weekName(t, week, isCurrent)}</span>
+        <span className="cal-over">
+          {weekName(t, week, isCurrent)} <ScopeSwitch scope="week" onScope={onScope} />
+        </span>
         {week.expected.count === 0 ? (
           <span className="cal-week-line">{t.calendar.noneThisWeek}</span>
         ) : (
@@ -488,13 +662,17 @@ export function LateLine({ late, open, onToggle, children }: { late: CalendarLat
       <div className="cal-late-in">
         <StateMark state="overdue" />
         <span className="cal-late-text">
-          {/* The space stands between the two pieces, not inside one: each is `nowrap`, and the line breaks only there. */}
+          {/* The space stands between the two pieces, not inside one: each is `nowrap`, and the line breaks only there.
+              The «·» stays with the piece before it, so a second line starts with the debt, not with «·» (QA after issue #9). */}
           <b>
-            <span>{t.calendar.late(late.count)}</span>
+            <span>
+              {t.calendar.late(late.count)}
+              {debt && ' ·'}
+            </span>
             {debt && (
               <>
                 {' '}
-                <span>· {debt}</span>
+                <span>{debt}</span>
               </>
             )}
           </b>
@@ -554,16 +732,51 @@ export function ReceivedLine({ period, tetri, dense }: { period: Period; tetri: 
  * month is loading, or `failed` to — the red block stays: grey bars beside it
  * while it loads, nothing beside it after a failure.
  */
-export function WeekCard({ week, isCurrent, late, received, failed }: { week: CalendarWeek | null; isCurrent: boolean; late: CalendarLateList; received: Period | null; failed: boolean }) {
+export function WeekCard({
+  week,
+  isCurrent,
+  late,
+  received,
+  failed,
+  scope,
+  onScope,
+  month,
+  monthName,
+  cardRef,
+}: {
+  week: CalendarWeek | null;
+  isCurrent: boolean;
+  late: CalendarLateList;
+  received: Period | null;
+  failed: boolean;
+  scope: TotalsScope;
+  onScope: (s: TotalsScope) => void;
+  month: CalendarMonthTotals | null;
+  monthName: string;
+  /** The card itself, for the page to bring into view when a week is picked in the month's table. */
+  cardRef?: Ref<HTMLElement>;
+}) {
   const t = useT();
+  // The month needs the month's answer; while it loads, the card shows the week it has, as before.
+  const byMonth = scope === 'month' && month !== null;
   const heaviest = week?.heaviest ? gel(week.heaviest.tetri) : null;
   const split = t.calendar.lateSplit(late.thisWeekTetri !== 0 ? gel(late.thisWeekTetri) : null, late.earlierTetri !== 0 ? gel(late.earlierTetri) : null);
   const pending = !week && !failed;
   return (
-    <section className="cal-card">
-      {week && (
+    <section className="cal-card" ref={cardRef}>
+      {byMonth && (
         <div className="cal-card-head">
-          <span>{weekName(t, week, isCurrent)}</span>
+          <span>
+            {monthName} <ScopeSwitch scope={scope} onScope={onScope} />
+          </span>
+        </div>
+      )}
+      {week && !byMonth && (
+        <div className="cal-card-head">
+          <span>
+            {/* The week is what is shown — also while the month asked for is still loading. */}
+            {weekName(t, week, isCurrent)} <ScopeSwitch scope="week" onScope={onScope} />
+          </span>
           <span className="cal-card-side">
             {received && <ReceivedLine period={received} tetri={week.receivedTetri} dense />}
             {week.heaviest && heaviest && (
@@ -581,8 +794,9 @@ export function WeekCard({ week, isCurrent, late, received, failed }: { week: Ca
       )}
       <div className="cal-figs">
         {pending && <WeekSkel shape="figs" />}
-        {week && week.expected.count === 0 && <p className="cal-none">{t.calendar.noneThisWeek}</p>}
-        {week && week.expected.count !== 0 && (
+        {byMonth && <MonthFigs total={month.total} />}
+        {week && !byMonth && week.expected.count === 0 && <p className="cal-none">{t.calendar.noneThisWeek}</p>}
+        {week && !byMonth && week.expected.count !== 0 && (
           <>
             <div className="cal-fig">
               <span className="cal-fig-v">{gel(week.expected.tetri)}</span>
@@ -632,7 +846,7 @@ export function WeekCard({ week, isCurrent, late, received, failed }: { week: Ca
 // ---------------------------------------------------------------------------
 
 /**
- * A row's buttons. «Принять оплату» is an outline pill — the screen has no
+ * A row's buttons. «Провести вручную» (was «Принять оплату», 22.10.2026) is an outline pill — the screen has no
  * filled button (§3.0). The reminder is a round icon, except on the laptop's
  * row of somebody who pays tomorrow, where it carries its word and the call
  * is left out, as the frame draws it. No phone — neither a call nor WhatsApp.
@@ -649,7 +863,7 @@ function RowActions({ card, remind, week, dense, worded, actions }: { card: Cale
   return (
     <>
       <button type="button" className={`pill${sm} cal-take`} onClick={() => actions.take(card)}>
-        {t.today.actions.take_money}
+        {t.calendar.recordByHand}
       </button>
       {reminds && worded && (
         <button type="button" className={`pill${sm} cal-remind`} aria-label={t.calendar.remindAria(template)} onClick={ask}>
@@ -971,7 +1185,7 @@ export function LateSection({ late, hidden, whole, onToggle, note, children }: {
       <div className="cal-sec-head late">
         <h3>
           <StateMark state="overdue" />
-          {t.calendar.late(late.count)}
+          {t.calendar.lateListTitle(late.count)}
         </h3>
         {late.debtTetri !== 0 && <span className="cal-sec-total">{t.calendar.debt(gel(late.debtTetri))}</span>}
       </div>

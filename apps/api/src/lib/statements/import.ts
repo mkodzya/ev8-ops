@@ -237,7 +237,8 @@ async function claim(tx: Tx, lineId: string, rule: string): Promise<void> {
 /** The line is money already entered by hand: link it, write nothing new (B2-03). */
 export async function linkPayment(tx: Tx, lineId: string, paymentId: string, rule: string): Promise<void> {
   await claim(tx, lineId, rule);
-  const done = await tx.payment.updateMany({ where: { id: paymentId, statementLineId: null, voidedAt: null }, data: { statementLineId: lineId } });
+  // Rent closed by a mechanic's work (0066) is no bank money: no line is ever its.
+  const done = await tx.payment.updateMany({ where: { id: paymentId, statementLineId: null, voidedAt: null, channel: { not: 'offset' } }, data: { statementLineId: lineId } });
   if (done.count === 0) throw conflict('payment_has_line', 'That payment already has a bank line.');
   await tx.statementLine.update({ where: { id: lineId }, data: { paymentId } });
 }

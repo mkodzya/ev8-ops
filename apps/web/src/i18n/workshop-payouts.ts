@@ -54,6 +54,29 @@ export const workshopPayoutsEn = {
     unnormedNote: 'waits for a norm from the chief mechanic',
     payBack: (sum: string) => `receipt ${sum} comes back to you`,
     nothingYet: 'Nothing to pay yet: a repair comes here once it is closed.',
+    // A mechanic who rents a moped (director, 22.10.2026; migration 0066).
+    // The weeks due and unpaid, not the customer's debt: that counts a deposit and charges too (ux.md, principle 5).
+    rentOffset: (rental: string, weeks: string) => `Towards rent ${rental} · weeks due ${weeks}`,
+    toHand: 'To hand over',
+    confirmOffset: (sum: string, rental: string, cash: string) => `${sum} goes towards rent ${rental}: its weeks are paid by work. To hand over: ${cash}.`,
+    /** confirmNote when part of the payout pays his rent: that one payment does appear in Money. Null cash: nothing handed over. */
+    confirmNoteOffset: (rental: string, cash: string | null) =>
+      `This is a mark: only the rent payment for ${rental}, «Offset against repairs», appears in Money. ${cash ? `Sort the ${cash} handed over in «Sort» as «Expense ▸».` : 'Nothing is handed over.'}`,
+    offsetIn: (sum: string) => `${sum} into rent`,
+    // When part of a payout pays the mechanic's rent, the button, the sheet and both histories name the cash handed
+    // over, never the whole sum (QA after issue #7, 23.10.2026).
+    payCash: (cash: string) => `Paid · to hand over ${cash}`,
+    confirmTitleOffset: (who: string, cash: string, offset: string, rental: string) => `Mark ${who} paid — hand over ${cash}, ${offset} into rent ${rental}?`,
+    markedOffset: (who: string, cash: string, offset: string) => `${who}: payout marked — ${cash} to hand over, ${offset} into rent`,
+    offsetInRent: (sum: string, rental: string) => `${sum} into rent ${rental}`,
+    handedOut: (sum: string) => `handed over ${sum}`,
+    voidOffset: 'The rent it paid is owed again.',
+    renter: 'Rents a moped',
+    renterNone: 'Rents nothing',
+    renterPick: 'Customer card',
+    renterHint: 'His payouts pay this customer’s rent first, never more than it owes.',
+    renterSaved: (who: string) => `${who}: rent link saved`,
+    renterCleared: (who: string) => `${who}: rents nothing any more`,
   },
 };
 
@@ -106,6 +129,24 @@ export const workshopPayoutsRu: WorkshopPayouts = {
     unnormedNote: 'ждёт нормы от главного механика',
     payBack: (sum) => `чек ${sum} вернётся тебе`,
     nothingYet: 'К оплате пока ничего: заявка приходит сюда, когда закрыта.',
+    rentOffset: (rental, weeks) => `В счёт аренды ${rental} · недели к оплате ${weeks}`,
+    toHand: 'К выдаче',
+    confirmOffset: (sum, rental, cash) => `${sum} пойдут в аренду ${rental}: недели оплатятся зачётом работ. К выдаче: ${cash}.`,
+    confirmNoteOffset: (rental, cash) =>
+      `Это отметка: в «Деньгах» появится только оплата аренды ${rental} способом «Зачёт работ». ${cash ? `Выданные ${cash} разбери в «Разобрать» как «Расход ▸».` : 'На руки ничего не выдаётся.'}`,
+    offsetIn: (sum) => `${sum} в аренду`,
+    payCash: (cash) => `Оплачено · к выдаче ${cash}`,
+    confirmTitleOffset: (who, cash, offset, rental) => `Отметить выплату ${who}: к выдаче ${cash}, ${offset} — в аренду ${rental}?`,
+    markedOffset: (who, cash, offset) => `${who}: выплата отмечена — к выдаче ${cash}, ${offset} в аренду`,
+    offsetInRent: (sum, rental) => `${sum} в аренду ${rental}`,
+    handedOut: (sum) => `выдано ${sum}`,
+    voidOffset: 'Зачёт в аренду тоже отменится: недели снова станут долгом.',
+    renter: 'Арендует мопед',
+    renterNone: 'Не арендует',
+    renterPick: 'Карточка клиента',
+    renterHint: 'Выплаты ему сначала гасят аренду этого клиента — не больше долга.',
+    renterSaved: (who) => `${who}: аренда привязана`,
+    renterCleared: (who) => `${who}: больше не арендует`,
   },
 };
 
@@ -164,5 +205,23 @@ export const workshopPayoutsKa: WorkshopPayouts = {
     unnormedNote: 'ელოდება ნორმას მთავარი მექანიკოსისგან',
     payBack: (sum) => `ქვითარი ${sum} დაგიბრუნდება`,
     nothingYet: 'გადასახდელი ჯერ არაფერია: შეკეთება აქ მოდის, როცა დაიხურება.',
+    rentOffset: (rental, weeks) => `ქირაში ${rental} · გადასახდელი კვირები ${weeks}`,
+    toHand: 'ხელზე გასაცემი',
+    confirmOffset: (sum, rental, cash) => `${sum} წავა ქირაში ${rental}: კვირები სამუშაოთი ჩაითვლება. ხელზე გასაცემი: ${cash}.`,
+    confirmNoteOffset: (rental, cash) =>
+      `ეს მონიშვნაა: „ფულში“ გაჩნდება მხოლოდ ქირის ${rental} გადახდა — „სამუშაოს ჩათვლა“. ${cash ? `ხელზე გაცემული ${cash} „დასახარისხებელში“ მონიშნე როგორც „ხარჯი ▸“.` : 'ხელზე არაფერი გაიცემა.'}`,
+    offsetIn: (sum) => `${sum} ქირაში`,
+    payCash: (cash) => `გადახდილია · ხელზე გასაცემი ${cash}`,
+    confirmTitleOffset: (who, cash, offset, rental) => `${who}: გადახდის მონიშვნა — ხელზე გასაცემი ${cash}, ${offset} ქირაში ${rental}?`,
+    markedOffset: (who, cash, offset) => `${who}: გადახდა მონიშნულია — ხელზე გასაცემი ${cash}, ${offset} ქირაში`,
+    offsetInRent: (sum, rental) => `${sum} ქირაში ${rental}`,
+    handedOut: (sum) => `ხელზე გაცემულია ${sum}`,
+    voidOffset: 'ქირაში ჩათვლაც გაუქმდება: კვირები ისევ ვალად იქცევა.',
+    renter: 'ქირაობს მოპედს',
+    renterNone: 'არ ქირაობს',
+    renterPick: 'კლიენტის ბარათი',
+    renterHint: 'ანაზღაურება ჯერ ამ კლიენტის ქირას ფარავს — ვალზე მეტს არა.',
+    renterSaved: (who) => `${who}: ქირა მიბმულია`,
+    renterCleared: (who) => `${who}: აღარ ქირაობს`,
   },
 };

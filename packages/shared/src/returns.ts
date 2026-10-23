@@ -12,6 +12,25 @@ import type { Tetri } from './money.js';
 export const KEY_FEE_TETRI: Tetri = 250_00;
 export const LATE_FEE_PER_DAY_TETRI: Tetri = 30_00;
 
+/**
+ * The notes the code writes on a charge for itself: a key not brought back
+ * carries the contract's clause, at a return and at a swap alike. They are
+ * stored as written — rows already hold them, so a value here never changes —
+ * and a screen says them in the reader's words; a person's note (a fine's
+ * reason, what was kept beyond the claims) is shown as typed. Written from one
+ * place, so a new row cannot spell it differently from the dictionary's key
+ * (QA after issue #9: «Потеря ключа · contract §6» on a Russian screen).
+ */
+export const CHARGE_NOTES = { keyContract: 'contract §6' } as const;
+export type ChargeNoteKey = keyof typeof CHARGE_NOTES;
+
+/** Which of the code's own notes this is; null for a person's words, or for none. */
+export function chargeNoteKey(note: string | null | undefined): ChargeNoteKey | null {
+  const own = (note ?? '').trim();
+  if (!own) return null;
+  return (Object.keys(CHARGE_NOTES) as ChargeNoteKey[]).find((key) => CHARGE_NOTES[key] === own) ?? null;
+}
+
 export interface SettlementPeriod {
   id: string;
   seq: number;

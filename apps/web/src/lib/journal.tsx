@@ -95,10 +95,15 @@ function value(field: string, raw: unknown, shifted = false): string | null {
   if (field === 'payDay') return typeof raw === 'number' && raw >= 1 && raw <= 7 ? t.calendar.weekdaysIn[raw % 7] : null;
   // The days a week gained, with their unit (ADR-0041).
   if (field === 'extraDays' && typeof raw === 'number') return t.weekShift.journal.days(raw);
+  // The card a mechanic rents on (0066), by its name; none is a dash — «— → card», «card → —».
+  if (field === 'renter') return typeof raw === 'string' && raw.trim() ? raw : t.common.dash;
   // A repair's kind may be given, changed and taken away again (Mika,
   // 21.10.2026): there «none» is an answer — «не указана → ДТП» — and not a
   // gap that hides the line.
-  if (raw == null) return field === 'reasonKind' ? t.rkind.none : null;
+  // A moped's first assignment, and an undone one, come from or go back to
+  // none: «Не назначен → Аренда», where the line said only «Изменено
+  // назначение» and not to what (QA after issue #9).
+  if (raw == null) return field === 'reasonKind' ? t.rkind.none : field === 'pool' ? t.pools.none : null;
   if (isReference(field)) return null;
   if (isMoney(field)) return typeof raw === 'number' ? formatGel(raw) : String(raw);
   if (typeof raw === 'boolean') return raw ? t.common.yes : t.common.dash;
@@ -226,6 +231,8 @@ function named(t: Dict, field: string, action?: string): string | null {
   if (field === 'warrantyUntil') return t.saleCard.warranty;
   // A rental's own pay day, whichever action moved it (ADR-0022, ADR-0041), and the day it falls due on.
   if (field === 'payWeekday' || field === 'payDay') return t.weekShift.journal.payDay;
+  // A mechanic's rent link, set or taken off (0066): «Арендует мопед: — → card».
+  if (field === 'renter') return t.wpay.renter;
   // A week moved: its end, its price, the days and their extra, each by name —
   // three bare pairs of dates and numbers side by side said nothing (review, 21.10.2026).
   if (action && WEEK_SHIFT.has(action)) {

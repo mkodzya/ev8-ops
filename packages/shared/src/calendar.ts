@@ -28,7 +28,7 @@ import type { ISODate, RentalStatus } from './types.js';
 export const CALENDAR_STATES = ['paid', 'paid_ahead', 'due_today', 'overdue', 'expected'] as const;
 export type CalendarState = (typeof CALENDAR_STATES)[number];
 /** The database's payment_channel. */
-export type CalendarChannel = 'cash' | 'acquiring' | 'transfer' | 'deposit';
+export type CalendarChannel = 'cash' | 'acquiring' | 'transfer' | 'deposit' | 'offset';
 /** Six Monday–Sunday weeks hold any month. */
 export const CALENDAR_MAX_DAYS = 42;
 /** How far ahead a schedule is drawn. */
@@ -316,6 +316,66 @@ export function calendarWeekOf(cal: PaymentsCalendar, day: ISODate): CalendarWee
 
 export function calendarEntriesOn(cal: PaymentsCalendar, day: ISODate): CalendarEntry[] {
   return cal.entries.filter((e) => e.dueOn === day);
+}
+
+/**
+ * A stretch's rent counted by the day each week is due (director, 22.10.2026):
+ * what should come in, what of it is paid, what is short on days already
+ * gone, and what is still awaited from today on. short + waiting is what is
+ * left, so due = paid + short + waiting, in money and in weeks alike.
+ */
+export interface CalendarTotals {
+  due: CalendarSum;
+  /** count: weeks fully paid; tetri: Σ paidTetri of every week, part-paid ones included. */
+  paid: CalendarSum;
+  /** Weeks due before today and not paid in full; Σ leftTetri. */
+  short: CalendarSum;
+  /** Weeks due today or later and not paid in full; Σ leftTetri. */
+  waiting: CalendarSum;
+}
+
+export interface CalendarMonthTotals {
+  /** The month's first and last day. */
+  month: Period;
+  total: CalendarTotals;
+  /**
+   * Its Monday–Sunday weeks cut to the month: the first may start on a
+   * Wednesday, the last end on a Friday. `part` marks a week cut so: its row
+   * holds only the month's days, while the week it opens holds all seven.
+   */
+  weeks: (Period & CalendarTotals & { part: boolean })[];
+}
+
+function totalsOf(entries: readonly CalendarEntry[], today: ISODate): CalendarTotals {
+  const open = entries.filter((e) => e.leftTetri > 0);
+  const short = open.filter((e) => e.dueOn < today);
+  const waiting = open.filter((e) => e.dueOn >= today);
+  return {
+    due: sumOf(entries, (e) => e.amountTetri),
+    paid: { count: entries.length - open.length, tetri: entries.reduce((n, e) => n + e.paidTetri, 0) },
+    short: sumOf(short, (e) => e.leftTetri),
+    waiting: sumOf(waiting, (e) => e.leftTetri),
+  };
+}
+
+/**
+ * The month of `day`, whole and week by week, from the answer already on the
+ * screen: its entries cover every day of the month's grid, so nothing is asked
+ * of the server. A week on the edge of two months is counted in each month
+ * only for its own days, so two months' totals never hold one week twice.
+ */
+export function calendarMonthTotals(cal: Pick<PaymentsCalendar, 'entries' | 'weeks'>, day: ISODate, today: ISODate): CalendarMonthTotals {
+  const first = `${day.slice(0, 8)}01`;
+  const last = addDays(`${addDays(first, 31).slice(0, 8)}01`, -1);
+  const mine = cal.entries.filter((e) => e.dueOn >= first && e.dueOn <= last);
+  const weeks = cal.weeks
+    .filter((w) => w.to >= first && w.from <= last)
+    .map((w) => {
+      const from = w.from < first ? first : w.from;
+      const to = w.to > last ? last : w.to;
+      return { from, to, part: from !== w.from || to !== w.to, ...totalsOf(mine.filter((e) => e.dueOn >= from && e.dueOn <= to), today) };
+    });
+  return { month: { from: first, to: last }, total: totalsOf(mine, today), weeks };
 }
 
 // ---------------------------------------------------------------------------

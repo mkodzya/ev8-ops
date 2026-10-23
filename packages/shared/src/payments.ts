@@ -60,6 +60,20 @@ export interface Spread {
 }
 
 /**
+ * What of a payment nothing has taken yet: the rent credit it left (PAY-06),
+ * which the nightly job lays on the next week — so a payment's page shows the
+ * rest of its money beside what it settled (QA after issue #9). Only money that
+ * came in for rent or onto the customer's account is credit, the rule
+ * `settleCredit` and the customer's debt read too: a sale's or a repair's
+ * payment is that record's own (B2-08), and money going out or a payment
+ * annulled is nobody's credit.
+ */
+export function rentCreditTetri(p: { direction: 'in' | 'out'; kind: string; voided: boolean; grossTetri: Tetri; allocatedTetri: Tetri }): Tetri {
+  if (p.voided || p.direction !== 'in' || (p.kind !== 'rent' && p.kind !== 'on_account')) return 0;
+  return Math.max(0, p.grossTetri - p.allocatedTetri);
+}
+
+/**
  * Spread `amountTetri` over the deposit and the open periods.
  *
  * The amount spread is the GROSS the customer paid, never the net the bank

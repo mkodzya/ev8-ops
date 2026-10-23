@@ -3,7 +3,7 @@
 // pay day. Two acts, two events, the old moped to a point or a repair; and
 // every place that once read "one rental, one moped" reads the right one.
 // Every moped, person, point and number here is made up.
-import { addDays, todayISO } from '@ev8/shared';
+import { CHARGE_NOTES, addDays, todayISO } from '@ev8/shared';
 import { describe, expect, it } from 'vitest';
 import { HAS_DB, call, json, loginAs, uniq } from './helpers.js';
 
@@ -231,7 +231,7 @@ describe.skipIf(!HAS_DB)('a swap in a running rental (ADR-0040)', () => {
     const res = await call(manager, 'POST', `/api/rentals/${f.rentalId}/swap`, swapBody(f, { items: { moped: { state: 'ok' }, key: { state: 'missing' } } }));
     expect(res.statusCode, res.body).toBe(200);
     const after = await card(manager, f.rentalId);
-    expect(after.charges).toEqual([expect.objectContaining({ kind: 'key', amountTetri: 25000 })]);
+    expect(after.charges).toEqual([expect.objectContaining({ kind: 'key', amountTetri: 25000, note: CHARGE_NOTES.keyContract })]);
     expect(after.rental.debtTetri).toBe(before.rental.debtTetri + 25000);
   });
 

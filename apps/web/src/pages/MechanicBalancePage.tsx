@@ -6,7 +6,7 @@ import { fmtDayMonth, formatGel } from '../format.js';
 import { useLocale, useT } from '../i18n/index.js';
 import { useLoad } from '../lib/use.js';
 import { normText } from '../lib/workBook.js';
-import { mopedOf, WorksOf, type PayMechanic, type PayoutRow } from './PayoutsPage.js';
+import { mopedOf, OffsetWords, RentLines, WorksOf, type PayMechanic, type PayoutRow } from './PayoutsPage.js';
 import './workshop-job.css';
 
 // The mechanic's balance (stage 5; prototype mechanic-payouts-options.html,
@@ -23,7 +23,7 @@ interface Bucket {
 
 export interface Balance {
   mechanic: { id: string; name: string; rateTetri: number };
-  payable: Pick<PayMechanic, 'jobs' | 'otherReceipts' | 'seconds' | 'workTetri' | 'reimburseTetri' | 'totalTetri'>;
+  payable: Pick<PayMechanic, 'jobs' | 'otherReceipts' | 'seconds' | 'workTetri' | 'reimburseTetri' | 'totalTetri'> & { rent?: PayMechanic['rent'] };
   waiting: Bucket;
   open: Bucket;
   unnormed: { jobs: { id: string; number: string }[] };
@@ -52,6 +52,9 @@ export function MechanicBalancePage() {
         <span className="muted">
           {p.jobs.length > 0 || receipts > 0 ? t.wpay.toPaySub(p.jobs.length, formatGel(p.workTetri), formatGel(p.reimburseTetri)) : t.wpay.nothingYet}
         </span>
+        {/* His own rent is paid out of it first (0066): how much, and what he will be handed — in the owner's lines,
+            not a quiet grey line under the big figure (QA after issue #7). The rental is not his to open. */}
+        {p.rent && p.rent.offsetTetri > 0 && <RentLines rent={p.rent} />}
       </section>
 
       <div className="wpay-tiles">
@@ -123,6 +126,8 @@ export function MechanicBalancePage() {
                 <span className="mono wpay-n">{fmtDayMonth(x.paidOn)}</span>
                 <span className="wpay-t">
                   {t.wpay.jobsN(x.jobs.length)}
+                  {/* What went into his rent and what he was handed — never the whole sum as if paid out (QA after issue #7). */}
+                  <OffsetWords p={x} />
                   <small className="muted">{x.voided ? t.wpay.voided(x.voided.reason) : x.markedBy ? t.wpay.markedBy(x.markedBy.name) : ''}</small>
                 </span>
                 <span className="mono wpay-g">{formatGel(x.totalTetri)}</span>

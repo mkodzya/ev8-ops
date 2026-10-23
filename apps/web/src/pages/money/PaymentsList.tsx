@@ -10,7 +10,10 @@ import { useT } from '../../i18n/index.js';
 import { useLoad } from '../../lib/use.js';
 
 type Kind = 'rent' | 'sale' | 'service' | 'on_account' | 'deposit_payout' | 'buyback' | 'supplier';
-type Channel = 'transfer' | 'acquiring' | 'cash';
+/** `deposit`: kept from a deposit; `offset`: rent closed by a mechanic's work at his payout (0066). */
+type Channel = 'transfer' | 'acquiring' | 'cash' | 'deposit' | 'offset';
+/** What the list filters by: the form's channels and «Зачёт работ», which only a payout writes (Mika, 22.10.2026). */
+const FILTER_CHANNELS = ['cash', 'acquiring', 'transfer', 'offset'] as const;
 
 export interface PaymentRow {
   id: string;
@@ -147,7 +150,7 @@ export function PaymentsList({ mine = false }: { mine?: boolean }) {
         </select>
         <select className="input" value={channel} onChange={(e) => setParam('channel', e.target.value)} aria-label={t.payList.allChannels}>
           <option value="">{t.payList.allChannels}</option>
-          {(['cash', 'acquiring', 'transfer'] as const).map((c) => (
+          {FILTER_CHANNELS.map((c) => (
             <option key={c} value={c}>
               {t.payments.channels[c]}
             </option>

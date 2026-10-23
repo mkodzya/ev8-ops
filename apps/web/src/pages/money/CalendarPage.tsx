@@ -10,6 +10,7 @@ import {
   calendarLateShown,
   calendarLegend,
   calendarLimits,
+  calendarMonthTotals,
   calendarReceivedPeriod,
   calendarStep,
   calendarViewOf,
@@ -45,6 +46,7 @@ import {
   DebtorRow,
   LateLine,
   LateSection,
+  MonthTable,
   PeriodBar,
   ReceivedLine,
   TomorrowLine,
@@ -56,6 +58,7 @@ import {
   rangeText,
   weekdayIn,
   type Actions,
+  type TotalsScope,
 } from './CalendarParts.js';
 
 // "Деньги → Календарь" (docs/redesign/payments-calendar.md): who pays today,
@@ -80,6 +83,10 @@ export function CalendarPage() {
   // The days whose paid rows are unfolded. A laptop shows two days' lists at once, and each folds on its own.
   const [paidOpen, setPaidOpen] = useState<ReadonlySet<ISODate>>(() => new Set());
   const [wa, setWa] = useState<{ target: WaTarget; kind: WaKind } | null>(null);
+  // The totals' stretch: the chosen day's week, or its month (director, 22.10.2026). Not in the address: a view, not a place.
+  const [scope, setScope] = useState<TotalsScope>('week');
+  // The totals' card, brought into view when a week is picked in the month's table.
+  const totals = useRef<HTMLElement>(null);
   // The server's day, once an answer has said it. State and not a ref: the
   // request below is made from it, and a ref written while rendering would
   // leave the request one render behind the cells — over a month's last
@@ -183,6 +190,8 @@ export function CalendarPage() {
   const heaviestDay = week && week.heaviest ? week.heaviest.date : null;
   const legend = calendarLegend(cells, today);
   const title = monthTitle(t, view.day);
+  // The month's totals and weeks, from this month's own answer only — never from another month kept on screen.
+  const month = data ? calendarMonthTotals(data, view.day, today) : null;
   const gridLabel = by === 'week' ? rangeText(t, weekOf(view.day)) : title;
 
   const actions: Actions = {
@@ -202,6 +211,16 @@ export function CalendarPage() {
     return card ? <DebtorRow key={late.rentalId} late={late} card={card} dense={laptop} actions={actions} /> : null;
   };
   const pick = (day: ISODate) => go(day, view.all);
+  // A week's row picks its first day and turns the totals to that week — in
+  // «Месяц» too, where the card would keep the month — and brings them into
+  // view: the table is under the grid, the totals at the top.
+  const pickWeek = (day: ISODate) => {
+    setScope('week');
+    pick(day);
+    const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    totals.current?.scrollIntoView({ block: 'nearest', behavior: still ? 'auto' : 'smooth' });
+  };
+  const table = month && <MonthTable totals={month} title={title} today={today} onPick={pickWeek} />;
   const toToday = () => go(today, view.all);
   const togglePaid = (day: ISODate) => () => {
     const next = new Set(paidOpen);
@@ -219,8 +238,8 @@ export function CalendarPage() {
       <>
         {head}
         <div className="cal">
-          <section className="cal-sum-card">
-            <WeekLine week={week} isCurrent={isCurrent} failed={failed !== null} />
+          <section className="cal-sum-card" ref={totals}>
+            <WeekLine week={week} isCurrent={isCurrent} failed={failed !== null} scope={scope} onScope={setScope} month={month} monthName={title} />
             <LateLine late={now.late} open={lateOpen} onToggle={() => setLateOpen(!lateOpen)}>
               {now.late.rentals.map(debtor)}
               <UnsortedNote count={now.unsortedIn} />
@@ -247,6 +266,7 @@ export function CalendarPage() {
               />
               {view.day === today && <TomorrowLine date={tomorrow} day={days.get(tomorrow)} onPick={() => pick(tomorrow)} />}
               {week && received && <ReceivedLine period={received} tetri={week.receivedTetri} dense={false} />}
+              {table}
             </>
           )}
           {!body && (failed ?? <CalendarSkeleton dense={false} part="body" cells={cells.length} />)}
@@ -263,7 +283,18 @@ export function CalendarPage() {
     <>
       {head}
       <div className="cal">
-        <WeekCard week={week} isCurrent={isCurrent} late={now.late} received={received} failed={failed !== null} />
+        <WeekCard
+          week={week}
+          isCurrent={isCurrent}
+          late={now.late}
+          received={received}
+          failed={failed !== null}
+          scope={scope}
+          onScope={setScope}
+          month={month}
+          monthName={title}
+          cardRef={totals}
+        />
         <div className="cal-desk">
           <div className="cal-left">
             <PeriodBar dense title={title} prev={arrow(-1)} next={arrow(1)} onToday={toToday} />
@@ -272,6 +303,7 @@ export function CalendarPage() {
               <>
                 <CalendarGrid cells={cells} days={days} today={today} selected={view.day} size="big" onPick={pick} label={gridLabel} />
                 <CalendarLegend variant="desk" shows={legend} />
+                {table}
               </>
             )}
             {!body && (failed ?? <CalendarSkeleton dense part="grid" cells={cells.length} />)}

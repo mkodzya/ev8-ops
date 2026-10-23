@@ -3,12 +3,11 @@
 // proofreading as one list. The tab's own name is in `shell.tabs.calendar`,
 // where the shell reads it.
 //
-// The Georgian here was written by a non-native and has not been read by one
-// yet. Two things for whoever reads it: «კვირა» is both "week" and "Sunday",
-// and it stands for both on this screen; and the screen holds two words for a
-// rental — the empty state reuses `returnPick.none`, which says «იჯარა», while
-// the new lines below say «ქირაობა». Both live in the product; one of them is
-// the native reader's to choose.
+// The Georgian here was written by a non-native; the director's glossary
+// (issue #9, 23.10.2026) settled its words — a rental is «ქირაობა» everywhere,
+// the empty state's `returnPick.none` included, and «აკლია», «მოსალოდნელი»,
+// «მისაღები», «ჯამი» are his. One thing stays for whoever reads it: «კვირა»
+// is both "week" and "Sunday", and it stands for both on this screen.
 //
 // `state`, `said` and `channels` are keyed by the shared enums' own members,
 // so the screen looks a word up by the state itself and a state added in
@@ -33,7 +32,7 @@ const halves = (a: string | null, b: string | null): string => [a, b].filter((s)
 
 const stateEn: Record<CalendarState, string> = { paid: 'Paid', paid_ahead: 'Paid ahead', due_today: 'Due today', expected: 'Expected', overdue: 'Overdue' };
 const saidEn: Record<CalendarState, string> = { paid: 'paid', paid_ahead: 'paid ahead', due_today: 'due today', expected: 'expected', overdue: 'overdue' };
-const channelsEn: Record<CalendarChannel, string> = { cash: 'cash', acquiring: 'card', transfer: 'transfer', deposit: 'from the deposit' };
+const channelsEn: Record<CalendarChannel, string> = { cash: 'cash', acquiring: 'card', transfer: 'transfer', deposit: 'from the deposit', offset: 'offset against repairs' };
 
 export const calendarEn = {
   calendar: {
@@ -65,10 +64,37 @@ export const calendarEn = {
     came: (period: string) => `Money received ${period}`,
     cameAria: 'Open the payments of these days',
     late: (n: number) => `Overdue · ${n}`,
+    /** The heading of the overdue list only (director, 22.10.2026); the card above keeps `late`. */
+    lateListTitle: (n: number) => `Overdue in total · ${n}`,
+    /** The row's button: a payment the bank did not bring — cash, or a transfer to record by hand (director, 22.10.2026). */
+    recordByHand: 'Record by hand',
+    // The month and its weeks, counted by the day each week is due (director, 22.10.2026).
+    scopeWeek: 'Week',
+    scopeMonth: 'Month',
+    scopeAria: 'Totals for',
+    shortLabel: 'short',
+    waitingLabel: 'still to come',
+    noneThisMonth: 'No payments this month',
+    monthTable: (month: string) => `${month} by week`,
+    colWeek: 'Week',
+    colDue: 'To come in',
+    colPaid: 'Paid',
+    colShort: 'Short',
+    colWaiting: 'Still to come',
+    monthTotal: 'Month in total',
+    /** Under an edge row of the month's table: its figures are the month's days only. */
+    partWeek: 'part of the week',
+    /**
+     * Under the month's table (QA after issue #7, 23.10.2026): what «short» counts, so that the red figure above —
+     * which counts today too — is not read as the same thing.
+     */
+    monthShortNote: 'Short: payments whose day has passed. Today’s and later ones are still to come.',
     debt: (sum: string) => `debt ${sum}`,
     debtLabel: 'debt',
-    ofThemThisWeek: (sum: string) => `of these ${sum} — this week`,
-    lateSplit: (week: string | null, earlier: string | null) => halves(week && `${week} — this week`, earlier && `${earlier} — earlier`),
+    // The red figure's week is today's, Monday through today — today's payment of a rental already late included —
+    // whatever week the card shows (QA after issue #7, 23.10.2026): not «this week», which read as the week chosen.
+    ofThemThisWeek: (sum: string) => `of these ${sum} — Monday through today`,
+    lateSplit: (week: string | null, earlier: string | null) => halves(week && `${week} — Monday through today`, earlier && `${earlier} — earlier`),
     lateWholeDebt: (n: number) => `Overdue · the whole debt on ${n} ${n === 1 ? 'rental' : 'rentals'}`,
     noLate: 'Nobody is overdue',
     show: 'Show',
@@ -152,10 +178,28 @@ export const calendarRu: typeof calendarEn = {
     came: (period) => `Пришло денег ${period}`,
     cameAria: 'Открыть платежи за эти дни',
     late: (n) => `Просрочено · ${n}`,
+    lateListTitle: (n) => `Всего просрочек · ${n}`,
+    recordByHand: 'Провести вручную',
+    scopeWeek: 'Неделя',
+    scopeMonth: 'Месяц',
+    scopeAria: 'Итоги за',
+    shortLabel: 'недоплачено',
+    waitingLabel: 'ещё ждём',
+    noneThisMonth: 'В этом месяце оплат нет',
+    monthTable: (month) => `${month} по неделям`,
+    colWeek: 'Неделя',
+    colDue: 'Должно прийти',
+    colPaid: 'Оплачено',
+    colShort: 'Недоплачено',
+    colWaiting: 'Ещё ждём',
+    monthTotal: 'Итого за месяц',
+    partWeek: 'часть недели',
+    monthShortNote: 'Недоплачено — оплаты, чей день уже прошёл. Сегодняшние и следующие — «ещё ждём».',
     debt: (sum) => `долг ${sum}`,
     debtLabel: 'долг',
-    ofThemThisWeek: (sum) => `из них ${sum} — эта неделя`,
-    lateSplit: (week, earlier) => halves(week && `${week} — эта неделя`, earlier && `${earlier} — раньше`),
+    // «по сегодня» — today included, as «по» says in Russian.
+    ofThemThisWeek: (sum) => `из них ${sum} — с понедельника по сегодня`,
+    lateSplit: (week, earlier) => halves(week && `${week} — с понедельника по сегодня`, earlier && `${earlier} — раньше`),
     lateWholeDebt: (n) => `Просрочено · весь долг по ${n} ${ruPlural(n, 'аренде', 'арендам', 'арендам')}`,
     noLate: 'Просрочек нет',
     show: 'Показать',
@@ -182,7 +226,7 @@ export const calendarRu: typeof calendarEn = {
     state: { paid: 'Оплачено', paid_ahead: 'Оплачено заранее', due_today: 'Ждём сегодня', expected: 'Ожидается', overdue: 'Просрочено' },
     said: { paid: 'оплачено', paid_ahead: 'оплачено заранее', due_today: 'ждём сегодня', expected: 'ожидается', overdue: 'просрочено' },
     withPayment: (word, when, how) => `${word} · ${when}, ${how}`,
-    channels: { cash: 'наличные', acquiring: 'карта', transfer: 'перевод', deposit: 'из залога' },
+    channels: { cash: 'наличные', acquiring: 'карта', transfer: 'перевод', deposit: 'из залога', offset: 'зачёт работ' },
     overdueLine: (days, debt) => `Просрочено · ${days}${debt === null ? '' : ` · долг ${debt}`}`,
     daysShort: (n) => `${n}\u00a0дн.`,
     // Accusative after «за»: «за 2 недели», «за 5 недель», «за 21 неделю».
@@ -224,7 +268,7 @@ export const calendarKa: typeof calendarEn = {
     paidOf: (paid, all) => `გადახდილია ${paid} / ${all}`,
     left: (sum) => `დარჩა ${sum}`,
     noneThisWeek: 'ამ კვირაში გადახდები არ არის',
-    toCome: 'უნდა შემოვიდეს',
+    toCome: 'მისაღები',
     paidLabel: 'გადახდილია',
     leftLabel: 'დარჩა',
     // No plural after a number in Georgian.
@@ -235,10 +279,28 @@ export const calendarKa: typeof calendarEn = {
     came: (period) => `შემოსული ფული ${period}`,
     cameAria: 'ამ დღეების გადახდების გახსნა',
     late: (n) => `ვადაგადაცილებულია · ${n}`,
+    lateListTitle: (n) => `სულ ვადაგადაცილებული · ${n}`,
+    recordByHand: 'ხელით გატარება',
+    scopeWeek: 'კვირა',
+    scopeMonth: 'თვე',
+    scopeAria: 'ჯამი',
+    shortLabel: 'აკლია',
+    waitingLabel: 'მოსალოდნელი',
+    noneThisMonth: 'ამ თვეში გადახდები არ არის',
+    monthTable: (month) => `${month} კვირების მიხედვით`,
+    colWeek: 'კვირა',
+    colDue: 'მისაღები',
+    colPaid: 'გადახდილია',
+    colShort: 'აკლია',
+    colWaiting: 'მოსალოდნელი',
+    monthTotal: 'სულ თვეში',
+    partWeek: 'კვირის ნაწილი',
+    monthShortNote: 'აკლია — გადახდები, რომელთა დღეც უკვე გავიდა. დღევანდელი და მომდევნო — „მოსალოდნელი“.',
     debt: (sum) => `ვალი ${sum}`,
     debtLabel: 'ვალი',
-    ofThemThisWeek: (sum) => `აქედან ${sum} — ეს კვირა`,
-    lateSplit: (week, earlier) => halves(week && `${week} — ეს კვირა`, earlier && `${earlier} — უფრო ადრე`),
+    // «ორშაბათიდან დღევანდელის ჩათვლით» — from Monday, today's included.
+    ofThemThisWeek: (sum) => `აქედან ${sum} — ორშაბათიდან დღევანდელის ჩათვლით`,
+    lateSplit: (week, earlier) => halves(week && `${week} — ორშაბათიდან დღევანდელის ჩათვლით`, earlier && `${earlier} — უფრო ადრე`),
     lateWholeDebt: (n) => `ვადაგადაცილებულია · მთელი ვალი ${n} ქირაობაზე`,
     noLate: 'ვადაგადაცილება არ არის',
     show: 'ჩვენება',
@@ -264,11 +326,11 @@ export const calendarKa: typeof calendarEn = {
     state: { paid: 'გადახდილია', paid_ahead: 'წინასწარ გადახდილია', due_today: 'დღეს ველოდებით', expected: 'მოსალოდნელია', overdue: 'ვადაგადაცილებულია' },
     said: { paid: 'გადახდილია', paid_ahead: 'წინასწარ გადახდილია', due_today: 'დღეს ველოდებით', expected: 'მოსალოდნელია', overdue: 'ვადაგადაცილებულია' },
     withPayment: (word, when, how) => `${word} · ${when}, ${how}`,
-    channels: { cash: 'ნაღდი', acquiring: 'ბარათი', transfer: 'გადარიცხვა', deposit: 'დეპოზიტიდან' },
+    channels: { cash: 'ნაღდი', acquiring: 'ბარათი', transfer: 'გადარიცხვა', deposit: 'დეპოზიტიდან', offset: 'სამუშაოს ჩათვლა' },
     overdueLine: (days, debt) => `ვადაგადაცილებულია · ${days}${debt === null ? '' : ` · ვალი ${debt}`}`,
     daysShort: (n) => `${n}\u00a0დღე`,
     forWeeks: (n) => `${n}\u00a0კვირისთვის`,
-    partPaid: (paid, all) => `შეტანილია ${paid} / ${all}`,
+    partPaid: (paid, all) => `გადახდილია ${paid} / ${all}`,
     paidFold: (n) => `გადახდილია · ${n}`,
     noneThisDay: 'ამ დღეს გადახდები არ არის.',
     tomorrowLine: (weekday, date) => `ხვალ, ${weekday} ${date}`,

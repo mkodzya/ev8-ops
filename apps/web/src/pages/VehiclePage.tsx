@@ -332,8 +332,15 @@ export function VehiclePage() {
                         </>
                       ) : (
                         <>
-                          {t.vehicle.events[e.kind]}{' '}
-                          {isPoolEvent(e.kind) ? <span className="pool-mark">{e.toPool ? t.pools[e.toPool] : t.common.dash}</span> : <StateBadge state={e.toState} />}
+                          {t.vehicle.events[e.kind]}
+                          {/* An assignment names its target in its own words — «Назначение: аренда» — and is not
+                              followed by the target a second time (QA after issue #9); a state change shows its pill. */}
+                          {!isPoolEvent(e.kind) && (
+                            <>
+                              {' '}
+                              <StateBadge state={e.toState} />
+                            </>
+                          )}
                           {rental && <> {rental}</>}
                         </>
                       )}

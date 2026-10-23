@@ -63,6 +63,12 @@ export function userRoutes(app: FastifyInstance): void {
       _max: { createdAt: true },
     });
     const lastLogin = new Map(logins.map((r) => [r.actorId, r._max.createdAt]));
+    // A mechanic who rents a moped: the card his rent is written to (0066).
+    const renters = await prisma.customer.findMany({
+      where: { id: { in: users.map((u) => u.customerId).filter((id): id is string => id != null) } },
+      select: { id: true, name: true },
+    });
+    const renter = new Map(renters.map((c) => [c.id, c]));
     return {
       roles: ROLES,
       users: users.map((u) => {
@@ -79,6 +85,8 @@ export function userRoutes(app: FastifyInstance): void {
           hasPin: u.pinHash != null,
           pinLockedUntil: lockedUntil(u)?.toISOString() ?? null,
           labourRateTetri: u.labourRateTetri,
+          /** His card as a customer when he rents a moped; his payouts pay that rent first (0066). */
+          customer: u.customerId ? (renter.get(u.customerId) ?? null) : null,
           sessions: u.sessions.length,
           /** The last sign-in the journal knows of; null means nothing is known. */
           lastLoginAt: signedIn?.toISOString() ?? null,
@@ -118,19 +126,28 @@ export function userRoutes(app: FastifyInstance): void {
     const actor = actorOf(req);
     const before = await prisma.user.findUnique({ where: { id: req.params.id } });
     if (!before) throw notFound('user_not_found', 'No such user.');
-    const data: { name?: string; role?: Role; active?: boolean; labourRateTetri?: number | null; pinHash?: null; pinFailed?: number; pinLockedUntil?: null } = {};
+    const data: { name?: string; role?: Role; active?: boolean; labourRateTetri?: number | null; customerId?: string | null; pinHash?: null; pinFailed?: number; pinLockedUntil?: null } = {};
     if ('name' in b) data.name = str(b, 'name', { required: true, max: 200 })!;
     if ('role' in b) data.role = oneOf(b, 'role', ROLES, { required: true })!;
     if ('active' in b) data.active = Boolean(b.active);
     if ('labourRateTetri' in b) data.labourRateTetri = readRate(b);
+    // A mechanic who rents a moped: his card as a customer (0066). Empty unlinks it.
+    if ('customerId' in b) {
+      const id = str(b, 'customerId');
+      if (id && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) throw badRequest('bad_field', 'customerId is an id.', { field: 'customerId' });
+      if (id && !(await prisma.customer.findUnique({ where: { id }, select: { id: true } }))) throw notFound('customer_not_found', 'No such customer.');
+      data.customerId = id;
+    }
     const role = data.role ?? (before.role as Role);
     // Somebody without an address signs in only with a PIN, which only a
     // mechanic has: give them an address and a password before another role.
     if (!before.email && !isPinRole(role)) throw conflict('email_required', 'This role signs in with an address and a password.');
     // Out of the workshop, the PIN and the rate go with the role.
     const leavesWorkshop = isPinRole(before.role) && !isPinRole(role);
-    if (leavesWorkshop) Object.assign(data, { pinHash: null, pinFailed: 0, pinLockedUntil: null, labourRateTetri: null });
+    if (leavesWorkshop) Object.assign(data, { pinHash: null, pinFailed: 0, pinLockedUntil: null, labourRateTetri: null, customerId: null });
     else if (!isPinRole(role) && data.labourRateTetri != null) throw conflict('rate_for_mechanics', 'A rate for an hour of norm is a mechanic\'s.');
+    // Rent paid by work is a mechanic's too: nobody else has payouts (0066).
+    else if (!isPinRole(role) && data.customerId != null) throw conflict('renter_for_mechanics', 'Only a mechanic\'s payouts can pay a rent.');
 
     // The last working owner cannot be demoted or switched off: a system
     // nobody can administer is not a safe state to leave one click away.
@@ -139,19 +156,37 @@ export function userRoutes(app: FastifyInstance): void {
       const owners = await prisma.user.count({ where: { role: 'owner', active: true, id: { not: before.id } } });
       if (owners === 0) throw conflict('last_owner', 'This is the last active owner.');
     }
-    await prisma.user.update({ where: { id: before.id }, data: { ...data, updatedAt: new Date() } });
+    try {
+      await prisma.user.update({ where: { id: before.id }, data: { ...data, updatedAt: new Date() } });
+    } catch (e) {
+      if (isUniqueViolation(e)) throw conflict('customer_taken', 'That customer is already another person\'s card.');
+      throw e;
+    }
     // Switching somebody off cuts their access now, not when their session expires.
     if (data.active === false) await prisma.session.deleteMany({ where: { userId: before.id } });
     // Out of the workshop, the tablet's sessions end with the PIN.
     else if (leavesWorkshop) await closePinSessions(before.id);
     const { pinHash: _cleared, ...shown } = data;
+    // The journal hides ids: a rent link set, changed or taken off is said by
+    // the card's name on both sides, none being null (0066).
+    const renterChanged = 'customerId' in data && data.customerId !== before.customerId;
+    const cardName = async (id: string | null | undefined) =>
+      id ? ((await prisma.customer.findUnique({ where: { id }, select: { name: true } }))?.name ?? null) : null;
+    const renter = renterChanged ? { was: await cardName(before.customerId), now: await cardName(data.customerId) } : null;
     await audit({
       actorId: actor.id,
       action: 'user.update',
       entityType: 'user',
       entityId: before.id,
-      before: { name: before.name, role: before.role, active: before.active, labourRateTetri: before.labourRateTetri },
-      after: leavesWorkshop ? { ...shown, pin: 'cleared' } : shown,
+      before: {
+        name: before.name,
+        role: before.role,
+        active: before.active,
+        labourRateTetri: before.labourRateTetri,
+        customerId: before.customerId,
+        ...(renter ? { renter: renter.was } : {}),
+      },
+      after: { ...shown, ...(renter ? { renter: renter.now } : {}), ...(leavesWorkshop ? { pin: 'cleared' } : {}) },
     });
     return { ok: true };
   });

@@ -14,11 +14,10 @@ import { LoadError } from '../components/LoadError.js';
 import { RowMenu } from '../components/RowMenu.js';
 import { BlockHead, Empty, Loading, PageHead, RentalBadge, Vin } from '../components/ui.js';
 import { Row } from '../components/Wizard.js';
-import { fmtDate, formatGel } from '../format.js';
+import { fmtDate, fmtDateAt, formatGel } from '../format.js';
 import { useLocale, useT } from '../i18n/index.js';
 import { nameMatches, primaryName, secondName } from '../lib/names.js';
 import { useLoad } from '../lib/use.js';
-import { fmtDate as fmtDay } from '../format.js';
 import { useSession } from '../session.js';
 import { KommoField } from '../components/Kommo.js';
 import { RecordHistory } from '../components/RecordHistory.js';
@@ -217,7 +216,7 @@ export function CustomerPage() {
             <ul className="timeline">
               {data.documents.map((d) => (
                 <li key={d.id}>
-                  <span className="mono muted">{fmtDay(d.createdAt.slice(0, 10))}</span>
+                  <span className="mono muted">{fmtDateAt(d.createdAt)}</span>
                   <span>
                     {data.canOpenDocuments ? (
                       <a href={`/api/files/${d.id}`} target="_blank" rel="noreferrer">

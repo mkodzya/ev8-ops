@@ -13,6 +13,7 @@ import '../../ds/money/money.css';
 import { Skeleton } from '../../ds/state/Skeleton.js';
 import { fmtDate, fmtDayMonth } from '../../format.js';
 import { useT } from '../../i18n/index.js';
+import { chargeWords } from '../../lib/charges.js';
 import { useLoad } from '../../lib/use.js';
 import { ExpenseAnswers, ExpenseRuleCard, useExpenseCategories, type Categories, type ExpenseRuleLine } from './ExpenseAnswers.js';
 
@@ -500,7 +501,7 @@ function SplitSheet({ line, onClose }: { line: SortLine; onClose: () => void }) 
           (c): SplitPart => ({
             key: `f:${c.id}`,
             kind: 'charge',
-            title: [t.rentalMoney.charges[c.kind] ?? c.kind, c.note].filter(Boolean).join(' · '),
+            title: chargeWords(t, c.kind, c.note),
             ref: numberOf(c.rentalId),
             body: { chargeId: c.id },
             owesTetri: c.openTetri,

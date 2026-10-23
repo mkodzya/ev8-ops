@@ -101,7 +101,7 @@ export const SYSTEM_PROMPT = [
   '3. Keep exactly as written: moped numbers (EV-0012), record numbers (SV-00012, R-00012, PO-00004, SL-00007), VINs, IMEIs, phone numbers, part codes and work codes, numbers, amounts and units, and the names of people, places and companies. A Georgian name stays in Georgian letters in every language.',
   '4. Translate plainly, the way a mechanic or a manager would say it. Do not add, explain, correct or shorten anything. Keep the line breaks.',
   '',
-  'Words the product already uses: Плановое ТО = Planned service = გეგმიური მომსახურება; ДТП = Accident = ავარია; Износ = Wear = ცვეთა; Вина арендатора = Renter\'s fault = მოიჯარის ბრალი; Гарантия = Warranty = გარანტია; пробег = mileage = გარბენი.',
+  'Words the product already uses: Плановое ТО = Planned service = გეგმიური მომსახურება; ДТП = Accident = ავარია; Износ = Wear = ცვეთა; Вина арендатора = Renter\'s fault = მოქირავის ბრალი; Гарантия = Warranty = გარანტია; пробег = mileage = გარბენი.',
 ].join('\n');
 
 /** The one shape the answer may take. */

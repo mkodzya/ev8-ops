@@ -814,7 +814,7 @@ export function PickupWizard() {
                   </Field>
                   {amountTetri != null && amountTetri > dueTetri && <p className="hint">{t.hand.overpay(formatGel(amountTetri - dueTetri))}</p>}
                   {amountTetri != null && amountTetri > 0 && amountTetri < dueTetri && (
-                    <p className="hint">{t.hand.closes(formatGel(closesDeposit), formatGel(depositDue), formatGel(closesWeeks), formatGel(weeksDue))}</p>
+                    <p className="hint">{t.hand.settles(formatGel(closesDeposit), formatGel(depositDue), formatGel(closesWeeks), formatGel(weeksDue))}</p>
                   )}
                   {f.channel === 'acquiring' && amountTetri != null && amountTetri > 0 && (
                     <p className="hint muted">{t.hand.cardNet(formatGel(acquiringNet(amountTetri)), formatGel(acquiringFee(amountTetri)))}</p>

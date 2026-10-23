@@ -1,4 +1,4 @@
-import { fleetNumber, jobPayState, partLineState, todayISO, workLineState, worksTotal, type PayState } from '@ev8/shared';
+import { fleetNumber, jobPayState, partLineState, todayISO, weekDueOn, workLineState, worksTotal, type PayState } from '@ev8/shared';
 import type { FastifyInstance } from 'fastify';
 import type { Prisma } from '../generated/prisma/client.js';
 import { dateFromISO, isoDate } from '../lib/dates.js';
@@ -6,6 +6,9 @@ import { prisma } from '../lib/db.js';
 import { env } from '../lib/env.js';
 import { badRequest, conflict, notFound } from '../lib/errors.js';
 import { actorOf } from '../lib/guard.js';
+import { recordPaymentTx, voidPaymentTx } from '../lib/payments.js';
+import { rentalOwed } from '../lib/rentalMoney.js';
+import { payOffsetOf } from '../lib/rentState.js';
 import { serviceSettings } from '../lib/serviceSettings.js';
 import { int, str } from '../lib/validate.js';
 
@@ -69,6 +72,9 @@ const PAYOUT = {
   markedAt: true,
   voidedAt: true,
   voidReason: true,
+  offsetTetri: true,
+  // The rental its offset paid, for the history to name it (QA after issue #7, 23.10.2026).
+  offsetPayment: { select: { rental: { select: { id: true, number: true } } } },
   mechanic: { select: { id: true, name: true } },
   markedBy: { select: { id: true, name: true } },
   voidedBy: { select: { id: true, name: true } },
@@ -117,6 +123,49 @@ export interface MechanicDue {
   totalTetri: number;
   jobIds: string[];
   partIds: string[];
+  /** A mechanic who rents a moped (0066): what his rent owes now and how much of this payout goes into it. */
+  rent: RentOffset | null;
+}
+
+/**
+ * The rent a payout pays first (director, 22.10.2026; 0066): the mechanic's
+ * oldest running rental, what its weeks owe now — due and not paid, a week
+ * due on its pay day as the customer's debt counts it (ADR-0022, ADR-0041);
+ * never the deposit, which is handed back in cash one day and must have come
+ * in as cash, nor a return's charges — and the part of the payout that goes
+ * there: everything owed to him, never more than those weeks. The rest is
+ * handed over; weeks owing more than the payout stay owed.
+ */
+export interface RentOffset {
+  customerId: string;
+  rentalId: string;
+  number: string;
+  /** The weeks due and unpaid — not the customer's whole debt, which counts a deposit and charges too. */
+  owedTetri: number;
+  offsetTetri: number;
+  /** totalTetri − offsetTetri: what is handed over. */
+  cashTetri: number;
+}
+
+async function rentOffsetFor(db: Db, mechanicId: string, totalTetri: number, today: string): Promise<RentOffset | null> {
+  const person = await db.user.findUnique({ where: { id: mechanicId }, select: { customerId: true } });
+  if (!person?.customerId) return null;
+  const rentals = await db.rental.findMany({
+    where: { customerId: person.customerId, status: { in: ['active', 'overdue'] }, pickedUpOn: { not: null }, returnedOn: null },
+    orderBy: [{ pickedUpOn: 'asc' }, { number: 'asc' }],
+    select: { id: true, number: true, pickedUpOn: true, payWeekday: true, weekShiftDays: true },
+  });
+  for (const r of rentals) {
+    const owed = await rentalOwed(db, r.id);
+    // Weeks due by today, by the rental's pay day as debt.ts counts them: a
+    // week not due is not a debt, and work is not put on it ahead.
+    const offset = payOffsetOf(r);
+    const owedTetri = owed.periods.filter((p) => weekDueOn(isoDate(p.startsOn)!, offset) <= today).reduce((n, p) => n + Math.max(0, p.amountTetri - p.paidTetri), 0);
+    if (owedTetri <= 0) continue;
+    const offsetTetri = Math.min(totalTetri, owedTetri);
+    return { customerId: person.customerId, rentalId: r.id, number: r.number, owedTetri, offsetTetri, cashTetri: totalTetri - offsetTetri };
+  }
+  return null;
 }
 
 /**
@@ -186,6 +235,7 @@ async function payableFor(db: Db, mechanicId: string): Promise<MechanicDue | nul
     totalTetri: workTetri + reimburseTetri,
     jobIds: out.map((j) => j.id),
     partIds: [...out.flatMap((j) => j.receipts.map((p) => p.id)), ...otherReceipts.map((p) => p.id)],
+    rent: await rentOffsetFor(db, person.id, workTetri + reimburseTetri, todayISO(new Date(), env.TZ)),
   };
 }
 
@@ -204,6 +254,7 @@ function nothingDue(person: { id: string; name: string; role: string; labourRate
     totalTetri: 0,
     jobIds: [],
     partIds: [],
+    rent: null,
   };
 }
 
@@ -242,6 +293,17 @@ async function payoutsOut(rows: PayoutRow[]) {
       labourTetri: r.labourTetri,
       reimburseTetri: r.reimburseTetri,
       totalTetri: r.labourTetri + r.reimburseTetri,
+      /** What of it went into the mechanic's rent, and what was handed over (0066). */
+      // A voided payout took its offset back: nothing of it is in rent any more.
+      offsetTetri: r.voidedAt ? 0 : r.offsetTetri,
+      cashTetri: r.labourTetri + r.reimburseTetri - (r.voidedAt ? 0 : r.offsetTetri),
+      /**
+       * The rental the offset paid, so that the owner's «Выплаты» and the
+       * mechanic's balance both say «… в аренду R-… · выдано …» rather than
+       * the whole sum as if handed over (QA after issue #7, 23.10.2026). Null
+       * with no offset, and once voided.
+       */
+      rental: !r.voidedAt && r.offsetTetri > 0 && r.offsetPayment?.rental ? { id: r.offsetPayment.rental.id, number: r.offsetPayment.rental.number } : null,
       jobs: was ? was.jobs : r.jobs,
       receiptsCount: was ? was.receipts : r._count.parts,
       markedBy: r.markedBy,
@@ -333,6 +395,8 @@ export function payoutRoutes(app: FastifyInstance): void {
     const jobIds = idList(b, 'jobIds');
     const partIds = idList(b, 'partIds');
     const totalTetri = int(b, 'totalTetri', { required: true, min: 0 })!;
+    // The part of it the screen showed going into the mechanic's rent (0066); a screen without it saw none.
+    const offsetTetri = int(b, 'offsetTetri', { min: 0 }) ?? 0;
     const now = new Date();
     const paidOn = todayISO(now, env.TZ);
 
@@ -345,7 +409,7 @@ export function payoutRoutes(app: FastifyInstance): void {
       await tx.$queryRaw`SELECT 1 FROM service_jobs WHERE mechanic_id = ${mechanicId}::uuid AND status = 'done' AND paid_in_payout_id IS NULL FOR UPDATE`;
       const due = await payableFor(tx, mechanicId);
       if (!due) throw conflict('nothing_to_pay', 'Nothing is owed to this mechanic now.');
-      if (!sameSet(jobIds, due.jobIds) || !sameSet(partIds, due.partIds) || totalTetri !== due.totalTetri) {
+      if (!sameSet(jobIds, due.jobIds) || !sameSet(partIds, due.partIds) || totalTetri !== due.totalTetri || offsetTetri !== (due.rent?.offsetTetri ?? 0)) {
         throw conflict('payout_changed', 'What is owed changed since the screen was read; read it again.', { mechanic: due });
       }
       const payout = await tx.mechanicPayout.create({
@@ -362,6 +426,29 @@ export function payoutRoutes(app: FastifyInstance): void {
       });
       // Paid by another mark a moment ago: this one is undone whole.
       if (jobs.count !== due.jobIds.length || parts.count !== due.partIds.length) throw conflict('already_paid', 'Some of this was paid a moment ago; read the screen again.');
+      // The mechanic's rent first (0066): a rent payment with no money behind
+      // it, closing his begun weeks oldest first — not the deposit — dated the
+      // day of the payout. Only the rest is handed over.
+      if (due.rent && due.rent.offsetTetri > 0) {
+        const paid = await recordPaymentTx(tx, {
+          actorId: actor.id,
+          occurredOn: paidOn,
+          channel: 'offset',
+          grossTetri: due.rent.offsetTetri,
+          feeTetri: 0,
+          customerId: due.rent.customerId,
+          rentalId: due.rent.rentalId,
+          bankText: null,
+          note: null,
+          source: 'manual',
+          kind: 'rent',
+          noDeposit: true,
+        });
+        // Rent closed by work never stays over as credit: a week paid a moment
+        // ago by other money means the screen was wrong, and nothing is marked.
+        if (paid.leftover > 0) throw conflict('payout_changed', 'What is owed changed since the screen was read; read it again.');
+        await tx.mechanicPayout.update({ where: { id: payout.id }, data: { offsetTetri: due.rent.offsetTetri, offsetPaymentId: paid.id } });
+      }
       if (due.jobs.length > 0) {
         await tx.auditLog.createMany({
           data: due.jobs.map((j) => ({
@@ -379,7 +466,15 @@ export function payoutRoutes(app: FastifyInstance): void {
           action: 'mechanic.payout',
           entityType: 'user',
           entityId: mechanicId,
-          after: { payoutId: payout.id, paidOn, labourTetri: due.workTetri, reimburseTetri: due.reimburseTetri, jobs: due.jobs.map((j) => j.number), receipts: due.partIds.length },
+          after: {
+            payoutId: payout.id,
+            paidOn,
+            labourTetri: due.workTetri,
+            reimburseTetri: due.reimburseTetri,
+            jobs: due.jobs.map((j) => j.number),
+            receipts: due.partIds.length,
+            ...(due.rent && due.rent.offsetTetri > 0 ? { offsetTetri: due.rent.offsetTetri, rental: due.rent.number } : {}),
+          },
         },
       });
       return tx.mechanicPayout.findUniqueOrThrow({ where: { id: payout.id }, select: PAYOUT });
@@ -398,7 +493,7 @@ export function payoutRoutes(app: FastifyInstance): void {
     // Spaces are no reason: the mechanic reads it in his balance.
     const reason = str(req.body ?? {}, 'reason', { required: true, max: 1000 });
     if (!reason) throw badRequest('missing_field', 'Say why the payout is voided.', { field: 'reason' });
-    const found = await prisma.mechanicPayout.findUnique({ where: { id: req.params.id }, select: { id: true, mechanicId: true, voidedAt: true } });
+    const found = await prisma.mechanicPayout.findUnique({ where: { id: req.params.id }, select: { id: true, mechanicId: true, voidedAt: true, offsetPaymentId: true } });
     if (!found) throw notFound('payout_not_found', 'No such payout.');
     if (found.voidedAt) throw conflict('payout_voided', 'This payout is already voided.');
     const now = new Date();
@@ -409,6 +504,11 @@ export function payoutRoutes(app: FastifyInstance): void {
       const jobs = await tx.serviceJob.findMany({ where: { paidInPayoutId: found.id }, orderBy: { number: 'asc' }, select: { id: true, number: true } });
       await tx.serviceJob.updateMany({ where: { paidInPayoutId: found.id }, data: { paidInPayoutId: null, updatedAt: now } });
       const parts = await tx.servicePart.updateMany({ where: { paidInPayoutId: found.id }, data: { paidInPayoutId: null } });
+      // The rent it closed is owed again (0066): its payment goes with it.
+      if (found.offsetPaymentId) {
+        const offset = await tx.payment.findUnique({ where: { id: found.offsetPaymentId }, select: { voidedAt: true } });
+        if (offset && !offset.voidedAt) await voidPaymentTx(tx, { actorId: actor.id, paymentId: found.offsetPaymentId, reason, kind: 'void' });
+      }
       if (jobs.length > 0) {
         await tx.auditLog.createMany({
           data: jobs.map((j) => ({ actorId: actor.id, action: 'service.unpaid', entityType: 'service_job', entityId: j.id, after: { number: j.number, payoutId: found.id }, note: reason })),

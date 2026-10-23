@@ -1,5 +1,5 @@
 import { DEFAULT_LOCALE, LOCALES, type Locale } from '@ev8/shared';
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useLayoutEffect, useMemo, useState, type ReactNode } from 'react';
 import { en, type Dict } from './en.js';
 import { ka } from './ka.js';
 import { ru } from './ru.js';
@@ -50,10 +50,17 @@ export function currentDict(): Dict {
 
 export function I18nProvider({ children }: { children: ReactNode }) {
   const [locale, setLocaleState] = useState<Locale>(initialLocale);
+  // The page's language is the one on screen, from the first paint: index.html
+  // says «ka», and a reload with Russian or English saved left it so — a
+  // screen reader read Russian as Georgian (QA after issue #7, 23.10.2026).
+  // Whatever sets the language — the toggle, a PIN sign-in, the tablet going
+  // back to Georgian — sets it here.
+  useLayoutEffect(() => {
+    document.documentElement.lang = locale;
+  }, [locale]);
 
   const setLocale = useCallback((l: Locale) => {
     setLocaleState(l);
-    document.documentElement.lang = l;
     try {
       localStorage.setItem(STORAGE_KEY, l);
     } catch {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { localDateTime, returnSettlement } from '../src/index.js';
+import { CHARGE_NOTES, chargeNoteKey, localDateTime, returnSettlement } from '../src/index.js';
 
 const week = (seq: number, startsOn: string, endsOn: string, paid = 0) => ({ id: `p${seq}`, seq, startsOn, endsOn, amountTetri: 15000, paidTetri: paid });
 
@@ -21,6 +21,23 @@ describe('a return’s settlement (wave 3 §3.4)', () => {
   it('adds 250 for a key not brought back (contract §6, crit. 20)', () => {
     const s = returnSettlement({ returnedOn: '2026-09-17', expectedReturnOn: null, periods: [week(1, '2026-09-11', '2026-09-17', 15000)], keyMissing: true });
     expect(s).toMatchObject({ keyTetri: 25000, claimsTetri: 25000 });
+  });
+});
+
+describe('the notes the code writes on a charge (QA after issue #9)', () => {
+  it('keeps the key’s note as the rows already hold it', () => {
+    // Stored since wave 3; a screen finds the words by this exact text.
+    expect(CHARGE_NOTES.keyContract).toBe('contract §6');
+  });
+
+  it('knows its own note, however it is padded, and nothing a person typed', () => {
+    expect(chargeNoteKey('contract §6')).toBe('keyContract');
+    expect(chargeNoteKey(' contract §6 ')).toBe('keyContract');
+    expect(chargeNoteKey('the key was lost on the street (invented)')).toBeNull();
+    expect(chargeNoteKey('3 × 30')).toBeNull();
+    expect(chargeNoteKey('')).toBeNull();
+    expect(chargeNoteKey(null)).toBeNull();
+    expect(chargeNoteKey(undefined)).toBeNull();
   });
 });
 

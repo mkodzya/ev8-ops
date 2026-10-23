@@ -232,7 +232,8 @@
 .wjob-wtag { padding: 1px 10px; border: 1.5px solid var(--line-control); border-radius: var(--radius-pill); background: var(--surface); font: var(--text-label); font-weight: 600; white-space: nowrap; }
 .wjob-norm { display: inline-flex; align-items: center; gap: var(--space2); flex-wrap: wrap; }
 .wjob-norm .input { width: 96px; min-height: 48px; }
-.wappr-close { min-height: var(--control-large); padding: 0 28px; font: var(--text-cta); }
+/* Both classes, or `.pill` (later in the bundle) keeps it a plain pill — the same as `.pill.wpay-pay`. */
+.pill.wappr-close { min-height: var(--control-large); padding: 0 28px; font: var(--text-cta); }
 /* Parts and trackers in the repair (stage 4; prototype mechanic-parts-options.html, A and A). */
 .wparts-lines li { align-items: center; }
 .wparts-kind { flex: none; padding: 2px 10px; border-radius: var(--radius-pill); background: var(--surface-2); font: var(--text-label); font-weight: 600; white-space: nowrap; }
@@ -295,15 +296,24 @@
 .wpay-sum dd { margin: 0; white-space: nowrap; }
 .wpay-sum .wpay-all { margin-top: var(--space1); padding-top: var(--space1); border-top: 1px solid var(--line-soft); font-weight: 600; }
 .wpay-sum .wpay-all dt { color: var(--ink); }
-.wpay-pay { min-height: var(--control-large); padding: 0 24px; font: var(--text-cta); }
-.wpay-narrow .wpay-pay { width: 100%; }
+/* The rent a payout pays first (0066): under the total on every width, the table's too. */
+.wpay-rent { margin-top: var(--space2); }
+/* The label can be wider than a phone's card — «გადახდილია · ხელზე გასაცემი 30.50 ₾» since issue #9 — and then
+   wraps to a second line; the display face's own line height (0.92) would lay the two lines over each other.
+   `.pill` comes later in the bundle (app.css is imported after the pages) and set this button's font, height and
+   padding back to the plain pill's — 14 px at line height 1, the two lines 4 px into each other (QA after issue
+   #9) — so the rule names both classes, as `.pill.cal-toggle` does: 19 px at 1.2, centred when it fills the card. */
+.pill.wpay-pay { min-height: var(--control-large); padding: 6px 24px; font: var(--text-cta); line-height: 1.2; justify-content: center; text-align: center; }
+.wpay-narrow .pill.wpay-pay { width: 100%; }
 .wpay-state { white-space: nowrap; }
 .wpay-held, .wpay-history { margin-bottom: var(--space4); }
 .wpay-void .wpay-g { color: var(--muted); text-decoration: line-through; }
 .wpay-wide { display: none; }
+/* Beside the laptop's button: what of the payout goes into the mechanic's rent (QA after issue #7). */
+.wpay-beside { font: var(--text-label); }
 @media (min-width: 900px) {
   .wpay-wide { display: block; }
-  .wpay-head .wpay-wide { display: inline-flex; }
+  .wpay-head .wpay-wide { display: inline-flex; align-items: center; gap: var(--space3); }
   .wpay-narrow { display: none; }
 }
 
@@ -323,9 +333,15 @@
   .wpay-tiles { grid-template-columns: 1fr; }
   .wpay-tile { min-height: 0; }
   .wpay-n { width: 76px; }
+  /* A repair still waiting goes under the mechanic's name, at the name's edge: kept on one line beside it,
+     «ელოდება დამტკიცებას» took 184 px and left the name 59 — «Имя · 25.00 ₾» in four lines, one a lone «·»
+     (QA after issue #9). */
+  .wpay-held .wpay-rows > li { flex-wrap: wrap; row-gap: 2px; }
+  .wpay-held .wpay-state { flex: 1 0 100%; padding-left: calc(76px + var(--space3)); white-space: normal; }
 }
-/* On the tablet the balance is reached from «Ремонт»: a finger's size, not a chip's. */
-.wpay-link { min-height: var(--control-large); padding: 0 20px; }
+/* On the tablet the balance is reached from «Ремонт»: a finger's size, not a chip's. Both classes, or the
+   small pill's height and padding (later in the bundle) win — the same as `.pill.wpay-pay`. */
+.pill.wpay-link { min-height: var(--control-large); padding: 0 20px; }
 
 /* Planned maintenance on the chief mechanic's «Ремонт» (stage 6; prototype
    mechanic-maintenance-options.html, variant A): a moped a row, what is left
