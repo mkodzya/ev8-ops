@@ -335,6 +335,7 @@ async function voidOne(tx: Tx, input: VoidInput): Promise<void> {
         kind: p.kind,
         rentalId: p.rentalId,
         saleId: p.saleId,
+        ...(p.goodsSaleId ? { goodsSaleId: p.goodsSaleId } : {}),
         statementLineId: p.statementLineId,
         closed: p.allocations.map((a) => ({
           target: a.target,
@@ -344,6 +345,34 @@ async function voidOne(tx: Tx, input: VoidInput): Promise<void> {
           endsOn: a.period ? isoDate(a.period.endsOn) : null,
         })),
       },
+      note: input.reason,
+    },
+  });
+}
+
+/**
+ * A cancelled goods sale's payment from an own customer becomes his credit
+ * (issue #11, ADR-0045 §4.2): the money did come in, and it is his. It is
+ * written over as money on account, keeping the sale it came from; its bank
+ * line, and the other parts of a split line, are left as they are. The
+ * credit is spread over his weeks by the caller, after the commit — the same
+ * `settleCredit` the night runs.
+ */
+export async function rebookToCredit(tx: Tx, input: { paymentId: string; actorId: string; reason: string }): Promise<void> {
+  const p = await tx.payment.findUnique({ where: { id: input.paymentId }, select: { id: true, kind: true, voidedAt: true, customerId: true, goodsSaleId: true, grossTetri: true } });
+  if (!p) throw notFound('payment_not_found', 'No such payment.');
+  if (p.voidedAt) throw conflict('already_voided', 'This payment is already void.');
+  // The caller's plan (shared `cancelPlan`) never asks this of anything else.
+  if (p.kind !== 'goods' || !p.customerId) throw new Error(`payment ${p.id} is not an own customer's payment for goods`);
+  await tx.payment.update({ where: { id: p.id }, data: { kind: 'on_account' } });
+  await tx.auditLog.create({
+    data: {
+      actorId: input.actorId,
+      action: 'payment.rebook',
+      entityType: 'payment',
+      entityId: p.id,
+      before: { kind: 'goods', goodsSaleId: p.goodsSaleId, grossTetri: p.grossTetri },
+      after: { kind: 'on_account', goodsSaleId: p.goodsSaleId },
       note: input.reason,
     },
   });

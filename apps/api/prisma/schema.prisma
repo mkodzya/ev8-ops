@@ -148,6 +148,8 @@ enum PaymentKind {
   deposit_payout
   buyback
   supplier
+  /// A goods sale's money (0067, ADR-0045): no allocation — open is the lines' total less these.
+  goods
 
   @@map("payment_kind")
 }
@@ -300,6 +302,8 @@ model User {
   trackersRemoved   VehicleTracker[] @relation("vehicle_tracker_removed_by")
   workTypesAdded    WorkType[]
   sales             Sale[]
+  goodsSalesMade      GoodsSale[]  @relation("goods_sale_created_by")
+  goodsSalesCancelled GoodsSale[]  @relation("goods_sale_cancelled_by")
   purchases         Purchase[]
   parts             Part[]
   stockMoves        StockMove[]
@@ -512,6 +516,7 @@ model Customer {
   payments    Payment[]
   serviceJobs ServiceJob[]
   sales       Sale[]
+  goodsSales  GoodsSale[]
   supplied    Purchase[]
   mergedInto  Customer?    @relation("customer_merge", fields: [mergedIntoId], references: [id])
   kommoLeads  KommoLead[]
@@ -686,6 +691,8 @@ model StoredFile {
   rentalId     String?  @map("rental_id") @db.Uuid
   saleId       String?  @map("sale_id") @db.Uuid
   serviceJobId String?  @map("service_job_id") @db.Uuid
+  /// A goods sale's invoice, kept as issued (0067, ADR-0045).
+  goodsSaleId  String?  @map("goods_sale_id") @db.Uuid
   label        String   @default("")
   /// What a repair photo shows: before, after, odometer, receipt (0056).
   tag          String?
@@ -705,6 +712,7 @@ model StoredFile {
   rental     Rental?     @relation(fields: [rentalId], references: [id], onDelete: Cascade)
   sale       Sale?       @relation(fields: [saleId], references: [id], onDelete: Cascade)
   serviceJob ServiceJob? @relation(fields: [serviceJobId], references: [id], onDelete: Cascade)
+  goodsSale  GoodsSale?  @relation(fields: [goodsSaleId], references: [id], onDelete: Cascade)
   uploadedBy User?     @relation(fields: [uploadedById], references: [id])
   receiptOf  ServicePart[] @relation("service_part_receipt")
 
@@ -767,6 +775,8 @@ model Payment {
   foreignMinor    BigInt?        @map("foreign_minor")
   foreignCurrency String?        @map("foreign_currency")
   voidKind        String?        @map("void_kind")
+  /// The goods sale this money paid (0067, ADR-0045). Kept as where it came from when a cancelled sale's payment became its customer's credit.
+  goodsSaleId     String?        @map("goods_sale_id") @db.Uuid
 
   statementLine StatementLine?    @relation("payment_of_line", fields: [statementLineId], references: [id], onDelete: SetNull)
   customer    Customer?           @relation(fields: [customerId], references: [id])
@@ -774,6 +784,7 @@ model Payment {
   sale        Sale?               @relation(fields: [saleId], references: [id])
   purchase    Purchase?           @relation(fields: [purchaseId], references: [id])
   serviceJob  ServiceJob?         @relation(fields: [serviceJobId], references: [id])
+  goodsSale   GoodsSale?          @relation(fields: [goodsSaleId], references: [id])
   deposit     Deposit?            @relation("deposit_payouts", fields: [depositId], references: [id])
   createdBy   User?               @relation("payment_created_by", fields: [createdById], references: [id])
   voidedBy    User?               @relation("payment_voided_by", fields: [voidedById], references: [id])
@@ -1189,6 +1200,66 @@ model SaleInstalment {
 
 /// An invoice from a factory or a marketplace (PUR-01). Lines are in the
 /// seller's currency; what a unit cost is derived from the payments.
+/// Parts and chargers sold over the counter (0067, ADR-0045). Price final, VAT inside.
+model GoodsSale {
+  id              String    @id @default(uuid()) @db.Uuid
+  number          String    @unique @default(dbgenerated("('TS-' || lpad(nextval('goods_sale_number_seq')::text, 5, '0'))"))
+  soldOn          DateTime  @map("sold_on") @db.Date
+  /// Null: «Розничный покупатель», no card.
+  customerId      String?   @map("customer_id") @db.Uuid
+  buyerName       String?   @map("buyer_name")
+  buyerPhone      String?   @map("buyer_phone")
+  /// 'active' | 'cancelled'
+  status          String    @default("active")
+  /// 'acquiring' | 'transfer': the rest comes from the bank.
+  promisedChannel String?   @map("promised_channel")
+  backdateReason  String?   @map("backdate_reason")
+  notes           String?
+  createdById     String?   @map("created_by") @db.Uuid
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @default(now()) @map("updated_at")
+  cancelledAt     DateTime? @map("cancelled_at")
+  cancelledById   String?   @map("cancelled_by") @db.Uuid
+  cancelReason    String?   @map("cancel_reason")
+
+  customer    Customer?       @relation(fields: [customerId], references: [id])
+  createdBy   User?           @relation("goods_sale_created_by", fields: [createdById], references: [id])
+  cancelledBy User?           @relation("goods_sale_cancelled_by", fields: [cancelledById], references: [id])
+  lines       GoodsSaleLine[]
+  payments    Payment[]
+  documents   StoredFile[]
+
+  @@map("goods_sales")
+}
+
+/// One line of a goods sale: a part off the shelf, or a counted item (0067).
+model GoodsSaleLine {
+  id              String  @id @default(uuid()) @db.Uuid
+  saleId          String  @map("sale_id") @db.Uuid
+  seq             Int     @db.SmallInt
+  partId          String? @map("part_id") @db.Uuid
+  /// 'charger' | 'battery' (ADR-0025); exactly one of partId / countedItem.
+  countedItem     String? @map("counted_item")
+  name            String
+  nameKa          String? @map("name_ka")
+  spec            String?
+  qty             Int
+  unitPriceTetri  Int     @map("unit_price_tetri")
+  shelfPriceTetri Int?    @map("shelf_price_tetri")
+  unitCostTetri   Int?    @map("unit_cost_tetri")
+  /// 'shelf' | 'count'
+  stockFrom       String  @default("shelf") @map("stock_from")
+  shortReason     String? @map("short_reason")
+
+  sale         GoodsSale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  part         Part?         @relation(fields: [partId], references: [id])
+  stockMoves   StockMove[]
+  batteryMoves BatteryMove[]
+
+  @@unique([saleId, seq])
+  @@map("goods_sale_lines")
+}
+
 model Purchase {
   id           String         @id @default(uuid()) @db.Uuid
   number       String         @unique @default(dbgenerated("('PO-' || lpad(nextval('purchase_number_seq')::text, 5, '0'))"))
@@ -1282,6 +1353,7 @@ model Part {
   purchaseLines PurchaseLine[]
   serviceParts  ServicePart[]
   trackers      VehicleTracker[]
+  goodsSaleLines GoodsSaleLine[]
 
   @@map("parts")
 }
@@ -1296,6 +1368,8 @@ model StockMove {
   occurredOn     DateTime      @map("occurred_on") @db.Date
   purchaseLineId String?       @map("purchase_line_id") @db.Uuid
   servicePartId  String?       @map("service_part_id") @db.Uuid
+  /// A goods sale's line: its issue, and its return when the sale is called off (0067).
+  goodsSaleLineId String?      @map("goods_sale_line_id") @db.Uuid
   reason         String?
   createdById    String?       @map("created_by") @db.Uuid
   createdAt      DateTime      @default(now()) @map("created_at")
@@ -1303,6 +1377,7 @@ model StockMove {
   part         Part          @relation(fields: [partId], references: [id])
   purchaseLine PurchaseLine? @relation(fields: [purchaseLineId], references: [id])
   servicePart  ServicePart?  @relation(fields: [servicePartId], references: [id])
+  goodsSaleLine GoodsSaleLine? @relation(fields: [goodsSaleLineId], references: [id])
   createdBy    User?         @relation(fields: [createdById], references: [id])
 
   @@map("stock_moves")
@@ -1492,6 +1567,8 @@ model BatteryMove {
   actId       String?  @map("act_id") @db.Uuid
   /// The repair a battery or a charger went to, or came back from (0058).
   serviceJobId String? @map("service_job_id") @db.Uuid
+  /// A goods sale's line: sold, back after a cancellation, or found when sold beyond the count (0067).
+  goodsSaleLineId String? @map("goods_sale_line_id") @db.Uuid
   occurredOn  DateTime @map("occurred_on") @db.Date
   createdById String?  @map("created_by") @db.Uuid
   createdAt   DateTime @default(now()) @map("created_at")
@@ -1499,6 +1576,7 @@ model BatteryMove {
   rental     Rental?     @relation(fields: [rentalId], references: [id])
   act        Act?        @relation(fields: [actId], references: [id])
   serviceJob ServiceJob? @relation(fields: [serviceJobId], references: [id])
+  goodsSaleLine GoodsSaleLine? @relation(fields: [goodsSaleLineId], references: [id])
   createdBy  User?       @relation(fields: [createdById], references: [id])
 
   @@index([occurredOn, createdAt])

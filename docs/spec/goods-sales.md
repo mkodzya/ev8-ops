@@ -153,9 +153,17 @@ CREATE UNIQUE INDEX IF NOT EXISTS battery_moves_goods_line_unique ON battery_mov
 -- The invoice, kept as issued (ADR-0003).
 ALTER TABLE files ADD COLUMN IF NOT EXISTS goods_sale_id uuid REFERENCES goods_sales(id) ON DELETE CASCADE;
 CREATE INDEX IF NOT EXISTS files_goods_sale_idx ON files(goods_sale_id) WHERE goods_sale_id IS NOT NULL;
+-- A PDF belongs to a rental, a sale — or now a goods sale (0024's rule, widened).
+ALTER TABLE files DROP CONSTRAINT IF EXISTS files_owner;
+ALTER TABLE files ADD CONSTRAINT files_owner CHECK (
+  (kind = 'act_photo'         AND act_id IS NOT NULL AND customer_id IS NULL) OR
+  (kind = 'customer_document' AND customer_id IS NOT NULL AND act_id IS NULL) OR
+  (kind = 'service_photo'     AND service_job_id IS NOT NULL) OR
+  (kind = 'pdf'               AND doc_kind IS NOT NULL AND (rental_id IS NOT NULL OR sale_id IS NOT NULL OR goods_sale_id IS NOT NULL))
+);
 ```
 
-Миграция только добавляет: боевые строки она не трогает, сида нет, в DEMO ничего не добавляется. Имя `battery_moves_kind_check` — автоимя встроенного CHECK из 0021. Миграция 0044 добавила колонку `item`, а этот CHECK не меняла.
+Миграция только добавляет: боевые строки она не трогает, сида нет, в DEMO ничего не добавляется. Правило `files_owner` (0024) расширено: PDF может принадлежать и продаже товаров. Имя `battery_moves_kind_check` — автоимя встроенного CHECK из 0021. Миграция 0044 добавила колонку `item`, а этот CHECK не меняла.
 
 Чего база не проверяет, проверяет код (`lib/goods.ts`, `lib/money.ts`, `statements/import.ts`):
 - у платежа `kind = 'goods'` всегда есть `goods_sale_id`;
