@@ -11,12 +11,13 @@ import { actorOf } from '../lib/guard.js';
 import { voidPayment } from '../lib/payments.js';
 import { recordOutFromLine } from '../lib/money.js';
 import { depositsOverview } from '../lib/deposits.js';
-import { SPLIT_MAX, attach, importStatement, linkBankDeposit, linkPayment, previewStatement, split } from '../lib/statements/import.js';
+import { SPLIT_MAX, attach, importStatement, linkBankDeposit, linkPayment, previewStatement, split, type SplitShift } from '../lib/statements/import.js';
 import { ParseError } from '../lib/statements/parse.js';
 import { isCashDeposit, loadCtx, storedLine, suggest } from '../lib/statements/reconcile.js';
 import { expenseKey, lastCategories, payeeLabel, sortByRule, waitingFrom } from '../lib/statements/expenses.js';
 import { tbcApiStatus } from '../lib/tbc.js';
-import { oneOf, str, tetri } from '../lib/validate.js';
+import { settleAfterShift } from '../lib/weekShift.js';
+import { int, oneOf, str, tetri } from '../lib/validate.js';
 
 // Statements and "Разобрать" (wave 2 §3.2, §3.5).
 //
@@ -333,10 +334,31 @@ export function statementRoutes(app: FastifyInstance): void {
    * "Разделить": one line, several records — a rental week and a repair paid
    * in one transfer (meeting of 14.10.2026). Each part is what the customer
    * paid for that record; together they are the whole line.
+   *
+   * `shift` — «Перенос дня оплаты» (issue #12, ADR-0041 addendum of
+   * 23.10.2026): the renter's latest week moved by the pay day he asked for,
+   * in the same transaction — `{ rentalId, seq, days, extraTetri, reason }`.
+   * A longer week's extra is money of the line and counts in its sum; a
+   * shorter week's discount does not.
    */
   app.post<{ Params: { id: string }; Body: Body }>('/api/statement-lines/:id/split', { config: { scope: 'payments.reconcile' } }, async (req) => {
-    const raw = (req.body ?? {}).parts;
-    if (!Array.isArray(raw) || raw.length === 0) throw badRequest('missing_field', 'Say what each part pays for.', { field: 'parts' });
+    const body = req.body ?? {};
+    const shiftRaw = body.shift;
+    let shift: SplitShift | null = null;
+    if (shiftRaw != null) {
+      if (typeof shiftRaw !== 'object' || Array.isArray(shiftRaw)) throw badRequest('bad_field', 'shift must be an object', { field: 'shift' });
+      const sb = shiftRaw as Body;
+      shift = {
+        rentalId: str(sb, 'rentalId', { required: true })!,
+        seq: int(sb, 'seq', { required: true, min: 1 })!,
+        days: int(sb, 'days', { required: true })!,
+        extraTetri: tetri(sb, 'extraTetri', { min: 0 }),
+        reason: str(sb, 'reason', { max: 500 }),
+      };
+    }
+    const raw = body.parts;
+    // The line may be the move's money alone: no other part then.
+    if (!Array.isArray(raw) || (raw.length === 0 && !shift)) throw badRequest('missing_field', 'Say what each part pays for.', { field: 'parts' });
     if (raw.length > SPLIT_MAX) throw badRequest('split_too_many', `A split has at most ${SPLIT_MAX} parts.`);
     const parts = raw.map((x) => {
       const b = (x ?? {}) as Body;
@@ -353,8 +375,12 @@ export function statementRoutes(app: FastifyInstance): void {
         fineReason: str(b, 'fineReason', { max: 500 }),
       };
     });
-    const r = await prisma.$transaction((tx) => split(tx, { actorId: actorOf(req).id, lineId: req.params.id, parts }));
-    return { ok: true, ids: r.paymentIds };
+    const today = todayISO(new Date(), env.TZ);
+    const r = await prisma.$transaction((tx) => split(tx, { actorId: actorOf(req).id, lineId: req.params.id, parts, shift, today }));
+    // What the night would do for the moved week, now: a week begun, money freed or not yet placed.
+    if (shift) await settleAfterShift(shift.rentalId, today);
+    // The week moved, for the message's «Отменить»: the payments and the move go back together.
+    return { ok: true, ids: r.paymentIds, ...(shift ? { shift: { rentalId: shift.rentalId, seq: shift.seq } } : {}) };
   });
 
   /** "Да, это он": the line is a payment already entered by hand (§3.2 "Похоже, уже записан"). */

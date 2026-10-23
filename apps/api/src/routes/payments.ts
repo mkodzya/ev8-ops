@@ -1,4 +1,4 @@
-import { INCOME_ROWS, acquiringGross, goodsTotals, paymentInRow, rentCreditTetri, todayISO, type IncomeRow, type WeekAllocationTarget, type WeekPaymentKind } from '@ev8/shared';
+import { INCOME_ROWS, acquiringGross, goodsTotals, paymentInRow, rentCreditTetri, rentWeekday, todayISO, type IncomeRow, type WeekAllocationTarget, type WeekPaymentKind } from '@ev8/shared';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { hasPerm } from '../lib/auth.js';
 import { dateFromISO, isoDate } from '../lib/dates.js';
@@ -9,6 +9,7 @@ import { badRequest, conflict, forbidden, notFound } from '../lib/errors.js';
 import { actorOf } from '../lib/guard.js';
 import { MONEY_KINDS, bankLinesFor, planMoney, recordMoney, type MoneyInput } from '../lib/money.js';
 import { voidPayment } from '../lib/payments.js';
+import { payOffsetOf } from '../lib/rentState.js';
 import { date, oneOf, str, strList, tetri } from '../lib/validate.js';
 
 // Money in and out (wave 2 §3.1, §3.3). One form writes every kind; the
@@ -352,7 +353,19 @@ export function paymentRoutes(app: FastifyInstance): void {
       prisma.rental.findMany({
         where: { customerId: id },
         orderBy: { pickedUpOn: 'desc' },
-        select: { id: true, number: true, status: true, weeklyRateTetri: true, transferredAt: true, vehicle: { select: { vin: true, model: { select: { name: true } } } } },
+        select: {
+          id: true,
+          number: true,
+          status: true,
+          weeklyRateTetri: true,
+          transferredAt: true,
+          // What «Перенос дня оплаты» counts from (issue #12): the day the rent falls due, and the weeks.
+          pickedUpOn: true,
+          returnedOn: true,
+          payWeekday: true,
+          weekShiftDays: true,
+          vehicle: { select: { vin: true, model: { select: { name: true } } } },
+        },
       }),
       prisma.sale.findMany({
         where: { customerId: id, status: 'active' },
@@ -370,7 +383,7 @@ export function paymentRoutes(app: FastifyInstance): void {
     // fine or other charge still open, and a week carried over as paid that
     // no bank money stands behind yet.
     const rentalIds = rentals.map((r) => r.id);
-    const [charges, carried, open] = await Promise.all([
+    const [charges, carried, open, weeks] = await Promise.all([
       prisma.rentalCharge.findMany({
         where: { rentalId: { in: rentalIds }, voidedAt: null },
         orderBy: { createdAt: 'asc' },
@@ -387,9 +400,41 @@ export function paymentRoutes(app: FastifyInstance): void {
         orderBy: [{ rentalId: 'asc' }, { seq: 'asc' }],
         select: { rentalId: true, startsOn: true, endsOn: true },
       }),
+      // Every week, for the latest one a move of the pay day would change (issue #12).
+      prisma.rentalPeriod.findMany({
+        where: { rentalId: { in: rentalIds } },
+        orderBy: [{ rentalId: 'asc' }, { seq: 'asc' }],
+        select: { rentalId: true, seq: true, startsOn: true, endsOn: true, amountTetri: true, paidTetri: true, payStatus: true, extraDays: true, extraTetri: true, paidBeforeTransfer: true },
+      }),
     ]);
     const firstOpen = new Map<string, { startsOn: string | null; endsOn: string | null }>();
     for (const w of open) if (!firstOpen.has(w.rentalId)) firstOpen.set(w.rentalId, { startsOn: isoDate(w.startsOn), endsOn: isoDate(w.endsOn) });
+    /**
+     * «Перенос дня оплаты» in «Разнести» (issue #12, ADR-0041 addendum of
+     * 23.10.2026): the running rental's latest week, the weekday its rent
+     * falls due on, and — when the move is shown but closed — why: an older
+     * week still owed, or the week moved already. None where the week cannot
+     * be moved at all: a rental not running, a week at nothing, a week paid
+     * before the transfer.
+     */
+    const payDayMoveOf = (r: (typeof rentals)[number]) => {
+      const pickedUpOn = isoDate(r.pickedUpOn);
+      if ((r.status !== 'active' && r.status !== 'overdue') || r.returnedOn || !pickedUpOn) return null;
+      const mine = weeks.filter((w) => w.rentalId === r.id);
+      const last = mine.at(-1);
+      if (!last || last.paidBeforeTransfer || (last.extraDays === 0 && last.amountTetri - last.extraTetri <= 0)) return null;
+      const older = mine.some((w) => w.seq < last.seq && w.payStatus !== 'paid');
+      return {
+        seq: last.seq,
+        startsOn: isoDate(last.startsOn)!,
+        endsOn: isoDate(last.endsOn)!,
+        amountTetri: last.amountTetri,
+        paidTetri: last.paidTetri,
+        payDay: rentWeekday(pickedUpOn, r.weekShiftDays, r.payWeekday),
+        payOffsetDays: payOffsetOf(r),
+        closed: older ? ('older_week_open' as const) : last.extraDays !== 0 ? ('week_moved' as const) : null,
+      };
+    };
     return {
       debt,
       rentals: rentals.map((r) => ({
@@ -402,6 +447,7 @@ export function paymentRoutes(app: FastifyInstance): void {
         // The day it was carried over: a line no later than it may already be inside "paid through" (ADR-0018).
         transferredOn: r.transferredAt ? todayISO(r.transferredAt, env.TZ) : null,
         firstOpenWeek: firstOpen.get(r.id) ?? null,
+        payDayMove: payDayMoveOf(r),
       })),
       sales: sales.map((s) => {
         const next = s.instalments.find((i) => i.paidTetri < i.amountTetri);
