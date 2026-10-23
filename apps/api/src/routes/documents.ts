@@ -1,4 +1,4 @@
-import { handOverActOf, localDateTime } from '@ev8/shared';
+import { countedName, handOverActOf, localDateTime, type CountedGoods } from '@ev8/shared';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { createHash } from 'node:crypto';
 import { mopedActOf } from '../lib/acts.js';
@@ -202,7 +202,11 @@ export function documentRoutes(app: FastifyInstance): void {
             taxCode: s.customer.kind === 'company' ? s.customer.personalId : null,
           }
         : { retail: true, name: s.buyerName, phone: s.buyerPhone },
-      lines: s.lines.map((l) => ({ name: l.name, nameKa: l.nameKa, unit: l.part?.unit ?? null, qty: l.qty, unitPriceTetri: l.unitPriceTetri })),
+      lines: s.lines.map((l) => {
+        // A charger's name in each language from its own words, not the Russian the line keeps; a part's from its card.
+        const counted = l.countedItem ? countedName(l.countedItem as CountedGoods, l.spec) : null;
+        return { name: counted ? counted.en : l.name, nameKa: counted ? counted.ka : l.nameKa, unit: l.part?.unit ?? (counted ? 'pcs' : null), qty: l.qty, unitPriceTetri: l.unitPriceTetri };
+      }),
       issuedBy: s.createdBy?.name ?? null,
       cancelled: s.status === 'cancelled' && s.cancelledAt ? { on: dayOf(s.cancelledAt)!, reason: s.cancelReason === UNDONE_AT_ONCE ? 'გაუქმდა მაშინვე · Undone at once' : (s.cancelReason ?? '') } : null,
     });

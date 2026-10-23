@@ -81,6 +81,8 @@ const blank = () => ({
   buyerPhone: '',
   how: 'cash' as How | null,
   cash: '',
+  /** The seller typed the cash himself: from then on it no longer follows the total. */
+  cashTyped: false,
   /** The bank line the owner said this money is; null — not come yet. */
   bankLineId: null as string | null,
   soldOn: todayISO(),
@@ -190,7 +192,12 @@ export function GoodsSaleWizard() {
     const id = window.setTimeout(() => {
       api
         .post<Preview>('/api/goods-sales/preview', body(true))
-        .then((p) => live && setPreview(p))
+        .then((p) => {
+          if (!live) return;
+          setPreview(p);
+          // The line chosen is offered only while it is exactly the sum left to the bank; once the lines change, it is not this money.
+          setF((prev) => (prev.bankLineId && !p.inBank.some((l) => l.lineId === prev.bankLineId && !l.payment) ? { ...prev, bankLineId: null } : prev));
+        })
         .catch(() => live && setPreview(null));
     }, 300);
     return () => {
@@ -200,11 +207,11 @@ export function GoodsSaleWizard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [previewKey]);
 
-  // Cash comes in at the total until somebody types another sum.
+  // Cash follows the total — a line changed on the first step changes it too — until somebody types another sum.
   useEffect(() => {
-    if (f.how === 'cash' && f.cash === '' && totals.grossTetri > 0) set({ cash: String(totals.grossTetri / 100) });
+    if (f.how === 'cash' && !f.cashTyped && totals.grossTetri > 0 && parseGel(f.cash) !== totals.grossTetri) set({ cash: String(totals.grossTetri / 100) });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [f.how, f.step]);
+  }, [f.how, f.step, f.cashTyped, totals.grossTetri]);
 
   const foundParts = useMemo(() => {
     const text = q.trim().toLowerCase();
@@ -292,7 +299,9 @@ export function GoodsSaleWizard() {
 
   const w = t.goods.wizard;
   const sum = formatGel(totals.grossTetri);
-  const restTetri = Math.max(0, totals.grossTetri - (bankChosen ? totals.grossTetri : cashTetri));
+  // What is left after the money at the counter: the cash typed, or the customer's sum of the bank line chosen.
+  const chosenLine = bankChosen ? (preview?.inBank ?? []).find((l) => l.lineId === f.bankLineId) : undefined;
+  const restTetri = Math.max(0, totals.grossTetri - (bankChosen ? (chosenLine?.grossTetri ?? 0) : cashTetri));
   const asking = (preview?.lines ?? []).filter((p) => p.needsCountAnswer);
 
   return (
@@ -441,14 +450,14 @@ export function GoodsSaleWizard() {
               {(['cash', 'acquiring', 'transfer', 'later'] as const)
                 .filter((h) => h !== 'later' || !retail)
                 .map((h) => (
-                  <button key={h} type="button" role="radio" aria-checked={f.how === h} className={`pill ${f.how === h ? 'on' : ''}`} onClick={() => set({ how: h, bankLineId: null, cash: h === 'cash' && f.cash === '' ? String(totals.grossTetri / 100) : f.cash })}>
+                  <button key={h} type="button" role="radio" aria-checked={f.how === h} className={`pill ${f.how === h ? 'on' : ''}`} onClick={() => set({ how: h, bankLineId: null })}>
                     {w.how[h]}
                   </button>
                 ))}
             </div>
             {f.how === 'cash' && (
               <Field label={w.cashAmount} name="paidNow.amountTetri">
-                <input className="input input-amount mono" inputMode="decimal" value={f.cash} onChange={(e) => set({ cash: e.target.value })} />
+                <input className="input input-amount mono" inputMode="decimal" value={f.cash} onChange={(e) => set({ cash: e.target.value, cashTyped: true })} />
               </Field>
             )}
             {(f.how === 'acquiring' || f.how === 'transfer') &&
@@ -476,6 +485,7 @@ export function GoodsSaleWizard() {
                 <p className="hint muted">{w.bankHint}</p>
               ))}
             {retail && f.how === 'cash' && cashTetri < totals.grossTetri && <p className="field-err">{w.retailMustPay}</p>}
+            {f.how === 'cash' && cashTetri > totals.grossTetri && <p className="field-err">{t.errors.codes.goods_paid_over}</p>}
           </section>
 
           {backdates && (
@@ -518,8 +528,8 @@ export function GoodsSaleWizard() {
             <p className="hint">
               {f.how === 'later' || (!retail && f.how === 'cash' && restTetri > 0)
                 ? <span className="crit-text">{w.restDebt(formatGel(restTetri))}</span>
-                : (f.how === 'acquiring' || f.how === 'transfer') && !bankChosen
-                  ? w.restBank(sum)
+                : (f.how === 'acquiring' || f.how === 'transfer') && restTetri > 0
+                  ? w.restBank(formatGel(restTetri))
                   : w.restNone}
             </p>
           </section>

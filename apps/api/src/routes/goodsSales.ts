@@ -341,12 +341,16 @@ export function goodsSaleRoutes(app: FastifyInstance): void {
   });
 
   /** What a cancellation would do, before the owner says so (§10, the cancel sheet). */
-  app.get<{ Params: { id: string } }>('/api/goods-sales/:id/cancel-plan', { config: { scope: 'sales.manage' } }, async (req) => cancelPreview(req.params.id));
+  app.get<{ Params: { id: string }; Querystring: Query }>('/api/goods-sales/:id/cancel-plan', { config: { scope: 'sales.manage' } }, async (req) =>
+    cancelPreview(req.params.id, req.query.countedBack === '1' || req.query.countedBack === 'true'),
+  );
 
   /** Call the sale off, with the reason (§6.3). */
   app.post<{ Params: { id: string }; Body: Body }>('/api/goods-sales/:id/cancel', { config: { scope: 'sales.manage' } }, async (req) => {
     const reason = str(req.body ?? {}, 'reason', { required: true, max: 500 })!;
-    const out = await cancelGoodsSale(actorOf(req), { id: req.params.id, mode: 'cancel', reason });
+    // A line a stocktake had already seen gone comes back only on the owner's word (§6.3 п. 3).
+    const countedBack = (req.body ?? {}).countedBack === true;
+    const out = await cancelGoodsSale(actorOf(req), { id: req.params.id, mode: 'cancel', reason, countedBack });
     return { ok: true, ...out };
   });
 

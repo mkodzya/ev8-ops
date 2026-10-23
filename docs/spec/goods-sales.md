@@ -364,13 +364,13 @@ model GoodsSaleLine {
 | Метод и путь | Scope | Что |
 |---|---|---|
 | `GET /api/goods-sales/items?q=` | `goods.sell` | Что можно продать. Запчасти (не в архиве): `{partId, name, nameKa, sku, unit, onHand, salePriceTetri, lastCountOn}`. Считаемые из `SELLABLE_COUNTED`: `{item, showroom, lastCountOn}`. Себестоимость — только при `cost.view` |
-| `POST /api/goods-sales/preview` | `goods.sell` | Тело как у создания, ничего не пишет. Ответ: `totals`; по строкам `available`, `decision`, `needsCountAnswer`, `lastCountOn`, `shelfPriceTetri`, `priceEdited`, себестоимость (при `cost.view`); `paymentProblem`; `inBank` — строки банка той же суммы ±3 дня (`inBankAlready`), для владельца при карте или переводе |
+| `POST /api/goods-sales/preview` | `goods.sell` | Тело как у создания, ничего не пишет. Ответ: `totals`; по строкам `available`, `decision`, `needsCountAnswer`, `lastCountOn`, `shelfPriceTetri`, `priceEdited`, себестоимость (при `cost.view`); `paymentProblem`; `inBank` — строки банка ±3 дня (`inBankAlready`), у которых сумма клиента ровно та, что оставлена банку (итог минус наличные), для владельца при карте или переводе. Ищутся от этой суммы, а не от открытого после выбранной строки — выбранная строка остаётся в списке. Перевод на сумму нетто карты и карта, чья нетто равна итогу, не предлагаются: первая оставила бы 1,5 % открытыми, вторая заплатила бы сверх продажи |
 | `POST /api/goods-sales` | `goods.sell` | Продать (§6.2) → `201 {id, number, paymentId?, openTetri}` |
 | `GET /api/goods-sales?status=&open=1&retail=1&customerId=&partId=&item=&from=&to=&q=` | `fleet.view` | Строки: `{id, number, soldOn, status, customer \| null, buyer \| null, items, totalTetri, paidTetri, openTetri, state}`; шапка `{openTetri, count}` |
 | `GET /api/goods-sales/:id` | `fleet.view` | Карточка: строки (себестоимость и маржа при `cost.view`), `totals` с НДС, платежи с судьбой (`paid` / `credit` / `voided`) и строкой банка, документы, лента (журнал `goods_sale` + платежи), `bankLines` (владельцу при открытом > 0), `can {pay, cancel, undo, edit}` |
 | `PATCH /api/goods-sales/:id` | `sales.manage` | `buyerName`, `buyerPhone` (только у розничной), `notes`. Правка покупателя отправляет выданный счёт в архив. Журнал `goods_sale.update` |
-| `GET /api/goods-sales/:id/cancel-plan` | `sales.manage` | Что вернётся на склад (было → станет), судьба каждого платежа, какие недели погасит аванс (`planMoney on_account`, только чтение), какие строки банка вернутся в «Разобрать» |
-| `POST /api/goods-sales/:id/cancel` | `sales.manage` | `{reason}` → §6.3 |
+| `GET /api/goods-sales/:id/cancel-plan` | `sales.manage` | `?countedBack=1` — ответ владельца о строках `stock_from 'count'`. Что вернётся на склад (было → станет; строка пересчёта без ответа «вернулся» — «остаток не меняется»), судьба каждого платежа, какие недели погасит аванс (`planMoney on_account`, только чтение), какие строки банка вернутся в «Разобрать» |
+| `POST /api/goods-sales/:id/cancel` | `sales.manage` | `{reason, countedBack?}` → §6.3 |
 | `POST /api/goods-sales/:id/undo` | `goods.sell` | Только создатель, ≤ 60 с, без причины → §6.3, режим `undo` |
 | `GET /api/goods-sales/:id/invoice.pdf` | `goods.sell` | §8. Первая выдача сохраняется (`files.doc_kind 'goods_invoice'`, журнал `goods_sale.invoice`), потом отдаётся сохранённое. После отмены или правки покупателя — новая копия, старая в архиве. Маршрут в `routes/documents.ts`, рядом с `contract.pdf` продажи |
 | `GET /api/economics/goods?from=&to=` | `reports.view` | `goodsEconomics`; по умолчанию текущий месяц (`monthOf`) |
@@ -434,16 +434,18 @@ model GoodsSaleLine {
    - `promised_channel` сохраняется только при остатке > 0.
 7. **Журнал.**
    - `goods_sale.create`: after `{number, soldOn, customerId | retail, lines: [{name, qty, unitPriceTetri, shelfPriceTetri, stockFrom}], totalTetri, vatTetri, paidNow, promisedChannel}`, note = причина задней даты.
-   - На каждую строку с правленой ценой — `goods_sale.price` (`{seq, shelfPriceTetri}` → `{seq, unitPriceTetri}`).
-   - На каждую строку сверх остатка — `goods_sale.minus` (`{available}` → `{asked}`, note = причина).
+   - На каждую строку с правленой ценой — `goods_sale.price` (`{seq, unitPriceTetri: цена склада}` → `{seq, unitPriceTetri}`): один ключ с обеих сторон, иначе журнал не покажет «было → стало».
+   - На каждую строку сверх остатка — `goods_sale.minus` (`{seq, qty: было}` → `{seq, qty: продано}`, note = причина).
 
 ### 6.3 Отмена и «Отменить сразу» — одна транзакция (`cancelGoodsSaleTx(mode)`)
 
 1. `SELECT … FOR UPDATE` на продаже; не `active` → `goods_sale_closed`. Для `undo` дополнительно: создатель и ≤ 60 с, иначе `goods_undo_too_late`.
 2. `cancelPlan`: если отказ, то `goods_payment_in_split`.
-3. **Товар вернулся физически сейчас** — по каждой строке, и при `stock_from 'shelf'`, и при `'count'`, с датой «сегодня»:
+3. **Товар вернулся физически сейчас** — по каждой строке `stock_from 'shelf'`, с датой «сегодня»:
    - запчасть → `returnGoodsLine`;
    - зарядка → `battery_moves sale_cancelled`.
+
+   Строка `stock_from 'count'` ничего не списала, поэтому сама не возвращается (ревью 23.10.2026): отмена — это и способ исправить ошибку записи (§1 п. 10), и отменённая и записанная заново продажа задним числом иначе подняла бы остаток без товара. `undo` её не возвращает никогда — он снимает только то, что записала продажа. `cancel` возвращает её, только если владелец ответил в листе отмены «Пересчёт уже не видел этот товар. Он вернулся?» — «Да» (`countedBack: true`); заранее выбрано «Нет». Журнал называет невозвращённое `kept: [{name, qty}]`.
 4. **Деньги** — §4.3. В режиме `undo` все платежи аннулируются как `kind 'undo'` с причиной «отменено сразу».
 5. `status 'cancelled'`, `cancelled_at`, `cancelled_by`, `cancel_reason` (для `undo` — «отменено сразу»). Выданный счёт уходит в архив; при следующем запросе печатается со штампом отмены.
 6. Журнал `goods_sale.cancel` или `goods_sale.undo`: было `{status: 'active', paidTetri, openTetri}`, стало `{status: 'cancelled', returned: [{name, qty}], payments: [{id, fate}]}`, note = причина.
@@ -578,11 +580,11 @@ model GoodsSaleLine {
    - Задняя дата до пересчёта — вопрос «Пересчёт 15.10 уже не видел этот товар?» («Да — остаток не трогать» выбрано заранее).
 2. **«Кому».** «Розничный покупатель» (выбран заранее, если мастер открыт не из карточки клиента) с необязательными именем и телефоном | «Наш клиент» — поиск, на карточке видна его общая цифра долга.
 3. **«Оплата и итог».**
-   - Чипы: «Наличными» (сумма подставлена) · «Картой» · «Переводом» · «Позже — в долг» (только свой клиент).
-   - Карта или перевод: строки банка той же суммы (`InBankLines`, владельцу) — «Это она» / «Ещё не пришла». Иначе подсказка «Владелец привяжет строку банка в „Разобрать“».
+   - Чипы: «Наличными» (сумма подставлена и идёт за итогом, пока её не впечатали руками; больше итога — ошибка поля) · «Картой» · «Переводом» · «Позже — в долг» (только свой клиент).
+   - Карта или перевод: строки банка ровно этой суммы (`InBankLines`, владельцу) — «Это она» / «Ещё не пришла»; выбранная строка остаётся в списке отмеченной, а остаток считается от её суммы. Иначе подсказка «Владелец привяжет строку банка в „Разобрать“».
    - Розница без оплаты и без банка — ошибка поля «Розничный покупатель платит сразу».
    - Дата: владелец может поставить прошлую, с причиной.
-   - Итог: строки; «Итого 100,00 ₾ · в т.ч. НДС 18 % 15,25 ₾»; «Остаток 0» / «Долг клиента после продажи 45 ₾» / «Ждёт банк 100 ₾».
+   - Итог: строки; «Итого 100,00 ₾ · в т.ч. НДС 18 % 15,25 ₾»; «Открыто 0» / «Долг клиента после продажи 45 ₾» / «Ждёт банк 100 ₾».
    - Кнопка в липкой полосе «Продать за 100 ₾» → «Записываем…» → открывается карточка (ux №4). Тост: «Продано TS-00001 · Счёт PDF · Отменить».
    - Ошибки сервера ведут на шаг поля (`stepOfField`, `byCode`), как в `SaleWizard`.
 
@@ -601,6 +603,7 @@ model GoodsSaleLine {
 
 **Лист отмены.** Причина обязательна, под ней план из `cancel-plan`:
 - «Зарядка 73V6A × 1 вернётся в шоурум (3 → 4)»;
+- есть строка `stock_from 'count'` — вопрос «Пересчёт уже не видел этот товар. Он вернулся?»: «Нет — остаток не трогать» (выбрано заранее; строка «… — остаток не меняется (3)») · «Да — вернуть на остаток»;
 - свой клиент: «100 ₾ станут авансом и погасят неделю 20–26.10 R-…»;
 - розница: «Платёж 100 ₾ картой аннулируется; строка TBC 08.10 · 98,50 вернётся в „Разобрать“»; для наличных — «уйдёт из кассы <имя>».
 
@@ -620,8 +623,8 @@ model GoodsSaleLine {
 | Действие | Вид | Было → стало |
 |---|---|---|
 | `goods_sale.create` | событие | §6.2 п. 7 |
-| `goods_sale.price` | изменение | `{seq, shelfPriceTetri}` → `{seq, unitPriceTetri}` |
-| `goods_sale.minus` | изменение | `{available}` → `{asked}`, причина |
+| `goods_sale.price` | изменение | `{seq, unitPriceTetri: цена склада}` → `{seq, unitPriceTetri}` |
+| `goods_sale.minus` | изменение | `{seq, qty: было}` → `{seq, qty: продано}`, причина |
 | `goods_sale.update` | изменение | имя, телефон, заметка |
 | `goods_sale.invoice` | событие | `{fileId, sha256}` |
 | `goods_sale.cancel` / `goods_sale.undo` | изменение | §6.3 п. 6 |

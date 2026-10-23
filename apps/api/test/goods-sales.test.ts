@@ -280,7 +280,7 @@ describe.skipIf(!HAS_DB)('more than there is (§1 п. 3, 5; acceptance 7)', () =
     expect(await onHand(owner, partId)).toBe(-1);
     const prisma = await db();
     const { id } = json<Sold>(res);
-    expect(await prisma.auditLog.findFirstOrThrow({ where: { entityId: id, action: 'goods_sale.minus' } })).toMatchObject({ before: { seq: 1, available: 1 }, after: { seq: 1, asked: 2 } });
+    expect(await prisma.auditLog.findFirstOrThrow({ where: { entityId: id, action: 'goods_sale.minus' } })).toMatchObject({ before: { seq: 1, qty: 1 }, after: { seq: 1, qty: 2 } });
   });
 
   it('sells a charger beyond the count by finding it first, so the count stays where it was', async () => {
@@ -318,7 +318,21 @@ describe.skipIf(!HAS_DB)('a sale dated before the last stocktake (§1 п. 9; acc
     const prisma = await db();
     expect(await prisma.payment.findFirstOrThrow({ where: { goodsSaleId: id } })).toMatchObject({ occurredOn: new Date(`${soldOn}T00:00:00Z`), backdateReason: 'test: entered late' });
 
+    // Cancelled to put the entry right: the count had seen it gone, and nothing comes back unless the owner says so.
+    type Plan = { goods: { stockFrom: string; back: boolean; beforeQty: number; afterQty: number }[] };
+    expect(json<Plan>(await call(owner, 'GET', `/api/goods-sales/${id}/cancel-plan`)).goods[0]).toMatchObject({ stockFrom: 'count', back: false, beforeQty: 4, afterQty: 4 });
+    expect(json<Plan>(await call(owner, 'GET', `/api/goods-sales/${id}/cancel-plan?countedBack=1`)).goods[0]).toMatchObject({ back: true, beforeQty: 4, afterQty: 5 });
     expect((await call(owner, 'POST', `/api/goods-sales/${id}/cancel`, { reason: 'test: wrong day' })).statusCode).toBe(200);
+    expect(await onHand(owner, partId)).toBe(4);
+
+    // Sold the same way and undone at once: an undo takes back only what the sale wrote.
+    const again = json<Sold>(await sell(owner, { ...body, lines: [{ ...body.lines[0], countedAlready: true }] }));
+    expect((await call(owner, 'POST', `/api/goods-sales/${again.id}/undo`)).statusCode).toBe(200);
+    expect(await onHand(owner, partId)).toBe(4);
+
+    // The goods did come back: on the owner's word the shelf has them again.
+    const third = json<Sold>(await sell(owner, { ...body, lines: [{ ...body.lines[0], countedAlready: true }] }));
+    expect((await call(owner, 'POST', `/api/goods-sales/${third.id}/cancel`, { reason: 'test: brought back', countedBack: true })).statusCode).toBe(200);
     expect(await onHand(owner, partId)).toBe(5);
   });
 });
@@ -350,6 +364,30 @@ describe.skipIf(!HAS_DB)('the money at the counter (§1 п. 6, 7; acceptance 9)'
     const prisma = await db();
     expect((await prisma.statementLine.findUniqueOrThrow({ where: { id: bank.id } })).paymentId).toBe(sold.paymentId);
     expect(await onHand(owner, partId)).toBe(4);
+  });
+
+  it('offers an owner only a bank line of exactly the sum, and keeps the line chosen on the list', async () => {
+    const owner = await loginAs('owner');
+    const partId = await newPart(owner, { qty: 2 });
+    const sum = 73_37;
+    const cardLine = await tbcCardLine(sum);
+    // A transfer of the card's net leaves the fee open; a card line whose net is the sum pays over it.
+    const netTransfer = await transferLine(acquiringNet(sum));
+    let over = sum;
+    while (acquiringNet(over) !== sum) over++;
+    const cardOver = await tbcCardLine(over);
+    type Preview = { inBank: { lineId: string }[]; paidNowTetri: number; openTetri: number; paymentProblem: string | null };
+    const ids = (p: Preview) => p.inBank.map((l) => l.lineId);
+    const body = { lines: [{ partId, qty: 1, unitPriceTetri: sum }], promisedChannel: 'acquiring' };
+
+    const offered = json<Preview>(await call(owner, 'POST', '/api/goods-sales/preview', body));
+    expect(ids(offered)).toContain(cardLine.id);
+    expect(ids(offered)).not.toContain(netTransfer.id);
+    expect(ids(offered)).not.toContain(cardOver.id);
+
+    const chosen = json<Preview>(await call(owner, 'POST', '/api/goods-sales/preview', { ...body, paidNow: { statementLineId: cardLine.id } }));
+    expect(ids(chosen)).toContain(cardLine.id);
+    expect(chosen).toMatchObject({ paidNowTetri: sum, openTetri: 0, paymentProblem: null });
   });
 });
 
@@ -398,7 +436,8 @@ describe.skipIf(!HAS_DB)('a price edited at the counter (acceptance 11)', () => 
     const partId = await newPart(owner, { qty: 2, priceTetri: 130_00 });
     const sold = json<Sold>(await sell(owner, { lines: [{ partId, qty: 1, unitPriceTetri: 100_00 }], paidNow: { channel: 'cash', amountTetri: 100_00 } }));
     const prisma = await db();
-    expect(await prisma.auditLog.findFirstOrThrow({ where: { entityId: sold.id, action: 'goods_sale.price' } })).toMatchObject({ before: { seq: 1, shelfPriceTetri: 130_00 }, after: { seq: 1, unitPriceTetri: 100_00 } });
+    // One key on both sides, so the journal's «было → стало» has the two prices to show.
+    expect(await prisma.auditLog.findFirstOrThrow({ where: { entityId: sold.id, action: 'goods_sale.price' } })).toMatchObject({ before: { seq: 1, unitPriceTetri: 130_00 }, after: { seq: 1, unitPriceTetri: 100_00 } });
     expect((await card(owner, sold.id)).sale.lines[0]).toMatchObject({ priceEdited: true, shelfPriceTetri: 130_00 });
   });
 });

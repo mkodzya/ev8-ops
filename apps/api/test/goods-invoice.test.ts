@@ -42,6 +42,17 @@ describe.skipIf(!HAS_DB)('the goods invoice', () => {
     expect(await prisma.storedFile.count({ where: { goodsSaleId: id, archived: true } })).toBe(1);
   });
 
+  it('names a charger in Georgian with its English under it, and says the unit in Georgian as the stock does', async () => {
+    const owner = await loginAs('owner');
+    expect((await call(owner, 'POST', '/api/batteries/inventory', { item: 'charger', showroomQty: 3, repairQty: 0, reason: 'test: counted for the invoice' })).statusCode).toBe(201);
+    const res = await call(owner, 'POST', '/api/goods-sales', { lines: [{ countedItem: 'charger', spec: '73V6A', qty: 1, unitPriceTetri: 100_00 }], paidNow: { channel: 'cash', amountTetri: 100_00 } });
+    expect(res.statusCode, res.body).toBe(201);
+    const text = await pdfText((await call(owner, 'GET', `/api/goods-sales/${json<{ id: string }>(res).id}/invoice.pdf`)).rawPayload);
+    for (const s of ['დამტენი 73V6A', 'Charger 73V6A', 'ცალი']) expect(text, s).toContain(s);
+    expect(text).not.toContain('Зарядка');
+    expect(text).not.toContain('pcs');
+  });
+
   it('names an own customer; a person\'s personal number stays off the paper, a company\'s tax code is on it', async () => {
     const owner = await loginAs('owner');
     const manager = await loginAs('manager');

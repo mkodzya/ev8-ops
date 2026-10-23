@@ -94,7 +94,7 @@
 | `goods.wizard.backdateReason` | Почему задним числом | რატომ წინა თარიღით | ratom tsina tarighit |
 | `goods.wizard.lines` | Товары | საქონელი | sakoneli |
 | `goods.wizard.total(…)` | Итого 100.00 ₾ · в т. ч. НДС 18 % 15.25 ₾ | ჯამი 100.00 ₾ · მათ შორის დღგ 18 % 15.25 ₾ | jami 100.00 ₾ · mat shoris dghg 18 % 15.25 ₾ |
-| `goods.wizard.restNone` | Остаток 0 | ნაშთი 0 | nashti 0 |
+| `goods.wizard.restNone` | Открыто 0 | გადასახდელი 0 | gadasakhdeli 0 |
 | `goods.wizard.restDebt(…)` | Долг клиента после продажи 100.00 ₾ | კლიენტის ვალი გაყიდვის შემდეგ 100.00 ₾ | klientis vali gaqidvis shemdeg 100.00 ₾ |
 | `goods.wizard.restBank(…)` | Ждёт банк 100.00 ₾ | ელოდება ბანკს 100.00 ₾ | elodeba banks 100.00 ₾ |
 | `goods.wizard.confirm(…)` | Продать за 100.00 ₾ | გაყიდვა 100.00 ₾-ად | gaqidva 100.00 ₾-ad |
@@ -134,13 +134,17 @@
 | `goods.card.soldBy(…)` | Продал … | გაყიდა … | gaqida … |
 | `goods.card.line(…)` | TBC 15.10.2026 · 100.00 ₾ | TBC 15.10.2026 · 100.00 ₾ | TBC 15.10.2026 · 100.00 ₾ |
 | `goods.card.notes` | Заметка | შენიშვნა | shenishvna |
-| `goods.card.promised(…)` | Остаток придёт картой | ნაშთი მოვა ბარათით | nashti mova baratit |
+| `goods.card.promised(…)` | Остальное придёт картой | დანარჩენი მოვა ბარათით | danarcheni mova baratit |
 | `goods.card.promisedHow.acquiring` | картой | ბარათით | baratit |
 | `goods.card.promisedHow.transfer` | переводом | გადარიცხვით | gadaritskhvit |
 | `goods.cancel.title(…)` | Отменить продажу 2 | 2 გაყიდვის გაუქმება | 2 gaqidvis gaukmeba |
 | `goods.cancel.button(…)` | Отменить продажу 2 | 2 გაყიდვის გაუქმება | 2 gaqidvis gaukmeba |
 | `goods.cancel.reason` | Почему | რატომ | ratom |
 | `goods.cancel.back(…)` | … × 2 вернётся на остаток (3 → 4) | … × 2 დაბრუნდება ნაშთზე (3 → 4) | … × 2 dabrundeba nashtze (3 → 4) |
+| `goods.cancel.stays(…)` | … × 2 — остаток не меняется (3) | … × 2 — ნაშთი არ იცვლება (3) | … × 2 — nashti ar itsvleba (3) |
+| `goods.cancel.countedBack` | Пересчёт уже не видел этот товар. Он вернулся? | ინვენტარიზაციამ ეს საქონელი უკვე ვეღარ ნახა. დაბრუნდა? | inventarizatsiam es sakoneli ukve veghar nakha. dabrunda? |
+| `goods.cancel.countedBackYes` | Да — вернуть на остаток | კი — დავაბრუნოთ ნაშთზე | ki — davabrunot nashtze |
+| `goods.cancel.countedBackNo` | Нет — остаток не трогать | არა — ნაშთს არ შევეხოთ | ara — nashts ar shevekhot |
 | `goods.cancel.credit(…)` | 100.00 ₾ станут авансом клиента | 100.00 ₾ გახდება კლიენტის ავანსი | 100.00 ₾ gakhdeba klientis avansi |
 | `goods.cancel.creditPays(…)` | и погасят … | და დაფარავს: … | da daparavs: … |
 | `goods.cancel.creditLeft(…)` | 100.00 ₾ останутся авансом | 100.00 ₾ დარჩება ავანსად | 100.00 ₾ darcheba avansad |
@@ -184,6 +188,7 @@
 | `goods.economics.unknown(…)` | Без себестоимости: 2 строки на 100.00 ₾ без НДС — в маржу не вошли | თვითღირებულების გარეშე: 2 ხაზი 100.00 ₾-ზე დღგ-ს გარეშე — მარჟაში არ შევიდა | tvitghirebulebis gareshe: 2 khazi 100.00 ₾-ze dghg-s gareshe — marzhashi ar shevida |
 | `goods.economics.none` | За этот период товаров не продавали. | ამ პერიოდში საქონელი არ გაყიდულა. | am periodshi sakoneli ar gaqidula. |
 | `goods.economics.fee` | Комиссия за карту — расход компании, она видна в неделе. | ბარათის საკომისიო კომპანიის ხარჯია: ის კვირაში ჩანს. | baratis sakomisio kompaniis kharjia: is kvirashi chans. |
+| `goods.journal.qty` | Было → продано | იყო → გაიყიდა | iqo → gaiqida |
 | `goods.values.stockFrom.shelf` | со склада | საწყობიდან | satsqobidan |
 | `goods.values.stockFrom.count` | пересчётом | ინვენტარიზაციით | inventarizatsiit |
 | `goods.values.status.active` | активна | აქტიური | aktiuri |
@@ -203,6 +208,7 @@
 | `stock.salePrice` | Цена для клиента с НДС | ფასი კლიენტისთვის, დღგ-ით | pasi klientistvis, dghg-it |
 | `paymentPage.acts.rebook` | стал авансом после отмены продажи товаров | გახდა ავანსი საქონლის გაყიდვის გაუქმებისას | gakhda avansi sakonlis gaqidvis gaukmebisas |
 | `weekReport.inGoods` | Поступило — товары | შემოსული — საქონელი | shemosuli — sakoneli |
+| `weekReport.rowTotals.goods` | Из них в «товары» за неделю | აქედან „საქონელში“ კვირის განმავლობაში | aqedan „sakonelshi“ kviris ganmavlobashi |
 | `feedWords.goods_sale.create` | Проданы товары | საქონელი გაიყიდა | sakoneli gaiqida |
 | `feedWords.goods_sale.price` | Цена изменена при продаже | ფასი შეიცვალა გაყიდვისას | pasi sheitsvala gaqidvisas |
 | `feedWords.goods_sale.minus` | Продано сверх остатка | გაიყიდა ნაშთზე მეტი | gaiqida nashtze meti |
@@ -251,6 +257,8 @@
 | Директор | Директор: … | დირექტორი: … | direktori: … |
 | Таблица: наименование | Наименование · Item | დასახელება | dasakheleba |
 | Таблица: единица | Ед. · Unit | ერთ. | ert. |
+| Единица в строке (как на «Складе»; у зарядки — штука) | шт · компл · л · кг · м | ცალი · კომპლ · ლ · კგ · მ | tsali · kompl · l · kg · m |
+| Строка товара | Зарядка 73V6A (серым под ней — только английское: Charger 73V6A) | დამტენი 73V6A | damteni 73V6A |
 | Таблица: количество | Кол-во · Qty | რაოდ. | raod. |
 | Таблица: цена | Цена с НДС · Price incl. VAT | ფასი დღგ-ს ჩათვლით | pasi dghg-s chatvlit |
 | Таблица: сумма | Сумма · Amount | თანხა | tankha |

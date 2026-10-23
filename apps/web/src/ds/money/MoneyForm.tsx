@@ -901,7 +901,8 @@ function AmountChips({ s, onPick }: { s: State; onPick: (v: string) => void }) {
     if (owed > 0) chips.push({ tetri: owed, label: t.money.chipDebt });
   }
   if (target.kind === 'goods' && target.openTetri) {
-    chips.push({ tetri: target.openTetri, label: t.money.chipDebt });
+    // A retail buyer takes nothing on credit (ADR-0045 §2): what his sale waits for is open, not a debt.
+    chips.push({ tetri: target.openTetri, label: target.customerId ? t.money.chipDebt : t.goods.cols.open });
   }
   if (target.kind === 'deposit_payout' && target.rentalId) {
     const d = deposits.data?.deposits.find((x) => x.rentalId === target.rentalId);

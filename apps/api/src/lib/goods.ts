@@ -284,7 +284,7 @@ export interface GoodsPreview {
   paidNowTetri: number;
   openTetri: number;
   paymentProblem: 'retail_must_pay' | 'goods_paid_over' | null;
-  /** Bank lines of the open sum within ±3 days, for an owner who said card or transfer. */
+  /** Bank lines of exactly the sum left to the bank within ±3 days, for an owner who said card or transfer — the one chosen among them. */
   inBank: InBank[];
 }
 
@@ -300,8 +300,16 @@ export async function previewGoodsSale(actor: Actor, input: GoodsSaleInput): Pro
     const nets = goodsLineNets(plans);
     const paid = await paidNowTetri(tx, input.paidNow);
     const open = Math.max(0, totals.grossTetri - paid);
-    const bank = input.promisedChannel && open > 0 && hasPerm(actor, 'payments.reconcile')
-      ? await inBankAlready(tx, { customerId: input.customerId, grossTetri: open, channel: input.promisedChannel, occurredOn: soldOn })
+    // What the counter leaves to the bank: the whole, less cash typed. The
+    // lines are looked for against it, not against what a line already chosen
+    // leaves open — so the line chosen as «Это она» stays on the list, chosen.
+    // Only a line whose customer's sum is exactly that is offered: «Это она»
+    // pays the sale with it, and a transfer of a card's net would leave the
+    // fee open, a card line whose net is the sum would pay over it.
+    const cash = input.paidNow && 'amountTetri' in input.paidNow ? input.paidNow.amountTetri : 0;
+    const toBank = Math.max(0, totals.grossTetri - cash);
+    const bank = input.promisedChannel && toBank > 0 && hasPerm(actor, 'payments.reconcile')
+      ? (await inBankAlready(tx, { customerId: input.customerId, grossTetri: toBank, channel: input.promisedChannel, occurredOn: soldOn })).filter((l) => l.grossTetri === toBank)
       : [];
     return {
       soldOn,
@@ -445,12 +453,13 @@ export async function createGoodsSale(actor: Actor, input: GoodsSaleInput): Prom
       for (const p of plans) {
         if (priceEdited(p.shelfPriceTetri, p.unitPriceTetri)) {
           await tx.auditLog.create({
-            data: { actorId: actor.id, action: 'goods_sale.price', entityType: 'goods_sale', entityId: sale.id, before: { seq: p.index + 1, shelfPriceTetri: p.shelfPriceTetri }, after: { seq: p.index + 1, unitPriceTetri: p.unitPriceTetri } },
+            // One key on both sides: the journal shows «было → стало» only for a field both name.
+            data: { actorId: actor.id, action: 'goods_sale.price', entityType: 'goods_sale', entityId: sale.id, before: { seq: p.index + 1, unitPriceTetri: p.shelfPriceTetri }, after: { seq: p.index + 1, unitPriceTetri: p.unitPriceTetri } },
           });
         }
         if (p.decision === 'minus' || p.decision === 'found_then_sold') {
           await tx.auditLog.create({
-            data: { actorId: actor.id, action: 'goods_sale.minus', entityType: 'goods_sale', entityId: sale.id, before: { seq: p.index + 1, available: p.available }, after: { seq: p.index + 1, asked: p.qty }, note: p.shortReason },
+            data: { actorId: actor.id, action: 'goods_sale.minus', entityType: 'goods_sale', entityId: sale.id, before: { seq: p.index + 1, qty: p.available }, after: { seq: p.index + 1, qty: p.qty }, note: p.shortReason },
           });
         }
       }
@@ -475,6 +484,14 @@ async function livePayments(tx: Tx, saleId: string) {
   return out;
 }
 
+export interface CancelInput {
+  id: string;
+  mode: 'cancel' | 'undo';
+  reason: string;
+  /** A line a stocktake had already seen gone: the owner says it came back. Undo never returns it. */
+  countedBack?: boolean;
+}
+
 export interface CancelOutcome {
   customerId: string | null;
   /** Payments that became the customer's credit: his weeks take it after the commit. */
@@ -486,7 +503,7 @@ export interface CancelOutcome {
  * becomes the customer's credit or is voided, the sale is cancelled and its
  * invoice archived — or nothing is, when a payment cannot be voided alone.
  */
-export async function cancelGoodsSaleTx(tx: Tx, actor: Actor, input: { id: string; mode: 'cancel' | 'undo'; reason: string }): Promise<CancelOutcome> {
+export async function cancelGoodsSaleTx(tx: Tx, actor: Actor, input: CancelInput): Promise<CancelOutcome> {
   await tx.$queryRaw`SELECT 1 FROM goods_sales WHERE id = ${input.id}::uuid FOR UPDATE`;
   const sale = await tx.goodsSale.findUnique({ where: { id: input.id }, include: { lines: { orderBy: { seq: 'asc' } } } });
   if (!sale) throw notFound('goods_sale_not_found', 'No such goods sale.');
@@ -505,9 +522,17 @@ export async function cancelGoodsSaleTx(tx: Tx, actor: Actor, input: { id: strin
   const why = input.mode === 'undo' ? UNDONE_AT_ONCE : input.reason;
   const words = `${sale.number} cancelled: ${why}`;
 
-  // The goods came back now — whether the sale took them off the shelf or a stocktake had already seen them gone.
+  // The goods came back now. A line a stocktake had already seen gone took
+  // nothing off, so nothing goes back by itself: an undo takes back only what
+  // the sale wrote, and a cancellation returns it only when the owner says it
+  // came back — cancelling is also how an entry is put right (§1 п. 10).
   const returned: { name: string; qty: number }[] = [];
+  const kept: { name: string; qty: number }[] = [];
   for (const l of sale.lines) {
+    if (l.stockFrom === 'count' && !(input.mode === 'cancel' && input.countedBack)) {
+      kept.push({ name: l.name, qty: l.qty });
+      continue;
+    }
     if (l.partId) {
       await returnGoodsLine(tx, { goodsSaleLineId: l.id, partId: l.partId, qty: l.qty, unitCostTetri: l.unitCostTetri, occurredOn: now, actorId: actor.id, reason: words });
     } else {
@@ -536,7 +561,7 @@ export async function cancelGoodsSaleTx(tx: Tx, actor: Actor, input: { id: strin
       entityType: 'goods_sale',
       entityId: sale.id,
       before: { status: 'active', paidTetri: owed.paidTetri, openTetri: owed.openTetri },
-      after: { status: 'cancelled', returned, payments: plan.fates.map((f) => ({ id: f.id, fate: f.fate })) },
+      after: { status: 'cancelled', returned, ...(kept.length > 0 ? { kept } : {}), payments: plan.fates.map((f) => ({ id: f.id, fate: f.fate })) },
       note: why,
     },
   });
@@ -544,7 +569,7 @@ export async function cancelGoodsSaleTx(tx: Tx, actor: Actor, input: { id: strin
 }
 
 /** Cancel, then let the customer's new credit pay his open weeks — the night's own `settleCredit`, now (§1 п. 14). */
-export async function cancelGoodsSale(actor: Actor, input: { id: string; mode: 'cancel' | 'undo'; reason: string }): Promise<CancelOutcome> {
+export async function cancelGoodsSale(actor: Actor, input: CancelInput): Promise<CancelOutcome> {
   const out = await prisma.$transaction((tx) => cancelGoodsSaleTx(tx, actor, input), { timeout: 20_000, maxWait: 20_000 });
   if (out.customerId && out.credited > 0) {
     const rentals = await prisma.rental.findMany({
@@ -557,11 +582,11 @@ export async function cancelGoodsSale(actor: Actor, input: { id: string; mode: '
   return out;
 }
 
-/** What a cancellation would do, before it is done (ADR-0045 §10, the cancel sheet). */
-export async function cancelPreview(id: string): Promise<{
+/** What a cancellation would do, before it is done (ADR-0045 §10, the cancel sheet); `countedBack` — the owner's answer for the lines a stocktake had already seen gone. */
+export async function cancelPreview(id: string, countedBack = false): Promise<{
   number: string;
   refuse: { code: 'goods_payment_in_split'; paymentId: string; lineId: string | null } | null;
-  goods: { name: string; countedItem: string | null; spec: string | null; partId: string | null; qty: number; beforeQty: number; afterQty: number }[];
+  goods: { name: string; countedItem: string | null; spec: string | null; partId: string | null; qty: number; stockFrom: 'shelf' | 'count'; back: boolean; beforeQty: number; afterQty: number }[];
   payments: { id: string; grossTetri: number; channel: string; fate: 'credit' | 'void'; by: string | null; line: { id: string; bank: string; occurredOn: string | null; amountTetri: number } | null }[];
   creditCloses: Closes[];
   creditLeftTetri: number;
@@ -579,8 +604,10 @@ export async function cancelPreview(id: string): Promise<{
       const key = l.partId ? `part:${l.partId}` : String(l.countedItem);
       if (!counts.has(key)) counts.set(key, l.partId ? (await partOnHandTx(tx, l.partId)).onHand : (await batteriesNow(l.countedItem as CountedGoods, tx)).showroom);
       const before = counts.get(key)!;
-      counts.set(key, before + l.qty);
-      goods.push({ name: l.name, countedItem: l.countedItem, spec: l.spec, partId: l.partId, qty: l.qty, beforeQty: before, afterQty: before + l.qty });
+      const back = l.stockFrom !== 'count' || countedBack;
+      const after = back ? before + l.qty : before;
+      counts.set(key, after);
+      goods.push({ name: l.name, countedItem: l.countedItem, spec: l.spec, partId: l.partId, qty: l.qty, stockFrom: l.stockFrom === 'count' ? ('count' as const) : ('shelf' as const), back, beforeQty: before, afterQty: after });
     }
     const creditTetri = payments.filter((p) => fate.get(p.id) === 'credit').reduce((n, p) => n + p.grossTetri, 0);
     const credit = sale.customerId && creditTetri > 0 ? await planMoney(tx, { kind: 'on_account', customerId: sale.customerId, amountTetri: creditTetri, channel: 'cash' }) : null;

@@ -19,12 +19,19 @@ export interface GoodsInvoiceData {
   soldOn: string;
   /** A retail buyer: no card, a name and a phone if he gave them. */
   buyer: { retail: true; name: string | null; phone: string | null } | { retail: false; name: string; phone: string | null; address: string | null; taxCode: string | null };
+  /** `name`: English where there is one (a charger's own words, a part's card); `unit`: the stock's code (`pcs`, `set`…). */
   lines: { name: string; nameKa: string | null; unit: string | null; qty: number; unitPriceTetri: number }[];
   issuedBy: string | null;
   cancelled: { on: string; reason: string } | null;
 }
 
 const EN = tokens.grey;
+
+/** A unit's word on the Georgian paper, as the stock screen says it in Georgian — not the code it is kept by. */
+const UNIT_KA: Record<string, string> = { pcs: 'ცალი', set: 'კომპლ', l: 'ლ', kg: 'კგ', m: 'მ' };
+
+/** A part's name on its card may be the team's Russian; the grey line under the Georgian is English or nothing. */
+const CYRILLIC = /[\u0400-\u04FF]/u;
 
 function block(doc: Doc, x: number, w: number, top: number, title: Bi, rows: string[]): number {
   doc.pdf.y = top;
@@ -63,14 +70,14 @@ function table(doc: Doc, lines: GoodsInvoiceData['lines']): void {
   doc.pdf.moveTo(doc.left, doc.pdf.y + 2).lineTo(doc.left + doc.width, doc.pdf.y + 2).lineWidth(0.5).strokeColor(tokens.ink).stroke();
   gap(doc, 0.35);
   lines.forEach((l, n) => {
-    const cells = [String(n + 1), l.nameKa || l.name, l.unit ?? '', String(l.qty), gel2(l.unitPriceTetri), gel2(l.qty * l.unitPriceTetri)];
+    const cells = [String(n + 1), l.nameKa || l.name, l.unit ? (UNIT_KA[l.unit] ?? l.unit) : '', String(l.qty), gel2(l.unitPriceTetri), gel2(l.qty * l.unitPriceTetri)];
     const h = Math.max(...cells.map((c, i) => heightOf(doc, c || ' ', { size: 9, width: ws[i]! - 4 })));
     keepTogether(doc, h + 6);
     const y = doc.pdf.y;
     cells.forEach((c, i) => write(doc, c, { size: 9, bold: i === 5, x: xs[i]!, y, width: ws[i]! - (right.has(i) ? 0 : 4), align: right.has(i) ? 'right' : 'left' }));
     doc.pdf.y = y + h;
-    // A part's English name under the Georgian one, when it has both.
-    if (l.nameKa && l.name && l.nameKa !== l.name) {
+    // The English name under the Georgian one, when there are both.
+    if (l.nameKa && l.name && l.nameKa !== l.name && !CYRILLIC.test(l.name)) {
       write(doc, l.name, { size: 7, color: EN, x: xs[1]!, width: ws[1]! - 4 });
     }
     gap(doc, 0.2);

@@ -299,7 +299,7 @@ export function GoodsSalePage() {
 interface CancelPlan {
   number: string;
   refuse: { code: string; paymentId: string; lineId: string | null } | null;
-  goods: { name: string; countedItem: string | null; spec: string | null; partId: string | null; qty: number; beforeQty: number; afterQty: number }[];
+  goods: { name: string; countedItem: string | null; spec: string | null; partId: string | null; qty: number; stockFrom: 'shelf' | 'count'; back: boolean; beforeQty: number; afterQty: number }[];
   payments: { id: string; grossTetri: number; channel: 'cash' | 'acquiring' | 'transfer'; fate: 'credit' | 'void'; by: string | null; line: { id: string; bank: string; occurredOn: string | null; amountTetri: number } | null }[];
   creditCloses: { target: string; amountTetri: number; startsOn?: string | null; endsOn?: string | null; number?: string | null; seq?: number }[];
   creditLeftTetri: number;
@@ -309,7 +309,14 @@ interface CancelPlan {
 function CancelSheet({ id, number, onClose, onDone }: { id: string; number: string; onClose: () => void; onDone: () => void }) {
   const t = useT();
   const named = useItemName();
-  const plan = useLoad<CancelPlan>(`/api/goods-sales/${id}/cancel-plan`);
+  // A line a stocktake had already seen gone took nothing off: it comes back
+  // only when the owner says so, and no is the answer in advance (§6.3 п. 3).
+  // Both answers' plans are read at once, so the lines follow the radio at once.
+  const [countedBack, setCountedBack] = useState(false);
+  const kept = useLoad<CancelPlan>(`/api/goods-sales/${id}/cancel-plan`);
+  const counted = (kept.data?.goods ?? []).some((g) => g.stockFrom === 'count');
+  const back = useLoad<CancelPlan>(counted ? `/api/goods-sales/${id}/cancel-plan?countedBack=1` : null);
+  const plan = countedBack && back.data ? back : kept;
   const [reason, setReason] = useState('');
   const k = t.goods.cancel;
   const dm = (iso: string | null | undefined) => (iso ? `${iso.slice(8, 10)}.${iso.slice(5, 7)}` : '');
@@ -323,7 +330,7 @@ function CancelSheet({ id, number, onClose, onDone }: { id: string; number: stri
       initial=""
       label={k.button(number)}
       submit={async (key) => {
-        await api.post(`/api/goods-sales/${id}/cancel`, { reason: reason.trim() }, { key });
+        await api.post(`/api/goods-sales/${id}/cancel`, { reason: reason.trim(), ...(counted ? { countedBack } : {}) }, { key });
         return { toast: { text: k.done(number) } };
       }}
       onDone={onDone}
@@ -333,10 +340,25 @@ function CancelSheet({ id, number, onClose, onDone }: { id: string; number: stri
       </Field>
       {plan.failure && <LoadError failure={plan.failure} onRetry={plan.reload} />}
       {plan.data?.refuse && <p className="field-err">{k.refuse}</p>}
+      {counted && (
+        <fieldset className="split-week" data-field="countedBack">
+          <legend>{k.countedBack}</legend>
+          {([false, true] as const).map((yes) => (
+            <label key={String(yes)} className={`split-radio ${countedBack === yes ? 'on' : ''}`}>
+              <input type="radio" name="counted-back" checked={countedBack === yes} onChange={() => setCountedBack(yes)} />
+              <span>{yes ? k.countedBackYes : k.countedBackNo}</span>
+            </label>
+          ))}
+        </fieldset>
+      )}
       {plan.data && (
         <ul className="goods-plan">
           {plan.data.goods.map((g, i) => (
-            <li key={i}>{k.back(named({ name: g.name, nameKa: null, countedItem: g.countedItem, spec: g.spec }), g.qty, g.beforeQty, g.afterQty)}</li>
+            <li key={i}>
+              {g.back
+                ? k.back(named({ name: g.name, nameKa: null, countedItem: g.countedItem, spec: g.spec }), g.qty, g.beforeQty, g.afterQty)
+                : k.stays(named({ name: g.name, nameKa: null, countedItem: g.countedItem, spec: g.spec }), g.qty, g.beforeQty)}
+            </li>
           ))}
           {credit > 0 && (
             <li>
@@ -372,7 +394,7 @@ function BuyerSheet({ id, retail, name, phone, notes, onClose, onDone }: { id: s
       onClose={onClose}
       value={f}
       initial={initial}
-      label={t.form.changesSaved}
+      label={t.actions.save}
       submit={async (key) => {
         await api.patch(`/api/goods-sales/${id}`, retail ? { buyerName: f.name, buyerPhone: f.phone, notes: f.notes } : { notes: f.notes }, { key });
         return { toast: { text: t.form.changesSaved } };

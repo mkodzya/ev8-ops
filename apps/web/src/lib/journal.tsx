@@ -236,6 +236,8 @@ function named(t: Dict, field: string, action?: string): string | null {
   if (field === 'payWeekday' || field === 'payDay') return t.weekShift.journal.payDay;
   // A mechanic's rent link, set or taken off (0066): «Арендует мопед: — → card».
   if (field === 'renter') return t.wpay.renter;
+  // Goods sold beyond the count: what there was, and what was sold (ADR-0045 §5).
+  if (action === 'goods_sale.minus' && field === 'qty') return t.goods.journal.qty;
   // A new hand-over date and a deposit marked received earlier (ADR-0044):
   // the dates, the weeks, the debt and «оплачено по» side by side, each by name.
   if (action === 'rental.pickup.date') {
