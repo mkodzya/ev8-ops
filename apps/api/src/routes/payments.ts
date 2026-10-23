@@ -1,4 +1,4 @@
-import { INCOME_ROWS, acquiringGross, paymentInRow, rentCreditTetri, todayISO, type IncomeRow, type WeekAllocationTarget, type WeekPaymentKind } from '@ev8/shared';
+import { INCOME_ROWS, acquiringGross, goodsTotals, paymentInRow, rentCreditTetri, todayISO, type IncomeRow, type WeekAllocationTarget, type WeekPaymentKind } from '@ev8/shared';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { hasPerm } from '../lib/auth.js';
 import { dateFromISO, isoDate } from '../lib/dates.js';
@@ -37,6 +37,7 @@ function moneyInput(b: Body): MoneyInput {
     rentalId: str(b, 'rentalId'),
     saleId: str(b, 'saleId'),
     serviceJobId: str(b, 'serviceJobId'),
+    goodsSaleId: str(b, 'goodsSaleId'),
     customerId: str(b, 'customerId'),
     purchaseId: str(b, 'purchaseId'),
     amountTetri: tetri(b, 'amountTetri', { required: true, min: 1 })!,
@@ -59,11 +60,12 @@ function paymentWhere(req: FastifyRequest<{ Querystring: Query }>) {
   const actor = actorOf(req);
   const q = req.query;
   // A manager: their own payments, "Мои платежи" — and a record's payments on a card they have open.
-  const mine = !hasPerm(actor, 'payments.view') && !q.customerId && !q.rentalId && !q.saleId;
+  const mine = !hasPerm(actor, 'payments.view') && !q.customerId && !q.rentalId && !q.saleId && !q.goodsSaleId;
   return {
     ...(q.customerId ? { customerId: q.customerId } : {}),
     ...(q.rentalId ? { rentalId: q.rentalId } : {}),
     ...(q.saleId ? { saleId: q.saleId } : {}),
+    ...(q.goodsSaleId ? { goodsSaleId: q.goodsSaleId } : {}),
     ...(q.from || q.to ? { occurredOn: { ...(q.from ? { gte: dateFromISO(q.from)! } : {}), ...(q.to ? { lte: dateFromISO(q.to)! } : {}) } } : {}),
     ...(q.channel && (LIST_CHANNELS as readonly string[]).includes(q.channel) ? { channel: q.channel as (typeof LIST_CHANNELS)[number] } : {}),
     ...(q.direction === 'in' || q.direction === 'out' ? { direction: q.direction as 'in' | 'out' } : {}),
@@ -85,6 +87,7 @@ export function paymentRoutes(app: FastifyInstance): void {
         sale: { select: { id: true, number: true } },
         purchase: { select: { id: true, number: true } },
         serviceJob: { select: { id: true, number: true } },
+        goodsSale: { select: { id: true, number: true } },
         createdBy: { select: { id: true, name: true } },
         allocations: { select: { amountTetri: true, target: true } },
       },
@@ -143,6 +146,7 @@ export function paymentRoutes(app: FastifyInstance): void {
         sale: p.sale,
         purchase: p.purchase,
         serviceJob: p.serviceJob,
+        goodsSale: p.goodsSale,
         bankText: p.bankText,
         note: p.note,
         source: p.source,
@@ -168,6 +172,7 @@ export function paymentRoutes(app: FastifyInstance): void {
         sale: { select: { id: true, number: true } },
         purchase: { select: { id: true, number: true, currency: true } },
         serviceJob: { select: { id: true, number: true } },
+        goodsSale: { select: { id: true, number: true } },
         createdBy: { select: { id: true, name: true } },
         voidedBy: { select: { name: true } },
         statementLine: { select: { id: true, bank: true, occurredOn: true, amountTetri: true, payer: true, purpose: true, matchedRule: true } },
@@ -190,7 +195,7 @@ export function paymentRoutes(app: FastifyInstance): void {
         ? await prisma.payment.findMany({
             where: { statementLineId: p.statementLineId, source: 'statement', voidedAt: p.voidedAt ? undefined : null, id: { not: p.id } },
             orderBy: { statementPart: 'asc' },
-            select: { id: true, grossTetri: true, rental: { select: { number: true } }, sale: { select: { number: true } }, serviceJob: { select: { number: true } }, customer: { select: { name: true } } },
+            select: { id: true, grossTetri: true, rental: { select: { number: true } }, sale: { select: { number: true } }, serviceJob: { select: { number: true } }, goodsSale: { select: { number: true } }, customer: { select: { name: true } } },
           })
         : [];
     const journal = await prisma.auditLog.findMany({
@@ -213,6 +218,7 @@ export function paymentRoutes(app: FastifyInstance): void {
         sale: p.sale,
         purchase: p.purchase,
         serviceJob: p.serviceJob,
+        goodsSale: p.goodsSale,
         note: p.note,
         paidTo: p.paidTo,
         paidToReason: p.paidToReason,
@@ -228,7 +234,7 @@ export function paymentRoutes(app: FastifyInstance): void {
         voidedBy: p.voidedBy?.name ?? null,
         voidedAt: p.voidedAt?.toISOString() ?? null,
         statementLine: p.statementLine ? { ...p.statementLine, occurredOn: isoDate(p.statementLine.occurredOn) } : null,
-        splitWith: splitWith.map((x) => ({ id: x.id, grossTetri: x.grossTetri, number: x.rental?.number ?? x.sale?.number ?? x.serviceJob?.number ?? null, customer: x.customer?.name ?? null })),
+        splitWith: splitWith.map((x) => ({ id: x.id, grossTetri: x.grossTetri, number: x.rental?.number ?? x.sale?.number ?? x.serviceJob?.number ?? x.goodsSale?.number ?? null, customer: x.customer?.name ?? null })),
         closed: p.allocations.map((a) => ({
           target: a.target,
           amountTetri: a.amountTetri,
@@ -339,7 +345,7 @@ export function paymentRoutes(app: FastifyInstance): void {
   app.get<{ Params: { id: string } }>('/api/customers/:id/money-targets', { config: { scope: 'cash.record' } }, async (req) => {
     const id = req.params.id;
     const today = todayISO(new Date(), env.TZ);
-    const [debt, rentals, sales, jobs] = await Promise.all([
+    const [debt, rentals, sales, jobs, goods] = await Promise.all([
       debtOf(id, today),
       prisma.rental.findMany({
         where: { customerId: id },
@@ -351,6 +357,12 @@ export function paymentRoutes(app: FastifyInstance): void {
         select: { id: true, number: true, instalments: { orderBy: { seq: 'asc' }, select: { dueOn: true, amountTetri: true, paidTetri: true } } },
       }),
       prisma.serviceJob.findMany({ where: { customerId: id, payer: 'customer', status: 'done' }, select: { id: true, number: true } }),
+      // Goods sold to him and not paid in full (ADR-0045): the money form and «Разнести» can take money for them.
+      prisma.goodsSale.findMany({
+        where: { customerId: id, status: 'active' },
+        orderBy: { soldOn: 'asc' },
+        select: { id: true, number: true, soldOn: true, lines: { orderBy: { seq: 'asc' }, select: { name: true, countedItem: true, spec: true, qty: true, unitPriceTetri: true } }, payments: { where: { voidedAt: null, kind: 'goods' }, select: { grossTetri: true } } },
+      }),
     ]);
     // What "Разделить" can put a part on beyond a whole rental (ADR-0023): a
     // fine or other charge still open, and a week carried over as paid that
@@ -394,6 +406,15 @@ export function paymentRoutes(app: FastifyInstance): void {
         return { id: s.id, number: s.number, nextTetri: next ? next.amountTetri - next.paidTetri : 0, nextDueOn: next ? isoDate(next.dueOn) : null, overdue: !!next && isoDate(next.dueOn)! <= today };
       }),
       repairs: jobs,
+      goods: goods
+        .map((g) => ({
+          id: g.id,
+          number: g.number,
+          soldOn: isoDate(g.soldOn),
+          items: g.lines.map((l) => ({ name: l.name, countedItem: l.countedItem, spec: l.spec, qty: l.qty })),
+          openTetri: Math.max(0, goodsTotals(g.lines).grossTetri - g.payments.reduce((n, p) => n + p.grossTetri, 0)),
+        }))
+        .filter((g) => g.openTetri > 0),
       charges: charges
         .map((c) => ({ id: c.id, rentalId: c.rentalId, kind: c.kind, note: c.note, openTetri: c.amountTetri - c.allocations.reduce((n, a) => n + a.amountTetri, 0) }))
         .filter((c) => c.openTetri > 0),

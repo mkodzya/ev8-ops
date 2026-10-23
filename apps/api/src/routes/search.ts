@@ -1,4 +1,4 @@
-import { SEARCH_GROUP_LIMIT, spellingMatches, numberMatches, paymentMatches, phoneMatches, readFleetNumber, readQuery, vinMatches, type Query } from '@ev8/shared';
+import { SEARCH_GROUP_LIMIT, goodsTotals, spellingMatches, numberMatches, paymentMatches, phoneMatches, readFleetNumber, readQuery, vinMatches, type Query } from '@ev8/shared';
 import type { FastifyInstance } from 'fastify';
 import { isoDate } from '../lib/dates.js';
 import { debtsOf, rentalDueToday } from '../lib/debt.js';
@@ -36,7 +36,7 @@ export function searchRoutes(app: FastifyInstance): void {
     const seeAllPayments = mayView(req, 'payments.view');
     const seePurchases = mayView(req, 'purchases.view');
 
-    const [customers, vehicles, rentals, sales, payments, purchases, jobs] = await Promise.all([
+    const [customers, vehicles, rentals, sales, payments, purchases, jobs, goods] = await Promise.all([
       prisma.customer.findMany({
         where: { archived: false },
         select: { id: true, name: true, nameKa: true, nameLat: true, phone: true, personalId: true, recordKind: true },
@@ -96,6 +96,21 @@ export function searchRoutes(app: FastifyInstance): void {
         select: { id: true, number: true, status: true, reason: true, vehicle: { select: { vin: true, model: { select: { brand: true, name: true } } } } },
         orderBy: { openedOn: 'desc' },
       }),
+      // Goods sold over the counter (ADR-0045): by number, by buyer — a card's name, or a retail buyer's name or phone — and by what was sold.
+      prisma.goodsSale.findMany({
+        select: {
+          id: true,
+          number: true,
+          status: true,
+          customerId: true,
+          buyerName: true,
+          buyerPhone: true,
+          customer: { select: { name: true, nameKa: true, nameLat: true } },
+          lines: { select: { name: true, nameKa: true, spec: true, qty: true, unitPriceTetri: true } },
+          payments: { where: { voidedAt: null, kind: 'goods' }, select: { grossTetri: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
     ]);
 
     const byCustomer = (c: { name: string; nameKa: string | null; nameLat: string | null }, q: Query) => spellingMatches(q, [c.name, c.nameKa, c.nameLat]);
@@ -145,6 +160,25 @@ export function searchRoutes(app: FastifyInstance): void {
               .map((p) => ({ id: p.id, number: p.number, status: p.status, supplier: p.supplier.name, invoiceNo: p.invoiceNo })),
           )
         : null,
+      goods: group(
+        goods
+          .filter(
+            (g) =>
+              numberMatches(q, g.number) ||
+              (g.customer ? byCustomer(g.customer, q) : spellingMatches(q, [g.buyerName]) || phoneMatches(q, g.buyerPhone)) ||
+              g.lines.some((l) => spellingMatches(q, [l.name, l.nameKa, l.spec])),
+          )
+          .map((g) => ({
+            id: g.id,
+            number: g.number,
+            status: g.status,
+            customerId: g.customerId,
+            buyer: g.customer?.name ?? g.buyerName ?? null,
+            retail: g.customerId == null,
+            items: g.lines.map((l) => l.name),
+            openTetri: g.status === 'active' ? Math.max(0, goodsTotals(g.lines).grossTetri - g.payments.reduce((n, p) => n + p.grossTetri, 0)) : 0,
+          })),
+      ),
       jobs: group(
         jobs
           .filter((j) => numberMatches(q, j.number) || vinMatches(q, j.vehicle.vin))

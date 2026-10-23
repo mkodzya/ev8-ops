@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 import { mopedActOf } from '../lib/acts.js';
 import { audit } from '../lib/audit.js';
 import { hasPerm } from '../lib/auth.js';
-import { isoDate } from '../lib/dates.js';
+import { dayOf, isoDate } from '../lib/dates.js';
 import { prisma } from '../lib/db.js';
 import { conflict, notFound } from '../lib/errors.js';
 import { driveOfRental } from '../lib/driveScan.js';
@@ -15,6 +15,8 @@ import type { DrawnSignature } from '../lib/pdf/layout.js';
 import { contractGaps } from './rentals.js';
 import { badRequest } from '../lib/errors.js';
 import { renderSaleDoc } from '../lib/pdf/saleDoc.js';
+import { renderGoodsInvoice } from '../lib/pdf/goodsInvoice.js';
+import { UNDONE_AT_ONCE } from '../lib/goods.js';
 import {
   renderReturnAct,
   type ItemState,
@@ -161,6 +163,68 @@ async function renderSale(sale: Sale, signature: DrawnSignature | null = null): 
 }
 
 export function documentRoutes(app: FastifyInstance): void {
+  /**
+   * A goods sale's invoice (issue #11, ADR-0045 §8). The first one handed out
+   * is kept and handed out again, byte for byte; a cancellation or a new
+   * buyer's name archives it, and the next one is printed anew — a cancelled
+   * sale's with the cancellation on it.
+   */
+  app.get<{ Params: { id: string } }>('/api/goods-sales/:id/invoice.pdf', { config: { scope: 'goods.sell' } }, async (req, reply) => {
+    const actor = actorOf(req);
+    const existing = await prisma.storedFile.findFirst({
+      where: { goodsSaleId: req.params.id, kind: 'pdf', docKind: 'goods_invoice', archived: false },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true, label: true },
+    });
+    if (existing) {
+      const row = await prisma.storedFile.findUniqueOrThrow({ where: { id: existing.id }, select: { bytes: true } });
+      return sendPdf(reply, existing.label, Buffer.from(row.bytes));
+    }
+    const s = await prisma.goodsSale.findUnique({
+      where: { id: req.params.id },
+      include: {
+        customer: { select: { name: true, phone: true, address: true, kind: true, personalId: true } },
+        createdBy: { select: { name: true } },
+        lines: { orderBy: { seq: 'asc' }, include: { part: { select: { unit: true } } } },
+      },
+    });
+    if (!s) throw notFound('goods_sale_not_found', 'No such goods sale.');
+    const bytes = await renderGoodsInvoice({
+      number: s.number,
+      soldOn: isoDate(s.soldOn)!,
+      buyer: s.customer
+        ? {
+            retail: false,
+            name: s.customer.name,
+            phone: s.customer.phone,
+            address: s.customer.address,
+            // A company's tax code is printed; a person's personal number never is (CST-03).
+            taxCode: s.customer.kind === 'company' ? s.customer.personalId : null,
+          }
+        : { retail: true, name: s.buyerName, phone: s.buyerPhone },
+      lines: s.lines.map((l) => ({ name: l.name, nameKa: l.nameKa, unit: l.part?.unit ?? null, qty: l.qty, unitPriceTetri: l.unitPriceTetri })),
+      issuedBy: s.createdBy?.name ?? null,
+      cancelled: s.status === 'cancelled' && s.cancelledAt ? { on: dayOf(s.cancelledAt)!, reason: s.cancelReason === UNDONE_AT_ONCE ? 'გაუქმდა მაშინვე · Undone at once' : (s.cancelReason ?? '') } : null,
+    });
+    const label = `${s.number}-invoice.pdf`;
+    const file = await prisma.storedFile.create({
+      data: {
+        kind: 'pdf',
+        docKind: 'goods_invoice',
+        goodsSaleId: s.id,
+        label,
+        mimeType: 'application/pdf',
+        sizeBytes: bytes.length,
+        sha256: createHash('sha256').update(bytes).digest('hex'),
+        bytes: new Uint8Array(bytes),
+        uploadedById: actor.id,
+      },
+      select: { id: true, sha256: true },
+    });
+    await audit({ actorId: actor.id, action: 'goods_sale.invoice', entityType: 'goods_sale', entityId: s.id, after: { fileId: file.id, sha256: file.sha256, cancelled: s.status === 'cancelled' } });
+    return sendPdf(reply, label, bytes);
+  });
+
   /**
    * The sale's document (§3.1). It follows the sale until it is signed, and
    * from then on it is what the buyer signed and does not change (B4-06).

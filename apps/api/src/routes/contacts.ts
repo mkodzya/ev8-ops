@@ -172,6 +172,8 @@ export function contactRoutes(app: FastifyInstance): void {
         payments: (await tx.payment.updateMany({ where, data: { customerId: keepId } })).count,
         documents: (await tx.storedFile.updateMany({ where, data: { customerId: keepId } })).count,
         repairs: (await tx.serviceJob.updateMany({ where, data: { customerId: keepId } })).count,
+        // Goods bought over the counter (ADR-0045): their debt goes with the card, or it would split in two.
+        goodsSales: (await tx.goodsSale.updateMany({ where, data: { customerId: keepId } })).count,
       };
       await tx.user.updateMany({ where, data: { customerId: keepId, updatedAt: new Date() } });
       // A personal number is unique: the duplicate gives it up, because two
