@@ -202,6 +202,8 @@ export function rentalRoutes(app: FastifyInstance): void {
         ? {
             amountTetri: r.deposit.amountTetri,
             paidTetri: r.deposit.paidTetri,
+            // Of what was received: what came before EV8 Ops, no payment behind it (ADR-0044 §2).
+            receivedBeforeTetri: r.deposit.receivedBeforeTransferTetri,
             status: r.deposit.status,
             returnedTetri: r.deposit.returnedTetri,
             withheldTetri: r.deposit.withheldTetri,
