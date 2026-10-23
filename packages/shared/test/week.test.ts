@@ -205,6 +205,23 @@ describe('a figure of the week leads to the rows it is made of (QA-W6-01)', () =
   });
 });
 
+describe('goods sold over the counter (issue #11, ADR-0045)', () => {
+  it('puts a charger paid by card on a row of its own, the acquirer\'s fee apart, and the rows still add up', () => {
+    const card = pay({ occurredOn: '2026-10-08', grossTetri: 100_00, feeTetri: 1_50, channel: 'acquiring', kind: 'goods' });
+    const m = weekIncome([card], { from: '2026-10-05', to: '2026-10-11' });
+    expect(m).toMatchObject({ goodsTetri: 100_00, acquiringFeeTetri: 1_50, totalTetri: 100_00, rentTetri: 0 });
+    expect(incomeRows(m)).toBe(m.totalTetri);
+    expect(paymentInRow(card, 'goods')).toBe(100_00);
+  });
+
+  it('moves a cancelled sale\'s money to rent once it became the customer\'s credit', () => {
+    const credit = pay({ occurredOn: '2026-10-08', grossTetri: 35_00, kind: 'on_account' });
+    const m = weekIncome([credit], { from: '2026-10-05', to: '2026-10-11' });
+    expect(m).toMatchObject({ goodsTetri: 0, rentTetri: 35_00 });
+    expect(incomeRows(m)).toBe(m.totalTetri);
+  });
+});
+
 describe('the filters a screen sends when it asks for payments (QA-W6-05)', () => {
   it('carries the row a figure of the week asked about', () => {
     const asked: Record<string, string> = { from: '2026-09-21', to: '2026-09-27', row: 'rent' };
@@ -220,7 +237,7 @@ describe('the filters a screen sends when it asks for payments (QA-W6-05)', () =
   it('sends nothing it was not given, and knows every filter the list has', () => {
     expect(paymentsQuery(() => '')).toBe('');
     // A filter added to the screen and forgotten here would travel nowhere.
-    for (const key of ['from', 'to', 'channel', 'direction', 'kind', 'row', 'by', 'customerId', 'rentalId', 'saleId']) {
+    for (const key of ['from', 'to', 'channel', 'direction', 'kind', 'row', 'by', 'customerId', 'rentalId', 'saleId', 'goodsSaleId']) {
       expect(PAYMENT_FILTERS).toContain(key);
     }
   });

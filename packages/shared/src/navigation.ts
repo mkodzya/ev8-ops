@@ -119,7 +119,8 @@ export type TabId =
   | 'suppliers'
   | 'payouts'
   | 'balance'
-  | 'repair';
+  | 'repair'
+  | 'goods';
 
 /** Tabs inside a section, in the address (wave 1 §3.2). */
 export const SECTION_TABS: Partial<Record<SectionId, readonly { id: TabId; path: string; anyOf: readonly Permission[]; noneOf?: readonly Permission[] }[]>> = {
@@ -186,6 +187,12 @@ export const SECTION_TABS: Partial<Record<SectionId, readonly { id: TabId; path:
     { id: 'orders', path: '/purchases', anyOf: ['purchases.view'] },
     { id: 'suppliers', path: '/purchases/suppliers', anyOf: ['purchases.view'] },
   ],
+  // Mopeds and goods (issue #11, ADR-0045): a part or a charger sold over the
+  // counter is a sale of its own, beside the mopeds.
+  sales: [
+    { id: 'vehicles', path: '/sales', anyOf: ['fleet.view'] },
+    { id: 'goods', path: '/sales/goods', anyOf: ['fleet.view'] },
+  ],
   // The week first: it is what an owner opens Reports for (wave 6 §3.1).
   reports: [
     { id: 'week', path: '/reports/week', anyOf: ['reports.view'] },
@@ -200,7 +207,7 @@ export function tabsFor(section: SectionId, permissions: readonly Permission[]) 
   return (SECTION_TABS[section] ?? []).filter((t) => allowed(t, permissions));
 }
 
-export type ActionId = 'pickup' | 'return' | 'takeMoney' | 'takeCash' | 'newCustomer' | 'openRepair' | 'reportBreak' | 'sell';
+export type ActionId = 'pickup' | 'return' | 'takeMoney' | 'takeCash' | 'newCustomer' | 'openRepair' | 'reportBreak' | 'sell' | 'sellGoods';
 
 /** What the "+" offers, most frequent first (wave 1 §3.2). */
 export const ACTIONS: readonly { id: ActionId; path: string; anyOf: readonly Permission[]; noneOf?: readonly Permission[] }[] = [
@@ -215,6 +222,8 @@ export const ACTIONS: readonly { id: ActionId; path: string; anyOf: readonly Per
   // an owner opens the repair itself, so they see the other one.
   { id: 'reportBreak', path: '/service?report=1', anyOf: ['service.report'], noneOf: ['service.manage'] },
   { id: 'sell', path: '/sales/new', anyOf: ['sales.manage'] },
+  // A part or a charger over the counter: the owner and the manager (ADR-0045).
+  { id: 'sellGoods', path: '/sales/goods/new', anyOf: ['goods.sell'] },
 ];
 
 export function actionsFor(permissions: readonly Permission[]) {
