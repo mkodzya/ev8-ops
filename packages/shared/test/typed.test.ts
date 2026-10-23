@@ -11,6 +11,7 @@ import {
   translatable,
   translationFor,
 } from '../src/typed.js';
+import { GOODS_UNDONE_AT_ONCE, goodsCancelReason } from '../src/goods.js';
 
 describe('what may be sent to the translator (Mika, 21.10.2026, answer A)', () => {
   it('lists only mopeds and repairs, and no table of customers, rentals, money, sales or purchases', () => {
@@ -55,6 +56,16 @@ describe('which texts are worth a translation', () => {
     expect(translatable('return undone: клиент вернулся за мопедом')).toBe(false);
     expect(translatable('sale SL-00007 cancelled: покупатель передумал')).toBe(false);
     expect(translatable('bought back under SL-00007, needs work')).toBe(false);
+  });
+
+  it('never sends a goods sale’s words the code put on a part’s or a charger’s movement (ADR-0045)', () => {
+    // A cancellation, the owner's reason or the seller's undo, as `goodsCancelReason` writes it.
+    expect(translatable(goodsCancelReason('TS-00004', 'покупатель вернул товар (пример)'))).toBe(false);
+    expect(translatable(goodsCancelReason('TS-00006', GOODS_UNDONE_AT_ONCE))).toBe(false);
+    // A charger sold beyond the count is found first, with the owner's words behind the sale's number.
+    expect(translatable('TS-00004: one more was in the box (example)')).toBe(false);
+    // A repair's own words that only mention a goods sale are still a repair's.
+    expect(translatable('поставили зеркало, проданное по TS-00004')).toBe(true);
   });
 
   it('never sends a rental’s number with its words: a hand-over, a swap, an act’s damage behind the rental’s number', () => {

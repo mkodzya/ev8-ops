@@ -1,4 +1,4 @@
-import { formatGel } from '@ev8/shared';
+import { formatGel, goodsCancelNote } from '@ev8/shared';
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../../api.js';
@@ -13,6 +13,8 @@ import { useOperation } from '../../ds/form/operation.js';
 import { useMoneyForm } from '../../ds/money/MoneyForm.js';
 import { fmtDate, fmtDateAt } from '../../format.js';
 import { useT } from '../../i18n/index.js';
+import { chargeWords } from '../../lib/charges.js';
+import { noteWords } from '../../lib/journal.js';
 import { useLoad } from '../../lib/use.js';
 import { useSession } from '../../session.js';
 import { GoodsPill, buyerName, useItemName, type GoodsState } from './GoodsSalesPage.js';
@@ -105,6 +107,13 @@ export function GoodsSalePage() {
 
   const s = data.sale;
   const c = t.goods.card;
+  // On the sale's own card a reason its cancellation wrote is said without the sale's number: the
+  // seller's undo in the reader's words, the owner's as typed; any other note as the journal says it.
+  const reasonHere = (note: string | null): string | null => {
+    const own = goodsCancelNote(note);
+    if (own?.number === s.number) return own.undone ? c.undoneAtOnce : own.why;
+    return noteWords(t, note);
+  };
   const live = s.status === 'active';
   const who = buyerName(t, s);
   const retail = s.customer == null;
@@ -186,7 +195,7 @@ export function GoodsSalePage() {
                 {l.stockFrom === 'count' && <span>{c.byCount}</span>}
                 {l.shortReason && <span className="warn-text">{c.beyond(l.shortReason)}</span>}
                 {can('cost.view') && (l.unitCostTetri != null ? <span>{c.cost(formatGel(l.unitCostTetri))}</span> : <span>{c.noCost}</span>)}
-                {l.marginTetri != null && <span className={l.marginTetri < 0 ? 'warn-text' : undefined}>{c.margin(formatGel(l.marginTetri))}</span>}
+                {l.marginTetri != null && <span className={l.marginTetri < 0 ? 'warn-text' : undefined}>{c.margin(formatGel(l.marginTetri), l.qty)}</span>}
               </div>
             </li>
           ))}
@@ -226,7 +235,7 @@ export function GoodsSalePage() {
                   <span className={p.fate === 'voided' ? 'warn-text' : p.fate === 'credit' ? undefined : 'ok-text'}>{c.fates[p.fate] ?? p.fate}</span>
                   {p.line && <span>{c.line(t.statements.banks[p.line.bank as 'bog'] ?? p.line.bank, fmtDate(p.line.occurredOn), formatGel(p.line.amountTetri))}</span>}
                   {p.by && <span>{p.by}</span>}
-                  {p.voidReason && <span>{p.voidReason}</span>}
+                  {reasonHere(p.voidReason) && <span>{reasonHere(p.voidReason)}</span>}
                 </div>
               </li>
             ))}
@@ -279,7 +288,7 @@ export function GoodsSalePage() {
                 <span className="mono muted">{fmtDate(row.day)}</span>
                 <span>
                   <span>{t.feedWords[row.action] ?? (row.action.startsWith('payment.') ? t.feedWords['payment.record'] : row.action)}</span>
-                  {row.note && <span className="muted"> · {row.note}</span>}
+                  {reasonHere(row.note) && <span className="muted"> · {reasonHere(row.note)}</span>}
                   {row.by && <span className="muted"> · {row.by}</span>}
                 </span>
               </li>
@@ -321,7 +330,17 @@ function CancelSheet({ id, number, onClose, onDone }: { id: string; number: stri
   const k = t.goods.cancel;
   const dm = (iso: string | null | undefined) => (iso ? `${iso.slice(8, 10)}.${iso.slice(5, 7)}` : '');
   const credit = (plan.data?.payments ?? []).filter((p) => p.fate === 'credit').reduce((n, p) => n + p.grossTetri, 0);
-  const pays = (plan.data?.creditCloses ?? []).map((cl) => (cl.target === 'period' ? t.money.closeWeek(dm(cl.startsOn), dm(cl.endsOn)) : cl.target === 'deposit' ? t.money.closeDeposit : (cl.number ?? ''))).join(', ');
+  // What the credit goes towards, each with its sum: 30 ₾ on a week of 140 does not pay it off (QA 23.10.2026).
+  const pays = (plan.data?.creditCloses ?? [])
+    .map((cl) => {
+      const sum = formatGel(cl.amountTetri);
+      if (cl.target === 'period') return k.paysWeek(dm(cl.startsOn), dm(cl.endsOn), sum);
+      if (cl.target === 'deposit') return k.paysDeposit(sum);
+      // A return's charge comes with its kind in `number`: «Потеря ключа», not «key» (as MoneyForm names it).
+      if (cl.target === 'charge') return k.paysRecord(chargeWords(t, cl.number), sum);
+      return k.paysRecord(cl.number ?? '', sum);
+    })
+    .join(', ');
   return (
     <FormSheet
       title={k.title(number)}

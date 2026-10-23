@@ -11,6 +11,7 @@ import '../../ds/money/money.css';
 import { fmtDate, fmtDateAt, formatGel } from '../../format.js';
 import { useT } from '../../i18n/index.js';
 import { chargeWords } from '../../lib/charges.js';
+import { noteWords } from '../../lib/journal.js';
 import { useLoad } from '../../lib/use.js';
 
 type Kind = 'rent' | 'sale' | 'service' | 'on_account' | 'deposit_payout' | 'buyback' | 'supplier' | 'goods';
@@ -83,6 +84,8 @@ export function PaymentPage() {
       <section className="card">
         <p className={`t-display mono ${p.voided ? 'amt-void' : p.direction === 'out' ? 'amt-out' : 'amt-in'}`}>{signed}</p>
         {p.customer && <Row k={t.paymentPage.customer} v={<Link to={`/customers/${p.customer.id}`}>{p.customer.name}</Link>} />}
+        {/* A retail buyer has no card: the goods sale names him so (ADR-0045, QA 23.10.2026). */}
+        {!p.customer && p.goodsSale && <Row k={t.paymentPage.customer} v={t.goods.retail} />}
         {record && <Row k={t.money.kinds[p.kind]} v={<Link to={record.to} className="mono">{record.n}</Link>} />}
         <Row k={t.paymentPage.channel} v={t.payments.channels[p.channel]} />
         {p.channel === 'acquiring' && p.direction === 'in' && (
@@ -98,7 +101,8 @@ export function PaymentPage() {
         {p.backdateReason && <Row k={t.paymentPage.backdate} v={p.backdateReason} />}
         {p.paidTo && <Row k={t.paymentPage.paidTo} v={`${p.paidTo} · ${p.paidToReason ?? ''}`} />}
         <Row k={t.paymentPage.by} v={`${p.createdBy ?? t.common.dash}, ${fmtDateAt(p.createdAt)} ${hhmm(p.createdAt)}`} />
-        {p.voided && <Row k={t.paymentPage.voided} v={`${p.voidReason ?? ''}${p.voidedBy ? ` · ${p.voidedBy}` : ''}`} />}
+        {/* The code's part of a reason in the reader's words — a goods sale's cancellation — a person's as typed. */}
+        {p.voided && <Row k={t.paymentPage.voided} v={[noteWords(t, p.voidReason), p.voidedBy].filter(Boolean).join(' · ')} />}
       </section>
 
       {(p.closed.length > 0 || credit > 0) && (
@@ -149,7 +153,7 @@ export function PaymentPage() {
         <section className="card">
           <BlockHead title={t.paymentPage.journal} />
           {data.journal.map((j, i) => (
-            <Row key={i} k={`${fmtDateAt(j.at)} ${hhmm(j.at)}`} v={`${j.who ?? ''} · ${actWord(t, j.action)}${j.note ? ` · ${j.note}` : ''}`} />
+            <Row key={i} k={`${fmtDateAt(j.at)} ${hhmm(j.at)}`} v={`${j.who ?? ''} · ${actWord(t, j.action)}${noteWords(t, j.note) ? ` · ${noteWords(t, j.note)}` : ''}`} />
           ))}
         </section>
       )}

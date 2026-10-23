@@ -19,7 +19,7 @@ export interface GoodsInvoiceData {
   soldOn: string;
   /** A retail buyer: no card, a name and a phone if he gave them. */
   buyer: { retail: true; name: string | null; phone: string | null } | { retail: false; name: string; phone: string | null; address: string | null; taxCode: string | null };
-  /** `name`: English where there is one (a charger's own words, a part's card); `unit`: the stock's code (`pcs`, `set`…). */
+  /** `name`: a charger's English, a part's card name as the team wrote it (often Russian); `unit`: the stock's code (`pcs`, `set`…). */
   lines: { name: string; nameKa: string | null; unit: string | null; qty: number; unitPriceTetri: number }[];
   issuedBy: string | null;
   cancelled: { on: string; reason: string } | null;
@@ -30,7 +30,7 @@ const EN = tokens.grey;
 /** A unit's word on the Georgian paper, as the stock screen says it in Georgian — not the code it is kept by. */
 const UNIT_KA: Record<string, string> = { pcs: 'ცალი', set: 'კომპლ', l: 'ლ', kg: 'კგ', m: 'მ' };
 
-/** A part's name on its card may be the team's Russian; the grey line under the Georgian is English or nothing. */
+/** A part's card name may be the team's Russian: the buyer's paper is Georgian with English, never Russian (§9, ux 16). */
 const CYRILLIC = /[\u0400-\u04FF]/u;
 
 function block(doc: Doc, x: number, w: number, top: number, title: Bi, rows: string[]): number {
@@ -76,7 +76,9 @@ function table(doc: Doc, lines: GoodsInvoiceData['lines']): void {
     const y = doc.pdf.y;
     cells.forEach((c, i) => write(doc, c, { size: 9, bold: i === 5, x: xs[i]!, y, width: ws[i]! - (right.has(i) ? 0 : 4), align: right.has(i) ? 'right' : 'left' }));
     doc.pdf.y = y + h;
-    // The English name under the Georgian one, when there are both.
+    // The English name under the Georgian one, when there are both: a charger's «Charger 73V6A», a
+    // part's card name when the team wrote it in Latin letters. A Russian card name is the team's
+    // working word, not a language of the buyer's paper, and stays off it (review of QA 23.10.2026).
     if (l.nameKa && l.name && l.nameKa !== l.name && !CYRILLIC.test(l.name)) {
       write(doc, l.name, { size: 7, color: EN, x: xs[1]!, width: ws[1]! - 4 });
     }

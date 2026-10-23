@@ -42,3 +42,15 @@
 
 .goods-plan { margin: var(--space2) 0 0; padding-left: var(--space4); font: var(--text-body-sm); }
 .goods-plan > li { margin: var(--space1) 0; }
+
+/* The wizard's foot on a phone (QA 23.10.2026: «Продать за 100.00 ₾» ran to three lines in a 97 px
+   pill, the Georgian broke at «₾-ად»). What is picked and its sum get a line of their own; the
+   button's label never wraps — beside «Назад» when it fits, on the whole line under it when not. */
+.goods-wizard .wizard-foot { flex-wrap: wrap; align-items: center; }
+.goods-wizard .wizard-foot-note { flex: 1 1 100%; font: var(--text-body-sm); }
+.goods-wizard .wizard-foot .pill-grow { white-space: nowrap; }
+
+/* The summary's goods: the name takes the room and wraps between its words, the sum stands right. */
+.sum-row.goods-sum-line { grid-template-columns: 1fr auto auto; }
+.goods-sum-line > .kv-k { overflow-wrap: break-word; }
+.goods-sum-line > .kv-v { text-align: right; }

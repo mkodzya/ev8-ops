@@ -116,6 +116,9 @@ export function PaymentsList({ mine = false }: { mine?: boolean }) {
     </span>
   );
   const what = (p: PaymentRow) => [t.money.kinds[p.kind], recordOf(p)].filter(Boolean).join(' · ');
+  // Who paid: the customer, or — a goods sale with no card — the retail buyer; the
+  // kind's word stood there and read «Товары» over «Товары · TS-…» (QA 23.10.2026).
+  const payer = (p: PaymentRow): string | null => p.customer?.name ?? (p.goodsSale ? t.goods.retail : null);
   const how = (p: PaymentRow) =>
     [t.payments.channels[p.channel], p.channel === 'acquiring' && p.direction === 'in' ? t.payList.bank(formatGel(p.netTetri)) : null, p.fromStatement ? t.payList.stated : null]
       .filter(Boolean)
@@ -222,11 +225,11 @@ export function PaymentsList({ mine = false }: { mine?: boolean }) {
             href={(p) => `/money/payments/${p.id}`}
             search={{
               placeholder: t.lists.paymentsSearch,
-              match: (p, s) => paymentMatches(s, { grossTetri: p.grossTetri, customer: p.customer?.name, bankText: p.bankText, note: p.note, createdBy: p.createdBy, rentalNumber: recordOf(p) }),
+              match: (p, s) => paymentMatches(s, { grossTetri: p.grossTetri, customer: payer(p), bankText: p.bankText, note: p.note, createdBy: p.createdBy, rentalNumber: recordOf(p) }),
             }}
             empty={{ text: t.payments.none }}
             card={(p) => ({
-              title: p.customer?.name ?? t.money.kinds[p.kind],
+              title: payer(p) ?? t.money.kinds[p.kind],
               sub: (
                 <>
                   {what(p)} · {fmtDate(p.occurredOn)}
@@ -237,7 +240,7 @@ export function PaymentsList({ mine = false }: { mine?: boolean }) {
             })}
             columns={[
               { key: 'date', label: t.payments.date, cell: (p) => <span className="mono">{fmtDate(p.occurredOn)}</span>, sort: { value: (p) => p.occurredOn, first: 'desc' } },
-              { key: 'who', label: t.payments.customer, cell: (p) => <span>{p.customer?.name ?? t.common.dash}</span>, sort: { value: (p) => p.customer?.name } },
+              { key: 'who', label: t.payments.customer, cell: (p) => <span>{payer(p) ?? t.common.dash}</span>, sort: { value: (p) => payer(p) } },
               { key: 'what', label: t.payList.anyKind, cell: (p) => what(p), sort: { value: (p) => p.kind } },
               { key: 'how', label: t.payments.channel, cell: (p) => <span className="muted">{p.voided ? t.paymentPage.voided : how(p)}</span>, sort: { value: (p) => p.channel } },
               { key: 'by', label: t.payList.anyone, cell: (p) => <span>{p.createdBy ?? t.common.dash}</span>, sort: { value: (p) => p.createdBy } },

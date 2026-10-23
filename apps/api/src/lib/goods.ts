@@ -13,10 +13,12 @@
 import {
   GOODS_MAX_LINES,
   GOODS_MAX_QTY,
+  GOODS_UNDONE_AT_ONCE,
   GOODS_UNDO_MS,
   SELLABLE_COUNTED,
   cancelPlan,
   countedName,
+  goodsCancelReason,
   goodsLineNets,
   goodsTotals,
   needsCountAnswer,
@@ -79,8 +81,8 @@ export interface GoodsSaleInput {
 
 const today = () => todayISO(new Date(), env.TZ);
 
-/** A cancelled sale's reason when its seller undid it at once. The screen says it in its language. */
-export const UNDONE_AT_ONCE = 'undone at once';
+/** A cancelled sale's reason when its seller undid it at once. The screen says it in its language (shared `goodsCancelNote`). */
+export const UNDONE_AT_ONCE = GOODS_UNDONE_AT_ONCE;
 
 /**
  * A goods sale's money: what its lines come to, what its live payments of
@@ -520,7 +522,8 @@ export async function cancelGoodsSaleTx(tx: Tx, actor: Actor, input: CancelInput
   }
   const now = today();
   const why = input.mode === 'undo' ? UNDONE_AT_ONCE : input.reason;
-  const words = `${sale.number} cancelled: ${why}`;
+  // One shape on every row it touches; a screen reads the code's part in its own language, the owner's as typed.
+  const words = goodsCancelReason(sale.number, why);
 
   // The goods came back now. A line a stocktake had already seen gone took
   // nothing off, so nothing goes back by itself: an undo takes back only what

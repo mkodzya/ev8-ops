@@ -68,6 +68,9 @@
 .sort-line-card { font: var(--text-label); color: var(--ink); margin: 0; }
 .sort-reason { margin: 0; font: var(--text-body-sm); }
 .sort-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+/* «Куда привязать»: a goods sale that waits for less than the line — the words, then «Разнести» under them. */
+.sort-over { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.sort-over > .field-err { margin: 0; }
 .sort-foot { margin: 16px 0; font: var(--text-body-sm); }
 
 /* The till (§3.4). */

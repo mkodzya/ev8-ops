@@ -53,6 +53,31 @@ describe.skipIf(!HAS_DB)('the goods invoice', () => {
     expect(text).not.toContain('pcs');
   });
 
+  it('prints a part\'s Latin card name under its Georgian one, and never the team\'s Russian (§9)', async () => {
+    const owner = await loginAs('owner');
+    const n = String(Math.floor(Math.random() * 1e6));
+    const part = async (name: string, nameKa: string) => {
+      const made = await call(owner, 'POST', '/api/parts', { name, nameKa, salePriceTetri: 30_00 });
+      expect(made.statusCode, made.body).toBe(201);
+      const partId = json<{ id: string }>(made).id;
+      expect((await call(owner, 'POST', `/api/parts/${partId}/initial`, { qty: 2, unitCostTetri: 10_00 })).statusCode).toBe(201);
+      return partId;
+    };
+    const pads = await part(`Колодки ${n}`, `ხუნდები ${n}`);
+    const cable = await part(`Cable ${n}`, `კაბელი ${n}`);
+    const res = await call(owner, 'POST', '/api/goods-sales', {
+      lines: [
+        { partId: pads, qty: 1, unitPriceTetri: 30_00 },
+        { partId: cable, qty: 1, unitPriceTetri: 30_00 },
+      ],
+      paidNow: { channel: 'cash', amountTetri: 60_00 },
+    });
+    expect(res.statusCode, res.body).toBe(201);
+    const text = await pdfText((await call(owner, 'GET', `/api/goods-sales/${json<{ id: string }>(res).id}/invoice.pdf`)).rawPayload);
+    for (const s of [`ხუნდები ${n}`, `კაბელი ${n}`, `Cable ${n}`]) expect(text, s).toContain(s);
+    expect(text).not.toContain(`Колодки ${n}`);
+  });
+
   it('names an own customer; a person\'s personal number stays off the paper, a company\'s tax code is on it', async () => {
     const owner = await loginAs('owner');
     const manager = await loginAs('manager');

@@ -6,7 +6,7 @@
 // beyond what is open, selling beyond the count, the stocktake question, the
 // rights, one key one sale, and the last charger wanted twice at once.
 // Buyers, items and phones are invented: the repository is public.
-import { acquiringNet, addDays, todayISO } from '@ev8/shared';
+import { acquiringNet, addDays, goodsCancelNote, todayISO } from '@ev8/shared';
 import { describe, expect, it } from 'vitest';
 import { HAS_DB, call, getApp, json, loginAs, makeUser, login, uniq } from './helpers.js';
 
@@ -167,6 +167,37 @@ describe.skipIf(!HAS_DB)('a part for cash at the counter (acceptance 2)', () => 
   });
 });
 
+describe.skipIf(!HAS_DB)('«Платежи» by «Основание» (QA 23.10.2026)', () => {
+  it('lists a voided payment only under the row of its own kind, and counts it under none', async () => {
+    const owner = await loginAs('owner');
+    const r = await renter(owner);
+    const partId = await newPart(owner, { qty: 2 });
+    // A goods payment voided by the seller's undo, and a rent payment voided by an owner.
+    const sold = json<Sold>(await sell(owner, { lines: [{ partId, qty: 1, unitPriceTetri: 35_00 }], paidNow: { channel: 'cash', amountTetri: 35_00 } }));
+    expect((await call(owner, 'POST', `/api/goods-sales/${sold.id}/undo`)).statusCode).toBe(200);
+    const rent = await call(owner, 'POST', '/api/payments', { rentalId: r.rentalId, channel: 'cash', grossTetri: 140_00 });
+    expect(rent.statusCode, rent.body).toBe(201);
+    const rentId = json<{ id: string }>(rent).id;
+    expect((await call(owner, 'POST', `/api/payments/${rentId}/void`, { reason: 'test: entered twice' })).statusCode).toBe(200);
+
+    const w = await week(owner);
+    type List = { totals: { rowTetri: number }; payments: { id: string; voided: boolean }[] };
+    const listed = async (row: string) => json<List>(await call(owner, 'GET', `/api/payments?from=${w.from}&to=${w.to}&row=${row}`));
+    const goods = await listed('goods');
+    const rentRow = await listed('rent');
+    const deposits = await listed('deposits');
+    expect(goods.payments.map((p) => p.id)).toContain(sold.paymentId);
+    expect(goods.payments.map((p) => p.id)).not.toContain(rentId);
+    expect(rentRow.payments.map((p) => p.id)).toContain(rentId);
+    expect(rentRow.payments.map((p) => p.id)).not.toContain(sold.paymentId);
+    expect(deposits.payments.map((p) => p.id)).not.toContain(rentId);
+    expect(deposits.payments.map((p) => p.id)).not.toContain(sold.paymentId);
+    // Shown, not counted: each list still adds up to its figure of the week.
+    expect(goods.totals.rowTetri).toBe(w.money.goodsTetri);
+    expect(rentRow.totals.rowTetri).toBe(w.money.rentTetri);
+  });
+});
+
 describe.skipIf(!HAS_DB)('a cancellation', () => {
   it('an own customer\'s: the part comes back at its cost, his cash becomes his credit and pays his weeks, the journal says both (acceptance 4)', async () => {
     const owner = await loginAs('owner');
@@ -226,7 +257,9 @@ describe.skipIf(!HAS_DB)('a cancellation', () => {
     expect(move).toMatchObject({ item: 'charger', qty: 1 });
     const pay = await prisma.payment.findUniqueOrThrow({ where: { id: sold.paymentId! } });
     expect(pay.voidedAt).not.toBeNull();
-    expect(pay.voidReason).toContain(sold.number);
+    // Written in the one shape a screen reads back: the code's part in the reader's words, the owner's as typed.
+    expect(goodsCancelNote(pay.voidReason)).toEqual({ number: sold.number, undone: false, why: 'test: returned the same day' });
+    expect(goodsCancelNote(move.reason)).toEqual({ number: sold.number, undone: false, why: 'test: returned the same day' });
     expect((await prisma.statementLine.findUniqueOrThrow({ where: { id: line.id } })).status).toBe('unmatched');
   });
 });
@@ -281,6 +314,10 @@ describe.skipIf(!HAS_DB)('more than there is (§1 п. 3, 5; acceptance 7)', () =
     const prisma = await db();
     const { id } = json<Sold>(res);
     expect(await prisma.auditLog.findFirstOrThrow({ where: { entityId: id, action: 'goods_sale.minus' } })).toMatchObject({ before: { seq: 1, qty: 1 }, after: { seq: 1, qty: 2 } });
+    // In the red the shelf has no average, and the card still says what one costs: what the sale took it at.
+    expect((await prisma.goodsSaleLine.findFirstOrThrow({ where: { saleId: id } })).unitCostTetri).toBe(20_00);
+    expect(json<{ part: { avgCostTetri: number | null }; costNowTetri: number | null }>(await call(owner, 'GET', `/api/parts/${partId}`))).toMatchObject({ part: { avgCostTetri: null }, costNowTetri: 20_00 });
+    expect(json<{ costNowTetri: number | null }>(await call(manager, 'GET', `/api/parts/${partId}`)).costNowTetri).toBeNull();
   });
 
   it('sells a charger beyond the count by finding it first, so the count stays where it was', async () => {
@@ -475,7 +512,9 @@ describe.skipIf(!HAS_DB)('«Отменить» on the toast (§1 п. 11; accepta
     expect(undone.statusCode, undone.body).toBe(200);
     expect(await onHand(owner, partId)).toBe(3);
     const prisma = await db();
-    expect(await prisma.payment.findUniqueOrThrow({ where: { id: sold.paymentId! } })).toMatchObject({ voidKind: 'undo' });
+    const undonePay = await prisma.payment.findUniqueOrThrow({ where: { id: sold.paymentId! } });
+    expect(undonePay).toMatchObject({ voidKind: 'undo' });
+    expect(goodsCancelNote(undonePay.voidReason)).toEqual({ number: sold.number, undone: true, why: '' });
     expect(await prisma.auditLog.count({ where: { entityId: sold.id, action: 'goods_sale.undo' } })).toBe(1);
 
     const late = json<Sold>(await sell(manager, { lines: [{ partId, qty: 1, unitPriceTetri: 35_00 }], paidNow: { channel: 'cash', amountTetri: 35_00 } }));

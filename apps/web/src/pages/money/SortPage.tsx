@@ -7,7 +7,7 @@ import { RowMenu } from '../../components/RowMenu.js';
 import { PageHead } from '../../components/ui.js';
 import { Field } from '../../components/Wizard.js';
 import { useToast } from '../../ds/feedback/Toast.js';
-import { FormSheet } from '../../ds/form/Form.js';
+import { FormSheet, useFieldError } from '../../ds/form/Form.js';
 import { useOperation } from '../../ds/form/operation.js';
 import '../../ds/money/money.css';
 import { Skeleton } from '../../ds/state/Skeleton.js';
@@ -162,7 +162,16 @@ export function SortPage() {
           {t.sort.aside(data.asideMonth ?? 0)} · <Link to="/money/sort/aside">{t.sort.show}</Link>
         </p>
       )}
-      {other && <OtherSheet line={other} onClose={() => setOther(null)} />}
+      {other && (
+        <OtherSheet
+          line={other}
+          onClose={() => setOther(null)}
+          onSplit={() => {
+            setOther(null);
+            setSplitting(other);
+          }}
+        />
+      )}
       {notOurs && <NotOursSheet line={notOurs} onClose={() => setNotOurs(null)} />}
       {splitting && <SplitSheet line={splitting} onClose={() => setSplitting(null)} />}
     </>
@@ -340,11 +349,22 @@ interface SearchAnswer {
   };
 }
 
+/** What «Другое» may attach to; a goods sale says what it waits for, and whether that is less than the line. */
+interface OtherPick {
+  body: Record<string, string>;
+  label: string;
+  /** A goods sale's open sum, and whether the line is bigger: the server refuses that, and the sheet says so first. */
+  open?: number;
+  short?: boolean;
+}
+
 /** "Другое": attach to any record, by number, name or phone — not a cut list (§3.2, B2-05). */
-function OtherSheet({ line, onClose }: { line: SortLine; onClose: () => void }) {
+function OtherSheet({ line, onClose, onSplit }: { line: SortLine; onClose: () => void; onSplit: () => void }) {
   const t = useT();
   const [q, setQ] = useState('');
-  const [pick, setPick] = useState<{ body: Record<string, string>; label: string } | null>(null);
+  const [pick, setPick] = useState<OtherPick | null>(null);
+  // What attaching writes: a card line the customer's sum, any other line its amount.
+  const lineTetri = line.channel === 'acquiring' && line.grossTetri != null ? line.grossTetri : line.amountTetri;
   const [answer, setAnswer] = useState<SearchAnswer | null>(null);
   useEffect(() => {
     const text = q.trim();
@@ -362,23 +382,33 @@ function OtherSheet({ line, onClose }: { line: SortLine; onClose: () => void }) 
     };
   }, [q]);
   const g = answer?.groups;
-  const options: { body: Record<string, string>; label: string; sub: string }[] = g
+  const options: (OtherPick & { sub: string })[] = g
     ? [
         ...g.rentals.items.map((r) => ({ body: { rentalId: r.id }, label: r.number, sub: r.customer })),
         ...g.sales.items.filter((x) => x.status === 'active').map((x) => ({ body: { saleId: x.id }, label: x.number, sub: x.customer })),
-        // Goods sales with money still open: a retail buyer's included (ADR-0045).
+        // Goods sales with money still open: a retail buyer's included (ADR-0045). One that waits for
+        // less than the line says so before it is chosen (QA 23.10.2026): the line goes there only split.
         ...(g.goods?.items ?? [])
           .filter((x) => x.status === 'active' && x.openTetri > 0)
-          .map((x) => ({ body: { goodsSaleId: x.id }, label: x.number, sub: `${x.retail ? t.goods.retail : (x.buyer ?? '')} · ${formatGel(x.openTetri, { decimals: false })}` })),
+          .map((x) => ({
+            body: { goodsSaleId: x.id },
+            label: x.number,
+            open: x.openTetri,
+            short: lineTetri > x.openTetri,
+            sub: [x.retail ? t.goods.retail : (x.buyer ?? ''), t.goods.card.waits(formatGel(x.openTetri)), lineTetri > x.openTetri ? t.goods.sort.lessThanLine : ''].filter(Boolean).join(' · '),
+          })),
         ...g.customers.items.map((c) => ({ body: { customerId: c.id }, label: `${t.money.toAccount} · ${c.name}`, sub: t.money.toAccountHint })),
       ]
     : [];
   return (
     <FormSheet
-      title={t.sort.whereTo(formatGel(line.channel === 'acquiring' && line.grossTetri != null ? line.grossTetri : line.amountTetri))}
+      title={t.sort.whereTo(formatGel(lineTetri))}
       onClose={onClose}
       value={pick}
       initial={null}
+      // More than the sale waits for is about the sale chosen: the words go under the list, and the button
+      // stays as it was — sending it again would be refused again (QA 23.10.2026).
+      fieldOf={{ goods_over_open: 'goodsSaleId' }}
       label={pick ? (pick.body.customerId ? pick.label : t.sort.attachTo(pick.label)) : t.sort.other}
       submit={async (key) => {
         if (!pick) throw new Error('nothing picked');
@@ -391,16 +421,43 @@ function OtherSheet({ line, onClose }: { line: SortLine; onClose: () => void }) 
       <ul className="pick-cards">
         {options.map((o) => (
           <li key={JSON.stringify(o.body)}>
-            <button type="button" className={`pick-card ${pick?.label === o.label ? 'on' : ''}`} onClick={() => setPick({ body: o.body, label: o.label })}>
+            <button type="button" className={`pick-card ${pick?.label === o.label ? 'on' : ''}`} onClick={() => setPick({ body: o.body, label: o.label, open: o.open, short: o.short })}>
               <span className="pick-card-main">
                 <span className="pick-card-title">{o.label}</span>
-                <span className="pick-card-sub">{o.sub}</span>
+                <span className={`pick-card-sub ${o.short ? 'warn-text' : ''}`}>{o.sub}</span>
               </span>
             </button>
           </li>
         ))}
       </ul>
+      {pick?.body.goodsSaleId && <OverOpen pick={pick} lineTetri={lineTetri} onSplit={onSplit} />}
     </FormSheet>
+  );
+}
+
+/**
+ * Under «Куда привязать», for a goods sale chosen: when it waits for less than
+ * the line, that it does and how much — before the line is sent — and the way
+ * that works, «Разнести»; once the server has refused, its words, which name
+ * the sum. The place the refusal is about, so the form shows it here.
+ */
+function OverOpen({ pick, lineTetri, onSplit }: { pick: OtherPick; lineTetri: number; onSplit: () => void }) {
+  const t = useT();
+  const refused = useFieldError('goodsSaleId');
+  const warn = refused ?? (pick.short && pick.open != null ? t.goods.sort.overOpen(pick.label, formatGel(pick.open), formatGel(lineTetri)) : null);
+  return (
+    <div className="sort-over" data-field="goodsSaleId">
+      {warn && (
+        <>
+          <p className="field-err" role={refused ? 'alert' : undefined}>
+            {warn}
+          </p>
+          <button type="button" className="pill pill-sm" onClick={onSplit}>
+            {t.sort.split}
+          </button>
+        </>
+      )}
+    </div>
   );
 }
 
@@ -561,6 +618,11 @@ function SplitSheet({ line, onClose }: { line: SortLine; onClose: () => void }) 
     setAmount(p.key, (take / 100).toFixed(2));
     window.setTimeout(() => input.select(), 0);
   };
+  // A goods sale, a repair, a charge: a part above what it waits for is refused by the server — said here
+  // before it is sent, not cut quietly from the debt below (QA 23.10.2026).
+  const CAPPED: SplitPart['kind'][] = ['goods', 'repair', 'charge'];
+  const overBy = (p: SplitPart) => (CAPPED.includes(p.kind) && p.owesTetri > 0 ? Math.max(0, amountOf(p.key) - p.owesTetri) : 0);
+  const anyOver = parts.some((p) => overBy(p) > 0);
   const visible = parts.filter((p) => !p.extra || value.more || amountOf(p.key) > 0);
   const hidden = parts.some((p) => p.extra && !visible.includes(p));
 
@@ -678,6 +740,7 @@ function SplitSheet({ line, onClose }: { line: SortLine; onClose: () => void }) 
                   })}
                 </fieldset>
               )}
+              {overBy(p) > 0 && <p className="field-err">{t.goods.sort.partOver(formatGel(p.owesTetri))}</p>}
               {p.fineOf && (
                 <Field label={t.sort.splitFineFor} name="fineReason">
                   <input className="input" value={value.reasons[p.fineOf] ?? ''} onChange={(e) => setValue((v) => ({ ...v, reasons: { ...v.reasons, [p.fineOf!]: e.target.value } }))} />
@@ -704,7 +767,11 @@ function SplitSheet({ line, onClose }: { line: SortLine; onClose: () => void }) 
                 {said.map((x, i) => (
                   <li key={i}>{x}</li>
                 ))}
-                {targets.data && <li>{after === before ? t.sort.resDebtSame(formatGel(before)) : t.sort.resDebt(formatGel(before), formatGel(after))}</li>}
+                {anyOver ? (
+                  <li className="field-err">{t.goods.sort.fixOver}</li>
+                ) : (
+                  targets.data && <li>{after === before ? t.sort.resDebtSame(formatGel(before)) : t.sort.resDebt(formatGel(before), formatGel(after))}</li>
+                )}
               </ul>
             </div>
           )}
