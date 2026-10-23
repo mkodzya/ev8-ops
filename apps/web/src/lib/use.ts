@@ -81,7 +81,8 @@ export function errorText(e: unknown): string {
  * The code's plain words stay the answer when the figures did not come.
  */
 function withFigures(e: ApiError): string | null {
-  const said: ((number: string, sum: string) => string) | undefined = currentDict().goods.refusals[e.code];
+  const refusals: Partial<Record<string, (number: string, sum: string) => string>> = currentDict().goods.refusals;
+  const said = Object.hasOwn(refusals, e.code) ? refusals[e.code] : undefined;
   const { number, openTetri } = e.extra;
   return said && typeof number === 'string' && typeof openTetri === 'number' ? said(number, formatGel(openTetri)) : null;
 }

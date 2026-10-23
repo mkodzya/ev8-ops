@@ -394,8 +394,8 @@ function OtherSheet({ line, onClose, onSplit }: { line: SortLine; onClose: () =>
             body: { goodsSaleId: x.id },
             label: x.number,
             open: x.openTetri,
-            short: x.openTetri < lineTetri,
-            sub: [x.retail ? t.goods.retail : (x.buyer ?? ''), t.goods.card.waits(formatGel(x.openTetri)), x.openTetri < lineTetri ? t.goods.sort.lessThanLine : ''].filter(Boolean).join(' · '),
+            short: lineTetri > x.openTetri,
+            sub: [x.retail ? t.goods.retail : (x.buyer ?? ''), t.goods.card.waits(formatGel(x.openTetri)), lineTetri > x.openTetri ? t.goods.sort.lessThanLine : ''].filter(Boolean).join(' · '),
           })),
         ...g.customers.items.map((c) => ({ body: { customerId: c.id }, label: `${t.money.toAccount} · ${c.name}`, sub: t.money.toAccountHint })),
       ]
