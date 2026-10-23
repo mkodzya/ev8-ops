@@ -153,7 +153,7 @@ export const goodsEn = {
       overOpen: (n: string, open: string, line: string) => `${n} waits for ${open}, the line is ${line}: it cannot be attached whole. Allocate the line.`,
       /** «Разнести»: a part above what its record waits for — the server refuses it, so the sheet says so first. */
       partOver: (sum: string) => `More than it waits for: ${sum}`,
-      fixOver: 'A part above what is owed will not be written: correct it.',
+      fixOver: 'While a part is above what is owed, the line will not be written: correct it.',
     },
     /** Refusals that name the sale and what is still open on it (`errorText`). */
     refusals: {
@@ -340,7 +340,7 @@ export const goodsRu: Goods = {
       lessThanLine: 'меньше строки',
       overOpen: (n, open, line) => `${n} ждёт ${open}, а строка — ${line}: целиком её не привязать. Разнесите строку.`,
       partOver: (sum) => `Больше, чем ждёт: ${sum}`,
-      fixOver: 'Часть больше долга не запишется: исправьте её.',
+      fixOver: 'Пока часть больше долга, строка не запишется: исправьте её.',
     },
     refusals: {
       goods_over_open: (n, sum) => `Это больше, чем ждёт ${n}: осталось заплатить ${sum}.`,
@@ -519,7 +519,7 @@ export const goodsKa: Goods = {
       // No case ending on a sum («₾-ს»): a line may break at its hyphen.
       overOpen: (n, open, line) => `${n} ელოდება: ${open}; ხაზი: ${line}. მთლიანად ვერ მიებმება — გაანაწილეთ ხაზი.`,
       partOver: (sum) => `მეტია, ვიდრე ელოდება: ${sum}`,
-      fixOver: 'ვალზე მეტი ნაწილი არ ჩაიწერება: შეასწორეთ.',
+      fixOver: 'სანამ ნაწილი ვალზე მეტია, ხაზი არ ჩაიწერება: შეასწორეთ.',
     },
     refusals: {
       goods_over_open: (n, sum) => `ეს მეტია, ვიდრე ${n} ელოდება: დარჩა გადასახდელი ${sum}.`,

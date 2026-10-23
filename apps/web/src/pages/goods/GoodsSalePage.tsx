@@ -13,6 +13,7 @@ import { useOperation } from '../../ds/form/operation.js';
 import { useMoneyForm } from '../../ds/money/MoneyForm.js';
 import { fmtDate, fmtDateAt } from '../../format.js';
 import { useT } from '../../i18n/index.js';
+import { chargeWords } from '../../lib/charges.js';
 import { noteWords } from '../../lib/journal.js';
 import { useLoad } from '../../lib/use.js';
 import { useSession } from '../../session.js';
@@ -335,6 +336,8 @@ function CancelSheet({ id, number, onClose, onDone }: { id: string; number: stri
       const sum = formatGel(cl.amountTetri);
       if (cl.target === 'period') return k.paysWeek(dm(cl.startsOn), dm(cl.endsOn), sum);
       if (cl.target === 'deposit') return k.paysDeposit(sum);
+      // A return's charge comes with its kind in `number`: «Потеря ключа», not «key» (as MoneyForm names it).
+      if (cl.target === 'charge') return k.paysRecord(chargeWords(t, cl.number), sum);
       return k.paysRecord(cl.number ?? '', sum);
     })
     .join(', ');
