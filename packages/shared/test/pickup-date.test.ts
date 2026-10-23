@@ -232,6 +232,34 @@ describe('the deposit received before EV8 Ops (ADR-0044 §2)', () => {
     expect(() => depositBeforePlan(m, 18001)).toThrow();
   });
 
+  it('money that lands on a charge names the charge by its id, not by its place in the list', () => {
+    // The card names a charge by its kind and note and never numbers it.
+    const m: RentalMoney = {
+      weeks: [week(1, TRUE_DAY, [{ paymentId: 'p0', amountTetri: 15000 }])],
+      deposit: { id: 'd', amountTetri: 18000, receivedBeforeTetri: 0, parts: [{ id: 'a1', paymentId: 'p1', amountTetri: 18000 }] },
+      charges: [
+        { id: 'c-key', amountTetri: 5000, parts: [{ paymentId: 'p0', amountTetri: 5000 }] },
+        { id: 'c-fine', amountTetri: 7000, parts: [] },
+      ],
+      credit: [
+        { id: 'p0', creditTetri: 0 },
+        { id: 'p1', creditTetri: 0 },
+      ],
+    };
+    const after = settleMoney(depositBeforePlan(m, 18000).money);
+    const change = moneyChange(m, after, { today: TODAY, payOffsetWas: 0, payOffsetNow: 0 });
+    expect(change.moves).toEqual([
+      {
+        paymentId: 'p1',
+        was: [{ kind: 'deposit', amountTetri: 18000 }],
+        now: [
+          { kind: 'charge', chargeId: 'c-fine', amountTetri: 7000 },
+          { kind: 'credit', amountTetri: 11000 },
+        ],
+      },
+    ]);
+  });
+
   it('taken off, the deposit is owed again and closes first: a bank line of 250 is the deposit and 70 of the week', () => {
     // The second case of the issue, made up: marked received earlier, though it came by the bank.
     const m: RentalMoney = {

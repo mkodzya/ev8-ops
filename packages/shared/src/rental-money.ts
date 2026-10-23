@@ -216,8 +216,10 @@ export function moneyPaidThrough(m: RentalMoney): ISODate | null {
 /** Where a payment's money lies on this rental: the deposit, a week by its number, a charge — or nowhere yet. */
 export interface MoneyTarget {
   kind: 'deposit' | 'week' | 'charge' | 'credit';
-  /** The week's number, or the charge's place in the list. */
+  /** The week's number, as the card shows it. */
   seq?: number;
+  /** The charge's id: the card names a charge by its kind and note, never by a number. */
+  chargeId?: string;
   amountTetri: Tetri;
 }
 
@@ -233,13 +235,13 @@ export interface MoneyChange {
 
 function targetsOf(m: RentalMoney, paymentId: string): MoneyTarget[] {
   const out: MoneyTarget[] = [];
-  const add = (kind: MoneyTarget['kind'], parts: readonly MoneyPart[], seq?: number) => {
+  const add = (kind: MoneyTarget['kind'], parts: readonly MoneyPart[], which: { seq?: number; chargeId?: string } = {}) => {
     const sum = sumParts(parts.filter((p) => p.paymentId === paymentId));
-    if (sum > 0) out.push({ kind, ...(seq != null ? { seq } : {}), amountTetri: sum });
+    if (sum > 0) out.push({ kind, ...which, amountTetri: sum });
   };
   if (m.deposit) add('deposit', m.deposit.parts);
-  for (const w of [...m.weeks].sort((a, b) => a.seq - b.seq)) add('week', w.parts, w.seq);
-  m.charges.forEach((c, i) => add('charge', c.parts, i + 1));
+  for (const w of [...m.weeks].sort((a, b) => a.seq - b.seq)) add('week', w.parts, { seq: w.seq });
+  for (const c of m.charges) add('charge', c.parts, { chargeId: c.id });
   const credit = m.credit.find((c) => c.id === paymentId)?.creditTetri ?? 0;
   if (credit > 0) out.push({ kind: 'credit', amountTetri: credit });
   return out;

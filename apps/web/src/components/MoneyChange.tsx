@@ -1,6 +1,7 @@
 import type { MoneyChange, MoneyTarget } from '@ev8/shared';
 import { fmtDate, fmtDayMonth, formatGel } from '../format.js';
 import { useT } from '../i18n/index.js';
+import { chargeWords } from '../lib/charges.js';
 import { Row } from './Wizard.js';
 
 /** A payment the change moves, as a person knows it: the day, the sum, how it came. */
@@ -9,6 +10,13 @@ export interface MovedPayment {
   occurredOn: string | null;
   grossTetri: number;
   channel: string;
+}
+
+/** A charge of the rental as its card names it: its kind, and its note. */
+export interface ChargeName {
+  id: string;
+  kind: string;
+  note: string | null;
 }
 
 const gel = (tetri: number) => formatGel(tetri, { decimals: false });
@@ -20,12 +28,17 @@ const gel = (tetri: number) => formatGel(tetri, { decimals: false });
  * the debt and «оплачено по» before and after. The sheet of a new hand-over
  * date shows the weeks' days; the deposit's sheet only the weeks whose money moves.
  */
-export function MoneyChangeView({ change, payments, days }: { change: MoneyChange; payments: MovedPayment[]; days: boolean }) {
+export function MoneyChangeView({ change, payments, charges, days }: { change: MoneyChange; payments: MovedPayment[]; charges: ChargeName[]; days: boolean }) {
   const t = useT();
   const w = t.pickupDate;
   const span = (d: { startsOn: string; endsOn: string }) => w.span(fmtDayMonth(d.startsOn), fmtDayMonth(d.endsOn));
+  // A charge by its kind and note, as the card names it.
+  const chargeName = (id: string | undefined) => {
+    const c = charges.find((x) => x.id === id);
+    return c ? chargeWords(t, c.kind, c.note) : w.target.anyCharge;
+  };
   const target = (x: MoneyTarget) =>
-    x.kind === 'deposit' ? w.target.deposit(gel(x.amountTetri)) : x.kind === 'week' ? w.target.week(x.seq ?? 0, gel(x.amountTetri)) : x.kind === 'charge' ? w.target.charge(x.seq ?? 0, gel(x.amountTetri)) : w.target.credit(gel(x.amountTetri));
+    x.kind === 'deposit' ? w.target.deposit(gel(x.amountTetri)) : x.kind === 'week' ? w.target.week(x.seq ?? 0, gel(x.amountTetri)) : x.kind === 'charge' ? w.target.charge(chargeName(x.chargeId), gel(x.amountTetri)) : w.target.credit(gel(x.amountTetri));
   const targets = (list: MoneyTarget[]) => (list.length > 0 ? list.map(target).join(', ') : t.common.dash);
   const channels = t.payments.channels as Record<string, string>;
   const paymentLabel = (id: string) => {

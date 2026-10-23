@@ -30,12 +30,14 @@ export const pickupDateEn = {
     noMoves: 'No payment moves: the money stays on the same weeks.',
     debt: 'Debt',
     payDay: 'Pay day',
-    /** Where a payment's money lies on the rental. */
+    /** Where a payment's money lies on the rental. The colon keeps «week 1» and «150 ₾» apart: without it they read as 1 150 ₾. */
     target: {
-      deposit: (sum: string) => `deposit ${sum}`,
-      week: (seq: number, sum: string) => `week ${seq} ${sum}`,
-      charge: (seq: number, sum: string) => `charge ${seq} ${sum}`,
-      credit: (sum: string) => `rent credit ${sum}`,
+      deposit: (sum: string) => `deposit: ${sum}`,
+      week: (seq: number, sum: string) => `week ${seq}: ${sum}`,
+      /** `what` — the charge as the card names it: its kind, and its note. */
+      charge: (what: string, sum: string) => `${what}: ${sum}`,
+      anyCharge: 'charge',
+      credit: (sum: string) => `rent credit: ${sum}`,
     },
     /** The journal's line: each figure by its name. */
     journal: {
@@ -73,7 +75,7 @@ export const pickupDateEn = {
   depositEarlier: {
     tick: 'Deposit received earlier',
     tickHint: 'only if it came before: with an earlier moped or before EV8 Ops',
-    ask: 'Did the deposit come by bank transfer or in cash after the rental began?',
+    ask: 'Did the deposit come after the rental began (by bank transfer or in cash)?',
     askWhy: 'The rental began less than three weeks ago — the deposit may have come with the first money.',
     cameAfter: 'Yes, it came later',
     cameBefore: 'No, it was received earlier',
@@ -108,10 +110,11 @@ export const pickupDateRu: typeof pickupDateEn = {
     debt: 'Долг',
     payDay: 'День оплаты',
     target: {
-      deposit: (sum) => `залог ${sum}`,
-      week: (seq, sum) => `неделя ${seq} ${sum}`,
-      charge: (seq, sum) => `начисление ${seq} ${sum}`,
-      credit: (sum) => `аванс по аренде ${sum}`,
+      deposit: (sum) => `залог: ${sum}`,
+      week: (seq, sum) => `неделя ${seq}: ${sum}`,
+      charge: (what, sum) => `${what}: ${sum}`,
+      anyCharge: 'начисление',
+      credit: (sum) => `аванс по аренде: ${sum}`,
     },
     journal: {
       pickedUpOn: 'выдача',
@@ -146,7 +149,7 @@ export const pickupDateRu: typeof pickupDateEn = {
   depositEarlier: {
     tick: 'Залог получен раньше',
     tickHint: 'только если он пришёл раньше: с прошлым мопедом или до EV8 Ops',
-    ask: 'Залог пришёл банковским переводом или наличными уже после начала аренды?',
+    ask: 'Залог пришёл уже после начала аренды (банковским переводом или наличными)?',
     askWhy: 'Аренда началась меньше трёх недель назад — залог мог прийти с первыми деньгами.',
     cameAfter: 'Да, пришёл позже',
     cameBefore: 'Нет, получен раньше',
@@ -181,10 +184,11 @@ export const pickupDateKa: typeof pickupDateEn = {
     debt: 'დავალიანება',
     payDay: 'გადახდის დღე',
     target: {
-      deposit: (sum) => `დეპოზიტი ${sum}`,
-      week: (seq, sum) => `კვირა ${seq} ${sum}`,
-      charge: (seq, sum) => `დარიცხვა ${seq} ${sum}`,
-      credit: (sum) => `ქირის ავანსი ${sum}`,
+      deposit: (sum) => `დეპოზიტი: ${sum}`,
+      week: (seq, sum) => `კვირა ${seq}: ${sum}`,
+      charge: (what, sum) => `${what}: ${sum}`,
+      anyCharge: 'დარიცხვა',
+      credit: (sum) => `ქირის ავანსი: ${sum}`,
     },
     journal: {
       pickedUpOn: 'გაცემა',
@@ -219,7 +223,7 @@ export const pickupDateKa: typeof pickupDateEn = {
   depositEarlier: {
     tick: 'დეპოზიტი ადრე იყო მიღებული',
     tickHint: 'მხოლოდ თუ ადრე მოვიდა: წინა მოპედთან ერთად ან EV8 Ops-მდე',
-    ask: 'დეპოზიტი ქირაობის დაწყების შემდეგ მოვიდა — ბანკით გადარიცხვით ან ნაღდით?',
+    ask: 'დეპოზიტი ქირაობის დაწყების შემდეგ მოვიდა (ბანკით ან ნაღდით)?',
     askWhy: 'ქირაობა სამ კვირაზე ნაკლები ხნის წინ დაიწყო — დეპოზიტი შესაძლოა პირველ თანხასთან ერთად მოვიდა.',
     cameAfter: 'დიახ, მოგვიანებით მოვიდა',
     cameBefore: 'არა, ადრე იყო მიღებული',

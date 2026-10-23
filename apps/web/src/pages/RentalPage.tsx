@@ -1,7 +1,7 @@
 import type { ActKind, DepositStatus, MoneyChange, PeriodPayStatus, PickupDateRefusal, RentalStatus, WeekDue } from '@ev8/shared';
 import { useEffect, useState } from 'react';
 import { MAX_SHIFT_DAYS, isISODate, isoWeekday, parseGel, shiftDaysOffered, todayISO, waOffered, weekDue, weekShiftPlan, type VehicleState } from '@ev8/shared';
-import { MoneyChangeView, type MovedPayment } from '../components/MoneyChange.js';
+import { MoneyChangeView, type ChargeName, type MovedPayment } from '../components/MoneyChange.js';
 import { DocumentRow, signedAtText, type DocState } from '../components/Documents.js';
 import { KommoField } from '../components/Kommo.js';
 import { RecordHistory } from '../components/RecordHistory.js';
@@ -243,8 +243,8 @@ export function RentalPage() {
         />
       )}
       {sheet === 'fine' && <FineSheet rentalId={r.id} onClose={closeSheet} onDone={() => { closeSheet(); reload(); }} />}
-      {sheet === 'pickupDate' && r.pickedUpOn && <PickupDateSheet rental={r} onClose={closeSheet} onDone={() => { closeSheet(); reload(); }} />}
-      {sheet === 'depositBefore' && d && <DepositBeforeSheet rental={r} deposit={d} onClose={closeSheet} onDone={() => { closeSheet(); reload(); }} />}
+      {sheet === 'pickupDate' && r.pickedUpOn && <PickupDateSheet rental={r} charges={data.charges} onClose={closeSheet} onDone={() => { closeSheet(); reload(); }} />}
+      {sheet === 'depositBefore' && d && <DepositBeforeSheet rental={r} deposit={d} charges={data.charges} onClose={closeSheet} onDone={() => { closeSheet(); reload(); }} />}
       {unfining && (
         <UnfineSheet
           rentalId={r.id}
@@ -1120,7 +1120,7 @@ interface PickupDatePreview {
  * counts it, the weeks before and after, every payment whose money lands
  * elsewhere and the debt before and after (ux.md №14, №15).
  */
-function PickupDateSheet({ rental, onClose, onDone }: { rental: RentalCard['rental']; onClose: () => void; onDone: () => void }) {
+function PickupDateSheet({ rental, charges, onClose, onDone }: { rental: RentalCard['rental']; charges: ChargeName[]; onClose: () => void; onDone: () => void }) {
   const t = useT();
   const w = t.pickupDate;
   const today = todayISO();
@@ -1197,7 +1197,7 @@ function PickupDateSheet({ rental, onClose, onDone }: { rental: RentalCard['rent
       {asked && !preview && !failed && <p className="hint muted">{w.counting}</p>}
       {preview?.money && (
         <>
-          <MoneyChangeView change={preview.money} payments={preview.payments} days />
+          <MoneyChangeView change={preview.money} payments={preview.payments} charges={charges} days />
           {preview.payDay.was !== preview.payDay.now && <p className="hint">{`${w.payDay}: ${weekday(preview.payDay.was)} → ${weekday(preview.payDay.now)}`}</p>}
         </>
       )}
@@ -1219,7 +1219,7 @@ interface DepositBeforePreview {
  * ADR-0044 §2). It is no payment; what payments put on the deposit beyond
  * its sum goes onto the weeks, and the sheet shows where before it is written.
  */
-function DepositBeforeSheet({ rental, deposit, onClose, onDone }: { rental: RentalCard['rental']; deposit: NonNullable<RentalCard['deposit']>; onClose: () => void; onDone: () => void }) {
+function DepositBeforeSheet({ rental, deposit, charges, onClose, onDone }: { rental: RentalCard['rental']; deposit: NonNullable<RentalCard['deposit']>; charges: ChargeName[]; onClose: () => void; onDone: () => void }) {
   const t = useT();
   const w = t.depositBefore;
   const had = deposit.receivedBeforeTetri ?? 0;
@@ -1271,7 +1271,7 @@ function DepositBeforeSheet({ rental, deposit, onClose, onDone }: { rental: Rent
         <>
           {preview.freedTetri > 0 && <p className="hint">{w.freed(formatGel(preview.freedTetri, { decimals: false }))}</p>}
           {preview.receivedBefore.now < preview.receivedBefore.was && <p className="hint">{w.owedAgain}</p>}
-          <MoneyChangeView change={preview.money} payments={preview.payments} days={false} />
+          <MoneyChangeView change={preview.money} payments={preview.payments} charges={charges} days={false} />
         </>
       )}
     </FormSheet>
