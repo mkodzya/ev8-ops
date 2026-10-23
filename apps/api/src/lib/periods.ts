@@ -5,7 +5,7 @@ import { dateFromISO, isoDate } from './dates.js';
 import { prisma } from './db.js';
 import { env } from './env.js';
 import { recomputeRental } from './payments.js';
-import { rentalOwed, spreadRental, writeAllocations } from './rentalMoney.js';
+import { creditPaymentsWhere, rentalOwed, spreadRental, writeAllocations } from './rentalMoney.js';
 
 // The nightly job (RNT-02, PAY-06), and the reason it lives in the API
 // rather than in the worker: the worker is the clock, this is the brain.
@@ -28,14 +28,9 @@ export async function settleCredit(rentalId: string): Promise<number> {
     // Payments of this rental first, then the customer's payments that were
     // never tied to a rental. Oldest first, the order a debt is paid off in.
     const payments = await tx.payment.findMany({
-      where: {
-        voidedAt: null,
-        direction: 'in',
-        // A sale's or a repair's payment is that record's own: it never pays
-        // rent, however much of it is left over (B2-08).
-        kind: { in: ['rent', 'on_account'] },
-        OR: [{ rentalId }, { customerId: rental.customerId, rentalId: null }],
-      },
+      // A sale's or a repair's payment is that record's own: it never pays
+      // rent, however much of it is left over (B2-08).
+      where: creditPaymentsWhere(rentalId, rental.customerId),
       orderBy: [{ occurredOn: 'asc' }, { createdAt: 'asc' }],
       include: { allocations: { select: { amountTetri: true } } },
     });

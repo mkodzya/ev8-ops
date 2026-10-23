@@ -38,6 +38,7 @@ import { contractSignedEn } from './contract-signed.js';
 import { saleDateEn } from './sale-date.js';
 import { rentalSwapEn } from './rental-swap.js';
 import { vehicleCardEn } from './vehicle-card.js';
+import { pickupDateEn } from './pickup-date.js';
 export const en = {
   lang: { label: 'Language', ka: 'ქართული', ru: 'Русский', en: 'English' },
 
@@ -1364,6 +1365,17 @@ export const en = {
       supplier_not_found: 'No such supplier.',
       swap_before_last_event: 'The swap date is before something already recorded in the history of one of the mopeds. Pick a later date.',
       swap_no_vehicle: 'This rental has no moped yet. Give it one in «Change terms» first.',
+      pickup_date_future: 'The hand-over date is today at the latest.',
+      pickup_date_same: 'The rental already has this hand-over date. Pick another one.',
+      pickup_date_week_shifted: 'By the new date a week made longer would not have begun yet. Take the week’s move back first.',
+      pickup_date_week_discounted: 'By the new date a week with a discount would not have begun yet. Take the discount off first (0 in «Discount on the week»).',
+      transfer_paid_through_week_end: '«Paid through» before EV8 Ops is no longer the end of a week on the new dates. Choose it again.',
+      pickup_before_arrival: 'The moped arrived after this date. The hand-over cannot be earlier than its arrival.',
+      pickup_after_swap: 'The moped was changed before this date. The hand-over comes before the swap.',
+      pickup_date_history: 'This date crosses something already recorded in the moped’s history. Pick a date closer to the current one.',
+      deposit_before_over: 'More cannot have been received earlier than the deposit itself.',
+      deposit_before_same: 'The deposit already says this much was received earlier.',
+      deposit_before_held: 'Part of this deposit was already kept for a repair: it cannot hold less than that.',
       too_late: 'It is too late to undo. Reassign the moped again instead.',
       too_many_attempts: 'Too many attempts. Wait 15 minutes and try again.',
       transfer_date: 'A rental that began before EV8 Ops must start before today, and paid weeks must end on a week boundary.',
@@ -1432,6 +1444,7 @@ export const en = {
   ...saleDateEn,
   ...rentalSwapEn,
   ...vehicleCardEn,
+  ...pickupDateEn,
 };
 
 export type Dict = typeof en;

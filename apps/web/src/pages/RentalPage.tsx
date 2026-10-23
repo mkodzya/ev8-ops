@@ -1,6 +1,7 @@
-import type { ActKind, DepositStatus, PeriodPayStatus, RentalStatus, WeekDue } from '@ev8/shared';
-import { useState } from 'react';
-import { MAX_SHIFT_DAYS, isoWeekday, parseGel, shiftDaysOffered, todayISO, waOffered, weekDue, weekShiftPlan, type VehicleState } from '@ev8/shared';
+import type { ActKind, DepositStatus, MoneyChange, PeriodPayStatus, PickupDateRefusal, RentalStatus, WeekDue } from '@ev8/shared';
+import { useEffect, useState } from 'react';
+import { MAX_SHIFT_DAYS, isISODate, isoWeekday, parseGel, shiftDaysOffered, todayISO, waOffered, weekDue, weekShiftPlan, type VehicleState } from '@ev8/shared';
+import { MoneyChangeView, type ChargeName, type MovedPayment } from '../components/MoneyChange.js';
 import { DocumentRow, signedAtText, type DocState } from '../components/Documents.js';
 import { KommoField } from '../components/Kommo.js';
 import { RecordHistory } from '../components/RecordHistory.js';
@@ -17,7 +18,7 @@ import { useMoneyForm } from '../ds/money/MoneyForm.js';
 import { Row } from '../components/Wizard.js';
 import { fmtDate, fmtDayMonth, formatGel } from '../format.js';
 import { useT } from '../i18n/index.js';
-import { useLoad } from '../lib/use.js';
+import { errorText, useLoad } from '../lib/use.js';
 import { useSession } from '../session.js';
 
 /**
@@ -92,7 +93,8 @@ export interface RentalCard {
   feed: { at: string; kind: 'payment' | 'act' | 'document' | 'log'; by: string | null; text: string; amountTetri: number | null; note: string | null }[];
   documents: { contract: DocState; returnAct: DocState | null };
   payments: { id: string; occurredOn: string; channel: Channel; grossTetri: number; feeTetri: number }[];
-  deposit: { amountTetri: number; paidTetri: number; status: DepositStatus; returnedTetri: number; withheldTetri: number; withheldReason: string | null; withheldGrounds: string[]; returnedTo: string | null; returnedOn: string | null; decided: boolean; paidOutTetri: number; withholdings: { source: string; amountTetri: number; number: string; reason: string }[] } | null;
+  /** `receivedBeforeTetri`: of what was received, what came before EV8 Ops (ADR-0044 §2); absent while an older API answers. */
+  deposit: { amountTetri: number; paidTetri: number; receivedBeforeTetri?: number; status: DepositStatus; returnedTetri: number; withheldTetri: number; withheldReason: string | null; withheldGrounds: string[]; returnedTo: string | null; returnedOn: string | null; decided: boolean; paidOutTetri: number; withholdings: { source: string; amountTetri: number; number: string; reason: string }[] } | null;
   periods: {
     seq: number;
     startsOn: string;
@@ -130,7 +132,7 @@ export function RentalPage() {
   const { data, failure, reload } = useLoad<RentalCard>(id ? `/api/rentals/${id}` : null);
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
-  const [sheet, setSheet] = useState<null | 'edit' | 'status' | 'undo' | 'decide' | 'fine'>(params.get('decide') === '1' ? 'decide' : null);
+  const [sheet, setSheet] = useState<null | 'edit' | 'status' | 'undo' | 'decide' | 'fine' | 'pickupDate' | 'depositBefore'>(params.get('decide') === '1' ? 'decide' : null);
   const [wa, setWa] = useState(false);
   const [feedFilter, setFeedFilter] = useState<'all' | 'payment' | 'act' | 'document' | 'log'>('all');
   const closeSheet = () => {
@@ -185,6 +187,8 @@ export function RentalPage() {
   ];
   const menu = [
     ...(open && can('rental.create') ? [{ key: 'edit', label: t.rentalMenu.edit, onPick: () => setSheet('edit') }] : []),
+    // The true day of hand-over, an owner's, beside the pay day in «Change terms» (ADR-0044 §1).
+    ...(open && owner && r.pickedUpOn ? [{ key: 'pickupDate', label: t.pickupDate.action, onPick: () => setSheet('pickupDate') }] : []),
     // Another moped in the same rental (ADR-0040): a return and a hand-over in one, so both rights.
     ...(swappable ? [{ key: 'swap', label: t.swap.menu, onPick: () => navigate(`/rentals/${r.id}/swap`) }] : []),
     ...(open && owner ? [{ key: 'status', label: t.rentalMenu.status, onPick: () => setSheet('status') }] : []),
@@ -239,6 +243,8 @@ export function RentalPage() {
         />
       )}
       {sheet === 'fine' && <FineSheet rentalId={r.id} onClose={closeSheet} onDone={() => { closeSheet(); reload(); }} />}
+      {sheet === 'pickupDate' && r.pickedUpOn && <PickupDateSheet rental={r} charges={data.charges} onClose={closeSheet} onDone={() => { closeSheet(); reload(); }} />}
+      {sheet === 'depositBefore' && d && <DepositBeforeSheet rental={r} deposit={d} charges={data.charges} onClose={closeSheet} onDone={() => { closeSheet(); reload(); }} />}
       {unfining && (
         <UnfineSheet
           rentalId={r.id}
@@ -484,11 +490,15 @@ export function RentalPage() {
         </section>
 
         <section className="card">
-          <BlockHead title={t.rentals.deposit} />
+          <BlockHead title={t.rentals.deposit}>
+            {/* Received before EV8 Ops, on an open rental: an owner marks it or takes the mark off (ADR-0044 §2). */}
+            {owner && open && d && !d.decided ? <RowMenu actions={[{ key: 'depositBefore', label: t.depositBefore.action, onPick: () => setSheet('depositBefore') }]} /> : null}
+          </BlockHead>
           {d ? (
             <>
               {/* Received of what the contract asks, what was kept line by line, handed back, on hand (B5-04, §3.3). */}
               <Row k={t.rental.paid} v={<span className="mono">{t.rentalMoney.receivedOf(formatGel(d.paidTetri, { decimals: false }), formatGel(d.amountTetri, { decimals: false }))}</span>} />
+              {(d.receivedBeforeTetri ?? 0) > 0 && <Row k={t.depositBefore.row} v={<span className="mono">{formatGel(d.receivedBeforeTetri ?? 0, { decimals: false })}</span>} />}
               {d.withholdings.map((w, i) => (
                 <Row
                   key={i}
@@ -1087,6 +1097,183 @@ function UndoSheet({ rental, until, onClose, onDone }: { rental: RentalCard['ren
         <input className="input" value={f.reason} onChange={(e) => setF({ reason: e.target.value })} />
       </Field>
       <p className="hint muted">{t.rentalMenu.undoUntil(untilText)}</p>
+    </FormSheet>
+  );
+}
+
+/** What the server says a new hand-over date would do (POST …/pickup-date/preview). */
+interface PickupDatePreview {
+  pickedUpOn: { was: string; now: string };
+  /** The plan's own refusal of the day — said beside the date, nothing to count. */
+  refusal: { code: PickupDateRefusal; seq?: number } | null;
+  /** A rental carried over with weeks paid before EV8 Ops: «оплачено по» kept as a date, chosen again if it must be. */
+  transfer: { was: string | null; now: string | null; options: string[] } | null;
+  payDay: { was: number; now: number };
+  money: MoneyChange | null;
+  payments: MovedPayment[];
+}
+
+/**
+ * «Дата выдачи» — an owner gives an open rental its true day of hand-over,
+ * with a reason (issue #10; ADR-0044 §1). The weeks are counted again from it
+ * and keep their numbers and money; the sheet shows beforehand, as the server
+ * counts it, the weeks before and after, every payment whose money lands
+ * elsewhere and the debt before and after (ux.md №14, №15).
+ */
+function PickupDateSheet({ rental, charges, onClose, onDone }: { rental: RentalCard['rental']; charges: ChargeName[]; onClose: () => void; onDone: () => void }) {
+  const t = useT();
+  const w = t.pickupDate;
+  const today = todayISO();
+  // `paidBefore`: '' — not said, the transfer's own date; 'none' — nothing paid before; else a week's end.
+  const initial = { date: rental.pickedUpOn ?? '', paidBefore: '', reason: '' };
+  const [f, setF] = useState(initial);
+  const [preview, setPreview] = useState<PickupDatePreview | null>(null);
+  const [failed, setFailed] = useState<string | null>(null);
+  const asked = f.date !== initial.date && isISODate(f.date);
+  const paidBeforeBody = f.paidBefore === '' ? {} : { paidBeforeThrough: f.paidBefore === 'none' ? null : f.paidBefore };
+  useEffect(() => {
+    setPreview(null);
+    setFailed(null);
+    if (!asked) return;
+    let live = true;
+    api
+      .ask<PickupDatePreview>(`/api/rentals/${rental.id}/pickup-date/preview`, { pickedUpOn: f.date, ...paidBeforeBody })
+      .then((p) => live && setPreview(p))
+      .catch((e: unknown) => live && setFailed(errorText(e)));
+    return () => {
+      live = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rental.id, f.date, f.paidBefore, asked]);
+  const refusal = preview?.refusal ?? null;
+  const codes = t.errors.codes as Record<string, string>;
+  // The day's refusal goes under the date; «оплачено по» asked again, under its own field.
+  const dateError = failed ?? (refusal && refusal.code !== 'transfer_paid_through_week_end' ? codes[refusal.code] : null);
+  const transfer = preview?.transfer ?? null;
+  const chosen = f.paidBefore !== '' ? f.paidBefore : transfer?.now && transfer.options.includes(transfer.now) ? transfer.now : '';
+  const weekday = (day: number) => t.calendar.weekdaysIn[day % 7];
+  return (
+    <FormSheet
+      title={w.title(rental.number)}
+      onClose={onClose}
+      value={f}
+      initial={initial}
+      label={w.save}
+      submit={async (key) => {
+        await api.post(`/api/rentals/${rental.id}/pickup-date`, { pickedUpOn: f.date, reason: f.reason.trim(), ...paidBeforeBody }, { key });
+        return { toast: { text: w.done } };
+      }}
+      onDone={onDone}
+    >
+      <p className="hint muted">{w.intro}</p>
+      <Field label={w.date} hint={w.dateHint(fmtDate(rental.pickedUpOn))} name="pickedUpOn" error={dateError}>
+        <input className="input mono" type="date" max={today} value={f.date} onChange={(e) => setF({ ...f, date: e.target.value, paidBefore: '' })} />
+      </Field>
+      {transfer && (
+        <Field
+          label={w.paidBefore}
+          hint={transfer.was ? w.paidBeforeHint(fmtDate(transfer.was)) : undefined}
+          name="paidBeforeThrough"
+          error={refusal?.code === 'transfer_paid_through_week_end' ? codes[refusal.code] : null}
+        >
+          <select className="input mono" value={chosen} onChange={(e) => setF({ ...f, paidBefore: e.target.value })}>
+            {chosen === '' && (
+              <option value="" disabled>
+                {w.choose}
+              </option>
+            )}
+            {transfer.options.map((d) => (
+              <option key={d} value={d}>
+                {fmtDate(d)}
+              </option>
+            ))}
+            <option value="none">{w.notPaid}</option>
+          </select>
+        </Field>
+      )}
+      <Field label={w.reason} hint={w.reasonHint} name="reason">
+        <input className="input" value={f.reason} onChange={(e) => setF({ ...f, reason: e.target.value })} />
+      </Field>
+      {asked && !preview && !failed && <p className="hint muted">{w.counting}</p>}
+      {preview?.money && (
+        <>
+          <MoneyChangeView change={preview.money} payments={preview.payments} charges={charges} days />
+          {preview.payDay.was !== preview.payDay.now && <p className="hint">{`${w.payDay}: ${weekday(preview.payDay.was)} → ${weekday(preview.payDay.now)}`}</p>}
+        </>
+      )}
+    </FormSheet>
+  );
+}
+
+/** What the server says the mark would do (POST …/deposit/before/preview). */
+interface DepositBeforePreview {
+  receivedBefore: { was: number; now: number };
+  freedTetri: number;
+  money: MoneyChange;
+  payments: MovedPayment[];
+}
+
+/**
+ * «Залог получен раньше» — an owner marks an open rental's deposit received
+ * before EV8 Ops, or takes the mark off with 0, with a reason (issue #10;
+ * ADR-0044 §2). It is no payment; what payments put on the deposit beyond
+ * its sum goes onto the weeks, and the sheet shows where before it is written.
+ */
+function DepositBeforeSheet({ rental, deposit, charges, onClose, onDone }: { rental: RentalCard['rental']; deposit: NonNullable<RentalCard['deposit']>; charges: ChargeName[]; onClose: () => void; onDone: () => void }) {
+  const t = useT();
+  const w = t.depositBefore;
+  const had = deposit.receivedBeforeTetri ?? 0;
+  // Offered first: the mark as it is, or — none yet — the whole deposit.
+  const initial = { amount: String((had > 0 ? had : deposit.amountTetri) / 100), reason: '' };
+  const [f, setF] = useState(initial);
+  const [preview, setPreview] = useState<DepositBeforePreview | null>(null);
+  const [failed, setFailed] = useState<string | null>(null);
+  const amount = parseGel(f.amount);
+  const asked = amount != null && amount !== had;
+  useEffect(() => {
+    setPreview(null);
+    setFailed(null);
+    if (!asked) return;
+    let live = true;
+    api
+      .ask<DepositBeforePreview>(`/api/rentals/${rental.id}/deposit/before/preview`, { receivedBeforeTetri: f.amount.trim() })
+      .then((p) => live && setPreview(p))
+      .catch((e: unknown) => live && setFailed(errorText(e)));
+    return () => {
+      live = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rental.id, f.amount, asked]);
+  const off = amount === 0;
+  return (
+    <FormSheet
+      title={w.title(rental.number)}
+      onClose={onClose}
+      value={f}
+      initial={initial}
+      label={off ? w.undoAction : w.save}
+      submit={async (key) => {
+        await api.post(`/api/rentals/${rental.id}/deposit/before`, { receivedBeforeTetri: f.amount.trim(), reason: f.reason.trim() }, { key });
+        // Taking the mark off is said in its own words.
+        return { toast: { text: off ? w.undone : w.done } };
+      }}
+      onDone={onDone}
+    >
+      <p className="hint muted">{w.intro}</p>
+      <Field label={w.amount} hint={w.amountHint(formatGel(deposit.amountTetri, { decimals: false }))} name="receivedBeforeTetri" error={failed}>
+        <input className="input mono" inputMode="decimal" value={f.amount} onChange={(e) => setF({ ...f, amount: e.target.value })} />
+      </Field>
+      <Field label={w.reason} hint={w.reasonHint} name="reason">
+        <input className="input" value={f.reason} onChange={(e) => setF({ ...f, reason: e.target.value })} />
+      </Field>
+      {asked && !preview && !failed && <p className="hint muted">{t.pickupDate.counting}</p>}
+      {preview && (
+        <>
+          {preview.freedTetri > 0 && <p className="hint">{w.freed(formatGel(preview.freedTetri, { decimals: false }))}</p>}
+          {preview.receivedBefore.now < preview.receivedBefore.was && <p className="hint">{w.owedAgain}</p>}
+          <MoneyChangeView change={preview.money} payments={preview.payments} charges={charges} days={false} />
+        </>
+      )}
     </FormSheet>
   );
 }
