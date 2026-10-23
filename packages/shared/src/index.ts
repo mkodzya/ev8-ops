@@ -37,3 +37,5 @@ export * from './contract.js';
 export * from './workshops.js';
 export * from './rental-mopeds.js';
 export * from './vehicle-history.js';
+export * from './rental-money.js';
+export * from './pickup-date.js';
