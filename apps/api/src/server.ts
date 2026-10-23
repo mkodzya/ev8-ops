@@ -23,6 +23,7 @@ import { rentalRoutes } from './routes/rentals.js';
 import { contactRoutes } from './routes/contacts.js';
 import { purchaseRoutes } from './routes/purchases.js';
 import { saleRoutes } from './routes/sales.js';
+import { goodsSaleRoutes } from './routes/goodsSales.js';
 import { searchRoutes } from './routes/search.js';
 import { serviceRoutes } from './routes/service.js';
 import { payoutRoutes } from './routes/payouts.js';
@@ -112,6 +113,7 @@ export function buildApp(opts: { logger?: FastifyServerOptions['logger'] } = {})
   serviceRoutes(app);
   payoutRoutes(app);
   saleRoutes(app);
+  goodsSaleRoutes(app);
   purchaseRoutes(app);
   contactRoutes(app);
   searchRoutes(app);

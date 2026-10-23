@@ -196,7 +196,14 @@ export function statementRoutes(app: FastifyInstance): void {
       include: {
         payments: {
           where: { voidedAt: null },
-          select: { id: true, grossTetri: true, rental: { select: { id: true, number: true } }, sale: { select: { id: true, number: true } }, customer: { select: { name: true } } },
+          select: {
+            id: true,
+            grossTetri: true,
+            rental: { select: { id: true, number: true } },
+            sale: { select: { id: true, number: true } },
+            goodsSale: { select: { id: true, number: true } },
+            customer: { select: { name: true } },
+          },
         },
       },
     });
@@ -235,7 +242,16 @@ export function statementRoutes(app: FastifyInstance): void {
           rule: l.matchedRule,
           reason: why.get(l.id) ?? null,
           payment: p
-            ? { id: p.id, grossTetri: p.grossTetri, number: p.rental?.number ?? p.sale?.number ?? null, rentalId: p.rental?.id ?? null, saleId: p.sale?.id ?? null, customer: p.customer?.name ?? null }
+            ? {
+                id: p.id,
+                grossTetri: p.grossTetri,
+                number: p.rental?.number ?? p.sale?.number ?? p.goodsSale?.number ?? null,
+                rentalId: p.rental?.id ?? null,
+                saleId: p.sale?.id ?? null,
+                // A goods sale the name rule attached (ADR-0045): the screen links to /sales/goods/:id.
+                goodsSaleId: p.goodsSale?.id ?? null,
+                customer: p.customer?.name ?? null,
+              }
             : null,
         };
       }),
@@ -305,8 +321,8 @@ export function statementRoutes(app: FastifyInstance): void {
   /** This line is this record's money (§3.2): a rental, a sale, a repair, or the customer's account. */
   app.post<{ Params: { id: string }; Body: Body }>('/api/statement-lines/:id/assign', { config: { scope: 'payments.reconcile' } }, async (req) => {
     const b = req.body ?? {};
-    const target = { rentalId: str(b, 'rentalId'), saleId: str(b, 'saleId'), serviceJobId: str(b, 'serviceJobId'), customerId: str(b, 'customerId') };
-    if (!target.rentalId && !target.saleId && !target.serviceJobId && !target.customerId) {
+    const target = { rentalId: str(b, 'rentalId'), saleId: str(b, 'saleId'), serviceJobId: str(b, 'serviceJobId'), goodsSaleId: str(b, 'goodsSaleId'), customerId: str(b, 'customerId') };
+    if (!target.rentalId && !target.saleId && !target.serviceJobId && !target.goodsSaleId && !target.customerId) {
       throw badRequest('missing_field', 'Say what this line pays for.', { field: 'rentalId' });
     }
     const r = await prisma.$transaction((tx) => attach(tx, { actorId: actorOf(req).id, lineId: req.params.id, rule: 'by_hand', ...target }));
@@ -329,6 +345,7 @@ export function statementRoutes(app: FastifyInstance): void {
         rentalId: str(b, 'rentalId'),
         saleId: str(b, 'saleId'),
         serviceJobId: str(b, 'serviceJobId'),
+        goodsSaleId: str(b, 'goodsSaleId'),
         customerId: str(b, 'customerId'),
         chargeId: str(b, 'chargeId'),
         carriedPeriodId: str(b, 'carriedPeriodId'),

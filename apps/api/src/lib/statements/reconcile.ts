@@ -1,4 +1,4 @@
-import { daysBetween, grossOf, nameMatches, todayISO } from '@ev8/shared';
+import { daysBetween, goodsTotals, grossOf, nameMatches, todayISO } from '@ev8/shared';
 import { isoDate } from '../dates.js';
 import { prisma } from '../db.js';
 import { env } from '../env.js';
@@ -19,6 +19,11 @@ import { cardOf } from './parse.js';
 //      with its paid weeks for a line dated on or before the day it was
 //      carried over: that money may already be inside its «paid through»;
 //   4. otherwise a person decides.
+// A goods sale (issue #11, ADR-0045) takes part in the name rule only — one
+// record of that customer's with a debt of exactly this sum — and is never
+// attached by its amount alone. An open goods sale of the same sum within
+// ±3 days stops the rental's amount-and-date rules: the line waits for a
+// person, who sees the goods sale among the hints.
 
 export const WINDOW_DAYS = 3;
 
@@ -64,6 +69,19 @@ interface SaleCand {
   dueOpenTetri: number;
 }
 
+interface GoodsCand {
+  id: string;
+  number: string;
+  /** Null: a retail buyer with no card. */
+  customerId: string | null;
+  /** The customer's name; for a retail buyer the name he gave, if any. */
+  customer: string | null;
+  names: (string | null)[];
+  openTetri: number;
+  soldOn: string;
+  promisedChannel: 'acquiring' | 'transfer' | null;
+}
+
 interface PaymentCand {
   id: string;
   customerId: string | null;
@@ -88,6 +106,8 @@ export interface Ctx {
   today: string;
   rentals: RentalCand[];
   sales: SaleCand[];
+  /** Goods sales with money still open (ADR-0045). */
+  goods: GoodsCand[];
   customers: { id: string; name: string; names: (string | null)[] }[];
   payments: PaymentCand[];
   bankDeposits: BankDepositCand[];
@@ -98,7 +118,7 @@ const RULE_RENTALS = new Set(['active', 'overdue']);
 /** Everything the rules look at, read once. */
 export async function loadCtx(): Promise<Ctx> {
   const today = todayISO(new Date(), env.TZ);
-  const [rentals, sales, customers, payments, bankDeposits] = await Promise.all([
+  const [rentals, sales, goods, customers, payments, bankDeposits] = await Promise.all([
     prisma.rental.findMany({
       include: {
         customer: { select: { id: true, name: true, nameKa: true, nameLat: true } },
@@ -109,6 +129,20 @@ export async function loadCtx(): Promise<Ctx> {
     prisma.sale.findMany({
       where: { status: 'active' },
       include: { customer: { select: { name: true, nameKa: true, nameLat: true } }, instalments: { orderBy: { seq: 'asc' } } },
+    }),
+    prisma.goodsSale.findMany({
+      where: { status: 'active' },
+      select: {
+        id: true,
+        number: true,
+        customerId: true,
+        buyerName: true,
+        soldOn: true,
+        promisedChannel: true,
+        customer: { select: { name: true, nameKa: true, nameLat: true } },
+        lines: { select: { qty: true, unitPriceTetri: true } },
+        payments: { where: { voidedAt: null, kind: 'goods' }, select: { grossTetri: true } },
+      },
     }),
     prisma.customer.findMany({ where: { archived: false }, select: { id: true, name: true, nameKa: true, nameLat: true } }),
     prisma.payment.findMany({
@@ -127,6 +161,7 @@ export async function loadCtx(): Promise<Ctx> {
         rental: { select: { number: true } },
         sale: { select: { number: true } },
         purchase: { select: { number: true } },
+        goodsSale: { select: { number: true } },
       },
     }),
     prisma.bankCashDeposit.findMany({ where: { statementLineId: null, voidedAt: null }, select: { id: true, bank: true, occurredOn: true, amountTetri: true } }),
@@ -167,6 +202,18 @@ export async function loadCtx(): Promise<Ctx> {
         dueOpenTetri: open.filter((i) => isoDate(i.dueOn)! <= today).reduce((n, i) => n + i.amountTetri - i.paidTetri, 0),
       };
     }),
+    goods: goods
+      .map((g) => ({
+        id: g.id,
+        number: g.number,
+        customerId: g.customerId,
+        customer: g.customer?.name ?? g.buyerName ?? null,
+        names: g.customer ? [g.customer.name, g.customer.nameKa, g.customer.nameLat] : [g.buyerName],
+        openTetri: Math.max(0, goodsTotals(g.lines).grossTetri - g.payments.reduce((n, p) => n + p.grossTetri, 0)),
+        soldOn: isoDate(g.soldOn)!,
+        promisedChannel: (g.promisedChannel as 'acquiring' | 'transfer' | null) ?? null,
+      }))
+      .filter((g) => g.openTetri > 0),
     customers: customers.map((c) => ({ id: c.id, name: c.name, names: [c.name, c.nameKa, c.nameLat] })),
     payments: payments.map((p) => ({
       id: p.id,
@@ -178,7 +225,7 @@ export async function loadCtx(): Promise<Ctx> {
       grossTetri: p.grossTetri,
       netTetri: p.netTetri,
       customer: p.customer?.name ?? null,
-      number: p.rental?.number ?? p.sale?.number ?? p.purchase?.number ?? null,
+      number: p.rental?.number ?? p.sale?.number ?? p.purchase?.number ?? p.goodsSale?.number ?? null,
     })),
     bankDeposits: bankDeposits.map((b) => ({ id: b.id, bank: b.bank, occurredOn: isoDate(b.occurredOn)!, amountTetri: b.amountTetri })),
   };
@@ -296,7 +343,10 @@ function otherCandidates(line: Line, ctx: Ctx, except: string | null): RentalCan
   );
 }
 
-export type RuleTarget = { rentalId: string; saleId?: undefined } | { saleId: string; rentalId?: undefined };
+export type RuleTarget =
+  | { rentalId: string; saleId?: undefined; goodsSaleId?: undefined }
+  | { saleId: string; rentalId?: undefined; goodsSaleId?: undefined }
+  | { goodsSaleId: string; rentalId?: undefined; saleId?: undefined };
 
 export type Decision =
   | { type: 'recorded'; paymentId: string }
@@ -306,7 +356,8 @@ export type Decision =
 
 /** A reason, in data; the screen says it in its language (§3.2 "причина словами"). */
 export interface Reason {
-  code: 'name' | 'card_pickup' | 'amount_week' | 'amount' | 'recorded' | 'bank_deposit';
+  /** `goods`: an open goods sale of this sum (ADR-0045) — `day` is the day it was sold, `channel` what the buyer promised. */
+  code: 'name' | 'card_pickup' | 'amount_week' | 'amount' | 'recorded' | 'bank_deposit' | 'goods';
   /** On a hint for a rental carried over after this line's day: the day it was carried over. The money may be counted already. */
   transferredOn?: string;
   name?: string;
@@ -316,6 +367,9 @@ export interface Reason {
   feeTetri?: number;
   netTetri?: number;
   day?: string;
+  channel?: 'acquiring' | 'transfer' | null;
+  /** A goods sale to a retail buyer: `name` is what he gave, if anything. */
+  retail?: boolean;
 }
 
 export function decide(line: Line, ctx: Ctx): Decision {
@@ -351,10 +405,13 @@ export function decide(line: Line, ctx: Ctx): Decision {
       const c = who[0];
       const rentals = eligible.filter((r) => r.customerId === c.id && rentalOwes(r, gross));
       const sales = ctx.sales.filter((s) => s.customerId === c.id && saleOwes(s, gross));
-      if (rentals.length + sales.length === 1) {
-        const target: RuleTarget = rentals[0] ? { rentalId: rentals[0].id } : { saleId: sales[0].id };
-        const number = rentals[0]?.number ?? sales[0].number;
-        const debt = rentals[0]?.owedNowTetri ?? sales[0].dueOpenTetri;
+      // Goods of this customer's with exactly this sum open: one more record
+      // the money may be — a rental of the same sum no longer takes it alone.
+      const goods = ctx.goods.filter((g) => g.customerId === c.id && g.openTetri === gross);
+      if (rentals.length + sales.length + goods.length === 1) {
+        const target: RuleTarget = rentals[0] ? { rentalId: rentals[0].id } : sales[0] ? { saleId: sales[0].id } : { goodsSaleId: goods[0].id };
+        const number = rentals[0]?.number ?? sales[0]?.number ?? goods[0].number;
+        const debt = rentals[0]?.owedNowTetri ?? sales[0]?.dueOpenTetri ?? goods[0].openTetri;
         return { type: 'rule', rule: 'payer_name', target, customerId: c.id, reason: { code: 'name', name: c.name, number, debtTetri: debt } };
       }
     }
@@ -363,6 +420,12 @@ export function decide(line: Line, ctx: Ctx): Decision {
   // 2. The amount, and the date: the pick-up day, or inside the week it closes.
   //    A line that names somebody is about that somebody: nobody else's rental.
   const named = new Set(who.map((c) => c.id));
+  //    Not while a goods sale of this very sum, sold within ±3 days, waits for
+  //    its money — a retail buyer's card, or the named customer's own goods:
+  //    two records fit, and a person says which (ADR-0045 §7).
+  if (ctx.goods.some((g) => g.openTetri === gross && near(g.soldOn, line.occurredOn) && (named.size === 0 || g.customerId == null || named.has(g.customerId)))) {
+    return { type: 'queue' };
+  }
   const byDate = eligible.filter(
     (r) =>
       (named.size === 0 || named.has(r.customerId)) &&
@@ -386,7 +449,9 @@ export function decide(line: Line, ctx: Ctx): Decision {
 }
 
 export interface Suggestion {
-  kind: 'rental' | 'sale' | 'customer' | 'payment' | 'bank_deposit';
+  kind: 'rental' | 'sale' | 'customer' | 'payment' | 'bank_deposit' | 'goods_sale';
+  /** A goods sale to a retail buyer, who has no card (ADR-0045). */
+  retail?: boolean;
   id: string;
   number: string | null;
   customer: string | null;
@@ -436,6 +501,9 @@ export function suggest(line: Line, ctx: Ctx): { group: 'recorded' | 'suggested'
       for (const s of ctx.sales.filter((x) => x.customerId === c.id && (x.dueOpenTetri > 0 || x.nextOpenTetri > 0))) {
         out.push({ kind: 'sale', id: s.id, number: s.number, customer: c.name, customerId: c.id, reason: { code: 'name', name: c.name, number: s.number, debtTetri: s.dueOpenTetri || s.nextOpenTetri } });
       }
+      for (const g of ctx.goods.filter((x) => x.customerId === c.id)) {
+        out.push({ kind: 'goods_sale', id: g.id, number: g.number, customer: c.name, customerId: c.id, reason: { code: 'name', name: c.name, number: g.number, debtTetri: g.openTetri } });
+      }
       out.push({ kind: 'customer', id: c.id, number: null, customer: c.name, customerId: c.id, reason: { code: 'name', name: c.name } });
     }
     const seen = new Set(out.map((s) => s.id));
@@ -450,6 +518,25 @@ export function suggest(line: Line, ctx: Ctx): { group: 'recorded' | 'suggested'
       });
       seen.add(r.id);
     }
+    // Goods of this sum sold within ±3 days, the ones promised by this line's
+    // channel first: above the rentals that only fit by their sum (ADR-0045 §7).
+    const goodsHint = (g: GoodsCand): Suggestion => ({
+      kind: 'goods_sale',
+      id: g.id,
+      number: g.number,
+      customer: g.customer,
+      ...(g.customerId ? { customerId: g.customerId } : {}),
+      retail: g.customerId == null,
+      amountTetri: g.openTetri,
+      occurredOn: g.soldOn,
+      reason: { code: 'goods', number: g.number, debtTetri: g.openTetri, day: g.soldOn, channel: g.promisedChannel, ...(g.customer ? { name: g.customer } : {}), retail: g.customerId == null },
+    });
+    const sameSum = ctx.goods.filter((g) => !seen.has(g.id) && g.openTetri === gross);
+    const promised = (g: GoodsCand) => (g.promisedChannel != null && g.promisedChannel === line.channel ? 0 : 1);
+    for (const g of sameSum.filter((x) => near(x.soldOn, line.occurredOn)).sort((a, b) => promised(a) - promised(b) || Math.abs(daysBetween(a.soldOn, line.occurredOn)) - Math.abs(daysBetween(b.soldOn, line.occurredOn)))) {
+      out.push(goodsHint(g));
+      seen.add(g.id);
+    }
     for (const r of ctx.rentals.filter((x) => !seen.has(x.id) && rentalFits(x, gross))) {
       out.push({ kind: 'rental', id: r.id, number: r.number, customer: r.customer, customerId: r.customerId, reason: { code: 'amount', number: r.number, debtTetri: r.owedNowTetri } });
       seen.add(r.id);
@@ -457,6 +544,8 @@ export function suggest(line: Line, ctx: Ctx): { group: 'recorded' | 'suggested'
     for (const s of ctx.sales.filter((x) => !seen.has(x.id) && saleFits(x, gross))) {
       out.push({ kind: 'sale', id: s.id, number: s.number, customer: s.customer, customerId: s.customerId, reason: { code: 'amount', number: s.number, debtTetri: s.dueOpenTetri || s.nextOpenTetri } });
     }
+    // Goods of this sum sold further away: last.
+    for (const g of sameSum.filter((x) => !seen.has(x.id))) out.push(goodsHint(g));
   }
   // A hint for a rental carried over after this line's day says so: the screen
   // adds that the money may already be inside «paid through».

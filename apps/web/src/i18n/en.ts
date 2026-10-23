@@ -39,6 +39,7 @@ import { saleDateEn } from './sale-date.js';
 import { rentalSwapEn } from './rental-swap.js';
 import { vehicleCardEn } from './vehicle-card.js';
 import { pickupDateEn } from './pickup-date.js';
+import { goodsEn } from './goods.js';
 export const en = {
   lang: { label: 'Language', ka: 'ქართული', ru: 'Русский', en: 'English' },
 
@@ -106,6 +107,7 @@ export const en = {
       openRepair: 'Open a repair',
       reportBreak: 'Report a breakdown',
       sell: 'Sell a moped',
+      sellGoods: 'Sell goods',
     },
     tabs: {
       calendar: 'Calendar',
@@ -137,12 +139,13 @@ export const en = {
       login: 'Sign-in',
       expenses: 'Expenses',
       drive: 'Drive',
+      goods: 'Goods',
     },
   },
 
   searchUi: {
     placeholder: 'VIN, name, phone, number, amount',
-    hint: 'Last 4 of a VIN · a name in Latin or Georgian · digits of a phone · an R-, SL-, PO- or SV- number · a payment amount',
+    hint: 'Last 4 of a VIN · a name in Latin or Georgian · digits of a phone · an R-, SL-, TS-, PO- or SV- number · a payment amount',
     recent: 'Recently opened',
     recentNone: 'Nothing opened on this device yet.',
     offline: 'No connection — searching what was opened recently on this device.',
@@ -150,7 +153,7 @@ export const en = {
     nothing: (q: string) => `Nothing matches “${q}”`,
     newCustomerWith: (phone: string) => `New customer with ${phone}`,
     more: (n: number) => `${n} more`,
-    groups: { customers: 'Customers', vehicles: 'Mopeds', rentals: 'Rentals', sales: 'Sales', payments: 'Payments', purchases: 'Purchases', jobs: 'Repairs' },
+    groups: { customers: 'Customers', vehicles: 'Mopeds', rentals: 'Rentals', sales: 'Sales', goods: 'Goods', payments: 'Payments', purchases: 'Purchases', jobs: 'Repairs' },
   },
 
   form: {
@@ -731,6 +734,7 @@ export const en = {
     payInstalment: (n: string) => `Take the payment · ${n}`,
     paySupplier: (n: string) => `Pay the supplier · ${n}`,
     payService: (n: string) => `Repair payment · ${n}`,
+    payGoods: (n: string) => `Goods payment · ${n}`,
     buyBack: (n: string) => `Buy back · ${n}`,
     in: 'In',
     out: 'Out',
@@ -767,6 +771,7 @@ export const en = {
     closeWeek: (from: string, to: string) => `Week ${from}–${to}`,
     closeInstalment: (seq: number, due: string) => `Instalment ${seq} · ${due}`,
     closeService: (n: string) => `Repair ${n}`,
+    closeGoods: (n: string) => `Goods ${n}`,
     closePurchase: (n: string) => `Payment for ${n}`,
     closeSale: (n: string) => `${n}: nothing owed on the sale after this`,
     ofFull: (a: string, full: string) => `${a} of ${full}`,
@@ -800,7 +805,7 @@ export const en = {
     bankFeeHint: 'if any · a company expense, not part of the cost',
     toState: 'Where the moped goes',
     nothingOwed: 'Nothing is owed — type the amount.',
-    kinds: { rent: 'Rental', sale: 'Sale', service: 'Repair', on_account: 'Rent credit', deposit_payout: 'Deposit handed back', buyback: 'Bought back', supplier: 'Supplier payment' },
+    kinds: { rent: 'Rental', sale: 'Sale', service: 'Repair', on_account: 'Rent credit', deposit_payout: 'Deposit handed back', buyback: 'Bought back', supplier: 'Supplier payment', goods: 'Goods' },
   },
 
   sort: {
@@ -961,7 +966,7 @@ export const en = {
 
   paymentPage: {
     wasLinked: 'was attached; when the payment was annulled the line went back to “Sort”',
-    acts: { record: 'recorded', void: 'annulled', undo: 'undone at once' },
+    acts: { record: 'recorded', void: 'annulled', undo: 'undone at once', rebook: 'became credit when the goods sale was cancelled' },
     title: (n: string) => `Payment ${n}`,
     customer: 'Customer',
     channel: 'Channel',
@@ -1141,7 +1146,7 @@ export const en = {
     unit: 'Unit',
     units: { pcs: 'pcs', set: 'set', l: 'l', kg: 'kg', m: 'm' },
     minQty: 'Keep at least',
-    salePrice: 'Charged for one',
+    salePrice: 'Charged for one, VAT included',
     notes: 'Notes',
     addPart: 'Add part',
     partAdded: 'Part added',
@@ -1150,7 +1155,7 @@ export const en = {
     countReason: 'What the difference is',
     countHint: 'Enter what was counted on the shelf. The difference is written down with your name on it.',
     kinds: { receipt: 'Came in', issue: 'Went out', adjust: 'Stock-take', return: 'Came back from a repair' },
-    negativeHint: 'A repair used parts the shelf never received. Count them.',
+    negativeHint: 'More left the shelf than it held — taken by a repair or sold. Count it.',
     none: 'No parts on the list yet.',
     noMoves: 'Nothing has moved yet.',
     archived: 'Archived',
@@ -1180,6 +1185,24 @@ export const en = {
     loadFailed: 'Didn’t load.',
     retry: 'Retry',
     codes: {
+      goods_no_lines: 'Say what is sold.',
+      goods_too_many_lines: 'At most 20 lines in one sale.',
+      goods_line_bad: 'A line is a part off the shelf or a charger — one of the two.',
+      goods_bad_qty: 'The quantity is from 1 to 999.',
+      goods_same_item: 'The same item twice: make it one line.',
+      goods_item_not_found: 'There is no such item on the list.',
+      goods_item_archived: 'This part is archived; it is not sold.',
+      goods_item_not_sellable: 'This item is not sold yet.',
+      goods_count_answer: 'Say whether the count had already seen this item gone.',
+      goods_short: 'There are not that many. Only an owner sells beyond the count.',
+      retail_must_pay: 'A retail buyer pays at once, or the money comes from the bank.',
+      goods_paid_over: 'That is more than the sale comes to.',
+      goods_sale_not_found: 'There is no such goods sale.',
+      goods_sale_closed: 'This goods sale is cancelled.',
+      goods_over_open: 'That is more than the goods sale still asks for.',
+      split_over_goods: 'That part is more than the goods sale still asks for.',
+      goods_payment_in_split: 'Its payment is one part of an allocated bank line: undo the line in «Sort» first.',
+      goods_undo_too_late: 'Too late to undo: an owner can cancel the sale with a reason.',
       act_not_found: 'This document was not found.',
       already_matched: 'This bank line is already attached to a payment.',
       already_merged: 'This card is already in the archive: it was merged into another.',
@@ -1445,6 +1468,7 @@ export const en = {
   ...rentalSwapEn,
   ...vehicleCardEn,
   ...pickupDateEn,
+  ...goodsEn,
 };
 
 export type Dict = typeof en;

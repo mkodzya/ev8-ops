@@ -29,9 +29,11 @@ async function numbersFor(rows: { entityType: string; entityId: string | null }[
       if (n) out.set(x.id, n);
     }
   };
-  const [rentals, sales, purchases, jobs, vehicles, customers, users, parts, locations, workshops, deposits, payments, acts] = await Promise.all([
+  const [rentals, sales, goodsSales, purchases, jobs, vehicles, customers, users, parts, locations, workshops, deposits, payments, acts] = await Promise.all([
     prisma.rental.findMany({ where: { id: { in: ids('rental') } }, select: { id: true, number: true } }),
     prisma.sale.findMany({ where: { id: { in: ids('sale') } }, select: { id: true, number: true } }),
+    // A goods sale (ADR-0045): TS-…
+    prisma.goodsSale.findMany({ where: { id: { in: ids('goods_sale') } }, select: { id: true, number: true } }),
     prisma.purchase.findMany({ where: { id: { in: ids('purchase') } }, select: { id: true, number: true } }),
     prisma.serviceJob.findMany({ where: { id: { in: ids('service_job') } }, select: { id: true, number: true } }),
     prisma.vehicle.findMany({ where: { id: { in: ids('vehicle') } }, select: { id: true, vin: true } }),
@@ -47,12 +49,13 @@ async function numbersFor(rows: { entityType: string; entityId: string | null }[
     prisma.deposit.findMany({ where: { id: { in: ids('deposit') } }, select: { id: true, rental: { select: { number: true } } } }),
     prisma.payment.findMany({
       where: { id: { in: ids('payment') } },
-      select: { id: true, rental: { select: { number: true } }, sale: { select: { number: true } }, purchase: { select: { number: true } }, serviceJob: { select: { number: true } } },
+      select: { id: true, rental: { select: { number: true } }, sale: { select: { number: true } }, purchase: { select: { number: true } }, serviceJob: { select: { number: true } }, goodsSale: { select: { number: true } } },
     }),
     prisma.act.findMany({ where: { id: { in: ids('act') } }, select: { id: true, rental: { select: { number: true } } } }),
   ]);
   put(rentals, (x: { number: string }) => x.number);
   put(sales, (x: { number: string }) => x.number);
+  put(goodsSales, (x: { number: string }) => x.number);
   put(purchases, (x: { number: string }) => x.number);
   put(jobs, (x: { number: string }) => x.number);
   put(vehicles, (x: { vin: string | null }) => x.vin);
@@ -62,8 +65,10 @@ async function numbersFor(rows: { entityType: string; entityId: string | null }[
   put(locations, (x: { name: string }) => x.name);
   put(workshops, (x: { name: string }) => x.name);
   put(deposits, (x: { rental: { number: string } }) => x.rental.number);
-  put(payments, (x: { rental: { number: string } | null; sale: { number: string } | null; purchase: { number: string } | null; serviceJob: { number: string } | null }) =>
-    x.rental?.number ?? x.sale?.number ?? x.purchase?.number ?? x.serviceJob?.number ?? null,
+  put(
+    payments,
+    (x: { rental: { number: string } | null; sale: { number: string } | null; purchase: { number: string } | null; serviceJob: { number: string } | null; goodsSale: { number: string } | null }) =>
+      x.rental?.number ?? x.sale?.number ?? x.purchase?.number ?? x.serviceJob?.number ?? x.goodsSale?.number ?? null,
   );
   put(acts, (x: { rental: { number: string } }) => x.rental.number);
   return out;
@@ -76,7 +81,7 @@ async function numbersFor(rows: { entityType: string; entityId: string | null }[
  * too, because a failed sign-in has no record at all, only an address.
  */
 /** The records a journal slice can be asked for by id. */
-export const RECORD_KINDS = ['rental', 'sale', 'purchase', 'service_job', 'vehicle', 'customer'] as const;
+export const RECORD_KINDS = ['rental', 'sale', 'goods_sale', 'purchase', 'service_job', 'vehicle', 'customer'] as const;
 export type RecordKind = (typeof RECORD_KINDS)[number];
 
 /**
@@ -99,8 +104,8 @@ async function withParts(kind: RecordKind, id: string): Promise<string[]> {
     ]);
     return [...one, ...deposits, ...payments, ...acts].map((x) => (typeof x === 'string' ? x : x.id));
   }
-  if (kind === 'sale' || kind === 'purchase' || kind === 'service_job') {
-    const where = kind === 'sale' ? { saleId: id } : kind === 'purchase' ? { purchaseId: id } : { serviceJobId: id };
+  if (kind === 'sale' || kind === 'goods_sale' || kind === 'purchase' || kind === 'service_job') {
+    const where = kind === 'sale' ? { saleId: id } : kind === 'goods_sale' ? { goodsSaleId: id } : kind === 'purchase' ? { purchaseId: id } : { serviceJobId: id };
     const payments = await prisma.payment.findMany({ where, select: { id: true } });
     return [...one, ...payments.map((x) => x.id)];
   }
@@ -115,11 +120,12 @@ async function idsMatching(query: string): Promise<{ ids: string[]; emails: stri
   const like = { contains: q, mode: 'insensitive' as const };
   if (looksLikeNumber(q)) {
     const number = { equals: q, mode: 'insensitive' as const };
-    const [r, s, p, j] = await Promise.all([
+    const [r, s, p, j, g] = await Promise.all([
       prisma.rental.findMany({ where: { number }, select: { id: true } }),
       prisma.sale.findMany({ where: { number }, select: { id: true } }),
       prisma.purchase.findMany({ where: { number }, select: { id: true } }),
       prisma.serviceJob.findMany({ where: { number }, select: { id: true } }),
+      prisma.goodsSale.findMany({ where: { number }, select: { id: true } }),
     ]);
     const rentalIds = r.map((x) => x.id);
     const saleIds = s.map((x) => x.id);
@@ -133,6 +139,7 @@ async function idsMatching(query: string): Promise<{ ids: string[]; emails: stri
       ...saleIds.map((id) => withParts('sale', id)),
       ...purchaseIds.map((id) => withParts('purchase', id)),
       ...jobIds.map((id) => withParts('service_job', id)),
+      ...g.map((x) => withParts('goods_sale', x.id)),
     ]);
     return { ids: parts.flat(), emails: [] };
   }

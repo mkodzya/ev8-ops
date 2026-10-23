@@ -7,7 +7,7 @@ import { RowMenu } from '../../components/RowMenu.js';
 import { PageHead } from '../../components/ui.js';
 import { Field } from '../../components/Wizard.js';
 import { useToast } from '../../ds/feedback/Toast.js';
-import { FormSheet } from '../../ds/form/Form.js';
+import { FormSheet, useFieldError } from '../../ds/form/Form.js';
 import { useOperation } from '../../ds/form/operation.js';
 import '../../ds/money/money.css';
 import { Skeleton } from '../../ds/state/Skeleton.js';
@@ -18,7 +18,8 @@ import { useLoad } from '../../lib/use.js';
 import { ExpenseAnswers, ExpenseRuleCard, useExpenseCategories, type Categories, type ExpenseRuleLine } from './ExpenseAnswers.js';
 
 interface Reason {
-  code: 'name' | 'card_pickup' | 'amount_week' | 'amount' | 'recorded' | 'bank_deposit';
+  /** `goods`: an open goods sale of this sum (ADR-0045). */
+  code: 'name' | 'card_pickup' | 'amount_week' | 'amount' | 'recorded' | 'bank_deposit' | 'goods';
   /** The rental under this hint was carried over on or after the line's day: its money may be counted already. */
   transferredOn?: string;
   name?: string;
@@ -28,9 +29,12 @@ interface Reason {
   feeTetri?: number;
   netTetri?: number;
   day?: string;
+  /** A goods sale's promised channel, and whether its buyer has no card. */
+  channel?: 'acquiring' | 'transfer' | null;
+  retail?: boolean;
 }
 interface Suggestion {
-  kind: 'rental' | 'sale' | 'customer' | 'payment' | 'bank_deposit';
+  kind: 'rental' | 'sale' | 'customer' | 'payment' | 'bank_deposit' | 'goods_sale';
   id: string;
   number: string | null;
   customer: string | null;
@@ -87,6 +91,11 @@ export function useReasonText() {
         return t.sort.reason.recorded(r.number ? `, ${r.number}` : '');
       case 'bank_deposit':
         return t.sort.reason.bank_deposit;
+      case 'goods': {
+        // «TS-00001 · Розничный покупатель · ждёт 100 ₾ · продано 08.10 · картой» (ADR-0045 §7).
+        const who = r.retail ? [t.goods.retail, r.name].filter(Boolean).join(' · ') : (r.name ?? '');
+        return t.goods.sort.reason(r.number ?? '', who, g(r.debtTetri), fmtDayMonth(r.day), r.channel ? t.goods.card.promisedHow[r.channel] ?? '' : '');
+      }
     }
   };
   // A line no later than the day the rental was carried over: the reason, and why a person is asked.
@@ -153,7 +162,16 @@ export function SortPage() {
           {t.sort.aside(data.asideMonth ?? 0)} · <Link to="/money/sort/aside">{t.sort.show}</Link>
         </p>
       )}
-      {other && <OtherSheet line={other} onClose={() => setOther(null)} />}
+      {other && (
+        <OtherSheet
+          line={other}
+          onClose={() => setOther(null)}
+          onSplit={() => {
+            setOther(null);
+            setSplitting(other);
+          }}
+        />
+      )}
       {notOurs && <NotOursSheet line={notOurs} onClose={() => setNotOurs(null)} />}
       {splitting && <SplitSheet line={splitting} onClose={() => setSplitting(null)} />}
     </>
@@ -207,7 +225,7 @@ function LineCard({ line, cats, onOther, onNotOurs, onSplit }: { line: SortLine;
 
   const attach = (s: Suggestion) => {
     if (s.kind === 'bank_deposit') return act('bank-deposit', { bankDepositId: s.id }, { text: t.sort.linked });
-    const body = s.kind === 'rental' ? { rentalId: s.id } : s.kind === 'sale' ? { saleId: s.id } : { customerId: s.id };
+    const body = s.kind === 'rental' ? { rentalId: s.id } : s.kind === 'sale' ? { saleId: s.id } : s.kind === 'goods_sale' ? { goodsSaleId: s.id } : { customerId: s.id };
     return act('assign', body, { text: t.sort.attached(s.number ?? s.customer ?? ''), undo: undoPayment });
   };
 
@@ -326,14 +344,27 @@ interface SearchAnswer {
     customers: { items: { id: string; name: string; phone: string | null }[] };
     rentals: { items: { id: string; number: string; customer: string; customerId?: string; status: string }[] };
     sales: { items: { id: string; number: string; customer: string; status: string }[] };
+    /** Goods sales (ADR-0045): absent while an older API answers. */
+    goods?: { items: { id: string; number: string; status: string; customerId: string | null; buyer: string | null; retail: boolean; openTetri: number }[] };
   };
 }
 
+/** What «Другое» may attach to; a goods sale says what it waits for, and whether that is less than the line. */
+interface OtherPick {
+  body: Record<string, string>;
+  label: string;
+  /** A goods sale's open sum, and whether the line is bigger: the server refuses that, and the sheet says so first. */
+  open?: number;
+  short?: boolean;
+}
+
 /** "Другое": attach to any record, by number, name or phone — not a cut list (§3.2, B2-05). */
-function OtherSheet({ line, onClose }: { line: SortLine; onClose: () => void }) {
+function OtherSheet({ line, onClose, onSplit }: { line: SortLine; onClose: () => void; onSplit: () => void }) {
   const t = useT();
   const [q, setQ] = useState('');
-  const [pick, setPick] = useState<{ body: Record<string, string>; label: string } | null>(null);
+  const [pick, setPick] = useState<OtherPick | null>(null);
+  // What attaching writes: a card line the customer's sum, any other line its amount.
+  const lineTetri = line.channel === 'acquiring' && line.grossTetri != null ? line.grossTetri : line.amountTetri;
   const [answer, setAnswer] = useState<SearchAnswer | null>(null);
   useEffect(() => {
     const text = q.trim();
@@ -351,19 +382,33 @@ function OtherSheet({ line, onClose }: { line: SortLine; onClose: () => void }) 
     };
   }, [q]);
   const g = answer?.groups;
-  const options: { body: Record<string, string>; label: string; sub: string }[] = g
+  const options: (OtherPick & { sub: string })[] = g
     ? [
         ...g.rentals.items.map((r) => ({ body: { rentalId: r.id }, label: r.number, sub: r.customer })),
         ...g.sales.items.filter((x) => x.status === 'active').map((x) => ({ body: { saleId: x.id }, label: x.number, sub: x.customer })),
+        // Goods sales with money still open: a retail buyer's included (ADR-0045). One that waits for
+        // less than the line says so before it is chosen (QA 23.10.2026): the line goes there only split.
+        ...(g.goods?.items ?? [])
+          .filter((x) => x.status === 'active' && x.openTetri > 0)
+          .map((x) => ({
+            body: { goodsSaleId: x.id },
+            label: x.number,
+            open: x.openTetri,
+            short: lineTetri > x.openTetri,
+            sub: [x.retail ? t.goods.retail : (x.buyer ?? ''), t.goods.card.waits(formatGel(x.openTetri)), lineTetri > x.openTetri ? t.goods.sort.lessThanLine : ''].filter(Boolean).join(' · '),
+          })),
         ...g.customers.items.map((c) => ({ body: { customerId: c.id }, label: `${t.money.toAccount} · ${c.name}`, sub: t.money.toAccountHint })),
       ]
     : [];
   return (
     <FormSheet
-      title={t.sort.whereTo(formatGel(line.channel === 'acquiring' && line.grossTetri != null ? line.grossTetri : line.amountTetri))}
+      title={t.sort.whereTo(formatGel(lineTetri))}
       onClose={onClose}
       value={pick}
       initial={null}
+      // More than the sale waits for is about the sale chosen: the words go under the list, and the button
+      // stays as it was — sending it again would be refused again (QA 23.10.2026).
+      fieldOf={{ goods_over_open: 'goodsSaleId' }}
       label={pick ? (pick.body.customerId ? pick.label : t.sort.attachTo(pick.label)) : t.sort.other}
       submit={async (key) => {
         if (!pick) throw new Error('nothing picked');
@@ -376,16 +421,43 @@ function OtherSheet({ line, onClose }: { line: SortLine; onClose: () => void }) 
       <ul className="pick-cards">
         {options.map((o) => (
           <li key={JSON.stringify(o.body)}>
-            <button type="button" className={`pick-card ${pick?.label === o.label ? 'on' : ''}`} onClick={() => setPick({ body: o.body, label: o.label })}>
+            <button type="button" className={`pick-card ${pick?.label === o.label ? 'on' : ''}`} onClick={() => setPick({ body: o.body, label: o.label, open: o.open, short: o.short })}>
               <span className="pick-card-main">
                 <span className="pick-card-title">{o.label}</span>
-                <span className="pick-card-sub">{o.sub}</span>
+                <span className={`pick-card-sub ${o.short ? 'warn-text' : ''}`}>{o.sub}</span>
               </span>
             </button>
           </li>
         ))}
       </ul>
+      {pick?.body.goodsSaleId && <OverOpen pick={pick} lineTetri={lineTetri} onSplit={onSplit} />}
     </FormSheet>
+  );
+}
+
+/**
+ * Under «Куда привязать», for a goods sale chosen: when it waits for less than
+ * the line, that it does and how much — before the line is sent — and the way
+ * that works, «Разнести»; once the server has refused, its words, which name
+ * the sum. The place the refusal is about, so the form shows it here.
+ */
+function OverOpen({ pick, lineTetri, onSplit }: { pick: OtherPick; lineTetri: number; onSplit: () => void }) {
+  const t = useT();
+  const refused = useFieldError('goodsSaleId');
+  const warn = refused ?? (pick.short && pick.open != null ? t.goods.sort.overOpen(pick.label, formatGel(pick.open), formatGel(lineTetri)) : null);
+  return (
+    <div className="sort-over" data-field="goodsSaleId">
+      {warn && (
+        <>
+          <p className="field-err" role={refused ? 'alert' : undefined}>
+            {warn}
+          </p>
+          <button type="button" className="pill pill-sm" onClick={onSplit}>
+            {t.sort.split}
+          </button>
+        </>
+      )}
+    </div>
   );
 }
 
@@ -398,6 +470,8 @@ interface Targets {
   rentals: { id: string; number: string; status: string; model: string | null; transferredOn?: string | null; firstOpenWeek?: Week | null }[];
   sales: { id: string; number: string; nextTetri: number }[];
   repairs: { id: string; number: string }[];
+  /** Goods sold to him and still open (ADR-0045); absent while an older API answers. */
+  goods?: { id: string; number: string; openTetri: number }[];
   /** Open fines and other charges, each its own part (ADR-0023). */
   charges?: { id: string; rentalId: string; kind: string; note: string | null; openTetri: number }[];
   /** Weeks carried over as paid with no bank money behind them yet (ADR-0023). */
@@ -407,7 +481,7 @@ interface Targets {
 /** One place the line's money can go. */
 interface SplitPart {
   key: string;
-  kind: 'rent' | 'fine' | 'charge' | 'repair' | 'sale' | 'account';
+  kind: 'rent' | 'fine' | 'charge' | 'repair' | 'sale' | 'goods' | 'account';
   title: string;
   /** The record's number, in mono beside the title. */
   ref: string;
@@ -424,6 +498,8 @@ interface SplitPart {
 }
 interface SplitValue {
   customer: { id: string; name: string } | null;
+  /** «Розничные продажи товаров»: a day's card line split over retail goods sales, no customer (ADR-0045). */
+  retail?: boolean;
   amounts: Record<string, string>;
   /** Per rental: the old line's rent is the carried week's money, or new money. */
   choice: Record<string, 'carried' | 'new'>;
@@ -466,6 +542,17 @@ function SplitSheet({ line, onClose }: { line: SortLine; onClose: () => void }) 
     };
   }, [q, value.customer]);
   const targets = useLoad<Targets>(value.customer ? `/api/customers/${value.customer.id}/money-targets` : null);
+  // Retail goods sales waiting for money: the retail mode's parts, and behind «+ ещё» for a customer.
+  const retailGoods = useLoad<{ sales: { id: string; number: string; openTetri: number; buyer: { name: string | null } | null }[] }>(value.customer || value.retail ? '/api/goods-sales?open=1&retail=1' : null);
+  const retailParts: SplitPart[] = (retailGoods.data?.sales ?? []).map((x) => ({
+    key: `g:${x.id}`,
+    kind: 'goods',
+    title: x.buyer?.name ? `${t.goods.retail} · ${x.buyer.name}` : t.goods.retail,
+    ref: x.number,
+    body: { goodsSaleId: x.id },
+    owesTetri: x.openTetri,
+    extra: !value.retail,
+  }));
 
   const owes = (kinds: string[], id: string) => (targets.data?.debt.parts ?? []).filter((p) => p.id === id && kinds.includes(p.kind)).reduce((n, p) => n + p.owesTetri, 0);
   const numberOf = (rentalId: string) => targets.data?.rentals.find((r) => r.id === rentalId)?.number ?? '';
@@ -511,10 +598,15 @@ function SplitSheet({ line, onClose }: { line: SortLine; onClose: () => void }) 
         ...targets.data.repairs
           .filter((j) => owes(['service'], j.id) > 0)
           .map((j): SplitPart => ({ key: `j:${j.id}`, kind: 'repair', title: t.money.kinds.service, ref: j.number, body: { serviceJobId: j.id }, owesTetri: owes(['service'], j.id), extra: true })),
+        // His goods, seen at once: a week and a charger are often one transfer (ADR-0045 §7).
+        ...(targets.data.goods ?? []).map((g): SplitPart => ({ key: `g:${g.id}`, kind: 'goods', title: t.goods.sort.part, ref: g.number, body: { goodsSaleId: g.id }, owesTetri: g.openTetri, extra: false })),
         ...targets.data.sales.map((x): SplitPart => ({ key: `s:${x.id}`, kind: 'sale', title: t.money.kinds.sale, ref: x.number, body: { saleId: x.id }, owesTetri: owes(['sale'], x.id), extra: true })),
         { key: `c:${value.customer!.id}`, kind: 'account', title: t.money.toAccount, ref: '', body: { customerId: value.customer!.id }, owesTetri: 0, extra: true },
+        ...retailParts,
       ]
-    : [];
+    : value.retail
+      ? retailParts
+      : [];
   const amountOf = (key: string) => parseGel(value.amounts[key] ?? '') ?? 0;
   const placed = parts.reduce((n, p) => n + amountOf(p.key), 0);
   const left = total - placed;
@@ -526,6 +618,11 @@ function SplitSheet({ line, onClose }: { line: SortLine; onClose: () => void }) 
     setAmount(p.key, (take / 100).toFixed(2));
     window.setTimeout(() => input.select(), 0);
   };
+  // A goods sale, a repair, a charge: a part above what it waits for is refused by the server — said here
+  // before it is sent, not cut quietly from the debt below (QA 23.10.2026).
+  const CAPPED: SplitPart['kind'][] = ['goods', 'repair', 'charge'];
+  const overBy = (p: SplitPart) => (CAPPED.includes(p.kind) && p.owesTetri > 0 ? Math.max(0, amountOf(p.key) - p.owesTetri) : 0);
+  const anyOver = parts.some((p) => overBy(p) > 0);
   const visible = parts.filter((p) => !p.extra || value.more || amountOf(p.key) > 0);
   const hidden = parts.some((p) => p.extra && !visible.includes(p));
 
@@ -539,6 +636,7 @@ function SplitSheet({ line, onClose }: { line: SortLine; onClose: () => void }) 
     if (p.kind === 'charge') return t.sort.resCharge(a, p.title, p.ref);
     if (p.kind === 'repair') return t.sort.resRepair(a, p.ref);
     if (p.kind === 'sale') return t.sort.resSale(a, p.ref);
+    if (p.kind === 'goods') return t.goods.sort.res(a, p.ref);
     return t.sort.resAccount(a);
   });
   const before = (targets.data?.debt.parts ?? []).reduce((n, p) => n + p.owesTetri, 0);
@@ -572,9 +670,16 @@ function SplitSheet({ line, onClose }: { line: SortLine; onClose: () => void }) 
       }}
     >
       <p className="split-from">{t.sort.splitFrom(fmtDate(line.occurredOn), t.statements.banks[line.bank])}</p>
-      {!value.customer ? (
+      {!value.customer && !value.retail ? (
         <>
           <input className="input" autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder={t.money.whoIn} aria-label={t.money.whoIn} />
+          {/* A day's TBC card line is several purchases of people with no card (ADR-0045 §7). */}
+          <button type="button" className="pick-card pick-card-quiet" onClick={() => setValue({ ...initial, retail: true })}>
+            <span className="pick-card-main">
+              <span className="pick-card-title">{t.goods.sort.retailMode}</span>
+              <span className="pick-card-sub">{t.goods.sort.retailHint}</span>
+            </span>
+          </button>
           <ul className="pick-cards">
             {people.map((c) => (
               <li key={`${c.id}:${c.sub}`}>
@@ -591,7 +696,7 @@ function SplitSheet({ line, onClose }: { line: SortLine; onClose: () => void }) 
       ) : (
         <div className="split-body">
           <div className="money-who-row split-who">
-            <p className="t-h3">{value.customer.name}</p>
+            <p className="t-h3">{value.customer?.name ?? t.goods.sort.retailMode}</p>
             <button type="button" className="pill pill-sm" onClick={() => setValue(initial)}>
               {t.sort.splitAnother}
             </button>
@@ -599,6 +704,7 @@ function SplitSheet({ line, onClose }: { line: SortLine; onClose: () => void }) 
           {targets.failure && <LoadError failure={targets.failure} onRetry={targets.reload} />}
           {!targets.data && !targets.failure && <Skeleton rows={3} />}
           {targets.data && parts.length === 1 && <p className="hint muted">{t.sort.splitNothing}</p>}
+          {value.retail && retailGoods.data && retailParts.length === 0 && <p className="hint muted">{t.goods.sort.retailNone}</p>}
           <div className="split-parts">
           {visible.map((p) => (
             <div key={p.key} className="split-part">
@@ -634,6 +740,7 @@ function SplitSheet({ line, onClose }: { line: SortLine; onClose: () => void }) 
                   })}
                 </fieldset>
               )}
+              {overBy(p) > 0 && <p className="field-err">{t.goods.sort.partOver(formatGel(p.owesTetri))}</p>}
               {p.fineOf && (
                 <Field label={t.sort.splitFineFor} name="fineReason">
                   <input className="input" value={value.reasons[p.fineOf] ?? ''} onChange={(e) => setValue((v) => ({ ...v, reasons: { ...v.reasons, [p.fineOf!]: e.target.value } }))} />
@@ -647,20 +754,24 @@ function SplitSheet({ line, onClose }: { line: SortLine; onClose: () => void }) 
               {t.sort.splitMore}
             </button>
           )}
-          {targets.data && (
+          {(targets.data || value.retail) && (
             <div className="split-sum" aria-live="polite">
               <span className="mono">{used.length > 0 ? `${used.map((p) => formatGel(amountOf(p.key), { decimals: false })).join(' + ')} = ${formatGel(placed, { decimals: false })}` : ''}</span>
               {left === 0 ? <span className="split-ok">{t.sort.splitAllPlaced}</span> : left > 0 ? <span>{t.sort.splitLeft(formatGel(left))}</span> : <span className="field-err">{t.sort.splitOver(formatGel(-left))}</span>}
             </div>
           )}
-          {targets.data && said.length > 0 && (
+          {(targets.data || value.retail) && said.length > 0 && (
             <div className="split-result">
               <b>{t.sort.resTitle}</b>
               <ul>
                 {said.map((x, i) => (
                   <li key={i}>{x}</li>
                 ))}
-                <li>{after === before ? t.sort.resDebtSame(formatGel(before)) : t.sort.resDebt(formatGel(before), formatGel(after))}</li>
+                {anyOver ? (
+                  <li className="field-err">{t.goods.sort.fixOver}</li>
+                ) : (
+                  targets.data && <li>{after === before ? t.sort.resDebtSame(formatGel(before)) : t.sort.resDebt(formatGel(before), formatGel(after))}</li>
+                )}
               </ul>
             </div>
           )}
@@ -706,7 +817,7 @@ interface RuleLine {
   purpose: string | null;
   rule: string | null;
   reason: Reason | null;
-  payment: { id: string; grossTetri: number; number: string | null; rentalId: string | null; saleId: string | null; customer: string | null } | null;
+  payment: { id: string; grossTetri: number; number: string | null; rentalId: string | null; saleId: string | null; goodsSaleId?: string | null; customer: string | null } | null;
 }
 
 interface AsideLine {
@@ -851,7 +962,13 @@ function RuleCard({ line, text }: { line: RuleLine; text: string }) {
   const t = useT();
   const toast = useToast();
   const op = useOperation();
-  const record = line.payment?.rentalId ? `/rentals/${line.payment.rentalId}` : line.payment?.saleId ? `/sales/${line.payment.saleId}` : null;
+  const record = line.payment?.rentalId
+    ? `/rentals/${line.payment.rentalId}`
+    : line.payment?.saleId
+      ? `/sales/${line.payment.saleId}`
+      : line.payment?.goodsSaleId
+        ? `/sales/goods/${line.payment.goodsSaleId}`
+        : null;
   return (
     <article className="sort-line">
       <div className="sort-line-head">

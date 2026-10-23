@@ -32,3 +32,14 @@ export function fmtDayMonth(iso: string | null | undefined): string {
 export function vinParts(vin: string): { head: string; tail: string } {
   return { head: vin.slice(0, -4), tail: vin.slice(-4) };
 }
+
+/**
+ * A record's number held together in a line of text: a word joiner (U+2060,
+ * nothing visible) after the hyphen of `TS-00001`, `R-00480`, `SL-00007`, so
+ * a narrow line breaks before the number and not inside it. For a string
+ * that cannot carry a `.nobr` span — the toast's words (QA 23.10.2026:
+ * «Продано TS-» / «00001»); the same joiner keeps «Signify-ში» whole.
+ */
+export function holdNumbers(text: string): string {
+  return text.replace(/\b([A-Z]{1,3})-(?=\d)/g, '$1-⁠');
+}

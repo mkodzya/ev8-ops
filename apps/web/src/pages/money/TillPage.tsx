@@ -37,7 +37,7 @@ interface Till {
   owner: boolean;
   me: string;
   rows: TillRow[];
-  mine: { id: string; direction: 'in' | 'out'; grossTetri: number; at: string; kind: string; customer: string | null; number: string | null }[];
+  mine: { id: string; direction: 'in' | 'out'; grossTetri: number; at: string; kind: string; customer: string | null; number: string | null; goodsSaleId?: string | null }[];
 }
 
 // The company's clock: a hand-over happened when Tbilisi says it did, not
@@ -261,7 +261,8 @@ function ManagerTill({ till }: { till: Till }) {
           {takenToday.map((m) => (
             <div key={m.id} className="till-row">
               <span>
-                {m.customer ?? ''} {m.number ? `· ${m.number}` : ''} · {hhmm(m.at)}
+                {/* Goods sold to a retail buyer name no card (ADR-0045): the kind and «Розничный покупатель». */}
+                {m.customer ?? (m.goodsSaleId ? t.goods.retail : '')} {m.kind === 'goods' ? `· ${t.money.kinds.goods}` : ''} {m.number ? `· ${m.number}` : ''} · {hhmm(m.at)}
               </span>
               <span className="mono amt-in nowrap">+{formatGel(m.grossTetri)}</span>
             </div>

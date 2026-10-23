@@ -39,3 +39,4 @@ export * from './rental-mopeds.js';
 export * from './vehicle-history.js';
 export * from './rental-money.js';
 export * from './pickup-date.js';
+export * from './goods.js';

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PERMISSIONS, PIN_ROLES, ROLE_PERMISSIONS, ROLES, roleCan, seesEveryRepair } from '../src/index.js';
+import { PERMISSIONS, PIN_ROLES, PIN_SESSION_PERMISSIONS, ROLE_PERMISSIONS, ROLES, roleCan, seesEveryRepair } from '../src/index.js';
 
 describe('roles and permissions (redesign §2.1, Mika 17.09.2026; ADR-0033, 20.10.2026)', () => {
   it('has four roles: the owners, the managers, the mechanics and the chief mechanics', () => {
@@ -29,6 +29,14 @@ describe('roles and permissions (redesign §2.1, Mika 17.09.2026; ADR-0033, 20.1
     for (const p of ['fleet.view', 'fleet.location.set', 'rental.create', 'rental.return', 'customer.create', 'cash.record'] as const) {
       expect(roleCan('manager', p), p).toBe(true);
     }
+  });
+
+  it('a manager sells goods over the counter; dating one back, cancelling it and a mechanic selling are not his (ADR-0045)', () => {
+    expect(roleCan('manager', 'goods.sell')).toBe(true);
+    expect(roleCan('manager', 'sales.manage')).toBe(false);
+    expect(roleCan('mechanic', 'goods.sell')).toBe(false);
+    expect(roleCan('chief_mechanic', 'goods.sell')).toBe(false);
+    expect(PIN_SESSION_PERMISSIONS).not.toContain('goods.sell');
   });
 
   it('a manager never sees cost, purchases, reports, documents or other people\'s money, and decides no deposit', () => {

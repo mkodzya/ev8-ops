@@ -190,6 +190,15 @@ describe('the battery count (wave 4 §3.8, D16)', () => {
     expect(batteryCount({ inventory, movesSince: [{ kind: 'to_repair', qty: 2 }, { kind: 'from_repair', qty: 1 }], couriersNow: 34 })).toEqual({ total: 42, couriers: 34, repair: 2, showroom: 6 });
   });
 
+  it('takes a charger sold off the shelf and puts it back when the sale is called off (issue #11)', async () => {
+    const { batteryCount } = await import('../src/index.js');
+    const inventory = { countedOn: '2026-10-15', showroomQty: 4, repairQty: 0, couriersQty: 10, totalQty: 14 };
+    expect(batteryCount({ inventory, movesSince: [{ kind: 'sold', qty: 1 }], couriersNow: 10 })).toEqual({ total: 13, couriers: 10, repair: 0, showroom: 3 });
+    expect(batteryCount({ inventory, movesSince: [{ kind: 'sold', qty: 1 }, { kind: 'sale_cancelled', qty: 1 }], couriersNow: 10 })).toEqual({ total: 14, couriers: 10, repair: 0, showroom: 4 });
+    // Sold beyond the count by an owner: found first, then sold — the count stays where it was.
+    expect(batteryCount({ inventory: { ...inventory, showroomQty: 0, totalQty: 10 }, movesSince: [{ kind: 'found', qty: 1 }, { kind: 'sold', qty: 1 }], couriersNow: 10 })).toEqual({ total: 10, couriers: 10, repair: 0, showroom: 0 });
+  });
+
   it('counts nothing until somebody counts (no stocktake yet)', async () => {
     const { batteryCount } = await import('../src/index.js');
     expect(batteryCount({ inventory: null, movesSince: [], couriersNow: 10 })).toEqual({ total: 0, couriers: 0, repair: 0, showroom: 0 });

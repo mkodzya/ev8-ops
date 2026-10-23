@@ -1,6 +1,7 @@
 import { CUSTOMER_SOURCES, todayISO, waRentalOf, type CustomerKind, type DepositStatus, type RentalStatus } from '@ev8/shared';
 import { useRef, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import { GoodsPill, useItemsText, type GoodsRow } from './goods/GoodsSalesPage.js';
 import { preparePhoto, uploadFile } from '../lib/photos.js';
 import { useOperation } from '../ds/form/operation.js';
 import { useMoneyForm } from '../ds/money/MoneyForm.js';
@@ -43,6 +44,8 @@ interface Card {
   };
   documents: { id: string; docKind: 'id_card' | 'driver_licence' | 'other'; label: string; sizeBytes: number; mimeType: string; createdAt: string }[];
   sales: { id: string; number: string; status: string; soldOn: string | null; priceTetri: number; instalments: number; instalmentsPaid: number }[];
+  /** Goods he bought over the counter (ADR-0045); absent while an older API answers. */
+  goodsSales?: GoodsRow[];
   feed: { at: string; kind: 'payment' | 'document' | 'log'; text: string; number: string | null; amountTetri: number | null; by: string | null; note: string | null }[];
   canOpenDocuments: boolean;
   /** Is there a personal number, and may this person ask to see it (Q27). */
@@ -57,12 +60,13 @@ interface Balance {
   creditTetri: number;
   aheadTetri: number;
   depositHeldTetri: number;
-  parts: { kind: 'rent' | 'deposit' | 'sale' | 'service'; id: string; number: string; owesTetri: number }[];
+  parts: { kind: 'rent' | 'deposit' | 'sale' | 'service' | 'goods'; id: string; number: string; owesTetri: number }[];
 }
 
 export function CustomerPage() {
   const { id } = useParams();
   const t = useT();
+  const navigate = useNavigate();
   const { locale } = useLocale();
   const { can } = useSession();
   const openMoney = useMoneyForm();
@@ -138,7 +142,15 @@ export function CustomerPage() {
             {t.actions.newRental}
           </Link>
         )}
-        {!c.archived && can('settings.manage') && <RowMenu actions={[{ key: 'merge', label: t.merge.title, onPick: () => setMerging(true) }]} />}
+        {!c.archived && (can('settings.manage') || can('goods.sell')) && (
+          <RowMenu
+            actions={[
+              // A part or a charger sold to him over the counter (ADR-0045).
+              ...(can('goods.sell') ? [{ key: 'goods', label: t.goods.sell, onPick: () => navigate(`/sales/goods/new?customer=${c.id}`) }] : []),
+              ...(can('settings.manage') ? [{ key: 'merge', label: t.merge.title, onPick: () => setMerging(true) }] : []),
+            ]}
+          />
+        )}
       </PageHead>
 
       {c.archived && (
@@ -179,7 +191,7 @@ export function CustomerPage() {
                   : `${t.money.noDebt} · ${formatGel(0)}`}
           </p>
           {balance.data.parts.map((p) => (
-            <Row key={`${p.kind}-${p.id}`} k={`${p.kind === 'deposit' ? t.money.closeDeposit : t.money.kinds[p.kind === 'service' ? 'service' : p.kind === 'sale' ? 'sale' : 'rent']} · ${p.number}`} v={<span className="mono">{formatGel(p.owesTetri)}</span>} />
+            <Row key={`${p.kind}-${p.id}`} k={`${p.kind === 'deposit' ? t.money.closeDeposit : t.money.kinds[p.kind === 'service' ? 'service' : p.kind === 'sale' ? 'sale' : p.kind === 'goods' ? 'goods' : 'rent']} · ${p.number}`} v={<span className="mono">{formatGel(p.owesTetri)}</span>} />
           ))}
           {balance.data.aheadTetri > 0 && <Row k={t.money.ahead} v={<span className="mono muted">{formatGel(balance.data.aheadTetri)}</span>} />}
           {balance.data.depositHeldTetri > 0 && <Row k={t.money.depositHeld} v={<span className="mono muted">{formatGel(balance.data.depositHeldTetri)}</span>} />}
@@ -253,6 +265,7 @@ export function CustomerPage() {
           <BlockHead title={t.sales.title} />
           <CustomerSales customerId={c.id} />
         </section>
+        <CustomerPurchases rows={data.goodsSales ?? []} customerId={c.id} archived={c.archived} />
         <section className="card">
           <BlockHead title={t.customer.rentals} sub={t.rentals.count(data.rentals.length)} />
           {data.rentals.length === 0 ? (
@@ -529,5 +542,40 @@ function PersonalId({ id, masked, may }: { id: string; masked: string | null; ma
         </button>
       )}
     </span>
+  );
+}
+
+/** «Покупки»: goods he bought over the counter, with what is still open on each (ADR-0045). */
+function CustomerPurchases({ rows, customerId, archived }: { rows: GoodsRow[]; customerId: string; archived: boolean }) {
+  const t = useT();
+  const { can } = useSession();
+  const items = useItemsText();
+  return (
+    <section className="card">
+      <BlockHead title={t.goods.customer.purchases} sub={rows.length > 0 ? String(rows.length) : undefined}>
+        {!archived && can('goods.sell') && (
+          <Link className="pill pill-sm" to={`/sales/goods/new?customer=${customerId}`}>
+            {t.goods.sell}
+          </Link>
+        )}
+      </BlockHead>
+      {rows.length === 0 ? (
+        <Empty text={t.goods.customer.none} />
+      ) : (
+        <ul className="timeline">
+          {rows.map((g) => (
+            <li key={g.id}>
+              <span className="mono muted">{fmtDate(g.soldOn)}</span>
+              <span>
+                <Link to={`/sales/goods/${g.id}`} className="mono">
+                  {g.number}
+                </Link>{' '}
+                · {items(g.items)} · <span className="mono">{formatGel(g.totalTetri, { decimals: false })}</span> · <GoodsPill state={g.state} openTetri={g.openTetri} />
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }

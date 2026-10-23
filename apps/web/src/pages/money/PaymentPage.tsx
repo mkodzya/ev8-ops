@@ -11,9 +11,10 @@ import '../../ds/money/money.css';
 import { fmtDate, fmtDateAt, formatGel } from '../../format.js';
 import { useT } from '../../i18n/index.js';
 import { chargeWords } from '../../lib/charges.js';
+import { noteWords } from '../../lib/journal.js';
 import { useLoad } from '../../lib/use.js';
 
-type Kind = 'rent' | 'sale' | 'service' | 'on_account' | 'deposit_payout' | 'buyback' | 'supplier';
+type Kind = 'rent' | 'sale' | 'service' | 'on_account' | 'deposit_payout' | 'buyback' | 'supplier' | 'goods';
 
 interface Card {
   payment: {
@@ -30,6 +31,8 @@ interface Card {
     sale: { id: string; number: string } | null;
     purchase: { id: string; number: string; currency: string } | null;
     serviceJob: { id: string; number: string } | null;
+    /** A goods sale (ADR-0045) — also the one a cancelled sale's credit came from. */
+    goodsSale?: { id: string; number: string } | null;
     note: string | null;
     paidTo: string | null;
     paidToReason: string | null;
@@ -81,6 +84,8 @@ export function PaymentPage() {
       <section className="card">
         <p className={`t-display mono ${p.voided ? 'amt-void' : p.direction === 'out' ? 'amt-out' : 'amt-in'}`}>{signed}</p>
         {p.customer && <Row k={t.paymentPage.customer} v={<Link to={`/customers/${p.customer.id}`}>{p.customer.name}</Link>} />}
+        {/* A retail buyer has no card: the goods sale names him so (ADR-0045, QA 23.10.2026). */}
+        {!p.customer && p.goodsSale && <Row k={t.paymentPage.customer} v={t.goods.retail} />}
         {record && <Row k={t.money.kinds[p.kind]} v={<Link to={record.to} className="mono">{record.n}</Link>} />}
         <Row k={t.paymentPage.channel} v={t.payments.channels[p.channel]} />
         {p.channel === 'acquiring' && p.direction === 'in' && (
@@ -96,7 +101,8 @@ export function PaymentPage() {
         {p.backdateReason && <Row k={t.paymentPage.backdate} v={p.backdateReason} />}
         {p.paidTo && <Row k={t.paymentPage.paidTo} v={`${p.paidTo} · ${p.paidToReason ?? ''}`} />}
         <Row k={t.paymentPage.by} v={`${p.createdBy ?? t.common.dash}, ${fmtDateAt(p.createdAt)} ${hhmm(p.createdAt)}`} />
-        {p.voided && <Row k={t.paymentPage.voided} v={`${p.voidReason ?? ''}${p.voidedBy ? ` · ${p.voidedBy}` : ''}`} />}
+        {/* The code's part of a reason in the reader's words — a goods sale's cancellation — a person's as typed. */}
+        {p.voided && <Row k={t.paymentPage.voided} v={[noteWords(t, p.voidReason), p.voidedBy].filter(Boolean).join(' · ')} />}
       </section>
 
       {(p.closed.length > 0 || credit > 0) && (
@@ -147,7 +153,7 @@ export function PaymentPage() {
         <section className="card">
           <BlockHead title={t.paymentPage.journal} />
           {data.journal.map((j, i) => (
-            <Row key={i} k={`${fmtDateAt(j.at)} ${hhmm(j.at)}`} v={`${j.who ?? ''} · ${actWord(t, j.action)}${j.note ? ` · ${j.note}` : ''}`} />
+            <Row key={i} k={`${fmtDateAt(j.at)} ${hhmm(j.at)}`} v={`${j.who ?? ''} · ${actWord(t, j.action)}${noteWords(t, j.note) ? ` · ${noteWords(t, j.note)}` : ''}`} />
           ))}
         </section>
       )}
@@ -169,6 +175,7 @@ function settledLabel(t: ReturnType<typeof useT>, c: Card['payment']['closed'][n
 function actWord(t: ReturnType<typeof useT>, action: string): string {
   if (action === 'payment.void') return t.paymentPage.acts.void;
   if (action === 'payment.undo') return t.paymentPage.acts.undo;
+  if (action === 'payment.rebook') return t.paymentPage.acts.rebook;
   return t.paymentPage.acts.record;
 }
 
@@ -178,6 +185,7 @@ function recordLink(p: Card['payment']): { to: string; n: string } | null {
   if (p.sale) return { to: `/sales/${p.sale.id}`, n: p.sale.number };
   if (p.purchase) return { to: `/purchases/${p.purchase.id}`, n: p.purchase.number };
   if (p.serviceJob) return { to: `/service/${p.serviceJob.id}`, n: p.serviceJob.number };
+  if (p.goodsSale) return { to: `/sales/goods/${p.goodsSale.id}`, n: p.goodsSale.number };
   return null;
 }
 

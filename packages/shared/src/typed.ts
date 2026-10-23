@@ -134,9 +134,13 @@ export const TRANSLATED_JOURNAL_LINES: readonly { action: string; entityType: st
  * - a repair a return or a swap opens says what the act found, behind the
  *   rental's number — «R-00012: …»: the act's words are the rental's
  *   (`acts` never leaves), and so is the swap's reason it falls back on. The
- *   same words reach the moped's history when the repair takes it out.
+ *   same words reach the moped's history when the repair takes it out;
+ * - a goods sale (ADR-0045) writes on the part's or the charger's movement the
+ *   owner's words for calling it off — «TS-00004 cancelled: …»
+ *   (`goodsCancelReason`) — and for selling a charger beyond the count,
+ *   «TS-00004: …»: a sale's words, not a repair's (amendment of 23.10.2026).
  */
-const NEVER_STARTS = [/^return undone:/, /^sale SL-/, /^bought back under SL-/, /^hand-over R-\d/, /^swap R-\d/, /^R-\d+: /];
+const NEVER_STARTS = [/^return undone:/, /^sale SL-/, /^bought back under SL-/, /^hand-over R-\d/, /^swap R-\d/, /^R-\d+: /, /^TS-\d+ cancelled: /, /^TS-\d+: /];
 
 /** Longer than this is not a note; it stays as typed rather than run up a bill. */
 export const MAX_TRANSLATED_CHARS = 2000;

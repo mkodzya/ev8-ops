@@ -1,5 +1,6 @@
 import { batteryCount, todayISO } from '@ev8/shared';
 import type { FastifyInstance } from 'fastify';
+import type { Prisma } from '../generated/prisma/client.js';
 import { audit } from '../lib/audit.js';
 import { dateFromISO, isoDate } from '../lib/dates.js';
 import { prisma } from '../lib/db.js';
@@ -14,19 +15,24 @@ import { date, int, oneOf, str } from '../lib/validate.js';
 // way since migration 0044 (meeting of 14.10.2026): every row says which.
 
 type Body = Record<string, unknown>;
+type Db = Prisma.TransactionClient | typeof prisma;
 
 export const COUNTED_ITEMS = ['battery', 'charger'] as const;
 export type CountedItem = (typeof COUNTED_ITEMS)[number];
 
 /** How many went out with the rentals that are still open. */
-async function couriersNow(item: CountedItem): Promise<number> {
-  const rows = await prisma.rental.findMany({ where: { status: { not: 'returned' } }, select: { batteries: true, chargers: true } });
+async function couriersNow(item: CountedItem, db: Db = prisma): Promise<number> {
+  const rows = await db.rental.findMany({ where: { status: { not: 'returned' } }, select: { batteries: true, chargers: true } });
   return rows.reduce((n, r) => n + ((item === 'charger' ? r.chargers : r.batteries) ?? 0), 0);
 }
 
-export async function batteriesNow(item: CountedItem = 'battery'): Promise<{ total: number; couriers: number; repair: number; showroom: number }> {
-  const inventory = await prisma.batteryInventory.findFirst({ where: { item }, orderBy: [{ countedOn: 'desc' }, { createdAt: 'desc' }] });
-  const movesSince = await prisma.batteryMove.findMany({
+/**
+ * The count now. Read through a transaction's client when a goods sale asks:
+ * it counts what is in the showroom after its own lock (issue #11).
+ */
+export async function batteriesNow(item: CountedItem = 'battery', db: Db = prisma): Promise<{ total: number; couriers: number; repair: number; showroom: number }> {
+  const inventory = await db.batteryInventory.findFirst({ where: { item }, orderBy: [{ countedOn: 'desc' }, { createdAt: 'desc' }] });
+  const movesSince = await db.batteryMove.findMany({
     where: inventory ? { item, createdAt: { gt: inventory.createdAt } } : { item },
     select: { kind: true, qty: true },
   });
@@ -35,8 +41,14 @@ export async function batteriesNow(item: CountedItem = 'battery'): Promise<{ tot
       ? { countedOn: isoDate(inventory.countedOn)!, showroomQty: inventory.showroomQty, repairQty: inventory.repairQty, couriersQty: inventory.couriersQty, totalQty: inventory.totalQty }
       : null,
     movesSince: movesSince.map((m) => ({ kind: m.kind as 'to_repair', qty: m.qty })),
-    couriersNow: await couriersNow(item),
+    couriersNow: await couriersNow(item, db),
   });
+}
+
+/** The day the item was last counted: a sale dated on or before it asks whether the count saw it gone (ADR-0045 §9). */
+export async function countedItemLastCountOn(item: CountedItem, db: Db = prisma): Promise<string | null> {
+  const last = await db.batteryInventory.findFirst({ where: { item }, orderBy: [{ countedOn: 'desc' }, { createdAt: 'desc' }], select: { countedOn: true } });
+  return last ? isoDate(last.countedOn) : null;
 }
 
 function itemOf(value: unknown): CountedItem {
@@ -57,7 +69,7 @@ export function batteryRoutes(app: FastifyInstance): void {
         where: { item },
         orderBy: [{ occurredOn: 'desc' }, { createdAt: 'desc' }],
         take: 60,
-        include: { rental: { select: { number: true } }, createdBy: { select: { name: true } } },
+        include: { rental: { select: { number: true } }, createdBy: { select: { name: true } }, goodsSaleLine: { select: { sale: { select: { id: true, number: true } } } } },
       }),
       prisma.batteryInventory.findMany({ where: { item }, orderBy: [{ countedOn: 'desc' }, { createdAt: 'desc' }], take: 10, include: { createdBy: { select: { name: true } } } }),
       // Batteries leave and come back with the mopeds: those movements are the
@@ -80,7 +92,17 @@ export function batteryRoutes(app: FastifyInstance): void {
         ? { countedOn: isoDate(inventory.countedOn), showroomQty: inventory.showroomQty, repairQty: inventory.repairQty, couriersQty: inventory.couriersQty, totalQty: inventory.totalQty, by: inventory.createdBy?.name ?? null, reason: inventory.reason }
         : null,
       moves: [
-        ...moves.map((m) => ({ id: m.id, kind: m.kind, qty: m.qty, reason: m.reason, number: m.rental?.number ?? null, occurredOn: isoDate(m.occurredOn), by: m.createdBy?.name ?? null })),
+        // A goods sale's movement names its sale and links to it (issue #11): sold, back after a cancellation, found when sold beyond the count.
+        ...moves.map((m) => ({
+          id: m.id,
+          kind: m.kind,
+          qty: m.qty,
+          reason: m.reason,
+          number: m.rental?.number ?? m.goodsSaleLine?.sale.number ?? null,
+          goodsSaleId: m.goodsSaleLine?.sale.id ?? null,
+          occurredOn: isoDate(m.occurredOn),
+          by: m.createdBy?.name ?? null,
+        })),
         ...rentals.flatMap((r) => [
           ...(r.pickedUpOn ? [{ id: `out:${r.number}`, kind: 'handed_out', qty: handed(r), reason: null, number: r.number, occurredOn: isoDate(r.pickedUpOn), by: null }] : []),
           ...(r.returnedOn ? [{ id: `back:${r.number}`, kind: 'came_back', qty: handed(r), reason: null, number: r.number, occurredOn: isoDate(r.returnedOn), by: null }] : []),

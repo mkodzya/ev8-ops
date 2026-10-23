@@ -17,7 +17,7 @@ import './money.css';
 // payment will close and what "paid through" becomes; after, a message with
 // "Undo" for ten seconds.
 
-export type MoneyKind = 'rent' | 'sale' | 'service' | 'on_account' | 'deposit_payout' | 'buyback' | 'supplier';
+export type MoneyKind = 'rent' | 'sale' | 'service' | 'on_account' | 'deposit_payout' | 'buyback' | 'supplier' | 'goods';
 type Channel = 'cash' | 'acquiring' | 'transfer';
 
 /** What the money is for, when the form is opened already knowing it. */
@@ -26,11 +26,15 @@ export interface MoneyTarget {
   rentalId?: string;
   saleId?: string;
   serviceJobId?: string;
+  /** A goods sale (issue #11, ADR-0045): a retail buyer's has no customer. */
+  goodsSaleId?: string;
   purchaseId?: string;
   customerId?: string;
-  /** R-00491, SL-00171, PO-00115 — for the title and the "closes" lines. */
+  /** R-00491, SL-00171, PO-00115, TS-00001 — for the title and the "closes" lines. */
   number?: string;
   customer?: string;
+  /** What a goods sale still asks for, when the opener knows it: the amount chip. */
+  openTetri?: number;
 }
 
 interface Opening {
@@ -89,7 +93,7 @@ interface State {
 
 interface Closes {
   /** `charge`: what a return charged — a key, days of delay; its kind comes as `number` (B5-08). */
-  target: 'deposit' | 'period' | 'instalment' | 'charge' | 'service' | 'sale' | 'purchase';
+  target: 'deposit' | 'period' | 'instalment' | 'charge' | 'service' | 'sale' | 'purchase' | 'goods';
   amountTetri: number;
   fullTetri: number;
   openTetri: number;
@@ -133,13 +137,15 @@ interface Debt {
   creditTetri: number;
   aheadTetri: number;
   depositHeldTetri: number;
-  parts: { kind: 'rent' | 'deposit' | 'sale' | 'service'; id: string; number: string; owesTetri: number }[];
+  parts: { kind: 'rent' | 'deposit' | 'sale' | 'service' | 'goods'; id: string; number: string; owesTetri: number }[];
 }
 interface Targets {
   debt: Debt;
   rentals: { id: string; number: string; status: string; weeklyRateTetri: number; vin: string | null; model: string | null }[];
   sales: { id: string; number: string; nextTetri: number; nextDueOn: string | null; overdue: boolean }[];
   repairs: { id: string; number: string }[];
+  /** Goods sold to him and still open (ADR-0045). Absent while an older API answers. */
+  goods?: { id: string; number: string; soldOn: string | null; openTetri: number; items: { name: string; countedItem: string | null; spec: string | null; qty: number }[] }[];
 }
 
 const OUT: readonly MoneyKind[] = ['deposit_payout', 'buyback', 'supplier'];
@@ -240,7 +246,15 @@ function MoneySheet({ opening, onClose }: { opening: Opening; onClose: () => voi
           if (!line) throw new ApiError(400, 'missing_field', 'Choose the bank line to attach.', { field: 'notBankLines', fieldText: t.inBank.choose });
           const target = s.target;
           const what =
-            target.kind === 'rent' ? { rentalId: target.rentalId } : target.kind === 'sale' ? { saleId: target.saleId } : target.kind === 'service' ? { serviceJobId: target.serviceJobId } : { customerId: target.customerId };
+            target.kind === 'rent'
+              ? { rentalId: target.rentalId }
+              : target.kind === 'sale'
+                ? { saleId: target.saleId }
+                : target.kind === 'service'
+                  ? { serviceJobId: target.serviceJobId }
+                  : target.kind === 'goods'
+                    ? { goodsSaleId: target.goodsSaleId }
+                    : { customerId: target.customerId };
           const { id } = await api.post<{ id: string }>(`/api/statement-lines/${line.lineId}/assign`, what, { key });
           return {
             toast: {
@@ -255,8 +269,10 @@ function MoneySheet({ opening, onClose }: { opening: Opening; onClose: () => voi
           rentalId: s.target.rentalId,
           saleId: s.target.saleId,
           serviceJobId: s.target.serviceJobId,
+          goodsSaleId: s.target.goodsSaleId,
           purchaseId: s.target.purchaseId,
-          customerId: s.target.customerId,
+          // A goods sale names its buyer itself; a retail one has none.
+          customerId: s.target.kind === 'goods' ? undefined : s.target.customerId,
           amountTetri: s.amount,
           channel: s.channel,
           occurredOn: owner && s.occurredOn !== today ? s.occurredOn : undefined,
@@ -436,6 +452,8 @@ function titleFor(t: ReturnType<typeof useT>, target: MoneyTarget): string {
       return t.money.paySupplier(n);
     case 'service':
       return t.money.payService(n);
+    case 'goods':
+      return t.money.payGoods(n);
     case 'buyback':
       return t.money.buyBack(n);
     default:
@@ -463,8 +481,9 @@ function usePlan(s: State, tetri: number | null) {
           rentalId: s.target!.rentalId,
           saleId: s.target!.saleId,
           serviceJobId: s.target!.serviceJobId,
+          goodsSaleId: s.target!.goodsSaleId,
           purchaseId: s.target!.purchaseId,
-          customerId: s.target!.customerId,
+          customerId: s.target!.kind === 'goods' ? undefined : s.target!.customerId,
           amountTetri: tetri,
           channel: s.channel,
           foreignAmount: s.foreignAmount || undefined,
@@ -629,6 +648,8 @@ function closeLabel(t: ReturnType<typeof useT>, c: Closes): string {
       return t.money.closePurchase(c.number ?? '');
     case 'sale':
       return t.money.closeSale(c.number ?? '');
+    case 'goods':
+      return t.money.closeGoods(c.number ?? '');
   }
 }
 
@@ -638,6 +659,8 @@ interface SearchAnswer {
     rentals: { items: { id: string; number: string; customer: string; status: string }[] };
     sales: { items: { id: string; number: string; customer: string; status: string }[] };
     purchases: { items: { id: string; number: string; supplier: string }[] } | null;
+    /** Goods sales (ADR-0045): absent while an older API answers. */
+    goods?: { items: { id: string; number: string; status: string; customerId: string | null; buyer: string | null; retail: boolean; openTetri: number }[] };
   };
 }
 
@@ -708,6 +731,24 @@ function WhoPicker({ direction, onPick }: { direction: 'in' | 'out'; onPick: (t:
                 </button>
               </li>
             ))}
+          {direction === 'in' &&
+            (g.goods?.items ?? [])
+              .filter((x) => x.status === 'active' && x.openTetri > 0)
+              .map((x) => (
+                <li key={x.id}>
+                  <button
+                    type="button"
+                    className="pick-card"
+                    onClick={() => onPick({ kind: 'goods', goodsSaleId: x.id, number: x.number, customerId: x.customerId ?? undefined, customer: x.retail ? (x.buyer ? `${t.goods.retail} · ${x.buyer}` : t.goods.retail) : (x.buyer ?? ''), openTetri: x.openTetri })}
+                  >
+                    <span className="pick-card-main">
+                      <span className="pick-card-title">{x.number}</span>
+                      <span className="pick-card-sub">{x.retail ? t.goods.retail : x.buyer}</span>
+                    </span>
+                    <span className="mono">{formatGel(x.openTetri, { decimals: false })}</span>
+                  </button>
+                </li>
+              ))}
           {direction === 'out' &&
             (g.purchases?.items ?? []).map((p) => (
               <li key={p.id}>
@@ -794,6 +835,17 @@ function RecordChoice({ targets, customer, onPick }: { targets: Targets; custome
             </button>
           </li>
         ))}
+        {(targets.goods ?? []).map((g) => (
+          <li key={g.id}>
+            <button type="button" className="pick-card" onClick={() => onPick({ kind: 'goods', goodsSaleId: g.id, number: g.number, customerId: customer.customerId, customer: customer.customer, openTetri: g.openTetri })}>
+              <span className="pick-card-main">
+                <span className="pick-card-title">{g.number}</span>
+                <span className="pick-card-sub">{t.money.kinds.goods}</span>
+              </span>
+              <span className="mono">{formatGel(g.openTetri, { decimals: false })}</span>
+            </button>
+          </li>
+        ))}
         {targets.repairs.map((j) => (
           <li key={j.id}>
             <button type="button" className="pick-card" onClick={() => onPick({ kind: 'service', serviceJobId: j.id, number: j.number, customerId: customer.customerId, customer: customer.customer })}>
@@ -847,6 +899,10 @@ function AmountChips({ s, onPick }: { s: State; onPick: (v: string) => void }) {
   if (target.kind === 'service' && target.serviceJobId) {
     const owed = owedOn(target.serviceJobId);
     if (owed > 0) chips.push({ tetri: owed, label: t.money.chipDebt });
+  }
+  if (target.kind === 'goods' && target.openTetri) {
+    // A retail buyer takes nothing on credit (ADR-0045 §2): what his sale waits for is open, not a debt.
+    chips.push({ tetri: target.openTetri, label: target.customerId ? t.money.chipDebt : t.goods.cols.open });
   }
   if (target.kind === 'deposit_payout' && target.rentalId) {
     const d = deposits.data?.deposits.find((x) => x.rentalId === target.rentalId);

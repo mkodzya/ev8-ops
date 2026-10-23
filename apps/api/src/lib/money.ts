@@ -6,6 +6,7 @@ import { prisma } from './db.js';
 import { PART_MONEY } from './stock.js';
 import { env } from './env.js';
 import { badRequest, conflict, forbidden, notFound } from './errors.js';
+import { goodsOwed } from './goods.js';
 import { recordPaymentTx } from './payments.js';
 import { recostPurchase } from './purchases.js';
 import { rentalOwed, spreadRental } from './rentalMoney.js';
@@ -19,7 +20,7 @@ import { moveVehicle } from './vehicles.js';
 
 type Tx = Prisma.TransactionClient;
 
-export const MONEY_KINDS = ['rent', 'sale', 'service', 'on_account', 'deposit_payout', 'buyback', 'supplier'] as const;
+export const MONEY_KINDS = ['rent', 'sale', 'service', 'on_account', 'deposit_payout', 'buyback', 'supplier', 'goods'] as const;
 export type MoneyKind = (typeof MONEY_KINDS)[number];
 export type Channel = 'cash' | 'acquiring' | 'transfer';
 
@@ -31,6 +32,8 @@ export interface MoneyInput {
   rentalId?: string | null;
   saleId?: string | null;
   serviceJobId?: string | null;
+  /** A goods sale (issue #11, ADR-0045): paid like a repair, no allocation. */
+  goodsSaleId?: string | null;
   customerId?: string | null;
   purchaseId?: string | null;
   amountTetri: number;
@@ -54,7 +57,7 @@ export interface MoneyInput {
 
 /** One thing a payment will close, in words the form can say. */
 export interface Closes {
-  target: 'deposit' | 'period' | 'instalment' | 'charge' | 'service' | 'sale' | 'purchase';
+  target: 'deposit' | 'period' | 'instalment' | 'charge' | 'service' | 'sale' | 'purchase' | 'goods';
   amountTetri: number;
   /** What this thing asks for in full, and what was open on it before. */
   fullTetri: number;
@@ -183,6 +186,14 @@ export async function planMoney(tx: Tx, input: MoneyInput): Promise<MoneyPlan> {
       if (gross > job.openTetri) throw conflict('over_open', 'That is more than the repair still asks for.', { field: 'amountTetri', openTetri: job.openTetri });
       return { ...base, closes: [{ target: 'service', amountTetri: gross, fullTetri: job.chargedTetri, openTetri: job.openTetri, number: job.number }], limitTetri: job.openTetri };
     }
+    case 'goods': {
+      if (!input.goodsSaleId) throw badRequest('missing_field', 'goodsSaleId is required', { field: 'goodsSaleId' });
+      const sale = await goodsOwed(tx, input.goodsSaleId);
+      if (sale.status !== 'active') throw conflict('goods_sale_closed', 'This goods sale is cancelled.');
+      // Its own code: `over_open` speaks of a repair (ADR-0045 §12).
+      if (gross > sale.openTetri) throw conflict('goods_over_open', 'That is more than the goods sale still asks for.', { field: 'amountTetri', number: sale.number, openTetri: sale.openTetri });
+      return { ...base, closes: [{ target: 'goods', amountTetri: gross, fullTetri: sale.totalTetri, openTetri: sale.openTetri, number: sale.number }], limitTetri: sale.openTetri };
+    }
     case 'deposit_payout': {
       if (!input.rentalId) throw badRequest('missing_field', 'rentalId is required', { field: 'rentalId' });
       const d = await depositMoney(tx, input.rentalId);
@@ -278,13 +289,15 @@ export async function depositMoney(tx: Tx | typeof prisma, rentalId: string) {
 }
 
 /** Money a customer brings, which a bank line may already be. */
-const FROM_CUSTOMER: readonly MoneyKind[] = ['rent', 'sale', 'service', 'on_account'];
+const FROM_CUSTOMER: readonly MoneyKind[] = ['rent', 'sale', 'service', 'on_account', 'goods'];
 
 /** Whose money it is: the customer of the record it pays. */
 async function payerOf(tx: Tx, input: MoneyInput): Promise<string | null> {
   if (input.kind === 'rent' && input.rentalId) return (await tx.rental.findUnique({ where: { id: input.rentalId }, select: { customerId: true } }))?.customerId ?? null;
   if (input.kind === 'sale' && input.saleId) return (await tx.sale.findUnique({ where: { id: input.saleId }, select: { customerId: true } }))?.customerId ?? null;
   if (input.kind === 'service' && input.serviceJobId) return (await tx.serviceJob.findUnique({ where: { id: input.serviceJobId }, select: { customerId: true } }))?.customerId ?? null;
+  // A retail buyer has no card: the lines it may be are the ones that name nobody.
+  if (input.kind === 'goods' && input.goodsSaleId) return (await tx.goodsSale.findUnique({ where: { id: input.goodsSaleId }, select: { customerId: true } }))?.customerId ?? null;
   return input.customerId ?? null;
 }
 
@@ -300,43 +313,49 @@ export async function bankLinesFor(tx: Tx, input: MoneyInput, occurredOn: string
 
 /** Write it. The plan is worked out again inside the transaction, so what is written is what was true then. */
 export async function recordMoney(actor: Actor, input: MoneyInput): Promise<{ id: string; plan: MoneyPlan }> {
+  return prisma.$transaction((tx) => recordMoneyTx(tx, actor, input));
+}
+
+/**
+ * The same, inside a transaction the caller holds: a goods sale and the cash
+ * paid for it at the counter are written together, or neither is (issue #11).
+ */
+export async function recordMoneyTx(tx: Tx, actor: Actor, input: MoneyInput): Promise<{ id: string; plan: MoneyPlan }> {
   checkMoney(actor, input);
   const occurredOn = input.occurredOn ?? today();
   const backdateReason = occurredOn < today() ? input.backdateReason?.trim() ?? null : null;
-  return prisma.$transaction(async (tx) => {
-    const plan = await planMoney(tx, input);
-    // The bank sends its lines within minutes now, so the money may be in
-    // already: written again by hand it would count twice. The form shows the
-    // line first; a line the person has not seen refuses the write (B11-03).
-    const notBankLines = input.notBankLines ?? [];
-    const unseen = (await bankLinesFor(tx, input, occurredOn)).filter((l) => !notBankLines.includes(l.lineId));
-    if (unseen.length > 0) {
-      throw conflict('bank_line_exists', 'The bank has sent this money already: attach its line, or say this is another transfer.', { field: 'notBankLines', lines: unseen });
-    }
-    let id: string;
-    if (input.kind === 'rent' || input.kind === 'sale' || input.kind === 'on_account') {
-      const r = await recordPaymentTx(tx, {
-        actorId: actor.id,
-        occurredOn,
-        channel: input.channel,
-        grossTetri: plan.grossTetri,
-        feeTetri: plan.feeTetri,
-        customerId: input.customerId ?? null,
-        rentalId: input.kind === 'rent' ? input.rentalId! : null,
-        saleId: input.kind === 'sale' ? input.saleId! : null,
-        bankText: null,
-        note: input.note ?? null,
-        source: 'manual',
-        kind: input.kind,
-        backdateReason,
-        notBankLines: notBankLines.length > 0 ? notBankLines : undefined,
-      });
-      id = r.id;
-    } else {
-      id = await writeOther(tx, actor, input, plan, occurredOn, backdateReason);
-    }
-    return { id, plan };
-  });
+  const plan = await planMoney(tx, input);
+  // The bank sends its lines within minutes now, so the money may be in
+  // already: written again by hand it would count twice. The form shows the
+  // line first; a line the person has not seen refuses the write (B11-03).
+  const notBankLines = input.notBankLines ?? [];
+  const unseen = (await bankLinesFor(tx, input, occurredOn)).filter((l) => !notBankLines.includes(l.lineId));
+  if (unseen.length > 0) {
+    throw conflict('bank_line_exists', 'The bank has sent this money already: attach its line, or say this is another transfer.', { field: 'notBankLines', lines: unseen });
+  }
+  let id: string;
+  if (input.kind === 'rent' || input.kind === 'sale' || input.kind === 'on_account') {
+    const r = await recordPaymentTx(tx, {
+      actorId: actor.id,
+      occurredOn,
+      channel: input.channel,
+      grossTetri: plan.grossTetri,
+      feeTetri: plan.feeTetri,
+      customerId: input.customerId ?? null,
+      rentalId: input.kind === 'rent' ? input.rentalId! : null,
+      saleId: input.kind === 'sale' ? input.saleId! : null,
+      bankText: null,
+      note: input.note ?? null,
+      source: 'manual',
+      kind: input.kind,
+      backdateReason,
+      notBankLines: notBankLines.length > 0 ? notBankLines : undefined,
+    });
+    id = r.id;
+  } else {
+    id = await writeOther(tx, actor, input, plan, occurredOn, backdateReason);
+  }
+  return { id, plan };
 }
 
 /**
@@ -383,6 +402,13 @@ async function writeOther(
       const job = await serviceOwed(tx, input.serviceJobId!);
       customerId = job.customerId;
       extra.serviceJobId = input.serviceJobId;
+      break;
+    }
+    case 'goods': {
+      // A retail buyer's money names nobody; an own customer's is his (ADR-0045).
+      const sale = await goodsOwed(tx, input.goodsSaleId!);
+      customerId = sale.customerId;
+      extra.goodsSaleId = input.goodsSaleId;
       break;
     }
     case 'deposit_payout': {
@@ -433,6 +459,7 @@ async function writeOther(
         grossTetri: plan.grossTetri,
         feeTetri: plan.feeTetri,
         kind: input.kind,
+        ...(input.goodsSaleId ? { goodsSaleId: input.goodsSaleId } : {}),
         paidTo: input.paidTo ?? null,
         paidToReason: input.paidToReason ?? null,
         rate: plan.rate,

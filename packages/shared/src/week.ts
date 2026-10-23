@@ -51,7 +51,7 @@ export function previousWeek(p: Period): Period {
 
 export const inPeriod = (p: Period, day: ISODate): boolean => day >= p.from && day <= p.to;
 
-export type WeekPaymentKind = 'rent' | 'sale' | 'service' | 'on_account' | 'deposit_payout' | 'buyback' | 'supplier';
+export type WeekPaymentKind = 'rent' | 'sale' | 'service' | 'on_account' | 'deposit_payout' | 'buyback' | 'supplier' | 'goods';
 export type WeekAllocationTarget = 'period' | 'deposit' | 'instalment' | 'charge';
 
 export interface WeekPayment {
@@ -84,6 +84,8 @@ export interface WeekIncome {
   depositsInTetri: Tetri;
   /** Repairs the customer paid for, and what a return charged beyond the weeks. */
   serviceTetri: Tetri;
+  /** Parts and chargers sold over the counter (issue #11, ADR-0045). */
+  goodsTetri: Tetri;
   /** The acquirer's 1.5 % on the week's cards — a company expense, shown apart. */
   acquiringFeeTetri: Tetri;
   /** Deposits handed back. */
@@ -115,7 +117,7 @@ export interface WeekIncome {
  * over. One function, because if the designer changes the rule again this is
  * the only place that should change.
  */
-export const INCOME_ROWS = ['rent', 'sale', 'deposits', 'service'] as const;
+export const INCOME_ROWS = ['rent', 'sale', 'deposits', 'service', 'goods'] as const;
 export type IncomeRow = (typeof INCOME_ROWS)[number];
 
 /**
@@ -129,6 +131,26 @@ export type IncomeRow = (typeof INCOME_ROWS)[number];
  * existed, the list showed its whole 330 under rent and disagreed with the
  * week by the deposits inside it (QA-W6-01).
  */
+/**
+ * Which row an allocation's target lands on, and which row the unplaced rest
+ * of a payment of each kind lands on. Both are exhaustive maps rather than
+ * chains of ternaries: a new kind or target that names no row is a compile
+ * error here, not a week that silently stops adding up (issue #11 — `goods`
+ * was the kind that would have fallen through).
+ */
+const ROW_OF_TARGET: Record<WeekAllocationTarget, IncomeRow> = { period: 'rent', deposit: 'deposits', instalment: 'sale', charge: 'service' };
+const ROW_OF_KIND: Record<WeekPaymentKind, IncomeRow | null> = {
+  rent: 'rent',
+  on_account: 'rent',
+  sale: 'sale',
+  service: 'service',
+  goods: 'goods',
+  // Money going out lands in no row of what came in.
+  deposit_payout: null,
+  buyback: null,
+  supplier: null,
+};
+
 export function paymentInRow(p: WeekPayment, row: IncomeRow): Tetri {
   // Money kept out of a deposit came in once already, as the deposit; rent
   // closed by a mechanic's work never came in.
@@ -137,23 +159,18 @@ export function paymentInRow(p: WeekPayment, row: IncomeRow): Tetri {
   let placed = 0;
   for (const a of p.allocations) {
     placed += a.amountTetri;
-    const its: IncomeRow = a.target === 'deposit' ? 'deposits' : a.target === 'instalment' ? 'sale' : a.target === 'charge' ? 'service' : 'rent';
-    if (its === row) out += a.amountTetri;
+    if (ROW_OF_TARGET[a.target] === row) out += a.amountTetri;
   }
   // The rest is named by what the payment was for. A kind that lands in no
   // row is left out on purpose: the total will then disagree with the rows,
   // and the test that compares them is what says so out loud.
   const left = Math.max(0, p.grossTetri - placed);
-  if (left > 0) {
-    const its: IncomeRow | null =
-      p.kind === 'rent' || p.kind === 'on_account' ? 'rent' : p.kind === 'sale' ? 'sale' : p.kind === 'service' ? 'service' : null;
-    if (its === row) out += left;
-  }
+  if (left > 0 && ROW_OF_KIND[p.kind] === row) out += left;
   return out;
 }
 
 export function weekIncome(payments: readonly WeekPayment[], period: Period): WeekIncome {
-  const out: WeekIncome = { totalTetri: 0, rentTetri: 0, saleTetri: 0, depositsInTetri: 0, serviceTetri: 0, acquiringFeeTetri: 0, depositsOutTetri: 0 };
+  const out: WeekIncome = { totalTetri: 0, rentTetri: 0, saleTetri: 0, depositsInTetri: 0, serviceTetri: 0, goodsTetri: 0, acquiringFeeTetri: 0, depositsOutTetri: 0 };
   for (const p of payments) {
     if (!inPeriod(period, p.occurredOn)) continue;
     // Money kept out of a deposit is written as a payment so the repair it
@@ -171,12 +188,13 @@ export function weekIncome(payments: readonly WeekPayment[], period: Period): We
     out.saleTetri += paymentInRow(p, 'sale');
     out.depositsInTetri += paymentInRow(p, 'deposits');
     out.serviceTetri += paymentInRow(p, 'service');
+    out.goodsTetri += paymentInRow(p, 'goods');
   }
   return out;
 }
 
 /** The rows of the breakdown, for the check against `totalTetri`. */
-export const incomeRows = (i: WeekIncome): Tetri => i.rentTetri + i.saleTetri + i.depositsInTetri + i.serviceTetri;
+export const incomeRows = (i: WeekIncome): Tetri => i.rentTetri + i.saleTetri + i.depositsInTetri + i.serviceTetri + i.goodsTetri;
 
 /**
  * Which of a screen's filters travel to the server when the list of payments
@@ -189,7 +207,7 @@ export const incomeRows = (i: WeekIncome): Tetri => i.rentTetri + i.saleTetri + 
  * it — there are no tests of the screens — so the rule moved to where a test
  * can reach it.
  */
-export const PAYMENT_FILTERS = ['from', 'to', 'channel', 'direction', 'kind', 'row', 'by', 'customerId', 'rentalId', 'saleId'] as const;
+export const PAYMENT_FILTERS = ['from', 'to', 'channel', 'direction', 'kind', 'row', 'by', 'customerId', 'rentalId', 'saleId', 'goodsSaleId'] as const;
 
 export function paymentsQuery(read: (key: string) => string | null | undefined): string {
   const q = new URLSearchParams();

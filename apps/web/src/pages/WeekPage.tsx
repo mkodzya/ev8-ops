@@ -34,6 +34,8 @@ interface Week {
     totalTetri: number;
     rentTetri: number;
     serviceTetri: number;
+    /** Goods sold over the counter (ADR-0045); absent while an older API answers. */
+    goodsTetri?: number;
     saleTetri: number;
     depositsInTetri: number;
     acquiringFeeTetri: number;
@@ -120,6 +122,7 @@ export function WeekPage() {
     { key: 'sales', label: t.weekReport.inSales, text: money(w.money.saleTetri), to: `/money/payments${list}&row=sale` },
     { key: 'depIn', label: t.weekReport.depositsIn, text: money(w.money.depositsInTetri), to: `/money/payments${list}&row=deposits` },
     { key: 'repairs', label: t.weekReport.inRepairs, text: money(w.money.serviceTetri), to: `/money/payments${list}&row=service` },
+    { key: 'goods', label: t.weekReport.inGoods, text: money(w.money.goodsTetri ?? 0), to: `/money/payments${list}&row=goods` },
     {
       key: 'fee',
       label: t.weekReport.acquiringFee,

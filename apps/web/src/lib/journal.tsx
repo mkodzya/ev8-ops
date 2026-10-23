@@ -1,3 +1,4 @@
+import { GOODS_UNDONE_AT_ONCE, goodsCancelNote } from '@ev8/shared';
 import type { Dict } from '../i18n/en.js';
 import { currentDict, useT } from '../i18n/index.js';
 import { fmtDate, formatGel } from '../format.js';
@@ -57,7 +58,10 @@ function said(t: Dict, field: string, raw: string): string {
     case 'status':
       // A rental's status and a repair's share the column and not the
       // vocabulary; where they overlap they mean the same thing.
-      return from(t.rentalStatus, t.service.statuses) ?? raw;
+      return from(t.rentalStatus, t.service.statuses, t.goods.values.status) ?? raw;
+    case 'stockFrom':
+      // A goods sale's line: taken off the shelf, or already seen gone by a count (ADR-0045).
+      return from(t.goods.values.stockFrom) ?? raw;
     case 'pool':
     case 'toPool':
       return from(t.pools) ?? raw;
@@ -122,10 +126,28 @@ function value(field: string, raw: unknown, shifted = false): string | null {
  * the journal asking "почему вернули не всё" saw an empty column
  * (QA-W6-15). The reason is read from either place.
  */
-export function noteWords(t: { feedNotes: Record<string, string> }, note: string | null | undefined, after?: unknown): string | null {
+export function noteWords(t: Pick<Dict, 'feedNotes' | 'goods'>, note: string | null | undefined, after?: unknown): string | null {
   const own = ownNote(note, after);
   if (!own) return null;
-  return t.feedNotes[own] ?? own;
+  return codeNote(t, own) ?? own;
+}
+
+/**
+ * The code's own words in a note, in the reader's language, or null for a
+ * person's. A recost's reasons are whole sentences (`feedNotes`); a goods
+ * sale's cancellation writes a template on the payment it voids or turns into
+ * credit — «TS-00004 cancelled: <the owner's words>», or the seller's undo
+ * (shared `goodsCancelNote`). Its own part is said in the reader's words, the
+ * owner's words stay as typed, and the stored row is left as it is (QA
+ * 23.10.2026: «TS-00004 cancelled: …» on a Russian screen).
+ */
+export function codeNote(t: Pick<Dict, 'feedNotes' | 'goods'>, own: string): string | null {
+  const coded = t.feedNotes[own];
+  if (coded) return coded;
+  if (own === GOODS_UNDONE_AT_ONCE) return t.goods.card.undoneAtOnce;
+  const goods = goodsCancelNote(own);
+  if (goods) return goods.undone ? t.goods.notes.undone(goods.number) : t.goods.notes.cancelled(goods.number, goods.why);
+  return null;
 }
 
 /**
@@ -154,7 +176,7 @@ export function JournalNote({ note, after, quoted = false }: { note: string | nu
   const t = useT();
   const own = ownNote(note, after);
   if (!own) return null;
-  const coded = t.feedNotes[own];
+  const coded = codeNote(t, own);
   if (coded) return <>{quoted ? `«${coded}»` : coded}</>;
   // In «» the quotes close around the words; the translation's mark stands after them.
   return <Typed text={own} quoted={quoted} />;
@@ -233,6 +255,8 @@ function named(t: Dict, field: string, action?: string): string | null {
   if (field === 'payWeekday' || field === 'payDay') return t.weekShift.journal.payDay;
   // A mechanic's rent link, set or taken off (0066): «Арендует мопед: — → card».
   if (field === 'renter') return t.wpay.renter;
+  // Goods sold beyond the count: what there was, and what was sold (ADR-0045 §5).
+  if (action === 'goods_sale.minus' && field === 'qty') return t.goods.journal.qty;
   // A new hand-over date and a deposit marked received earlier (ADR-0044):
   // the dates, the weeks, the debt and «оплачено по» side by side, each by name.
   if (action === 'rental.pickup.date') {

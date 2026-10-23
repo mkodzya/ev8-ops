@@ -23,11 +23,29 @@ interface Move {
   actor: string | null;
   purchase: { id: string; number: string } | null;
   job: { id: string; number: string } | null;
+  /** A goods sale's issue, or its return when the sale was cancelled (ADR-0045). */
+  sale?: { id: string; number: string } | null;
+}
+
+interface PartSale {
+  saleId: string;
+  number: string;
+  soldOn: string;
+  status: 'active' | 'cancelled';
+  buyer: string | null;
+  retail: boolean;
+  qty: number;
+  unitPriceTetri: number;
+  unitCostTetri: number | null;
 }
 
 interface Part {
   part: PartRow;
+  /** At nought or below, what one costs all the same — the figure a sale or a repair takes it at; absent while an older API answers. */
+  costNowTetri?: number | null;
   moves: Move[];
+  /** Absent while an older API answers. */
+  sales?: PartSale[];
 }
 
 type Sheet = 'initial' | 'receipt' | 'count' | 'edit';
@@ -47,6 +65,8 @@ type Sheet = 'initial' | 'receipt' | 'count' | 'edit';
  * are the words that were translated.
  */
 function reasonOf(m: Move): string | null {
+  // A goods sale's movement names its sale, linked beside it: its reason says nothing more.
+  if (m.sale) return null;
   return stockReasonText(m.reason, { job: m.job?.number ?? null, purchase: m.purchase?.number ?? null });
 }
 
@@ -97,6 +117,12 @@ export function PartPage() {
             {t.shelf.initial}
           </button>
         )}
+        {/* Sold over the counter (ADR-0045). */}
+        {can('goods.sell') && !p.archived && (
+          <Link className="pill pill-sm" to={`/sales/goods/new?part=${p.id}`}>
+            {t.goods.part.sell}
+          </Link>
+        )}
       </PageHead>
 
       <div className="num-strip">
@@ -114,9 +140,10 @@ export function PartPage() {
         )}
         {seeCost && (
           <>
+            {/* The shelf's average while it holds something; at nought or below, what one costs all the same (QA 23.10.2026). */}
             <span className="num">
-              <span className="num-v">{p.avgCostTetri == null ? t.common.dash : formatGel(p.avgCostTetri)}</span>
-              <span className="num-l">{t.shelf.avgCost}</span>
+              <span className="num-v">{p.avgCostTetri != null ? formatGel(p.avgCostTetri) : data.costNowTetri != null ? formatGel(data.costNowTetri) : t.common.dash}</span>
+              <span className="num-l">{p.avgCostTetri == null && data.costNowTetri != null ? t.goods.wizard.cost : t.shelf.avgCost}</span>
             </span>
             <span className="num">
               <span className="num-v">{formatGel(p.valueTetri)}</span>
@@ -152,7 +179,11 @@ export function PartPage() {
                     {m.qty > 0 ? '+' : ''}
                     {m.qty}
                   </span>{' '}
-                  {t.stock.kinds[m.kind]}
+                  {m.sale ? (
+                    <Link to={`/sales/goods/${m.sale.id}`}>{m.kind === 'return' ? t.goods.moves.returned(m.sale.number) : t.goods.moves.sold(m.sale.number)}</Link>
+                  ) : (
+                    t.stock.kinds[m.kind]
+                  )}
                   {seeCost && m.unitCostTetri != null && (
                     <span className="muted">
                       {' · '}
@@ -185,6 +216,29 @@ export function PartPage() {
                     </span>
                   )}
                   {m.actor && <span className="muted"> · {m.actor}</span>}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section className="card">
+        <BlockHead title={t.goods.part.sales} sub={(data.sales ?? []).length > 0 ? String((data.sales ?? []).length) : undefined} />
+        {(data.sales ?? []).length === 0 ? (
+          <Empty text={t.goods.part.none} />
+        ) : (
+          <ul className="timeline">
+            {(data.sales ?? []).map((s) => (
+              <li key={`${s.saleId}-${s.qty}`}>
+                <span className="mono muted">{fmtDate(s.soldOn)}</span>
+                <span>
+                  <Link to={`/sales/goods/${s.saleId}`} className="mono">
+                    {s.number}
+                  </Link>{' '}
+                  · {s.retail ? (s.buyer ? `${t.goods.retail} · ${s.buyer}` : t.goods.retail) : s.buyer} · <span className="mono">×{s.qty}</span> · <span className="mono">{formatGel(s.unitPriceTetri)}</span>
+                  {seeCost && s.unitCostTetri != null && <span className="muted"> · {t.goods.card.cost(formatGel(s.unitCostTetri))}</span>}
+                  {s.status === 'cancelled' && <span className="muted"> · {t.goods.states.cancelled}</span>}
                 </span>
               </li>
             ))}

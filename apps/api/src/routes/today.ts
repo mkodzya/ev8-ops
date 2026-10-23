@@ -279,6 +279,8 @@ export function todayRoutes(app: FastifyInstance): void {
           rentTetri: Math.max(0, sum((p) => p.kind === 'rent' || p.kind === 'on_account') - depositPart),
           saleTetri: sum((p) => p.kind === 'sale' || p.kind === 'buyback'),
           serviceTetri: sum((p) => p.kind === 'service'),
+          // Goods sold over the counter (ADR-0045): a row of their own.
+          goodsTetri: sum((p) => p.kind === 'goods'),
           depositTetri: depositPart,
           feeTetri: inWeek.reduce((n, p) => n + p.feeTetri, 0),
           from: weekStart(today),

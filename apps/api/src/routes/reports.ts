@@ -56,6 +56,8 @@ function pdfRows(w: WeekAnswer): { groups: { title: { ka: string; en: string }; 
     { label: { ka: 'შემოსული — გაყიდვები', en: 'Received — sales' }, value: money(w.money.saleTetri) },
     { label: { ka: 'მიღებული დეპოზიტები', en: 'Deposits received' }, value: money(w.money.depositsInTetri) },
     { label: { ka: 'შემოსული — შეკეთება', en: 'Received — repairs' }, value: money(w.money.serviceTetri) },
+    // Goods sold over the counter (issue #11, ADR-0045): one word, «Товары».
+    { label: { ka: 'შემოსული — საქონელი', en: 'Received — goods' }, value: money(w.money.goodsTetri) },
     { label: { ka: 'ექვაირინგის საკომისიო', en: 'Acquiring fee' }, value: money(w.money.acquiringFeeTetri, { negative: true }), negative: true },
     { label: { ka: 'დაბრუნებული დეპოზიტები', en: 'Deposits handed back' }, value: money(w.money.depositsOutTetri, { negative: true }), negative: true },
     { label: { ka: 'დეპოზიტიდან დაკავებული', en: 'Kept out of deposits' }, value: money(w.money.withheldTetri) },

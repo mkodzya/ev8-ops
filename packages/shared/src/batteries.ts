@@ -12,7 +12,11 @@ export interface BatteryInventory {
 }
 
 export interface BatteryMove {
-  kind: 'to_repair' | 'from_repair' | 'lost' | 'found';
+  /**
+   * `sold` and `sale_cancelled` are a goods sale's (issue #11, ADR-0045): out
+   * of the count when sold, back into it when the sale is called off.
+   */
+  kind: 'to_repair' | 'from_repair' | 'lost' | 'found' | 'sold' | 'sale_cancelled';
   qty: number;
 }
 
@@ -36,8 +40,10 @@ export function batteryCount(input: { inventory: BatteryInventory | null; movesS
   const sum = (kind: BatteryMove['kind']) => input.movesSince.filter((m) => m.kind === kind).reduce((n, m) => n + m.qty, 0);
   const lost = sum('lost');
   const found = sum('found');
+  // A sale takes from the shelf what the company had; its cancellation puts it back.
+  const sold = sum('sold') - sum('sale_cancelled');
   const repair = Math.max(0, (input.inventory?.repairQty ?? 0) + sum('to_repair') - sum('from_repair'));
-  const total = Math.max(0, (input.inventory?.totalQty ?? 0) - lost + found);
+  const total = Math.max(0, (input.inventory?.totalQty ?? 0) - lost + found - sold);
   const couriers = Math.min(input.couriersNow, total);
   return { total, couriers, repair: Math.min(repair, total), showroom: Math.max(0, total - couriers - Math.min(repair, total)) };
 }

@@ -486,10 +486,13 @@ export function PickupWizard() {
                       onClick={() =>
                         openMoney({
                           target: {
-                            kind: firstDebt.kind === 'sale' ? 'sale' : firstDebt.kind === 'service' ? 'service' : 'rent',
-                            rentalId: firstDebt.kind === 'sale' || firstDebt.kind === 'service' ? undefined : firstDebt.id,
+                            // A goods sale's debt is paid as its own (ADR-0045), not as rent.
+                            kind: firstDebt.kind === 'sale' ? 'sale' : firstDebt.kind === 'service' ? 'service' : firstDebt.kind === 'goods' ? 'goods' : 'rent',
+                            rentalId: firstDebt.kind === 'sale' || firstDebt.kind === 'service' || firstDebt.kind === 'goods' ? undefined : firstDebt.id,
                             saleId: firstDebt.kind === 'sale' ? firstDebt.id : undefined,
                             serviceJobId: firstDebt.kind === 'service' ? firstDebt.id : undefined,
+                            goodsSaleId: firstDebt.kind === 'goods' ? firstDebt.id : undefined,
+                            openTetri: firstDebt.kind === 'goods' ? firstDebt.owesTetri : undefined,
                             number: firstDebt.number,
                             customerId: debt.id,
                             customer: debt.name,
@@ -909,9 +912,10 @@ export function PickupWizard() {
   );
 }
 
-export function SumRow({ k, v, go }: { k: string; v: ReactNode; go: () => void }) {
+/** One line of a wizard's summary: what, its value, and the way back to the step that owns it. `className` lays a row out its own way (`goods-sum-line`). */
+export function SumRow({ k, v, go, className }: { k: ReactNode; v: ReactNode; go: () => void; className?: string }) {
   return (
-    <button type="button" className="sum-row" onClick={go}>
+    <button type="button" className={`sum-row ${className ?? ''}`} onClick={go}>
       <span className="kv-k">{k}</span>
       <span className="kv-v">{v}</span>
       <span className="sum-go" aria-hidden="true">

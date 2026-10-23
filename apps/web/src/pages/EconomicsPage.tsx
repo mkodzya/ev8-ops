@@ -5,6 +5,7 @@ import { Row } from '../components/Wizard.js';
 import { formatGel } from '../format.js';
 import { useT } from '../i18n/index.js';
 import { useLoad } from '../lib/use.js';
+import { GoodsEconomics } from './goods/GoodsEconomics.js';
 
 export interface EconomicsRow {
   id: string;
@@ -99,6 +100,9 @@ export function EconomicsPage() {
           <p className="hint">{t.economics.since}</p>
         </section>
       </div>
+
+      {/* Goods sold over the counter: revenue, VAT, cost and margin of their own (ADR-0045). */}
+      <GoodsEconomics />
 
       {rows.length === 0 ? (
         <Empty text={t.economics.none} />

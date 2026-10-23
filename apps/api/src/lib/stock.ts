@@ -3,13 +3,14 @@
 // Every count on every screen comes through here, and every movement is a
 // row somebody can point at — a shipment line, a repair line, or a person's
 // signed stock-take with a reason. There is no fourth way.
-import { type StockMoveKind, shortfall, stockState } from '@ev8/shared';
+import { type StockMoveKind, type StockState, shortfall, stockState } from '@ev8/shared';
 import type { Prisma } from '../generated/prisma/client.js';
 import { conflict } from './errors.js';
 import { dateFromISO, isoDate } from './dates.js';
 import { prisma } from './db.js';
 
 type Tx = Prisma.TransactionClient;
+type Db = Tx | typeof prisma;
 
 export interface PartRow {
   id: string;
@@ -276,6 +277,90 @@ export async function receiveRemoved(
       unitCostTetri: 0,
       occurredOn: dateFromISO(input.occurredOn)!,
       servicePartId: input.servicePartId,
+      reason: input.reason,
+      createdById: input.actorId,
+    },
+  });
+}
+
+/**
+ * One part's shelf as its movements say, read through the client given — a
+ * transaction's, so a sale counts what is there after its own lock (issue #11).
+ */
+export async function partOnHandTx(db: Db, partId: string): Promise<StockState> {
+  const moves = await db.stockMove.findMany({ where: { partId }, select: { kind: true, qty: true, unitCostTetri: true, occurredOn: true, createdAt: true } });
+  return stockState(moves.map((m) => ({ kind: m.kind as StockMoveKind, qty: m.qty, unitCostTetri: m.unitCostTetri, occurredOn: isoDate(m.occurredOn)!, at: m.createdAt.toISOString() })));
+}
+
+/**
+ * What one of a part costs today: the shelf's average, or else what the last
+ * shipment paid for one, or else nobody knows. A repair line and a goods sale
+ * take their cost from here, so the two cannot price the same part apart.
+ */
+export async function shelfCost(db: Db, partId: string): Promise<number | null> {
+  const state = await partOnHandTx(db, partId);
+  if (state.avgCostTetri != null) return state.avgCostTetri;
+  const last = await db.stockMove.findFirst({
+    where: { partId, kind: 'receipt', servicePartId: null, unitCostTetri: { gt: 0 } },
+    orderBy: [{ occurredOn: 'desc' }, { createdAt: 'desc' }],
+    select: { unitCostTetri: true },
+  });
+  return last?.unitCostTetri ?? null;
+}
+
+/**
+ * The day a part was last counted by a person: a stock-take, or the first
+ * count of a part that had never moved. A sale dated on or before it asks
+ * whether the count already saw the part gone (ADR-0045 §9).
+ */
+export async function lastCountOn(db: Db, partId: string): Promise<string | null> {
+  const last = await db.stockMove.findFirst({
+    where: { partId, OR: [{ kind: 'adjust' }, { kind: 'receipt', reason: 'initial' }] },
+    orderBy: [{ occurredOn: 'desc' }, { createdAt: 'desc' }],
+    select: { occurredOn: true },
+  });
+  return last ? isoDate(last.occurredOn) : null;
+}
+
+/**
+ * A goods sale's line takes parts off the shelf (issue #11). Like a repair's
+ * issue it carries no cost of its own: the shelf's average goes with it. One
+ * issue a line — the unique index refuses a second.
+ */
+export async function issueForGoodsLine(
+  tx: Tx,
+  input: { goodsSaleLineId: string; partId: string; qty: number; occurredOn: string; actorId: string; reason: string },
+): Promise<void> {
+  await tx.stockMove.create({
+    data: {
+      partId: input.partId,
+      kind: 'issue',
+      qty: -Math.abs(input.qty),
+      occurredOn: dateFromISO(input.occurredOn)!,
+      goodsSaleLineId: input.goodsSaleLineId,
+      reason: input.reason,
+      createdById: input.actorId,
+    },
+  });
+}
+
+/**
+ * A goods sale called off puts its parts back on the shelf, at the cost the
+ * line remembered — so the shelf's average is where it was — or, when nobody
+ * knew one, at what its shelfmates are worth.
+ */
+export async function returnGoodsLine(
+  tx: Tx,
+  input: { goodsSaleLineId: string; partId: string; qty: number; unitCostTetri: number | null; occurredOn: string; actorId: string; reason: string },
+): Promise<void> {
+  await tx.stockMove.create({
+    data: {
+      partId: input.partId,
+      kind: 'return',
+      qty: Math.abs(input.qty),
+      unitCostTetri: input.unitCostTetri,
+      occurredOn: dateFromISO(input.occurredOn)!,
+      goodsSaleLineId: input.goodsSaleLineId,
       reason: input.reason,
       createdById: input.actorId,
     },

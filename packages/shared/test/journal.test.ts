@@ -25,6 +25,9 @@ describe('which filter a line answers to', () => {
 
   it('files money where money moved, and a moped where it moved', () => {
     expect(journalGroups('payment.record')).toEqual(['money']);
+    expect(journalGroups('goods_sale.cancel')).toEqual(['money']);
+    expect(journalKind('goods_sale.create')).toBe('event');
+    expect(journalKind('goods_sale.price')).toBe('change');
     expect(journalGroups('till.handover')).toEqual(['money']);
     expect(journalGroups('vehicle.state.manual')).toEqual(['states']);
     expect(journalGroups('vehicle.cost')).toEqual(['money', 'states']);
@@ -116,6 +119,8 @@ describe('the search box', () => {
     expect(looksLikeNumber('R-00488')).toBe(true);
     expect(looksLikeNumber('sl-00169')).toBe(true);
     expect(looksLikeNumber('PO-00118')).toBe(true);
+    // A goods sale (issue #11, ADR-0045).
+    expect(looksLikeNumber('TS-00001')).toBe(true);
     expect(looksLikeNumber('Клиент Пример Б')).toBe(false);
     expect(looksLikeNumber('TESTW5CHECK000002')).toBe(false);
   });

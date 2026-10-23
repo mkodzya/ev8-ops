@@ -30,6 +30,7 @@ interface Week {
     saleTetri: number;
     depositsInTetri: number;
     serviceTetri: number;
+    goodsTetri: number;
     acquiringFeeTetri: number;
     depositsOutTetri: number;
     withheldTetri: number;
@@ -44,7 +45,7 @@ interface Week {
 
 const week = async (who: string, q = ''): Promise<Week> => json<Week>(await call(who, 'GET', `/api/reports/week${q}`));
 /** The breakdown, to be checked against the total that was summed apart from it. */
-const rows = (w: Week) => w.money.rentTetri + w.money.saleTetri + w.money.depositsInTetri + w.money.serviceTetri;
+const rows = (w: Week) => w.money.rentTetri + w.money.saleTetri + w.money.depositsInTetri + w.money.serviceTetri + w.money.goodsTetri;
 const range = (p: { from: string; to: string }) => `?from=${p.from}&to=${p.to}`;
 
 async function fixtures() {
@@ -95,6 +96,7 @@ describe.skipIf(!HAS_DB)('wave 6 · the week', () => {
         saleTetri: expect.any(Number),
         depositsInTetri: expect.any(Number),
         serviceTetri: expect.any(Number),
+        goodsTetri: expect.any(Number),
         acquiringFeeTetri: expect.any(Number),
         depositsOutTetri: expect.any(Number),
         withheldTetri: expect.any(Number),

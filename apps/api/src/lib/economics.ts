@@ -4,7 +4,7 @@
 // it — allocations, sale payments, repair lines, events — so a voided payment
 // or a corrected repair changes the answer the moment it is saved, and a
 // number on this screen can always be walked back to the row it came from.
-import { type VehicleEconomics, type VehicleState, mopedLegs, mopedOnDay, repairTotalTetri, todayISO, vehicleEconomics } from '@ev8/shared';
+import { type GoodsEconomicsLine, type VehicleEconomics, type VehicleState, mopedLegs, mopedOnDay, repairTotalTetri, todayISO, vehicleEconomics } from '@ev8/shared';
 import { MOPED_ACT, mopedActOf } from './acts.js';
 import { isoDate } from './dates.js';
 import { prisma } from './db.js';
@@ -139,4 +139,26 @@ export async function fleetEconomics(opts: { vehicleIds?: string[]; until?: stri
       }),
     };
   });
+}
+
+/**
+ * Goods sold over the counter as «Экономика» reads them (issue #11,
+ * ADR-0045): every line of every sale, the cancelled included — the shared
+ * `goodsEconomics` leaves them out — so the period is applied in one place.
+ */
+export async function goodsLinesOf(): Promise<GoodsEconomicsLine[]> {
+  const lines = await prisma.goodsSaleLine.findMany({
+    select: { partId: true, countedItem: true, spec: true, name: true, nameKa: true, qty: true, unitPriceTetri: true, unitCostTetri: true, sale: { select: { id: true, soldOn: true, status: true } } },
+  });
+  return lines.map((l) => ({
+    saleId: l.sale.id,
+    soldOn: isoDate(l.sale.soldOn)!,
+    status: l.sale.status === 'cancelled' ? 'cancelled' : 'active',
+    // A charger by its model: «Зарядка 73V6A» and «Зарядка 60V3A» are two rows.
+    key: l.partId ? `part:${l.partId}` : `${l.countedItem}:${(l.spec ?? '').toLowerCase()}`,
+    name: l.name,
+    qty: l.qty,
+    unitPriceTetri: l.unitPriceTetri,
+    unitCostTetri: l.unitCostTetri,
+  }));
 }

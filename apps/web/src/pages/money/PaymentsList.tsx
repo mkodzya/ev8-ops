@@ -9,7 +9,7 @@ import { fmtDate, formatGel } from '../../format.js';
 import { useT } from '../../i18n/index.js';
 import { useLoad } from '../../lib/use.js';
 
-type Kind = 'rent' | 'sale' | 'service' | 'on_account' | 'deposit_payout' | 'buyback' | 'supplier';
+type Kind = 'rent' | 'sale' | 'service' | 'on_account' | 'deposit_payout' | 'buyback' | 'supplier' | 'goods';
 /** `deposit`: kept from a deposit; `offset`: rent closed by a mechanic's work at his payout (0066). */
 type Channel = 'transfer' | 'acquiring' | 'cash' | 'deposit' | 'offset';
 /** What the list filters by: the form's channels and «Зачёт работ», which only a payout writes (Mika, 22.10.2026). */
@@ -29,6 +29,8 @@ export interface PaymentRow {
   sale: { id: string; number: string } | null;
   purchase: { id: string; number: string } | null;
   serviceJob: { id: string; number: string } | null;
+  /** A goods sale (ADR-0045); absent while an older API answers. */
+  goodsSale?: { id: string; number: string } | null;
   bankText: string | null;
   note: string | null;
   fromStatement: boolean;
@@ -40,7 +42,7 @@ export interface PaymentRow {
 interface Answer {
   totals: { inTetri: number; outTetri: number; acquiringFeeTetri: number; rowTetri: number | null };
   /** Set when a figure of the week's report asked for its own rows (QA-W6-01). */
-  row: 'rent' | 'sale' | 'deposits' | 'service' | null;
+  row: 'rent' | 'sale' | 'deposits' | 'service' | 'goods' | null;
   people: { id: string; name: string }[];
   payments: PaymentRow[];
 }
@@ -68,8 +70,8 @@ function range(period: Period, today: string): { from?: string; to?: string } {
 }
 
 /** A payment's number and what it was for, in words (§3.3 "основание словами"). */
-export function recordOf(p: Pick<PaymentRow, 'rental' | 'sale' | 'purchase' | 'serviceJob'>): string | null {
-  return p.rental?.number ?? p.sale?.number ?? p.purchase?.number ?? p.serviceJob?.number ?? null;
+export function recordOf(p: Pick<PaymentRow, 'rental' | 'sale' | 'purchase' | 'serviceJob' | 'goodsSale'>): string | null {
+  return p.rental?.number ?? p.sale?.number ?? p.purchase?.number ?? p.serviceJob?.number ?? p.goodsSale?.number ?? null;
 }
 
 /**
@@ -114,6 +116,9 @@ export function PaymentsList({ mine = false }: { mine?: boolean }) {
     </span>
   );
   const what = (p: PaymentRow) => [t.money.kinds[p.kind], recordOf(p)].filter(Boolean).join(' · ');
+  // Who paid: the customer, or — a goods sale with no card — the retail buyer; the
+  // kind's word stood there and read «Товары» over «Товары · TS-…» (QA 23.10.2026).
+  const payer = (p: PaymentRow): string | null => p.customer?.name ?? (p.goodsSale ? t.goods.retail : null);
   const how = (p: PaymentRow) =>
     [t.payments.channels[p.channel], p.channel === 'acquiring' && p.direction === 'in' ? t.payList.bank(formatGel(p.netTetri)) : null, p.fromStatement ? t.payList.stated : null]
       .filter(Boolean)
@@ -220,11 +225,11 @@ export function PaymentsList({ mine = false }: { mine?: boolean }) {
             href={(p) => `/money/payments/${p.id}`}
             search={{
               placeholder: t.lists.paymentsSearch,
-              match: (p, s) => paymentMatches(s, { grossTetri: p.grossTetri, customer: p.customer?.name, bankText: p.bankText, note: p.note, createdBy: p.createdBy, rentalNumber: recordOf(p) }),
+              match: (p, s) => paymentMatches(s, { grossTetri: p.grossTetri, customer: payer(p), bankText: p.bankText, note: p.note, createdBy: p.createdBy, rentalNumber: recordOf(p) }),
             }}
             empty={{ text: t.payments.none }}
             card={(p) => ({
-              title: p.customer?.name ?? t.money.kinds[p.kind],
+              title: payer(p) ?? t.money.kinds[p.kind],
               sub: (
                 <>
                   {what(p)} · {fmtDate(p.occurredOn)}
@@ -235,7 +240,7 @@ export function PaymentsList({ mine = false }: { mine?: boolean }) {
             })}
             columns={[
               { key: 'date', label: t.payments.date, cell: (p) => <span className="mono">{fmtDate(p.occurredOn)}</span>, sort: { value: (p) => p.occurredOn, first: 'desc' } },
-              { key: 'who', label: t.payments.customer, cell: (p) => <span>{p.customer?.name ?? t.common.dash}</span>, sort: { value: (p) => p.customer?.name } },
+              { key: 'who', label: t.payments.customer, cell: (p) => <span>{payer(p) ?? t.common.dash}</span>, sort: { value: (p) => payer(p) } },
               { key: 'what', label: t.payList.anyKind, cell: (p) => what(p), sort: { value: (p) => p.kind } },
               { key: 'how', label: t.payments.channel, cell: (p) => <span className="muted">{p.voided ? t.paymentPage.voided : how(p)}</span>, sort: { value: (p) => p.channel } },
               { key: 'by', label: t.payList.anyone, cell: (p) => <span>{p.createdBy ?? t.common.dash}</span>, sort: { value: (p) => p.createdBy } },

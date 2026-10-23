@@ -13,7 +13,7 @@ import { useSession } from '../../session.js';
 import { forgetRecent, readRecent, rememberRecent, type Recent } from './recent.js';
 import './search.css';
 
-type Kind = 'customers' | 'vehicles' | 'rentals' | 'sales' | 'payments' | 'purchases' | 'jobs';
+type Kind = 'customers' | 'vehicles' | 'rentals' | 'sales' | 'goods' | 'payments' | 'purchases' | 'jobs';
 interface Group<T> {
   total: number;
   items: T[];
@@ -26,6 +26,8 @@ interface Answer {
     vehicles: Group<{ id: string; vin: string; fleetNo?: number | null; state: string; model: string }>;
     rentals: Group<{ id: string; number: string; status: string; customer: string; vin: string | null; debtTetri: number; dueTodayTetri: number }>;
     sales: Group<{ id: string; number: string; status: string; customer: string; vin: string | null }>;
+    /** Goods sold over the counter (ADR-0045); absent while an older API answers. */
+    goods?: Group<{ id: string; number: string; status: string; customerId: string | null; buyer: string | null; retail: boolean; items: string[]; openTetri: number }>;
     payments: Group<{ id: string; grossTetri: number; occurredOn: string; channel: string; voided: boolean; customer: string | null; rental: { id: string; number: string } | null; sale: { id: string; number: string } | null }>;
     purchases: Group<{ id: string; number: string; status: string; supplier: string; invoiceNo: string | null }> | null;
     jobs: Group<{ id: string; number: string; status: string; reason: string; vin: string; model: string }>;
@@ -40,7 +42,7 @@ interface Row {
   recent: Omit<Recent, 'at'>;
 }
 
-const ORDER: Kind[] = ['customers', 'vehicles', 'rentals', 'sales', 'payments', 'purchases', 'jobs'];
+const ORDER: Kind[] = ['customers', 'vehicles', 'rentals', 'sales', 'goods', 'payments', 'purchases', 'jobs'];
 
 /** The last characters of a VIN on lime, the way every list shows them. */
 const Tail = ({ vin }: { vin: string }) => <span className="mono">···{vinParts(vin).tail}</span>;
@@ -98,6 +100,7 @@ export function SearchOverlay({ onClose }: { onClose: () => void }) {
     vehicles: '/fleet',
     rentals: '/rentals',
     sales: '/sales',
+    goods: '/sales/goods',
     payments: can('payments.view') ? '/money/payments' : '/money/cash',
     purchases: '/purchases',
     jobs: '/service',
@@ -159,6 +162,11 @@ export function SearchOverlay({ onClose }: { onClose: () => void }) {
       href: `/sales/${s.id}`,
       recent: { href: `/sales/${s.id}`, title: `${s.number} · ${s.customer}`, sub: s.vin ?? '' },
     }));
+    rows.goods = (groups.goods?.items ?? []).map((g) => {
+      const who = g.retail ? (g.buyer ? `${t.goods.retail} · ${g.buyer}` : t.goods.retail) : (g.buyer ?? '');
+      const sub = [g.items.join(', '), g.openTetri > 0 ? t.goods.card.waits(formatGel(g.openTetri)) : null, g.status === 'cancelled' ? t.goods.states.cancelled : null].filter(Boolean).join(' · ');
+      return { key: `g-${g.id}`, title: `${g.number} · ${who}`, sub, href: `/sales/goods/${g.id}`, recent: { href: `/sales/goods/${g.id}`, title: `${g.number} · ${who}`, sub } };
+    });
     rows.payments = groups.payments.items.map((p) => {
       const href = p.rental ? `/rentals/${p.rental.id}` : p.sale ? `/sales/${p.sale.id}` : `${moreHref.payments}?q=${encodeURIComponent(q)}`;
       const title = `${formatGel(p.grossTetri)} · ${t.payments.channels[p.channel as keyof typeof t.payments.channels] ?? p.channel}`;
