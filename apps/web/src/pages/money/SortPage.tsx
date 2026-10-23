@@ -1,4 +1,4 @@
-import { formatGel, parseGel, SEARCH_MIN } from '@ev8/shared';
+import { formatGel, isoWeekday, parseGel, payDayMove, SEARCH_MIN, todayISO, weekDueOn, type PayDayMove } from '@ev8/shared';
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../../api.js';
@@ -465,9 +465,35 @@ interface Week {
   startsOn: string | null;
   endsOn: string | null;
 }
+/**
+ * A running rental's latest week as «Перенос дня оплаты» reads it (issue #12,
+ * ADR-0041 addendum of 23.10.2026): the weekday the rent falls due on now, and
+ * — when the move is shown closed — why.
+ */
+interface PayDayTarget {
+  seq: number;
+  startsOn: string;
+  endsOn: string;
+  amountTetri: number;
+  paidTetri: number;
+  /** ISO 1–7. */
+  payDay: number;
+  payOffsetDays: number;
+  closed: 'older_week_open' | 'week_moved' | null;
+}
 interface Targets {
   debt: { parts: { kind: 'rent' | 'deposit' | 'charge' | 'sale' | 'service'; id: string; owesTetri: number }[] };
-  rentals: { id: string; number: string; status: string; model: string | null; transferredOn?: string | null; firstOpenWeek?: Week | null }[];
+  rentals: {
+    id: string;
+    number: string;
+    status: string;
+    model: string | null;
+    weeklyRateTetri: number;
+    transferredOn?: string | null;
+    firstOpenWeek?: Week | null;
+    /** None where the latest week cannot be moved; absent while an older API answers. */
+    payDayMove?: PayDayTarget | null;
+  }[];
   sales: { id: string; number: string; nextTetri: number }[];
   repairs: { id: string; number: string }[];
   /** Goods sold to him and still open (ADR-0045); absent while an older API answers. */
@@ -478,10 +504,10 @@ interface Targets {
   carriedWeeks?: { id: string; rentalId: string; seq: number; startsOn: string; endsOn: string; amountTetri: number }[];
 }
 
-/** One place the line's money can go. */
+/** One place the line's money can go — or, «Перенос дня оплаты», what it moves. */
 interface SplitPart {
   key: string;
-  kind: 'rent' | 'fine' | 'charge' | 'repair' | 'sale' | 'goods' | 'account';
+  kind: 'rent' | 'fine' | 'charge' | 'repair' | 'sale' | 'goods' | 'account' | 'payday';
   title: string;
   /** The record's number, in mono beside the title. */
   ref: string;
@@ -495,6 +521,11 @@ interface SplitPart {
   openWeek?: Week | null;
   /** A new fine on this rental, with what it is for. */
   fineOf?: string;
+  /** The rental of a rent or pay-day part. */
+  rentalId?: string;
+  /** A pay-day part: the latest week it would move, and the weekly rate the suggestion is counted from. */
+  move?: PayDayTarget;
+  rateTetri?: number;
 }
 interface SplitValue {
   customer: { id: string; name: string } | null;
@@ -507,6 +538,12 @@ interface SplitValue {
   reasons: Record<string, string>;
   /** "+ ещё" opened. */
   more: boolean;
+  /**
+   * «Перенос дня оплаты» (issue #12): the rental, the weekday chosen (ISO,
+   * as text), the sum — the extra, or the discount — and the reason, both
+   * filled in and editable. One move per line; none — the day stays.
+   */
+  move: { rentalId: string; to: string; amount: string; reason: string } | null;
 }
 
 const weekText = (w: { startsOn: string | null; endsOn: string | null }) => `${fmtDayMonth(w.startsOn)}–${fmtDayMonth(w.endsOn)}`;
@@ -522,7 +559,7 @@ const weekText = (w: { startsOn: string | null; endsOn: string | null }) => `${f
 function SplitSheet({ line, onClose }: { line: SortLine; onClose: () => void }) {
   const t = useT();
   const total = line.channel === 'acquiring' && line.grossTetri != null ? line.grossTetri : line.amountTetri;
-  const initial: SplitValue = { customer: null, amounts: {}, choice: {}, reasons: {}, more: false };
+  const initial: SplitValue = { customer: null, amounts: {}, choice: {}, reasons: {}, more: false, move: null };
   const [value, setValue] = useState<SplitValue>(initial);
   const [q, setQ] = useState('');
   const [answer, setAnswer] = useState<SearchAnswer | null>(null);
@@ -580,7 +617,12 @@ function SplitSheet({ line, onClose }: { line: SortLine; onClose: () => void }) 
               extra: false,
               ...(week ? { carried: { rentalId: r.id, week } } : {}),
               openWeek: r.firstOpenWeek ?? null,
+              rentalId: r.id,
             },
+            // Beside the rent: the pay day moved with this line (issue #12), on a running rental's latest week.
+            ...(r.payDayMove
+              ? [{ key: `d:${r.id}`, kind: 'payday' as const, title: t.payDayMove.title, ref: r.number, body: {}, owesTetri: 0, extra: false, rentalId: r.id, move: r.payDayMove, rateTetri: r.weeklyRateTetri }]
+              : []),
             { key: `n:${r.id}`, kind: 'fine', title: t.sort.splitFineTitle, ref: r.number, body: { fineRentalId: r.id, fineReason: value.reasons[r.id] ?? '' }, owesTetri: 0, extra: false, fineOf: r.id },
           ];
         }),
@@ -608,8 +650,41 @@ function SplitSheet({ line, onClose }: { line: SortLine; onClose: () => void }) 
       ? retailParts
       : [];
   const amountOf = (key: string) => parseGel(value.amounts[key] ?? '') ?? 0;
-  const placed = parts.reduce((n, p) => n + amountOf(p.key), 0);
+  // The pay day moved (issue #12): what the latest week becomes, from the same arithmetic the server reads.
+  const today = todayISO();
+  const lineDay = fmtDayMonth(line.occurredOn);
+  const planOf = (p: SplitPart, to: number): PayDayMove =>
+    payDayMove({ payDay: p.move!.payDay, to, startsOn: p.move!.startsOn, weeklyRateTetri: p.rateTetri ?? 0, payOffsetDays: p.move!.payOffsetDays, today });
+  const moving = value.move ? parts.find((p) => p.kind === 'payday' && p.rentalId === value.move!.rentalId) ?? null : null;
+  const chosen = moving && value.move ? planOf(moving, Number(value.move.to)) : null;
+  const moveTyped = value.move ? parseGel(value.move.amount) ?? 0 : 0;
+  // A longer week's extra is money of the line, a shorter week's discount is not.
+  const moveMoney = chosen && chosen.days > 0 ? moveTyped : 0;
+  const moveOff = chosen && chosen.days < 0 ? moveTyped : 0;
+  const dayWord = (to: number) => t.payDayMove.onDay[to - 1] ?? '';
+  const autoOf = (p: SplitPart, to: number) => ({ amount: String(planOf(p, to).plan.suggestedExtraTetri / 100), reason: t.payDayMove.reasonAuto(dayWord(to), lineDay) });
+  const chooseDay = (p: SplitPart, to: string) =>
+    setValue((v) => {
+      // The day he pays on now: no move.
+      if (Number(to) === p.move!.payDay) return { ...v, move: null };
+      const was = v.move && v.move.rentalId === p.rentalId ? v.move : null;
+      const filled = was ? autoOf(p, Number(was.to)) : null;
+      const next = autoOf(p, Number(to));
+      // What was filled in follows the day; what a person typed stays.
+      return {
+        ...v,
+        move: {
+          rentalId: p.rentalId!,
+          to,
+          amount: !was || was.amount === filled!.amount ? next.amount : was.amount,
+          reason: !was || was.reason === filled!.reason ? next.reason : was.reason,
+        },
+      };
+    });
+  const placed = parts.reduce((n, p) => n + amountOf(p.key), 0) + moveMoney;
   const left = total - placed;
+  // «150 + 20 = 170»: the parts typed, and the move's money of a longer week.
+  const placedSums = [...parts.map((p) => amountOf(p.key)).filter((a) => a > 0), ...(moveMoney > 0 ? [moveMoney] : [])];
   const setAmount = (key: string, text: string) => setValue((v) => ({ ...v, amounts: { ...v.amounts, [key]: text } }));
   // An empty sum takes the rest when it is touched, selected so that typing replaces it.
   const takeRest = (p: SplitPart, input: HTMLInputElement) => {
@@ -628,23 +703,61 @@ function SplitSheet({ line, onClose }: { line: SortLine; onClose: () => void }) 
 
   // What will be written, said in words, and what the customer will owe after.
   const used = parts.filter((p) => amountOf(p.key) > 0);
-  const said = used.map((p) => {
+  // The week the rent goes onto, by its days — the new ones when the line moves that very week.
+  const rentWeekText = (p: SplitPart): string | null => {
+    if (!p.openWeek) return null;
+    const m = moving?.move;
+    if (m && chosen && p.rentalId === moving!.rentalId && p.openWeek.startsOn === m.startsOn) return weekText({ startsOn: m.startsOn, endsOn: chosen.plan.endsOn });
+    return weekText(p.openWeek);
+  };
+  // The pay day moved, in words (issue #12): «20,00 ₾ — перенос дня оплаты на пятницу (+1 день)»,
+  // or, for a shorter week, what it becomes and how much cheaper — no money of the line. A move
+  // with 0 typed is written all the same, so it is said all the same, without the sum (review, 23.10.2026).
+  const moveWords = (): string | null => {
+    if (!moving || !chosen || !value.move) return null;
+    const day = dayWord(Number(value.move.to));
+    const days = t.payDayMove.days(chosen.days);
+    if (chosen.days > 0) return moveMoney > 0 ? t.payDayMove.resLonger(formatGel(moveMoney), day, days, moving.ref) : t.payDayMove.resLongerFree(day, days, moving.ref);
+    const week = weekText({ startsOn: moving.move!.startsOn, endsOn: chosen.plan.endsOn });
+    return moveOff > 0 ? t.payDayMove.resShorter(day, days, moving.ref, week, formatGel(moveOff)) : t.payDayMove.resShorterFree(day, days, moving.ref, week);
+  };
+  const said: string[] = [];
+  let moveTold = false;
+  for (const p of used) {
     const a = formatGel(amountOf(p.key));
-    if (p.kind === 'rent' && p.carried && value.choice[p.carried.rentalId] === 'carried') return t.sort.resCarried(a, weekText(p.carried.week), p.ref);
-    if (p.kind === 'rent') return p.openWeek ? t.sort.resRent(a, p.ref, weekText(p.openWeek)) : t.sort.resRentAhead(a, p.ref);
-    if (p.kind === 'fine') return t.sort.resFine(a, (value.reasons[p.fineOf!] ?? '').trim() || '…', p.ref);
-    if (p.kind === 'charge') return t.sort.resCharge(a, p.title, p.ref);
-    if (p.kind === 'repair') return t.sort.resRepair(a, p.ref);
-    if (p.kind === 'sale') return t.sort.resSale(a, p.ref);
-    if (p.kind === 'goods') return t.goods.sort.res(a, p.ref);
-    return t.sort.resAccount(a);
-  });
+    if (p.kind === 'rent' && p.carried && value.choice[p.carried.rentalId] === 'carried') said.push(t.sort.resCarried(a, weekText(p.carried.week), p.ref));
+    else if (p.kind === 'rent') {
+      const week = rentWeekText(p);
+      said.push(week ? t.sort.resRent(a, p.ref, week) : t.sort.resRentAhead(a, p.ref));
+      // The move right after the rent of its rental.
+      if (moving && p.rentalId === moving.rentalId) {
+        const words = moveWords();
+        if (words) said.push(words);
+        moveTold = true;
+      }
+    } else if (p.kind === 'fine') said.push(t.sort.resFine(a, (value.reasons[p.fineOf!] ?? '').trim() || '…', p.ref));
+    else if (p.kind === 'charge') said.push(t.sort.resCharge(a, p.title, p.ref));
+    else if (p.kind === 'repair') said.push(t.sort.resRepair(a, p.ref));
+    else if (p.kind === 'sale') said.push(t.sort.resSale(a, p.ref));
+    else if (p.kind === 'goods') said.push(t.goods.sort.res(a, p.ref));
+    else said.push(t.sort.resAccount(a));
+  }
+  if (!moveTold) {
+    const words = moveWords();
+    if (words) said.push(words);
+  }
   const before = (targets.data?.debt.parts ?? []).reduce((n, p) => n + p.owesTetri, 0);
-  const paidOff = used.reduce((n, p) => {
-    const a = amountOf(p.key);
-    if (p.kind === 'fine' || (p.kind === 'rent' && p.carried && value.choice[p.carried.rentalId] === 'carried')) return n;
-    return n + (p.owesTetri > 0 ? Math.min(a, p.owesTetri) : a);
-  }, 0);
+  // A longer week's extra is owed and paid by the same line: the debt is as the rent leaves it.
+  // A shorter week's discount takes off the debt only when the week is in it — from its pay day on.
+  const movedWeek = moving?.move;
+  const moveOffOwed =
+    movedWeek && moveOff > 0 && weekDueOn(movedWeek.startsOn, movedWeek.payOffsetDays) <= today ? Math.min(moveOff, Math.max(0, movedWeek.amountTetri - movedWeek.paidTetri)) : 0;
+  const paidOff =
+    used.reduce((n, p) => {
+      const a = amountOf(p.key);
+      if (p.kind === 'fine' || (p.kind === 'rent' && p.carried && value.choice[p.carried.rentalId] === 'carried')) return n;
+      return n + (p.owesTetri > 0 ? Math.min(a, p.owesTetri) : a);
+    }, 0) + moveOffOwed;
   const after = Math.max(0, before - paidOff);
 
   const g = answer?.groups;
@@ -665,8 +778,24 @@ function SplitSheet({ line, onClose }: { line: SortLine; onClose: () => void }) 
       submit={async (key) => {
         if (used.some((p) => p.carried && !value.choice[p.carried.rentalId])) throw new Error(t.sort.splitOldPick);
         const body = used.map((p) => ({ ...p.body, grossTetri: amountOf(p.key) }));
-        const r = await api.post<{ ids: string[] }>(`/api/statement-lines/${line.id}/split`, { parts: body }, { key });
-        return { toast: { text: t.sort.splitDone(body.length), undo: () => api.post(`/api/payments/${r.ids[0]}/undo`) } };
+        // The pay day moved (issue #12): the server moves the week and writes the payments in one go.
+        const shift =
+          moving && chosen && value.move
+            ? { rentalId: value.move.rentalId, seq: moving.move!.seq, days: chosen.days, extraTetri: value.move.amount.trim(), reason: value.move.reason.trim() }
+            : null;
+        const r = await api.post<{ ids: string[]; shift?: { rentalId: string; seq: number } }>(`/api/statement-lines/${line.id}/split`, { parts: body, ...(shift ? { shift } : {}) }, { key });
+        const moved = r.shift;
+        return {
+          toast: {
+            // The weekday as a word on its own, Sunday first: «день оплаты — пятница».
+            text: moved && value.move ? t.payDayMove.done(r.ids.length, t.calendar.weekdaysIn[Number(value.move.to) % 7]) : t.sort.splitDone(body.length),
+            // «Отменить» takes back what the line wrote: its payments, then the move.
+            undo: async () => {
+              await api.post(`/api/payments/${r.ids[0]}/undo`);
+              if (moved) await api.post(`/api/rentals/${moved.rentalId}/weeks/${moved.seq}/shift`, { days: 0, reason: t.payDayMove.undoReason });
+            },
+          },
+        };
       }}
     >
       <p className="split-from">{t.sort.splitFrom(fmtDate(line.occurredOn), t.statements.banks[line.bank])}</p>
@@ -706,48 +835,60 @@ function SplitSheet({ line, onClose }: { line: SortLine; onClose: () => void }) 
           {targets.data && parts.length === 1 && <p className="hint muted">{t.sort.splitNothing}</p>}
           {value.retail && retailGoods.data && retailParts.length === 0 && <p className="hint muted">{t.goods.sort.retailNone}</p>}
           <div className="split-parts">
-          {visible.map((p) => (
-            <div key={p.key} className="split-part">
-              <div className="split-part-top">
-                <label className="split-part-name" htmlFor={`split-${p.key}`}>
-                  {p.title} {p.ref && <span className="split-part-ref">{p.ref}</span>}
-                </label>
-                <input
-                  id={`split-${p.key}`}
-                  name={p.key}
-                  className="input mono split-amount"
-                  inputMode="decimal"
-                  value={value.amounts[p.key] ?? ''}
-                  placeholder={left > 0 ? formatGel(p.owesTetri > 0 ? Math.min(p.owesTetri, left) : left, { decimals: false }) : ''}
-                  onFocus={(e) => takeRest(p, e.currentTarget)}
-                  onChange={(e) => setAmount(p.key, e.target.value)}
-                />
+          {visible.map((p) =>
+            p.kind === 'payday' ? (
+              <PayDayPart
+                key={p.key}
+                part={p}
+                move={value.move?.rentalId === p.rentalId ? value.move : null}
+                planOf={planOf}
+                rateTetri={p.rateTetri ?? 0}
+                onDay={(to) => chooseDay(p, to)}
+                onChange={(patch) => setValue((v) => (v.move ? { ...v, move: { ...v.move, amount: patch.amount ?? v.move.amount, reason: patch.reason ?? v.move.reason } } : v))}
+              />
+            ) : (
+              <div key={p.key} className="split-part">
+                <div className="split-part-top">
+                  <label className="split-part-name" htmlFor={`split-${p.key}`}>
+                    {p.title} {p.ref && <span className="split-part-ref">{p.ref}</span>}
+                  </label>
+                  <input
+                    id={`split-${p.key}`}
+                    name={p.key}
+                    className="input mono split-amount"
+                    inputMode="decimal"
+                    value={value.amounts[p.key] ?? ''}
+                    placeholder={left > 0 ? formatGel(p.owesTetri > 0 ? Math.min(p.owesTetri, left) : left, { decimals: false }) : ''}
+                    onFocus={(e) => takeRest(p, e.currentTarget)}
+                    onChange={(e) => setAmount(p.key, e.target.value)}
+                  />
+                </div>
+                {p.carried && (
+                  <fieldset className="split-week">
+                    <legend>{t.sort.splitWhichWeek}</legend>
+                    {(['carried', 'new'] as const).map((c) => {
+                      const on = value.choice[p.carried!.rentalId] === c;
+                      return (
+                        <label key={c} className={`split-radio ${on ? 'on' : ''}`}>
+                          <input type="radio" name={`week-${p.carried!.rentalId}`} checked={on} onChange={() => setValue((v) => ({ ...v, choice: { ...v.choice, [p.carried!.rentalId]: c } }))} />
+                          <span>
+                            {c === 'carried' ? weekText(p.carried!.week) : p.openWeek ? weekText(p.openWeek) : t.sort.splitWeekNewTitle}
+                            <small>{c === 'carried' ? t.sort.splitWeekCarried : p.openWeek ? t.sort.splitWeekOpen : t.sort.splitWeekNewSub}</small>
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </fieldset>
+                )}
+                {overBy(p) > 0 && <p className="field-err">{t.goods.sort.partOver(formatGel(p.owesTetri))}</p>}
+                {p.fineOf && (
+                  <Field label={t.sort.splitFineFor} name="fineReason">
+                    <input className="input" value={value.reasons[p.fineOf] ?? ''} onChange={(e) => setValue((v) => ({ ...v, reasons: { ...v.reasons, [p.fineOf!]: e.target.value } }))} />
+                  </Field>
+                )}
               </div>
-              {p.carried && (
-                <fieldset className="split-week">
-                  <legend>{t.sort.splitWhichWeek}</legend>
-                  {(['carried', 'new'] as const).map((c) => {
-                    const on = value.choice[p.carried!.rentalId] === c;
-                    return (
-                      <label key={c} className={`split-radio ${on ? 'on' : ''}`}>
-                        <input type="radio" name={`week-${p.carried!.rentalId}`} checked={on} onChange={() => setValue((v) => ({ ...v, choice: { ...v.choice, [p.carried!.rentalId]: c } }))} />
-                        <span>
-                          {c === 'carried' ? weekText(p.carried!.week) : p.openWeek ? weekText(p.openWeek) : t.sort.splitWeekNewTitle}
-                          <small>{c === 'carried' ? t.sort.splitWeekCarried : p.openWeek ? t.sort.splitWeekOpen : t.sort.splitWeekNewSub}</small>
-                        </span>
-                      </label>
-                    );
-                  })}
-                </fieldset>
-              )}
-              {overBy(p) > 0 && <p className="field-err">{t.goods.sort.partOver(formatGel(p.owesTetri))}</p>}
-              {p.fineOf && (
-                <Field label={t.sort.splitFineFor} name="fineReason">
-                  <input className="input" value={value.reasons[p.fineOf] ?? ''} onChange={(e) => setValue((v) => ({ ...v, reasons: { ...v.reasons, [p.fineOf!]: e.target.value } }))} />
-                </Field>
-              )}
-            </div>
-          ))}
+            ),
+          )}
           </div>
           {hidden && (
             <button type="button" className="pill pill-sm split-more" onClick={() => setValue((v) => ({ ...v, more: true }))}>
@@ -756,7 +897,7 @@ function SplitSheet({ line, onClose }: { line: SortLine; onClose: () => void }) 
           )}
           {(targets.data || value.retail) && (
             <div className="split-sum" aria-live="polite">
-              <span className="mono">{used.length > 0 ? `${used.map((p) => formatGel(amountOf(p.key), { decimals: false })).join(' + ')} = ${formatGel(placed, { decimals: false })}` : ''}</span>
+              <span className="mono">{placedSums.length > 0 ? `${placedSums.map((a) => formatGel(a, { decimals: false })).join(' + ')} = ${formatGel(placed, { decimals: false })}` : ''}</span>
               {left === 0 ? <span className="split-ok">{t.sort.splitAllPlaced}</span> : left > 0 ? <span>{t.sort.splitLeft(formatGel(left))}</span> : <span className="field-err">{t.sort.splitOver(formatGel(-left))}</span>}
             </div>
           )}
@@ -778,6 +919,90 @@ function SplitSheet({ line, onClose }: { line: SortLine; onClose: () => void }) 
         </div>
       )}
     </FormSheet>
+  );
+}
+
+/**
+ * «Перенос дня оплаты» — a part of «Разнести» beside the rent (issue #12 of
+ * the director, Mika's «А» of 23.10.2026; ADR-0041, addendum): the weekdays
+ * Monday to Sunday, the one he pays on now marked «сейчас»; a later one makes
+ * his latest week longer, an earlier one shorter. Under the choice, what the
+ * week becomes and when he pays next; then the sum — the extra, money of the
+ * line, or the discount — and the reason, both filled in and his to change.
+ * Shown closed, with why, when the line pays an older week or the week was
+ * moved already.
+ */
+function PayDayPart({
+  part,
+  move,
+  planOf,
+  rateTetri,
+  onDay,
+  onChange,
+}: {
+  part: SplitPart;
+  move: SplitValue['move'];
+  planOf: (p: SplitPart, to: number) => PayDayMove;
+  rateTetri: number;
+  onDay: (to: string) => void;
+  onChange: (patch: { amount?: string; reason?: string }) => void;
+}) {
+  const t = useT();
+  const m = part.move!;
+  const closed = m.closed;
+  const chosen = move ? planOf(part, Number(move.to)) : null;
+  // A weekday inside a sentence, Sunday first.
+  const weekday = (date: string) => t.calendar.weekdaysIn[isoWeekday(date) % 7];
+  const options = t.payDay.days.map((day, i) => {
+    const to = i + 1;
+    if (to === m.payDay) return { to, label: t.payDayMove.option(day, t.payDayMove.now), off: false };
+    const plan = planOf(part, to);
+    // A shorter week never ends before today: in the list, not to be chosen.
+    return plan.endsBeforeToday ? { to, label: t.payDayMove.tooEarly(day), off: true } : { to, label: t.payDayMove.option(day, t.payDayMove.days(plan.days)), off: false };
+  });
+  const rate = formatGel(rateTetri, { decimals: false });
+  const why = closed === 'older_week_open' ? t.payDayMove.olderOpen : closed === 'week_moved' ? t.payDayMove.moved : undefined;
+  return (
+    <div className="split-part">
+      <div className="split-part-top">
+        <span className="split-part-name">
+          {part.title} <span className="split-part-ref">{part.ref}</span>
+        </span>
+      </div>
+      {/* Only the move chosen answers to the server's words about the days, its sum and its reason. */}
+      <Field label={t.payDay.label} hint={why} name={move ? 'days' : undefined}>
+        <select className="input" disabled={!!closed} value={move ? move.to : String(m.payDay)} onChange={(e) => onDay(e.target.value)}>
+          {options.map((o) => (
+            <option key={o.to} value={String(o.to)} disabled={o.off}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+      </Field>
+      {move && chosen && (
+        <>
+          <p className="hint">
+            {t.payDayMove.plan(
+              weekText({ startsOn: m.startsOn, endsOn: m.endsOn }),
+              weekText({ startsOn: m.startsOn, endsOn: chosen.plan.endsOn }),
+              t.payDayMove.days(chosen.days),
+              weekday(chosen.plan.nextDueOn),
+              fmtDayMonth(chosen.plan.nextDueOn),
+            )}
+          </p>
+          <Field
+            label={chosen.days > 0 ? t.weekShift.extra : t.weekShift.less}
+            hint={(chosen.days > 0 ? t.weekShift.extraHint : t.weekShift.lessHint)(rate, Math.abs(chosen.days), formatGel(chosen.plan.suggestedExtraTetri, { decimals: false }))}
+            name="extraTetri"
+          >
+            <input className="input mono" inputMode="decimal" value={move.amount} onChange={(e) => onChange({ amount: e.target.value })} />
+          </Field>
+          <Field label={t.weekShift.reason} name="reason">
+            <input className="input" value={move.reason} onChange={(e) => onChange({ reason: e.target.value })} />
+          </Field>
+        </>
+      )}
+    </div>
   );
 }
 

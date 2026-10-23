@@ -241,11 +241,14 @@ export function handoverRoutes(app: FastifyInstance): void {
   });
 
   /**
-   * The running week made 1–6 days longer, an owner's, with a reason
-   * (ADR-0041): the extra days and their price, typed by a person; every
-   * later week and the pay day follow. 0 days takes the move back.
+   * The running week made 1–6 days longer or shorter, with a reason
+   * (ADR-0041 and its addendum of 23.10.2026): `days` −6 … 6, and
+   * `extraTetri` — what those days are worth, a sum above nought typed by a
+   * person: the extra for days gained, the discount for days lost. Every
+   * later week and the pay day follow; 0 days takes the move back. An
+   * owner's and, since Mika's «А» of 23.10.2026, a manager's too.
    */
-  app.post<{ Params: { id: string; seq: string }; Body: Body }>('/api/rentals/:id/weeks/:seq/shift', { config: { scope: 'deposit.decide' } }, async (req) => {
+  app.post<{ Params: { id: string; seq: string }; Body: Body }>('/api/rentals/:id/weeks/:seq/shift', { config: { scope: 'rental.week.shift' } }, async (req) => {
     const b = req.body ?? {};
     const seq = Number(req.params.seq);
     if (!Number.isInteger(seq) || seq < 1) throw notFound('week_not_found', 'No such week in this rental.');

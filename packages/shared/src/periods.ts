@@ -3,10 +3,12 @@
 // 18–24, 25–31, … The worker creates the next one every night while the
 // rental is active; "paid through" is the end of the last fully paid period.
 //
-// An owner may make the running week 1–6 days longer (ADR-0041): that week
-// ends later, and every week after it starts as many days later. The weeks
-// are then counted from the pickup plus the days earlier weeks gained — the
-// `shifts` every function here takes, empty for a rental never moved.
+// The running week may be made 1–6 days longer (ADR-0041) or, since Mika's
+// «А» of 23.10.2026 (issue #12), 1–6 days shorter: that week ends later or
+// earlier, and every week after it starts as many days later or earlier. The
+// weeks are then counted from the pickup plus the days earlier weeks gained
+// or lost — the `shifts` every function here takes, empty for a rental never
+// moved.
 import { addDays, daysBetween, minDate } from './time.js';
 import type { Tetri } from './money.js';
 import type { ISODate, PeriodPayStatus } from './types.js';
@@ -17,28 +19,40 @@ export interface PeriodBounds {
   /** 1-based. Stored on the row so re-runs are idempotent. */
   seq: number;
   startsOn: ISODate;
-  /** Inclusive: the 7th day of the period, or later for a week made longer (ADR-0041). */
+  /** Inclusive: the 7th day of the period, later for a week made longer, earlier for one made shorter (ADR-0041). */
   endsOn: ISODate;
 }
 
-/** A week made longer by an owner (ADR-0041): its seq and the days it gained — `rental_periods.extra_days`. */
+/**
+ * A week made longer or shorter (ADR-0041 and its addendum of 23.10.2026): its
+ * seq and the days it gained, below nought for days it lost — `rental_periods.extra_days`.
+ */
 export interface WeekShift {
   seq: number;
   days: number;
 }
 
-/** The longest a week is made: seven more days is simply the next week, unpaid. */
+/**
+ * The most a week is moved either way: seven more days is simply the next
+ * week, unpaid, and a week seven days shorter is no week at all.
+ */
 export const MAX_SHIFT_DAYS = 6;
 
-/** A rental's shifts, read off its week rows; a row with no extra days is not one. */
+/** Whole days a week may be moved by: −6 … 6, nought — not moved. */
+export function isShiftDays(days: number): boolean {
+  return Number.isInteger(days) && Math.abs(days) <= MAX_SHIFT_DAYS;
+}
+
+/** A rental's shifts, read off its week rows; a row with no days gained or lost is not one. */
 export function shiftsOf(rows: readonly { seq: number; extraDays?: number | null }[]): WeekShift[] {
-  return rows.filter((r) => (r.extraDays ?? 0) > 0).map((r) => ({ seq: r.seq, days: r.extraDays ?? 0 }));
+  return rows.filter((r) => (r.extraDays ?? 0) !== 0).map((r) => ({ seq: r.seq, days: r.extraDays ?? 0 }));
 }
 
 /**
  * The days of week `seq`: from the pickup, 7 days a week, later by the days
- * the weeks before it gained, and longer by its own (ADR-0041). With no
- * shifts — every rental never moved — exactly the 7-day grid of RNT-02.
+ * the weeks before it gained (earlier by those they lost), and longer or
+ * shorter by its own (ADR-0041). With no shifts — every rental never moved —
+ * exactly the 7-day grid of RNT-02.
  */
 export function periodBounds(pickedUpOn: ISODate, seq: number, shifts: readonly WeekShift[] = []): PeriodBounds {
   if (!Number.isInteger(seq) || seq < 1) throw new Error(`period seq must be a positive integer, got ${seq}`);
@@ -166,17 +180,23 @@ export function overdueDays(paidThroughDate: ISODate | null, pickedUpOn: ISODate
 // same day). The week he is in becomes three days longer and costs the extra;
 // every later week, and the day it is paid, starts three days later. What was
 // paid for earlier weeks stays where it is. Only the last week of a running
-// rental, 1–6 days, by an owner with a reason — never by itself from the size
-// of a payment: a bank line comes without a name.
+// rental, 1–6 days, with a reason — never by itself from the size of a
+// payment: a bank line comes without a name.
+//
+// Since Mika's «А» of 23.10.2026 (issue #12, the ADR's addendum) the week may
+// also be made 1–6 days shorter, for a discount a person types; a manager
+// moves it too, and «Разнести» moves it by the pay day chosen. What is paid
+// on the week above its new price becomes the customer's credit.
 
 /**
  * The day the weeks of a rental run from now: the pickup, later by every day
- * its weeks gained. Its weekday is the weeks' weekday — what the pay day is
- * counted from (`payOffsetDays`).
+ * its weeks gained and earlier by every day they lost — a day before the
+ * pickup, when a week was made shorter. Its weekday is the weeks' weekday —
+ * what the pay day is counted from (`payOffsetDays`).
  */
 export function weeksAnchor(pickedUpOn: ISODate | null, shiftDays = 0): ISODate | null {
   if (!pickedUpOn) return null;
-  return shiftDays > 0 ? addDays(pickedUpOn, shiftDays) : pickedUpOn;
+  return shiftDays !== 0 ? addDays(pickedUpOn, shiftDays) : pickedUpOn;
 }
 
 /**
@@ -208,34 +228,48 @@ export function shiftedPayWeekday(payWeekday: number | null, by: number, anchorA
 }
 
 /**
- * What `days` more days cost by the weekly rate: rate ÷ 7 × days, to whole
- * lari — 150 a week, 3 days → 64. Only the form's suggestion: the sum is
- * typed by a person (Mika, 21.10.2026), as a discount is.
+ * What `days` days are worth by the weekly rate: rate ÷ 7 × days, to whole
+ * lari — 150 a week, 3 days → 64, one day → 21. The extra for days a week
+ * gained, or the discount for days it lost (the sign of `days` does not
+ * matter: the sum is always above nought). Only the form's suggestion: the
+ * sum is typed by a person (Mika, 21.10.2026 and 23.10.2026), as a discount is.
  */
 export function shiftExtraTetri(weeklyRateTetri: Tetri, days: number): Tetri {
-  return Math.round((weeklyRateTetri * days) / PERIOD_DAYS / 100) * 100;
+  return Math.round((weeklyRateTetri * Math.abs(days)) / PERIOD_DAYS / 100) * 100;
+}
+
+/**
+ * What a move does to the week's price, as `rental_periods.extra_tetri` keeps
+ * it: the typed sum on top for days gained, taken off for days lost — the
+ * sign follows the days (ADR-0041, addendum of 23.10.2026) — and nothing
+ * without a move. The week's price is the rate, less a discount, plus this.
+ */
+export function shiftMoneyTetri(days: number, typedTetri: Tetri): Tetri {
+  if (days === 0) return 0;
+  return days > 0 ? Math.abs(typedTetri) : -Math.abs(typedTetri);
 }
 
 export interface WeekShiftPlan {
-  /** The week's last day once it is `days` longer. */
+  /** The week's last day once it is `days` longer (or shorter). */
   endsOn: ISODate;
   /** Its length in days: 7 + days. */
   lengthDays: number;
   /** The first day of the week after it, and the day that week is due. */
   nextStartsOn: ISODate;
   nextDueOn: ISODate;
-  /** The suggestion for the extra days' price (`shiftExtraTetri`). */
+  /** The suggestion for the days' price — the extra, or the discount (`shiftExtraTetri`). */
   suggestedExtraTetri: Tetri;
 }
 
 /**
  * One arithmetic for the sheet and the server: the week starting `startsOn`
- * made `days` longer (0 — as it was). The pay day keeps its place within a
- * week, so the next week is due `payOffsetDays` after its first day.
+ * made `days` longer, or shorter for days below nought (0 — as it was). The
+ * pay day keeps its place within a week, so the next week is due
+ * `payOffsetDays` after its first day.
  */
 export function weekShiftPlan(input: { startsOn: ISODate; days: number; weeklyRateTetri: Tetri; payOffsetDays?: number }): WeekShiftPlan {
-  if (!Number.isInteger(input.days) || input.days < 0 || input.days > MAX_SHIFT_DAYS) {
-    throw new Error(`a week is made 0–${MAX_SHIFT_DAYS} days longer, got ${input.days}`);
+  if (!isShiftDays(input.days)) {
+    throw new Error(`a week is moved −${MAX_SHIFT_DAYS} to ${MAX_SHIFT_DAYS} days, got ${input.days}`);
   }
   const endsOn = addDays(input.startsOn, PERIOD_DAYS - 1 + input.days);
   const nextStartsOn = addDays(endsOn, 1);
@@ -259,4 +293,57 @@ export function weekShiftPlan(input: { startsOn: ISODate; days: number; weeklyRa
 export function shiftDaysOffered(input: { startsOn: ISODate; payOffsetDays?: number; today: ISODate }): { days: number; exact: boolean } {
   const late = daysBetween(weekDueOn(input.startsOn, input.payOffsetDays ?? 0), input.today);
   return { days: Math.min(MAX_SHIFT_DAYS, Math.max(1, late)), exact: late >= 1 && late <= MAX_SHIFT_DAYS };
+}
+
+/**
+ * A week made shorter may not end before today (ADR-0041, addendum of
+ * 23.10.2026): its next week would have begun in the past, and the renter
+ * would be late for a week nobody told him of. A week made longer, or its
+ * move taken back, may — the next week then opens at once (rule 7).
+ */
+export function shorterEndsBeforeToday(days: number, endsOn: ISODate, today: ISODate): boolean {
+  return days < 0 && endsOn < today;
+}
+
+// ---------------------------------------------------------------------------
+// The pay day moved while a bank line is allocated (issue #12)
+// ---------------------------------------------------------------------------
+//
+// A courier pays 170 for a 150 week: 20 so that he pays on Fridays from now
+// on (the director's request of 23.10.2026; Mika's «А» the same day). In
+// «Разнести» the person chooses the new pay day from the weekdays, Monday to
+// Sunday; one later in that list than the day he pays on now makes his latest
+// week longer by the days between, an earlier one shorter — the same move as
+// «Сдвинуть неделю» on the rental's card, counted from the day instead of
+// from the days.
+
+/**
+ * The days the latest week is moved by when the rent falls due on `to`
+ * instead of `payDay` (ISO 1–7): later in the week Monday … Sunday — longer,
+ * earlier — shorter (the director's answer, issue #12). Thursday → Friday +1,
+ * Thursday → Monday −3, Monday → Sunday +6.
+ */
+export function payDayShiftDays(payDay: number, to: number): number {
+  return to - payDay;
+}
+
+export interface PayDayMove {
+  /** The days the week is moved by: above nought longer, below shorter, 0 — the same day. */
+  days: number;
+  plan: WeekShiftPlan;
+  /** A week made shorter would end before today: not offered (`week_ends_before_today`). */
+  endsBeforeToday: boolean;
+}
+
+/**
+ * The latest week of a rental, not moved yet, starting `startsOn`, with the
+ * rent falling due on `to` from the next week on: what it becomes, and when
+ * the next rent is due. The pay day keeps its place within a week, so the
+ * next one falls on `to`: Thursday's week 22.10–28.10 and Friday chosen —
+ * 22.10–29.10, the next rent on Friday 30.10.
+ */
+export function payDayMove(input: { payDay: number; to: number; startsOn: ISODate; weeklyRateTetri: Tetri; payOffsetDays: number; today: ISODate }): PayDayMove {
+  const days = payDayShiftDays(input.payDay, input.to);
+  const plan = weekShiftPlan({ startsOn: input.startsOn, days, weeklyRateTetri: input.weeklyRateTetri, payOffsetDays: input.payOffsetDays });
+  return { days, plan, endsBeforeToday: shorterEndsBeforeToday(days, plan.endsOn, input.today) };
 }

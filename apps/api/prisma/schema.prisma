@@ -542,8 +542,9 @@ model Rental {
   /// The weekday a week's rent is due on, ISO 1 = Monday … 7 = Sunday; null =
   /// the pickup's weekday (ADR-0022). The weeks still run from the pickup.
   payWeekday            Int?         @map("pay_weekday") @db.SmallInt
-  /// The days all its weeks were made longer by an owner (ADR-0041, migration 0064):
-  /// the weeks now run from the pickup plus this. Derived — only recomputeRental writes it.
+  /// The days all its weeks were made longer (ADR-0041, migration 0064), less the days
+  /// weeks were made shorter (addendum of 23.10.2026, migration 0068) — may be below
+  /// nought: the weeks now run from the pickup plus this. Derived — only recomputeRental writes it.
   weekShiftDays         Int          @default(0) @map("week_shift_days")
   buyoutTargetTetri     Int?         @map("buyout_target_tetri")
   buyoutPerPaymentTetri Int?         @map("buyout_per_payment_tetri")
@@ -602,8 +603,10 @@ model RentalPeriod {
   discountReason String?   @map("discount_reason")
   discountedById String?   @map("discounted_by") @db.Uuid
   discountedAt   DateTime? @map("discounted_at")
-  /// Days an owner made the week longer, and what they cost, with a reason (ADR-0041,
-  /// migration 0064): endsOn = startsOn + 6 + extraDays; amountTetri includes extraTetri.
+  /// Days the week was made longer, and what they cost, with a reason (ADR-0041,
+  /// migration 0064); since migration 0068 (addendum of 23.10.2026) −6 … 6, and a week
+  /// made shorter keeps its discount here below nought — the money has the days' sign.
+  /// endsOn = startsOn + 6 + extraDays; amountTetri includes extraTetri.
   extraDays      Int       @default(0) @map("extra_days") @db.SmallInt
   extraTetri     Int       @default(0) @map("extra_tetri")
   shiftReason    String?   @map("shift_reason")

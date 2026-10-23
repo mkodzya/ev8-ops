@@ -166,6 +166,25 @@ export function settleMoney(m: RentalMoney): RentalMoney {
   return out;
 }
 
+/**
+ * A week made cheaper than what is paid on it — shorter, with less extra, its
+ * move taken back (ADR-0041, addendum of 23.10.2026): the money above its new
+ * price is freed, the newest part first — the last money in is the money the
+ * new price does not need — and becomes the customer's credit, which the
+ * settling lays on the next week by the one order. `parts` oldest first, as
+ * the week holds them; what comes back is what each part gives up.
+ */
+export function weekSurplusFreed(parts: readonly MoneyPart[], amountTetri: Tetri): MoneyPart[] {
+  let surplus = Math.max(0, sumParts(parts) - Math.max(0, amountTetri));
+  const freed: MoneyPart[] = [];
+  for (let i = parts.length - 1; i >= 0 && surplus > 0; i--) {
+    const take = Math.min(parts[i].amountTetri, surplus);
+    surplus -= take;
+    if (take > 0) freed.push({ ...parts[i], amountTetri: take });
+  }
+  return freed;
+}
+
 /** Money freed from what it closed goes back to its payment, which `settleCredit` then reads. */
 export function moneyWithCredit(credit: readonly CreditPayment[], freed: readonly MoneyPart[]): CreditPayment[] {
   const out = credit.map((c) => ({ ...c }));
