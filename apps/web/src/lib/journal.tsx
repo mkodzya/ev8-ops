@@ -210,8 +210,9 @@ export function ChangedFromTo({ action, before, after }: { action?: string; befo
   // Which week a move was made on: the number is the same on both sides, so
   // no pair carries it (ADR-0041).
   const week = action && WEEK_SHIFT.has(action) && typeof now.seq === 'number' ? t.weekShift.journal.week(now.seq) : null;
+  const credit = movedToCredit(t, action, now);
   const markOff = markCleared(t, action, was, now);
-  if (pairs.length === 0 && moved === 0 && !markOff) return null;
+  if (pairs.length === 0 && moved === 0 && !markOff && !credit) return null;
   return (
     <>
       {week && <span className="muted">{` · ${week}`}</span>}
@@ -223,6 +224,7 @@ export function ChangedFromTo({ action, before, after }: { action?: string; befo
         </span>
       ))}
       {moved > 0 && <span className="muted">{` · ${t.saleDate.linesMoved(moved)}`}</span>}
+      {credit && <span className="muted">{` · ${credit}`}</span>}
       {markOff && <span className="muted">{` · ${markOff}`}</span>}
     </>
   );
@@ -292,6 +294,19 @@ function listWords(t: Dict, action: string | undefined, field: string, raw: unkn
 
 /** A week made longer or shorter, and the move taken back (ADR-0041). */
 const WEEK_SHIFT = new Set(['rental.week.shift', 'rental.week.shift.undo']);
+
+/**
+ * The money a move took off its week and made the customer's credit — a
+ * shorter week, less extra, a move taken back (addendum of 23.10.2026, rule
+ * 6). It is written on the «after» side only, so no pair carries it, and the
+ * 20 ₾ that left the week on «Убрать сдвиг» went without a trace (review,
+ * 23.10.2026): «в аванс: 20,00 ₾».
+ */
+function movedToCredit(t: Dict, action: string | undefined, now: Bag): string | null {
+  if (!action || !WEEK_SHIFT.has(action)) return null;
+  const freed = now?.freedTetri;
+  return typeof freed === 'number' && freed > 0 ? t.weekShift.journal.credit(formatGel(freed)) : null;
+}
 
 /**
  * A move's money where a side is a shorter week's discount, kept below nought

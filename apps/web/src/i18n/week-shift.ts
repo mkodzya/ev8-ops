@@ -49,6 +49,8 @@ export const weekShiftEn = {
       extraTetri: 'extra',
       /** A move's money on a line where a side is a shorter week's discount (below nought). */
       extraOrLess: 'extra / discount',
+      /** What the move left above the week's new price, now the customer's credit (addendum rule 6). */
+      credit: (sum: string) => `to credit: ${sum}`,
       days: (n: number) => (n === 0 ? 'none' : `${signed(n)} d`),
       payDay: 'pay day',
     },
@@ -87,6 +89,7 @@ export const weekShiftRu: typeof weekShiftEn = {
       extraDays: 'сдвиг',
       extraTetri: 'доплата',
       extraOrLess: 'доплата / скидка',
+      credit: (sum: string) => `в аванс: ${sum}`,
       days: (n: number) => (n === 0 ? 'нет' : `${signed(n)} дн.`),
       payDay: 'день оплаты',
     },
@@ -125,6 +128,7 @@ export const weekShiftKa: typeof weekShiftEn = {
       extraDays: 'გადაწევა',
       extraTetri: 'დამატებით',
       extraOrLess: 'დამატებით / ფასდაკლება',
+      credit: (sum: string) => `ავანსში: ${sum}`,
       days: (n: number) => (n === 0 ? 'არა' : `${signed(n)} დღე`),
       payDay: 'გადახდის დღე',
     },

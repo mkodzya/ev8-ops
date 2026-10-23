@@ -711,13 +711,15 @@ function SplitSheet({ line, onClose }: { line: SortLine; onClose: () => void }) 
     return weekText(p.openWeek);
   };
   // The pay day moved, in words (issue #12): «20,00 ₾ — перенос дня оплаты на пятницу (+1 день)»,
-  // or, for a shorter week, what it becomes and how much cheaper — no money of the line.
+  // or, for a shorter week, what it becomes and how much cheaper — no money of the line. A move
+  // with 0 typed is written all the same, so it is said all the same, without the sum (review, 23.10.2026).
   const moveWords = (): string | null => {
     if (!moving || !chosen || !value.move) return null;
     const day = dayWord(Number(value.move.to));
     const days = t.payDayMove.days(chosen.days);
-    if (chosen.days > 0) return moveMoney > 0 ? t.payDayMove.resLonger(formatGel(moveMoney), day, days, moving.ref) : null;
-    return t.payDayMove.resShorter(day, days, moving.ref, weekText({ startsOn: moving.move!.startsOn, endsOn: chosen.plan.endsOn }), formatGel(moveOff));
+    if (chosen.days > 0) return moveMoney > 0 ? t.payDayMove.resLonger(formatGel(moveMoney), day, days, moving.ref) : t.payDayMove.resLongerFree(day, days, moving.ref);
+    const week = weekText({ startsOn: moving.move!.startsOn, endsOn: chosen.plan.endsOn });
+    return moveOff > 0 ? t.payDayMove.resShorter(day, days, moving.ref, week, formatGel(moveOff)) : t.payDayMove.resShorterFree(day, days, moving.ref, week);
   };
   const said: string[] = [];
   let moveTold = false;
