@@ -6,7 +6,7 @@
 // beyond what is open, selling beyond the count, the stocktake question, the
 // rights, one key one sale, and the last charger wanted twice at once.
 // Buyers, items and phones are invented: the repository is public.
-import { acquiringNet, addDays, todayISO } from '@ev8/shared';
+import { acquiringNet, addDays, goodsCancelNote, todayISO } from '@ev8/shared';
 import { describe, expect, it } from 'vitest';
 import { HAS_DB, call, getApp, json, loginAs, makeUser, login, uniq } from './helpers.js';
 
@@ -226,7 +226,9 @@ describe.skipIf(!HAS_DB)('a cancellation', () => {
     expect(move).toMatchObject({ item: 'charger', qty: 1 });
     const pay = await prisma.payment.findUniqueOrThrow({ where: { id: sold.paymentId! } });
     expect(pay.voidedAt).not.toBeNull();
-    expect(pay.voidReason).toContain(sold.number);
+    // Written in the one shape a screen reads back: the code's part in the reader's words, the owner's as typed.
+    expect(goodsCancelNote(pay.voidReason)).toEqual({ number: sold.number, undone: false, why: 'test: returned the same day' });
+    expect(goodsCancelNote(move.reason)).toEqual({ number: sold.number, undone: false, why: 'test: returned the same day' });
     expect((await prisma.statementLine.findUniqueOrThrow({ where: { id: line.id } })).status).toBe('unmatched');
   });
 });
@@ -475,7 +477,9 @@ describe.skipIf(!HAS_DB)('«Отменить» on the toast (§1 п. 11; accepta
     expect(undone.statusCode, undone.body).toBe(200);
     expect(await onHand(owner, partId)).toBe(3);
     const prisma = await db();
-    expect(await prisma.payment.findUniqueOrThrow({ where: { id: sold.paymentId! } })).toMatchObject({ voidKind: 'undo' });
+    const undonePay = await prisma.payment.findUniqueOrThrow({ where: { id: sold.paymentId! } });
+    expect(undonePay).toMatchObject({ voidKind: 'undo' });
+    expect(goodsCancelNote(undonePay.voidReason)).toEqual({ number: sold.number, undone: true, why: '' });
     expect(await prisma.auditLog.count({ where: { entityId: sold.id, action: 'goods_sale.undo' } })).toBe(1);
 
     const late = json<Sold>(await sell(manager, { lines: [{ partId, qty: 1, unitPriceTetri: 35_00 }], paidNow: { channel: 'cash', amountTetri: 35_00 } }));

@@ -4,11 +4,15 @@
 import { describe, expect, it } from 'vitest';
 import {
   GOODS_MAX_LINES,
+  GOODS_UNDONE_AT_ONCE,
   SELLABLE_COUNTED,
   cancelPlan,
   countedName,
   customerDebt,
+  debtAfterSale,
   dueTodayOf,
+  goodsCancelNote,
+  goodsCancelReason,
   goodsEconomics,
   goodsLineNets,
   goodsSaleState,
@@ -159,6 +163,57 @@ describe('what a cancellation does with the money (§1 п. 4, 11, 13)', () => {
     expect(cancelPlan({ retail: true, mode: 'cancel', payments: [{ id: 'p1', inSplit: true }] })).toEqual({ refuse: 'goods_payment_in_split', paymentId: 'p1' });
     // Credit leaves the line as it is.
     expect(cancelPlan({ retail: false, mode: 'cancel', payments: [{ id: 'p1', inSplit: true }] })).toEqual({ fates: [{ id: 'p1', fate: 'credit' }] });
+  });
+});
+
+describe('the reason a cancellation writes, read back in the reader\'s words (QA 23.10.2026)', () => {
+  it('keeps the shape the rows already hold', () => {
+    expect(goodsCancelReason('TS-00004', 'покупатель вернул товар (пример)')).toBe('TS-00004 cancelled: покупатель вернул товар (пример)');
+    expect(goodsCancelReason('TS-00006', GOODS_UNDONE_AT_ONCE)).toBe('TS-00006 cancelled: undone at once');
+  });
+
+  it('takes the number and the owner\'s words apart, the words as typed', () => {
+    expect(goodsCancelNote(goodsCancelReason('TS-00004', 'покупатель вернул товар (пример)'))).toEqual({ number: 'TS-00004', undone: false, why: 'покупатель вернул товар (пример)' });
+    // A reason of several lines stays whole.
+    expect(goodsCancelNote('TS-00012 cancelled: first line\nsecond line')).toEqual({ number: 'TS-00012', undone: false, why: 'first line\nsecond line' });
+  });
+
+  it('knows the seller\'s undo, which has no words of a person\'s', () => {
+    expect(goodsCancelNote(goodsCancelReason('TS-00006', GOODS_UNDONE_AT_ONCE))).toEqual({ number: 'TS-00006', undone: true, why: '' });
+  });
+
+  it('leaves any other text alone', () => {
+    for (const other of ['sale SL-00007 cancelled: покупатель передумал', 'TS-00004', 'TS-00004: found in the box', 'return undone: x', '', null, undefined]) {
+      expect(goodsCancelNote(other), String(other)).toBeNull();
+    }
+  });
+});
+
+describe('the customer\'s debt after a sale on credit (QA 23.10.2026)', () => {
+  const base = { today: '2026-10-23', rentals: [], sales: [], repairs: [], depositHeldTetri: 0 };
+  const sale = (owes: number) => ({ id: 'g-new', number: 'TS-00099', chargedTetri: owes, paidTetri: 0 });
+
+  it('adds the sale\'s open sum to what he owes: 750 → 850', () => {
+    expect(debtAfterSale({ owesTetri: 750_00, creditTetri: 0 }, 100_00)).toBe(850_00);
+  });
+
+  it('lets his credit take it first, as his card will', () => {
+    expect(debtAfterSale({ owesTetri: 0, creditTetri: 30_00 }, 100_00)).toBe(70_00);
+    expect(debtAfterSale({ owesTetri: 0, creditTetri: 130_00 }, 100_00)).toBe(0);
+  });
+
+  it('says what `customerDebt` says once the sale is there', () => {
+    const cases: [goodsOwed: number, unplaced: number, added: number][] = [
+      [750_00, 0, 100_00],
+      [0, 30_00, 100_00],
+      [45_00, 0, 22_30],
+      [0, 0, 0],
+    ];
+    for (const [goodsOwed, unplaced, added] of cases) {
+      const now = customerDebt({ ...base, unplacedTetri: unplaced, goods: goodsOwed > 0 ? [{ id: 'g1', number: 'TS-00001', chargedTetri: goodsOwed, paidTetri: 0 }] : [] });
+      const after = customerDebt({ ...base, unplacedTetri: unplaced, goods: [...(goodsOwed > 0 ? [{ id: 'g1', number: 'TS-00001', chargedTetri: goodsOwed, paidTetri: 0 }] : []), sale(added)] });
+      expect(debtAfterSale(now, added)).toBe(after.owesTetri);
+    }
   });
 });
 

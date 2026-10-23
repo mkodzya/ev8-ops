@@ -151,6 +151,49 @@ export function cancelPlan(i: { retail: boolean; mode: 'cancel' | 'undo'; paymen
   return { fates: fates.map(({ id, fate }) => ({ id, fate })) };
 }
 
+/** A cancelled sale's reason when its seller undid it at once, no person's words in it (§1 п. 11). */
+export const GOODS_UNDONE_AT_ONCE = 'undone at once';
+
+/**
+ * The reason a cancellation writes on everything it moves: the payment it
+ * voids or turns into the customer's credit, the goods it puts back on the
+ * shelf or in the showroom — «TS-00004 cancelled: <why>», where `why` is the
+ * owner's words as typed or `GOODS_UNDONE_AT_ONCE`. Written from here and read
+ * back by `goodsCancelNote`, so a screen says the code's part in the reader's
+ * language and the person's part as it was typed (QA 23.10.2026: «TS-00004
+ * cancelled: …» on a Russian screen). Rows already hold this shape: it never
+ * changes, only the reading does.
+ */
+export function goodsCancelReason(number: string, why: string): string {
+  return `${number} cancelled: ${why}`;
+}
+
+const CANCEL_NOTE = /^(TS-\d+) cancelled: ([\s\S]*)$/u;
+
+/**
+ * A cancellation's reason taken apart: the sale's number, and whose words —
+ * the seller's undo (`undone`, no words), or the owner's, as typed. Null for
+ * any other text, which a screen shows as it is.
+ */
+export function goodsCancelNote(reason: string | null | undefined): { number: string; undone: boolean; why: string } | null {
+  const m = CANCEL_NOTE.exec((reason ?? '').trim());
+  if (!m) return null;
+  const why = m[2]!.trim();
+  const undone = why === GOODS_UNDONE_AT_ONCE;
+  return { number: m[1]!, undone, why: undone ? '' : why };
+}
+
+/**
+ * The customer's one debt figure (B7-02) once a sale leaves `addedTetri` of
+ * it open, from the figure and the credit he has now. The same arithmetic as
+ * `customerDebt`: his money nothing has taken yet comes off the whole, the
+ * new goods part included — so «было 750, станет 850» on the counter is what
+ * his card will say after (QA 23.10.2026: the wizard said only this sale's 100).
+ */
+export function debtAfterSale(now: { owesTetri: Tetri; creditTetri: Tetri }, addedTetri: Tetri): Tetri {
+  return Math.max(0, now.owesTetri - now.creditTetri + Math.max(0, addedTetri));
+}
+
 /** One line of a sale, as «Экономика» reads it. */
 export interface GoodsEconomicsLine {
   saleId: string;
