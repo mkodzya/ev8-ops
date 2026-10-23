@@ -9,7 +9,7 @@ import { dateFromISO, isoDate } from '../lib/dates.js';
 import { prisma } from '../lib/db.js';
 import { env } from '../lib/env.js';
 import { conflict, isUniqueViolation, notFound } from '../lib/errors.js';
-import { initialStock, partRows } from '../lib/stock.js';
+import { initialStock, partRows, shelfCost } from '../lib/stock.js';
 import { salesOfPart } from './goodsSales.js';
 import { todayISO } from '@ev8/shared';
 import { date, int, oneOf, str, tetri } from '../lib/validate.js';
@@ -53,6 +53,9 @@ export function stockRoutes(app: FastifyInstance): void {
     });
     return {
       part,
+      // A shelf at nought or below has no average; what one costs is still known — the figure a
+      // sale or a repair takes it at — and the card says that rather than nothing (QA 23.10.2026).
+      costNowTetri: seeCost && found.avgCostTetri == null ? await shelfCost(prisma, part.id) : null,
       // The goods sales that took it off the shelf (issue #11, ADR-0045), the margin to an owner.
       sales: await salesOfPart(part.id, seeCost),
       moves: moves.map((m) => ({

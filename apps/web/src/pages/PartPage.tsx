@@ -41,6 +41,8 @@ interface PartSale {
 
 interface Part {
   part: PartRow;
+  /** At nought or below, what one costs all the same — the figure a sale or a repair takes it at; absent while an older API answers. */
+  costNowTetri?: number | null;
   moves: Move[];
   /** Absent while an older API answers. */
   sales?: PartSale[];
@@ -138,9 +140,10 @@ export function PartPage() {
         )}
         {seeCost && (
           <>
+            {/* The shelf's average while it holds something; at nought or below, what one costs all the same (QA 23.10.2026). */}
             <span className="num">
-              <span className="num-v">{p.avgCostTetri == null ? t.common.dash : formatGel(p.avgCostTetri)}</span>
-              <span className="num-l">{t.shelf.avgCost}</span>
+              <span className="num-v">{p.avgCostTetri != null ? formatGel(p.avgCostTetri) : data.costNowTetri != null ? formatGel(data.costNowTetri) : t.common.dash}</span>
+              <span className="num-l">{p.avgCostTetri == null && data.costNowTetri != null ? t.goods.wizard.cost : t.shelf.avgCost}</span>
             </span>
             <span className="num">
               <span className="num-v">{formatGel(p.valueTetri)}</span>

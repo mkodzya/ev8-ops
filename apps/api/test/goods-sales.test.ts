@@ -314,6 +314,10 @@ describe.skipIf(!HAS_DB)('more than there is (§1 п. 3, 5; acceptance 7)', () =
     const prisma = await db();
     const { id } = json<Sold>(res);
     expect(await prisma.auditLog.findFirstOrThrow({ where: { entityId: id, action: 'goods_sale.minus' } })).toMatchObject({ before: { seq: 1, qty: 1 }, after: { seq: 1, qty: 2 } });
+    // In the red the shelf has no average, and the card still says what one costs: what the sale took it at.
+    expect((await prisma.goodsSaleLine.findFirstOrThrow({ where: { saleId: id } })).unitCostTetri).toBe(20_00);
+    expect(json<{ part: { avgCostTetri: number | null }; costNowTetri: number | null }>(await call(owner, 'GET', `/api/parts/${partId}`))).toMatchObject({ part: { avgCostTetri: null }, costNowTetri: 20_00 });
+    expect(json<{ costNowTetri: number | null }>(await call(manager, 'GET', `/api/parts/${partId}`)).costNowTetri).toBeNull();
   });
 
   it('sells a charger beyond the count by finding it first, so the count stays where it was', async () => {
