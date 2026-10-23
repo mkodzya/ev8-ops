@@ -21,7 +21,7 @@ export interface RedateWeek {
   seq: number;
   startsOn: ISODate;
   endsOn: ISODate;
-  /** Days an owner made it longer (ADR-0041). */
+  /** Days it was made longer, below nought shorter (ADR-0041 and its addendum of 23.10.2026). */
   extraDays: number;
   /** Taken off by an owner (migration 0040). */
   discountTetri: Tetri;
@@ -98,7 +98,7 @@ export function pickupDatePlan(input: {
   const weekEnds = [...weeks.flatMap((w) => (w.to ? [w.to.endsOn] : [])), ...opened.map((b) => b.endsOn)];
 
   const gone = input.weeks.filter((w) => !begun.has(w.seq)).sort((a, b) => a.seq - b.seq);
-  const shiftedGone = gone.find((w) => w.extraDays > 0);
+  const shiftedGone = gone.find((w) => w.extraDays !== 0);
   const discountedGone = gone.find((w) => w.discountTetri > 0);
   let refusal: PickupDatePlan['refusal'] = null;
   if (future) refusal = { code: 'pickup_date_future' };

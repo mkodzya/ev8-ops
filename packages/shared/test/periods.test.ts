@@ -199,7 +199,8 @@ describe('a week made longer (ADR-0041)', () => {
     // Nought: the week as it was.
     expect(weekShiftPlan({ startsOn: '2026-10-08', days: 0, weeklyRateTetri: 15000 })).toMatchObject({ endsOn: '2026-10-14', lengthDays: 7, nextStartsOn: '2026-10-15', suggestedExtraTetri: 0 });
     expect(() => weekShiftPlan({ startsOn: '2026-10-08', days: 7, weeklyRateTetri: 15000 })).toThrow();
-    expect(() => weekShiftPlan({ startsOn: '2026-10-08', days: -1, weeklyRateTetri: 15000 })).toThrow();
+    // Shorter is a move too since 23.10.2026 (pay-day-move.test.ts); seven days off is no week at all.
+    expect(() => weekShiftPlan({ startsOn: '2026-10-08', days: -7, weeklyRateTetri: 15000 })).toThrow();
     expect(() => weekShiftPlan({ startsOn: '2026-10-08', days: 1.5, weeklyRateTetri: 15000 })).toThrow();
   });
 

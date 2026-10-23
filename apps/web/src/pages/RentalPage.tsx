@@ -1,6 +1,6 @@
 import type { ActKind, DepositStatus, MoneyChange, PeriodPayStatus, PickupDateRefusal, RentalStatus, WeekDue } from '@ev8/shared';
 import { useEffect, useState } from 'react';
-import { MAX_SHIFT_DAYS, isISODate, isoWeekday, parseGel, shiftDaysOffered, todayISO, waOffered, weekDue, weekShiftPlan, type VehicleState } from '@ev8/shared';
+import { MAX_SHIFT_DAYS, isISODate, isoWeekday, parseGel, shiftDaysOffered, shiftMoneyTetri, shorterEndsBeforeToday, todayISO, waOffered, weekDue, weekShiftPlan, type VehicleState } from '@ev8/shared';
 import { MoneyChangeView, type ChargeName, type MovedPayment } from '../components/MoneyChange.js';
 import { DocumentRow, signedAtText, type DocState } from '../components/Documents.js';
 import { KommoField } from '../components/Kommo.js';
@@ -70,7 +70,7 @@ export interface RentalCard {
     /** The weekday the rent is due on, ISO 1–7; null — the pickup's weekday (ADR-0022). */
     payWeekday: number | null;
     payOffsetDays: number;
-    /** The days its weeks were made longer, and the day they run from now (ADR-0041); absent while an older API answers. */
+    /** The days its weeks were made longer — below nought, shorter — and the day they run from now (ADR-0041); absent while an older API answers. */
     weekShiftDays?: number;
     weeksFromOn?: string | null;
     /** The day the next rent is due, for a running rental. */
@@ -105,7 +105,10 @@ export interface RentalCard {
     /** Taken off by an owner, with a reason (migration 0040); absent while an older API answers. */
     discountTetri?: number;
     discountReason?: string | null;
-    /** Made longer by an owner: the days, what they cost, why (ADR-0041); absent while an older API answers. */
+    /**
+     * Made longer: the days, what they cost, why (ADR-0041); made shorter (addendum of
+     * 23.10.2026): the days lost and the discount, both below nought. Absent while an older API answers.
+     */
     extraDays?: number;
     extraTetri?: number;
     shiftReason?: string | null;
@@ -173,18 +176,22 @@ export function RentalPage() {
   const swappable = open && !!r.vehicle && can('rental.create') && can('rental.return');
   // The mopeds it had before the one it has, newest first (ADR-0040).
   const earlier = (r.mopeds ?? []).slice(0, -1).reverse();
-  // Its weeks were made longer (ADR-0041): they start on another weekday than the pickup's.
-  const moved = (r.weekShiftDays ?? 0) > 0;
-  // Only the last week of a running rental is made longer (ADR-0041).
+  // Its weeks were made longer or shorter (ADR-0041): they start on another weekday than the pickup's.
+  const moved = (r.weekShiftDays ?? 0) !== 0;
+  // Only the last week of a running rental is moved (ADR-0041) — by an owner, and since
+  // Mika's «А» of 23.10.2026 by a manager too (issue #12).
   const running = !r.returnedOn && (r.storedStatus === 'active' || r.storedStatus === 'overdue');
   const lastSeq = data.periods.reduce((n, p) => Math.max(n, p.seq), 0);
+  const canShift = can('rental.week.shift');
   const weekActions = (p: RentalCard['periods'][number]) => [
-    ...(!p.paidBeforeTransfer && (p.paidTetri < p.amountTetri || (p.discountTetri ?? 0) > 0) ? [{ key: 'discount', label: t.rental.discount, onPick: () => setDiscounting(p) }] : []),
-    // A week at nothing is not made longer; one moved already can always have its move changed or taken back.
-    ...(running && p.seq === lastSeq && !p.paidBeforeTransfer && ((p.extraDays ?? 0) > 0 || p.amountTetri - (p.extraTetri ?? 0) > 0)
+    ...(owner && !p.paidBeforeTransfer && (p.paidTetri < p.amountTetri || (p.discountTetri ?? 0) > 0) ? [{ key: 'discount', label: t.rental.discount, onPick: () => setDiscounting(p) }] : []),
+    // A week at nothing is not moved; one moved already can always have its move changed or taken back.
+    ...(canShift && running && p.seq === lastSeq && !p.paidBeforeTransfer && ((p.extraDays ?? 0) !== 0 || p.amountTetri - (p.extraTetri ?? 0) > 0)
       ? [{ key: 'shift', label: t.weekShift.action, onPick: () => setShifting(p) }]
       : []),
   ];
+  // The weeks' «⋯»: whoever may discount a week or move one.
+  const weekMenu = owner || canShift;
   const menu = [
     ...(open && can('rental.create') ? [{ key: 'edit', label: t.rentalMenu.edit, onPick: () => setSheet('edit') }] : []),
     // The true day of hand-over, an owner's, beside the pay day in «Change terms» (ADR-0044 §1).
@@ -545,7 +552,7 @@ export function RentalPage() {
                   <th className="num">{t.rental.amount}</th>
                   <th className="num">{t.rental.paid}</th>
                   <th>{t.fleet.state}</th>
-                  {owner && <th aria-label={t.shell.openActions} />}
+                  {weekMenu && <th aria-label={t.shell.openActions} />}
                 </tr>
               </thead>
               <tbody>
@@ -568,16 +575,21 @@ export function RentalPage() {
                             <span className="nobr">{t.rental.discountShort(formatGel(p.discountTetri ?? 0, { decimals: false }))}</span>
                           </span>
                         )}
-                        {(p.extraDays ?? 0) > 0 && (
+                        {(p.extraDays ?? 0) !== 0 && (
                           <span className="muted cell-note">
                             <span className="nobr">{t.weekShift.shortDays(p.extraDays ?? 0)}&nbsp;·</span>{' '}
-                            <span className="nobr">{t.weekShift.shortExtra(formatGel(p.extraTetri ?? 0, { decimals: false }))}</span>
+                            {/* A shorter week keeps its discount below nought (addendum of 23.10.2026): said as a discount. */}
+                            <span className="nobr">
+                              {(p.extraTetri ?? 0) < 0
+                                ? t.weekShift.shortLess(formatGel(-(p.extraTetri ?? 0), { decimals: false }))
+                                : t.weekShift.shortExtra(formatGel(p.extraTetri ?? 0, { decimals: false }))}
+                            </span>
                           </span>
                         )}
                       </td>
                       <td className="num mono">{formatGel(p.paidTetri, { decimals: false })}</td>
                       <WeekState kind={weekKind(p)} partPaid={p.paidTetri > 0} overdue={r.status === 'overdue'} />
-                      {owner && <td>{actions.length > 0 && <RowMenu actions={actions} />}</td>}
+                      {weekMenu && <td>{actions.length > 0 && <RowMenu actions={actions} />}</td>}
                     </tr>
                   );
                 })}
@@ -760,7 +772,7 @@ function RentalEdit({ rental, owner, onClose, onSaved }: { rental: RentalCard['r
   // pickup's, or the one they moved to (ADR-0041). An owner's, with a reason.
   const weeksFrom = rental.weeksFromOn ?? rental.pickedUpOn;
   const pickupDay = weeksFrom ? isoWeekday(weeksFrom) : null;
-  const moved = (rental.weekShiftDays ?? 0) > 0;
+  const moved = (rental.weekShiftDays ?? 0) !== 0;
   const initial = {
     payDay: String(rental.payWeekday ?? pickupDay ?? ''),
     payReason: '',
@@ -938,21 +950,25 @@ function DiscountSheet({ rentalId, week, onClose, onDone }: { rentalId: string; 
 }
 
 /**
- * "Сдвинуть неделю" — an owner makes the running week 1–6 days longer, for an
- * extra a person types, with a reason (ADR-0041; the courier of 21.10.2026 who
- * paid three days late with the three days on top). The choice is the day the
- * next week starts; the suggestion is rate ÷ 7 × days, and the sheet says what
- * the week becomes and when the next one is due. On a week already moved, the
- * days start where they are, and «not moved» takes the move back.
+ * "Сдвинуть неделю" — the running week made 1–6 days longer, for an extra a
+ * person types, with a reason (ADR-0041; the courier of 21.10.2026 who paid
+ * three days late with the three days on top) — or, since Mika's «А» of
+ * 23.10.2026 (issue #12), 1–6 days shorter for a discount, never ending
+ * before today; an owner's and a manager's. The choice is the day the next
+ * week starts; the suggestion is rate ÷ 7 × days, and the sheet says what the
+ * week becomes, when the next one is due, and what of the money paid on it
+ * becomes rent credit. On a week already moved, the days start where they
+ * are, and «not moved» takes the move back.
  */
 function ShiftSheet({ rental, week, onClose, onDone }: { rental: RentalCard['rental']; week: RentalCard['periods'][number]; onClose: () => void; onDone: () => void }) {
   const t = useT();
+  const today = todayISO();
   const had = week.extraDays ?? 0;
   const plan = (days: number) => weekShiftPlan({ startsOn: week.startsOn, days, weeklyRateTetri: rental.weeklyRateTetri, payOffsetDays: rental.payOffsetDays });
-  const gel = (tetri: number) => String(tetri / 100);
+  const gel = (tetri: number) => String(Math.abs(tetri) / 100);
   // Offered first: the days he is late today, from the week's pay day — the
   // next pay day a week after the day he paid. A week already moved keeps its own.
-  const offered = shiftDaysOffered({ startsOn: week.startsOn, payOffsetDays: rental.payOffsetDays, today: todayISO() });
+  const offered = shiftDaysOffered({ startsOn: week.startsOn, payOffsetDays: rental.payOffsetDays, today });
   const guess = had || offered.days;
   // The sheet says why it offers that day, where the reason holds (ux.md №15).
   const guessed = had === 0 && offered.exact;
@@ -960,18 +976,27 @@ function ShiftSheet({ rental, week, onClose, onDone }: { rental: RentalCard['ren
   const [f, setF] = useState(initial);
   const days = Number(f.days);
   const p = plan(days);
-  const price = week.amountTetri - (week.extraTetri ?? 0) + (days === 0 ? 0 : (parseGel(f.extra) ?? 0));
+  // The money kept with the days' sign: on top for days gained, off for days lost.
+  const price = week.amountTetri - (week.extraTetri ?? 0) + shiftMoneyTetri(days, parseGel(f.extra) ?? 0);
+  // Paid above the new price: that much becomes rent credit (addendum of 23.10.2026).
+  const overPaid = week.paidTetri - Math.max(0, price);
   // Weekdays inside a sentence, Sunday first.
   const weekday = (date: string) => t.calendar.weekdaysIn[isoWeekday(date) % 7];
   // A pay day of its own falls inside the week: its date too, so the choice
   // can be checked against the day he paid.
   const nextPayDay = p.nextDueOn === p.nextStartsOn ? weekday(p.nextDueOn) : [weekday(p.nextDueOn), fmtDayMonth(p.nextDueOn)].join(', ');
-  const choices = Array.from({ length: MAX_SHIFT_DAYS + 1 }, (_, n) => n).filter((n) => n !== 0 || had !== 0);
+  // Shorter first, in the order of the days: a shorter week never ends before today. A week moved
+  // already keeps its own move among them, and «not moved» to take it back.
+  const choices = Array.from({ length: MAX_SHIFT_DAYS * 2 + 1 }, (_, i) => i - MAX_SHIFT_DAYS).filter((n) =>
+    had !== 0 && (n === had || n === 0) ? true : n !== 0 && !shorterEndsBeforeToday(n, plan(n).endsOn, today),
+  );
   const pick = (value: string) => {
     // A suggestion left as it was follows the days; a sum typed by hand stays.
     const extra = f.extra === gel(plan(days).suggestedExtraTetri) ? gel(plan(Number(value)).suggestedExtraTetri) : f.extra;
     setF({ ...f, days: value, extra });
   };
+  const rate = formatGel(rental.weeklyRateTetri, { decimals: false });
+  const suggested = formatGel(p.suggestedExtraTetri, { decimals: false });
   return (
     <FormSheet
       title={t.weekShift.title(week.seq, fmtDate(week.startsOn), fmtDate(week.endsOn))}
@@ -1002,8 +1027,8 @@ function ShiftSheet({ rental, week, onClose, onDone }: { rental: RentalCard['ren
       </Field>
       {days !== 0 && (
         <Field
-          label={t.weekShift.extra}
-          hint={t.weekShift.extraHint(formatGel(rental.weeklyRateTetri, { decimals: false }), days, formatGel(p.suggestedExtraTetri, { decimals: false }))}
+          label={days > 0 ? t.weekShift.extra : t.weekShift.less}
+          hint={days > 0 ? t.weekShift.extraHint(rate, days, suggested) : t.weekShift.lessHint(rate, -days, suggested)}
           name="extraTetri"
         >
           <input className="input mono" inputMode="decimal" value={f.extra} onChange={(e) => setF({ ...f, extra: e.target.value })} />
@@ -1016,6 +1041,7 @@ function ShiftSheet({ rental, week, onClose, onDone }: { rental: RentalCard['ren
         {days === 0 ? t.weekShift.undo : t.weekShift.summary(week.seq, fmtDayMonth(week.startsOn), fmtDayMonth(p.endsOn), p.lengthDays, formatGel(price, { decimals: false }))}{' '}
         {t.weekShift.next(fmtDayMonth(p.nextStartsOn), weekday(p.nextStartsOn), nextPayDay)}
       </p>
+      {overPaid > 0 && <p className="hint">{t.weekShift.toCredit(formatGel(week.paidTetri), formatGel(overPaid))}</p>}
     </FormSheet>
   );
 }

@@ -64,6 +64,12 @@ describe('route table', () => {
       'POST /api/workshop/devices/:id/revoke',
       'POST /api/workshops',
     ]);
+    // Moving a renter's latest week was an owner's (deposit.decide, ADR-0041); since Mika's «А» of
+    // 23.10.2026 (issue #12) it has a right of its own that a manager has too — this route and no other.
+    const weekShift = app.routeTable.filter((r) => r.scope === 'rental.week.shift').map((r) => `${r.method} ${r.url}`);
+    expect(weekShift).toEqual(['POST /api/rentals/:id/weeks/:seq/shift']);
+    // «Разнести», which moves the week with a bank line, stays the owners': the queue is theirs.
+    expect(app.routeTable.find((r) => r.method === 'POST' && r.url === '/api/statement-lines/:id/split')?.scope).toBe('payments.reconcile');
     const publicOnes = app.routeTable.filter((r) => r.scope === 'public').map((r) => r.url).sort();
     // The jobs are public to the session guard and closed by the worker token (routes/jobs.ts).
     // The PIN sign-in and the tablet's list of names are closed by the tablet's own token (ADR-0033).

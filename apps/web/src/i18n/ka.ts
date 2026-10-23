@@ -12,6 +12,7 @@ import { bankApiKa } from './bank-api.js';
 import { calendarKa } from './payments-calendar.js';
 import { payDayKa } from './pay-day.js';
 import { weekShiftKa } from './week-shift.js';
+import { payDayMoveKa } from './pay-day-move.js';
 import { workshopKa } from './workshop.js';
 import { workshopJobsKa } from './workshop-jobs.js';
 import { workshopApprovalKa } from './workshop-approval.js';
@@ -1358,8 +1359,8 @@ export const ka: Dict = {
       same_state: 'მოპედი უკვე ამ სტატუსშია.',
       same_vehicle: 'ეს მოპედი უკვე კლიენტთანაა. აირჩიეთ სხვა.',
       service_not_found: 'ასეთი შეკეთება არ არის.',
-      shift_days_range: 'კვირა 1–6 დღით გრძელდება. კიდევ 7 დღე — უბრალოდ შემდეგი კვირაა.',
-      shift_over_paid: 'კვირისთვის ამდენი უკვე გადახდილია: გადახდილზე იაფი ვერ გახდება.',
+      shift_days_range: 'კვირა 1–6 დღით გრძელდება ან მოკლდება. კიდევ 7 დღე — უბრალოდ შემდეგი კვირაა.',
+      shift_older_week_open: 'ჯერ მიმდინარე კვირა გადაიხადეთ: წინა კვირაზე ჯერ კიდევ ვალია, გადაიწევა კი მხოლოდ ბოლო.',
       sold_by_sale: 'მოპედი იყიდება გაყიდვით და ბრუნდება უკან შესყიდვით.',
       split_bad_amount: 'თითოეულ ნაწილს ნულზე მეტი თანხა უნდა ჰქონდეს.',
       split_bad_target: 'თითო ნაწილი ზუსტად ერთ ჩანაწერს იხდის.',
@@ -1408,8 +1409,10 @@ export const ka: Dict = {
       vin_or_note: 'აირჩიეთ მოპედი პარკიდან ან დაწერეთ, რატომ არ არის VIN დადასტურებული.',
       vins_count: 'ხაზში VIN-ების რაოდენობა არ ემთხვევა შეკვეთილს. შეამოწმეთ ყოველი ხაზი.',
       vins_missing: 'ხაზში VIN-ები არ არის. ყოველი მოდელისთვის ჩაწერეთ თითო VIN თითო სტრიქონზე.',
-      week_at_nothing: 'ეს კვირა არაფერი ღირს — გასაგრძელებელი არაფერია.',
+      week_at_nothing: 'ეს კვირა არაფერი ღირს — გადასაწევი არაფერია.',
+      week_ends_before_today: 'შემოკლებული კვირა დღევანდელზე ადრე ვერ დასრულდება. აირჩიეთ ნაკლები დღე.',
       week_has_bank_money: 'ამ კვირას ბანკის თანხა უკვე აქვს.',
+      week_moved_already: 'კვირა უკვე გადაწეულია — გადაწევა ქირაობის ბარათში შეასწორეთ.',
       week_not_carried: 'ეს კვირა EV8 Ops-მდე გადახდილად არ არის მონიშნული.',
       week_not_found: 'ასეთი კვირა ამ ქირაობაში არ არის.',
       week_not_last: 'გადაიწევა მხოლოდ ბოლო კვირა: შემდეგი უკვე დაიწყო.',
@@ -1436,6 +1439,7 @@ export const ka: Dict = {
   ...calendarKa,
   ...payDayKa,
   ...weekShiftKa,
+  ...payDayMoveKa,
   ...workshopKa,
   ...workshopJobsKa,
   ...workshopApprovalKa,

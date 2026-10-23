@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { addDays } from '@ev8/shared';
+import { MAX_SHIFT_DAYS, addDays, isShiftDays, shiftMoneyTetri } from '@ev8/shared';
 import type { Prisma } from '../../generated/prisma/client.js';
 import { badRequest, conflict, notFound } from '../errors.js';
 import { dateFromISO, isoDate } from '../dates.js';
@@ -7,6 +7,7 @@ import { prisma } from '../db.js';
 import { recomputeRental, recordPaymentTx } from '../payments.js';
 import { serviceOwed } from '../money.js';
 import { goodsOwed } from '../goods.js';
+import { shiftWeekTx } from '../weekShift.js';
 import { cardOf, parseStatement, type ParsedLine } from './parse.js';
 import { decide, lineGross, loadCtx, type Ctx, type Decision, type Line } from './reconcile.js';
 import { expenseKey, liveRules, sortByRule } from './expenses.js';
@@ -399,6 +400,8 @@ async function paymentOf(
   money: { channel: 'transfer' | 'acquiring'; grossTetri: number; feeTetri: number },
   target: LineTarget,
   part: number,
+  /** What the part was for, in words: the reason of a move of the pay day (issue #12). */
+  note: string | null = null,
 ): Promise<string> {
   if (target.chargeId || target.carriedPeriodId) return placedPayment(tx, actorId, line, money, target, part);
   if (target.goodsSaleId) {
@@ -460,7 +463,7 @@ async function paymentOf(
     rentalId: target.rentalId ?? null,
     saleId: target.saleId ?? null,
     bankText: line.raw.slice(0, 500),
-    note: null,
+    note,
     source: 'statement',
     statementLineId: line.id,
     statementPart: part,
@@ -508,6 +511,22 @@ export async function attach(
 export const SPLIT_MAX = 9;
 
 /**
+ * «Перенос дня оплаты» in «Разнести» (issue #12 of the director, Mika's «А» of
+ * 23.10.2026; ADR-0041, addendum): the renter's latest week moved by the pay
+ * day he asked for, in the same transaction as the line's payments. `days`
+ * above nought — longer, and `extraTetri` is money of the line, written as a
+ * rent payment of its own after the move; below nought — shorter, and
+ * `extraTetri` is the discount, no money of the line.
+ */
+export interface SplitShift {
+  rentalId: string;
+  seq: number;
+  days: number;
+  extraTetri: number | null;
+  reason: string | null;
+}
+
+/**
  * One line, several records (meeting of 14.10.2026: one transfer for a rental
  * week and a repair). The parts are what the customer paid and add up to the
  * line's whole; on a card line the acquirer's fee is shared in proportion, the
@@ -518,12 +537,25 @@ export const SPLIT_MAX = 9;
  */
 export async function split(
   tx: Tx,
-  input: { actorId: string; lineId: string; parts: (LineTarget & NewFine & { grossTetri: number })[] },
+  input: { actorId: string; lineId: string; parts: (LineTarget & NewFine & { grossTetri: number })[]; shift?: SplitShift | null; today?: string },
 ): Promise<{ paymentIds: string[] }> {
   const line = await incomingLine(tx, input.lineId);
   const parts = input.parts;
-  if (parts.length < 2) throw badRequest('split_needs_two', 'A split has at least two parts.');
+  const shift = input.shift ?? null;
+  // A move of the pay day is one more thing the line writes: with it, one
+  // part of money is enough — or none, when the line is the move's money
+  // alone. The sum below still asks the line to be placed whole.
+  if (!shift && parts.length < 2) throw badRequest('split_needs_two', 'A split has at least two parts.');
   if (parts.length > SPLIT_MAX) throw badRequest('split_too_many', `A split has at most ${SPLIT_MAX} parts.`);
+  if (shift) {
+    if (!isShiftDays(shift.days) || shift.days === 0) {
+      throw badRequest('shift_days_range', `A week is made 1 to ${MAX_SHIFT_DAYS} days longer or shorter.`, { field: 'days' });
+    }
+    if (shift.extraTetri == null) throw badRequest('missing_field', 'Say what the days are worth.', { field: 'extraTetri' });
+    if (!shift.reason) throw badRequest('missing_field', 'Say why the week is moved.', { field: 'reason' });
+  }
+  // A longer week's extra is money of the line; a shorter week's discount is not.
+  const shiftMoney = shift && shift.days > 0 ? shift.extraTetri ?? 0 : 0;
   const keys = new Set<string>();
   for (const p of parts) {
     if (!Number.isInteger(p.grossTetri) || p.grossTetri <= 0) throw badRequest('split_bad_amount', 'Every part is a sum above zero.', { field: 'grossTetri' });
@@ -547,7 +579,7 @@ export async function split(
     keys.add(key);
   }
   const money = moneyOf(line);
-  const sum = parts.reduce((n, p) => n + p.grossTetri, 0);
+  const sum = parts.reduce((n, p) => n + p.grossTetri, 0) + shiftMoney;
   if (sum !== money.grossTetri) {
     throw badRequest('split_sum', 'The parts must add up to the whole line.', { lineTetri: money.grossTetri, partsTetri: sum });
   }
@@ -572,7 +604,23 @@ export async function split(
     }
   }
 
+  if (shift) {
+    // Only the latest week, and only once the weeks before it are paid: a
+    // line that pays an older week leaves the move for later (issue #12 —
+    // «сначала оплатите текущую неделю»). In «Разнести» the move is counted
+    // from the week as it is; a week moved already is changed on its card.
+    const older = await tx.rentalPeriod.count({ where: { rentalId: shift.rentalId, seq: { lt: shift.seq }, payStatus: { not: 'paid' } } });
+    if (older > 0) throw conflict('shift_older_week_open', 'An older week is still owed: the latest one is moved once it is paid.', { field: 'days' });
+    const week = await tx.rentalPeriod.findUnique({ where: { rentalId_seq: { rentalId: shift.rentalId, seq: shift.seq } }, select: { extraDays: true } });
+    if (week && week.extraDays !== 0) throw conflict('week_moved_already', 'This week was moved already: change the move on the rental card.', { field: 'days' });
+  }
+
   await claim(tx, line.id, 'split');
+  // The move first, so the week costs what the line pays for it: 150 + 20 = 170 (issue #12).
+  if (shift) {
+    if (!input.today) throw new Error('a split that moves a week needs today');
+    await shiftWeekTx(tx, { actorId: input.actorId, rentalId: shift.rentalId, seq: shift.seq, days: shift.days, extraTetri: shift.extraTetri, reason: shift.reason, today: input.today });
+  }
   // A fine typed into the split is charged here, in the same transaction as
   // its payment: it exists only if the money that pays it is written too.
   for (const p of parts) {
@@ -586,13 +634,18 @@ export async function split(
     p.chargeId = fine.id;
     p.fineRentalId = null;
   }
+  // The longer week's extra is the last part: a rent payment of its own, with the move's reason in words.
+  const written: (LineTarget & { grossTetri: number; note?: string | null; shift?: true })[] = [
+    ...parts,
+    ...(shift && shiftMoney > 0 ? [{ rentalId: shift.rentalId, grossTetri: shiftMoney, note: shift.reason, shift: true as const }] : []),
+  ];
   const paymentIds: string[] = [];
   let feeLeft = money.feeTetri;
-  for (const [i, p] of parts.entries()) {
-    const last = i === parts.length - 1;
+  for (const [i, p] of written.entries()) {
+    const last = i === written.length - 1;
     const fee = last ? feeLeft : Math.floor((money.feeTetri * p.grossTetri) / money.grossTetri);
     feeLeft -= fee;
-    paymentIds.push(await paymentOf(tx, input.actorId, line, { channel: money.channel, grossTetri: p.grossTetri, feeTetri: fee }, p, i + 1));
+    paymentIds.push(await paymentOf(tx, input.actorId, line, { channel: money.channel, grossTetri: p.grossTetri, feeTetri: fee }, p, i + 1, p.note ?? null));
   }
   await tx.statementLine.update({ where: { id: line.id }, data: { paymentId: paymentIds[0] } });
   await tx.auditLog.create({
@@ -603,7 +656,7 @@ export async function split(
       entityId: line.id,
       after: {
         paymentIds,
-        parts: parts.map((p) => ({
+        parts: written.map((p) => ({
           grossTetri: p.grossTetri,
           rentalId: p.rentalId ?? null,
           saleId: p.saleId ?? null,
@@ -612,7 +665,10 @@ export async function split(
           customerId: p.customerId ?? null,
           chargeId: p.chargeId ?? null,
           carriedPeriodId: p.carriedPeriodId ?? null,
+          ...(p.shift ? { shift: true } : {}),
         })),
+        // The pay day moved with the line (issue #12): the week, the days, the money with the days' sign.
+        ...(shift ? { shift: { rentalId: shift.rentalId, seq: shift.seq, days: shift.days, extraTetri: shiftMoneyTetri(shift.days, shift.extraTetri ?? 0) } } : {}),
       },
     },
   });

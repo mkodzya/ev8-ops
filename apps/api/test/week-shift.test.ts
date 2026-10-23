@@ -279,7 +279,7 @@ describe.skipIf(!HAS_DB)('a rental week made longer (ADR-0041)', () => {
     expect((await call(r.owner, 'GET', url).then((res) => json<Signed>(res))).documents.contract.signedElsewhere).toBeNull();
 
     // On the new moped the week is still the last one, and its move is changed as before
-    // (for the same 64: the week cannot become cheaper than the 214 paid on it).
+    // (for the same 64, so the 214 paid on it stay on it and nothing becomes credit).
     const again = await shift(r.owner, r.id, 2, { days: 2, extraTetri: '64', reason: 'test: two days for the same money' });
     expect(again.statusCode, again.body).toBe(200);
     expect((await card(r.owner, r.id)).rental).toMatchObject({ weekShiftDays: 2, weeksFromOn: addDays(t, -8), paidThrough: addDays(t, 5), vehicle: { id: fresh.id } });
@@ -290,16 +290,18 @@ describe.skipIf(!HAS_DB)('a rental week made longer (ADR-0041)', () => {
     expect(entries.find((e) => e.seq === 3)).toMatchObject({ dueOn: addDays(t, 6), projected: true });
   });
 
-  it('refuses: a manager, no reason, days out of range, no price, a week not there or not the last', async () => {
+  it('refuses: no reason, days out of range, no price, a week not there or not the last', async () => {
     const r = await running(10);
-    const manager = await loginAs('manager');
-    expect((await shift(manager, r.id, 2, { days: 3, extraTetri: '64', reason: REASON })).statusCode).toBe(403);
+    // A mechanic has no rental to move (a manager does since 23.10.2026 — pay-day-in-sort.test.ts).
+    const mechanic = await loginAs('mechanic');
+    expect((await shift(mechanic, r.id, 2, { days: 3, extraTetri: '64', reason: REASON })).statusCode).toBe(403);
 
     const noReason = await shift(r.owner, r.id, 2, { days: 3, extraTetri: '64' });
     expect(noReason.statusCode).toBe(400);
     expect(err(noReason)).toMatchObject({ error: 'missing_field', field: 'reason' });
 
-    for (const days of [7, -1]) {
+    // Seven days either way is no move: the next week, or no week at all.
+    for (const days of [7, -7]) {
       const res = await shift(r.owner, r.id, 2, { days, extraTetri: '64', reason: REASON });
       expect(res.statusCode, String(days)).toBe(400);
       expect(err(res)).toMatchObject({ error: 'shift_days_range', field: 'days' });
@@ -319,15 +321,28 @@ describe.skipIf(!HAS_DB)('a rental week made longer (ADR-0041)', () => {
     expect(await r.prisma.auditLog.count({ where: { entityType: 'rental', entityId: r.id, action: 'rental.week.shift' } })).toBe(0);
   });
 
-  it('refuses to make a week cheaper than what is paid on it', async () => {
+  it('a week made cheaper than what is paid on it gives the rest back as credit, for the next week (addendum of 23.10.2026)', async () => {
     const r = await running(10);
-    await pay(r.owner, r.id, 21400);
+    const t = today();
+    const paid = await pay(r.owner, r.id, 21400);
     expect((await shift(r.owner, r.id, 2, { days: 3, extraTetri: '64', reason: REASON })).statusCode).toBe(200);
-    for (const body of [{ days: 3, extraTetri: 0 }, { days: 0 }]) {
-      const res = await shift(r.owner, r.id, 2, { ...body, reason: REASON });
-      expect(res.statusCode).toBe(409);
-      expect(err(res).error).toBe('shift_over_paid');
-    }
+    // The same three days for nothing: the week is 150 again, and the 64 paid for them are the customer's credit.
+    const free = await shift(r.owner, r.id, 2, { days: 3, extraTetri: 0, reason: 'test: the days given free after all' });
+    expect(free.statusCode, free.body).toBe(200);
+    expect(json(free)).toMatchObject({ amountTetri: 15000, freedTetri: 6400 });
+    expect(weekNo(await card(r.owner, r.id), 2)).toMatchObject({ amountTetri: 15000, paidTetri: 15000, payStatus: 'paid', extraDays: 3, extraTetri: 0 });
+    const { id: paymentId } = json<{ id: string }>(paid);
+    const placed = async () => (await r.prisma.paymentAllocation.aggregate({ where: { paymentId }, _sum: { amountTetri: true } }))._sum.amountTetri ?? 0;
+    expect(await placed()).toBe(15000);
+    const log = await r.prisma.auditLog.findFirst({ where: { entityType: 'rental', entityId: r.id, action: 'rental.week.shift' }, orderBy: { createdAt: 'desc' } });
+    expect(log?.after).toMatchObject({ amountTetri: 15000, freedTetri: 6400 });
+
+    // The night the next week begins, the 64 go onto it.
+    const { openWeeks, settleCredit } = await import('../src/lib/periods.js');
+    expect(await openWeeks(r.id, addDays(t, 7))).toBe(1);
+    await settleCredit(r.id);
+    expect(weekNo(await card(r.owner, r.id), 3)).toMatchObject({ startsOn: addDays(t, 7), amountTetri: 15000, paidTetri: 6400, payStatus: 'partial' });
+    expect(await placed()).toBe(21400);
   });
 
   it('only a running rental: not paused, disputed or returned; not a week at nothing; not a week paid before the transfer', async () => {

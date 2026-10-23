@@ -12,6 +12,10 @@ export const PERMISSIONS = [
   'fleet.pool.set', // move a moped between the rental and the sale park (ADR-0005)
   'rental.create', // hand-over wizard (RNT-01)
   'rental.return', // return wizard (RNT-04)
+  // Make the latest week longer or shorter, with a reason (ADR-0041): an
+  // owner's from 21.10.2026, a manager's too since Mika's «А» of 23.10.2026
+  // (issue #12) — the journal keeps who and why, and an owner takes it back.
+  'rental.week.shift',
   'customer.create',
   'customer.documents.view', // ID and licence photos, the personal number (CST-03)
   'cash.record', // take cash from a customer (PAY-05)
@@ -42,11 +46,25 @@ export type Permission = (typeof PERMISSIONS)[number];
 
 /**
  * A manager hands mopeds over and takes them back, opens a customer, takes
- * cash, says where a moped stands and sells goods over the counter (ADR-0045). Deciding a deposit, repairs, money
- * beyond their own cash, cost, purchases, reports and settings are the
- * owners' (redesign blueprint §2.1, Mika 17.09.2026).
+ * cash, says where a moped stands and sells goods over the counter (ADR-0045),
+ * and moves a renter's latest week when his pay day moves (ADR-0041, addendum
+ * of 23.10.2026). Deciding a deposit, repairs, money beyond their own cash,
+ * cost, purchases, reports and settings are the owners' (redesign blueprint
+ * §2.1, Mika 17.09.2026).
  */
-const MANAGER: Permission[] = ['fleet.view', 'fleet.location.set', 'fleet.state.manual', 'rental.create', 'rental.return', 'customer.create', 'cash.record', 'service.report', 'service.view', 'goods.sell'];
+const MANAGER: Permission[] = [
+  'fleet.view',
+  'fleet.location.set',
+  'fleet.state.manual',
+  'rental.create',
+  'rental.return',
+  'rental.week.shift',
+  'customer.create',
+  'cash.record',
+  'service.report',
+  'service.view',
+  'goods.sell',
+];
 
 /**
  * A mechanic opens, carries and closes their own repairs and sees no one
