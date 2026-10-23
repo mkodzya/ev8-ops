@@ -368,6 +368,8 @@ export interface Reason {
   netTetri?: number;
   day?: string;
   channel?: 'acquiring' | 'transfer' | null;
+  /** A goods sale to a retail buyer: `name` is what he gave, if anything. */
+  retail?: boolean;
 }
 
 export function decide(line: Line, ctx: Ctx): Decision {
@@ -527,7 +529,7 @@ export function suggest(line: Line, ctx: Ctx): { group: 'recorded' | 'suggested'
       retail: g.customerId == null,
       amountTetri: g.openTetri,
       occurredOn: g.soldOn,
-      reason: { code: 'goods', number: g.number, debtTetri: g.openTetri, day: g.soldOn, channel: g.promisedChannel },
+      reason: { code: 'goods', number: g.number, debtTetri: g.openTetri, day: g.soldOn, channel: g.promisedChannel, ...(g.customer ? { name: g.customer } : {}), retail: g.customerId == null },
     });
     const sameSum = ctx.goods.filter((g) => !seen.has(g.id) && g.openTetri === gross);
     const promised = (g: GoodsCand) => (g.promisedChannel != null && g.promisedChannel === line.channel ? 0 : 1);

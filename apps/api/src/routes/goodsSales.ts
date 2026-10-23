@@ -14,7 +14,7 @@ import { hasPerm } from '../lib/auth.js';
 import { dateFromISO, dayOf, isoDate } from '../lib/dates.js';
 import { prisma } from '../lib/db.js';
 import { ApiError, badRequest, conflict, notFound } from '../lib/errors.js';
-import { cancelGoodsSale, cancelPreview, createGoodsSale, previewGoodsSale, type GoodsLineInput, type GoodsSaleInput, type PaidNow } from '../lib/goods.js';
+import { UNDONE_AT_ONCE, cancelGoodsSale, cancelPreview, createGoodsSale, previewGoodsSale, type GoodsLineInput, type GoodsSaleInput, type PaidNow } from '../lib/goods.js';
 import { actorOf } from '../lib/guard.js';
 import { inBankAlready } from '../lib/statements/inBank.js';
 import { partRows } from '../lib/stock.js';
@@ -250,7 +250,9 @@ export function goodsSaleRoutes(app: FastifyInstance): void {
         createdAt: s.createdAt.toISOString(),
         cancelledAt: s.cancelledAt?.toISOString() ?? null,
         cancelledBy: s.cancelledBy?.name ?? null,
-        cancelReason: s.cancelReason,
+        // The seller's own undo carries no words of a person's: the screen says «отменено сразу».
+        cancelReason: s.cancelReason === UNDONE_AT_ONCE ? null : s.cancelReason,
+        undone: s.cancelReason === UNDONE_AT_ONCE,
         totals,
         paidTetri: paid,
         openTetri: st.openTetri,
@@ -292,7 +294,7 @@ export function goodsSaleRoutes(app: FastifyInstance): void {
       })),
       documents: s.documents.map((d) => ({ id: d.id, docKind: d.docKind, createdAt: d.createdAt.toISOString() })),
       bankLines,
-      feed: log.map((l) => ({ at: l.createdAt.toISOString(), day: dayOf(l.createdAt), action: l.action, by: l.actor?.name ?? null, note: l.note, before: l.before, after: l.after })),
+      feed: log.map((l) => ({ at: l.createdAt.toISOString(), day: dayOf(l.createdAt), action: l.action, by: l.actor?.name ?? null, note: l.note === UNDONE_AT_ONCE ? null : l.note, before: l.before, after: l.after })),
       can: {
         pay: st.openTetri > 0 && hasPerm(actor, 'cash.record'),
         attach: st.openTetri > 0 && hasPerm(actor, 'payments.reconcile'),

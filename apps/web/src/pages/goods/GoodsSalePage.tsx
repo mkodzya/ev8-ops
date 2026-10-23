@@ -163,7 +163,7 @@ export function GoodsSalePage() {
         {s.customer?.phone && <Row k={t.goods.edit.phone} v={<a className="mono" href={`tel:${s.customer.phone}`}>{s.customer.phone}</a>} />}
         <Row k={t.goods.wizard.soldOn} v={<span className="mono">{fmtDate(s.soldOn)}</span>} />
         {s.backdateReason && <Row k={t.goods.wizard.backdateReason} v={s.backdateReason} />}
-        {s.createdBy && <Row k={t.goods.cols.state} v={c.soldBy(s.createdBy)} />}
+        {s.createdBy && <p className="hint muted">{c.soldBy(s.createdBy)}</p>}
         {s.notes && <Row k={c.notes} v={s.notes} />}
       </section>
 
