@@ -116,8 +116,12 @@ describe.skipIf(!HAS_DB)('a charger to a retail buyer by card (acceptance 1)', (
     const { decide, loadCtx, storedLine, suggest } = await import('../src/lib/statements/reconcile.js');
     const ctx = await loadCtx();
     expect(decide(storedLine(line), ctx)).toEqual({ type: 'queue' });
-    const hints = suggest(storedLine(line), ctx).suggestions;
-    expect(hints.find((h) => h.id === sold.id)).toMatchObject({ kind: 'goods_sale', retail: true, reason: { code: 'goods', number: sold.number, debtTetri: 100_00, channel: 'acquiring' } });
+    // The hints as this suite's own records give them: the suites share one database, and other suites' rentals of
+    // 100 handed over today would fill the eight places first. The card's rental of the day leads, the goods sale follows.
+    const mine = { ...ctx, rentals: ctx.rentals.filter((r) => r.customerId === c.id), sales: [], payments: [], bankDeposits: [], goods: ctx.goods.filter((g) => g.id === sold.id) };
+    const hints = suggest(storedLine(line), mine).suggestions;
+    expect(hints.map((h) => h.kind)).toEqual(['rental', 'goods_sale']);
+    expect(hints[1]).toMatchObject({ id: sold.id, retail: true, reason: { code: 'goods', number: sold.number, debtTetri: 100_00, channel: 'acquiring' } });
 
     const assigned = await call(owner, 'POST', `/api/statement-lines/${line.id}/assign`, { goodsSaleId: sold.id });
     expect(assigned.statusCode, assigned.body).toBe(200);
