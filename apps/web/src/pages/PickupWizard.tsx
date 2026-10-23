@@ -1,4 +1,4 @@
-import { acquiringFee, acquiringNet, addDays, CUSTOMER_SOURCES, DEFAULT_DEPOSIT_TETRI, gelFromTetri, handOverBlockTetri, parseGel, readFleetNumber, todayISO, type VehiclePool, type VehicleState } from '@ev8/shared';
+import { acquiringFee, acquiringNet, addDays, CUSTOMER_SOURCES, DEFAULT_DEPOSIT_TETRI, depositEarlierAsks, gelFromTetri, handOverBlockTetri, parseGel, readFleetNumber, todayISO, type VehiclePool, type VehicleState } from '@ev8/shared';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api, ApiError } from '../api.js';
@@ -138,6 +138,8 @@ export function PickupWizard() {
     chargers: 2,
     transfer: false,
     paidThrough: '',
+    // «Залог получен ранее» is not ticked by itself (ADR-0044 §3): the second case of issue #10 was ticked and the deposit came by the bank.
+    depositEarlier: false,
     depositBefore: gel(DEFAULT_DEPOSIT_TETRI),
     odometer: '',
     odometerReason: '',
@@ -164,6 +166,8 @@ export function PickupWizard() {
   const [progress, setProgress] = useState<string | null>(null);
   const [photoTrouble, setPhotoTrouble] = useState(false);
   const [result, setResult] = useState<{ id: string; number: string } | null>(null);
+  // Ticking «received earlier» on a recent hand-over asks first how the deposit came (ADR-0044 §3); 'after' — it came later, by the bank or in cash.
+  const [earlierAsk, setEarlierAsk] = useState<null | 'asking' | 'after'>(null);
   const op = useOperation();
 
   const drafts = useDraft({ id: 'pickup', value: f, initial, hold: result != null });
@@ -256,7 +260,8 @@ export function PickupWizard() {
   // 330. A 0 typed on purpose is a figure, as the server takes it.
   const rateTetri = parseGel(f.rate) ?? -1;
   const depositTetri = parseGel(f.deposit) ?? -1;
-  const depositBeforeTetri = parseGel(f.depositBefore) ?? -1;
+  // Not ticked: nothing received earlier, and the deposit is owed like any other.
+  const depositBeforeTetri = f.depositEarlier ? (parseGel(f.depositBefore) ?? -1) : 0;
   const amountError = (text: string) => (text.trim() === '' ? t.hand.amountMissing : parseGel(text) == null ? t.hand.amountUnread : null);
   const transfer = owner && f.transfer;
   const weeksTotal = f.pickedUpOn <= today ? Math.floor(days(f.pickedUpOn, today) / 7) + 1 : 1;
@@ -705,9 +710,50 @@ export function PickupWizard() {
                   ))}
                 </select>
               </Field>
-              <Field label={t.hand.depositBefore} name="depositReceivedTetri" error={amountError(f.depositBefore)}>
-                <input className="input input-amount mono" value={f.depositBefore} onChange={(e) => set({ depositBefore: e.target.value })} inputMode="decimal" />
-              </Field>
+              <label className="check">
+                <input
+                  type="checkbox"
+                  checked={!!f.depositEarlier}
+                  onChange={(e) => {
+                    const on = e.target.checked;
+                    // Within three weeks of the hand-over the deposit may have come with the first money: ask before ticking.
+                    if (on && depositEarlierAsks(f.pickedUpOn, today)) return setEarlierAsk('asking');
+                    setEarlierAsk(null);
+                    set({ depositEarlier: on });
+                  }}
+                />
+                <span>
+                  <b>{t.depositEarlier.tick}</b>
+                  <span className="muted"> · {t.depositEarlier.tickHint}</span>
+                </span>
+              </label>
+              {earlierAsk === 'asking' && (
+                <section className="card">
+                  <p>{t.depositEarlier.ask}</p>
+                  <p className="hint muted">{t.depositEarlier.askWhy}</p>
+                  <div className="row-actions">
+                    <button type="button" className="pill pill-sm" onClick={() => setEarlierAsk('after')}>
+                      {t.depositEarlier.cameAfter}
+                    </button>
+                    <button
+                      type="button"
+                      className="pill pill-sm"
+                      onClick={() => {
+                        setEarlierAsk(null);
+                        set({ depositEarlier: true });
+                      }}
+                    >
+                      {t.depositEarlier.cameBefore}
+                    </button>
+                  </div>
+                </section>
+              )}
+              {earlierAsk === 'after' && !f.depositEarlier && <p className="hint">{t.depositEarlier.afterHint}</p>}
+              {f.depositEarlier && (
+                <Field label={t.hand.depositBefore} name="depositReceivedTetri" error={amountError(f.depositBefore)}>
+                  <input className="input input-amount mono" value={f.depositBefore} onChange={(e) => set({ depositBefore: e.target.value })} inputMode="decimal" />
+                </Field>
+              )}
               <section className="card">
                 <Row k={t.hand.weeks} v={<span className="mono">{weeksTotal}</span>} />
                 <Row k={t.hand.paidBefore} v={<span className="mono">{paidWeeks}</span>} />

@@ -236,6 +236,16 @@ function named(t: Dict, field: string, action?: string): string | null {
   if (field === 'payWeekday' || field === 'payDay') return t.weekShift.journal.payDay;
   // A mechanic's rent link, set or taken off (0066): «Арендует мопед: — → card».
   if (field === 'renter') return t.wpay.renter;
+  // A new hand-over date and a deposit marked received earlier (ADR-0044):
+  // the dates, the weeks, the debt and «оплачено по» side by side, each by name.
+  if (action === 'rental.pickup.date') {
+    const words = t.pickupDate.journal as Record<string, string>;
+    if (field in words) return words[field];
+  }
+  if (action === 'deposit.before' || action === 'deposit.before.undo') {
+    const words = t.depositBefore.journal as Record<string, string>;
+    if (field in words) return words[field];
+  }
   // A week moved: its end, its price, the days and their extra, each by name —
   // three bare pairs of dates and numbers side by side said nothing (review, 21.10.2026).
   if (action && WEEK_SHIFT.has(action)) {

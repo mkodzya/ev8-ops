@@ -29,6 +29,7 @@ import { contractSignedKa, SIGNIFY_IN_KA } from './contract-signed.js';
 import { saleDateKa } from './sale-date.js';
 import { rentalSwapKa } from './rental-swap.js';
 import { vehicleCardKa } from './vehicle-card.js';
+import { pickupDateKa } from './pickup-date.js';
 import { goodsKa } from './goods.js';
 import type { Dict } from './en.js';
 
@@ -1373,6 +1374,17 @@ export const ka: Dict = {
       supplier_not_found: 'ასეთი მომწოდებელი არ არის.',
       swap_before_last_event: 'შეცვლის თარიღი უფრო ადრეა, ვიდრე ერთ-ერთი მოპედის ისტორიაში უკვე ჩაწერილი. აირჩიეთ უფრო გვიანი თარიღი.',
       swap_no_vehicle: 'ამ ქირას ჯერ მოპედი არ აქვს. ჯერ მიუთითეთ ის «პირობების შეცვლაში».',
+      pickup_date_future: 'გაცემის თარიღი არ შეიძლება იყოს დღევანდელზე გვიან.',
+      pickup_date_same: 'ქირაობას უკვე ეს გაცემის თარიღი აქვს. აირჩიეთ სხვა.',
+      pickup_date_week_shifted: 'ახალი თარიღით გადაწეული კვირა ჯერ არ დაიწყებოდა. ჯერ კვირის გადაწევა გააუქმეთ.',
+      pickup_date_week_discounted: 'ახალი თარიღით ფასდაკლებიანი კვირა ჯერ არ დაიწყებოდა. ჯერ ფასდაკლება მოხსენით (0 «კვირის ფასდაკლებაში»).',
+      transfer_paid_through_week_end: 'EV8 Ops-მდე «გადახდილია» ახალი თარიღებით კვირის ბოლო აღარ არის. აირჩიეთ თავიდან.',
+      pickup_before_arrival: 'მოპედი ამ თარიღის შემდეგ შემოვიდა. გაცემა მის შემოსვლამდე ვერ იქნება.',
+      pickup_after_swap: 'მოპედი ამ თარიღამდე შეიცვალა. გაცემა შეცვლამდეა.',
+      pickup_date_history: 'თარიღი კვეთს იმას, რაც მოპედის ისტორიაში უკვე ჩაწერილია. აირჩიეთ ახლანდელთან უფრო ახლოს მყოფი თარიღი.',
+      deposit_before_over: 'ადრე მიღებული თანხა დეპოზიტზე მეტი ვერ იქნება.',
+      deposit_before_same: 'დეპოზიტზე უკვე აღნიშნულია, რომ ამდენი ადრე იყო მიღებული.',
+      deposit_before_held: 'დეპოზიტიდან უკვე დაკავებულია რემონტისთვის — ის დაკავებულზე ნაკლები ვერ გახდება.',
       too_late: 'გაუქმება ახლა შეუძლებელია — მოპედს დანიშნულება ხელახლა შეუცვალეთ.',
       too_many_attempts: 'ძალიან ბევრი მცდელობა. დაიცადეთ 15 წუთი და სცადეთ ხელახლა.',
       transfer_date: 'EV8 Ops-მდე დაწყებული ქირაობა უნდა იწყებოდეს დღევანდელ დღემდე, ხოლო გადახდილი კვირები უნდა მთავრდებოდეს კვირის საზღვარზე.',
@@ -1441,5 +1453,6 @@ export const ka: Dict = {
   ...saleDateKa,
   ...rentalSwapKa,
   ...vehicleCardKa,
+  ...pickupDateKa,
   ...goodsKa,
 };

@@ -29,6 +29,7 @@ import { contractSignedRu } from './contract-signed.js';
 import { saleDateRu } from './sale-date.js';
 import { rentalSwapRu } from './rental-swap.js';
 import { vehicleCardRu } from './vehicle-card.js';
+import { pickupDateRu } from './pickup-date.js';
 import { goodsRu } from './goods.js';
 import type { Dict } from './en.js';
 
@@ -1384,6 +1385,17 @@ export const ru: Dict = {
       supplier_not_found: 'Такого поставщика нет.',
       swap_before_last_event: 'Дата замены раньше того, что уже записано в истории одного из мопедов. Выберите дату позже.',
       swap_no_vehicle: 'У этой аренды ещё нет мопеда. Сначала укажите его в «Изменить условия».',
+      pickup_date_future: 'Дата выдачи — не позже сегодня.',
+      pickup_date_same: 'У аренды уже эта дата выдачи. Выберите другую.',
+      pickup_date_week_shifted: 'По новой дате удлинённая неделя ещё не началась бы. Сначала отмените сдвиг недели.',
+      pickup_date_week_discounted: 'По новой дате неделя со скидкой ещё не началась бы. Сначала уберите скидку (0 в «Скидке на неделю»).',
+      transfer_paid_through_week_end: '«Оплачено по» до EV8 Ops по новым датам уже не конец недели. Выберите его заново.',
+      pickup_before_arrival: 'Мопед пришёл позже этой даты. Выдача не может быть раньше его прихода.',
+      pickup_after_swap: 'Мопед заменили раньше этой даты. Выдача — до замены.',
+      pickup_date_history: 'Дата пересекает то, что уже записано в истории мопеда. Выберите дату ближе к нынешней.',
+      deposit_before_over: 'Получено раньше не может быть больше самого залога.',
+      deposit_before_same: 'У залога уже отмечено, что столько получено раньше.',
+      deposit_before_held: 'Из залога уже удержано за ремонт — он не может стать меньше удержанного.',
       too_late: 'Отменить уже нельзя — измените назначение мопеда заново.',
       too_many_attempts: 'Слишком много попыток. Подождите 15 минут и попробуйте снова.',
       transfer_date: 'Аренда, начатая до EV8 Ops, должна начинаться раньше сегодняшнего дня, а оплаченные недели — заканчиваться на границе недели.',
@@ -1452,5 +1464,6 @@ export const ru: Dict = {
   ...saleDateRu,
   ...rentalSwapRu,
   ...vehicleCardRu,
+  ...pickupDateRu,
   ...goodsRu,
 };

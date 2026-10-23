@@ -11,6 +11,8 @@ import { decideDeposit, pickUp, returnPreview, returnRental, setRentalStatus, sw
 import { WITHHOLD_GROUNDS } from '../lib/pdf/returnAct.js';
 import { discountWeek } from '../lib/discount.js';
 import { shiftWeek } from '../lib/weekShift.js';
+import { changePickupDate, pickupDatePreview, type PickupDateInput } from '../lib/pickupDate.js';
+import { depositBeforePreview, setDepositBefore, type DepositBeforeInput } from '../lib/depositBefore.js';
 import { addFine, voidFine } from '../lib/fines.js';
 import { date, int, oneOf, str, strList, tetri } from '../lib/validate.js';
 
@@ -256,6 +258,42 @@ export function handoverRoutes(app: FastifyInstance): void {
       reason: str(b, 'reason', { max: 500 }),
       today: todayISO(new Date(), env.TZ),
     });
+    return { ok: true, ...r };
+  });
+
+  /**
+   * «Дата выдачи»: an open rental given its true day of hand-over, an owner's,
+   * with a reason (ADR-0044 §1). The weeks are counted from it again and keep
+   * their numbers and money; the preview says the same before anything is written.
+   */
+  const pickupDateOf = (req: { params: { id: string }; body: Body }): PickupDateInput => {
+    const b = req.body ?? {};
+    return {
+      rentalId: req.params.id,
+      pickedUpOn: date(b, 'pickedUpOn', { required: true })!,
+      // Said again only when asked: absent keeps the transfer's own date.
+      ...('paidBeforeThrough' in b ? { paidBeforeThrough: date(b, 'paidBeforeThrough') } : {}),
+      today: todayISO(new Date(), env.TZ),
+    };
+  };
+  app.post<{ Params: { id: string }; Body: Body }>('/api/rentals/:id/pickup-date/preview', { config: { scope: 'deposit.decide' } }, async (req) => pickupDatePreview(pickupDateOf(req)));
+  app.post<{ Params: { id: string }; Body: Body }>('/api/rentals/:id/pickup-date', { config: { scope: 'deposit.decide' } }, async (req) => {
+    const r = await changePickupDate({ ...pickupDateOf(req), actorId: actorOf(req).id, reason: str(req.body ?? {}, 'reason', { max: 1000 }) });
+    return { ok: true, ...r };
+  });
+
+  /**
+   * «Залог получен раньше»: an open rental's deposit marked received before
+   * EV8 Ops, or the mark taken off with 0 — an owner's, with a reason (ADR-0044 §2).
+   */
+  const depositBeforeOf = (req: { params: { id: string }; body: Body }): DepositBeforeInput => ({
+    rentalId: req.params.id,
+    receivedBeforeTetri: tetri(req.body ?? {}, 'receivedBeforeTetri', { required: true, min: 0 })!,
+    today: todayISO(new Date(), env.TZ),
+  });
+  app.post<{ Params: { id: string }; Body: Body }>('/api/rentals/:id/deposit/before/preview', { config: { scope: 'deposit.decide' } }, async (req) => depositBeforePreview(depositBeforeOf(req)));
+  app.post<{ Params: { id: string }; Body: Body }>('/api/rentals/:id/deposit/before', { config: { scope: 'deposit.decide' } }, async (req) => {
+    const r = await setDepositBefore({ ...depositBeforeOf(req), actorId: actorOf(req).id, reason: str(req.body ?? {}, 'reason', { max: 1000 }) });
     return { ok: true, ...r };
   });
 
