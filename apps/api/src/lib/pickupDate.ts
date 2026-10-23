@@ -120,8 +120,11 @@ async function study(tx: Tx, input: PickupDateInput) {
       if (e.id === handOverEvent.id || e.id === poolEvent?.id || e.kind === 'arrived') continue;
       const on = isoDate(e.occurredOn)!;
       const before = on < handedOn || (on === handedOn && e.createdAt < handOverEvent.createdAt);
-      if (before) lastBefore = lastBefore == null || on > lastBefore ? on : lastBefore;
-      else firstAfter = firstAfter == null || on < firstAfter ? on : firstAfter;
+      if (before) {
+        if (lastBefore === null || on > lastBefore) lastBefore = on;
+      } else if (firstAfter === null || on < firstAfter) {
+        firstAfter = on;
+      }
     }
   }
 
