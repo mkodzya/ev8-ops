@@ -29,6 +29,7 @@ import { contractSignedRu } from './contract-signed.js';
 import { saleDateRu } from './sale-date.js';
 import { rentalSwapRu } from './rental-swap.js';
 import { vehicleCardRu } from './vehicle-card.js';
+import { pickupDateRu } from './pickup-date.js';
 import type { Dict } from './en.js';
 
 // Typed as Dict: a missing or misspelled key fails the build.
@@ -1440,4 +1441,5 @@ export const ru: Dict = {
   ...saleDateRu,
   ...rentalSwapRu,
   ...vehicleCardRu,
+  ...pickupDateRu,
 };

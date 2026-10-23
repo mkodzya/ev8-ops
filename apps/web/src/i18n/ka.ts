@@ -29,6 +29,7 @@ import { contractSignedKa, SIGNIFY_IN_KA } from './contract-signed.js';
 import { saleDateKa } from './sale-date.js';
 import { rentalSwapKa } from './rental-swap.js';
 import { vehicleCardKa } from './vehicle-card.js';
+import { pickupDateKa } from './pickup-date.js';
 import type { Dict } from './en.js';
 
 // Typed as Dict: a missing or misspelled key fails the build.
@@ -1429,4 +1430,5 @@ export const ka: Dict = {
   ...saleDateKa,
   ...rentalSwapKa,
   ...vehicleCardKa,
+  ...pickupDateKa,
 };
