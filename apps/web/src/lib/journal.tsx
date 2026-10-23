@@ -193,8 +193,9 @@ export function ChangedFromTo({ action, before, after }: { action?: string; befo
   const t = currentDict();
   const pairs: { field: string; label: string | null; from: string; to: string }[] = [];
   // Whether the rental's weeks had been moved, which a pay day change keeps
-  // beside it (ADR-0041); a line from before the move had none to keep.
-  const shifted = typeof now.weekShiftDays === 'number' && now.weekShiftDays > 0;
+  // beside it (ADR-0041); a line from before the move had none to keep. A
+  // week made shorter moves them too (addendum of 23.10.2026).
+  const shifted = typeof now.weekShiftDays === 'number' && now.weekShiftDays !== 0;
   // A line that names the day the rent falls due on says it once, by that day.
   const payDayNamed = typeof was.payDay === 'number' && typeof now.payDay === 'number';
   for (const field of Object.keys(was)) {
@@ -203,7 +204,7 @@ export function ChangedFromTo({ action, before, after }: { action?: string; befo
     const from = listWords(t, action, field, was[field]) ?? value(field, was[field], shifted);
     const to = listWords(t, action, field, now[field]) ?? value(field, now[field], shifted);
     if (from == null || to == null || from === to) continue;
-    pairs.push({ field, label: named(t, field, action), from, to });
+    pairs.push({ field, label: shiftMoneyLabel(t, action, field, was, now) ?? named(t, field, action), from, to });
   }
   const moved = movedLines(was.schedule, now.schedule);
   // Which week a move was made on: the number is the same on both sides, so
@@ -289,8 +290,19 @@ function listWords(t: Dict, action: string | undefined, field: string, raw: unkn
   return raw ? t.wshop.journalOff : t.wshop.journalOn;
 }
 
-/** A week made longer, and the move taken back (ADR-0041). */
+/** A week made longer or shorter, and the move taken back (ADR-0041). */
 const WEEK_SHIFT = new Set(['rental.week.shift', 'rental.week.shift.undo']);
+
+/**
+ * A move's money where a side is a shorter week's discount, kept below nought
+ * (addendum of 23.10.2026): «доплата / скидка: 0,00 ₾ → -21,00 ₾», not a
+ * «доплата» of minus twenty-one. Null — the usual words.
+ */
+function shiftMoneyLabel(t: Dict, action: string | undefined, field: string, was: Bag, now: Bag): string | null {
+  if (field !== 'extraTetri' || !action || !WEEK_SHIFT.has(action)) return null;
+  const below = (v: unknown) => typeof v === 'number' && v < 0;
+  return below(was?.extraTetri) || below(now?.extraTetri) ? t.weekShift.journal.extraOrLess : null;
+}
 
 /**
  * A schedule is a list, and a list has no "было → стало" of its own, so the

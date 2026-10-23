@@ -12,6 +12,7 @@ import { bankApiRu } from './bank-api.js';
 import { calendarRu } from './payments-calendar.js';
 import { payDayRu } from './pay-day.js';
 import { weekShiftRu } from './week-shift.js';
+import { payDayMoveRu } from './pay-day-move.js';
 import { workshopRu } from './workshop.js';
 import { workshopJobsRu } from './workshop-jobs.js';
 import { workshopApprovalRu } from './workshop-approval.js';
@@ -1369,8 +1370,8 @@ export const ru: Dict = {
       same_state: 'Мопед уже в этом статусе.',
       same_vehicle: 'Этот мопед уже у клиента. Выберите другой.',
       service_not_found: 'Такого ремонта нет.',
-      shift_days_range: 'Неделю удлиняют на 1–6 дней. Ещё 7 дней — это просто следующая неделя.',
-      shift_over_paid: 'Столько за неделю уже оплачено: дешевле оплаченного она стать не может.',
+      shift_days_range: 'Неделю удлиняют или укорачивают на 1–6 дней. Ещё 7 дней — это просто следующая неделя.',
+      shift_older_week_open: 'Сначала оплатите текущую неделю: за прошлую ещё есть долг, а сдвигают только последнюю.',
       sold_by_sale: 'Мопед продаётся продажей, а возвращается обратным выкупом.',
       split_bad_amount: 'У каждой части должна быть сумма больше нуля.',
       split_bad_target: 'Каждая часть оплачивает ровно одну запись.',
@@ -1419,8 +1420,10 @@ export const ru: Dict = {
       vin_or_note: 'Выберите мопед из парка или напишите, почему VIN не подтверждён.',
       vins_count: 'Число VIN в строке не совпадает с заказанным. Проверьте каждую строку.',
       vins_missing: 'В строке нет VIN. Впишите по одному VIN в строке для каждой модели.',
-      week_at_nothing: 'Эта неделя ничего не стоит — удлинять нечего.',
+      week_at_nothing: 'Эта неделя ничего не стоит — сдвигать нечего.',
+      week_ends_before_today: 'Укороченная неделя кончается не раньше сегодняшнего дня. Выберите меньше дней.',
       week_has_bank_money: 'У этой недели уже есть деньги из банка.',
+      week_moved_already: 'Неделя уже сдвинута — поправьте сдвиг в карточке аренды.',
       week_not_carried: 'Эта неделя не отмечена оплаченной до EV8 Ops.',
       week_not_found: 'Такой недели в аренде нет.',
       week_not_last: 'Сдвинуть можно только последнюю неделю: следующая уже началась.',
@@ -1447,6 +1450,7 @@ export const ru: Dict = {
   ...calendarRu,
   ...payDayRu,
   ...weekShiftRu,
+  ...payDayMoveRu,
   ...workshopRu,
   ...workshopJobsRu,
   ...workshopApprovalRu,

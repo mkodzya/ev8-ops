@@ -21,6 +21,7 @@ import { bankApiEn } from './bank-api.js';
 import { calendarEn } from './payments-calendar.js';
 import { payDayEn } from './pay-day.js';
 import { weekShiftEn } from './week-shift.js';
+import { payDayMoveEn } from './pay-day-move.js';
 import { workshopEn } from './workshop.js';
 import { workshopJobsEn } from './workshop-jobs.js';
 import { workshopApprovalEn } from './workshop-approval.js';
@@ -1372,8 +1373,8 @@ export const en = {
       same_state: 'The moped already has this status.',
       same_vehicle: 'This is the moped the customer already has. Pick another one.',
       service_not_found: 'No such repair.',
-      shift_days_range: 'A week is made 1 to 6 days longer. Seven more days is simply the next week.',
-      shift_over_paid: 'That much of the week is paid already: its price cannot go below it.',
+      shift_days_range: 'A week is made 1 to 6 days longer or shorter. Seven more days is simply the next week.',
+      shift_older_week_open: 'First pay the current week: an older week is still owed, and only the latest one is moved.',
       sold_by_sale: 'A moped is sold by a sale, and comes back by a buy-back.',
       split_bad_amount: 'Every part needs a sum above zero.',
       split_bad_target: 'Every part pays exactly one record.',
@@ -1422,8 +1423,10 @@ export const en = {
       vin_or_note: 'Pick a moped from the fleet, or write why the VIN is not confirmed.',
       vins_count: 'The number of VINs in a line does not match the quantity ordered. Check each line.',
       vins_missing: 'A line has no VINs. Enter one VIN per row for every model line.',
-      week_at_nothing: 'This week costs nothing — there is nothing to make longer.',
+      week_at_nothing: 'This week costs nothing — there is nothing to move.',
+      week_ends_before_today: 'A week made shorter ends today at the earliest. Choose fewer days.',
       week_has_bank_money: 'This week already has its bank money.',
+      week_moved_already: 'The week is moved already — change its move on the rental card.',
       week_not_carried: 'This week was not marked paid before EV8 Ops.',
       week_not_found: 'No such week in this rental.',
       week_not_last: 'Only the last week is moved: the next one has already begun.',
@@ -1450,6 +1453,7 @@ export const en = {
   ...calendarEn,
   ...payDayEn,
   ...weekShiftEn,
+  ...payDayMoveEn,
   ...workshopEn,
   ...workshopJobsEn,
   ...workshopApprovalEn,
