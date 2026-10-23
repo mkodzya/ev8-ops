@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { useCallback } from 'react';
+import { formatGel } from '@ev8/shared';
 import { api, ApiError } from '../api.js';
 import { currentDict } from '../i18n/index.js';
 
@@ -63,10 +64,24 @@ export function errorText(e: unknown): string {
   // "no connection to the server", not a fault somebody should report.
   if (e instanceof ApiError && e.status >= 500 && (e.code === 'error' || e.status >= 502)) return t.network;
   if (e instanceof ApiError) {
+    const figured = withFigures(e);
+    if (figured) return figured;
     const known = (t.codes as Record<string, string>)[e.code];
     return known ?? `${t.unknown} (${e.code})`;
   }
   // fetch rejects with a TypeError when the request never reached the server.
   if (e instanceof TypeError) return t.network;
   return t.unknown;
+}
+
+/**
+ * A refusal that names the record and what is still open on it says both:
+ * «Это больше, чем ждёт TS-00003: осталось заплатить 22.30 ₾» rather than
+ * that it is more than something (QA 23.10.2026, a bank line on a goods sale).
+ * The code's plain words stay the answer when the figures did not come.
+ */
+function withFigures(e: ApiError): string | null {
+  const said: ((number: string, sum: string) => string) | undefined = currentDict().goods.refusals[e.code];
+  const { number, openTetri } = e.extra;
+  return said && typeof number === 'string' && typeof openTetri === 'number' ? said(number, formatGel(openTetri)) : null;
 }
