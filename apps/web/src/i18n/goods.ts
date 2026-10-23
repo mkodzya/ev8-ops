@@ -516,7 +516,8 @@ export const goodsKa: Goods = {
       retailNone: 'ფულის მომლოდინე საცალო გაყიდვა არ არის.',
       more: '+ კიდევ: საქონლის საცალო გაყიდვები',
       lessThanLine: 'ხაზზე ნაკლები',
-      overOpen: (n, open, line) => `${n} ელოდება ${open}-ს, ხაზი კი ${line}-ია: მთლიანად ვერ მიებმება. გაანაწილეთ ხაზი.`,
+      // No case ending on a sum («₾-ს»): a line may break at its hyphen.
+      overOpen: (n, open, line) => `${n} ელოდება: ${open}; ხაზი: ${line}. მთლიანად ვერ მიებმება — გაანაწილეთ ხაზი.`,
       partOver: (sum) => `მეტია, ვიდრე ელოდება: ${sum}`,
       fixOver: 'ვალზე მეტი ნაწილი არ ჩაიწერება: შეასწორეთ.',
     },
