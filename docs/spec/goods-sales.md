@@ -790,69 +790,69 @@ Worktree `feature/goods-sales`. Каждую законченную правку
 ## 18. Чек-лист точек касания
 
 **База и модель**
-- [ ] `apps/api/migrations/0067_goods_sales.sql`
-- [ ] `apps/api/prisma/schema.prisma` — `PaymentKind.goods`, `GoodsSale`, `GoodsSaleLine`, связи у `Payment`, `StockMove`, `BatteryMove`, `StoredFile`, `Customer`, `Part`, `User`
+- [x] `apps/api/migrations/0067_goods_sales.sql`
+- [x] `apps/api/prisma/schema.prisma` — `PaymentKind.goods`, `GoodsSale`, `GoodsSaleLine`, связи у `Payment`, `StockMove`, `BatteryMove`, `StoredFile`, `Customer`, `Part`, `User`
 
 **Shared**
-- [ ] `packages/shared/src/goods.ts` (новый) + `index.ts`
-- [ ] `packages/shared/src/week.ts` — строка `goods`, `Record` вместо тернарников, `PAYMENT_FILTERS`
-- [ ] `packages/shared/src/debt.ts` — `goods`, `DebtPart.kind`
-- [ ] `packages/shared/src/batteries.ts` — `sold`, `sale_cancelled`
-- [ ] `packages/shared/src/permissions.ts` — `goods.sell`
-- [ ] `packages/shared/src/navigation.ts` — вкладка `goods`, действие `sellGoods`
-- [ ] `packages/shared/src/journal.ts` — `goods_sale.*`, `TS`
-- [ ] `packages/shared/test/*` — goods, week, debt, due, batteries, permissions, navigation, journal
+- [x] `packages/shared/src/goods.ts` (новый) + `index.ts`
+- [x] `packages/shared/src/week.ts` — строка `goods`, `Record` вместо тернарников, `PAYMENT_FILTERS`
+- [x] `packages/shared/src/debt.ts` — `goods`, `DebtPart.kind`
+- [x] `packages/shared/src/batteries.ts` — `sold`, `sale_cancelled`
+- [x] `packages/shared/src/permissions.ts` — `goods.sell`
+- [x] `packages/shared/src/navigation.ts` — вкладка `goods`, действие `sellGoods`
+- [x] `packages/shared/src/journal.ts` — `goods_sale.*`, `TS`
+- [x] `packages/shared/test/*` — goods, week, debt, due, batteries, permissions, navigation, journal
 
 **API: библиотеки**
-- [ ] `apps/api/src/lib/goods.ts` (новый) — `goodsOwed`, `createGoodsSaleTx`, `cancelGoodsSaleTx(mode)`
-- [ ] `apps/api/src/lib/money.ts` — `MONEY_KINDS`, `MoneyInput`, `Closes`, `planMoney`, `FROM_CUSTOMER`, `payerOf`, `writeOther`, `recordMoneyTx`
-- [ ] `apps/api/src/lib/payments.ts` — `rebookToCredit`
-- [ ] `apps/api/src/lib/stock.ts` — `shelfCost`, `partOnHandTx`, `lastCountOn`, `issueForGoodsLine`, `returnGoodsLine`
-- [ ] `apps/api/src/routes/service.ts` — `shelfPrice` → `shelfCost`
-- [ ] `apps/api/src/lib/statements/reconcile.ts` — `Ctx.goods`, `loadCtx`, `decide`, `RuleTarget`, `suggest`, `Suggestion`, `Reason`
-- [ ] `apps/api/src/lib/statements/import.ts` — `LineTarget`, `paymentOf`, `attach`, `split`, `ingest`
-- [ ] `apps/api/src/lib/statements/inBank.ts` — номер TS
-- [ ] `apps/api/src/lib/debt.ts` — продажи товаров клиентов
-- [ ] `apps/api/src/lib/economics.ts` — `goodsLinesOf`
-- [ ] `apps/api/src/lib/pdf/goodsInvoice.ts` (новый), `apps/api/src/lib/pdf/company.ts` — `gel2`
+- [x] `apps/api/src/lib/goods.ts` (новый) — `goodsOwed`, `createGoodsSaleTx`, `cancelGoodsSaleTx(mode)`
+- [x] `apps/api/src/lib/money.ts` — `MONEY_KINDS`, `MoneyInput`, `Closes`, `planMoney`, `FROM_CUSTOMER`, `payerOf`, `writeOther`, `recordMoneyTx`
+- [x] `apps/api/src/lib/payments.ts` — `rebookToCredit`
+- [x] `apps/api/src/lib/stock.ts` — `shelfCost`, `partOnHandTx`, `lastCountOn`, `issueForGoodsLine`, `returnGoodsLine`
+- [x] `apps/api/src/routes/service.ts` — `shelfPrice` → `shelfCost`
+- [x] `apps/api/src/lib/statements/reconcile.ts` — `Ctx.goods`, `loadCtx`, `decide`, `RuleTarget`, `suggest`, `Suggestion`, `Reason`
+- [x] `apps/api/src/lib/statements/import.ts` — `LineTarget`, `paymentOf`, `attach`, `split`, `ingest`
+- [x] `apps/api/src/lib/statements/inBank.ts` — номер TS
+- [x] `apps/api/src/lib/debt.ts` — продажи товаров клиентов
+- [x] `apps/api/src/lib/economics.ts` — `goodsLinesOf`
+- [x] `apps/api/src/lib/pdf/goodsInvoice.ts` (новый), `apps/api/src/lib/pdf/company.ts` — `gel2`
 
 **API: маршруты**
-- [ ] `apps/api/src/routes/goodsSales.ts` (новый) + `apps/api/src/server.ts`
-- [ ] `apps/api/src/routes/documents.ts` — `invoice.pdf`
-- [ ] `apps/api/src/routes/payments.ts` — `moneyInput`, `paymentWhere`, include `goodsSale`, `money-targets.goods`
-- [ ] `apps/api/src/routes/statements.ts` — `assign`, `split`, `by-rules`
-- [ ] `apps/api/src/routes/batteries.ts` — `batteriesNow(db)`, `sold` / `sale_cancelled`, номер продажи в ленте
-- [ ] `apps/api/src/routes/stock.ts` — `GET /api/parts/:id`: продажи
-- [ ] `apps/api/src/routes/customers.ts` — покупки, номер в ленте
-- [ ] `apps/api/src/routes/contacts.ts` — merge `goodsSales`
-- [ ] `apps/api/src/routes/search.ts` — группа `goods`
-- [ ] `apps/api/src/routes/till.ts` — номер TS
-- [ ] `apps/api/src/routes/today.ts` — `weekMoney.goodsTetri`
-- [ ] `apps/api/src/routes/reports.ts` — строка PDF недели
-- [ ] `apps/api/src/routes/economics.ts` — `GET /api/economics/goods`
-- [ ] `apps/api/src/routes/journal.ts` — `numbersFor`, `RECORD_KINDS`, `withParts`
-- [ ] `apps/api/test/goods-sales.test.ts`, `goods-invoice.test.ts` (новые), `guard.test.ts`, хелпер строк в `week.test.ts`
+- [x] `apps/api/src/routes/goodsSales.ts` (новый) + `apps/api/src/server.ts`
+- [x] `apps/api/src/routes/documents.ts` — `invoice.pdf`
+- [x] `apps/api/src/routes/payments.ts` — `moneyInput`, `paymentWhere`, include `goodsSale`, `money-targets.goods`
+- [x] `apps/api/src/routes/statements.ts` — `assign`, `split`, `by-rules`
+- [x] `apps/api/src/routes/batteries.ts` — `batteriesNow(db)`, `sold` / `sale_cancelled`, номер продажи в ленте
+- [x] `apps/api/src/routes/stock.ts` — `GET /api/parts/:id`: продажи
+- [x] `apps/api/src/routes/customers.ts` — покупки, номер в ленте
+- [x] `apps/api/src/routes/contacts.ts` — merge `goodsSales`
+- [x] `apps/api/src/routes/search.ts` — группа `goods`
+- [x] `apps/api/src/routes/till.ts` — номер TS
+- [x] `apps/api/src/routes/today.ts` — `weekMoney.goodsTetri`
+- [x] `apps/api/src/routes/reports.ts` — строка PDF недели
+- [x] `apps/api/src/routes/economics.ts` — `GET /api/economics/goods`
+- [x] `apps/api/src/routes/journal.ts` — `numbersFor`, `RECORD_KINDS`, `withParts`
+- [x] `apps/api/test/goods-sales.test.ts`, `goods-invoice.test.ts` (новые), `guard.test.ts`, хелпер строк в `week.test.ts`
 
 **Web**
-- [ ] `apps/web/src/App.tsx` — три маршрута
-- [ ] `apps/web/src/pages/goods/GoodsSalesPage.tsx`, `GoodsSaleWizard.tsx`, `GoodsSalePage.tsx` (новые)
-- [ ] `apps/web/src/ds/money/MoneyForm.tsx` — `goods`
-- [ ] `apps/web/src/pages/money/SortPage.tsx` — `LineCard`, `useReasonText`, `OtherSheet`, `SplitSheet` (часть «Товары», розничный режим)
-- [ ] `apps/web/src/pages/money/PaymentsList.tsx` — `Kind`, `recordOf`
-- [ ] `apps/web/src/pages/money/PaymentPage.tsx` — `Kind`, `recordLink`, `actWord`
-- [ ] `apps/web/src/pages/money/TillPage.tsx`
-- [ ] `apps/web/src/pages/WeekPage.tsx`, `TodayPage.tsx`, `EconomicsPage.tsx`
-- [ ] `apps/web/src/pages/CustomerPage.tsx` — подпись долга, «Покупки», «Продать товар»
-- [ ] `apps/web/src/pages/PickupWizard.tsx` — `firstDebt`
-- [ ] `apps/web/src/pages/PartPage.tsx` — «Продать», «Продажи», подписи движений
-- [ ] `apps/web/src/pages/BatteriesPage.tsx` — «Продать зарядку», лента
-- [ ] `apps/web/src/ds/search/SearchOverlay.tsx` — группа `goods`
-- [ ] `apps/web/src/lib/journal.tsx` — слова значений
-- [ ] `apps/web/src/i18n/goods.ts` (новый) + `en.ts` / `ru.ts` / `ka.ts` (`money.kinds.goods`, `shell.tabs.goods`, `actions.sellGoods`, `weekReport.inGoods`, `stock.salePrice`, `errors.codes.*`) + `wave4.ts` (`feedWords`)
+- [x] `apps/web/src/App.tsx` — три маршрута
+- [x] `apps/web/src/pages/goods/GoodsSalesPage.tsx`, `GoodsSaleWizard.tsx`, `GoodsSalePage.tsx` (новые)
+- [x] `apps/web/src/ds/money/MoneyForm.tsx` — `goods`
+- [x] `apps/web/src/pages/money/SortPage.tsx` — `LineCard`, `useReasonText`, `OtherSheet`, `SplitSheet` (часть «Товары», розничный режим)
+- [x] `apps/web/src/pages/money/PaymentsList.tsx` — `Kind`, `recordOf`
+- [x] `apps/web/src/pages/money/PaymentPage.tsx` — `Kind`, `recordLink`, `actWord`
+- [x] `apps/web/src/pages/money/TillPage.tsx`
+- [x] `apps/web/src/pages/WeekPage.tsx`, `TodayPage.tsx`, `EconomicsPage.tsx`
+- [x] `apps/web/src/pages/CustomerPage.tsx` — подпись долга, «Покупки», «Продать товар»
+- [x] `apps/web/src/pages/PickupWizard.tsx` — `firstDebt`
+- [x] `apps/web/src/pages/PartPage.tsx` — «Продать», «Продажи», подписи движений
+- [x] `apps/web/src/pages/BatteriesPage.tsx` — «Продать зарядку», лента
+- [x] `apps/web/src/ds/search/SearchOverlay.tsx` — группа `goods`
+- [x] `apps/web/src/lib/journal.tsx` — слова значений
+- [x] `apps/web/src/i18n/goods.ts` (новый) + `en.ts` / `ru.ts` / `ka.ts` (`money.kinds.goods`, `shell.tabs.goods`, `actions.sellGoods`, `weekReport.inGoods`, `stock.salePrice`, `errors.codes.*`) + `wave4.ts` (`feedWords`)
 
 **Документы**
-- [ ] `docs/adr/0045-goods-are-sold-from-the-shelf-with-vat-inside.md`
-- [ ] `docs/design/ux.md`, `docs/handoff.md`, `docs/qa/goods-sales-ka-strings.md`
+- [x] `docs/adr/0045-goods-are-sold-from-the-shelf-with-vat-inside.md`
+- [x] `docs/design/ux.md`, `docs/handoff.md`, `docs/qa/goods-sales-ka-strings.md`
 - [ ] (книга, сессия Mika) `business/money.md`, глоссарий
 
 ---
