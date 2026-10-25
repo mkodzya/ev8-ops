@@ -32,7 +32,11 @@ const BODY_LIMIT = Math.ceil(MAX_STATEMENT_BYTES * 1.2);
 /** Older than this, a bank's statements are stale (§3.5; the threshold is a proposal). */
 const STALE_DAYS = 7;
 export const BANKS = ['bog', 'tbc', 'credo'] as const;
-/** What the rules and the import attached by themselves. */
+/**
+ * What the rules and the import attached by themselves. `amount_date` and
+ * `card_pickup_day` attach nothing since issue #13; the lines they attached
+ * before stay listed with their reason.
+ */
 const BY_RULES = ['payer_name', 'amount_date', 'card_pickup_day', 'recorded', 'bank_deposit'];
 
 type Body = Record<string, unknown>;

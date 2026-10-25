@@ -33,6 +33,7 @@ import { vehicleCardRu } from './vehicle-card.js';
 import { pickupDateRu } from './pickup-date.js';
 import { depositReviseRu } from './deposit-revise.js';
 import { goodsRu } from './goods.js';
+import { incRu } from './inbound.js';
 import type { Dict } from './en.js';
 
 // Typed as Dict: a missing or misspelled key fails the build.
@@ -1473,4 +1474,5 @@ export const ru: Dict = {
   ...pickupDateRu,
   ...depositReviseRu,
   ...goodsRu,
+  ...incRu,
 };

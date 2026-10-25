@@ -82,6 +82,8 @@ export function useReasonText() {
       case 'name':
         return r.number ? t.sort.reason.name(r.name ?? '', g(r.debtTetri), r.number) : t.sort.reason.nameOnly(r.name ?? '');
       case 'card_pickup':
+        // Given no more (issue #13). A transfer it attached before paid no fee: no «− 1,5 %» of it.
+        if (!r.feeTetri) return t.inc.reasonPickupDay(r.number ?? '', fmtDate(r.day));
         return t.sort.reason.card_pickup(g(r.netTetri ?? line?.amountTetri), g(r.grossTetri), r.number ?? '', fmtDate(r.day));
       case 'amount_week':
         return t.sort.reason.amount_week(r.number ?? '', g(r.debtTetri));
