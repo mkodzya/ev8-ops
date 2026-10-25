@@ -2,8 +2,12 @@ import type { Prisma } from '../../generated/prisma/client.js';
 import { prisma } from '../db.js';
 import { conflict, notFound } from '../errors.js';
 
-/** What a line set aside is: not ours, or one of the answers that write no payment. */
-export type AsideResolution = 'not_ours' | 'company_expense' | 'own_transfer' | 'shareholder' | 'founder_equity' | 'other_income';
+/**
+ * What a line set aside is: not ours, or one of the answers that write no
+ * payment — or the second listing of a card payment the bank sent twice
+ * (`duplicate`, issue #16).
+ */
+export type AsideResolution = 'not_ours' | 'company_expense' | 'own_transfer' | 'shareholder' | 'founder_equity' | 'other_income' | 'duplicate';
 
 /**
  * Set a line aside, once: a second answer finds it taken. `categoryId` is an

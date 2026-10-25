@@ -16,6 +16,7 @@ import { ParseError } from '../lib/statements/parse.js';
 import { isCashDeposit, loadCtx, storedLine, suggest } from '../lib/statements/reconcile.js';
 import { expenseKey, lastCategories, payeeLabel, sortByRule, waitingFrom } from '../lib/statements/expenses.js';
 import { BACK_TO_QUEUE, setAside } from '../lib/statements/aside.js';
+import { twinReason, twinsOf } from '../lib/statements/duplicates.js';
 import { livePayerRules, payerKey, payerLabel, rememberPayer, type PayerKind } from '../lib/statements/payers.js';
 import { tbcApiStatus } from '../lib/tbc.js';
 import { settleAfterShift } from '../lib/weekShift.js';
@@ -163,6 +164,8 @@ export function statementRoutes(app: FastifyInstance): void {
       const named = toHandBack.filter((d) => d.tetri === l.amountTetri && nameMatches(to, d.names));
       return named.length === 1 ? named[0] : null;
     };
+    // A Bank of Georgia card payment the bank sent twice: the later line names the one it repeats (issue #16).
+    const twins = await twinsOf(lines);
     return {
       counts: { in: counts.find((c) => c.direction === 'in')?._count._all ?? 0, out: counts.find((c) => c.direction === 'out')?._count._all ?? 0 },
       byRulesWeek: byRules + byExpenseRules,
@@ -173,6 +176,7 @@ export function statementRoutes(app: FastifyInstance): void {
         const key = l.direction === 'out' ? expenseKey(l) : null;
         const lastCategoryId = key ? last.get(key) ?? null : null;
         const deposit = l.direction === 'out' ? depositFor(l) : null;
+        const twin = twins.get(l.id) ?? null;
         return {
           id: l.id,
           bank: l.bank,
@@ -188,6 +192,8 @@ export function statementRoutes(app: FastifyInstance): void {
           fileName: l.statement.fileName,
           cashDeposit: isCashDeposit(line),
           ...hints,
+          // «Похоже на дубль строки от … (№…)» and its one answer, «Это дубль» (issue #16).
+          duplicateOf: twin,
           ...(l.direction === 'in'
             ? (() => {
                 // Who sent it, as «Запомнить для „…“» says it; none — a card line, cash paid in, nobody named (0069).
@@ -203,7 +209,7 @@ export function statementRoutes(app: FastifyInstance): void {
                 canRemember: key != null,
                 lastCategoryId,
                 depositHint: deposit ? { rentalId: deposit.rentalId, number: deposit.number } : null,
-                group: hints.group === 'none' && (lastCategoryId || deposit) ? ('suggested' as const) : hints.group,
+                group: hints.group === 'none' && (lastCategoryId || deposit || twin) ? ('suggested' as const) : hints.group,
               }
             : {}),
         };
@@ -477,6 +483,25 @@ export function statementRoutes(app: FastifyInstance): void {
     const reason = str(req.body ?? {}, 'reason', { required: true, max: 500 })!;
     await setAside(req.params.id, actor.id, 'not_ours', reason);
     await audit({ actorId: actor.id, action: 'statement.line.ignore', entityType: 'statement_line', entityId: req.params.id, note: reason });
+    return { ok: true };
+  });
+
+  /**
+   * «Это дубль» (issue #16): the second listing of a Bank of Georgia card
+   * payment the bank sent twice — the line the queue marks «похоже на дубль
+   * строки от …» — out of the queue, with the line it repeats as its reason.
+   * Only a line rule 5 finds a twin for: any other line is «Это не наше», with
+   * a reason in words. «Вернуть в очередь» puts it back.
+   */
+  app.post<{ Params: { id: string } }>('/api/statement-lines/:id/duplicate', { config: { scope: 'payments.reconcile' } }, async (req) => {
+    const actor = actorOf(req);
+    const line = await prisma.statementLine.findUnique({ where: { id: req.params.id }, select: { id: true, bank: true, raw: true, occurredOn: true, status: true } });
+    if (!line) throw notFound('line_not_found', 'No such statement line.');
+    if (line.status !== 'unmatched') throw conflict('already_matched', 'This line is already attached.');
+    const twin = (await twinsOf([line])).get(line.id);
+    if (!twin) throw conflict('no_twin', 'This line repeats no other line.');
+    await setAside(line.id, actor.id, 'duplicate', twinReason(twin));
+    await audit({ actorId: actor.id, action: 'statement.line.duplicate', entityType: 'statement_line', entityId: line.id, after: { twinId: twin.id, twinOn: twin.occurredOn, twinDocNo: twin.docNo } });
     return { ok: true };
   });
 

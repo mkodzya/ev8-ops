@@ -189,7 +189,8 @@ export function inboundRoutes(app: FastifyInstance): void {
       if (l.status === 'unmatched') {
         apart.unsorted += l.amountTetri;
         apart.unsortedLines++;
-      } else if (l.resolution === 'not_ours') {
+      } else if (l.resolution === 'not_ours' || l.resolution === 'duplicate') {
+        // Not the company's money, or a line the bank sent twice (issue #16): counted once, under its first listing.
         continue;
       } else if (l.resolution === 'founder_equity') {
         apart.founder += l.amountTetri;
