@@ -75,8 +75,11 @@ export function useRowActions(): { actions: Actions; sheet: ReactNode } {
   return { actions, sheet };
 }
 
+/** How two rentals of one day stand to each other: negative, zero or positive. */
+type RowOrder = (a: string, b: string) => number;
+
 /** Two rentals of one day in the order the product's lists sort names, then by number. */
-export function useRowOrder(cardOf: Map<string, CalendarRentalCard>): (a: string, b: string) => number {
+export function useRowOrder(cardOf: Map<string, CalendarRentalCard>): RowOrder {
   const { locale } = useLocale();
   const names = byName(locale);
   return (a, b) => {
