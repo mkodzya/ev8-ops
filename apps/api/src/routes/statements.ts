@@ -189,7 +189,7 @@ export function statementRoutes(app: FastifyInstance): void {
                 // Who sent it, as «Запомнить для „…“» says it; none — a card line, cash paid in, nobody named (0069).
                 const key = payerKey(line);
                 const rule = key ? payers.get(key) : undefined;
-                return { payerLabel: payerLabel(line), canRemember: key != null, remembered: rule ? { kind: rule.kind as PayerKind, customerId: rule.customerId, categoryId: rule.categoryId } : null };
+                return { payerLabel: payerLabel(line), canRemember: key != null, remembered: rule ? { kind: rule.kind as PayerKind, customerId: rule.customerId, customerName: rule.customerName ?? null, categoryId: rule.categoryId } : null };
               })()
             : {}),
           ...(l.direction === 'out'

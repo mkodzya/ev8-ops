@@ -33,6 +33,8 @@ export interface LivePayerRule {
   kind: PayerKind;
   customerId: string | null;
   categoryId: string | null;
+  /** The customer's name, for the queue's «Плательщик запомнен: …». */
+  customerName?: string | null;
 }
 
 const norm = (s: string) => s.toLowerCase().replace(/\s+/g, ' ').trim();
@@ -54,9 +56,9 @@ export function payerLabel(line: Line): string | null {
 export async function livePayerRules(db: Db): Promise<Map<string, LivePayerRule>> {
   const rows = await db.payerRule.findMany({
     where: { archivedAt: null, OR: [{ categoryId: null }, { category: { archived: false } }] },
-    select: { id: true, payerKey: true, kind: true, customerId: true, categoryId: true },
+    select: { id: true, payerKey: true, kind: true, customerId: true, categoryId: true, customer: { select: { name: true } } },
   });
-  return new Map(rows.map((r) => [r.payerKey, { id: r.id, kind: r.kind as PayerKind, customerId: r.customerId, categoryId: r.categoryId }]));
+  return new Map(rows.map((r) => [r.payerKey, { id: r.id, kind: r.kind as PayerKind, customerId: r.customerId, categoryId: r.categoryId, customerName: r.customer?.name ?? null }]));
 }
 
 export type PayerAnswer =

@@ -140,6 +140,7 @@ export const en = {
       migration: 'Before EV8 Ops',
       login: 'Sign-in',
       expenses: 'Expenses',
+      incoming: 'Money in',
       drive: 'Drive',
       goods: 'Goods',
     },

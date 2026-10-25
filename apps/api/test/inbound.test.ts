@@ -157,8 +157,8 @@ describe.skipIf(!HAS_DB)('a payer remembered as a customer (issue #13, acceptanc
     expect(rules.lines.find((l) => l.id === second.id)).toMatchObject({ rule: 'payer_rule', reason: { code: 'payer_rule', name: `Relative Example ${t}` }, payerRule: { id: res.ruleId, live: true } });
     // The queue says who the payer is remembered as.
     await load(owner, inRow(today(), '1.01', from(`Relative Example ${t}`, ' odd')));
-    const queue = json<{ lines: { raw: string; remembered: { kind: string; customerId: string | null } | null; canRemember: boolean }[] }>(await call(owner, 'GET', '/api/statement-lines?direction=in'));
-    expect(queue.lines.find((l) => l.raw.includes(`${t}; Account`) && l.raw.includes('odd'))).toMatchObject({ canRemember: true, remembered: { kind: 'customer' } });
+    const queue = json<{ lines: { raw: string; remembered: { kind: string; customerId: string | null; customerName: string | null } | null; canRemember: boolean }[] }>(await call(owner, 'GET', '/api/statement-lines?direction=in'));
+    expect(queue.lines.find((l) => l.raw.includes(`${t}; Account`) && l.raw.includes('odd'))).toMatchObject({ canRemember: true, remembered: { kind: 'customer', customerName: expect.stringContaining('Тест Арендатор') } });
   });
 
   it('a line the rule cannot place without a doubt waits: no debt, or a sum that fits nothing', async () => {
@@ -236,6 +236,11 @@ describe.skipIf(!HAS_DB)('the panel beside a line (issue #13)', () => {
     const line = await lineOf(t);
     const deposits = json<{ options: Option[] }>(await call(owner, 'GET', `/api/statement-lines/${line.id}/options?kind=deposit`)).options;
     expect(deposits.find((o) => o.target.rentalId === rentalId)).toMatchObject({ owesTetri: expect.any(Number) });
+    // A returned rental's deposit is the return's to settle, not a line's.
+    const returned = await rental();
+    await prisma.rental.update({ where: { id: returned.rentalId }, data: { status: 'returned' } });
+    const after = json<{ options: Option[] }>(await call(owner, 'GET', `/api/statement-lines/${line.id}/options?kind=deposit`)).options;
+    expect(after.map((o) => o.target.rentalId)).not.toContain(returned.rentalId);
     const repairs = json<{ options: Option[] }>(await call(owner, 'GET', `/api/statement-lines/${line.id}/options?kind=repair`)).options;
     const charge = repairs.find((o) => o.target.chargeId === fine.id)!;
     expect(charge).toMatchObject({ owesTetri: 4000, fits: true });

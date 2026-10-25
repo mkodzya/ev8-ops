@@ -133,6 +133,7 @@ export const ka: Dict = {
       migration: 'EV8 Ops-მდე',
       login: 'შესვლა',
       expenses: 'ხარჯები',
+      incoming: 'შემოსავალი',
       drive: 'Drive',
       goods: 'საქონელი',
     },

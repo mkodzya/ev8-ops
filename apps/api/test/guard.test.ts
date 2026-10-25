@@ -40,6 +40,7 @@ describe('route table', () => {
       'PATCH /api/expense-categories/:id',
       'PATCH /api/fleet/:id',
       'PATCH /api/fleet/:id/vin',
+      'PATCH /api/income-categories/:id',
       'PATCH /api/locations/:id',
       'PATCH /api/models/:id',
       // Wave 6: the deposit and the weekly rates are an owner's to set (R5).
@@ -53,6 +54,7 @@ describe('route table', () => {
       'POST /api/drive/scan',
       'POST /api/expense-categories',
       'POST /api/fleet',
+      'POST /api/income-categories',
       'POST /api/locations',
       'POST /api/models',
       'POST /api/settings/rates',

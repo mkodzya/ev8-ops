@@ -144,6 +144,7 @@ export const ru: Dict = {
       migration: 'До EV8 Ops',
       login: 'Вход',
       expenses: 'Расходы',
+      incoming: 'Поступления',
       drive: 'Drive',
       goods: 'Товары',
     },

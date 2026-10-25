@@ -108,7 +108,8 @@ export async function optionsFor(line: Line, kind: OptionKind, raw: string): Pro
       if (!s) continue;
       const debt = debts.get(r.customerId);
       const owes = (debt?.parts ?? []).filter((p) => p.id === r.id && (p.kind === 'rent' || p.kind === 'deposit' || p.kind === 'charge')).reduce((n, p) => n + p.owesTetri, 0);
-      if (kind === 'deposit' ? s.openDepositTetri <= 0 : !RUNNING.has(r.status) && owes <= 0) continue;
+      // A deposit is paid while the rental runs; after the return the deposit decision settles it.
+      if (kind === 'deposit' ? !RUNNING.has(r.status) || s.openDepositTetri <= 0 : !RUNNING.has(r.status) && owes <= 0) continue;
       if (q && !(numberMatches(q, r.number) || byCustomer(q, r.customer) || phoneMatches(q, r.customer.phone) || vinMatches(q, r.vehicle?.vin) || (fleetNo != null && r.vehicle?.fleetNo === fleetNo))) continue;
       const returned = r.status === 'returned';
       const owed = {
