@@ -1231,6 +1231,7 @@ export const en = {
       category_exists: 'There is a category by that name already.',
       category_not_found: 'No such expense category.',
       charge_not_found: 'No such charge on the rental — it may have been taken back.',
+      charge_over_open: 'That is more than the charge still asks for.',
       closed_before_opened: 'A repair cannot close before the day it was opened.',
       contract_not_marked: 'The contract is not marked as signed in Signify. Refresh the screen.',
       customer_archived: 'This card was merged into another one. Work on the card it went into.',

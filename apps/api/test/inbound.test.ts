@@ -277,6 +277,35 @@ describe.skipIf(!HAS_DB)('the panel beside a line (issue #13)', () => {
     expect(p.allocations).toEqual([expect.objectContaining({ target: 'charge', chargeId: fine.id, amountTetri: 4000 })]);
   });
 
+  it('a line above what a charge or a repair still asks for is refused whole: the rest would belong to nothing (review of 25.10.2026)', async () => {
+    const { prisma, owner, rentalId, vehicle, tag: t } = await rental();
+    const fine = await prisma.rentalCharge.create({ data: { rentalId, kind: 'fine', amountTetri: 4000, note: 'test fine' } });
+    const job = json<{ id: string }>(await call(owner, 'POST', '/api/service', { vehicleId: vehicle.id, reason: 'brake cable', payer: 'customer', labourTetri: '20' }));
+    expect((await call(owner, 'POST', `/api/service/${job.id}/close`, {})).statusCode).toBe(200);
+    await load(owner, inRow(today(), '55.17', from(`Over Example ${t}`)));
+    const line = await lineOf(t);
+    // 55.17 on a fine of 40: 15.17 would be on the fine and nowhere in the customer's account.
+    const onCharge = await call(owner, 'POST', `/api/statement-lines/${line.id}/assign`, { chargeId: fine.id });
+    expect(onCharge.statusCode).toBe(409);
+    expect(json(onCharge)).toMatchObject({ error: 'charge_over_open', openTetri: 4000 });
+    const repair = json<{ options: Option[] }>(await call(owner, 'GET', `/api/statement-lines/${line.id}/options?kind=repair&q=${t}`)).options.find((o) => o.target.serviceJobId === job.id)!;
+    expect(repair.owesTetri).toBeLessThan(5517);
+    const onRepair = await call(owner, 'POST', `/api/statement-lines/${line.id}/assign`, { serviceJobId: job.id });
+    expect(onRepair.statusCode).toBe(409);
+    expect(json(onRepair)).toMatchObject({ error: 'over_open', openTetri: repair.owesTetri });
+    // Nothing is written and the line still waits; the way that works is «Несколько услуг».
+    expect((await prisma.statementLine.findUniqueOrThrow({ where: { id: line.id } })).status).toBe('unmatched');
+    expect(await prisma.payment.count({ where: { statementLineId: line.id } })).toBe(0);
+    const split = await call(owner, 'POST', `/api/statement-lines/${line.id}/split`, { parts: [{ chargeId: fine.id, grossTetri: 4000 }, { serviceJobId: job.id, grossTetri: 1517 }] });
+    expect(split.statusCode, split.body).toBe(200);
+    const paid = await prisma.payment.findMany({ where: { statementLineId: line.id, voidedAt: null }, orderBy: { statementPart: 'asc' }, include: { allocations: true } });
+    expect(paid.map((p) => [p.kind, p.grossTetri])).toEqual([
+      ['rent', 4000],
+      ['service', 1517],
+    ]);
+    expect(paid[0].allocations).toEqual([expect.objectContaining({ target: 'charge', chargeId: fine.id, amountTetri: 4000 })]);
+  });
+
   it('an unknown kind is refused in words', async () => {
     const owner = await loginAs('owner');
     const t = tag();

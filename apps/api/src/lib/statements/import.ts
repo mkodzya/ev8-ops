@@ -540,6 +540,25 @@ async function incomingLine(tx: Tx, lineId: string): Promise<StoredLine> {
   return line;
 }
 
+/**
+ * A line put whole on one charge or one repair is never more than it still
+ * asks for (review of 25.10.2026, ADR-0046 addendum): the money is placed on
+ * that record alone, so what is over would belong to nothing — not the
+ * customer's credit, not his weeks — and he would be asked for it again.
+ * Such a line is several services: «Несколько услуг». A goods sale refuses
+ * the same in `paymentOf` (ADR-0045 §7).
+ */
+async function notOverOpen(tx: Tx, target: LineTarget, grossTetri: number): Promise<void> {
+  if (target.chargeId) {
+    const charge = await chargeOwed(tx, target.chargeId);
+    if (grossTetri > charge.openTetri) throw conflict('charge_over_open', 'That is more than the charge still asks for.', { openTetri: charge.openTetri });
+  }
+  if (target.serviceJobId) {
+    const job = await serviceOwed(tx, target.serviceJobId);
+    if (grossTetri > job.openTetri) throw conflict('over_open', 'That is more than the repair still asks for.', { number: job.number, openTetri: job.openTetri });
+  }
+}
+
 /** A customer's payment made of this line: a rental, a sale, a repair, or the customer's account. */
 export async function attach(
   tx: Tx,
@@ -547,7 +566,10 @@ export async function attach(
 ): Promise<{ paymentId: string }> {
   const line = await incomingLine(tx, input.lineId);
   await claim(tx, line.id, input.rule);
-  const paymentId = await paymentOf(tx, input.actorId, line, moneyOf(line), input, 1);
+  // Refused, the claim goes back with the transaction: the line waits as it did.
+  const money = moneyOf(line);
+  await notOverOpen(tx, input, money.grossTetri);
+  const paymentId = await paymentOf(tx, input.actorId, line, money, input, 1);
   await tx.statementLine.update({ where: { id: line.id }, data: { paymentId } });
   await tx.auditLog.create({
     data: {

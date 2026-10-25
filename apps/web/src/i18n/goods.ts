@@ -148,10 +148,13 @@ export const goodsEn = {
       retailHint: 'One card line of a day may be several purchases',
       retailNone: 'No retail sale is waiting for money.',
       more: '+ more: retail goods sales',
-      /** «Куда привязать»: a sale that waits for less than the line, before it is chosen and once it is. */
+      /**
+       * «Куда привязать»: a record that waits for less than the line, before it is chosen and once it is — a
+       * goods sale, and since the review of 25.10.2026 a repair or a charge in «Ремонт / начисление» too.
+       */
       lessThanLine: 'less than the line',
-      overOpen: (n: string, open: string, line: string) => `${n} waits for ${open}, the line is ${line}: it cannot be attached whole. Allocate the line.`,
-      /** «Разнести»: a part above what its record waits for — the server refuses it, so the sheet says so first. */
+      overOpen: (n: string, open: string, line: string) => `${n} waits for ${open}, the line is ${line}: it cannot be attached whole — «Several services».`,
+      /** «Несколько услуг» (was «Разнести»): a part above what its record waits for — the server refuses it, so the sheet says so first. */
       partOver: (sum: string) => `More than it waits for: ${sum}`,
       fixOver: 'While a part is above what is owed, the line will not be written: correct it.',
     },
@@ -338,7 +341,7 @@ export const goodsRu: Goods = {
       retailNone: 'Розничных продаж, ждущих денег, нет.',
       more: '+ ещё: розничные продажи товаров',
       lessThanLine: 'меньше строки',
-      overOpen: (n, open, line) => `${n} ждёт ${open}, а строка — ${line}: целиком её не привязать. Разнесите строку.`,
+      overOpen: (n, open, line) => `${n} ждёт ${open}, а строка — ${line}: целиком её не привязать — «Несколько услуг».`,
       partOver: (sum) => `Больше, чем ждёт: ${sum}`,
       fixOver: 'Пока часть больше долга, строка не запишется: исправьте её.',
     },
@@ -517,7 +520,7 @@ export const goodsKa: Goods = {
       more: '+ კიდევ: საქონლის საცალო გაყიდვები',
       lessThanLine: 'ხაზზე ნაკლები',
       // No case ending on a sum («₾-ს»): a line may break at its hyphen.
-      overOpen: (n, open, line) => `${n} ელოდება: ${open}; ხაზი: ${line}. მთლიანად ვერ მიებმება — გაანაწილეთ ხაზი.`,
+      overOpen: (n, open, line) => `${n} ელოდება: ${open}; ხაზი: ${line}. მთლიანად ვერ მიებმება — «რამდენიმე მომსახურება».`,
       partOver: (sum) => `მეტია, ვიდრე ელოდება: ${sum}`,
       fixOver: 'სანამ ნაწილი ვალზე მეტია, ხაზი არ ჩაიწერება: შეასწორეთ.',
     },

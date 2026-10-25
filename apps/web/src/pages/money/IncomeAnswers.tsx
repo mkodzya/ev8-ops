@@ -239,6 +239,12 @@ function KindSheet({
   const rest = options.filter((o) => !o.probable);
   const g = (n: number) => formatGel(n);
   const weekday = (iso: number) => t.calendar.weekdaysIn[iso % 7];
+  // A goods sale, a repair or a charge takes no more than it waits for: the
+  // server refuses the rest (ADR-0045 §7; review of 25.10.2026), so the card
+  // and the panel say so before the line is sent.
+  const capped = kind === 'goods' || kind === 'repair';
+  const waitsLess = (o: Option) => capped && sum > o.owesTetri;
+  const less = (o: Option) => (waitsLess(o) ? t.goods.sort.lessThanLine : null);
 
   const subOf = (o: Option): string => {
     const owes = o.owesTetri > 0 ? t.inc.owes(g(o.owesTetri)) : t.inc.noDebt;
@@ -250,13 +256,11 @@ function KindSheet({
       case 'sale':
         return [...o.facts, o.extraTetri ? t.inc.nextPayment(g(o.extraTetri), fmtDayMonth(o.day)) : null, owes].filter(Boolean).join(' · ');
       case 'goods':
-        return [o.retail ? t.goods.retail : null, ...o.facts, t.goods.card.waits(g(o.owesTetri)), o.day ? t.inc.soldOn(fmtDayMonth(o.day)) : null, sum > o.owesTetri ? t.goods.sort.lessThanLine : null]
-          .filter(Boolean)
-          .join(' · ');
+        return [o.retail ? t.goods.retail : null, ...o.facts, t.goods.card.waits(g(o.owesTetri)), o.day ? t.inc.soldOn(fmtDayMonth(o.day)) : null, less(o)].filter(Boolean).join(' · ');
       case 'repair':
         return o.charge
-          ? [chargeWords(t, o.charge.kind, o.charge.note), ...o.facts, owes, o.day ? t.inc.chargeFrom(fmtDayMonth(o.day)) : null].filter(Boolean).join(' · ')
-          : [t.money.kinds.service, ...o.facts, owes, o.day ? t.inc.repairDone(fmtDayMonth(o.day)) : null].filter(Boolean).join(' · ');
+          ? [chargeWords(t, o.charge.kind, o.charge.note), ...o.facts, owes, o.day ? t.inc.chargeFrom(fmtDayMonth(o.day)) : null, less(o)].filter(Boolean).join(' · ')
+          : [t.money.kinds.service, ...o.facts, owes, o.day ? t.inc.repairDone(fmtDayMonth(o.day)) : null, less(o)].filter(Boolean).join(' · ');
       case 'customer':
         return [o.facts.length ? o.facts.join(' · ') : null, o.customerDebtTetri ? t.inc.owes(g(o.customerDebtTetri)) : t.inc.noDebt].filter(Boolean).join(' · ');
       case 'bank_deposit':
@@ -287,7 +291,9 @@ function KindSheet({
   const before = pick?.customerDebtTetri ?? null;
   const paidOff = pick ? (kind === 'customer' ? sum : Math.min(sum, pick.owesTetri)) : 0;
   const after = before != null ? Math.max(0, before - paidOff) : null;
-  const over = kind === 'goods' && !!pick && sum > pick.owesTetri;
+  const over = !!pick && waitsLess(pick);
+  // The record in the warning: a charge by its words and its rental.
+  const overWhat = pick ? (pick.charge ? [chargeWords(t, pick.charge.kind, pick.charge.note), pick.number].filter(Boolean).join(' · ') : (pick.number ?? '')) : '';
 
   const card = (o: Option) => (
     <li key={o.key}>
@@ -297,7 +303,7 @@ function KindSheet({
             {titleOf(o)}
             {o.probable && <span className="inc-why"> · {o.probable === 'rule' ? t.inc.whyRule(line.payerLabel ?? '') : t.inc.whyName}</span>}
           </span>
-          <span className={`pick-card-sub ${kind === 'goods' && sum > o.owesTetri ? 'warn-text' : ''}`}>{subOf(o)}</span>
+          <span className={`pick-card-sub ${waitsLess(o) ? 'warn-text' : ''}`}>{subOf(o)}</span>
         </span>
       </button>
     </li>
@@ -309,7 +315,7 @@ function KindSheet({
       onClose={onClose}
       value={pick?.key ?? null}
       initial={null}
-      fieldOf={{ goods_over_open: 'goodsSaleId' }}
+      fieldOf={{ goods_over_open: 'goodsSaleId', charge_over_open: 'chargeId', over_open: 'serviceJobId' }}
       label={pick ? (pick.key === NEW_DEPOSIT ? t.inc.newBankDeposit : t.inc.attach(label(pick))) : t.inc.choose}
       submit={async (key) => {
         if (!pick) throw new Error(t.inc.choose);
@@ -369,7 +375,7 @@ function KindSheet({
         </p>
       )}
       {pick?.transferredOn && <p className="hint warn-text">{t.sort.reason.beforeTransfer(fmtDate(pick.transferredOn))}</p>}
-      {pick && kind === 'goods' && <GoodsOver pick={pick} sum={sum} over={over} onSplit={onSplit} />}
+      {pick && capped && <OverOpen pick={pick} what={overWhat} sum={sum} over={over} onSplit={onSplit} />}
       {canRemember && pick && pick.key !== NEW_DEPOSIT && (
         <label className="check-row">
           <input type="checkbox" checked={keep} onChange={(e) => setKeep(e.target.checked)} />
@@ -377,14 +383,14 @@ function KindSheet({
         </label>
       )}
       {canRemember && keep && pick && <p className="hint muted">{t.inc.rememberHint}</p>}
-      {pick && said.length > 0 && (
+      {pick && said.length > 0 && !over && (
         <div className="split-result">
           <b>{t.sort.resTitle}</b>
           <ul>
             {said.map((x, i) => (
               <li key={i}>{x}</li>
             ))}
-            {before != null && after != null && !over && <li>{after === before ? t.sort.resDebtSame(g(before)) : t.sort.resDebt(g(before), g(after))}</li>}
+            {before != null && after != null && <li>{after === before ? t.sort.resDebtSame(g(before)) : t.sort.resDebt(g(before), g(after))}</li>}
           </ul>
         </div>
       )}
@@ -392,18 +398,23 @@ function KindSheet({
   );
 }
 
+/** The field a refusal of a record's open sum is about: the record chosen. */
+const overField = (o: Option) => (o.target.goodsSaleId ? 'goodsSaleId' : o.target.chargeId ? 'chargeId' : 'serviceJobId');
+
 /**
- * A goods sale chosen that waits for less than the line: said before the line
- * is sent, with the way that works — «Несколько услуг»; once the server has
- * refused, its words.
+ * A goods sale, a repair or a charge chosen that waits for less than the line:
+ * said before the line is sent, with the way that works — «Несколько услуг»;
+ * once the server has refused, its words. Nothing of «Что запишется» is
+ * promised meanwhile (review of 25.10.2026).
  */
-function GoodsOver({ pick, sum, over, onSplit }: { pick: Option; sum: number; over: boolean; onSplit: () => void }) {
+function OverOpen({ pick, what, sum, over, onSplit }: { pick: Option; what: string; sum: number; over: boolean; onSplit: () => void }) {
   const t = useT();
-  const refused = useFieldError('goodsSaleId');
-  const warn = refused ?? (over ? t.goods.sort.overOpen(pick.number ?? '', formatGel(pick.owesTetri), formatGel(sum)) : null);
+  const field = overField(pick);
+  const refused = useFieldError(field);
+  const warn = refused ?? (over ? t.goods.sort.overOpen(what, formatGel(pick.owesTetri), formatGel(sum)) : null);
   if (!warn) return null;
   return (
-    <div className="sort-over" data-field="goodsSaleId">
+    <div className="sort-over" data-field={field}>
       <p className="field-err" role={refused ? 'alert' : undefined}>
         {warn}
       </p>
