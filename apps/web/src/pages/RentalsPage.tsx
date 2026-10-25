@@ -75,7 +75,7 @@ export function RentalsPage() {
   const red = sumOf(rows.filter(isDebt));
   const ink = sumOf(rows.filter((r) => !isDebt(r)));
   // The debts of many customers together are an owner's figure (Mika's «да» of
-  // 25.10.2026): a manager reads «75 аренд» and each row's own debt.
+  // 25.10.2026): a manager reads «40 аренд» (an invented example) and each row's own debt.
   const sums = data?.totals === true;
 
   // What the right of a row says: the debt when there is one, otherwise how

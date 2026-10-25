@@ -38,10 +38,10 @@ export function rentalRoutes(app: FastifyInstance): void {
       (debts.get(customerId)?.parts ?? []).filter((p) => p.id === rentalId && (p.kind === 'rent' || p.kind === 'deposit' || p.kind === 'charge')).reduce((n, p) => n + p.owesTetri, 0);
     return {
       today,
-      // Whether the line over the list may add the rows' debts up: «75 аренд ·
-      // долг …» is many customers' debt together, an owner's figure; a manager
-      // reads «75 аренд» and each row's own (Mika's «да» of 25.10.2026, ADR-0048
-      // addendum). The rows are the same for both.
+      // Whether the line over the list may add the rows' debts up: «40 аренд ·
+      // долг …» (an invented example) is many customers' debt together, an owner's
+      // figure; a manager reads «40 аренд» and each row's own (Mika's «да» of
+      // 25.10.2026, ADR-0048 addendum). The rows are the same for both.
       totals: mayTotal(req),
       rentals: rentals.map((r) => {
         const pickedUpOn = isoDate(r.pickedUpOn);
