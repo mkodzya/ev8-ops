@@ -63,7 +63,8 @@ describe('the structure each role sees (wave 1 §3.2)', () => {
   // them — one list, one address (designer, 21.09.2026).
   // The expense categories joined them on 15.10.2026 (migration 0046).
   it('gives settings seven tabs, and its points stay in Settings (Mika, 29.09.2026)', () => {
-    expect(tabsForRole('settings', 'owner').map((t) => t.id)).toEqual(['people', 'points', 'rental', 'repair', 'expenses', 'drive', 'journal', 'migration', 'login']);
+    // «Поступления» beside «Расходы»: the categories of other income (issue #13, migration 0069).
+    expect(tabsForRole('settings', 'owner').map((t) => t.id)).toEqual(['people', 'points', 'rental', 'repair', 'expenses', 'incoming', 'drive', 'journal', 'migration', 'login']);
     expect(tabsForRole('settings', 'owner').find((t) => t.id === 'points')?.path).toBe('/settings/points');
     expect(sectionOfPath('/settings/points')).toBe('settings');
     // Fleet keeps its own tab to the same page.

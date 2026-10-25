@@ -7,7 +7,7 @@ import { RowMenu } from '../../components/RowMenu.js';
 import { PageHead } from '../../components/ui.js';
 import { Field } from '../../components/Wizard.js';
 import { useToast } from '../../ds/feedback/Toast.js';
-import { FormSheet, useFieldError } from '../../ds/form/Form.js';
+import { FormSheet } from '../../ds/form/Form.js';
 import { useOperation } from '../../ds/form/operation.js';
 import '../../ds/money/money.css';
 import { Skeleton } from '../../ds/state/Skeleton.js';
@@ -16,10 +16,11 @@ import { useT } from '../../i18n/index.js';
 import { chargeWords } from '../../lib/charges.js';
 import { useLoad } from '../../lib/use.js';
 import { ExpenseAnswers, ExpenseRuleCard, useExpenseCategories, type Categories, type ExpenseRuleLine } from './ExpenseAnswers.js';
+import { IncomeAnswers, useIncomeCategories, type InLine } from './IncomeAnswers.js';
 
 interface Reason {
-  /** `goods`: an open goods sale of this sum (ADR-0045). */
-  code: 'name' | 'card_pickup' | 'amount_week' | 'amount' | 'recorded' | 'bank_deposit' | 'goods';
+  /** `goods`: an open goods sale of this sum (ADR-0045). `payer_rule`: a payer remembered as this customer (0069). */
+  code: 'name' | 'card_pickup' | 'amount_week' | 'amount' | 'recorded' | 'bank_deposit' | 'goods' | 'payer_rule';
   /** The rental under this hint was carried over on or after the line's day: its money may be counted already. */
   transferredOn?: string;
   name?: string;
@@ -64,6 +65,9 @@ export interface SortLine {
   canRemember?: boolean;
   lastCategoryId?: string | null;
   depositHint?: { rentalId: string; number: string } | null;
+  /** Money coming in (migration 0069): the payer to remember, and what he is remembered as. */
+  payerLabel?: string | null;
+  remembered?: InLine['remembered'];
 }
 interface Queue {
   counts: { in: number; out: number };
@@ -93,6 +97,8 @@ export function useReasonText() {
         return t.sort.reason.recorded(r.number ? `, ${r.number}` : '');
       case 'bank_deposit':
         return t.sort.reason.bank_deposit;
+      case 'payer_rule':
+        return t.inc.reasonRule(r.name ?? '', r.number ?? '', g(r.debtTetri));
       case 'goods': {
         // «TS-00001 · Розничный покупатель · ждёт 100 ₾ · продано 08.10 · картой» (ADR-0045 §7).
         const who = r.retail ? [t.goods.retail, r.name].filter(Boolean).join(' · ') : (r.name ?? '');
@@ -114,12 +120,12 @@ export function SortPage() {
   const [params, setParams] = useSearchParams();
   const direction = params.get('d') === 'out' ? 'out' : 'in';
   const { data, failure, reload } = useLoad<Queue>(`/api/statement-lines?direction=${direction}`);
-  const [other, setOther] = useState<SortLine | null>(null);
   const [notOurs, setNotOurs] = useState<SortLine | null>(null);
   const [splitting, setSplitting] = useState<SortLine | null>(null);
   const cats = useExpenseCategories(direction === 'out');
+  const incomeCats = useIncomeCategories(direction === 'in');
 
-  const groups = (['recorded', 'suggested', 'none'] as const).map((g) => ({ g, lines: (data?.lines ?? []).filter((l) => l.group === g) }));
+  const groups = (['recorded', 'suggested', 'none'] as const).map((g) => ({ g, lines: (data?.lines ?? []).filter((l) => groupOf(l) === g) }));
   const title = { recorded: t.sort.recordedGroup, suggested: t.sort.hintsGroup, none: t.sort.noneGroup };
 
   return (
@@ -152,7 +158,7 @@ export function SortPage() {
                   {title[g]} <span className="muted mono">{lines.length}</span>
                 </h2>
                 {lines.map((l) => (
-                  <LineCard key={l.id} line={l} cats={cats} onOther={() => setOther(l)} onNotOurs={() => setNotOurs(l)} onSplit={() => setSplitting(l)} />
+                  <LineCard key={l.id} line={l} cats={l.direction === 'in' ? incomeCats : cats} onNotOurs={() => setNotOurs(l)} onSplit={() => setSplitting(l)} />
                 ))}
               </section>
             ),
@@ -164,20 +170,20 @@ export function SortPage() {
           {t.sort.aside(data.asideMonth ?? 0)} · <Link to="/money/sort/aside">{t.sort.show}</Link>
         </p>
       )}
-      {other && (
-        <OtherSheet
-          line={other}
-          onClose={() => setOther(null)}
-          onSplit={() => {
-            setOther(null);
-            setSplitting(other);
-          }}
-        />
-      )}
       {notOurs && <NotOursSheet line={notOurs} onClose={() => setNotOurs(null)} />}
       {splitting && <SplitSheet line={splitting} onClose={() => setSplitting(null)} />}
     </>
   );
+}
+
+/**
+ * Where a line stands in the queue. Money coming in (issue #13): «Подсказки»
+ * only for a line the payer's name, a remembered payer or cash taken to the
+ * bank speaks for — a sum alone raises nothing; going out, as the server says.
+ */
+function groupOf(l: SortLine): SortLine['group'] {
+  if (l.direction === 'out' || l.group === 'recorded') return l.group;
+  return l.remembered || l.suggestions.some((s) => s.reason.code === 'name' || s.kind === 'bank_deposit') ? 'suggested' : 'none';
 }
 
 function AllSorted({ byRules, aside }: { byRules: number; aside: number }) {
@@ -207,7 +213,7 @@ function AllSorted({ byRules, aside }: { byRules: number; aside: number }) {
 }
 
 /** One line: its amount, day, bank, the bank's words — and the answers (§3.2). */
-function LineCard({ line, cats, onOther, onNotOurs, onSplit }: { line: SortLine; cats: Categories; onOther: () => void; onNotOurs: () => void; onSplit: () => void }) {
+function LineCard({ line, cats, onNotOurs, onSplit }: { line: SortLine; cats: Categories; onNotOurs: () => void; onSplit: () => void }) {
   const t = useT();
   const toast = useToast();
   const reason = useReasonText();
@@ -221,15 +227,19 @@ function LineCard({ line, cats, onOther, onNotOurs, onSplit }: { line: SortLine;
     if (!res.ok) return;
     toast({ text: done.text, undo: done.undo?.(res.value) });
   };
-  const undoPayment = (a: { id?: string }) => () => api.post(`/api/payments/${a.id}/undo`);
-  const first = line.suggestions[0];
-  const rest = line.suggestions.slice(1);
 
   const attach = (s: Suggestion) => {
     if (s.kind === 'bank_deposit') return act('bank-deposit', { bankDepositId: s.id }, { text: t.sort.linked });
     const body = s.kind === 'rental' ? { rentalId: s.id } : s.kind === 'sale' ? { saleId: s.id } : s.kind === 'goods_sale' ? { goodsSaleId: s.id } : { customerId: s.id };
-    return act('assign', body, { text: t.sort.attached(s.number ?? s.customer ?? ''), undo: undoPayment });
+    return act('assign', body, { text: t.sort.attached(s.number ?? s.customer ?? ''), undo: (a) => () => api.post(`/api/payments/${a.id}/undo`) });
   };
+  // Money coming in: what the payer's name speaks for, in words — never a button above the kinds (issue #13).
+  const byName = line.direction === 'in' ? line.suggestions.filter((s) => s.reason.code === 'name' && s.kind !== 'customer') : [];
+  const nameWords = byName
+    .slice(0, 3)
+    .map((s) => [s.number, s.customer].filter(Boolean).join(' · ') + (s.reason.debtTetri ? ` · ${t.inc.owes(formatGel(s.reason.debtTetri, { decimals: false }))}` : ''))
+    .join('; ');
+  const remembered = line.direction === 'in' ? line.remembered : null;
 
   return (
     <article className={`sort-line ${busy ? 'busy' : ''}`} aria-busy={busy}>
@@ -241,16 +251,8 @@ function LineCard({ line, cats, onOther, onNotOurs, onSplit }: { line: SortLine;
         <span className="sort-line-meta">
           {fmtDate(line.occurredOn)} · {t.statements.banks[line.bank]}
         </span>
-        <RowMenu
-          actions={[
-            ...(line.direction === 'in' ? [{ key: 'split', label: t.sort.split, onPick: onSplit }] : []),
-            // Money coming in from another of the company's accounts (ADR-0028); going out, the answer sits under the line.
-            ...(line.direction === 'in'
-              ? [{ key: 'own', label: t.exp.ownTransfer, onPick: () => void act('own-transfer', {}, { text: t.exp.ownTransferDone, undo: () => () => api.post(`/api/statement-lines/${line.id}/restore`, {}) }) }]
-              : []),
-            { key: 'not', label: t.sort.notOurs, onPick: onNotOurs },
-          ]}
-        />
+        {/* Money coming in has every answer under it; going out, «Это не наше» sits here. */}
+        {line.direction === 'out' && <RowMenu actions={[{ key: 'not', label: t.sort.notOurs, onPick: onNotOurs }]} />}
       </div>
       {/* The sum above is what the bank credited. A card line says what the customer paid — that is what
           attaching it writes — and what the bank kept. */}
@@ -269,7 +271,7 @@ function LineCard({ line, cats, onOther, onNotOurs, onSplit }: { line: SortLine;
                 [formatGel(p.amountTetri ?? 0), fmtDate(p.occurredOn), p.customer, p.number].filter(Boolean).join(', '),
               )}
             </p>
-            {/* The first is the main answer, the rest are quiet (§3.2, QA-W2-08). */}
+            {/* Money entered by hand: the line is linked to it, nothing new is written (B2-03). The first is the main answer. */}
             <button type="button" className={`pill pill-sm ${i === 0 ? 'pill-accent' : ''}`} disabled={busy} onClick={() => act('link', { paymentId: p.id }, { text: t.sort.linked })}>
               {busy ? t.sort.attaching : line.direction === 'out' ? t.sort.yesShe : t.sort.yes}
             </button>
@@ -286,55 +288,22 @@ function LineCard({ line, cats, onOther, onNotOurs, onSplit }: { line: SortLine;
         </div>
       )}
 
-      {line.group === 'suggested' && first && (
-        <>
-          <p className="sort-reason">{reason(first.reason, line)}</p>
-          <div className="sort-actions">
-            <button type="button" className="pill pill-sm pill-accent" disabled={busy} onClick={() => attach(first)}>
-              {busy ? t.sort.attaching : first.kind === 'bank_deposit' ? t.sort.bankDepositYes : t.sort.attachTo(first.number ?? first.customer ?? '')}
-            </button>
-            {rest.slice(0, 3).map((s) => (
-              <button key={s.id} type="button" className="pill pill-sm" disabled={busy} onClick={() => attach(s)} title={reason(s.reason, line)}>
-                {s.number ?? s.customer}
-                {s.reason.debtTetri ? ` · ${formatGel(s.reason.debtTetri, { decimals: false })}` : ''}
-              </button>
-            ))}
-            <button type="button" className="pill pill-sm" disabled={busy} onClick={onOther}>
-              {t.sort.other}
-            </button>
-            {line.direction === 'in' && (
-              <button type="button" className="pill pill-sm" disabled={busy} onClick={onSplit}>
-                {t.sort.split}
-              </button>
-            )}
-          </div>
-        </>
+      {line.direction === 'in' && line.group !== 'recorded' && nameWords && <p className="sort-reason">{t.inc.nameHint(nameWords)}</p>}
+      {remembered && (
+        <p className="sort-reason muted">
+          {remembered.kind === 'other_income'
+            ? t.inc.remembered.other_income(cats.nameOf(remembered.categoryId))
+            : remembered.kind === 'customer'
+              ? t.inc.remembered.customer(remembered.customerName ?? line.payerLabel ?? '')
+              : t.inc.remembered[remembered.kind]}
+        </p>
+      )}
+      {line.direction === 'in' && line.group !== 'recorded' && (line.cashDeposit || line.suggestions.some((s) => s.kind === 'bank_deposit')) && (
+        <p className="sort-reason">{line.suggestions.some((s) => s.kind === 'bank_deposit') ? reason({ code: 'bank_deposit' }) : t.sort.bankDeposit}</p>
       )}
 
-      {line.direction === 'in' && line.cashDeposit && line.group !== 'recorded' && !line.suggestions.some((s) => s.kind === 'bank_deposit') && (
-        <div className="sort-actions">
-          <p className="sort-reason">{t.sort.bankDeposit}</p>
-          <button type="button" className="pill pill-sm" disabled={busy} onClick={() => act('bank-deposit', {}, { text: t.sort.linked })}>
-            {t.sort.bankDepositYes}
-          </button>
-        </div>
-      )}
-
-      {line.direction === 'in' && (line.group === 'none' || line.group === 'recorded') && (
-        <div className="sort-actions">
-          {line.direction === 'in' ? (
-            <>
-              <button type="button" className={`pill pill-sm ${line.group === 'none' ? 'pill-accent' : ''}`} disabled={busy} onClick={onOther}>
-                {line.group === 'recorded' ? t.sort.no : t.sort.other}
-              </button>
-              <button type="button" className="pill pill-sm" disabled={busy} onClick={onSplit}>
-                {t.sort.split}
-              </button>
-            </>
-          ) : null}
-        </div>
-      )}
-      {/* Money going out: what it is, and for an expense what it was for (migration 0046). */}
+      {/* Money coming in: what it is, first (issue #13); going out, what it is and what it was for (migration 0046). */}
+      {line.direction === 'in' && <IncomeAnswers line={line} cats={cats} onSplit={onSplit} onNotOurs={onNotOurs} />}
       {line.direction === 'out' && <ExpenseAnswers line={line} cats={cats} quiet={line.group === 'recorded'} />}
       {op.failure && <p className="field-err" role="alert">{op.failure.text}</p>}
     </article>
@@ -349,118 +318,6 @@ interface SearchAnswer {
     /** Goods sales (ADR-0045): absent while an older API answers. */
     goods?: { items: { id: string; number: string; status: string; customerId: string | null; buyer: string | null; retail: boolean; openTetri: number }[] };
   };
-}
-
-/** What «Другое» may attach to; a goods sale says what it waits for, and whether that is less than the line. */
-interface OtherPick {
-  body: Record<string, string>;
-  label: string;
-  /** A goods sale's open sum, and whether the line is bigger: the server refuses that, and the sheet says so first. */
-  open?: number;
-  short?: boolean;
-}
-
-/** "Другое": attach to any record, by number, name or phone — not a cut list (§3.2, B2-05). */
-function OtherSheet({ line, onClose, onSplit }: { line: SortLine; onClose: () => void; onSplit: () => void }) {
-  const t = useT();
-  const [q, setQ] = useState('');
-  const [pick, setPick] = useState<OtherPick | null>(null);
-  // What attaching writes: a card line the customer's sum, any other line its amount.
-  const lineTetri = line.channel === 'acquiring' && line.grossTetri != null ? line.grossTetri : line.amountTetri;
-  const [answer, setAnswer] = useState<SearchAnswer | null>(null);
-  useEffect(() => {
-    const text = q.trim();
-    if (text.length < SEARCH_MIN) {
-      setAnswer(null);
-      return;
-    }
-    let live = true;
-    const id = window.setTimeout(() => {
-      api.get<SearchAnswer>(`/api/search?q=${encodeURIComponent(text)}`).then((a) => live && setAnswer(a)).catch(() => live && setAnswer(null));
-    }, 250);
-    return () => {
-      live = false;
-      window.clearTimeout(id);
-    };
-  }, [q]);
-  const g = answer?.groups;
-  const options: (OtherPick & { sub: string })[] = g
-    ? [
-        ...g.rentals.items.map((r) => ({ body: { rentalId: r.id }, label: r.number, sub: r.customer })),
-        ...g.sales.items.filter((x) => x.status === 'active').map((x) => ({ body: { saleId: x.id }, label: x.number, sub: x.customer })),
-        // Goods sales with money still open: a retail buyer's included (ADR-0045). One that waits for
-        // less than the line says so before it is chosen (QA 23.10.2026): the line goes there only split.
-        ...(g.goods?.items ?? [])
-          .filter((x) => x.status === 'active' && x.openTetri > 0)
-          .map((x) => ({
-            body: { goodsSaleId: x.id },
-            label: x.number,
-            open: x.openTetri,
-            short: lineTetri > x.openTetri,
-            sub: [x.retail ? t.goods.retail : (x.buyer ?? ''), t.goods.card.waits(formatGel(x.openTetri)), lineTetri > x.openTetri ? t.goods.sort.lessThanLine : ''].filter(Boolean).join(' · '),
-          })),
-        ...g.customers.items.map((c) => ({ body: { customerId: c.id }, label: `${t.money.toAccount} · ${c.name}`, sub: t.money.toAccountHint })),
-      ]
-    : [];
-  return (
-    <FormSheet
-      title={t.sort.whereTo(formatGel(lineTetri))}
-      onClose={onClose}
-      value={pick}
-      initial={null}
-      // More than the sale waits for is about the sale chosen: the words go under the list, and the button
-      // stays as it was — sending it again would be refused again (QA 23.10.2026).
-      fieldOf={{ goods_over_open: 'goodsSaleId' }}
-      label={pick ? (pick.body.customerId ? pick.label : t.sort.attachTo(pick.label)) : t.sort.other}
-      submit={async (key) => {
-        if (!pick) throw new Error('nothing picked');
-        const r = await api.post<{ id: string }>(`/api/statement-lines/${line.id}/assign`, pick.body, { key });
-        return { toast: { text: t.sort.attached(pick.label), undo: () => api.post(`/api/payments/${r.id}/undo`) } };
-      }}
-    >
-      <input className="input" autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder={t.money.whoIn} aria-label={t.money.whoIn} />
-      <p className="hint muted">{t.sort.whereHint}</p>
-      <ul className="pick-cards">
-        {options.map((o) => (
-          <li key={JSON.stringify(o.body)}>
-            <button type="button" className={`pick-card ${pick?.label === o.label ? 'on' : ''}`} onClick={() => setPick({ body: o.body, label: o.label, open: o.open, short: o.short })}>
-              <span className="pick-card-main">
-                <span className="pick-card-title">{o.label}</span>
-                <span className={`pick-card-sub ${o.short ? 'warn-text' : ''}`}>{o.sub}</span>
-              </span>
-            </button>
-          </li>
-        ))}
-      </ul>
-      {pick?.body.goodsSaleId && <OverOpen pick={pick} lineTetri={lineTetri} onSplit={onSplit} />}
-    </FormSheet>
-  );
-}
-
-/**
- * Under «Куда привязать», for a goods sale chosen: when it waits for less than
- * the line, that it does and how much — before the line is sent — and the way
- * that works, «Разнести»; once the server has refused, its words, which name
- * the sum. The place the refusal is about, so the form shows it here.
- */
-function OverOpen({ pick, lineTetri, onSplit }: { pick: OtherPick; lineTetri: number; onSplit: () => void }) {
-  const t = useT();
-  const refused = useFieldError('goodsSaleId');
-  const warn = refused ?? (pick.short && pick.open != null ? t.goods.sort.overOpen(pick.label, formatGel(pick.open), formatGel(lineTetri)) : null);
-  return (
-    <div className="sort-over" data-field="goodsSaleId">
-      {warn && (
-        <>
-          <p className="field-err" role={refused ? 'alert' : undefined}>
-            {warn}
-          </p>
-          <button type="button" className="pill pill-sm" onClick={onSplit}>
-            {t.sort.split}
-          </button>
-        </>
-      )}
-    </div>
-  );
 }
 
 interface Week {
@@ -509,11 +366,11 @@ interface Targets {
 /** One place the line's money can go — or, «Перенос дня оплаты», what it moves. */
 interface SplitPart {
   key: string;
-  kind: 'rent' | 'fine' | 'charge' | 'repair' | 'sale' | 'goods' | 'account' | 'payday';
+  kind: 'rent' | 'deposit' | 'fine' | 'charge' | 'repair' | 'sale' | 'goods' | 'account' | 'payday';
   title: string;
   /** The record's number, in mono beside the title. */
   ref: string;
-  body: Record<string, string>;
+  body: Record<string, string | boolean>;
   /** What the record still owes: the most "the rest" fills in. 0 — no limit. */
   owesTetri: number;
   /** Behind "+ ещё": rarely needed. */
@@ -551,8 +408,9 @@ interface SplitValue {
 const weekText = (w: { startsOn: string | null; endsOn: string | null }) => `${fmtDayMonth(w.startsOn)}–${fmtDayMonth(w.endsOn)}`;
 
 /**
- * "Разделить": one line, several of the customer's records — a rental week
- * and a fine paid in one transfer (meeting of 14.10.2026). Laid out the way
+ * «Несколько услуг» (until issue #13 «Разнести»): one line, several of the
+ * customer's records — a rental week and a fine paid in one transfer
+ * (meeting of 14.10.2026), a deposit and a week (250 = 180 + 70). Laid out the way
  * an owner says it (Mika, 15.10.2026, variant «В» of
  * docs/redesign/prototypes/split-options.html): rent and a fine per rental,
  * the week asked by its dates when the payment is older than the carry-over,
@@ -608,14 +466,19 @@ function SplitSheet({ line, onClose }: { line: SortLine; onClose: () => void }) 
         ...shown.flatMap((r): SplitPart[] => {
           const week = carriedWeekOf(r);
           const asCarried = !!week && value.choice[r.id] === 'carried';
+          // A deposit still to pay is a part of its own (issue #13): «Залог 180 + Аренда 70»; the rent then leaves it alone.
+          const depositOwed = owes(['deposit'], r.id);
           return [
+            ...(depositOwed > 0
+              ? [{ key: `p:${r.id}`, kind: 'deposit' as const, title: t.inc.kinds.deposit, ref: r.number, body: { depositRentalId: r.id }, owesTetri: depositOwed, extra: false, rentalId: r.id }]
+              : []),
             {
               key: `r:${r.id}`,
               kind: 'rent',
               title: t.sort.splitRentTitle,
               ref: r.number,
-              body: asCarried ? { carriedPeriodId: week!.id } : { rentalId: r.id },
-              owesTetri: asCarried ? week!.amountTetri : owes(['rent', 'deposit'], r.id),
+              body: asCarried ? { carriedPeriodId: week!.id } : depositOwed > 0 ? { rentalId: r.id, rentOnly: true } : { rentalId: r.id },
+              owesTetri: asCarried ? week!.amountTetri : owes(['rent'], r.id),
               extra: false,
               ...(week ? { carried: { rentalId: r.id, week } } : {}),
               openWeek: r.firstOpenWeek ?? null,
@@ -697,7 +560,7 @@ function SplitSheet({ line, onClose }: { line: SortLine; onClose: () => void }) 
   };
   // A goods sale, a repair, a charge: a part above what it waits for is refused by the server — said here
   // before it is sent, not cut quietly from the debt below (QA 23.10.2026).
-  const CAPPED: SplitPart['kind'][] = ['goods', 'repair', 'charge'];
+  const CAPPED: SplitPart['kind'][] = ['goods', 'repair', 'charge', 'deposit'];
   const overBy = (p: SplitPart) => (CAPPED.includes(p.kind) && p.owesTetri > 0 ? Math.max(0, amountOf(p.key) - p.owesTetri) : 0);
   const anyOver = parts.some((p) => overBy(p) > 0);
   const visible = parts.filter((p) => !p.extra || value.more || amountOf(p.key) > 0);
@@ -727,7 +590,8 @@ function SplitSheet({ line, onClose }: { line: SortLine; onClose: () => void }) 
   let moveTold = false;
   for (const p of used) {
     const a = formatGel(amountOf(p.key));
-    if (p.kind === 'rent' && p.carried && value.choice[p.carried.rentalId] === 'carried') said.push(t.sort.resCarried(a, weekText(p.carried.week), p.ref));
+    if (p.kind === 'deposit') said.push(t.inc.res.deposit(a, p.ref));
+    else if (p.kind === 'rent' && p.carried && value.choice[p.carried.rentalId] === 'carried') said.push(t.sort.resCarried(a, weekText(p.carried.week), p.ref));
     else if (p.kind === 'rent') {
       const week = rentWeekText(p);
       said.push(week ? t.sort.resRent(a, p.ref, week) : t.sort.resRentAhead(a, p.ref));
@@ -772,11 +636,11 @@ function SplitSheet({ line, onClose }: { line: SortLine; onClose: () => void }) 
 
   return (
     <FormSheet
-      title={t.sort.splitTitle(formatGel(total))}
+      title={t.inc.severalTitle(formatGel(total))}
       onClose={onClose}
       value={value}
       initial={initial}
-      label={t.sort.split}
+      label={t.inc.several}
       submit={async (key) => {
         if (used.some((p) => p.carried && !value.choice[p.carried.rentalId])) throw new Error(t.sort.splitOldPick);
         const body = used.map((p) => ({ ...p.body, grossTetri: amountOf(p.key) }));
@@ -1044,7 +908,21 @@ interface RuleLine {
   purpose: string | null;
   rule: string | null;
   reason: Reason | null;
+  /** The remembered payer that put it here (0069); absent while an older API answers. */
+  payerRule?: { id: string; since: string; live: boolean } | null;
   payment: { id: string; grossTetri: number; number: string | null; rentalId: string | null; saleId: string | null; goodsSaleId?: string | null; customer: string | null } | null;
+}
+
+/** Money coming in set aside by a remembered payer (0069): between accounts, a founder's, other income. */
+interface IncomeRuleLine {
+  id: string;
+  bank: 'bog' | 'tbc' | 'credo';
+  occurredOn: string;
+  amountTetri: number;
+  payer: string | null;
+  resolution: 'own_transfer' | 'founder_equity' | 'other_income' | string | null;
+  categoryId: string | null;
+  rule: { id: string; since: string; live: boolean } | null;
 }
 
 interface AsideLine {
@@ -1063,6 +941,8 @@ interface AsideLine {
   parts?: { categoryId: string; amountTetri: number }[];
   /** What an expense was for (migration 0046); absent while an older API answers. */
   categoryId?: string | null;
+  /** Other income's category (0069). */
+  incomeCategoryId?: string | null;
   reason: string | null;
   by: string | null;
   on: string | null;
@@ -1073,18 +953,19 @@ export function AsidePage() {
   const t = useT();
   const { data, failure, reload } = useLoad<{ days: number; lines: AsideLine[] }>('/api/statement-lines/aside');
   const cats = useExpenseCategories(true, true);
+  const incomeCats = useIncomeCategories(true, true);
   if (failure) return <LoadError failure={failure} onRetry={reload} />;
   return (
     <>
       <PageHead title={t.sort.asideTitle} sub={data ? t.sort.asideSub(data.lines.length) : undefined} />
       {!data && <Skeleton rows={4} />}
       {data && data.lines.length === 0 && <p className="muted">{t.sort.asideEmpty}</p>}
-      {data?.lines.map((l) => <AsideCard key={l.id} line={l} cats={cats} />)}
+      {data?.lines.map((l) => <AsideCard key={l.id} line={l} cats={cats} incomeCats={incomeCats} />)}
     </>
   );
 }
 
-function AsideCard({ line, cats }: { line: AsideLine; cats: Categories }) {
+function AsideCard({ line, cats, incomeCats }: { line: AsideLine; cats: Categories; incomeCats: Categories }) {
   const t = useT();
   const toast = useToast();
   const op = useOperation();
@@ -1101,7 +982,11 @@ function AsideCard({ line, cats }: { line: AsideLine; cats: Categories }) {
           : t.exp.asideOwn
         : line.resolution === 'shareholder'
           ? t.exp.asideShareholder
-          : t.sort.asideNotOurs(line.reason ?? '');
+          : line.resolution === 'founder_equity'
+            ? t.inc.asideFounder
+            : line.resolution === 'other_income'
+              ? t.inc.asideOther(incomeCats.nameOf(line.incomeCategoryId))
+              : t.sort.asideNotOurs(line.reason ?? '');
   return (
     <article className="sort-line">
       <div className="sort-line-head">
@@ -1148,13 +1033,25 @@ function ownWhy(t: ReturnType<typeof useT>, reason: string | null): string {
 export function RulesPage() {
   const t = useT();
   const reason = useReasonText();
-  const { data, failure, reload } = useLoad<{ days: number; lines: RuleLine[]; expenses?: ExpenseRuleLine[] }>('/api/statement-lines/by-rules');
+  const { data, failure, reload } = useLoad<{ days: number; lines: RuleLine[]; expenses?: ExpenseRuleLine[]; incoming?: IncomeRuleLine[] }>('/api/statement-lines/by-rules');
   const cats = useExpenseCategories(true, true);
+  const incomeCats = useIncomeCategories(true, true);
   if (failure) return <LoadError failure={failure} onRetry={reload} />;
   const expenses = data?.expenses ?? [];
+  const incoming = data?.incoming ?? [];
   return (
     <>
-      <PageHead title={t.sort.rulesTitle} sub={data ? t.sort.rulesSub(data.lines.length + expenses.length) : undefined} />
+      <PageHead title={t.sort.rulesTitle} sub={data ? t.sort.rulesSub(data.lines.length + expenses.length + incoming.length) : undefined} />
+      {incoming.length > 0 && (
+        <section>
+          <h2 className="sort-group t-h3">
+            {t.inc.rulesIncoming} <span className="muted mono">{incoming.length}</span>
+          </h2>
+          {incoming.map((l) => (
+            <IncomeRuleCard key={l.id} line={l} cats={incomeCats} onDone={reload} />
+          ))}
+        </section>
+      )}
       {expenses.length > 0 && (
         <section>
           <h2 className="sort-group t-h3">
@@ -1185,6 +1082,72 @@ export function RulesPage() {
   );
 }
 
+/** A line coming in a remembered payer set aside: put it back, or forget the payer (0069). */
+function IncomeRuleCard({ line, cats, onDone }: { line: IncomeRuleLine; cats: Categories; onDone: () => void }) {
+  const t = useT();
+  const toast = useToast();
+  const op = useOperation();
+  const busy = op.state === 'busy';
+  const what = line.resolution === 'other_income' ? t.inc.asideOther(cats.nameOf(line.categoryId)) : line.resolution === 'founder_equity' ? t.inc.asideFounder : t.exp.asideOwn;
+  return (
+    <article className="sort-line">
+      <div className="sort-line-head">
+        <span className="t-money amt-in">+{formatGel(line.amountTetri)}</span>
+        <span className="sort-line-meta">
+          {fmtDate(line.occurredOn)} · {t.statements.banks[line.bank]}
+        </span>
+      </div>
+      <p className="sort-reason">
+        {what} {line.rule ? (line.rule.live ? t.inc.ruleSince(line.payer ?? '', fmtDate(line.rule.since)) : t.inc.ruleForgotten) : ''}
+      </p>
+      <div className="sort-actions">
+        <button
+          type="button"
+          className="pill pill-sm"
+          disabled={busy}
+          onClick={async () => {
+            const res = await op.run((key) => api.post(`/api/statement-lines/${line.id}/restore`, {}, { key }), 'restore');
+            if (res.ok) {
+              toast({ text: t.sort.unlinked });
+              onDone();
+            }
+          }}
+        >
+          {t.sort.unlink}
+        </button>
+        {line.rule?.live && <ForgetPayer ruleId={line.rule.id} onDone={onDone} />}
+      </div>
+      {op.failure && <p className="field-err" role="alert">{op.failure.text}</p>}
+    </article>
+  );
+}
+
+/** «Забыть правило» of a remembered payer: his next line waits for a person; what the rule sorted stays. */
+function ForgetPayer({ ruleId, onDone }: { ruleId: string; onDone?: () => void }) {
+  const t = useT();
+  const toast = useToast();
+  const op = useOperation();
+  return (
+    <>
+      <button
+        type="button"
+        className="pill pill-sm"
+        disabled={op.state === 'busy'}
+        onClick={async () => {
+          const res = await op.run((key) => api.post(`/api/payer-rules/${ruleId}/forget`, {}, { key }), 'forget');
+          if (res.ok) {
+            toast({ text: t.inc.forgotten });
+            onDone?.();
+          }
+        }}
+      >
+        {t.inc.forget}
+      </button>
+      {op.failure && <span className="field-err" role="alert">{op.failure.text}</span>}
+    </>
+  );
+}
+
 function RuleCard({ line, text }: { line: RuleLine; text: string }) {
   const t = useT();
   const toast = useToast();
@@ -1205,7 +1168,11 @@ function RuleCard({ line, text }: { line: RuleLine; text: string }) {
         </span>
       </div>
       <p className="sort-line-text">{[line.payer, line.purpose].filter(Boolean).join(' · ')}</p>
-      <p className="sort-reason">{text}</p>
+      <p className="sort-reason">
+        {text}
+        {/* A remembered payer (0069): «правило „…“, запомнено …», or that it is forgotten. */}
+        {line.payerRule && <span className="muted"> · {line.payerRule.live ? t.inc.ruleSince(line.payer ?? '', fmtDate(line.payerRule.since)) : t.inc.ruleForgotten}</span>}
+      </p>
       <div className="sort-actions">
         {line.payment && (
           <Link className="pill pill-sm" to={`/money/payments/${line.payment.id}`}>
@@ -1228,6 +1195,7 @@ function RuleCard({ line, text }: { line: RuleLine; text: string }) {
         >
           {t.sort.unlink}
         </button>
+        {line.payerRule?.live && <ForgetPayer ruleId={line.payerRule.id} />}
       </div>
       {op.failure && <p className="field-err" role="alert">{op.failure.text}</p>}
     </article>

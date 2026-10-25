@@ -120,7 +120,8 @@ export type TabId =
   | 'payouts'
   | 'balance'
   | 'repair'
-  | 'goods';
+  | 'goods'
+  | 'incoming';
 
 /** Tabs inside a section, in the address (wave 1 §3.2). */
 export const SECTION_TABS: Partial<Record<SectionId, readonly { id: TabId; path: string; anyOf: readonly Permission[]; noneOf?: readonly Permission[] }[]>> = {
@@ -175,6 +176,8 @@ export const SECTION_TABS: Partial<Record<SectionId, readonly { id: TabId; path:
     { id: 'repair', path: '/settings/repair', anyOf: ['settings.manage'] },
     // What money going out was for (migration 0046).
     { id: 'expenses', path: '/settings/expenses', anyOf: ['settings.manage'] },
+    // What money coming in that is no customer's was: «Прочий доход» (migration 0069).
+    { id: 'incoming', path: '/settings/incoming', anyOf: ['settings.manage'] },
     // The rentals folders in Google Drive beside the rentals here (ADR-0031).
     { id: 'drive', path: '/settings/drive', anyOf: ['users.manage'] },
     { id: 'journal', path: '/settings/journal', anyOf: ['users.manage'] },
@@ -200,6 +203,8 @@ export const SECTION_TABS: Partial<Record<SectionId, readonly { id: TabId; path:
     { id: 'economics', path: '/reports/economics', anyOf: ['reports.view'] },
     // What left the accounts, by category (migration 0046).
     { id: 'expenses', path: '/reports/expenses', anyOf: ['reports.view'] },
+    // What came into them, by what it was (migration 0069).
+    { id: 'incoming', path: '/reports/incoming', anyOf: ['reports.view'] },
   ],
 };
 

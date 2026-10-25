@@ -59,6 +59,9 @@ export async function teardown(): Promise<void> {
     // each other; the lines that pointed at them went with their statements.
     await prisma.expenseRule.deleteMany({ where: { createdAt: since } });
     await prisma.expenseCategory.deleteMany({ where: { createdAt: since } });
+    // Payers remembered (0069) point at customers and at the income categories a run added.
+    await prisma.payerRule.deleteMany({ where: { createdAt: since } });
+    await prisma.incomeCategory.deleteMany({ where: { createdAt: since } });
     // A battery moved by a repair names it (0058): the movement goes first.
     await prisma.batteryMove.deleteMany({ where: { createdAt: since } });
     // A goods sale (0067): its shelf movements name its lines, its payments went
