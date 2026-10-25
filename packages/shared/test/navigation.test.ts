@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { REDIRECTS, movedTo } from '../src/index.js';
+import { GROUPS, REDIRECTS, groupHeadingForRole, movedTo } from '../src/index.js';
 import { actionsForRole, homePathForRole, menuSectionsForRole, phoneTabsForRole, sectionOfPath, sectionsForRole, tabsForRole } from './navigation-helpers.js';
 
 describe('the structure each role sees (wave 1 §3.2; issue #15, ADR-0048)', () => {
@@ -19,6 +19,12 @@ describe('the structure each role sees (wave 1 §3.2; issue #15, ADR-0048)', () 
       ['manage', 'settings'],
     ]);
     expect(sectionsForRole('manager').map((s) => s.id)).toEqual(['today', 'schedule', 'sort', 'cash', 'fleet', 'rentals', 'service', 'sales']);
+  });
+
+  it('names a group by what the reader finds in it: «Продажи» for a manager, who has no purchases (QA of #15, the director’s mockup)', () => {
+    expect(GROUPS.map((g) => groupHeadingForRole(g, 'owner'))).toEqual(['daily', 'fleet', 'trade', 'manage']);
+    expect(groupHeadingForRole('trade', 'manager')).toBe('sales');
+    for (const g of ['daily', 'fleet', 'manage'] as const) expect(groupHeadingForRole(g, 'manager'), g).toBe(g);
   });
 
   it('gives both roles Today · Оплаты · Разобрать · Мопеды on the bar, and the rest under «Ещё» in the rail’s order', () => {

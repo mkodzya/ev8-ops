@@ -90,7 +90,7 @@ export const ka: Dict = {
     cash: 'სალარო',
     reports: 'ანგარიშები',
     settings: 'პარამეტრები',
-    groups: { daily: 'ყოველდღიური', fleet: 'პარკი', trade: 'გაყიდვები და შესყიდვები', manage: 'მართვა' },
+    groups: { daily: 'ყოველდღიური', fleet: 'პარკი', trade: 'გაყიდვები და შესყიდვები', sales: 'გაყიდვები', manage: 'მართვა' },
   },
 
   shell: {
@@ -280,7 +280,6 @@ export const ka: Dict = {
   fleet: {
     vehicleAdded: 'მოპედი დაემატა',
     addVehicleCta: 'მოპედის დამატება',
-    title: 'პარკი',
     vin: 'VIN',
     model: 'მოდელი',
     color: 'ფერი',

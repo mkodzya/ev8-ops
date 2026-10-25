@@ -101,7 +101,7 @@ export const ru: Dict = {
     cash: 'Касса',
     reports: 'Отчёты',
     settings: 'Настройки',
-    groups: { daily: 'Ежедневно', fleet: 'Парк', trade: 'Продажи и закупки', manage: 'Управление' },
+    groups: { daily: 'Ежедневно', fleet: 'Парк', trade: 'Продажи и закупки', sales: 'Продажи', manage: 'Управление' },
   },
 
   shell: {
@@ -291,7 +291,6 @@ export const ru: Dict = {
   fleet: {
     vehicleAdded: 'Мопед добавлен',
     addVehicleCta: 'Добавить мопед',
-    title: 'Парк',
     vin: 'VIN',
     model: 'Модель',
     color: 'Цвет',

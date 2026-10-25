@@ -112,7 +112,7 @@ export const tokens = {
   rowX: '10px', // a list row's air left and right, and the gap between its columns
   cardPad: '14px', // inside a card, a tile, a number with its label. Was 18-20px, which is a poster's margin, not a working screen's
   control: '44px', // touch targets no smaller than 44 px (spec §9.2)
-  railW: '220px', // the rail on a laptop
+  railW: '270px', // the rail on a laptop. 270 px, as in the director's mockup of issue #15: a section's name and its two counters on one line
   controlLarge: '52px', // the one loud action: the + in the bar, the sticky primary in a wizard or card
   touchGap: '8px', // the least space between two touch targets
   headerH: '56px', // the phone header: title, search, avatar
@@ -717,8 +717,8 @@ export const tokenGroups: TokenGroup[] = [
       {
         "name": "railW",
         "cssVar": "--rail-w",
-        "value": "220px",
-        "note": "the rail on a laptop"
+        "value": "270px",
+        "note": "the rail on a laptop. 270 px, as in the director's mockup of issue #15: a section's name and its two counters on one line"
       },
       {
         "name": "controlLarge",
