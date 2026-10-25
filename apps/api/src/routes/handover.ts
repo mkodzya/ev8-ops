@@ -208,7 +208,7 @@ export function handoverRoutes(app: FastifyInstance): void {
   });
 
   /**
-   * «Пересмотреть решение по залогу» (issue #14, ADR-0046): an owner, any
+   * «Пересмотреть решение по залогу» (issue #14, ADR-0047): an owner, any
    * time after the return. The preview answers with what the form starts
    * from and, given a decision, the deposit and the debt it would leave.
    */

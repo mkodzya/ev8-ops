@@ -1,4 +1,4 @@
-// «Пересмотреть решение по залогу» (issue #14, ADR-0046): an owner revises a
+// «Пересмотреть решение по залогу» (issue #14, ADR-0047): an owner revises a
 // deposit decided at the return, any time after it, with a reason. Every
 // customer here is invented. Needs a *_test database.
 import { addDays, todayISO } from '@ev8/shared';

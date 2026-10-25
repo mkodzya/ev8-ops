@@ -7,7 +7,7 @@
 словаря продукта; «გადახედვა» [gadakhedva] («пересмотр») и «იყო → იქნება» [iqo → iqneba] («было → станет») — новые.
 Залог возвращают, а не «выдают» (issue #9, пункт 5): `npm run guard:words` теперь следит и за этими ключами.
 Источники — `apps/web/src/i18n/deposit-revise.ts`, `errors.codes.deposit_undecided` в `apps/web/src/i18n/ka.ts`,
-`feedWords['deposit.revise']` в `apps/web/src/i18n/wave4.ts`. Правило — ADR-0046. Примеры выдуманы: аренда R-…,
+`feedWords['deposit.revise']` в `apps/web/src/i18n/wave4.ts`. Правило — ADR-0047. Примеры выдуманы: аренда R-…,
 решение 14.10.2026, долг 150 ₾.
 
 | Ключ | RU | KA | Чтение | Где видно |

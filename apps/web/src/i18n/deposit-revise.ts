@@ -1,5 +1,5 @@
 // «Пересмотреть решение по залогу» on a returned rental (issue #14,
-// ADR-0046). One file, so the Georgian goes to proofreading as one list
+// ADR-0047). One file, so the Georgian goes to proofreading as one list
 // (docs/qa/deposit-revise-ka-strings.md).
 
 export const depositReviseEn = {

@@ -9,7 +9,7 @@ import { Drawer } from './Drawer.js';
 import { DepositDecision } from './ReturnMoney.js';
 import { Field, Row } from './Wizard.js';
 
-// «Пересмотреть решение по залогу» (issue #14, ADR-0046): the return's
+// «Пересмотреть решение по залогу» (issue #14, ADR-0047): the return's
 // decision made again by an owner, from the same choice as at the return,
 // with «было → станет» worked out by the server before anything is written.
 

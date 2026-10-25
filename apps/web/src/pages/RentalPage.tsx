@@ -502,7 +502,7 @@ export function RentalPage() {
           <BlockHead title={t.rentals.deposit}>
             {/* Received before EV8 Ops, on an open rental: an owner marks it or takes the mark off (ADR-0044 §2). */}
             {owner && open && d && !d.decided ? <RowMenu actions={[{ key: 'depositBefore', label: t.depositBefore.action, onPick: () => setSheet('depositBefore') }]} /> : null}
-            {/* A returned rental's decision, revised by an owner any time after (issue #14, ADR-0046). */}
+            {/* A returned rental's decision, revised by an owner any time after (issue #14, ADR-0047). */}
             {owner && !open && d && d.decided ? <RowMenu actions={[{ key: 'revise', label: t.depositRevise.action, onPick: () => setSheet('revise') }]} /> : null}
           </BlockHead>
           {d ? (

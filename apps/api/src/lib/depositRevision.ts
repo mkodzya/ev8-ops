@@ -8,7 +8,7 @@ import { rentalOwed, syncDeposit } from './rentalMoney.js';
 import { writeDecision, type DepositDecision } from './rentals.js';
 
 // An owner's decision on a deposit, revised after the return (issue #14,
-// ADR-0046). The decision is taken apart — the money kept goes back onto the
+// ADR-0047). The decision is taken apart — the money kept goes back onto the
 // deposit, what it paid is owed again — and decided anew from that clean
 // state by the same `writeDecision` a first decision uses. The money handed
 // back is not touched here: a payout is its own record, written and annulled
