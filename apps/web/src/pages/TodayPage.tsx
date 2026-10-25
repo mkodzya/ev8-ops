@@ -1,4 +1,4 @@
-import { localDateTime, type FleetChip, type TaskGroupRows, type TaskRow, type VehicleState } from '@ev8/shared';
+import { localDateTime, queueMore, type FleetChip, type TaskGroupRows, type TaskRow, type VehicleState } from '@ev8/shared';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { LoadError } from '../components/LoadError.js';
@@ -121,6 +121,20 @@ export function TodayPage() {
       bits.push(at ? t.today.kommoAt(at.date, at.time) : t.today.kommoNeverAnswered);
     }
     return bits.join(' · ');
+  };
+
+  // The line under a group longer than the rows it shows: the number and the sum say one set
+  // (QA of #15; shared `queueMore`): all the rows and their sum, the set the list it opens adds
+  // up to (ux №10), or — a manager's group, which carries no sum (ADR-0048, addendum of
+  // 25.10.2026), or one with no money — the rows left.
+  const moreLine = (g: TaskGroupRows) => {
+    const m = queueMore(g);
+    if (!m) return null;
+    return (
+      <Link className="queue-more" to={SEGMENT[g.group] ?? '/rentals'}>
+        {m.kind === 'all' ? t.today.all(m.count, formatGel(m.tetri, { decimals: false })) : t.today.morePlain(m.count)}
+      </Link>
+    );
   };
 
   const rowTitle = (r: TaskRow): string => {
@@ -295,14 +309,7 @@ export function TodayPage() {
               ))}
             </ul>
             {g.group === 'maintenance' && (data.maintenanceUnknown ?? 0) > 0 && <p className="hint muted">{t.wmaint.unknown(data.maintenanceUnknown ?? 0)}</p>}
-            {/* The number and the sum say one set (QA of #15): «Все 32 · …» — every row of the group, the
-                sum the list it opens adds up to (ux №10); not «Ещё 29» beside the sum of all 32. A group
-                with no sum, or a manager's, which carries none (ADR-0048, addendum of 25.10.2026): «Ещё 29». */}
-            {g.total > g.rows.length && (
-              <Link className="queue-more" to={SEGMENT[g.group] ?? '/rentals'}>
-                {(g.totalTetri ?? 0) > 0 ? t.today.all(g.total, formatGel(g.totalTetri ?? 0, { decimals: false })) : t.today.morePlain(g.total - g.rows.length)}
-              </Link>
-            )}
+            {moreLine(g)}
           </section>
         ))
       )}

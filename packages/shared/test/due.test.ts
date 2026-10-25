@@ -16,6 +16,7 @@ import {
   handOverBlockTetri,
   overdueDays,
   queueCount,
+  queueMore,
   rentDueOn,
   waOffered,
   waRentalOf,
@@ -483,12 +484,18 @@ describe('the four cases in the queue of “Today”', () => {
     expect(theirs.map((g) => g.totalTetri)).toEqual([45000, 48000]);
   });
 
-  it('a group’s sum is of every row in it, not of the ones left under the three shown (QA of #15)', () => {
+  it('the line under a group says one set: all its rows and their sum for an owner, the rows left for a manager (QA of #15)', () => {
     const late = [1, 2, 3, 4, 5].map((i) => rental({ id: `l${i}`, number: `R-0001${i}`, status: 'overdue', pickedUpOn: d(-14), paidThrough: d(-7 - i), debtTetri: 10000 * i, dueTodayTetri: 0 }));
-    const g = group(dayQueue(input({ rentals: late })), 'overdue')!;
-    expect([g.total, g.rows.length]).toEqual([5, 3]);
-    // «Все 5 · 1 500 ₾»: the five the list «Просрочены» shows, and their sum.
-    expect(g.totalTetri).toBe(150000);
+    const theirs = group(dayQueue(input({ rentals: late })), 'overdue')!;
+    expect([theirs.total, theirs.rows.length]).toEqual([5, 3]);
+    // «Все 5 · 1 500 ₾»: the five the list «Просрочены» shows and their sum —
+    // not «Ещё 2» beside the sum of all five, which the screen said before.
+    expect(queueMore(theirs)).toEqual({ kind: 'all', count: 5, tetri: 150000 });
+    // A manager's group carries no sum (ADR-0048, addendum): «Ещё 2», the rows left.
+    const mine = group(dayQueue(input({ owner: false, rentals: late })), 'overdue')!;
+    expect(queueMore(mine)).toEqual({ kind: 'left', count: 2 });
+    // A group that shows all it has: no line under it.
+    expect(queueMore(group(dayQueue(input({ rentals: late.slice(0, 3) })), 'overdue')!)).toBeNull();
   });
 
   it('due today with nothing to take is no row (the week has no row yet)', () => {
