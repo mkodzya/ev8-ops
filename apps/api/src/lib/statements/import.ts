@@ -13,7 +13,7 @@ import { lineGross, loadCtx, type Ctx, type Decision, type Line } from './reconc
 import { expenseKey, liveRules, sortByRule } from './expenses.js';
 import { asideByRule, attachByRule, decideWithPayers, livePayerRules, type PayerAnswer } from './payers.js';
 import { markOwnTransfers } from './ownTransfers.js';
-import { alreadyIn, type AlreadyIn } from './sameLine.js';
+import { CARD_DAYS, alreadyIn, type AlreadyIn } from './sameLine.js';
 
 // Loading a statement and letting it settle what it can (PAY-01, PAY-02,
 // wave 2 §3.2, §3.5). Two properties it has to have, and both are about not
@@ -56,16 +56,18 @@ function asLine(bank: 'bog' | 'tbc', l: ParsedLine): Line {
  * Which lines are in already. A line is in when its key is; it is in, too,
  * when the same operation came from another source — a file against the
  * API, or the day's pull against the nightly statement (`sameLine.ts`,
- * ADR-0021; TBC, ADR-0026).
+ * ADR-0021; TBC, ADR-0026) — or when it is a Bank of Georgia card payment
+ * the bank listed already under its other number (rule 5, issue #16).
  */
 export async function knownLines<T extends ParsedLine>(parsed: { bank: 'bog' | 'tbc'; lines: T[] }): Promise<AlreadyIn<T>> {
-  const select = { naturalKey: true, docNo: true, occurredOn: true, direction: true, amountTetri: true } as const;
+  const select = { naturalKey: true, docNo: true, occurredOn: true, direction: true, amountTetri: true, raw: true } as const;
   const byKey = await prisma.statementLine.findMany({ where: { bank: parsed.bank, naturalKey: { in: parsed.lines.map((l) => l.naturalKey) } }, select });
   let near: typeof byKey = [];
   if (parsed.lines.length > 0) {
+    // As far as the two listings of one card payment may be apart; the other rules look a day either side.
     const days = parsed.lines.map((l) => l.occurredOn).sort();
     near = await prisma.statementLine.findMany({
-      where: { bank: parsed.bank, occurredOn: { gte: dateFromISO(addDays(days[0]!, -1))!, lte: dateFromISO(addDays(days[days.length - 1]!, 1))! } },
+      where: { bank: parsed.bank, occurredOn: { gte: dateFromISO(addDays(days[0]!, -CARD_DAYS))!, lte: dateFromISO(addDays(days[days.length - 1]!, CARD_DAYS))! } },
       select,
     });
   }
