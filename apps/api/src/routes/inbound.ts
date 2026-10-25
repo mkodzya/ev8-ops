@@ -12,7 +12,8 @@ import { BACK_TO_QUEUE, setAside } from '../lib/statements/aside.js';
 import { OPTION_KINDS, optionsFor, type OptionKind } from '../lib/statements/options.js';
 import { rememberPayer } from '../lib/statements/payers.js';
 import { storedLine } from '../lib/statements/reconcile.js';
-import { date, str } from '../lib/validate.js';
+import { date, str, strList } from '../lib/validate.js';
+import { UNDO_MS } from './payments.js';
 import { incomingKey } from './statements.js';
 
 // Money coming in, answered by its kind (issue #13 of the director,
@@ -97,22 +98,38 @@ export function inboundRoutes(app: FastifyInstance): void {
    * «Отменить» right after an answer with «Запомнить»: the rule is put away
    * and the lines it sorted in the same tap wait again — a payment it wrote
    * is annulled. The line the person answered is taken back by its own undo.
+   *
+   * The same tap only, as a payment's «Отменить» (`/api/payments/:id/undo`):
+   * the person who remembered the payer, within `UNDO_MS` of it, and only the
+   * lines he sorted then — `lines`, the ids the tap returned as `alsoSorted`,
+   * narrows it further. A line the rule sorted later, from a statement loaded
+   * afterwards, is taken back by itself with «Отвязать»; the rule is
+   * forgotten with «Забыть правило» (review of 25.10.2026, ADR-0046 addendum).
    */
-  app.post<{ Params: { id: string } }>('/api/payer-rules/:id/undo', { config: { scope: 'payments.reconcile' } }, async (req) => {
+  app.post<{ Params: { id: string }; Body: Body }>('/api/payer-rules/:id/undo', { config: { scope: 'payments.reconcile' } }, async (req) => {
     const actor = actorOf(req);
-    const rule = await prisma.payerRule.findUnique({ where: { id: req.params.id }, select: { id: true } });
+    const b = req.body ?? {};
+    const asked = Array.isArray(b.lines) ? new Set(strList(b, 'lines')) : null;
+    const rule = await prisma.payerRule.findUnique({ where: { id: req.params.id }, select: { id: true, createdById: true, createdAt: true } });
     if (!rule) throw notFound('payer_rule_not_found', 'No such remembered payer.');
+    if (rule.createdById !== actor.id || Date.now() - rule.createdAt.getTime() > UNDO_MS) {
+      throw conflict('payer_rule_undo_too_late', 'Too late to undo: forget the rule, and unlink what it sorted one line at a time.');
+    }
+    // What the tap itself did: by this person, before the minute ran out.
+    const until = rule.createdAt.getTime() + UNDO_MS;
+    const inTap = (id: string, by: string | null, at: Date | null) => by === actor.id && at != null && at.getTime() <= until && (asked == null || asked.has(id));
     await prisma.payerRule.updateMany({ where: { id: rule.id, archivedAt: null }, data: { archivedAt: new Date(), archivedById: actor.id } });
     const lines = await prisma.statementLine.findMany({
       where: { payerRuleId: rule.id },
-      select: { id: true, status: true, payments: { where: { voidedAt: null, source: 'statement' }, select: { id: true } } },
+      select: { id: true, status: true, resolvedById: true, resolvedAt: true, payments: { where: { voidedAt: null, source: 'statement' }, select: { id: true, createdById: true, createdAt: true } } },
     });
     let restored = 0;
     for (const l of lines) {
-      if (l.status === 'matched' && l.payments[0]) {
-        await voidPayment({ actorId: actor.id, paymentId: l.payments[0].id, reason: 'undone with the payer remembered', kind: 'undo' });
+      const p = l.payments[0];
+      if (l.status === 'matched' && p && inTap(l.id, p.createdById, p.createdAt)) {
+        await voidPayment({ actorId: actor.id, paymentId: p.id, reason: 'undone with the payer remembered', kind: 'undo' });
         restored++;
-      } else if (l.status === 'ignored') {
+      } else if (l.status === 'ignored' && inTap(l.id, l.resolvedById, l.resolvedAt)) {
         restored += (await prisma.statementLine.updateMany({ where: { id: l.id, status: 'ignored' }, data: BACK_TO_QUEUE })).count;
       }
     }

@@ -70,12 +70,17 @@ export const incEn = {
     },
     remember: (payer: string) => `Remember for «${payer}»`,
     rememberHint: 'His next lines are placed by themselves — on his rental when there is one that this sum fits; otherwise they wait for a person.',
+    /** The Bank of Georgia gives the sender's account: the payer is his name with it (review of 25.10.2026). */
+    rememberAccount: 'Remembered with the account he pays from: a line of his from another account waits for a person.',
     remembered: {
       customer: (name: string) => `Payer remembered: ${name}.`,
       own_transfer: 'Payer remembered: between own accounts.',
       founder_equity: 'Payer remembered: a founder’s contribution.',
       other_income: (category: string) => `Payer remembered: other income · ${category}.`,
     },
+    /** The line names another customer than the one remembered (any customer, for an answer that is no customer's): the rule kept quiet. */
+    rememberedQuiet: 'But the line names another customer: the rule left it — choose yourself.',
+    rememberedQuietAny: 'But the line names a customer: the rule left it — choose yourself.',
     alsoSorted: (n: number) => (n > 0 ? ` · ${n} more from this payer` : ''),
     founderDone: 'Marked: a founder’s contribution',
     otherDone: (category: string) => `Marked: other income · ${category}`,
@@ -182,13 +187,16 @@ export const incRu: Inc = {
       bank: (a) => `${a} — наличные, сданные в банк; ничей долг не меняется.`,
     },
     remember: (payer) => `Запомнить для «${payer}»`,
-    rememberHint: 'Следующие строки от него разнесутся сами — на его аренду, если она одна и сумма подходит; иначе подождут человека.',
+    rememberHint: 'Следующие строки от него правило разберёт само — на его аренду, если она одна и сумма подходит; иначе они подождут человека.',
+    rememberAccount: 'Запоминается вместе со счётом, с которого он платит: строка от него с другого счёта подождёт человека.',
     remembered: {
       customer: (name) => `Плательщик запомнен: ${name}.`,
       own_transfer: 'Плательщик запомнен: между своими счетами.',
       founder_equity: 'Плательщик запомнен: взнос учредителя.',
       other_income: (category) => `Плательщик запомнен: прочий доход · ${category}.`,
     },
+    rememberedQuiet: 'Но строка называет другого клиента: правило её не разобрало — выберите сами.',
+    rememberedQuietAny: 'Но строка называет клиента: правило её не разобрало — выберите сами.',
     alsoSorted: (n) => (n > 0 ? ` · ещё ${n} от этого плательщика` : ''),
     founderDone: 'Отмечено: взнос учредителя',
     otherDone: (category) => `Отмечено: прочий доход · ${category}`,
@@ -205,7 +213,7 @@ export const incRu: Inc = {
     forgotten: 'Правило забыто: следующая строка от этого плательщика подождёт человека',
     settings: {
       title: 'Категории прочего дохода',
-      hint: 'Что такое поступление, если это не деньги клиента: возврат от поставщика, страховка. Убранная категория остаётся у своих строк; её запомненные плательщики перестают разносить.',
+      hint: 'Что такое поступление, если это не деньги клиента: возврат от поставщика, страховка. Убранная категория остаётся у своих строк; строки её запомненных плательщиков в неё больше не разбираются.',
     },
     report: {
       title: 'Поступления',
@@ -291,13 +299,16 @@ export const incKa: Inc = {
       bank: (a) => `${a} — ბანკში შეტანილი ნაღდი; არავის დავალიანება არ იცვლება.`,
     },
     remember: (payer) => `დამახსოვრება «${payer}»-თვის`,
-    rememberHint: 'მისი შემდეგი ხაზები თავად განაწილდება — მის ქირაობაზე, თუ ერთია და თანხა ერგება; თორემ ადამიანს დაელოდება.',
+    rememberHint: 'მისი შემდეგი ხაზები თავად დახარისხდება — მის ქირაობაზე, თუ ერთია და თანხა ერგება; თორემ ადამიანს დაელოდება.',
+    rememberAccount: 'დაიმახსოვრება იმ ანგარიშთან ერთად, საიდანაც იხდის: მისი ხაზი სხვა ანგარიშიდან ადამიანს დაელოდება.',
     remembered: {
       customer: (name) => `გამგზავნი დამახსოვრებულია: ${name}.`,
       own_transfer: 'გამგზავნი დამახსოვრებულია: საკუთარ ანგარიშებს შორის.',
       founder_equity: 'გამგზავნი დამახსოვრებულია: პარტნიორისგან.',
       other_income: (category) => `გამგზავნი დამახსოვრებულია: სხვა შემოსავალი · ${category}.`,
     },
+    rememberedQuiet: 'მაგრამ ხაზში სხვა კლიენტის სახელია: წესმა ის არ დაახარისხა — აირჩიეთ თავად.',
+    rememberedQuietAny: 'მაგრამ ხაზში კლიენტის სახელია: წესმა ის არ დაახარისხა — აირჩიეთ თავად.',
     alsoSorted: (n) => (n > 0 ? ` · კიდევ ${n} ამ გამგზავნისგან` : ''),
     founderDone: 'მოინიშნა: პარტნიორისგან',
     otherDone: (category) => `მოინიშნა: სხვა შემოსავალი · ${category}`,
@@ -314,7 +325,7 @@ export const incKa: Inc = {
     forgotten: 'წესი დავიწყებულია: ამ გამგზავნის შემდეგი ხაზი ადამიანს დაელოდება',
     settings: {
       title: 'სხვა შემოსავლის კატეგორიები',
-      hint: 'რა არის შემოსული თანხა, თუ ის კლიენტის არ არის: მომწოდებლისგან დაბრუნებული თანხა, დაზღვევა. ამოღებული კატეგორია თავის ხაზებთან რჩება; მისი დამახსოვრებული გამგზავნები აღარ ანაწილებენ.',
+      hint: 'რა არის შემოსული თანხა, თუ ის კლიენტის არ არის: მომწოდებლისგან დაბრუნებული თანხა, დაზღვევა. ამოღებული კატეგორია თავის ხაზებთან რჩება; მისი დამახსოვრებული გამგზავნების ხაზები მასში აღარ დახარისხდება.',
     },
     report: {
       title: 'შემოსავალი',

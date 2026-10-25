@@ -19,8 +19,8 @@ import { date, oneOf, str, strList, tetri } from '../lib/validate.js';
 const CHANNELS = ['transfer', 'acquiring', 'cash'] as const;
 /** What the list filters by: the form's channels and rent closed by a mechanic's work, which only a payout writes (0066). */
 const LIST_CHANNELS = [...CHANNELS, 'offset'] as const;
-/** "Undo" in the message after a write: seconds on screen, a minute of room for a slow phone. */
-const UNDO_MS = 60_000;
+/** "Undo" in the message after a write: seconds on screen, a minute of room for a slow phone. A remembered payer's undo keeps it too (inbound.ts). */
+export const UNDO_MS = 60_000;
 type Body = Record<string, unknown>;
 type Query = Record<string, string | undefined>;
 

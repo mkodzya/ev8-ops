@@ -68,6 +68,7 @@ export interface SortLine {
   depositHint?: { rentalId: string; number: string } | null;
   /** Money coming in (migration 0069): the payer to remember, and what he is remembered as. */
   payerLabel?: string | null;
+  payerByAccount?: boolean;
   remembered?: InLine['remembered'];
   /** A Bank of Georgia card payment the bank sent twice (issue #16): the earlier line this one repeats; absent while an older API answers. */
   duplicateOf?: { id: string; occurredOn: string; docNo: string | null; status: string } | null;
@@ -323,6 +324,8 @@ function LineCard({ line, cats, onNotOurs, onSplit }: { line: SortLine; cats: Ca
               : t.inc.remembered[remembered.kind]}
         </p>
       )}
+      {/* The line names another customer than the one remembered: the rule kept quiet, and the panel puts the name first. */}
+      {remembered?.namesAnother && <p className="sort-reason">{remembered.kind === 'customer' ? t.inc.rememberedQuiet : t.inc.rememberedQuietAny}</p>}
       {line.direction === 'in' && line.group !== 'recorded' && (line.cashDeposit || line.suggestions.some((s) => s.kind === 'bank_deposit')) && (
         <p className="sort-reason">{line.suggestions.some((s) => s.kind === 'bank_deposit') ? reason({ code: 'bank_deposit' }) : t.sort.bankDeposit}</p>
       )}

@@ -1,7 +1,9 @@
+import { nameMatches } from '@ev8/shared';
 import type { Prisma } from '../../generated/prisma/client.js';
 import { prisma } from '../db.js';
 import { ApiError } from '../errors.js';
 import { attach } from './import.js';
+import { ibanOf } from './ownTransfers.js';
 import { beforeTransfer, decide, isCashDeposit, lineGross, loadCtx, recordedFor, storedLine, type Ctx, type Decision, type Line, type Reason } from './reconcile.js';
 
 // Money coming in, and its payer remembered (migration 0069; issue #13 of the
@@ -22,6 +24,16 @@ import { beforeTransfer, decide, isCashDeposit, lineGross, loadCtx, recordedFor,
 //     is set aside as that.
 // A card line names a terminal, not a person, and cash paid in at a branch
 // names whoever paid it in: neither has a payer to remember.
+//
+// Two guards since the review before 1.16.0 (25.10.2026; ADR-0046, addendum):
+//   * where the bank gives the sender's account — the Bank of Georgia does,
+//     in its English wording («Account: GE…») and in the row's own column —
+//     the payer is his name and that account together: a namesake sending
+//     from another account is another payer. A line with no account (TBC)
+//     keeps the name alone;
+//   * a remembered payer is silent when the line's own words name another
+//     of our customers: the line goes on as if nobody had remembered him —
+//     the name rule, or a person.
 
 type Tx = Prisma.TransactionClient;
 type Db = Tx | typeof prisma;
@@ -39,18 +51,48 @@ export interface LivePayerRule {
 
 const norm = (s: string) => s.toLowerCase().replace(/\s+/g, ' ').trim();
 
-/** Who sent the money, as one remembered key; none for a card line, cash paid in, or a line that names nobody. */
+/**
+ * The account the money came from, where the bank writes it: the Bank of
+ * Georgia, in its English wording after the sender («Sender: …; Account:
+ * GE…»), and in the row's column of the other side's account — the third
+ * cell of a stored line, from a file and from the API alike (`bog.ts`). TBC's
+ * lines keep no account: none.
+ */
+export function senderAccount(line: Line): string | null {
+  if (line.direction !== 'in' || line.bank !== 'bog') return null;
+  const said = /\bAccount:\s*([A-Z0-9 ]{15,40})/i.exec(line.raw)?.[1];
+  return ibanOf(said) ?? ibanOf(line.raw.split(' | ')[2]);
+}
+
+/**
+ * Who sent the money, as one remembered key; none for a card line, cash paid
+ * in, or a line that names nobody. The name as the bank writes it, and the
+ * sender's account beside it where the bank gives one: `name|GE…`.
+ */
 export function payerKey(line: Line): string | null {
   if (line.direction !== 'in' || line.channel !== 'transfer' || isCashDeposit(line)) return null;
   const payer = norm(line.payer ?? '');
-  return payer.length >= 3 ? payer : null;
+  if (payer.length < 3) return null;
+  const account = senderAccount(line);
+  return account ? `${payer}|${account}` : payer;
 }
 
-/** The same payer, as a person reads it beside «Запомнить для …». */
+/**
+ * The same payer, as a person reads it beside «Запомнить для …», in
+ * «Разобрано правилами» and in a rule's reason: the name, and where the key
+ * holds the sender's account, its last four characters — «… · …0001». The
+ * same name from another account is another payer, and the screen says which
+ * one it remembers (review of 25.10.2026).
+ */
 export function payerLabel(line: Line): string | null {
   if (payerKey(line) == null) return null;
-  return (line.payer ?? '').replace(/\s+/g, ' ').trim();
+  const name = (line.payer ?? '').replace(/\s+/g, ' ').trim();
+  const account = senderAccount(line);
+  return account ? `${name} · …${account.slice(-4)}` : name;
 }
+
+/** Whether the payer's key holds the sender's account: a line from another account waits for a person. */
+export const payerByAccount = (line: Line): boolean => payerKey(line) != null && senderAccount(line) != null;
 
 /** The rules in force, by payer key. A category taken off stops its rules (as with expenses). */
 export async function livePayerRules(db: Db): Promise<Map<string, LivePayerRule>> {
@@ -77,13 +119,41 @@ function takes(r: Ctx['rentals'][number], gross: number): boolean {
   return [r.owedNowTetri, r.weeklyRateTetri, r.openDepositTetri + r.openFirstPeriodTetri, r.openDepositTetri, r.openFirstPeriodTetri, r.openTotalTetri].some((n) => n > 0 && n === gross);
 }
 
+/** The customers the line's own words name — the payer and the purpose, read as the name rule reads them. */
+export function namedCustomers(line: Line, ctx: Pick<Ctx, 'customers'>): string[] {
+  const text = [line.payer, line.purpose].filter(Boolean).join(' ');
+  return text ? ctx.customers.filter((c) => nameMatches(text, c.names)).map((c) => c.id) : [];
+}
+
+/**
+ * The line names another of our customers than the one the payer is
+ * remembered as — for an answer that is no customer's, any customer: the
+ * remembered payer keeps quiet (`byPayerRule`), and the screen says so — the
+ * queue in words, the panel with the name above the payer remembered.
+ */
+export function namesAnother(line: Line, ctx: Pick<Ctx, 'customers'>, rule: { customerId: string | null }): boolean {
+  return namedCustomers(line, ctx).some((id) => id !== rule.customerId);
+}
+
+/** Our customers by their names, as `loadCtx` holds them for the name rule — for a screen that needs no more of it. */
+export async function customersByName(db: Db): Promise<Ctx['customers']> {
+  const rows = await db.customer.findMany({ where: { archived: false }, select: { id: true, name: true, nameKa: true, nameLat: true } });
+  return rows.map((c) => ({ id: c.id, name: c.name, names: [c.name, c.nameKa, c.nameLat] }));
+}
+
 /**
  * What a remembered payer makes of this line, or nothing — then the line goes
  * on as if nobody had remembered him. Never over money entered by hand: a
- * payment of this sum within ±3 days may be this very line (B2-03).
+ * payment of this sum within ±3 days may be this very line (B2-03). Never
+ * when the line names another of our customers (review of 25.10.2026): a
+ * namesake, or the relative remembered for one customer who now rents
+ * himself — the name speaks of somebody else, and a remembered payer does
+ * not argue with it. For an answer that is no customer's — between own
+ * accounts, a founder, other income — every customer is another.
  */
 export function byPayerRule(line: Line, ctx: Ctx, rule: LivePayerRule): PayerAnswer | null {
   if (line.direction !== 'in' || recordedFor(line, ctx).length > 0) return null;
+  if (namesAnother(line, ctx, rule)) return null;
   if (rule.kind !== 'customer') {
     return { type: 'aside', resolution: rule.kind, categoryId: rule.kind === 'other_income' ? rule.categoryId : null, payerRuleId: rule.id };
   }
@@ -107,7 +177,8 @@ export function byPayerRule(line: Line, ctx: Ctx, rule: LivePayerRule): PayerAns
 /**
  * What the import does with a line: money entered by hand and cash taken to
  * the bank first, as ever; then a remembered payer, a person's own word, over
- * the name rule; then the name rule; then a person.
+ * the name rule — unless the line names another customer than the one he is
+ * remembered as (`byPayerRule`); then the name rule; then a person.
  */
 export function decideWithPayers(line: Line, ctx: Ctx, rules: Map<string, LivePayerRule>): Decision | PayerAnswer {
   const d = decide(line, ctx);

@@ -159,6 +159,29 @@ describe.skipIf(!HAS_DB)('issue #14 · revising a deposit decision', () => {
     expect(c.rental.debtTetri).toBe(0);
   });
 
+  it('other money on the charge for what was kept beyond the claims: the revision refuses rather than strand it (review of 25.10.2026)', async () => {
+    const { prisma, owner, id } = await returned(3, { action: 'return_all' });
+    // Kept 50 for mud with nothing owed: the 50 is a charge of its own, paid by the deposit.
+    expect((await revise(owner, id, { action: 'withhold', withheldTetri: 5000, grounds: ['cleaning'], reason: 'mud inside', revisionReason: 'found the mud the next day' })).statusCode).toBe(200);
+    // The deposit's payment annulled by hand: the charge is open again, and 20 in cash is booked onto it.
+    const kept = await prisma.depositWithholding.findFirstOrThrow({ where: { rentalId: id, source: 'return', voidedAt: null } });
+    expect((await call(owner, 'POST', `/api/payments/${kept.paymentId}/void`, { reason: 'annulled by hand' })).statusCode).toBe(200);
+    const cash = await call(owner, 'POST', '/api/money', { kind: 'rent', rentalId: id, amountTetri: '20', channel: 'cash' });
+    expect(cash.statusCode, cash.body).toBe(201);
+    expect((await card(owner, id)).charges).toEqual([expect.objectContaining({ kind: 'withheld', amountTetri: 5000, paidTetri: 2000 })]);
+    // Taking the decision apart would void the charge and leave the 20 on nothing: refused, and the preview says so first.
+    expect(err(await call(owner, 'POST', `/api/rentals/${id}/deposit/revise/preview`, {})).error).toBe('withheld_paid_by_other');
+    const refused = await revise(owner, id, { action: 'return_all', revisionReason: 'the mud was ours' });
+    expect(refused.statusCode).toBe(409);
+    expect(json<{ error: string; paidTetri: number }>(refused)).toMatchObject({ error: 'withheld_paid_by_other', paidTetri: 2000 });
+    expect((await card(owner, id)).deposit.withheldTetri).toBe(5000);
+    // Its own door first — the cash annulled — and then the revision goes through.
+    expect((await call(owner, 'POST', `/api/payments/${json<{ id: string }>(cash).id}/void`, { reason: 'booked on the wrong charge' })).statusCode).toBe(200);
+    const ok = await revise(owner, id, { action: 'return_all', revisionReason: 'the mud was ours' });
+    expect(ok.statusCode, ok.body).toBe(200);
+    expect((await card(owner, id)).charges).toEqual([]);
+  });
+
   it('money handed back already stays; more than is left cannot be kept', async () => {
     const { owner, id } = await returned(3, { action: 'withhold', withheldTetri: 3000, grounds: ['cleaning'], reason: 'mud' });
     expect((await call(owner, 'POST', '/api/money', { kind: 'deposit_payout', rentalId: id, amountTetri: '150', channel: 'cash' })).statusCode).toBe(201);
