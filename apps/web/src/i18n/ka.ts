@@ -35,6 +35,7 @@ import { depositReviseKa } from './deposit-revise.js';
 import { menuKa } from './menu.js';
 import { goodsKa } from './goods.js';
 import { incKa } from './inbound.js';
+import { dupKa } from './card-duplicate.js';
 import type { Dict } from './en.js';
 
 // Typed as Dict: a missing or misspelled key fails the build.
@@ -1337,6 +1338,7 @@ export const ka: Dict = {
       not_outgoing: 'პარტნიორის მიერ გატანილად მხოლოდ ანგარიშიდან გასული თანხის მონიშვნაა შესაძლებელი.',
       not_returned: 'დაბრუნების აქტი გამოჩნდება ქირაობის დახურვის შემდეგ.',
       not_set_aside: 'ეს ხაზი რიგიდან ამოღებული არ არის. განაახლეთ სია.',
+      no_twin: 'ეს ხაზი სხვა ხაზს არ იმეორებს. თუ ის ჩვენი არ არის — «ეს ჩვენი არ არის», მიზეზით.',
       not_yours: 'ამ ცვლილების გაუქმება შეუძლია მხოლოდ მას, ვინც ის გააკეთა.',
       nothing_to_correct: 'ნაშთი უკვე ასეთია.',
       nothing_to_undo: 'ამ მოპედს არ აქვს გადაყვანა, რომლის გაუქმებაც შესაძლებელია.',
@@ -1491,4 +1493,5 @@ export const ka: Dict = {
   ...menuKa,
   ...goodsKa,
   ...incKa,
+  ...dupKa,
 };

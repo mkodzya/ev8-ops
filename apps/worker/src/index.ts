@@ -106,7 +106,7 @@ type BankOutcome =
       added: number;
       recorded: number;
       matched: number;
-      known: { byKey: number; byId?: number; byDoc: number; bySum: number };
+      known: { byKey: number; byId?: number; byDoc: number; bySum: number; byCard?: number };
       days: string[];
       fromStatement?: boolean;
       mismatched?: string[];
@@ -165,11 +165,15 @@ async function askBank(bank: Bank, part: 'today' | 'night'): Promise<void> {
       line = `${name} did not answer${night ? ' with the statement' : ''} — ${r.failure}${r.httpStatus ? ` (${r.httpStatus})` : ''}${r.stage ? ` at the ${r.stage === 'token' ? 'token' : 'API'}` : ''}`;
     else {
       const byId = r.known.byId ?? 0;
-      const known = r.known.byKey + byId + r.known.byDoc + r.known.bySum;
+      const byCard = r.known.byCard ?? 0;
+      const known = r.known.byKey + byId + r.known.byDoc + r.known.bySum + byCard;
       const added = r.added ? `${r.added} new line(s), ${r.recorded} linked to payments entered by hand, ${r.matched} attached by a rule` : 'nothing new';
       const other = byId + r.known.byDoc + r.known.bySum;
       // How a line from a file was known matters while the join of file and API is unproven (ADR-0021, ADR-0026).
-      const from = other ? `; ${other} already in from another source${byId ? ` (${byId} by the bank's transaction id, ${r.known.byDoc + r.known.bySum} by day and sum)` : ''}` : '';
+      // A card payment the bank listed again under its other number is counted apart (issue #16).
+      const from =
+        (other ? `; ${other} already in from another source${byId ? ` (${byId} by the bank's transaction id, ${r.known.byDoc + r.known.bySum} by day and sum)` : ''}` : '') +
+        (byCard ? `; ${byCard} card payment(s) the bank listed again under the other number` : '');
       const off = r.mismatched?.length ? `; the movements of ${r.mismatched.join(', ')} do not add up to the bank's statement — read again within the hour` : '';
       line = night
         ? r.days.length

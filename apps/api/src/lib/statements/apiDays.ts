@@ -54,12 +54,15 @@ export interface Tally {
   added: number;
   recorded: number;
   matched: number;
-  /** Listed and already in: by their own key, by TBC's transaction id, by document number from another source, by day and sum. */
-  known: { byKey: number; byId: number; byDoc: number; bySum: number };
+  /**
+   * Listed and already in: by their own key, by TBC's transaction id, by document number from another source, by day
+   * and sum, and a Bank of Georgia card payment the bank listed again under its other number (issue #16).
+   */
+  known: { byKey: number; byId: number; byDoc: number; bySum: number; byCard: number };
 }
 
 export function tally(): Tally {
-  return { listed: 0, added: 0, recorded: 0, matched: 0, known: { byKey: 0, byId: 0, byDoc: 0, bySum: 0 } };
+  return { listed: 0, added: 0, recorded: 0, matched: 0, known: { byKey: 0, byId: 0, byDoc: 0, bySum: 0, byCard: 0 } };
 }
 
 /** Each operation once, should the bank list one twice. */
@@ -127,6 +130,7 @@ export async function keep(bank: ApiBank, name: string, account: string, day: st
   t.known.byId += sorted.byId;
   t.known.byDoc += sorted.byDoc;
   t.known.bySum += sorted.bySum;
+  t.known.byCard += sorted.byCard;
   const statement = await prisma.statement.findFirst({ where: { bank, source: 'api', account, periodFrom: dateFromISO(day)! }, select: { id: true, lineCount: true } });
   if (sorted.fresh.length === 0) {
     if (statement && lines.length > statement.lineCount) await prisma.statement.update({ where: { id: statement.id }, data: { lineCount: lines.length } });

@@ -35,6 +35,7 @@ import { depositReviseRu } from './deposit-revise.js';
 import { menuRu } from './menu.js';
 import { goodsRu } from './goods.js';
 import { incRu } from './inbound.js';
+import { dupRu } from './card-duplicate.js';
 import type { Dict } from './en.js';
 
 // Typed as Dict: a missing or misspelled key fails the build.
@@ -1348,6 +1349,7 @@ export const ru: Dict = {
       not_outgoing: 'Выводом акционера можно отметить только деньги, ушедшие со счёта.',
       not_returned: 'Акт возврата появится, когда аренда будет закрыта.',
       not_set_aside: 'Эта строка не убрана из очереди. Обновите список.',
+      no_twin: 'Эта строка не повторяет другую. Если она не наша — «Это не наше», с причиной.',
       not_yours: 'Отменить перевод может только тот, кто его сделал.',
       nothing_to_correct: 'Остаток уже такой.',
       nothing_to_undo: 'У этого мопеда нет перевода, который можно отменить.',
@@ -1502,4 +1504,5 @@ export const ru: Dict = {
   ...menuRu,
   ...goodsRu,
   ...incRu,
+  ...dupRu,
 };

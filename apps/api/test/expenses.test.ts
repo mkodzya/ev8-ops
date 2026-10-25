@@ -119,12 +119,13 @@ describe.skipIf(!HAS_DB)('what money going out was for', () => {
     expect(nameless.resolution).toBe('own_transfer');
   });
 
-  it('a deposit handed back from the bank line itself: hinted, written, and back in the queue when annulled', async () => {
+  it('a deposit handed back from the bank line itself: hinted to its renter only, written, and back in the queue when annulled', async () => {
     const owner = await loginAs('owner');
     const { prisma } = await import('../src/lib/db.js');
     const model = await prisma.vehicleModel.create({ data: { brand: 'Test', name: `Model ${uniq()}`, forRent: true } });
     const vehicle = await prisma.vehicle.create({ data: { vin: `TESTE${uniq().replace(/\D/g, '').slice(-12).padStart(12, '0')}`, modelId: model.id } });
-    const customer = await prisma.customer.create({ data: { name: `ТЕСТ Залог ${uniq()}` } });
+    // An invented renter, in Latin letters as a bank writes a recipient.
+    const customer = await prisma.customer.create({ data: { name: `Testa Zalogi ${uniq()}` } });
     const { id: rentalId } = json<{ id: string }>(
       await call(owner, 'POST', '/api/rentals', { customerId: customer.id, vehicleId: vehicle.id, weeklyRateTetri: 15000, batteries: 2, chargers: 2, pickedUpOn: '2026-09-01' }),
     );
@@ -141,9 +142,20 @@ describe.skipIf(!HAS_DB)('what money going out was for', () => {
     const before = (await owed()).toHandBackTetri;
     expect(before).toBeGreaterThan(0);
 
-    const payee = `TEST DEPOSIT ${uniq()}`;
-    await load(owner, [outRow('10.10.2026', (before / 100).toFixed(2), payee)]);
-    const line = (await queue(owner)).find((l) => l.raw.includes(payee)) as QueueLine & { depositHint: { rentalId: string } | null };
+    // Exactly that sum to somebody who is none of our customers: no hint — a sum alone is no sign (issue #16).
+    const stranger = `TEST STRANGER ${uniq()}`;
+    await load(owner, [outRow('10.10.2026', (before / 100).toFixed(2), stranger)]);
+    const theirs = (await queue(owner)).find((l) => l.raw.includes(stranger)) as QueueLine & { depositHint: { rentalId: string } | null };
+    expect(theirs.depositHint).toBeNull();
+    expect(theirs.group).toBe('none');
+    // Nor a line that names no recipient at all.
+    await load(owner, [`"10.10.2026","${doc++}","GE89BG0000000902936900GEL","${(before / 100).toFixed(2)}","","1","${(before / 100).toFixed(2)}","REFUND ${stranger}"`]);
+    const nameless = (await queue(owner)).find((l) => l.raw.includes(`REFUND ${stranger}`)) as QueueLine & { depositHint: { rentalId: string } | null };
+    expect(nameless.depositHint).toBeNull();
+
+    // The renter named as the recipient: «Похоже на возврат залога R-…».
+    await load(owner, [outRow('10.10.2026', (before / 100).toFixed(2), customer.name)]);
+    const line = (await queue(owner)).find((l) => l.raw.includes(customer.name)) as QueueLine & { depositHint: { rentalId: string } | null };
     expect(line.depositHint?.rentalId).toBe(rentalId);
     expect(line.group).toBe('suggested');
 

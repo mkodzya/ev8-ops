@@ -98,6 +98,8 @@ describe('route table', () => {
       'POST /api/statement-lines/:id/bank-deposit',
       'POST /api/statement-lines/:id/pay-out',
       'POST /api/statement-lines/:id/restore',
+      // «Это дубль» (issue #16) sets a line aside, as «Это не наше» does: an owner's.
+      'POST /api/statement-lines/:id/duplicate',
       'POST /api/payer-rules/:id/forget',
       'POST /api/payer-rules/:id/undo',
     ]) {
