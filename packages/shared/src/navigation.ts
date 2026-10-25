@@ -3,57 +3,73 @@ import { UTILISATION_PATH } from './utilisation.js';
 import type { Role } from './types.js';
 
 /**
- * The structure of the product (redesign blueprint §2.1–2.2, wave 1 §3.2–3.4):
- * nine sections in three groups, the tabs inside them, the phone bar and the
- * "+" actions of each role. Which of it a person sees follows from their
- * permissions, so the menu and the API cannot disagree about a role.
+ * The structure of the product: the sections in their groups, the tabs inside
+ * them, the phone bar and the "+" actions of each role. Which of it a person
+ * sees follows from their permissions, so the menu and the API cannot
+ * disagree about a role.
+ *
+ * Since issue #15 of the director (25.10.2026; ADR-0048) the groups are the
+ * day's work first: «Ежедневно» — Today, «Оплаты по графику», «Разобрать»
+ * with their counters, the till; «Парк» — the mopeds, the rentals with their
+ * customers, the repairs; «Продажи и закупки»; and the owners' «Управление»
+ * — Money (the payments, the statements, the deposits), Reports, Settings.
+ * Before it (wave 1 §3.2–3.4) the payments calendar and «Разобрать» were tabs
+ * of Money and the customers sat in the avatar menu.
  *
  * A section a role has no work in is not shown anywhere — not on the rail,
- * not on the bar, not in the avatar menu (B1-05). `anyOf` empty means
- * everybody signed in.
+ * not on the bar, not under «Ещё» (B1-05). `anyOf` empty means everybody
+ * signed in.
  */
 
 export type SectionId =
   | 'today'
-  | 'rentals'
-  | 'fleet'
-  | 'service'
-  | 'money'
+  | 'schedule'
+  | 'sort'
   | 'cash'
+  | 'fleet'
+  | 'rentals'
+  | 'service'
   | 'sales'
   | 'purchases'
+  | 'money'
   | 'reports'
-  | 'settings'
-  | 'customers';
+  | 'settings';
 
-export type GroupId = 'work' | 'money' | 'manage';
+export type GroupId = 'daily' | 'fleet' | 'trade' | 'manage';
 
 export interface Section {
   id: SectionId;
   path: string;
-  group: GroupId | null; // null: not on the rail — reached from the avatar menu
+  group: GroupId;
   anyOf: readonly Permission[];
-  /** Hidden from roles that have any of these: the till is the manager's view of money, the owner has Money. */
+  /** Hidden from roles that have any of these. */
   noneOf?: readonly Permission[];
 }
 
 export const SECTIONS: readonly Section[] = [
   // "Today" is the front office's queue — rentals, money, the yard. A mechanic
   // has none of it; their first screen is the repairs (ADR-0033).
-  { id: 'today', path: '/', group: 'work', anyOf: ['fleet.view'] },
-  { id: 'rentals', path: '/rentals', group: 'work', anyOf: ['fleet.view'] },
-  { id: 'fleet', path: '/fleet', group: 'work', anyOf: ['fleet.view'] },
-  { id: 'service', path: '/service', group: 'work', anyOf: ['service.view'] },
-  { id: 'money', path: '/money', group: 'money', anyOf: ['payments.view'] },
-  { id: 'cash', path: '/money/cash', group: 'money', anyOf: ['cash.record'], noneOf: ['payments.view'] },
-  { id: 'sales', path: '/sales', group: 'money', anyOf: ['fleet.view'] },
-  { id: 'purchases', path: '/purchases', group: 'money', anyOf: ['purchases.view'] },
+  { id: 'today', path: '/', group: 'daily', anyOf: ['fleet.view'] },
+  // Who pays by the schedule — today, late, the calendar (issue #15): the
+  // manager calls them, the owner also reads the sums.
+  { id: 'schedule', path: '/schedule', group: 'daily', anyOf: ['payments.schedule'] },
+  // The bank lines nobody placed: the manager sorts the customers' money, the owner all of it.
+  { id: 'sort', path: '/sort', group: 'daily', anyOf: ['payments.sort.customer'] },
+  // The till by person and one's own payments — the owner's too since issue #15.
+  { id: 'cash', path: '/money/cash', group: 'daily', anyOf: ['cash.record'] },
+  { id: 'fleet', path: '/fleet', group: 'fleet', anyOf: ['fleet.view'] },
+  // The rentals and the customers in one section (the customers were in the avatar menu).
+  { id: 'rentals', path: '/rentals', group: 'fleet', anyOf: ['fleet.view'] },
+  { id: 'service', path: '/service', group: 'fleet', anyOf: ['service.view'] },
+  { id: 'sales', path: '/sales', group: 'trade', anyOf: ['fleet.view'] },
+  { id: 'purchases', path: '/purchases', group: 'trade', anyOf: ['purchases.view'] },
+  // What is left of Money: the journal of payments, the statements, the deposits.
+  { id: 'money', path: '/money/payments', group: 'manage', anyOf: ['payments.view'] },
   { id: 'reports', path: '/reports/week', group: 'manage', anyOf: ['reports.view'] },
   { id: 'settings', path: '/settings', group: 'manage', anyOf: ['users.manage'] },
-  { id: 'customers', path: '/customers', group: null, anyOf: ['fleet.view'] },
 ];
 
-export const GROUPS: readonly GroupId[] = ['work', 'money', 'manage'];
+export const GROUPS: readonly GroupId[] = ['daily', 'fleet', 'trade', 'manage'];
 
 const allowed = (s: { anyOf: readonly Permission[]; noneOf?: readonly Permission[] }, permissions: readonly Permission[]) =>
   (s.anyOf.length === 0 || s.anyOf.some((p) => permissions.includes(p))) && !(s.noneOf ?? []).some((p) => permissions.includes(p));
@@ -63,17 +79,17 @@ export function sectionsFor(permissions: readonly Permission[]): Section[] {
 }
 
 /**
- * The phone bar: four sections around the "+" (wave 1 §3.2). An owner has
- * Money where a manager has the till.
- *   owner:   Today · Rentals · + · Money · Fleet
- *   manager: Today · Rentals · + · Fleet · Till
+ * The phone bar (issue #15): four sections and «Ещё». The day's work — Today,
+ * the schedule, «Разобрать» — and the mopeds; the "+" is a round button of
+ * its own above the bar. A mechanic has one section, the repairs (ADR-0033).
+ *   owner and manager: Today · Оплаты · Разобрать · Мопеды · Ещё
  */
+export const PHONE_BAR: readonly SectionId[] = ['today', 'schedule', 'sort', 'fleet'];
+
 export function phoneTabsFor(permissions: readonly Permission[]): SectionId[] {
   const mine = new Set(sectionsFor(permissions).map((s) => s.id));
-  // A mechanic has one section, the repairs (ADR-0033).
   if (!mine.has('today')) return [...mine];
-  const order: SectionId[] = mine.has('money') ? ['today', 'rentals', 'money', 'fleet'] : ['today', 'rentals', 'fleet', 'cash'];
-  return order.filter((id) => mine.has(id));
+  return PHONE_BAR.filter((id) => mine.has(id));
 }
 
 /** Where a person lands: "Today" for the front office, the repairs for a mechanic. */
@@ -81,13 +97,26 @@ export function homePathFor(permissions: readonly Permission[]): string {
   return sectionsFor(permissions)[0]?.path ?? '/';
 }
 
-/** Everything a role has that is not on its bar, for the avatar menu — in rail order, customers first. */
+/** «Ещё» on the phone: every section of the role that is not on its bar, in the rail's order. */
 export function menuSectionsFor(permissions: readonly Permission[]): SectionId[] {
   const tabs = new Set(phoneTabsFor(permissions));
-  const rest = sectionsFor(permissions)
+  return sectionsFor(permissions)
     .map((s) => s.id)
     .filter((id) => !tabs.has(id));
-  return [...rest.filter((id) => id === 'customers'), ...rest.filter((id) => id !== 'customers')];
+}
+
+/**
+ * The numbers beside the sections (issue #15), one request for the rail, the
+ * bar and the tabs (`GET /api/nav/counts`). Null where the person has no such
+ * section: nothing is counted for him.
+ */
+export interface NavCounts {
+  /** «Оплаты по графику»: rentals late (red) and weeks awaited today (grey). */
+  schedule: { late: number; dueToday: number } | null;
+  /** «Разобрать»: lines waiting, coming in — and going out, for whoever sorts those. */
+  sort: { in: number; out: number | null } | null;
+  /** Cash handed over and waiting for an owner. */
+  till: number | null;
 }
 
 export type TabId =
@@ -121,7 +150,19 @@ export type TabId =
   | 'balance'
   | 'repair'
   | 'goods'
-  | 'incoming';
+  | 'incoming'
+  // «Оплаты по графику» (issue #15).
+  | 'due'
+  | 'late'
+  | 'month'
+  // «Разобрать» (issue #15): money coming in, going out, sorted by the rules, removed from the queue.
+  | 'sortIn'
+  | 'sortOut'
+  | 'byRules'
+  | 'aside'
+  // «Аренды и клиенты» (issue #15).
+  | 'rentals'
+  | 'customers';
 
 /** Tabs inside a section, in the address (wave 1 §3.2). */
 export const SECTION_TABS: Partial<Record<SectionId, readonly { id: TabId; path: string; anyOf: readonly Permission[]; noneOf?: readonly Permission[] }[]>> = {
@@ -142,24 +183,40 @@ export const SECTION_TABS: Partial<Record<SectionId, readonly { id: TabId; path:
     { id: 'payouts', path: '/service/payouts', anyOf: ['service.payout'] },
     { id: 'balance', path: '/service/balance', anyOf: ['service.work'], noneOf: ['service.manage'] },
   ],
-  // Money in one place (wave 2 §3.0): sort the bank lines, the payments,
-  // the till by person, the statements, the deposits. The payments calendar
-  // stands first in the row — who pays today is what an owner opens Money
-  // for in the morning. The place is the options page's recommendation of
-  // 11.10.2026; Mika chose the variant and has not answered about the place.
-  // `/money` itself still lands on "sort" or "payments" (MoneyHome).
-  money: [
-    { id: 'calendar', path: '/money/calendar', anyOf: ['payments.view'] },
-    { id: 'sort', path: '/money/sort', anyOf: ['payments.reconcile'] },
-    { id: 'payments', path: '/money/payments', anyOf: ['payments.view'] },
-    { id: 'till', path: '/money/cash', anyOf: ['payments.reconcile'] },
-    { id: 'statements', path: '/money/statements', anyOf: ['payments.reconcile'] },
-    { id: 'deposits', path: '/money/deposits', anyOf: ['payments.view'] },
+  // «Оплаты по графику» (issue #15 of the director, ADR-0048; was «Деньги →
+  // Календарь»): who pays today and who is late, as lists to call from, then
+  // the calendar; the month's figures are an owner's tab of their own.
+  schedule: [
+    { id: 'due', path: '/schedule', anyOf: ['payments.schedule'] },
+    { id: 'late', path: '/schedule/late', anyOf: ['payments.schedule'] },
+    { id: 'calendar', path: '/schedule/calendar', anyOf: ['payments.schedule'] },
+    { id: 'month', path: '/schedule/month', anyOf: ['payments.view'] },
   ],
-  // A manager's money: their own till and their own payments.
+  // «Разобрать» (issue #15; was a tab of Money): a manager sorts the money
+  // coming in; going out, the rules' work and the lines taken out are an owner's.
+  sort: [
+    { id: 'sortIn', path: '/sort', anyOf: ['payments.sort.customer'] },
+    { id: 'sortOut', path: '/sort/out', anyOf: ['payments.reconcile'] },
+    { id: 'byRules', path: '/sort/rules', anyOf: ['payments.reconcile'] },
+    { id: 'aside', path: '/sort/aside', anyOf: ['payments.reconcile'] },
+  ],
+  // The till by person and one's own payments: a manager's money, and since
+  // issue #15 an owner's daily section too — he accepts the cash handed over.
   cash: [
     { id: 'till', path: '/money/cash', anyOf: ['cash.record'] },
     { id: 'mine', path: '/money/mine', anyOf: ['cash.record'] },
+  ],
+  // The customers beside the rentals (issue #15): they were in the avatar menu.
+  rentals: [
+    { id: 'rentals', path: '/rentals', anyOf: ['fleet.view'] },
+    { id: 'customers', path: '/customers', anyOf: ['fleet.view'] },
+  ],
+  // What is left of Money (wave 2 §3.0, issue #15): the journal of payments,
+  // the statements, the deposits — an owner's.
+  money: [
+    { id: 'payments', path: '/money/payments', anyOf: ['payments.view'] },
+    { id: 'statements', path: '/money/statements', anyOf: ['payments.reconcile'] },
+    { id: 'deposits', path: '/money/deposits', anyOf: ['payments.view'] },
   ],
   // Settings grew from one page to six tabs in wave 6 (§3.4–3.9): the people,
   // the points, what a hand-over proposes, the journal, what the move from
@@ -239,27 +296,33 @@ export function actionsFor(permissions: readonly Permission[]) {
 export function sectionOfPath(pathname: string, permissions?: readonly Permission[]): SectionId {
   const first = pathname.split('/')[1] ?? '';
   if (first === '') return 'today';
-  // The till and "my payments" are the manager's section of their own; for an owner they are tabs of Money.
   if (first === 'money') {
-    const owner = permissions ? permissions.includes('payments.view') : false;
-    return !owner && (pathname.startsWith('/money/cash') || pathname.startsWith('/money/mine')) ? 'cash' : 'money';
+    // The till and one's own payments are the till's section, for everybody
+    // since issue #15. A payment's page is Money's — or, for whoever does not
+    // read Money, the till's: it is reached from «Мои платежи».
+    if (pathname.startsWith('/money/cash') || pathname.startsWith('/money/mine')) return 'cash';
+    const owner = permissions ? permissions.includes('payments.view') : true;
+    return !owner && pathname.startsWith('/money/payments/') ? 'cash' : 'money';
   }
-  if (first === 'reports') return 'reports';
   const known: Record<string, SectionId> = {
+    schedule: 'schedule',
+    sort: 'sort',
     rentals: 'rentals',
+    customers: 'rentals',
     fleet: 'fleet',
     service: 'service',
     sales: 'sales',
     purchases: 'purchases',
+    reports: 'reports',
     settings: 'settings',
-    customers: 'customers',
   };
   return known[first] ?? 'today';
 }
 
 /**
- * Old addresses and where they live now (build plan Р8, wave 1 §3.4). A
- * bookmark on the old one still arrives.
+ * Old addresses and where they live now (build plan Р8, wave 1 §3.4; issue
+ * #15 moved the calendar and «Разобрать» out of Money). A bookmark on the
+ * old one still arrives; the query goes along.
  */
 export const REDIRECTS: readonly { from: string; to: string }[] = [
   { from: '/models', to: '/fleet/models' },
@@ -270,7 +333,28 @@ export const REDIRECTS: readonly { from: string; to: string }[] = [
   { from: '/statements', to: '/money/statements' },
   { from: '/economics', to: '/reports/economics' },
   { from: '/profile', to: '/me' },
+  { from: '/money', to: '/money/payments' },
+  { from: '/money/calendar', to: '/schedule/calendar' },
+  { from: '/money/sort', to: '/sort' },
+  { from: '/money/sort/rules', to: '/sort/rules' },
+  { from: '/money/sort/aside', to: '/sort/aside' },
 ];
+
+/**
+ * Where an old address with its query goes. One case is not a path's: the
+ * money going out was `/money/sort?d=out` and is a tab of its own now.
+ */
+export function movedTo(from: string, search: string): string {
+  const rule = REDIRECTS.find((r) => r.from === from);
+  const to = rule?.to ?? from;
+  const q = new URLSearchParams(search);
+  if (to === '/sort' && q.get('d') === 'out') {
+    q.delete('d');
+    const rest = q.toString();
+    return `/sort/out${rest ? `?${rest}` : ''}`;
+  }
+  return to + search;
+}
 
 export const sectionsForRole = (role: Role) => sectionsFor(ROLE_PERMISSIONS[role]);
 export const phoneTabsForRole = (role: Role) => phoneTabsFor(ROLE_PERMISSIONS[role]);
