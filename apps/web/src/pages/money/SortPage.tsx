@@ -388,6 +388,8 @@ interface SplitPart {
   move?: PayDayTarget;
   rateTetri?: number;
 }
+/** The parts kept behind «+ ещё», in the order the button names them. */
+const MORE_KINDS = ['repair', 'sale', 'goods', 'account'] as const satisfies readonly SplitPart['kind'][];
 interface SplitValue {
   customer: { id: string; name: string } | null;
   /** «Розничные продажи товаров»: a day's card line split over retail goods sales, no customer (ADR-0045). */
@@ -571,6 +573,10 @@ function SplitSheet({ line, onClose }: { line: SortLine; onClose: () => void }) 
   const anyOver = parts.some((p) => overBy(p) > 0);
   const visible = parts.filter((p) => !p.extra || value.more || amountOf(p.key) > 0);
   const hidden = parts.some((p) => p.extra && !visible.includes(p));
+  // «+ ещё» names what it opens — a manager finds no advance behind it (review of issue #15).
+  const moreWords = MORE_KINDS.filter((k) => parts.some((p) => p.kind === k && p.extra && !visible.includes(p)))
+    .map((k) => t.sort.splitMoreWords[k])
+    .join(', ');
 
   // What will be written, said in words, and what the customer will owe after.
   const used = parts.filter((p) => amountOf(p.key) > 0);
@@ -704,7 +710,10 @@ function SplitSheet({ line, onClose }: { line: SortLine; onClose: () => void }) 
           </div>
           {targets.failure && <LoadError failure={targets.failure} onRetry={targets.reload} />}
           {!targets.data && !targets.failure && <Skeleton rows={3} />}
-          {targets.data && parts.length <= 1 && <p className="hint muted">{t.sort.splitNothing}</p>}
+          {/* No record of his to pay: the advance is all an owner is offered, and a manager not even that (review of #15). */}
+          {targets.data && !parts.some((p) => p.kind !== 'account') && (
+            <p className="hint muted">{parts.some((p) => p.kind === 'account') ? t.sort.splitNothing : t.sort.splitNothingAtAll}</p>
+          )}
           {value.retail && retailGoods.data && retailParts.length === 0 && <p className="hint muted">{t.goods.sort.retailNone}</p>}
           <div className="split-parts">
           {visible.map((p) =>
@@ -764,7 +773,7 @@ function SplitSheet({ line, onClose }: { line: SortLine; onClose: () => void }) 
           </div>
           {hidden && (
             <button type="button" className="pill pill-sm split-more" onClick={() => setValue((v) => ({ ...v, more: true }))}>
-              {t.sort.splitMore}
+              {t.sort.splitMore(moreWords)}
             </button>
           )}
           {(targets.data || value.retail) && (

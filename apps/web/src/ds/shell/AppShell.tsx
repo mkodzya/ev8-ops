@@ -76,6 +76,10 @@ function Frame() {
   }
   const move = lastMove.current;
   const label = (id: SectionId) => t.nav[id];
+  // The bar's own words where a section's name is longer than a fifth of a
+  // phone: «Оплаты» for the schedule, and for «Разобрать» a Georgian word that
+  // does not break in two (review of issue #15).
+  const barWords: Partial<Record<SectionId, string>> = { schedule: t.nav.scheduleShort, sort: t.nav.sortShort };
 
   // The badge of Today counts the rows "Today" lists, from the same request
   // it reads (wave 4 §3.1): one queue, one number, and it moves as soon as a
@@ -241,7 +245,7 @@ function Frame() {
 
       <nav className="app-tabbar" aria-label={t.shell.menu}>
         {tabs.map((id) => (
-          <PhoneTab key={id} id={id} on={current === id} label={id === 'schedule' ? t.nav.scheduleShort : label(id)} today={todayCount} counts={counts.data} />
+          <PhoneTab key={id} id={id} on={current === id} label={barWords[id] ?? label(id)} today={todayCount} counts={counts.data} />
         ))}
         {/* «Ещё»: the role's other sections (issue #15). Lit while one of them is open. */}
         {more.length > 0 && (
@@ -255,7 +259,8 @@ function Frame() {
       </nav>
       {/* The "+" above the bar, at the thumb (issue #15). On a section's own
           list only: a card or a wizard has its main action in the strip at
-          the foot, and the round button would sit on it. */}
+          the foot, and the round button would sit on it — and so has the
+          till's list while there is cash to hand over (shell.css hides it). */}
       {actions.length > 0 && isRoot && (
         <button type="button" className="tab-fab" onClick={() => setSheet('actions')} aria-label={t.shell.openActions} aria-haspopup="dialog">
           <Plus {...ICON} aria-hidden="true" />

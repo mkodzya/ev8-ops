@@ -80,6 +80,8 @@ export const en = {
     // Issue #15 (ADR-0048): the sections of the new menu, the bar's short word for the schedule.
     schedule: 'Scheduled payments',
     scheduleShort: 'Schedule',
+    /** The phone bar's word for «Разобрать», a fifth of the screen wide. */
+    sortShort: 'Sort',
     sort: 'Sort',
     fleet: 'Mopeds',
     rentals: 'Rentals and customers',
@@ -870,7 +872,9 @@ export const en = {
     splitWeekNewTitle: 'New money',
     splitWeekNewSub: 'it goes to the weeks ahead',
     splitOldPick: 'Mark which week the rent is for.',
-    splitMore: '+ more: a repair, rent credit',
+    /** «+ ещё» names what it opens: the kinds behind it, of `splitMoreWords`. */
+    splitMore: (words: string) => `+ more: ${words}`,
+    splitMoreWords: { repair: 'a repair', sale: 'a moped sale', goods: 'goods', account: 'rent credit' },
     splitAllPlaced: 'all placed ✓',
     resTitle: 'What will be written',
     resCarried: (a: string, week: string, r: string) => `${a} — the week ${week} of ${r}. It was paid already; now it has its payment from the bank.`,
@@ -884,6 +888,8 @@ export const en = {
     resDebtSame: (a: string) => `The customer’s debt does not change: ${a}.`,
     resDebt: (a: string, b: string) => `The customer’s debt: was ${a}, will be ${b}.`,
     splitNothing: 'The customer has no open records — only “rent credit”.',
+    /** The same, said to whoever may not put money on the account (a manager, ADR-0048). */
+    splitNothingAtAll: 'The customer has no open records.',
     splitDone: (n: number) => `Line allocated into ${n} parts`,
     /** On a card line: the sum on the card is what the bank credited; this is what the customer paid and what the bank kept. */
     byCard: (paid: string, fee: string) => `Card payment: the customer paid ${paid}, the bank kept ${fee}.`,
