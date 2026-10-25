@@ -45,7 +45,8 @@ interface FleetVehicle {
 export function SalesPage() {
   const t = useT();
   const { can } = useSession();
-  const { data, failure, reload } = useLoad<{ overdueTetri: number; sales: Sale[] }>('/api/sales');
+  // `overdueTetri`: every buyer's together — null for a manager (ADR-0048, addendum of 25.10.2026).
+  const { data, failure, reload } = useLoad<{ overdueTetri: number | null; sales: Sale[] }>('/api/sales');
 
   if (failure) return <LoadError failure={failure} onRetry={reload} />;
   if (!data) return <Loading />;
@@ -53,7 +54,7 @@ export function SalesPage() {
   return (
     <>
       <PageHead wrap title={t.sales.title} sub={t.sales.count(data.sales.length)}>
-        {data.overdueTetri > 0 && (
+        {data.overdueTetri != null && data.overdueTetri > 0 && (
           <span className="crit-text mono">
             {t.sales.overdue}: {formatGel(data.overdueTetri, { decimals: false })}
           </span>

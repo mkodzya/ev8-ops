@@ -7,7 +7,7 @@ import { env } from '../lib/env.js';
 import { kommoRefToKeep } from '../lib/kommo.js';
 import { badRequest, conflict, forbidden, notFound } from '../lib/errors.js';
 import { hasPerm } from '../lib/auth.js';
-import { actorOf } from '../lib/guard.js';
+import { actorOf, mayTotal } from '../lib/guard.js';
 import { recordMoney } from '../lib/money.js';
 import { recomputeSale } from '../lib/payments.js';
 import { date, int, oneOf, str, strList, tetri } from '../lib/validate.js';
@@ -104,13 +104,15 @@ function soldOnIn(side: unknown): string | null {
 }
 
 export function saleRoutes(app: FastifyInstance): void {
-  app.get('/api/sales', { config: { scope: 'fleet.view' } }, async () => {
+  app.get('/api/sales', { config: { scope: 'fleet.view' } }, async (req) => {
     const today = todayISO(new Date(), env.TZ);
     const sales = await prisma.sale.findMany({ orderBy: { soldOn: 'desc' }, take: 300, include: INCLUDE });
     const rows = sales.map((s) => serialize(s, today));
     return {
       today,
-      overdueTetri: rows.reduce((n, s) => n + s.overdueTetri, 0),
+      // What every buyer is behind on together: an owner's figure. A manager
+      // reads each sale's own (Mika's «да» of 25.10.2026, ADR-0048 addendum).
+      overdueTetri: mayTotal(req) ? rows.reduce((n, s) => n + s.overdueTetri, 0) : null,
       sales: rows,
     };
   });

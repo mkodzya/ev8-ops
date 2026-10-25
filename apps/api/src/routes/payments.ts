@@ -6,7 +6,7 @@ import { debtOf } from '../lib/debt.js';
 import { prisma } from '../lib/db.js';
 import { env } from '../lib/env.js';
 import { badRequest, conflict, forbidden, notFound } from '../lib/errors.js';
-import { actorOf } from '../lib/guard.js';
+import { actorOf, mayTotal } from '../lib/guard.js';
 import { MONEY_KINDS, bankLinesFor, planMoney, recordMoney, type MoneyInput } from '../lib/money.js';
 import { voidPayment } from '../lib/payments.js';
 import { payOffsetOf } from '../lib/rentState.js';
@@ -129,8 +129,15 @@ export function paymentRoutes(app: FastifyInstance): void {
     const people = hasPerm(actorOf(req), 'payments.view')
       ? await prisma.user.findMany({ where: { paymentsCreated: { some: {} } }, select: { id: true, name: true }, orderBy: { name: 'asc' } })
       : [];
+    // A manager's own list, «Мои платежи», holds since issue #15 the bank lines
+    // he sorted too: what came in over it is many customers' money together,
+    // an owner's figure (Mika's «да» of 25.10.2026, ADR-0048 addendum). One
+    // record's payments — a customer's, a rental's, a sale's — are that
+    // record's own, and their sum stays; so does his till, which he hands over.
+    const q = req.query;
+    const oneRecord = Boolean(q.customerId || q.rentalId || q.saleId || q.goodsSaleId);
     return {
-      totals,
+      totals: mayTotal(req) || oneRecord ? totals : null,
       people,
       row,
       // A voided payment is listed, not counted — and only under the row of its own kind: its allocations went

@@ -15,7 +15,7 @@ import { dateFromISO, dayOf, isoDate } from '../lib/dates.js';
 import { prisma } from '../lib/db.js';
 import { ApiError, badRequest, conflict, notFound } from '../lib/errors.js';
 import { UNDONE_AT_ONCE, cancelGoodsSale, cancelPreview, createGoodsSale, previewGoodsSale, type GoodsLineInput, type GoodsSaleInput, type PaidNow } from '../lib/goods.js';
-import { actorOf } from '../lib/guard.js';
+import { actorOf, mayTotal } from '../lib/guard.js';
 import { inBankAlready } from '../lib/statements/inBank.js';
 import { partRows } from '../lib/stock.js';
 import { date, oneOf, str, tetri } from '../lib/validate.js';
@@ -182,7 +182,10 @@ export function goodsSaleRoutes(app: FastifyInstance): void {
     const sales = await prisma.goodsSale.findMany({ where, orderBy: [{ soldOn: 'desc' }, { createdAt: 'desc' }], take: 300, include: LIST_INCLUDE });
     const rows = sales.map(rowOf).filter((r) => (q.open === '1' ? r.openTetri > 0 : true));
     const open = rows.filter((r) => r.openTetri > 0);
-    return { count: rows.length, openCount: open.length, openTetri: open.reduce((n, r) => n + r.openTetri, 0), sales: rows };
+    // What the buyers still owe together is an owner's figure; a manager is
+    // told how many wait, and each sale says its own (Mika's «да» of
+    // 25.10.2026, ADR-0048 addendum).
+    return { count: rows.length, openCount: open.length, openTetri: mayTotal(req) ? open.reduce((n, r) => n + r.openTetri, 0) : null, sales: rows };
   });
 
   /** A sale's card (§10): what was sold, the money and where it stands, the invoice, the feed. */
