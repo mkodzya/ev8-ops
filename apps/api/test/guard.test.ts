@@ -72,6 +72,8 @@ describe('route table', () => {
     expect(weekShift).toEqual(['POST /api/rentals/:id/weeks/:seq/shift']);
     // «Разнести», which moves the week with a bank line, stays the owners': the queue is theirs.
     expect(app.routeTable.find((r) => r.method === 'POST' && r.url === '/api/statement-lines/:id/split')?.scope).toBe('payments.reconcile');
+    // «Это дубль» (issue #16) sets a line aside, as «Это не наше» does: an owner's.
+    expect(app.routeTable.find((r) => r.method === 'POST' && r.url === '/api/statement-lines/:id/duplicate')?.scope).toBe('payments.reconcile');
     const publicOnes = app.routeTable.filter((r) => r.scope === 'public').map((r) => r.url).sort();
     // The jobs are public to the session guard and closed by the worker token (routes/jobs.ts).
     // The PIN sign-in and the tablet's list of names are closed by the tablet's own token (ADR-0033).

@@ -8,7 +8,7 @@
 // line another suite loaded can be taken for one of these.
 import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { BogClient, BogError, accountOf, bankDay, bogConfig, lineFromEntry, lineFromToday, reconcileBogNight, setBogFetchForTests, syncBogToday, type BogConfig, type BogFetch } from '../src/lib/bog.js';
-import { alreadyIn, type SameLineCandidate } from '../src/lib/statements/sameLine.js';
+import { alreadyIn, bogCardOf, cardRepeats, sameCardPayment, type SameLineCandidate } from '../src/lib/statements/sameLine.js';
 import { HAS_DB, call, getApp, json, loginAs, uniq } from './helpers.js';
 
 const ID = 'test-client-id';
@@ -135,6 +135,33 @@ function entry(o: { id: number; day: string; doc?: string; credit?: number; debi
   };
 }
 
+/**
+ * A payment by the company's card as Bank of Georgia words it — in Georgian in
+ * the API, where both listings of one payment carry the same words; in English
+ * in the CSV export. The shop, the sum, the minute and the card's digits are
+ * invented.
+ */
+function cardText(o: { sum: number; at: string; shop?: string; card?: string; mcc?: string; lang?: 'ka' | 'en' }): string {
+  const gel = o.sum.toFixed(2);
+  const shop = o.shop ?? 'Example Cafe, Tbilisi, 1 Test Street';
+  return o.lang === 'en'
+    ? `Payment - Amount: GEL${gel}; Merchant: ${shop}; MCC:${o.mcc ?? '5814'}; Date: ${o.at}; Card No: ****${o.card ?? '0000'}; Payment transaction amount and currency: ${gel} GEL`
+    : `გადახდა - თანხა: GEL${gel}; ობიექტი: ${shop}; MCC:${o.mcc ?? '5814'}; თარიღი: ${o.at}; ბარათის No: ****${o.card ?? '0000'}; გადახდის ოპერაციის თანხა და ვალუტა: ${gel} GEL`;
+}
+
+/**
+ * The two numbers the bank gives one card payment, invented in their shapes:
+ * the posting's (eleven digits), then the card operation's (twelve).
+ */
+const posting = (n: number) => `110000${String(n).padStart(5, '0')}`;
+const cardOperation = (n: number) => `6200000${String(n).padStart(5, '0')}`;
+
+/** What the bank says of a card payment in each listing's nomination (invented shop, card and code). */
+const nominations = (sum: number, at: string) => ({
+  posting: `ჩამოჭრა თანხაზე ${sum.toFixed(2)} GEL, მერჩანტი: EXAMPLE CAFE>TBILISI GE, ბარათი ***0000, კოდი: 000000`,
+  cardOperation: `გადახდა - თანხა: GEL ${sum} საკომისიო: 0; MCC: 5814; ობიექტი: სატესტო კაფე; თარიღი: ${at}:07; ბარათის ნომერი: 00000*******0000`,
+});
+
 describe('the Bank of Georgia settings', () => {
   it('are off without both keys', () => {
     expect(bogConfig({})).toBeNull();
@@ -222,6 +249,88 @@ describe('one operation, two sources', () => {
     const r = alreadyIn([l('api:entry:9', '2031-03-10', 15000, '0042'), l('api:entry:10', '2031-03-10', 2000, '77'), l('api:entry:11', '2031-03-10', 2000, '78')], stored);
     expect(r).toMatchObject({ byDoc: 1, bySum: 1 });
     expect(r.fresh.map((x) => x.naturalKey)).toEqual(['api:entry:11']);
+  });
+});
+
+describe('a card payment the bank lists twice (rule 5, issue #16)', () => {
+  const at = '03/03/2031 18:13';
+  const card = (key: string, day: string, doc: string | null, o: Partial<Parameters<typeof cardText>[0]> = {}): SameLineCandidate => ({
+    naturalKey: key,
+    occurredOn: day,
+    amountTetri: 1240,
+    docNo: doc,
+    direction: 'out',
+    raw: `${day.slice(8, 10)}.${day.slice(5, 7)}.${day.slice(0, 4)} | ${doc ?? ''} |  | 12.40 |  | ${cardText({ sum: 12.4, at, ...o })}`,
+  });
+
+  it('reads the shop, the minute, the MCC and the card from either wording, and nothing from a transfer', () => {
+    expect(bogCardOf(cardText({ sum: 12.4, at }))).toEqual({ merchant: 'example cafe', at: '2031-03-03 18:13', mcc: '5814', card: '0000' });
+    expect(bogCardOf(cardText({ sum: 12.4, at, lang: 'en' }))).toEqual({ merchant: 'example cafe', at: '2031-03-03 18:13', mcc: '5814', card: '0000' });
+    // The bank writes one shop two ways: `>` and the city, or a comma and the street.
+    expect(bogCardOf(cardText({ sum: 12.4, at, shop: 'Example Cafe>TBILISI GE, Georgia' }))?.merchant).toBe('example cafe');
+    expect(bogCardOf('Beneficiary: TEST SHOP; Details: komisia')).toBeNull();
+    expect(bogCardOf(null)).toBeNull();
+    // Cut short after the minute: what is there is read. Before the minute: no card payment for the rule.
+    const text = cardText({ sum: 12.4, at });
+    expect(bogCardOf(text.slice(0, text.indexOf('ბარათის No') + 14))).toMatchObject({ at: '2031-03-03 18:13', card: null });
+    expect(bogCardOf(text.slice(0, text.indexOf('თარიღი') + 12))).toBeNull();
+  });
+
+  it('knows the card operation’s listing as the posting already in — the same day, or the next one — and keeps the posting', () => {
+    const stored = [card('api:today:1', '2031-03-03', posting(1))];
+    expect(alreadyIn([card('api:today:2', '2031-03-03', cardOperation(1))], stored)).toMatchObject({ fresh: [], byCard: 1 });
+    expect(alreadyIn([card('api:today:2', '2031-03-04', cardOperation(1))], stored)).toMatchObject({ fresh: [], byCard: 1 });
+    // The night and a file know it the same way, whichever of its numbers they carry.
+    expect(alreadyIn([card('api:entry:9', '2031-03-03', cardOperation(1))], stored).byCard).toBe(1);
+    expect(alreadyIn([card('hash-a', '2031-03-03', cardOperation(1), { lang: 'en', shop: 'Example Cafe>TBILISI GE, Georgia' })], stored).byCard).toBe(1);
+    // The day's list holds both listings: the posting is known by its key, and still closes its twin.
+    const both = alreadyIn([card('api:today:1', '2031-03-03', posting(1)), card('api:today:2', '2031-03-03', cardOperation(1))], stored);
+    expect(both).toMatchObject({ fresh: [], byKey: 1, byCard: 1 });
+    // Both new in one reading: the first stays.
+    expect(alreadyIn([card('api:today:1', '2031-03-03', posting(1)), card('api:today:2', '2031-03-03', cardOperation(1))], []).fresh.map((x) => x.naturalKey)).toEqual(['api:today:1']);
+  });
+
+  it('keeps two purchases of one sum in one shop two lines: at different minutes, and in one minute', () => {
+    const stored = [card('api:today:1', '2031-03-03', posting(1))];
+    expect(alreadyIn([card('api:today:2', '2031-03-03', cardOperation(2), { at: '03/03/2031 18:40' })], stored).fresh).toHaveLength(1);
+    expect(alreadyIn([card('api:today:2', '2031-03-03', posting(2), { at: '03/03/2031 18:40' })], stored).fresh).toHaveLength(1);
+    // In one minute each comes first under a posting number of its own: two numbers of one kind are two payments.
+    expect(alreadyIn([card('api:today:2', '2031-03-03', posting(2))], stored).fresh).toHaveLength(1);
+    // Their card operations later: each closes one posting, and nothing is added.
+    const two = [...stored, card('api:today:2', '2031-03-03', posting(2))];
+    expect(alreadyIn([card('api:today:3', '2031-03-03', cardOperation(1)), card('api:today:4', '2031-03-03', cardOperation(2))], two)).toMatchObject({ fresh: [], byCard: 2 });
+    expect(alreadyIn([card('api:today:3', '2031-03-03', cardOperation(1)), card('api:today:4', '2031-03-03', cardOperation(2)), card('api:today:5', '2031-03-03', cardOperation(3))], two).fresh).toHaveLength(1);
+  });
+
+  it('takes another card, another MCC, another shop, a sum, a direction or days too far apart for another payment', () => {
+    const stored = [card('api:today:1', '2031-03-03', posting(1))];
+    expect(alreadyIn([card('api:today:2', '2031-03-03', cardOperation(1), { card: '1111' })], stored).fresh).toHaveLength(1);
+    expect(alreadyIn([card('api:today:2', '2031-03-03', cardOperation(1), { mcc: '4814' })], stored).fresh).toHaveLength(1);
+    expect(alreadyIn([card('api:today:2', '2031-03-03', cardOperation(1), { shop: 'Another Shop, Tbilisi' })], stored).fresh).toHaveLength(1);
+    expect(alreadyIn([{ ...card('api:today:2', '2031-03-03', cardOperation(1)), amountTetri: 1250 }], stored).fresh).toHaveLength(1);
+    expect(alreadyIn([{ ...card('api:today:2', '2031-03-03', cardOperation(1)), direction: 'in' }], stored).fresh).toHaveLength(1);
+    expect(alreadyIn([card('api:today:2', '2031-03-07', cardOperation(1))], stored).fresh).toHaveLength(1);
+    // A number missing on either side: the rule does not say.
+    expect(sameCardPayment(card('a', '2031-03-03', null), card('b', '2031-03-03', cardOperation(1)))).toBe(false);
+    expect(sameCardPayment(card('a', '2031-03-03', posting(1)), card('b', '2031-03-03', cardOperation(1)))).toBe(true);
+  });
+
+  it('names, of lines already in, the later listing of each payment and the line it repeats — once each', () => {
+    const t0 = new Date('2031-03-03T14:15:00Z').getTime();
+    const line = (id: string, doc: string, minutes: number, o: Partial<Parameters<typeof cardText>[0]> = {}) => ({ ...card(`api:today:${id}`, '2031-03-03', doc, o), id, createdAt: new Date(t0 + minutes * 60_000) });
+    const lines = [
+      line('b', cardOperation(1), 5),
+      line('a', posting(1), 0),
+      line('c', posting(2), 1),
+      line('d', cardOperation(2), 6),
+      line('e', cardOperation(3), 7),
+      line('f', posting(4), 2, { at: '03/03/2031 19:00' }),
+    ];
+    const repeats = cardRepeats(lines);
+    expect([...repeats.entries()].map(([id, twin]) => [id, twin.id]).sort()).toEqual([
+      ['b', 'a'],
+      ['d', 'c'],
+    ]);
   });
 });
 
@@ -334,15 +443,17 @@ describe.skipIf(!HAS_DB)('the pull, the night and the queue', () => {
     return prisma.statementLine.findMany({ where: { bank: 'bog', amountTetri: { in: amounts.map((a) => Math.round(a * 100)) } }, include: { statement: true }, orderBy: { naturalKey: 'asc' } });
   }
 
-  /** A Bank of Georgia CSV of this invented account, as the export writes it. */
-  function csv(period: [string, string], rows: { day: string; doc: string; credit: string; text: string }[]) {
+  /** A Bank of Georgia CSV of this invented account, as the export writes it: money in under «krediti», out under «debeti». */
+  function csv(period: [string, string], rows: { day: string; doc: string; credit?: string; debit?: string; text: string }[]) {
     const dmy = (iso: string) => `${iso.slice(8, 10)}.${iso.slice(5, 7)}.${iso.slice(2, 4)}`;
     return [
       ',,,"angariSis mflobeli: TEST",,,,',
       `,,,"angariSis #:${ACCOUNT}GEL",,,,`,
       `"TEST",,,"periodi: ${dmy(period[0])}-${dmy(period[1])}",,,,`,
       '"TariRi","sabuTis #","mokorespondento angariSi","debeti","krediti","kursi","eqv.lari","operaciis Sinaarsi"',
-      ...rows.map((r) => `"${r.day.slice(8, 10)}.${r.day.slice(5, 7)}.${r.day.slice(0, 4)}","${r.doc}","GE00TB0000000000000002","","${r.credit}","1","${r.credit}","${r.text}"`),
+      ...rows.map(
+        (r) => `"${r.day.slice(8, 10)}.${r.day.slice(5, 7)}.${r.day.slice(0, 4)}","${r.doc}","GE00TB0000000000000002","${r.debit ?? ''}","${r.credit ?? ''}","1","${r.credit ?? r.debit}","${r.text}"`,
+      ),
     ].join('\n');
   }
 
@@ -530,6 +641,62 @@ describe.skipIf(!HAS_DB)('the pull, the night and the queue', () => {
     const owner = await loginAs('owner');
     const page = json<{ banks: { bank: string; api: unknown }[] }>(await call(owner, 'GET', '/api/statements'));
     expect(page.banks.find((b) => b.bank === 'bog')?.api).toBeNull();
+  });
+
+  // Issue #16: a payment by the company's card reached «Разобрать» twice. The
+  // bank lists it in the day's list under the posting's number, and again —
+  // minutes later, or on the next day's list — under the card operation's.
+  it('puts a card payment the bank lists twice — posting, then card operation — in the queue once; the next day, the night and a file know it too', async () => {
+    const day = '2031-03-17';
+    const when = '17/03/2031 18:13';
+    const text = cardText({ sum: sum(5), at: when });
+    const said = nominations(sum(5), when);
+    const first = activity({ id: 9601, day, doc: posting(9601), debit: sum(5), comment: text, nomination: said.posting });
+    const again = activity({ id: 9602, day, doc: cardOperation(9601), debit: sum(5), comment: text, nomination: said.cardOperation });
+    setBogFetchForTests(fakeBank({ today: [first] }).fetchFn, quick);
+    expect(await syncBogToday(at(day, '18:15'))).toMatchObject({ status: 'ok', listed: 1, added: 1 });
+    // Five minutes later the day's list holds both listings.
+    setBogFetchForTests(fakeBank({ today: [first, again] }).fetchFn, quick);
+    expect(await syncBogToday(at(day, '18:20'))).toMatchObject({ status: 'ok', listed: 2, added: 0, known: { byKey: 1, byCard: 1 } });
+    // Or the card operation comes on the next day's list, dated that day.
+    setBogFetchForTests(fakeBank({ today: [again] }).fetchFn, quick);
+    expect(await syncBogToday(at('2031-03-18', '08:20'))).toMatchObject({ status: 'ok', listed: 1, added: 0, known: { byCard: 1 } });
+
+    // The night's statement, under either number.
+    const { prisma } = await import('../src/lib/db.js');
+    await prisma.bogSync.update({ where: { id: true }, data: { nightThrough: new Date('2031-03-16T00:00:00Z') } });
+    setBogFetchForTests(
+      fakeBank({ entries: [entry({ id: 99601, day, doc: posting(9601), debit: sum(5), comment: text }), entry({ id: 99602, day, doc: cardOperation(9601), debit: sum(5), comment: text })] }).fetchFn,
+      quick,
+    );
+    expect(await reconcileBogNight(at('2031-03-19', '06:17'))).toMatchObject({ status: 'ok', listed: 2, added: 0, known: { byDoc: 1, byCard: 1 } });
+
+    // A CSV export of the day words it in English, under the card operation's number.
+    const owner = await loginAs('owner');
+    const file = csv([day, day], [{ day, doc: cardOperation(9601), debit: sum(5).toFixed(2), text: cardText({ sum: sum(5), at: when, lang: 'en', shop: 'Example Cafe>TBILISI GE, Georgia' }) }]);
+    const preview = json<{ newLines: number; alreadyIn: number }>(await call(owner, 'POST', '/api/statements/preview', { fileName: 'StatementExport.csv', text: file }));
+    expect(preview).toMatchObject({ newLines: 0, alreadyIn: 1 });
+
+    const lines = await linesOf([sum(5)]);
+    expect(lines.map((l) => [l.naturalKey, l.docNo, l.direction])).toEqual([['api:today:9601', posting(9601), 'out']]);
+  });
+
+  it('keeps two purchases of one sum in one shop at different minutes two lines, each listed twice', async () => {
+    const day = '2031-03-20';
+    const listings = ['18:13', '18:40'].map((hhmm, i) => {
+      const when = `20/03/2031 ${hhmm}`;
+      const text = cardText({ sum: sum(6), at: when });
+      const said = nominations(sum(6), when);
+      return [
+        activity({ id: 9701 + i, day, doc: posting(9701 + i), debit: sum(6), comment: text, nomination: said.posting }),
+        activity({ id: 9711 + i, day, doc: cardOperation(9701 + i), debit: sum(6), comment: text, nomination: said.cardOperation }),
+      ];
+    });
+    setBogFetchForTests(fakeBank({ today: listings.map((l) => l[0]) }).fetchFn, quick);
+    expect(await syncBogToday(at(day, '19:00'))).toMatchObject({ status: 'ok', added: 2 });
+    setBogFetchForTests(fakeBank({ today: listings.flat() }).fetchFn, quick);
+    expect(await syncBogToday(at(day, '19:05'))).toMatchObject({ status: 'ok', listed: 4, added: 0, known: { byKey: 2, byCard: 2 } });
+    expect(await linesOf([sum(6)])).toHaveLength(2);
   });
 
   it('opens the two jobs to the worker only', async () => {
