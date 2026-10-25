@@ -126,7 +126,8 @@ export function FleetPage() {
 
   return (
     <>
-      <PageHead title={t.fleet.title} sub={t.fleet.count(rows.length)}>
+      {/* The menu's word for the section (QA of #15): «Мопеды», not the old «Парк» — one name for one place. */}
+      <PageHead title={t.nav.fleet} sub={t.fleet.count(rows.length)}>
         {/* Drawn at once, not when the models arrive: a button that turns up a
             beat after the page pushed everything under it down (29.09.2026). */}
         <StickersButton numbers={rows.map((v) => v.fleetNo).filter((n): n is number => n != null)} />

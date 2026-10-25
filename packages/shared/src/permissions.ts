@@ -108,6 +108,19 @@ export function seesEveryRepair(permissions: readonly Permission[]): boolean {
   return permissions.includes('fleet.view') || permissions.includes('service.approve');
 }
 
+/**
+ * A sum of many customers' money or debt together — the overdue of all the
+ * renters, what the sales or the goods still wait for, what came in over a
+ * list of payments — is read by whoever reads Money (`payments.view`), as the
+ * week's and the month's figures of «Оплаты по графику» are (ADR-0048). A
+ * manager reads the rows: one customer's debt, one rental's, one sale's
+ * (Mika's «да» of 25.10.2026, ADR-0048 addendum). Asked of the rights, so the
+ * server cuts the sum before it is sent and the screen asks the same thing.
+ */
+export function seesTotals(permissions: readonly Permission[]): boolean {
+  return permissions.includes('payments.view');
+}
+
 /** Roles that sign in with a PIN on the workshop tablet; nobody else has one (ADR-0033 §6). */
 export const PIN_ROLES: readonly Role[] = ['mechanic', 'chief_mechanic'];
 

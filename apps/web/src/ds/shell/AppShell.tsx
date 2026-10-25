@@ -3,6 +3,7 @@ import {
   SECTIONS,
   SECTION_TABS,
   actionsFor,
+  groupHeadingFor,
   menuSectionsFor,
   phoneTabsFor,
   sectionOfPath,
@@ -176,7 +177,8 @@ function Frame() {
           if (items.length === 0) return null;
           return (
             <div key={g} className="rail-group">
-              <div className="rail-group-title">{t.nav.groups[g]}</div>
+              {/* Named by what is under it: «Продажи» for a manager, who has no purchases (QA of #15). */}
+              <div className="rail-group-title">{t.nav.groups[groupHeadingFor(g, permissions)]}</div>
               {items.map((s) => {
                 const Icon = SECTION_ICON[s.id];
                 return (

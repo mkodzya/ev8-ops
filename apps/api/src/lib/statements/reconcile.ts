@@ -440,6 +440,14 @@ export interface Suggestion {
   customerId?: string;
   amountTetri?: number;
   occurredOn?: string;
+  /**
+   * On a payment entered by hand (`kind: 'payment'`): what it was — rent, a
+   * sale, a repair, goods, an advance. Whoever sorts only the customers' money
+   * may link a line to the first four and not to an advance (`mayLinkPayment`,
+   * ADR-0048): the screen offers him «Да, это он» only where the server would
+   * take it (QA of #15, 25.10.2026).
+   */
+  paymentKind?: string;
   reason: Reason;
 }
 
@@ -456,6 +464,7 @@ export function suggest(line: Line, ctx: Ctx): { group: 'recorded' | 'suggested'
     customer: p.customer,
     amountTetri: p.grossTetri,
     occurredOn: p.occurredOn,
+    paymentKind: p.kind,
     reason: { code: 'recorded', number: p.number ?? undefined, name: p.customer ?? undefined },
   }));
   if (recorded.length > 0) {

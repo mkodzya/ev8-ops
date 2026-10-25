@@ -198,7 +198,8 @@ interface TodayRow {
 }
 interface Today {
   today: string;
-  queue: { group: string; rows: TodayRow[]; total: number; totalTetri: number }[];
+  /** `totalTetri`: null for a manager — no sum of many customers together (ADR-0048, addendum of 25.10.2026). */
+  queue: { group: string; rows: TodayRow[]; total: number; totalTetri: number | null }[];
   count: number;
   numbers: Record<string, unknown> & { overdueTetri: number | null };
 }
@@ -693,7 +694,7 @@ describe.skipIf(!HAS_DB)('the due day · rentals that are not running', () => {
 });
 
 describe.skipIf(!HAS_DB)('the due day · who sees what', () => {
-  it('a manager gets both groups with their sums and cash as the action, and no figure more than before', async () => {
+  it('a manager gets both groups, each row with its sum and cash as the action, and no sum of the group', async () => {
     const owner = await loginAs('owner');
     const manager = await loginAs('manager');
     await running(7);
@@ -703,8 +704,12 @@ describe.skipIf(!HAS_DB)('the due day · who sees what', () => {
     const theirs = await get<Today>(owner, '/api/today');
     for (const name of ['overdue', 'due_today']) {
       const g = groupOf(mine, name)!;
-      // The same rentals and the same money an owner sees in the group.
-      expect([g.total, g.totalTetri]).toEqual([groupOf(theirs, name)!.total, groupOf(theirs, name)!.totalTetri]);
+      // The same rentals an owner sees in the group, each with its own sum —
+      // and the sum of them all an owner's alone (Mika's «да» of 25.10.2026).
+      expect(g.total).toBe(groupOf(theirs, name)!.total);
+      expect(g.totalTetri).toBeNull();
+      expect(typeof groupOf(theirs, name)!.totalTetri).toBe('number');
+      expect(g.rows.every((r) => typeof r.amountTetri === 'number' && r.amountTetri > 0)).toBe(true);
       expect(g.rows.length).toBeGreaterThan(0);
       expect(g.rows.every((r) => r.action === 'take_cash')).toBe(true);
     }

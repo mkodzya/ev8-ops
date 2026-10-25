@@ -86,10 +86,13 @@ button.rail-cta:focus-visible { outline: none; box-shadow: var(--focus-ring); }
   opacity: 0.55;
   padding: 12px 10px 4px;
 }
+/* 8 px between the icon, the name and the counters: on the 270 px rail
+   «Оплаты по графику» and both its counters stand on one line, as in the
+   director's mockup (QA of #15, measured: the name is 133 px in Russian). */
 .rail-item {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   min-height: 34px;
   padding: 0 10px;
   border-radius: var(--radius-pill);
@@ -100,8 +103,9 @@ button.rail-cta:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .rail-item.on { background: var(--rail-accent); color: var(--ink); }
 .rail-item .badge { margin-left: 0; }
 /* A label wraps beside its counters rather than run under them: at a space
-   first, inside a word only when one word is longer than the room — the
-   Georgian «Разобрать», «დასახარისხებელი», beside its counter (review of #15). */
+   first, inside a word only when one word is longer than the room (review of
+   #15). On the 270 px rail no word of the menu is: the Georgian «Разобрать»,
+   «დასახარისხებელი», stands whole beside a two-digit counter (QA of #15). */
 .rail-item-label { min-width: 0; overflow-wrap: anywhere; }
 /* The counters beside a section (issue #15, the director's mockup): red for
    the rentals late, grey for what waits — on the dark rail a grey that is the

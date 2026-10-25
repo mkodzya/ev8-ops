@@ -97,7 +97,8 @@ export const en = {
     cash: 'Till',
     reports: 'Reports',
     settings: 'Settings',
-    groups: { daily: 'Daily', fleet: 'Fleet', trade: 'Sales and purchases', manage: 'Manage' },
+    // `sales`: the trade group of whoever has no purchases — a manager (QA of #15, the director's mockup).
+    groups: { daily: 'Daily', fleet: 'Fleet', trade: 'Sales and purchases', sales: 'Sales', manage: 'Manage' },
   },
 
   // The frame around every screen (wave 1 §3.2–3.3).
@@ -289,7 +290,6 @@ export const en = {
   fleet: {
     vehicleAdded: 'Moped added',
     addVehicleCta: 'Add moped',
-    title: 'Fleet',
     vin: 'VIN',
     model: 'Model',
     color: 'Colour',

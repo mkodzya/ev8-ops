@@ -74,7 +74,8 @@ export function GoodsSalesPage() {
   const { can } = useSession();
   const items = useItemsText();
   const named = useItemName();
-  const { data, failure, reload } = useLoad<{ count: number; openCount: number; openTetri: number; sales: GoodsRow[] }>('/api/goods-sales');
+  // `openTetri`: what all the buyers wait to pay together — null for a manager (ADR-0048, addendum of 25.10.2026).
+  const { data, failure, reload } = useLoad<{ count: number; openCount: number; openTetri: number | null; sales: GoodsRow[] }>('/api/goods-sales');
 
   if (failure) return <LoadError failure={failure} onRetry={reload} />;
   if (!data) return <Loading />;
@@ -84,7 +85,7 @@ export function GoodsSalesPage() {
       <PageHead wrap title={t.goods.title} sub={t.goods.count(data.count)}>
         {data.openCount > 0 && (
           <Link className="muted mono" to="/sales/goods?f=open">
-            {t.goods.awaiting(data.openCount, formatGel(data.openTetri, { decimals: false }))}
+            {t.goods.awaiting(data.openCount, data.openTetri != null ? formatGel(data.openTetri, { decimals: false }) : null)}
           </Link>
         )}
         {can('goods.sell') && (

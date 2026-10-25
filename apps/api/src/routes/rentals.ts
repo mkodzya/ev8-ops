@@ -9,12 +9,13 @@ import { payOffsetOf, rentStateOf } from '../lib/rentState.js';
 import { prisma } from '../lib/db.js';
 import { env } from '../lib/env.js';
 import { notFound } from '../lib/errors.js';
+import { mayTotal } from '../lib/guard.js';
 
 // Rentals, read side (overdue and due-today as signals — ADR-0017, which
 // replaces RNT-03; RNT-06 the no-VIN list).
 
 export function rentalRoutes(app: FastifyInstance): void {
-  app.get('/api/rentals', { config: { scope: 'fleet.view' } }, async () => {
+  app.get('/api/rentals', { config: { scope: 'fleet.view' } }, async (req) => {
     const today = todayISO(new Date(), env.TZ);
     const rentals = await prisma.rental.findMany({
       orderBy: [{ status: 'asc' }, { pickedUpOn: 'desc' }],
@@ -37,6 +38,11 @@ export function rentalRoutes(app: FastifyInstance): void {
       (debts.get(customerId)?.parts ?? []).filter((p) => p.id === rentalId && (p.kind === 'rent' || p.kind === 'deposit' || p.kind === 'charge')).reduce((n, p) => n + p.owesTetri, 0);
     return {
       today,
+      // Whether the line over the list may add the rows' debts up: «40 аренд ·
+      // долг …» (an invented example) is many customers' debt together, an owner's
+      // figure; a manager reads «40 аренд» and each row's own (Mika's «да» of
+      // 25.10.2026, ADR-0048 addendum). The rows are the same for both.
+      totals: mayTotal(req),
       rentals: rentals.map((r) => {
         const pickedUpOn = isoDate(r.pickedUpOn);
         const paidThrough = isoDate(r.paidThrough);
