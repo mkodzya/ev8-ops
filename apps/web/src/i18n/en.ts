@@ -40,6 +40,7 @@ import { saleDateEn } from './sale-date.js';
 import { rentalSwapEn } from './rental-swap.js';
 import { vehicleCardEn } from './vehicle-card.js';
 import { pickupDateEn } from './pickup-date.js';
+import { depositReviseEn } from './deposit-revise.js';
 import { goodsEn } from './goods.js';
 import { incEn } from './inbound.js';
 export const en = {
@@ -1238,6 +1239,7 @@ export const en = {
       customer_not_found: 'Customer not found.',
       demo_login_off: 'Demo logins are switched off on this stand.',
       deposit_decided: 'The deposit has already been decided.',
+      deposit_undecided: 'There is no decision on this deposit yet: decide it first.',
       deposit_decision_forbidden: 'Only an owner decides on a deposit.',
       deposit_has_line: 'That bank deposit already has its statement line.',
       deposit_not_found: 'This rental has no deposit.',
@@ -1481,6 +1483,7 @@ export const en = {
   ...rentalSwapEn,
   ...vehicleCardEn,
   ...pickupDateEn,
+  ...depositReviseEn,
   ...goodsEn,
   ...incEn,
 };

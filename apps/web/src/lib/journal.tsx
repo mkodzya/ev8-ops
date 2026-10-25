@@ -270,6 +270,11 @@ function named(t: Dict, field: string, action?: string): string | null {
     const words = t.depositBefore.journal as Record<string, string>;
     if (field in words) return words[field];
   }
+  // A deposit decision revised (issue #14): kept, to go back, handed back, on hand and the debt, each by name.
+  if (action === 'deposit.revise') {
+    const words = t.depositRevise.journal as Record<string, string>;
+    if (field in words) return words[field];
+  }
   // A week moved: its end, its price, the days and their extra, each by name —
   // three bare pairs of dates and numbers side by side said nothing (review, 21.10.2026).
   if (action && WEEK_SHIFT.has(action)) {

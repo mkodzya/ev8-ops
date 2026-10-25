@@ -1,5 +1,5 @@
 import { CUSTOMER_SOURCES, WA_TEMPLATES, todayISO } from '@ev8/shared';
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { env } from '../lib/env.js';
 import { kommoRefToKeep } from '../lib/kommo.js';
 import { badRequest, notFound } from '../lib/errors.js';
@@ -12,6 +12,7 @@ import { WITHHOLD_GROUNDS } from '../lib/pdf/returnAct.js';
 import { discountWeek } from '../lib/discount.js';
 import { shiftWeek } from '../lib/weekShift.js';
 import { changePickupDate, pickupDatePreview, type PickupDateInput } from '../lib/pickupDate.js';
+import { reviseDeposit } from '../lib/depositRevision.js';
 import { depositBeforePreview, setDepositBefore, type DepositBeforeInput } from '../lib/depositBefore.js';
 import { addFine, voidFine } from '../lib/fines.js';
 import { date, int, oneOf, str, strList, tetri } from '../lib/validate.js';
@@ -204,6 +205,28 @@ export function handoverRoutes(app: FastifyInstance): void {
     if (!decision) throw badRequest('missing_field', 'action is required', { field: 'action' });
     await decideDeposit({ actor: actorOf(req), rentalId: req.params.id, decision, today: todayISO(new Date(), env.TZ) });
     return { ok: true };
+  });
+
+  /**
+   * «Пересмотреть решение по залогу» (issue #14, ADR-0047): an owner, any
+   * time after the return. The preview answers with what the form starts
+   * from and, given a decision, the deposit and the debt it would leave.
+   */
+  const revisionOf = (req: FastifyRequest<{ Params: { id: string }; Body: Body }>, write: boolean) => {
+    const b = req.body ?? {};
+    return {
+      actor: actorOf(req),
+      rentalId: req.params.id,
+      today: todayISO(new Date(), env.TZ),
+      decision: b.action != null ? decisionOf(b) : null,
+      reason: str(b, 'revisionReason', { max: 1000 }),
+      write,
+    };
+  };
+  app.post<{ Params: { id: string }; Body: Body }>('/api/rentals/:id/deposit/revise/preview', { config: { scope: 'deposit.decide' } }, async (req) => reviseDeposit(revisionOf(req, false)));
+  app.post<{ Params: { id: string }; Body: Body }>('/api/rentals/:id/deposit/revise', { config: { scope: 'deposit.decide' } }, async (req) => {
+    const view = await reviseDeposit(revisionOf(req, true));
+    return { ok: true, after: view.after };
   });
 
   /** "Отменить возврат": an owner, within a day, with a reason (§3.7, B5-08). */

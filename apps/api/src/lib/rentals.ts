@@ -605,6 +605,40 @@ export async function applyDecision(tx: Tx, actor: Actor, rentalId: string, deci
   const withheldBefore = d.withholdings.reduce((n, w) => n + w.amountTetri, 0);
   const paidOut = d.paidOutBeforeTetri + d.payouts.reduce((n, p) => n + p.grossTetri, 0);
   const held = Math.max(0, d.paidTetri - withheldBefore - paidOut);
+  const { keep, back } = await writeDecision(tx, actor, { id: d.id, rentalId, customerId: d.rental.customerId, notes: d.notes }, decision, on, held);
+  await tx.auditLog.create({
+    data: {
+      actorId: actor.id,
+      action: 'deposit.decide',
+      entityType: 'deposit',
+      entityId: d.id,
+      // What the deposit held before the decision and what it holds after,
+      // so the journal can say "180.00 ₾ → 0.00 ₾" instead of nothing
+      // (QA-W6-15). The rest of the decision stays beside it for the record.
+      before: { heldTetri: held },
+      after: { ...decision, heldTetri: 0, keptTetri: keep, backTetri: back },
+      // A reason belongs in the note, where every other action puts it and
+      // where the journal's own column looks for it.
+      note: decision.reason?.trim() || null,
+    },
+  });
+}
+
+/**
+ * What a decision writes once the deposit holds `held` to decide on: the
+ * money kept, paying what the return left owed, and a charge of its own for
+ * the rest; what goes back, to whom; the act made again. Shared by the first
+ * decision and by an owner's revision of it (issue #14).
+ */
+export async function writeDecision(
+  tx: Tx,
+  actor: Actor,
+  d: { id: string; rentalId: string; customerId: string; notes: string | null },
+  decision: DepositDecision,
+  on: string,
+  held: number,
+): Promise<{ keep: number; back: number }> {
+  const rentalId = d.rentalId;
   const keep = decision.action === 'return_all' ? 0 : decision.withheldTetri;
   if (keep > held) throw conflict('over_held', 'More than the deposit holds cannot be kept.', { field: 'withheldTetri', heldTetri: held });
   if (keep > 0) {
@@ -626,7 +660,7 @@ export async function applyDecision(tx: Tx, actor: Actor, rentalId: string, deci
         grossTetri: keep,
         feeTetri: 0,
         netTetri: keep,
-        customerId: d.rental.customerId,
+        customerId: d.customerId,
         rentalId,
         note: decision.reason,
         createdById: actor.id,
@@ -662,22 +696,7 @@ export async function applyDecision(tx: Tx, actor: Actor, rentalId: string, deci
   await recomputeRental(tx, rentalId);
   // The return act says what was decided: the copy made before is archived (B5-07).
   await tx.storedFile.updateMany({ where: { rentalId, kind: 'pdf', docKind: 'return_act', archived: false }, data: { archived: true } });
-  await tx.auditLog.create({
-    data: {
-      actorId: actor.id,
-      action: 'deposit.decide',
-      entityType: 'deposit',
-      entityId: d.id,
-      // What the deposit held before the decision and what it holds after,
-      // so the journal can say "180.00 ₾ → 0.00 ₾" instead of nothing
-      // (QA-W6-15). The rest of the decision stays beside it for the record.
-      before: { heldTetri: held },
-      after: { ...decision, heldTetri: 0, keptTetri: keep, backTetri: back },
-      // A reason belongs in the note, where every other action puts it and
-      // where the journal's own column looks for it.
-      note: decision.reason?.trim() || null,
-    },
-  });
+  return { keep, back };
 }
 
 export async function decideDeposit(input: { actor: Actor; rentalId: string; decision: DepositDecision; today: string }): Promise<void> {
