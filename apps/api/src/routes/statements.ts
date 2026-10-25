@@ -145,19 +145,23 @@ export function statementRoutes(app: FastifyInstance): void {
     const payers = direction === 'out' ? new Map() : await livePayerRules(prisma);
     // "Как в прошлый раз" for money going out (migration 0046).
     const last = direction === 'in' ? new Map<string, string>() : await lastCategories();
-    // A line going out of exactly a deposit we owe back looks like that deposit handed back.
+    // A line going out of exactly a deposit we owe back, to its renter, looks like that deposit handed back.
     const toHandBack =
       direction === 'in'
         ? []
         : (await depositsOverview()).deposits.filter((d) => d.toHandBackTetri > 0).map((d) => ({ rentalId: d.rentalId, number: d.number, tetri: d.toHandBackTetri, names: [d.customer.name, d.customer.nameKa, d.customer.nameLat] }));
     // Of the deposits owed back in exactly this sum, the one whose renter the
-    // bank names — or the only one there is. Two of one sum and no name: no
-    // guess (Mika, 19.10.2026: which deposit is this money?).
-    const depositFor = (l: { amountTetri: number; payer: string | null; purpose: string | null }) => {
-      const same = toHandBack.filter((d) => d.tetri === l.amountTetri);
-      const text = [l.payer, l.purpose].filter(Boolean).join(' ');
-      const named = text ? same.filter((d) => nameMatches(text, d.names)) : [];
-      return named.length === 1 ? named[0] : same.length === 1 ? same[0] : null;
+    // bank names as the recipient. A sum alone is no sign (issue #16 of the
+    // director, 25.10.2026, as #13 ruled for money coming in): two refunds of
+    // 180 were both offered as the deposit of the one rental with 180 to hand
+    // back, and one of them was another renter's. No recipient, a recipient
+    // who is none of them, or two of one sum and one name: no hint — the line
+    // waits in «Без подсказки» and a person chooses.
+    const depositFor = (l: { amountTetri: number; payer: string | null }) => {
+      const to = l.payer?.trim();
+      if (!to) return null;
+      const named = toHandBack.filter((d) => d.tetri === l.amountTetri && nameMatches(to, d.names));
+      return named.length === 1 ? named[0] : null;
     };
     return {
       counts: { in: counts.find((c) => c.direction === 'in')?._count._all ?? 0, out: counts.find((c) => c.direction === 'out')?._count._all ?? 0 },
