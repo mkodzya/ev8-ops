@@ -36,7 +36,16 @@ export interface InLine {
   /** The payer as «Запомнить для „…“» says him; absent while an older API answers. */
   payerLabel?: string | null;
   canRemember?: boolean;
-  remembered?: { kind: 'customer' | 'own_transfer' | 'founder_equity' | 'other_income'; customerId: string | null; customerName?: string | null; categoryId: string | null } | null;
+  /** The payer is his name with the account he sends from (the Bank of Georgia): another account is another payer. */
+  payerByAccount?: boolean;
+  /** `namesAnother`: the line names another customer than the one remembered — the rule kept quiet over it. */
+  remembered?: {
+    kind: 'customer' | 'own_transfer' | 'founder_equity' | 'other_income';
+    customerId: string | null;
+    customerName?: string | null;
+    categoryId: string | null;
+    namesAnother?: boolean;
+  } | null;
 }
 
 /** The categories of other income (migration 0069), each one's name in the screen's language. */
@@ -140,6 +149,7 @@ export function IncomeAnswers({ line, cats, onSplit, onNotOurs }: { line: InLine
           <span>{t.inc.remember(line.payerLabel!)}</span>
         </label>
       )}
+      {keep && line.payerByAccount && <p className="hint muted">{t.inc.rememberAccount}</p>}
       {other && (
         <div className="exp-panel">
           <p className="hint muted">{t.inc.otherWhat}</p>
@@ -387,7 +397,12 @@ function KindSheet({
           <span>{t.inc.remember(line.payerLabel ?? '')}</span>
         </label>
       )}
-      {canRemember && keep && pick && <p className="hint muted">{t.inc.rememberHint}</p>}
+      {canRemember && keep && pick && (
+        <p className="hint muted">
+          {t.inc.rememberHint}
+          {line.payerByAccount && <> {t.inc.rememberAccount}</>}
+        </p>
+      )}
       {pick && said.length > 0 && !over && (
         <div className="split-result">
           <b>{t.sort.resTitle}</b>

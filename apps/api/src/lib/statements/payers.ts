@@ -77,11 +77,22 @@ export function payerKey(line: Line): string | null {
   return account ? `${payer}|${account}` : payer;
 }
 
-/** The same payer, as a person reads it beside «Запомнить для …». */
+/**
+ * The same payer, as a person reads it beside «Запомнить для …», in
+ * «Разобрано правилами» and in a rule's reason: the name, and where the key
+ * holds the sender's account, its last four characters — «… · …0001». The
+ * same name from another account is another payer, and the screen says which
+ * one it remembers (review of 25.10.2026).
+ */
 export function payerLabel(line: Line): string | null {
   if (payerKey(line) == null) return null;
-  return (line.payer ?? '').replace(/\s+/g, ' ').trim();
+  const name = (line.payer ?? '').replace(/\s+/g, ' ').trim();
+  const account = senderAccount(line);
+  return account ? `${name} · …${account.slice(-4)}` : name;
 }
+
+/** Whether the payer's key holds the sender's account: a line from another account waits for a person. */
+export const payerByAccount = (line: Line): boolean => payerKey(line) != null && senderAccount(line) != null;
 
 /** The rules in force, by payer key. A category taken off stops its rules (as with expenses). */
 export async function livePayerRules(db: Db): Promise<Map<string, LivePayerRule>> {
@@ -109,9 +120,25 @@ function takes(r: Ctx['rentals'][number], gross: number): boolean {
 }
 
 /** The customers the line's own words name — the payer and the purpose, read as the name rule reads them. */
-export function namedCustomers(line: Line, ctx: Ctx): string[] {
+export function namedCustomers(line: Line, ctx: Pick<Ctx, 'customers'>): string[] {
   const text = [line.payer, line.purpose].filter(Boolean).join(' ');
   return text ? ctx.customers.filter((c) => nameMatches(text, c.names)).map((c) => c.id) : [];
+}
+
+/**
+ * The line names another of our customers than the one the payer is
+ * remembered as — for an answer that is no customer's, any customer: the
+ * remembered payer keeps quiet (`byPayerRule`), and the screen says so — the
+ * queue in words, the panel with the name above the payer remembered.
+ */
+export function namesAnother(line: Line, ctx: Pick<Ctx, 'customers'>, rule: { customerId: string | null }): boolean {
+  return namedCustomers(line, ctx).some((id) => id !== rule.customerId);
+}
+
+/** Our customers by their names, as `loadCtx` holds them for the name rule — for a screen that needs no more of it. */
+export async function customersByName(db: Db): Promise<Ctx['customers']> {
+  const rows = await db.customer.findMany({ where: { archived: false }, select: { id: true, name: true, nameKa: true, nameLat: true } });
+  return rows.map((c) => ({ id: c.id, name: c.name, names: [c.name, c.nameKa, c.nameLat] }));
 }
 
 /**
@@ -126,7 +153,7 @@ export function namedCustomers(line: Line, ctx: Ctx): string[] {
  */
 export function byPayerRule(line: Line, ctx: Ctx, rule: LivePayerRule): PayerAnswer | null {
   if (line.direction !== 'in' || recordedFor(line, ctx).length > 0) return null;
-  if (namedCustomers(line, ctx).some((id) => id !== rule.customerId)) return null;
+  if (namesAnother(line, ctx, rule)) return null;
   if (rule.kind !== 'customer') {
     return { type: 'aside', resolution: rule.kind, categoryId: rule.kind === 'other_income' ? rule.categoryId : null, payerRuleId: rule.id };
   }

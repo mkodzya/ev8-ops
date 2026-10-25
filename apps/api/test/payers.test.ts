@@ -4,7 +4,7 @@
 // the line names another customer. Pure: lines and the rules' context are
 // built here, no database. Every name and account number is invented.
 import { describe, expect, it } from 'vitest';
-import { byPayerRule, decideWithPayers, payerKey, senderAccount, type LivePayerRule } from '../src/lib/statements/payers.js';
+import { byPayerRule, decideWithPayers, namesAnother, payerByAccount, payerKey, payerLabel, senderAccount, type LivePayerRule } from '../src/lib/statements/payers.js';
 import type { Ctx, Line } from '../src/lib/statements/reconcile.js';
 
 const DAY = '2031-03-10';
@@ -91,6 +91,16 @@ describe('the payer a line is remembered by', () => {
     expect(payerKey(bog('Exampla Payer', { account: 'GE00BG0000000000000009' }))).not.toBe(payerKey(bog('Exampla Payer', { account: 'GE00BG0000000000000008' })));
   });
 
+  it('is read on screen with the account’s last four characters where the key holds one, so «Запомнить для …» says which', () => {
+    expect(payerLabel(bog('Exampla  Payer', { account: 'GE00BG0000000000000009' }))).toBe('Exampla Payer · …0009');
+    expect(payerByAccount(bog('Exampla Payer', { account: 'GE00BG0000000000000009' }))).toBe(true);
+    expect(payerLabel(tbc('Exampla Payer'))).toBe('Exampla Payer');
+    expect(payerByAccount(tbc('Exampla Payer'))).toBe(false);
+    // A card line has no payer: neither a label nor an account.
+    expect(payerLabel({ ...bog('Exampla Payer'), channel: 'acquiring' })).toBeNull();
+    expect(payerByAccount({ ...bog('Exampla Payer'), channel: 'acquiring' })).toBe(false);
+  });
+
   it('a card line and cash paid in have none', () => {
     expect(payerKey({ ...bog('Exampla Payer'), channel: 'acquiring' })).toBeNull();
     expect(payerKey({ ...bog('Exampla Payer'), purpose: 'naRdi fulis Setana' })).toBeNull();
@@ -121,6 +131,13 @@ describe('a payer remembered as a customer keeps quiet when the line names anoth
     const line = bog('Lasha Relativo');
     const d = decideWithPayers(line, ctx, new Map([[payerKey(line)!, asCustomer(A.id)]]));
     expect(d).toMatchObject({ type: 'rule', rule: 'payer_name', target: { rentalId: 'b1' }, customerId: B.id });
+  });
+
+  it('the screen reads the same guard: another customer named, or only the one remembered', () => {
+    const ctx = ctxOf([A, { id: B.id, name: 'Lasha Relativo' }], []);
+    expect(namesAnother(bog('Lasha Relativo'), ctx, { customerId: A.id })).toBe(true);
+    expect(namesAnother(bog('Lasha Relativo'), ctx, { customerId: B.id })).toBe(false);
+    expect(namesAnother(bog('Nobody Invented'), ctx, { customerId: A.id })).toBe(false);
   });
 
   it('the remembered customer named on the line is no other: the rule still places it', () => {

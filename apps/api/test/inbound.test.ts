@@ -177,11 +177,17 @@ describe.skipIf(!HAS_DB)('a payer remembered as a customer (issue #13, acceptanc
     expect(second).toMatchObject({ status: 'matched', matchedRule: 'payer_rule', payerRuleId: res.ruleId });
     expect(await prisma.payment.findFirstOrThrow({ where: { statementLineId: second.id } })).toMatchObject({ rentalId, grossTetri: RATE });
     const rules = json<{ lines: { id: string; rule: string; reason: { code: string; name: string } | null; payerRule: { id: string; live: boolean } | null }[] }>(await call(owner, 'GET', '/api/statement-lines/by-rules'));
-    expect(rules.lines.find((l) => l.id === second.id)).toMatchObject({ rule: 'payer_rule', reason: { code: 'payer_rule', name: `Relative Example ${t}` }, payerRule: { id: res.ruleId, live: true } });
+    // The payer is read with his account's last four characters: the same name from another account is another payer.
+    expect(rules.lines.find((l) => l.id === second.id)).toMatchObject({ rule: 'payer_rule', reason: { code: 'payer_rule', name: `Relative Example ${t} · …0001` }, payerRule: { id: res.ruleId, live: true } });
     // The queue says who the payer is remembered as.
     await load(owner, inRow(today(), '1.01', from(`Relative Example ${t}`, ' odd')));
     const queue = json<{ lines: { raw: string; remembered: { kind: string; customerId: string | null; customerName: string | null } | null; canRemember: boolean }[] }>(await call(owner, 'GET', '/api/statement-lines?direction=in'));
-    expect(queue.lines.find((l) => l.raw.includes(`${t}; Account`) && l.raw.includes('odd'))).toMatchObject({ canRemember: true, remembered: { kind: 'customer', customerName: expect.stringContaining('Тест Арендатор') } });
+    expect(queue.lines.find((l) => l.raw.includes(`${t}; Account`) && l.raw.includes('odd'))).toMatchObject({
+      canRemember: true,
+      payerLabel: `Relative Example ${t} · …0001`,
+      payerByAccount: true,
+      remembered: { kind: 'customer', customerName: expect.stringContaining('Тест Арендатор'), namesAnother: false },
+    });
   });
 
   it('a line the rule cannot place without a doubt waits: no debt, or a sum that fits nothing', async () => {
@@ -224,6 +230,9 @@ describe.skipIf(!HAS_DB)('a payer remembered as a customer (issue #13, acceptanc
     const other = await prisma.statementLine.findFirstOrThrow({ where: { raw: { contains: `${t}; Account: GE38BG0000000000000002` } } });
     expect(other.status).toBe('unmatched');
     expect(await prisma.payment.count({ where: { statementLineId: other.id } })).toBe(0);
+    // On screen he is the name with that other account, remembered as nobody yet.
+    const queue = json<{ lines: { id: string }[] }>(await call(owner, 'GET', '/api/statement-lines?direction=in'));
+    expect(queue.lines.find((l) => l.id === other.id)).toMatchObject({ payerLabel: `Twin Example ${t} · …0002`, payerByAccount: true, remembered: null });
   });
 
   it('a namesake of another customer: the remembered payer keeps quiet and the line waits (review of 25.10.2026)', async () => {
@@ -240,6 +249,14 @@ describe.skipIf(!HAS_DB)('a payer remembered as a customer (issue #13, acceptanc
     expect(week).toMatchObject({ status: 'unmatched', payerRuleId: null });
     expect(await prisma.payment.count({ where: { statementLineId: week.id } })).toBe(0);
     expect(await prisma.payment.count({ where: { rentalId: namesake.rentalId, voidedAt: null } })).toBe(0);
+    // The screen says the same: the queue, why the rule kept quiet; the panel, the namesake by his name above the payer remembered.
+    const queue = json<{ lines: { id: string; remembered: { kind: string; namesAnother: boolean } | null }[] }>(await call(owner, 'GET', '/api/statement-lines?direction=in'));
+    expect(queue.lines.find((l) => l.id === week.id)?.remembered).toMatchObject({ kind: 'customer', namesAnother: true });
+    const { options } = json<{ options: Option[] }>(await call(owner, 'GET', `/api/statement-lines/${week.id}/options?kind=rental`));
+    expect(options.filter((o) => o.probable).map((o) => [o.target.rentalId, o.probable])).toEqual([
+      [namesake.rentalId, 'name'],
+      [rentalId, 'rule'],
+    ]);
   });
 
   it('the relative remembered for one renter, renting himself, pays his own week by his name (review of 25.10.2026)', async () => {

@@ -17,7 +17,7 @@ import { isCashDeposit, loadCtx, storedLine, suggest } from '../lib/statements/r
 import { expenseKey, lastCategories, payeeLabel, sortByRule, waitingFrom } from '../lib/statements/expenses.js';
 import { BACK_TO_QUEUE, setAside } from '../lib/statements/aside.js';
 import { twinReason, twinsOf } from '../lib/statements/duplicates.js';
-import { livePayerRules, payerKey, payerLabel, rememberPayer, type PayerKind } from '../lib/statements/payers.js';
+import { livePayerRules, namesAnother, payerByAccount, payerKey, payerLabel, rememberPayer, type PayerKind } from '../lib/statements/payers.js';
 import { tbcApiStatus } from '../lib/tbc.js';
 import { settleAfterShift } from '../lib/weekShift.js';
 import { int, oneOf, str, tetri } from '../lib/validate.js';
@@ -197,9 +197,24 @@ export function statementRoutes(app: FastifyInstance): void {
           ...(l.direction === 'in'
             ? (() => {
                 // Who sent it, as «Запомнить для „…“» says it; none — a card line, cash paid in, nobody named (0069).
+                // `payerByAccount`: the payer is his name with the account he sends from (review of 25.10.2026).
                 const key = payerKey(line);
                 const rule = key ? payers.get(key) : undefined;
-                return { payerLabel: payerLabel(line), canRemember: key != null, remembered: rule ? { kind: rule.kind as PayerKind, customerId: rule.customerId, customerName: rule.customerName ?? null, categoryId: rule.categoryId } : null };
+                return {
+                  payerLabel: payerLabel(line),
+                  canRemember: key != null,
+                  payerByAccount: payerByAccount(line),
+                  remembered: rule
+                    ? {
+                        kind: rule.kind as PayerKind,
+                        customerId: rule.customerId,
+                        customerName: rule.customerName ?? null,
+                        categoryId: rule.categoryId,
+                        // The line names another customer: the rule kept quiet over it, and the queue says why.
+                        namesAnother: namesAnother(line, ctx, rule),
+                      }
+                    : null,
+                };
               })()
             : {}),
           ...(l.direction === 'out'

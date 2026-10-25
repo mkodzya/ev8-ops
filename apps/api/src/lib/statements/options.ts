@@ -3,7 +3,7 @@ import { isoDate } from '../dates.js';
 import { debtsOf } from '../debt.js';
 import { prisma } from '../db.js';
 import { PART_MONEY } from '../stock.js';
-import { livePayerRules, payerKey } from './payers.js';
+import { customersByName, livePayerRules, namesAnother, payerKey } from './payers.js';
 import { lineGross, loadCtx, type Line } from './reconcile.js';
 
 // The panel beside a line coming in, once its kind is chosen (issue #13 of the
@@ -62,9 +62,17 @@ const LIMIT = 60;
 const RUNNING_LIST = ['booked', 'active', 'overdue', 'paused', 'disputed'] as const;
 const RUNNING = new Set<string>(RUNNING_LIST);
 
-const order = (a: Option, b: Option) =>
-  rank(a.probable) - rank(b.probable) || Number(b.fits) - Number(a.fits) || b.owesTetri - a.owesTetri || (b.number ?? '').localeCompare(a.number ?? '');
-const rank = (p: Option['probable']) => (p === 'rule' ? 0 : p === 'name' ? 1 : 2);
+/**
+ * The probable first — the payer remembered, then the name; but when the line
+ * names another customer than the one remembered, the name first: the rule
+ * kept quiet over it (`byPayerRule`), and the screen does not point the other
+ * way (review of 25.10.2026). Then what fits by its sum, then the debt.
+ */
+const orderBy = (nameFirst: boolean) => {
+  const rank = (p: Option['probable']) => (p === 'rule' ? (nameFirst ? 1 : 0) : p === 'name' ? (nameFirst ? 0 : 1) : 2);
+  return (a: Option, b: Option) =>
+    rank(a.probable) - rank(b.probable) || Number(b.fits) - Number(a.fits) || b.owesTetri - a.owesTetri || (b.number ?? '').localeCompare(a.number ?? '');
+};
 
 export async function optionsFor(line: Line, kind: OptionKind, raw: string): Promise<Option[]> {
   const q = readQuery(raw);
@@ -74,8 +82,14 @@ export async function optionsFor(line: Line, kind: OptionKind, raw: string): Pro
   const key = payerKey(line);
   const remembered = key ? (await livePayerRules(prisma)).get(key) ?? null : null;
   const ruleCustomer = remembered?.kind === 'customer' ? remembered.customerId : null;
+  // The line names another customer than the one remembered: a namesake, or a
+  // relative remembered for one renter who now rents himself. The rule kept
+  // quiet; here the name goes first, and the payer remembered below it, «запомнен
+  // для …» — the person chooses.
+  const quiet = ruleCustomer != null && namesAnother(line, { customers: await customersByName(prisma) }, { customerId: ruleCustomer });
+  const order = orderBy(quiet);
   const probableOf = (customerId: string | null, names: (string | null | undefined)[]): Option['probable'] =>
-    customerId && customerId === ruleCustomer ? 'rule' : named(names) ? 'name' : null;
+    quiet && named(names) ? 'name' : customerId && customerId === ruleCustomer ? 'rule' : named(names) ? 'name' : null;
   const byCustomer = (q: Query, c: { name: string; nameKa: string | null; nameLat: string | null } | null) => !!c && spellingMatches(q, [c.name, c.nameKa, c.nameLat]);
 
   if (kind === 'rental' || kind === 'deposit') {
