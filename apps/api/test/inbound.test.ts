@@ -221,10 +221,15 @@ describe.skipIf(!HAS_DB)('the panel beside a line (issue #13)', () => {
     expect(options[mine].plan).toEqual([{ kind: 'deposit', tetri: 15000 }]);
     expect(options[mine].payDay).toBeGreaterThanOrEqual(1);
 
+    // Four digits are also a rental's number or part of a phone, as in the header's search: the rental is among
+    // what they find, whatever other suites left behind with the same digits.
     const byVin = json<{ options: Option[] }>(await call(named.owner, 'GET', `/api/statement-lines/${line.id}/options?kind=rental&q=${sameSum.vehicle.vin.slice(-4)}`)).options;
-    expect(byVin.map((o) => o.target.rentalId)).toEqual([sameSum.rentalId]);
+    expect(byVin.map((o) => o.target.rentalId)).toContain(sameSum.rentalId);
     const byFleet = json<{ options: Option[] }>(await call(named.owner, 'GET', `/api/statement-lines/${line.id}/options?kind=rental&q=${fleetNumber(sameSum.vehicle.fleetNo)}`)).options;
-    expect(byFleet.map((o) => o.target.rentalId)).toEqual([sameSum.rentalId]);
+    expect(byFleet.map((o) => o.target.rentalId)).toContain(sameSum.rentalId);
+    // A word that is nobody's finds nothing.
+    const none = json<{ options: Option[] }>(await call(named.owner, 'GET', `/api/statement-lines/${line.id}/options?kind=rental&q=zzqx${named.tag}`)).options;
+    expect(none).toEqual([]);
     const byPhone = json<{ options: Option[] }>(await call(named.owner, 'GET', `/api/statement-lines/${line.id}/options?kind=rental&q=5550000`)).options;
     expect(byPhone.map((o) => o.target.rentalId)).toContain(named.rentalId);
   });
