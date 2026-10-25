@@ -7,6 +7,7 @@ import { KommoField } from '../components/Kommo.js';
 import { RecordHistory } from '../components/RecordHistory.js';
 import { LoadError } from '../components/LoadError.js';
 import { DecideSheet } from '../components/ReturnMoney.js';
+import { ReviseSheet } from '../components/DepositRevise.js';
 import { RowMenu } from '../components/RowMenu.js';
 import { WhatsappSheet } from '../components/Whatsapp.js';
 import { Field } from '../components/Wizard.js';
@@ -135,7 +136,7 @@ export function RentalPage() {
   const { data, failure, reload } = useLoad<RentalCard>(id ? `/api/rentals/${id}` : null);
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
-  const [sheet, setSheet] = useState<null | 'edit' | 'status' | 'undo' | 'decide' | 'fine' | 'pickupDate' | 'depositBefore'>(params.get('decide') === '1' ? 'decide' : null);
+  const [sheet, setSheet] = useState<null | 'edit' | 'status' | 'undo' | 'decide' | 'revise' | 'fine' | 'pickupDate' | 'depositBefore'>(params.get('decide') === '1' ? 'decide' : null);
   const [wa, setWa] = useState(false);
   const [feedFilter, setFeedFilter] = useState<'all' | 'payment' | 'act' | 'document' | 'log'>('all');
   const closeSheet = () => {
@@ -287,6 +288,7 @@ export function RentalPage() {
       )}
       {sheet === 'status' && <StatusSheet rental={r} onClose={closeSheet} onDone={() => { closeSheet(); reload(); }} />}
       {sheet === 'undo' && r.undoReturnUntil && <UndoSheet rental={r} until={r.undoReturnUntil} onClose={closeSheet} onDone={() => { closeSheet(); reload(); }} />}
+      {sheet === 'revise' && <ReviseSheet rentalId={r.id} number={r.number} onClose={closeSheet} onDone={() => { closeSheet(); reload(); }} />}
       {sheet === 'decide' && r.returnedOn && (
         <DecideSheet rentalId={r.id} number={r.number} returnedOn={r.returnedOn} paidThrough={r.paidThrough} onClose={closeSheet} onDone={() => { closeSheet(); reload(); }} />
       )}
@@ -500,6 +502,8 @@ export function RentalPage() {
           <BlockHead title={t.rentals.deposit}>
             {/* Received before EV8 Ops, on an open rental: an owner marks it or takes the mark off (ADR-0044 §2). */}
             {owner && open && d && !d.decided ? <RowMenu actions={[{ key: 'depositBefore', label: t.depositBefore.action, onPick: () => setSheet('depositBefore') }]} /> : null}
+            {/* A returned rental's decision, revised by an owner any time after (issue #14, ADR-0046). */}
+            {owner && !open && d && d.decided ? <RowMenu actions={[{ key: 'revise', label: t.depositRevise.action, onPick: () => setSheet('revise') }]} /> : null}
           </BlockHead>
           {d ? (
             <>

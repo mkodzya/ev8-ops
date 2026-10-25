@@ -31,6 +31,7 @@ import { saleDateKa } from './sale-date.js';
 import { rentalSwapKa } from './rental-swap.js';
 import { vehicleCardKa } from './vehicle-card.js';
 import { pickupDateKa } from './pickup-date.js';
+import { depositReviseKa } from './deposit-revise.js';
 import { goodsKa } from './goods.js';
 import type { Dict } from './en.js';
 
@@ -1222,6 +1223,7 @@ export const ka: Dict = {
       customer_not_found: 'კლიენტი ვერ მოიძებნა.',
       demo_login_off: 'დემო ანგარიშები ამ სტენდზე გამორთულია.',
       deposit_decided: 'დეპოზიტზე გადაწყვეტილება უკვე მიღებულია.',
+      deposit_undecided: 'დეპოზიტზე გადაწყვეტილება ჯერ არ არის — ჯერ „დეპოზიტის გადაწყვეტა“.',
       deposit_decision_forbidden: 'დეპოზიტზე გადაწყვეტილებას იღებს მფლობელი.',
       deposit_has_line: 'ბანკში ამ შეტანას უკვე აქვს ამონაწერის ხაზი.',
       deposit_not_found: 'ამ ქირაობას დეპოზიტი არ აქვს.',
@@ -1458,5 +1460,6 @@ export const ka: Dict = {
   ...rentalSwapKa,
   ...vehicleCardKa,
   ...pickupDateKa,
+  ...depositReviseKa,
   ...goodsKa,
 };

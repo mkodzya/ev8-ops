@@ -31,6 +31,7 @@ import { saleDateRu } from './sale-date.js';
 import { rentalSwapRu } from './rental-swap.js';
 import { vehicleCardRu } from './vehicle-card.js';
 import { pickupDateRu } from './pickup-date.js';
+import { depositReviseRu } from './deposit-revise.js';
 import { goodsRu } from './goods.js';
 import type { Dict } from './en.js';
 
@@ -1233,6 +1234,7 @@ export const ru: Dict = {
       customer_not_found: 'Клиент не найден.',
       demo_login_off: 'Демо-учётки на этом стенде отключены.',
       deposit_decided: 'По залогу уже есть решение.',
+      deposit_undecided: 'По залогу ещё нет решения — сначала «Решить залог».',
       deposit_decision_forbidden: 'Решение по залогу принимает владелец.',
       deposit_has_line: 'У этого внесения в банк уже есть строка выписки.',
       deposit_not_found: 'У этой аренды нет залога.',
@@ -1469,5 +1471,6 @@ export const ru: Dict = {
   ...rentalSwapRu,
   ...vehicleCardRu,
   ...pickupDateRu,
+  ...depositReviseRu,
   ...goodsRu,
 };
