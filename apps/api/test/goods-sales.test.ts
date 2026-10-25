@@ -94,7 +94,7 @@ describe.skipIf(!HAS_DB)('a charger to a retail buyer by card (acceptance 1)', (
     const owner = await loginAs('owner');
     const manager = await loginAs('manager');
     await countChargers(owner, 4);
-    // A rental at 100 a week handed over today: the card rule would take a 100 card line for it.
+    // A rental at 100 a week handed over today: the card rule took a 100 card line for it until issue #13.
     const prisma = await db();
     const model = await prisma.vehicleModel.create({ data: { brand: 'Test', name: `Model ${uniq()}`, forRent: true } });
     const vehicle = await prisma.vehicle.create({ data: { vin: `GOODC${uniq().replace(/\D/g, '').slice(-12).padStart(12, '0')}`, modelId: model.id } });
@@ -117,11 +117,13 @@ describe.skipIf(!HAS_DB)('a charger to a retail buyer by card (acceptance 1)', (
     const ctx = await loadCtx();
     expect(decide(storedLine(line), ctx)).toEqual({ type: 'queue' });
     // The hints as this suite's own records give them: the suites share one database, and other suites' rentals of
-    // 100 handed over today would fill the eight places first. The card's rental of the day leads, the goods sale follows.
+    // 100 handed over today would fill the eight places first. The goods sale of this sum leads; the rental that
+    // fits by its sum alone follows — its pick-up day is no sign since issue #13.
     const mine = { ...ctx, rentals: ctx.rentals.filter((r) => r.customerId === c.id), sales: [], payments: [], bankDeposits: [], goods: ctx.goods.filter((g) => g.id === sold.id) };
     const hints = suggest(storedLine(line), mine).suggestions;
-    expect(hints.map((h) => h.kind)).toEqual(['rental', 'goods_sale']);
-    expect(hints[1]).toMatchObject({ id: sold.id, retail: true, reason: { code: 'goods', number: sold.number, debtTetri: 100_00, channel: 'acquiring' } });
+    expect(hints.map((h) => h.kind)).toEqual(['goods_sale', 'rental']);
+    expect(hints[0]).toMatchObject({ id: sold.id, retail: true, reason: { code: 'goods', number: sold.number, debtTetri: 100_00, channel: 'acquiring' } });
+    expect(hints[1].reason.code).toBe('amount');
 
     const assigned = await call(owner, 'POST', `/api/statement-lines/${line.id}/assign`, { goodsSaleId: sold.id });
     expect(assigned.statusCode, assigned.body).toBe(200);

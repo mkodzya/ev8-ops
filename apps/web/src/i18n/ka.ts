@@ -32,6 +32,7 @@ import { rentalSwapKa } from './rental-swap.js';
 import { vehicleCardKa } from './vehicle-card.js';
 import { pickupDateKa } from './pickup-date.js';
 import { goodsKa } from './goods.js';
+import { incKa } from './inbound.js';
 import type { Dict } from './en.js';
 
 // Typed as Dict: a missing or misspelled key fails the build.
@@ -1459,4 +1460,5 @@ export const ka: Dict = {
   ...vehicleCardKa,
   ...pickupDateKa,
   ...goodsKa,
+  ...incKa,
 };
