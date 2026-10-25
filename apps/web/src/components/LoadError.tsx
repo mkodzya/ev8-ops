@@ -21,7 +21,7 @@ export function LoadError({ failure, onRetry }: { failure: LoadFailure | null; o
       { prefix: '/fleet/models', missing: 'model_not_found', list: t.nav.models },
       { prefix: '/service/stock', missing: 'part_not_found', list: t.stock.nav },
       { prefix: '/fleet', missing: 'vehicle_not_found', list: t.nav.fleet },
-      { prefix: '/rentals', missing: 'rental_not_found', list: t.nav.rentals },
+      { prefix: '/rentals', missing: 'rental_not_found', list: t.shell.tabs.rentals },
       { prefix: '/sales', missing: 'sale_not_found', list: t.nav.sales },
       { prefix: '/purchases', missing: 'purchase_not_found', list: t.nav.purchases },
       { prefix: '/service', missing: 'job_not_found', list: t.nav.service },

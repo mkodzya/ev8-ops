@@ -168,7 +168,7 @@ export function WeekPage() {
       to: '/fleet/batteries',
       note: t.weekReport.batteriesToday,
     },
-    { key: 'unmatched', label: t.weekReport.unmatched, text: String(w.unmatchedLines), to: '/money/sort' },
+    { key: 'unmatched', label: t.weekReport.unmatched, text: String(w.unmatchedLines), to: '/sort' },
     // The one figure nobody keeps (`batteries.md`): said in words, not as 0.
     { key: 'swaps', label: t.weekReport.swaps, text: t.weekReport.noRecord, absent: true },
   ];

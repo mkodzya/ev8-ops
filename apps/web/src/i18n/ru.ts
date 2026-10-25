@@ -32,6 +32,7 @@ import { rentalSwapRu } from './rental-swap.js';
 import { vehicleCardRu } from './vehicle-card.js';
 import { pickupDateRu } from './pickup-date.js';
 import { depositReviseRu } from './deposit-revise.js';
+import { menuRu } from './menu.js';
 import { goodsRu } from './goods.js';
 import { incRu } from './inbound.js';
 import type { Dict } from './en.js';
@@ -79,15 +80,18 @@ export const ru: Dict = {
   },
 
   nav: {
-    serviceStock: 'Сервис · Склад',
     today: 'Сегодня',
     more: 'Ещё',
-    fleet: 'Парк',
-    rentals: 'Аренды',
+    // Issue #15 (ADR-0048): the sections of the new menu, the bar's short word for the schedule.
+    schedule: 'Оплаты по графику',
+    scheduleShort: 'Оплаты',
+    sort: 'Разобрать',
+    fleet: 'Мопеды',
+    rentals: 'Аренды и клиенты',
     payments: 'Платежи',
     purchases: 'Закупки',
     sales: 'Продажи',
-    service: 'Сервис',
+    service: 'Ремонты',
     statements: 'Выписки',
     customers: 'Клиенты',
     models: 'Модели',
@@ -95,7 +99,7 @@ export const ru: Dict = {
     cash: 'Касса',
     reports: 'Отчёты',
     settings: 'Настройки',
-    groups: { work: 'Работа', money: 'Деньги', manage: 'Управление' },
+    groups: { daily: 'Ежедневно', fleet: 'Парк', trade: 'Продажи и закупки', manage: 'Управление' },
   },
 
   shell: {
@@ -148,6 +152,16 @@ export const ru: Dict = {
       incoming: 'Поступления',
       drive: 'Drive',
       goods: 'Товары',
+      // Issue #15: «Оплаты по графику», «Разобрать», «Аренды и клиенты».
+      due: 'Сегодня',
+      late: 'Просрочки',
+      month: 'Месяц',
+      sortIn: 'Поступления',
+      sortOut: 'Списания',
+      byRules: 'Разобрано правилами',
+      aside: 'Убрано из очереди',
+      rentals: 'Аренды',
+      customers: 'Клиенты',
     },
   },
 
@@ -1482,6 +1496,7 @@ export const ru: Dict = {
   ...vehicleCardRu,
   ...pickupDateRu,
   ...depositReviseRu,
+  ...menuRu,
   ...goodsRu,
   ...incRu,
 };

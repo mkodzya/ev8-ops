@@ -6,7 +6,9 @@ import { LoadError } from '../../components/LoadError.js';
 import { RowMenu } from '../../components/RowMenu.js';
 import { BlockHead, Loading, PageHead } from '../../components/ui.js';
 import { Field, Row } from '../../components/Wizard.js';
+import { useToast } from '../../ds/feedback/Toast.js';
 import { FormSheet } from '../../ds/form/Form.js';
+import { useOperation } from '../../ds/form/operation.js';
 import '../../ds/money/money.css';
 import { fmtDate, fmtDateAt, formatGel } from '../../format.js';
 import { useT } from '../../i18n/index.js';
@@ -55,6 +57,8 @@ interface Card {
   };
   journal: { at: string; action: string; who: string | null; note: string | null }[];
   canVoid: boolean;
+  /** Money a manager attached himself from a bank line: he lets go of it (issue #15). Absent while an older API answers. */
+  canUnlink?: boolean;
 }
 
 const dm = (iso: string | null) => (iso ? `${iso.slice(8, 10)}.${iso.slice(5, 7)}` : '');
@@ -68,6 +72,8 @@ export function PaymentPage() {
   const t = useT();
   const { data, failure, reload } = useLoad<Card>(id ? `/api/payments/${id}` : null);
   const [voiding, setVoiding] = useState(false);
+  const toast = useToast();
+  const unlinking = useOperation();
   if (failure) return <LoadError failure={failure} onRetry={reload} />;
   if (!data) return <Loading />;
   const p = data.payment;
@@ -79,7 +85,29 @@ export function PaymentPage() {
     <>
       <PageHead title={t.paymentPage.title(signed)} sub={p.voided ? (p.voidKind === 'undo' ? t.paymentPage.undone : t.paymentPage.voided) : t.money.kinds[p.kind]}>
         {data.canVoid && <RowMenu actions={[{ key: 'void', label: t.paymentPage.void, onPick: () => setVoiding(true) }]} />}
+        {/* «Отвязать»: the line goes back to «Разобрать», the payment is annulled with it (issue #15, ADR-0048). */}
+        {data.canUnlink && p.statementLine && (
+          <RowMenu
+            actions={[
+              {
+                key: 'unlink',
+                label: t.sort.unlink,
+                onPick: () => {
+                  const lineId = p.statementLine!.id;
+                  void unlinking.run((key) => api.post(`/api/statement-lines/${lineId}/unlink`, {}, { key }), 'unlink').then((res) => {
+                    if (res.ok) toast({ text: t.sort.unlinked });
+                  });
+                },
+              },
+            ]}
+          />
+        )}
       </PageHead>
+      {unlinking.failure && (
+        <p className="field-err" role="alert">
+          {unlinking.failure.text}
+        </p>
+      )}
 
       <section className="card">
         <p className={`t-display mono ${p.voided ? 'amt-void' : p.direction === 'out' ? 'amt-out' : 'amt-in'}`}>{signed}</p>

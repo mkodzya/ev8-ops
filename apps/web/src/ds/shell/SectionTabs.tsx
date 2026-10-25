@@ -1,4 +1,4 @@
-import { sectionOfPath, tabsFor, type Permission } from '@ev8/shared';
+import { sectionOfPath, tabsFor, type NavCounts, type Permission, type TabId } from '@ev8/shared';
 import { useLayoutEffect, useRef } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { useT } from '../../i18n/index.js';
@@ -28,8 +28,21 @@ export function SectionTabs() {
   const tabs = tabsFor(section, me?.permissions ?? []);
   const nav = useRef<HTMLElement>(null);
   const mark = useRef<HTMLSpanElement>(null);
-  // Money says how much waits (§3.0): lines to sort, hand-overs to take.
-  const counts = useLoad<{ sort: number; till: number }>(section === 'money' && me?.permissions.includes('payments.reconcile') ? '/api/money/counts' : null);
+  // How much waits behind a tab (§3.0, issue #15): lines to sort coming in and
+  // going out, hand-overs to take, who pays today and who is late — the
+  // request the rail's counters read, so one number everywhere.
+  const counted = section === 'sort' || section === 'cash' || section === 'schedule';
+  const counts = useLoad<NavCounts>(counted && me?.permissions.includes('fleet.view') ? '/api/nav/counts' : null);
+  const countOf = (id: TabId): number => {
+    const c = counts.data;
+    if (!c) return 0;
+    if (id === 'sortIn') return c.sort?.in ?? 0;
+    if (id === 'sortOut') return c.sort?.out ?? 0;
+    if (id === 'till') return c.till ?? 0;
+    if (id === 'due') return c.schedule?.dueToday ?? 0;
+    if (id === 'late') return c.schedule?.late ?? 0;
+    return 0;
+  };
   const shown = tabs.length >= 2 && tabs.some((tab) => tab.path === pathname);
 
   // Put the mark under the open tab. It slides there by its CSS transition;
@@ -69,7 +82,7 @@ export function SectionTabs() {
       {tabs.map((tab) => (
         <NavLink key={tab.id} to={tab.path} end className={({ isActive }) => `section-tab ${isActive ? 'on' : ''}`}>
           {t.shell.tabs[tab.id]}
-          {(tab.id === 'sort' || tab.id === 'till') && (counts.data?.[tab.id] ?? 0) > 0 && <span className="section-tab-n mono">{counts.data![tab.id]}</span>}
+          {countOf(tab.id) > 0 && <span className={`section-tab-n mono${tab.id === 'late' ? ' late' : ''}`}>{countOf(tab.id)}</span>}
         </NavLink>
       ))}
     </nav>

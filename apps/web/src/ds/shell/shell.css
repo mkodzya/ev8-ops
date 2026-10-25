@@ -58,6 +58,9 @@
   margin: 0 0 8px;
 }
 .rail-cta:hover { background: var(--accent-hover); }
+/* «+ Действие» opens the actions (issue #15): a button, not a link. */
+button.rail-cta { border: 0; cursor: pointer; width: 100%; }
+button.rail-cta:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .rail-search {
   min-height: 36px;
   border-radius: var(--radius-pill);
@@ -95,7 +98,14 @@
 }
 .rail-item:hover { background: var(--rail-active); }
 .rail-item.on { background: var(--rail-accent); color: var(--ink); }
-.rail-item .badge { margin-left: auto; }
+.rail-item .badge { margin-left: 0; }
+.rail-item-label { min-width: 0; }
+/* The counters beside a section (issue #15, the director's mockup): red for
+   the rentals late, grey for what waits — on the dark rail a grey that is the
+   rail's own line, on the lit item the page's white. */
+.rail-badges { margin-left: auto; display: inline-flex; gap: 4px; flex: none; }
+.rail-item .badge-quiet { background: var(--rail-line); color: var(--rail-ink); }
+.rail-item.on .badge-quiet { background: var(--surface); color: var(--ink); }
 .rail-user {
   margin-top: auto;
   display: flex;
@@ -190,20 +200,40 @@
   /* Georgian labels wrap to a second line rather than being cut. */
   .tab-label { overflow-wrap: anywhere; }
   .tab-badge { position: absolute; top: 4px; left: calc(50% + 6px); margin: 0; }
-  .tab-plus { display: grid; place-items: center; border: 0; background: none; cursor: pointer; padding: 0; }
-  .plus {
+  .tab-badge.badge-quiet { background: var(--surface-2); color: var(--ink); box-shadow: inset 0 0 0 1px var(--line-control); }
+  /* «Ещё» is a button among links: the same face. */
+  button.tab { border: 0; background: none; cursor: pointer; }
+  .tab:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+  /* The "+" above the bar (issue #15): round, at the right thumb, clear of
+     the bar's labels; shown on a section's own lists only (AppShell). */
+  .tab-fab {
+    position: fixed;
+    z-index: 31;
+    right: var(--space4);
+    bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + var(--space3));
     width: var(--control-large);
     height: var(--control-large);
     border-radius: 50%;
+    border: 3px solid var(--surface);
     background: var(--accent);
     color: var(--on-accent);
     display: grid;
     place-items: center;
-    margin-top: -20px;
     box-shadow: var(--shadow);
-    border: 3px solid var(--surface);
+    cursor: pointer;
+    padding: 0;
   }
+  .tab-fab:hover { background: var(--accent-hover); }
+  .tab-fab:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+  /* The last row of a list stays clear of the round button. */
+  .app-page { padding-bottom: calc(var(--tabbar-h) + var(--control-large) + 40px + env(safe-area-inset-bottom)); }
 }
+@media (min-width: 900px) {
+  .tab-fab { display: none; }
+}
+
+/* Read aloud, not drawn: what a number beside a section counts. */
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
 /* ---- sheets: actions and the avatar menu ---- */
 .act-list { display: flex; flex-direction: column; }
@@ -316,3 +346,6 @@
 
 .section-tab-n { margin-left: 6px; font-size: 12px; color: var(--muted); }
 .section-tab.on .section-tab-n { color: inherit; }
+/* Who is late is said in red beside its tab, as on the rail (issue #15). */
+.section-tab-n.late { color: var(--crit-ink); }
+.section-tab.on .section-tab-n.late { color: inherit; }

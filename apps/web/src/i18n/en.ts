@@ -41,6 +41,7 @@ import { rentalSwapEn } from './rental-swap.js';
 import { vehicleCardEn } from './vehicle-card.js';
 import { pickupDateEn } from './pickup-date.js';
 import { depositReviseEn } from './deposit-revise.js';
+import { menuEn } from './menu.js';
 import { goodsEn } from './goods.js';
 import { incEn } from './inbound.js';
 export const en = {
@@ -74,15 +75,18 @@ export const en = {
   },
 
   nav: {
-    serviceStock: 'Service · Stock',
     today: 'Today',
     more: 'More',
-    fleet: 'Fleet',
-    rentals: 'Rentals',
+    // Issue #15 (ADR-0048): the sections of the new menu, the bar's short word for the schedule.
+    schedule: 'Scheduled payments',
+    scheduleShort: 'Schedule',
+    sort: 'Sort',
+    fleet: 'Mopeds',
+    rentals: 'Rentals and customers',
     payments: 'Payments',
     purchases: 'Purchases',
     sales: 'Sales',
-    service: 'Service',
+    service: 'Repairs',
     statements: 'Statements',
     customers: 'Customers',
     models: 'Models',
@@ -90,7 +94,7 @@ export const en = {
     cash: 'Till',
     reports: 'Reports',
     settings: 'Settings',
-    groups: { work: 'Work', money: 'Money', manage: 'Manage' },
+    groups: { daily: 'Daily', fleet: 'Fleet', trade: 'Sales and purchases', manage: 'Manage' },
   },
 
   // The frame around every screen (wave 1 §3.2–3.3).
@@ -144,6 +148,16 @@ export const en = {
       incoming: 'Money in',
       drive: 'Drive',
       goods: 'Goods',
+      // Issue #15: «Оплаты по графику», «Разобрать», «Аренды и клиенты».
+      due: 'Today',
+      late: 'Overdue',
+      month: 'Month',
+      sortIn: 'Money in',
+      sortOut: 'Money out',
+      byRules: 'Sorted by the rules',
+      aside: 'Removed from the queue',
+      rentals: 'Rentals',
+      customers: 'Customers',
     },
   },
 
@@ -1485,6 +1499,7 @@ export const en = {
   ...vehicleCardEn,
   ...pickupDateEn,
   ...depositReviseEn,
+  ...menuEn,
   ...goodsEn,
   ...incEn,
 };

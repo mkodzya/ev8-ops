@@ -20,7 +20,7 @@ export function PointsPage() {
   const sub = fleet.data ? `${t.vehicleW4.atCustomers(atCustomers)} · ${t.vehicleW4.noPoint(noPoint)}` : undefined;
   return (
     <>
-      <PageHead title={t.nav.fleet} sub={sub} />
+      <PageHead title={t.shell.tabs.points} sub={sub} />
       <PointsBlock />
     </>
   );

@@ -32,6 +32,7 @@ import { rentalSwapKa } from './rental-swap.js';
 import { vehicleCardKa } from './vehicle-card.js';
 import { pickupDateKa } from './pickup-date.js';
 import { depositReviseKa } from './deposit-revise.js';
+import { menuKa } from './menu.js';
 import { goodsKa } from './goods.js';
 import { incKa } from './inbound.js';
 import type { Dict } from './en.js';
@@ -68,15 +69,18 @@ export const ka: Dict = {
   },
 
   nav: {
-    serviceStock: 'სერვისი · საწყობი',
     today: 'დღეს',
     more: 'მეტი',
-    fleet: 'პარკი',
-    rentals: 'ქირაობა',
+    // Issue #15 (ADR-0048): the sections of the new menu, the bar's short word for the schedule.
+    schedule: 'გადახდის გრაფიკი',
+    scheduleShort: 'გრაფიკი',
+    sort: 'დასახარისხებელი',
+    fleet: 'მოპედები',
+    rentals: 'ქირაობები და კლიენტები',
     payments: 'გადახდები',
     purchases: 'შესყიდვები',
     sales: 'გაყიდვები',
-    service: 'სერვისი',
+    service: 'რემონტები',
     statements: 'ამონაწერები',
     customers: 'კლიენტები',
     models: 'მოდელები',
@@ -84,7 +88,7 @@ export const ka: Dict = {
     cash: 'სალარო',
     reports: 'ანგარიშები',
     settings: 'პარამეტრები',
-    groups: { work: 'მუშაობა', money: 'ფული', manage: 'მართვა' },
+    groups: { daily: 'ყოველდღიური', fleet: 'პარკი', trade: 'გაყიდვები და შესყიდვები', manage: 'მართვა' },
   },
 
   shell: {
@@ -137,6 +141,16 @@ export const ka: Dict = {
       incoming: 'შემოსავალი',
       drive: 'Drive',
       goods: 'საქონელი',
+      // Issue #15: «Оплаты по графику», «Разобрать», «Аренды и клиенты».
+      due: 'დღეს',
+      late: 'ვადაგადაცილებული',
+      month: 'თვე',
+      sortIn: 'შემოსავლები',
+      sortOut: 'ჩამოწერები',
+      byRules: 'წესებით დახარისხებული',
+      aside: 'რიგიდან ამოღებული',
+      rentals: 'ქირაობები',
+      customers: 'კლიენტები',
     },
   },
 
@@ -1471,6 +1485,7 @@ export const ka: Dict = {
   ...vehicleCardKa,
   ...pickupDateKa,
   ...depositReviseKa,
+  ...menuKa,
   ...goodsKa,
   ...incKa,
 };

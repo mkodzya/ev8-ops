@@ -1,4 +1,4 @@
-import { REDIRECTS, homePathFor, type Permission } from '@ev8/shared';
+import { REDIRECTS, homePathFor, movedTo, type Permission } from '@ev8/shared';
 import { Navigate, Route, Routes, useLocation, useParams } from 'react-router-dom';
 import { LoginPage } from './LoginPage.js';
 import { AppShell } from './ds/shell/AppShell.js';
@@ -17,8 +17,8 @@ import { CustomerForm } from './pages/CustomerForm.js';
 import { CustomerPage } from './pages/CustomerPage.js';
 import { CustomersPage } from './pages/CustomersPage.js';
 import { CalendarPage } from './pages/money/CalendarPage.js';
+import { ScheduleDuePage, ScheduleLatePage, ScheduleMonthPage } from './pages/money/SchedulePages.js';
 import { DepositsPage } from './pages/money/DepositsPage.js';
-import { MoneyHome } from './pages/money/MoneyHome.js';
 import { PaymentPage } from './pages/money/PaymentPage.js';
 import { PaymentsList } from './pages/money/PaymentsList.js';
 import { AsidePage, RulesPage, SortPage } from './pages/money/SortPage.js';
@@ -120,12 +120,14 @@ function Home() {
   return <Navigate to={homePathFor(me.permissions)} replace />;
 }
 
-/** An old address, with its :id carried over (build plan Р8). */
-function Moved({ to }: { to: string }) {
+/** An old address, with its :id and its query carried over (build plan Р8; issue #15). */
+function Moved({ from }: { from: string }) {
   const params = useParams();
   const { search } = useLocation();
-  const target = to.replace(/:(\w+)/g, (_, k: string) => params[k] ?? '');
-  return <Navigate to={target + search} replace />;
+  const target = movedTo(from, search);
+  const q = target.indexOf('?');
+  const path = (q < 0 ? target : target.slice(0, q)).replace(/:(\w+)/g, (_, k: string) => params[k] ?? '');
+  return <Navigate to={path + (q < 0 ? '' : target.slice(q))} replace />;
 }
 
 export function App() {
@@ -172,13 +174,19 @@ export function App() {
         <Route path="service/balance" element={<Require perm="service.work"><MechanicBalancePage /></Require>} />
         <Route path="service/:id" element={<ServiceJobPage />} />
 
-        {/* Money in one place (wave 2 §3.0). */}
-        <Route path="money" element={<Require perm="payments.view"><MoneyHome /></Require>} />
-        {/* The first tab of the row; `/money` itself still opens on "sort" or the payments (MoneyHome). */}
-        <Route path="money/calendar" element={<Require perm="payments.view"><CalendarPage /></Require>} />
-        <Route path="money/sort" element={<Require perm="payments.reconcile"><SortPage /></Require>} />
-        <Route path="money/sort/rules" element={<Require perm="payments.reconcile"><RulesPage /></Require>} />
-        <Route path="money/sort/aside" element={<Require perm="payments.reconcile"><AsidePage /></Require>} />
+        {/* «Оплаты по графику» (issue #15, ADR-0048; was «Деньги → Календарь»): a manager's
+            too — the rows; the month's figures are an owner's. */}
+        <Route path="schedule" element={<Require perm="payments.schedule"><ScheduleDuePage /></Require>} />
+        <Route path="schedule/late" element={<Require perm="payments.schedule"><ScheduleLatePage /></Require>} />
+        <Route path="schedule/calendar" element={<Require perm="payments.schedule"><CalendarPage /></Require>} />
+        <Route path="schedule/month" element={<Require perm="payments.view"><ScheduleMonthPage /></Require>} />
+        {/* «Разобрать» (issue #15; was a tab of Money): a manager sorts the money coming in. */}
+        <Route path="sort" element={<Require perm="payments.sort.customer"><SortPage direction="in" /></Require>} />
+        <Route path="sort/out" element={<Require perm="payments.reconcile"><SortPage direction="out" /></Require>} />
+        <Route path="sort/rules" element={<Require perm="payments.reconcile"><RulesPage /></Require>} />
+        <Route path="sort/aside" element={<Require perm="payments.reconcile"><AsidePage /></Require>} />
+
+        {/* What is left of Money (wave 2 §3.0): the payments, the statements, the deposits. */}
         <Route path="money/payments" element={<Require perm="payments.view"><PaymentsList /></Require>} />
         <Route path="money/payments/:id" element={<Require perm="cash.record"><PaymentPage /></Require>} />
         <Route path="money/mine" element={<Require perm="cash.record"><PaymentsList mine /></Require>} />
@@ -228,7 +236,7 @@ export function App() {
         <Route path="design" element={<Require perm="users.manage"><DesignPage /></Require>} />
 
         {REDIRECTS.map((r) => (
-          <Route key={r.from} path={r.from.slice(1)} element={<Moved to={r.to} />} />
+          <Route key={r.from} path={r.from.slice(1)} element={<Moved from={r.from} />} />
         ))}
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
