@@ -220,7 +220,6 @@ function LineCard({ line, cats, onNotOurs, onSplit }: { line: SortLine; cats: Ca
   const { me, can } = useSession();
   const toast = useToast();
   const reason = useReasonText();
-  const { can } = useSession();
   const op = useOperation();
   const busy = op.state === 'busy';
   const sign = line.direction === 'out' ? '−' : '+';
