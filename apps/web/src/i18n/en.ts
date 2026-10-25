@@ -41,6 +41,7 @@ import { rentalSwapEn } from './rental-swap.js';
 import { vehicleCardEn } from './vehicle-card.js';
 import { pickupDateEn } from './pickup-date.js';
 import { depositReviseEn } from './deposit-revise.js';
+import { menuEn } from './menu.js';
 import { goodsEn } from './goods.js';
 import { incEn } from './inbound.js';
 import { dupEn } from './card-duplicate.js';
@@ -75,15 +76,20 @@ export const en = {
   },
 
   nav: {
-    serviceStock: 'Service · Stock',
     today: 'Today',
     more: 'More',
-    fleet: 'Fleet',
-    rentals: 'Rentals',
+    // Issue #15 (ADR-0048): the sections of the new menu, the bar's short word for the schedule.
+    schedule: 'Scheduled payments',
+    scheduleShort: 'Schedule',
+    /** The phone bar's word for «Разобрать», a fifth of the screen wide. */
+    sortShort: 'Sort',
+    sort: 'Sort',
+    fleet: 'Mopeds',
+    rentals: 'Rentals and customers',
     payments: 'Payments',
     purchases: 'Purchases',
     sales: 'Sales',
-    service: 'Service',
+    service: 'Repairs',
     statements: 'Statements',
     customers: 'Customers',
     models: 'Models',
@@ -91,7 +97,7 @@ export const en = {
     cash: 'Till',
     reports: 'Reports',
     settings: 'Settings',
-    groups: { work: 'Work', money: 'Money', manage: 'Manage' },
+    groups: { daily: 'Daily', fleet: 'Fleet', trade: 'Sales and purchases', manage: 'Manage' },
   },
 
   // The frame around every screen (wave 1 §3.2–3.3).
@@ -145,6 +151,16 @@ export const en = {
       incoming: 'Money in',
       drive: 'Drive',
       goods: 'Goods',
+      // Issue #15: «Оплаты по графику», «Разобрать», «Аренды и клиенты».
+      due: 'Today',
+      late: 'Overdue',
+      month: 'Month',
+      sortIn: 'Money in',
+      sortOut: 'Money out',
+      byRules: 'Sorted by the rules',
+      aside: 'Removed from the queue',
+      rentals: 'Rentals',
+      customers: 'Customers',
     },
   },
 
@@ -857,7 +873,9 @@ export const en = {
     splitWeekNewTitle: 'New money',
     splitWeekNewSub: 'it goes to the weeks ahead',
     splitOldPick: 'Mark which week the rent is for.',
-    splitMore: '+ more: a repair, rent credit',
+    /** «+ ещё» names what it opens: the kinds behind it, of `splitMoreWords`. */
+    splitMore: (words: string) => `+ more: ${words}`,
+    splitMoreWords: { repair: 'a repair', sale: 'a moped sale', goods: 'goods', account: 'rent credit' },
     splitAllPlaced: 'all placed ✓',
     resTitle: 'What will be written',
     resCarried: (a: string, week: string, r: string) => `${a} — the week ${week} of ${r}. It was paid already; now it has its payment from the bank.`,
@@ -871,6 +889,8 @@ export const en = {
     resDebtSame: (a: string) => `The customer’s debt does not change: ${a}.`,
     resDebt: (a: string, b: string) => `The customer’s debt: was ${a}, will be ${b}.`,
     splitNothing: 'The customer has no open records — only “rent credit”.',
+    /** The same, said to whoever may not put money on the account (a manager, ADR-0048). */
+    splitNothingAtAll: 'The customer has no open records.',
     splitDone: (n: number) => `Line allocated into ${n} parts`,
     /** On a card line: the sum on the card is what the bank credited; this is what the customer paid and what the bank kept. */
     byCard: (paid: string, fee: string) => `Card payment: the customer paid ${paid}, the bank kept ${fee}.`,
@@ -1349,6 +1369,7 @@ export const en = {
       over_on_hand: 'That is more than you have on you.',
       over_open: 'That is more than the repair still asks for.',
       owner_only: 'Only an owner can do this.',
+      sort_owner_only: 'The owner sorts this. A manager links money coming in to a rental, a deposit, a moped sale, goods or a repair.',
       owner_only_backdate: 'Only an owner dates a payment in the past. A manager records today\'s.',
       paid_before_too_big: 'More was paid before EV8 Ops than the sale is worth.',
       part_exists: 'A part with this name or article number is already on the list.',
@@ -1489,6 +1510,7 @@ export const en = {
   ...vehicleCardEn,
   ...pickupDateEn,
   ...depositReviseEn,
+  ...menuEn,
   ...goodsEn,
   ...incEn,
   ...dupEn,

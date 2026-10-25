@@ -110,7 +110,7 @@ export function ExpensesReportPage() {
           {data.unsorted > 0 && (
             <div className="kv">
               <span className="kv-k">
-                {t.exp.unsorted(data.unsortedLines)} · <Link to="/money/sort?d=out">{t.exp.openSort}</Link>
+                {t.exp.unsorted(data.unsortedLines)} · <Link to="/sort/out">{t.exp.openSort}</Link>
               </span>
               <span className="mono">{formatGel(data.unsorted)}</span>
             </div>

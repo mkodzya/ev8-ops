@@ -1,4 +1,4 @@
-import { formatGel, SEARCH_MIN } from '@ev8/shared';
+import { formatGel, INCOME_ANSWERS, incomeAnswersFor, mayRemember, SEARCH_MIN, type IncomeAnswer } from '@ev8/shared';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../../api.js';
@@ -11,6 +11,7 @@ import { fmtDate, fmtDayMonth } from '../../format.js';
 import { useLocale, useT } from '../../i18n/index.js';
 import { chargeWords } from '../../lib/charges.js';
 import { useLoad } from '../../lib/use.js';
+import { useSession } from '../../session.js';
 import type { Categories, ExpenseCategory } from './ExpenseAnswers.js';
 
 // Money coming in, answered by its kind first (issue #13 of the director,
@@ -72,16 +73,25 @@ const PANEL: IncomeKind[] = ['rental', 'deposit', 'sale', 'goods', 'repair', 'cu
 /** Where «Запомнить» means «this payer is this customer». */
 const REMEMBERS_CUSTOMER = new Set<IncomeKind>(['rental', 'deposit', 'customer']);
 
-/** The answers under a line coming in. */
+/**
+ * The answers under a line coming in. A manager is shown the customers' money
+ * only (issue #15, ADR-0048), and under it, in the panel's own words, what the
+ * owner sorts — so the line he leaves is not a puzzle.
+ */
 export function IncomeAnswers({ line, cats, onSplit, onNotOurs }: { line: InLine; cats: Categories; onSplit: () => void; onNotOurs: () => void }) {
   const t = useT();
+  const { me } = useSession();
   const toast = useToast();
   const op = useOperation();
   const busy = op.state === 'busy';
   const [sheet, setSheet] = useState<IncomeKind | null>(null);
   const [other, setOther] = useState(false);
   const [pick, setPick] = useState<string | null>(line.remembered?.kind === 'other_income' ? line.remembered.categoryId : null);
-  const canRemember = !!line.canRemember && !!line.payerLabel;
+  const permissions = me?.permissions ?? [];
+  const mine = incomeAnswersFor(permissions);
+  const may = (a: IncomeAnswer) => mine.includes(a);
+  // «Запомнить» sorts the payer's next lines by itself: a standing rule, an owner's to set.
+  const canRemember = !!line.canRemember && !!line.payerLabel && mayRemember(permissions);
   const [remember, setRemember] = useState(false);
   const kindWords: Record<IncomeKind, string> = {
     rental: t.inc.kinds.rental,
@@ -92,6 +102,16 @@ export function IncomeAnswers({ line, cats, onSplit, onNotOurs }: { line: InLine
     customer: t.inc.kinds.customer,
     bank_deposit: t.inc.kinds.bank,
   };
+  // The answers that are not his, by the names the owner's panel gives them.
+  const answerWords: Record<IncomeAnswer, string> = {
+    ...kindWords,
+    several: t.inc.several,
+    own_transfer: t.inc.kinds.own,
+    founder_equity: t.inc.kinds.founder,
+    other_income: t.inc.kinds.other,
+    not_ours: t.sort.notOurs,
+  };
+  const owners = INCOME_ANSWERS.filter((a) => !may(a));
   const restore = () => api.post(`/api/statement-lines/${line.id}/restore`, {});
   /**
    * One tap, one answer: a second tap does nothing (B2-02). Undone, the rule
@@ -116,32 +136,45 @@ export function IncomeAnswers({ line, cats, onSplit, onNotOurs }: { line: InLine
       {/* Two rows: the customers' money, then what is no customer's and «Несколько услуг». */}
       <div className="inc-kinds">
         <div className="sort-actions">
-          {PANEL.map((k) => (
+          {PANEL.filter(may).map((k) => (
             <button key={k} type="button" className="pill pill-sm" disabled={busy} onClick={() => setSheet(k)}>
               {kindWords[k]}
             </button>
           ))}
         </div>
         <div className="sort-actions">
-          <button type="button" className="pill pill-sm" disabled={busy} onClick={() => void answer('own-transfer', { remember: keep }, (n) => t.exp.ownTransferDone + t.inc.alsoSorted(n))}>
-            {t.inc.kinds.own}
-          </button>
-          <button type="button" className="pill pill-sm" disabled={busy} onClick={() => void answer('founder-equity', { remember: keep }, (n) => t.inc.founderDone + t.inc.alsoSorted(n))}>
-            {t.inc.kinds.founder}
-          </button>
-          <button type="button" className="pill pill-sm" disabled={busy} onClick={() => setSheet('bank_deposit')}>
-            {t.inc.kinds.bank}
-          </button>
-          <button type="button" className={`pill pill-sm ${other ? 'on' : ''}`} disabled={busy} onClick={() => setOther(!other)} aria-expanded={other}>
-            {t.inc.kinds.other} {other ? '▾' : '▸'}
-          </button>
-          <button type="button" className="pill pill-sm" disabled={busy} onClick={onNotOurs}>
-            {t.sort.notOurs}
-          </button>
-          <button type="button" className="pill pill-sm inc-several" disabled={busy} onClick={onSplit}>
-            {t.inc.several}
-          </button>
+          {may('own_transfer') && (
+            <button type="button" className="pill pill-sm" disabled={busy} onClick={() => void answer('own-transfer', { remember: keep }, (n) => t.exp.ownTransferDone + t.inc.alsoSorted(n))}>
+              {t.inc.kinds.own}
+            </button>
+          )}
+          {may('founder_equity') && (
+            <button type="button" className="pill pill-sm" disabled={busy} onClick={() => void answer('founder-equity', { remember: keep }, (n) => t.inc.founderDone + t.inc.alsoSorted(n))}>
+              {t.inc.kinds.founder}
+            </button>
+          )}
+          {may('bank_deposit') && (
+            <button type="button" className="pill pill-sm" disabled={busy} onClick={() => setSheet('bank_deposit')}>
+              {t.inc.kinds.bank}
+            </button>
+          )}
+          {may('other_income') && (
+            <button type="button" className={`pill pill-sm ${other ? 'on' : ''}`} disabled={busy} onClick={() => setOther(!other)} aria-expanded={other}>
+              {t.inc.kinds.other} {other ? '▾' : '▸'}
+            </button>
+          )}
+          {may('not_ours') && (
+            <button type="button" className="pill pill-sm" disabled={busy} onClick={onNotOurs}>
+              {t.sort.notOurs}
+            </button>
+          )}
+          {may('several') && (
+            <button type="button" className="pill pill-sm inc-several" disabled={busy} onClick={onSplit}>
+              {t.inc.several}
+            </button>
+          )}
         </div>
+        {owners.length > 0 && <p className="hint muted">{t.menu.ownerSorts(owners.map((a) => answerWords[a]).join(', '))}</p>}
       </div>
       {canRemember && (
         <label className="check-row check-row-quiet">
@@ -150,7 +183,7 @@ export function IncomeAnswers({ line, cats, onSplit, onNotOurs }: { line: InLine
         </label>
       )}
       {keep && line.payerByAccount && <p className="hint muted">{t.inc.rememberAccount}</p>}
-      {other && (
+      {other && may('other_income') && (
         <div className="exp-panel">
           <p className="hint muted">{t.inc.otherWhat}</p>
           <div className="chips" role="radiogroup" aria-label={t.inc.otherWhat}>

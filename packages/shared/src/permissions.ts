@@ -21,6 +21,15 @@ export const PERMISSIONS = [
   'cash.record', // take cash from a customer (PAY-05)
   'payments.view', // every payment, not only the cash one took oneself
   'payments.reconcile', // statements, unmatched queue (PAY-01..03)
+  // «Оплаты по графику» (issue #15, ADR-0048): who owes what and when, row by
+  // row, with WhatsApp, a call and «Провести вручную» — the sums of a week, a
+  // month or a day stay with `payments.view`.
+  'payments.schedule',
+  // «Разобрать» for the customers' money (issue #15, ADR-0048): a line coming
+  // in linked to a rental, a deposit, a moped sale, goods or a repair, or
+  // spread over those in «Несколько услуг». Every other answer stays with
+  // `payments.reconcile` (`SORT_ANSWERS`, navigation of the queue).
+  'payments.sort.customer',
   'cost.view', // unit cost, stock value, landed cost: the owners' numbers (redesign §2.1)
   'purchases.view', // orders and suppliers
   'purchases.manage', // place an order, pay a factory, receive a shipment (wave 5 §3.4–3.6)
@@ -48,9 +57,11 @@ export type Permission = (typeof PERMISSIONS)[number];
  * A manager hands mopeds over and takes them back, opens a customer, takes
  * cash, says where a moped stands and sells goods over the counter (ADR-0045),
  * and moves a renter's latest week when his pay day moves (ADR-0041, addendum
- * of 23.10.2026). Deciding a deposit, repairs, money beyond their own cash,
- * cost, purchases, reports and settings are the owners' (redesign blueprint
- * §2.1, Mika 17.09.2026).
+ * of 23.10.2026). Since issue #15 (ADR-0048, Mika's «начинай» of 25.10.2026)
+ * he also calls those who pay by the schedule and sorts the customers' money
+ * coming in. Deciding a deposit, repairs, money beyond that, cost, purchases,
+ * reports and settings are the owners' (redesign blueprint §2.1, Mika
+ * 17.09.2026).
  */
 const MANAGER: Permission[] = [
   'fleet.view',
@@ -61,6 +72,8 @@ const MANAGER: Permission[] = [
   'rental.week.shift',
   'customer.create',
   'cash.record',
+  'payments.schedule',
+  'payments.sort.customer',
   'service.report',
   'service.view',
   'goods.sell',

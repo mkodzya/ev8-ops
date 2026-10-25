@@ -19,6 +19,7 @@ import { locationRoutes } from './routes/locations.js';
 import { opsRoutes } from './routes/ops.js';
 import { paymentRoutes } from './routes/payments.js';
 import { calendarRoutes } from './routes/calendar.js';
+import { navRoutes } from './routes/nav.js';
 import { rentalRoutes } from './routes/rentals.js';
 import { contactRoutes } from './routes/contacts.js';
 import { purchaseRoutes } from './routes/purchases.js';
@@ -104,6 +105,7 @@ export function buildApp(opts: { logger?: FastifyServerOptions['logger'] } = {})
   migrationRoutes(app);
   paymentRoutes(app);
   calendarRoutes(app);
+  navRoutes(app);
   statementRoutes(app);
   expenseRoutes(app);
   inboundRoutes(app);

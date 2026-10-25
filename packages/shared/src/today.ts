@@ -339,7 +339,7 @@ export function dayQueue(input: QueueInput): TaskGroupRows[] {
   // 5. Money — an owner's: lines to sort, statements nobody has uploaded.
   if (input.owner) {
     if (input.unmatchedLines > 0) {
-      rows.push({ id: 'sort', group: 'money', action: 'sort', who: null, number: null, vin: null, days: null, amountTetri: null, href: '/money/sort', phone: null, note: String(input.unmatchedLines) });
+      rows.push({ id: 'sort', group: 'money', action: 'sort', who: null, number: null, vin: null, days: null, amountTetri: null, href: '/sort', phone: null, note: String(input.unmatchedLines) });
     }
     for (const b of input.staleBanks) {
       rows.push({ id: `bank:${b.bank}`, group: 'money', action: 'upload_statement', who: null, number: null, vin: null, days: b.days, amountTetri: null, href: '/money/statements', phone: null, note: b.bank });
