@@ -15,6 +15,7 @@ import { fmtDate, fmtDayMonth } from '../../format.js';
 import { useT } from '../../i18n/index.js';
 import { chargeWords } from '../../lib/charges.js';
 import { useLoad } from '../../lib/use.js';
+import { useSession } from '../../session.js';
 import { ExpenseAnswers, ExpenseRuleCard, useExpenseCategories, type Categories, type ExpenseRuleLine } from './ExpenseAnswers.js';
 import { IncomeAnswers, useIncomeCategories, type InLine } from './IncomeAnswers.js';
 
@@ -68,6 +69,8 @@ export interface SortLine {
   /** Money coming in (migration 0069): the payer to remember, and what he is remembered as. */
   payerLabel?: string | null;
   remembered?: InLine['remembered'];
+  /** A Bank of Georgia card payment the bank sent twice (issue #16): the earlier line this one repeats; absent while an older API answers. */
+  duplicateOf?: { id: string; occurredOn: string; docNo: string | null; status: string } | null;
 }
 interface Queue {
   counts: { in: number; out: number };
@@ -183,7 +186,7 @@ export function SortPage() {
  */
 function groupOf(l: SortLine): SortLine['group'] {
   if (l.direction === 'out' || l.group === 'recorded') return l.group;
-  return l.remembered || l.suggestions.some((s) => s.reason.code === 'name' || s.kind === 'bank_deposit') ? 'suggested' : 'none';
+  return l.remembered || l.duplicateOf || l.suggestions.some((s) => s.reason.code === 'name' || s.kind === 'bank_deposit') ? 'suggested' : 'none';
 }
 
 function AllSorted({ byRules, aside }: { byRules: number; aside: number }) {
@@ -217,6 +220,7 @@ function LineCard({ line, cats, onNotOurs, onSplit }: { line: SortLine; cats: Ca
   const t = useT();
   const toast = useToast();
   const reason = useReasonText();
+  const { can } = useSession();
   const op = useOperation();
   const busy = op.state === 'busy';
   const sign = line.direction === 'out' ? '−' : '+';
@@ -240,6 +244,8 @@ function LineCard({ line, cats, onNotOurs, onSplit }: { line: SortLine; cats: Ca
     .map((s) => [s.number, s.customer].filter(Boolean).join(' · ') + (s.reason.debtTetri ? ` · ${t.inc.owes(formatGel(s.reason.debtTetri, { decimals: false }))}` : ''))
     .join('; ');
   const remembered = line.direction === 'in' ? line.remembered : null;
+  // A card payment the bank sent twice (issue #16): «Это дубль» is the main answer, the others stay below it.
+  const twin = line.duplicateOf ?? null;
 
   return (
     <article className={`sort-line ${busy ? 'busy' : ''}`} aria-busy={busy}>
@@ -262,6 +268,25 @@ function LineCard({ line, cats, onNotOurs, onSplit }: { line: SortLine; cats: Ca
         </p>
       )}
       <p className="sort-line-text">{[line.payer, line.purpose].filter(Boolean).join(' · ') || line.raw}</p>
+
+      {twin && (
+        <>
+          <p className="sort-reason">{t.dup.looksLike(fmtDate(twin.occurredOn), twin.docNo ?? '')}</p>
+          {/* Setting a line aside is an owner's (issue #16): «Это дубль» goes the way «Это не наше» goes. */}
+          {can('payments.reconcile') && (
+            <div className="sort-actions">
+              <button
+                type="button"
+                className="pill pill-sm pill-accent"
+                disabled={busy}
+                onClick={() => void act('duplicate', {}, { text: t.dup.done, undo: () => () => api.post(`/api/statement-lines/${line.id}/restore`, {}) })}
+              >
+                {t.dup.yes}
+              </button>
+            </div>
+          )}
+        </>
+      )}
 
       {line.group === 'recorded' &&
         line.recorded.map((p, i) => (
@@ -304,7 +329,7 @@ function LineCard({ line, cats, onNotOurs, onSplit }: { line: SortLine; cats: Ca
 
       {/* Money coming in: what it is, first (issue #13); going out, what it is and what it was for (migration 0046). */}
       {line.direction === 'in' && <IncomeAnswers line={line} cats={cats} onSplit={onSplit} onNotOurs={onNotOurs} />}
-      {line.direction === 'out' && <ExpenseAnswers line={line} cats={cats} quiet={line.group === 'recorded'} />}
+      {line.direction === 'out' && <ExpenseAnswers line={line} cats={cats} quiet={line.group === 'recorded' || twin != null} />}
       {op.failure && <p className="field-err" role="alert">{op.failure.text}</p>}
     </article>
   );
@@ -934,7 +959,8 @@ interface AsideLine {
   payer: string | null;
   purpose: string | null;
   raw: string;
-  resolution: 'not_ours' | 'company_expense' | 'own_transfer' | string | null;
+  /** `duplicate`: a card payment the bank sent twice, set aside by «Это дубль» (issue #16). */
+  resolution: 'not_ours' | 'company_expense' | 'own_transfer' | 'duplicate' | string | null;
   /** The rule that answered when the stand did it itself — `own_transfer_auto` (ADR-0028). */
   rule?: string | null;
   /** An expense split into parts (ADR-0030); absent while an older API answers. */
@@ -986,7 +1012,9 @@ function AsideCard({ line, cats, incomeCats }: { line: AsideLine; cats: Categori
             ? t.inc.asideFounder
             : line.resolution === 'other_income'
               ? t.inc.asideOther(incomeCats.nameOf(line.incomeCategoryId))
-              : t.sort.asideNotOurs(line.reason ?? '');
+              : line.resolution === 'duplicate'
+                ? twinWhy(t, line.reason)
+                : t.sort.asideNotOurs(line.reason ?? '');
   return (
     <article className="sort-line">
       <div className="sort-line-head">
@@ -1018,6 +1046,12 @@ function AsideCard({ line, cats, incomeCats }: { line: AsideLine; cats: Categori
       </div>
     </article>
   );
+}
+
+/** The line a duplicate repeats, from the reason «Это дубль» stored: `twin:<day>:<document>` (issue #16). */
+function twinWhy(t: ReturnType<typeof useT>, reason: string | null): string {
+  const [, day, doc] = (reason ?? '').split(':');
+  return t.dup.aside(fmtDate(day || null), doc ?? '');
 }
 
 /** Why the stand found a line to be money between the company's accounts, from the reason it stored (ADR-0028). */

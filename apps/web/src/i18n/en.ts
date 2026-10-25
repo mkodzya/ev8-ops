@@ -43,6 +43,7 @@ import { pickupDateEn } from './pickup-date.js';
 import { depositReviseEn } from './deposit-revise.js';
 import { goodsEn } from './goods.js';
 import { incEn } from './inbound.js';
+import { dupEn } from './card-duplicate.js';
 export const en = {
   lang: { label: 'Language', ka: 'ქართული', ru: 'Русский', en: 'English' },
 
@@ -1335,6 +1336,7 @@ export const en = {
       not_outgoing: 'Only money going out of the account can be marked as taken out by a shareholder.',
       not_returned: 'The return act appears once the rental is closed.',
       not_set_aside: 'This line was not removed from the queue. Refresh the list.',
+      no_twin: 'This line repeats no other line. If it is not the company’s, use «Not ours» and say why.',
       not_yours: 'Only the person who made this move can undo it.',
       nothing_to_correct: 'The count already says that.',
       nothing_to_undo: 'This moped has no reassignment to undo.',
@@ -1489,6 +1491,7 @@ export const en = {
   ...depositReviseEn,
   ...goodsEn,
   ...incEn,
+  ...dupEn,
 };
 
 export type Dict = typeof en;
