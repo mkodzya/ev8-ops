@@ -167,7 +167,8 @@ describe.skipIf(!HAS_DB)('a payer remembered as a customer (issue #13, acceptanc
     expect(first.status).toBe('unmatched');
     const res = json<{ id: string; ruleId: string; alsoSorted: string[] }>(await call(owner, 'POST', `/api/statement-lines/${first.id}/assign`, { rentalId, remember: true }));
     expect(res.ruleId).toBeTruthy();
-    expect(await prisma.payerRule.findUniqueOrThrow({ where: { id: res.ruleId } })).toMatchObject({ kind: 'customer', payerKey: `relative example ${t}` });
+    // The payer is the name and the account he sends from (review of 25.10.2026).
+    expect(await prisma.payerRule.findUniqueOrThrow({ where: { id: res.ruleId } })).toMatchObject({ kind: 'customer', payerKey: `relative example ${t}|GE38BG0000000000000001` });
 
     // The next line from him is a week: it pays the oldest week owed, by itself.
     const loaded = await load(owner, inRow(today(), gel(RATE), from(`Relative Example ${t}`, ' again')));
@@ -211,6 +212,50 @@ describe.skipIf(!HAS_DB)('a payer remembered as a customer (issue #13, acceptanc
     expect((await prisma.statementLine.findMany({ where: { raw: { contains: `${t}; Account` } } })).map((l) => l.status)).toEqual(['unmatched', 'unmatched']);
     expect(await prisma.payment.count({ where: { rentalId, voidedAt: null } })).toBe(0);
     expect((await prisma.payerRule.findUniqueOrThrow({ where: { id: res.ruleId } })).archivedAt).not.toBeNull();
+  });
+
+  it('the same name from another account is another payer: his line waits (review of 25.10.2026)', async () => {
+    const { prisma, owner, rentalId } = await rental({ pickedUpOn: addDays(today(), -7) });
+    const t = tag();
+    await load(owner, inRow(today(), gel(DEPOSIT), from(`Twin Example ${t}`)));
+    const first = await lineOf(t);
+    expect(json<{ ruleId: string }>(await call(owner, 'POST', `/api/statement-lines/${first.id}/assign`, { rentalId, remember: true })).ruleId).toBeTruthy();
+    await load(owner, inRow(today(), gel(RATE), from(`Twin Example ${t}`, ' other', 'GE38BG0000000000000002')));
+    const other = await prisma.statementLine.findFirstOrThrow({ where: { raw: { contains: `${t}; Account: GE38BG0000000000000002` } } });
+    expect(other.status).toBe('unmatched');
+    expect(await prisma.payment.count({ where: { statementLineId: other.id } })).toBe(0);
+  });
+
+  it('a namesake of another customer: the remembered payer keeps quiet and the line waits (review of 25.10.2026)', async () => {
+    // Remembered for one renter; then another customer's card turns out to hold the very name the bank writes.
+    const { prisma, owner, rentalId } = await rental({ pickedUpOn: addDays(today(), -7) });
+    const t = tag();
+    await load(owner, inRow(today(), gel(DEPOSIT), from(`Namesake Example ${t}`)));
+    const first = await lineOf(t);
+    expect(json<{ ruleId: string }>(await call(owner, 'POST', `/api/statement-lines/${first.id}/assign`, { rentalId, remember: true })).ruleId).toBeTruthy();
+    // The namesake owes his deposit and his first week: no debt of exactly a week, so the name rule does not place it either.
+    const namesake = await rental({ name: `Namesake Example ${t}` });
+    await load(owner, inRow(today(), gel(RATE), from(`Namesake Example ${t}`, ' week')));
+    const week = await prisma.statementLine.findFirstOrThrow({ where: { raw: { contains: `${t}; Account` }, amountTetri: RATE } });
+    expect(week).toMatchObject({ status: 'unmatched', payerRuleId: null });
+    expect(await prisma.payment.count({ where: { statementLineId: week.id } })).toBe(0);
+    expect(await prisma.payment.count({ where: { rentalId: namesake.rentalId, voidedAt: null } })).toBe(0);
+  });
+
+  it('the relative remembered for one renter, renting himself, pays his own week by his name (review of 25.10.2026)', async () => {
+    const a = await rental({ pickedUpOn: addDays(today(), -7) });
+    const t = tag();
+    await load(a.owner, inRow(today(), gel(DEPOSIT), from(`Relative Renter ${t}`)));
+    const first = await lineOf(t);
+    expect(json<{ ruleId: string }>(await call(a.owner, 'POST', `/api/statement-lines/${first.id}/assign`, { rentalId: a.rentalId, remember: true })).ruleId).toBeTruthy();
+    // Later he rents a moped himself, no deposit asked: he owes exactly his first week.
+    const b = await rental({ name: `Relative Renter ${t}`, deposit: 0 });
+    await load(a.owner, inRow(today(), gel(RATE), from(`Relative Renter ${t}`, ' own week')));
+    const own = await a.prisma.statementLine.findFirstOrThrow({ where: { raw: { contains: `${t}; Account` }, amountTetri: RATE } });
+    expect(own).toMatchObject({ status: 'matched', matchedRule: 'payer_name', payerRuleId: null });
+    expect(await a.prisma.payment.findFirstOrThrow({ where: { statementLineId: own.id } })).toMatchObject({ rentalId: b.rentalId, grossTetri: RATE });
+    // Nothing of it went on the rental he was remembered for.
+    expect(await a.prisma.payment.count({ where: { rentalId: a.rentalId, statementLineId: own.id } })).toBe(0);
   });
 
   it('a card line or a sale has no payer to remember', async () => {
