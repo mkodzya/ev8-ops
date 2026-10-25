@@ -59,6 +59,14 @@ export async function teardown(): Promise<void> {
     // each other; the lines that pointed at them went with their statements.
     await prisma.expenseRule.deleteMany({ where: { createdAt: since } });
     await prisma.expenseCategory.deleteMany({ where: { createdAt: since } });
+    // Payers remembered (0069) point at customers and at the income categories a run added.
+    // A rule is the run's when it was remembered in the run or by somebody the run made:
+    // a suite that dates one back to test the undo's minute still owns it. One the run
+    // only forgot keeps its row and lets go of the person who forgot it.
+    const runUserIds = (await prisma.user.findMany({ where: { createdAt: since }, select: { id: true } })).map((u) => u.id);
+    await prisma.payerRule.deleteMany({ where: { OR: [{ createdAt: since }, { createdById: { in: runUserIds } }] } });
+    await prisma.payerRule.updateMany({ where: { archivedById: { in: runUserIds } }, data: { archivedById: null } });
+    await prisma.incomeCategory.deleteMany({ where: { createdAt: since } });
     // A battery moved by a repair names it (0058): the movement goes first.
     await prisma.batteryMove.deleteMany({ where: { createdAt: since } });
     // A goods sale (0067): its shelf movements name its lines, its payments went

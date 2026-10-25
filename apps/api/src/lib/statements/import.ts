@@ -9,10 +9,11 @@ import { serviceOwed } from '../money.js';
 import { goodsOwed } from '../goods.js';
 import { shiftWeekTx } from '../weekShift.js';
 import { cardOf, parseStatement, type ParsedLine } from './parse.js';
-import { decide, lineGross, loadCtx, type Ctx, type Decision, type Line } from './reconcile.js';
+import { lineGross, loadCtx, type Ctx, type Decision, type Line } from './reconcile.js';
 import { expenseKey, liveRules, sortByRule } from './expenses.js';
+import { asideByRule, attachByRule, decideWithPayers, livePayerRules, type PayerAnswer } from './payers.js';
 import { markOwnTransfers } from './ownTransfers.js';
-import { alreadyIn, type AlreadyIn } from './sameLine.js';
+import { CARD_DAYS, alreadyIn, type AlreadyIn } from './sameLine.js';
 
 // Loading a statement and letting it settle what it can (PAY-01, PAY-02,
 // wave 2 §3.2, §3.5). Two properties it has to have, and both are about not
@@ -55,16 +56,18 @@ function asLine(bank: 'bog' | 'tbc', l: ParsedLine): Line {
  * Which lines are in already. A line is in when its key is; it is in, too,
  * when the same operation came from another source — a file against the
  * API, or the day's pull against the nightly statement (`sameLine.ts`,
- * ADR-0021; TBC, ADR-0026).
+ * ADR-0021; TBC, ADR-0026) — or when it is a Bank of Georgia card payment
+ * the bank listed already under its other number (rule 5, issue #16).
  */
 export async function knownLines<T extends ParsedLine>(parsed: { bank: 'bog' | 'tbc'; lines: T[] }): Promise<AlreadyIn<T>> {
-  const select = { naturalKey: true, docNo: true, occurredOn: true, direction: true, amountTetri: true } as const;
+  const select = { naturalKey: true, docNo: true, occurredOn: true, direction: true, amountTetri: true, raw: true } as const;
   const byKey = await prisma.statementLine.findMany({ where: { bank: parsed.bank, naturalKey: { in: parsed.lines.map((l) => l.naturalKey) } }, select });
   let near: typeof byKey = [];
   if (parsed.lines.length > 0) {
+    // As far as the two listings of one card payment may be apart; the other rules look a day either side.
     const days = parsed.lines.map((l) => l.occurredOn).sort();
     near = await prisma.statementLine.findMany({
-      where: { bank: parsed.bank, occurredOn: { gte: dateFromISO(addDays(days[0]!, -1))!, lte: dateFromISO(addDays(days[days.length - 1]!, 1))! } },
+      where: { bank: parsed.bank, occurredOn: { gte: dateFromISO(addDays(days[0]!, -CARD_DAYS))!, lte: dateFromISO(addDays(days[days.length - 1]!, CARD_DAYS))! } },
       select,
     });
   }
@@ -77,7 +80,7 @@ async function freshLines<T extends ParsedLine>(parsed: { bank: 'bog' | 'tbc'; l
 }
 
 /** Take what a decision used off the table, so the next line does not reuse it. */
-function spend(ctx: Ctx, d: Decision): void {
+function spend(ctx: Ctx, d: Decision | PayerAnswer): void {
   if (d.type === 'recorded') ctx.payments = ctx.payments.filter((p) => p.id !== d.paymentId);
   if (d.type === 'bank_deposit') ctx.bankDeposits = ctx.bankDeposits.filter((b) => b.id !== d.bankDepositId);
 }
@@ -91,13 +94,15 @@ export async function previewStatement(input: { fileName: string; text: string }
   const parsed = parseStatement(input.text, { fileName: input.fileName });
   const fresh = await freshLines(parsed);
   const ctx = await loadCtx();
+  // Payers a person chose to remember sort their lines in the preview as on the import (0069).
+  const payers = await livePayerRules(prisma);
   let recorded = 0;
   let matched = 0;
   for (const l of fresh) {
-    const d = decide(asLine(parsed.bank, l), ctx);
+    const d = decideWithPayers(asLine(parsed.bank, l), ctx, payers);
     spend(ctx, d);
     if (d.type === 'recorded' || d.type === 'bank_deposit') recorded++;
-    else if (d.type === 'rule') matched++;
+    else if (d.type === 'rule' || d.type === 'aside') matched++;
   }
   // The period as the bank states it, or else as the lines span it (§3.5, QA-W2-07).
   const days = parsed.lines.map((l) => l.occurredOn).sort();
@@ -177,8 +182,10 @@ export async function ingest(input: { statementId: string; bank: 'bog' | 'tbc'; 
   let ctx = await loadCtx();
   // Payees a person chose to remember: their next outgoing line is sorted here (migration 0046).
   const rules = await liveRules(prisma);
+  // Payers of money coming in, likewise (migration 0069).
+  const payers = await livePayerRules(prisma);
   for (const line of input.lines) {
-    const d = decide(asLine(input.bank, line), ctx);
+    const d = decideWithPayers(asLine(input.bank, line), ctx, payers);
     await prisma.$transaction(async (tx) => {
       const row = await tx.statementLine.create({
         data: {
@@ -204,6 +211,11 @@ export async function ingest(input: { statementId: string; bank: 'bog' | 'tbc'; 
       } else if (d.type === 'bank_deposit') {
         await linkBankDeposit(tx, input.actorId, row.id, d.bankDepositId);
         recorded++;
+      } else if (d.type === 'rule' && d.rule === 'payer_rule') {
+        await attachByRule(tx, row.id, d, input.actorId);
+        matched++;
+      } else if (d.type === 'aside') {
+        if (await asideByRule(tx, row.id, d, input.actorId)) matched++;
       } else if (d.type === 'rule') {
         // A goods sale's money names the sale, never the customer's account (ADR-0045).
         await attach(tx, {
@@ -275,6 +287,10 @@ export interface LineTarget {
   chargeId?: string | null;
   /** A week carried over as paid: this money is what paid it (ADR-0023). */
   carriedPeriodId?: string | null;
+  /** The rental's deposit alone — «Залог» in «Несколько услуг» (issue #13): never beyond what it still asks for. */
+  depositRentalId?: string | null;
+  /** The rental's weeks and charges, its deposit left alone: the deposit is a part of its own in the same split. */
+  rentOnly?: boolean;
 }
 
 /** A part that is a new fine on a rental, charged and paid in the same split (Mika, 15.10.2026). */
@@ -404,6 +420,7 @@ async function paymentOf(
   note: string | null = null,
 ): Promise<string> {
   if (target.chargeId || target.carriedPeriodId) return placedPayment(tx, actorId, line, money, target, part);
+  if (target.depositRentalId) return depositPayment(tx, actorId, line, money, target.depositRentalId, part);
   if (target.goodsSaleId) {
     // Never beyond what is open: neither by hand nor by a rule (ADR-0045 §7).
     const sale = await goodsOwed(tx, target.goodsSaleId);
@@ -467,8 +484,55 @@ async function paymentOf(
     source: 'statement',
     statementLineId: line.id,
     statementPart: part,
+    noDeposit: target.rentOnly === true,
   });
   return r.id;
+}
+
+/** What a rental's deposit still asks for, while the rental runs. */
+async function depositOpen(tx: Tx, rentalId: string): Promise<{ id: string; customerId: string; number: string; openTetri: number }> {
+  const r = await tx.rental.findUnique({ where: { id: rentalId }, select: { customerId: true, number: true, status: true, deposit: { select: { id: true, amountTetri: true, paidTetri: true } } } });
+  if (!r) throw notFound('rental_not_found', 'No such rental.');
+  if (!r.deposit || r.status === 'returned') throw conflict('split_over_deposit', 'This rental’s deposit asks for nothing more.', { number: r.number, openTetri: 0 });
+  return { id: r.deposit.id, customerId: r.customerId, number: r.number, openTetri: Math.max(0, r.deposit.amountTetri - r.deposit.paidTetri) };
+}
+
+/** A part that is the rental's deposit alone (issue #13): «Залог 180 + Аренда 70». */
+async function depositPayment(
+  tx: Tx,
+  actorId: string | null,
+  line: StoredLine,
+  money: { channel: 'transfer' | 'acquiring'; grossTetri: number; feeTetri: number },
+  rentalId: string,
+  part: number,
+): Promise<string> {
+  const d = await depositOpen(tx, rentalId);
+  if (money.grossTetri > d.openTetri) throw conflict('split_over_deposit', 'That part is more than the deposit still asks for.', { number: d.number, openTetri: d.openTetri });
+  const p = await tx.payment.create({
+    data: {
+      occurredOn: line.occurredOn,
+      direction: 'in',
+      channel: money.channel,
+      grossTetri: money.grossTetri,
+      feeTetri: money.feeTetri,
+      netTetri: money.grossTetri - money.feeTetri,
+      customerId: d.customerId,
+      rentalId,
+      kind: 'rent',
+      bankText: line.raw.slice(0, 500),
+      source: 'statement',
+      createdById: actorId,
+      statementLineId: line.id,
+      statementPart: part,
+    },
+    select: { id: true },
+  });
+  await tx.paymentAllocation.create({ data: { paymentId: p.id, target: 'deposit', depositId: d.id, amountTetri: money.grossTetri } });
+  await recomputeRental(tx, rentalId);
+  await tx.auditLog.create({
+    data: { actorId, action: 'payment.record', entityType: 'payment', entityId: p.id, after: { occurredOn: isoDate(line.occurredOn), channel: money.channel, grossTetri: money.grossTetri, rentalId, deposit: true } },
+  });
+  return p.id;
 }
 
 async function incomingLine(tx: Tx, lineId: string): Promise<StoredLine> {
@@ -478,6 +542,25 @@ async function incomingLine(tx: Tx, lineId: string): Promise<StoredLine> {
   return line;
 }
 
+/**
+ * A line put whole on one charge or one repair is never more than it still
+ * asks for (review of 25.10.2026, ADR-0046 addendum): the money is placed on
+ * that record alone, so what is over would belong to nothing — not the
+ * customer's credit, not his weeks — and he would be asked for it again.
+ * Such a line is several services: «Несколько услуг». A goods sale refuses
+ * the same in `paymentOf` (ADR-0045 §7).
+ */
+async function notOverOpen(tx: Tx, target: LineTarget, grossTetri: number): Promise<void> {
+  if (target.chargeId) {
+    const charge = await chargeOwed(tx, target.chargeId);
+    if (grossTetri > charge.openTetri) throw conflict('charge_over_open', 'That is more than the charge still asks for.', { openTetri: charge.openTetri });
+  }
+  if (target.serviceJobId) {
+    const job = await serviceOwed(tx, target.serviceJobId);
+    if (grossTetri > job.openTetri) throw conflict('over_open', 'That is more than the repair still asks for.', { number: job.number, openTetri: job.openTetri });
+  }
+}
+
 /** A customer's payment made of this line: a rental, a sale, a repair, or the customer's account. */
 export async function attach(
   tx: Tx,
@@ -485,7 +568,10 @@ export async function attach(
 ): Promise<{ paymentId: string }> {
   const line = await incomingLine(tx, input.lineId);
   await claim(tx, line.id, input.rule);
-  const paymentId = await paymentOf(tx, input.actorId, line, moneyOf(line), input, 1);
+  // Refused, the claim goes back with the transaction: the line waits as it did.
+  const money = moneyOf(line);
+  await notOverOpen(tx, input, money.grossTetri);
+  const paymentId = await paymentOf(tx, input.actorId, line, money, input, 1);
   await tx.statementLine.update({ where: { id: line.id }, data: { paymentId } });
   await tx.auditLog.create({
     data: {
@@ -569,6 +655,7 @@ export async function split(
         ['charge', p.chargeId],
         ['week', p.carriedPeriodId],
         ['fine', p.fineRentalId],
+        ['deposit', p.depositRentalId],
       ] as const
     ).filter(([, id]) => !!id);
     if (named.length !== 1) throw badRequest('split_bad_target', 'Every part pays exactly one record.', { field: 'rentalId' });
@@ -596,6 +683,10 @@ export async function split(
     if (p.chargeId) {
       const charge = await chargeOwed(tx, p.chargeId);
       if (p.grossTetri > charge.openTetri) throw conflict('split_over_charge', 'That part is more than the charge still owes.', { openTetri: charge.openTetri });
+    }
+    if (p.depositRentalId) {
+      const d = await depositOpen(tx, p.depositRentalId);
+      if (p.grossTetri > d.openTetri) throw conflict('split_over_deposit', 'That part is more than the deposit still asks for.', { number: d.number, openTetri: d.openTetri });
     }
     if (p.carriedPeriodId) {
       // The whole week or nothing: it was carried over paid in full.
@@ -665,6 +756,7 @@ export async function split(
           customerId: p.customerId ?? null,
           chargeId: p.chargeId ?? null,
           carriedPeriodId: p.carriedPeriodId ?? null,
+          ...(p.depositRentalId ? { depositRentalId: p.depositRentalId } : {}),
           ...(p.shift ? { shift: true } : {}),
         })),
         // The pay day moved with the line (issue #12): the week, the days, the money with the days' sign.

@@ -118,16 +118,41 @@ describe.skipIf(!HAS_DB)('rules need two signs (B2-04)', () => {
     expect(await prisma.payment.count({ where: { rentalId } })).toBe(0);
   });
 
-  it('a card line on the pick-up day attaches, gross and fee, and shows under "by rules" (crit. 15, 22)', async () => {
-    const { prisma, owner, rentalId } = await rental({ rate: 15000 });
-    const t = tag();
-    // 325.05 credited = 330 paid − 1.5 %.
-    const res = json<{ matched: number }>(await call(owner, 'POST', '/api/statements', { fileName: 's.csv', text: file(inRow(today(), '325.05', `Caricxva - Tanxa GEL325.05; Wallet/domestic MC cards ${t}`)) }));
+  it('a name and the debt attach, and the line shows under "by rules" with its reason (crit. 15, 22)', async () => {
+    const { prisma, owner, rentalId, tag: t } = await rental({ rate: 15000 });
+    // 150 for the week and 180 for the deposit, from the renter himself.
+    const res = json<{ matched: number }>(await call(owner, 'POST', '/api/statements', { fileName: 's.csv', text: file(inRow(today(), '330.00', `gadmomricxavi: testaZe gela ${t}`)) }));
     expect(res.matched).toBe(1);
     const p = await prisma.payment.findFirstOrThrow({ where: { rentalId } });
-    expect(p).toMatchObject({ channel: 'acquiring', grossTetri: 33000, feeTetri: 495 });
+    expect(p).toMatchObject({ channel: 'transfer', grossTetri: 33000, feeTetri: 0 });
     const byRules = json<{ lines: { payment: { id: string } | null; reason: { code: string } | null }[] }>(await call(owner, 'GET', '/api/statement-lines/by-rules'));
-    expect(byRules.lines.find((l) => l.payment?.id === p.id)?.reason?.code).toBe('card_pickup');
+    expect(byRules.lines.find((l) => l.payment?.id === p.id)?.reason?.code).toBe('name');
+  });
+
+  it('a card line on the pick-up day is no rule any more, and no hint by that day (issue #13)', async () => {
+    const { prisma, owner, rentalId } = await rental({ rate: 15000 });
+    const t = tag();
+    // 325.05 credited = 330 paid − 1.5 %: the sum and the day fit, nothing else does.
+    const res = json<{ matched: number }>(await call(owner, 'POST', '/api/statements', { fileName: 's.csv', text: file(inRow(today(), '325.05', `Caricxva - Tanxa GEL325.05; Wallet/domestic MC cards ${t}`)) }));
+    expect(res.matched).toBe(0);
+    expect(await prisma.payment.count({ where: { rentalId } })).toBe(0);
+    const line = await queued(owner, t);
+    expect(line?.suggestions.map((s) => s.reason.code)).not.toContain('card_pickup');
+  });
+
+  it('a transfer on the day another rental was handed over, of that rental’s week, is not put on it (issue #13)', async () => {
+    // The director's case of 25.10.2026, with invented people: a renter's bank spells him unlike his card,
+    // and another rental of the same 150 was handed over that very day.
+    const { prisma, owner, rentalId } = await rental({ rate: 15000, pickedUpOn: today() });
+    await call(owner, 'POST', '/api/money', { kind: 'rent', rentalId, amountTetri: '180', channel: 'cash' });
+    const t = tag();
+    const res = json<{ matched: number }>(await call(owner, 'POST', '/api/statements', { fileName: 's.csv', text: file(inRow(today(), '150.00', `gadmomricxavi: sxva gvari ${t}; daniSnuleba: Transfer`)) }));
+    expect(res.matched).toBe(0);
+    expect(await prisma.payment.count({ where: { rentalId, source: 'statement' } })).toBe(0);
+    const line = await queued(owner, t);
+    // Offered by its sum, below anything a name would raise — and never as the card's «− 1,5 %».
+    const hint = line?.suggestions.find((s) => s.id === rentalId);
+    expect(hint?.reason.code).toBe('amount');
   });
 
   it('an amount alone is only a hint', async () => {
@@ -175,9 +200,8 @@ describe.skipIf(!HAS_DB)('"Разобрать" (§3.2)', () => {
   });
 
   it('"unlink" on what a rule attached: the line is back, the payment annulled, the debt returns (crit. 21)', async () => {
-    const { prisma, owner, customer, rentalId } = await rental({ rate: 15000 });
-    const t = tag();
-    await call(owner, 'POST', '/api/statements', { fileName: 's.csv', text: file(inRow(today(), '325.05', `Wallet/domestic MC cards ${t}`)) });
+    const { prisma, owner, customer, rentalId, tag: t } = await rental({ rate: 15000 });
+    await call(owner, 'POST', '/api/statements', { fileName: 's.csv', text: file(inRow(today(), '330.00', `gadmomricxavi: testaZe gela ${t}`)) });
     const line = await prisma.statementLine.findFirstOrThrow({ where: { raw: { contains: t } } });
     expect(line.status).toBe('matched');
     expect((await call(owner, 'POST', `/api/statement-lines/${line.id}/unlink`)).statusCode).toBe(200);
@@ -325,15 +349,17 @@ describe.skipIf(!HAS_DB)('round 1 of wave 2 (QA-W2-04, designer’s answer 3)', 
     expect((await queued(owner, t))?.group).toBe('suggested');
   });
 
-  it('a line that is both a hand-entered payment and another rental’s first card payment is asked about, not linked', async () => {
+  it('a line that is a hand-entered payment links to it, though another rental of that sum was handed over that day (issue #13)', async () => {
     const entered = await rental({ pickedUpOn: addDays(today(), -1) });
-    const fresh = await rental({ pickedUpOn: today() });
-    await byHand(entered.owner, '/api/money', { kind: 'rent', rentalId: entered.rentalId, amountTetri: '330', channel: 'acquiring', occurredOn: addDays(today(), -1), backdateReason: 'x' });
+    await rental({ pickedUpOn: today() });
+    const p = json<{ id: string }>(
+      await byHand(entered.owner, '/api/money', { kind: 'rent', rentalId: entered.rentalId, amountTetri: '330', channel: 'acquiring', occurredOn: addDays(today(), -1), backdateReason: 'x' }),
+    );
     const t = tag();
-    await call(entered.owner, 'POST', '/api/statements', { fileName: 's.csv', text: file(inRow(today(), '325.05', `Wallet/domestic MC cards ${t}`)) });
-    const line = await queued(entered.owner, t);
-    expect(line?.group).toBe('recorded');
-    expect(line?.suggestions.map((s) => s.id)).toContain(fresh.rentalId);
+    const res = json<{ recorded: number }>(await call(entered.owner, 'POST', '/api/statements', { fileName: 's.csv', text: file(inRow(today(), '325.05', `Wallet/domestic MC cards ${t}`)) }));
+    expect(res.recorded).toBe(1);
+    expect(await queued(entered.owner, t)).toBeUndefined();
+    expect((await entered.prisma.payment.findUniqueOrThrow({ where: { id: p.id } })).statementLineId).not.toBeNull();
   });
 });
 

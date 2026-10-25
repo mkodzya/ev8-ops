@@ -1,6 +1,6 @@
-import { INCOME_ROWS, acquiringGross, goodsTotals, paymentInRow, rentCreditTetri, rentWeekday, todayISO, type IncomeRow, type WeekAllocationTarget, type WeekPaymentKind } from '@ev8/shared';
+import { INCOME_ROWS, acquiringGross, goodsTotals, mayUnlink, paymentInRow, rentCreditTetri, rentWeekday, todayISO, type IncomeRow, type WeekAllocationTarget, type WeekPaymentKind } from '@ev8/shared';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
-import { hasPerm } from '../lib/auth.js';
+import { hasPerm, permissionsOf, type Actor } from '../lib/auth.js';
 import { dateFromISO, isoDate } from '../lib/dates.js';
 import { debtOf } from '../lib/debt.js';
 import { prisma } from '../lib/db.js';
@@ -19,8 +19,8 @@ import { date, oneOf, str, strList, tetri } from '../lib/validate.js';
 const CHANNELS = ['transfer', 'acquiring', 'cash'] as const;
 /** What the list filters by: the form's channels and rent closed by a mechanic's work, which only a payout writes (0066). */
 const LIST_CHANNELS = [...CHANNELS, 'offset'] as const;
-/** "Undo" in the message after a write: seconds on screen, a minute of room for a slow phone. */
-const UNDO_MS = 60_000;
+/** "Undo" in the message after a write: seconds on screen, a minute of room for a slow phone. A remembered payer's undo keeps it too (inbound.ts). */
+export const UNDO_MS = 60_000;
 type Body = Record<string, unknown>;
 type Query = Record<string, string | undefined>;
 
@@ -261,6 +261,9 @@ export function paymentRoutes(app: FastifyInstance): void {
       journal: journal.map((j) => ({ at: j.createdAt.toISOString(), action: j.action, who: j.actor?.name ?? null, note: j.note, before: j.before, after: j.after })),
       // Rent closed by a mechanic's payout goes with the payout, never alone (0066).
       canVoid: hasPerm(actor, 'payments.reconcile') && !p.voidedAt && p.kind !== 'buyback' && !(await prisma.mechanicPayout.findFirst({ where: { offsetPaymentId: p.id, voidedAt: null }, select: { id: true } })),
+      // «Отвязать от строки банка» for whoever annuls nothing but sorts the customers' money: money he attached
+      // himself from a bank line goes back to «Разобрать» (issue #15, ADR-0048). An owner annuls instead.
+      canUnlink: await unlinkable(actor, p),
     };
   });
 
@@ -469,4 +472,17 @@ export function paymentRoutes(app: FastifyInstance): void {
       carriedWeeks: carried.map((w) => ({ id: w.id, rentalId: w.rentalId, seq: w.seq, startsOn: isoDate(w.startsOn), endsOn: isoDate(w.endsOn), amountTetri: w.amountTetri })),
     };
   });
+}
+
+/**
+ * «Отвязать от строки банка» on a payment's page, for whoever annuls nothing
+ * but sorts the customers' money (issue #15, ADR-0048): money he attached
+ * himself from a bank line — every part of it, when the line was spread —
+ * goes back to «Разобрать». An owner annuls instead, as before.
+ */
+async function unlinkable(actor: Actor, p: { id: string; source: string; createdById: string | null; statementLineId: string | null; voidedAt: Date | null }): Promise<boolean> {
+  if (hasPerm(actor, 'payments.reconcile') || !hasPerm(actor, 'payments.sort.customer')) return false;
+  if (p.voidedAt || p.source !== 'statement' || !p.statementLineId) return false;
+  const others = await prisma.payment.findMany({ where: { statementLineId: p.statementLineId, voidedAt: null, id: { not: p.id } }, select: { source: true, createdById: true } });
+  return mayUnlink(permissionsOf(actor.role, actor.via), [{ source: p.source, createdById: p.createdById }, ...others], actor.id);
 }

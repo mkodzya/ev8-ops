@@ -40,7 +40,11 @@ import { saleDateEn } from './sale-date.js';
 import { rentalSwapEn } from './rental-swap.js';
 import { vehicleCardEn } from './vehicle-card.js';
 import { pickupDateEn } from './pickup-date.js';
+import { depositReviseEn } from './deposit-revise.js';
+import { menuEn } from './menu.js';
 import { goodsEn } from './goods.js';
+import { incEn } from './inbound.js';
+import { dupEn } from './card-duplicate.js';
 export const en = {
   lang: { label: 'Language', ka: 'ქართული', ru: 'Русский', en: 'English' },
 
@@ -72,15 +76,20 @@ export const en = {
   },
 
   nav: {
-    serviceStock: 'Service · Stock',
     today: 'Today',
     more: 'More',
-    fleet: 'Fleet',
-    rentals: 'Rentals',
+    // Issue #15 (ADR-0048): the sections of the new menu, the bar's short word for the schedule.
+    schedule: 'Scheduled payments',
+    scheduleShort: 'Schedule',
+    /** The phone bar's word for «Разобрать», a fifth of the screen wide. */
+    sortShort: 'Sort',
+    sort: 'Sort',
+    fleet: 'Mopeds',
+    rentals: 'Rentals and customers',
     payments: 'Payments',
     purchases: 'Purchases',
     sales: 'Sales',
-    service: 'Service',
+    service: 'Repairs',
     statements: 'Statements',
     customers: 'Customers',
     models: 'Models',
@@ -88,7 +97,7 @@ export const en = {
     cash: 'Till',
     reports: 'Reports',
     settings: 'Settings',
-    groups: { work: 'Work', money: 'Money', manage: 'Manage' },
+    groups: { daily: 'Daily', fleet: 'Fleet', trade: 'Sales and purchases', manage: 'Manage' },
   },
 
   // The frame around every screen (wave 1 §3.2–3.3).
@@ -139,8 +148,19 @@ export const en = {
       migration: 'Before EV8 Ops',
       login: 'Sign-in',
       expenses: 'Expenses',
+      incoming: 'Money in',
       drive: 'Drive',
       goods: 'Goods',
+      // Issue #15: «Оплаты по графику», «Разобрать», «Аренды и клиенты».
+      due: 'Today',
+      late: 'Overdue',
+      month: 'Month',
+      sortIn: 'Money in',
+      sortOut: 'Money out',
+      byRules: 'Sorted by the rules',
+      aside: 'Removed from the queue',
+      rentals: 'Rentals',
+      customers: 'Customers',
     },
   },
 
@@ -390,7 +410,7 @@ export const en = {
     fineAmount: 'Amount',
     fineReason: 'What for',
     fineReasonHint: 'Required: for example, “damage to the moped” or “a dirty moped”.',
-    fineHint: 'The charge joins the customer’s debt. It is paid by “Take money” or by allocating a bank line.',
+    fineHint: 'The charge joins the customer’s debt. It is paid by “Take money” or by a bank line: “Sort” → “Repair / charge”.',
     fineDone: 'Charged',
     fineVoid: 'Take the charge back',
     fineVoidReason: 'Why it is taken back',
@@ -853,7 +873,9 @@ export const en = {
     splitWeekNewTitle: 'New money',
     splitWeekNewSub: 'it goes to the weeks ahead',
     splitOldPick: 'Mark which week the rent is for.',
-    splitMore: '+ more: a repair, rent credit',
+    /** «+ ещё» names what it opens: the kinds behind it, of `splitMoreWords`. */
+    splitMore: (words: string) => `+ more: ${words}`,
+    splitMoreWords: { repair: 'a repair', sale: 'a moped sale', goods: 'goods', account: 'rent credit' },
     splitAllPlaced: 'all placed ✓',
     resTitle: 'What will be written',
     resCarried: (a: string, week: string, r: string) => `${a} — the week ${week} of ${r}. It was paid already; now it has its payment from the bank.`,
@@ -867,6 +889,8 @@ export const en = {
     resDebtSame: (a: string) => `The customer’s debt does not change: ${a}.`,
     resDebt: (a: string, b: string) => `The customer’s debt: was ${a}, will be ${b}.`,
     splitNothing: 'The customer has no open records — only “rent credit”.',
+    /** The same, said to whoever may not put money on the account (a manager, ADR-0048). */
+    splitNothingAtAll: 'The customer has no open records.',
     splitDone: (n: number) => `Line allocated into ${n} parts`,
     /** On a card line: the sum on the card is what the bank credited; this is what the customer paid and what the bank kept. */
     byCard: (paid: string, fee: string) => `Card payment: the customer paid ${paid}, the bank kept ${fee}.`,
@@ -1228,6 +1252,7 @@ export const en = {
       category_exists: 'There is a category by that name already.',
       category_not_found: 'No such expense category.',
       charge_not_found: 'No such charge on the rental — it may have been taken back.',
+      charge_over_open: 'That is more than the charge still asks for.',
       closed_before_opened: 'A repair cannot close before the day it was opened.',
       contract_not_marked: 'The contract is not marked as signed in Signify. Refresh the screen.',
       customer_archived: 'This card was merged into another one. Work on the card it went into.',
@@ -1236,6 +1261,7 @@ export const en = {
       customer_not_found: 'Customer not found.',
       demo_login_off: 'Demo logins are switched off on this stand.',
       deposit_decided: 'The deposit has already been decided.',
+      deposit_undecided: 'There is no decision on this deposit yet: decide it first.',
       deposit_decision_forbidden: 'Only an owner decides on a deposit.',
       deposit_has_line: 'That bank deposit already has its statement line.',
       deposit_not_found: 'This rental has no deposit.',
@@ -1330,6 +1356,7 @@ export const en = {
       not_outgoing: 'Only money going out of the account can be marked as taken out by a shareholder.',
       not_returned: 'The return act appears once the rental is closed.',
       not_set_aside: 'This line was not removed from the queue. Refresh the list.',
+      no_twin: 'This line repeats no other line. If it is not the company’s, use «Not ours» and say why.',
       not_yours: 'Only the person who made this move can undo it.',
       nothing_to_correct: 'The count already says that.',
       nothing_to_undo: 'This moped has no reassignment to undo.',
@@ -1342,6 +1369,7 @@ export const en = {
       over_on_hand: 'That is more than you have on you.',
       over_open: 'That is more than the repair still asks for.',
       owner_only: 'Only an owner can do this.',
+      sort_owner_only: 'The owner sorts this. A manager links money coming in to a rental, a deposit, a moped sale, goods or a repair.',
       owner_only_backdate: 'Only an owner dates a payment in the past. A manager records today\'s.',
       paid_before_too_big: 'More was paid before EV8 Ops than the sale is worth.',
       part_exists: 'A part with this name or article number is already on the list.',
@@ -1364,6 +1392,13 @@ export const en = {
       rental_not_running: 'Only the week of a running rental is moved — not of one paused, disputed or returned.',
       return_before_pickup: 'The return date is before the pickup date.',
       rule_not_found: 'That remembered payee is gone already.',
+      // Money coming in (issue #13, 0069).
+      income_category_not_found: 'There is no such income category.',
+      no_payer: 'The bank names nobody on this line — there is no payer to remember.',
+      not_incoming: 'Only money coming in is answered so.',
+      payer_rule_not_found: 'That remembered payer is gone already.',
+      payer_rule_undo_too_late: 'Too late to undo: under «Sorted by the rules», «Forget the rule», and «Unlink» its lines one at a time.',
+      remember_rent_only: 'A payer is remembered for rent, a deposit or an advance.',
       sale_before_history: 'A sale cannot be dated before the last event in the moped’s history. Pick that day or a later one.',
       sale_closed: 'This sale is closed.',
       sale_date_future: 'A sale cannot be dated in the future.',
@@ -1381,6 +1416,7 @@ export const en = {
       split_carried_week: 'A week paid before EV8 Ops is closed by exactly its price.',
       split_needs_two: 'Allocating a line needs at least two parts.',
       split_over_charge: 'That part is more than the charge still owes.',
+      split_over_deposit: 'That part is more than the deposit still asks for.',
       split_over_repair: 'That part is more than the repair still owes.',
       split_same_target: 'Two parts pay the same record — make them one.',
       split_sum: 'The parts do not add up to the line.',
@@ -1431,6 +1467,7 @@ export const en = {
       week_not_found: 'No such week in this rental.',
       week_not_last: 'Only the last week is moved: the next one has already begun.',
       week_paid_before_transfer: 'This week was paid before EV8 Ops — it stays as it was.',
+      withheld_paid_by_other: 'Other money paid the charge «Kept beyond the claims» too. Annul that payment or unlink its line in «Sort» first: a revision moves no other money.',
       withheld_over_total: 'You cannot withhold more than the repair costs.',
       workshop_archived: 'This workshop was taken off the list. Choose another, or put it back in Settings → Repair.',
       workshop_archived_exists: 'A workshop by that name was taken off the list. Put it back instead: «…» → «Put back».',
@@ -1472,7 +1509,11 @@ export const en = {
   ...rentalSwapEn,
   ...vehicleCardEn,
   ...pickupDateEn,
+  ...depositReviseEn,
+  ...menuEn,
   ...goodsEn,
+  ...incEn,
+  ...dupEn,
 };
 
 export type Dict = typeof en;

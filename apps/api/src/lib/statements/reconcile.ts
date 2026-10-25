@@ -11,19 +11,23 @@ import { cardOf } from './parse.js';
 //   1. the money is already in, entered by hand: a payment of this amount
 //      (gross or net) within ±3 days that has no bank line yet (Q2);
 //   2. cash an owner took to the bank, found by amount and date;
-//   3. a rule — and a rule needs two signs, never an amount alone:
-//      the payer's name is one customer with one record this amount fits, or
-//      the amount fits a rental and the date is its pick-up day or falls in
-//      the week the amount would close. Disputed, paused and booked rentals
-//      take part in no rule (Q25), and neither does a rental carried over
-//      with its paid weeks for a line dated on or before the day it was
-//      carried over: that money may already be inside its «paid through»;
+//   3. a rule — and a rule needs two signs, never an amount alone: the
+//      payer's name is one customer with one record this amount fits.
+//      Disputed, paused and booked rentals take part in no rule (Q25), and
+//      neither does a rental carried over with its paid weeks for a line
+//      dated on or before the day it was carried over: that money may
+//      already be inside its «paid through»;
 //   4. otherwise a person decides.
+// The amount and a date — a rental's pick-up day, or the week the amount
+// would close — are no rule any more, and no hint (issue #13 of the
+// director, 25.10.2026: «так далеко не всегда»; ADR-0046). A transfer of 150
+// from one renter was put on another's rental only because that one was
+// handed over the same day for the same 150, with the card's «− 1,5 %» said
+// of money that paid no fee. A sum that fits a rental is still offered, under
+// the names, without the word «совпало».
 // A goods sale (issue #11, ADR-0045) takes part in the name rule only — one
 // record of that customer's with a debt of exactly this sum — and is never
-// attached by its amount alone. An open goods sale of the same sum within
-// ±3 days stops the rental's amount-and-date rules: the line waits for a
-// person, who sees the goods sale among the hints.
+// attached by its amount alone.
 
 export const WINDOW_DAYS = 3;
 
@@ -114,6 +118,8 @@ export interface Ctx {
 }
 
 const RULE_RENTALS = new Set(['active', 'overdue']);
+/** A rental that runs: the ones a sum alone may be offered for. */
+const RUNNING = new Set(['booked', 'active', 'overdue', 'paused', 'disputed']);
 
 /** Everything the rules look at, read once. */
 export async function loadCtx(): Promise<Ctx> {
@@ -333,14 +339,17 @@ function saleOwes(s: SaleCand, gross: number): boolean {
   return s.dueOpenTetri > 0 && [s.dueOpenTetri, s.nextOpenTetri].some((n) => n > 0 && n === gross);
 }
 
-/** Records this line could pay by its own signs — name with a debt, or pick-up day — for the "is it this or that" check. */
+/**
+ * Records this line could pay by its own signs — the payer's name and a debt
+ * of this sum — for the "is it this or that" check. A pick-up day is no sign
+ * (issue #13): two rentals of one sum handed over the same day are no reason
+ * to doubt the payment entered by hand.
+ */
 function otherCandidates(line: Line, ctx: Ctx, except: string | null): RentalCand[] {
   const gross = lineGross(line);
   const text = [line.payer, line.purpose].filter(Boolean).join(' ');
   const who = text ? new Set(ctx.customers.filter((c) => nameMatches(text, c.names)).map((c) => c.id)) : new Set<string>();
-  return ctx.rentals.filter(
-    (r) => r.id !== except && RULE_RENTALS.has(r.status) && ((who.has(r.customerId) && rentalOwes(r, gross)) || (r.pickedUpOn === line.occurredOn && rentalFits(r, gross) && r.owedNowTetri > 0)),
-  );
+  return ctx.rentals.filter((r) => r.id !== except && RULE_RENTALS.has(r.status) && who.has(r.customerId) && rentalOwes(r, gross));
 }
 
 export type RuleTarget =
@@ -351,13 +360,17 @@ export type RuleTarget =
 export type Decision =
   | { type: 'recorded'; paymentId: string }
   | { type: 'bank_deposit'; bankDepositId: string }
-  | { type: 'rule'; rule: 'payer_name' | 'amount_date' | 'card_pickup_day'; target: RuleTarget; customerId: string; reason: Reason }
+  | { type: 'rule'; rule: 'payer_name'; target: RuleTarget; customerId: string; reason: Reason }
   | { type: 'queue' };
 
 /** A reason, in data; the screen says it in its language (§3.2 "причина словами"). */
 export interface Reason {
-  /** `goods`: an open goods sale of this sum (ADR-0045) — `day` is the day it was sold, `channel` what the buyer promised. */
-  code: 'name' | 'card_pickup' | 'amount_week' | 'amount' | 'recorded' | 'bank_deposit' | 'goods';
+  /**
+   * `goods`: an open goods sale of this sum (ADR-0045) — `day` is the day it was sold, `channel` what the buyer promised.
+   * `card_pickup` and `amount_week` are no longer given (issue #13); lines attached by them before stay readable.
+   * `payer_rule`: a payer remembered as this customer (0069) — `name` is the payer as the bank writes him.
+   */
+  code: 'name' | 'card_pickup' | 'amount_week' | 'amount' | 'recorded' | 'bank_deposit' | 'goods' | 'payer_rule';
   /** On a hint for a rental carried over after this line's day: the day it was carried over. The money may be counted already. */
   transferredOn?: string;
   name?: string;
@@ -398,52 +411,21 @@ export function decide(line: Line, ctx: Ctx): Decision {
   const eligible = ctx.rentals.filter((r) => RULE_RENTALS.has(r.status) && !beforeTransfer(r, line.occurredOn));
   const text = [line.payer, line.purpose].filter(Boolean).join(' ');
 
-  // 1. The name, and one record of that customer's that this amount fits.
+  // The name, and one record of that customer's that this amount fits.
   const who = text ? ctx.customers.filter((c) => nameMatches(text, c.names)) : [];
-  {
-    if (who.length === 1) {
-      const c = who[0];
-      const rentals = eligible.filter((r) => r.customerId === c.id && rentalOwes(r, gross));
-      const sales = ctx.sales.filter((s) => s.customerId === c.id && saleOwes(s, gross));
-      // Goods of this customer's with exactly this sum open: one more record
-      // the money may be — a rental of the same sum no longer takes it alone.
-      const goods = ctx.goods.filter((g) => g.customerId === c.id && g.openTetri === gross);
-      if (rentals.length + sales.length + goods.length === 1) {
-        const target: RuleTarget = rentals[0] ? { rentalId: rentals[0].id } : sales[0] ? { saleId: sales[0].id } : { goodsSaleId: goods[0].id };
-        const number = rentals[0]?.number ?? sales[0]?.number ?? goods[0].number;
-        const debt = rentals[0]?.owedNowTetri ?? sales[0]?.dueOpenTetri ?? goods[0].openTetri;
-        return { type: 'rule', rule: 'payer_name', target, customerId: c.id, reason: { code: 'name', name: c.name, number, debtTetri: debt } };
-      }
+  if (who.length === 1) {
+    const c = who[0];
+    const rentals = eligible.filter((r) => r.customerId === c.id && rentalOwes(r, gross));
+    const sales = ctx.sales.filter((s) => s.customerId === c.id && saleOwes(s, gross));
+    // Goods of this customer's with exactly this sum open: one more record
+    // the money may be — a rental of the same sum no longer takes it alone.
+    const goods = ctx.goods.filter((g) => g.customerId === c.id && g.openTetri === gross);
+    if (rentals.length + sales.length + goods.length === 1) {
+      const target: RuleTarget = rentals[0] ? { rentalId: rentals[0].id } : sales[0] ? { saleId: sales[0].id } : { goodsSaleId: goods[0].id };
+      const number = rentals[0]?.number ?? sales[0]?.number ?? goods[0].number;
+      const debt = rentals[0]?.owedNowTetri ?? sales[0]?.dueOpenTetri ?? goods[0].openTetri;
+      return { type: 'rule', rule: 'payer_name', target, customerId: c.id, reason: { code: 'name', name: c.name, number, debtTetri: debt } };
     }
-  }
-
-  // 2. The amount, and the date: the pick-up day, or inside the week it closes.
-  //    A line that names somebody is about that somebody: nobody else's rental.
-  const named = new Set(who.map((c) => c.id));
-  //    Not while a goods sale of this very sum, sold within ±3 days, waits for
-  //    its money — a retail buyer's card, or the named customer's own goods:
-  //    two records fit, and a person says which (ADR-0045 §7).
-  if (ctx.goods.some((g) => g.openTetri === gross && near(g.soldOn, line.occurredOn) && (named.size === 0 || g.customerId == null || named.has(g.customerId)))) {
-    return { type: 'queue' };
-  }
-  const byDate = eligible.filter(
-    (r) =>
-      (named.size === 0 || named.has(r.customerId)) &&
-      rentalFits(r, gross) &&
-      (r.pickedUpOn === line.occurredOn || (!!r.firstOpenPeriod && line.occurredOn >= r.firstOpenPeriod.startsOn && line.occurredOn <= r.firstOpenPeriod.endsOn)),
-  );
-  if (byDate.length === 1) {
-    const r = byDate[0];
-    const pickup = r.pickedUpOn === line.occurredOn;
-    return {
-      type: 'rule',
-      rule: pickup && line.channel === 'acquiring' ? 'card_pickup_day' : 'amount_date',
-      target: { rentalId: r.id },
-      customerId: r.customerId,
-      reason: pickup
-        ? { code: 'card_pickup', number: r.number, name: r.customer, grossTetri: gross, feeTetri: gross - line.amountTetri, netTetri: line.amountTetri, day: line.occurredOn }
-        : { code: 'amount_week', number: r.number, name: r.customer, debtTetri: r.owedNowTetri },
-    };
   }
   return { type: 'queue' };
 }
@@ -507,17 +489,6 @@ export function suggest(line: Line, ctx: Ctx): { group: 'recorded' | 'suggested'
       out.push({ kind: 'customer', id: c.id, number: null, customer: c.name, customerId: c.id, reason: { code: 'name', name: c.name } });
     }
     const seen = new Set(out.map((s) => s.id));
-    for (const r of ctx.rentals.filter((x) => !seen.has(x.id) && x.pickedUpOn === line.occurredOn && rentalFits(x, gross))) {
-      out.push({
-        kind: 'rental',
-        id: r.id,
-        number: r.number,
-        customer: r.customer,
-        customerId: r.customerId,
-        reason: { code: 'card_pickup', number: r.number, grossTetri: gross, feeTetri: gross - line.amountTetri, netTetri: line.amountTetri, day: line.occurredOn },
-      });
-      seen.add(r.id);
-    }
     // Goods of this sum sold within ±3 days, the ones promised by this line's
     // channel first: above the rentals that only fit by their sum (ADR-0045 §7).
     const goodsHint = (g: GoodsCand): Suggestion => ({
@@ -537,7 +508,8 @@ export function suggest(line: Line, ctx: Ctx): { group: 'recorded' | 'suggested'
       out.push(goodsHint(g));
       seen.add(g.id);
     }
-    for (const r of ctx.rentals.filter((x) => !seen.has(x.id) && rentalFits(x, gross))) {
+    // By the sum alone: rentals that run now — a returned one comes by its renter's name only (issue #13).
+    for (const r of ctx.rentals.filter((x) => !seen.has(x.id) && RUNNING.has(x.status) && rentalFits(x, gross))) {
       out.push({ kind: 'rental', id: r.id, number: r.number, customer: r.customer, customerId: r.customerId, reason: { code: 'amount', number: r.number, debtTetri: r.owedNowTetri } });
       seen.add(r.id);
     }

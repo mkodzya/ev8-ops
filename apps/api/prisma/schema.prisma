@@ -521,6 +521,8 @@ model Customer {
   mergedInto  Customer?    @relation("customer_merge", fields: [mergedIntoId], references: [id])
   kommoLeads  KommoLead[]
   mergedFrom  Customer[]   @relation("customer_merge")
+  /// Payers remembered as this customer (migration 0069).
+  payerRules  PayerRule[]
 
   @@map("customers")
 }
@@ -868,6 +870,9 @@ model StatementLine {
   /// Money going out as an expense: what it was for, and the remembered payee that sorted it (migration 0046).
   expenseCategoryId String?       @map("expense_category_id") @db.Uuid
   expenseRuleId     String?       @map("expense_rule_id") @db.Uuid
+  /// Money coming in as other income: its category; and the remembered payer that sorted the line (migration 0069).
+  incomeCategoryId  String?       @map("income_category_id") @db.Uuid
+  payerRuleId       String?       @map("payer_rule_id") @db.Uuid
   createdAt   DateTime            @default(now()) @map("created_at")
 
   statement Statement @relation(fields: [statementId], references: [id], onDelete: Cascade)
@@ -876,6 +881,8 @@ model StatementLine {
   expenseCategory ExpenseCategory? @relation(fields: [expenseCategoryId], references: [id])
   expenseRule     ExpenseRule?     @relation(fields: [expenseRuleId], references: [id])
   expenseParts    StatementLineExpensePart[]
+  incomeCategory  IncomeCategory?  @relation(fields: [incomeCategoryId], references: [id])
+  payerRule       PayerRule?       @relation(fields: [payerRuleId], references: [id])
 
   @@unique([bank, naturalKey])
   @@map("statement_lines")
@@ -915,6 +922,42 @@ model ExpenseCategory {
 }
 
 /// "Remember this payee": its next line is sorted into the category by itself (migration 0046).
+/// «Прочий доход ▸»: what money coming in that is no customer's was (migration 0069).
+model IncomeCategory {
+  id          String   @id @default(uuid()) @db.Uuid
+  nameRu      String   @map("name_ru")
+  nameKa      String?  @map("name_ka")
+  nameEn      String?  @map("name_en")
+  sortOrder   Int      @default(0) @map("sort_order")
+  archived    Boolean  @default(false)
+  createdById String?  @map("created_by") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  lines StatementLine[]
+  rules PayerRule[]
+
+  @@map("income_categories")
+}
+
+/// A remembered payer of money coming in (migration 0069): `customer`, `own_transfer`, `founder_equity` or `other_income`.
+model PayerRule {
+  id           String    @id @default(uuid()) @db.Uuid
+  payerKey     String    @map("payer_key")
+  kind         String
+  customerId   String?   @map("customer_id") @db.Uuid
+  categoryId   String?   @map("category_id") @db.Uuid
+  createdById  String?   @map("created_by") @db.Uuid
+  createdAt    DateTime  @default(now()) @map("created_at")
+  archivedAt   DateTime? @map("archived_at")
+  archivedById String?   @map("archived_by") @db.Uuid
+
+  customer Customer?       @relation(fields: [customerId], references: [id])
+  category IncomeCategory? @relation(fields: [categoryId], references: [id])
+  lines    StatementLine[]
+
+  @@map("payer_rules")
+}
+
 model ExpenseRule {
   id           String    @id @default(uuid()) @db.Uuid
   payeeKey     String    @map("payee_key")

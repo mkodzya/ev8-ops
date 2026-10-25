@@ -31,7 +31,11 @@ import { saleDateRu } from './sale-date.js';
 import { rentalSwapRu } from './rental-swap.js';
 import { vehicleCardRu } from './vehicle-card.js';
 import { pickupDateRu } from './pickup-date.js';
+import { depositReviseRu } from './deposit-revise.js';
+import { menuRu } from './menu.js';
 import { goodsRu } from './goods.js';
+import { incRu } from './inbound.js';
+import { dupRu } from './card-duplicate.js';
 import type { Dict } from './en.js';
 
 // Typed as Dict: a missing or misspelled key fails the build.
@@ -77,15 +81,19 @@ export const ru: Dict = {
   },
 
   nav: {
-    serviceStock: 'Сервис · Склад',
     today: 'Сегодня',
     more: 'Ещё',
-    fleet: 'Парк',
-    rentals: 'Аренды',
+    // Issue #15 (ADR-0048): the sections of the new menu, the bar's short word for the schedule.
+    schedule: 'Оплаты по графику',
+    scheduleShort: 'Оплаты',
+    sortShort: 'Разобрать',
+    sort: 'Разобрать',
+    fleet: 'Мопеды',
+    rentals: 'Аренды и клиенты',
     payments: 'Платежи',
     purchases: 'Закупки',
     sales: 'Продажи',
-    service: 'Сервис',
+    service: 'Ремонты',
     statements: 'Выписки',
     customers: 'Клиенты',
     models: 'Модели',
@@ -93,7 +101,7 @@ export const ru: Dict = {
     cash: 'Касса',
     reports: 'Отчёты',
     settings: 'Настройки',
-    groups: { work: 'Работа', money: 'Деньги', manage: 'Управление' },
+    groups: { daily: 'Ежедневно', fleet: 'Парк', trade: 'Продажи и закупки', manage: 'Управление' },
   },
 
   shell: {
@@ -143,8 +151,19 @@ export const ru: Dict = {
       migration: 'До EV8 Ops',
       login: 'Вход',
       expenses: 'Расходы',
+      incoming: 'Поступления',
       drive: 'Drive',
       goods: 'Товары',
+      // Issue #15: «Оплаты по графику», «Разобрать», «Аренды и клиенты».
+      due: 'Сегодня',
+      late: 'Просрочки',
+      month: 'Месяц',
+      sortIn: 'Поступления',
+      sortOut: 'Списания',
+      byRules: 'Разобрано правилами',
+      aside: 'Убрано из очереди',
+      rentals: 'Аренды',
+      customers: 'Клиенты',
     },
   },
 
@@ -392,7 +411,7 @@ export const ru: Dict = {
     fineAmount: 'Сумма',
     fineReason: 'За что',
     fineReasonHint: 'Обязательно: например, «повреждение мопеда» или «грязный мопед».',
-    fineHint: 'Начисление войдёт в долг клиента. Оплатить его — «Принять деньги» или «Разнести» строку банка.',
+    fineHint: 'Начисление войдёт в долг клиента. Оплатить его — «Принять деньги» или строкой банка: «Разобрать» → «Ремонт / начисление».',
     fineDone: 'Начислено',
     fineVoid: 'Снять начисление',
     fineVoidReason: 'Почему снимаете',
@@ -853,7 +872,8 @@ export const ru: Dict = {
     splitWeekNewTitle: 'Новая оплата',
     splitWeekNewSub: 'пойдёт в следующие недели',
     splitOldPick: 'Отметьте, за какую неделю аренда.',
-    splitMore: '+ ещё: ремонт, аванс по аренде',
+    splitMore: (words) => `+ ещё: ${words}`,
+    splitMoreWords: { repair: 'ремонт', sale: 'продажа мопеда', goods: 'товары', account: 'аванс по аренде' },
     splitAllPlaced: 'всё разнесено ✓',
     resTitle: 'Что запишется',
     resCarried: (a, week, r) => `${a} — оплата недели ${week} по ${r}. Неделя и так была оплаченной, теперь у неё есть платёж из банка.`,
@@ -867,6 +887,7 @@ export const ru: Dict = {
     resDebtSame: (a) => `Долг клиента не изменится: ${a}.`,
     resDebt: (a, b) => `Долг клиента: было ${a}, станет ${b}.`,
     splitNothing: 'У клиента нет открытых записей — только «аванс по аренде».',
+    splitNothingAtAll: 'У клиента нет открытых записей.',
     splitDone: (n: number) => `Строка разнесена, частей: ${n}`,
     byCard: (paid: string, fee: string) => `Оплата картой: клиент заплатил ${paid}, комиссия банка ${fee}.`,
     byCardPlain: 'Оплата картой.',
@@ -1225,6 +1246,7 @@ export const ru: Dict = {
       category_exists: 'Категория с таким названием уже есть.',
       category_not_found: 'Такой категории расходов нет.',
       charge_not_found: 'Такого начисления у аренды нет — возможно, его уже сняли.',
+      charge_over_open: 'Это больше, чем осталось заплатить по начислению.',
       closed_before_opened: 'Ремонт не может закрыться раньше дня открытия.',
       contract_not_marked: 'Договор не отмечен как подписанный в Signify. Обновите экран.',
       customer_archived: 'Эта карточка объединена с другой — работайте в той, в которую она вошла.',
@@ -1233,6 +1255,7 @@ export const ru: Dict = {
       customer_not_found: 'Клиент не найден.',
       demo_login_off: 'Демо-учётки на этом стенде отключены.',
       deposit_decided: 'По залогу уже есть решение.',
+      deposit_undecided: 'По залогу ещё нет решения — сначала «Решить залог».',
       deposit_decision_forbidden: 'Решение по залогу принимает владелец.',
       deposit_has_line: 'У этого внесения в банк уже есть строка выписки.',
       deposit_not_found: 'У этой аренды нет залога.',
@@ -1327,6 +1350,7 @@ export const ru: Dict = {
       not_outgoing: 'Выводом акционера можно отметить только деньги, ушедшие со счёта.',
       not_returned: 'Акт возврата появится, когда аренда будет закрыта.',
       not_set_aside: 'Эта строка не убрана из очереди. Обновите список.',
+      no_twin: 'Эта строка не повторяет другую. Если она не наша — «Это не наше», с причиной.',
       not_yours: 'Отменить перевод может только тот, кто его сделал.',
       nothing_to_correct: 'Остаток уже такой.',
       nothing_to_undo: 'У этого мопеда нет перевода, который можно отменить.',
@@ -1339,6 +1363,7 @@ export const ru: Dict = {
       over_on_hand: 'Это больше, чем у вас на руках.',
       over_open: 'Это больше, чем осталось заплатить за ремонт.',
       owner_only: 'Это делает только владелец.',
+      sort_owner_only: 'Это разбирает владелец. Менеджер привязывает поступления к аренде, залогу, продаже мопеда, товарам и ремонту.',
       owner_only_backdate: 'Прошлой датой записывает только владелец. Менеджер записывает сегодняшним днём.',
       paid_before_too_big: 'Оплачено до EV8 Ops больше, чем стоит продажа.',
       part_exists: 'Запчасть с таким названием или артикулом уже есть.',
@@ -1361,6 +1386,13 @@ export const ru: Dict = {
       rental_not_running: 'Сдвинуть можно только неделю идущей аренды — не на паузе, не в споре и не возвращённой.',
       return_before_pickup: 'Дата возврата раньше даты выдачи.',
       rule_not_found: 'Этого правила уже нет.',
+      // Поступления (issue #13, 0069).
+      income_category_not_found: 'Такой категории дохода нет.',
+      no_payer: 'Банк не назвал плательщика в этой строке — запоминать некого.',
+      not_incoming: 'Так отвечают только на поступление.',
+      payer_rule_not_found: 'Этого правила уже нет.',
+      payer_rule_undo_too_late: 'Отменить уже нельзя: в «Разобрано правилами» — «Забыть правило», а его строки — «Отвязать» по одной.',
+      remember_rent_only: 'Плательщик запоминается только для аренды, залога или аванса.',
       sale_before_history: 'Продажа не может быть раньше последнего события в истории мопеда. Выберите тот день или позже.',
       sale_closed: 'Эта продажа закрыта.',
       sale_date_future: 'Продажу нельзя записать будущей датой.',
@@ -1378,6 +1410,7 @@ export const ru: Dict = {
       split_carried_week: 'Неделя, оплаченная до EV8 Ops, закрывается ровно своей ценой.',
       split_needs_two: 'Чтобы разнести строку, нужны хотя бы две части.',
       split_over_charge: 'Часть больше, чем осталось оплатить по начислению.',
+      split_over_deposit: 'Часть больше, чем осталось внести в залог.',
       split_over_repair: 'Часть больше, чем осталось оплатить по ремонту.',
       split_same_target: 'Две части на одну запись — сложите их в одну.',
       split_sum: 'Части не складываются в сумму строки.',
@@ -1428,6 +1461,7 @@ export const ru: Dict = {
       week_not_found: 'Такой недели в аренде нет.',
       week_not_last: 'Сдвинуть можно только последнюю неделю: следующая уже началась.',
       week_paid_before_transfer: 'Эта неделя оплачена до EV8 Ops — она остаётся как есть.',
+      withheld_paid_by_other: 'Начисление «Удержано сверх претензий» оплачено и другими деньгами. Сначала аннулируйте тот платёж или отвяжите его строку в «Разобрать»: пересмотр другие деньги не двигает.',
       withheld_over_total: 'Удержать больше стоимости ремонта нельзя.',
       workshop_archived: 'Эта мастерская убрана из списка. Выберите другую или верните её в «Настройки → Ремонт».',
       workshop_archived_exists: 'Мастерская с таким названием убрана из списка. Верните её: «…» → «Вернуть».',
@@ -1469,5 +1503,9 @@ export const ru: Dict = {
   ...rentalSwapRu,
   ...vehicleCardRu,
   ...pickupDateRu,
+  ...depositReviseRu,
+  ...menuRu,
   ...goodsRu,
+  ...incRu,
+  ...dupRu,
 };

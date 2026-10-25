@@ -116,7 +116,8 @@ describe.skipIf(!HAS_DB)('reading a Bank of Georgia export', () => {
     const tag = uniq();
     const who = tagged({ ru: 'Давид Двойной', ka: 'დავით ორმაგიძე' });
     const { owner, prisma } = await rentalFor(who);
-    const text = [BOG_HEADER, bogRow('06.09.2026', '140.0', `Caricxva: gadmomricxavi: ormagiZe daviT ${who.tag}; daniSnuleba: qira ${tag}`)].join('\n');
+    // The week and the deposit, from the renter by name: the rule attaches it the first time.
+    const text = [BOG_HEADER, bogRow('06.09.2026', '320.0', `Caricxva: gadmomricxavi: ormagiZe daviT ${who.tag}; daniSnuleba: qira ${tag}`)].join('\n');
 
     const first = json<{ newLines: number; matched: number }>(await call(owner, 'POST', '/api/statements', { fileName: 'a.csv', text }));
     expect(first.newLines).toBe(1);

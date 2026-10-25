@@ -252,6 +252,93 @@ export type PaymentsCalendarAnswer = PaymentsCalendar & {
   unsortedIn: number;
 };
 
+/** A day of «Оплаты по графику» without its money: how many weeks fall due on it, and in what state (issue #15). */
+export type ScheduleDay = Omit<CalendarDay, 'due' | 'leftTetri' | 'receivedTetri'> & { due: { count: number } };
+
+/**
+ * «Оплаты по графику» as a manager reads it (issue #15 of the director,
+ * ADR-0048): who owes what and when, row by row — a week of a rental with its
+ * rent and what is left of it, a late rental with its debt — and no sum of
+ * several rows: no week's or month's figures, no day's total, no money
+ * received, no debt of everybody together. Those stay with `payments.view`.
+ */
+export interface ScheduleAnswer {
+  totals: false;
+  today: ISODate;
+  from: ISODate;
+  to: ISODate;
+  firstPickupOn: ISODate | null;
+  /** The Monday–Sunday weeks the answer covers — their days, not their sums. */
+  weeks: Period[];
+  days: ScheduleDay[];
+  entries: CalendarEntry[];
+  late: { count: number; rentals: CalendarLate[] };
+  rentals: CalendarRentalCard[];
+  unsortedIn: number;
+}
+
+/** What GET /api/money/calendar answers: every sum to whoever has `payments.view`, the rows alone to anybody else. */
+export type CalendarAnswer = (PaymentsCalendarAnswer & { totals: true }) | ScheduleAnswer;
+
+/**
+ * The answer without its sums. Named field by field, never spread: a figure
+ * added to the calendar later reaches a manager only once somebody writes it
+ * here — the default is that it does not.
+ */
+export function scheduleOf(a: PaymentsCalendarAnswer): ScheduleAnswer {
+  return {
+    totals: false,
+    today: a.today,
+    from: a.from,
+    to: a.to,
+    firstPickupOn: a.firstPickupOn,
+    weeks: a.weeks.map((w) => ({ from: w.from, to: w.to })),
+    days: a.days.map((d) => ({ date: d.date, due: { count: d.due.count }, paidCount: d.paidCount, states: { ...d.states } })),
+    entries: a.entries.map((e) => ({
+      rentalId: e.rentalId,
+      seq: e.seq,
+      dueOn: e.dueOn,
+      endsOn: e.endsOn,
+      amountTetri: e.amountTetri,
+      paidTetri: e.paidTetri,
+      leftTetri: e.leftTetri,
+      state: e.state,
+      paidOn: e.paidOn,
+      channel: e.channel,
+      paymentId: e.paymentId,
+      projected: e.projected,
+      creditTetri: e.creditTetri,
+    })),
+    late: {
+      count: a.late.count,
+      rentals: a.late.rentals.map((l) => ({ rentalId: l.rentalId, debtTetri: l.debtTetri, overdueTetri: l.overdueTetri, weeks: l.weeks, sinceOn: l.sinceOn, days: l.days })),
+    },
+    rentals: a.rentals.map((r) => ({
+      id: r.id,
+      number: r.number,
+      customer: { id: r.customer.id, name: r.customer.name, nameKa: r.customer.nameKa, nameLat: r.customer.nameLat, phone: r.customer.phone },
+      vehicle: r.vehicle ? { id: r.vehicle.id, vin: r.vehicle.vin, model: r.vehicle.model } : null,
+      weeklyRateTetri: r.weeklyRateTetri,
+      pickedUpOn: r.pickedUpOn,
+      paidThrough: r.paidThrough,
+      debtTetri: r.debtTetri,
+    })),
+    unsortedIn: a.unsortedIn,
+  };
+}
+
+/** A day's rent in money — or nothing, for an answer without sums. */
+export const dayDueTetri = (day: CalendarDay | ScheduleDay): Tetri | null => ('tetri' in day.due ? day.due.tetri : null);
+
+/**
+ * The two numbers beside «Оплаты по графику» in the menu (issue #15): the
+ * rentals late, and the weeks awaited today and not paid yet — the rows of the
+ * screen's «Просрочки» and «Сегодня», counted from the same answer.
+ */
+export function scheduleCounts(a: Pick<PaymentsCalendar, 'today' | 'entries'> & { late: { count: number } }): { late: number; dueToday: number } {
+  return { late: a.late.count, dueToday: a.entries.filter((e) => e.dueOn === a.today && e.state === 'due_today').length };
+}
+
 // ---------------------------------------------------------------------------
 // The days an answer covers
 // ---------------------------------------------------------------------------
@@ -314,7 +401,7 @@ export function calendarWeekOf(cal: PaymentsCalendar, day: ISODate): CalendarWee
   return cal.weeks.find((w) => inPeriod(w, day)) ?? cal.weeks.find((w) => inPeriod(w, cal.today))!;
 }
 
-export function calendarEntriesOn(cal: PaymentsCalendar, day: ISODate): CalendarEntry[] {
+export function calendarEntriesOn(cal: { entries: readonly CalendarEntry[] }, day: ISODate): CalendarEntry[] {
   return cal.entries.filter((e) => e.dueOn === day);
 }
 

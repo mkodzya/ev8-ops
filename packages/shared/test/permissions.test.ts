@@ -46,6 +46,15 @@ describe('roles and permissions (redesign §2.1, Mika 17.09.2026; ADR-0033, 20.1
     expect(PIN_SESSION_PERMISSIONS).not.toContain('rental.week.shift');
   });
 
+  it('a manager calls those who pay by the schedule and sorts the customers’ money; a mechanic does neither (issue #15, ADR-0048)', () => {
+    for (const p of ['payments.schedule', 'payments.sort.customer'] as const) {
+      expect(roleCan('owner', p), p).toBe(true);
+      expect(roleCan('manager', p), p).toBe(true);
+      for (const role of ['mechanic', 'chief_mechanic'] as const) expect(roleCan(role, p), `${role} ${p}`).toBe(false);
+      expect(PIN_SESSION_PERMISSIONS).not.toContain(p);
+    }
+  });
+
   it('a manager never sees cost, purchases, reports, documents or other people\'s money, and decides no deposit', () => {
     for (const p of ['cost.view', 'purchases.view', 'reports.view', 'customer.documents.view', 'payments.view', 'payments.reconcile', 'deposit.decide', 'service.manage', 'settings.manage', 'users.manage'] as const) {
       expect(roleCan('manager', p), p).toBe(false);

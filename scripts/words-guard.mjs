@@ -47,6 +47,7 @@ const DEPOSIT_BACK = new RegExp(
       'drive\\.todayPaidBack',
       'errors\\.codes\\.(?:bad_channel|over_held)',
       'feedWords\\.statement\\.line\\.pay_out',
+      'depositRevise\\.(?:payouts|rows\\.(?:back|paidOut)|journal\\.(?:backTetri|paidOutTetri))',
     ].join('|') +
     ')$',
   'u',
