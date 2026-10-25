@@ -29,6 +29,7 @@ import { serviceRoutes } from './routes/service.js';
 import { payoutRoutes } from './routes/payouts.js';
 import { statementRoutes } from './routes/statements.js';
 import { expenseRoutes } from './routes/expenses.js';
+import { inboundRoutes } from './routes/inbound.js';
 import { tillRoutes } from './routes/till.js';
 import { handoverRoutes } from './routes/handover.js';
 import { signRoutes } from './routes/documents.js';
@@ -105,6 +106,7 @@ export function buildApp(opts: { logger?: FastifyServerOptions['logger'] } = {})
   calendarRoutes(app);
   statementRoutes(app);
   expenseRoutes(app);
+  inboundRoutes(app);
   tillRoutes(app);
   handoverRoutes(app);
   signRoutes(app);
