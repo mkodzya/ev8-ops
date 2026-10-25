@@ -433,3 +433,15 @@ button.cal-cell { cursor: pointer; }
 @media (max-width: 479px) {
   .table.cal-month-table .cal-wait { display: none; }
 }
+
+/* Money coming in, answered by its kind (issue #13, ADR-0046): a row of the
+   customers' money, a row of what is no customer's, «Несколько услуг» at its
+   end on a pointer's width; the panel's records read from the left. */
+.inc-kinds { display: grid; gap: 8px; }
+@media (min-width: 900px) { .inc-several { margin-left: auto; } }
+.check-row-quiet { color: var(--muted); }
+.check-row-quiet input { width: 16px; height: 16px; }
+.inc-pick .pick-card { width: 100%; text-align: left; border: 1px solid var(--line); }
+.inc-pick .pick-card.on { border-color: var(--accent); background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent); }
+.inc-why { font-weight: 400; color: var(--muted); }
+.inc-group { margin: 6px 0 0; font: var(--text-overline); color: var(--muted); }

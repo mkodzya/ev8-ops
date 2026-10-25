@@ -368,8 +368,9 @@ export interface Reason {
   /**
    * `goods`: an open goods sale of this sum (ADR-0045) — `day` is the day it was sold, `channel` what the buyer promised.
    * `card_pickup` and `amount_week` are no longer given (issue #13); lines attached by them before stay readable.
+   * `payer_rule`: a payer remembered as this customer (0069) — `name` is the payer as the bank writes him.
    */
-  code: 'name' | 'card_pickup' | 'amount_week' | 'amount' | 'recorded' | 'bank_deposit' | 'goods';
+  code: 'name' | 'card_pickup' | 'amount_week' | 'amount' | 'recorded' | 'bank_deposit' | 'goods' | 'payer_rule';
   /** On a hint for a rental carried over after this line's day: the day it was carried over. The money may be counted already. */
   transferredOn?: string;
   name?: string;

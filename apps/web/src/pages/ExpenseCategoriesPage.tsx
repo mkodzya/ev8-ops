@@ -19,8 +19,23 @@ import type { ExpenseCategory } from './money/ExpenseAnswers.js';
  */
 export function ExpenseCategoriesPage() {
   const t = useT();
+  return <CategoriesBlock path="/api/expense-categories" title={t.exp.title} hint={t.exp.hint} />;
+}
+
+/**
+ * Settings → Поступления: what money coming in that is no customer's is —
+ * «Прочий доход ▸» in «Разобрать» (issue #13, migration 0069). The two the
+ * director named and «Прочее» to begin with; the same list as the expenses'.
+ */
+export function IncomeCategoriesPage() {
+  const t = useT();
+  return <CategoriesBlock path="/api/income-categories" title={t.inc.settings.title} hint={t.inc.settings.hint} />;
+}
+
+function CategoriesBlock({ path, title, hint }: { path: string; title: string; hint: string }) {
+  const t = useT();
   const { locale } = useLocale();
-  const { data, failure, reload } = useLoad<{ categories: ExpenseCategory[] }>('/api/expense-categories?all=1');
+  const { data, failure, reload } = useLoad<{ categories: ExpenseCategory[] }>(`${path}?all=1`);
   const toast = useToast();
   const op = useOperation();
   const [editing, setEditing] = useState<ExpenseCategory | 'new' | null>(null);
@@ -28,7 +43,7 @@ export function ExpenseCategoriesPage() {
   if (!data) return <Loading />;
   const name = (c: ExpenseCategory) => (locale === 'ka' ? c.nameKa : locale === 'en' ? c.nameEn : null) || c.nameRu;
   const setArchived = async (c: ExpenseCategory, archived: boolean) => {
-    const res = await op.run((key) => api.patch(`/api/expense-categories/${c.id}`, { archived }, { key }), `archive:${c.id}:${archived}`);
+    const res = await op.run((key) => api.patch(`${path}/${c.id}`, { archived }, { key }), `archive:${c.id}:${archived}`);
     if (!res.ok) return;
     toast({ text: t.form.changesSaved });
     reload();
@@ -37,7 +52,7 @@ export function ExpenseCategoriesPage() {
   const menuOf = (c: ExpenseCategory) => [{ key: 'edit', label: t.exp.edit, onPick: () => setEditing(c) }, flip(c)];
   return (
     <section className="card">
-      <BlockHead title={t.exp.title} note={t.exp.hint} />
+      <BlockHead title={title} note={hint} />
       <ul className="item-list">
         {data.categories.map((c) => (
           <li key={c.id} className="kv">
@@ -55,6 +70,7 @@ export function ExpenseCategoriesPage() {
       {op.failure && <p className="field-err" role="alert">{op.failure.text}</p>}
       {editing && (
         <CategorySheet
+          path={path}
           category={editing === 'new' ? null : editing}
           onClose={() => setEditing(null)}
           onDone={() => {
@@ -67,7 +83,7 @@ export function ExpenseCategoriesPage() {
   );
 }
 
-function CategorySheet({ category, onClose, onDone }: { category: ExpenseCategory | null; onClose: () => void; onDone: () => void }) {
+function CategorySheet({ path, category, onClose, onDone }: { path: string; category: ExpenseCategory | null; onClose: () => void; onDone: () => void }) {
   const t = useT();
   const initial = { nameRu: category?.nameRu ?? '', nameKa: category?.nameKa ?? '', nameEn: category?.nameEn ?? '' };
   const [f, setF] = useState(initial);
@@ -80,8 +96,8 @@ function CategorySheet({ category, onClose, onDone }: { category: ExpenseCategor
       label={t.actions.save}
       submit={async (key) => {
         const body = { nameRu: f.nameRu.trim(), nameKa: f.nameKa.trim(), nameEn: f.nameEn.trim() };
-        if (category) await api.patch(`/api/expense-categories/${category.id}`, body, { key });
-        else await api.post('/api/expense-categories', body, { key });
+        if (category) await api.patch(`${path}/${category.id}`, body, { key });
+        else await api.post(path, body, { key });
         return { toast: { text: t.form.changesSaved } };
       }}
       onDone={onDone}

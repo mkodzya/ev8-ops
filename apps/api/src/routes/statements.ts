@@ -15,6 +15,8 @@ import { SPLIT_MAX, attach, importStatement, linkBankDeposit, linkPayment, previ
 import { ParseError } from '../lib/statements/parse.js';
 import { isCashDeposit, loadCtx, storedLine, suggest } from '../lib/statements/reconcile.js';
 import { expenseKey, lastCategories, payeeLabel, sortByRule, waitingFrom } from '../lib/statements/expenses.js';
+import { BACK_TO_QUEUE, setAside } from '../lib/statements/aside.js';
+import { livePayerRules, payerKey, payerLabel, rememberPayer, type PayerKind } from '../lib/statements/payers.js';
 import { tbcApiStatus } from '../lib/tbc.js';
 import { settleAfterShift } from '../lib/weekShift.js';
 import { int, oneOf, str, tetri } from '../lib/validate.js';
@@ -37,9 +39,12 @@ export const BANKS = ['bog', 'tbc', 'credo'] as const;
  * `card_pickup_day` attach nothing since issue #13; the lines they attached
  * before stay listed with their reason.
  */
-const BY_RULES = ['payer_name', 'amount_date', 'card_pickup_day', 'recorded', 'bank_deposit'];
+const BY_RULES = ['payer_name', 'payer_rule', 'amount_date', 'card_pickup_day', 'recorded', 'bank_deposit'];
 
 type Body = Record<string, unknown>;
+
+/** Set aside by a person — not by a remembered payee or payer, which «Разобрано правилами» lists. */
+const BY_PERSON = { OR: [{ matchedRule: null }, { matchedRule: { notIn: ['expense_rule', 'payer_rule'] } }] };
 
 function readFile(b: Body): { fileName: string; text: string } {
   const fileName = str(b, 'fileName', { required: true, max: 200 })!;
@@ -132,9 +137,12 @@ export function statementRoutes(app: FastifyInstance): void {
       prisma.statementLine.count({ where: { status: 'matched', matchedRule: { in: BY_RULES }, createdAt: { gte: new Date(Date.now() - 7 * 24 * 3600_000) } } }),
       loadCtx(),
     ]);
-    const aside = await prisma.statementLine.count({ where: { status: 'ignored', OR: [{ matchedRule: null }, { matchedRule: { not: 'expense_rule' } }], resolvedAt: { gte: new Date(Date.now() - ASIDE_DAYS * 24 * 3600_000) } } });
+    const aside = await prisma.statementLine.count({ where: { status: 'ignored', ...BY_PERSON, resolvedAt: { gte: new Date(Date.now() - ASIDE_DAYS * 24 * 3600_000) } } });
     const weekAgo = new Date(Date.now() - 7 * 24 * 3600_000);
-    const byExpenseRules = await prisma.statementLine.count({ where: { status: 'ignored', matchedRule: 'expense_rule', resolvedAt: { gte: weekAgo } } });
+    // Set aside by a remembered payee (0046) or payer (0069): «Разобрано правилами», not «Отложено».
+    const byExpenseRules = await prisma.statementLine.count({ where: { status: 'ignored', matchedRule: { in: ['expense_rule', 'payer_rule'] }, resolvedAt: { gte: weekAgo } } });
+    // Payers remembered (0069): what «Запомнить для …» would replace.
+    const payers = direction === 'out' ? new Map() : await livePayerRules(prisma);
     // "Как в прошлый раз" for money going out (migration 0046).
     const last = direction === 'in' ? new Map<string, string>() : await lastCategories();
     // A line going out of exactly a deposit we owe back looks like that deposit handed back.
@@ -176,6 +184,14 @@ export function statementRoutes(app: FastifyInstance): void {
           fileName: l.statement.fileName,
           cashDeposit: isCashDeposit(line),
           ...hints,
+          ...(l.direction === 'in'
+            ? (() => {
+                // Who sent it, as «Запомнить для „…“» says it; none — a card line, cash paid in, nobody named (0069).
+                const key = payerKey(line);
+                const rule = key ? payers.get(key) : undefined;
+                return { payerLabel: payerLabel(line), canRemember: key != null, remembered: rule ? { kind: rule.kind as PayerKind, customerId: rule.customerId, customerName: rule.customerName ?? null, categoryId: rule.categoryId } : null };
+              })()
+            : {}),
           ...(l.direction === 'out'
             ? {
                 // Who the money went to, as "Запомнить для …" says it; none — nothing to remember.
@@ -199,6 +215,7 @@ export function statementRoutes(app: FastifyInstance): void {
       orderBy: [{ occurredOn: 'desc' }],
       take: 300,
       include: {
+        payerRule: { select: { id: true, createdAt: true, archivedAt: true } },
         payments: {
           where: { voidedAt: null },
           select: {
@@ -223,6 +240,14 @@ export function statementRoutes(app: FastifyInstance): void {
       take: 300,
       include: { expenseRule: { select: { id: true, createdAt: true, archivedAt: true } } },
     });
+    // Money coming in set aside by a remembered payer (0069): between accounts, a founder's, other income.
+    const incoming = await prisma.statementLine.findMany({
+      where: { status: 'ignored', matchedRule: 'payer_rule', resolvedAt: { gte: new Date(Date.now() - days * 24 * 3600_000) } },
+      orderBy: [{ occurredOn: 'desc' }],
+      take: 300,
+      include: { payerRule: { select: { id: true, createdAt: true, archivedAt: true } } },
+    });
+    const ruleOf = (r: { id: string; createdAt: Date; archivedAt: Date | null } | null) => (r ? { id: r.id, since: todayISO(r.createdAt, env.TZ), live: r.archivedAt == null } : null);
     return {
       days,
       // Money going out sorted by a remembered payee (migration 0046).
@@ -235,6 +260,16 @@ export function statementRoutes(app: FastifyInstance): void {
         categoryId: l.expenseCategoryId,
         rule: l.expenseRule ? { id: l.expenseRule.id, since: todayISO(l.expenseRule.createdAt, env.TZ), live: l.expenseRule.archivedAt == null } : null,
       })),
+      incoming: incoming.map((l) => ({
+        id: l.id,
+        bank: l.bank,
+        occurredOn: isoDate(l.occurredOn),
+        amountTetri: l.amountTetri,
+        payer: payerLabel(storedLine(l)),
+        resolution: l.resolution,
+        categoryId: l.incomeCategoryId,
+        rule: ruleOf(l.payerRule),
+      })),
       lines: lines.map((l) => {
         const p = l.payments[0] ?? null;
         return {
@@ -246,6 +281,8 @@ export function statementRoutes(app: FastifyInstance): void {
           purpose: l.purpose,
           rule: l.matchedRule,
           reason: why.get(l.id) ?? null,
+          // A remembered payer that put it here (0069): «правило „…“, запомнено …», «Забыть правило».
+          payerRule: ruleOf(l.payerRule),
           payment: p
             ? {
                 id: p.id,
@@ -272,7 +309,7 @@ export function statementRoutes(app: FastifyInstance): void {
   app.get<{ Querystring: { days?: string } }>('/api/statement-lines/aside', { config: { scope: 'payments.reconcile' } }, async (req) => {
     const days = Math.min(90, Math.max(1, Number(req.query.days) || ASIDE_DAYS));
     const lines = await prisma.statementLine.findMany({
-      where: { status: 'ignored', OR: [{ matchedRule: null }, { matchedRule: { not: 'expense_rule' } }], resolvedAt: { gte: new Date(Date.now() - days * 24 * 3600_000) } },
+      where: { status: 'ignored', ...BY_PERSON, resolvedAt: { gte: new Date(Date.now() - days * 24 * 3600_000) } },
       orderBy: [{ resolvedAt: 'desc' }],
       take: 300,
       include: { expenseParts: { orderBy: { seq: 'asc' }, select: { categoryId: true, amountTetri: true } } },
@@ -301,6 +338,8 @@ export function statementRoutes(app: FastifyInstance): void {
           // Who answered: a rule's name when the stand did it itself (`own_transfer_auto`, ADR-0028).
           rule: l.matchedRule,
           categoryId: l.expenseCategoryId,
+          // Other income's category (0069).
+          incomeCategoryId: l.incomeCategoryId,
           reason: l.resolutionReason,
           by: l.resolvedById ? (who.get(l.resolvedById) ?? null) : null,
           on: l.resolvedAt ? todayISO(l.resolvedAt, env.TZ) : null,
@@ -325,13 +364,24 @@ export function statementRoutes(app: FastifyInstance): void {
 
   /** This line is this record's money (§3.2): a rental, a sale, a repair, or the customer's account. */
   app.post<{ Params: { id: string }; Body: Body }>('/api/statement-lines/:id/assign', { config: { scope: 'payments.reconcile' } }, async (req) => {
+    const actor = actorOf(req);
     const b = req.body ?? {};
-    const target = { rentalId: str(b, 'rentalId'), saleId: str(b, 'saleId'), serviceJobId: str(b, 'serviceJobId'), goodsSaleId: str(b, 'goodsSaleId'), customerId: str(b, 'customerId') };
-    if (!target.rentalId && !target.saleId && !target.serviceJobId && !target.goodsSaleId && !target.customerId) {
-      throw badRequest('missing_field', 'Say what this line pays for.', { field: 'rentalId' });
-    }
-    const r = await prisma.$transaction((tx) => attach(tx, { actorId: actorOf(req).id, lineId: req.params.id, rule: 'by_hand', ...target }));
-    return { ok: true, id: r.paymentId };
+    // A charge — a fine, a key, damage — is paid on its own (ADR-0023): «Ремонт / начисление» (issue #13).
+    const target = { rentalId: str(b, 'rentalId'), saleId: str(b, 'saleId'), serviceJobId: str(b, 'serviceJobId'), goodsSaleId: str(b, 'goodsSaleId'), customerId: str(b, 'customerId'), chargeId: str(b, 'chargeId') };
+    const named = Object.values(target).filter(Boolean).length;
+    if (named === 0) throw badRequest('missing_field', 'Say what this line pays for.', { field: 'rentalId' });
+    if (target.chargeId && named > 1) throw badRequest('split_bad_target', 'A charge is paid on its own.', { field: 'chargeId' });
+    // «Запомнить для „…“» (0069): for rent, a deposit or an advance the payer is remembered as the customer.
+    const remember = b.remember === true;
+    if (remember && !target.rentalId && !target.customerId) throw badRequest('remember_rent_only', 'A payer is remembered for rent, a deposit or an advance.', { field: 'remember' });
+    const line = remember ? await prisma.statementLine.findUnique({ where: { id: req.params.id } }) : null;
+    const key = line ? payerKey(storedLine(line)) : null;
+    if (remember && !key) throw badRequest('no_payer', 'The bank names nobody on this line: there is no payer to remember.', { field: 'remember' });
+    const r = await prisma.$transaction((tx) => attach(tx, { actorId: actor.id, lineId: req.params.id, rule: 'by_hand', ...target }));
+    if (!remember) return { ok: true, id: r.paymentId };
+    const customerId = target.customerId ?? (await prisma.rental.findUniqueOrThrow({ where: { id: target.rentalId! }, select: { customerId: true } })).customerId;
+    const remembered = await rememberPayer({ actorId: actor.id, key: key!, kind: 'customer', customerId, categoryId: null, lineId: req.params.id });
+    return { ok: true, id: r.paymentId, ...remembered };
   });
 
   /**
@@ -377,6 +427,9 @@ export function statementRoutes(app: FastifyInstance): void {
         carriedPeriodId: str(b, 'carriedPeriodId'),
         fineRentalId: str(b, 'fineRentalId'),
         fineReason: str(b, 'fineReason', { max: 500 }),
+        // «Залог» as a part of its own, and a rent part that leaves the deposit to it (issue #13).
+        depositRentalId: str(b, 'depositRentalId'),
+        rentOnly: b.rentOnly === true,
       };
     });
     const today = todayISO(new Date(), env.TZ);
@@ -540,11 +593,15 @@ export function statementRoutes(app: FastifyInstance): void {
   });
 
   /** «Между счетами»: money between the company's own accounts, or into the till — neither spent nor somebody else's. */
-  app.post<{ Params: { id: string } }>('/api/statement-lines/:id/own-transfer', { config: { scope: 'payments.reconcile' } }, async (req) => {
+  app.post<{ Params: { id: string }; Body: Body }>('/api/statement-lines/:id/own-transfer', { config: { scope: 'payments.reconcile' } }, async (req) => {
     const actor = actorOf(req);
+    // Money coming in from our own account may have its payer remembered (0069).
+    const remember = (req.body ?? {}).remember === true;
+    const key = remember ? await incomingKey(req.params.id) : null;
     await setAside(req.params.id, actor.id, 'own_transfer', null);
     await audit({ actorId: actor.id, action: 'statement.line.own_transfer', entityType: 'statement_line', entityId: req.params.id });
-    return { ok: true };
+    if (!key) return { ok: true };
+    return { ok: true, ...(await rememberPayer({ actorId: actor.id, key, kind: 'own_transfer', customerId: null, categoryId: null, lineId: req.params.id })) };
   });
 
   /**
@@ -569,10 +626,7 @@ export function statementRoutes(app: FastifyInstance): void {
     const actor = actorOf(req);
     const line = await prisma.statementLine.findUnique({ where: { id: req.params.id }, select: { id: true, resolution: true, resolutionReason: true } });
     if (!line) throw notFound('line_not_found', 'No such statement line.');
-    const done = await prisma.statementLine.updateMany({
-      where: { id: line.id, status: 'ignored' },
-      data: { status: 'unmatched', matchedRule: null, resolution: null, resolutionReason: null, resolvedById: null, resolvedAt: null, expenseCategoryId: null, expenseRuleId: null },
-    });
+    const done = await prisma.statementLine.updateMany({ where: { id: line.id, status: 'ignored' }, data: BACK_TO_QUEUE });
     if (done.count === 0) throw conflict('not_set_aside', 'This line is not set aside.');
     // A line split into expenses waits again whole (ADR-0030).
     await prisma.statementLineExpensePart.deleteMany({ where: { lineId: line.id } });
@@ -607,22 +661,15 @@ export function statementRoutes(app: FastifyInstance): void {
   });
 }
 
-/** Set a line aside, once: a second answer finds it taken. */
-async function setAside(
-  lineId: string,
-  actorId: string,
-  resolution: 'not_ours' | 'company_expense' | 'own_transfer' | 'shareholder',
-  reason: string | null,
-  categoryId: string | null = null,
-  db: Prisma.TransactionClient | typeof prisma = prisma,
-): Promise<void> {
-  const done = await db.statementLine.updateMany({
-    where: { id: lineId, status: 'unmatched' },
-    data: { status: 'ignored', matchedRule: resolution, resolution, resolutionReason: reason, resolvedById: actorId, resolvedAt: new Date(), expenseCategoryId: categoryId },
-  });
-  if (done.count === 0) {
-    const exists = await db.statementLine.findUnique({ where: { id: lineId }, select: { id: true } });
-    if (!exists) throw notFound('line_not_found', 'No such statement line.');
-    throw conflict('already_matched', 'This line is already attached.');
-  }
+/**
+ * The payer key of a line coming in, for «Запомнить для „…“» (0069): refused
+ * when the line goes out or names nobody to remember.
+ */
+export async function incomingKey(lineId: string): Promise<string> {
+  const line = await prisma.statementLine.findUnique({ where: { id: lineId } });
+  if (!line) throw notFound('line_not_found', 'No such statement line.');
+  if (line.direction !== 'in') throw conflict('not_incoming', 'Only money coming in has a payer to remember.');
+  const key = payerKey(storedLine(line));
+  if (!key) throw badRequest('no_payer', 'The bank names nobody on this line: there is no payer to remember.', { field: 'remember' });
+  return key;
 }
