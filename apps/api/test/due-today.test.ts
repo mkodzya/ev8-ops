@@ -720,8 +720,12 @@ describe.skipIf(!HAS_DB)('the due day · who sees what', () => {
     expect(Object.keys(mine.numbers).sort()).toEqual(['batteries', 'chips', 'depositsHeldTetri', 'fleet', 'myTillTetri', 'overdueTetri', 'week']);
     expect(Object.keys(theirs.numbers).sort()).toEqual(['batteries', 'chips', 'depositsHeldTetri', 'fleet', 'myTillTetri', 'overdueTetri', 'week']);
 
-    // The calendar and the week's report stay behind their permissions.
-    expect(err(await call(manager, 'GET', '/api/money/calendar'))).toMatchObject({ error: 'forbidden', permission: 'payments.view' });
+    // The calendar's sums and the week's report stay behind their permissions: since issue #15 a
+    // manager reads the schedule's rows, never its totals (ADR-0048).
+    const schedule = await call(manager, 'GET', '/api/money/calendar');
+    expect(schedule.statusCode).toBe(200);
+    expect(json<{ totals: boolean; weeks: object[] }>(schedule)).toMatchObject({ totals: false });
+    expect(json<{ weeks: object[] }>(schedule).weeks.every((w) => Object.keys(w).sort().join() === 'from,to')).toBe(true);
     expect((await call(manager, 'GET', '/api/reports/week')).statusCode).toBe(403);
   });
 

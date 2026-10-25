@@ -32,6 +32,7 @@ import { rentalSwapKa } from './rental-swap.js';
 import { vehicleCardKa } from './vehicle-card.js';
 import { pickupDateKa } from './pickup-date.js';
 import { depositReviseKa } from './deposit-revise.js';
+import { menuKa } from './menu.js';
 import { goodsKa } from './goods.js';
 import { incKa } from './inbound.js';
 import { dupKa } from './card-duplicate.js';
@@ -69,15 +70,19 @@ export const ka: Dict = {
   },
 
   nav: {
-    serviceStock: 'სერვისი · საწყობი',
     today: 'დღეს',
     more: 'მეტი',
-    fleet: 'პარკი',
-    rentals: 'ქირაობა',
+    // Issue #15 (ADR-0048): the sections of the new menu, the bar's short word for the schedule.
+    schedule: 'გადახდის გრაფიკი',
+    scheduleShort: 'გრაფიკი',
+    sortShort: 'გარჩევა',
+    sort: 'დასახარისხებელი',
+    fleet: 'მოპედები',
+    rentals: 'ქირაობები და კლიენტები',
     payments: 'გადახდები',
     purchases: 'შესყიდვები',
     sales: 'გაყიდვები',
-    service: 'სერვისი',
+    service: 'რემონტები',
     statements: 'ამონაწერები',
     customers: 'კლიენტები',
     models: 'მოდელები',
@@ -85,7 +90,7 @@ export const ka: Dict = {
     cash: 'სალარო',
     reports: 'ანგარიშები',
     settings: 'პარამეტრები',
-    groups: { work: 'მუშაობა', money: 'ფული', manage: 'მართვა' },
+    groups: { daily: 'ყოველდღიური', fleet: 'პარკი', trade: 'გაყიდვები და შესყიდვები', manage: 'მართვა' },
   },
 
   shell: {
@@ -138,6 +143,16 @@ export const ka: Dict = {
       incoming: 'შემოსავალი',
       drive: 'Drive',
       goods: 'საქონელი',
+      // Issue #15: «Оплаты по графику», «Разобрать», «Аренды и клиенты».
+      due: 'დღეს',
+      late: 'ვადაგადაცილებული',
+      month: 'თვე',
+      sortIn: 'შემოსავლები',
+      sortOut: 'ჩამოწერები',
+      byRules: 'წესებით დახარისხებული',
+      aside: 'რიგიდან ამოღებული',
+      rentals: 'ქირაობები',
+      customers: 'კლიენტები',
     },
   },
 
@@ -846,7 +861,8 @@ export const ka: Dict = {
     splitWeekNewTitle: 'ახალი გადახდა',
     splitWeekNewSub: 'მომდევნო კვირებში წავა',
     splitOldPick: 'მონიშნეთ, რომელი კვირის ქირაა.',
-    splitMore: '+ კიდევ: შეკეთება, ქირის ავანსი',
+    splitMore: (words) => `+ კიდევ: ${words}`,
+    splitMoreWords: { repair: 'შეკეთება', sale: 'მოპედის გაყიდვა', goods: 'საქონელი', account: 'ქირის ავანსი' },
     splitAllPlaced: 'ყველაფერი განაწილდა ✓',
     resTitle: 'რა ჩაიწერება',
     resCarried: (a, week, r) => `${a} — კვირის ${week} გადახდა, ${r}. კვირა ისედაც გადახდილი იყო, ახლა მას ბანკის გადახდა აქვს.`,
@@ -860,6 +876,7 @@ export const ka: Dict = {
     resDebtSame: (a) => `კლიენტის დავალიანება არ შეიცვლება: ${a}.`,
     resDebt: (a, b) => `კლიენტის დავალიანება: იყო ${a}, გახდება ${b}.`,
     splitNothing: 'კლიენტს ღია ჩანაწერები არ აქვს — მხოლოდ «ქირის ავანსი».',
+    splitNothingAtAll: 'კლიენტს ღია ჩანაწერები არ აქვს.',
     splitDone: (n: number) => `ხაზი განაწილდა ${n} ნაწილად`,
     byCard: (paid: string, fee: string) => `ბარათით გადახდა: კლიენტმა გადაიხადა ${paid}, ბანკის საკომისიო ${fee}.`,
     byCardPlain: 'ბარათით გადახდა.',
@@ -1334,6 +1351,7 @@ export const ka: Dict = {
       over_on_hand: 'ეს მეტია, ვიდრე ხელზე გაქვთ.',
       over_open: 'ეს მეტია, ვიდრე შეკეთებისთვის დარჩა გადასახდელი.',
       owner_only: 'ამას მხოლოდ მფლობელი აკეთებს.',
+      sort_owner_only: 'ამას მფლობელი ახარისხებს. მენეჯერი შემოსავალს მიაბამს ქირაობას, დეპოზიტს, მოპედის გაყიდვას, საქონელს ან რემონტს.',
       owner_only_backdate: 'წარსული თარიღით მხოლოდ მფლობელი წერს. მენეჯერი დღევანდელით წერს.',
       paid_before_too_big: 'EV8 Ops-მდე გადახდილი გაყიდვის ფასს აღემატება.',
       part_exists: 'ამ დასახელებით ან არტიკულით სათადარიგო ნაწილი უკვე არსებობს.',
@@ -1472,6 +1490,7 @@ export const ka: Dict = {
   ...vehicleCardKa,
   ...pickupDateKa,
   ...depositReviseKa,
+  ...menuKa,
   ...goodsKa,
   ...incKa,
   ...dupKa,

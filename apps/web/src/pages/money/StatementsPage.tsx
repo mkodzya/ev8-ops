@@ -222,7 +222,7 @@ export function StatementsPage() {
           <p className="t-h3">{t.statements.doneN(done.newLines)}</p>
           <p className="muted">{t.statements.doneSummary(done.recorded, done.matched, done.unmatched)}</p>
           {done.unmatched > 0 && (
-            <Link className="pill pill-accent" to="/money/sort">
+            <Link className="pill pill-accent" to="/sort">
               {t.statements.sortN(done.unmatched)}
             </Link>
           )}

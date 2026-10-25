@@ -4,6 +4,7 @@ import {
   calendarDebtWeeks,
   calendarFold,
   calendarWeekday,
+  dayDueTetri,
   formatGel,
   paymentsQuery,
   waOffered,
@@ -18,6 +19,7 @@ import {
   type CalendarWeek,
   type ISODate,
   type Period,
+  type ScheduleDay,
   type Tetri,
 } from '@ev8/shared';
 import { Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, MessageCircle, Phone } from 'lucide-react';
@@ -61,6 +63,19 @@ export const monthRowText = (period: Period): string => {
   const sameMonth = period.from.slice(0, 7) === period.to.slice(0, 7);
   return `${sameMonth ? period.from.slice(8, 10) : fmtDayMonth(period.from)}–${fmtDayMonth(period.to)}`;
 };
+
+/**
+ * A day as the grid and the lists read it: with its money for whoever reads
+ * Money, its counts alone for a manager (issue #15, ADR-0048).
+ */
+export type AnyDay = CalendarDay | ScheduleDay;
+
+/** Who is late as a heading reads it: the debt of them all is an owner's figure, absent for a manager. */
+export interface LateHead {
+  count: number;
+  debtTetri?: Tetri;
+  thisWeekTetri?: Tetri;
+}
 
 /** What a row can do. Both open something the product already has: the money form, the WhatsApp sheet. */
 export interface Actions {
@@ -133,7 +148,7 @@ export function Weekdays() {
   );
 }
 
-function DayCell({ date, day, today, selected, big, onPick }: { date: ISODate; day: CalendarDay | undefined; today: ISODate; selected: boolean; big: boolean; onPick: (day: ISODate) => void }) {
+function DayCell({ date, day, today, selected, big, onPick }: { date: ISODate; day: AnyDay | undefined; today: ISODate; selected: boolean; big: boolean; onPick: (day: ISODate) => void }) {
   const t = useT();
   const kind = calendarCellKind(date, today);
   const ddmm = fmtDayMonth(date);
@@ -172,7 +187,9 @@ function DayCell({ date, day, today, selected, big, onPick }: { date: ISODate; d
     );
   }
 
-  const sum = gel(day.due.tetri);
+  // A manager's day has no sum (issue #15): the cell says how many payments, as its label does.
+  const tetri = dayDueTetri(day);
+  const sum = tetri !== null ? gel(tetri) : t.calendar.pays(count);
   const allPaid = day.paidCount === day.due.count;
   const states = day.states;
   let label: string;
@@ -229,7 +246,7 @@ function DayCell({ date, day, today, selected, big, onPick }: { date: ISODate; d
     inner = (
       <>
         <span className="cal-n">{number}</span>
-        <span className="cal-cell-sum">{sum}</span>
+        {tetri !== null && <span className="cal-cell-sum">{sum}</span>}
         <span className={`cal-cell-count${allPaid ? ' all' : ''}`}>{t.calendar.countOf(day.paidCount, day.due.count)}</span>
         {hasLate && <i className="cal-flag" />}
       </>
@@ -258,7 +275,7 @@ export function CalendarGrid({
   label,
 }: {
   cells: (ISODate | null)[];
-  days: Map<ISODate, CalendarDay>;
+  days: Map<ISODate, AnyDay>;
   today: ISODate;
   selected: ISODate;
   size: 'compact' | 'big';
@@ -563,7 +580,8 @@ export function WeekLine({
   isCurrent: boolean;
   failed: boolean;
   scope: TotalsScope;
-  onScope: (s: TotalsScope) => void;
+  /** No switch without it: the month has a tab of its own since issue #15. */
+  onScope?: (s: TotalsScope) => void;
   month: CalendarMonthTotals | null;
   monthName: string;
 }) {
@@ -577,7 +595,7 @@ export function WeekLine({
       <div className="cal-week">
         <div className="cal-week-text">
           <span className="cal-over">
-            {monthName} <ScopeSwitch scope={scope} onScope={onScope} />
+            {monthName} {onScope && <ScopeSwitch scope={scope} onScope={onScope} />}
           </span>
           {m.due.count === 0 ? (
             <span className="cal-week-line">{t.calendar.noneThisMonth}</span>
@@ -615,7 +633,7 @@ export function WeekLine({
     <div className="cal-week">
       <div className="cal-week-text">
         <span className="cal-over">
-          {weekName(t, week, isCurrent)} <ScopeSwitch scope="week" onScope={onScope} />
+          {weekName(t, week, isCurrent)} {onScope && <ScopeSwitch scope="week" onScope={onScope} />}
         </span>
         {week.expected.count === 0 ? (
           <span className="cal-week-line">{t.calendar.noneThisWeek}</span>
@@ -640,7 +658,7 @@ export function WeekLine({
  * now, whatever day is chosen. «Показать» opens the list under it, whole.
  * With nobody late it is a quiet line of the same height.
  */
-export function LateLine({ late, open, onToggle, children }: { late: CalendarLateList; open: boolean; onToggle: () => void; children: ReactNode }) {
+export function LateLine({ late, open, onToggle, children }: { late: LateHead; open: boolean; onToggle: () => void; children: ReactNode }) {
   const t = useT();
   if (late.count === 0) {
     return (
@@ -655,8 +673,9 @@ export function LateLine({ late, open, onToggle, children }: { late: CalendarLat
     );
   }
   // A debt of nought is not written at all — as "Аренды" does not write one (§3.5.10).
-  const debt = late.debtTetri !== 0 ? t.calendar.debt(gel(late.debtTetri)) : null;
-  const thisWeek = late.thisWeekTetri !== 0 ? t.calendar.ofThemThisWeek(gel(late.thisWeekTetri)) : null;
+  // A manager's answer has no debt of everybody together (issue #15): nothing is written, as for nought.
+  const debt = late.debtTetri ? t.calendar.debt(gel(late.debtTetri)) : null;
+  const thisWeek = late.thisWeekTetri ? t.calendar.ofThemThisWeek(gel(late.thisWeekTetri)) : null;
   return (
     <div className="cal-late">
       <div className="cal-late-in">
@@ -750,7 +769,8 @@ export function WeekCard({
   received: Period | null;
   failed: boolean;
   scope: TotalsScope;
-  onScope: (s: TotalsScope) => void;
+  /** No switch without it: the month has a tab of its own since issue #15. */
+  onScope?: (s: TotalsScope) => void;
   month: CalendarMonthTotals | null;
   monthName: string;
   /** The card itself, for the page to bring into view when a week is picked in the month's table. */
@@ -767,7 +787,7 @@ export function WeekCard({
       {byMonth && (
         <div className="cal-card-head">
           <span>
-            {monthName} <ScopeSwitch scope={scope} onScope={onScope} />
+            {monthName} {onScope && <ScopeSwitch scope={scope} onScope={onScope} />}
           </span>
         </div>
       )}
@@ -775,7 +795,7 @@ export function WeekCard({
         <div className="cal-card-head">
           <span>
             {/* The week is what is shown — also while the month asked for is still loading. */}
-            {weekName(t, week, isCurrent)} <ScopeSwitch scope="week" onScope={onScope} />
+            {weekName(t, week, isCurrent)} {onScope && <ScopeSwitch scope="week" onScope={onScope} />}
           </span>
           <span className="cal-card-side">
             {received && <ReceivedLine period={received} tetri={week.receivedTetri} dense />}
@@ -1067,7 +1087,7 @@ export function DaySection({
   actions,
 }: {
   date: ISODate;
-  day: CalendarDay | undefined;
+  day: AnyDay | undefined;
   /** The day's weeks, already in the order they are read (calendarDayRows). */
   rows: CalendarEntry[];
   today: ISODate;
@@ -1086,7 +1106,9 @@ export function DaySection({
   const ddmm = fmtDayMonth(date);
   const tag = date === today ? t.calendar.todayLow : date === addDays(today, 1) ? t.calendar.tomorrowLow : null;
   // What should come in for the day — the sum of the rows under the heading. Text, not a link (§8.1).
-  const total = day && day.due.count !== 0 ? t.calendar.dayTotal(t.calendar.pays(day.due.count), gel(day.due.tetri)) : null;
+  // A manager's answer has no sum (issue #15): the heading says how many payments.
+  const dayTetri = day ? dayDueTetri(day) : null;
+  const total = day && day.due.count !== 0 ? (dayTetri !== null ? t.calendar.dayTotal(t.calendar.pays(day.due.count), gel(dayTetri)) : t.calendar.pays(day.due.count)) : null;
   const row = (entry: CalendarEntry) => {
     const card = cardOf.get(entry.rentalId);
     if (!card) return null;
@@ -1145,14 +1167,15 @@ export function DaySection({
 }
 
 /** The phone's «Завтра, Чт 15.10 · 2 оплаты · 300 ₾»: choosing it chooses tomorrow, whose list this sum is. */
-export function TomorrowLine({ date, day, onPick }: { date: ISODate; day: CalendarDay | undefined; onPick: () => void }) {
+export function TomorrowLine({ date, day, onPick }: { date: ISODate; day: AnyDay | undefined; onPick: () => void }) {
   const t = useT();
   const count = day ? day.due.count : 0;
   const pays = t.calendar.pays(count);
+  const tetri = day ? dayDueTetri(day) : null;
   return (
     <button type="button" className="cal-next" onClick={onPick}>
       <span>
-        {t.calendar.tomorrowLine(weekdayShort(t, date), fmtDayMonth(date))} · <b>{day && count !== 0 ? t.calendar.dayTotal(pays, gel(day.due.tetri)) : pays}</b>
+        {t.calendar.tomorrowLine(weekdayShort(t, date), fmtDayMonth(date))} · <b>{tetri !== null && count !== 0 ? t.calendar.dayTotal(pays, gel(tetri)) : pays}</b>
       </span>
       <ChevronRight className="cal-go" aria-hidden="true" />
     </button>
@@ -1165,7 +1188,7 @@ export function TomorrowLine({ date, day, onPick }: { date: ISODate; day: Calend
  * the screen, and a click on a cell would look like nothing happened
  * (§3.5.10). The heading is always about all of them.
  */
-export function LateSection({ late, hidden, whole, onToggle, note, children }: { late: CalendarLateList; hidden: number; whole: boolean; onToggle: () => void; note: ReactNode; children: ReactNode }) {
+export function LateSection({ late, hidden, whole, onToggle, note, children }: { late: LateHead; hidden: number; whole: boolean; onToggle: () => void; note: ReactNode; children: ReactNode }) {
   const t = useT();
   if (late.count === 0) {
     return (
@@ -1187,7 +1210,7 @@ export function LateSection({ late, hidden, whole, onToggle, note, children }: {
           <StateMark state="overdue" />
           {t.calendar.lateListTitle(late.count)}
         </h3>
-        {late.debtTetri !== 0 && <span className="cal-sec-total">{t.calendar.debt(gel(late.debtTetri))}</span>}
+        {!!late.debtTetri && <span className="cal-sec-total">{t.calendar.debt(gel(late.debtTetri))}</span>}
       </div>
       <div id="cal-late-list">{children}</div>
       {folds && (

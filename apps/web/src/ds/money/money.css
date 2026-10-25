@@ -107,6 +107,11 @@
    Selectors on a pill carry `.pill` as well: this file may be read before
    app.css, and a rule of equal weight would lose to the pill's own. */
 .cal { min-width: 0; }
+/* «Оплаты по графику → Сегодня / Просрочки» (issue #15): the calendar's lists without the grid — on a
+   laptop one card, as wide as a list reads well; on a phone the day's headings and cards. */
+.sched .cal-side { max-width: 860px; }
+.sched > .cal-note { border-top: 0; padding: 8px 2px 0; }
+.sched > .cal-day-head ~ .cal-day-head { margin-top: 12px; }
 /* Links here are names and lines, not green words. */
 .cal a { color: inherit; }
 /* Said to a screen reader, not drawn. */

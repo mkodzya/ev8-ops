@@ -32,6 +32,7 @@ import { rentalSwapRu } from './rental-swap.js';
 import { vehicleCardRu } from './vehicle-card.js';
 import { pickupDateRu } from './pickup-date.js';
 import { depositReviseRu } from './deposit-revise.js';
+import { menuRu } from './menu.js';
 import { goodsRu } from './goods.js';
 import { incRu } from './inbound.js';
 import { dupRu } from './card-duplicate.js';
@@ -80,15 +81,19 @@ export const ru: Dict = {
   },
 
   nav: {
-    serviceStock: 'Сервис · Склад',
     today: 'Сегодня',
     more: 'Ещё',
-    fleet: 'Парк',
-    rentals: 'Аренды',
+    // Issue #15 (ADR-0048): the sections of the new menu, the bar's short word for the schedule.
+    schedule: 'Оплаты по графику',
+    scheduleShort: 'Оплаты',
+    sortShort: 'Разобрать',
+    sort: 'Разобрать',
+    fleet: 'Мопеды',
+    rentals: 'Аренды и клиенты',
     payments: 'Платежи',
     purchases: 'Закупки',
     sales: 'Продажи',
-    service: 'Сервис',
+    service: 'Ремонты',
     statements: 'Выписки',
     customers: 'Клиенты',
     models: 'Модели',
@@ -96,7 +101,7 @@ export const ru: Dict = {
     cash: 'Касса',
     reports: 'Отчёты',
     settings: 'Настройки',
-    groups: { work: 'Работа', money: 'Деньги', manage: 'Управление' },
+    groups: { daily: 'Ежедневно', fleet: 'Парк', trade: 'Продажи и закупки', manage: 'Управление' },
   },
 
   shell: {
@@ -149,6 +154,16 @@ export const ru: Dict = {
       incoming: 'Поступления',
       drive: 'Drive',
       goods: 'Товары',
+      // Issue #15: «Оплаты по графику», «Разобрать», «Аренды и клиенты».
+      due: 'Сегодня',
+      late: 'Просрочки',
+      month: 'Месяц',
+      sortIn: 'Поступления',
+      sortOut: 'Списания',
+      byRules: 'Разобрано правилами',
+      aside: 'Убрано из очереди',
+      rentals: 'Аренды',
+      customers: 'Клиенты',
     },
   },
 
@@ -857,7 +872,8 @@ export const ru: Dict = {
     splitWeekNewTitle: 'Новая оплата',
     splitWeekNewSub: 'пойдёт в следующие недели',
     splitOldPick: 'Отметьте, за какую неделю аренда.',
-    splitMore: '+ ещё: ремонт, аванс по аренде',
+    splitMore: (words) => `+ ещё: ${words}`,
+    splitMoreWords: { repair: 'ремонт', sale: 'продажа мопеда', goods: 'товары', account: 'аванс по аренде' },
     splitAllPlaced: 'всё разнесено ✓',
     resTitle: 'Что запишется',
     resCarried: (a, week, r) => `${a} — оплата недели ${week} по ${r}. Неделя и так была оплаченной, теперь у неё есть платёж из банка.`,
@@ -871,6 +887,7 @@ export const ru: Dict = {
     resDebtSame: (a) => `Долг клиента не изменится: ${a}.`,
     resDebt: (a, b) => `Долг клиента: было ${a}, станет ${b}.`,
     splitNothing: 'У клиента нет открытых записей — только «аванс по аренде».',
+    splitNothingAtAll: 'У клиента нет открытых записей.',
     splitDone: (n: number) => `Строка разнесена, частей: ${n}`,
     byCard: (paid: string, fee: string) => `Оплата картой: клиент заплатил ${paid}, комиссия банка ${fee}.`,
     byCardPlain: 'Оплата картой.',
@@ -1345,6 +1362,7 @@ export const ru: Dict = {
       over_on_hand: 'Это больше, чем у вас на руках.',
       over_open: 'Это больше, чем осталось заплатить за ремонт.',
       owner_only: 'Это делает только владелец.',
+      sort_owner_only: 'Это разбирает владелец. Менеджер привязывает поступления к аренде, залогу, продаже мопеда, товарам и ремонту.',
       owner_only_backdate: 'Прошлой датой записывает только владелец. Менеджер записывает сегодняшним днём.',
       paid_before_too_big: 'Оплачено до EV8 Ops больше, чем стоит продажа.',
       part_exists: 'Запчасть с таким названием или артикулом уже есть.',
@@ -1483,6 +1501,7 @@ export const ru: Dict = {
   ...vehicleCardRu,
   ...pickupDateRu,
   ...depositReviseRu,
+  ...menuRu,
   ...goodsRu,
   ...incRu,
   ...dupRu,

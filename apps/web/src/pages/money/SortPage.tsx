@@ -1,6 +1,6 @@
-import { formatGel, isoWeekday, parseGel, payDayMove, SEARCH_MIN, todayISO, weekDueOn, type PayDayMove } from '@ev8/shared';
+import { formatGel, isoWeekday, maySortTo, parseGel, payDayMove, SEARCH_MIN, todayISO, weekDueOn, type PayDayMove } from '@ev8/shared';
 import { useEffect, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { api } from '../../api.js';
 import { LoadError } from '../../components/LoadError.js';
 import { RowMenu } from '../../components/RowMenu.js';
@@ -73,10 +73,12 @@ export interface SortLine {
   duplicateOf?: { id: string; occurredOn: string; docNo: string | null; status: string } | null;
 }
 interface Queue {
-  counts: { in: number; out: number };
-  byRulesWeek: number;
+  /** `out` is null for whoever sorts only the money coming in (issue #15). */
+  counts: { in: number; out: number | null };
+  /** An owner's counts; null for a manager, whose pages these are not (issue #15). */
+  byRulesWeek: number | null;
   /** Lines set aside in the last month — absent while an older API answers. */
-  asideMonth?: number;
+  asideMonth?: number | null;
   lines: SortLine[];
 }
 
@@ -114,44 +116,34 @@ export function useReasonText() {
 }
 
 /**
- * Money → Разобрать (wave 2 §3.2): the bank lines nobody placed. In and out
- * apart; "already recorded", then hints with their reason, then the rest with
- * the search straight away.
+ * «Разобрать» (wave 2 §3.2; a section of its own since issue #15): the bank
+ * lines nobody placed. In and out are two tabs of the section; "already
+ * recorded", then hints with their reason, then the rest with the search
+ * straight away. A manager sorts the money coming in, the customers' money
+ * only (ADR-0048): the answers he may not give are not shown, and the server
+ * refuses them all the same.
  */
-export function SortPage() {
+export function SortPage({ direction }: { direction: 'in' | 'out' }) {
   const t = useT();
-  const [params, setParams] = useSearchParams();
-  const direction = params.get('d') === 'out' ? 'out' : 'in';
+  const { can } = useSession();
+  const owner = can('payments.reconcile');
   const { data, failure, reload } = useLoad<Queue>(`/api/statement-lines?direction=${direction}`);
   const [notOurs, setNotOurs] = useState<SortLine | null>(null);
   const [splitting, setSplitting] = useState<SortLine | null>(null);
   const cats = useExpenseCategories(direction === 'out');
-  const incomeCats = useIncomeCategories(direction === 'in');
+  // Other income's categories are an owner's answer: a manager's screen does not ask for them.
+  const incomeCats = useIncomeCategories(direction === 'in' && owner);
 
   const groups = (['recorded', 'suggested', 'none'] as const).map((g) => ({ g, lines: (data?.lines ?? []).filter((l) => groupOf(l) === g) }));
   const title = { recorded: t.sort.recordedGroup, suggested: t.sort.hintsGroup, none: t.sort.noneGroup };
 
   return (
     <>
-      <PageHead title={t.shell.tabs.sort} />
-      <div className="list-chips" role="tablist">
-        {(['in', 'out'] as const).map((d) => (
-          <button
-            key={d}
-            type="button"
-            role="tab"
-            aria-selected={direction === d}
-            className={`list-chip ${direction === d ? 'on' : ''}`}
-            onClick={() => setParams(d === 'in' ? {} : { d }, { replace: true })}
-          >
-            {d === 'in' ? t.sort.incoming : t.sort.outgoing} <span className="n">{data ? data.counts[d] : ''}</span>
-          </button>
-        ))}
-      </div>
+      <PageHead title={t.shell.tabs.sort} sub={direction === 'out' ? t.sort.outgoing : t.sort.incoming} />
 
       {!data && failure && <LoadError failure={failure} onRetry={reload} />}
       {!data && !failure && <Skeleton rows={4} />}
-      {data && data.lines.length === 0 && <AllSorted byRules={data.byRulesWeek} aside={data.asideMonth ?? 0} />}
+      {data && data.lines.length === 0 && <AllSorted byRules={data.byRulesWeek} aside={data.asideMonth ?? null} />}
       {data &&
         groups.map(
           ({ g, lines }) =>
@@ -166,11 +158,11 @@ export function SortPage() {
               </section>
             ),
         )}
-      {data && data.lines.length > 0 && (
+      {data && data.lines.length > 0 && data.byRulesWeek != null && (
         <p className="sort-foot">
-          {t.sort.byRules(data.byRulesWeek)} · <Link to="/money/sort/rules">{t.sort.check}</Link>
+          {t.sort.byRules(data.byRulesWeek)} · <Link to="/sort/rules">{t.sort.check}</Link>
           <br />
-          {t.sort.aside(data.asideMonth ?? 0)} · <Link to="/money/sort/aside">{t.sort.show}</Link>
+          {t.sort.aside(data.asideMonth ?? 0)} · <Link to="/sort/aside">{t.sort.show}</Link>
         </p>
       )}
       {notOurs && <NotOursSheet line={notOurs} onClose={() => setNotOurs(null)} />}
@@ -189,9 +181,12 @@ function groupOf(l: SortLine): SortLine['group'] {
   return l.remembered || l.duplicateOf || l.suggestions.some((s) => s.reason.code === 'name' || s.kind === 'bank_deposit') ? 'suggested' : 'none';
 }
 
-function AllSorted({ byRules, aside }: { byRules: number; aside: number }) {
+/** Nothing waits. An owner is told how fresh each bank is and what the rules did; a manager, that all is sorted. */
+function AllSorted({ byRules, aside }: { byRules: number | null; aside: number | null }) {
   const t = useT();
-  const statements = useLoad<{ banks: { bank: 'bog' | 'tbc' | 'credo'; throughOn: string | null; never: boolean }[] }>('/api/statements');
+  const { can } = useSession();
+  const owner = can('payments.reconcile');
+  const statements = useLoad<{ banks: { bank: 'bog' | 'tbc' | 'credo'; throughOn: string | null; never: boolean }[] }>(owner ? '/api/statements' : null);
   return (
     <div className="task-clear">
       <p className="t-h3">{t.sort.empty}</p>
@@ -203,14 +198,18 @@ function AllSorted({ byRules, aside }: { byRules: number; aside: number }) {
             .join(' · ')}
         </p>
       )}
-      <Link className="pill pill-accent" to="/money/statements">
-        {t.statements.importCta}
-      </Link>
-      <p className="sort-foot">
-        {t.sort.byRules(byRules)} · <Link to="/money/sort/rules">{t.sort.check}</Link>
-        <br />
-        {t.sort.aside(aside)} · <Link to="/money/sort/aside">{t.sort.show}</Link>
-      </p>
+      {owner && (
+        <Link className="pill pill-accent" to="/money/statements">
+          {t.statements.importCta}
+        </Link>
+      )}
+      {byRules != null && (
+        <p className="sort-foot">
+          {t.sort.byRules(byRules)} · <Link to="/sort/rules">{t.sort.check}</Link>
+          <br />
+          {t.sort.aside(aside ?? 0)} · <Link to="/sort/aside">{t.sort.show}</Link>
+        </p>
+      )}
     </div>
   );
 }
@@ -218,9 +217,9 @@ function AllSorted({ byRules, aside }: { byRules: number; aside: number }) {
 /** One line: its amount, day, bank, the bank's words — and the answers (§3.2). */
 function LineCard({ line, cats, onNotOurs, onSplit }: { line: SortLine; cats: Categories; onNotOurs: () => void; onSplit: () => void }) {
   const t = useT();
+  const { me, can } = useSession();
   const toast = useToast();
   const reason = useReasonText();
-  const { can } = useSession();
   const op = useOperation();
   const busy = op.state === 'busy';
   const sign = line.direction === 'out' ? '−' : '+';
@@ -302,10 +301,11 @@ function LineCard({ line, cats, onNotOurs, onSplit }: { line: SortLine; cats: Ca
             </button>
           </div>
         ))}
-      {/* Entered by hand, or this other record's money — the person says which (designer's answer 3). */}
+      {/* Entered by hand, or this other record's money — the person says which (designer's answer 3).
+          A manager is offered the customers' records only: no advance, no cash to the bank (issue #15). */}
       {line.group === 'recorded' && line.suggestions.length > 0 && (
         <div className="sort-actions">
-          {line.suggestions.map((s) => (
+          {line.suggestions.filter((s) => (s.kind === 'bank_deposit' ? can('payments.reconcile') : s.kind !== 'customer' || maySortTo(me?.permissions ?? [], { customerId: s.id }))).map((s) => (
             <button key={s.id} type="button" className="pill pill-sm" disabled={busy} onClick={() => attach(s)}>
               {t.sort.itsPayment(s.number ?? '')}
             </button>
@@ -411,6 +411,8 @@ interface SplitPart {
   move?: PayDayTarget;
   rateTetri?: number;
 }
+/** The parts kept behind «+ ещё», in the order the button names them. */
+const MORE_KINDS = ['repair', 'sale', 'goods', 'account'] as const satisfies readonly SplitPart['kind'][];
 interface SplitValue {
   customer: { id: string; name: string } | null;
   /** «Розничные продажи товаров»: a day's card line split over retail goods sales, no customer (ADR-0045). */
@@ -443,6 +445,7 @@ const weekText = (w: { startsOn: string | null; endsOn: string | null }) => `${f
  */
 function SplitSheet({ line, onClose }: { line: SortLine; onClose: () => void }) {
   const t = useT();
+  const { me, can } = useSession();
   const total = line.channel === 'acquiring' && line.grossTetri != null ? line.grossTetri : line.amountTetri;
   const initial: SplitValue = { customer: null, amounts: {}, choice: {}, reasons: {}, more: false, move: null };
   const [value, setValue] = useState<SplitValue>(initial);
@@ -486,7 +489,7 @@ function SplitSheet({ line, onClose }: { line: SortLine; onClose: () => void }) 
       ? (targets.data?.carriedWeeks ?? []).find((w) => w.rentalId === r.id && w.startsOn <= line.occurredOn && line.occurredOn <= w.endsOn) ?? null
       : null;
   const shown = (targets.data?.rentals ?? []).filter((r) => owes(['rent', 'deposit'], r.id) > 0 || !['returned', 'cancelled'].includes(r.status));
-  const parts: SplitPart[] = targets.data
+  const offered: SplitPart[] = targets.data
     ? [
         ...shown.flatMap((r): SplitPart[] => {
           const week = carriedWeekOf(r);
@@ -539,6 +542,9 @@ function SplitSheet({ line, onClose }: { line: SortLine; onClose: () => void }) 
     : value.retail
       ? retailParts
       : [];
+  // What this person may write (issue #15, ADR-0048): a manager the customers' records — no advance on the
+  // account, no new fine — and the pay day moved by whoever may move a renter's week.
+  const parts = offered.filter((p) => (p.kind === 'payday' ? can('rental.week.shift') : maySortTo(me?.permissions ?? [], p.body)));
   const amountOf = (key: string) => parseGel(value.amounts[key] ?? '') ?? 0;
   // The pay day moved (issue #12): what the latest week becomes, from the same arithmetic the server reads.
   const today = todayISO();
@@ -590,6 +596,10 @@ function SplitSheet({ line, onClose }: { line: SortLine; onClose: () => void }) 
   const anyOver = parts.some((p) => overBy(p) > 0);
   const visible = parts.filter((p) => !p.extra || value.more || amountOf(p.key) > 0);
   const hidden = parts.some((p) => p.extra && !visible.includes(p));
+  // «+ ещё» names what it opens — a manager finds no advance behind it (review of issue #15).
+  const moreWords = MORE_KINDS.filter((k) => parts.some((p) => p.kind === k && p.extra && !visible.includes(p)))
+    .map((k) => t.sort.splitMoreWords[k])
+    .join(', ');
 
   // What will be written, said in words, and what the customer will owe after.
   const used = parts.filter((p) => amountOf(p.key) > 0);
@@ -723,7 +733,10 @@ function SplitSheet({ line, onClose }: { line: SortLine; onClose: () => void }) 
           </div>
           {targets.failure && <LoadError failure={targets.failure} onRetry={targets.reload} />}
           {!targets.data && !targets.failure && <Skeleton rows={3} />}
-          {targets.data && parts.length === 1 && <p className="hint muted">{t.sort.splitNothing}</p>}
+          {/* No record of his to pay: the advance is all an owner is offered, and a manager not even that (review of #15). */}
+          {targets.data && !parts.some((p) => p.kind !== 'account') && (
+            <p className="hint muted">{parts.some((p) => p.kind === 'account') ? t.sort.splitNothing : t.sort.splitNothingAtAll}</p>
+          )}
           {value.retail && retailGoods.data && retailParts.length === 0 && <p className="hint muted">{t.goods.sort.retailNone}</p>}
           <div className="split-parts">
           {visible.map((p) =>
@@ -783,7 +796,7 @@ function SplitSheet({ line, onClose }: { line: SortLine; onClose: () => void }) 
           </div>
           {hidden && (
             <button type="button" className="pill pill-sm split-more" onClick={() => setValue((v) => ({ ...v, more: true }))}>
-              {t.sort.splitMore}
+              {t.sort.splitMore(moreWords)}
             </button>
           )}
           {(targets.data || value.retail) && (

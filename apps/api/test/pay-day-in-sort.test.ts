@@ -191,9 +191,10 @@ describe.skipIf(!HAS_DB)('«Перенос дня оплаты» in «Разне
     // Moved on its card already: «Разнести» counts from the week as it is, and leaves the move to the card.
     expect((await shiftOnCard(r.owner, r.id, 2, { days: 2, extraTetri: '43', reason: 'test: two days' })).statusCode).toBe(200);
     expect(err(await split(r.owner, line.id, body({ days: 1, extraTetri: 2000, reason: REASON })))).toMatchObject({ error: 'week_moved_already', field: 'days' });
-    // A manager does not allocate bank lines.
+    // A manager allocates the customers' money too since issue #15 (ADR-0048), and moves a week
+    // (ADR-0041, addendum of 23.10.2026): he meets the same refusal, and nothing is written.
     const manager = await loginAs('manager');
-    expect((await split(manager, line.id, body({ days: 1, extraTetri: 2000, reason: REASON }))).statusCode).toBe(403);
+    expect(err(await split(manager, line.id, body({ days: 1, extraTetri: 2000, reason: REASON })))).toMatchObject({ error: 'week_moved_already', field: 'days' });
     expect((await r.prisma.statementLine.findUniqueOrThrow({ where: { id: line.id } })).status).toBe('unmatched');
   });
 

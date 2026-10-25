@@ -95,12 +95,18 @@ const err = (res: { body: string }) => json<{ error: string; field?: string; per
 const AHEAD = { later: false, channel: 'cash', amountTetri: 48000 };
 
 describe.skipIf(!HAS_DB)('payments calendar · who may ask, and for what', () => {
-  it('is an owner’s: a manager gets 403 naming the permission, nobody gets 401 (crit. 29)', async () => {
+  // Issue #15 (ADR-0048): «Оплаты по графику» is a manager's too — the rows, without the sums.
+  // It was an owner's alone until then (crit. 29); a mechanic still gets 403, nobody 401.
+  it('answers a manager the rows without the sums, refuses a mechanic, and nobody gets in without a session', async () => {
     const manager = await loginAs('manager');
-    const refused = await call(manager, 'GET', '/api/money/calendar');
-    expect(refused.statusCode).toBe(403);
-    expect(err(refused)).toMatchObject({ error: 'forbidden', permission: 'payments.view' });
+    const res = await call(manager, 'GET', '/api/money/calendar');
+    expect(res.statusCode, res.body).toBe(200);
+    expect(json<{ totals: boolean }>(res).totals).toBe(false);
+    const mechanic = await call(await loginAs('mechanic'), 'GET', '/api/money/calendar');
+    expect(mechanic.statusCode).toBe(403);
+    expect(err(mechanic)).toMatchObject({ error: 'forbidden', permission: 'payments.schedule' });
     expect((await call(null, 'GET', '/api/money/calendar')).statusCode).toBe(401);
+    expect(json<{ totals: boolean }>(await call(await loginAs('owner'), 'GET', '/api/money/calendar')).totals).toBe(true);
   });
 
   it('refuses a range it cannot answer, with the field at fault', async () => {

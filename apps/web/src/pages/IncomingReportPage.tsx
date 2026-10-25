@@ -116,7 +116,7 @@ export function IncomingReportPage() {
           {data.unsorted > 0 && (
             <div className="kv">
               <span className="kv-k">
-                {r.unsorted(data.unsortedLines)} · <Link to="/money/sort">{r.openSort}</Link>
+                {r.unsorted(data.unsortedLines)} · <Link to="/sort">{r.openSort}</Link>
               </span>
               <span className="mono">{formatGel(data.unsorted)}</span>
             </div>

@@ -390,6 +390,8 @@ export const wave4En = {
     'money paid before the move': 'the amount paid before EV8 Ops was stated',
     'taken off the list': 'taken off the list',
     'put back on the list': 'put back on the list',
+    // A payment annulled when its bank line was unlinked (statements.ts, «Отвязать»).
+    'unlinked from the bank line': 'unlinked from the bank line',
   } as Record<string, string>,
   batWords: { handed_out: 'Handed out', came_back: 'Came back' } as Record<string, string>,
   seg: {
@@ -748,6 +750,7 @@ export const wave4Ru: Wave4 = {
     'money paid before the move': 'указана оплата до EV8 Ops',
     'taken off the list': 'убрана из списка',
     'put back on the list': 'возвращена в список',
+    'unlinked from the bank line': 'отвязан от строки банка',
   },
   batWords: { handed_out: 'Выдано', came_back: 'Вернулось' },
   seg: {
@@ -1100,6 +1103,7 @@ export const wave4Ka: Wave4 = {
     'money paid before the move': 'მითითებულია EV8 Ops-მდე გადახდილი',
     'taken off the list': 'სიიდან მოიხსნა',
     'put back on the list': 'სიაში დაბრუნდა',
+    'unlinked from the bank line': 'მოიხსნა ბანკის ხაზიდან',
   },
   batWords: { handed_out: 'გაიცა', came_back: 'დაბრუნდა' },
   seg: {

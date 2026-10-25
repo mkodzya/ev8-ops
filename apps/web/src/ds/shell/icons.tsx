@@ -1,19 +1,40 @@
 import type { ActionId, SectionId } from '@ev8/shared';
-import { Banknote, Bike, CalendarCheck, ChartColumn, FileText, Package, Send, Settings, ShoppingBag, TriangleAlert, Truck, Undo2, UserPlus, Users, Wallet, Wrench, type LucideIcon } from 'lucide-react';
+import {
+  ArrowLeftRight,
+  Banknote,
+  Bike,
+  CalendarCheck,
+  CalendarClock,
+  ChartColumn,
+  FileText,
+  Package,
+  Send,
+  Settings,
+  ShoppingBag,
+  TriangleAlert,
+  Truck,
+  Undo2,
+  UserPlus,
+  Wallet,
+  Wrench,
+  type LucideIcon,
+} from 'lucide-react';
 
 /** One linear icon per section and per "+" action (brand.md, "Значки"). */
 export const SECTION_ICON: Record<SectionId, LucideIcon> = {
   today: CalendarCheck,
-  rentals: FileText,
-  fleet: Bike,
-  service: Wrench,
-  money: Wallet,
+  // «Оплаты по графику» and «Разобрать» (issue #15): who pays when, and lines to place.
+  schedule: CalendarClock,
+  sort: ArrowLeftRight,
   cash: Banknote,
+  fleet: Bike,
+  rentals: FileText,
+  service: Wrench,
   sales: ShoppingBag,
   purchases: Truck,
+  money: Wallet,
   reports: ChartColumn,
   settings: Settings,
-  customers: Users,
 };
 
 export const ACTION_ICON: Record<ActionId, LucideIcon> = {
