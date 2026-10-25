@@ -70,8 +70,41 @@ describe('route table', () => {
     // 23.10.2026 (issue #12) it has a right of its own that a manager has too — this route and no other.
     const weekShift = app.routeTable.filter((r) => r.scope === 'rental.week.shift').map((r) => `${r.method} ${r.url}`);
     expect(weekShift).toEqual(['POST /api/rentals/:id/weeks/:seq/shift']);
-    // «Разнести», which moves the week with a bank line, stays the owners': the queue is theirs.
-    expect(app.routeTable.find((r) => r.method === 'POST' && r.url === '/api/statement-lines/:id/split')?.scope).toBe('payments.reconcile');
+    // «Разобрать» for the customers' money is a manager's too since issue #15 (ADR-0048): these routes
+    // and no other. Each refuses him, with words, every answer that is not the customers' money.
+    const sortCustomer = app.routeTable.filter((r) => r.scope === 'payments.sort.customer').map((r) => `${r.method} ${r.url}`).sort();
+    expect(sortCustomer).toEqual([
+      'GET /api/statement-lines',
+      'GET /api/statement-lines/:id/options',
+      'POST /api/statement-lines/:id/assign',
+      'POST /api/statement-lines/:id/link',
+      'POST /api/statement-lines/:id/split',
+      'POST /api/statement-lines/:id/unlink',
+    ]);
+    // Everything else of the queue stays an owner's by its scope: no manager reaches it at all.
+    const reconcile = app.routeTable.filter((r) => r.scope === 'payments.reconcile').map((r) => `${r.method} ${r.url}`);
+    for (const owners of [
+      'GET /api/statement-lines/by-rules',
+      'GET /api/statement-lines/aside',
+      'GET /api/statements',
+      'GET /api/income-categories',
+      'POST /api/statement-lines/:id/ignore',
+      'POST /api/statement-lines/:id/expense',
+      'POST /api/statement-lines/:id/expense-split',
+      'POST /api/statement-lines/:id/own-transfer',
+      'POST /api/statement-lines/:id/founder-equity',
+      'POST /api/statement-lines/:id/other-income',
+      'POST /api/statement-lines/:id/shareholder',
+      'POST /api/statement-lines/:id/bank-deposit',
+      'POST /api/statement-lines/:id/pay-out',
+      'POST /api/statement-lines/:id/restore',
+      'POST /api/payer-rules/:id/forget',
+      'POST /api/payer-rules/:id/undo',
+    ]) {
+      expect(reconcile, owners).toContain(owners);
+    }
+    // «Оплаты по графику»: one route, the rows for whoever calls, the sums only with `payments.view` (issue #15).
+    expect(app.routeTable.filter((r) => r.scope === 'payments.schedule').map((r) => `${r.method} ${r.url}`)).toEqual(['GET /api/money/calendar']);
     const publicOnes = app.routeTable.filter((r) => r.scope === 'public').map((r) => r.url).sort();
     // The jobs are public to the session guard and closed by the worker token (routes/jobs.ts).
     // The PIN sign-in and the tablet's list of names are closed by the tablet's own token (ADR-0033).

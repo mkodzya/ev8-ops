@@ -1,11 +1,13 @@
-import { CALENDAR_FIRST_DAY, CALENDAR_HORIZON_DAYS, CALENDAR_MAX_DAYS, addDays, calendarGrid, daysBetween, todayISO, type Period } from '@ev8/shared';
+import { CALENDAR_FIRST_DAY, CALENDAR_HORIZON_DAYS, CALENDAR_MAX_DAYS, addDays, calendarGrid, daysBetween, scheduleOf, todayISO, type CalendarAnswer, type Period } from '@ev8/shared';
 import type { FastifyInstance } from 'fastify';
 import { calendarAnswer } from '../lib/calendar.js';
 import { env } from '../lib/env.js';
 import { badRequest } from '../lib/errors.js';
+import { mayView } from '../lib/guard.js';
 import { date } from '../lib/validate.js';
 
-// "Деньги → Календарь" (docs/redesign/payments-calendar.md): who pays today,
+// «Оплаты по графику» (issue #15; was "Деньги → Календарь",
+// docs/redesign/payments-calendar.md): who pays today,
 // who pays tomorrow, who is late, and what a week should bring. One request
 // per month shown — the answer carries every week of the grid and the week of
 // today, so choosing another day on the screen is a lookup, not a request.
@@ -39,8 +41,16 @@ function rangeOf(query: Query, today: string): Period {
 }
 
 export function calendarRoutes(app: FastifyInstance): void {
-  app.get<{ Querystring: Query }>('/api/money/calendar', { config: { scope: 'payments.view' } }, async (req) => {
+  /**
+   * Whoever calls those who pay reads the rows (`payments.schedule`, a
+   * manager too since issue #15); the week's and the month's figures, a
+   * day's total and the money received go only to whoever reads Money
+   * (`payments.view`). The cut is made here, on the server — the screen
+   * that hides a sum it was sent hides nothing (ADR-0048).
+   */
+  app.get<{ Querystring: Query }>('/api/money/calendar', { config: { scope: 'payments.schedule' } }, async (req): Promise<CalendarAnswer> => {
     const today = todayISO(new Date(), env.TZ);
-    return calendarAnswer(rangeOf(req.query, today), today);
+    const answer = await calendarAnswer(rangeOf(req.query, today), today);
+    return mayView(req, 'payments.view') ? { ...answer, totals: true } : scheduleOf(answer);
   });
 }

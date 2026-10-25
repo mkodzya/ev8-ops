@@ -1346,6 +1346,7 @@ export const en = {
       over_on_hand: 'That is more than you have on you.',
       over_open: 'That is more than the repair still asks for.',
       owner_only: 'Only an owner can do this.',
+      sort_owner_only: 'The owner sorts this. A manager links money coming in to a rental, a deposit, a moped sale, goods or a repair.',
       owner_only_backdate: 'Only an owner dates a payment in the past. A manager records today\'s.',
       paid_before_too_big: 'More was paid before EV8 Ops than the sale is worth.',
       part_exists: 'A part with this name or article number is already on the list.',

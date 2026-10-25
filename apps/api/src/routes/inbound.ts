@@ -1,10 +1,11 @@
-import { todayISO, weekOf } from '@ev8/shared';
+import { incomeAnswersFor, todayISO, weekOf } from '@ev8/shared';
 import type { FastifyInstance } from 'fastify';
 import { audit } from '../lib/audit.js';
+import { permissionsOf } from '../lib/auth.js';
 import { dateFromISO } from '../lib/dates.js';
 import { prisma } from '../lib/db.js';
 import { env } from '../lib/env.js';
-import { badRequest, conflict, notFound } from '../lib/errors.js';
+import { badRequest, conflict, forbidden, notFound } from '../lib/errors.js';
 import { actorOf } from '../lib/guard.js';
 import { voidPayment } from '../lib/payments.js';
 import { BACK_TO_QUEUE, setAside } from '../lib/statements/aside.js';
@@ -37,10 +38,18 @@ async function incoming(lineId: string) {
 }
 
 export function inboundRoutes(app: FastifyInstance): void {
-  /** The panel beside a line, once its kind is chosen: what the money can go on, the probable first. */
-  app.get<{ Params: { id: string }; Querystring: { kind?: string; q?: string } }>('/api/statement-lines/:id/options', { config: { scope: 'payments.reconcile' } }, async (req) => {
+  /**
+   * The panel beside a line, once its kind is chosen: what the money can go
+   * on, the probable first. A manager opens the customers' kinds only (issue
+   * #15, ADR-0048): an advance and cash taken to the bank are an owner's.
+   */
+  app.get<{ Params: { id: string }; Querystring: { kind?: string; q?: string } }>('/api/statement-lines/:id/options', { config: { scope: 'payments.sort.customer' } }, async (req) => {
     const kind = req.query.kind as OptionKind;
     if (!OPTION_KINDS.includes(kind)) throw badRequest('bad_field', `kind is one of ${OPTION_KINDS.join(', ')}`, { field: 'kind' });
+    const actor = actorOf(req);
+    if (!incomeAnswersFor(permissionsOf(actor.role, actor.via)).includes(kind)) {
+      throw forbidden('sort_owner_only', 'The owner sorts this. A manager links money coming in to a rental, a deposit, a moped sale, goods or a repair.');
+    }
     const line = await incoming(req.params.id);
     return { kind, options: await optionsFor(storedLine(line), kind, req.query.q ?? '') };
   });
