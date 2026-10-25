@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PERMISSIONS, PIN_ROLES, PIN_SESSION_PERMISSIONS, ROLE_PERMISSIONS, ROLES, roleCan, seesEveryRepair } from '../src/index.js';
+import { PERMISSIONS, PIN_ROLES, PIN_SESSION_PERMISSIONS, ROLE_PERMISSIONS, ROLES, roleCan, seesEveryRepair, seesTotals } from '../src/index.js';
 
 describe('roles and permissions (redesign §2.1, Mika 17.09.2026; ADR-0033, 20.10.2026)', () => {
   it('has four roles: the owners, the managers, the mechanics and the chief mechanics', () => {
@@ -53,6 +53,14 @@ describe('roles and permissions (redesign §2.1, Mika 17.09.2026; ADR-0033, 20.1
       for (const role of ['mechanic', 'chief_mechanic'] as const) expect(roleCan(role, p), `${role} ${p}`).toBe(false);
       expect(PIN_SESSION_PERMISSIONS).not.toContain(p);
     }
+  });
+
+  it('sums of many customers together are an owner’s; a manager and a mechanic read the rows (Mika’s «да» of 25.10.2026, ADR-0048)', () => {
+    expect(seesTotals(ROLE_PERMISSIONS.owner)).toBe(true);
+    for (const role of ['manager', 'mechanic', 'chief_mechanic'] as const) expect(seesTotals(ROLE_PERMISSIONS[role]), role).toBe(false);
+    // The same right that keeps the week's and the month's figures of «Оплаты по графику».
+    expect(seesTotals(['payments.view'])).toBe(true);
+    expect(seesTotals(['payments.schedule', 'payments.sort.customer', 'cash.record'])).toBe(false);
   });
 
   it('a manager never sees cost, purchases, reports, documents or other people\'s money, and decides no deposit', () => {

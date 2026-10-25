@@ -199,7 +199,8 @@ export function ServicePage() {
 
   return (
     <>
-      <PageHead wrap title={t.repair.title} sub={onlyMine ? t.wjob.yours(data.jobs.length) : t.repair.openCount(data.open)}>
+      {/* The menu's word for the section (QA of #15): «Ремонты», not the old «Сервис». */}
+      <PageHead wrap title={t.nav.service} sub={onlyMine ? t.wjob.yours(data.jobs.length) : t.repair.openCount(data.open)}>
         {/* On the tablet there are no section tabs: the book is reached from here. */}
         {can('service.norms') && me?.via === 'pin' && (
           <Link className="pill pill-sm" to="/service/works">

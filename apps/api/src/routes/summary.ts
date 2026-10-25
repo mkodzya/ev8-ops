@@ -4,7 +4,7 @@ import { dateFromISO } from '../lib/dates.js';
 import { depositsOverview } from '../lib/deposits.js';
 import { prisma } from '../lib/db.js';
 import { env } from '../lib/env.js';
-import { mayView } from '../lib/guard.js';
+import { mayTotal, mayView } from '../lib/guard.js';
 import { rentalsNow } from '../lib/overdue.js';
 
 // The numbers on "Today" (DSH-01). Every figure here is also a list one
@@ -72,8 +72,9 @@ export function summaryRoutes(app: FastifyInstance): void {
       // What today asks a person to do, not only what it counts (DSH-01).
       unmatchedLines,
       openServiceJobs,
-      // Sales behind their schedule (SAL-02), in money rather than in rows.
-      salesOverdueTetri: overdueInstalments.reduce((n, i) => n + (i.amountTetri - i.paidTetri), 0),
+      // Sales behind their schedule (SAL-02), in money rather than in rows —
+      // every buyer's together, an owner's (Mika's «да» of 25.10.2026, ADR-0048 addendum).
+      salesOverdueTetri: mayTotal(req) ? overdueInstalments.reduce((n, i) => n + (i.amountTetri - i.paidTetri), 0) : null,
       pickedUpToday: pickedUpToday.map((r) => ({ id: r.id, number: r.number, customer: r.customer.name })),
       dueBackToday: dueBackToday.map((r) => ({ id: r.id, number: r.number, customer: r.customer.name })),
     };

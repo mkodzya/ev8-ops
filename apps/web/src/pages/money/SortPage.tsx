@@ -1,4 +1,4 @@
-import { formatGel, isoWeekday, maySortTo, parseGel, payDayMove, SEARCH_MIN, todayISO, weekDueOn, type PayDayMove } from '@ev8/shared';
+import { formatGel, isoWeekday, mayLinkPayment, maySortTo, parseGel, payDayMove, SEARCH_MIN, todayISO, weekDueOn, type PayDayMove } from '@ev8/shared';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../../api.js';
@@ -43,6 +43,8 @@ interface Suggestion {
   customerId?: string;
   amountTetri?: number;
   occurredOn?: string;
+  /** A payment entered by hand: what it was (rent, sale, service, goods, on_account) — absent while an older API answers. */
+  paymentKind?: string;
   reason: Reason;
 }
 export interface SortLine {
@@ -244,6 +246,12 @@ function LineCard({ line, cats, onNotOurs, onSplit }: { line: SortLine; cats: Ca
     .map((s) => [s.number, s.customer].filter(Boolean).join(' · ') + (s.reason.debtTetri ? ` · ${t.inc.owes(formatGel(s.reason.debtTetri, { decimals: false }))}` : ''))
     .join('; ');
   const remembered = line.direction === 'in' ? line.remembered : null;
+  // «Похоже, уже записан»: the payments entered by hand this line may be, and
+  // which of them this person may link it to — the server's own rule
+  // (`mayLinkPayment`); an answer without the kind is offered, as before.
+  const linkable = line.recorded.map((p) => ({ p, may: p.paymentKind == null || mayLinkPayment(me?.permissions ?? [], p.paymentKind) }));
+  const firstLinkable = linkable.find((x) => x.may)?.p.id ?? null;
+  const kindWord = (k: string | undefined): string => (k ? ((t.money.kinds as Record<string, string>)[k] ?? '') : '');
   // A card payment the bank sent twice (issue #16): «Это дубль» is the main answer, the others stay below it.
   const twin = line.duplicateOf ?? null;
 
@@ -289,17 +297,23 @@ function LineCard({ line, cats, onNotOurs, onSplit }: { line: SortLine; cats: Ca
       )}
 
       {line.group === 'recorded' &&
-        line.recorded.map((p, i) => (
+        linkable.map(({ p, may }) => (
           <div key={p.id} className="sort-actions">
             <p className="sort-reason">
               {(line.direction === 'out' ? t.sort.recordedOut : t.sort.recordedText)(
                 [formatGel(p.amountTetri ?? 0), fmtDate(p.occurredOn), p.customer, p.number].filter(Boolean).join(', '),
               )}
             </p>
-            {/* Money entered by hand: the line is linked to it, nothing new is written (B2-03). The first is the main answer. */}
-            <button type="button" className={`pill pill-sm ${i === 0 ? 'pill-accent' : ''}`} disabled={busy} onClick={() => act('link', { paymentId: p.id }, { text: t.sort.linked })}>
-              {busy ? t.sort.attaching : line.direction === 'out' ? t.sort.yesShe : t.sort.yes}
-            </button>
+            {/* Money entered by hand: the line is linked to it, nothing new is written (B2-03). The first he may link is
+                the main answer. An advance entered by hand is the owners' to link (ADR-0048): a manager sees that it
+                is there — the line is not new money — and whose answer it is, not a button the server would refuse. */}
+            {may ? (
+              <button type="button" className={`pill pill-sm ${p.id === firstLinkable ? 'pill-accent' : ''}`} disabled={busy} onClick={() => act('link', { paymentId: p.id }, { text: t.sort.linked })}>
+                {busy ? t.sort.attaching : line.direction === 'out' ? t.sort.yesShe : t.sort.yes}
+              </button>
+            ) : (
+              <p className="hint muted">{t.menu.ownerSorts(p.paymentKind === 'on_account' ? t.inc.kinds.customer : kindWord(p.paymentKind))}</p>
+            )}
           </div>
         ))}
       {/* Entered by hand, or this other record's money — the person says which (designer's answer 3).

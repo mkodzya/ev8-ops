@@ -39,7 +39,8 @@ export function RentalsPage() {
   const t = useT();
   const { can } = useSession();
   const { locale } = useLocale();
-  const { data, failure, reload } = useLoad<{ today: string; rentals: Rental[] }>('/api/rentals');
+  // `totals`: whether the line over the list may add the rows' debts up — an owner's leave (ADR-0048, addendum of 25.10.2026).
+  const { data, failure, reload } = useLoad<{ today: string; totals?: boolean; rentals: Rental[] }>('/api/rentals');
   const [params, setParams] = useSearchParams();
   const all = data?.rentals ?? null;
   if (!all && failure) return <LoadError failure={failure} onRetry={reload} />;
@@ -73,6 +74,9 @@ export function RentalsPage() {
   const sumOf = (list: Rental[]) => list.reduce((n, r) => n + r.debtTetri, 0);
   const red = sumOf(rows.filter(isDebt));
   const ink = sumOf(rows.filter((r) => !isDebt(r)));
+  // The debts of many customers together are an owner's figure (Mika's «да» of
+  // 25.10.2026): a manager reads «40 аренд» (an invented example) and each row's own debt.
+  const sums = data?.totals === true;
 
   // What the right of a row says: the debt when there is one, otherwise how
   // far it is paid — one figure, as on the card (U5). An ink sum always has
@@ -102,8 +106,10 @@ export function RentalsPage() {
             </button>
           ))}
       </div>
-      {/* Each sum only when it is above nought; with neither — «debt 0», as before. */}
-      <p className="hint muted">{t.seg.totals(rows.length, red > 0 || ink === 0 ? formatGel(red, { decimals: false }) : null, ink > 0 ? formatGel(ink, { decimals: false }) : null)}</p>
+      {/* Each sum only when it is above nought; with neither — «debt 0», as before. Without leave to add up — the count alone. */}
+      <p className="hint muted">
+        {sums ? t.seg.totals(rows.length, red > 0 || ink === 0 ? formatGel(red, { decimals: false }) : null, ink > 0 ? formatGel(ink, { decimals: false }) : null) : t.seg.totals(rows.length, null, null)}
+      </p>
       <DataList
         rows={rows}
         rowKey={(r) => r.id}

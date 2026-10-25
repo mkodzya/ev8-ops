@@ -40,7 +40,11 @@ export interface PaymentRow {
 }
 
 interface Answer {
-  totals: { inTetri: number; outTetri: number; acquiringFeeTetri: number; rowTetri: number | null };
+  /**
+   * Null on a manager's own list: what came in over «Мои платежи» is many
+   * customers' money together, an owner's figure (ADR-0048, addendum of 25.10.2026).
+   */
+  totals: { inTetri: number; outTetri: number; acquiringFeeTetri: number; rowTetri: number | null } | null;
   /** Set when a figure of the week's report asked for its own rows (QA-W6-01). */
   row: 'rent' | 'sale' | 'deposits' | 'service' | 'goods' | null;
   people: { id: string; name: string }[];
@@ -194,30 +198,7 @@ export function PaymentsList({ mine = false }: { mine?: boolean }) {
       {!data && !failure && <Skeleton rows={5} />}
       {data && (
         <>
-          <dl className="money-totals">
-            {/* What belongs to the row of the week that linked here — the
-                figure this list has to add up to (ux №10). */}
-            {data.row && data.totals.rowTetri != null && (
-              <div>
-                <dt>{t.weekReport.rowTotals[data.row]}</dt>
-                <dd className="amt-in">{formatGel(data.totals.rowTetri)}</dd>
-              </div>
-            )}
-            <div>
-              <dt>{t.payList.totalIn}</dt>
-              <dd className="amt-in">{data.totals.inTetri > 0 ? '+' : ''}{formatGel(data.totals.inTetri)}</dd>
-            </div>
-            <div>
-              <dt>{t.payList.totalOut}</dt>
-              <dd>{data.totals.outTetri > 0 ? '−' : ''}{formatGel(data.totals.outTetri)}</dd>
-            </div>
-            {data.totals.acquiringFeeTetri > 0 && (
-              <div>
-                <dt>{t.payList.totalFee}</dt>
-                <dd>−{formatGel(data.totals.acquiringFeeTetri)}</dd>
-              </div>
-            )}
-          </dl>
+          {data.totals && <ListTotals totals={data.totals} row={data.row} />}
           <DataList
             rows={data.payments}
             rowKey={(p) => p.id}
@@ -250,5 +231,46 @@ export function PaymentsList({ mine = false }: { mine?: boolean }) {
         </>
       )}
     </>
+  );
+}
+
+/**
+ * The total over the filter (§3.3): what came in, what went out, what the
+ * acquirer kept — and, when a row of the week linked here, what belongs to
+ * that row, the figure this list has to add up to (ux №10). Drawn only when
+ * the server sent it: a manager's own list comes without it (ADR-0048,
+ * addendum of 25.10.2026).
+ */
+function ListTotals({ totals, row }: { totals: NonNullable<Answer['totals']>; row: Answer['row'] }) {
+  const t = useT();
+  return (
+    <dl className="money-totals">
+      {row && totals.rowTetri != null && (
+        <div>
+          <dt>{t.weekReport.rowTotals[row]}</dt>
+          <dd className="amt-in">{formatGel(totals.rowTetri)}</dd>
+        </div>
+      )}
+      <div>
+        <dt>{t.payList.totalIn}</dt>
+        <dd className="amt-in">
+          {totals.inTetri > 0 ? '+' : ''}
+          {formatGel(totals.inTetri)}
+        </dd>
+      </div>
+      <div>
+        <dt>{t.payList.totalOut}</dt>
+        <dd>
+          {totals.outTetri > 0 ? '−' : ''}
+          {formatGel(totals.outTetri)}
+        </dd>
+      </div>
+      {totals.acquiringFeeTetri > 0 && (
+        <div>
+          <dt>{t.payList.totalFee}</dt>
+          <dd>−{formatGel(totals.acquiringFeeTetri)}</dd>
+        </div>
+      )}
+    </dl>
   );
 }

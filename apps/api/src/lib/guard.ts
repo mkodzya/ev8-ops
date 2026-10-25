@@ -6,9 +6,9 @@
 // default-deny. The onRoute hook collects every route into app.routeTable so
 // a test can sweep it; there is no hand-maintained route list anywhere.
 
-import { PERMISSIONS, type Permission } from '@ev8/shared';
+import { PERMISSIONS, seesTotals, type Permission } from '@ev8/shared';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { SESSION_COOKIE, hasPerm, loadActor, type Actor } from './auth.js';
+import { SESSION_COOKIE, hasPerm, loadActor, permissionsOf, type Actor } from './auth.js';
 
 export type RouteScope = 'public' | 'session' | Permission;
 const DEFAULT_SCOPE: RouteScope = 'users.manage';
@@ -83,4 +83,14 @@ export function actorOf(req: FastifyRequest): Actor {
  */
 export function mayView(req: FastifyRequest, perm: Permission): boolean {
   return !!req.actor && hasPerm(req.actor, perm);
+}
+
+/**
+ * May the person asking read a sum of many customers' money or debt
+ * together? `seesTotals` of @ev8/shared — an owner; a manager reads the rows
+ * (Mika's «да» of 25.10.2026, ADR-0048 addendum). Such a field goes out as
+ * null: the screen that hides a sum it was sent hides nothing.
+ */
+export function mayTotal(req: FastifyRequest): boolean {
+  return !!req.actor && seesTotals(permissionsOf(req.actor.role, req.actor.via));
 }

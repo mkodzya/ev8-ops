@@ -78,6 +78,20 @@ export function sectionsFor(permissions: readonly Permission[]): Section[] {
   return SECTIONS.filter((s) => allowed(s, permissions));
 }
 
+/** What a group's heading says: its own name, or — for «Продажи и закупки» read without the purchases — «Продажи». */
+export type GroupHeading = GroupId | 'sales';
+
+/**
+ * A group's heading names what the reader finds under it (QA of #15,
+ * 25.10.2026; the director's mockup): «Продажи и закупки» holds only «Продажи»
+ * for a manager, and his heading says «Продажи». The other groups' names say
+ * what each holds for every role that sees them.
+ */
+export function groupHeadingFor(group: GroupId, permissions: readonly Permission[]): GroupHeading {
+  if (group !== 'trade') return group;
+  return sectionsFor(permissions).some((s) => s.id === 'purchases') ? 'trade' : 'sales';
+}
+
 /**
  * The phone bar (issue #15): four sections and «Ещё». The day's work — Today,
  * the schedule, «Разобрать» — and the mopeds; the "+" is a round button of
@@ -357,5 +371,6 @@ export function movedTo(from: string, search: string): string {
 }
 
 export const sectionsForRole = (role: Role) => sectionsFor(ROLE_PERMISSIONS[role]);
+export const groupHeadingForRole = (group: GroupId, role: Role) => groupHeadingFor(group, ROLE_PERMISSIONS[role]);
 export const phoneTabsForRole = (role: Role) => phoneTabsFor(ROLE_PERMISSIONS[role]);
 export const menuSectionsForRole = (role: Role) => menuSectionsFor(ROLE_PERMISSIONS[role]);

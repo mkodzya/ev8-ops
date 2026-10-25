@@ -13,7 +13,6 @@ const ruPlural = (n: number, one: string, few: string, many: string): string => 
 
 export const wave5serviceEn = {
   repair: {
-    title: 'Service',
     openCount: (n: number) => `${n} open`,
     searchHint: 'Number, last 4 of the VIN',
     none: 'No repairs yet.',
@@ -177,7 +176,6 @@ export type Wave5service = typeof wave5serviceEn;
 
 export const wave5serviceRu: Wave5service = {
   repair: {
-    title: 'Сервис',
     openCount: (n) => `${n} открыто`,
     searchHint: 'Номер, последние 4 VIN',
     none: 'Ремонтов пока нет.',
@@ -335,7 +333,6 @@ export const wave5serviceRu: Wave5service = {
 
 export const wave5serviceKa: Wave5service = {
   repair: {
-    title: 'სერვისი',
     openCount: (n) => `${n} ღიაა`,
     searchHint: 'ნომერი, VIN-ის ბოლო 4',
     none: 'შეკეთება ჯერ არ არის.',

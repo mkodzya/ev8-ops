@@ -11,7 +11,7 @@
 // into the queue with a purpose no rule reads, as the pull leaves them.
 import { todayISO } from '@ev8/shared';
 import { describe, expect, it } from 'vitest';
-import { HAS_DB, call, json, login, loginAs, makeUser, uniq } from './helpers.js';
+import { HAS_DB, byHand, call, json, login, loginAs, makeUser, uniq } from './helpers.js';
 
 const today = () => todayISO();
 const digits = () => uniq().replace(/\D/g, '');
@@ -151,6 +151,26 @@ describe.skipIf(!HAS_DB)('«Разобрать» for a manager: the customers’
     expect(err(refused).error).toBe('sort_owner_only');
     const linked = await call(m.cookie, 'POST', `/api/statement-lines/${one.id}/link`, { paymentId: rent.id });
     expect(linked.statusCode, linked.body).toBe(200);
+  });
+
+  it('says under «Похоже, уже записан» what the money entered by hand was, so he is offered only what he may link (QA of #15)', async () => {
+    const r = await rental();
+    const m = await manager();
+    // By transfer, not in cash: cash never reaches a bank, so no line is ever offered as it. Odd sums, the suite's own.
+    const rent = await byHand(r.owner, '/api/payments', { rentalId: r.rentalId, channel: 'transfer', grossTetri: 4383 });
+    const advance = await byHand(r.owner, '/api/payments', { customerId: r.customer.id, channel: 'transfer', grossTetri: 4384 });
+    expect([rent.statusCode, advance.statusCode], `${rent.body} ${advance.body}`).toEqual([201, 201]);
+    const one = await bankLine(4383);
+    const two = await bankLine(4384);
+    type Queue = { lines: { id: string; group: string; recorded: { id: string; kind: string; paymentKind?: string }[] }[] };
+    const q = json<Queue>(await call(m.cookie, 'GET', '/api/statement-lines'));
+    const candidate = (lineId: string, paymentId: string) => q.lines.find((l) => l.id === lineId)?.recorded.find((p) => p.id === paymentId);
+    expect(candidate(one.id, json<{ id: string }>(rent).id)).toMatchObject({ kind: 'payment', paymentKind: 'rent' });
+    expect(candidate(two.id, json<{ id: string }>(advance).id)).toMatchObject({ kind: 'payment', paymentKind: 'on_account' });
+    // The screen asks the server's own rule of that kind: the advance stays the owners' to link.
+    const refused = await call(m.cookie, 'POST', `/api/statement-lines/${two.id}/link`, { paymentId: json<{ id: string }>(advance).id });
+    expect(refused.statusCode).toBe(403);
+    expect(err(refused).error).toBe('sort_owner_only');
   });
 
   it('refuses him every answer that is not the customers’ money, by its scope, and writes nothing', async () => {

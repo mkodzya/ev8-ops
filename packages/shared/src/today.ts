@@ -175,7 +175,15 @@ export interface TaskGroupRows {
   rows: TaskRow[];
   /** Everything in the group, not only the three the screen shows. */
   total: number;
-  totalTetri: Tetri;
+  /**
+   * The money of every row of the group — `total` rows, not the ones left
+   * over, so the line under the group says «Все 12 · …» (an invented example)
+   * of the same 12 the list it opens adds up to (QA of #15, 25.10.2026;
+   * `queueMore`). Null for a manager:
+   * the overdue of all the renters together is an owner's figure (Mika's «да»
+   * of 25.10.2026, ADR-0048 addendum); each row keeps its own sum.
+   */
+  totalTetri: Tetri | null;
 }
 
 const SHOWN = 3;
@@ -511,13 +519,34 @@ export function dayQueue(input: QueueInput): TaskGroupRows[] {
     rows.push({ id: 'my-till', group: 'till', action: 'hand_over_till', who: null, number: null, vin: null, days: null, amountTetri: input.myTillTetri, href: '/money/cash', phone: null, note: null });
   }
 
+  // A group's sum is many customers' money together — an owner's figure; a
+  // manager's queue carries each row's own and no sum of them (ADR-0048,
+  // addendum of 25.10.2026). The till is his own and is one row: no sum is lost.
   return TASK_GROUPS.map((group) => {
     const all = rows.filter((r) => r.group === group);
-    return { group, rows: all.slice(0, group === 'intake' || group === 'maintenance' ? SHOWN_INTAKE : SHOWN), total: all.length, totalTetri: all.reduce((n, r) => n + (r.amountTetri ?? 0), 0) };
+    const totalTetri = input.owner ? all.reduce((n, r) => n + (r.amountTetri ?? 0), 0) : null;
+    return { group, rows: all.slice(0, group === 'intake' || group === 'maintenance' ? SHOWN_INTAKE : SHOWN), total: all.length, totalTetri };
   }).filter((g) => g.total > 0);
 }
 
 /** The badge: how many things are waiting, not how many kinds (U11). */
 export function queueCount(groups: TaskGroupRows[]): number {
   return groups.reduce((n, g) => n + g.total, 0);
+}
+
+/**
+ * The line under a group longer than the rows it shows: its number and its
+ * sum say one set (QA of #15, 25.10.2026). With a sum — an owner's group with
+ * money in it — every row of the group and their money together, the set the
+ * list it opens adds up to: `all`, «Все 12 · …» (an invented example). Without
+ * one — a manager's group, which carries none (ADR-0048, addendum of
+ * 25.10.2026), or a group with no money — the rows left under the ones shown:
+ * `left`, «Ещё 9». Null when the group shows all it has.
+ */
+export type QueueMore = { kind: 'all'; count: number; tetri: Tetri } | { kind: 'left'; count: number };
+
+export function queueMore(g: TaskGroupRows): QueueMore | null {
+  if (g.total <= g.rows.length) return null;
+  if (g.totalTetri !== null && g.totalTetri > 0) return { kind: 'all', count: g.total, tetri: g.totalTetri };
+  return { kind: 'left', count: g.total - g.rows.length };
 }
