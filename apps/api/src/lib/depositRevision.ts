@@ -82,6 +82,22 @@ async function figuresOf(tx: Tx, depositId: string, rentalId: string): Promise<D
 }
 
 /**
+ * Money other than the decision's own on the charge it made for what it kept
+ * beyond the debt (`withheld`): cash or a bank line booked onto it after the
+ * decision's own payment was annulled by hand. Voiding the charge would leave
+ * that money on nothing — no debt it paid, no credit of the customer's — so
+ * the revision refuses until a person moves it through its own door: annuls
+ * the payment, or unlinks its bank line (ADR-0047 §5, addendum of 25.10.2026).
+ */
+async function othersOnWithheld(tx: Tx, rentalId: string, own: string[]): Promise<number> {
+  const rows = await tx.paymentAllocation.findMany({
+    where: { charge: { rentalId, kind: 'withheld', voidedAt: null }, payment: { voidedAt: null, id: { notIn: own } } },
+    select: { amountTetri: true },
+  });
+  return rows.reduce((n, a) => n + a.amountTetri, 0);
+}
+
+/**
  * The return's decision taken back: its money from the deposit annulled (a
  * payment already annulled is passed by), the charge it made for what it
  * kept beyond the debt voided, its lines of «удержано» voided. A repair's
@@ -150,6 +166,12 @@ export async function reviseDeposit(input: ReviseInput): Promise<RevisionView> {
         };
         // The decision keeps its day: what it keeps pays the weeks on the day it was decided.
         const on = isoDate(d.returnedOn) ?? isoDate(r.returnedOn) ?? input.today;
+
+        // Said by the preview too, before anything is typed: it runs this same transaction.
+        const others = await othersOnWithheld(tx, r.id, d.withholdings.map((w) => w.paymentId).filter((x): x is string => x != null));
+        if (others > 0) {
+          throw conflict('withheld_paid_by_other', 'Other money paid the charge for what was kept beyond the claims: annul that payment or unlink its bank line first.', { paidTetri: others });
+        }
 
         await takeBack(tx, input.actor.id, d.id, r.id, d.withholdings, `deposit revised: ${reason ?? '—'}`);
         const clean = await tx.deposit.findUniqueOrThrow({ where: { id: d.id } });

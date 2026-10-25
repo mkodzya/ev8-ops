@@ -1444,6 +1444,7 @@ export const en = {
       week_not_found: 'No such week in this rental.',
       week_not_last: 'Only the last week is moved: the next one has already begun.',
       week_paid_before_transfer: 'This week was paid before EV8 Ops — it stays as it was.',
+      withheld_paid_by_other: 'Other money paid the charge «Kept beyond the claims» too. Annul that payment or unlink its line in «Sort» first: a revision moves no other money.',
       withheld_over_total: 'You cannot withhold more than the repair costs.',
       workshop_archived: 'This workshop was taken off the list. Choose another, or put it back in Settings → Repair.',
       workshop_archived_exists: 'A workshop by that name was taken off the list. Put it back instead: «…» → «Put back».',
