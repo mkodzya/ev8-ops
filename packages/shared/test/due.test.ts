@@ -470,6 +470,27 @@ describe('the four cases in the queue of “Today”', () => {
     expect(q.flatMap((g) => g.rows.map((r) => r.action))).toEqual(['take_cash', 'take_cash']);
   });
 
+  it('a manager’s groups carry each row’s sum and no sum of the group; an owner’s carry it (ADR-0048, addendum of 25.10.2026)', () => {
+    const all = [case4, case3, case2, case1];
+    const mine = dayQueue(input({ owner: false, rentals: all }));
+    for (const g of mine) {
+      expect(g.totalTetri, g.group).toBeNull();
+      expect(g.rows.every((r) => (r.amountTetri ?? 0) > 0), g.group).toBe(true);
+    }
+    // The counts are the owner's own: the rows are the same, only the sum is cut.
+    const theirs = dayQueue(input({ rentals: all }));
+    expect(mine.map((g) => [g.group, g.total])).toEqual(theirs.map((g) => [g.group, g.total]));
+    expect(theirs.map((g) => g.totalTetri)).toEqual([45000, 48000]);
+  });
+
+  it('a group’s sum is of every row in it, not of the ones left under the three shown (QA of #15)', () => {
+    const late = [1, 2, 3, 4, 5].map((i) => rental({ id: `l${i}`, number: `R-0001${i}`, status: 'overdue', pickedUpOn: d(-14), paidThrough: d(-7 - i), debtTetri: 10000 * i, dueTodayTetri: 0 }));
+    const g = group(dayQueue(input({ rentals: late })), 'overdue')!;
+    expect([g.total, g.rows.length]).toEqual([5, 3]);
+    // «Все 5 · 1 500 ₾»: the five the list «Просрочены» shows, and their sum.
+    expect(g.totalTetri).toBe(150000);
+  });
+
   it('due today with nothing to take is no row (the week has no row yet)', () => {
     expect(dayQueue(input({ rentals: [rental({ debtTetri: 0, dueTodayTetri: 0 })] }))).toEqual([]);
   });

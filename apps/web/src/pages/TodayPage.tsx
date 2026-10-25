@@ -295,9 +295,12 @@ export function TodayPage() {
               ))}
             </ul>
             {g.group === 'maintenance' && (data.maintenanceUnknown ?? 0) > 0 && <p className="hint muted">{t.wmaint.unknown(data.maintenanceUnknown ?? 0)}</p>}
+            {/* The number and the sum say one set (QA of #15): «Все 32 · …» — every row of the group, the
+                sum the list it opens adds up to (ux №10); not «Ещё 29» beside the sum of all 32. A group
+                with no sum, or a manager's, which carries none (ADR-0048, addendum of 25.10.2026): «Ещё 29». */}
             {g.total > g.rows.length && (
               <Link className="queue-more" to={SEGMENT[g.group] ?? '/rentals'}>
-                {g.totalTetri > 0 ? t.today.more(g.total - g.rows.length, formatGel(g.totalTetri, { decimals: false })) : t.today.morePlain(g.total - g.rows.length)}
+                {(g.totalTetri ?? 0) > 0 ? t.today.all(g.total, formatGel(g.totalTetri ?? 0, { decimals: false })) : t.today.morePlain(g.total - g.rows.length)}
               </Link>
             )}
           </section>

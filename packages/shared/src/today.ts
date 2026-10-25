@@ -175,7 +175,14 @@ export interface TaskGroupRows {
   rows: TaskRow[];
   /** Everything in the group, not only the three the screen shows. */
   total: number;
-  totalTetri: Tetri;
+  /**
+   * The money of every row of the group — `total` rows, not the ones left
+   * over, so the line under the group says «Все 32 · …» of the same 32 the
+   * list it opens adds up to (QA of #15, 25.10.2026). Null for a manager:
+   * the overdue of all the renters together is an owner's figure (Mika's «да»
+   * of 25.10.2026, ADR-0048 addendum); each row keeps its own sum.
+   */
+  totalTetri: Tetri | null;
 }
 
 const SHOWN = 3;
@@ -511,9 +518,13 @@ export function dayQueue(input: QueueInput): TaskGroupRows[] {
     rows.push({ id: 'my-till', group: 'till', action: 'hand_over_till', who: null, number: null, vin: null, days: null, amountTetri: input.myTillTetri, href: '/money/cash', phone: null, note: null });
   }
 
+  // A group's sum is many customers' money together — an owner's figure; a
+  // manager's queue carries each row's own and no sum of them (ADR-0048,
+  // addendum of 25.10.2026). The till is his own and is one row: no sum is lost.
   return TASK_GROUPS.map((group) => {
     const all = rows.filter((r) => r.group === group);
-    return { group, rows: all.slice(0, group === 'intake' || group === 'maintenance' ? SHOWN_INTAKE : SHOWN), total: all.length, totalTetri: all.reduce((n, r) => n + (r.amountTetri ?? 0), 0) };
+    const totalTetri = input.owner ? all.reduce((n, r) => n + (r.amountTetri ?? 0), 0) : null;
+    return { group, rows: all.slice(0, group === 'intake' || group === 'maintenance' ? SHOWN_INTAKE : SHOWN), total: all.length, totalTetri };
   }).filter((g) => g.total > 0);
 }
 
