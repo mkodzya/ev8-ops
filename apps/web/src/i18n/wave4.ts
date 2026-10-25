@@ -959,7 +959,7 @@ export const wave4Ka: Wave4 = {
     'expense.rule.forget': 'დამახსოვრებული მიმღები დავიწყებულია',
     'statement.line.founder_equity': 'ხაზი მოინიშნა: პარტნიორის მიერ შემოტანილი თანხა',
     'statement.line.other_income': 'ხაზი მოინიშნა: სხვა შემოსავალი',
-    'statement.line.payer_rule': 'ხაზი განაწილდა დამახსოვრებული გამგზავნის წესით',
+    'statement.line.payer_rule': 'ხაზი დახარისხდა დამახსოვრებული გამგზავნის წესით',
     'payer.rule.remember': 'გამგზავნი დამახსოვრებულია',
     'payer.rule.forget': 'დამახსოვრებული გამგზავნი დავიწყებულია',
     'payer.rule.undo': 'დამახსოვრებული გამგზავნი გაუქმდა იმ ხაზებთან ერთად, რომლებიც მან მაშინვე დაახარისხა',

@@ -393,7 +393,7 @@ export const en = {
     fineAmount: 'Amount',
     fineReason: 'What for',
     fineReasonHint: 'Required: for example, “damage to the moped” or “a dirty moped”.',
-    fineHint: 'The charge joins the customer’s debt. It is paid by “Take money” or by allocating a bank line.',
+    fineHint: 'The charge joins the customer’s debt. It is paid by “Take money” or by a bank line: “Sort” → “Repair / charge”.',
     fineDone: 'Charged',
     fineVoid: 'Take the charge back',
     fineVoidReason: 'Why it is taken back',
