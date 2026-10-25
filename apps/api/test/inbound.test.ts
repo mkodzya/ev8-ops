@@ -2,48 +2,70 @@
 // 25.10.2026; ADR-0046; migration 0069): a founder's contribution, other
 // income with its category, the payer remembered, the panel's options, a
 // charge paid alone, a deposit as a part of its own, and «Отчёты →
-// Поступления». Every payer and customer here is invented, and carries a tag
-// of its own so a name never matches what an earlier run left behind.
+// Поступления». Every payer, customer and account number here is invented,
+// and every name carries a tag of its own so it never matches what an
+// earlier run left behind.
 import { addDays, fleetNumber, todayISO } from '@ev8/shared';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { HAS_DB, call, json, loginAs, uniq } from './helpers.js';
 
 const today = () => todayISO(new Date(), 'Asia/Tbilisi');
 const dmy = (iso: string) => iso.split('-').reverse().join('.');
 
+// An invented company account and invented senders (the repository is public).
 const BOG_HEADER = [
-  ',,,"angariSis mflobeli: Sps e-mouSen moTors",,,,',
-  ',,,"angariSis #:GE41BG0000000600217157GEL (600217157)",,,,',
+  ',,,"angariSis mflobeli: Sps sacdeli kompania",,,,',
+  ',,,"angariSis #:GE00BG0000000000000001GEL (0000000001)",,,,',
   '"TariRi","sabuTis #","mokorespondento angariSi","debeti","krediti","kursi","eqv.lari","operaciis Sinaarsi"',
 ].join('\n');
+/** The account an invented sender pays from, as the bank's row writes it beside his words. */
+const SENDER = 'GE00TB0000000000000002';
 let doc = 0;
-const inRow = (iso: string, amount: string, content: string) => `"${dmy(iso)}","${7000 + (doc++ % 900)}","GE38TB7756045063400002","","${amount}","1","${amount}","${content}"`;
-const outRow = (iso: string, amount: string, content: string) => `"${dmy(iso)}","${8000 + (doc++ % 900)}","GE89BG0000000902936900GEL","${amount}","","1","${amount}","${content}"`;
+const inRow = (iso: string, amount: string, content: string) => `"${dmy(iso)}","${7000 + (doc++ % 900)}","${SENDER}","","${amount}","1","${amount}","${content}"`;
+const outRow = (iso: string, amount: string, content: string) => `"${dmy(iso)}","${8000 + (doc++ % 900)}","GE00BG0000000000000003GEL","${amount}","","1","${amount}","${content}"`;
 const file = (...rows: string[]) => [BOG_HEADER, ...rows].join('\n');
-/** A transfer from an invented sender, in the bank's English wording since autumn 2026. */
-const from = (who: string, extra = '') => `Incoming Transfer - Amount: GEL; Sender: ${who}; Account: GE38BG0000000000000001GEL; Details: Transfer${extra}`;
+/** A transfer from an invented sender, in the bank's English wording since autumn 2026; `account` — the one he sends from. */
+const from = (who: string, extra = '', account = 'GE38BG0000000000000001') => `Incoming Transfer - Amount: GEL; Sender: ${who}; Account: ${account}GEL; Details: Transfer${extra}`;
 
 const tag = () => `t${uniq().replace(/\D/g, '').slice(-9)}`;
 
-// Other suites leave running rentals of 150 behind; each test here counts only what it made itself.
-beforeEach(async () => {
-  if (!HAS_DB) return;
+/**
+ * Sums of this suite's own. The suites share one database and run side by
+ * side: others leave running rentals of 150 and transfers of 150 entered by
+ * hand, and any of them would fit a line of 150 here — as «уже записан», or
+ * as one more rental of that sum in the panel. A week of 150.13 and a deposit
+ * of 180.29 are nobody else's, so nothing of theirs needs to be touched.
+ */
+const RATE = 15013;
+const DEPOSIT = 18029;
+const gel = (tetri: number) => (tetri / 100).toFixed(2);
+
+/** The rentals this suite handed over: returned when each test ends, so none of them waits for another suite's line. */
+const made: string[] = [];
+afterEach(async () => {
+  if (!HAS_DB || made.length === 0) return;
   const { prisma } = await import('../src/lib/db.js');
-  await prisma.rental.updateMany({ where: { status: { not: 'returned' } }, data: { status: 'returned' } });
-  await prisma.payment.updateMany({ where: { statementLineId: null, voidedAt: null, source: 'manual', channel: { not: 'cash' } }, data: { voidedAt: new Date(), voidReason: 'test isolation', voidKind: 'void' } });
+  await prisma.rental.updateMany({ where: { id: { in: made.splice(0) } }, data: { status: 'returned' } });
 });
 
-async function rental(opts: { rate?: number; pickedUpOn?: string; phone?: string; georgian?: boolean } = {}) {
+async function rental(opts: { rate?: number; deposit?: number; pickedUpOn?: string; phone?: string; georgian?: boolean; name?: string } = {}) {
   const { prisma } = await import('../src/lib/db.js');
   const t = tag();
   const model = await prisma.vehicleModel.create({ data: { brand: 'Test', name: `Inbound ${uniq()}`, forRent: true } });
   const vehicle = await prisma.vehicle.create({ data: { vin: `TESTI${uniq().replace(/\D/g, '').slice(-12).padStart(12, '0')}`, modelId: model.id } });
   // An invented renter; the bank, as in the director's case, writes his sender otherwise.
   // With `georgian` the card holds the Georgian spelling, which the bank writes in its Latin («testaZe gela»).
-  const customer = await prisma.customer.create({ data: { name: `Тест Арендатор ${t}`, nameKa: opts.georgian ? `გელა ტესტაძე ${t}` : null, phone: opts.phone ?? null } });
+  const customer = await prisma.customer.create({ data: { name: opts.name ?? `Тест Арендатор ${t}`, nameKa: opts.georgian ? `გელა ტესტაძე ${t}` : null, phone: opts.phone ?? null } });
   const owner = await loginAs('owner');
-  const res = await call(owner, 'POST', '/api/rentals', { customerId: customer.id, vehicleId: vehicle.id, weeklyRateTetri: opts.rate ?? 15000, pickedUpOn: opts.pickedUpOn ?? today() });
+  const res = await call(owner, 'POST', '/api/rentals', {
+    customerId: customer.id,
+    vehicleId: vehicle.id,
+    weeklyRateTetri: opts.rate ?? RATE,
+    depositTetri: opts.deposit ?? DEPOSIT,
+    pickedUpOn: opts.pickedUpOn ?? today(),
+  });
   const { id } = json<{ id: string }>(res);
+  made.push(id);
   return { prisma, owner, customer, vehicle, rentalId: id, tag: t };
 }
 
@@ -98,14 +120,14 @@ describe.skipIf(!HAS_DB)('«Прочий доход ▸» and a remembered payer
     const cats = json<{ categories: { id: string; nameRu: string }[] }>(await call(owner, 'GET', '/api/income-categories'));
     const insurance = cats.categories.find((c) => c.nameRu === 'Страховка')!;
     expect(insurance).toBeTruthy();
-    await load(owner, inRow(today(), '120.00', from(`Insurer Example ${t}`)));
+    await load(owner, inRow(today(), '120.41', from(`Insurer Example ${t}`)));
     const first = await lineOf(t);
     const res = json<{ ruleId: string; alsoSorted: string[] }>(await call(owner, 'POST', `/api/statement-lines/${first.id}/other-income`, { categoryId: insurance.id, remember: true }));
     expect(res.ruleId).toBeTruthy();
 
-    await load(owner, inRow(addDays(today(), 1), '80.00', from(`Insurer Example ${t}`, ' second')));
+    await load(owner, inRow(addDays(today(), 1), '80.23', from(`Insurer Example ${t}`, ' second')));
     const { prisma } = await import('../src/lib/db.js');
-    const second = await prisma.statementLine.findFirstOrThrow({ where: { raw: { contains: `${t}; Account` }, amountTetri: 8000 } });
+    const second = await prisma.statementLine.findFirstOrThrow({ where: { raw: { contains: `${t}; Account` }, amountTetri: 8023 } });
     expect(second).toMatchObject({ status: 'ignored', resolution: 'other_income', incomeCategoryId: insurance.id, payerRuleId: res.ruleId, matchedRule: 'payer_rule' });
     const rules = json<{ incoming: { id: string; rule: { id: string; live: boolean } | null }[] }>(await call(owner, 'GET', '/api/statement-lines/by-rules'));
     expect(rules.incoming.find((l) => l.id === second.id)?.rule).toMatchObject({ id: res.ruleId, live: true });
@@ -115,8 +137,8 @@ describe.skipIf(!HAS_DB)('«Прочий доход ▸» and a remembered payer
 
     // «Забыть правило»: the third line waits for a person; what the rule sorted stays.
     expect((await call(owner, 'POST', `/api/payer-rules/${res.ruleId}/forget`)).statusCode).toBe(200);
-    await load(owner, inRow(addDays(today(), 2), '70.00', from(`Insurer Example ${t}`, ' third')));
-    expect((await prisma.statementLine.findFirstOrThrow({ where: { raw: { contains: `${t}; Account` }, amountTetri: 7000 } })).status).toBe('unmatched');
+    await load(owner, inRow(addDays(today(), 2), '70.37', from(`Insurer Example ${t}`, ' third')));
+    expect((await prisma.statementLine.findFirstOrThrow({ where: { raw: { contains: `${t}; Account` }, amountTetri: 7037 } })).status).toBe('unmatched');
     expect((await prisma.statementLine.findUniqueOrThrow({ where: { id: second.id } })).status).toBe('ignored');
   });
 
@@ -140,7 +162,7 @@ describe.skipIf(!HAS_DB)('a payer remembered as a customer (issue #13, acceptanc
     const { prisma, owner, rentalId } = await rental({ pickedUpOn: addDays(today(), -7) });
     const t = tag();
     // A sender the card does not name: a relative, or the bank's own spelling.
-    await load(owner, inRow(today(), '180.00', from(`Relative Example ${t}`)));
+    await load(owner, inRow(today(), gel(DEPOSIT), from(`Relative Example ${t}`)));
     const first = await lineOf(t);
     expect(first.status).toBe('unmatched');
     const res = json<{ id: string; ruleId: string; alsoSorted: string[] }>(await call(owner, 'POST', `/api/statement-lines/${first.id}/assign`, { rentalId, remember: true }));
@@ -148,11 +170,11 @@ describe.skipIf(!HAS_DB)('a payer remembered as a customer (issue #13, acceptanc
     expect(await prisma.payerRule.findUniqueOrThrow({ where: { id: res.ruleId } })).toMatchObject({ kind: 'customer', payerKey: `relative example ${t}` });
 
     // The next line from him is a week: it pays the oldest week owed, by itself.
-    const loaded = await load(owner, inRow(today(), '150.00', from(`Relative Example ${t}`, ' again')));
+    const loaded = await load(owner, inRow(today(), gel(RATE), from(`Relative Example ${t}`, ' again')));
     expect(loaded.matched).toBe(1);
     const second = await prisma.statementLine.findFirstOrThrow({ where: { raw: { contains: `${t}; Account` }, id: { not: first.id } } });
     expect(second).toMatchObject({ status: 'matched', matchedRule: 'payer_rule', payerRuleId: res.ruleId });
-    expect(await prisma.payment.findFirstOrThrow({ where: { statementLineId: second.id } })).toMatchObject({ rentalId, grossTetri: 15000 });
+    expect(await prisma.payment.findFirstOrThrow({ where: { statementLineId: second.id } })).toMatchObject({ rentalId, grossTetri: RATE });
     const rules = json<{ lines: { id: string; rule: string; reason: { code: string; name: string } | null; payerRule: { id: string; live: boolean } | null }[] }>(await call(owner, 'GET', '/api/statement-lines/by-rules'));
     expect(rules.lines.find((l) => l.id === second.id)).toMatchObject({ rule: 'payer_rule', reason: { code: 'payer_rule', name: `Relative Example ${t}` }, payerRule: { id: res.ruleId, live: true } });
     // The queue says who the payer is remembered as.
@@ -164,20 +186,20 @@ describe.skipIf(!HAS_DB)('a payer remembered as a customer (issue #13, acceptanc
   it('a line the rule cannot place without a doubt waits: no debt, or a sum that fits nothing', async () => {
     const { prisma, owner, rentalId } = await rental();
     const t = tag();
-    await load(owner, inRow(today(), '330.00', from(`Payer Example ${t}`)));
+    await load(owner, inRow(today(), gel(DEPOSIT + RATE), from(`Payer Example ${t}`)));
     const first = await lineOf(t);
     expect(json<{ ruleId: string }>(await call(owner, 'POST', `/api/statement-lines/${first.id}/assign`, { rentalId, remember: true })).ruleId).toBeTruthy();
-    // Paid up: 150 more from him has nothing owed to go on.
-    await load(owner, inRow(today(), '150.00', from(`Payer Example ${t}`, ' ahead')));
-    const ahead = await prisma.statementLine.findFirstOrThrow({ where: { raw: { contains: `${t}; Account` }, amountTetri: 15000 } });
+    // Paid up: a week more from him has nothing owed to go on.
+    await load(owner, inRow(today(), gel(RATE), from(`Payer Example ${t}`, ' ahead')));
+    const ahead = await prisma.statementLine.findFirstOrThrow({ where: { raw: { contains: `${t}; Account` }, amountTetri: RATE } });
     expect(ahead.status).toBe('unmatched');
   });
 
   it('remembering sorts the lines already waiting from that payer', async () => {
     const { prisma, owner, rentalId } = await rental();
     const t = tag();
-    // 180 and 150: two lines from one sender — the deposit, then the week.
-    await load(owner, inRow(today(), '180.00', from(`Brother Example ${t}`)), inRow(today(), '150.00', from(`Brother Example ${t}`, ' week')));
+    // Two lines from one sender — the deposit, then the week.
+    await load(owner, inRow(today(), gel(DEPOSIT), from(`Brother Example ${t}`)), inRow(today(), gel(RATE), from(`Brother Example ${t}`, ' week')));
     const lines = await prisma.statementLine.findMany({ where: { raw: { contains: `${t}; Account` } }, orderBy: { amountTetri: 'desc' } });
     expect(lines.map((l) => l.status)).toEqual(['unmatched', 'unmatched']);
     const res = json<{ id: string; ruleId: string; alsoSorted: string[] }>(await call(owner, 'POST', `/api/statement-lines/${lines[0].id}/assign`, { rentalId, remember: true }));
@@ -210,7 +232,7 @@ describe.skipIf(!HAS_DB)('the panel beside a line (issue #13)', () => {
     const sameSum = await rental();
     const t = named.tag;
     // The bank writes the card's Georgian name in its own Latin.
-    await load(named.owner, inRow(today(), '150.00', from(`testaZe gela ${t}`, ' x')));
+    await load(named.owner, inRow(today(), gel(RATE), from(`testaZe gela ${t}`, ' x')));
     const line = await lineOf(t);
     const { options } = json<{ options: Option[] }>(await call(named.owner, 'GET', `/api/statement-lines/${line.id}/options?kind=rental`));
     const mine = options.findIndex((o) => o.target.rentalId === named.rentalId);
@@ -218,7 +240,7 @@ describe.skipIf(!HAS_DB)('the panel beside a line (issue #13)', () => {
     expect(mine).toBe(0);
     expect(options[mine]).toMatchObject({ probable: 'name' });
     expect(options[other]).toMatchObject({ probable: null, fits: true });
-    expect(options[mine].plan).toEqual([{ kind: 'deposit', tetri: 15000 }]);
+    expect(options[mine].plan).toEqual([{ kind: 'deposit', tetri: RATE }]);
     expect(options[mine].payDay).toBeGreaterThanOrEqual(1);
 
     // Four digits are also a rental's number or part of a phone, as in the header's search: the rental is among
@@ -239,14 +261,15 @@ describe.skipIf(!HAS_DB)('the panel beside a line (issue #13)', () => {
     const fine = await prisma.rentalCharge.create({ data: { rentalId, kind: 'fine', amountTetri: 4000, note: 'test fine' } });
     await load(owner, inRow(today(), '40.00', from(`Somebody Else ${t}`)));
     const line = await lineOf(t);
-    const deposits = json<{ options: Option[] }>(await call(owner, 'GET', `/api/statement-lines/${line.id}/options?kind=deposit`)).options;
+    // Searched by the renter's tag: whatever other suites left running, the list holds this one.
+    const deposits = json<{ options: Option[] }>(await call(owner, 'GET', `/api/statement-lines/${line.id}/options?kind=deposit&q=${t}`)).options;
     expect(deposits.find((o) => o.target.rentalId === rentalId)).toMatchObject({ owesTetri: expect.any(Number) });
     // A returned rental's deposit is the return's to settle, not a line's.
     const returned = await rental();
     await prisma.rental.update({ where: { id: returned.rentalId }, data: { status: 'returned' } });
-    const after = json<{ options: Option[] }>(await call(owner, 'GET', `/api/statement-lines/${line.id}/options?kind=deposit`)).options;
+    const after = json<{ options: Option[] }>(await call(owner, 'GET', `/api/statement-lines/${line.id}/options?kind=deposit&q=${returned.tag}`)).options;
     expect(after.map((o) => o.target.rentalId)).not.toContain(returned.rentalId);
-    const repairs = json<{ options: Option[] }>(await call(owner, 'GET', `/api/statement-lines/${line.id}/options?kind=repair`)).options;
+    const repairs = json<{ options: Option[] }>(await call(owner, 'GET', `/api/statement-lines/${line.id}/options?kind=repair&q=${t}`)).options;
     const charge = repairs.find((o) => o.target.chargeId === fine.id)!;
     expect(charge).toMatchObject({ owesTetri: 4000, fits: true });
     expect((await call(owner, 'POST', `/api/statement-lines/${line.id}/assign`, charge.target)).statusCode).toBe(200);
@@ -266,16 +289,17 @@ describe.skipIf(!HAS_DB)('the panel beside a line (issue #13)', () => {
 describe.skipIf(!HAS_DB)('«Несколько услуг»: a deposit as a part of its own (issue #13, acceptance 3)', () => {
   it('250 = deposit 180 + rent 70: the deposit takes its part, the rent its own, no more than the deposit asks', async () => {
     const { prisma, owner, rentalId, tag: t } = await rental();
-    await load(owner, inRow(today(), '250.00', from(`Split Example ${t}`)));
+    // This suite's deposit is 180.29: the line is 250.29.
+    await load(owner, inRow(today(), gel(DEPOSIT + 7000), from(`Split Example ${t}`)));
     const line = await lineOf(t);
-    const over = await call(owner, 'POST', `/api/statement-lines/${line.id}/split`, { parts: [{ depositRentalId: rentalId, grossTetri: '190' }, { rentalId, rentOnly: true, grossTetri: '60' }] });
+    const over = await call(owner, 'POST', `/api/statement-lines/${line.id}/split`, { parts: [{ depositRentalId: rentalId, grossTetri: gel(DEPOSIT + 1000) }, { rentalId, rentOnly: true, grossTetri: '60' }] });
     expect(json<{ error: string }>(over).error).toBe('split_over_deposit');
-    const res = await call(owner, 'POST', `/api/statement-lines/${line.id}/split`, { parts: [{ depositRentalId: rentalId, grossTetri: '180' }, { rentalId, rentOnly: true, grossTetri: '70' }] });
+    const res = await call(owner, 'POST', `/api/statement-lines/${line.id}/split`, { parts: [{ depositRentalId: rentalId, grossTetri: gel(DEPOSIT) }, { rentalId, rentOnly: true, grossTetri: '70' }] });
     expect(res.statusCode, res.body).toBe(200);
     const payments = await prisma.payment.findMany({ where: { statementLineId: line.id }, orderBy: { statementPart: 'asc' }, include: { allocations: true } });
-    expect(payments.map((p) => p.allocations.map((a) => [a.target, a.amountTetri]))).toEqual([[['deposit', 18000]], [['period', 7000]]]);
+    expect(payments.map((p) => p.allocations.map((a) => [a.target, a.amountTetri]))).toEqual([[['deposit', DEPOSIT]], [['period', 7000]]]);
     const card = json<{ deposit: { paidTetri: number } }>(await call(owner, 'GET', `/api/rentals/${rentalId}`));
-    expect(card.deposit.paidTetri).toBe(18000);
+    expect(card.deposit.paidTetri).toBe(DEPOSIT);
   });
 });
 
@@ -284,13 +308,13 @@ describe.skipIf(!HAS_DB)('«Отчёты → Поступления»', () => {
     const { owner, rentalId, tag: t } = await rental();
     const day = addDays(today(), -400);
     const r0 = json<{ customers: { rent: number; deposits: number }; unsorted: number }>(await call(owner, 'GET', `/api/reports/incoming?from=${day}&to=${day}`));
-    await load(owner, inRow(day, '330.00', from(`Report Example ${t}`)), inRow(day, '12.34', from(`Report Example ${t}`, ' left')));
+    await load(owner, inRow(day, gel(DEPOSIT + RATE), from(`Report Example ${t}`)), inRow(day, '12.34', from(`Report Example ${t}`, ' left')));
     const { prisma } = await import('../src/lib/db.js');
-    const line = await prisma.statementLine.findFirstOrThrow({ where: { raw: { contains: `${t}; Account` }, amountTetri: 33000 } });
+    const line = await prisma.statementLine.findFirstOrThrow({ where: { raw: { contains: `${t}; Account` }, amountTetri: DEPOSIT + RATE } });
     expect((await call(owner, 'POST', `/api/statement-lines/${line.id}/assign`, { rentalId })).statusCode).toBe(200);
     const r = json<{ customers: { rent: number; deposits: number }; unsorted: number; totalInTetri: number }>(await call(owner, 'GET', `/api/reports/incoming?from=${day}&to=${day}`));
-    expect(r.customers.deposits - r0.customers.deposits).toBe(18000);
-    expect(r.customers.rent - r0.customers.rent).toBe(15000);
+    expect(r.customers.deposits - r0.customers.deposits).toBe(DEPOSIT);
+    expect(r.customers.rent - r0.customers.rent).toBe(RATE);
     expect(r.unsorted - r0.unsorted).toBe(1234);
   });
 });
