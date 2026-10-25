@@ -258,6 +258,48 @@ describe.skipIf(!HAS_DB)('a payer remembered as a customer (issue #13, acceptanc
     expect(await a.prisma.payment.count({ where: { rentalId: a.rentalId, statementLineId: own.id } })).toBe(0);
   });
 
+  it('«Отменить» of a remembered payer is the same person’s, in the same minute, and takes back only what that tap sorted (review of 25.10.2026)', async () => {
+    const { prisma, owner, rentalId } = await rental({ pickedUpOn: addDays(today(), -7) });
+    const t = tag();
+    // The deposit and the first week wait; remembering the payer on the deposit sorts the week in the same tap.
+    await load(owner, inRow(today(), gel(DEPOSIT), from(`Undo Example ${t}`)), inRow(today(), gel(RATE), from(`Undo Example ${t}`, ' week 1')));
+    const [deposit, week1] = await prisma.statementLine.findMany({ where: { raw: { contains: `${t}; Account` } }, orderBy: { amountTetri: 'desc' } });
+    const res = json<{ id: string; ruleId: string; alsoSorted: string[] }>(await call(owner, 'POST', `/api/statement-lines/${deposit.id}/assign`, { rentalId, remember: true }));
+    expect(res.alsoSorted).toEqual([week1.id]);
+    // Another owner loads the second week: the rule sorts it, and that is no part of the tap.
+    const other = await loginAs('owner');
+    expect((await load(other, inRow(today(), gel(RATE), from(`Undo Example ${t}`, ' week 2')))).matched).toBe(1);
+    const week2 = await prisma.statementLine.findFirstOrThrow({ where: { raw: { contains: `${t}; Account` }, id: { notIn: [deposit.id, week1.id] } } });
+    expect(week2).toMatchObject({ status: 'matched', payerRuleId: res.ruleId });
+    // Not the one who remembered him: refused, and nothing is taken back.
+    const refused = await call(other, 'POST', `/api/payer-rules/${res.ruleId}/undo`);
+    expect(refused.statusCode).toBe(409);
+    expect(json(refused)).toMatchObject({ error: 'payer_rule_undo_too_late' });
+    expect((await prisma.payerRule.findUniqueOrThrow({ where: { id: res.ruleId } })).archivedAt).toBeNull();
+    // The one who did: the rule goes, with the week this tap sorted; the second week stays where the rule put it.
+    expect(json<{ restored: number }>(await call(owner, 'POST', `/api/payer-rules/${res.ruleId}/undo`, { lines: res.alsoSorted })).restored).toBe(1);
+    expect((await prisma.statementLine.findUniqueOrThrow({ where: { id: week1.id } })).status).toBe('unmatched');
+    expect((await prisma.statementLine.findUniqueOrThrow({ where: { id: week2.id } })).status).toBe('matched');
+    expect(await prisma.payment.count({ where: { statementLineId: week2.id, voidedAt: null } })).toBe(1);
+    expect((await prisma.payerRule.findUniqueOrThrow({ where: { id: res.ruleId } })).archivedAt).not.toBeNull();
+  });
+
+  it('a minute later the rule is not undone: it is forgotten, and what it sorted is unlinked line by line', async () => {
+    const owner = await loginAs('owner');
+    const t = tag();
+    const cats = json<{ categories: { id: string; nameRu: string }[] }>(await call(owner, 'GET', '/api/income-categories'));
+    const insurance = cats.categories.find((c) => c.nameRu === 'Страховка')!;
+    await load(owner, inRow(today(), '61.19', from(`Late Example ${t}`)));
+    const line = await lineOf(t);
+    const res = json<{ ruleId: string }>(await call(owner, 'POST', `/api/statement-lines/${line.id}/other-income`, { categoryId: insurance.id, remember: true }));
+    const { prisma } = await import('../src/lib/db.js');
+    // Remembered two minutes ago.
+    await prisma.payerRule.update({ where: { id: res.ruleId }, data: { createdAt: new Date(Date.now() - 2 * 60_000) } });
+    expect(json(await call(owner, 'POST', `/api/payer-rules/${res.ruleId}/undo`))).toMatchObject({ error: 'payer_rule_undo_too_late' });
+    expect((await prisma.payerRule.findUniqueOrThrow({ where: { id: res.ruleId } })).archivedAt).toBeNull();
+    expect((await call(owner, 'POST', `/api/payer-rules/${res.ruleId}/forget`)).statusCode).toBe(200);
+  });
+
   it('a card line or a sale has no payer to remember', async () => {
     const { owner, rentalId } = await rental();
     const t = tag();

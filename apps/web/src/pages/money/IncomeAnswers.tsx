@@ -84,16 +84,20 @@ export function IncomeAnswers({ line, cats, onSplit, onNotOurs }: { line: InLine
     bank_deposit: t.inc.kinds.bank,
   };
   const restore = () => api.post(`/api/statement-lines/${line.id}/restore`, {});
-  /** One tap, one answer: a second tap does nothing (B2-02). Undone, the rule remembered with it goes too. */
+  /**
+   * One tap, one answer: a second tap does nothing (B2-02). Undone, the rule
+   * remembered with it goes too, with the lines this tap sorted — no others.
+   */
   const answer = async (path: string, body: Record<string, unknown>, text: (also: number) => string) => {
     const res = await op.run((key) => api.post<{ ruleId?: string; alsoSorted?: string[] }>(`/api/statement-lines/${line.id}/${path}`, body, { key }), `${path}:${JSON.stringify(body)}`);
     if (!res.ok) return;
     const ruleId = res.value.ruleId;
+    const sorted = res.value.alsoSorted ?? [];
     toast({
-      text: text(res.value.alsoSorted?.length ?? 0),
+      text: text(sorted.length),
       undo: async () => {
         await restore();
-        if (ruleId) await api.post(`/api/payer-rules/${ruleId}/undo`, {});
+        if (ruleId) await api.post(`/api/payer-rules/${ruleId}/undo`, { lines: sorted });
       },
     });
   };
@@ -329,7 +333,8 @@ function KindSheet({
             text: t.sort.attached(label(pick)) + t.inc.alsoSorted(r.alsoSorted?.length ?? 0),
             undo: async () => {
               await api.post(`/api/payments/${r.id}/undo`);
-              if (r.ruleId) await api.post(`/api/payer-rules/${r.ruleId}/undo`, {});
+              // The rule goes with the lines this tap sorted, no others.
+              if (r.ruleId) await api.post(`/api/payer-rules/${r.ruleId}/undo`, { lines: r.alsoSorted ?? [] });
             },
           },
         };

@@ -1374,6 +1374,7 @@ export const en = {
       no_payer: 'The bank names nobody on this line — there is no payer to remember.',
       not_incoming: 'Only money coming in is answered so.',
       payer_rule_not_found: 'That remembered payer is gone already.',
+      payer_rule_undo_too_late: 'Too late to undo: under «Sorted by the rules», «Forget the rule», and «Unlink» its lines one at a time.',
       remember_rent_only: 'A payer is remembered for rent, a deposit or an advance.',
       sale_before_history: 'A sale cannot be dated before the last event in the moped’s history. Pick that day or a later one.',
       sale_closed: 'This sale is closed.',
