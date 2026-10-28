@@ -511,8 +511,8 @@ describe.skipIf(!HAS_DB)('the poll and what it keeps', () => {
 
     const owner = await loginAs('owner');
     expect((await dealRows(owner)).find((r) => r.id === `kommo-sale:${sold}`)).toMatchObject({ action: 'sell_from_kommo', who: contacts[72].name, href: `/sales/new?customer=${lead.customerId}&lead=${sold}` });
-    // A manager does not sell, and is not asked to.
-    expect((await dealRows(await loginAs('manager'))).some((r) => r.id === `kommo-sale:${sold}`)).toBe(false);
+    // A manager sells a moped too since issue #18 (B8), and is asked to as well.
+    expect((await dealRows(await loginAs('manager'))).find((r) => r.id === `kommo-sale:${sold}`)).toMatchObject({ action: 'sell_from_kommo' });
     // The owner's list names it too, with its way into Kommo.
     const page = json<{ wonThere: { leadId: string; leadUrl: string; customer: { id: string } | null }[] }>(await call(owner, 'GET', '/api/kommo/reconciliation'));
     expect(page.wonThere).toEqual([expect.objectContaining({ leadId: String(sold), leadUrl: link(sold), customer: { id: lead.customerId, name: contacts[72].name } })]);

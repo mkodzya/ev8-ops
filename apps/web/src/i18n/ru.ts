@@ -39,6 +39,7 @@ import { incRu } from './inbound.js';
 import { dupRu } from './card-duplicate.js';
 import { rentedFreeRu } from './rented-free.js';
 import { peopleDeleteRu } from './people-delete.js';
+import { simpleRu } from './simplify.js';
 import type { Dict } from './en.js';
 
 // Typed as Dict: a missing or misspelled key fails the build.
@@ -1519,4 +1520,5 @@ export const ru: Dict = {
   ...dupRu,
   ...rentedFreeRu,
   ...peopleDeleteRu,
+  ...simpleRu,
 };

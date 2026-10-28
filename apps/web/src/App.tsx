@@ -192,7 +192,8 @@ export function App() {
         <Route path="money/deposits" element={<Require perm="payments.view"><DepositsPage /></Require>} />
 
         <Route path="sales" element={<SalesPage />} />
-        <Route path="sales/new" element={<Require perm="sales.manage"><SaleWizard /></Require>} />
+        {/* A manager sells a moped too since issue #18 (B8); cancelling and buying back stay an owner's. */}
+        <Route path="sales/new" element={<Require perm="sales.create"><SaleWizard /></Require>} />
         {/* Goods sold over the counter (issue #11, ADR-0045): a static segment, so it wins over sales/:id. */}
         <Route path="sales/goods" element={<GoodsSalesPage />} />
         <Route path="sales/goods/new" element={<Require perm="goods.sell"><GoodsSaleWizard /></Require>} />

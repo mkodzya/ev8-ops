@@ -172,7 +172,7 @@ export function todayRoutes(app: FastifyInstance): void {
     // The comparison is an owner's; the deals to enter are for whoever enters
     // them — a hand-over is a manager's too, a sale is for those who may sell.
     const kommoNow = await kommoReconciliation();
-    const maySell = hasPerm(actor, 'sales.manage');
+    const maySell = hasPerm(actor, 'sales.create');
     const kommoDeals = kommoNow && kommoNow.freshness !== 'waiting' ? kommoNow.deals.filter((d) => d.kind === 'rent' || maySell) : [];
     const kommo =
       owner && kommoNow && kommoNow.freshness !== 'waiting'

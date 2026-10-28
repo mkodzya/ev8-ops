@@ -45,11 +45,11 @@ describe('the structure each role sees (wave 1 §3.2; issue #15, ADR-0048)', () 
     expect(menuSectionsForRole('manager')).not.toContain('money');
   });
 
-  it('offers the owner seven actions under + and the manager six (wave 5 §3.7; issue #11)', () => {
+  it('offers the owner seven actions under + and the manager seven (wave 5 §3.7; issue #11; issue #18 B8)', () => {
     expect(actionsForRole('owner').map((a) => a.id)).toEqual(['pickup', 'return', 'takeMoney', 'newCustomer', 'openRepair', 'sell', 'sellGoods']);
     // A manager reports a breakdown; opening the repair itself is an owner's.
-    // He sells a part or a charger over the counter, never a moped (ADR-0045).
-    expect(actionsForRole('manager').map((a) => a.id)).toEqual(['pickup', 'return', 'takeCash', 'newCustomer', 'reportBreak', 'sellGoods']);
+    // He sells a part or a charger over the counter (ADR-0045), and since issue #18 a moped too.
+    expect(actionsForRole('manager').map((a) => a.id)).toEqual(['pickup', 'return', 'takeCash', 'newCustomer', 'reportBreak', 'sell', 'sellGoods']);
   });
 
   it('splits Sales into the mopeds and the goods, for both roles (issue #11)', () => {

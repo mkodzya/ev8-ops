@@ -39,6 +39,7 @@ import { incKa } from './inbound.js';
 import { dupKa } from './card-duplicate.js';
 import { rentedFreeKa } from './rented-free.js';
 import { peopleDeleteKa } from './people-delete.js';
+import { simpleKa } from './simplify.js';
 import type { Dict } from './en.js';
 
 // Typed as Dict: a missing or misspelled key fails the build.
@@ -1508,4 +1509,5 @@ export const ka: Dict = {
   ...dupKa,
   ...rentedFreeKa,
   ...peopleDeleteKa,
+  ...simpleKa,
 };

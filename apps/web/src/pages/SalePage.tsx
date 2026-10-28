@@ -193,7 +193,7 @@ export function SalePage() {
           <a className="pill pill-sm" href={`/api/sales/${s.id}/contract.pdf`} target="_blank" rel="noreferrer">
             {t.sell.document}
           </a>
-          {!doc?.signedAt && can('sales.manage') && (
+          {!doc?.signedAt && can('sales.create') && (
             <button type="button" className="pill pill-sm" onClick={() => setSigning(true)}>
               {t.sell.sign}
             </button>

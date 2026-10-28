@@ -170,16 +170,26 @@ export function saleRoutes(app: FastifyInstance): void {
     };
   });
 
-  /** Sell a moped (SAL-01). The VIN leaves the fleet the same moment. */
-  app.post<{ Body: Body }>('/api/sales', { config: { scope: 'sales.manage' } }, async (req, reply) => {
+  /**
+   * Sell a moped (SAL-01). The VIN leaves the fleet the same moment. A
+   * manager sells too since issue #18 (B8, Mika's «Да, без отмены» of
+   * 28.10.2026) — today's sale, a moped of the sale park or of none; the
+   * day of a sale, a sale carried over and a moped moved out of the rental
+   * park stay an owner's, as cancelling and buying back do.
+   */
+  app.post<{ Body: Body }>('/api/sales', { config: { scope: 'sales.create' } }, async (req, reply) => {
     const b = req.body ?? {};
     const actor = actorOf(req);
+    const owner = hasPerm(actor, 'sales.manage');
     const customerId = str(b, 'customerId', { required: true })!;
     const vehicleId = str(b, 'vehicleId');
     const vinNote = str(b, 'vinNote', { max: 200 });
     if (!vehicleId && !vinNote) throw conflict('vin_or_note', 'Pick a moped from the fleet, or say what the papers show.');
 
-    const soldOn = date(b, 'soldOn') ?? todayISO(new Date(), env.TZ);
+    const today = todayISO(new Date(), env.TZ);
+    const soldOn = date(b, 'soldOn') ?? today;
+    // The day of a sale is an owner's to set or move (call of 21.10.2026); a manager's sale is today's.
+    if (!owner && soldOn !== today) throw forbidden('owner_only_backdate', 'Only an owner dates a sale in the past.', { field: 'soldOn' });
     // The price is the model's, edited as often as not, plus whatever was put
     // on the moped with it: a second battery, a top box (SAL-01, §3.1).
     const extraLines = Array.isArray(b.extraLines) ? (b.extraLines as Record<string, unknown>[]) : [];
@@ -220,6 +230,8 @@ export function saleRoutes(app: FastifyInstance): void {
       // A moped kept for renting can be sold, but somebody has to say so:
       // the wizard asks, and the park moves with the sale (§3.1).
       if (v.pool === 'rent') {
+        // Taking a moped out of the rental park is the owners' decision (ADR-0005), whoever sells it.
+        if (!hasPerm(actor, 'fleet.pool.set')) throw forbidden('owner_only', 'A moped kept for renting goes to the sale park by an owner.', { field: 'vehicleId' });
         if (!b.movePool) throw conflict('vehicle_in_rent_pool', 'This moped is kept for renting; selling it moves it to the sale park.', { field: 'movePool' });
         poolMove = true;
       }

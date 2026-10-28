@@ -106,6 +106,9 @@ export function SaleWizard() {
   const [params] = useSearchParams();
   const { can } = useSession();
   const owner = can('deposit.decide');
+  // A manager sells too (issue #18, B8). His money form takes cash; a card or a
+  // transfer reaches the bank, and he sorts that line to the sale in «Разобрать».
+  const reconciles = can('payments.reconcile');
   const op = useOperation();
 
   const fleet = useLoad<{ vehicles: FleetRow[] }>('/api/fleet');
@@ -210,6 +213,7 @@ export function SaleWizard() {
   // A sale with nothing paid today is an owner's decision and carries a
   // reason; anything else needs a channel and an amount (§3.1, step 4).
   const paymentOk = !needsPrepayment || (f.channel === 'later' ? owner && f.why.trim().length > 2 : f.channel != null && prepaymentTetri > 0);
+  const ways: (Channel | 'later')[] = owner ? ['cash', 'acquiring', 'transfer', 'later'] : ['cash', 'acquiring', 'transfer'];
   const buyerOk = f.creating ? f.ncName.trim().length > 1 && f.ncPhone.trim().length > 5 : f.customerId !== '';
   const ok = [vehicleOk, buyerOk, priceOk, paymentOk, true][f.step];
 
@@ -258,8 +262,10 @@ export function SaleWizard() {
       setResult(sale);
       drafts.drop();
       // The prepayment goes in as money of its own, through the one money
-      // rule of wave 2 — so a card carries its fee (crit. 1, 8).
-      if (needsPrepayment && f.channel && f.channel !== 'later' && prepaymentTetri > 0) {
+      // rule of wave 2 — so a card carries its fee (crit. 1, 8). A manager's
+      // card or transfer is not written here: it comes as a bank line, and he
+      // sorts it to the sale (issue #18, B8; ADR-0048).
+      if (needsPrepayment && f.channel && f.channel !== 'later' && prepaymentTetri > 0 && (reconciles || f.channel === 'cash')) {
         try {
           await api.post(`/api/sales/${sale.id}/payments`, { grossTetri: prepaymentTetri, channel: f.channel }, { key: `${key}-pay` });
         } catch (e) {
@@ -525,7 +531,8 @@ export function SaleWizard() {
                 />
               </Field>
               <div className="chips" role="radiogroup" aria-label={t.sell.pay}>
-                {(['cash', 'acquiring', 'transfer', 'later'] as const).map((c) => (
+                {/* «Позже — в долг» is an owner's decision with a reason (§3.1): a manager is not offered it. */}
+                {ways.map((c) => (
                   <button key={c} type="button" role="radio" aria-checked={f.channel === c} className={`pill ${f.channel === c ? 'on' : ''}`} onClick={() => set({ channel: c })}>
                     {c === 'later' ? t.sell.noPrepayment : t.payments.channels[c]}
                   </button>
@@ -535,6 +542,7 @@ export function SaleWizard() {
               {f.channel === 'acquiring' && prepaymentTetri > 0 && (
                 <p className="hint muted">{t.sell.cardNet(formatGel(acquiringNet(prepaymentTetri)), formatGel(acquiringFee(prepaymentTetri)))}</p>
               )}
+              {!reconciles && (f.channel === 'acquiring' || f.channel === 'transfer') && <p className="hint">{t.simple.sale.viaBank}</p>}
               {f.channel === 'later' && (
                 <>
                   <p className="hint muted">{t.sell.noPrepaymentHint}</p>

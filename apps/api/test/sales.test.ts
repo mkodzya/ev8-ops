@@ -67,11 +67,46 @@ describe.skipIf(!HAS_DB)('selling (SAL-01)', () => {
     expect(twice.statusCode).toBe(409);
   });
 
-  it('a manager does not sell', async () => {
-    const { vehicle, customer } = await fixtures();
+  // Issue #18, B8 (Mika's «Да, без отмены» of 28.10.2026): a manager sells a moped and takes its
+  // money; cancelling the sale, buying the moped back and moving its day stay an owner's.
+  it('a manager sells today and takes cash on it; the day, the rental park, cancelling and buying back are an owner’s', async () => {
+    const { prisma, vehicle, customer } = await fixtures();
     const manager = await loginAs('manager');
-    expect((await call(manager, 'POST', '/api/sales', { customerId: customer.id, vehicleId: vehicle.id, priceTetri: '2900' })).statusCode).toBe(403);
+    const today = todayISO();
     expect((await call(manager, 'GET', '/api/sales')).statusCode).toBe(200);
+
+    // Another day is the owner's to give a sale: the refusal says so in words.
+    const back = await call(manager, 'POST', '/api/sales', { customerId: customer.id, vehicleId: vehicle.id, priceTetri: '2900', soldOn: addDays(today, -3) });
+    expect(back.statusCode).toBe(403);
+    expect(json<{ error: string }>(back).error).toBe('owner_only_backdate');
+    // A moped of the rental park goes to the sale park by an owner (ADR-0005), whoever sells it.
+    await prisma.vehicle.update({ where: { id: vehicle.id }, data: { pool: 'rent' } });
+    const fromRent = await call(manager, 'POST', '/api/sales', { customerId: customer.id, vehicleId: vehicle.id, priceTetri: '2900', movePool: true });
+    expect(fromRent.statusCode).toBe(403);
+    expect(json<{ error: string }>(fromRent).error).toBe('owner_only');
+    await prisma.vehicle.update({ where: { id: vehicle.id }, data: { pool: 'sale' } });
+
+    const made = await call(manager, 'POST', '/api/sales', { customerId: customer.id, vehicleId: vehicle.id, priceTetri: '2900' });
+    expect(made.statusCode, made.body).toBe(201);
+    const { id } = json<{ id: string }>(made);
+    expect((await prisma.vehicle.findUniqueOrThrow({ where: { id: vehicle.id } })).state).toBe('sold');
+    expect(saleCard(await call(manager, 'GET', `/api/sales/${id}`)).sale).toMatchObject({ status: 'active', priceTetri: 290000 });
+    // Its paper is printed and signed by whoever made it.
+    expect((await call(manager, 'GET', `/api/sales/${id}/contract.pdf`)).statusCode).toBe(200);
+
+    // The money: cash by his own form; a card reaches the bank and is sorted, as before (ADR-0048).
+    expect((await call(manager, 'POST', `/api/sales/${id}/payments`, { grossTetri: '500', channel: 'cash' })).statusCode).toBe(201);
+    const card = await call(manager, 'POST', `/api/sales/${id}/payments`, { grossTetri: '500', channel: 'acquiring' });
+    expect(card.statusCode).toBe(403);
+    expect(json<{ error: string }>(card).error).toBe('reconcile_required');
+    expect(saleCard(await call(manager, 'GET', `/api/sales/${id}`)).sale.paidTetri).toBe(50000);
+
+    // What stays an owner's: cancelling, buying back, the day, the schedule, editing.
+    expect((await call(manager, 'POST', `/api/sales/${id}/cancel`, { reason: 'test' })).statusCode).toBe(403);
+    expect((await call(manager, 'POST', `/api/sales/${id}/buy-back`, { amountTetri: '1000' })).statusCode).toBe(403);
+    expect((await call(manager, 'POST', `/api/sales/${id}/date`, { soldOn: addDays(today, -1), reason: 'test' })).statusCode).toBe(403);
+    expect((await call(manager, 'POST', `/api/sales/${id}/schedule`, { reason: 'test', schedule: [{ dueOn: today, amountTetri: '2900' }] })).statusCode).toBe(403);
+    expect((await call(manager, 'PATCH', `/api/sales/${id}`, { notes: 'test' })).statusCode).toBe(403);
   });
 });
 

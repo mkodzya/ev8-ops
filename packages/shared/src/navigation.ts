@@ -317,7 +317,8 @@ export const ACTIONS: readonly { id: ActionId; path: string; anyOf: readonly Per
   // A manager says a moped is broken and no more than that (wave 5 §3.7);
   // an owner opens the repair itself, so they see the other one.
   { id: 'reportBreak', path: '/service?report=1', anyOf: ['service.report'], noneOf: ['service.manage'] },
-  { id: 'sell', path: '/sales/new', anyOf: ['sales.manage'] },
+  // A moped sold by the owner and, since issue #18 (B8), by the manager too.
+  { id: 'sell', path: '/sales/new', anyOf: ['sales.create'] },
   // A part or a charger over the counter: the owner and the manager (ADR-0045).
   { id: 'sellGoods', path: '/sales/goods/new', anyOf: ['goods.sell'] },
 ];

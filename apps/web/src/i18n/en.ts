@@ -48,6 +48,7 @@ import { incEn } from './inbound.js';
 import { dupEn } from './card-duplicate.js';
 import { rentedFreeEn } from './rented-free.js';
 import { peopleDeleteEn } from './people-delete.js';
+import { simpleEn } from './simplify.js';
 export const en = {
   lang: { label: 'Language', ka: 'ქართული', ru: 'Русский', en: 'English' },
 
@@ -1529,6 +1530,7 @@ export const en = {
   ...dupEn,
   ...rentedFreeEn,
   ...peopleDeleteEn,
+  ...simpleEn,
 };
 
 export type Dict = typeof en;

@@ -161,7 +161,7 @@ export function VehiclePage() {
         ? { label: t.stray.rentedBy(stray.number), onClick: () => setStateSheet({ prefer: 'rented' }) }
         : null
       : forSale
-      ? can('sales.manage')
+      ? can('sales.create')
         ? { label: t.sales.newSale, to: `/sales/new?vehicle=${v.id}` }
         : null
       : v.state === 'available' && can('rental.create')
@@ -197,7 +197,8 @@ export function VehiclePage() {
         )}
         {/* Selling starts from the moped as often as from the "+" (§3.1); on a
             moped for sale the two trade places with the main button. */}
-        {v.state === 'available' && !forSale && !stray && can('sales.manage') && (
+        {/* A manager sells too (issue #18, B8) — not a moped of the rental park: moving it out is an owner's (ADR-0005). */}
+        {v.state === 'available' && !forSale && !stray && can('sales.create') && (v.pool !== 'rent' || can('fleet.pool.set')) && (
           <Link className="pill pill-sm" to={`/sales/new?vehicle=${v.id}`}>
             {t.sell.title}
           </Link>
