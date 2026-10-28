@@ -1771,13 +1771,15 @@ export function serviceRoutes(app: FastifyInstance): void {
         },
       });
       if (odometerKm != null) await tx.vehicle.update({ where: { id: job.vehicleId }, data: { odometerKm, updatedAt: new Date() } });
-      // A moped that never left the customer keeps no point of ours while it
-      // is out with them; the point is set on the one that comes back.
-      if (closedLocationId && job.movedVehicle) {
-        await tx.vehicle.update({ where: { id: job.vehicleId }, data: { locationId: closedLocationId, updatedAt: new Date() } });
-      }
       if (job.movedVehicle) {
-        await moveVehicle(tx, { vehicleId: job.vehicleId, kind: 'service_out', occurredOn: closedOn, actorId: actor.id, reason: job.reason });
+        const { to } = await moveVehicle(tx, { vehicleId: job.vehicleId, kind: 'service_out', occurredOn: closedOn, actorId: actor.id, reason: job.reason });
+        // A moped that never left the customer keeps no point of ours while it
+        // is out with them; the point is set on the one that comes back. One
+        // whose rental is still open ends the repair with that customer (issue
+        // #17) and keeps none either: a rented moped stands at no point.
+        if (closedLocationId && to !== 'rented') {
+          await tx.vehicle.update({ where: { id: job.vehicleId }, data: { locationId: closedLocationId, updatedAt: new Date() } });
+        }
       }
       await tx.auditLog.create({
         data: {
