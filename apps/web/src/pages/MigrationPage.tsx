@@ -2,7 +2,7 @@ import { formatGel } from '@ev8/shared';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { LoadError } from '../components/LoadError.js';
-import { BlockHead, Empty, Loading, PageHead, Vin } from '../components/ui.js';
+import { BlockHead, Empty, Loading, PageHead } from '../components/ui.js';
 import { SubmitButton } from '../ds/form/Form.js';
 import { useOperation } from '../ds/form/operation.js';
 import { useToast } from '../ds/feedback/Toast.js';
@@ -37,7 +37,6 @@ interface Migration {
     running: { count: number; amountTetri: number };
   };
   rentalsWithoutVin: { count: number; rows: { id: string; number: string; status: string; who: string; pickedUpOn: string | null; note: string | null }[] };
-  vehiclesInServiceWithoutJob: { count: number; rows: { id: string; vin: string; model: string | null; arrivedOn: string | null }[] };
 }
 
 export function MigrationPage() {
@@ -112,8 +111,6 @@ export function MigrationPage() {
           </div>
         )}
       </section>
-
-      <InService rows={d.vehiclesInServiceWithoutJob.rows} onDone={m.reload} />
     </>
   );
 }
@@ -238,75 +235,6 @@ function Deposits({ data, onDone }: { data: Migration['deposits']; onDone: () =>
           {op.failure && <div className="field-err">{op.failure.fieldText ?? op.failure.text}</div>}
           <SubmitButton type="button" state={op.state} label={t.migrationPage.mark(t.migrationPage.decide[decision])} onClick={() => void mark()} />
         </>
-      )}
-    </section>
-  );
-}
-
-/** A moped Odoo called "in service" with nothing behind it (register #23). */
-function InService({ rows, onDone }: { rows: Migration['vehiclesInServiceWithoutJob']['rows']; onDone: () => void }) {
-  const t = useT();
-  const toast = useToast();
-  const op = useOperation();
-  const [open, setOpen] = useState<string | null>(null);
-  const [reason, setReason] = useState('');
-
-  const back = async (id: string, vin: string) => {
-    const res = await op.run((key) => api.post(`/api/migration/vehicles/${id}/back`, { reason }, { key }), `back:${id}`);
-    if (!res.ok) return;
-    toast({ text: t.migrationPage.backDone(vin) });
-    setOpen(null);
-    setReason('');
-    op.reset();
-    onDone();
-  };
-
-  return (
-    <section className="card">
-      <BlockHead title={t.migrationPage.inService} sub={rows.length > 0 ? t.migrationPage.inServiceNote(rows.length) : undefined} />
-      {rows.length === 0 ? (
-        <Empty text={t.migrationPage.nothing} />
-      ) : (
-        <div className="table-wrap table-flat">
-          <table className="table">
-            <tbody>
-              {rows.map((v) => (
-                <tr key={v.id}>
-                  <td>
-                    <Link to={`/fleet/${v.id}`}>
-                      <Vin vin={v.vin} />
-                    </Link>
-                  </td>
-                  <td className="muted">{v.model ?? ''}</td>
-                  <td className="num">
-                    {open === v.id ? (
-                      <span className="inline-form">
-                        <input
-                          className="input input-inline"
-                          value={reason}
-                          autoFocus
-                          placeholder={t.migrationPage.backReason}
-                          aria-label={t.migrationPage.backReason}
-                          onChange={(e) => setReason(e.target.value)}
-                        />
-                        <SubmitButton small type="button" state={op.state} label={t.migrationPage.backToFleet} disabled={!reason.trim()} onClick={() => void back(v.id, v.vin)} />
-                      </span>
-                    ) : (
-                      <>
-                        <Link className="pill pill-sm" to={`/service/new?vehicleId=${v.id}`}>
-                          {t.migrationPage.openRepair}
-                        </Link>{' '}
-                        <button type="button" className="pill pill-sm" onClick={() => setOpen(v.id)}>
-                          {t.migrationPage.backToFleet}
-                        </button>
-                      </>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
       )}
     </section>
   );

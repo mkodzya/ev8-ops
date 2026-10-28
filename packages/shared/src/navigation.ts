@@ -147,6 +147,12 @@ export interface NavCounts {
   sort: { in: number; out: number | null } | null;
   /** Cash handed over and waiting for an owner. */
   till: number | null;
+  /**
+   * What «Настройки → До EV8 Ops» still asks: deposits brought over with no
+   * decision and rentals brought over with no VIN (issue #18, B6). Nought
+   * hides the tab (`tabsShown`); null — not counted for this person.
+   */
+  migration: number | null;
 }
 
 export type TabId =
@@ -199,6 +205,7 @@ export const SECTION_TABS: Partial<Record<SectionId, readonly { id: TabId; path:
   fleet: [
     { id: 'vehicles', path: '/fleet', anyOf: ['fleet.view'] },
     { id: 'models', path: '/fleet/models', anyOf: ['fleet.view'] },
+    // The one place of the points since issue #18 (B6): Settings had a tab to the same page.
     { id: 'points', path: '/fleet/points', anyOf: ['settings.manage'] },
   ],
   service: [
@@ -230,9 +237,12 @@ export const SECTION_TABS: Partial<Record<SectionId, readonly { id: TabId; path:
   ],
   // The till by person and one's own payments: a manager's money, and since
   // issue #15 an owner's daily section too — he accepts the cash handed over.
+  // «Мои платежи» is not an owner's tab since issue #18 (B6): whoever reads
+  // «Деньги → Платежи» has his own payments there, filtered, and a second
+  // list of the same money was a duplicate (the director's audit, 25.10.2026).
   cash: [
     { id: 'till', path: '/money/cash', anyOf: ['cash.record'] },
-    { id: 'mine', path: '/money/mine', anyOf: ['cash.record'] },
+    { id: 'mine', path: '/money/mine', anyOf: ['cash.record'], noneOf: ['payments.view'] },
   ],
   // The customers beside the rentals (issue #15): they were in the avatar menu.
   rentals: [
@@ -247,14 +257,12 @@ export const SECTION_TABS: Partial<Record<SectionId, readonly { id: TabId; path:
     { id: 'deposits', path: '/money/deposits', anyOf: ['payments.view'] },
   ],
   // Settings grew from one page to six tabs in wave 6 (§3.4–3.9): the people,
-  // the points, what a hand-over proposes, the journal, what the move from
-  // Odoo left, and the rules of signing in.
+  // what a hand-over proposes, the journal, what the move from Odoo left, and
+  // the rules of signing in. The points were a tab here too (Mika, 29.09.2026)
+  // — one page on two addresses; since issue #18 (B6) they live in «Мопеды →
+  // Точки» alone, and `/settings/points` leads there.
   settings: [
     { id: 'people', path: '/settings', anyOf: ['users.manage'] },
-    // The same list as Fleet's, opened without leaving Settings (Mika,
-    // 29.09.2026: being thrown into Fleet from Settings was inconvenient).
-    // One page on two addresses, so still no copy (designer, 21.09.2026).
-    { id: 'points', path: '/settings/points', anyOf: ['settings.manage'] },
     { id: 'rental', path: '/settings/rental', anyOf: ['settings.manage'] },
     // The workshop's rate and the planned-maintenance interval (stage 6, ADR-0038),
     // and the workshops that do the repairs (task #1 of 21.10.2026).
@@ -301,6 +309,17 @@ export const SECTION_TABS: Partial<Record<SectionId, readonly { id: TabId; path:
 
 export function tabsFor(section: SectionId, permissions: readonly Permission[]) {
   return (SECTION_TABS[section] ?? []).filter((t) => allowed(t, permissions));
+}
+
+/**
+ * The tabs drawn: a section's tabs, less one with nothing left in it —
+ * «До EV8 Ops» once its lists are empty (issue #18, B6; the director's audit
+ * read 0 deposits and 0 rentals without a VIN on 25.10.2026). It stays while
+ * the counts have not come, and while it is the address open: a strip whose
+ * open tab vanished under the reader would be worse than the tab.
+ */
+export function tabsShown(section: SectionId, permissions: readonly Permission[], counts: NavCounts | null | undefined, pathname: string) {
+  return tabsFor(section, permissions).filter((t) => t.id !== 'migration' || t.path === pathname || counts?.migration == null || counts.migration > 0);
 }
 
 export type ActionId = 'pickup' | 'return' | 'takeMoney' | 'takeCash' | 'newCustomer' | 'openRepair' | 'reportBreak' | 'sell' | 'sellGoods';
@@ -377,6 +396,8 @@ export const REDIRECTS: readonly { from: string; to: string }[] = [
   { from: '/money/sort', to: '/sort' },
   { from: '/money/sort/rules', to: '/sort/rules' },
   { from: '/money/sort/aside', to: '/sort/aside' },
+  // The points in one place (issue #18, B6).
+  { from: '/settings/points', to: '/fleet/points' },
 ];
 
 /**

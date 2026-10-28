@@ -156,8 +156,8 @@ export function App() {
         <Route path="fleet" element={<FleetPage />} />
         <Route path="fleet/models" element={<ModelsPage />} />
         <Route path="fleet/models/:id" element={<ModelPage />} />
+        {/* The points live here alone since issue #18 (B6); `/settings/points` is an old address now (REDIRECTS). */}
         <Route path="fleet/points" element={<Require perm="settings.manage"><PointsPage /></Require>} />
-        <Route path="settings/points" element={<Require perm="settings.manage"><PointsPage /></Require>} />
         <Route path="fleet/:id" element={<VehiclePage />} />
         {/* A sticker's QR: ops.ev8.ge/m/EV-007 (Mika, 15.10.2026). */}
         <Route path="m/:code" element={<MopedByNumber />} />

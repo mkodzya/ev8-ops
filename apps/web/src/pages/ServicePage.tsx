@@ -4,9 +4,11 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { LoadError } from '../components/LoadError.js';
 import { PhotoPicker } from '../components/PhotoPicker.js';
-import { Loading, PageHead, Vin } from '../components/ui.js';
+import { BlockHead, FleetNo, Loading, PageHead, Vin } from '../components/ui.js';
 import { Field } from '../components/Wizard.js';
-import { FormSheet } from '../ds/form/Form.js';
+import { useToast } from '../ds/feedback/Toast.js';
+import { FormSheet, SubmitButton } from '../ds/form/Form.js';
+import { useOperation } from '../ds/form/operation.js';
 import { DataList } from '../ds/list/DataList.js';
 import { formatGel } from '../format.js';
 import { useT } from '../i18n/index.js';
@@ -182,6 +184,85 @@ function daysOf(j: ServiceJob, today: string): number {
  * one, so an owner never has to open a card to find out there is nothing to
  * read yet.
  */
+/**
+ * «В ремонте без заявки» (issue #18, B6; register #23): mopeds whose status
+ * says «В ремонте» with no repair open behind them. Odoo left nineteen so; it
+ * was a list of «Настройки → До EV8 Ops», where nobody looked for a repair
+ * (the director's audit read 19 on 25.10.2026). Whoever moves a moped by hand
+ * opens the repair, or sends the moped back to the yard with a reason. With
+ * nothing in it there is no block.
+ */
+function WithoutRepair({ onDone }: { onDone: () => void }) {
+  const t = useT();
+  const { can } = useSession();
+  const toast = useToast();
+  const op = useOperation();
+  const { data, reload } = useLoad<{ vehicles: { id: string; vin: string; fleetNo: number | null; model: string | null }[] }>('/api/service/without-repair');
+  const [open, setOpen] = useState<string | null>(null);
+  const [reason, setReason] = useState('');
+  const rows = data?.vehicles ?? [];
+  if (rows.length === 0) return null;
+
+  const back = async (id: string, vin: string) => {
+    const res = await op.run((key) => api.post(`/api/service/without-repair/${id}/back`, { reason }, { key }), `back:${id}`);
+    if (!res.ok) return;
+    toast({ text: t.migrationPage.backDone(vin) });
+    setOpen(null);
+    setReason('');
+    op.reset();
+    reload();
+    onDone();
+  };
+
+  return (
+    <section className="card">
+      <BlockHead title={t.simple.idle.title} sub={t.simple.idle.count(rows.length)} note={t.simple.idle.note} />
+      <div className="table-wrap table-flat">
+        <table className="table">
+          <tbody>
+            {rows.map((v) => (
+              <tr key={v.id}>
+                <td>
+                  <Link to={`/fleet/${v.id}`}>{v.fleetNo ? <FleetNo n={v.fleetNo} /> : <Vin vin={v.vin} />}</Link>
+                </td>
+                <td className="muted">{v.model ?? ''}</td>
+                <td className="num">
+                  {open === v.id ? (
+                    <span className="inline-form">
+                      <input
+                        className="input input-inline"
+                        value={reason}
+                        autoFocus
+                        placeholder={t.migrationPage.backReason}
+                        aria-label={t.migrationPage.backReason}
+                        onChange={(e) => setReason(e.target.value)}
+                      />
+                      <SubmitButton small type="button" state={op.state} label={t.migrationPage.backToFleet} disabled={!reason.trim()} onClick={() => void back(v.id, v.vin)} />
+                    </span>
+                  ) : (
+                    <>
+                      {can('service.work') && (
+                        <>
+                          <Link className="pill pill-sm" to={`/service/new?vehicleId=${v.id}`}>
+                            {t.migrationPage.openRepair}
+                          </Link>{' '}
+                        </>
+                      )}
+                      <button type="button" className="pill pill-sm" onClick={() => setOpen(v.id)}>
+                        {t.migrationPage.backToFleet}
+                      </button>
+                    </>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
 export function ServicePage() {
   const t = useT();
   const { can, me } = useSession();
@@ -245,6 +326,9 @@ export function ServicePage() {
           </ul>
         </section>
       )}
+
+      {/* «В ремонте без заявки» (issue #18, B6): was a list of «Настройки → До EV8 Ops». */}
+      {mayFleet && can('fleet.state.manual') && <WithoutRepair onDone={reload} />}
 
       <DataList
         rows={data.jobs}

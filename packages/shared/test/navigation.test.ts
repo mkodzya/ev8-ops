@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { GROUPS, REDIRECTS, groupHeadingForRole, movedTo } from '../src/index.js';
+import { GROUPS, REDIRECTS, ROLE_PERMISSIONS, groupHeadingForRole, movedTo, tabsShown, type NavCounts } from '../src/index.js';
 import { actionsForRole, homePathForRole, menuSectionsForRole, phoneTabsForRole, sectionOfPath, sectionsForRole, tabsForRole } from './navigation-helpers.js';
 
 describe('the structure each role sees (wave 1 §3.2; issue #15, ADR-0048)', () => {
@@ -70,7 +70,9 @@ describe('the structure each role sees (wave 1 §3.2; issue #15, ADR-0048)', () 
     expect(tabsForRole('money', 'owner').map((t) => t.id)).toEqual(['payments', 'statements', 'deposits']);
     expect(tabsForRole('money', 'manager')).toEqual([]);
     expect(tabsForRole('cash', 'manager').map((t) => t.id)).toEqual(['till', 'mine']);
-    expect(tabsForRole('cash', 'owner').map((t) => t.id)).toEqual(['till', 'mine']);
+    // «Мои платежи» repeated «Деньги → Платежи» for an owner (issue #18, B6): whoever reads Money has his there.
+    expect(tabsForRole('cash', 'owner').map((t) => t.id)).toEqual(['till']);
+    expect(sectionOfPath('/money/mine', ['payments.view'])).toBe('cash');
   });
 
   // Issue #15: «Оплаты по графику» was «Деньги → Календарь», an owner's only.
@@ -148,17 +150,30 @@ describe('the structure each role sees (wave 1 §3.2; issue #15, ADR-0048)', () 
     expect(sectionOfPath('/purchases/suppliers')).toBe('purchases');
   });
 
-  // Wave 6 §3.4–3.9. Settings grew into tabs; the points did not move with
-  // them — one list, one address (designer, 21.09.2026).
-  // The expense categories joined them on 15.10.2026 (migration 0046).
-  it('gives settings seven tabs, and its points stay in Settings (Mika, 29.09.2026)', () => {
+  // Wave 6 §3.4–3.9. Settings grew into tabs. The expense categories joined
+  // them on 15.10.2026 (migration 0046). The points were a tab here as well
+  // (Mika, 29.09.2026) until issue #18 (B6): one list, in «Мопеды → Точки».
+  it('gives settings its tabs without the points, which live in «Мопеды → Точки» alone (issue #18 B6)', () => {
     // «Поступления» beside «Расходы»: the categories of other income (issue #13, migration 0069).
-    expect(tabsForRole('settings', 'owner').map((t) => t.id)).toEqual(['people', 'points', 'rental', 'repair', 'expenses', 'incoming', 'drive', 'journal', 'migration', 'login']);
-    expect(tabsForRole('settings', 'owner').find((t) => t.id === 'points')?.path).toBe('/settings/points');
-    expect(sectionOfPath('/settings/points')).toBe('settings');
-    // Fleet keeps its own tab to the same page.
+    expect(tabsForRole('settings', 'owner').map((t) => t.id)).toEqual(['people', 'rental', 'repair', 'expenses', 'incoming', 'drive', 'journal', 'migration', 'login']);
     expect(tabsForRole('fleet', 'owner').find((t) => t.id === 'points')?.path).toBe('/fleet/points');
+    // A bookmark on the old address still arrives.
+    expect(movedTo('/settings/points', '')).toBe('/fleet/points');
     expect(tabsForRole('settings', 'manager')).toEqual([]);
+  });
+
+  // Issue #18 (B6): «До EV8 Ops» is drawn while its lists have something in them.
+  it('hides «До EV8 Ops» once nothing is left in it, but not before the counts come nor while it is open', () => {
+    const owner = ROLE_PERMISSIONS.owner;
+    const counts = (migration: number | null): NavCounts => ({ schedule: null, sort: null, till: null, migration });
+    const ids = (c: NavCounts | null, at = '/settings') => tabsShown('settings', owner, c, at).map((t) => t.id);
+    expect(ids(counts(0))).not.toContain('migration');
+    expect(ids(counts(3))).toContain('migration');
+    expect(ids(null)).toContain('migration');
+    expect(ids(counts(null))).toContain('migration');
+    expect(ids(counts(0), '/settings/migration')).toContain('migration');
+    // No other tab is hidden by it.
+    expect(ids(counts(0))).toEqual(tabsForRole('settings', 'owner').map((t) => t.id).filter((id) => id !== 'migration'));
   });
 
   // ADR-0033: a mechanic and a chief mechanic see the repairs and nothing else,
