@@ -5,7 +5,7 @@
 // about it, and a mechanic's own «Сегодня». Every task and name here is
 // invented; the suites share one database, so each works with its own people
 // and its own tasks.
-import { TODO_ENDED_RENTAL, TODO_ENDED_VEHICLE, addDays, todayISO, type TodoView } from '@ev8/shared';
+import { TODO_ENDED_RENTAL, TODO_ENDED_VEHICLE, addDays, fleetNumber, nextTodoDue, todayISO, type TodoView } from '@ev8/shared';
 import { describe, expect, it } from 'vitest';
 import { HAS_DB, call, json, login, makeUser, uniq } from './helpers.js';
 
@@ -212,6 +212,47 @@ describe.skipIf(!HAS_DB)('«Задачи» (issue #18 A, ADR-0050)', () => {
     const kept = await prisma.todo.findUniqueOrThrow({ where: { id }, select: { deletedAt: true, deletedById: true } });
     expect(kept.deletedById).toBe(owner.id);
     expect((await prisma.todoSeries.findUniqueOrThrow({ where: { id: t.seriesId! } })).stoppedById).toBe(owner.id);
+  });
+
+  it('starts a repeat of another kind anew from the task changed: the old one stops and takes back what it made ahead', async () => {
+    const owner = await person('owner');
+    const { prisma } = await import('../src/lib/db.js');
+    const text = `Сверка по неделям (пример) ${uniq()}`;
+    const id = await set(owner.cookie, { text, repeat: 'weekly' });
+    // A week ago, as if made then: reading makes today's from it.
+    const back = addDays(today(), -7);
+    const old = (await prisma.todo.findUniqueOrThrow({ where: { id }, select: { seriesId: true } })).seriesId!;
+    await prisma.todo.update({ where: { id }, data: { dueOn: date(back), seriesOn: date(back) } });
+    await prisma.todoSeries.update({ where: { id: old }, data: { lastOn: date(back) } });
+    const made = (await list(owner.cookie)).todos.filter((t) => t.text === text);
+    expect(made.map((t) => t.dueOn)).toEqual([back, today()]);
+
+    // The late one becomes monthly: today's, of the weekly rule, is taken back,
+    // and the next comes a month after the late one's day — once.
+    expect((await call(owner.cookie, 'PATCH', `/api/todos/${id}`, { repeat: 'monthly' })).statusCode).toBe(200);
+    await list(owner.cookie);
+    const now = (await list(owner.cookie)).todos.filter((t) => t.text === text);
+    const day = Number(back.slice(8, 10));
+    const next = nextTodoDue('monthly', day, back);
+    expect(now.map((t) => t.dueOn)).toEqual([back, next]);
+    expect(now.every((t) => t.repeat === 'monthly' && t.repeatDay === day)).toBe(true);
+    const todays = made.find((t) => t.dueOn === today())!;
+    expect((await prisma.todo.findUniqueOrThrow({ where: { id: todays.id } })).deletedById).toBe(owner.id);
+    expect((await prisma.todoSeries.findUniqueOrThrow({ where: { id: old } })).stoppedAt).not.toBeNull();
+    const changed = await prisma.todo.findUniqueOrThrow({ where: { id }, include: { series: true } });
+    expect(changed.seriesId).not.toBe(old);
+    expect(changed.series).toMatchObject({ repeat: 'monthly', repeatDay: day, lastOn: date(next), stoppedAt: null });
+  });
+
+  it('writes in the journal which record a task moved to, not only its kind', async () => {
+    const owner = await person('owner');
+    const { prisma, vehicle } = await rentalFixture();
+    const other = await prisma.vehicle.create({ data: { vin: `TESTT${digits().slice(-12).padStart(12, '0')}`, modelId: vehicle.modelId, pool: 'rent' } });
+    const id = await set(owner.cookie, { text: 'Проверить фару (пример)', link: { kind: 'vehicle', id: vehicle.id } });
+    expect((await call(owner.cookie, 'PATCH', `/api/todos/${id}`, { link: { kind: 'vehicle', id: other.id } })).statusCode).toBe(200);
+    const line = await prisma.auditLog.findFirstOrThrow({ where: { entityId: id, action: 'todo.update' } });
+    expect(line.before).toEqual({ link: { kind: 'vehicle', label: fleetNumber(vehicle.fleetNo) } });
+    expect(line.after).toEqual({ link: { kind: 'vehicle', label: fleetNumber(other.fleetNo) } });
   });
 
   it('closes a task about a rental when the rental is returned, keeps it closed, and takes no task about an ended record', async () => {

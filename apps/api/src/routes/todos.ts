@@ -5,6 +5,7 @@ import {
   TODO_MINE,
   TODO_NOTE_MAX,
   TODO_REPEATS,
+  fleetNumber,
   mayGiveTodo,
   mayLinkTodo,
   repeatDayOf,
@@ -102,6 +103,29 @@ interface LinkIds {
 const NO_LINK: LinkIds = { vehicleId: null, rentalId: null, customerId: null };
 
 const kindOf = (l: LinkIds): TodoLinkKind | null => (l.vehicleId ? 'vehicle' : l.rentalId ? 'rental' : l.customerId ? 'customer' : null);
+
+const sameLink = (a: LinkIds, b: LinkIds): boolean => a.vehicleId === b.vehicleId && a.rentalId === b.rentalId && a.customerId === b.customerId;
+
+/**
+ * The record a task is about, for the journal: its kind and what a person
+ * knows it by — a moped's fleet number, a rental's number, a customer's name.
+ * By kind alone a task moved from one moped to another wrote nothing.
+ */
+async function linkWord(l: LinkIds): Promise<{ kind: TodoLinkKind; label: string | null } | null> {
+  if (l.vehicleId) {
+    const v = await prisma.vehicle.findUnique({ where: { id: l.vehicleId }, select: { vin: true, fleetNo: true } });
+    return { kind: 'vehicle', label: v ? (fleetNumber(v.fleetNo) ?? `···${v.vin.slice(-4)}`) : null };
+  }
+  if (l.rentalId) {
+    const r = await prisma.rental.findUnique({ where: { id: l.rentalId }, select: { number: true } });
+    return { kind: 'rental', label: r?.number ?? null };
+  }
+  if (l.customerId) {
+    const c = await prisma.customer.findUnique({ where: { id: l.customerId }, select: { name: true } });
+    return { kind: 'customer', label: c?.name ?? null };
+  }
+  return null;
+}
 
 /**
  * The record a task is about, as the body names it: `{ kind, id }`, or null
@@ -269,8 +293,8 @@ export function todoRoutes(app: FastifyInstance): void {
    * Change a task — whoever set it, while it is open. A task of a repeat
    * changes the ones after it too (its words, whose, «нужно фото», the
    * record), never their days. `repeat`: «Нет» stops the repeat and takes back
-   * the occurrences it made ahead; another kind reads its day from this
-   * task's due day.
+   * the occurrences it made ahead; another kind does the same and starts a
+   * repeat of its own from this task, its day read from this task's due day.
    */
   app.patch<{ Params: { id: string }; Body: Body }>('/api/todos/:id', { config: { scope: 'todos.own' } }, async (req) => {
     const actor = actorOf(req);
@@ -308,13 +332,17 @@ export function todoRoutes(app: FastifyInstance): void {
       let takenBack = 0;
       if (running && repeat === 'none') {
         takenBack = await stopSeries(tx, running.id, row.seriesOn!, actor.id);
-      } else if (running && repeat !== 'none') {
-        // The repeat goes on: what it makes from, and its day if its kind changed.
-        const day = repeat !== running.repeat ? repeatDayOf(repeat, f.dueOn) : running.repeatDay;
-        await tx.todoSeries.update({ where: { id: running.id }, data: { ...common, repeat, repeatDay: day } });
+      } else if (running && repeat === running.repeat) {
+        // The repeat goes on as it was: what it makes from, never its days.
+        await tx.todoSeries.update({ where: { id: running.id }, data: common });
         await tx.todo.updateMany({ where: { seriesId: running.id, seriesOn: { gt: row.seriesOn! }, ...OPEN }, data: { ...common, updatedAt: at } });
-      } else if (!running && repeat !== 'none') {
-        // A repeat from this task on: its first occurrence is this one.
+      } else if (repeat !== 'none') {
+        // A repeat from this task on: its first occurrence is this one. A
+        // repeat of another kind starts so too — the old one stops and takes
+        // back what it made ahead. Changed in place it kept the old rule's
+        // last day and occurrences: a second task on the new rule's day, or
+        // the old rule's days going on before the new one began.
+        if (running) takenBack = await stopSeries(tx, running.id, row.seriesOn!, actor.id);
         const s = await tx.todoSeries.create({ data: { ...common, createdById: row.createdById, repeat, repeatDay: repeatDayOf(repeat, f.dueOn), lastOn: dueOn }, select: { id: true } });
         seriesId = s.id;
         seriesOn = dueOn;
@@ -339,8 +367,13 @@ export function todoRoutes(app: FastifyInstance): void {
       before.assignee = row.assignee.name;
       after.assignee = assignee.name;
     }
-    note('link', kindOf(wasLink), kindOf(link));
+    if (!sameLink(wasLink, link)) {
+      // By the record, not its kind: from one moped to another is a change too.
+      before.link = await linkWord(wasLink);
+      after.link = await linkWord(link);
+    }
     note('repeat', running ? running.repeat : 'none', repeat);
+    if (taken > 0 && repeat !== 'none') after.takenBack = taken;
     if (Object.keys(after).length > 0) await audit({ actorId: actor.id, action: 'todo.update', entityType: 'todo', entityId: row.id, before, after });
     if (running && repeat === 'none') await audit({ actorId: actor.id, action: 'todo.repeat.stop', entityType: 'todo_series', entityId: running.id, after: { takenBack: taken } });
     return { ok: true };
