@@ -30,6 +30,7 @@ import { contractSignedKa, SIGNIFY_IN_KA } from './contract-signed.js';
 import { saleDateKa } from './sale-date.js';
 import { rentalSwapKa } from './rental-swap.js';
 import { vehicleCardKa } from './vehicle-card.js';
+import { vehicleDetailsKa } from './vehicle-details.js';
 import { pickupDateKa } from './pickup-date.js';
 import { depositReviseKa } from './deposit-revise.js';
 import { menuKa } from './menu.js';
@@ -1216,6 +1217,7 @@ export const ka: Dict = {
       already_returned: 'ეს ქირაობა უკვე დახურულია.',
       already_signed: `ხელშეკრულება უკვე ხელმოწერილია — ეკრანზე ან ${SIGNIFY_IN_KA}.`,
       already_voided: 'ეს გადახდა უკვე გაუქმებულია.',
+      arrival_date_bad: 'მოპედის მოსვლის თარიღი — არა უგვიანეს დღევანდელი დღისა და არა უგვიანეს მისი ისტორიის პირველი დღისა.',
       bad_channel: 'დეპოზიტი ბრუნდება ნაღდით ან გადარიცხვით.',
       bad_field: 'ველი არასწორად არის შევსებული. შეამოწმეთ ფორმა და სცადეთ ხელახლა.',
       bad_locale: 'ეს ენა არ არის ხელმისაწვდომი.',
@@ -1436,6 +1438,7 @@ export const ka: Dict = {
       vehicle_not_found: 'მოპედი ვერ მოიძებნა.',
       vehicle_rented: 'მოპედი კლიენტთანაა — ადგილი დაბრუნებისას მიენიჭება.',
       vehicle_rented_move: 'მოპედი კლიენტთანაა — ჯერ დახურეთ ქირა.',
+      vehicle_year_bad: 'მოპედის წელი — 2000-დან მომავალ წლამდე.',
       vehicle_rented_sale: 'მოპედი ქირაშია — გაყიდვა შეუძლებელია დაბრუნებამდე.',
       vehicle_sold: 'ეს მოპედი უკვე გაყიდულია.',
       vin_or_note: 'აირჩიეთ მოპედი პარკიდან ან დაწერეთ, რატომ არ არის VIN დადასტურებული.',
@@ -1490,6 +1493,7 @@ export const ka: Dict = {
   ...saleDateKa,
   ...rentalSwapKa,
   ...vehicleCardKa,
+  ...vehicleDetailsKa,
   ...pickupDateKa,
   ...depositReviseKa,
   ...menuKa,

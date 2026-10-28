@@ -42,6 +42,7 @@ import { vehicleCardEn } from './vehicle-card.js';
 import { pickupDateEn } from './pickup-date.js';
 import { depositReviseEn } from './deposit-revise.js';
 import { menuEn } from './menu.js';
+import { vehicleDetailsEn } from './vehicle-details.js';
 import { goodsEn } from './goods.js';
 import { incEn } from './inbound.js';
 import { dupEn } from './card-duplicate.js';
@@ -1237,6 +1238,7 @@ export const en = {
       already_returned: 'This rental is already closed.',
       already_signed: 'The contract is already signed — on the screen or in Signify.',
       already_voided: 'This payment is already cancelled.',
+      arrival_date_bad: 'The day a moped came is not after today, nor after the first day in its history.',
       bad_channel: 'A deposit goes back in cash or by transfer.',
       bad_field: 'A field is filled in wrongly. Check the form and try again.',
       bad_locale: 'This language is not supported.',
@@ -1457,6 +1459,7 @@ export const en = {
       vehicle_not_found: 'Moped not found.',
       vehicle_rented: 'The moped is with a customer. It gets a point back on return.',
       vehicle_rented_move: 'The moped is with a customer. Close the rental first.',
+      vehicle_year_bad: 'A moped’s year is from 2000 to next year.',
       vehicle_rented_sale: 'The moped is out on rent. It cannot be sold until it comes back.',
       vehicle_sold: 'This moped has already been sold.',
       vin_or_note: 'Pick a moped from the fleet, or write why the VIN is not confirmed.',
@@ -1511,6 +1514,7 @@ export const en = {
   ...saleDateEn,
   ...rentalSwapEn,
   ...vehicleCardEn,
+  ...vehicleDetailsEn,
   ...pickupDateEn,
   ...depositReviseEn,
   ...menuEn,

@@ -30,6 +30,7 @@ import { contractSignedRu } from './contract-signed.js';
 import { saleDateRu } from './sale-date.js';
 import { rentalSwapRu } from './rental-swap.js';
 import { vehicleCardRu } from './vehicle-card.js';
+import { vehicleDetailsRu } from './vehicle-details.js';
 import { pickupDateRu } from './pickup-date.js';
 import { depositReviseRu } from './deposit-revise.js';
 import { menuRu } from './menu.js';
@@ -1227,6 +1228,7 @@ export const ru: Dict = {
       already_returned: 'Эта аренда уже закрыта.',
       already_signed: 'Договор уже подписан — на экране или в Signify.',
       already_voided: 'Этот платёж уже отменён.',
+      arrival_date_bad: 'Дата прихода мопеда — не позже сегодняшнего дня и не позже первого дня в его истории.',
       bad_channel: 'Залог возвращают наличными или переводом.',
       bad_field: 'Поле заполнено неверно. Проверьте форму и попробуйте ещё раз.',
       bad_locale: 'Этот язык не поддерживается.',
@@ -1447,6 +1449,7 @@ export const ru: Dict = {
       vehicle_not_found: 'Мопед не найден.',
       vehicle_rented: 'Мопед у клиента — точка появится при возврате.',
       vehicle_rented_move: 'Мопед у клиента — сначала закройте аренду.',
+      vehicle_year_bad: 'Год мопеда — от 2000 до следующего года.',
       vehicle_rented_sale: 'Мопед в аренде — продать нельзя, пока не вернут.',
       vehicle_sold: 'Этот мопед уже продан.',
       vin_or_note: 'Выберите мопед из парка или напишите, почему VIN не подтверждён.',
@@ -1501,6 +1504,7 @@ export const ru: Dict = {
   ...saleDateRu,
   ...rentalSwapRu,
   ...vehicleCardRu,
+  ...vehicleDetailsRu,
   ...pickupDateRu,
   ...depositReviseRu,
   ...menuRu,
