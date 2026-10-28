@@ -1,4 +1,4 @@
-import { asksForSignature, contractState, countFleetChips, dayQueue, queueCount, statusBySchedule, todayISO, VEHICLE_STATES, type QueueRental, type SchedulePay, type VehicleState } from '@ev8/shared';
+import { asksForSignature, contractState, countFleetChips, dayQueue, queueCount, seesEveryRepair, statusBySchedule, todayISO, VEHICLE_STATES, type QueueRental, type SchedulePay, type VehicleState } from '@ev8/shared';
 import type { FastifyInstance } from 'fastify';
 import type { Prisma } from '../generated/prisma/client.js';
 import { scheduleToday } from '../lib/calendar.js';
@@ -10,7 +10,7 @@ import { prisma } from '../lib/db.js';
 import { partRows } from '../lib/stock.js';
 import { env } from '../lib/env.js';
 import { kommoReconciliation } from '../lib/kommo.js';
-import { hasPerm } from '../lib/auth.js';
+import { hasPerm, permissionsOf } from '../lib/auth.js';
 import { actorOf, mayView } from '../lib/guard.js';
 import { onHandOf } from '../lib/till.js';
 import { maintenanceOverview } from '../lib/maintenance.js';
@@ -18,6 +18,7 @@ import { UNDO_RETURN_MS } from '../lib/rentals.js';
 import { payOffsetOf, rentStateOf } from '../lib/rentState.js';
 import { BANKS } from './statements.js';
 import { batteriesNow } from './batteries.js';
+import { payableFor } from './payouts.js';
 
 // "Today" (wave 4 §3.1): the queue and the numbers beside it. The rules of
 // the queue live in @ev8/shared, so the screen, the badge and the laptop's
@@ -104,6 +105,39 @@ export function queueRental(r: Prisma.RentalGetPayload<{ select: typeof QUEUE_RE
 }
 
 export function todayRoutes(app: FastifyInstance): void {
+  /**
+   * A mechanic's «Сегодня» (issue #18 of the director, part A; ADR-0050): the
+   * day of whoever reads no front office — before it a mechanic had none and
+   * landed on the repairs. His repairs waiting for approval and in work; for
+   * whoever approves, every repair waiting; for whoever sees every repair, the
+   * mopeds due for planned maintenance (ADR-0038: «механик без права
+   * согласования блока не видит»); his own payout owed now (ADR-0037). His
+   * tasks are the block «Задачи», read from `/api/todos`. No customer and no
+   * customer's money is in it (ADR-0033 §2).
+   */
+  app.get('/api/today/workshop', { config: { scope: 'service.work' } }, async (req) => {
+    const actor = actorOf(req);
+    const today = todayISO(new Date(), env.TZ);
+    const every = seesEveryRepair(permissionsOf(actor.role, actor.via));
+    const approves = hasPerm(actor, 'service.approve');
+    const [waiting, open, toApprove, maintenance, due] = await Promise.all([
+      prisma.serviceJob.count({ where: { mechanicId: actor.id, status: 'draft' } }),
+      prisma.serviceJob.count({ where: { mechanicId: actor.id, status: 'open' } }),
+      approves ? prisma.serviceJob.count({ where: { status: 'draft' } }) : null,
+      every ? maintenanceOverview(prisma) : null,
+      payableFor(prisma, actor.id),
+    ]);
+    return {
+      today,
+      repairs: { waiting, open },
+      toApprove,
+      // Due or past the mark, and of them past it — the list itself is the repairs' block.
+      maintenance: maintenance ? { due: maintenance.due.length, late: maintenance.due.filter((m) => (m.leftKm ?? 0) < 0).length } : null,
+      // What «Баланс» says is owed him now; nought when nothing is.
+      payoutTetri: due?.totalTetri ?? 0,
+    };
+  });
+
   app.get('/api/today', { config: { scope: 'fleet.view' } }, async (req) => {
     const actor = actorOf(req);
     const owner = mayView(req, 'deposit.decide');

@@ -49,12 +49,14 @@ async function onTablet(device: string, userId: string, pin: string): Promise<st
 }
 
 describe('the PIN and the tablet, without a database', () => {
-  it('lets a PIN session reach the repairs and nothing else, whatever the role (ADR-0033 §7)', async () => {
+  // And since issue #18 A (ADR-0050) his own «Сегодня» and tasks: most mechanics sign in nowhere else.
+  it('lets a PIN session reach the repairs and one’s own tasks and nothing else, whatever the role (ADR-0033 §7)', async () => {
     const { permissionsOf } = await import('../src/lib/auth.js');
     expect(permissionsOf('owner', 'pin')).toEqual(PIN_SESSION_PERMISSIONS);
     expect(permissionsOf('owner', 'pin')).not.toContain('service.payout');
-    expect(permissionsOf('mechanic', 'pin')).toEqual(['service.view', 'service.work']);
-    expect(permissionsOf('chief_mechanic', 'pin')).toEqual(['service.view', 'service.work', 'service.approve', 'service.norms']);
+    expect(permissionsOf('owner', 'pin')).not.toContain('todos.assign');
+    expect(permissionsOf('mechanic', 'pin')).toEqual(['service.view', 'service.work', 'todos.own']);
+    expect(permissionsOf('chief_mechanic', 'pin')).toEqual(['service.view', 'service.work', 'service.approve', 'service.norms', 'todos.own']);
   });
 
   it('gives neither mechanic the fleet, a customer, money or cost', async () => {
@@ -93,7 +95,7 @@ describe.skipIf(!HAS_DB)('the workshop tablet (ADR-0033)', () => {
     const session = await onTablet(device, m.id, m.pin);
     const me = json<{ id: string; via: string; idleMinutes: number; permissions: string[] }>(await call(session, 'GET', '/api/me'));
     expect(me).toMatchObject({ id: m.id, via: 'pin', idleMinutes: 10 });
-    expect(me.permissions).toEqual(['service.view', 'service.work']);
+    expect(me.permissions).toEqual(['service.view', 'service.work', 'todos.own']);
 
     const revoked = await call(owner, 'POST', `/api/workshop/devices/${id}/revoke`);
     expect(revoked.statusCode, revoked.body).toBe(200);

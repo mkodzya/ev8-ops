@@ -103,6 +103,14 @@ const TRACES = {
   payoutsReceived: true,
   payoutsMarked: true,
   payoutsVoided: true,
+  // «Задачи» (ADR-0050): given to them, set, closed or taken back by them.
+  todosAssigned: true,
+  todosSet: true,
+  todosClosed: true,
+  todosDeleted: true,
+  todoSeriesAssigned: true,
+  todoSeriesSet: true,
+  todoSeriesStopped: true,
 } as const;
 
 /** The names of what is recorded to a person, from the counts of TRACES; empty — nothing. */
