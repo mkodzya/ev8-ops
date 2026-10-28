@@ -14,7 +14,7 @@ import { preliminaryOf } from '../lib/purchases.js';
 import { rentStateOf } from '../lib/rentState.js';
 import { renderStickers } from '../lib/pdf/stickers.js';
 import { settingsRow } from './settings.js';
-import { openRentalOf } from '../lib/vehicles.js';
+import { openRentalOf, openRentalsOf } from '../lib/vehicles.js';
 
 // Read side of the fleet (FLT-01, FLT-02). Writes arrive with the hand-over
 // and return wizards in step 4 of stage 1; state changes go through events.
@@ -56,13 +56,7 @@ export function fleetRoutes(app: FastifyInstance): void {
     // The rentals still open on each moped, asked of the rentals (issue #17):
     // a moped whose rental runs while its state says otherwise is shown so,
     // and is offered to no hand-over, swap or sale.
-    const open = await prisma.rental.findMany({
-      where: { vehicleId: { in: vehicles.map((v) => v.id) }, status: { not: 'returned' }, pickedUpOn: { not: null } },
-      orderBy: [{ pickedUpOn: 'desc' }, { createdAt: 'desc' }],
-      select: { id: true, number: true, vehicleId: true },
-    });
-    const openOf = new Map<string, { id: string; number: string }>();
-    for (const r of open) if (r.vehicleId && !openOf.has(r.vehicleId)) openOf.set(r.vehicleId, { id: r.id, number: r.number });
+    const openOf = await openRentalsOf(prisma, vehicles.map((v) => v.id));
     const byState = Object.fromEntries(VEHICLE_STATES.map((s) => [s, 0])) as Record<VehicleState, number>;
     for (const v of vehicles) byState[v.state as VehicleState]++;
     // Counted the way the screen groups them (`parkOf`): a moped that has left

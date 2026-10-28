@@ -41,7 +41,7 @@ import { actorOf, mayView } from '../lib/guard.js';
 import { fitTracker, readTracker } from '../lib/trackers.js';
 import { date, int, oneOf, str, tetri } from '../lib/validate.js';
 import { syncDeposit } from '../lib/rentalMoney.js';
-import { moveVehicle, openRentalOf } from '../lib/vehicles.js';
+import { moveVehicle, openRentalOf, openRentalsOf } from '../lib/vehicles.js';
 import { rateOf } from '../lib/serviceSettings.js';
 import { maintenanceOverview, restoreOdometer } from '../lib/maintenance.js';
 import { downtimeOf } from '../lib/downtime.js';
@@ -125,6 +125,8 @@ function serialize(job: {
   rejectReason: string | null;
   notes: string | null;
   movedVehicle: boolean;
+  /** Read by the route, not stored: see `backToRental` in the answer. */
+  backToRental?: { id: string; number: string } | null;
   withheldTetri: number;
   vehicle: {
     id: string;
@@ -247,6 +249,13 @@ function serialize(job: {
     payState: jobPayState(job),
     notes: job.notes,
     movedVehicle: job.movedVehicle,
+    /**
+     * A repair that took the moped in and has not ended: the rental still open
+     * on the moped, which its end gives the moped back to — «В аренде», at no
+     * point of ours (issue #17, ADR-0049). Empty: it goes back to the yard, or
+     * the repair never moved it.
+     */
+    backToRental: job.backToRental ?? null,
     vehicle: {
       id: job.vehicle.id,
       vin: job.vehicle.vin,
@@ -368,6 +377,18 @@ function hideTrackers(job: Job): Job {
  */
 function mine(actor: Actor): { mechanicId?: string } {
   return seesEveryRepair(permissionsOf(actor.role, actor.via)) ? {} : { mechanicId: actor.id };
+}
+
+/**
+ * Where each repair's end gives its moped back (issue #17, ADR-0049): asked
+ * only of a repair that took the moped in and has not ended — the rental
+ * still open on that moped, or none. Closing, cancelling and refusing say it
+ * before they are done, and closing does not ask for a point of ours then.
+ */
+async function withBackTo<J extends { vehicleId: string; movedVehicle: boolean; status: string }>(jobs: J[]): Promise<(J & { backToRental: { id: string; number: string } | null })[]> {
+  const asks = (j: J) => j.movedVehicle && (j.status === 'open' || j.status === 'draft');
+  const open = await openRentalsOf(prisma, [...new Set(jobs.filter(asks).map((j) => j.vehicleId))]);
+  return jobs.map((j) => ({ ...j, backToRental: asks(j) ? (open.get(j.vehicleId) ?? null) : null }));
 }
 
 const INCLUDE = {
@@ -702,7 +723,7 @@ export function serviceRoutes(app: FastifyInstance): void {
       prisma.serviceJob.count({ where: { ...own, status: 'draft' } }),
       prisma.workshop.findMany({ where: { archived: false }, orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }], select: { id: true, name: true, phone: true } }),
     ]);
-    return { open, drafts, workshops, jobs: jobs.map((j) => present(req, serialize(j))) };
+    return { open, drafts, workshops, jobs: (await withBackTo(jobs)).map((j) => present(req, serialize(j))) };
   });
 
   /**
@@ -727,7 +748,8 @@ export function serviceRoutes(app: FastifyInstance): void {
     });
     // Somebody else's repair is, to a mechanic, no repair at all.
     if (!job) throw notFound('job_not_found', 'No such repair job.');
-    return { job: present(req, serialize(job)) };
+    const [told] = await withBackTo([job]);
+    return { job: present(req, serialize(told!)) };
   });
 
   /**
@@ -1691,9 +1713,12 @@ export function serviceRoutes(app: FastifyInstance): void {
     // odometer read, and where the moped stands now.
     const odometerKm = int(b, 'odometerKm', { min: 0, max: 1_000_000 });
     const closedLocationId = str(b, 'locationId');
+    // A moped whose rental is still open goes back to its customer, not to a
+    // point of ours (issue #17): the point is not asked of it.
+    const backTo = job.movedVehicle ? await openRentalOf(prisma, job.vehicleId) : null;
     if (job.movedVehicle) {
       if (odometerKm == null) throw badRequest('missing_field', 'Say what the odometer reads.', { field: 'odometerKm' });
-      if (!closedLocationId) throw badRequest('missing_field', 'Say where the moped stands now.', { field: 'locationId' });
+      if (!closedLocationId && !backTo) throw badRequest('missing_field', 'Say where the moped stands now.', { field: 'locationId' });
     }
     // «Плановое ТО» is counted from a reading (ADR-0038 §2). The tablet takes
     // one at the opening; the office does not, and a repair at the renter's

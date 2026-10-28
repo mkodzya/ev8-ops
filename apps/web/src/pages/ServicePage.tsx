@@ -96,6 +96,12 @@ export interface ServiceJob {
   /** True when this job is what took the moped out of the yard: only then does closing bring it back. */
   movedVehicle: boolean;
   /**
+   * A repair that took the moped in and has not ended: the rental still open
+   * on the moped, which its end gives the moped back to — «В аренде», at no
+   * point (issue #17). Empty: it goes back to the yard. Absent while an older API answers.
+   */
+  backToRental?: { id: string; number: string } | null;
+  /**
    * The tracker on the moped now, if any (ADR-0036); `fromShelf` — whether it
    * came off a shelf (one written on the moped's card did not), absent while an
    * older API answers.

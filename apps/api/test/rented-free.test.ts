@@ -95,6 +95,29 @@ describe.skipIf(!HAS_DB)('a repair ends where the moped was (issue #17)', () => 
     expect(out).toMatchObject({ fromState: 'rented', toState: 'rented', rentalId: rental.id });
   });
 
+  it('says before the close where the moped goes, and asks no point of one going back to its customer', async () => {
+    const owner = await loginAs('owner');
+    const manager = await loginAs('manager');
+    const v = await moped();
+    const job = json<{ id: string }>(await call(owner, 'POST', '/api/service', { vehicleId: v.id, reason: 'ТЕСТ chain' })).id;
+    // From the yard it goes back to a point of ours, and the close asks which.
+    expect(json<{ job: { backToRental: unknown } }>(await call(owner, 'GET', `/api/service/${job}`)).job.backToRental).toBeNull();
+    expect(err(await call(owner, 'POST', `/api/service/${job}/close`, { odometerKm: 200 }))).toMatchObject({ error: 'missing_field', field: 'locationId' });
+
+    expect((await call(manager, 'POST', `/api/fleet/${v.id}/state`, { toState: 'available', reason: 'ТЕСТ rides fine' })).statusCode).toBe(200);
+    const rental = await handOver(owner, v.id);
+    // The repair says it ends with that customer — on its own page and in the list the approval reads.
+    expect(json<{ job: { backToRental: unknown } }>(await call(owner, 'GET', `/api/service/${job}`)).job.backToRental).toEqual({ id: rental.id, number: rental.number });
+    const list = json<{ jobs: { id: string; backToRental: { number: string } | null }[] }>(await call(owner, 'GET', '/api/service?status=open'));
+    expect(list.jobs.find((x) => x.id === job)?.backToRental).toMatchObject({ number: rental.number });
+
+    const closed = await call(owner, 'POST', `/api/service/${job}/close`, { odometerKm: 210 });
+    expect(closed.statusCode, closed.body).toBe(200);
+    expect(await state(v.id)).toMatchObject({ state: 'rented', currentRentalId: rental.id, locationId: null });
+    // Over, it gives the moped back to nobody any more.
+    expect(json<{ job: { backToRental: unknown } }>(await call(owner, 'GET', `/api/service/${job}`)).job.backToRental).toBeNull();
+  });
+
   it('a repair cancelled on a moped whose rental is open gives it back to the customer, not to the yard', async () => {
     const owner = await loginAs('owner');
     const v = await moped();

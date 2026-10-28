@@ -24,6 +24,19 @@ export async function openRentalOf(db: Db, vehicleId: string, except?: string): 
   });
 }
 
+/** `openRentalOf` for many mopeds at once, by moped: a list's question (issue #17). */
+export async function openRentalsOf(db: Db, vehicleIds: string[]): Promise<Map<string, { id: string; number: string }>> {
+  const out = new Map<string, { id: string; number: string }>();
+  if (vehicleIds.length === 0) return out;
+  const rows = await db.rental.findMany({
+    where: { vehicleId: { in: vehicleIds }, status: { not: 'returned' }, pickedUpOn: { not: null } },
+    orderBy: [{ pickedUpOn: 'desc' }, { createdAt: 'desc' }],
+    select: { id: true, number: true, vehicleId: true },
+  });
+  for (const r of rows) if (r.vehicleId && !out.has(r.vehicleId)) out.set(r.vehicleId, { id: r.id, number: r.number });
+  return out;
+}
+
 /**
  * A moped that is out on a rental is handed to nobody else — whatever its
  * state says (issue #17): the hand-over, a swap, a VIN confirmed later, a
