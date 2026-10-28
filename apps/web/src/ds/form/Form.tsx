@@ -84,6 +84,14 @@ export function Form<V>({
     el?.focus();
   }, [op.failure]);
 
+  // A refusal said for the whole form stands above it. Pressed at the foot of a
+  // long sheet, it was out of sight and only «Не записалось — повторить» was
+  // read (QA before 1.17.0, a second repair on one moped): it comes into view.
+  const bannerRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (op.failure) bannerRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }, [op.failure]);
+
   // A refusal about one field is answered by changing the form: once it
   // changes, the words under the field go (QA-W2-10). The next attempt asks again.
   const shape = JSON.stringify(value);
@@ -126,7 +134,7 @@ export function Form<V>({
     <FieldErrors.Provider value={op.failure}>
       <form ref={formRef} className={`form ${className ?? ''}`} onSubmit={onSubmit} noValidate>
         {general && (
-          <div className="form-banner form-banner-bad" role="alert">
+          <div ref={bannerRef} className="form-banner form-banner-bad" role="alert">
             {general.network && <CloudOff size={18} strokeWidth={1.75} aria-hidden="true" />}
             <div>
               <b>{t.form.notSaved}</b> {general.text}
