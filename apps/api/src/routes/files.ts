@@ -153,12 +153,16 @@ export function fileRoutes(app: FastifyInstance): void {
     }
     const row = await prisma.storedFile.findUniqueOrThrow({ where: { id: meta.id }, select: { bytes: true } });
     const safeName = (meta.label || meta.id).replace(/[^\w.\-]+/g, '_');
+    // Not kept by the browser, as the PDFs are not (QA before 1.17.0): a file
+    // kept for a day was opened from the cache by whoever signed in next on the
+    // same phone or tablet — past the checks above and past the journal of a
+    // customer's document. Every opening comes here and is asked again.
     return reply
       .header('content-type', meta.mimeType)
       .header('content-length', String(meta.sizeBytes))
       .header('x-content-type-options', 'nosniff')
       .header('content-disposition', `inline; filename="${safeName}"`)
-      .header('cache-control', 'private, max-age=86400')
+      .header('cache-control', 'private, no-store')
       .send(Buffer.from(row.bytes));
   });
 

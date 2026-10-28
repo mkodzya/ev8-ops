@@ -28,6 +28,8 @@ describe.skipIf(!HAS_DB)('files', () => {
     expect(got.statusCode).toBe(200);
     expect(got.headers['content-type']).toBe('image/png');
     expect(got.headers['x-content-type-options']).toBe('nosniff');
+    // Not kept by the browser: whoever signs in next on the device is asked again (QA before 1.17.0).
+    expect(got.headers['cache-control']).toBe('private, no-store');
     expect(Buffer.compare(got.rawPayload, PNG)).toBe(0);
 
     const card = json<{ acts: { kind: string; photos: { id: string }[] }[] }>(await call(manager, 'GET', `/api/rentals/${id}`));
@@ -48,7 +50,10 @@ describe.skipIf(!HAS_DB)('files', () => {
     expect((await call(manager, 'GET', `/api/files/${fileId}`)).statusCode).toBe(403);
 
     const owner = await loginAs('owner');
-    expect((await call(owner, 'GET', `/api/files/${fileId}`)).statusCode).toBe(200);
+    const doc = await call(owner, 'GET', `/api/files/${fileId}`);
+    expect(doc.statusCode).toBe(200);
+    // Every opening is journaled because none is served from the browser's cache.
+    expect(doc.headers['cache-control']).toBe('private, no-store');
     const opened = await prisma.auditLog.findFirst({ where: { action: 'customer.document.open', entityId: customer.id } });
     expect(opened).not.toBeNull();
 
