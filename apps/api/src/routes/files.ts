@@ -18,13 +18,15 @@ import { oneOf, str } from '../lib/validate.js';
 // in the app's own origin.
 
 const MAX_BYTES = 10 * 1024 * 1024;
-const BODY_LIMIT = Math.ceil(MAX_BYTES * 1.4);
+/** The body an upload of the largest file comes in: base64 inside JSON. */
+export const BODY_LIMIT = Math.ceil(MAX_BYTES * 1.4);
 const ALLOWED_MIME = new Set(['image/jpeg', 'image/png', 'image/webp', 'application/pdf']);
 export const DOC_KINDS = ['id_card', 'driver_licence', 'other'] as const;
 
 type Body = Record<string, unknown>;
 
-function readUpload(b: Body): { bytes: Buffer; mime: string; label: string } {
+/** An upload as every route stores it: an image or a PDF, up to 10 MB, with its name. */
+export function readUpload(b: Body): { bytes: Buffer; mime: string; label: string } {
   const mime = str(b, 'mimeType', { required: true })!;
   if (!ALLOWED_MIME.has(mime)) throw badRequest('bad_mime', 'Only JPEG, PNG, WebP and PDF files are stored.', { mimeType: mime });
   const data = b.dataBase64;
@@ -116,17 +118,33 @@ export function fileRoutes(app: FastifyInstance): void {
 
   // The file itself. Act photos: anyone who sees the fleet. Repair photos:
   // whoever sees that repair — a mechanic, the ones he carries (ADR-0033). Customer
-  // documents: the owners, and the access is journaled (spec §8).
+  // documents: the owners, and the access is journaled (spec §8). What a task
+  // closed with (ADR-0050): whoever sees the task — whose it is, who set it,
+  // an owner who reads everybody's.
   app.get<{ Params: { id: string } }>('/api/files/:id', { config: { scope: 'session' } }, async (req, reply) => {
     const actor = actorOf(req);
     const meta = await prisma.storedFile.findUnique({
       where: { id: req.params.id },
-      select: { id: true, kind: true, customerId: true, mimeType: true, sizeBytes: true, label: true, archived: true, serviceJob: { select: { mechanicId: true } } },
+      select: {
+        id: true,
+        kind: true,
+        customerId: true,
+        mimeType: true,
+        sizeBytes: true,
+        label: true,
+        archived: true,
+        serviceJob: { select: { mechanicId: true } },
+        todo: { select: { assigneeId: true, createdById: true } },
+      },
     });
     if (!meta || meta.archived) throw notFound('file_not_found', 'No such file.');
     if (meta.kind === 'customer_document') {
       if (!hasPerm(actor, 'customer.documents.view')) throw forbidden('documents_restricted', 'Customer documents are for the owners only.');
       await audit({ actorId: actor.id, action: 'customer.document.open', entityType: 'customer', entityId: meta.customerId, after: { fileId: meta.id } });
+    } else if (meta.kind === 'todo_file') {
+      const t = meta.todo;
+      const sees = t != null && hasPerm(actor, 'todos.own') && (t.assigneeId === actor.id || t.createdById === actor.id || hasPerm(actor, 'todos.assign'));
+      if (!sees) throw forbidden('forbidden', 'No access to files.');
     } else if (meta.kind === 'service_photo' && !hasPerm(actor, 'fleet.view')) {
       const sees = hasPerm(actor, 'service.view') && (seesEveryRepair(permissionsOf(actor.role, actor.via)) || meta.serviceJob?.mechanicId === actor.id);
       if (!sees) throw forbidden('forbidden', 'No access to files.');
@@ -149,19 +167,23 @@ export function fileRoutes(app: FastifyInstance): void {
     const actor = actorOf(req);
     const f = await prisma.storedFile.findUnique({
       where: { id: req.params.id },
-      select: { id: true, kind: true, actId: true, customerId: true, serviceJobId: true, serviceJob: { select: { paidInPayoutId: true } } },
+      select: { id: true, kind: true, actId: true, customerId: true, serviceJobId: true, todoId: true, serviceJob: { select: { paidInPayoutId: true } } },
     });
     if (!f) throw notFound('file_not_found', 'No such file.');
     // A paid repair is a record: nothing on it is hidden either (ADR-0037 §5).
     if (f.serviceJob?.paidInPayoutId != null) throw conflict('job_paid', 'This repair is paid to its mechanic; it is not changed any more.');
     await prisma.storedFile.update({ where: { id: f.id }, data: { archived: true } });
     // The journal names what the file was on: a repair's photo, its repair.
-    const on = f.serviceJobId ? { entityType: 'service_job', entityId: f.serviceJobId } : { entityType: f.kind === 'act_photo' ? 'act' : 'customer', entityId: f.actId ?? f.customerId };
+    const on = f.serviceJobId
+      ? { entityType: 'service_job', entityId: f.serviceJobId }
+      : f.todoId
+        ? { entityType: 'todo', entityId: f.todoId }
+        : { entityType: f.kind === 'act_photo' ? 'act' : 'customer', entityId: f.actId ?? f.customerId };
     await audit({ actorId: actor.id, action: 'file.archive', ...on, note: str(req.body ?? {}, 'reason', { max: 1000 }) });
     return { ok: true };
   });
 }
 
-function sha(bytes: Buffer): string {
+export function sha(bytes: Buffer): string {
   return createHash('sha256').update(bytes).digest('hex');
 }

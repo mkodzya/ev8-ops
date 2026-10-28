@@ -88,6 +88,19 @@ function said(t: Dict, field: string, raw: string): string {
   }
 }
 
+/**
+ * The record a task is about, in a journal line: its kind and what it is known
+ * by — «мопед EV-012», «аренда R-00034». A line written by kind alone (the
+ * first days of «Задачи») says the kind; none is a dash.
+ */
+function todoLinkWords(t: Dict, raw: unknown): string {
+  if (typeof raw === 'string') return t.todos.journalLink[raw] ?? raw;
+  const l = raw as { kind?: unknown; label?: unknown } | null;
+  if (l == null || typeof l !== 'object' || typeof l.kind !== 'string') return t.common.dash;
+  const kind = t.todos.journalLink[l.kind] ?? l.kind;
+  return typeof l.label === 'string' && l.label ? [kind, l.label].join(' ') : kind;
+}
+
 function value(field: string, raw: unknown, shifted = false): string | null {
   const t = currentDict();
   // A rental's pay day is a weekday, ISO 1–7, and none of its own is the
@@ -104,6 +117,11 @@ function value(field: string, raw: unknown, shifted = false): string | null {
   if (field === 'payDay') return typeof raw === 'number' && raw >= 1 && raw <= 7 ? t.calendar.weekdaysIn[raw % 7] : null;
   // The days a week gained, with their unit (ADR-0041).
   if (field === 'extraDays' && typeof raw === 'number') return t.weekShift.journal.days(raw);
+  // A task changed (issue #18 A, ADR-0050): its repeat and the record it is about, in words;
+  // none is an answer too — «без повтора», «— → мопед EV-012».
+  if (field === 'repeat' && typeof raw === 'string') return t.todos.journalRepeat[raw] ?? raw;
+  if (field === 'link') return todoLinkWords(t, raw);
+  if (field === 'leadDays' && typeof raw === 'number') return raw === 0 ? t.todos.form.leadNone : t.todos.form.leadDays(raw);
   // The card a mechanic rents on (0066), by its name; none is a dash — «— → card», «card → —».
   if (field === 'renter') return typeof raw === 'string' && raw.trim() ? raw : t.common.dash;
   // A repair's kind may be given, changed and taken away again (Mika,
@@ -263,6 +281,11 @@ function named(t: Dict, field: string, action?: string): string | null {
   // the second pair and not the first (QA, 22.10.2026).
   if (field === 'soldOn') return t.sell.soldOn;
   if (field === 'warrantyUntil') return t.saleCard.warranty;
+  // A task changed (issue #18 A, ADR-0050): «Срок: 15.10.2026 → 17.10.2026», each field by its name.
+  if (action === 'todo.update') {
+    const words = t.todos.journal;
+    if (field in words) return words[field] ?? null;
+  }
   // A rental's own pay day, whichever action moved it (ADR-0022, ADR-0041), and the day it falls due on.
   if (field === 'payWeekday' || field === 'payDay') return t.weekShift.journal.payDay;
   // A mechanic's rent link, set or taken off (0066): «Арендует мопед: — → card».

@@ -120,6 +120,24 @@ describe('route table', () => {
     for (const owners of ['PATCH /api/sales/:id', 'POST /api/sales/:id/buy-back', 'POST /api/sales/:id/cancel', 'POST /api/sales/:id/schedule', 'POST /api/sales/:id/date']) {
       expect(salesOwner, owners).toContain(owners);
     }
+    // «Задачи» (issue #18 A, ADR-0050): every role keeps his own, so every route is `todos.own` and asks
+    // inside whose the task is — whose it is closes it, who set it changes it. An owner's `todos.assign`
+    // is asked inside too (anybody's list, a task given to somebody else) and guards no route by itself.
+    // The menu's numbers answer every role since then: each part only for whoever has its section.
+    expect(app.routeTable.filter((r) => r.scope === 'todos.own').map((r) => `${r.method} ${r.url}`).sort()).toEqual([
+      'DELETE /api/todos/:id',
+      'GET /api/nav/counts',
+      'GET /api/todos',
+      'GET /api/todos/assignees',
+      'PATCH /api/todos/:id',
+      'POST /api/todos',
+      'POST /api/todos/:id/close',
+      'POST /api/todos/:id/files',
+      'POST /api/todos/:id/reopen',
+    ]);
+    expect(app.routeTable.filter((r) => r.scope === 'todos.assign')).toEqual([]);
+    // A mechanic's own «Сегодня» (ADR-0050) is the workshop's: no front office, no customer's money.
+    expect(app.routeTable.find((r) => r.url === '/api/today/workshop')?.scope).toBe('service.work');
     // «Оплаты по графику»: one route, the rows for whoever calls, the sums only with `payments.view` (issue #15).
     expect(app.routeTable.filter((r) => r.scope === 'payments.schedule').map((r) => `${r.method} ${r.url}`)).toEqual(['GET /api/money/calendar']);
     const publicOnes = app.routeTable.filter((r) => r.scope === 'public').map((r) => r.url).sort();

@@ -8,8 +8,9 @@ describe('roles and permissions (redesign §2.1, Mika 17.09.2026; ADR-0033, 20.1
   });
 
   it('gives a mechanic their own repairs and the chief mechanic every repair, the approval and the norms', () => {
-    expect(ROLE_PERMISSIONS.mechanic).toEqual(['service.view', 'service.work']);
-    expect(ROLE_PERMISSIONS.chief_mechanic).toEqual(['service.view', 'service.work', 'service.approve', 'service.norms']);
+    // And each keeps his own tasks (issue #18 A, ADR-0050).
+    expect(ROLE_PERMISSIONS.mechanic).toEqual(['service.view', 'service.work', 'todos.own']);
+    expect(ROLE_PERMISSIONS.chief_mechanic).toEqual(['service.view', 'service.work', 'service.approve', 'service.norms', 'todos.own']);
     expect(seesEveryRepair(ROLE_PERMISSIONS.mechanic)).toBe(false);
     for (const role of ['owner', 'manager', 'chief_mechanic'] as const) expect(seesEveryRepair(ROLE_PERMISSIONS[role]), role).toBe(true);
     // Marking a mechanic paid is the owners' alone.
@@ -69,6 +70,16 @@ describe('roles and permissions (redesign §2.1, Mika 17.09.2026; ADR-0033, 20.1
     // The same right that keeps the week's and the month's figures of «Оплаты по графику».
     expect(seesTotals(['payments.view'])).toBe(true);
     expect(seesTotals(['payments.schedule', 'payments.sort.customer', 'cash.record'])).toBe(false);
+  });
+
+  it('everybody keeps his own tasks, on the workshop tablet too; setting one to somebody else is an owner’s (issue #18 A, ADR-0050)', () => {
+    for (const role of ROLES) expect(roleCan(role, 'todos.own'), role).toBe(true);
+    expect(roleCan('owner', 'todos.assign')).toBe(true);
+    for (const role of ['manager', 'mechanic', 'chief_mechanic'] as const) expect(roleCan(role, 'todos.assign'), role).toBe(false);
+    expect(PIN_SESSION_PERMISSIONS).toContain('todos.own');
+    expect(PIN_SESSION_PERMISSIONS).not.toContain('todos.assign');
+    // In the order of PERMISSIONS: a PIN session's rights are a filter of the role's.
+    expect([...PIN_SESSION_PERMISSIONS]).toEqual(PERMISSIONS.filter((p) => PIN_SESSION_PERMISSIONS.includes(p)));
   });
 
   it('a manager never sees cost, purchases, reports, documents or other people\'s money, and decides no deposit', () => {

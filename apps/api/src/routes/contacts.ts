@@ -174,7 +174,10 @@ export function contactRoutes(app: FastifyInstance): void {
         repairs: (await tx.serviceJob.updateMany({ where, data: { customerId: keepId } })).count,
         // Goods bought over the counter (ADR-0045): their debt goes with the card, or it would split in two.
         goodsSales: (await tx.goodsSale.updateMany({ where, data: { customerId: keepId } })).count,
+        // Tasks about the person (ADR-0050) and the repeats that make them follow his card.
+        todos: (await tx.todo.updateMany({ where, data: { customerId: keepId } })).count,
       };
+      await tx.todoSeries.updateMany({ where, data: { customerId: keepId } });
       await tx.user.updateMany({ where, data: { customerId: keepId, updatedAt: new Date() } });
       // A payer remembered as the card that goes now pays the card that stays (0069).
       await tx.payerRule.updateMany({ where, data: { customerId: keepId } });

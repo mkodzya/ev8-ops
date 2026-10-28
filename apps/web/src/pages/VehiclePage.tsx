@@ -1,4 +1,4 @@
-import { TRANSLATED_EVENT_KINDS, VEHICLE_POOLS, arrivalFault, arrivalLatestDay, isISODate, isPoolEvent, localDateTime, manualStateTargets, newestFirst, todayISO, vehicleYearFault, vehicleYearRange, type RentalStatus, type VehicleEventKind, type VehiclePool, type VehicleState } from '@ev8/shared';
+import { TRANSLATED_EVENT_KINDS, VEHICLE_POOLS, fleetNumber, todoRecordEnded, arrivalFault, arrivalLatestDay, isISODate, isPoolEvent, localDateTime, manualStateTargets, newestFirst, todayISO, vehicleYearFault, vehicleYearRange, type RentalStatus, type VehicleEventKind, type VehiclePool, type VehicleState } from '@ev8/shared';
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api, ApiError } from '../api.js';
@@ -21,6 +21,7 @@ import { useSession } from '../session.js';
 import { VehicleEconomics } from './EconomicsPage.js';
 import { NewJob } from './ServicePage.js';
 import { TrackerHistory, TrackerRows, type CardTracker } from './VehicleTracker.js';
+import { TodoSheet } from './todos/TodoSheet.js';
 import { formatGel } from '../format.js';
 
 interface Card {
@@ -130,6 +131,8 @@ export function VehiclePage() {
   const [stateSheet, setStateSheet] = useState<{ prefer?: VehicleState } | null>(null);
   const [fixing, setFixing] = useState(false);
   const [editing, setEditing] = useState(false);
+  // «⋯ → Поручить» (issue #18 A, ADR-0050): a task about this moped, set from its card.
+  const [tasking, setTasking] = useState(false);
 
   if (failure) return <LoadError failure={failure} onRetry={reload} />;
   if (!data) return <Loading />;
@@ -208,15 +211,19 @@ export function VehiclePage() {
             {t.actions.newRental}
           </Link>
         )}
-        {/* «Изменить данные» — the colour, the year, the day it came (issue #19) — beside «Исправить VIN»: an owner's. */}
-        {can('settings.manage') && (
-          <RowMenu
-            actions={[
-              { key: 'details', label: t.vdetails.title, onPick: () => setEditing(true) },
-              { key: 'vin', label: t.vinFix.title, onPick: () => setFixing(true) },
-            ]}
-          />
-        )}
+        {/* «Изменить данные» — the colour, the year, the day it came (issue #19) — beside «Исправить VIN»: an owner's.
+            «Поручить» (issue #18 A): a task about the moped, while it is in the fleet — one that left would close it at once. */}
+        <RowMenu
+          actions={[
+            ...(can('todos.own') && !todoRecordEnded({ kind: 'vehicle', vehicleState: v.state }) ? [{ key: 'task', label: t.todos.give, onPick: () => setTasking(true) }] : []),
+            ...(can('settings.manage')
+              ? [
+                  { key: 'details', label: t.vdetails.title, onPick: () => setEditing(true) },
+                  { key: 'vin', label: t.vinFix.title, onPick: () => setFixing(true) },
+                ]
+              : []),
+          ]}
+        />
         {primary &&
           (primary.to ? (
             <Link className="pill pill-sm pill-accent head-primary" to={primary.to}>
@@ -254,6 +261,8 @@ export function VehiclePage() {
           onDone={reload}
         />
       )}
+
+      {tasking && <TodoSheet fromCard link={{ kind: 'vehicle', id: v.id, label: fleetNumber(v.fleetNo) ?? `···${v.vin.slice(-4)}` }} onClose={() => setTasking(false)} />}
 
       {stateSheet && <StateSheet v={v} targets={targets} rental={open} prefer={stateSheet.prefer} onClose={() => setStateSheet(null)} onDone={reload} />}
 

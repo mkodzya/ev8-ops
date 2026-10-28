@@ -16,6 +16,12 @@ import type { Role } from './types.js';
  * Before it (wave 1 §3.2–3.4) the payments calendar and «Разобрать» were tabs
  * of Money and the customers sat in the avatar menu.
  *
+ * Since issue #18 of the director, part A (28.10.2026; ADR-0050) «Задачи» —
+ * the tasks people set by hand — stand second in «Ежедневно», and «Сегодня» is
+ * everybody's: a mechanic's is his own (his tasks, his repairs, the planned
+ * maintenance, his payout), the front office's is the queue it was. On the
+ * phone bar «Задачи» took the mopeds' place (the director's mockup).
+ *
  * Since issue #19 of the director (28.10.2026; ADR-0048, addendum) «Склад» is
  * a section of its own in «Продажи и закупки», before the orders: the parts
  * (was «Ремонты → Склад») and the batteries and chargers (was «Мопеды →
@@ -29,6 +35,7 @@ import type { Role } from './types.js';
 
 export type SectionId =
   | 'today'
+  | 'tasks'
   | 'schedule'
   | 'sort'
   | 'cash'
@@ -61,9 +68,13 @@ export interface NavRule {
 }
 
 export const SECTIONS: readonly Section[] = [
-  // "Today" is the front office's queue — rentals, money, the yard. A mechanic
-  // has none of it; their first screen is the repairs (ADR-0033).
-  { id: 'today', path: '/', group: 'daily', anyOf: ['fleet.view'] },
+  // "Today" is the front office's queue — rentals, money, the yard — and, for
+  // whoever reads none of it, a mechanic, his own day: his tasks, his repairs,
+  // the planned maintenance, his payout (issue #18 A, ADR-0050). Before it a
+  // mechanic had no «Сегодня» and landed on the repairs (ADR-0033).
+  { id: 'today', path: '/', group: 'daily', anyOf: ['fleet.view', 'todos.own'] },
+  // «Задачи» (issue #18 A, ADR-0050): what a person was set by hand, by days.
+  { id: 'tasks', path: '/tasks', group: 'daily', anyOf: ['todos.own'] },
   // Who pays by the schedule — today, late, the calendar (issue #15): the
   // manager calls them, the owner also reads the sums.
   { id: 'schedule', path: '/schedule', group: 'daily', anyOf: ['payments.schedule'] },
@@ -119,19 +130,24 @@ export function groupHeadingFor(group: GroupId, permissions: readonly Permission
 
 /**
  * The phone bar (issue #15): four sections and «Ещё». The day's work — Today,
- * the schedule, «Разобрать» — and the mopeds; the "+" is a round button of
- * its own above the bar. A mechanic has one section, the repairs (ADR-0033).
- *   owner and manager: Today · Оплаты · Разобрать · Мопеды · Ещё
+ * the tasks, the schedule, «Разобрать»; the "+" is a round button of its own
+ * above the bar. The mopeds stood fourth until issue #18 (part A, the
+ * director's mockup): «Задачи» took their place, and they are under «Ещё».
+ * A role with fewer of these — a mechanic: Today and the tasks — fills the
+ * bar with its other sections in the rail's order, the repairs.
+ *   owner and manager: Today · Задачи · Оплаты · Разобрать · Ещё
+ *   mechanic, chief mechanic: Today · Задачи · Ремонты
  */
-export const PHONE_BAR: readonly SectionId[] = ['today', 'schedule', 'sort', 'fleet'];
+export const PHONE_BAR: readonly SectionId[] = ['today', 'tasks', 'schedule', 'sort'];
 
 export function phoneTabsFor(permissions: readonly Permission[]): SectionId[] {
-  const mine = new Set(sectionsFor(permissions).map((s) => s.id));
-  if (!mine.has('today')) return [...mine];
-  return PHONE_BAR.filter((id) => mine.has(id));
+  const mine = sectionsFor(permissions).map((s) => s.id);
+  const bar = PHONE_BAR.filter((id) => mine.includes(id));
+  for (const id of mine) if (bar.length < PHONE_BAR.length && !bar.includes(id)) bar.push(id);
+  return bar;
 }
 
-/** Where a person lands: "Today" for the front office, the repairs for a mechanic. */
+/** Where a person lands: "Today" — the front office's queue, or a mechanic's own day (ADR-0050). */
 export function homePathFor(permissions: readonly Permission[]): string {
   return sectionsFor(permissions)[0]?.path ?? '/';
 }
@@ -156,6 +172,11 @@ export interface NavCounts {
   sort: { in: number; out: number | null } | null;
   /** Cash handed over and waiting for an owner. */
   till: number | null;
+  /**
+   * «Задачи» (issue #18 A, ADR-0050): one's own tasks late (red) and on today
+   * (grey) — the rows of the block «Задачи» on «Сегодня», by `todoBucket`.
+   */
+  todos: { late: number; today: number } | null;
   /**
    * What «Настройки → До EV8 Ops» still asks: deposits brought over with no
    * decision and rentals brought over with no VIN (issue #18, B6). Nought
@@ -380,6 +401,7 @@ export function sectionOfPath(pathname: string, permissions?: readonly Permissio
     return !owner && pathname.startsWith('/money/payments/') ? 'cash' : 'money';
   }
   const known: Record<string, SectionId> = {
+    tasks: 'tasks',
     schedule: 'schedule',
     sort: 'sort',
     rentals: 'rentals',

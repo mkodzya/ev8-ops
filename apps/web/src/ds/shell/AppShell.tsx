@@ -79,16 +79,18 @@ function Frame() {
   const label = (id: SectionId) => t.nav[id];
   // The bar's own words where a section's name is longer than a fifth of a
   // phone: «Оплаты» for the schedule, and for «Разобрать» a Georgian word that
-  // does not break in two (review of issue #15).
-  const barWords: Partial<Record<SectionId, string>> = { schedule: t.nav.scheduleShort, sort: t.nav.sortShort };
+  // does not break in two (review of issue #15); the same for «Задачи» (issue #18 A).
+  const barWords: Partial<Record<SectionId, string>> = { tasks: t.nav.tasksShort, schedule: t.nav.scheduleShort, sort: t.nav.sortShort };
 
   // The badge of Today counts the rows "Today" lists, from the same request
   // it reads (wave 4 §3.1): one queue, one number, and it moves as soon as a
   // write marks that request stale. The other counters are one request of
-  // their own, each counted the way its screen counts (issue #15).
+  // their own, each counted the way its screen counts (issue #15) — for
+  // everybody since «Задачи» (issue #18 A, ADR-0050): a mechanic's tasks are
+  // counted too, the front office's sections for whoever has them.
   const front = me != null && can('fleet.view');
   const queue = useLoad<{ count: number }>(front ? '/api/today' : null);
-  const counts = useLoad<NavCounts>(front ? '/api/nav/counts' : null);
+  const counts = useLoad<NavCounts>(me != null && can('todos.own') ? '/api/nav/counts' : null);
   // Search finds mopeds, customers and records of the fleet; a mechanic has none of them.
   const mayFind = can('fleet.view');
   const todayCount = queue.data?.count ?? 0;
@@ -338,14 +340,20 @@ function Frame() {
 
 /**
  * The numbers beside a section on the rail (issue #15; the director's
- * mockup): Today's tasks, «Оплаты по графику» red for the rentals late and
- * grey for the weeks awaited today, «Разобрать» the lines waiting. Each
- * number says what it counts to a screen reader; nought is not drawn.
+ * mockup): Today the rows of its queue — said as rows, not as tasks (issue
+ * #18 A): «Задачи» are the ones set by hand, red late and grey today's; «Оплаты
+ * по графику» red for the rentals late and grey for the weeks awaited today,
+ * «Разобрать» the lines waiting. Each number says what it counts to a screen
+ * reader; nought is not drawn.
  */
 function SectionCount({ id, today, counts }: { id: SectionId; today: number; counts: NavCounts | null }) {
   const t = useT();
   const badges: { n: number; tone: 'crit' | 'quiet'; said: string }[] = [];
-  if (id === 'today' && today > 0) badges.push({ n: today, tone: 'quiet', said: '' });
+  if (id === 'today' && today > 0) badges.push({ n: today, tone: 'quiet', said: t.todos.queueSaid });
+  if (id === 'tasks' && counts?.todos) {
+    if (counts.todos.late > 0) badges.push({ n: counts.todos.late, tone: 'crit', said: t.todos.saidLate });
+    if (counts.todos.today > 0) badges.push({ n: counts.todos.today, tone: 'quiet', said: t.todos.saidToday });
+  }
   if (id === 'schedule' && counts?.schedule) {
     if (counts.schedule.late > 0) badges.push({ n: counts.schedule.late, tone: 'crit', said: t.calendar.said.overdue });
     if (counts.schedule.dueToday > 0) badges.push({ n: counts.schedule.dueToday, tone: 'quiet', said: t.calendar.said.due_today });
@@ -373,9 +381,20 @@ function PhoneTab({ id, on, label, today, counts }: { id: SectionId; on: boolean
   const { me } = useSession();
   const path = sectionsFor(me?.permissions ?? []).find((s) => s.id === id)?.path ?? '/';
   const Icon = SECTION_ICON[id];
-  const late = id === 'schedule' ? (counts?.schedule?.late ?? 0) : 0;
+  const late = id === 'schedule' ? (counts?.schedule?.late ?? 0) : id === 'tasks' ? (counts?.todos?.late ?? 0) : 0;
   const quiet =
-    id === 'today' ? today : id === 'schedule' ? (counts?.schedule?.dueToday ?? 0) : id === 'sort' && counts?.sort ? counts.sort.in + (counts.sort.out ?? 0) : 0;
+    id === 'today'
+      ? today
+      : id === 'schedule'
+        ? (counts?.schedule?.dueToday ?? 0)
+        : id === 'tasks'
+          ? (counts?.todos?.today ?? 0)
+          : id === 'sort' && counts?.sort
+            ? counts.sort.in + (counts.sort.out ?? 0)
+            : 0;
+  // What each number counts, to a screen reader.
+  const saidLate = id === 'tasks' ? t.todos.saidLate : t.calendar.said.overdue;
+  const saidQuiet = id === 'today' ? t.todos.queueSaid : id === 'tasks' ? t.todos.saidToday : id === 'schedule' ? t.calendar.said.due_today : null;
   return (
     <NavLink to={path} end={id === 'today'} className={() => `tab ${on ? 'on' : ''}`}>
       <span className="tab-ic">
@@ -384,13 +403,13 @@ function PhoneTab({ id, on, label, today, counts }: { id: SectionId; on: boolean
       <span className="tab-label">{label}</span>
       {late > 0 ? (
         <span className="badge tab-badge">
-          <span className="sr-only">{t.calendar.said.overdue} </span>
+          <span className="sr-only">{saidLate} </span>
           {late}
         </span>
       ) : (
         quiet > 0 && (
           <span className="badge badge-quiet tab-badge">
-            {id === 'schedule' && <span className="sr-only">{t.calendar.said.due_today} </span>}
+            {saidQuiet && <span className="sr-only">{saidQuiet} </span>}
             {quiet}
           </span>
         )

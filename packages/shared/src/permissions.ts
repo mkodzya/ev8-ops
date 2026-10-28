@@ -57,6 +57,13 @@ export const PERMISSIONS = [
   'reports.view',
   'settings.manage', // models, tariffs, points
   'users.manage',
+  // «Задачи» (issue #18, part A; ADR-0050): the tasks a person sets by hand —
+  // one's own, set to oneself, closed by oneself. Every role keeps them, the
+  // workshop tablet too: a mechanic has no other place to read his.
+  'todos.own',
+  // Set a task to a manager or a chief mechanic, and read everybody's with a
+  // filter by whose: an owner's (the director's issue, Mika's «А» of 28.10.2026).
+  'todos.assign',
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 
@@ -68,7 +75,8 @@ export type Permission = (typeof PERMISSIONS)[number];
  * he also calls those who pay by the schedule and sorts the customers' money
  * coming in; since issue #18 (Mika's «Да, без отмены» of 28.10.2026) he sells
  * a moped too — cancelling it, buying it back and moving its day stay an
- * owner's. Deciding a deposit, repairs, money beyond that, cost, purchases,
+ * owner's. He keeps his own tasks and sets them only to himself (ADR-0050).
+ * Deciding a deposit, repairs, money beyond that, cost, purchases,
  * reports and settings are the owners' (redesign blueprint §2.1, Mika
  * 17.09.2026).
  */
@@ -87,16 +95,19 @@ const MANAGER: Permission[] = [
   'service.view',
   'goods.sell',
   'sales.create',
+  'todos.own',
 ];
 
 /**
  * A mechanic opens, carries and closes their own repairs and sees no one
  * else's; the chief mechanic sees every repair, approves them and keeps the
  * norms. Neither sees the fleet, a customer, a payment, a deposit or what
- * anything cost (ADR-0033 §2). Marking a mechanic paid is the owners'.
+ * anything cost (ADR-0033 §2). Marking a mechanic paid is the owners'. Each
+ * keeps his own tasks, as everybody does (ADR-0050); one is set to a chief
+ * mechanic by an owner, to a mechanic by nobody but himself.
  */
-const MECHANIC: Permission[] = ['service.view', 'service.work'];
-const CHIEF_MECHANIC: Permission[] = [...MECHANIC, 'service.approve', 'service.norms'];
+const MECHANIC: Permission[] = ['service.view', 'service.work', 'todos.own'];
+const CHIEF_MECHANIC: Permission[] = ['service.view', 'service.work', 'service.approve', 'service.norms', 'todos.own'];
 
 export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
   owner: PERMISSIONS,
@@ -136,10 +147,13 @@ export const PIN_ROLES: readonly Role[] = ['mechanic', 'chief_mechanic'];
 
 /**
  * What a session opened with a PIN on the workshop tablet may reach: the
- * repair screens and nothing else (ADR-0033 §7), whatever the role allows on
- * a phone. Paying a mechanic is not done from the workshop.
+ * repair screens (ADR-0033 §7), whatever the role allows on a phone — and
+ * since issue #18 (ADR-0050) the mechanic's own «Сегодня» and tasks: most
+ * mechanics sign in nowhere else. Paying a mechanic is not done from the
+ * workshop, and nobody is given a task from it. In the order of
+ * `PERMISSIONS`, as a filter of an owner's rights gives them.
  */
-export const PIN_SESSION_PERMISSIONS: readonly Permission[] = ['service.view', 'service.work', 'service.approve', 'service.norms'];
+export const PIN_SESSION_PERMISSIONS: readonly Permission[] = ['service.view', 'service.work', 'service.approve', 'service.norms', 'todos.own'];
 
 /** PIN rules — code, like the other sign-in rules (wave 6 §3.9, Q30; ADR-0033 §7). */
 export const PIN_MIN_DIGITS = 4;

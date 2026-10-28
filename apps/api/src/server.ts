@@ -47,6 +47,7 @@ import { driveRoutes } from './routes/drive.js';
 import { workshopRoutes } from './routes/workshop.js';
 import { workBookRoutes } from './routes/workBook.js';
 import { textRoutes } from './routes/texts.js';
+import { todoRoutes } from './routes/todos.js';
 
 /** `logger` only for a test that reads what the API logs — a secret must never be in it. */
 export function buildApp(opts: { logger?: FastifyServerOptions['logger'] } = {}): FastifyInstance {
@@ -125,6 +126,7 @@ export function buildApp(opts: { logger?: FastifyServerOptions['logger'] } = {})
   kommoRoutes(app);
   driveRoutes(app);
   textRoutes(app);
+  todoRoutes(app);
 
   return app;
 }
