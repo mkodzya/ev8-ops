@@ -37,8 +37,8 @@ export const vehicleDetailsRu: typeof vehicleDetailsEn = {
 export const vehicleDetailsKa: typeof vehicleDetailsEn = {
   vdetails: {
     title: 'მონაცემების შეცვლა',
-    latestToday: 'არა უგვიანეს დღევანდელი დღისა.',
-    latestHistory: (day) => `არა უგვიანეს ${day}: ეს მოპედის ისტორიის პირველი დღეა.`,
+    latestToday: 'არაუგვიანეს დღევანდელი დღისა.',
+    latestHistory: (day) => `არაუგვიანეს ${day}: ეს მოპედის ისტორიის პირველი დღეა.`,
     yearRange: (min, max) => `${min}-დან ${max}-მდე.`,
     reason: 'რატომ იცვლება მოსვლის თარიღი',
     reasonHint: 'ჩაიწერება მოპედის ისტორიაში ძველი და ახალი თარიღის გვერდით.',
