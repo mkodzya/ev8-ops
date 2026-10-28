@@ -1,8 +1,10 @@
+import { RECENT_SEARCH_KEY } from '@ev8/shared';
+
 /**
  * The last records opened from the search, on this device (wave 1 §3.5).
  * With no connection the search looks only here. Names and phones are
  * personal data on what may be a shared phone, so signing out forgets them
- * along with the drafts (session.tsx).
+ * along with the drafts, and so does another person signing in (session.tsx).
  */
 export interface Recent {
   href: string;
@@ -11,7 +13,7 @@ export interface Recent {
   at: number;
 }
 
-const KEY = 'ev8-recent';
+const KEY = RECENT_SEARCH_KEY;
 const LIMIT = 5;
 
 export function readRecent(): Recent[] {

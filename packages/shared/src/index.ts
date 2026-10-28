@@ -45,3 +45,4 @@ export * from './vehicle-details.js';
 export * from './drive-returns.js';
 export * from './chips.js';
 export * from './todos.js';
+export * from './device.js';
