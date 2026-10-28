@@ -148,6 +148,8 @@ describe.skipIf(!HAS_DB)('a moped out on a rental is handed to nobody else (issu
     const buyer = await customer();
     expect(err(await call(owner, 'POST', '/api/sales', { customerId: buyer.id, vehicleId: v.id, priceTetri: '2900', movePool: true }))).toMatchObject({ error: 'vehicle_rented_sale', rental: rental.number });
     expect(await state(v.id)).toMatchObject({ state: 'available', currentRentalId: null });
+    // Not left free in its rental for the suites after this one.
+    expect((await call(owner, 'POST', `/api/fleet/${v.id}/state`, { toState: 'rented', reason: 'ТЕСТ put right' })).statusCode).toBe(200);
   });
 
   it('a repair opened on it leaves it where it is and remembers the rental, as for any moped out with a customer', async () => {
@@ -157,6 +159,9 @@ describe.skipIf(!HAS_DB)('a moped out on a rental is handed to nobody else (issu
     const job = await prisma.serviceJob.findUniqueOrThrow({ where: { id: json<{ id: string }>(res).id } });
     expect(job).toMatchObject({ rentalId: rental.id, movedVehicle: false });
     expect(await state(v.id)).toMatchObject({ state: 'available' });
+    // Not left open, nor free in its rental, for the suites after this one.
+    expect((await call(owner, 'POST', `/api/service/${job.id}/cancel`, { reason: 'ТЕСТ done' })).statusCode).toBe(200);
+    expect((await call(owner, 'POST', `/api/fleet/${v.id}/state`, { toState: 'rented', reason: 'ТЕСТ put right' })).statusCode).toBe(200);
   });
 });
 
