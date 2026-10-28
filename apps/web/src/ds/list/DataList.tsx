@@ -117,12 +117,19 @@ export function DataList<T>({
     setLimit(PAGE);
   };
 
-  // «Показать все»: no search and «Все» — an address without a chip now opens the first one (issue #17).
+  // «Искать во всех»: a chip that holds nothing widens to «Все» and keeps what
+  // was typed — a list opens on its first chip since issue #17, so this is
+  // the usual way here, not a rare one. With nothing left to widen, the
+  // search lets go. «Все» is written as `f=all`: an address without a chip
+  // opens the first one.
   const showAll = () => {
     const next = new URLSearchParams(params);
-    next.delete('q');
-    if (chips.length > 0) next.set('f', ALL_CHIP);
-    else next.delete('f');
+    if (chip) next.set('f', ALL_CHIP);
+    else {
+      next.delete('q');
+      if (chips.length > 0) next.set('f', ALL_CHIP);
+      else next.delete('f');
+    }
     setParams(next, { replace: true });
     setLimit(PAGE);
   };
