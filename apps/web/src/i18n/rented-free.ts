@@ -18,8 +18,12 @@ export const rentedFreeEn = {
   },
   /** A repair that took in a moped whose rental is open gives it back to that customer, not to the yard. */
   repairBack: {
-    /** The closing's foot and the owner's closing sheet, then `rented` in bold. */
-    toRenter: (v: string, n: string) => `${v} goes back to the renter on ${n}`,
+    /**
+     * The closing's foot and the owner's closing sheet, then `rented` in bold —
+     * so it ends on the separator the refusal puts between the rental and the
+     * status (QA before 1.17.0: «… по R-00511 «В аренде»» ran the two together).
+     */
+    toRenter: (v: string, n: string) => `${v} goes back to the renter on ${n},`,
     rented: '«Rented»',
     /** Refusing such a repair. */
     reject: (v: string, n: string) => `The repair becomes «Refused». ${v} goes back to the renter on ${n}, «Rented». No pay for the mechanic on it.`,
@@ -35,7 +39,7 @@ export const rentedFreeRu: typeof rentedFreeEn = {
     list: (n: string) => `аренда ${n} открыта`,
   },
   repairBack: {
-    toRenter: (v: string, n: string) => `${v} вернётся арендатору по ${n}`,
+    toRenter: (v: string, n: string) => `${v} вернётся арендатору по ${n} —`,
     rented: '«В аренде»',
     reject: (v: string, n: string) => `Заявка станет «Отклонена». ${v} вернётся арендатору по ${n} — «В аренде». Оплаты механику по ней не будет.`,
   },
@@ -50,7 +54,7 @@ export const rentedFreeKa: typeof rentedFreeEn = {
     list: (n: string) => `ქირაობა ${n} ღიაა`,
   },
   repairBack: {
-    toRenter: (v: string, n: string) => `${v} დაბრუნდება მოქირავესთან — ${n}`,
+    toRenter: (v: string, n: string) => `${v} დაბრუნდება მოქირავესთან — ${n},`,
     rented: '«ქირაშია»',
     reject: (v: string, n: string) => `შეკეთება გახდება „უარყოფილი“. ${v} დაბრუნდება მოქირავესთან — ${n}, «ქირაშია». მექანიკოსს ამაში ანაზღაურება არ ექნება.`,
   },
