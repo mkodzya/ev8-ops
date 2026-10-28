@@ -186,7 +186,7 @@ export function GoodsSalePage() {
             <li key={l.id}>
               <div className="goods-line-head">
                 <span>
-                  {l.partId ? <Link to={`/service/stock/parts/${l.partId}`}>{named(l)}</Link> : named(l)} ×{l.qty}
+                  {l.partId ? <Link to={`/stock/parts/${l.partId}`}>{named(l)}</Link> : named(l)} ×{l.qty}
                 </span>
                 <span className="mono">{formatGel(l.lineTetri)}</span>
               </div>

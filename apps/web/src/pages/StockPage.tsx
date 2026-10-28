@@ -40,7 +40,8 @@ interface Parts {
 }
 
 /**
- * Склад (wave 5 §3.8). Parts only — the mopeds-by-model table went back to
+ * «Склад → Запчасти» (wave 5 §3.8; a section of its own since issue #19, was
+ * «Ремонты → Склад»). Parts only — the mopeds-by-model table went back to
  * «Парк → Модели», where a moped is a VIN with a state rather than a line in
  * a stock report (deviation 3 of wave 1, crit. 30). What is short opens the
  * page by itself when anything is, because that is the only row on this
@@ -76,7 +77,7 @@ export function StockPage() {
     <>
       <PageHead
         wrap
-        title={t.shelf.title}
+        title={t.nav.stock}
         sub={
           <>
             {t.stock.partsCount(data.parts.length)}
@@ -108,7 +109,7 @@ export function StockPage() {
         ]}
         empty={{ text: t.stock.none }}
         card={(p) => ({
-          title: <Link to={`/service/stock/parts/${p.id}`}>{partName(p)}</Link>,
+          title: <Link to={`/stock/parts/${p.id}`}>{partName(p)}</Link>,
           sub: (
             <>
               {p.sku && <span className="mono">{p.sku}</span>}
@@ -127,7 +128,7 @@ export function StockPage() {
           {
             key: 'name',
             label: t.stock.name,
-            cell: (p) => <Link to={`/service/stock/parts/${p.id}`}>{partName(p)}</Link>,
+            cell: (p) => <Link to={`/stock/parts/${p.id}`}>{partName(p)}</Link>,
             sort: { value: (p) => partName(p) },
           },
           { key: 'sku', label: t.stock.sku, cell: (p) => <span className="muted mono">{p.sku ?? t.common.dash}</span>, sort: { value: (p) => p.sku } },
@@ -271,7 +272,7 @@ function NewPart({ onDone }: { onDone: () => void }) {
               },
               { key },
             );
-            return { created: part.id, toast: { text: t.stock.partAdded, open: `/service/stock/parts/${part.id}` } };
+            return { created: part.id, toast: { text: t.stock.partAdded, open: `/stock/parts/${part.id}` } };
           }}
           onDone={() => {
             setF(NO_PART);

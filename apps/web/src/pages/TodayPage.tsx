@@ -222,7 +222,7 @@ export function TodayPage() {
         {n.overdueTetri != null && <Num to="/rentals?s=overdue" value={formatGel(n.overdueTetri, { decimals: false })} label={t.today.numbers.overdue ?? ''} tone="crit" />}
         {n.depositsHeldTetri != null && <Num to="/money/deposits" value={formatGel(n.depositsHeldTetri, { decimals: false })} label={t.today.numbers.deposits ?? ''} />}
         {n.week && <Num to="/money/payments" value={formatGel(n.week.rentTetri + n.week.saleTetri + n.week.serviceTetri + (n.week.goodsTetri ?? 0), { decimals: false })} label={t.today.numbers.week ?? ''} />}
-        {n.batteries && <Num to="/fleet/batteries" value={t.today.batteriesOf(n.batteries.showroom, n.batteries.total)} label={t.today.numbers.batteries ?? ''} />}
+        {n.batteries && <Num to="/stock/batteries" value={t.today.batteriesOf(n.batteries.showroom, n.batteries.total)} label={t.today.numbers.batteries ?? ''} />}
         {n.myTillTetri != null && <Num to="/money/cash" value={formatGel(n.myTillTetri, { decimals: false })} label={t.today.numbers.myTill ?? ''} />}
       </div>
 

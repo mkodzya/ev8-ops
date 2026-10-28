@@ -93,6 +93,7 @@ export const ru: Dict = {
     payments: 'Платежи',
     purchases: 'Закупки',
     sales: 'Продажи',
+    stock: 'Склад',
     service: 'Ремонты',
     statements: 'Выписки',
     customers: 'Клиенты',
@@ -101,7 +102,7 @@ export const ru: Dict = {
     cash: 'Касса',
     reports: 'Отчёты',
     settings: 'Настройки',
-    groups: { daily: 'Ежедневно', fleet: 'Парк', trade: 'Продажи и закупки', sales: 'Продажи', manage: 'Управление' },
+    groups: { daily: 'Ежедневно', fleet: 'Парк', trade: 'Продажи и закупки', sales: 'Продажи', salesStock: 'Продажи и склад', manage: 'Управление' },
   },
 
   shell: {
@@ -135,7 +136,7 @@ export const ru: Dict = {
       points: 'Точки',
       batteries: 'Батареи и зарядки',
       jobs: 'Ремонты',
-      stock: 'Склад',
+      parts: 'Запчасти',
       works: 'Справочник работ',
       payouts: 'К оплате',
       balance: 'Баланс',
@@ -1157,7 +1158,6 @@ export const ru: Dict = {
     saveCount: 'Записать пересчёт',
     movesCount: counted('движение', 'движения', 'движений'),
     partsCount: counted('запчасть', 'запчасти', 'запчастей'),
-    nav: 'Склад',
     name: 'Название',
     nameKa: 'Название по-грузински',
     sku: 'Артикул',

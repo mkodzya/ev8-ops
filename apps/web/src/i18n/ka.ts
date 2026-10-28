@@ -82,6 +82,7 @@ export const ka: Dict = {
     payments: 'გადახდები',
     purchases: 'შესყიდვები',
     sales: 'გაყიდვები',
+    stock: 'საწყობი',
     service: 'რემონტები',
     statements: 'ამონაწერები',
     customers: 'კლიენტები',
@@ -90,7 +91,7 @@ export const ka: Dict = {
     cash: 'სალარო',
     reports: 'ანგარიშები',
     settings: 'პარამეტრები',
-    groups: { daily: 'ყოველდღიური', fleet: 'პარკი', trade: 'გაყიდვები და შესყიდვები', sales: 'გაყიდვები', manage: 'მართვა' },
+    groups: { daily: 'ყოველდღიური', fleet: 'პარკი', trade: 'გაყიდვები და შესყიდვები', sales: 'გაყიდვები', salesStock: 'გაყიდვები და საწყობი', manage: 'მართვა' },
   },
 
   shell: {
@@ -124,7 +125,7 @@ export const ka: Dict = {
       points: 'ადგილები',
       batteries: 'ბატარეები და დამტენები',
       jobs: 'რემონტები',
-      stock: 'საწყობი',
+      parts: 'ნაწილები',
       works: 'სამუშაოების ცნობარი',
       payouts: 'გადასახდელი',
       balance: 'ბალანსი',
@@ -1146,7 +1147,6 @@ export const ka: Dict = {
     saveCount: 'ინვენტარიზაციის ჩაწერა',
     movesCount: (n: number) => `${n} ოპერაცია`,
     partsCount: (n: number) => `${n} ნაწილი`,
-    nav: 'საწყობი',
     name: 'დასახელება',
     nameKa: 'დასახელება ქართულად',
     sku: 'არტიკული',

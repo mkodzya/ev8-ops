@@ -13,26 +13,30 @@ describe('the structure each role sees (wave 1 §3.2; issue #15, ADR-0048)', () 
       ['fleet', 'rentals'],
       ['fleet', 'service'],
       ['trade', 'sales'],
+      // «Склад» (issue #19): in «Продажи и закупки», before the orders.
+      ['trade', 'stock'],
       ['trade', 'purchases'],
       ['manage', 'money'],
       ['manage', 'reports'],
       ['manage', 'settings'],
     ]);
-    expect(sectionsForRole('manager').map((s) => s.id)).toEqual(['today', 'schedule', 'sort', 'cash', 'fleet', 'rentals', 'service', 'sales']);
+    expect(sectionsForRole('manager').map((s) => s.id)).toEqual(['today', 'schedule', 'sort', 'cash', 'fleet', 'rentals', 'service', 'sales', 'stock']);
   });
 
-  it('names a group by what the reader finds in it: «Продажи» for a manager, who has no purchases (QA of #15, the director’s mockup)', () => {
+  it('names a group by what the reader finds in it: «Продажи и склад» for a manager, who has no purchases (QA of #15, the director’s mockup; issue #19)', () => {
     expect(GROUPS.map((g) => groupHeadingForRole(g, 'owner'))).toEqual(['daily', 'fleet', 'trade', 'manage']);
-    expect(groupHeadingForRole('trade', 'manager')).toBe('sales');
+    expect(groupHeadingForRole('trade', 'manager')).toBe('salesStock');
+    // The shelf and the sales go by one right; a reader of neither has no such group at all.
+    expect(sectionsForRole('mechanic').some((s) => s.group === 'trade')).toBe(false);
     for (const g of ['daily', 'fleet', 'manage'] as const) expect(groupHeadingForRole(g, 'manager'), g).toBe(g);
   });
 
   it('gives both roles Today · Оплаты · Разобрать · Мопеды on the bar, and the rest under «Ещё» in the rail’s order', () => {
     expect(phoneTabsForRole('owner')).toEqual(['today', 'schedule', 'sort', 'fleet']);
     expect(phoneTabsForRole('manager')).toEqual(['today', 'schedule', 'sort', 'fleet']);
-    expect(menuSectionsForRole('manager')).toEqual(['cash', 'rentals', 'service', 'sales']);
+    expect(menuSectionsForRole('manager')).toEqual(['cash', 'rentals', 'service', 'sales', 'stock']);
     // The director's list names Money, Reports and Settings for the owner; the orders are his section too, so they are there.
-    expect(menuSectionsForRole('owner')).toEqual(['cash', 'rentals', 'service', 'sales', 'purchases', 'money', 'reports', 'settings']);
+    expect(menuSectionsForRole('owner')).toEqual(['cash', 'rentals', 'service', 'sales', 'stock', 'purchases', 'money', 'reports', 'settings']);
   });
 
   it('keeps purchases, reports, settings and Money itself away from a manager everywhere', () => {
@@ -60,8 +64,9 @@ describe('the structure each role sees (wave 1 §3.2; issue #15, ADR-0048)', () 
   });
 
   it('shows the points tab and statements only to the owner', () => {
-    expect(tabsForRole('fleet', 'owner').map((t) => t.id)).toEqual(['vehicles', 'models', 'points', 'batteries']);
-    expect(tabsForRole('fleet', 'manager').map((t) => t.id)).toEqual(['vehicles', 'models', 'batteries']);
+    // The batteries and chargers left for «Склад» (issue #19).
+    expect(tabsForRole('fleet', 'owner').map((t) => t.id)).toEqual(['vehicles', 'models', 'points']);
+    expect(tabsForRole('fleet', 'manager').map((t) => t.id)).toEqual(['vehicles', 'models']);
     expect(tabsForRole('money', 'owner').map((t) => t.id)).toEqual(['payments', 'statements', 'deposits']);
     expect(tabsForRole('money', 'manager')).toEqual([]);
     expect(tabsForRole('cash', 'manager').map((t) => t.id)).toEqual(['till', 'mine']);
@@ -108,6 +113,34 @@ describe('the structure each role sees (wave 1 §3.2; issue #15, ADR-0048)', () 
     expect(REDIRECTS.map((r) => r.from)).toContain('/money/calendar');
   });
 
+  // Issue #19 of the director (28.10.2026): the shelf is a section of its own.
+  it('gives «Склад» two tabs, the parts and the batteries and chargers, to both roles and to no mechanic', () => {
+    for (const role of ['owner', 'manager'] as const) {
+      expect(tabsForRole('stock', role).map((t) => [t.id, t.path])).toEqual([
+        ['parts', '/stock'],
+        ['batteries', '/stock/batteries'],
+      ]);
+    }
+    for (const role of ['mechanic', 'chief_mechanic'] as const) {
+      expect(sectionsForRole(role).map((s) => s.id)).not.toContain('stock');
+      expect(tabsForRole('stock', role)).toEqual([]);
+    }
+    // Neither tab is left behind in its old section.
+    for (const section of ['fleet', 'service'] as const) {
+      expect(tabsForRole(section, 'owner').map((t) => t.path)).not.toContain('/fleet/batteries');
+      expect(tabsForRole(section, 'owner').map((t) => t.path)).not.toContain('/service/stock');
+    }
+  });
+
+  it('sends the shelf’s old addresses to «Склад», the part and the query along', () => {
+    expect(movedTo('/service/stock', '?f=short')).toBe('/stock?f=short');
+    expect(movedTo('/service/stock/parts/:id', '')).toBe('/stock/parts/:id');
+    expect(movedTo('/fleet/batteries', '?item=charger')).toBe('/stock/batteries?item=charger');
+    // `/stock` is the section's own address now, no longer an old one.
+    expect(REDIRECTS.map((r) => r.from)).not.toContain('/stock');
+    expect(REDIRECTS.map((r) => r.from)).not.toContain('/stock/parts/:id');
+  });
+
   // Mika, 28.09.2026: the suppliers are a tab of Purchases, not a section.
   it('gives purchases two tabs, the orders and the suppliers, to the owner only', () => {
     expect(tabsForRole('purchases', 'owner').map((t) => t.path)).toEqual(['/purchases', '/purchases/suppliers']);
@@ -142,7 +175,9 @@ describe('the structure each role sees (wave 1 §3.2; issue #15, ADR-0048)', () 
     // Each reads his own balance (stage 5); marking a mechanic paid is the owners' alone.
     expect(tabsForRole('service', 'mechanic').map((t) => t.id)).toEqual(['jobs', 'balance']);
     expect(tabsForRole('service', 'chief_mechanic').map((t) => t.id)).toEqual(['jobs', 'works', 'balance']);
-    expect(tabsForRole('service', 'owner').map((t) => t.id)).toEqual(['jobs', 'stock', 'works', 'payouts']);
+    // The shelf left the repairs for «Склад» (issue #19): a mechanic takes parts in the repair's card, as before.
+    expect(tabsForRole('service', 'owner').map((t) => t.id)).toEqual(['jobs', 'works', 'payouts']);
+    expect(tabsForRole('service', 'manager').map((t) => t.id)).toEqual(['jobs']);
     expect(tabsForRole('service', 'manager').map((t) => t.id)).not.toContain('payouts');
     expect(homePathForRole('owner')).toBe('/');
     expect(homePathForRole('manager')).toBe('/');
@@ -151,7 +186,8 @@ describe('the structure each role sees (wave 1 §3.2; issue #15, ADR-0048)', () 
   it('knows which section an address belongs to', () => {
     expect(sectionOfPath('/')).toBe('today');
     expect(sectionOfPath('/fleet/models/abc')).toBe('fleet');
-    expect(sectionOfPath('/service/stock/parts/x')).toBe('service');
+    expect(sectionOfPath('/stock/parts/x')).toBe('stock');
+    expect(sectionOfPath('/stock/batteries')).toBe('stock');
     expect(sectionOfPath('/money/cash')).toBe('cash');
     // The till is the till's section for an owner too since issue #15.
     expect(sectionOfPath('/money/cash', ['payments.view'])).toBe('cash');

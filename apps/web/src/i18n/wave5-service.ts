@@ -131,7 +131,6 @@ export const wave5serviceEn = {
     partsBack: (n: number, names: string) => `${n} part${n === 1 ? '' : 's'} go back on the shelf: ${names}.`,
   },
   shelf: {
-    title: 'Warehouse',
     searchHint: 'Name, article number',
     chips: { short: 'Below the minimum', negative: 'Below zero' },
     order: 'Order it',
@@ -290,7 +289,6 @@ export const wave5serviceRu: Wave5service = {
     partsBack: (n, names) => `${n} ${ruPlural(n, 'запчасть вернётся', 'запчасти вернутся', 'запчастей вернутся')} на склад: ${names}.`,
   },
   shelf: {
-    title: 'Склад',
     searchHint: 'Название, артикул',
     chips: { short: 'Ниже минимума', negative: 'В минусе' },
     order: 'В заказ',
@@ -447,7 +445,6 @@ export const wave5serviceKa: Wave5service = {
     partsBack: (n, names) => `${n} ნაწილი დაბრუნდება საწყობში: ${names}.`,
   },
   shelf: {
-    title: 'საწყობი',
     searchHint: 'დასახელება, არტიკული',
     chips: { short: 'მინიმუმზე ნაკლები', negative: 'მინუსში' },
     order: 'შეკვეთაში',

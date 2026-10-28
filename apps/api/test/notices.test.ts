@@ -618,7 +618,7 @@ describe.skipIf(!HAS_DB)('the notices to the workshop’s group (ADR-0038 §6–
     const [ka, ru, link] = tg.texts()[0]!.split('\n');
     expect(ka).toBe('📦 <b>სატესტო ხუნდი</b> მინიმუმზე ნაკლებია: ნაშთი 3, გვქონდეს არანაკლებ 5');
     expect(ru).toBe(`Деталь <b>${part.name}</b> ниже минимума: остаток 3, держать не меньше 5`);
-    expect(link).toBe(`${STAND}/service/stock/parts/${part.id}`);
+    expect(link).toBe(`${STAND}/stock/parts/${part.id}`);
 
     // A part taken off a donor only passes through the shelf (ADR-0036): no restock, no new notice.
     const v = await moped();

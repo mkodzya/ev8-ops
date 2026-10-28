@@ -89,6 +89,8 @@ export const en = {
     payments: 'Payments',
     purchases: 'Purchases',
     sales: 'Sales',
+    // «Склад» (issue #19): the parts, the batteries and the chargers in one section.
+    stock: 'Stock',
     service: 'Repairs',
     statements: 'Statements',
     customers: 'Customers',
@@ -97,8 +99,9 @@ export const en = {
     cash: 'Till',
     reports: 'Reports',
     settings: 'Settings',
-    // `sales`: the trade group of whoever has no purchases — a manager (QA of #15, the director's mockup).
-    groups: { daily: 'Daily', fleet: 'Fleet', trade: 'Sales and purchases', sales: 'Sales', manage: 'Manage' },
+    // `sales`: the trade group of whoever has no purchases — a manager (QA of #15, the director's mockup);
+    // `salesStock` the same with the shelf in it (issue #19).
+    groups: { daily: 'Daily', fleet: 'Fleet', trade: 'Sales and purchases', sales: 'Sales', salesStock: 'Sales and stock', manage: 'Manage' },
   },
 
   // The frame around every screen (wave 1 §3.2–3.3).
@@ -133,7 +136,8 @@ export const en = {
       points: 'Points',
       batteries: 'Batteries and chargers',
       jobs: 'Repairs',
-      stock: 'Stock',
+      // «Склад → Запчасти» (issue #19; was «Ремонты → Склад»).
+      parts: 'Parts',
       works: 'Book of works',
       payouts: 'To pay',
       balance: 'Balance',
@@ -1164,7 +1168,6 @@ export const en = {
     saveCount: 'Save count',
     movesCount: (n: number) => `${n} ${n === 1 ? 'movement' : 'movements'}`,
     partsCount: (n: number) => `${n} part${n === 1 ? '' : 's'}`,
-    nav: 'Warehouse',
     name: 'Name',
     nameKa: 'Name in Georgian',
     sku: 'Article',

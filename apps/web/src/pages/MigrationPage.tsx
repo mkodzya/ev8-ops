@@ -72,7 +72,7 @@ export function MigrationPage() {
             <span className="muted"> · {t.migrationPage.rows.saleNote}</span>
           </li>
           <li className="act-item">
-            <Link to="/service/stock">{t.migrationPage.rows.stock}</Link>
+            <Link to="/stock">{t.migrationPage.rows.stock}</Link>
             <span className="muted"> · {t.migrationPage.rows.stockNote}</span>
           </li>
           <li className="act-item">

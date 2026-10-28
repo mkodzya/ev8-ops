@@ -16,6 +16,7 @@ import {
   Undo2,
   UserPlus,
   Wallet,
+  Warehouse,
   Wrench,
   type LucideIcon,
 } from 'lucide-react';
@@ -31,6 +32,8 @@ export const SECTION_ICON: Record<SectionId, LucideIcon> = {
   rentals: FileText,
   service: Wrench,
   sales: ShoppingBag,
+  // «Склад» (issue #19): the shelf of parts, batteries and chargers.
+  stock: Warehouse,
   purchases: Truck,
   money: Wallet,
   reports: ChartColumn,
