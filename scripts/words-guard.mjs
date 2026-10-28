@@ -250,6 +250,15 @@ const RULES = [
   },
   { lang: 'ru', word: /Аванс по аренде/iu, use: 'a customer’s money on no rental is «Аванс клиента» (issue #18 B5)' },
   {
+    // The money form's choice for it is read by a customer with no rental too: «Авансом по аренде»
+    // and its «следующая неделя» outlived the rule above in another case (QA before 1.17.0). A
+    // rental's own overpayment elsewhere («Лишнее … — авансом по аренде») is another thing.
+    lang: 'ru',
+    at: /^money\.toAccount(?:Hint)?$/u,
+    word: /по\s+аренд/iu,
+    use: 'a customer’s money on no rental is «Аванс клиента»; it lies on the nearest week of a rental (issue #18 B5, QA before 1.17.0)',
+  },
+  {
     lang: 'ru',
     word: /Внёс в банк|Сдача наличных в банк/iu,
     use: 'cash paid into the bank is «Внесение наличных в банк»; «сдача» is the till’s (issue #18 B5)',
