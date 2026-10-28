@@ -17,6 +17,7 @@ import {
   type Role,
   type TodoLinkKind,
   type TodoRepeat,
+  type TodoFault,
   type TodoRepeatKind,
 } from '@ev8/shared';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
@@ -26,7 +27,7 @@ import { permissionsOf, type Actor } from '../lib/auth.js';
 import { dateFromISO, isoDate } from '../lib/dates.js';
 import { prisma } from '../lib/db.js';
 import { env } from '../lib/env.js';
-import { badRequest, conflict, forbidden, notFound } from '../lib/errors.js';
+import { badRequest, conflict, forbidden, notFound, type ApiError } from '../lib/errors.js';
 import { actorOf, mayView } from '../lib/guard.js';
 import { TODO_SELECT, doneSince, keepTodos, todoView, type TodoReader } from '../lib/todos.js';
 import { oneOf, str } from '../lib/validate.js';
@@ -59,6 +60,28 @@ function fieldsOf(b: Body, was?: { text: string; note: string | null; dueOn: str
   const leadDays = b.leadDays == null || b.leadDays === '' ? (was?.leadDays ?? 0) : Number(b.leadDays);
   const needsFile = typeof b.needsFile === 'boolean' ? b.needsFile : (was?.needsFile ?? false);
   return { text, note, dueOn, leadDays, needsFile };
+}
+
+/**
+ * A task's field refused by `todoFault`, the form's own rule, with the field
+ * named. Each code written out: the dictionaries' guard reads them here.
+ */
+function refusal(fault: TodoFault): ApiError {
+  const field = { field: fault.field };
+  switch (fault.code) {
+    case 'todo_text_missing':
+      return badRequest('todo_text_missing', 'Write what to do.', field);
+    case 'todo_text_long':
+      return badRequest('todo_text_long', 'Up to 300 characters; the rest goes in the comment.', field);
+    case 'todo_note_long':
+      return badRequest('todo_note_long', 'The comment is up to 2,000 characters.', field);
+    case 'todo_due_bad':
+      return badRequest('todo_due_bad', 'The due day is a date, YYYY-MM-DD.', field);
+    case 'todo_due_past':
+      return badRequest('todo_due_past', 'The due day has passed.', field);
+    case 'todo_lead_bad':
+      return badRequest('todo_lead_bad', 'Shown ahead by 0 to 30 days.', field);
+  }
 }
 
 /** Whom the task goes to — himself, or for an owner a manager or the chief mechanic (`mayGiveTodo`). */
@@ -221,7 +244,7 @@ export function todoRoutes(app: FastifyInstance): void {
     const b = req.body ?? {};
     const f = fieldsOf(b);
     const fault = todoFault({ ...f, today: today() });
-    if (fault) throw badRequest(fault.code, 'The task is not filled in as it should be.', { field: fault.field });
+    if (fault) throw refusal(fault);
     const repeat: TodoRepeat = oneOf(b, 'repeat', TODO_REPEATS) ?? 'none';
     const assignee = await assigneeOf(actor, me.permissions, str(b, 'assigneeId') ?? actor.id);
     const link = await linkOf(me.permissions, assignee.role, b.link);
@@ -259,7 +282,7 @@ export function todoRoutes(app: FastifyInstance): void {
     const was = { text: row.text, note: row.note, dueOn: isoDate(row.dueOn)!, leadDays: row.leadDays, needsFile: row.needsFile };
     const f = fieldsOf(b, was);
     const fault = todoFault({ ...f, today: today(), dueChanged: f.dueOn !== was.dueOn });
-    if (fault) throw badRequest(fault.code, 'The task is not filled in as it should be.', { field: fault.field });
+    if (fault) throw refusal(fault);
 
     const assigneeId = str(b, 'assigneeId') ?? row.assigneeId;
     const assignee = assigneeId === row.assigneeId ? { id: row.assigneeId, name: row.assignee.name, role: row.assignee.role as Role } : await assigneeOf(actor, me.permissions, assigneeId);
