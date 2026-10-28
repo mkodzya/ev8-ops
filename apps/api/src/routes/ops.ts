@@ -1,4 +1,4 @@
-import { CONTACT_KINDS, CUSTOMER_KINDS, CUSTOMER_SOURCES, VEHICLE_POOLS, VEHICLE_STATES, isoWeekday, manualMoveRefusal, nameSpellings, normalizeVin, todayISO, trackerCorrection, trackerDayFault, trackerEarliestDay, trackerTails, vinFault, weeksAnchor, type ManualMoveRefusal, type VehicleState } from '@ev8/shared';
+import { CONTACT_KINDS, CUSTOMER_KINDS, CUSTOMER_SOURCES, VEHICLE_POOLS, VEHICLE_STATES, arrivalFault, arrivalLatestDay, isoWeekday, manualMoveRefusal, nameSpellings, normalizeVin, todayISO, trackerCorrection, trackerDayFault, trackerEarliestDay, trackerTails, vehicleYearFault, vehicleYearRange, vinFault, weeksAnchor, type ManualMoveRefusal, type VehicleState } from '@ev8/shared';
 import type { FastifyInstance } from 'fastify';
 import { audit } from '../lib/audit.js';
 import { hasPerm } from '../lib/auth.js';
@@ -380,26 +380,80 @@ export function opsRoutes(app: FastifyInstance): void {
   });
 
   // ---- reference data: mopeds (owner); models live in routes/models.ts ----
+  // «Изменить данные» on the card (issue #19 of the director, item 2): the
+  // colour, the year and the day it came, put right after the moped was added.
+  // Only what changed is written, and the journal — the card's «История» —
+  // keeps each field «было → стало» with who did it. A day as a day: the row
+  // used to keep the moment Prisma hands back, which no screen reads as a date.
   app.patch<{ Params: { id: string }; Body: Body }>('/api/fleet/:id', { config: { scope: 'settings.manage' } }, async (req) => {
     const b = req.body ?? {};
     const actor = actorOf(req);
     const before = await prisma.vehicle.findUnique({ where: { id: req.params.id } });
     if (!before) throw notFound('vehicle_not_found', 'No such moped.');
+    const today = todayISO(new Date(), env.TZ);
+    const was: Record<string, unknown> = {};
+    const now: Record<string, unknown> = {};
     const data: Record<string, unknown> = {};
-    if ('color' in b) data.color = str(b, 'color', { max: 60 });
-    if ('year' in b) data.year = int(b, 'year', { min: 2000 });
-    if ('odometerKm' in b) data.odometerKm = int(b, 'odometerKm', { min: 0 });
-    if ('notes' in b) data.notes = str(b, 'notes', { max: 4000 });
-    if ('arrivedOn' in b) data.arrivedOn = dateFromISO(date(b, 'arrivedOn'));
-    if ('modelId' in b) data.modelId = str(b, 'modelId', { required: true });
+    const change = (field: string, from: unknown, to: unknown, write: unknown = to) => {
+      if (from === to) return;
+      was[field] = from;
+      now[field] = to;
+      data[field] = write;
+    };
+    if ('color' in b) change('color', before.color, str(b, 'color', { max: 60 }));
+    if ('year' in b) {
+      const year = int(b, 'year');
+      const fault = year == null ? null : vehicleYearFault(year, today);
+      if (fault) throw badRequest('vehicle_year_bad', 'A moped’s year is from 2000 to next year.', { field: 'year', fault, ...vehicleYearRange(today) });
+      change('year', before.year, year);
+    }
+    if ('odometerKm' in b) change('odometerKm', before.odometerKm, int(b, 'odometerKm', { min: 0 }));
+    if ('notes' in b) change('notes', before.notes, str(b, 'notes', { max: 4000 }));
+    if ('arrivedOn' in b) {
+      const had = isoDate(before.arrivedOn);
+      const on = date(b, 'arrivedOn');
+      // Once the day it came is written, «not known» is no correction of it.
+      if (on == null && had != null) throw badRequest('missing_field', 'Say the day the moped came.', { field: 'arrivedOn' });
+      if (on != null && on !== had) {
+        // Not after today, not after the first thing its history holds: the
+        // refusal names the latest day it would take, as the sheet does.
+        const historyOn = await historyDaysOf(before.id);
+        const fault = arrivalFault({ on, today, historyOn });
+        if (fault) {
+          const latest = arrivalLatestDay({ today, historyOn });
+          throw badRequest('arrival_date_bad', 'The day a moped came is not after today, nor after the first thing in its history.', { field: 'arrivedOn', fault, latest: latest.on, latestBy: latest.by });
+        }
+      }
+      change('arrivedOn', had, on, dateFromISO(on));
+    }
+    if ('modelId' in b) change('modelId', before.modelId, str(b, 'modelId', { required: true }));
     if ('archived' in b) {
       // A moped out on rent is not something to hide from the fleet.
       if (Boolean(b.archived) && before.state === 'rented') throw conflict('vehicle_rented_move', 'Close the rental first.');
-      data.archived = Boolean(b.archived);
+      change('archived', before.archived, Boolean(b.archived));
     }
-    await prisma.vehicle.update({ where: { id: before.id }, data: { ...data, updatedAt: new Date() } });
-    await audit({ actorId: actor.id, action: 'vehicle.update', entityType: 'vehicle', entityId: before.id, before: pickKeys(before, data) as object, after: data as object });
-    return { ok: true };
+    // A date put right says why (ux №14); a colour or a year needs no more than who.
+    const reason = str(b, 'reason', { max: 1000 });
+    if ('arrivedOn' in now && !reason) throw badRequest('missing_field', 'Say why the day the moped came changes.', { field: 'reason' });
+    if (Object.keys(data).length === 0) return { ok: true, changed: false };
+    const cameOn = typeof now.arrivedOn === 'string' ? now.arrivedOn : null;
+    await prisma.$transaction(async (tx) => {
+      await tx.vehicle.update({ where: { id: before.id }, data: { ...data, updatedAt: new Date() } });
+      // The day it came is its «Пришёл» too: the card's history shows that
+      // event, and the utilisation counts the moped from it (lib/utilisation.ts).
+      if (cameOn) {
+        const arrived = await tx.vehicleEvent.findFirst({
+          where: { vehicleId: before.id, kind: 'arrived' },
+          orderBy: [{ occurredOn: 'asc' }, { createdAt: 'asc' }],
+          select: { id: true },
+        });
+        if (arrived) await tx.vehicleEvent.update({ where: { id: arrived.id }, data: { occurredOn: dateFromISO(cameOn)! } });
+      }
+      await tx.auditLog.create({
+        data: { actorId: actor.id, action: 'vehicle.update', entityType: 'vehicle', entityId: before.id, before: was as object, after: now as object, note: reason },
+      });
+    });
+    return { ok: true, changed: true };
   });
 
   app.post<{ Body: Body }>('/api/fleet', { config: { scope: 'settings.manage' } }, async (req, reply) => {
@@ -442,4 +496,19 @@ function pickKeys(obj: object, keys: Record<string, unknown>): Record<string, un
   const out: Record<string, unknown> = {};
   for (const k of Object.keys(keys)) out[k] = (obj as Record<string, unknown>)[k];
   return out;
+}
+
+/**
+ * The first days a moped's history holds besides its arrival (issue #19): its
+ * first event that is not «Пришёл», its first repair, its first tracker. The
+ * day it came is not after any of them (`arrivalFault`); the card's sheet
+ * reads the same three off the card.
+ */
+async function historyDaysOf(vehicleId: string): Promise<(string | null)[]> {
+  const [event, job, tracker] = await Promise.all([
+    prisma.vehicleEvent.findFirst({ where: { vehicleId, kind: { not: 'arrived' } }, orderBy: { occurredOn: 'asc' }, select: { occurredOn: true } }),
+    prisma.serviceJob.findFirst({ where: { vehicleId }, orderBy: { openedOn: 'asc' }, select: { openedOn: true } }),
+    prisma.vehicleTracker.findFirst({ where: { vehicleId }, orderBy: { installedOn: 'asc' }, select: { installedOn: true } }),
+  ]);
+  return [isoDate(event?.occurredOn), isoDate(job?.openedOn), isoDate(tracker?.installedOn)];
 }

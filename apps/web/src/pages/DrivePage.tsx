@@ -1,4 +1,4 @@
-import { formatGel, localDateTime } from '@ev8/shared';
+import { formatGel, localDateTime, type DriveReturnWhy } from '@ev8/shared';
 import { Link } from 'react-router-dom';
 import { api } from '../api.js';
 import { LoadError } from '../components/LoadError.js';
@@ -22,13 +22,19 @@ interface Reconciliation {
   failure: string | null;
   folders: number;
   matched: number;
-  returnedThere: {
-    folder: { name: string; url: string | null };
-    rental: { id: string; number: string; customer: { id: string; name: string } };
-    act: { url: string | null; returnedOn: string | null; contractOn: string | null; vin: string | null; depositTetri: number | null; withheldTetri: number | null; paidBackTetri: number | null } | null;
-  }[];
+  returnedThere: ReturnRow[];
+  /** Rows an owner answered «Это не возврат» (issue #19): off "Today", kept here; absent while an older API answers. */
+  notReturned?: (ReturnRow & { answer: { at: string; by: string | null; reason: string | null } })[];
   missingHere: { id: string; name: string; url: string | null; datedOn: string | null; contract: { url: string | null; signedOn: string | null; vin: string | null } | null }[];
   missingThere: { id: string; number: string; customer: { id: string; name: string }; pickedUpOn: string | null; vin: string | null }[];
+}
+
+interface ReturnRow {
+  folder: { name: string; url: string | null };
+  rental: { id: string; number: string; customer: { id: string; name: string } };
+  act: { url: string | null; returnedOn: string | null; contractOn: string | null; vin: string | null; depositTetri: number | null; withheldTetri: number | null; paidBackTetri: number | null } | null;
+  /** The act's day, an act with no day, or the folder among the finished (issue #19); absent while an older API answers. */
+  why?: DriveReturnWhy;
 }
 
 export function DrivePage() {
@@ -95,7 +101,7 @@ export function DrivePage() {
                       <span className="q-sub muted">
                         {[
                           row.rental.number,
-                          row.act?.returnedOn ? d.act(fmtDate(row.act.returnedOn)) : d.noAct,
+                          row.act?.returnedOn ? d.act(fmtDate(row.act.returnedOn)) : row.act ? d.actUndated : d.noAct,
                           row.act && row.act.depositTetri != null ? d.deposit(gel(row.act.depositTetri), gel(row.act.withheldTetri), gel(row.act.paidBackTetri)) : '',
                           row.act?.vin ? `···${row.act.vin.slice(-4)}` : '',
                         ]
@@ -115,6 +121,39 @@ export function DrivePage() {
               </ul>
             )}
           </section>
+
+          {/* What an owner answered «Это не возврат» (issue #19): quiet, with who, when and why. */}
+          {(x.notReturned?.length ?? 0) > 0 && (
+            <section className="card queue-card">
+              <BlockHead title={`${d.notReturned} — ${x.notReturned!.length}`} note={d.notReturnedNote} />
+              <ul className="queue">
+                {x.notReturned!.map((row) => (
+                  <li key={row.rental.id} className="q-row">
+                    <Link to={`/rentals/${row.rental.id}`} className="q-who">
+                      <span className="q-name">{row.rental.customer.name}</span>
+                      <span className="q-sub muted">
+                        {[
+                          row.rental.number,
+                          row.act?.returnedOn ? d.act(fmtDate(row.act.returnedOn)) : row.act ? d.actUndated : d.noAct,
+                          row.answer.reason ?? '',
+                          d.answeredBy(row.answer.by ?? '', localDateTime(row.answer.at).date),
+                        ]
+                          .filter(Boolean)
+                          .join(' · ')}
+                      </span>
+                    </Link>
+                    {(row.act?.url ?? row.folder.url) && (
+                      <span className="q-acts">
+                        <a className="pill pill-sm" href={(row.act?.url ?? row.folder.url)!} target="_blank" rel="noreferrer">
+                          {d.open}
+                        </a>
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
 
           <section className="card queue-card">
             <BlockHead title={`${d.missingHere} — ${x.missingHere.length}`} note={x.missingHere.length > 0 ? d.missingHereNote : undefined} />

@@ -1,7 +1,8 @@
-import { TRANSLATED_EVENT_KINDS, VEHICLE_POOLS, isPoolEvent, localDateTime, manualStateTargets, newestFirst, type RentalStatus, type VehicleEventKind, type VehiclePool, type VehicleState } from '@ev8/shared';
+import { TRANSLATED_EVENT_KINDS, VEHICLE_POOLS, arrivalFault, arrivalLatestDay, isISODate, isPoolEvent, localDateTime, manualStateTargets, newestFirst, todayISO, vehicleYearFault, vehicleYearRange, type RentalStatus, type VehicleEventKind, type VehiclePool, type VehicleState } from '@ev8/shared';
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api, ApiError } from '../api.js';
+import { ColorPicker } from '../components/ColorPicker.js';
 import { LoadError } from '../components/LoadError.js';
 import { FormSheet, useFieldError } from '../ds/form/Form.js';
 import { useOperation } from '../ds/form/operation.js';
@@ -128,6 +129,7 @@ export function VehiclePage() {
   // The state sheet, open or not; «Вернуть в парк» opens it on «Свободен».
   const [stateSheet, setStateSheet] = useState<{ prefer?: VehicleState } | null>(null);
   const [fixing, setFixing] = useState(false);
+  const [editing, setEditing] = useState(false);
 
   if (failure) return <LoadError failure={failure} onRetry={reload} />;
   if (!data) return <Loading />;
@@ -205,7 +207,15 @@ export function VehiclePage() {
             {t.actions.newRental}
           </Link>
         )}
-        {can('settings.manage') && <RowMenu actions={[{ key: 'vin', label: t.vinFix.title, onPick: () => setFixing(true) }]} />}
+        {/* «Изменить данные» — the colour, the year, the day it came (issue #19) — beside «Исправить VIN»: an owner's. */}
+        {can('settings.manage') && (
+          <RowMenu
+            actions={[
+              { key: 'details', label: t.vdetails.title, onPick: () => setEditing(true) },
+              { key: 'vin', label: t.vinFix.title, onPick: () => setFixing(true) },
+            ]}
+          />
+        )}
         {primary &&
           (primary.to ? (
             <Link className="pill pill-sm pill-accent head-primary" to={primary.to}>
@@ -227,6 +237,20 @@ export function VehiclePage() {
             setFixing(false);
             reload();
           }}
+        />
+      )}
+
+      {editing && (
+        <DetailsSheet
+          v={v}
+          // What the day it came may not be after: the card's own history, the three the server reads (issue #19).
+          historyOn={[
+            ...data.events.filter((e) => e.kind !== 'arrived').map((e) => e.occurredOn),
+            ...data.serviceJobs.map((j) => j.openedOn),
+            ...(data.trackers ?? []).map((x) => x.installedOn),
+          ]}
+          onClose={() => setEditing(false)}
+          onDone={reload}
         />
       )}
 
@@ -725,6 +749,64 @@ function VinSheet({ id, vin, onClose, onDone }: { id: string; vin: string; onClo
       <Field label={t.vinFix.reason} name="reason">
         <input className="input" value={f.reason} onChange={(e) => setF({ ...f, reason: e.target.value })} />
       </Field>
+    </FormSheet>
+  );
+}
+
+/**
+ * «Изменить данные» (issue #19 of the director, item 2): the colour, the year
+ * and the day the moped came, put right by an owner. The rules are the
+ * server's (`arrivalFault`, `vehicleYearFault`), said under the fields before
+ * anything is sent; the button is not held back (ux, «Ошибка поля»). Only
+ * what changed goes — an untouched colour written the old way («Красный»)
+ * stays as written — and a new day it came asks why (ux №14).
+ */
+function DetailsSheet({ v, historyOn, onClose, onDone }: { v: Card['vehicle']; historyOn: (string | null)[]; onClose: () => void; onDone: () => void }) {
+  const t = useT();
+  const today = todayISO();
+  const initial = { color: v.color ?? '', year: v.year != null ? String(v.year) : '', arrivedOn: v.arrivedOn ?? '', reason: '' };
+  const [f, setF] = useState(initial);
+  const latest = arrivalLatestDay({ today, historyOn });
+  const latestWords = latest.by === 'history' ? t.vdetails.latestHistory(fmtDate(latest.on)) : t.vdetails.latestToday;
+  const range = vehicleYearRange(today);
+  const yearTyped = f.year.trim();
+  const yearBad = yearTyped !== '' && vehicleYearFault(Number(yearTyped), today) != null ? t.vdetails.yearRange(range.min, range.max) : null;
+  const arrivalMoved = f.arrivedOn !== (v.arrivedOn ?? '');
+  const arrivalBad = arrivalMoved && isISODate(f.arrivedOn) && arrivalFault({ on: f.arrivedOn, today, historyOn }) != null ? latestWords : null;
+  return (
+    <FormSheet
+      title={t.vdetails.title}
+      onClose={onClose}
+      value={f}
+      initial={initial}
+      onRestore={setF}
+      label={t.actions.save}
+      submit={async (key) => {
+        const body: Record<string, unknown> = {};
+        if (f.color.trim() !== (v.color ?? '')) body.color = f.color.trim() || null;
+        if (yearTyped !== (v.year != null ? String(v.year) : '')) body.year = yearTyped || null;
+        if (arrivalMoved) {
+          body.arrivedOn = f.arrivedOn || null;
+          body.reason = f.reason.trim();
+        }
+        if (Object.keys(body).length === 0) return { toast: { text: t.vdetails.same } };
+        const res = await api.patch<{ changed: boolean }>(`/api/fleet/${v.id}`, body, { key });
+        return { toast: { text: res.changed ? t.form.changesSaved : t.vdetails.same } };
+      }}
+      onDone={onDone}
+    >
+      <ColorPicker value={f.color} onChange={(color) => setF({ ...f, color })} />
+      <Field label={t.models.year} hint={t.vdetails.yearRange(range.min, range.max)} name="year" error={yearBad}>
+        <input className="input input-amount mono" value={f.year} onChange={(e) => setF({ ...f, year: e.target.value })} inputMode="numeric" maxLength={4} />
+      </Field>
+      <Field label={t.models.arrivedOn} hint={latestWords} name="arrivedOn" error={arrivalBad}>
+        <input className="input mono" type="date" max={latest.on} value={f.arrivedOn} onChange={(e) => setF({ ...f, arrivedOn: e.target.value })} />
+      </Field>
+      {arrivalMoved && (
+        <Field label={t.vdetails.reason} hint={t.vdetails.reasonHint} name="reason">
+          <input className="input" value={f.reason} onChange={(e) => setF({ ...f, reason: e.target.value })} />
+        </Field>
+      )}
     </FormSheet>
   );
 }

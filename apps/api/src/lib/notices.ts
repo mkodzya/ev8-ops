@@ -185,7 +185,7 @@ async function composeStock(n: NoticeRow, e: NodeJS.ProcessEnv): Promise<string 
   const [onHand, min] = [String(p.onHand), String(p.minQty)];
   // The Georgian line names the part in Georgian where the catalogue has it.
   const name: Record<NoticeLang, string> = { ka: escapeHtml(p.nameKa?.trim() || p.name), ru: escapeHtml(p.name) };
-  return message((w, lang) => w.stockLow(name[lang], onHand, min), `/service/stock/parts/${p.id}`, e);
+  return message((w, lang) => w.stockLow(name[lang], onHand, min), `/stock/parts/${p.id}`, e);
 }
 
 // ── The sender ──────────────────────────────────────────────────────────

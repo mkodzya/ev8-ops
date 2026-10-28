@@ -30,6 +30,7 @@ import { contractSignedRu } from './contract-signed.js';
 import { saleDateRu } from './sale-date.js';
 import { rentalSwapRu } from './rental-swap.js';
 import { vehicleCardRu } from './vehicle-card.js';
+import { vehicleDetailsRu } from './vehicle-details.js';
 import { pickupDateRu } from './pickup-date.js';
 import { depositReviseRu } from './deposit-revise.js';
 import { menuRu } from './menu.js';
@@ -95,6 +96,7 @@ export const ru: Dict = {
     payments: 'Платежи',
     purchases: 'Закупки',
     sales: 'Продажи',
+    stock: 'Склад',
     service: 'Ремонты',
     statements: 'Выписки',
     customers: 'Клиенты',
@@ -103,7 +105,7 @@ export const ru: Dict = {
     cash: 'Касса',
     reports: 'Отчёты',
     settings: 'Настройки',
-    groups: { daily: 'Ежедневно', fleet: 'Парк', trade: 'Продажи и закупки', sales: 'Продажи', manage: 'Управление' },
+    groups: { daily: 'Ежедневно', fleet: 'Парк', trade: 'Продажи и закупки', sales: 'Продажи', salesStock: 'Продажи и склад', manage: 'Управление' },
   },
 
   shell: {
@@ -137,7 +139,7 @@ export const ru: Dict = {
       points: 'Точки',
       batteries: 'Батареи и зарядки',
       jobs: 'Ремонты',
-      stock: 'Склад',
+      parts: 'Запчасти',
       works: 'Справочник работ',
       payouts: 'К оплате',
       balance: 'Баланс',
@@ -1159,7 +1161,6 @@ export const ru: Dict = {
     saveCount: 'Записать пересчёт',
     movesCount: counted('движение', 'движения', 'движений'),
     partsCount: counted('запчасть', 'запчасти', 'запчастей'),
-    nav: 'Склад',
     name: 'Название',
     nameKa: 'Название по-грузински',
     sku: 'Артикул',
@@ -1229,6 +1230,7 @@ export const ru: Dict = {
       already_returned: 'Эта аренда уже закрыта.',
       already_signed: 'Договор уже подписан — на экране или в Signify.',
       already_voided: 'Этот платёж уже отменён.',
+      arrival_date_bad: 'Дата прихода мопеда — не позже сегодняшнего дня и не позже первого дня в его истории.',
       bad_channel: 'Залог возвращают наличными или переводом.',
       bad_field: 'Поле заполнено неверно. Проверьте форму и попробуйте ещё раз.',
       bad_locale: 'Этот язык не поддерживается.',
@@ -1270,6 +1272,7 @@ export const ru: Dict = {
       documents_restricted: 'Документы клиента видят только владельцы.',
       down_payment_too_big: 'Первый взнос больше цены.',
       drive_folder_not_found: 'Этой папки больше нет в копии Drive — прочитайте Drive снова.',
+      drive_return_none: 'По этой аренде в Drive нет возврата, на который нужно ответить: ответ уже дан или акта больше нет. Обновите экран.',
       duplicate_customer: 'Клиент с таким личным номером или телефоном уже есть.',
       duplicate_email: 'С этой почтой уже кто-то входит.',
       duplicate_location: 'Точка с таким названием уже есть.',
@@ -1452,6 +1455,7 @@ export const ru: Dict = {
       vehicle_not_found: 'Мопед не найден.',
       vehicle_rented: 'Мопед у клиента — точка появится при возврате.',
       vehicle_rented_move: 'Мопед у клиента — сначала закройте аренду.',
+      vehicle_year_bad: 'Год мопеда — от 2000 до следующего года.',
       vehicle_rented_sale: 'Мопед в аренде — продать нельзя, пока не вернут.',
       vehicle_sold: 'Этот мопед уже продан.',
       vin_or_note: 'Выберите мопед из парка или напишите, почему VIN не подтверждён.',
@@ -1506,6 +1510,7 @@ export const ru: Dict = {
   ...saleDateRu,
   ...rentalSwapRu,
   ...vehicleCardRu,
+  ...vehicleDetailsRu,
   ...pickupDateRu,
   ...depositReviseRu,
   ...menuRu,

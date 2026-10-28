@@ -167,7 +167,7 @@ export function WeekPage() {
       key: 'batteries',
       label: t.weekReport.batteries,
       text: `${w.batteries.showroom} · ${w.batteries.couriers} · ${w.batteries.repair}`,
-      to: '/fleet/batteries',
+      to: '/stock/batteries',
       note: t.weekReport.batteriesToday,
     },
     { key: 'unmatched', label: t.weekReport.unmatched, text: String(w.unmatchedLines), to: '/sort' },

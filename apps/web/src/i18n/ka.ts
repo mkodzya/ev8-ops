@@ -30,6 +30,7 @@ import { contractSignedKa, SIGNIFY_IN_KA } from './contract-signed.js';
 import { saleDateKa } from './sale-date.js';
 import { rentalSwapKa } from './rental-swap.js';
 import { vehicleCardKa } from './vehicle-card.js';
+import { vehicleDetailsKa } from './vehicle-details.js';
 import { pickupDateKa } from './pickup-date.js';
 import { depositReviseKa } from './deposit-revise.js';
 import { menuKa } from './menu.js';
@@ -84,6 +85,7 @@ export const ka: Dict = {
     payments: 'გადახდები',
     purchases: 'შესყიდვები',
     sales: 'გაყიდვები',
+    stock: 'საწყობი',
     service: 'რემონტები',
     statements: 'ამონაწერები',
     customers: 'კლიენტები',
@@ -92,7 +94,7 @@ export const ka: Dict = {
     cash: 'სალარო',
     reports: 'ანგარიშები',
     settings: 'პარამეტრები',
-    groups: { daily: 'ყოველდღიური', fleet: 'პარკი', trade: 'გაყიდვები და შესყიდვები', sales: 'გაყიდვები', manage: 'მართვა' },
+    groups: { daily: 'ყოველდღიური', fleet: 'პარკი', trade: 'გაყიდვები და შესყიდვები', sales: 'გაყიდვები', salesStock: 'გაყიდვები და საწყობი', manage: 'მართვა' },
   },
 
   shell: {
@@ -126,7 +128,7 @@ export const ka: Dict = {
       points: 'ადგილები',
       batteries: 'ბატარეები და დამტენები',
       jobs: 'რემონტები',
-      stock: 'საწყობი',
+      parts: 'ნაწილები',
       works: 'სამუშაოების ცნობარი',
       payouts: 'გადასახდელი',
       balance: 'ბალანსი',
@@ -1148,7 +1150,6 @@ export const ka: Dict = {
     saveCount: 'ინვენტარიზაციის ჩაწერა',
     movesCount: (n: number) => `${n} ოპერაცია`,
     partsCount: (n: number) => `${n} ნაწილი`,
-    nav: 'საწყობი',
     name: 'დასახელება',
     nameKa: 'დასახელება ქართულად',
     sku: 'არტიკული',
@@ -1218,6 +1219,7 @@ export const ka: Dict = {
       already_returned: 'ეს ქირაობა უკვე დახურულია.',
       already_signed: `ხელშეკრულება უკვე ხელმოწერილია — ეკრანზე ან ${SIGNIFY_IN_KA}.`,
       already_voided: 'ეს გადახდა უკვე გაუქმებულია.',
+      arrival_date_bad: 'მოპედის მოსვლის თარიღი — არაუგვიანეს დღევანდელი დღისა და არაუგვიანეს მისი ისტორიის პირველი დღისა.',
       bad_channel: 'დეპოზიტი ბრუნდება ნაღდით ან გადარიცხვით.',
       bad_field: 'ველი არასწორად არის შევსებული. შეამოწმეთ ფორმა და სცადეთ ხელახლა.',
       bad_locale: 'ეს ენა არ არის ხელმისაწვდომი.',
@@ -1259,6 +1261,7 @@ export const ka: Dict = {
       documents_restricted: 'კლიენტის დოკუმენტებს ხედავენ მხოლოდ მფლობელები.',
       down_payment_too_big: 'წინასწარი გადახდა აღემატება ფასს.',
       drive_folder_not_found: 'ეს საქაღალდე Drive-ის ასლში აღარ არის — წაიკითხეთ Drive თავიდან.',
+      drive_return_none: 'ამ ქირაობაზე Drive-ში დაბრუნება, რომელზეც პასუხია საჭირო, აღარ არის: პასუხი უკვე ჩაწერილია ან აქტი აღარ არის. განაახლეთ ეკრანი.',
       duplicate_customer: 'ამ პირადი ნომრით ან ტელეფონით კლიენტი უკვე არსებობს.',
       duplicate_email: 'ამ ელფოსტით უკვე ვიღაც შედის.',
       duplicate_location: 'ამ დასახელებით ადგილი უკვე არსებობს.',
@@ -1441,6 +1444,7 @@ export const ka: Dict = {
       vehicle_not_found: 'მოპედი ვერ მოიძებნა.',
       vehicle_rented: 'მოპედი კლიენტთანაა — ადგილი დაბრუნებისას მიენიჭება.',
       vehicle_rented_move: 'მოპედი კლიენტთანაა — ჯერ დახურეთ ქირა.',
+      vehicle_year_bad: 'მოპედის წელი — 2000-დან მომავალ წლამდე.',
       vehicle_rented_sale: 'მოპედი ქირაშია — გაყიდვა შეუძლებელია დაბრუნებამდე.',
       vehicle_sold: 'ეს მოპედი უკვე გაყიდულია.',
       vin_or_note: 'აირჩიეთ მოპედი პარკიდან ან დაწერეთ, რატომ არ არის VIN დადასტურებული.',
@@ -1495,6 +1499,7 @@ export const ka: Dict = {
   ...saleDateKa,
   ...rentalSwapKa,
   ...vehicleCardKa,
+  ...vehicleDetailsKa,
   ...pickupDateKa,
   ...depositReviseKa,
   ...menuKa,

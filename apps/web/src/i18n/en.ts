@@ -42,6 +42,7 @@ import { vehicleCardEn } from './vehicle-card.js';
 import { pickupDateEn } from './pickup-date.js';
 import { depositReviseEn } from './deposit-revise.js';
 import { menuEn } from './menu.js';
+import { vehicleDetailsEn } from './vehicle-details.js';
 import { goodsEn } from './goods.js';
 import { incEn } from './inbound.js';
 import { dupEn } from './card-duplicate.js';
@@ -91,6 +92,8 @@ export const en = {
     payments: 'Payments',
     purchases: 'Purchases',
     sales: 'Sales',
+    // «Склад» (issue #19): the parts, the batteries and the chargers in one section.
+    stock: 'Stock',
     service: 'Repairs',
     statements: 'Statements',
     customers: 'Customers',
@@ -99,8 +102,9 @@ export const en = {
     cash: 'Till',
     reports: 'Reports',
     settings: 'Settings',
-    // `sales`: the trade group of whoever has no purchases — a manager (QA of #15, the director's mockup).
-    groups: { daily: 'Daily', fleet: 'Fleet', trade: 'Sales and purchases', sales: 'Sales', manage: 'Manage' },
+    // `sales`: the trade group of whoever has no purchases — a manager (QA of #15, the director's mockup);
+    // `salesStock` the same with the shelf in it (issue #19).
+    groups: { daily: 'Daily', fleet: 'Fleet', trade: 'Sales and purchases', sales: 'Sales', salesStock: 'Sales and stock', manage: 'Manage' },
   },
 
   // The frame around every screen (wave 1 §3.2–3.3).
@@ -135,7 +139,8 @@ export const en = {
       points: 'Points',
       batteries: 'Batteries and chargers',
       jobs: 'Repairs',
-      stock: 'Stock',
+      // «Склад → Запчасти» (issue #19; was «Ремонты → Склад»).
+      parts: 'Parts',
       works: 'Book of works',
       payouts: 'To pay',
       balance: 'Balance',
@@ -1166,7 +1171,6 @@ export const en = {
     saveCount: 'Save count',
     movesCount: (n: number) => `${n} ${n === 1 ? 'movement' : 'movements'}`,
     partsCount: (n: number) => `${n} part${n === 1 ? '' : 's'}`,
-    nav: 'Warehouse',
     name: 'Name',
     nameKa: 'Name in Georgian',
     sku: 'Article',
@@ -1236,6 +1240,7 @@ export const en = {
       already_returned: 'This rental is already closed.',
       already_signed: 'The contract is already signed — on the screen or in Signify.',
       already_voided: 'This payment is already cancelled.',
+      arrival_date_bad: 'The day a moped came is not after today, nor after the first day in its history.',
       bad_channel: 'A deposit goes back in cash or by transfer.',
       bad_field: 'A field is filled in wrongly. Check the form and try again.',
       bad_locale: 'This language is not supported.',
@@ -1277,6 +1282,7 @@ export const en = {
       documents_restricted: 'Customer documents are for the owners only.',
       down_payment_too_big: 'The down payment is more than the price.',
       drive_folder_not_found: 'That folder is no longer in the copy of Drive — read Drive again.',
+      drive_return_none: 'Drive has no return of this rental to answer: it was answered already, or the act is no longer there. Refresh the screen.',
       duplicate_customer: 'A customer with this personal number or phone already exists.',
       duplicate_email: 'Somebody already signs in with this email.',
       duplicate_location: 'A point with this name already exists.',
@@ -1459,6 +1465,7 @@ export const en = {
       vehicle_not_found: 'Moped not found.',
       vehicle_rented: 'The moped is with a customer. It gets a point back on return.',
       vehicle_rented_move: 'The moped is with a customer. Close the rental first.',
+      vehicle_year_bad: 'A moped’s year is from 2000 to next year.',
       vehicle_rented_sale: 'The moped is out on rent. It cannot be sold until it comes back.',
       vehicle_sold: 'This moped has already been sold.',
       vin_or_note: 'Pick a moped from the fleet, or write why the VIN is not confirmed.',
@@ -1513,6 +1520,7 @@ export const en = {
   ...saleDateEn,
   ...rentalSwapEn,
   ...vehicleCardEn,
+  ...vehicleDetailsEn,
   ...pickupDateEn,
   ...depositReviseEn,
   ...menuEn,

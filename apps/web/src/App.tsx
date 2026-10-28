@@ -156,7 +156,6 @@ export function App() {
         <Route path="fleet" element={<FleetPage />} />
         <Route path="fleet/models" element={<ModelsPage />} />
         <Route path="fleet/models/:id" element={<ModelPage />} />
-        <Route path="fleet/batteries" element={<BatteriesPage />} />
         <Route path="fleet/points" element={<Require perm="settings.manage"><PointsPage /></Require>} />
         <Route path="settings/points" element={<Require perm="settings.manage"><PointsPage /></Require>} />
         <Route path="fleet/:id" element={<VehiclePage />} />
@@ -164,8 +163,6 @@ export function App() {
         <Route path="m/:code" element={<MopedByNumber />} />
 
         <Route path="service" element={<ServicePage />} />
-        <Route path="service/stock" element={<StockPage />} />
-        <Route path="service/stock/parts/:id" element={<PartPage />} />
         <Route path="service/new" element={<Require perm="service.work"><WorkshopJobWizard /></Require>} />
         <Route path="service/:id/close" element={<Require perm="service.work"><RepairClosePage /></Require>} />
         <Route path="service/works" element={<Require perm="service.norms"><WorkBookPage /></Require>} />
@@ -201,6 +198,10 @@ export function App() {
         <Route path="sales/goods/new" element={<Require perm="goods.sell"><GoodsSaleWizard /></Require>} />
         <Route path="sales/goods/:id" element={<GoodsSalePage />} />
         <Route path="sales/:id" element={<SalePage />} />
+        {/* «Склад» (issue #19): the parts, and the batteries and chargers — were tabs of the repairs and the mopeds. */}
+        <Route path="stock" element={<StockPage />} />
+        <Route path="stock/batteries" element={<BatteriesPage />} />
+        <Route path="stock/parts/:id" element={<PartPage />} />
         <Route path="purchases" element={<Require perm="purchases.view"><PurchasesPage /></Require>} />
         <Route path="purchases/suppliers" element={<Require perm="purchases.view"><SuppliersPage /></Require>} />
         <Route path="purchases/suppliers/:id" element={<Require perm="purchases.view"><SupplierPage /></Require>} />

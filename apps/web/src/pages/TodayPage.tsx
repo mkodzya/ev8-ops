@@ -1,9 +1,12 @@
 import { localDateTime, queueMore, type FleetChip, type TaskGroupRows, type TaskRow, type VehicleState } from '@ev8/shared';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { api } from '../api.js';
 import { LoadError } from '../components/LoadError.js';
 import { Loading } from '../components/ui.js';
 import { WhatsappSheet, type WaTarget } from '../components/Whatsapp.js';
+import { Field } from '../components/Wizard.js';
+import { FormSheet } from '../ds/form/Form.js';
 import { useMoneyForm } from '../ds/money/MoneyForm.js';
 import { fmtDate, formatGel } from '../format.js';
 import { useT } from '../i18n/index.js';
@@ -82,6 +85,8 @@ export function TodayPage() {
   const navigate = useNavigate();
   const { data, failure, reload } = useLoad<TodayData>('/api/today');
   const [wa, setWa] = useState<WaTarget | null>(null);
+  // The Drive return row an owner is answering «Это не возврат» (issue #19).
+  const [notReturn, setNotReturn] = useState<TaskRow | null>(null);
   if (!data && failure) return <LoadError failure={failure} onRetry={reload} />;
   if (!data) return <Loading />;
   const n = data.numbers;
@@ -90,10 +95,11 @@ export function TodayPage() {
     const bits: string[] = [];
     if (r.number) bits.push(r.number);
     if (r.vin) bits.push(`···${r.vin.slice(-4)}`);
-    // Drive's return: the act's day and what it paid back, or only that the folder was moved (ADR-0034).
+    // Drive's return: the act's day and what it paid back, an act with no day, or only that the
+    // folder was moved (ADR-0034). An undated act read «папка — в завершённых» (issue #19).
     if (r.action === 'close_from_drive') {
-      const [on, back] = (r.note ?? '|').split('|');
-      bits.push(on ? t.drive.todayAct(fmtDate(on)) : t.drive.todayFinished);
+      const [on, back, why] = (r.note ?? '||').split('|');
+      bits.push(on ? t.drive.todayAct(fmtDate(on)) : why === 'act_undated' ? t.drive.todayActUndated : t.drive.todayFinished);
       if (back) bits.push(t.drive.todayPaidBack(formatGel(Number(back), { decimals: false })));
     } else if (r.action === 'hand_over_from_drive') bits.push(t.drive.todayContract(fmtDate(r.note)));
     else if (r.group === 'returns') bits.push(r.days && r.days > 0 ? t.today.lateBy(r.days) : t.today.duesToday);
@@ -223,7 +229,7 @@ export function TodayPage() {
         {n.overdueTetri != null && <Num to="/rentals?s=overdue" value={formatGel(n.overdueTetri, { decimals: false })} label={t.today.numbers.overdue ?? ''} tone="crit" />}
         {n.depositsHeldTetri != null && <Num to="/money/deposits" value={formatGel(n.depositsHeldTetri, { decimals: false })} label={t.today.numbers.deposits ?? ''} />}
         {n.week && <Num to="/money/payments" value={formatGel(n.week.rentTetri + n.week.saleTetri + n.week.serviceTetri + (n.week.goodsTetri ?? 0), { decimals: false })} label={t.today.numbers.week ?? ''} />}
-        {n.batteries && <Num to="/fleet/batteries" value={t.today.batteriesOf(n.batteries.showroom, n.batteries.total)} label={t.today.numbers.batteries ?? ''} />}
+        {n.batteries && <Num to="/stock/batteries" value={t.today.batteriesOf(n.batteries.showroom, n.batteries.total)} label={t.today.numbers.batteries ?? ''} />}
         {n.myTillTetri != null && <Num to="/money/cash" value={formatGel(n.myTillTetri, { decimals: false })} label={t.today.numbers.myTill ?? ''} />}
       </div>
 
@@ -302,9 +308,24 @@ export function TodayPage() {
                         )}
                       </>
                     )}
-                    <button type="button" className="pill pill-sm pill-accent" onClick={() => act(r)}>
-                      {t.today.actions[r.action]}
-                    </button>
+                    {r.action === 'close_from_drive' ? (
+                      <>
+                        {/* Drive's return is a question to the owner (issue #19): closing the rental is no
+                            longer the loud action — the act may be a mistake — and «Это не возврат» stands beside it. */}
+                        <button type="button" className="pill pill-sm" onClick={() => act(r)}>
+                          {t.today.actions[r.action]}
+                        </button>
+                        {can('users.manage') && (
+                          <button type="button" className="pill pill-sm" onClick={() => setNotReturn(r)}>
+                            {t.drive.notReturn}
+                          </button>
+                        )}
+                      </>
+                    ) : (
+                      <button type="button" className="pill pill-sm pill-accent" onClick={() => act(r)}>
+                        {t.today.actions[r.action]}
+                      </button>
+                    )}
                   </span>
                 </li>
               ))}
@@ -331,7 +352,43 @@ export function TodayPage() {
       )}
 
       {wa && <WhatsappSheet target={wa} onClose={() => setWa(null)} />}
+      {notReturn && <NotReturnSheet row={notReturn} onClose={() => setNotReturn(null)} onDone={reload} />}
     </>
+  );
+}
+
+/**
+ * «Это не возврат» (issue #19 of the director, item 3; ADR-0034, addendum
+ * 28.10.2026): Drive has a return act for a rental that runs on — one made by
+ * mistake, or the paper of the moped the renter had before. The owner says
+ * why; the rental is not touched, the row leaves and comes back only when a
+ * new act appears in the folder. The answer goes into the rental's journal.
+ */
+function NotReturnSheet({ row, onClose, onDone }: { row: TaskRow; onClose: () => void; onDone: () => void }) {
+  const t = useT();
+  const initial = { reason: '' };
+  const [f, setF] = useState(initial);
+  const rentalId = row.id.split(':')[1] ?? '';
+  return (
+    <FormSheet
+      title={t.drive.notReturn}
+      onClose={onClose}
+      value={f}
+      initial={initial}
+      onRestore={setF}
+      label={t.drive.notReturn}
+      submit={async (key) => {
+        await api.post(`/api/drive/returns/${rentalId}/not-return`, { reason: f.reason.trim() }, { key });
+        return { toast: { text: t.drive.notReturnDone(row.number ?? '') } };
+      }}
+      onDone={onDone}
+    >
+      <p className="hint">{[row.who, row.number].filter(Boolean).join(' · ')}</p>
+      <p className="hint muted">{t.drive.notReturnNote}</p>
+      <Field label={t.drive.notReturnReason} hint={t.drive.notReturnHint} name="reason">
+        <input className="input" value={f.reason} onChange={(e) => setF({ reason: e.target.value })} autoFocus />
+      </Field>
+    </FormSheet>
   );
 }
 

@@ -52,6 +52,18 @@ export const driveEn = {
     todayFinished: 'the folder in Drive is among the finished',
     todayPaidBack: (sum: string) => `deposit paid back ${sum}`,
     returnOnAct: (date: string) => `The day of the return is the act's in Drive: ${date}. Check the deposit against the act.`,
+    // «Это не возврат» on a Drive return row (issue #19; ADR-0034, addendum 28.10.2026).
+    /** An act in the folder with no date on it — not «the folder is among the finished». */
+    todayActUndated: 'return act in Drive, undated',
+    actUndated: 'act with no date',
+    notReturn: 'Not a return',
+    notReturnNote: 'The rental goes on as it is. The row leaves “Today” and comes back only if a new act appears in the folder in Drive.',
+    notReturnReason: 'Why it is not a return',
+    notReturnHint: 'For example: the act is of the moped the renter had before; the act was made by mistake.',
+    notReturnDone: (number: string) => `${number}: not a return — the row is gone`,
+    notReturned: 'Not a return, by an owner’s answer',
+    notReturnedNote: 'Not on “Today”: a new act in the folder brings the row back.',
+    answeredBy: (who: string, date: string) => `${who}, ${date}`,
   },
 };
 
@@ -105,6 +117,16 @@ export const driveRu: typeof driveEn = {
     todayFinished: 'папка в Drive — в завершённых',
     todayPaidBack: (sum) => `залог вернули ${sum}`,
     returnOnAct: (date) => `Дата возврата — из акта в Drive: ${date}. Сверьте залог с актом.`,
+    todayActUndated: 'акт возврата в Drive без даты',
+    actUndated: 'акт без даты',
+    notReturn: 'Это не возврат',
+    notReturnNote: 'Аренда продолжится как есть. Строка уйдёт с «Сегодня» и вернётся, только если в папке в Drive появится новый акт.',
+    notReturnReason: 'Почему это не возврат',
+    notReturnHint: 'Например: акт на мопед, который был у клиента раньше; акт составлен по ошибке.',
+    notReturnDone: (number) => `${number}: это не возврат — строка убрана`,
+    notReturned: 'Не возврат — ответ владельца',
+    notReturnedNote: 'На «Сегодня» их нет: новый акт в папке вернёт строку.',
+    answeredBy: (who, date) => `${who}, ${date}`,
   },
 };
 
@@ -158,5 +180,15 @@ export const driveKa: typeof driveEn = {
     todayFinished: 'საქაღალდე Drive-ში დასრულებულებშია',
     todayPaidBack: (sum) => `დეპოზიტი დაბრუნდა ${sum}`,
     returnOnAct: (date) => `დაბრუნების თარიღი Drive-ის აქტიდანაა: ${date}. დეპოზიტი შეადარეთ აქტს.`,
+    todayActUndated: 'დაბრუნების აქტი Drive-ში, თარიღის გარეშე',
+    actUndated: 'აქტი თარიღის გარეშე',
+    notReturn: 'ეს დაბრუნება არ არის',
+    notReturnNote: 'ქირაობა ისე გაგრძელდება, როგორც არის. ხაზი „დღეს“-იდან წავა და დაბრუნდება მხოლოდ მაშინ, თუ Drive-ის საქაღალდეში ახალი აქტი გამოჩნდება.',
+    notReturnReason: 'რატომ არ არის ეს დაბრუნება',
+    notReturnHint: 'მაგალითად: აქტი იმ მოპედზეა, რომელიც კლიენტს ადრე ჰქონდა; აქტი შეცდომით შედგა.',
+    notReturnDone: (number) => `${number}: ეს დაბრუნება არ არის — ხაზი მოიხსნა`,
+    notReturned: 'დაბრუნება არ არის — მფლობელის პასუხი',
+    notReturnedNote: '„დღეს“-ზე ისინი არ ჩანს: საქაღალდეში ახალი აქტი ხაზს დააბრუნებს.',
+    answeredBy: (who, date) => `${who}, ${date}`,
   },
 };

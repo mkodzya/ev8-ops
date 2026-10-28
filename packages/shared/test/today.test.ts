@@ -209,21 +209,27 @@ describe('the battery count (wave 4 §3.8, D16)', () => {
 describe('Drive on "Today"', () => {
   const drive = {
     contracts: [{ folderId: 'f-new', who: 'Test Newcomer', datedOn: '2026-09-19' }],
-    returns: [{ rentalId: 'r1', returnedOn: '2026-09-18', paidBackTetri: 18000 }],
+    returns: [{ rentalId: 'r1', returnedOn: '2026-09-18', paidBackTetri: 18000, act: true }],
   };
 
   it('a return Drive has is closed from "Returns", on the act’s day, instead of its planned-day row', () => {
     const q = dayQueue(input({ drive, rentals: [rental({ expectedReturnOn: '2026-09-15' })] }));
     const returns = group(q, 'returns')!;
     expect(returns.rows).toHaveLength(1);
-    expect(returns.rows[0]).toMatchObject({ id: 'drive_return:r1', action: 'close_from_drive', number: 'R-00001', href: '/rentals/r1/return?on=2026-09-18', note: '2026-09-18|18000' });
+    expect(returns.rows[0]).toMatchObject({ id: 'drive_return:r1', action: 'close_from_drive', number: 'R-00001', href: '/rentals/r1/return?on=2026-09-18', note: '2026-09-18|18000|act' });
   });
 
   it('an act dated ahead of today opens the return on today, and a moved folder with no act says only that', () => {
-    const later = dayQueue(input({ drive: { contracts: [], returns: [{ rentalId: 'r1', returnedOn: '2026-10-01', paidBackTetri: null }] }, rentals: [rental()] }));
-    expect(group(later, 'returns')!.rows[0]).toMatchObject({ href: '/rentals/r1/return', note: '2026-10-01|' });
-    const moved = dayQueue(input({ drive: { contracts: [], returns: [{ rentalId: 'r1', returnedOn: null, paidBackTetri: null }] }, rentals: [rental()] }));
-    expect(group(moved, 'returns')!.rows[0]).toMatchObject({ href: '/rentals/r1/return', note: '|' });
+    const later = dayQueue(input({ drive: { contracts: [], returns: [{ rentalId: 'r1', returnedOn: '2026-10-01', paidBackTetri: null, act: true }] }, rentals: [rental()] }));
+    expect(group(later, 'returns')!.rows[0]).toMatchObject({ href: '/rentals/r1/return', note: '2026-10-01||act' });
+    const moved = dayQueue(input({ drive: { contracts: [], returns: [{ rentalId: 'r1', returnedOn: null, paidBackTetri: null, act: false }] }, rentals: [rental()] }));
+    expect(group(moved, 'returns')!.rows[0]).toMatchObject({ href: '/rentals/r1/return', note: '||finished' });
+  });
+
+  // Issue #19: an undated act in a folder among the running ones said «папка в Drive — в завершённых».
+  it('an act with no date is an act, not a folder moved among the finished', () => {
+    const undated = dayQueue(input({ drive: { contracts: [], returns: [{ rentalId: 'r1', returnedOn: null, paidBackTetri: null, act: true }] }, rentals: [rental()] }));
+    expect(group(undated, 'returns')!.rows[0]).toMatchObject({ action: 'close_from_drive', href: '/rentals/r1/return', note: '||act_undated' });
   });
 
   it('a contract in Drive with no rental here is a hand-over to enter, filled in from it', () => {

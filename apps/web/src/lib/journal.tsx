@@ -1,4 +1,4 @@
-import { GOODS_UNDONE_AT_ONCE, goodsCancelNote } from '@ev8/shared';
+import { GOODS_UNDONE_AT_ONCE, colorOf, goodsCancelNote } from '@ev8/shared';
 import type { Dict } from '../i18n/en.js';
 import { currentDict, useT } from '../i18n/index.js';
 import { fmtDate, formatGel } from '../format.js';
@@ -78,6 +78,11 @@ function said(t: Dict, field: string, raw: string): string {
     case 'reasonKind':
       // A repair's kind, in the tablet's words wherever it was picked (Mika, 21.10.2026).
       return from(t.wjob.reasons) ?? raw;
+    case 'color': {
+      // A moped's colour in the reader's word, as the card says it; one nobody taught us stays as typed (issue #19).
+      const code = colorOf(raw);
+      return code ? t.colors[code] : raw;
+    }
     default:
       return raw;
   }
@@ -107,7 +112,8 @@ function value(field: string, raw: unknown, shifted = false): string | null {
   // A moped's first assignment, and an undone one, come from or go back to
   // none: «Не назначен → Аренда», where the line said only «Изменено
   // назначение» and not to what (QA after issue #9).
-  if (raw == null) return field === 'reasonKind' ? t.rkind.none : field === 'pool' ? t.pools.none : null;
+  // A moped's colour, year or arrival not known before, or no longer (issue #19): «— → Красный».
+  if (raw == null) return field === 'reasonKind' ? t.rkind.none : field === 'pool' ? t.pools.none : MOPED_DETAILS.has(field) ? t.common.dash : null;
   if (isReference(field)) return null;
   if (isMoney(field)) return typeof raw === 'number' ? formatGel(raw) : String(raw);
   if (typeof raw === 'boolean') return raw ? t.common.yes : t.common.dash;
@@ -149,6 +155,9 @@ export function codeNote(t: Pick<Dict, 'feedNotes' | 'goods'>, own: string): str
   if (goods) return goods.undone ? t.goods.notes.undone(goods.number) : t.goods.notes.cancelled(goods.number, goods.why);
   return null;
 }
+
+/** What «Изменить данные» on a moped's card changes (issue #19), each named in the journal line. */
+const MOPED_DETAILS = new Set(['color', 'year', 'arrivedOn']);
 
 /**
  * Notes the code wrote only to say what a flag meant: a workshop taken off the
@@ -258,6 +267,13 @@ function named(t: Dict, field: string, action?: string): string | null {
   if (field === 'payWeekday' || field === 'payDay') return t.weekShift.journal.payDay;
   // A mechanic's rent link, set or taken off (0066): «Арендует мопед: — → card».
   if (field === 'renter') return t.wpay.renter;
+  // A moped's details put right on its card (issue #19): «Изменены данные · Цвет: Красный → Чёрный».
+  if (action === 'vehicle.update') {
+    if (field === 'color') return t.fleet.color;
+    if (field === 'year') return t.fleet.year;
+    if (field === 'arrivedOn') return t.models.arrivedOn;
+    if (field === 'odometerKm') return t.vehicle.odometer;
+  }
   // Goods sold beyond the count: what there was, and what was sold (ADR-0045 §5).
   if (action === 'goods_sale.minus' && field === 'qty') return t.goods.journal.qty;
   // A new hand-over date and a deposit marked received earlier (ADR-0044):

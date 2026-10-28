@@ -53,6 +53,8 @@ describe('route table', () => {
       'PATCH /api/users/:id',
       'PATCH /api/workshops/:id',
       'POST /api/customers/:id/merge',
+      // «Это не возврат» on a Drive return row (issue #19, ADR-0034 addendum): Drive is an owner's.
+      'POST /api/drive/returns/:rentalId/not-return',
       'POST /api/drive/scan',
       'POST /api/expense-categories',
       'POST /api/fleet',

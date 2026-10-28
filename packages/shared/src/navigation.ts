@@ -16,6 +16,12 @@ import type { Role } from './types.js';
  * Before it (wave 1 §3.2–3.4) the payments calendar and «Разобрать» were tabs
  * of Money and the customers sat in the avatar menu.
  *
+ * Since issue #19 of the director (28.10.2026; ADR-0048, addendum) «Склад» is
+ * a section of its own in «Продажи и закупки», before the orders: the parts
+ * (was «Ремонты → Склад») and the batteries and chargers (was «Мопеды →
+ * Батареи и зарядки»). The director looked for the shelf to sell a part from
+ * and did not find it in either place.
+ *
  * A section a role has no work in is not shown anywhere — not on the rail,
  * not on the bar, not under «Ещё» (B1-05). `anyOf` empty means everybody
  * signed in.
@@ -30,6 +36,7 @@ export type SectionId =
   | 'rentals'
   | 'service'
   | 'sales'
+  | 'stock'
   | 'purchases'
   | 'money'
   | 'reports'
@@ -62,6 +69,10 @@ export const SECTIONS: readonly Section[] = [
   { id: 'rentals', path: '/rentals', group: 'fleet', anyOf: ['fleet.view'] },
   { id: 'service', path: '/service', group: 'fleet', anyOf: ['service.view'] },
   { id: 'sales', path: '/sales', group: 'trade', anyOf: ['fleet.view'] },
+  // The shelf: parts, batteries and chargers — what is sold from it and what
+  // the orders fill it with (issue #19). The rights its two tabs had before;
+  // a mechanic takes parts inside the repair's card, as he did.
+  { id: 'stock', path: '/stock', group: 'trade', anyOf: ['fleet.view'] },
   { id: 'purchases', path: '/purchases', group: 'trade', anyOf: ['purchases.view'] },
   // What is left of Money: the journal of payments, the statements, the deposits.
   { id: 'money', path: '/money/payments', group: 'manage', anyOf: ['payments.view'] },
@@ -78,18 +89,23 @@ export function sectionsFor(permissions: readonly Permission[]): Section[] {
   return SECTIONS.filter((s) => allowed(s, permissions));
 }
 
-/** What a group's heading says: its own name, or — for «Продажи и закупки» read without the purchases — «Продажи». */
-export type GroupHeading = GroupId | 'sales';
+/**
+ * What a group's heading says: its own name, or — for «Продажи и закупки» read
+ * without the purchases — «Продажи и склад», or «Продажи» where there is no shelf either.
+ */
+export type GroupHeading = GroupId | 'sales' | 'salesStock';
 
 /**
  * A group's heading names what the reader finds under it (QA of #15,
- * 25.10.2026; the director's mockup): «Продажи и закупки» holds only «Продажи»
- * for a manager, and his heading says «Продажи». The other groups' names say
- * what each holds for every role that sees them.
+ * 25.10.2026; the director's mockup): «Продажи и закупки» holds «Продажи» and
+ * «Склад» for a manager (issue #19), and his heading says «Продажи и склад».
+ * The other groups' names say what each holds for every role that sees them.
  */
 export function groupHeadingFor(group: GroupId, permissions: readonly Permission[]): GroupHeading {
   if (group !== 'trade') return group;
-  return sectionsFor(permissions).some((s) => s.id === 'purchases') ? 'trade' : 'sales';
+  const ids = new Set(sectionsFor(permissions).map((s) => s.id));
+  if (ids.has('purchases')) return 'trade';
+  return ids.has('stock') ? 'salesStock' : 'sales';
 }
 
 /**
@@ -141,7 +157,7 @@ export type TabId =
   | 'batteries'
   | 'jobs'
   | 'works'
-  | 'stock'
+  | 'parts'
   | 'sort'
   | 'payments'
   | 'till'
@@ -184,11 +200,9 @@ export const SECTION_TABS: Partial<Record<SectionId, readonly { id: TabId; path:
     { id: 'vehicles', path: '/fleet', anyOf: ['fleet.view'] },
     { id: 'models', path: '/fleet/models', anyOf: ['fleet.view'] },
     { id: 'points', path: '/fleet/points', anyOf: ['settings.manage'] },
-    { id: 'batteries', path: '/fleet/batteries', anyOf: ['fleet.view'] },
   ],
   service: [
     { id: 'jobs', path: '/service', anyOf: ['service.view'] },
-    { id: 'stock', path: '/service/stock', anyOf: ['fleet.view'] },
     // The book of works and its norms (stage 2 of the mechanic plan).
     { id: 'works', path: '/service/works', anyOf: ['service.norms'] },
     // Paying the mechanic (stage 5, ADR-0037): the owners mark it, the mechanics
@@ -267,6 +281,12 @@ export const SECTION_TABS: Partial<Record<SectionId, readonly { id: TabId; path:
     { id: 'vehicles', path: '/sales', anyOf: ['fleet.view'] },
     { id: 'goods', path: '/sales/goods', anyOf: ['fleet.view'] },
   ],
+  // «Склад» (issue #19): the parts — were «Ремонты → Склад» — and the
+  // batteries and chargers — were «Мопеды → Батареи и зарядки».
+  stock: [
+    { id: 'parts', path: '/stock', anyOf: ['fleet.view'] },
+    { id: 'batteries', path: '/stock/batteries', anyOf: ['fleet.view'] },
+  ],
   // The week first: it is what an owner opens Reports for (wave 6 §3.1).
   reports: [
     { id: 'week', path: '/reports/week', anyOf: ['reports.view'] },
@@ -326,6 +346,7 @@ export function sectionOfPath(pathname: string, permissions?: readonly Permissio
     fleet: 'fleet',
     service: 'service',
     sales: 'sales',
+    stock: 'stock',
     purchases: 'purchases',
     reports: 'reports',
     settings: 'settings',
@@ -335,14 +356,17 @@ export function sectionOfPath(pathname: string, permissions?: readonly Permissio
 
 /**
  * Old addresses and where they live now (build plan Р8, wave 1 §3.4; issue
- * #15 moved the calendar and «Разобрать» out of Money). A bookmark on the
- * old one still arrives; the query goes along.
+ * #15 moved the calendar and «Разобрать» out of Money, issue #19 the shelf
+ * out of the repairs and the mopeds). A bookmark on the old one still
+ * arrives; the query goes along. `/stock` was itself an old address of the
+ * repairs' shelf until #19 made it the section's own.
  */
 export const REDIRECTS: readonly { from: string; to: string }[] = [
   { from: '/models', to: '/fleet/models' },
   { from: '/models/:id', to: '/fleet/models/:id' },
-  { from: '/stock', to: '/service/stock' },
-  { from: '/stock/parts/:id', to: '/service/stock/parts/:id' },
+  { from: '/service/stock', to: '/stock' },
+  { from: '/service/stock/parts/:id', to: '/stock/parts/:id' },
+  { from: '/fleet/batteries', to: '/stock/batteries' },
   { from: '/payments', to: '/money/payments' },
   { from: '/statements', to: '/money/statements' },
   { from: '/economics', to: '/reports/economics' },
