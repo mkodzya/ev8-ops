@@ -251,7 +251,8 @@ export function SaleWizard() {
         downPaymentTetri: f.instalments ? downTetri : 0,
         months: f.instalments ? months : 0,
         schedule: rowsTetri.map((r) => ({ dueOn: r.dueOn, amountTetri: r.amountTetri })),
-        soldOn: f.soldOn,
+        // A manager's sale is the server's today (issue #18, B8): a wizard left open past midnight is not dated back.
+        soldOn: owner ? f.soldOn : undefined,
         transferred: f.transfer,
         paidBeforeTetri: f.transfer ? paidBeforeTetri : 0,
         movePool: f.movePool,
