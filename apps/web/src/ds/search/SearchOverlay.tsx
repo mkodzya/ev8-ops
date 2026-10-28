@@ -1,4 +1,4 @@
-import { SEARCH_MIN, fleetNumber, formatGel } from '@ev8/shared';
+import { ALL_CHIP, SEARCH_MIN, fleetNumber, formatGel } from '@ev8/shared';
 import { useQuery } from '@tanstack/react-query';
 import { ChevronLeft, Clock, Search, UserPlus } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
@@ -95,16 +95,20 @@ export function SearchOverlay({ onClose }: { onClose: () => void }) {
   }, [recent, ready, q]);
 
   const groups = answer.data?.groups ?? null;
+  // "More N" opens every row of the list, searched: its chips stand on «Все»
+  // (`f=all`; the rentals' segments `s=all`) — an address without one opens
+  // the first chip since issue #17. Payments and the till have no chips.
   const moreHref: Record<Kind, string> = {
-    customers: '/customers',
-    vehicles: '/fleet',
-    rentals: '/rentals',
-    sales: '/sales',
-    goods: '/sales/goods',
+    customers: `/customers?f=${ALL_CHIP}`,
+    vehicles: `/fleet?f=${ALL_CHIP}`,
+    rentals: `/rentals?s=${ALL_CHIP}`,
+    sales: `/sales?f=${ALL_CHIP}`,
+    goods: `/sales/goods?f=${ALL_CHIP}`,
     payments: can('payments.view') ? '/money/payments' : '/money/cash',
-    purchases: '/purchases',
-    jobs: '/service',
+    purchases: `/purchases?f=${ALL_CHIP}`,
+    jobs: `/service?f=${ALL_CHIP}`,
   };
+  const searched = (href: string) => `${href}${href.includes('?') ? '&' : '?'}q=${encodeURIComponent(q)}`;
 
   // The one debt figure in words (ADR-0017): «due today» in ink when all of it
   // is awaited today, «owes» when anything in it is older. The second line of
@@ -168,7 +172,7 @@ export function SearchOverlay({ onClose }: { onClose: () => void }) {
       return { key: `g-${g.id}`, title: `${g.number} · ${who}`, sub, href: `/sales/goods/${g.id}`, recent: { href: `/sales/goods/${g.id}`, title: `${g.number} · ${who}`, sub } };
     });
     rows.payments = groups.payments.items.map((p) => {
-      const href = p.rental ? `/rentals/${p.rental.id}` : p.sale ? `/sales/${p.sale.id}` : `${moreHref.payments}?q=${encodeURIComponent(q)}`;
+      const href = p.rental ? `/rentals/${p.rental.id}` : p.sale ? `/sales/${p.sale.id}` : searched(moreHref.payments);
       const title = `${formatGel(p.grossTetri)} · ${t.payments.channels[p.channel as keyof typeof t.payments.channels] ?? p.channel}`;
       const sub = [fmtDate(p.occurredOn), p.rental?.number ?? p.sale?.number, p.customer].filter(Boolean).join(' · ');
       return { key: `p-${p.id}`, title, sub, href, recent: { href, title, sub } };
@@ -285,7 +289,7 @@ export function SearchOverlay({ onClose }: { onClose: () => void }) {
             );
           })}
           {total(k) > list.length && (
-            <button type="button" className="search-more" onClick={() => open(`${moreHref[k]}?q=${encodeURIComponent(q)}`)}>
+            <button type="button" className="search-more" onClick={() => open(searched(moreHref[k]))}>
               {t.searchUi.more(total(k) - list.length)}
             </button>
           )}

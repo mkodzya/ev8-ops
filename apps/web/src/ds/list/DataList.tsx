@@ -1,4 +1,4 @@
-import { readQuery, type Query } from '@ev8/shared';
+import { ALL_CHIP, chipOnOpen, readQuery, type Query } from '@ev8/shared';
 import { ArrowDownUp, Search } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
@@ -48,6 +48,11 @@ const PAGE = 50;
  * address, so the header search's "More N" arrives already filtered and a
  * list somebody is looking at is one they can send. Fifty rows, then "Show
  * more". A record just created is lit for two seconds.
+ *
+ * «Все» is the last chip of the row, and a list opened with no chip in its
+ * address shows the first one (GitHub issue #17, item 2): `chipOnOpen`.
+ * «Все» is written in the address as `f=all`, so a link that wants every row
+ * — the header search's "More N" — says so.
  */
 export function DataList<T>({
   rows,
@@ -78,8 +83,8 @@ export function DataList<T>({
   const location = useLocation();
   const [params, setParams] = useSearchParams();
   const q = params.get('q') ?? '';
-  const chipKey = params.get('f');
-  const chip = chips.find((c) => c.key === chipKey) ?? null;
+  const opened = chipOnOpen(params.get('f'), chips.map((c) => c.key));
+  const chip = chips.find((c) => c.key === opened) ?? null;
   const [limit, setLimit] = useState(PAGE);
   const [sorting, setSorting] = useState(false);
   const [lit, setLit] = useState<string | null>((location.state as { created?: string } | null)?.created ?? null);
@@ -112,6 +117,16 @@ export function DataList<T>({
     setLimit(PAGE);
   };
 
+  // «Показать все»: no search and «Все» — an address without a chip now opens the first one (issue #17).
+  const showAll = () => {
+    const next = new URLSearchParams(params);
+    next.delete('q');
+    if (chips.length > 0) next.set('f', ALL_CHIP);
+    else next.delete('f');
+    setParams(next, { replace: true });
+    setLimit(PAGE);
+  };
+
   const query = useMemo(() => readQuery(q), [q]);
   const searched = useMemo(() => (query && search ? rows.filter((r) => search.match(r, query)) : rows), [rows, query, search]);
   const filtered = useMemo(() => (chip ? searched.filter(chip.test) : searched), [searched, chip]);
@@ -139,14 +154,15 @@ export function DataList<T>({
           )}
           {chips.length > 0 && (
             <div className="list-chips" role="group">
-              <button type="button" className={`list-chip ${chip ? '' : 'on'}`} onClick={() => setParam('f', null)}>
-                {t.common.all} <span className="n">{searched.length}</span>
-              </button>
+              {/* A chip tapped again lets go of it: everything shows, as «Все» does. */}
               {chips.map((c) => (
-                <button key={c.key} type="button" className={`list-chip ${chip?.key === c.key ? 'on' : ''}`} onClick={() => setParam('f', chip?.key === c.key ? null : c.key)}>
+                <button key={c.key} type="button" className={`list-chip ${chip?.key === c.key ? 'on' : ''}`} onClick={() => setParam('f', chip?.key === c.key ? ALL_CHIP : c.key)}>
                   {c.label} <span className="n">{counts[c.key]}</span>
                 </button>
               ))}
+              <button type="button" className={`list-chip ${chip ? '' : 'on'}`} onClick={() => setParam('f', ALL_CHIP)}>
+                {t.common.all} <span className="n">{searched.length}</span>
+              </button>
             </div>
           )}
         </div>
@@ -160,7 +176,7 @@ export function DataList<T>({
       ) : filtered.length === 0 ? (
         <div className="list-empty">
           <p>{query ? (chip ? t.lists.nothingIn(q, chip.label) : t.lists.nothing(q)) : t.lists.noneIn(chip?.label ?? '')}</p>
-          <button type="button" className="pill pill-sm" onClick={() => setParams(new URLSearchParams(), { replace: true })}>
+          <button type="button" className="pill pill-sm" onClick={showAll}>
             {t.lists.showAll}
           </button>
         </div>

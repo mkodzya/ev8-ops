@@ -1,4 +1,4 @@
-import { numberMatches, phoneMatches, spellingMatches, todayISO, vinMatches, type RentalStatus } from '@ev8/shared';
+import { ALL_CHIP, chipOnOpen, numberMatches, phoneMatches, spellingMatches, todayISO, vinMatches, type RentalStatus } from '@ev8/shared';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useSession } from '../session.js';
 import { LoadError } from '../components/LoadError.js';
@@ -63,9 +63,13 @@ export function RentalsPage() {
   type Segment = keyof typeof SEGMENTS;
   // A link sent before the segment was renamed still opens it.
   const asked = params.get('s') === 'awaiting' ? 'due_today' : params.get('s');
-  const segment = (Object.keys(SEGMENTS) as Segment[]).find((s) => s === asked) ?? null;
-  const rows = segment ? all.filter(SEGMENTS[segment]) : all;
   const count = (s: Segment) => all.filter(SEGMENTS[s]).length;
+  // The segments with rows, and the one asked for even when it has none.
+  const shown = (Object.keys(SEGMENTS) as Segment[]).filter((s) => count(s) > 0 || s === asked);
+  // «Все» stands last, and an address with no segment opens the first one
+  // (GitHub issue #17, item 2): `chipOnOpen`, as every list's chips do.
+  const segment = chipOnOpen(asked, shown);
+  const rows = segment ? all.filter(SEGMENTS[segment]) : all;
   // One figure, two names (ADR-0017): red and "debt" when anything in it is
   // older than what is awaited today; ink and "due today" when all of it is
   // awaited. Never split: a mixed figure is red as a whole. An answer
@@ -98,13 +102,15 @@ export function RentalsPage() {
         )}
       </PageHead>
       <div className="list-chips">
-        {(Object.keys(SEGMENTS) as Segment[])
-          .filter((s) => count(s) > 0 || segment === s)
-          .map((s) => (
-            <button key={s} type="button" className={`list-chip ${segment === s ? 'on' : ''}`} onClick={() => setParams(segment === s ? {} : { s }, { replace: true })}>
-              {t.seg[s]} <span className="n">{count(s)}</span>
-            </button>
-          ))}
+        {/* A segment tapped again lets go of it: every rental shows, as «Все» does. */}
+        {shown.map((s) => (
+          <button key={s} type="button" className={`list-chip ${segment === s ? 'on' : ''}`} onClick={() => setParams({ s: segment === s ? ALL_CHIP : s }, { replace: true })}>
+            {t.seg[s]} <span className="n">{count(s)}</span>
+          </button>
+        ))}
+        <button type="button" className={`list-chip ${segment ? '' : 'on'}`} onClick={() => setParams({ s: ALL_CHIP }, { replace: true })}>
+          {t.common.all} <span className="n">{all.length}</span>
+        </button>
       </div>
       {/* Each sum only when it is above nought; with neither — «debt 0», as before. Without leave to add up — the count alone. */}
       <p className="hint muted">
