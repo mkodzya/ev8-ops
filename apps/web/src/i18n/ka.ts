@@ -771,7 +771,7 @@ export const ka: Dict = {
     ahead: 'განვადებით წინ',
     depositHeld: 'ხელზე არსებული დეპოზიტი — ვალი არ არის',
     whatFor: 'რისთვის',
-    toAccount: 'კლიენტის ავანსი',
+    toAccount: 'ქირის ავანსი',
     toAccountHint: 'ქირაობის უახლოეს კვირაზე ჩაიწერება',
     amount: 'თანხა',
     amountCash: 'თანხა ნაღდით',
