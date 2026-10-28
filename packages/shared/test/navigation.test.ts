@@ -3,9 +3,11 @@ import { GROUPS, REDIRECTS, ROLE_PERMISSIONS, actionsFor, groupHeadingForRole, m
 import { actionsForRole, homePathForRole, menuSectionsForRole, phoneTabsForRole, sectionOfPath, sectionsForRole, tabsForRole } from './navigation-helpers.js';
 
 describe('the structure each role sees (wave 1 §3.2; issue #15, ADR-0048)', () => {
-  it('groups the day’s work first: Today, the schedule, «Разобрать», the till — then the fleet, sales and purchases, and the owner’s management', () => {
+  it('groups the day’s work first: Today, the tasks, the schedule, «Разобрать», the till — then the fleet, sales and purchases, and the owner’s management', () => {
     expect(sectionsForRole('owner').map((s) => [s.group, s.id])).toEqual([
       ['daily', 'today'],
+      // «Задачи» (issue #18 A, ADR-0050): second, under Today.
+      ['daily', 'tasks'],
       ['daily', 'schedule'],
       ['daily', 'sort'],
       ['daily', 'cash'],
@@ -20,7 +22,7 @@ describe('the structure each role sees (wave 1 §3.2; issue #15, ADR-0048)', () 
       ['manage', 'reports'],
       ['manage', 'settings'],
     ]);
-    expect(sectionsForRole('manager').map((s) => s.id)).toEqual(['today', 'schedule', 'sort', 'cash', 'fleet', 'rentals', 'service', 'sales', 'stock']);
+    expect(sectionsForRole('manager').map((s) => s.id)).toEqual(['today', 'tasks', 'schedule', 'sort', 'cash', 'fleet', 'rentals', 'service', 'sales', 'stock']);
   });
 
   it('names a group by what the reader finds in it: «Продажи и склад» for a manager, who has no purchases (QA of #15, the director’s mockup; issue #19)', () => {
@@ -31,12 +33,13 @@ describe('the structure each role sees (wave 1 §3.2; issue #15, ADR-0048)', () 
     for (const g of ['daily', 'fleet', 'manage'] as const) expect(groupHeadingForRole(g, 'manager'), g).toBe(g);
   });
 
-  it('gives both roles Today · Оплаты · Разобрать · Мопеды on the bar, and the rest under «Ещё» in the rail’s order', () => {
-    expect(phoneTabsForRole('owner')).toEqual(['today', 'schedule', 'sort', 'fleet']);
-    expect(phoneTabsForRole('manager')).toEqual(['today', 'schedule', 'sort', 'fleet']);
-    expect(menuSectionsForRole('manager')).toEqual(['cash', 'rentals', 'service', 'sales', 'stock']);
+  // «Задачи» took the mopeds' place on the bar (issue #18 A, the director's mockup); the mopeds are under «Ещё».
+  it('gives both roles Today · Задачи · Оплаты · Разобрать on the bar, and the rest under «Ещё» in the rail’s order', () => {
+    expect(phoneTabsForRole('owner')).toEqual(['today', 'tasks', 'schedule', 'sort']);
+    expect(phoneTabsForRole('manager')).toEqual(['today', 'tasks', 'schedule', 'sort']);
+    expect(menuSectionsForRole('manager')).toEqual(['cash', 'fleet', 'rentals', 'service', 'sales', 'stock']);
     // The director's list names Money, Reports and Settings for the owner; the orders are his section too, so they are there.
-    expect(menuSectionsForRole('owner')).toEqual(['cash', 'rentals', 'service', 'sales', 'stock', 'purchases', 'money', 'reports', 'settings']);
+    expect(menuSectionsForRole('owner')).toEqual(['cash', 'fleet', 'rentals', 'service', 'sales', 'stock', 'purchases', 'money', 'reports', 'settings']);
   });
 
   it('keeps purchases, reports, settings and Money itself away from a manager everywhere', () => {
@@ -176,7 +179,7 @@ describe('the structure each role sees (wave 1 §3.2; issue #15, ADR-0048)', () 
   // Issue #18 (B6): «До EV8 Ops» is drawn while its lists have something in them.
   it('hides «До EV8 Ops» once nothing is left in it, but not before the counts come nor while it is open', () => {
     const owner = ROLE_PERMISSIONS.owner;
-    const counts = (migration: number | null): NavCounts => ({ schedule: null, sort: null, till: null, migration });
+    const counts = (migration: number | null): NavCounts => ({ schedule: null, sort: null, till: null, todos: null, migration });
     const ids = (c: NavCounts | null, at = '/settings') => tabsShown('settings', owner, c, at).map((t) => t.id);
     expect(ids(counts(0))).not.toContain('migration');
     expect(ids(counts(3))).toContain('migration');
@@ -187,15 +190,16 @@ describe('the structure each role sees (wave 1 §3.2; issue #15, ADR-0048)', () 
     expect(ids(counts(0))).toEqual(tabsForRole('settings', 'owner').map((t) => t.id).filter((id) => id !== 'migration'));
   });
 
-  // ADR-0033: a mechanic and a chief mechanic see the repairs and nothing else,
-  // and land on them — "Today" is the front office's queue.
-  it('gives a mechanic and a chief mechanic the repairs alone, as their first screen', () => {
+  // ADR-0033: a mechanic and a chief mechanic see the repairs and none of the
+  // front office. Since issue #18 A (ADR-0050) they have a «Сегодня» of their
+  // own — their tasks, their repairs, the maintenance, their payout — and land on it.
+  it('gives a mechanic and a chief mechanic their own Today, their tasks and the repairs, Today first', () => {
     for (const role of ['mechanic', 'chief_mechanic'] as const) {
-      expect(sectionsForRole(role).map((s) => s.id)).toEqual(['service']);
-      expect(phoneTabsForRole(role)).toEqual(['service']);
+      expect(sectionsForRole(role).map((s) => s.id)).toEqual(['today', 'tasks', 'service']);
+      expect(phoneTabsForRole(role)).toEqual(['today', 'tasks', 'service']);
       expect(menuSectionsForRole(role)).toEqual([]);
       expect(actionsForRole(role)).toEqual([]);
-      expect(homePathForRole(role)).toBe('/service');
+      expect(homePathForRole(role)).toBe('/');
     }
     // The book of works is the chief mechanic's to keep, not the mechanic's (stage 2).
     // Each reads his own balance (stage 5); marking a mechanic paid is the owners' alone.
@@ -211,6 +215,7 @@ describe('the structure each role sees (wave 1 §3.2; issue #15, ADR-0048)', () 
 
   it('knows which section an address belongs to', () => {
     expect(sectionOfPath('/')).toBe('today');
+    expect(sectionOfPath('/tasks')).toBe('tasks');
     expect(sectionOfPath('/fleet/models/abc')).toBe('fleet');
     expect(sectionOfPath('/stock/parts/x')).toBe('stock');
     expect(sectionOfPath('/stock/batteries')).toBe('stock');
