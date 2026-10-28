@@ -21,6 +21,8 @@ describe('route table', () => {
       // Wave 5 moved the orders onto a purchases scope of their own; what is
       // left here is the settings and the people.
       'DELETE /api/settings/rates/:id',
+      // Issue #17 (ADR-0049): a login nobody used is deleted by an owner; everybody else is switched off.
+      'DELETE /api/users/:id',
       // ADR-0033: the PIN of the workshop tablet and the tablet itself are an owner's to give and take.
       'DELETE /api/users/:id/pin',
       // The rentals folders in Drive beside the rentals here (ADR-0031): an owner's list.

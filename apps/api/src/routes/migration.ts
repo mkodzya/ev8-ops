@@ -3,10 +3,10 @@ import type { FastifyInstance } from 'fastify';
 import { audit } from '../lib/audit.js';
 import { isoDate } from '../lib/dates.js';
 import { prisma } from '../lib/db.js';
-import { badRequest, notFound } from '../lib/errors.js';
+import { badRequest, conflict, notFound } from '../lib/errors.js';
 import { actorOf } from '../lib/guard.js';
 import { oneOf, str } from '../lib/validate.js';
-import { moveVehicle } from '../lib/vehicles.js';
+import { moveVehicle, openRentalOf } from '../lib/vehicles.js';
 
 // Settings → Transfer (wave 6 §3.6–3.7).
 //
@@ -158,6 +158,8 @@ export function migrationRoutes(app: FastifyInstance): void {
     const locationId = str(req.body ?? {}, 'locationId');
     const v = await prisma.vehicle.findUnique({ where: { id: req.params.id }, select: { id: true, state: true } });
     if (!v) throw notFound('vehicle_not_found', 'No such moped.');
+    // A moped out on a rental still open is the customer's (issue #17): it comes back through that rental.
+    if (await openRentalOf(prisma, v.id)) throw conflict('vehicle_rented_move', 'Close the rental first; a rented moped does not move by hand.');
     await prisma.$transaction(async (tx) => {
       await moveVehicle(tx, { vehicleId: v.id, kind: 'manual', toState: 'available', occurredOn: todayISO(), actorId: actor.id, reason });
       if (locationId) await tx.vehicle.update({ where: { id: v.id }, data: { locationId, updatedAt: new Date() } });

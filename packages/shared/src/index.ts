@@ -43,3 +43,4 @@ export * from './goods.js';
 export * from './sort-rights.js';
 export * from './vehicle-details.js';
 export * from './drive-returns.js';
+export * from './chips.js';

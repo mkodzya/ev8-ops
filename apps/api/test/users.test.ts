@@ -101,3 +101,76 @@ describe.skipIf(!HAS_DB)('users', () => {
     expect(body).not.toMatch(/passwordHash|password_hash|s2:/);
   });
 });
+
+// GitHub issue #17, item 5 (ADR-0049): a login nobody ever signed in with and
+// to which nothing is recorded is deleted, and its email is free again;
+// everybody else is only switched off. Every name and address here is made up.
+describe.skipIf(!HAS_DB)('deleting a login nobody used (issue #17)', () => {
+  type Row = { id: string; email: string | null; deletable: boolean };
+  const list = async (owner: string) => json<{ users: Row[] }>(await call(owner, 'GET', '/api/users')).users;
+  const err = (res: { body: string }) => json<{ error: string; what?: string[] }>(res);
+
+  it('the owner deletes a login made with a typo, the journal keeps whose, and the email can be used again', async () => {
+    const { prisma } = await import('../src/lib/db.js');
+    const owner = await loginAs('owner');
+    const email = `typo.${uniq()}@test.ev8`;
+    const made = await call(owner, 'POST', '/api/users', { email, name: 'Test Typo', role: 'manager', password: 'long-enough-1' });
+    expect(made.statusCode, made.body).toBe(201);
+    const { id } = json<{ id: string }>(made);
+    expect((await list(owner)).find((u) => u.id === id)?.deletable).toBe(true);
+
+    const res = await call(owner, 'DELETE', `/api/users/${id}`);
+    expect(res.statusCode, res.body).toBe(200);
+    expect(await prisma.user.findUnique({ where: { id } })).toBeNull();
+    const log = await prisma.auditLog.findFirstOrThrow({ where: { action: 'user.delete', entityId: id } });
+    expect(log.before).toMatchObject({ name: 'Test Typo', email, role: 'manager' });
+    expect(log.note).toBe(`Test Typo · ${email}`);
+    expect(log.actorId).not.toBeNull();
+
+    // The address is free: a new login with it is not a duplicate.
+    expect((await call(owner, 'POST', '/api/users', { email, name: 'Test Again', role: 'manager', password: 'long-enough-1' })).statusCode).toBe(201);
+    expect((await call(owner, 'DELETE', `/api/users/${id}`)).statusCode).toBe(404);
+  });
+
+  it('somebody who signed in is only switched off — the owner too, about themselves', async () => {
+    const owner = await loginAs('owner');
+    const used = await makeUser('manager');
+    await login(used.email);
+    expect((await list(owner)).find((u) => u.id === used.id)?.deletable).toBe(false);
+    expect(err(await call(owner, 'DELETE', `/api/users/${used.id}`)).error).toBe('user_signed_in');
+    const me = json<{ id: string }>(await call(owner, 'GET', '/api/me'));
+    expect(err(await call(owner, 'DELETE', `/api/users/${me.id}`)).error).toBe('user_signed_in');
+  });
+
+  it('somebody to whom anything is recorded is only switched off, whichever table records it', async () => {
+    const { prisma } = await import('../src/lib/db.js');
+    const owner = await loginAs('owner');
+    // A point written down by them: a relation the schema names.
+    const author = await makeUser('manager');
+    await prisma.location.create({ data: { name: `ТЕСТ point ${uniq()}`, createdById: author.id } });
+    expect((await list(owner)).find((u) => u.id === author.id)?.deletable).toBe(false);
+    expect(err(await call(owner, 'DELETE', `/api/users/${author.id}`))).toMatchObject({ error: 'user_has_records', what: ['locations'] });
+    // A category made by them: a column with a foreign key and no relation in the schema — the database refuses it.
+    const other = await makeUser('manager');
+    await prisma.expenseCategory.create({ data: { nameRu: `ТЕСТ категория ${uniq()}`, createdById: other.id } });
+    expect(err(await call(owner, 'DELETE', `/api/users/${other.id}`)).error).toBe('user_has_records');
+    expect(await prisma.user.findUnique({ where: { id: other.id } })).not.toBeNull();
+  });
+
+  it('only an owner deletes', async () => {
+    const manager = await loginAs('manager');
+    const nobody = await makeUser('manager');
+    expect((await call(manager, 'DELETE', `/api/users/${nobody.id}`)).statusCode).toBe(403);
+  });
+
+  it('no foreign key to a person deletes or empties what it points from — only sessions and operation keys go with them', async () => {
+    const { prisma } = await import('../src/lib/db.js');
+    // A table added tomorrow with ON DELETE SET NULL or CASCADE would let a
+    // deletion wipe what is recorded to a person; this names it.
+    const rows = await prisma.$queryRaw<{ tbl: string; action: string }[]>`
+      SELECT c.conrelid::regclass::text AS tbl, c.confdeltype::text AS action
+      FROM pg_constraint c
+      WHERE c.contype = 'f' AND c.confrelid = 'users'::regclass AND c.confdeltype NOT IN ('a', 'r')`;
+    expect(rows.map((r) => `${r.tbl}:${r.action}`).sort()).toEqual(['operation_keys:c', 'sessions:c']);
+  });
+});

@@ -1,4 +1,4 @@
-import { addDays, todayISO, utilisationPath, weekOf } from '@ev8/shared';
+import { ALL_CHIP, addDays, todayISO, utilisationPath, weekOf } from '@ev8/shared';
 import { useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { LoadError } from '../components/LoadError.js';
@@ -92,8 +92,9 @@ export function WeekPage() {
   const list = `?from=${w.from}&to=${w.to}`;
 
   const figures: Figure[] = [
-    { key: 'rented', label: t.weekReport.rented, text: String(w.fleet.rented), to: '/fleet' },
-    { key: 'free', label: t.weekReport.free, text: String(w.fleet.freeInRentPool), to: '/fleet' },
+    // The fleet's list opens on its first chip since issue #17: each figure names the chip it is counted under.
+    { key: 'rented', label: t.weekReport.rented, text: String(w.fleet.rented), to: '/fleet?f=rented' },
+    { key: 'free', label: t.weekReport.free, text: String(w.fleet.freeInRentPool), to: '/fleet?f=available' },
     {
       key: 'service',
       label: t.weekReport.inService,
@@ -101,8 +102,9 @@ export function WeekPage() {
       to: '/service',
     },
     // Downtime of the week's repairs in hours, waiting for approval within it (ADR-0038).
-    ...(w.fleet.repairs ? [{ key: 'repair-hours', label: t.wmaint.repairsLine, text: repairHoursText(w.fleet.repairs, t, locale), to: '/service' }] : []),
-    { key: 'moves', label: t.weekReport.startedReturned, text: `${w.rentals.started} · ${w.rentals.returned}`, to: '/rentals' },
+    // The week's repairs, closed ones among them, and its hand-overs and returns: every row of the list («Все»).
+    ...(w.fleet.repairs ? [{ key: 'repair-hours', label: t.wmaint.repairsLine, text: repairHoursText(w.fleet.repairs, t, locale), to: `/service?f=${ALL_CHIP}` }] : []),
+    { key: 'moves', label: t.weekReport.startedReturned, text: `${w.rentals.started} · ${w.rentals.returned}`, to: `/rentals?s=${ALL_CHIP}` },
     {
       key: 'overdue',
       label: t.weekReport.overdue,

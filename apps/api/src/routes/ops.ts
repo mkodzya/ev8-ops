@@ -8,7 +8,7 @@ import { env } from '../lib/env.js';
 import { badRequest, conflict, forbidden, isUniqueViolation, notFound, type ApiError } from '../lib/errors.js';
 import { actorOf } from '../lib/guard.js';
 import { date, int, oneOf, str, strList, tetri } from '../lib/validate.js';
-import { movePool, moveVehicle } from '../lib/vehicles.js';
+import { inRentalRefusal, movePool, moveVehicle, openRentalOf } from '../lib/vehicles.js';
 import { fitTracker, imeiInUse, imeiOpenElsewhere, readImeiOf, readSimOf, readTracker } from '../lib/trackers.js';
 
 type Body = Record<string, unknown>;
@@ -184,6 +184,9 @@ export function opsRoutes(app: FastifyInstance): void {
         const v = await tx.vehicle.findUnique({ where: { id: vehicleId } });
         if (!v) throw notFound('vehicle_not_found', 'No such moped.');
         if (v.state !== 'available') throw conflict('vehicle_not_available', 'This moped cannot be handed over in its current state.', { state: v.state });
+        // Free on its card, but out on another rental (issue #17): not this one's.
+        const busy = await openRentalOf(tx, vehicleId, r.id);
+        if (busy) throw inRentalRefusal(busy);
         data.vehicleId = vehicleId;
         data.vinUnconfirmed = false;
         // Dated today, not at the rental's start. Confirming which VIN a
@@ -228,11 +231,18 @@ export function opsRoutes(app: FastifyInstance): void {
     // what a hand says, and a buy-back brings it back; writing one off is an
     // owner's (Q22, §3.6); and the state it is already in is no move at all —
     // it used to be written as an X → X event with a reason (21.10.2026).
-    const refusal = manualMoveRefusal(v.state as VehicleState, toState, { mayWriteOff: hasPerm(actor, 'deposit.decide'), hasRental: !!v.currentRentalId });
+    // Whether it is out on a rental is asked of the rentals (issue #17): a
+    // moped whose rental is open while its state says otherwise goes back to
+    // «В аренде» by an owner, and nowhere else until that rental is closed.
+    const open = await openRentalOf(prisma, v.id);
+    const refusal = manualMoveRefusal(v.state as VehicleState, toState, { mayWriteOff: hasPerm(actor, 'deposit.decide'), hasRental: open != null });
     if (refusal) throw MANUAL_MOVE_REFUSED[refusal]();
+    const backTo = toState === 'rented' ? open : null;
     const moved = await prisma.$transaction(async (tx) => {
-      const m = await moveVehicle(tx, { vehicleId: v.id, kind: 'manual', occurredOn, actorId: actor.id, reason, toState });
-      await tx.auditLog.create({ data: { actorId: actor.id, action: 'vehicle.state.manual', entityType: 'vehicle', entityId: v.id, before: { state: m.from }, after: { state: m.to }, note: reason } });
+      const m = await moveVehicle(tx, { vehicleId: v.id, kind: 'manual', occurredOn, actorId: actor.id, reason, toState, rentalId: backTo?.id ?? null });
+      await tx.auditLog.create({
+        data: { actorId: actor.id, action: 'vehicle.state.manual', entityType: 'vehicle', entityId: v.id, before: { state: m.from }, after: { state: m.to, ...(backTo ? { rental: backTo.number } : {}) }, note: reason },
+      });
       return m;
     });
     return moved;

@@ -168,7 +168,8 @@ export function SwapWizard() {
   const vinNeedle = vq.trim().toUpperCase();
   // The number on the sticker or a piece of the VIN, as at a hand-over.
   const noNeedle = readFleetNumber(vq, { digitsToo: true });
-  const free = vehicles.filter((v) => v.id !== old.id && v.state === 'available' && (!vinNeedle || v.vin.includes(vinNeedle) || (noNeedle != null && v.fleetNo === noNeedle)));
+  // A moped out on a rental still open is not free, whatever its status says (issue #17).
+  const free = vehicles.filter((v) => v.id !== old.id && v.state === 'available' && !v.openRental && (!vinNeedle || v.vin.includes(vinNeedle) || (noNeedle != null && v.fleetNo === noNeedle)));
   const forRent = free.filter((v) => v.pool !== 'sale');
   const forSale = free.filter((v) => v.pool === 'sale');
   const fresh = vehicles.find((v) => v.id === f.vehicleId) ?? null;
