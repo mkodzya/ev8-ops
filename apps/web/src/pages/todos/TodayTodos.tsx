@@ -1,6 +1,7 @@
 import { TODO_MINE, todoBucket, todoOnToday, todoDaysLate } from '@ev8/shared';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { fmtDayMonth } from '../../format.js';
 import { useT } from '../../i18n/index.js';
 import { useLoad } from '../../lib/use.js';
 import { TodoCard } from './TodoCard.js';
@@ -13,7 +14,9 @@ import './todos.css';
  * one's own tasks late and today's — those shown ahead of their day too —
  * each with «Сделано» at its end, and «все задачи →». Not shown when there
  * are none. The same request as «Задачи → Мои», so the two never disagree,
- * and its rows are what the menu's two numbers count (ux №10).
+ * and its rows are what the menu's two numbers count (ux №10). One shown
+ * ahead says its due day above «Сделано» («срок 31.10»): without it, it read
+ * as due today (QA before 1.17.0).
  */
 export function TodayTodos() {
   const t = useT();
@@ -50,11 +53,14 @@ export function TodayTodos() {
                     {todoBucket(x, data.today) === 'overdue' ? (
                       <span className="todo-due todo-due-late">{t.todos.lateBy(todoDaysLate(x.dueOn, data.today))}</span>
                     ) : (
-                      x.may.close && (
-                        <button type="button" className="pill pill-sm" onClick={() => void quickClose(x)}>
-                          {t.todos.card.done}
-                        </button>
-                      )
+                      <>
+                        {x.dueOn !== data.today && <span className="todo-act-due">{t.todos.card.dueOn(fmtDayMonth(x.dueOn))}</span>}
+                        {x.may.close && (
+                          <button type="button" className="pill pill-sm" onClick={() => void quickClose(x)}>
+                            {t.todos.card.done}
+                          </button>
+                        )}
+                      </>
                     )}
                   </span>
                 }
