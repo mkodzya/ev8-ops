@@ -36,6 +36,8 @@ interface FleetRow {
   pool: 'rent' | 'sale' | null;
   location: { id: string; name: string } | null;
   salePriceTetri: number | null;
+  /** A rental still open on it, whatever its status says (issue #17); absent while an older API answers. */
+  openRental?: { id: string; number: string } | null;
 }
 
 interface CustomerRow {
@@ -126,14 +128,15 @@ export function SaleWizard() {
   const customer = customers.data?.customers.find((c) => c.id === f.customerId) ?? null;
 
   // What may be sold: standing free, in the sale park or in none. A moped out
-  // with a renter is not offered at all — the refusal for a direct link is the
+  // with a renter is not offered at all — nor one whose rental is open while
+  // its status says free (issue #17) — the refusal for a direct link is the
   // API's, in words about selling (crit. 2).
   const forSale = useMemo(
-    () => (fleet.data?.vehicles ?? []).filter((v) => v.state === 'available' && v.pool !== 'rent'),
+    () => (fleet.data?.vehicles ?? []).filter((v) => v.state === 'available' && !v.openRental && v.pool !== 'rent'),
     [fleet.data],
   );
   const rentPool = useMemo(
-    () => (fleet.data?.vehicles ?? []).filter((v) => v.state === 'available' && v.pool === 'rent'),
+    () => (fleet.data?.vehicles ?? []).filter((v) => v.state === 'available' && !v.openRental && v.pool === 'rent'),
     [fleet.data],
   );
   const offered = useMemo(() => {

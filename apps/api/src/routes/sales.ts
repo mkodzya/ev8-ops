@@ -11,7 +11,7 @@ import { actorOf, mayTotal } from '../lib/guard.js';
 import { recordMoney } from '../lib/money.js';
 import { recomputeSale } from '../lib/payments.js';
 import { date, int, oneOf, str, strList, tetri } from '../lib/validate.js';
-import { moveVehicle } from '../lib/vehicles.js';
+import { moveVehicle, openRentalOf } from '../lib/vehicles.js';
 
 // Selling a moped (SAL-01…03).
 //
@@ -212,6 +212,9 @@ export function saleRoutes(app: FastifyInstance): void {
       // Its own code: one `vehicle_rented` served three unrelated refusals,
       // and the words the screen showed were another one's (QA-W5-04).
       if (v.state === 'rented') throw conflict('vehicle_rented_sale', 'This moped is out on rent; it cannot be sold until it comes back.', { state: v.state });
+      // Out on a rental still open, whatever its state says (issue #17): the same answer.
+      const busy = await openRentalOf(prisma, vehicleId);
+      if (busy) throw conflict('vehicle_rented_sale', 'This moped is out on rent; it cannot be sold until it comes back.', { state: v.state, rental: busy.number });
       if (v.state === 'sold') throw conflict('vehicle_sold', 'This moped has already been sold.', { state: v.state });
       if (v.state !== 'available') throw conflict('vehicle_not_available', 'Only a moped standing free is sold.', { state: v.state });
       // A moped kept for renting can be sold, but somebody has to say so:

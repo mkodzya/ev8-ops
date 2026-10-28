@@ -63,7 +63,11 @@ export function RepairClosePage() {
   const when = useWhen();
   const { data, failure, reload } = useLoad<{ job: ServiceJob }>(id ? `/api/service/${id}` : null);
   const moved = data?.job.movedVehicle ?? false;
-  const points = useLoad<{ locations: Point[] }>(moved ? '/api/service/locations' : null);
+  // A moped whose rental is still open goes back to its customer, «В аренде»:
+  // no point of ours is asked of it (issue #17).
+  const backTo = moved ? (data?.job.backToRental ?? null) : null;
+  const asksWhere = moved && !backTo;
+  const points = useLoad<{ locations: Point[] }>(asksWhere ? '/api/service/locations' : null);
   const [photos, setPhotos] = useState<PreparedPhoto[]>([]);
   const [km, setKm] = useState('');
   const [lower, setLower] = useState<Lower>('');
@@ -97,7 +101,7 @@ export function RepairClosePage() {
     // «Плановое ТО» with no reading of its opening counts from this one (ADR-0038 §2), as the server asks.
     const needKm = moved || (j.reasonKind === 'planned' && j.openedOdometerKm == null);
     if (needKm && (kmValue == null || !Number.isInteger(kmValue) || kmValue < 0)) p.km = t.wappr.needKm;
-    if (moved && !chosen) p.where = t.wappr.needWhere;
+    if (asksWhere && !chosen) p.where = t.wappr.needWhere;
     if (below && !lowerText) p.lower = t.wjob.needWhy;
     setShown(p);
     if (Object.keys(p).length > 0) return;
@@ -108,7 +112,7 @@ export function RepairClosePage() {
           {
             odometerKm: kmValue,
             odometerReason: below ? lowerText : null,
-            locationId: moved ? chosen : null,
+            locationId: asksWhere ? chosen : null,
             photos: await Promise.all(photos.map(async (ph) => ({ mimeType: ph.mimeType, dataBase64: await toBase64(ph.blob) }))),
           },
           { key },
@@ -120,7 +124,7 @@ export function RepairClosePage() {
         }),
     );
     if (!res.ok) return;
-    toast({ text: t.wappr.closed(j.number, moved ? moped : null) });
+    toast({ text: t.wappr.closed(j.number, asksWhere ? moped : null) });
     navigate(`/service/${j.id}`, { replace: true });
   };
 
@@ -183,7 +187,7 @@ export function RepairClosePage() {
                   )}
                 </div>
               )}
-              {moved && (
+              {asksWhere && (
                 <div className={`field ${shown.where ? 'field-bad' : ''}`} data-field="locationId">
                   <span className="lbl">{t.wappr.where}</span>
                   <div className="wjob-chips">
@@ -227,9 +231,13 @@ export function RepairClosePage() {
         )}
         <footer className="wizard-foot">
           <span className="wizard-foot-note">
-            {moved ? (
+            {asksWhere ? (
               <span>
                 {t.wappr.backToFleet(moped)} <b>{t.wappr.available}</b>
+              </span>
+            ) : backTo ? (
+              <span>
+                {t.repairBack.toRenter(moped, backTo.number)} <b>{t.repairBack.rented}</b>
               </span>
             ) : (
               <span>{t.wappr.staysRented}</span>

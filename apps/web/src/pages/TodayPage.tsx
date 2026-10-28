@@ -62,7 +62,8 @@ const SEGMENT: Record<string, string> = {
   money: '/money/statements',
   service: '/service',
   instalments: '/sales',
-  purchases: '/purchases',
+  // The orders waiting to arrive — the chip they are under; the list opens on its first chip otherwise (issue #17).
+  purchases: '/purchases?f=ordered',
   fill: '/rentals?s=unsigned',
   till: '/money/cash',
 };

@@ -304,7 +304,8 @@ export function RejectSheet({ job, onClose, onDone }: { job: ServiceJob; onClose
       <Field label={t.wappr.reason} hint={t.wappr.reasonHint} name="reason">
         <textarea className="input" rows={3} value={reason} onChange={(e) => setReason(e.target.value)} required autoFocus />
       </Field>
-      <p className="hint">{repeat ? words.note : job.movedVehicle ? t.wappr.rejectMoved(moped) : t.wappr.rejectRented}</p>
+      {/* A moped taken in while its rental is still open goes back to that customer, not to the yard (issue #17). */}
+      <p className="hint">{repeat ? words.note : job.backToRental ? t.repairBack.reject(moped, job.backToRental.number) : job.movedVehicle ? t.wappr.rejectMoved(moped) : t.wappr.rejectRented}</p>
     </FormSheet>
   );
 }

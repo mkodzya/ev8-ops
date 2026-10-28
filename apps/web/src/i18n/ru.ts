@@ -36,6 +36,8 @@ import { menuRu } from './menu.js';
 import { goodsRu } from './goods.js';
 import { incRu } from './inbound.js';
 import { dupRu } from './card-duplicate.js';
+import { rentedFreeRu } from './rented-free.js';
+import { peopleDeleteRu } from './people-delete.js';
 import type { Dict } from './en.js';
 
 // Typed as Dict: a missing or misspelled key fails the build.
@@ -845,8 +847,8 @@ export const ru: Dict = {
     linked: 'Связано с внесённым платежом',
     other: 'Другое',
     more: 'Ещё',
-    notOurs: 'Это не наше',
-    notOursTitle: 'Это не платёж клиента',
+    notOurs: 'Убрать из очереди',
+    notOursTitle: 'Убрать строку из очереди',
     notOursReason: 'Что это на самом деле',
     notOursHint: 'Причина обязательна; строка уйдёт из очереди, в журнал — кто и почему.',
     notOursDone: 'Убрано из очереди',
@@ -903,7 +905,7 @@ export const ru: Dict = {
     asideTitle: 'Убранные из очереди',
     asideSub: (n: number) => `За месяц · ${n}`,
     asideEmpty: 'За месяц из очереди ничего не убрано.',
-    asideNotOurs: (reason: string) => `Это не наше: ${reason}`,
+    asideNotOurs: (reason: string) => `Убрано: ${reason}`,
     asideExpense: 'Расход компании.',
     asideBy: (who: string, day: string) => `${who}, ${day}`,
     restore: 'Вернуть в очередь',
@@ -1349,7 +1351,7 @@ export const ru: Dict = {
       not_outgoing: 'Выводом акционера можно отметить только деньги, ушедшие со счёта.',
       not_returned: 'Акт возврата появится, когда аренда будет закрыта.',
       not_set_aside: 'Эта строка не убрана из очереди. Обновите список.',
-      no_twin: 'Эта строка не повторяет другую. Если она не наша — «Это не наше», с причиной.',
+      no_twin: 'Эта строка не повторяет другую. Если она не нужна в учёте — «Убрать из очереди», с причиной.',
       not_yours: 'Отменить перевод может только тот, кто его сделал.',
       nothing_to_correct: 'Остаток уже такой.',
       nothing_to_undo: 'У этого мопеда нет перевода, который можно отменить.',
@@ -1438,10 +1440,13 @@ export const ru: Dict = {
       unreadable_statement: 'Файл выписки не читается. Загрузите выгрузку банка (BOG или TBC) без правок.',
       use_rental: 'Мопед становится «в аренде» только через выдачу.',
       use_status_route: 'Статус меняется отдельным действием, с причиной.',
+      user_has_records: 'За этим человеком уже что-то записано — его можно только отключить.',
       user_not_found: 'Пользователь не найден.',
+      user_signed_in: 'Через этот вход уже входили — его можно только отключить.',
       vehicle_already_set: 'У этой аренды уже есть мопед. Сменить его — «Заменить мопед» в меню.',
       vehicle_gone: 'Мопед выбыл из парка. Вернуть его можно обратным выкупом.',
       vehicle_in_rent_pool: 'Мопед назначен в аренду: при продаже назначение сменится на «Продажа».',
+      vehicle_in_rental: 'Мопед числится в другой открытой аренде — выдать его нельзя. Закройте ту аренду или верните мопеду «В аренде» в его карточке.',
       vehicle_in_sale_pool: 'Мопед назначен на продажу. Выдать его может только владелец.',
       vehicle_not_available: 'Этот мопед сейчас нельзя выдать: он не свободен. Откройте мопед и проверьте статус.',
       vehicle_not_found: 'Мопед не найден.',
@@ -1507,4 +1512,6 @@ export const ru: Dict = {
   ...goodsRu,
   ...incRu,
   ...dupRu,
+  ...rentedFreeRu,
+  ...peopleDeleteRu,
 };
