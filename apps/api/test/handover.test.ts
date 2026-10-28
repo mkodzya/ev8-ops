@@ -473,3 +473,50 @@ describe.skipIf(!HAS_DB)('wave 3 · after the hand-over', () => {
     expect((await card(owner, id)).rental.status).toBe('active');
   });
 });
+
+// Issue #18, B3: the case of 25.10.2026, with invented sums. A customer sent 50 ahead; the
+// wizard asked 330 and the rental showed a debt of 50 until the night's roll laid the advance.
+describe.skipIf(!HAS_DB)('issue #18 · the hand-over takes the customer’s advance', () => {
+  it('lays an advance sent before the hand-over on the new rental at once: 280 paid, nothing owed', async () => {
+    const { vehicle, customer } = await fixtures();
+    const manager = await loginAs('manager');
+    const owner = await loginAs('owner');
+    // Money on the customer and on no rental: the advance.
+    const advance = await call(owner, 'POST', '/api/payments', { customerId: customer.id, channel: 'cash', grossTetri: 5000 });
+    expect(advance.statusCode, advance.body).toBe(201);
+    const balance = async () => json<{ owesTetri: number; creditTetri: number }>(await call(owner, 'GET', `/api/customers/${customer.id}/balance`));
+    expect(await balance()).toMatchObject({ owesTetri: 0, creditTetri: 5000 });
+    // The wizard reads the same credit off the customers' list.
+    const listed = json<{ customers: { id: string; creditTetri: number }[] }>(await call(manager, 'GET', '/api/customers')).customers.find((c) => c.id === customer.id);
+    expect(listed?.creditTetri).toBe(5000);
+
+    const res = await call(manager, 'POST', '/api/pickups', pickup(customer.id, vehicle.id, { payment: { later: false, channel: 'cash', amountTetri: 28000 } }));
+    expect(res.statusCode, res.body).toBe(201);
+    const { id } = json<{ id: string }>(res);
+
+    // The deposit first, then the week — with the 50, before any night.
+    const c = await card(owner, id);
+    expect(c.deposit.paidTetri).toBe(18000);
+    expect(c.periods[0]).toMatchObject({ seq: 1, amountTetri: 15000, paidTetri: 15000 });
+    expect(c.rental.debtTetri).toBe(0);
+    expect(c.rental.paidThrough).toBe(addDays(today(), 6));
+    expect(await balance()).toMatchObject({ owesTetri: 0, creditTetri: 0 });
+  });
+
+  it('takes nothing more when the advance pays all of it, and leaves the rest of a larger one as credit', async () => {
+    const { vehicle, customer } = await fixtures();
+    const owner = await loginAs('owner');
+    expect((await call(owner, 'POST', '/api/payments', { customerId: customer.id, channel: 'cash', grossTetri: 40000 })).statusCode).toBe(201);
+    // Nothing due today: the wizard says so, and sends «later» — no money is taken now.
+    const res = await call(owner, 'POST', '/api/pickups', pickup(customer.id, vehicle.id, { payment: { later: true } }));
+    expect(res.statusCode, res.body).toBe(201);
+    const { id } = json<{ id: string }>(res);
+    const c = await card(owner, id);
+    expect(c.payments).toEqual([]);
+    expect(c.deposit.paidTetri).toBe(18000);
+    expect(c.periods[0]!.paidTetri).toBe(15000);
+    expect(c.rental.debtTetri).toBe(0);
+    // 400 − 330: the customer's, for the weeks to come.
+    expect(json<{ creditTetri: number }>(await call(owner, 'GET', `/api/customers/${customer.id}/balance`)).creditTetri).toBe(7000);
+  });
+});

@@ -572,14 +572,14 @@ describe.skipIf(!HAS_DB)('the due day · the edges of the rule', () => {
   });
 
   /**
-   * The one known difference from the calendar (note §8.2), pinned so that it
-   * is not taken for a defect: a hand-over records only its own payment, and
-   * money a customer already has on account is placed by the night's roll
-   * alone. Until then the lists say "due today" with the whole sum, while the
-   * customer's own figure is already nought and the calendar shows the week
-   * paid. It was so under the old names too.
+   * What was the one known difference from the calendar (note §8.2): a
+   * hand-over recorded only its own payment, and money a customer already had
+   * on account waited for the night's roll, while the lists said "due today"
+   * with the whole sum. Since issue #18 (B3) the hand-over lays it at once,
+   * as the roll would: the lists, the customer's figure and the calendar say
+   * one thing from the first minute.
    */
-  it('money on account on a hand-over day: the lists wait for the roll, the customer’s figure and the calendar do not', async () => {
+  it('money on account on a hand-over day: laid on the rental at once, so the lists, the figure and the calendar agree', async () => {
     const f = await fixtures();
     const owner = await loginAs('owner');
     const onAccount = await call(owner, 'POST', '/api/payments', { customerId: f.customer.id, channel: 'cash', grossTetri: 33000 });
@@ -590,16 +590,12 @@ describe.skipIf(!HAS_DB)('the due day · the edges of the rule', () => {
     const t = today();
 
     const row = async () => (await list(owner)).find((r) => r.id === id)!;
-    expect(await row()).toMatchObject({ status: 'due_today', overdueDays: 0, debtTetri: 33000, dueTodayTetri: 33000 });
+    expect(await row()).toMatchObject({ status: 'active', overdueDays: 0, debtTetri: 0, dueTodayTetri: 0, paidThrough: addDays(t, 6) });
     expect(await balanceOf(owner, f.customer.id)).toMatchObject({ owesTetri: 0, dueTodayTetri: 0, dueTodayRentTetri: 0, creditTetri: 0 });
     const entry = entryOn(await calendar(owner), id, t);
     expect(['paid', 'paid_ahead']).toContain(entry.state);
     expect(entry.leftTetri).toBe(0);
-    oneSet(await totals(owner));
-
-    const { rollPeriods } = await import('../src/lib/periods.js');
-    await rollPeriods(t);
-    expect(await row()).toMatchObject({ status: 'active', overdueDays: 0, debtTetri: 0, dueTodayTetri: 0, paidThrough: addDays(t, 6) });
+    expect(entry.creditTetri).toBe(0);
     oneSet(await totals(owner));
   });
 });

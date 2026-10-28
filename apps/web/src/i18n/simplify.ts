@@ -1,7 +1,8 @@
 // GitHub issue #18 of the director, part B — the simplifications of the audit
 // (28.10.2026): a manager sells a moped (B8), the mopeds «В ремонте» with no
 // repair become a block of «Ремонты» (B6), «Заменить мопед» stands under the
-// "+" (B2). One file, so the Georgian goes to proofreading as one list
+// "+" (B2), the hand-over takes the customer's advance off what is due (B3).
+// One file, so the Georgian goes to proofreading as one list
 // (docs/qa/issue-18-b-simplify-ka-strings.md).
 
 const ruPlural = (n: number, one: string, few: string, many: string): string => {
@@ -28,6 +29,11 @@ export const simpleEn = {
     swapPick: {
       title: 'Whose moped to change?',
     },
+    /** The hand-over's payment step: the customer's advance comes off what is due today (B3). */
+    hand: {
+      credit: 'Customer’s advance',
+      creditNote: 'Money sent ahead lies on this rental at once, not at night: the deposit first, then the week.',
+    },
   },
 };
 
@@ -44,6 +50,10 @@ export const simpleRu: typeof simpleEn = {
     swapPick: {
       title: 'Чей мопед заменить?',
     },
+    hand: {
+      credit: 'Аванс клиента',
+      creditNote: 'Деньги, присланные заранее, лягут на эту аренду сразу, не ночью: сначала залог, потом неделя.',
+    },
   },
 };
 
@@ -59,6 +69,10 @@ export const simpleKa: typeof simpleEn = {
     },
     swapPick: {
       title: 'ვისი მოპედი შევცვალოთ?',
+    },
+    hand: {
+      credit: 'კლიენტის ავანსი',
+      creditNote: 'წინასწარ გამოგზავნილი თანხა ამ ქირაობაზე მაშინვე ჩაიწერება, არა ღამით: ჯერ დეპოზიტი, მერე კვირა.',
     },
   },
 };
