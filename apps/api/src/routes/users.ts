@@ -290,8 +290,16 @@ export function userRoutes(app: FastifyInstance): void {
     try {
       await prisma.$transaction(async (tx) => {
         await tx.user.delete({ where: { id: user.id } });
+        // Which login went is read on the journal's line itself: the note names it (the row is gone).
         await tx.auditLog.create({
-          data: { actorId: actor.id, action: 'user.delete', entityType: 'user', entityId: user.id, before: { name: user.name, email: user.email, role: user.role, active: user.active } },
+          data: {
+            actorId: actor.id,
+            action: 'user.delete',
+            entityType: 'user',
+            entityId: user.id,
+            before: { name: user.name, email: user.email, role: user.role, active: user.active },
+            note: [user.name, user.email].filter(Boolean).join(' · '),
+          },
         });
       });
     } catch (e) {

@@ -124,6 +124,7 @@ describe.skipIf(!HAS_DB)('deleting a login nobody used (issue #17)', () => {
     expect(await prisma.user.findUnique({ where: { id } })).toBeNull();
     const log = await prisma.auditLog.findFirstOrThrow({ where: { action: 'user.delete', entityId: id } });
     expect(log.before).toMatchObject({ name: 'Test Typo', email, role: 'manager' });
+    expect(log.note).toBe(`Test Typo · ${email}`);
     expect(log.actorId).not.toBeNull();
 
     // The address is free: a new login with it is not a duplicate.
