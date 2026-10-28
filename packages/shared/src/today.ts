@@ -6,6 +6,7 @@ import type { ISODate, RentalStatus } from './types.js';
 import type { Tetri } from './money.js';
 import { waOffered } from './due.js';
 import { overdueDays } from './periods.js';
+import { driveReturnWhy } from './drive-returns.js';
 
 // "till" is a manager's last group (§3.1): their own cash, handed over at the
 // end of the day. An owner has no such group — a till handed to them is a
@@ -166,7 +167,12 @@ export interface QueueInput {
   drive?: {
     /** With a deal in Kommo for the same person: its link, the card it found, the phone (ADR-0034). */
     contracts: { folderId: string; who: string; datedOn: ISODate | null; leadId?: string; customerId?: string | null; phone?: string | null }[];
-    returns: { rentalId: string; returnedOn: ISODate | null; paidBackTetri: Tetri | null }[];
+    /**
+     * `act`: a return act is in the folder, dated or not; false — only the
+     * folder was moved among the finished. An act with no date is still an act
+     * (issue #19): the row said «папка в Drive — в завершённых» of one.
+     */
+    returns: { rentalId: string; returnedOn: ISODate | null; paidBackTetri: Tetri | null; act: boolean }[];
   };
 }
 
@@ -272,7 +278,8 @@ export function dayQueue(input: QueueInput): TaskGroupRows[] {
       amountTetri: null,
       href: `/rentals/${r.id}/return${on}`,
       phone: r.customer.phone,
-      note: `${d.returnedOn ?? ''}|${d.paidBackTetri ?? ''}`,
+      // The act's day, what it paid back, and what made the row: an act — dated or not — or the folder moved (issue #19).
+      note: `${d.returnedOn ?? ''}|${d.paidBackTetri ?? ''}|${driveReturnWhy(d.act ? { returnedOn: d.returnedOn } : null)}`,
       ...wa(r),
     });
   }

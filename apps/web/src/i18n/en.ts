@@ -1280,6 +1280,7 @@ export const en = {
       documents_restricted: 'Customer documents are for the owners only.',
       down_payment_too_big: 'The down payment is more than the price.',
       drive_folder_not_found: 'That folder is no longer in the copy of Drive — read Drive again.',
+      drive_return_none: 'Drive has no return of this rental to answer: it was answered already, or the act is no longer there. Refresh the screen.',
       duplicate_customer: 'A customer with this personal number or phone already exists.',
       duplicate_email: 'Somebody already signs in with this email.',
       duplicate_location: 'A point with this name already exists.',

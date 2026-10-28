@@ -42,3 +42,4 @@ export * from './pickup-date.js';
 export * from './goods.js';
 export * from './sort-rights.js';
 export * from './vehicle-details.js';
+export * from './drive-returns.js';

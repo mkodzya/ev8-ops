@@ -347,7 +347,7 @@ describe.skipIf(!HAS_DB)('the rentals folders in Drive, read and laid beside the
       type Q = { queue: { group: string; rows: { id: string; action: string; href: string; note: string | null }[] }[] };
       const rows = (q: Q) => q.queue.flatMap((g) => g.rows);
       const mine = rows(json<Q>(await call(owner, 'GET', '/api/today')));
-      expect(mine.find((x) => x.id === `drive_return:${rentalId}`)).toMatchObject({ action: 'close_from_drive', href: `/rentals/${rentalId}/return`, note: '2031-11-03|15000' });
+      expect(mine.find((x) => x.id === `drive_return:${rentalId}`)).toMatchObject({ action: 'close_from_drive', href: `/rentals/${rentalId}/return`, note: '2031-11-03|15000|act' });
       expect(mine.find((x) => x.id === `drive_return:${rentalId2}`)?.action).toBe('close_from_drive');
       expect(mine.find((x) => x.id === 'drive_contract:f-fresh')).toMatchObject({ action: 'hand_over_from_drive', href: '/rentals/new?drive=f-fresh' });
       expect(mine.some((x) => x.id === 'drive_contract:f-stranger')).toBe(false);
@@ -389,6 +389,104 @@ describe.skipIf(!HAS_DB)('the rentals folders in Drive, read and laid beside the
       delete process.env.DRIVE_ROOT;
       forgetToken();
       await prisma.driveFolder.deleteMany({});
+    }
+  });
+});
+
+// Issue #19 of the director, item 3 (ADR-0034, addendum 28.10.2026). The two
+// rows of 27.10.2026, in shape only: renters, mopeds, folders and acts here are
+// invented.
+describe.skipIf(!HAS_DB)('«Это не возврат» on a Drive return row (issue #19)', () => {
+  it('takes the row of a running rental off "Today" until a new act appears, and journals the answer', async () => {
+    const { prisma } = await import('../src/lib/db.js');
+    const owner = await loginAs('owner');
+    const manager = await loginAs('manager');
+    const model = await prisma.vehicleModel.create({ data: { brand: 'Test', name: `Model ${uniq()}`, weeklyRateTetri: 15000, forRent: true } });
+    const digits = () => uniq().replace(/\D/g, '').slice(-12).padStart(12, '0');
+    const running = async (prefix: string, pickedUpOn: string) => {
+      const vin = `${prefix}${digits()}`;
+      const vehicle = await prisma.vehicle.create({ data: { vin, modelId: model.id } });
+      const customer = await prisma.customer.create({ data: { name: `Test Renter ${uniq()}` } });
+      const made = await call(owner, 'POST', '/api/rentals', { customerId: customer.id, vehicleId: vehicle.id, weeklyRateTetri: '150', pickedUpOn });
+      expect(made.statusCode, made.body).toBe(201);
+      return { id: json<{ id: string }>(made).id, vin };
+    };
+    // The R-00008 shape: an act of 09.09 for the same moped, one digit of its VIN left out — made by mistake.
+    const a = await running('TESTN', '2026-09-01');
+    // The R-00016 shape: an undated act of the moped the renter had before this rental, swapped before EV8 Ops.
+    const b = await running('TESTP', '2026-09-20');
+    const earlierVin = `TESTR${digits()}`;
+
+    const at = new Date('2026-10-27T09:00:00.000Z');
+    const fa = `f19a-${uniq()}`;
+    const fb = `f19b-${uniq()}`;
+    const actA = `act19a-${uniq()}`;
+    const actB = `act19b-${uniq()}`;
+    await prisma.driveFolder.create({ data: { id: fa, name: '260901 Test Renter A', section: 'active', rentalId: a.id, datedOn: new Date('2026-09-01T00:00:00Z') } });
+    await prisma.driveFolder.create({ data: { id: fb, name: '260920 Test Renter B', section: 'active', rentalId: b.id, datedOn: new Date('2026-09-20T00:00:00Z') } });
+    await prisma.driveFile.create({
+      data: { id: actA, folderId: fa, name: '260909 return act.pdf', kind: 'return_act', modifiedAt: at, datedOn: new Date('2026-09-09T00:00:00Z'), vin: a.vin.slice(0, 9) + a.vin.slice(10) },
+    });
+    await prisma.driveFile.create({ data: { id: actB, folderId: fb, name: 'return act.pdf', kind: 'return_act', modifiedAt: at, datedOn: null, vin: earlierVin } });
+
+    const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048, privateKeyEncoding: { type: 'pkcs8', format: 'pem' }, publicKeyEncoding: { type: 'spki', format: 'pem' } });
+    process.env.DRIVE_SA_KEY = JSON.stringify({ type: 'service_account', client_email: 'test@example.iam.gserviceaccount.com', private_key: privateKey });
+    process.env.DRIVE_ROOT = 'root';
+    forgetToken();
+    try {
+      type Q = { queue: { group: string; rows: { id: string; action: string; note: string | null }[] }[] };
+      const rows = async () => json<Q>(await call(owner, 'GET', '/api/today')).queue.flatMap((g) => g.rows);
+      const first = await rows();
+      expect(first.find((x) => x.id === `drive_return:${a.id}`)).toMatchObject({ action: 'close_from_drive', note: '2026-09-09||act' });
+      // An undated act is an act, not a folder moved among the finished.
+      expect(first.find((x) => x.id === `drive_return:${b.id}`)).toMatchObject({ action: 'close_from_drive', note: '||act_undated' });
+
+      // Drive is the owners': a manager does not answer it.
+      expect((await call(manager, 'POST', `/api/drive/returns/${a.id}/not-return`, { reason: 'test' })).statusCode).toBe(403);
+      const noReason = await call(owner, 'POST', `/api/drive/returns/${a.id}/not-return`, {});
+      expect(noReason.statusCode).toBe(400);
+      expect(json<{ error: string; field: string }>(noReason)).toMatchObject({ error: 'missing_field', field: 'reason' });
+
+      const why = 'test: the act was made by mistake, the moped is still out';
+      const answered = await call(owner, 'POST', `/api/drive/returns/${a.id}/not-return`, { reason: why });
+      expect(answered.statusCode, answered.body).toBe(201);
+      const after = await rows();
+      expect(after.some((x) => x.id === `drive_return:${a.id}`)).toBe(false);
+      expect(after.some((x) => x.id === `drive_return:${b.id}`)).toBe(true);
+      // The rental is not touched: it runs on.
+      const card = json<{ rental: { status: string } }>(await call(owner, 'GET', `/api/rentals/${a.id}`));
+      expect(card.rental.status).not.toBe('returned');
+      // The answer is a line of the rental's journal: the reason, and what it answered.
+      const line = await prisma.auditLog.findFirstOrThrow({ where: { action: 'drive.not_return', entityId: a.id } });
+      expect(line).toMatchObject({ entityType: 'rental', note: why });
+      expect((line.after as { keys: string[] }).keys).toEqual([`act:${actA}@${at.toISOString()}`]);
+      // «Настройки → Drive» says the same: not among the returns, among the answered, with the reason.
+      const r = json<{ returnedThere: { rental: { id: string } }[]; notReturned: { rental: { id: string }; answer: { reason: string | null } }[] }>(
+        await call(owner, 'GET', '/api/drive/reconciliation'),
+      );
+      expect(r.returnedThere.some((x) => x.rental.id === a.id)).toBe(false);
+      expect(r.notReturned.find((x) => x.rental.id === a.id)?.answer.reason).toBe(why);
+      // Answered is answered: a second answer finds nothing to answer.
+      const again = await call(owner, 'POST', `/api/drive/returns/${a.id}/not-return`, { reason: 'test' });
+      expect(again.statusCode).toBe(409);
+      expect(json<{ error: string }>(again).error).toBe('drive_return_none');
+
+      // A new act in the folder brings the row back.
+      await prisma.driveFile.create({
+        data: { id: `act19c-${uniq()}`, folderId: fa, name: '261020 return act.pdf', kind: 'return_act', modifiedAt: new Date('2026-10-28T09:00:00.000Z'), datedOn: new Date('2026-10-20T00:00:00Z'), vin: a.vin },
+      });
+      expect((await rows()).find((x) => x.id === `drive_return:${a.id}`)?.note).toBe('2026-10-20||act');
+
+      // The undated act answered, then changed in Drive: back as well.
+      expect((await call(owner, 'POST', `/api/drive/returns/${b.id}/not-return`, { reason: 'test: the paper of the moped before' })).statusCode).toBe(201);
+      expect((await rows()).some((x) => x.id === `drive_return:${b.id}`)).toBe(false);
+      await prisma.driveFile.update({ where: { id: actB }, data: { modifiedAt: new Date('2026-10-28T10:00:00.000Z') } });
+      expect((await rows()).some((x) => x.id === `drive_return:${b.id}`)).toBe(true);
+    } finally {
+      delete process.env.DRIVE_SA_KEY;
+      delete process.env.DRIVE_ROOT;
+      forgetToken();
+      await prisma.driveFolder.deleteMany({ where: { id: { in: [fa, fb] } } });
     }
   });
 });
