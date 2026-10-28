@@ -54,6 +54,8 @@ export interface FleetRow {
   odometerKm: number | null;
   /** For a moped carried over this means "the day we wrote it down". */
   arrivedOn: string | null;
+  /** A rental still open on it, whatever its status says (issue #17); absent while an older API answers. */
+  openRental?: { id: string; number: string } | null;
 }
 type Channel = 'cash' | 'acquiring' | 'transfer' | 'later';
 
@@ -250,7 +252,8 @@ export function PickupWizard() {
   const vinNeedle = vq.trim().toUpperCase();
   // The number on the sticker or a piece of the VIN (Mika, 15.10.2026).
   const noNeedle = readFleetNumber(vq, { digitsToo: true });
-  const free = vehicles.filter((v) => v.state === 'available' && (!vinNeedle || v.vin.includes(vinNeedle) || (noNeedle != null && v.fleetNo === noNeedle)));
+  // A moped out on a rental still open is not free, whatever its status says (issue #17).
+  const free = vehicles.filter((v) => v.state === 'available' && !v.openRental && (!vinNeedle || v.vin.includes(vinNeedle) || (noNeedle != null && v.fleetNo === noNeedle)));
   const forRent = free.filter((v) => v.pool !== 'sale');
   const forSale = free.filter((v) => v.pool === 'sale');
 

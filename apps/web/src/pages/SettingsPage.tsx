@@ -28,6 +28,8 @@ interface Users {
     sessions: number;
     lastLoginAt: string | null;
     lastSeenAt: string | null;
+    /** Never signed in, nothing recorded: may be deleted (issue #17); absent while an older API answers. */
+    deletable?: boolean;
     createdAt: string;
   }[];
 }
@@ -312,6 +314,8 @@ function UserRow({ user: u, onRole, onDone }: { user: Users['users'][number]; on
   const [pin, setPin] = useState('');
   const [rate, setRate] = useState('');
   const [renter, setRenter] = useState('');
+  // «Удалить» asks first: a deletion cannot be taken back (ux.md, principle 14).
+  const [deleting, setDeleting] = useState(false);
   const mechanic = isPinRole(u.role);
   // The customers to pick the mechanic's own card from — read only while the picker is open.
   const customers = useLoad<{ customers: { id: string; name: string; openRentals: { number: string }[] }[] }>(editing === 'renter' ? '/api/customers' : null);
@@ -488,6 +492,14 @@ function UserRow({ user: u, onRole, onDone }: { user: Users['users'][number]; on
             <button type="button" className="pill pill-sm" onClick={() => void toggle()} disabled={u.id === me?.id || op.state === 'busy'}>
               {u.active ? t.users.switchOff : t.users.switchOn}
             </button>{' '}
+            {/* A login nobody ever used and nothing is recorded to (issue #17): deleted, and its email is free again. */}
+            {u.deletable && u.id !== me?.id && (
+              <>
+                <button type="button" className="pill pill-sm" title={t.peopleDelete.hint} onClick={() => setDeleting(true)} disabled={op.state === 'busy'}>
+                  {t.peopleDelete.remove}
+                </button>{' '}
+              </>
+            )}
             <button type="button" className="pill pill-sm" onClick={() => setEditing('password')}>
               {u.email ? t.users.resetPassword : t.workshop.giveEmail}
             </button>{' '}
@@ -533,6 +545,22 @@ function UserRow({ user: u, onRole, onDone }: { user: Users['users'][number]; on
           </>
         )}
         {op.failure && <div className="field-err">{op.failure.fieldText ?? op.failure.text}</div>}
+        {deleting && (
+          <FormSheet
+            title={t.peopleDelete.title}
+            onClose={() => setDeleting(false)}
+            value={u.id}
+            initial={u.id}
+            label={t.peopleDelete.cta}
+            submit={async (key) => {
+              await api.del(`/api/users/${u.id}`, { key });
+              return { toast: { text: t.peopleDelete.done(u.name) } };
+            }}
+            onDone={onDone}
+          >
+            <p>{t.peopleDelete.ask(u.name, u.email)}</p>
+          </FormSheet>
+        )}
       </td>
     </tr>
   );

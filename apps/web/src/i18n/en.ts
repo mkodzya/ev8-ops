@@ -45,6 +45,8 @@ import { menuEn } from './menu.js';
 import { goodsEn } from './goods.js';
 import { incEn } from './inbound.js';
 import { dupEn } from './card-duplicate.js';
+import { rentedFreeEn } from './rented-free.js';
+import { peopleDeleteEn } from './people-delete.js';
 export const en = {
   lang: { label: 'Language', ka: 'ქართული', ru: 'Русский', en: 'English' },
 
@@ -847,8 +849,8 @@ export const en = {
     linked: 'Linked to the payment entered by hand',
     other: 'Other',
     more: 'More',
-    notOurs: 'Not ours',
-    notOursTitle: 'Not a customer’s payment',
+    notOurs: 'Remove from queue',
+    notOursTitle: 'Remove the line from the queue',
     notOursReason: 'What it really is',
     notOursHint: 'A reason is required; the line leaves the queue, and the journal keeps who and why.',
     notOursDone: 'Removed from the queue',
@@ -909,7 +911,7 @@ export const en = {
     asideTitle: 'Removed from the queue',
     asideSub: (n: number) => `This month · ${n}`,
     asideEmpty: 'Nothing was removed from the queue this month.',
-    asideNotOurs: (reason: string) => `Not ours: ${reason}`,
+    asideNotOurs: (reason: string) => `Removed: ${reason}`,
     asideExpense: 'Company expense.',
     asideBy: (who: string, day: string) => `${who}, ${day}`,
     restore: 'Back to the queue',
@@ -1356,7 +1358,7 @@ export const en = {
       not_outgoing: 'Only money going out of the account can be marked as taken out by a shareholder.',
       not_returned: 'The return act appears once the rental is closed.',
       not_set_aside: 'This line was not removed from the queue. Refresh the list.',
-      no_twin: 'This line repeats no other line. If it is not the company’s, use «Not ours» and say why.',
+      no_twin: 'This line repeats no other line. If the company does not need it, use «Remove from queue» and say why.',
       not_yours: 'Only the person who made this move can undo it.',
       nothing_to_correct: 'The count already says that.',
       nothing_to_undo: 'This moped has no reassignment to undo.',
@@ -1445,10 +1447,13 @@ export const en = {
       unreadable_statement: 'This statement file could not be read. Upload the bank’s own export (BOG or TBC) without editing it.',
       use_rental: 'A moped becomes rented only through a hand-over.',
       use_status_route: 'The status is changed through its own action, with a reason.',
+      user_has_records: 'Something is already recorded to this person: they can only be switched off.',
       user_not_found: 'User not found.',
+      user_signed_in: 'Somebody has already signed in with this login: it can only be switched off.',
       vehicle_already_set: 'This rental already has a moped. Change it with «Change the moped» in the menu.',
       vehicle_gone: 'This moped has left the fleet. A buy-back brings it back.',
       vehicle_in_rent_pool: 'This moped is assigned to rental; selling it changes its assignment to sale.',
+      vehicle_in_rental: 'The moped is out on another rental that is still open: it cannot be handed out. Close that rental, or give the moped its «Rented» back on its card.',
       vehicle_in_sale_pool: 'This moped is assigned to sale. Only an owner can hand it over.',
       vehicle_not_available: 'This moped cannot be handed over now: it is not free. Open the moped and check its status.',
       vehicle_not_found: 'Moped not found.',
@@ -1514,6 +1519,8 @@ export const en = {
   ...goodsEn,
   ...incEn,
   ...dupEn,
+  ...rentedFreeEn,
+  ...peopleDeleteEn,
 };
 
 export type Dict = typeof en;

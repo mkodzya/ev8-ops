@@ -41,6 +41,8 @@ interface Card {
     costPaidPercent: number | null;
     notes: string | null;
     currentRentalId: string | null;
+    /** The rental still open on it, whatever its status says (issue #17); absent while an older API answers. */
+    openRental?: { id: string; number: string } | null;
   };
   events: {
     id: string;
@@ -130,11 +132,16 @@ export function VehiclePage() {
   if (failure) return <LoadError failure={failure} onRetry={reload} />;
   if (!data) return <Loading />;
   const v = data.vehicle;
-  const current = data.rentals.find((r) => r.id === v.currentRentalId) ?? null;
+  // The rental it is out on, asked of the rentals (issue #17); an older API says only the moped's own link.
+  const open = v.openRental === undefined ? (v.currentRentalId ? { id: v.currentRentalId, number: '' } : null) : v.openRental;
+  const current = data.rentals.find((r) => r.id === (v.currentRentalId ?? open?.id)) ?? null;
+  // Out on a rental still open while its status says otherwise: the card says so, an owner puts it right.
+  const stray = open && v.state !== 'rented' ? open : null;
   const locked = v.state === 'rented' && !!v.currentRentalId;
   // What the sheet may offer — the rule the server refuses by (21.10.2026).
   // Empty for a moped out on a rental and for a sold one: nothing to open.
-  const targets = manualStateTargets(v.state, { mayWriteOff: can('deposit.decide'), hasRental: !!v.currentRentalId });
+  // For a stray one, an owner's «В аренде по R-…» alone (issue #17).
+  const targets = manualStateTargets(v.state, { mayWriteOff: can('deposit.decide'), hasRental: open != null });
   const openJob = data.serviceJobs.find((j) => j.status === 'open') ?? null;
 
   // One action, and which one depends on where the moped is (U4). A card
@@ -144,9 +151,14 @@ export function VehiclePage() {
   // out moves it to the other park, which is an owner's decision, and steps
   // back to a plain pill (21.10.2026). A manager gets no button here: the
   // hand-over would refuse him (`vehicle_in_sale_pool`).
-  const forSale = v.state === 'available' && v.pool === 'sale';
+  const forSale = v.state === 'available' && v.pool === 'sale' && !stray;
+  // A stray moped is handed to nobody and sold to nobody: its one step is the owner's correction.
   const primary: { label: string; to?: string; onClick?: () => void } | null =
-    forSale
+    stray
+      ? targets.includes('rented')
+        ? { label: t.stray.rentedBy(stray.number), onClick: () => setStateSheet({ prefer: 'rented' }) }
+        : null
+      : forSale
       ? can('sales.manage')
         ? { label: t.sales.newSale, to: `/sales/new?vehicle=${v.id}` }
         : null
@@ -173,7 +185,7 @@ export function VehiclePage() {
             className="pill pill-sm"
             onClick={() => setStateSheet({})}
             disabled={targets.length === 0}
-            title={locked ? t.vehicle.rentedLock : v.state === 'sold' ? t.vehicleW4.soldNote : undefined}
+            title={locked ? t.vehicle.rentedLock : stray && targets.length === 0 ? t.stray.ownerFixes : v.state === 'sold' ? t.vehicleW4.soldNote : undefined}
           >
             {t.actions.changeState}
           </button>
@@ -183,7 +195,7 @@ export function VehiclePage() {
         )}
         {/* Selling starts from the moped as often as from the "+" (§3.1); on a
             moped for sale the two trade places with the main button. */}
-        {v.state === 'available' && !forSale && can('sales.manage') && (
+        {v.state === 'available' && !forSale && !stray && can('sales.manage') && (
           <Link className="pill pill-sm" to={`/sales/new?vehicle=${v.id}`}>
             {t.sell.title}
           </Link>
@@ -218,7 +230,14 @@ export function VehiclePage() {
         />
       )}
 
-      {stateSheet && <StateSheet v={v} targets={targets} prefer={stateSheet.prefer} onClose={() => setStateSheet(null)} onDone={reload} />}
+      {stateSheet && <StateSheet v={v} targets={targets} rental={open} prefer={stateSheet.prefer} onClose={() => setStateSheet(null)} onDone={reload} />}
+
+      {/* Out on a rental still open while its status says otherwise (issue #17): said where it is read. */}
+      {stray && (
+        <p className="hint warn-text">
+          {t.stray.card(stray.number, t.states[v.state])} {targets.length === 0 && t.stray.ownerFixes}
+        </p>
+      )}
 
       {/* On a phone the one action lives at the bottom, over the tab bar,
           where a thumb already is (ux.md, principle 2). */}
@@ -523,7 +542,22 @@ function PlaceRow({ v, onDone }: { v: Card['vehicle']; onDone: () => void }) {
  * first state on offer: a sheet that kept the last choice once held the state
  * the moped had just been moved to, lit nowhere, and sent it (21.10.2026).
  */
-function StateSheet({ v, targets, prefer, onClose, onDone }: { v: Card['vehicle']; targets: VehicleState[]; prefer?: VehicleState; onClose: () => void; onDone: () => void }) {
+function StateSheet({
+  v,
+  targets,
+  rental,
+  prefer,
+  onClose,
+  onDone,
+}: {
+  v: Card['vehicle'];
+  targets: VehicleState[];
+  /** The rental still open on the moped: «В аренде» goes back to it (issue #17). */
+  rental: { id: string; number: string } | null;
+  prefer?: VehicleState;
+  onClose: () => void;
+  onDone: () => void;
+}) {
   const t = useT();
   const first = prefer && targets.includes(prefer) ? prefer : (targets[0] ?? null);
   const [move, setMove] = useState<{ toState: VehicleState | null; reason: string }>({ toState: first, reason: '' });
@@ -549,11 +583,11 @@ function StateSheet({ v, targets, prefer, onClose, onDone }: { v: Card['vehicle'
           throw new ApiError(400, 'missing_field', 'Write-off is not confirmed.', { field: 'writeOff', fieldText: t.vehicleW4.writeOffAsk });
         }
         await api.post(`/api/fleet/${v.id}/state`, { toState, reason: move.reason }, { key });
-        return { toast: { text: t.vehicle.stateChanged(t.states[toState]) } };
+        return { toast: { text: t.vehicle.stateChanged(toState === 'rented' && rental ? t.stray.rentedBy(rental.number) : t.states[toState]) } };
       }}
       onDone={onDone}
     >
-      <StatePick now={v.state} targets={targets} value={toState} onPick={(s) => setMove({ ...move, toState: s })} />
+      <StatePick now={v.state} targets={targets} rental={rental} value={toState} onPick={(s) => setMove({ ...move, toState: s })} />
       {toState === 'out' && (
         <Field label={t.vehicleW4.writeOffTitle} name="writeOff">
           <label className="check">
@@ -577,9 +611,24 @@ function StateSheet({ v, targets, prefer, onClose, onDone }: { v: Card['vehicle'
  * badge to the first pill. Sold and rented are never on offer; the line
  * under the pills says why.
  */
-function StatePick({ now, targets, value, onPick }: { now: VehicleState; targets: VehicleState[]; value: VehicleState | null; onPick: (s: VehicleState) => void }) {
+function StatePick({
+  now,
+  targets,
+  rental,
+  value,
+  onPick,
+}: {
+  now: VehicleState;
+  targets: VehicleState[];
+  rental: { number: string } | null;
+  value: VehicleState | null;
+  onPick: (s: VehicleState) => void;
+}) {
   const t = useT();
   const error = useFieldError('toState');
+  // «В аренде по R-…»: offered only for a moped whose rental is open (issue #17), so it names that rental.
+  const back = targets.includes('rented') && rental ? rental : null;
+  const word = (s: VehicleState): string => (s === 'rented' && back ? t.stray.rentedBy(back.number) : t.states[s]);
   return (
     <div className={`field ${error ? 'field-bad' : ''}`} data-field="toState">
       <span className="lbl">{t.fleet.state}</span>
@@ -595,13 +644,13 @@ function StatePick({ now, targets, value, onPick }: { now: VehicleState; targets
           <span className="chips" role="radiogroup" aria-label={t.vehicle.toState}>
             {targets.map((s) => (
               <button key={s} type="button" role="radio" aria-checked={value === s} className={`pill pill-sm ${value === s ? 'on' : ''}`} onClick={() => onPick(s)}>
-                {t.states[s]}
+                {word(s)}
               </button>
             ))}
           </span>
         </span>
       </div>
-      {error ? <span className="field-err">{error}</span> : <span className="hint muted">{t.vehicleW4.soldNote}</span>}
+      {error ? <span className="field-err">{error}</span> : <span className="hint muted">{back ? t.stray.sheetHint(back.number) : t.vehicleW4.soldNote}</span>}
     </div>
   );
 }

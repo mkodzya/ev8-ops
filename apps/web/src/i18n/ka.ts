@@ -36,6 +36,8 @@ import { menuKa } from './menu.js';
 import { goodsKa } from './goods.js';
 import { incKa } from './inbound.js';
 import { dupKa } from './card-duplicate.js';
+import { rentedFreeKa } from './rented-free.js';
+import { peopleDeleteKa } from './people-delete.js';
 import type { Dict } from './en.js';
 
 // Typed as Dict: a missing or misspelled key fails the build.
@@ -834,8 +836,8 @@ export const ka: Dict = {
     linked: 'დაკავშირდა ხელით გატარებულ გადახდასთან',
     other: 'სხვა',
     more: 'კიდევ',
-    notOurs: 'ეს ჩვენი არ არის',
-    notOursTitle: 'ეს კლიენტის გადახდა არ არის',
+    notOurs: 'რიგიდან ამოღება',
+    notOursTitle: 'ხაზის რიგიდან ამოღება',
     notOursReason: 'რა არის სინამდვილეში',
     notOursHint: 'მიზეზი სავალდებულოა; ხაზი რიგიდან წავა, ჟურნალში — ვინ და რატომ.',
     notOursDone: 'რიგიდან ამოღებულია',
@@ -892,7 +894,7 @@ export const ka: Dict = {
     asideTitle: 'რიგიდან ამოღებული ხაზები',
     asideSub: (n: number) => `თვეში · ${n}`,
     asideEmpty: 'ამ თვეში რიგიდან არაფერი ამოღებულა.',
-    asideNotOurs: (reason: string) => `ეს ჩვენი არ არის: ${reason}`,
+    asideNotOurs: (reason: string) => `ამოღებულია: ${reason}`,
     asideExpense: 'კომპანიის ხარჯი.',
     asideBy: (who: string, day: string) => `${who}, ${day}`,
     restore: 'რიგში დაბრუნება',
@@ -1338,7 +1340,7 @@ export const ka: Dict = {
       not_outgoing: 'პარტნიორის მიერ გატანილად მხოლოდ ანგარიშიდან გასული თანხის მონიშვნაა შესაძლებელი.',
       not_returned: 'დაბრუნების აქტი გამოჩნდება ქირაობის დახურვის შემდეგ.',
       not_set_aside: 'ეს ხაზი რიგიდან ამოღებული არ არის. განაახლეთ სია.',
-      no_twin: 'ეს ხაზი სხვა ხაზს არ იმეორებს. თუ ის ჩვენი არ არის — «ეს ჩვენი არ არის», მიზეზით.',
+      no_twin: 'ეს ხაზი სხვა ხაზს არ იმეორებს. თუ ის აღრიცხვაში არ არის საჭირო — «რიგიდან ამოღება», მიზეზით.',
       not_yours: 'ამ ცვლილების გაუქმება შეუძლია მხოლოდ მას, ვინც ის გააკეთა.',
       nothing_to_correct: 'ნაშთი უკვე ასეთია.',
       nothing_to_undo: 'ამ მოპედს არ აქვს გადაყვანა, რომლის გაუქმებაც შესაძლებელია.',
@@ -1427,10 +1429,13 @@ export const ka: Dict = {
       unreadable_statement: 'ამონაწერის ფაილი არ იკითხება. ატვირთეთ ბანკის ექსპორტი (BOG ან TBC) ცვლილებების გარეშე.',
       use_rental: 'მოპედი ქირაში გადადის მხოლოდ გაცემის გზით.',
       use_status_route: 'სტატუსი იცვლება ცალკე მოქმედებით, მიზეზით.',
+      user_has_records: 'ამ ადამიანზე უკვე რაღაც ჩაწერილია — მისი მხოლოდ გამორთვაა შესაძლებელი.',
       user_not_found: 'მომხმარებელი ვერ მოიძებნა.',
+      user_signed_in: 'ამ შესვლით უკვე შესულან — მისი მხოლოდ გამორთვაა შესაძლებელი.',
       vehicle_already_set: 'ამ ქირაობას მოპედი უკვე აქვს. მის შესაცვლელად — «მოპედის შეცვლა» მენიუში.',
       vehicle_gone: 'მოპედი პარკიდან გავიდა. დაბრუნება შესაძლებელია უკან შესყიდვით.',
       vehicle_in_rent_pool: 'მოპედის დანიშნულებაა ქირავნობა: გაყიდვისას დანიშნულება „გაყიდვა“ გახდება.',
+      vehicle_in_rental: 'მოპედი სხვა ღია ქირაობაშია — მისი გაცემა შეუძლებელია. დახურეთ ის ქირაობა ან მოპედის ბარათზე დაუბრუნეთ «ქირაშია».',
       vehicle_in_sale_pool: 'მოპედის დანიშნულებაა გაყიდვა. მისი გაცემა შეუძლია მხოლოდ მფლობელს.',
       vehicle_not_available: 'ამ მოპედის გაცემა ახლა შეუძლებელია: ის თავისუფალი არ არის. გახსენით მოპედი და შეამოწმეთ სტატუსი.',
       vehicle_not_found: 'მოპედი ვერ მოიძებნა.',
@@ -1496,4 +1501,6 @@ export const ka: Dict = {
   ...goodsKa,
   ...incKa,
   ...dupKa,
+  ...rentedFreeKa,
+  ...peopleDeleteKa,
 };
