@@ -20,7 +20,7 @@ export const weekShiftEn = {
     less: 'Discount for these days',
     lessHint: (rate: string, days: number, sum: string) => `By the rate: ${rate} ÷ 7 × ${days} = ${sum}. You decide the sum; 0 — no discount.`,
     /** Paid on the week above its new price: what becomes of it, before it is written. */
-    toCredit: (paid: string, sum: string) => `Paid ${paid} — ${sum} more than the new price: that money becomes rent credit and goes to the next week.`,
+    toCredit: (paid: string, sum: string) => `Paid ${paid} — ${sum} more than the new price: that money becomes the customer’s advance and goes to the next week.`,
     reason: 'Reason',
     reasonHint: 'Required: for example, «paid three days late, with the three days».',
     summary: (seq: number, from: string, to: string, days: number, sum: string) => `Week ${seq} becomes ${from}–${to} (${days} days), ${sum}.`,

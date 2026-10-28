@@ -163,8 +163,10 @@ describe.skipIf(!HAS_DB)('a week at nothing is a paid week (ADR-0017)', () => {
       const c = await card(r.owner, r.id);
       return { cardDebtTetri: c.rental.debtTetri, weeks: c.periods.map((p) => [p.seq, p.amountTetri, p.paidTetri]), owesTetri: (await balance(r.owner, r.customer.id)).owesTetri };
     };
-    // Overdue with nothing owed: the false state this rule would have put on three more screens.
-    expect(await listed(r.owner, r.id)).toMatchObject({ status: 'overdue', overdueDays: 1, debtTetri: 0, paidThrough: addDays(t, -2) });
+    // The stale "paid through" the stored row carries until the roll. It no longer makes the
+    // rental look late with nothing owed: since issue #18 (B4) the list's status and days are
+    // what «Оплаты по графику» says, and the schedule reads the week's money, not this date.
+    expect(await listed(r.owner, r.id)).toMatchObject({ status: 'active', overdueDays: 0, debtTetri: 0, paidThrough: addDays(t, -2) });
     const before = await money();
     expect(before).toEqual({
       cardDebtTetri: 0,

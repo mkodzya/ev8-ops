@@ -37,7 +37,7 @@ export const pickupDateEn = {
       /** `what` — the charge as the card names it: its kind, and its note. */
       charge: (what: string, sum: string) => `${what}: ${sum}`,
       anyCharge: 'charge',
-      credit: (sum: string) => `rent credit: ${sum}`,
+      credit: (sum: string) => `customer’s advance: ${sum}`,
     },
     /** The journal's line: each figure by its name. */
     journal: {
@@ -79,7 +79,7 @@ export const pickupDateEn = {
     askWhy: 'The rental began less than three weeks ago — the deposit may have come with the first money.',
     cameAfter: 'Yes, it came later',
     cameBefore: 'No, it was received earlier',
-    afterHint: 'Then leave it unmarked and record the money as a payment: a bank line in «Sort», cash by «Take money». The deposit is paid off first.',
+    afterHint: 'Then leave it unmarked and record the money as a payment: a bank line in «Sort», cash by «Take the payment». The deposit is paid off first.',
   },
 };
 
@@ -114,7 +114,7 @@ export const pickupDateRu: typeof pickupDateEn = {
       week: (seq, sum) => `неделя ${seq}: ${sum}`,
       charge: (what, sum) => `${what}: ${sum}`,
       anyCharge: 'начисление',
-      credit: (sum) => `аванс по аренде: ${sum}`,
+      credit: (sum) => `аванс клиента: ${sum}`,
     },
     journal: {
       pickedUpOn: 'выдача',
@@ -153,7 +153,7 @@ export const pickupDateRu: typeof pickupDateEn = {
     askWhy: 'Аренда началась меньше трёх недель назад — залог мог прийти с первыми деньгами.',
     cameAfter: 'Да, пришёл позже',
     cameBefore: 'Нет, получен раньше',
-    afterHint: 'Тогда не отмечайте его, а проведите деньги платежом: строку банка — в «Разобрать», наличные — «Принять деньги». Залог погасится первым.',
+    afterHint: 'Тогда не отмечайте его, а проведите деньги платежом: строку банка — в «Разобрать», наличные — «Принять оплату». Залог погасится первым.',
   },
 };
 
@@ -227,6 +227,6 @@ export const pickupDateKa: typeof pickupDateEn = {
     askWhy: 'ქირაობა სამ კვირაზე ნაკლები ხნის წინ დაიწყო — დეპოზიტი შესაძლოა პირველ თანხასთან ერთად მოვიდა.',
     cameAfter: 'დიახ, მოგვიანებით მოვიდა',
     cameBefore: 'არა, ადრე იყო მიღებული',
-    afterHint: 'მაშინ არ მონიშნოთ და თანხა გადახდად ჩაწერეთ: ბანკის ხაზი — «დასახარისხებელში», ნაღდი — «ფულის მიღებით». დეპოზიტი პირველი დაიფარება.',
+    afterHint: 'მაშინ არ მონიშნოთ და თანხა გადახდად ჩაწერეთ: ბანკის ხაზი — «დასახარისხებელში», ნაღდი — «გადახდის მიღებით». დეპოზიტი პირველი დაიფარება.',
   },
 };

@@ -32,7 +32,6 @@ interface Migration {
     running: { count: number; amountTetri: number };
   };
   rentalsWithoutVin: { count: number; rows: { id: string; number: string }[] };
-  vehiclesInServiceWithoutJob: { count: number; rows: { id: string; vin: string }[] };
 }
 
 describe.skipIf(!HAS_DB)('Settings → Transfer (wave 6 §3.6–3.7)', () => {
@@ -135,20 +134,42 @@ describe.skipIf(!HAS_DB)('Settings → Transfer (wave 6 §3.6–3.7)', () => {
     expect(again.statusCode).toBe(404);
   });
 
-  it('a moped Odoo called "in service" goes back to the fleet with a reason (crit. 27)', async () => {
+  // A block of «Ремонты» since issue #18 (B6): it was the third list of this tab.
+  it('a moped «in repair» with no repair goes back to the fleet with a reason, from «Ремонты» (crit. 27; issue #18 B6)', async () => {
     const owner = await loginAs('owner');
+    const manager = await loginAs('manager');
     const { prisma, vehicle } = await transferred();
     await prisma.vehicle.update({ where: { id: vehicle.id }, data: { state: 'service' } });
 
-    const before = json<Migration>(await call(owner, 'GET', '/api/migration'));
-    expect(before.vehiclesInServiceWithoutJob.rows.map((r) => r.id)).toContain(vehicle.id);
+    const listed = async (who: string) => json<{ vehicles: { id: string; vin: string }[] }>(await call(who, 'GET', '/api/service/without-repair')).vehicles.map((v) => v.id);
+    // Whoever moves a moped by hand reads it — the owner and the manager; a mechanic does not.
+    expect(await listed(owner)).toContain(vehicle.id);
+    expect(await listed(manager)).toContain(vehicle.id);
+    expect((await call(await loginAs('mechanic'), 'GET', '/api/service/without-repair')).statusCode).toBe(403);
+    // «До EV8 Ops» no longer carries it.
+    expect(json<Record<string, unknown>>(await call(owner, 'GET', '/api/migration'))).not.toHaveProperty('vehiclesInServiceWithoutJob');
 
-    const res = await call(owner, 'POST', `/api/migration/vehicles/${vehicle.id}/back`, { reason: 'ТЕСТ ремонта не было' });
+    const res = await call(manager, 'POST', `/api/service/without-repair/${vehicle.id}/back`, { reason: 'ТЕСТ ремонта не было' });
     expect(res.statusCode).toBe(200);
     const v = await prisma.vehicle.findUniqueOrThrow({ where: { id: vehicle.id } });
     expect(v.state).toBe('available');
     const event = await prisma.vehicleEvent.findFirst({ where: { vehicleId: vehicle.id }, orderBy: { createdAt: 'desc' } });
     expect(event?.reason).toBe('ТЕСТ ремонта не было');
+    expect(await listed(owner)).not.toContain(vehicle.id);
+  });
+
+  // Issue #18 (B6): the tab hides when its two lists are empty; the menu's counts say how much is left.
+  it('counts what «До EV8 Ops» still asks — its two lists — for the owner, and for nobody else', async () => {
+    const owner = await loginAs('owner');
+    const counts = async (who: string) => json<{ migration: number | null }>(await call(who, 'GET', '/api/nav/counts'));
+    const a = await transferred();
+    const m = json<Migration>(await call(owner, 'GET', '/api/migration'));
+    expect(m.deposits.due.rows.map((r) => r.id)).toContain(a.deposit.id);
+    // The suites share one database: the count is at least this deposit, and the same number the lists give.
+    const { migrationLeft } = await import('../src/routes/migration.js');
+    expect((await counts(owner)).migration).toBeGreaterThanOrEqual(1);
+    expect(await migrationLeft()).toBeGreaterThanOrEqual(m.deposits.due.count);
+    expect((await counts(await loginAs('manager'))).migration).toBeNull();
   });
 
   /**

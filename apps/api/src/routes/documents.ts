@@ -233,7 +233,8 @@ export function documentRoutes(app: FastifyInstance): void {
    * The sale's document (§3.1). It follows the sale until it is signed, and
    * from then on it is what the buyer signed and does not change (B4-06).
    */
-  app.get<{ Params: { id: string } }>('/api/sales/:id/contract.pdf', { config: { scope: 'sales.manage' } }, async (req, reply) => {
+  // Whoever makes a sale prints its paper and has it signed — a manager too since issue #18 (B8).
+  app.get<{ Params: { id: string } }>('/api/sales/:id/contract.pdf', { config: { scope: 'sales.create' } }, async (req, reply) => {
     const actor = actorOf(req);
     const existing = await prisma.storedFile.findFirst({
       where: { saleId: req.params.id, kind: 'pdf', docKind: 'sale', archived: false },
@@ -340,7 +341,7 @@ export function signRoutes(app: FastifyInstance): void {
   /** The buyer signs the sale on the screen, schedule and all (D17, crit. 9). */
   app.post<{ Params: { id: string }; Body: Record<string, unknown> }>(
     '/api/sales/:id/contract/sign',
-    { config: { scope: 'sales.manage' }, bodyLimit: 4 * 1024 * 1024 },
+    { config: { scope: 'sales.create' }, bodyLimit: 4 * 1024 * 1024 },
     async (req, reply) => {
       const actor = actorOf(req);
       const b = req.body ?? {};

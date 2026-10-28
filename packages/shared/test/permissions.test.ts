@@ -39,6 +39,14 @@ describe('roles and permissions (redesign §2.1, Mika 17.09.2026; ADR-0033, 20.1
     expect(PIN_SESSION_PERMISSIONS).not.toContain('goods.sell');
   });
 
+  it('a manager sells a moped; cancelling a sale, buying back and moving its day stay an owner’s (issue #18 B8, Mika’s «Да, без отмены»)', () => {
+    expect(roleCan('owner', 'sales.create')).toBe(true);
+    expect(roleCan('manager', 'sales.create')).toBe(true);
+    expect(roleCan('manager', 'sales.manage')).toBe(false);
+    for (const role of ['mechanic', 'chief_mechanic'] as const) expect(roleCan(role, 'sales.create'), role).toBe(false);
+    expect(PIN_SESSION_PERMISSIONS).not.toContain('sales.create');
+  });
+
   it('a manager moves a renter’s latest week too; a mechanic does not (ADR-0041, addendum of 23.10.2026)', () => {
     expect(roleCan('owner', 'rental.week.shift')).toBe(true);
     expect(roleCan('manager', 'rental.week.shift')).toBe(true);

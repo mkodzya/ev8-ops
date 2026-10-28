@@ -149,6 +149,8 @@ export function App() {
         <Route path="rentals" element={<RentalsPage />} />
         <Route path="rentals/new" element={<PickupWizard />} />
         <Route path="rentals/return" element={<Require perm="rental.return"><ReturnPickPage /></Require>} />
+        {/* «Заменить мопед» from the "+" (issue #18, B2): whose rental, then the swap wizard. */}
+        <Route path="rentals/swap" element={<Require perm="rental.return"><ReturnPickPage mode="swap" /></Require>} />
         <Route path="rentals/:id" element={<RentalPage />} />
         <Route path="rentals/:id/return" element={<ReturnWizard />} />
         <Route path="rentals/:id/swap" element={<Require perm="rental.return"><SwapWizard /></Require>} />
@@ -156,8 +158,8 @@ export function App() {
         <Route path="fleet" element={<FleetPage />} />
         <Route path="fleet/models" element={<ModelsPage />} />
         <Route path="fleet/models/:id" element={<ModelPage />} />
+        {/* The points live here alone since issue #18 (B6); `/settings/points` is an old address now (REDIRECTS). */}
         <Route path="fleet/points" element={<Require perm="settings.manage"><PointsPage /></Require>} />
-        <Route path="settings/points" element={<Require perm="settings.manage"><PointsPage /></Require>} />
         <Route path="fleet/:id" element={<VehiclePage />} />
         {/* A sticker's QR: ops.ev8.ge/m/EV-007 (Mika, 15.10.2026). */}
         <Route path="m/:code" element={<MopedByNumber />} />
@@ -192,7 +194,8 @@ export function App() {
         <Route path="money/deposits" element={<Require perm="payments.view"><DepositsPage /></Require>} />
 
         <Route path="sales" element={<SalesPage />} />
-        <Route path="sales/new" element={<Require perm="sales.manage"><SaleWizard /></Require>} />
+        {/* A manager sells a moped too since issue #18 (B8); cancelling and buying back stay an owner's. */}
+        <Route path="sales/new" element={<Require perm="sales.create"><SaleWizard /></Require>} />
         {/* Goods sold over the counter (issue #11, ADR-0045): a static segment, so it wins over sales/:id. */}
         <Route path="sales/goods" element={<GoodsSalesPage />} />
         <Route path="sales/goods/new" element={<Require perm="goods.sell"><GoodsSaleWizard /></Require>} />

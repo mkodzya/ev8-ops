@@ -1,7 +1,8 @@
-import { actsInOrder, contractSignedOf, contractState, fleetNumber, mopedLegs, rentDueOn, todayISO, weeksAnchor } from '@ev8/shared';
+import { actsInOrder, contractSignedOf, contractState, fleetNumber, mopedLegs, rentDueOn, statusBySchedule, todayISO, weeksAnchor } from '@ev8/shared';
 import type { FastifyInstance } from 'fastify';
 import { mopedActOf } from '../lib/acts.js';
 import { dayOf, isoDate } from '../lib/dates.js';
+import { scheduleToday } from '../lib/calendar.js';
 import { debtsOf, rentalDueToday } from '../lib/debt.js';
 import { UNDO_RETURN_MS } from '../lib/rentals.js';
 import { driveOfRental } from '../lib/driveScan.js';
@@ -12,7 +13,10 @@ import { notFound } from '../lib/errors.js';
 import { mayTotal } from '../lib/guard.js';
 
 // Rentals, read side (overdue and due-today as signals — ADR-0017, which
-// replaces RNT-03; RNT-06 the no-VIN list).
+// replaces RNT-03; RNT-06 the no-VIN list). Since issue #18 (B4) a running
+// rental is late or due today by what «Оплаты по графику» says of it — the
+// segments of the list, its pill and its days — so the list and the calendar
+// cannot disagree about money the night has not placed yet.
 
 export function rentalRoutes(app: FastifyInstance): void {
   app.get('/api/rentals', { config: { scope: 'fleet.view' } }, async (req) => {
@@ -33,7 +37,7 @@ export function rentalRoutes(app: FastifyInstance): void {
     });
     // A rental's debt is its part of its customer's one figure: its unpaid weeks and deposit.
     // Asked for the same day the statuses below are read for: one clock for one answer.
-    const debts = await debtsOf(rentals.map((r) => r.customerId), today);
+    const [debts, schedule] = await Promise.all([debtsOf(rentals.map((r) => r.customerId), today), scheduleToday(today)]);
     const debtOfRental = (customerId: string, rentalId: string) =>
       (debts.get(customerId)?.parts ?? []).filter((p) => p.id === rentalId && (p.kind === 'rent' || p.kind === 'deposit' || p.kind === 'charge')).reduce((n, p) => n + p.owesTetri, 0);
     return {
@@ -46,8 +50,11 @@ export function rentalRoutes(app: FastifyInstance): void {
       rentals: rentals.map((r) => {
         const pickedUpOn = isoDate(r.pickedUpOn);
         const paidThrough = isoDate(r.paidThrough);
-        // What it is called today and how many days it is late: the one function every route asks.
-        const { status, overdueDays } = rentStateOf(r, today);
+        // What it is called today and how many days it is late: for a running rental, what the
+        // schedule says (issue #18, B4) — the days of its oldest late week, the calendar's own.
+        const pay = schedule.pay.get(r.id);
+        const status = statusBySchedule(rentStateOf(r, today).status, pay);
+        const overdueDays = status === 'overdue' ? (pay?.days ?? 0) : 0;
         return {
           id: r.id,
           number: r.number,
@@ -144,8 +151,10 @@ export function rentalRoutes(app: FastifyInstance): void {
     const today = todayISO(new Date(), env.TZ);
     const pickedUpOn = isoDate(r.pickedUpOn);
     const paidThrough = isoDate(r.paidThrough);
-    // This rental's part of its customer's one debt figure (B7-02): weeks and an unpaid deposit (QA-W2-01).
-    const debt = (await debtsOf([r.customerId], today)).get(r.customerId);
+    // This rental's part of its customer's one debt figure (B7-02): weeks and an unpaid deposit (QA-W2-01);
+    // and what the schedule says of it, the list's rule (issue #18, B4).
+    const [debts, schedule] = await Promise.all([debtsOf([r.customerId], today), scheduleToday(today)]);
+    const debt = debts.get(r.customerId);
     const debtTetri = (debt?.parts ?? []).filter((p) => p.id === r.id && (p.kind === 'rent' || p.kind === 'deposit' || p.kind === 'charge')).reduce((n, p) => n + p.owesTetri, 0);
     return {
       rental: {
@@ -154,7 +163,7 @@ export function rentalRoutes(app: FastifyInstance): void {
         debtTetri,
         dueTodayTetri: rentalDueToday(debt, r.id),
         odooName: r.odooName,
-        status: rentStateOf(r, today).status,
+        status: statusBySchedule(rentStateOf(r, today).status, schedule.pay.get(r.id)),
         storedStatus: r.status,
         customer: { id: r.customer.id, name: r.customer.name, phone: r.customer.phone },
         vehicle: r.vehicle ? { id: r.vehicle.id, vin: r.vehicle.vin, fleetNo: r.vehicle.fleetNo, model: `${r.vehicle.model.brand} ${r.vehicle.model.name}` } : null,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { GROUPS, REDIRECTS, groupHeadingForRole, movedTo } from '../src/index.js';
+import { GROUPS, REDIRECTS, ROLE_PERMISSIONS, actionsFor, groupHeadingForRole, movedTo, tabsShown, type NavCounts } from '../src/index.js';
 import { actionsForRole, homePathForRole, menuSectionsForRole, phoneTabsForRole, sectionOfPath, sectionsForRole, tabsForRole } from './navigation-helpers.js';
 
 describe('the structure each role sees (wave 1 §3.2; issue #15, ADR-0048)', () => {
@@ -45,11 +45,20 @@ describe('the structure each role sees (wave 1 §3.2; issue #15, ADR-0048)', () 
     expect(menuSectionsForRole('manager')).not.toContain('money');
   });
 
-  it('offers the owner seven actions under + and the manager six (wave 5 §3.7; issue #11)', () => {
-    expect(actionsForRole('owner').map((a) => a.id)).toEqual(['pickup', 'return', 'takeMoney', 'newCustomer', 'openRepair', 'sell', 'sellGoods']);
+  it('offers the owner eight actions under + and the manager eight (wave 5 §3.7; issue #11; issue #18 B2, B8)', () => {
+    // «Заменить мопед» right after the return (issue #18, B2): the swap wizard of ADR-0040.
+    expect(actionsForRole('owner').map((a) => a.id)).toEqual(['pickup', 'return', 'swap', 'takeMoney', 'newCustomer', 'openRepair', 'sell', 'sellGoods']);
     // A manager reports a breakdown; opening the repair itself is an owner's.
-    // He sells a part or a charger over the counter, never a moped (ADR-0045).
-    expect(actionsForRole('manager').map((a) => a.id)).toEqual(['pickup', 'return', 'takeCash', 'newCustomer', 'reportBreak', 'sellGoods']);
+    // He sells a part or a charger over the counter (ADR-0045), and since issue #18 a moped too.
+    expect(actionsForRole('manager').map((a) => a.id)).toEqual(['pickup', 'return', 'swap', 'takeCash', 'newCustomer', 'reportBreak', 'sell', 'sellGoods']);
+  });
+
+  it('asks both rights of the swap — it is a return and a hand-over in one (issue #18 B2)', () => {
+    const swap = (permissions: Parameters<typeof actionsFor>[0]) => actionsFor(permissions).some((a) => a.id === 'swap');
+    expect(swap(['rental.create', 'rental.return'])).toBe(true);
+    expect(swap(['rental.create'])).toBe(false);
+    expect(swap(['rental.return'])).toBe(false);
+    expect(actionsFor(ROLE_PERMISSIONS.owner).find((a) => a.id === 'swap')?.path).toBe('/rentals/swap');
   });
 
   it('splits Sales into the mopeds and the goods, for both roles (issue #11)', () => {
@@ -70,7 +79,9 @@ describe('the structure each role sees (wave 1 §3.2; issue #15, ADR-0048)', () 
     expect(tabsForRole('money', 'owner').map((t) => t.id)).toEqual(['payments', 'statements', 'deposits']);
     expect(tabsForRole('money', 'manager')).toEqual([]);
     expect(tabsForRole('cash', 'manager').map((t) => t.id)).toEqual(['till', 'mine']);
-    expect(tabsForRole('cash', 'owner').map((t) => t.id)).toEqual(['till', 'mine']);
+    // «Мои платежи» repeated «Деньги → Платежи» for an owner (issue #18, B6): whoever reads Money has his there.
+    expect(tabsForRole('cash', 'owner').map((t) => t.id)).toEqual(['till']);
+    expect(sectionOfPath('/money/mine', ['payments.view'])).toBe('cash');
   });
 
   // Issue #15: «Оплаты по графику» was «Деньги → Календарь», an owner's only.
@@ -148,17 +159,32 @@ describe('the structure each role sees (wave 1 §3.2; issue #15, ADR-0048)', () 
     expect(sectionOfPath('/purchases/suppliers')).toBe('purchases');
   });
 
-  // Wave 6 §3.4–3.9. Settings grew into tabs; the points did not move with
-  // them — one list, one address (designer, 21.09.2026).
-  // The expense categories joined them on 15.10.2026 (migration 0046).
-  it('gives settings seven tabs, and its points stay in Settings (Mika, 29.09.2026)', () => {
+  // Wave 6 §3.4–3.9. Settings grew into tabs. The expense categories joined
+  // them on 15.10.2026 (migration 0046). The points were a tab here as well
+  // (Mika, 29.09.2026) until issue #18 (B6): one list, in «Мопеды → Точки».
+  it('gives settings its tabs without the points, which live in «Мопеды → Точки» alone (issue #18 B6)', () => {
     // «Поступления» beside «Расходы»: the categories of other income (issue #13, migration 0069).
-    expect(tabsForRole('settings', 'owner').map((t) => t.id)).toEqual(['people', 'points', 'rental', 'repair', 'expenses', 'incoming', 'drive', 'journal', 'migration', 'login']);
-    expect(tabsForRole('settings', 'owner').find((t) => t.id === 'points')?.path).toBe('/settings/points');
-    expect(sectionOfPath('/settings/points')).toBe('settings');
-    // Fleet keeps its own tab to the same page.
+    // «Статьи расходов» and «Статьи доходов» (issue #18 B5): tabs of their own, not the reports' «Расходы» and «Поступления».
+    expect(tabsForRole('settings', 'owner').map((t) => t.id)).toEqual(['people', 'rental', 'repair', 'expenseItems', 'incomeItems', 'drive', 'journal', 'migration', 'login']);
+    expect(tabsForRole('settings', 'owner').filter((t) => t.id === 'expenseItems' || t.id === 'incomeItems').map((t) => t.path)).toEqual(['/settings/expenses', '/settings/incoming']);
     expect(tabsForRole('fleet', 'owner').find((t) => t.id === 'points')?.path).toBe('/fleet/points');
+    // A bookmark on the old address still arrives.
+    expect(movedTo('/settings/points', '')).toBe('/fleet/points');
     expect(tabsForRole('settings', 'manager')).toEqual([]);
+  });
+
+  // Issue #18 (B6): «До EV8 Ops» is drawn while its lists have something in them.
+  it('hides «До EV8 Ops» once nothing is left in it, but not before the counts come nor while it is open', () => {
+    const owner = ROLE_PERMISSIONS.owner;
+    const counts = (migration: number | null): NavCounts => ({ schedule: null, sort: null, till: null, migration });
+    const ids = (c: NavCounts | null, at = '/settings') => tabsShown('settings', owner, c, at).map((t) => t.id);
+    expect(ids(counts(0))).not.toContain('migration');
+    expect(ids(counts(3))).toContain('migration');
+    expect(ids(null)).toContain('migration');
+    expect(ids(counts(null))).toContain('migration');
+    expect(ids(counts(0), '/settings/migration')).toContain('migration');
+    // No other tab is hidden by it.
+    expect(ids(counts(0))).toEqual(tabsForRole('settings', 'owner').map((t) => t.id).filter((id) => id !== 'migration'));
   });
 
   // ADR-0033: a mechanic and a chief mechanic see the repairs and nothing else,

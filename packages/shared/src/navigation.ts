@@ -53,6 +53,13 @@ export interface Section {
   noneOf?: readonly Permission[];
 }
 
+/** Who sees a section, a tab or an action: any of `anyOf` (none — everybody), all of `allOf`, none of `noneOf`. */
+export interface NavRule {
+  anyOf: readonly Permission[];
+  allOf?: readonly Permission[];
+  noneOf?: readonly Permission[];
+}
+
 export const SECTIONS: readonly Section[] = [
   // "Today" is the front office's queue — rentals, money, the yard. A mechanic
   // has none of it; their first screen is the repairs (ADR-0033).
@@ -82,8 +89,10 @@ export const SECTIONS: readonly Section[] = [
 
 export const GROUPS: readonly GroupId[] = ['daily', 'fleet', 'trade', 'manage'];
 
-const allowed = (s: { anyOf: readonly Permission[]; noneOf?: readonly Permission[] }, permissions: readonly Permission[]) =>
-  (s.anyOf.length === 0 || s.anyOf.some((p) => permissions.includes(p))) && !(s.noneOf ?? []).some((p) => permissions.includes(p));
+const allowed = (s: NavRule, permissions: readonly Permission[]) =>
+  (s.anyOf.length === 0 || s.anyOf.some((p) => permissions.includes(p))) &&
+  (s.allOf ?? []).every((p) => permissions.includes(p)) &&
+  !(s.noneOf ?? []).some((p) => permissions.includes(p));
 
 export function sectionsFor(permissions: readonly Permission[]): Section[] {
   return SECTIONS.filter((s) => allowed(s, permissions));
@@ -147,6 +156,12 @@ export interface NavCounts {
   sort: { in: number; out: number | null } | null;
   /** Cash handed over and waiting for an owner. */
   till: number | null;
+  /**
+   * What «Настройки → До EV8 Ops» still asks: deposits brought over with no
+   * decision and rentals brought over with no VIN (issue #18, B6). Nought
+   * hides the tab (`tabsShown`); null — not counted for this person.
+   */
+  migration: number | null;
 }
 
 export type TabId =
@@ -173,6 +188,10 @@ export type TabId =
   | 'migration'
   | 'login'
   | 'expenses'
+  // Settings' «Статьи расходов» and «Статьи доходов» (issue #18, B5): the
+  // reports' «Расходы» and «Поступления» are other screens with other words.
+  | 'expenseItems'
+  | 'incomeItems'
   | 'drive'
   | 'orders'
   | 'suppliers'
@@ -195,10 +214,11 @@ export type TabId =
   | 'customers';
 
 /** Tabs inside a section, in the address (wave 1 §3.2). */
-export const SECTION_TABS: Partial<Record<SectionId, readonly { id: TabId; path: string; anyOf: readonly Permission[]; noneOf?: readonly Permission[] }[]>> = {
+export const SECTION_TABS: Partial<Record<SectionId, readonly ({ id: TabId; path: string } & NavRule)[]>> = {
   fleet: [
     { id: 'vehicles', path: '/fleet', anyOf: ['fleet.view'] },
     { id: 'models', path: '/fleet/models', anyOf: ['fleet.view'] },
+    // The one place of the points since issue #18 (B6): Settings had a tab to the same page.
     { id: 'points', path: '/fleet/points', anyOf: ['settings.manage'] },
   ],
   service: [
@@ -230,9 +250,12 @@ export const SECTION_TABS: Partial<Record<SectionId, readonly { id: TabId; path:
   ],
   // The till by person and one's own payments: a manager's money, and since
   // issue #15 an owner's daily section too — he accepts the cash handed over.
+  // «Мои платежи» is not an owner's tab since issue #18 (B6): whoever reads
+  // «Деньги → Платежи» has his own payments there, filtered, and a second
+  // list of the same money was a duplicate (the director's audit, 25.10.2026).
   cash: [
     { id: 'till', path: '/money/cash', anyOf: ['cash.record'] },
-    { id: 'mine', path: '/money/mine', anyOf: ['cash.record'] },
+    { id: 'mine', path: '/money/mine', anyOf: ['cash.record'], noneOf: ['payments.view'] },
   ],
   // The customers beside the rentals (issue #15): they were in the avatar menu.
   rentals: [
@@ -247,22 +270,20 @@ export const SECTION_TABS: Partial<Record<SectionId, readonly { id: TabId; path:
     { id: 'deposits', path: '/money/deposits', anyOf: ['payments.view'] },
   ],
   // Settings grew from one page to six tabs in wave 6 (§3.4–3.9): the people,
-  // the points, what a hand-over proposes, the journal, what the move from
-  // Odoo left, and the rules of signing in.
+  // what a hand-over proposes, the journal, what the move from Odoo left, and
+  // the rules of signing in. The points were a tab here too (Mika, 29.09.2026)
+  // — one page on two addresses; since issue #18 (B6) they live in «Мопеды →
+  // Точки» alone, and `/settings/points` leads there.
   settings: [
     { id: 'people', path: '/settings', anyOf: ['users.manage'] },
-    // The same list as Fleet's, opened without leaving Settings (Mika,
-    // 29.09.2026: being thrown into Fleet from Settings was inconvenient).
-    // One page on two addresses, so still no copy (designer, 21.09.2026).
-    { id: 'points', path: '/settings/points', anyOf: ['settings.manage'] },
     { id: 'rental', path: '/settings/rental', anyOf: ['settings.manage'] },
     // The workshop's rate and the planned-maintenance interval (stage 6, ADR-0038),
     // and the workshops that do the repairs (task #1 of 21.10.2026).
     { id: 'repair', path: '/settings/repair', anyOf: ['settings.manage'] },
-    // What money going out was for (migration 0046).
-    { id: 'expenses', path: '/settings/expenses', anyOf: ['settings.manage'] },
-    // What money coming in that is no customer's was: «Прочий доход» (migration 0069).
-    { id: 'incoming', path: '/settings/incoming', anyOf: ['settings.manage'] },
+    // What money going out was for (migration 0046) — «Статьи расходов».
+    { id: 'expenseItems', path: '/settings/expenses', anyOf: ['settings.manage'] },
+    // What money coming in that is no customer's was: «Прочий доход» (migration 0069) — «Статьи доходов».
+    { id: 'incomeItems', path: '/settings/incoming', anyOf: ['settings.manage'] },
     // The rentals folders in Google Drive beside the rentals here (ADR-0031).
     { id: 'drive', path: '/settings/drive', anyOf: ['users.manage'] },
     { id: 'journal', path: '/settings/journal', anyOf: ['users.manage'] },
@@ -303,12 +324,31 @@ export function tabsFor(section: SectionId, permissions: readonly Permission[]) 
   return (SECTION_TABS[section] ?? []).filter((t) => allowed(t, permissions));
 }
 
-export type ActionId = 'pickup' | 'return' | 'takeMoney' | 'takeCash' | 'newCustomer' | 'openRepair' | 'reportBreak' | 'sell' | 'sellGoods';
+/**
+ * The tabs drawn: a section's tabs, less one with nothing left in it —
+ * «До EV8 Ops» once its lists are empty (issue #18, B6; the director's audit
+ * read 0 deposits and 0 rentals without a VIN on 25.10.2026). It stays while
+ * the counts have not come, and while it is the address open: a strip whose
+ * open tab vanished under the reader would be worse than the tab.
+ */
+export function tabsShown(section: SectionId, permissions: readonly Permission[], counts: NavCounts | null | undefined, pathname: string) {
+  return tabsFor(section, permissions).filter((t) => t.id !== 'migration' || t.path === pathname || counts?.migration == null || counts.migration > 0);
+}
 
-/** What the "+" offers, most frequent first (wave 1 §3.2). */
-export const ACTIONS: readonly { id: ActionId; path: string; anyOf: readonly Permission[]; noneOf?: readonly Permission[] }[] = [
+export type ActionId = 'pickup' | 'return' | 'swap' | 'takeMoney' | 'takeCash' | 'newCustomer' | 'openRepair' | 'reportBreak' | 'sell' | 'sellGoods';
+
+/**
+ * What the "+" offers, most frequent first (wave 1 §3.2). Since issue #18
+ * (B2) the hand-over, the return and the swap say one set of words —
+ * «Выдать мопед», «Вернуть мопед», «Заменить мопед» — wherever they stand.
+ */
+export const ACTIONS: readonly ({ id: ActionId; path: string } & NavRule)[] = [
   { id: 'pickup', path: '/rentals/new', anyOf: ['rental.create'] },
   { id: 'return', path: '/rentals/return', anyOf: ['rental.return'] },
+  // «Заменить мопед» (issue #18, B2): pick the rental, then the swap wizard
+  // of ADR-0040 — a return and a hand-over in one, so both rights, as the
+  // rental card's «⋯» asks them.
+  { id: 'swap', path: '/rentals/swap', anyOf: [], allOf: ['rental.create', 'rental.return'] },
   // Third on the "+" (wave 2 §3.0): the one money form, opened over the money section.
   { id: 'takeMoney', path: '/money/payments?take=1', anyOf: ['payments.reconcile'] },
   { id: 'takeCash', path: '/money/cash?take=1', anyOf: ['cash.record'], noneOf: ['payments.reconcile'] },
@@ -317,7 +357,8 @@ export const ACTIONS: readonly { id: ActionId; path: string; anyOf: readonly Per
   // A manager says a moped is broken and no more than that (wave 5 §3.7);
   // an owner opens the repair itself, so they see the other one.
   { id: 'reportBreak', path: '/service?report=1', anyOf: ['service.report'], noneOf: ['service.manage'] },
-  { id: 'sell', path: '/sales/new', anyOf: ['sales.manage'] },
+  // A moped sold by the owner and, since issue #18 (B8), by the manager too.
+  { id: 'sell', path: '/sales/new', anyOf: ['sales.create'] },
   // A part or a charger over the counter: the owner and the manager (ADR-0045).
   { id: 'sellGoods', path: '/sales/goods/new', anyOf: ['goods.sell'] },
 ];
@@ -376,6 +417,8 @@ export const REDIRECTS: readonly { from: string; to: string }[] = [
   { from: '/money/sort', to: '/sort' },
   { from: '/money/sort/rules', to: '/sort/rules' },
   { from: '/money/sort/aside', to: '/sort/aside' },
+  // The points in one place (issue #18, B6).
+  { from: '/settings/points', to: '/fleet/points' },
 ];
 
 /**

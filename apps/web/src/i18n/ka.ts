@@ -39,6 +39,7 @@ import { incKa } from './inbound.js';
 import { dupKa } from './card-duplicate.js';
 import { rentedFreeKa } from './rented-free.js';
 import { peopleDeleteKa } from './people-delete.js';
+import { simpleKa } from './simplify.js';
 import type { Dict } from './en.js';
 
 // Typed as Dict: a missing or misspelled key fails the build.
@@ -105,10 +106,11 @@ export const ka: Dict = {
     menu: 'მენიუ',
     myLogin: 'ჩემი შესვლა · პაროლი',
     actions: {
-      takeMoney: 'ფულის მიღება',
+      takeMoney: 'გადახდის მიღება',
       takeCash: 'ნაღდის მიღება',
       pickup: 'მოპედის გაცემა',
       return: 'დაბრუნების მიღება',
+      swap: 'მოპედის შეცვლა',
       newCustomer: 'ახალი კლიენტი',
       openRepair: 'რემონტის გახსნა',
       reportBreak: 'გაუმართაობის შეტყობინება',
@@ -145,10 +147,12 @@ export const ka: Dict = {
       login: 'შესვლა',
       expenses: 'ხარჯები',
       incoming: 'შემოსავალი',
+      expenseItems: 'ხარჯების კატეგორიები',
+      incomeItems: 'სხვა შემოსავლის კატეგორიები',
       drive: 'Drive',
       goods: 'საქონელი',
       // Issue #15: «Оплаты по графику», «Разобрать», «Аренды и клиенты».
-      due: 'დღეს',
+      due: 'დასარეკი',
       late: 'ვადაგადაცილებული',
       month: 'თვე',
       sortIn: 'შემოსავლები',
@@ -332,8 +336,8 @@ export const ka: Dict = {
   },
 
   actions: {
-    newRental: 'ახალი გაცემა',
-    returnRental: 'დაბრუნება',
+    newRental: 'მოპედის გაცემა',
+    returnRental: 'დაბრუნების მიღება',
     newCustomer: 'ახალი კლიენტი',
     changeState: 'სტატუსის შეცვლა',
     back: 'უკან',
@@ -403,7 +407,7 @@ export const ka: Dict = {
     fineAmount: 'თანხა',
     fineReason: 'რისთვის',
     fineReasonHint: 'სავალდებულოა: მაგალითად, «მოპედის დაზიანება» ან «ჭუჭყიანი მოპედი».',
-    fineHint: 'დარიცხვა კლიენტის დავალიანებას დაემატება. მისი გადახდა — «ფულის მიღება» ან ბანკის ხაზით: «დასახარისხებელი» → «შეკეთება / დარიცხვა».',
+    fineHint: 'დარიცხვა კლიენტის დავალიანებას დაემატება. მისი გადახდა — «გადახდის მიღება» ან ბანკის ხაზით: «დასახარისხებელი» → «შეკეთება / დარიცხვა».',
     fineDone: 'დარიცხულია',
     fineVoid: 'დარიცხვის მოხსნა',
     fineVoidReason: 'რატომ იხსნება',
@@ -740,7 +744,7 @@ export const ka: Dict = {
     tillMinusNeed: 'მონიშნეთ, თუ სხვა ფულიდან აბრუნებთ.',
     tillMinus: (onHand: string, minus: string) => `სალაროში გაქვთ ${onHand} — მეტს აბრუნებთ, სალარო მინუსში წავა −${minus}`,
     tillMinusOk: 'დიახ, ვაბრუნებ — სალარო მინუსში წავა',
-    take: 'ფულის მიღება',
+    take: 'გადახდის მიღება',
     takeCash: 'ნაღდის მიღება',
     takeFor: (n: string) => `გადახდის მიღება · ${n}`,
     payOutFor: (n: string) => `დეპოზიტის დაბრუნება · ${n}`,
@@ -1024,10 +1028,8 @@ export const ka: Dict = {
 
   payments: {
     voidedToast: 'გადახდა გაუქმდა',
-    record: 'გადახდის ჩაწერა',
     count: (n: number) => `${n} გადახდა`,
     title: 'გადახდები',
-    add: 'გადახდის გატარება',
     date: 'თარიღი',
     channel: 'არხი',
     channels: { transfer: 'გადარიცხვა', acquiring: 'ბარათი', cash: 'ნაღდი', deposit: 'დეპოზიტიდან', offset: 'სამუშაოს ჩათვლა' },
@@ -1508,4 +1510,5 @@ export const ka: Dict = {
   ...dupKa,
   ...rentedFreeKa,
   ...peopleDeleteKa,
+  ...simpleKa,
 };

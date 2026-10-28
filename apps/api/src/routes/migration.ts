@@ -15,8 +15,10 @@ import { moveVehicle, openRentalOf } from '../lib/vehicles.js';
 // instalments, the stock on the shelf, what was owed to a factory — are the
 // wizards of waves 3 and 5 and are only linked from here. What this file
 // does is the part nobody had a screen for: the deposits, the rentals whose
-// VIN never came over, and the mopeds Odoo called "in service" with no repair
-// behind them.
+// VIN never came over, and the mopeds called "in service" with no repair
+// behind them. The last list is no longer a part of «До EV8 Ops» since issue
+// #18 (B6): it is a block of «Ремонты», read here by its own route, and the
+// tab hides once its own two lists are empty (`migrationLeft`).
 //
 // **The counts are read, never written down here.** The wave's own text says
 // "17 deposits" and "2 rentals without a VIN"; the stand says 42 and 26. A
@@ -28,9 +30,22 @@ const DECISIONS = ['returned_earlier', 'kept_earlier', 'unknown'] as const;
 /** From Odoo: the record carries the order it came over as. */
 const FROM_ODOO = { odooOrderId: { not: null } } as const;
 
+/**
+ * What «До EV8 Ops» still asks of an owner: deposits brought over whose rental
+ * has ended with no decision on them, and rentals brought over with no VIN —
+ * the rows of its two lists. Nought: the tab is hidden (issue #18, B6).
+ */
+export async function migrationLeft(): Promise<number> {
+  const [deposits, rentalsNoVin] = await Promise.all([
+    prisma.deposit.count({ where: { status: 'held', decidedById: null, migrationDecision: null, rental: { ...FROM_ODOO, status: { in: ['returned', 'disputed'] } } } }),
+    prisma.rental.count({ where: { vehicleId: null, ...FROM_ODOO } }),
+  ]);
+  return deposits + rentalsNoVin;
+}
+
 export function migrationRoutes(app: FastifyInstance): void {
   app.get('/api/migration', { config: { scope: 'users.manage' } }, async () => {
-    const [deposits, rentalsNoVin, inService] = await Promise.all([
+    const [deposits, rentalsNoVin] = await Promise.all([
       prisma.deposit.findMany({
         where: { status: 'held', decidedById: null, migrationDecision: null, rental: FROM_ODOO },
         include: { rental: { select: { id: true, number: true, status: true, returnedOn: true, customer: { select: { name: true } } } } },
@@ -40,11 +55,6 @@ export function migrationRoutes(app: FastifyInstance): void {
         where: { vehicleId: null, ...FROM_ODOO },
         select: { id: true, number: true, status: true, pickedUpOn: true, vinNote: true, customer: { select: { name: true } } },
         orderBy: [{ status: 'asc' }, { pickedUpOn: 'desc' }],
-      }),
-      prisma.vehicle.findMany({
-        where: { state: 'service', serviceJobs: { none: { status: { not: 'done' } } } },
-        select: { id: true, vin: true, arrivedOn: true, model: { select: { brand: true, name: true } } },
-        orderBy: { vin: 'asc' },
       }),
     ]);
 
@@ -92,10 +102,24 @@ export function migrationRoutes(app: FastifyInstance): void {
           note: r.vinNote,
         })),
       },
-      vehiclesInServiceWithoutJob: {
-        count: inService.length,
-        rows: inService.map((v) => ({ id: v.id, vin: v.vin, model: v.model ? `${v.model.brand} ${v.model.name}` : null, arrivedOn: isoDate(v.arrivedOn) })),
-      },
+    };
+  });
+
+  /**
+   * Mopeds whose status says «В ремонте» with no repair open behind them
+   * (register #23): Odoo left nineteen so, and a status set by hand can leave
+   * one more. A block of «Ремонты» since issue #18 (B6; it was a list of
+   * «Настройки → До EV8 Ops»), for whoever may move a moped by hand: open the
+   * repair, or send the moped back to the yard with a reason.
+   */
+  app.get('/api/service/without-repair', { config: { scope: 'fleet.state.manual' } }, async () => {
+    const rows = await prisma.vehicle.findMany({
+      where: { archived: false, state: 'service', serviceJobs: { none: { status: { not: 'done' } } } },
+      select: { id: true, vin: true, fleetNo: true, arrivedOn: true, model: { select: { brand: true, name: true } } },
+      orderBy: { vin: 'asc' },
+    });
+    return {
+      vehicles: rows.map((v) => ({ id: v.id, vin: v.vin, fleetNo: v.fleetNo, model: v.model ? `${v.model.brand} ${v.model.name}` : null, arrivedOn: isoDate(v.arrivedOn) })),
     };
   });
 
@@ -148,11 +172,12 @@ export function migrationRoutes(app: FastifyInstance): void {
   });
 
   /**
-   * A moped Odoo called "in service" with no repair behind it (register #23):
-   * either a repair is opened for it on the service screen, or it goes back
-   * to the fleet from here, with a reason and an entry in its own feed.
+   * A moped «В ремонте» with no repair behind it (register #23): either a
+   * repair is opened for it, or it goes back to the yard from the block of
+   * «Ремонты», with a reason and an entry in its own feed. (Was
+   * `/api/migration/vehicles/:id/back` until issue #18.)
    */
-  app.post<{ Params: { id: string }; Body: Record<string, unknown> }>('/api/migration/vehicles/:id/back', { config: { scope: 'fleet.state.manual' } }, async (req) => {
+  app.post<{ Params: { id: string }; Body: Record<string, unknown> }>('/api/service/without-repair/:id/back', { config: { scope: 'fleet.state.manual' } }, async (req) => {
     const actor = actorOf(req);
     const reason = str(req.body ?? {}, 'reason', { required: true, max: 500 })!;
     const locationId = str(req.body ?? {}, 'locationId');

@@ -695,8 +695,9 @@ export function RentalBlock() {
 }
 
 /**
- * Points — the company's own words for its places. Lives in Settings and,
- * for the owner, as the "Points" tab of the fleet (wave 1 §3.2).
+ * Points — the company's own words for its places: the owner's tab
+ * «Мопеды → Точки» (wave 1 §3.2). It was a tab of Settings too until issue
+ * #18 (B6); `/settings/points` leads to the fleet's now.
  */
 export function PointsBlock() {
   const t = useT();

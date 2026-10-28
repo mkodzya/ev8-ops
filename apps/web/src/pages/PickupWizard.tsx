@@ -38,6 +38,14 @@ interface CustomerRow {
   /** Of dueTodayTetri: the rent alone — what the hand-over guard reads. */
   dueTodayRentTetri: number;
   debtIn: DebtPart[];
+  /** Paid in and on nothing yet, net of what the customer owes. */
+  creditTetri?: number;
+  /**
+   * Of creditTetri: what lies on no rental — the advance the hand-over lays on
+   * the new rental at once (issue #18, B3). Money left over on another rental's
+   * payment stays that rental's; the night does not move it either.
+   */
+  advanceTetri?: number;
 }
 /** A moped as the hand-over and the swap pick one from the fleet. */
 export interface FleetRow {
@@ -271,16 +279,25 @@ export function PickupWizard() {
   const paidWeeks = transfer && f.paidThrough ? Math.round((days(f.pickedUpOn, f.paidThrough) + 1) / 7) : 0;
   const weekEnds = Array.from({ length: weeksTotal }, (_, i) => addDays(f.pickedUpOn, 7 * (i + 1) - 1));
   const owedWeeks = Math.max(0, weeksTotal - paidWeeks);
-  const dueTetri = transfer
+  const owedTetri = transfer
     ? owedWeeks * Math.max(0, rateTetri) + Math.max(0, depositTetri - Math.max(0, depositBeforeTetri))
     : Math.max(0, rateTetri) + Math.max(0, depositTetri);
+  // The customer's advance — money in on no rental that nothing has taken —
+  // lies on this rental the moment it is made (issue #18, B3; `settleCredit`
+  // after the hand-over): «аванс 50 → к оплате 280», not 330 and a debt of 50
+  // till night. Only that part: a week paid ahead on a running rental stays on
+  // it, and taking it off here would leave this one owing.
+  const creditTetri = !f.creating && customer ? Math.min(Math.max(0, customer.advanceTetri ?? 0), owedTetri) : 0;
+  const dueTetri = owedTetri - creditTetri;
   const amountTetri = f.amount ? parseGel(f.amount) : dueTetri;
-  const paymentNeeded = !transfer || dueTetri > 0;
-  // What the money closes, the way the server spreads it: the deposit first, then the weeks (Q6).
+  const paymentNeeded = (!transfer && creditTetri === 0) || dueTetri > 0;
+  // What the money closes, the way the server spreads it: the deposit first, then the weeks (Q6) —
+  // the payment and the advance together, as they lie once the hand-over is written.
   const depositDue = transfer ? Math.max(0, depositTetri - Math.max(0, depositBeforeTetri)) : Math.max(0, depositTetri);
-  const weeksDue = Math.max(0, dueTetri - depositDue);
-  const closesDeposit = Math.min(Math.max(0, amountTetri ?? 0), depositDue);
-  const closesWeeks = Math.min(Math.max(0, (amountTetri ?? 0) - closesDeposit), weeksDue);
+  const weeksDue = Math.max(0, owedTetri - depositDue);
+  const paidIn = Math.max(0, amountTetri ?? 0) + creditTetri;
+  const closesDeposit = Math.min(paidIn, depositDue);
+  const closesWeeks = Math.min(Math.max(0, paidIn - closesDeposit), weeksDue);
 
   // ---- what each step needs ---------------------------------------------------
   const ncPhoneOk = phoneKey(f.ncPhone).length === 9;
@@ -363,7 +380,8 @@ export function PickupWizard() {
         odometerKm: km,
         odometerReason: below ? f.odometerReason.trim() : null,
         condition: f.condition.trim() || null,
-        payment: !paymentNeeded ? undefined : f.channel === 'later' ? { later: true } : { later: false, channel: f.channel, amountTetri },
+        // Paid whole by the advance (issue #18, B3): no money is taken now — the server asks to be told so.
+        payment: !paymentNeeded ? (transfer ? undefined : { later: true }) : f.channel === 'later' ? { later: true } : { later: false, channel: f.channel, amountTetri },
         transfer: transferBody,
         kommoRef: fromLead ?? undefined,
         debtOverrideReason: held && owner ? f.why.trim() : undefined,
@@ -503,7 +521,14 @@ export function PickupWizard() {
                         })
                       }
                     >
-                      {debtor ? t.hand.takeCash(formatGel(debt.debtTetri, { decimals: false })) : t.today.actions[owner ? 'take_money' : 'take_cash']}
+                      {/* The money form's one name (issue #18, B1), with the sum when it is a debt. */}
+                      {debtor
+                        ? takesTransfers
+                          ? t.back.takeDebt(formatGel(debt.debtTetri, { decimals: false }))
+                          : t.hand.takeCash(formatGel(debt.debtTetri, { decimals: false }))
+                        : takesTransfers
+                          ? t.money.take
+                          : t.money.takeCash}
                     </button>
                   )}
                   {held && owner && (
@@ -841,6 +866,13 @@ export function PickupWizard() {
               <>
                 <Row k={t.hand.weeksOwed(owedWeeks)} v={<span className="mono">{formatGel(owedWeeks * rateTetri)}</span>} />
                 <Row k={t.hand.depositLine} v={<span className="mono">{formatGel(Math.max(0, depositTetri - depositBeforeTetri))}</span>} />
+              </>
+            )}
+            {/* The advance comes off what is due today (issue #18, B3). */}
+            {creditTetri > 0 && (
+              <>
+                <Row k={t.simple.hand.credit} v={<span className="mono">−{formatGel(creditTetri)}</span>} />
+                <p className="hint muted">{t.simple.hand.creditNote}</p>
               </>
             )}
           </section>

@@ -30,7 +30,6 @@ export interface TodayData {
     chips: Record<FleetChip, number>;
     overdueTetri: number | null;
     depositsHeldTetri: number | null;
-    week: { rentTetri: number; saleTetri: number; serviceTetri: number; goodsTetri?: number; depositTetri: number; feeTetri: number; from: string } | null;
     myTillTetri: number | null;
     batteries?: { showroom: number; total: number } | null;
   };
@@ -60,8 +59,6 @@ function dayTitle(iso: string, t: ReturnType<typeof useT>): string {
 const SEGMENT: Record<string, string> = {
   decide: '/money/deposits',
   returns: '/rentals?s=returns',
-  overdue: '/rentals?s=overdue',
-  due_today: '/rentals?s=due_today',
   money: '/money/statements',
   service: '/service',
   instalments: '/sales',
@@ -70,6 +67,35 @@ const SEGMENT: Record<string, string> = {
   fill: '/rentals?s=unsigned',
   till: '/money/cash',
 };
+
+/**
+ * «Оплаты: 3 просрочено · 2 сегодня» (issue #18, B4; Mika's «Одно правило
+ * календаря» of 28.10.2026): one line where the groups «Просрочены» and «Ждём
+ * сегодня» listed the rentals a second time, counted by another rule. The two
+ * numbers are «Оплаты по графику»'s own — its menu badge says them too — and
+ * the line opens it. A nought is not said; the late part is red and worded.
+ */
+function ScheduleLine({ row }: { row: TaskRow }) {
+  const t = useT();
+  const [late, due] = (row.note ?? '0|0').split('|').map(Number);
+  return (
+    <li className="q-row">
+      <Link to={row.href} className="q-who">
+        <span className="q-name">
+          {t.simple.today.payments}{' '}
+          {(late ?? 0) > 0 && <span className="crit-text">{t.simple.today.late(late ?? 0)}</span>}
+          {(late ?? 0) > 0 && (due ?? 0) > 0 && ' · '}
+          {(due ?? 0) > 0 && <span>{t.simple.today.due(due ?? 0)}</span>}
+        </span>
+      </Link>
+      <span className="q-acts">
+        <Link to={row.href} className="pill pill-sm pill-accent">
+          {t.simple.today.open}
+        </Link>
+      </span>
+    </li>
+  );
+}
 
 /** «осталось 140 км», or red «просрочено на 320 км» — first in the group, by the API's order. */
 function MaintenanceLeft({ note }: { note: string | null }) {
@@ -103,8 +129,6 @@ export function TodayPage() {
       if (back) bits.push(t.drive.todayPaidBack(formatGel(Number(back), { decimals: false })));
     } else if (r.action === 'hand_over_from_drive') bits.push(t.drive.todayContract(fmtDate(r.note)));
     else if (r.group === 'returns') bits.push(r.days && r.days > 0 ? t.today.lateBy(r.days) : t.today.duesToday);
-    else if (r.group === 'overdue' && r.days) bits.push(t.today.overdueDays(r.days));
-    else if (r.group === 'due_today' && r.note === 'handed_today') bits.push(t.today.handedToday);
     else if (r.action === 'take_instalment' && r.days) bits.push(t.today.overdueDays(r.days));
     else if (r.action === 'open_purchase') bits.push(t.today.ordered);
     // A deal Kommo has won and nobody has entered here yet (ADR-0015).
@@ -188,11 +212,6 @@ export function TodayPage() {
     }
   };
 
-  // Red is for a debt: every sum of the overdue group, and in "due today" a
-  // figure that holds more than is awaited today (a deposit short since an
-  // earlier day). The whole figure is red then, never a part of it (ADR-0017).
-  const sumIsDebt = (r: TaskRow): boolean => r.group === 'overdue' || (r.group === 'due_today' && (r.amountTetri ?? 0) > (r.dueTodayTetri ?? 0));
-
   // The rental a row is about, when it is about one: then the row's address
   // is that rental's. An instalment or a deal from Kommo is not a rental, and
   // the WhatsApp sheet must not wait for one that will never load.
@@ -202,11 +221,6 @@ export function TodayPage() {
   };
 
   const act = (r: TaskRow) => {
-    const id = r.id.split(':')[1];
-    if ((r.action === 'take_money' || r.action === 'take_cash') && r.number && id) {
-      openMoney({ target: { kind: 'rent', rentalId: id, number: r.number, customer: r.who ?? undefined } });
-      return;
-    }
     if (r.action === 'take_instalment') {
       openMoney({ target: { kind: 'sale', saleId: r.href.split('/').pop(), number: r.number ?? undefined, customer: r.who ?? undefined } });
       return;
@@ -226,9 +240,9 @@ export function TodayPage() {
         <Num to="/fleet?f=rented" value={String(n.chips.rented ?? 0)} label={t.today.numbers.rented ?? ''} />
         <Num to="/fleet?f=available" value={String(n.chips.available ?? 0)} label={t.today.numbers.available ?? ''} />
         <Num to="/service" value={String(n.fleet.service ?? 0)} label={t.today.numbers.service ?? ''} />
+        {/* The late rentals' one figure, «Оплаты по графику»'s own sum (issue #18, B4): the list it opens adds up to it. */}
         {n.overdueTetri != null && <Num to="/rentals?s=overdue" value={formatGel(n.overdueTetri, { decimals: false })} label={t.today.numbers.overdue ?? ''} tone="crit" />}
         {n.depositsHeldTetri != null && <Num to="/money/deposits" value={formatGel(n.depositsHeldTetri, { decimals: false })} label={t.today.numbers.deposits ?? ''} />}
-        {n.week && <Num to="/money/payments" value={formatGel(n.week.rentTetri + n.week.saleTetri + n.week.serviceTetri + (n.week.goodsTetri ?? 0), { decimals: false })} label={t.today.numbers.week ?? ''} />}
         {n.batteries && <Num to="/stock/batteries" value={t.today.batteriesOf(n.batteries.showroom, n.batteries.total)} label={t.today.numbers.batteries ?? ''} />}
         {n.myTillTetri != null && <Num to="/money/cash" value={formatGel(n.myTillTetri, { decimals: false })} label={t.today.numbers.myTill ?? ''} />}
       </div>
@@ -250,17 +264,21 @@ export function TodayPage() {
           )}
         </section>
       ) : (
-        data.queue.map((g) => (
-          // "Due today" is a calm group (ADR-0017): an ink heading, nothing red
-          // of its own. A sum in it turns red only when the figure holds
-          // something older than today's week — the rule of every screen.
+        data.queue.map((g) =>
+          // «Оплаты» is one line with no heading of its own (issue #18, B4).
+          g.group === 'schedule' ? (
+            <section key={g.group} className="card queue-card">
+              <ul className="queue">
+                {g.rows.map((r) => (
+                  <ScheduleLine key={r.id} row={r} />
+                ))}
+              </ul>
+            </section>
+          ) : (
           <section key={g.group} className="card queue-card">
             <div className="queue-head">
               <h2>{t.today.groups[g.group]}</h2>
-              <span className="muted">
-                {g.total}
-                {g.group === 'overdue' && g.total > 1 ? ` · ${t.today.sortedLongest}` : ''}
-              </span>
+              <span className="muted">{g.total}</span>
             </div>
             <ul className="queue">
               {g.rows.map((r) => (
@@ -277,7 +295,7 @@ export function TodayPage() {
                       )}
                     </span>
                   </Link>
-                  {r.amountTetri != null && r.amountTetri > 0 && <span className={`t-money q-sum ${sumIsDebt(r) ? 'crit-text' : ''}`}>{formatGel(r.amountTetri, { decimals: false })}</span>}
+                  {r.amountTetri != null && r.amountTetri > 0 && <span className="t-money q-sum">{formatGel(r.amountTetri, { decimals: false })}</span>}
                   {r.action === 'open_maintenance' && <MaintenanceLeft note={r.note} />}
                   <span className="q-acts">
                     {r.phone && (
@@ -333,22 +351,16 @@ export function TodayPage() {
             {g.group === 'maintenance' && (data.maintenanceUnknown ?? 0) > 0 && <p className="hint muted">{t.wmaint.unknown(data.maintenanceUnknown ?? 0)}</p>}
             {moreLine(g)}
           </section>
-        ))
+          ),
+        )
       )}
 
-      {n.week && (
-        <section className="card week-card">
-          <div className="queue-head">
-            <h2>{t.today.weekTitle}</h2>
-            <span className="muted">{t.today.weekFrom(`${n.week.from.slice(8)}.${n.week.from.slice(5, 7)}`)}</span>
-          </div>
-          <WeekRow k={t.today.weekRent} v={n.week.rentTetri} />
-          <WeekRow k={t.today.weekSale} v={n.week.saleTetri} />
-          <WeekRow k={t.today.weekService} v={n.week.serviceTetri} />
-          {(n.week.goodsTetri ?? 0) > 0 && <WeekRow k={t.money.kinds.goods} v={n.week.goodsTetri ?? 0} />}
-          <WeekRow k={t.today.weekDeposit} v={n.week.depositTetri} />
-          <WeekRow k={t.today.weekFee} v={-n.week.feeTetri} />
-        </section>
+      {/* The week's money lives in «Отчёты → Неделя» (issue #18, B7): the card here repeated it,
+          «Оплаты → Месяц» and the payments' totals. The owner gets the way to it. */}
+      {can('reports.view') && (
+        <p className="hint">
+          <Link to="/reports/week">{t.simple.today.weekLink}</Link>
+        </p>
       )}
 
       {wa && <WhatsappSheet target={wa} onClose={() => setWa(null)} />}
@@ -398,14 +410,5 @@ function Num({ to, value, label, tone }: { to: string; value: string; label: str
       <span className="num-v">{value}</span>
       <span className="num-l">{label}</span>
     </Link>
-  );
-}
-
-function WeekRow({ k, v }: { k: string; v: number }) {
-  return (
-    <div className="kv">
-      <span className="kv-k">{k}</span>
-      <span className="kv-v mono">{formatGel(v)}</span>
-    </div>
   );
 }

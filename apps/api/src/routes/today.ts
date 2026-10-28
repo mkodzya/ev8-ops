@@ -1,6 +1,7 @@
-import { asksForSignature, contractState, countFleetChips, dayQueue, queueCount, todayISO, VEHICLE_STATES, type QueueRental, type VehicleState } from '@ev8/shared';
+import { asksForSignature, contractState, countFleetChips, dayQueue, queueCount, statusBySchedule, todayISO, VEHICLE_STATES, type QueueRental, type SchedulePay, type VehicleState } from '@ev8/shared';
 import type { FastifyInstance } from 'fastify';
 import type { Prisma } from '../generated/prisma/client.js';
+import { scheduleToday } from '../lib/calendar.js';
 import { dateFromISO, isoDate } from '../lib/dates.js';
 import { debtsOf, rentalDebt, rentalDueToday, type CustomerDebt } from '../lib/debt.js';
 import { depositsOverview } from '../lib/deposits.js';
@@ -52,13 +53,17 @@ export const QUEUE_RENTAL = {
  * A rental as the queue of "Today" reads it: what it is called today, its
  * part of the one debt figure and how much of that is awaited. `today` is the
  * day the debts were asked for — one clock for the status and for the figure.
- * Exported with its select so that a test can hold the mapping for ONE
- * rental: a group shows three rows, and the rule is for every one.
+ * `pays`: what «Оплаты по графику» says of the running rentals (issue #18,
+ * B4) — given, a running rental is called by it, as on every list; absent,
+ * by its stored "paid through". Exported with its select so that a test can
+ * hold the mapping for ONE rental: a group shows three rows, and the rule is
+ * for every one.
  */
-export function queueRental(r: Prisma.RentalGetPayload<{ select: typeof QUEUE_RENTAL }>, today: string, debts: Map<string, CustomerDebt>): QueueRental {
+export function queueRental(r: Prisma.RentalGetPayload<{ select: typeof QUEUE_RENTAL }>, today: string, debts: Map<string, CustomerDebt>, pays?: Map<string, SchedulePay>): QueueRental {
   const paidThrough = isoDate(r.paidThrough);
   const pickedUpOn = isoDate(r.pickedUpOn);
-  const { status } = rentStateOf(r, today);
+  const stored = rentStateOf(r, today).status;
+  const status = pays ? statusBySchedule(stored, pays.get(r.id)) : stored;
   // The contract to sign is the one of the moped the customer has: after a
   // swap it is a new paper from the swap's day, for a rental brought over too.
   const swappedOn = isoDate(r.acts[0]?.occurredOn);
@@ -98,23 +103,14 @@ export function queueRental(r: Prisma.RentalGetPayload<{ select: typeof QUEUE_RE
   };
 }
 
-/** Monday of the week `today` falls in — the week the numbers are about (`weekly.md`). */
-export function weekStart(today: string): string {
-  const d = new Date(`${today}T00:00:00Z`);
-  const shift = (d.getUTCDay() + 6) % 7;
-  d.setUTCDate(d.getUTCDate() - shift);
-  return d.toISOString().slice(0, 10);
-}
-
 export function todayRoutes(app: FastifyInstance): void {
   app.get('/api/today', { config: { scope: 'fleet.view' } }, async (req) => {
     const actor = actorOf(req);
     const owner = mayView(req, 'deposit.decide');
     const today = todayISO(new Date(), env.TZ);
     const day = dateFromISO(today)!;
-    const monday = dateFromISO(weekStart(today))!;
 
-    const [rentalRows, tills, unmatchedLines, lastLines, instalmentRows, serviceJobs, reportRows, parts, purchaseRows, vehicles, week, myTill] = await Promise.all([
+    const [rentalRows, tills, unmatchedLines, lastLines, instalmentRows, serviceJobs, reportRows, parts, purchaseRows, vehicles, myTill, schedule] = await Promise.all([
       prisma.rental.findMany({
         where: { OR: [{ status: { not: 'returned' } }, { status: 'returned', deposit: { status: 'held', decidedById: null, migrationDecision: null, paidTetri: { gt: 0 } } }] },
         select: QUEUE_RENTAL,
@@ -140,18 +136,15 @@ export function todayRoutes(app: FastifyInstance): void {
       owner ? partRows() : [],
       owner ? prisma.purchase.findMany({ where: { status: 'ordered' }, select: { id: true, number: true, supplier: { select: { name: true } } }, orderBy: { createdAt: 'asc' } }) : [],
       prisma.vehicle.findMany({ where: { archived: false }, select: { state: true, pool: true, locationId: true } }),
-      owner
-        ? prisma.payment.findMany({
-            where: { voidedAt: null, occurredOn: { gte: monday }, channel: { notIn: ['deposit', 'offset'] } },
-            select: { direction: true, kind: true, grossTetri: true, feeTetri: true },
-          })
-        : [],
       owner ? 0 : onHandOf(actor.id),
+      // «Оплаты по графику» for the same day (issue #18, B4): its one line, the
+      // status of every running rental, and the owner's «просрочка».
+      mayView(req, 'payments.schedule') ? scheduleToday(today) : null,
     ]);
 
     // The debts for the same day the statuses are read for: one clock for one answer.
     const debts = await debtsOf([...new Set(rentalRows.map((r) => r.customer.id))], today);
-    const rentals: QueueRental[] = rentalRows.map((r) => queueRental(r, today, debts));
+    const rentals: QueueRental[] = rentalRows.map((r) => queueRental(r, today, debts, schedule?.pay));
 
     // What the transfer left undecided, as one number (§3.7). Only an owner
     // ever sees it, so only an owner's request pays for the query.
@@ -172,7 +165,7 @@ export function todayRoutes(app: FastifyInstance): void {
     // The comparison is an owner's; the deals to enter are for whoever enters
     // them — a hand-over is a manager's too, a sale is for those who may sell.
     const kommoNow = await kommoReconciliation();
-    const maySell = hasPerm(actor, 'sales.manage');
+    const maySell = hasPerm(actor, 'sales.create');
     const kommoDeals = kommoNow && kommoNow.freshness !== 'waiting' ? kommoNow.deals.filter((d) => d.kind === 'rent' || maySell) : [];
     const kommo =
       owner && kommoNow && kommoNow.freshness !== 'waiting'
@@ -204,6 +197,7 @@ export function todayRoutes(app: FastifyInstance): void {
       today,
       owner,
       rentals,
+      schedule: schedule?.counts ?? null,
       tills: tills.map((t) => ({ id: t.id, who: t.fromUser.name, amountTetri: t.amountTetri })),
       myTillTetri: myTill,
       unmatchedLines,
@@ -252,8 +246,9 @@ export function todayRoutes(app: FastifyInstance): void {
     const fleet = Object.fromEntries(VEHICLE_STATES.map((s) => [s, 0])) as Record<VehicleState, number>;
     for (const v of vehicles) fleet[v.state as VehicleState]++;
     // Late rentals only: a rental due today is not in it (ADR-0017). The same
-    // set and the same figures as the week's report and "Аренды → Просрочены".
-    const overdueTetri = rentals.filter((r) => r.status === 'overdue').reduce((n, r) => n + r.debtTetri, 0);
+    // set and the same figures as the week's report, "Аренды → Просрочены" and
+    // «Оплаты по графику → Просрочки» — the schedule's own sum (issue #18, B4).
+    const overdueTetri = schedule?.lateDebtTetri ?? rentals.filter((r) => r.status === 'overdue').reduce((n, r) => n + r.debtTetri, 0);
     // Deposit money held comes from the one function "Деньги → Залоги" and
     // the week both read (`lib/deposits.ts`). This line used to count it
     // itself — `status: 'held'` and nothing else — and a deposit closed by a
@@ -261,31 +256,9 @@ export function todayRoutes(app: FastifyInstance): void {
     // 3 160 ₾ that two other screens had already let go (QA-W6-21). Three
     // readings of one figure is two too many; there is one now.
     const depositsHeldTetri = owner ? (await depositsOverview()).totals.heldTetri : null;
-    // Deposit money of the week is what payments put on deposits, not a kind of payment.
-    const depositsIn = owner
-      ? await prisma.paymentAllocation.aggregate({ where: { target: 'deposit', payment: { voidedAt: null, occurredOn: { gte: monday }, channel: { notIn: ['deposit', 'offset'] } } }, _sum: { amountTetri: true } })
-      : null;
-
-    // What came in this week, by what it was for (`weekly.md`): the fee and
-    // the deposits stand apart from what the rentals and the sales brought.
-    const inWeek = week.filter((p) => p.direction === 'in');
-    const sum = (f: (p: (typeof inWeek)[number]) => boolean) => inWeek.filter(f).reduce((n, p) => n + p.grossTetri, 0);
-    const depositPart = depositsIn?._sum.amountTetri ?? 0;
-    const weekMoney = owner
-      ? {
-          // Deposits stand apart (`weekly.md`), so the rent line is what the
-          // week brought less the part of it that went onto deposits — the
-          // lines add up to what came in (QA-W4-03).
-          rentTetri: Math.max(0, sum((p) => p.kind === 'rent' || p.kind === 'on_account') - depositPart),
-          saleTetri: sum((p) => p.kind === 'sale' || p.kind === 'buyback'),
-          serviceTetri: sum((p) => p.kind === 'service'),
-          // Goods sold over the counter (ADR-0045): a row of their own.
-          goodsTetri: sum((p) => p.kind === 'goods'),
-          depositTetri: depositPart,
-          feeTetri: inWeek.reduce((n, p) => n + p.feeTetri, 0),
-          from: weekStart(today),
-        }
-      : null;
+    // The week's money is no longer a card here (issue #18, B7): it repeated
+    // «Отчёты → Неделя», «Оплаты → Месяц» and the payments' totals, and the
+    // screen links to the report instead.
 
     return {
       today,
@@ -299,7 +272,6 @@ export function todayRoutes(app: FastifyInstance): void {
         chips,
         overdueTetri: owner ? overdueTetri : null,
         depositsHeldTetri,
-        week: weekMoney,
         myTillTetri: owner ? null : myTill,
         batteries: await batteriesNow(),
       },

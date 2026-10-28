@@ -66,8 +66,6 @@ export const calendarEn = {
     late: (n: number) => `Overdue · ${n}`,
     /** The heading of the overdue list only (director, 22.10.2026); the card above keeps `late`. */
     lateListTitle: (n: number) => `Overdue in total · ${n}`,
-    /** The row's button: a payment the bank did not bring — cash, or a transfer to record by hand (director, 22.10.2026). */
-    recordByHand: 'Record by hand',
     // The month and its weeks, counted by the day each week is due (director, 22.10.2026).
     scopeWeek: 'Week',
     scopeMonth: 'Month',
@@ -179,7 +177,6 @@ export const calendarRu: typeof calendarEn = {
     cameAria: 'Открыть платежи за эти дни',
     late: (n) => `Просрочено · ${n}`,
     lateListTitle: (n) => `Всего просрочек · ${n}`,
-    recordByHand: 'Провести вручную',
     scopeWeek: 'Неделя',
     scopeMonth: 'Месяц',
     scopeAria: 'Итоги за',
@@ -280,7 +277,6 @@ export const calendarKa: typeof calendarEn = {
     cameAria: 'ამ დღეების გადახდების გახსნა',
     late: (n) => `ვადაგადაცილებულია · ${n}`,
     lateListTitle: (n) => `სულ ვადაგადაცილებული · ${n}`,
-    recordByHand: 'ხელით გატარება',
     scopeWeek: 'კვირა',
     scopeMonth: 'თვე',
     scopeAria: 'ჯამი',

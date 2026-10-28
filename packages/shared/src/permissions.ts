@@ -43,7 +43,14 @@ export const PERMISSIONS = [
   'service.norms', // the book of works and their norm times
   'service.payout', // mark a mechanic's work paid
   'stock.count', // correct a count by hand — a stock-take
-  'sales.manage', // sales and buy-backs (SAL-01..03); a goods sale dated back, cancelled or its buyer edited
+  // Make a moped sale — today, from the sale park or none — print and sign its
+  // paper, and take its money as the money form lets the role (issue #18 B8,
+  // Mika's «Да, без отмены» of 28.10.2026): a manager's too.
+  'sales.create',
+  // Cancel a moped sale, buy the moped back, move its day or its schedule, edit
+  // it after it is made (SAL-01..03); a goods sale dated back, cancelled or its
+  // buyer edited — an owner's.
+  'sales.manage',
   'goods.sell', // sell a part or a charger over the counter, print its invoice (issue #11, ADR-0045)
   // Return or keep a deposit. One owner decides; there is no second confirmation (D18).
   'deposit.decide',
@@ -59,7 +66,9 @@ export type Permission = (typeof PERMISSIONS)[number];
  * and moves a renter's latest week when his pay day moves (ADR-0041, addendum
  * of 23.10.2026). Since issue #15 (ADR-0048, Mika's «начинай» of 25.10.2026)
  * he also calls those who pay by the schedule and sorts the customers' money
- * coming in. Deciding a deposit, repairs, money beyond that, cost, purchases,
+ * coming in; since issue #18 (Mika's «Да, без отмены» of 28.10.2026) he sells
+ * a moped too — cancelling it, buying it back and moving its day stay an
+ * owner's. Deciding a deposit, repairs, money beyond that, cost, purchases,
  * reports and settings are the owners' (redesign blueprint §2.1, Mika
  * 17.09.2026).
  */
@@ -77,6 +86,7 @@ const MANAGER: Permission[] = [
   'service.report',
   'service.view',
   'goods.sell',
+  'sales.create',
 ];
 
 /**

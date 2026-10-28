@@ -109,6 +109,17 @@ describe('route table', () => {
     ]) {
       expect(reconcile, owners).toContain(owners);
     }
+    // A manager sells a moped since issue #18 (B8): the sale and its paper, and no other route. Cancelling it,
+    // buying the moped back, its day, its schedule and editing it stay with `sales.manage`, an owner's.
+    expect(app.routeTable.filter((r) => r.scope === 'sales.create').map((r) => `${r.method} ${r.url}`).sort()).toEqual([
+      'GET /api/sales/:id/contract.pdf',
+      'POST /api/sales',
+      'POST /api/sales/:id/contract/sign',
+    ]);
+    const salesOwner = app.routeTable.filter((r) => r.scope === 'sales.manage').map((r) => `${r.method} ${r.url}`);
+    for (const owners of ['PATCH /api/sales/:id', 'POST /api/sales/:id/buy-back', 'POST /api/sales/:id/cancel', 'POST /api/sales/:id/schedule', 'POST /api/sales/:id/date']) {
+      expect(salesOwner, owners).toContain(owners);
+    }
     // «Оплаты по графику»: one route, the rows for whoever calls, the sums only with `payments.view` (issue #15).
     expect(app.routeTable.filter((r) => r.scope === 'payments.schedule').map((r) => `${r.method} ${r.url}`)).toEqual(['GET /api/money/calendar']);
     const publicOnes = app.routeTable.filter((r) => r.scope === 'public').map((r) => r.url).sort();

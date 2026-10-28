@@ -1,4 +1,4 @@
-import { sectionOfPath, tabsFor, type NavCounts, type Permission, type TabId } from '@ev8/shared';
+import { sectionOfPath, tabsFor, tabsShown, type NavCounts, type Permission, type TabId } from '@ev8/shared';
 import { useLayoutEffect, useRef } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { useT } from '../../i18n/index.js';
@@ -25,14 +25,15 @@ export function SectionTabs() {
   const { me } = useSession();
   const { pathname } = useLocation();
   const section = sectionOfPath(pathname, me?.permissions);
-  const tabs = tabsFor(section, me?.permissions ?? []);
   const nav = useRef<HTMLElement>(null);
   const mark = useRef<HTMLSpanElement>(null);
   // How much waits behind a tab (§3.0, issue #15): lines to sort coming in and
   // going out, hand-overs to take, who pays today and who is late — the
-  // request the rail's counters read, so one number everywhere.
-  const counted = section === 'sort' || section === 'cash' || section === 'schedule';
+  // request the rail's counters read, so one number everywhere. Settings asks
+  // it too: «До EV8 Ops» hides once nothing is left in it (issue #18, B6).
+  const counted = section === 'sort' || section === 'cash' || section === 'schedule' || section === 'settings';
   const counts = useLoad<NavCounts>(counted && me?.permissions.includes('fleet.view') ? '/api/nav/counts' : null);
+  const tabs = tabsShown(section, me?.permissions ?? [], counts.data, pathname);
   const countOf = (id: TabId): number => {
     const c = counts.data;
     if (!c) return 0;

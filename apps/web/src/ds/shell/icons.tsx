@@ -8,6 +8,7 @@ import {
   ChartColumn,
   FileText,
   Package,
+  Repeat,
   Send,
   Settings,
   ShoppingBag,
@@ -43,6 +44,8 @@ export const SECTION_ICON: Record<SectionId, LucideIcon> = {
 export const ACTION_ICON: Record<ActionId, LucideIcon> = {
   pickup: Send,
   return: Undo2,
+  // Another moped in the same rental (ADR-0040; the "+" since issue #18, B2).
+  swap: Repeat,
   takeMoney: Banknote,
   takeCash: Banknote,
   newCustomer: UserPlus,
