@@ -30,8 +30,10 @@
  * «Аванс клиента»; cash into the bank is «Внесение наличных в банк»; one
  * line over several records is «Несколько услуг» both ways; goods are
  * «Товары»; the schedule's first tab is «К звонку», not a second «Сегодня»;
- * Settings' categories are «Статьи расходов» and «Статьи доходов». Kardu's
- * Georgian words stayed — the Russian ones moved — so these rules are Russian.
+ * Settings' categories are «Статьи расходов» and «Статьи доходов». The
+ * Russian words moved; in Georgian nine strings took the word Kardu already
+ * had for the concept (docs/qa/issue-18-b-simplify-ka-strings.md, §2, for his
+ * check) and no new one came in, so these rules are Russian.
  *
  *   node scripts/words-guard.mjs
  */

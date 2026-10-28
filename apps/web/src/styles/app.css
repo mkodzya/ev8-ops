@@ -463,6 +463,22 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
   .table.people-table td.people-acts .inline-form > .input { flex: 1 1 100%; }
   .table.people-table td.people-acts > .people-hint, .table.people-table td.people-acts > .field-err { flex-basis: 100%; max-width: none; margin: 0; }
 }
+/* «Ремонты» → «В ремонте без заявки» (issue #18, B6): one line under the repairs until opened. A moped is a row:
+   its number and model, its buttons at the right on a laptop and under it on a phone, 8 px apart (ux.md №13). */
+.idle-fold > summary { list-style: none; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; min-height: var(--control); cursor: pointer; }
+.idle-fold > summary::-webkit-details-marker { display: none; }
+.idle-fold > summary h2 { margin: 0; }
+.idle-fold .chev { margin-left: auto; transition: transform var(--ease); }
+.idle-fold[open] .chev { transform: rotate(180deg); }
+.idle-fold[open] > summary { margin-bottom: 6px; }
+.idle-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--touch-gap) 12px; padding: 10px 0; }
+.idle-what { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.idle-row .row-actions { margin-top: 0; gap: var(--touch-gap); }
+@media (max-width: 719px) {
+  .idle-what { flex-basis: 100%; }
+  .idle-row .inline-form { flex-wrap: wrap; flex-basis: 100%; }
+  .idle-row .input-inline { flex: 1 1 100%; max-width: 100%; min-height: var(--control); }
+}
 
 /* ---- the unmatched queue -------------------------------------------- */
 .queue { list-style: none; margin: 0; padding: 0; }

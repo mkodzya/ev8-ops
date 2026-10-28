@@ -4,7 +4,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { LoadError } from '../components/LoadError.js';
 import { PhotoPicker } from '../components/PhotoPicker.js';
-import { BlockHead, FleetNo, Loading, PageHead, Vin } from '../components/ui.js';
+import { FleetNo, Loading, PageHead, Vin } from '../components/ui.js';
 import { Field } from '../components/Wizard.js';
 import { useToast } from '../ds/feedback/Toast.js';
 import { FormSheet, SubmitButton } from '../ds/form/Form.js';
@@ -214,52 +214,53 @@ function WithoutRepair({ onDone }: { onDone: () => void }) {
     onDone();
   };
 
+  // Folded under the section's own list, one line until opened (review of issue #18): nineteen
+  // mopeds above the repairs pushed the list a screen down. On a phone a moped is a row of its own
+  // and its buttons wrap under it, never behind sideways scroll (ux.md, «Списки»; principle 12).
   return (
-    <section className="card">
-      <BlockHead title={t.simple.idle.title} sub={t.simple.idle.count(rows.length)} note={t.simple.idle.note} />
-      <div className="table-wrap table-flat">
-        <table className="table">
-          <tbody>
-            {rows.map((v) => (
-              <tr key={v.id}>
-                <td>
-                  <Link to={`/fleet/${v.id}`}>{v.fleetNo ? <FleetNo n={v.fleetNo} /> : <Vin vin={v.vin} />}</Link>
-                </td>
-                <td className="muted">{v.model ?? ''}</td>
-                <td className="num">
-                  {open === v.id ? (
-                    <span className="inline-form">
-                      <input
-                        className="input input-inline"
-                        value={reason}
-                        autoFocus
-                        placeholder={t.migrationPage.backReason}
-                        aria-label={t.migrationPage.backReason}
-                        onChange={(e) => setReason(e.target.value)}
-                      />
-                      <SubmitButton small type="button" state={op.state} label={t.migrationPage.backToFleet} disabled={!reason.trim()} onClick={() => void back(v.id, v.vin)} />
-                    </span>
-                  ) : (
-                    <>
-                      {can('service.work') && (
-                        <>
-                          <Link className="pill pill-sm" to={`/service/new?vehicleId=${v.id}`}>
-                            {t.migrationPage.openRepair}
-                          </Link>{' '}
-                        </>
-                      )}
-                      <button type="button" className="pill pill-sm" onClick={() => setOpen(v.id)}>
-                        {t.migrationPage.backToFleet}
-                      </button>
-                    </>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </section>
+    <details className="card idle-fold">
+      <summary>
+        <h2>{t.simple.idle.title}</h2>
+        <span className="block-sub">{t.simple.idle.count(rows.length)}</span>
+        <span className="chev" aria-hidden="true">
+          ▾
+        </span>
+      </summary>
+      <p className="block-note">{t.simple.idle.note}</p>
+      <ul className="queue">
+        {rows.map((v) => (
+          <li key={v.id} className="queue-item idle-row">
+            <span className="idle-what">
+              <Link to={`/fleet/${v.id}`}>{v.fleetNo ? <FleetNo n={v.fleetNo} /> : <Vin vin={v.vin} />}</Link> <span className="muted">{v.model ?? ''}</span>
+            </span>
+            {open === v.id ? (
+              <span className="inline-form">
+                <input
+                  className="input input-inline"
+                  value={reason}
+                  autoFocus
+                  placeholder={t.migrationPage.backReason}
+                  aria-label={t.migrationPage.backReason}
+                  onChange={(e) => setReason(e.target.value)}
+                />
+                <SubmitButton small type="button" state={op.state} label={t.migrationPage.backToFleet} disabled={!reason.trim()} onClick={() => void back(v.id, v.vin)} />
+              </span>
+            ) : (
+              <span className="row-actions">
+                {can('service.work') && (
+                  <Link className="pill pill-sm" to={`/service/new?vehicleId=${v.id}`}>
+                    {t.migrationPage.openRepair}
+                  </Link>
+                )}
+                <button type="button" className="pill pill-sm" onClick={() => setOpen(v.id)}>
+                  {t.migrationPage.backToFleet}
+                </button>
+              </span>
+            )}
+          </li>
+        ))}
+      </ul>
+    </details>
   );
 }
 
@@ -326,9 +327,6 @@ export function ServicePage() {
           </ul>
         </section>
       )}
-
-      {/* «В ремонте без заявки» (issue #18, B6): was a list of «Настройки → До EV8 Ops». */}
-      {mayFleet && can('fleet.state.manual') && <WithoutRepair onDone={reload} />}
 
       <DataList
         rows={data.jobs}
@@ -429,6 +427,10 @@ export function ServicePage() {
           },
         ]}
       />
+
+      {/* «В ремонте без заявки» (issue #18, B6): was a list of «Настройки → До EV8 Ops». After the
+          section's own list and folded, so the repairs stay first. */}
+      {mayFleet && can('fleet.state.manual') && <WithoutRepair onDone={reload} />}
     </>
   );
 }
