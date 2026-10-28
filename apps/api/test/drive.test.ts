@@ -434,7 +434,7 @@ describe.skipIf(!HAS_DB)('«Это не возврат» on a Drive return row (
     process.env.DRIVE_ROOT = 'root';
     forgetToken();
     try {
-      type Q = { queue: { group: string; rows: { id: string; action: string; note: string | null }[] }[] };
+      type Q = { queue: { group: string; rows: { id: string; action: string; href: string; note: string | null }[] }[] };
       const rows = async () => json<Q>(await call(owner, 'GET', '/api/today')).queue.flatMap((g) => g.rows);
       const first = await rows();
       expect(first.find((x) => x.id === `drive_return:${a.id}`)).toMatchObject({ action: 'close_from_drive', note: '2026-09-09||act' });
@@ -482,6 +482,15 @@ describe.skipIf(!HAS_DB)('«Это не возврат» on a Drive return row (
       expect((await rows()).some((x) => x.id === `drive_return:${b.id}`)).toBe(false);
       await prisma.driveFile.update({ where: { id: actB }, data: { modifiedAt: new Date('2026-10-28T10:00:00.000Z') } });
       expect((await rows()).some((x) => x.id === `drive_return:${b.id}`)).toBe(true);
+
+      // Answered again, and then the real act of this rental lands beside it: the row is back with that act — its
+      // day, what it paid back, the return opening on its day — not the undated paper answered before (review of #19).
+      expect((await call(owner, 'POST', `/api/drive/returns/${b.id}/not-return`, { reason: 'test: still the paper of the moped before' })).statusCode).toBe(201);
+      expect((await rows()).some((x) => x.id === `drive_return:${b.id}`)).toBe(false);
+      await prisma.driveFile.create({
+        data: { id: `act19d-${uniq()}`, folderId: fb, name: '261021 return act.pdf', kind: 'return_act', modifiedAt: new Date('2026-10-28T11:00:00.000Z'), datedOn: new Date('2026-10-21T00:00:00Z'), vin: b.vin, paidBackTetri: 18000 },
+      });
+      expect((await rows()).find((x) => x.id === `drive_return:${b.id}`)).toMatchObject({ note: '2026-10-21|18000|act', href: `/rentals/${b.id}/return?on=2026-10-21` });
     } finally {
       delete process.env.DRIVE_SA_KEY;
       delete process.env.DRIVE_ROOT;

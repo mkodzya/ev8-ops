@@ -1,4 +1,4 @@
-import { addDays, driveReturnAnswered, driveReturnKeys, driveReturnWhy, effectiveRentalStatus, todayISO, type RentalStatus } from '@ev8/shared';
+import { addDays, driveReturnAnswered, driveReturnKeys, driveReturnShownAct, driveReturnWhy, effectiveRentalStatus, todayISO, type RentalStatus } from '@ev8/shared';
 import { dateFromISO, isoDate } from './dates.js';
 import { prisma } from './db.js';
 import { DriveError, FOLDER, download, driveConfig, listFolder, type DriveConfig, type DriveFailure, type DriveItem } from './drive.js';
@@ -276,8 +276,8 @@ export async function driveReconciliation() {
     return !!s && actOfSwappedMoped(vin, s);
   };
   // The folder's return acts — the rental's own, not one dated before its
-  // pickup, nor the closing paper of a moped a swap took out of it — and the
-  // first of them, the one the row shows.
+  // pickup, nor the closing paper of a moped a swap took out of it — and
+  // whether there is one (the act the row shows is `shownAct`, below).
   const ownActs = (f: (typeof folders)[number]) =>
     f.files.filter((x) => x.kind === 'return_act' && actAfterPickup(isoDate(x.datedOn), isoDate(f.rental?.pickedUpOn ?? null)) && !swappedAct(f, x.vin));
   const act = (f: (typeof folders)[number]) => ownActs(f)[0] ?? null;
@@ -302,8 +302,17 @@ export async function driveReconciliation() {
     driveReturnKeys(backAll.filter((f) => f.rentalId === rentalId).map((f) => ({ id: f.id, acts: ownActs(f).map((x) => ({ id: x.id, modifiedAt: x.modifiedAt.toISOString() })) })));
   const answers = await notReturnAnswers(back.map((f) => f.rentalId!));
   const answered = (f: (typeof folders)[number]) => driveReturnAnswered(keysOf(f.rentalId!), answers.get(f.rentalId!)?.keys ?? []);
+  // The act the row shows: the new one nobody answered first, a dated one before an undated one (`driveReturnShownAct`).
+  const shownAct = (f: (typeof folders)[number]) => {
+    const acts = ownActs(f);
+    const pick = driveReturnShownAct(
+      acts.map((x) => ({ id: x.id, modifiedAt: x.modifiedAt.toISOString(), datedOn: isoDate(x.datedOn) })),
+      answers.get(f.rentalId!)?.keys ?? [],
+    );
+    return pick ? (acts.find((x) => x.id === pick.id) ?? null) : null;
+  };
   const rowOf = (f: (typeof folders)[number]) => {
-    const a = act(f);
+    const a = shownAct(f);
     return {
       folder: { id: f.id, name: f.name, url: f.webUrl, section: f.section },
       rental: { id: f.rental!.id, number: f.rental!.number, customer: f.rental!.customer },

@@ -23,6 +23,11 @@ export function driveReturnWhy(act: { returnedOn: ISODate | null } | null): Driv
   return act.returnedOn ? 'act' : 'act_undated';
 }
 
+/** One return act's key: the file and the moment Drive last changed it. */
+export function driveReturnActKey(act: { id: string; modifiedAt: string }): string {
+  return `act:${act.id}@${act.modifiedAt}`;
+}
+
 /**
  * The things that made a rental's row, one key each: every return act in its
  * folders that counts — the file and the moment Drive last changed it — or,
@@ -30,7 +35,20 @@ export function driveReturnWhy(act: { returnedOn: ISODate | null } | null): Driv
  * owner's answer keeps these keys.
  */
 export function driveReturnKeys(folders: readonly { id: string; acts: readonly { id: string; modifiedAt: string }[] }[]): string[] {
-  return folders.flatMap((f) => (f.acts.length > 0 ? f.acts.map((a) => `act:${a.id}@${a.modifiedAt}`) : [`folder:${f.id}`]));
+  return folders.flatMap((f) => (f.acts.length > 0 ? f.acts.map(driveReturnActKey) : [`folder:${f.id}`]));
+}
+
+/**
+ * The act a row shows, of a folder's return acts (newest first): the first
+ * nobody answered «Это не возврат» — the new one that brought the row back —
+ * else the first. An act with a day comes before one without: the day is what
+ * the return opens on, and what it paid back is that act's. Review of #19: an
+ * undated act answered, then the real act came, and the row still showed the
+ * undated one — no day, no sum, the return opened on today.
+ */
+export function driveReturnShownAct<A extends { id: string; modifiedAt: string; datedOn: ISODate | null }>(acts: readonly A[], answered: readonly string[]): A | null {
+  const dayFirst = [...acts].sort((x, y) => Number(x.datedOn == null) - Number(y.datedOn == null));
+  return dayFirst.find((a) => !answered.includes(driveReturnActKey(a))) ?? dayFirst[0] ?? null;
 }
 
 /**
