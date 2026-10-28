@@ -1,9 +1,10 @@
-import { LOCALES } from '@ev8/shared';
+import { LOCALES, sectionOfPath, sectionsFor, type NavCounts } from '@ev8/shared';
 import { ChevronLeft, LogOut } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../../api.js';
 import { LanguageToggle, useLocale, useT, type Locale } from '../../i18n/index.js';
+import { useLoad } from '../../lib/use.js';
 import { useSession } from '../../session.js';
 import { SyncBar } from '../state/SyncBar.js';
 import { PageHeadSlot, useHeader } from './header.js';
@@ -14,9 +15,12 @@ import './tablet.css';
 const WARN_SECONDS = 30;
 
 /**
- * The frame of a PIN session on the workshop tablet (ADR-0033 §7, §10). One
- * section — the repairs — so no rail, no bar, no search; instead the name of
- * whoever is signed in, always in sight, and a sign-out the width of a thumb.
+ * The frame of a PIN session on the workshop tablet (ADR-0033 §7, §10). No
+ * rail, no bar, no search; instead the name of whoever is signed in, always in
+ * sight, and a sign-out the width of a thumb. Since issue #18 A (ADR-0050) the
+ * repairs are one of three sections — the mechanic's own «Сегодня», his
+ * «Задачи», «Ремонты» — and a row of three pills under the bar goes between
+ * them, «Задачи» with its red and grey numbers.
  * This is the one exception to "sign out lives in the avatar menu"
  * (`docs/design/ux.md`): the tablet is shared, and leaving is the action that
  * keeps the next person's work off this one's name.
@@ -29,7 +33,13 @@ export function TabletFrame() {
   const { pathname } = useLocation();
   // Below 900 px a page hands its title to the header, as on a phone: here the bar carries it.
   const header = useHeader();
-  const atRoot = pathname === '/service' || pathname === '/';
+  const sections = sectionsFor(me?.permissions ?? []);
+  const atRoot = pathname === '/' || sections.some((x) => x.path === pathname);
+  const current = sectionOfPath(pathname, me?.permissions);
+  // The tasks' numbers, as on a phone's bar: the tablet is where a mechanic reads them.
+  const counts = useLoad<NavCounts>(me?.permissions.includes('todos.own') ? '/api/nav/counts' : null);
+  const late = counts.data?.todos?.late ?? 0;
+  const due = counts.data?.todos?.today ?? 0;
 
   // The tablet speaks the language of whoever signed in on it, whatever the
   // last person chose (ADR-0033 §9).
@@ -55,14 +65,14 @@ export function TabletFrame() {
             <button
               type="button"
               className="icon-btn"
-              onClick={() => (window.history.length > 1 ? navigate(-1) : navigate('/service'))}
+              onClick={() => (window.history.length > 1 ? navigate(-1) : navigate('/'))}
               aria-label={t.shell.back}
             >
               <ChevronLeft {...ICON} aria-hidden="true" />
             </button>
           )}
           <span className="tablet-title">
-            <span className="tablet-section">{header?.title ?? t.nav.service}</span>
+            <span className="tablet-section">{header?.title ?? t.nav[current]}</span>
             {header?.sub != null && <span className="tablet-sub">{header.sub}</span>}
           </span>
         </div>
@@ -83,6 +93,27 @@ export function TabletFrame() {
           </button>
         </div>
       </header>
+      {sections.length > 1 && (
+        <nav className="tablet-nav" aria-label={t.shell.menu}>
+          {sections.map((x) => (
+            <NavLink key={x.id} to={x.path} end={x.path === '/'} className={() => `pill tablet-nav-item ${current === x.id ? 'on' : ''}`}>
+              {t.nav[x.id]}
+              {x.id === 'tasks' && late > 0 && (
+                <span className="badge">
+                  <span className="sr-only">{t.todos.saidLate} </span>
+                  {late}
+                </span>
+              )}
+              {x.id === 'tasks' && late === 0 && due > 0 && (
+                <span className="badge badge-quiet">
+                  <span className="sr-only">{t.todos.saidToday} </span>
+                  {due}
+                </span>
+              )}
+            </NavLink>
+          ))}
+        </nav>
+      )}
       <main className="app-page tablet-page">
         <SyncBar />
         <PageHeadSlot>

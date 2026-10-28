@@ -49,6 +49,7 @@ import { dupEn } from './card-duplicate.js';
 import { rentedFreeEn } from './rented-free.js';
 import { peopleDeleteEn } from './people-delete.js';
 import { simpleEn } from './simplify.js';
+import { todosEn } from './todos.js';
 export const en = {
   lang: { label: 'Language', ka: 'ქართული', ru: 'Русский', en: 'English' },
 
@@ -81,6 +82,8 @@ export const en = {
 
   nav: {
     today: 'Today',
+    // «Задачи» (issue #18 A, ADR-0050): what a person was set by hand.
+    tasks: 'Tasks',
     more: 'More',
     // Issue #15 (ADR-0048): the sections of the new menu, the bar's short word for the schedule.
     schedule: 'Scheduled payments',
@@ -1487,6 +1490,22 @@ export const en = {
       workshop_archived_exists: 'A workshop by that name was taken off the list. Put it back instead: «…» → «Put back».',
       workshop_exists: 'A workshop by that name is already on the list.',
       workshop_not_found: 'No such workshop.',
+      todo_assignee_refused: 'A task is set to yourself. An owner also sets one to a manager or the chief mechanic.',
+      todo_closed: 'This task is closed. Open it again first.',
+      todo_due_bad: 'Write the due day as a date.',
+      todo_due_past: 'The due day has passed. Choose today or a day ahead.',
+      todo_lead_bad: 'Show it ahead by up to 30 days.',
+      todo_link_ended: 'That record has ended — the rental is returned or the moped has left the fleet. Tie the task to the customer instead.',
+      todo_link_not_found: 'That record was not found.',
+      todo_link_refused: 'A task for a mechanic is about a moped only, and only whoever reads the fleet ties a task to a record.',
+      todo_needs_file: 'This task closes with a photo or a file. Add one, then press «Done».',
+      todo_not_found: 'No such task.',
+      todo_not_yours: 'Whoever set a task changes or deletes it; whoever it is for closes it.',
+      todo_note_long: 'The comment is too long: up to 2,000 characters.',
+      todo_record_ended: 'The record this task was about has ended, so it stays closed. Set a new task if there is more to do.',
+      todo_text_long: 'Too long: up to 300 characters. Put the rest in the comment.',
+      todo_text_missing: 'Write what to do.',
+      todos_not_yours: 'You see your own tasks only.',
       wrong_password: 'The current password is wrong.',
     },
   },
@@ -1532,6 +1551,7 @@ export const en = {
   ...rentedFreeEn,
   ...peopleDeleteEn,
   ...simpleEn,
+  ...todosEn,
 };
 
 export type Dict = typeof en;

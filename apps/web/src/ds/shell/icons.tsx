@@ -7,6 +7,7 @@ import {
   CalendarClock,
   ChartColumn,
   FileText,
+  ListChecks,
   Package,
   Repeat,
   Send,
@@ -25,6 +26,8 @@ import {
 /** One linear icon per section and per "+" action (brand.md, "Значки"). */
 export const SECTION_ICON: Record<SectionId, LucideIcon> = {
   today: CalendarCheck,
+  // «Задачи» (issue #18 A, ADR-0050): what people set by hand, ticked off.
+  tasks: ListChecks,
   // «Оплаты по графику» and «Разобрать» (issue #15): who pays when, and lines to place.
   schedule: CalendarClock,
   sort: ArrowLeftRight,

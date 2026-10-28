@@ -68,6 +68,14 @@ describe('two kinds of line', () => {
   it('a contract marked signed in Signify, and the mark taken back, are events (ADR-0039)', () => {
     for (const a of ['document.signed_elsewhere', 'document.signed_elsewhere.undo']) expect(journalKind(a), a).toBe('event');
   });
+
+  it('a task set, its file and its closing are events; its change is a change, under no money filter (ADR-0050)', () => {
+    for (const a of ['todo.create', 'todo.file.add', 'todo.close', 'todo.close.record']) {
+      expect(journalKind(a), a).toBe('event');
+      expect(journalGroups(a), a).toEqual([]);
+    }
+    expect(journalKind('todo.update')).toBe('change');
+  });
 });
 
 describe('three looks at one personal number', () => {

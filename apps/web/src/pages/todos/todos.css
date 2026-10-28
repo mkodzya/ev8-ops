@@ -1,0 +1,89 @@
+/* «Задачи» (issue #18 of the director, part A; ADR-0050): the director's
+   mockup in the product's tokens. Rows by day, a ring to tick at the thumb,
+   the words, quiet tags under them, the day on the right. One radius
+   language: tags are pills like the chips. */
+
+.todo-day { display: flex; align-items: baseline; gap: 8px; margin: 18px 0 6px; font: var(--text-h3); }
+.todo-day:first-of-type { margin-top: 4px; }
+.todo-day small { font: var(--text-body-sm); color: var(--muted); }
+.todo-day-late { color: var(--crit-ink); }
+
+.todo-list { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--surface); overflow: hidden; }
+.todo-row { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; gap: 0 8px; align-items: start; padding: 4px 12px 8px 4px; border-top: 1px solid var(--line-soft); }
+.todo-row:first-child { border-top: 0; }
+.todo-row-late { background: linear-gradient(90deg, var(--crit-soft), transparent 40%); }
+
+/* The ring: 44 px to the thumb (ux №13), 22 px to the eye. */
+.todo-tick { width: 44px; height: 44px; display: grid; place-items: center; padding: 0; border: 0; background: none; cursor: pointer; color: inherit; }
+.todo-tick:disabled { cursor: default; }
+.todo-ring { position: relative; width: 22px; height: 22px; border: 2px solid var(--line-control); border-radius: 50%; }
+.todo-tick:hover:not(:disabled) .todo-ring, .todo-tick:focus-visible .todo-ring { border-color: var(--accent); }
+.todo-tick:focus-visible { outline: none; box-shadow: var(--focus-ring); border-radius: 50%; }
+.todo-row-done .todo-ring { background: var(--accent); border-color: var(--accent); }
+.todo-row-done .todo-ring::after {
+  content: '';
+  position: absolute;
+  left: 6px;
+  top: 2px;
+  width: 5px;
+  height: 10px;
+  border: solid var(--on-accent);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.todo-main { display: block; min-width: 0; padding-top: 11px; }
+.todo-open { display: block; width: 100%; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.todo-open:hover .todo-text { color: var(--accent); }
+.todo-open:focus-visible { outline: none; box-shadow: var(--focus-ring); border-radius: 8px; }
+.todo-text { font-weight: 600; overflow-wrap: anywhere; }
+.todo-row-done .todo-text { color: var(--muted); text-decoration: line-through; }
+.todo-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin-top: 5px; font: var(--text-body-sm); color: var(--muted); }
+.todo-tag { display: inline-block; padding: 1px 8px; border-radius: var(--radius-pill); background: var(--surface-2); color: var(--ink); font: var(--text-label); white-space: nowrap; }
+.todo-tag-who { background: var(--accent-soft); color: var(--accent-ink); }
+.todo-tag-file { background: var(--warn-soft); color: var(--service-deep); }
+.todo-tag-repeat { background: var(--info-soft); color: var(--rented-ink); }
+.todo-tag-record { font: var(--text-mono-sm); border: 1px solid var(--line); background: var(--surface); }
+.todo-due { padding-top: 12px; font: var(--text-mono-sm); white-space: nowrap; text-align: right; }
+.todo-due-late { color: var(--crit-ink); font-weight: 600; }
+
+.todo-more { display: block; width: 100%; margin-top: 6px; padding: 10px 14px; border: 1px dashed var(--line); border-radius: var(--radius-card); background: none; color: var(--muted); font: var(--text-body-sm); text-align: left; cursor: pointer; }
+.todo-more:hover { color: var(--accent); border-color: var(--accent-hover); }
+
+.todo-chips { margin: 4px 0 8px; }
+
+/* The block first on «Сегодня»: the same rows, denser, a «Сделано» at the end of each. */
+.todo-block .todo-list { border: 0; border-radius: 0; background: none; }
+.todo-block .todo-row { padding-left: 0; padding-right: 0; }
+.todo-block .todo-act { padding-top: 6px; }
+
+/* A task's sheet. */
+.todo-card-text { margin: 0 0 6px; font: var(--text-h3); overflow-wrap: anywhere; }
+.todo-card-note { margin: 10px 0; padding: 10px 12px; border-radius: var(--radius-card); background: var(--surface-2); white-space: pre-wrap; overflow-wrap: anywhere; }
+.todo-files { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0; }
+.todo-file { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 4px 10px; border: 1px solid var(--line); border-radius: var(--radius-pill); color: var(--ink); font: var(--text-label); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.todo-drop { display: grid; gap: 6px; justify-items: start; margin: 10px 0; padding: 14px; border: 2px dashed var(--line-control); border-radius: var(--radius-card); }
+.todo-card-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+
+/* The record a new task is about, picked by search. */
+.todo-pick { display: grid; gap: 4px; margin-top: 6px; }
+.todo-pick-item { display: flex; justify-content: space-between; gap: 8px; min-height: 44px; align-items: center; padding: 6px 12px; border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--surface); color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+.todo-pick-item:hover { border-color: var(--accent-hover); }
+.todo-linked { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+/* A mechanic's «Сегодня»: the cards side by side where the tablet has room. */
+.wday { display: grid; gap: 12px; grid-template-columns: 1fr; }
+@media (min-width: 720px) {
+  .wday { grid-template-columns: 1fr 1fr; }
+}
+.wday .card { margin-bottom: 0; }
+.wday-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 6px; }
+.wday-head h2 { margin: 0; font: var(--text-h3); }
+.wday-line { margin: 4px 0; font: var(--text-body); }
+
+/* The due day and «Показать заранее» side by side: two short controls fit 375 px. */
+.todo-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.todo-pair .input { min-width: 0; width: 100%; }
+.todo-drop-pick { cursor: pointer; color: var(--muted); }
+.todo-drop-pick b { color: var(--accent); font: var(--text-button); }
+.todo-drop-pick:hover { border-color: var(--accent-hover); }

@@ -62,6 +62,8 @@ import { ModelsPage } from './pages/ModelsPage.js';
 import { FleetPage } from './pages/FleetPage.js';
 import { RentalsPage } from './pages/RentalsPage.js';
 import { TodayPage } from './pages/TodayPage.js';
+import { TodosPage } from './pages/todos/TodosPage.js';
+import { WorkshopToday } from './pages/todos/WorkshopToday.js';
 import { useT } from './i18n/index.js';
 import { useSession } from './session.js';
 
@@ -111,12 +113,15 @@ function Unreachable() {
 }
 
 /**
- * "/" is "Today" — the front office's queue. Whoever has none of it, a
- * mechanic, lands on their own first section instead (ADR-0033).
+ * "/" is "Today" — the front office's queue. Whoever reads none of it, a
+ * mechanic, has a «Сегодня» of his own since issue #18 A (ADR-0050): his
+ * tasks, his repairs, the maintenance, his payout. Before it he landed on the
+ * repairs (ADR-0033); one with neither still lands on his first section.
  */
 function Home() {
   const { me, can } = useSession();
   if (!me || can('fleet.view')) return <TodayPage />;
+  if (can('todos.own')) return <WorkshopToday />;
   return <Navigate to={homePathFor(me.permissions)} replace />;
 }
 
@@ -145,6 +150,8 @@ export function App() {
         }
       >
         <Route index element={<Home />} />
+        {/* «Задачи» (issue #18 A, ADR-0050): everybody's own; an owner reads everybody's. */}
+        <Route path="tasks" element={<Require perm="todos.own"><TodosPage /></Require>} />
 
         <Route path="rentals" element={<RentalsPage />} />
         <Route path="rentals/new" element={<PickupWizard />} />

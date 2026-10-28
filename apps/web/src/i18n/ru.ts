@@ -40,6 +40,7 @@ import { dupRu } from './card-duplicate.js';
 import { rentedFreeRu } from './rented-free.js';
 import { peopleDeleteRu } from './people-delete.js';
 import { simpleRu } from './simplify.js';
+import { todosRu } from './todos.js';
 import type { Dict } from './en.js';
 
 // Typed as Dict: a missing or misspelled key fails the build.
@@ -86,6 +87,8 @@ export const ru: Dict = {
 
   nav: {
     today: 'Сегодня',
+    // «Задачи» (issue #18 A, ADR-0050): what a person was set by hand.
+    tasks: 'Задачи',
     more: 'Ещё',
     // Issue #15 (ADR-0048): the sections of the new menu, the bar's short word for the schedule.
     schedule: 'Оплаты по графику',
@@ -1477,6 +1480,22 @@ export const ru: Dict = {
       workshop_archived_exists: 'Мастерская с таким названием убрана из списка. Верните её: «…» → «Вернуть».',
       workshop_exists: 'Мастерская с таким названием уже есть в списке.',
       workshop_not_found: 'Такой мастерской нет.',
+      todo_assignee_refused: 'Задачу ставят себе. Владелец ставит и менеджеру или главному механику.',
+      todo_closed: 'Задача закрыта. Сначала верните её в работу.',
+      todo_due_bad: 'Срок — это дата.',
+      todo_due_past: 'Этот день прошёл. Выберите сегодня или день впереди.',
+      todo_lead_bad: 'Показать заранее можно не больше чем за 30 дней.',
+      todo_link_ended: 'Эта запись закончилась — аренда возвращена или мопед выбыл из парка. Привяжите задачу к клиенту.',
+      todo_link_not_found: 'Запись не найдена.',
+      todo_link_refused: 'Задачу механику привязывают только к мопеду, а привязывает тот, кто видит парк.',
+      todo_needs_file: 'Эта задача закрывается с фото или файлом. Добавьте его и нажмите «Сделано».',
+      todo_not_found: 'Такой задачи нет.',
+      todo_not_yours: 'Изменить или удалить задачу может тот, кто её поставил; закрывает исполнитель.',
+      todo_note_long: 'Комментарий слишком длинный: до 2 000 знаков.',
+      todo_record_ended: 'Запись, к которой привязана задача, закончилась, поэтому задача остаётся закрытой. Если дело осталось — поставьте новую.',
+      todo_text_long: 'Слишком длинно: до 300 знаков. Остальное — в комментарий.',
+      todo_text_missing: 'Напишите, что сделать.',
+      todos_not_yours: 'Вам видны только ваши задачи.',
       wrong_password: 'Текущий пароль неверный.',
     },
   },
@@ -1522,4 +1541,5 @@ export const ru: Dict = {
   ...rentedFreeRu,
   ...peopleDeleteRu,
   ...simpleRu,
+  ...todosRu,
 };

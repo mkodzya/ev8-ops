@@ -22,6 +22,7 @@ import { useLoad } from '../lib/use.js';
 import { useSession } from '../session.js';
 import { KommoField } from '../components/Kommo.js';
 import { RecordHistory } from '../components/RecordHistory.js';
+import { TodoSheet } from './todos/TodoSheet.js';
 
 interface Card {
   customer: {
@@ -79,6 +80,8 @@ export function CustomerPage() {
   const [editing, setEditing] = useState(false);
   const [wa, setWa] = useState(false);
   const [merging, setMerging] = useState(false);
+  // «⋯ → Поручить» (issue #18 A, ADR-0050): a task about this customer — a debt left after a return, a call.
+  const [tasking, setTasking] = useState(false);
   const [feedFilter, setFeedFilter] = useState<'all' | 'payment' | 'document'>('all');
   if (failure) return <LoadError failure={failure} onRetry={reload} />;
   if (!data) return <Loading />;
@@ -142,11 +145,12 @@ export function CustomerPage() {
             {t.actions.newRental}
           </Link>
         )}
-        {!c.archived && (can('settings.manage') || can('goods.sell')) && (
+        {!c.archived && (can('settings.manage') || can('goods.sell') || can('todos.own')) && (
           <RowMenu
             actions={[
               // A part or a charger sold to him over the counter (ADR-0045).
               ...(can('goods.sell') ? [{ key: 'goods', label: t.goods.sell, onPick: () => navigate(`/sales/goods/new?customer=${c.id}`) }] : []),
+              ...(can('todos.own') ? [{ key: 'task', label: t.todos.give, onPick: () => setTasking(true) }] : []),
               ...(can('settings.manage') ? [{ key: 'merge', label: t.merge.title, onPick: () => setMerging(true) }] : []),
             ]}
           />
@@ -164,6 +168,7 @@ export function CustomerPage() {
         </section>
       )}
 
+      {tasking && <TodoSheet fromCard link={{ kind: 'customer', id: c.id, label: c.name }} onClose={() => setTasking(false)} />}
       {merging && (
         <MergeSheet
           keepId={c.id}

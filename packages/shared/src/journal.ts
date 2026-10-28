@@ -68,6 +68,11 @@ const EVENT_ACTIONS = new Set<string>([
   'mechanic.payout.void',
   'customer.document.add',
   'journal.export',
+  // «Задачи» (ADR-0050): a task set, its file, «Сделано», closed by its record — nothing edited.
+  'todo.create',
+  'todo.file.add',
+  'todo.close',
+  'todo.close.record',
 ]);
 
 const startsWithAny = (action: string, prefixes: readonly string[]) => prefixes.some((p) => action.startsWith(p));

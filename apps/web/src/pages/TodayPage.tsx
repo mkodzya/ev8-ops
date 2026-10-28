@@ -1,4 +1,4 @@
-import { localDateTime, queueMore, type FleetChip, type TaskGroupRows, type TaskRow, type VehicleState } from '@ev8/shared';
+import { TODO_MINE, localDateTime, queueMore, todoOnToday, type FleetChip, type TaskGroupRows, type TaskRow, type VehicleState } from '@ev8/shared';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../api.js';
@@ -14,6 +14,8 @@ import { useLoad } from '../lib/use.js';
 import { kmText, leftText } from '../lib/maintenance.js';
 import { Typed } from '../lib/typed.js';
 import { useSession } from '../session.js';
+import { TodayTodos } from './todos/TodayTodos.js';
+import { todosUrl, type TodoList } from './todos/TodoParts.js';
 
 // "Today" is the queue (wave 4 §3.1): group by group, three rows and what is
 // left over, one action per row. The rules are in @ev8/shared — this screen
@@ -110,12 +112,16 @@ export function TodayPage() {
   const openMoney = useMoneyForm();
   const navigate = useNavigate();
   const { data, failure, reload } = useLoad<TodayData>('/api/today');
+  // The block «Задачи» reads the same request: with a task on today, the day is not «всё».
+  const todos = useLoad<TodoList>(can('todos.own') ? todosUrl(TODO_MINE) : null);
   const [wa, setWa] = useState<WaTarget | null>(null);
   // The Drive return row an owner is answering «Это не возврат» (issue #19).
   const [notReturn, setNotReturn] = useState<TaskRow | null>(null);
   if (!data && failure) return <LoadError failure={failure} onRetry={reload} />;
   if (!data) return <Loading />;
   const n = data.numbers;
+  // A task late or today's (the block above): then the day is not «На сегодня всё».
+  const tasksToday = todos.data ? todos.data.todos.some((x) => todoOnToday(x, todos.data?.today ?? data.today)) : false;
 
   const rowSub = (r: TaskRow): string => {
     const bits: string[] = [];
@@ -235,6 +241,10 @@ export function TodayPage() {
         <p className="muted">{dayTitle(data.today, t)}</p>
       </header>
 
+      {/* «Задачи» first (issue #18 A, ADR-0050): one's own late and today's, set by hand.
+          None — no block. Nothing below is copied into it: the queue is what the data says. */}
+      <TodayTodos />
+
       <div className="num-strip">
         {/* Each says the number of the chip it opens (Mika, answer «А», 22.10.2026): «Свободно» is ready to hand out — the rental park, on a point. */}
         <Num to="/fleet?f=rented" value={String(n.chips.rented ?? 0)} label={t.today.numbers.rented ?? ''} />
@@ -247,7 +257,7 @@ export function TodayPage() {
         {n.myTillTetri != null && <Num to="/money/cash" value={formatGel(n.myTillTetri, { decimals: false })} label={t.today.numbers.myTill ?? ''} />}
       </div>
 
-      {data.queue.length === 0 ? (
+      {data.queue.length === 0 && !tasksToday ? (
         <section className="card empty-day">
           <p className="empty-title">{t.today.allDone}</p>
           <p className="muted">{t.today.allDoneSub}</p>

@@ -35,6 +35,12 @@
  * had for the concept (docs/qa/issue-18-b-simplify-ka-strings.md, §2, for his
  * check) and no new one came in, so these rules are Russian.
  *
+ * Part A of the same issue (ADR-0050) gave «Задачи» / «დავალებები» to the
+ * tasks people set by hand. The word is that section's alone: the queue
+ * «Сегодня» builds from the data is its rows, and a decision waiting there is
+ * not a task (the director's «Чтобы не задвоить»). A rule with `except` reads
+ * every string but those whose key matches it — here the section's own.
+ *
  *   node scripts/words-guard.mjs
  */
 import { readdirSync, readFileSync } from 'node:fs';
@@ -96,6 +102,9 @@ const ASSIGNMENT = new RegExp(
  */
 const SETTLED = /^(?:money\.settles|hand\.(?:settles|overpay)|paymentPage\.settled|payments\.(?:allocated|recorded))$/u;
 
+/** The keys of «Задачи» itself (issue #18 A, ADR-0050): its dictionary, its menu word, its refusals and its journal lines. */
+const TASKS = /^(?:todos(?:\.|$)|nav\.tasks$|errors\.codes\.todos?_|feedWords\.todo\.)/u;
+
 /** The labels of the return wherever it stands: «Вернуть мопед», never a bare «Возврат» (issue #18, B2). */
 const RETURN_ACTION = /^(?:actions\.returnRental|shell\.actions\.return|today\.actions\.return)$/u;
 
@@ -103,7 +112,7 @@ const RETURN_ACTION = /^(?:actions\.returnRental|shell\.actions\.return|today\.a
  * `word` is the retired word (any of its forms), `use` what the glossary says
  * instead. A word kept for one thing has `keeps(text)`: true when the string
  * uses it for that thing. A rule with `at` reads only the strings whose key
- * matches it.
+ * matches it; one with `except`, every string but those.
  */
 const RULES = [
   // Georgian: nowhere.
@@ -264,6 +273,19 @@ const RULES = [
     word: /Поступлени|^Расходы$|Категории/u,
     use: 'Settings keeps «Статьи расходов» and «Статьи доходов»; «Поступления» is «Разобрать»’s and the report’s (issue #18 B5)',
   },
+  // Issue #18, part A (28.10.2026; ADR-0050).
+  {
+    lang: 'ru',
+    word: /задач/iu,
+    except: TASKS,
+    use: '«Задачи» are what people set by hand; what «Сегодня» builds from the data is its rows, not tasks (issue #18 A)',
+  },
+  {
+    lang: 'ka',
+    word: /დავალებ|ამოცან/u,
+    except: TASKS,
+    use: '«დავალებები» are what people set by hand; what «დღეს» builds from the data is its rows, not tasks (issue #18 A)',
+  },
 ];
 
 /**
@@ -405,6 +427,7 @@ for (const file of files) {
     for (const rule of RULES) {
       if (!ALPHABET[rule.lang].test(text) || !rule.word.test(text)) continue;
       if (rule.at && !rule.at.test(path)) continue;
+      if (rule.except?.test(path)) continue;
       if (rule.keeps?.(text)) continue;
       findings.push(`${file}:${line}: ${path} «${text}» — ${rule.use}`);
     }

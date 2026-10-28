@@ -40,6 +40,7 @@ import { dupKa } from './card-duplicate.js';
 import { rentedFreeKa } from './rented-free.js';
 import { peopleDeleteKa } from './people-delete.js';
 import { simpleKa } from './simplify.js';
+import { todosKa } from './todos.js';
 import type { Dict } from './en.js';
 
 // Typed as Dict: a missing or misspelled key fails the build.
@@ -75,6 +76,8 @@ export const ka: Dict = {
 
   nav: {
     today: 'დღეს',
+    // «Задачи» (issue #18 A, ADR-0050): what a person was set by hand.
+    tasks: 'დავალებები',
     more: 'მეტი',
     // Issue #15 (ADR-0048): the sections of the new menu, the bar's short word for the schedule.
     schedule: 'გადახდის გრაფიკი',
@@ -1466,6 +1469,22 @@ export const ka: Dict = {
       workshop_archived_exists: 'ამ სახელით სახელოსნო სიიდან მოხსნილია. დააბრუნეთ ის: «…» → «დაბრუნება».',
       workshop_exists: 'ამ სახელით სახელოსნო უკვე სიაშია.',
       workshop_not_found: 'ასეთი სახელოსნო არ არის.',
+      todo_assignee_refused: 'დავალებას საკუთარ თავს აძლევენ. მფლობელი აძლევს მენეჯერს ან მთავარ მექანიკოსსაც.',
+      todo_closed: 'დავალება დახურულია. ჯერ ხელახლა გახსენით.',
+      todo_due_bad: 'ვადა თარიღით ჩაწერეთ.',
+      todo_due_past: 'ეს დღე გავიდა. აირჩიეთ დღეს ან მომავალი დღე.',
+      todo_lead_bad: 'წინასწარ ჩვენება — არაუმეტეს 30 დღით ადრე.',
+      todo_link_ended: 'ეს ჩანაწერი დასრულდა — ქირაობა დაბრუნდა ან მოპედი პარკიდან გავიდა. დავალება კლიენტს მიაბით.',
+      todo_link_not_found: 'ჩანაწერი ვერ მოიძებნა.',
+      todo_link_refused: 'მექანიკოსის დავალება მხოლოდ მოპედს ებმის, და მიაბამს ის, ვინც პარკს ხედავს.',
+      todo_needs_file: 'ეს დავალება ფოტოთი ან ფაილით იხურება. დაამატეთ და დააჭირეთ «შესრულდა».',
+      todo_not_found: 'ასეთი დავალება არ არის.',
+      todo_not_yours: 'დავალებას ცვლის ან შლის ის, ვინც მისცა; ხურავს შემსრულებელი.',
+      todo_note_long: 'კომენტარი ძალიან გრძელია: 2 000 სიმბოლომდე.',
+      todo_record_ended: 'ჩანაწერი, რომელსაც დავალება ებმოდა, დასრულდა, ამიტომ დავალება დახურული რჩება. თუ საქმე დარჩა — ახალი დავალება მიეცით.',
+      todo_text_long: 'ძალიან გრძელია: 300 სიმბოლომდე. დანარჩენი — კომენტარში.',
+      todo_text_missing: 'ჩაწერეთ, რა უნდა გაკეთდეს.',
+      todos_not_yours: 'თქვენ მხოლოდ თქვენს დავალებებს ხედავთ.',
       wrong_password: 'მიმდინარე პაროლი არასწორია.',
     },
   },
@@ -1511,4 +1530,5 @@ export const ka: Dict = {
   ...rentedFreeKa,
   ...peopleDeleteKa,
   ...simpleKa,
+  ...todosKa,
 };
