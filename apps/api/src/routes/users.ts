@@ -4,7 +4,7 @@ import { audit } from '../lib/audit.js';
 import { SESSION_COOKIE, hashPassword, permissionsOf, verifyPassword } from '../lib/auth.js';
 import { prisma } from '../lib/db.js';
 import { demoLoginRefused } from '../lib/env.js';
-import { badRequest, conflict, forbidden, isUniqueViolation, notFound } from '../lib/errors.js';
+import { badRequest, conflict, forbidden, isForeignKeyViolation, isUniqueViolation, notFound } from '../lib/errors.js';
 import { actorOf } from '../lib/guard.js';
 import { oneOf, str, tetri } from '../lib/validate.js';
 import { hashPin, isPinRole, isPinShaped, lockedUntil } from '../lib/workshop.js';
@@ -44,13 +44,82 @@ function readRate(b: Body): number | null {
 /** The PIN sessions of this person end — a new PIN, no PIN, another role. */
 const closePinSessions = (userId: string) => prisma.session.deleteMany({ where: { userId, kind: 'pin' } });
 
+/**
+ * Everything the schema records to a person, as the relations of `User` name
+ * it (GitHub issue #17, item 5; ADR-0049): what they did — the journal's rows
+ * by them included — and what was written to them, a repair carried or a
+ * payout. A person with any of it is switched off, never deleted. The
+ * sessions are asked apart: they say the person signed in. Behind this list
+ * stand the database's own foreign keys, every one of them NO ACTION but the
+ * sessions' and the operation keys': a table this list does not name refuses
+ * the deletion all the same (`isForeignKeyViolation`).
+ */
+const TRACES = {
+  operationKeys: true,
+  rentalsCreated: true,
+  contractsMarkedSigned: true,
+  depositsDecided: true,
+  depositsConfirmed: true,
+  actsCreated: true,
+  vehicleEvents: true,
+  auditEntries: true,
+  filesUploaded: true,
+  paymentsCreated: true,
+  batteryCounts: true,
+  batteryMoves: true,
+  paymentsVoided: true,
+  statements: true,
+  serviceJobs: true,
+  repairsCarried: true,
+  worksDone: true,
+  worksWritten: true,
+  repairsApproved: true,
+  repairsRejected: true,
+  worksApproved: true,
+  worksRejected: true,
+  partsWritten: true,
+  partsReimbursed: true,
+  partsApproved: true,
+  partsRejected: true,
+  trackersFitted: true,
+  trackersRemoved: true,
+  workTypesAdded: true,
+  sales: true,
+  goodsSalesMade: true,
+  goodsSalesCancelled: true,
+  purchases: true,
+  parts: true,
+  stockMoves: true,
+  locations: true,
+  rentalSettings: true,
+  serviceSettings: true,
+  quickRates: true,
+  workshops: true,
+  handoversFrom: true,
+  handoversDecided: true,
+  bankDeposits: true,
+  devicesRegistered: true,
+  devicesRevoked: true,
+  payoutsReceived: true,
+  payoutsMarked: true,
+  payoutsVoided: true,
+} as const;
+
+/** The names of what is recorded to a person, from the counts of TRACES; empty — nothing. */
+function tracesOf(counts: Record<string, number>): string[] {
+  return Object.entries(counts)
+    .filter(([key, n]) => key in TRACES && n > 0)
+    .map(([key]) => key);
+}
+
 export function userRoutes(app: FastifyInstance): void {
   app.get('/api/users', { config: { scope: 'users.manage' } }, async () => {
     const users = await prisma.user.findMany({
       orderBy: [{ active: 'desc' }, { name: 'asc' }],
       // On how many devices this person is signed in right now: the number
-      // "Закрыть все входы" is decided by (§3.4).
-      include: { sessions: { select: { lastSeenAt: true } } },
+      // "Закрыть все входы" is decided by (§3.4). And what is recorded to
+      // them: nothing, with no sign-in either, offers «Удалить» (issue #17).
+      include: { sessions: { select: { lastSeenAt: true } }, _count: { select: TRACES } },
     });
     // When each of them last signed in. Live sessions cannot answer this:
     // closing a session takes its history with it, and the column then says
@@ -92,6 +161,13 @@ export function userRoutes(app: FastifyInstance): void {
           lastLoginAt: signedIn?.toISOString() ?? null,
           /** The last request of a session still open, for "сейчас на N устройствах". */
           lastSeenAt: live?.toISOString() ?? null,
+          /**
+           * Never signed in and nothing recorded to them (issue #17): an owner
+           * may delete the login, and its email is free again. Everybody else
+           * is only switched off. The deletion asks again, and the database's
+           * keys stand behind it.
+           */
+          deletable: u.sessions.length === 0 && signedIn == null && tracesOf(u._count).length === 0,
           createdAt: u.createdAt.toISOString(),
         };
       }),
@@ -188,6 +264,40 @@ export function userRoutes(app: FastifyInstance): void {
       },
       after: { ...shown, ...(renter ? { renter: renter.now } : {}), ...(leavesWorkshop ? { pin: 'cleared' } : {}) },
     });
+    return { ok: true };
+  });
+
+  /**
+   * A login nobody ever signed in with, and to which nothing is recorded, is
+   * deleted rather than switched off (GitHub issue #17, item 5; ADR-0049):
+   * a test login, one made with a typo in its address. Its email is free
+   * again — `duplicate_email` no longer stands in the way of a new login with
+   * it. Anybody who signed in, or to whom anything is recorded — a line of
+   * the journal by them, a repair, a payout, a payment, the till, a device —
+   * is only switched off, as before; the database's foreign keys refuse what
+   * the list of TRACES might miss. The journal keeps who deleted whom, and
+   * which address.
+   */
+  app.delete<{ Params: { id: string } }>('/api/users/:id', { config: { scope: 'users.manage' } }, async (req) => {
+    const actor = actorOf(req);
+    const user = await prisma.user.findUnique({ where: { id: req.params.id }, include: { _count: { select: { sessions: true, ...TRACES } } } });
+    if (!user) throw notFound('user_not_found', 'No such user.');
+    const { sessions, ...counts } = user._count;
+    const signedIn = sessions > 0 || (await prisma.auditLog.count({ where: { actorId: user.id, action: 'auth.login' } })) > 0;
+    if (signedIn) throw conflict('user_signed_in', 'Somebody has signed in with this login; it is switched off, not deleted.');
+    const what = tracesOf(counts);
+    if (what.length > 0) throw conflict('user_has_records', 'Something is recorded to this person; they are switched off, not deleted.', { what });
+    try {
+      await prisma.$transaction(async (tx) => {
+        await tx.user.delete({ where: { id: user.id } });
+        await tx.auditLog.create({
+          data: { actorId: actor.id, action: 'user.delete', entityType: 'user', entityId: user.id, before: { name: user.name, email: user.email, role: user.role, active: user.active } },
+        });
+      });
+    } catch (e) {
+      if (isForeignKeyViolation(e)) throw conflict('user_has_records', 'Something is recorded to this person; they are switched off, not deleted.');
+      throw e;
+    }
     return { ok: true };
   });
 
