@@ -84,6 +84,8 @@ export function customerRoutes(app: FastifyInstance): void {
         dueTodayTetri: debts.get(c.id)?.dueTodayTetri ?? 0,
         dueTodayRentTetri: debts.get(c.id)?.dueTodayRentTetri ?? 0,
         creditTetri: debts.get(c.id)?.creditTetri ?? 0,
+        // Of it, what a hand-over lays on the new rental at once (issue #18, B3): money on no rental.
+        advanceTetri: debts.get(c.id)?.advanceTetri ?? 0,
         // Where the debt sits: «Долг 300 по R-00488» in the hand-over (wave 3 §3.1).
         debtIn: (debts.get(c.id)?.parts ?? []).filter((p) => p.owesTetri > 0).map((p) => ({ kind: p.kind, id: p.id, number: p.number, owesTetri: p.owesTetri })),
         // «Должны» or awaited today, by the schedule's rule for the rent (issue #18, B4) and the

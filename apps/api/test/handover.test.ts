@@ -520,3 +520,35 @@ describe.skipIf(!HAS_DB)('issue #18 · the hand-over takes the customer’s adva
     expect(json<{ creditTetri: number }>(await call(owner, 'GET', `/api/customers/${customer.id}/balance`)).creditTetri).toBe(7000);
   });
 });
+
+// Review of issue #18, B3: the wizard takes off «К оплате» only what the hand-over lays on the new
+// rental — money on no rental. A week paid ahead on a running rental stays that rental's; taken off
+// here, it left the new rental owing its first week and late the next morning. Invented sums.
+describe.skipIf(!HAS_DB)('issue #18 · an advance is money on no rental', () => {
+  it('counts money left over on another rental as credit, not as an advance for the new one', async () => {
+    const { vehicle, customer } = await fixtures();
+    const second = await fixtures();
+    const owner = await loginAs('owner');
+    const manager = await loginAs('manager');
+    const first = await call(manager, 'POST', '/api/pickups', pickup(customer.id, second.vehicle.id));
+    expect(first.statusCode, first.body).toBe(201);
+    const a = json<{ id: string }>(first).id;
+    // A week paid ahead on the running rental A: 150 that no week of A has taken yet.
+    expect((await call(owner, 'POST', '/api/payments', { customerId: customer.id, rentalId: a, channel: 'cash', grossTetri: 15000 })).statusCode).toBe(201);
+    // And 50 sent on no rental.
+    expect((await call(owner, 'POST', '/api/payments', { customerId: customer.id, channel: 'cash', grossTetri: 5000 })).statusCode).toBe(201);
+    const listed = () =>
+      call(manager, 'GET', '/api/customers').then((r) => json<{ customers: { id: string; creditTetri: number; advanceTetri: number }[] }>(r).customers.find((c) => c.id === customer.id));
+    expect(await listed()).toMatchObject({ creditTetri: 20000, advanceTetri: 5000 });
+
+    // The wizard asks 330 − 50 = 280, and the new rental owes nothing after it.
+    const res = await call(manager, 'POST', '/api/pickups', pickup(customer.id, vehicle.id, { payment: { later: false, channel: 'cash', amountTetri: 28000 } }));
+    expect(res.statusCode, res.body).toBe(201);
+    const c = await card(owner, json<{ id: string }>(res).id);
+    expect(c.deposit.paidTetri).toBe(18000);
+    expect(c.periods[0]).toMatchObject({ seq: 1, amountTetri: 15000, paidTetri: 15000 });
+    expect(c.rental.debtTetri).toBe(0);
+    // The week paid ahead is still A's, waiting for A's next week.
+    expect(await listed()).toMatchObject({ creditTetri: 15000, advanceTetri: 0 });
+  });
+});

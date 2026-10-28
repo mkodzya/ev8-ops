@@ -38,8 +38,14 @@ interface CustomerRow {
   /** Of dueTodayTetri: the rent alone — what the hand-over guard reads. */
   dueTodayRentTetri: number;
   debtIn: DebtPart[];
-  /** Paid in and on nothing yet — an advance the hand-over lays on the new rental at once (issue #18, B3). */
+  /** Paid in and on nothing yet, net of what the customer owes. */
   creditTetri?: number;
+  /**
+   * Of creditTetri: what lies on no rental — the advance the hand-over lays on
+   * the new rental at once (issue #18, B3). Money left over on another rental's
+   * payment stays that rental's; the night does not move it either.
+   */
+  advanceTetri?: number;
 }
 /** A moped as the hand-over and the swap pick one from the fleet. */
 export interface FleetRow {
@@ -276,10 +282,12 @@ export function PickupWizard() {
   const owedTetri = transfer
     ? owedWeeks * Math.max(0, rateTetri) + Math.max(0, depositTetri - Math.max(0, depositBeforeTetri))
     : Math.max(0, rateTetri) + Math.max(0, depositTetri);
-  // The customer's advance — money in that nothing has taken — lies on this
-  // rental the moment it is made (issue #18, B3; `settleCredit` after the
-  // hand-over): «аванс 50 → к оплате 280», not 330 and a debt of 50 till night.
-  const creditTetri = !f.creating && customer ? Math.min(Math.max(0, customer.creditTetri ?? 0), owedTetri) : 0;
+  // The customer's advance — money in on no rental that nothing has taken —
+  // lies on this rental the moment it is made (issue #18, B3; `settleCredit`
+  // after the hand-over): «аванс 50 → к оплате 280», not 330 and a debt of 50
+  // till night. Only that part: a week paid ahead on a running rental stays on
+  // it, and taking it off here would leave this one owing.
+  const creditTetri = !f.creating && customer ? Math.min(Math.max(0, customer.advanceTetri ?? 0), owedTetri) : 0;
   const dueTetri = owedTetri - creditTetri;
   const amountTetri = f.amount ? parseGel(f.amount) : dueTetri;
   const paymentNeeded = (!transfer && creditTetri === 0) || dueTetri > 0;

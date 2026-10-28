@@ -24,6 +24,13 @@ export type CustomerDebt = Debt & {
   dueTodayRentTetri: number;
   /** dueTodayTetri by rental id, before credit. */
   dueTodayBy: Record<string, number>;
+  /**
+   * Of creditTetri: what lies on payments tied to no rental — the part
+   * `settleCredit` lays on a new rental at its hand-over (issue #18, B3).
+   * Money left over on another rental's payment stays that rental's, so the
+   * hand-over wizard takes this off «К оплате», not the whole credit.
+   */
+  advanceTetri: number;
 };
 
 export async function debtsOf(customerIds: string[], today: string = todayISO(new Date(), env.TZ)): Promise<Map<string, CustomerDebt>> {
@@ -77,9 +84,10 @@ export async function debtsOf(customerIds: string[], today: string = todayISO(ne
     // their allocations. A sale's or a repair's payment is that record's own.
     prisma.payment.findMany({
       where: { customerId: { in: ids }, voidedAt: null, direction: 'in', kind: { in: ['rent', 'on_account'] } },
-      select: { customerId: true, grossTetri: true, allocations: { select: { amountTetri: true } } },
+      select: { customerId: true, rentalId: true, grossTetri: true, allocations: { select: { amountTetri: true } } },
     }),
   ]);
+  const unplacedOf = (p: (typeof payments)[number]) => Math.max(0, p.grossTetri - p.allocations.reduce((m, a) => m + a.amountTetri, 0));
 
   for (const id of ids) {
     const mine = rentals.filter((r) => r.customerId === id);
@@ -115,9 +123,7 @@ export async function debtsOf(customerIds: string[], today: string = todayISO(ne
         goods: goods
           .filter((g) => g.customerId === id)
           .map((g) => ({ id: g.id, number: g.number, chargedTetri: goodsTotals(g.lines).grossTetri, paidTetri: g.payments.reduce((n, p) => n + p.grossTetri, 0) })),
-        unplacedTetri: payments
-          .filter((p) => p.customerId === id)
-          .reduce((n, p) => n + Math.max(0, p.grossTetri - p.allocations.reduce((m, a) => m + a.amountTetri, 0)), 0),
+        unplacedTetri: payments.filter((p) => p.customerId === id).reduce((n, p) => n + unplacedOf(p), 0),
         depositHeldTetri: held,
       }),
     );
@@ -129,7 +135,8 @@ export async function debtsOf(customerIds: string[], today: string = todayISO(ne
   for (const [id, debt] of out) {
     const mine = rentals.filter((r) => r.customerId === id).map((r) => ({ id: r.id, status: rentStateOf(r, today).status, pickedUpOn: isoDate(r.pickedUpOn) }));
     const due = dueTodayOf(debt, mine, today);
-    withDue.set(id, { ...debt, dueTodayTetri: due.tetri, dueTodayRentTetri: due.rentTetri, dueTodayBy: due.byRental });
+    const loose = payments.filter((p) => p.customerId === id && p.rentalId == null).reduce((n, p) => n + unplacedOf(p), 0);
+    withDue.set(id, { ...debt, dueTodayTetri: due.tetri, dueTodayRentTetri: due.rentTetri, dueTodayBy: due.byRental, advanceTetri: Math.min(debt.creditTetri, loose) });
   }
   return withDue;
 }
