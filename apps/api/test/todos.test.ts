@@ -52,6 +52,17 @@ describe('the records that end a task, without a database', () => {
     expect(ENDED_RECORD).toEqual({ OR: [{ rental: { status: TODO_ENDED_RENTAL[0] } }, { vehicle: { OR: [{ state: { in: [...TODO_ENDED_VEHICLE] } }, { archived: true }] } }] });
     expect(TODO_ENDED_RENTAL).toEqual(['returned']);
   });
+
+  it('asks one question for «Вернуть в работу» and its refusal: has the record ended', async () => {
+    const { todoLinkEnded } = await import('../src/lib/todos.js');
+    expect(todoLinkEnded({ rental: null, vehicle: null })).toBe(false);
+    expect(todoLinkEnded({ rental: { status: 'active' }, vehicle: null })).toBe(false);
+    expect(todoLinkEnded({ rental: { status: 'returned' }, vehicle: null })).toBe(true);
+    expect(todoLinkEnded({ rental: null, vehicle: { state: 'rented', archived: false } })).toBe(false);
+    expect(todoLinkEnded({ rental: null, vehicle: { state: 'sold', archived: false } })).toBe(true);
+    expect(todoLinkEnded({ rental: null, vehicle: { state: 'out', archived: false } })).toBe(true);
+    expect(todoLinkEnded({ rental: null, vehicle: { state: 'available', archived: true } })).toBe(true);
+  });
 });
 
 describe.skipIf(!HAS_DB)('«Задачи» (issue #18 A, ADR-0050)', () => {
@@ -264,7 +275,9 @@ describe.skipIf(!HAS_DB)('«Задачи» (issue #18 A, ADR-0050)', () => {
 
     const his = await list(manager.cookie);
     expect(his.todos.map((t) => t.id)).not.toContain(id);
-    expect(his.done.find((t) => t.id === id)).toMatchObject({ closedByRecord: true, closedBy: null });
+    // «Вернуть в работу» is not offered while the rental is returned — to whose it is nor to who set it (QA before 1.17.0).
+    expect(his.done.find((t) => t.id === id)).toMatchObject({ closedByRecord: true, closedBy: null, may: { close: false, edit: false, reopen: false } });
+    expect((await list(owner.cookie, manager.id)).done.find((t) => t.id === id)?.may.reopen).toBe(false);
     const again = await call(manager.cookie, 'POST', `/api/todos/${id}/reopen`);
     expect(json<{ error: string }>(again).error).toBe('todo_record_ended');
     const late = await call(owner.cookie, 'POST', '/api/todos', { text: 'Пример', dueOn: today(), assigneeId: manager.id, link: { kind: 'rental', id: rental.id } });
