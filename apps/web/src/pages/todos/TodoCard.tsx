@@ -1,4 +1,4 @@
-import { TODO_NOTE_MAX, localDateTime, todoBucket, todoDaysLate, todoShownFrom, type TodoView } from '@ev8/shared';
+import { TODO_NOTE_MAX, todoBucket, todoDaysLate, todoShownFrom, type TodoView } from '@ev8/shared';
 import { useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ApiError, api, markStale } from '../../api.js';
@@ -38,7 +38,6 @@ export function TodoCard({ todo, today, onClose, onEdit, onChanged }: { todo: To
   const [removing, setRemoving] = useState(false);
   const link = todo.link;
   const href = link?.open ? (link.kind === 'vehicle' ? `/fleet/${link.id}` : link.kind === 'rental' ? `/rentals/${link.id}` : `/customers/${link.id}`) : null;
-  const closedAt = todo.closedAt ? localDateTime(todo.closedAt) : null;
 
   const act = async (write: () => Promise<unknown>, text: string) => {
     try {
@@ -80,24 +79,14 @@ export function TodoCard({ todo, today, onClose, onEdit, onChanged }: { todo: To
         </div>
       )}
 
-      {!open && (
-        <>
-          <p className="muted">
-            {todo.closedByRecord
-              ? (t.todos.closedByRecord[link?.kind ?? ''] ?? '')
-              : closedAt && todo.closedBy
-                ? t.todos.closedBy(todo.closedBy.name, closedAt.date, closedAt.time)
-                : null}
-          </p>
-          {todo.closeNote && (
-            <div className="field">
-              <span className="lbl">{t.todos.card.closedNote}</span>
-              <div className="todo-card-note">
-                <Typed text={todo.closeNote} />
-              </div>
-            </div>
-          )}
-        </>
+      {/* Who closed it and when is said under the words (TodoMeta); his comment stands here whole. */}
+      {!open && todo.closeNote && (
+        <div className="field">
+          <span className="lbl">{t.todos.card.closedNote}</span>
+          <div className="todo-card-note">
+            <Typed text={todo.closeNote} />
+          </div>
+        </div>
       )}
 
       {open && todo.may.close && <CloseForm todo={todo} onDone={() => { onChanged(); onClose(); }} />}

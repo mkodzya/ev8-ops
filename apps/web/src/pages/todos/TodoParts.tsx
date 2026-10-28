@@ -1,4 +1,4 @@
-import { todoBucket, todoDaysLate, type Role, type TodoView } from '@ev8/shared';
+import { localDateTime, todoBucket, todoDaysLate, type Role, type TodoView } from '@ev8/shared';
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../../api.js';
@@ -51,13 +51,25 @@ export function DueText({ todo, today }: { todo: TodoView; today: string }) {
  * one person's), the repeat, «нужно фото или файл», the record it is about —
  * a link to its card for whoever may open it — who set it, if not he, and
  * the comment, in the reader's language where a translation is ready
- * (ADR-0042).
+ * (ADR-0042). A closed one says who closed it and when, its files and his
+ * comment instead (the mockup's «Сделано»).
  */
 export function TodoMeta({ todo, showWho, withNote = true }: { todo: TodoView; showWho: boolean; withNote?: boolean }) {
   const t = useT();
   const repeat = repeatText(t, todo);
   const link = todo.link;
   const href = link?.open ? (link.kind === 'vehicle' ? `/fleet/${link.id}` : link.kind === 'rental' ? `/rentals/${link.id}` : `/customers/${link.id}`) : null;
+  if (todo.closedAt) {
+    const at = localDateTime(todo.closedAt);
+    return (
+      <span className="todo-meta">
+        {showWho && <span className="todo-tag todo-tag-who">{todo.assignee.name}</span>}
+        <span>{todo.closedByRecord ? (t.todos.closedByRecord[link?.kind ?? ''] ?? '') : todo.closedBy ? t.todos.closedBy(todo.closedBy.name, at.date, at.time) : ''}</span>
+        {todo.files.length > 0 && <span>{t.todos.files(todo.files.length)}</span>}
+        {withNote && todo.closeNote && <Typed text={todo.closeNote} quiet quoted />}
+      </span>
+    );
+  }
   return (
     <span className="todo-meta">
       {showWho && <span className="todo-tag todo-tag-who">{todo.assignee.name}</span>}

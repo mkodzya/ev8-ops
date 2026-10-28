@@ -107,11 +107,11 @@ export function todoView(r: TodoRow, reader: TodoReader): TodoView {
  * has no `due_today` — the shared list is tested against this one.
  */
 export const ENDED_RECORD = {
-  OR: [{ rental: { status: 'returned' } }, { vehicle: { OR: [{ state: { in: ['sold', 'out'] } }, { archived: true }] } }],
+  OR: [{ rental: { status: 'returned' as const } }, { vehicle: { OR: [{ state: { in: ['sold' as const, 'out' as const] } }, { archived: true }] } }],
 } satisfies Prisma.TodoWhereInput;
 
 const ENDED_SERIES = {
-  OR: [{ rental: { status: 'returned' } }, { vehicle: { OR: [{ state: { in: ['sold', 'out'] } }, { archived: true }] } }],
+  OR: [{ rental: { status: 'returned' as const } }, { vehicle: { OR: [{ state: { in: ['sold' as const, 'out' as const] } }, { archived: true }] } }],
 } satisfies Prisma.TodoSeriesWhereInput;
 
 /**
