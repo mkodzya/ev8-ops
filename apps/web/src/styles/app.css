@@ -1368,6 +1368,8 @@ h2.sub { font: var(--text-h3); margin: 18px 0 8px; }
 }
 .sum-row:first-child { border-top: 0; }
 .sum-row:hover .sum-go { color: var(--accent); }
+/* A line said, not pressed: this person cannot change the value on any step. */
+.sum-row-still { cursor: default; }
 .sum-go { color: var(--muted); font-size: 20px; }
 .settle .kv-total { border-top: 1px solid var(--line); font-weight: 600; }
 .late-choice { display: flex; flex-direction: column; gap: 6px; padding: 8px 0; border-top: 1px solid var(--line-soft); }

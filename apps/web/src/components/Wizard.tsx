@@ -1,6 +1,6 @@
 import { FailureProvider, SubmitButton, useFieldError } from '../ds/form/Form.js';
 import type { Failure, SubmitState } from '../ds/form/operation.js';
-import { cloneElement, isValidElement, useEffect, useId, type ReactNode } from 'react';
+import { cloneElement, isValidElement, useEffect, useId, useRef, type ReactNode } from 'react';
 import { useT } from '../i18n/index.js';
 
 // One step per screen, one button at the bottom, reachable with a thumb
@@ -32,6 +32,15 @@ export function Wizard(props: {
   useEffect(() => {
     window.scrollTo(0, 0);
   }, [props.step]);
+  // The refusal stands under the step, above the buttons: on a long step it was
+  // below the screen and only «Не записалось — повторить» was read (QA before
+  // 1.17.0, a second repair on one moped). One that names no field comes into
+  // view; one that names a field leaves the field where it is.
+  const failure = props.submit?.failure ?? props.failure ?? null;
+  const bannerRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (failure && !failure.field) bannerRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }, [failure]);
   return (
     <div className={`wizard ${props.className ?? ''}`}>
       <header className="wizard-head">
@@ -45,13 +54,13 @@ export function Wizard(props: {
           </li>
         ))}
       </ol>
-      <FailureProvider value={props.submit?.failure ?? props.failure ?? null}>
+      <FailureProvider value={failure}>
         <section className="wizard-body">{props.children}</section>
       </FailureProvider>
-      {(props.submit?.failure ?? props.failure) && (
-        <div className="form-banner form-banner-bad" role="alert">
+      {failure && (
+        <div ref={bannerRef} className="form-banner form-banner-bad" role="alert">
           <div>
-            <b>{t.form.notSaved}</b> {(props.submit?.failure ?? props.failure)!.text}
+            <b>{t.form.notSaved}</b> {failure.text}
           </div>
         </div>
       )}

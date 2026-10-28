@@ -30,7 +30,7 @@ import { prisma } from '../lib/db.js';
 import { env } from '../lib/env.js';
 import { badRequest, conflict, forbidden, notFound, type ApiError } from '../lib/errors.js';
 import { actorOf, mayView } from '../lib/guard.js';
-import { TODO_SELECT, doneSince, keepTodos, todoView, type TodoReader } from '../lib/todos.js';
+import { TODO_SELECT, doneSince, keepTodos, todoLinkEnded, todoView, type TodoReader } from '../lib/todos.js';
 import { oneOf, str } from '../lib/validate.js';
 import { BODY_LIMIT, readUpload, sha } from './files.js';
 
@@ -435,17 +435,15 @@ export function todoRoutes(app: FastifyInstance): void {
   /**
    * Open a closed task again — whose it is or who set it: «Сделано» pressed by
    * mistake, the «Отменить» of its message. One its record closed stays closed
-   * while the record is ended: it would close again at the next look.
+   * while the record is ended: it would close again at the next look. The list
+   * asks the same (`todoLinkEnded`) and does not offer it.
    */
   app.post<{ Params: { id: string } }>('/api/todos/:id/reopen', { config: { scope: 'todos.own' } }, async (req) => {
     const actor = actorOf(req);
     const row = await stored(req.params.id);
     if (row.assigneeId !== actor.id && row.createdById !== actor.id) throw forbidden('todo_not_yours', 'A task is opened again by whoever it was given to or whoever set it.');
     if (!row.closedAt) return { ok: true };
-    const ended =
-      (row.rentalId != null && todoRecordEnded({ kind: 'rental', rentalStatus: row.rental?.status })) ||
-      (row.vehicleId != null && todoRecordEnded({ kind: 'vehicle', vehicleState: row.vehicle?.state, vehicleArchived: row.vehicle?.archived }));
-    if (ended) throw conflict('todo_record_ended', 'The record this task is about has ended; set a new task.');
+    if (todoLinkEnded(row)) throw conflict('todo_record_ended', 'The record this task is about has ended; set a new task.');
     const at = new Date();
     await prisma.todo.update({ where: { id: row.id }, data: { closedAt: null, closedById: null, closeNote: null, closedByRecord: false, updatedAt: at } });
     await audit({

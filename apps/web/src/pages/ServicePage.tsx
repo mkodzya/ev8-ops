@@ -541,6 +541,8 @@ export function NewJob({ vehicleId, onDone }: { vehicleId?: string; onDone: () =
           onRestore={setF}
           summary={(v) => v.reason}
           label={mayManage ? t.repair.newJob : t.repair.reportCta}
+          // A moped with a repair open already is refused about the moped: the words go under it (QA before 1.17.0).
+          fieldOf={{ job_already_open: 'vehicleId' }}
           submit={async (key) => {
             const job = await api.post<{ id: string }>(
               '/api/service',

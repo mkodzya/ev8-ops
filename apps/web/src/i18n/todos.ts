@@ -179,7 +179,8 @@ export const todosRu: typeof todosEn = {
     emptySub: 'Сюда попадают задачи, поставленные вручную: декларация каждый месяц, обход парковки по понедельникам. То, что «Сегодня» находит само, остаётся там.',
     emptyOther: 'Здесь открытых задач нет.',
     lateBy: (n) => `−${n} дн.`,
-    weekly: (weekday) => `каждую неделю, ${weekday}`,
+    // Mid-sentence the day is lower case, as in the director's mockup («↻ каждую неделю, пн»); the calendar's head keeps «Пн».
+    weekly: (weekday) => `каждую неделю, ${weekday.toLowerCase()}`,
     monthly: (day) => `каждый месяц, ${day}-го`,
     fileTag: 'нужно фото или файл',
     setBy: (name) => `поставил(а) ${name}`,

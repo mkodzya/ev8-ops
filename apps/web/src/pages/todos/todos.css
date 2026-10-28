@@ -57,7 +57,9 @@
 /* The block first on «Сегодня»: the same rows, denser, a «Сделано» at the end of each. */
 .todo-block .todo-list { border: 0; border-radius: 0; background: none; }
 .todo-block .todo-row { padding-left: 0; padding-right: 0; }
-.todo-block .todo-act { padding-top: 6px; }
+.todo-block .todo-act { padding-top: 6px; text-align: right; }
+/* One shown ahead is on «Сегодня» but not due today: its day stands above «Сделано», no wider than the button (375 px). */
+.todo-act-due { display: block; margin-bottom: 4px; font: var(--text-mono-sm); color: var(--muted); white-space: nowrap; }
 
 /* A task's sheet. */
 .todo-card-text { margin: 0 0 6px; font: var(--text-h3); overflow-wrap: anywhere; }

@@ -108,6 +108,9 @@ export function TodoSheet({
         ? t.todos.form.monthlyHint(repeatDay)
         : undefined;
   const dueChanged = !todo || f.dueOn !== todo.dueOn;
+  // A draft restored for somebody not on this person's list — switched off since, or kept from another
+  // person's sign-in — goes to whom a new task goes: a manager has no «Кому» to put it right (QA before 1.17.0).
+  const restore = (v: Draft) => setF(list.length > 0 && !list.some((p) => p.id === v.assigneeId) ? { ...v, assigneeId: initial.assigneeId } : v);
 
   return (
     <FormSheet
@@ -116,7 +119,7 @@ export function TodoSheet({
       value={f}
       initial={initial}
       draft={todo ? undefined : 'todo-new'}
-      onRestore={todo ? undefined : setF}
+      onRestore={todo ? undefined : restore}
       summary={(v) => v.text}
       label={todo ? t.todos.form.save : t.todos.form.submit}
       submit={async (key) => {

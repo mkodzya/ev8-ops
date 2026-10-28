@@ -109,6 +109,8 @@ export function SaleWizard() {
   // A manager sells too (issue #18, B8). His money form takes cash; a card or a
   // transfer reaches the bank, and he sorts that line to the sale in «Разобрать».
   const reconciles = can('payments.reconcile');
+  // Only whoever manages sales dates one in the past, as the server answers (`owner_only_backdate`).
+  const backdates = can('sales.manage');
   const op = useOperation();
 
   const fleet = useLoad<{ vehicles: FleetRow[] }>('/api/fleet');
@@ -590,8 +592,9 @@ export function SaleWizard() {
         <section className="card">
           <SumRow k={t.sell.moped} v={vehicle ? `${vehicle.model} ···${vehicle.vin.slice(-4)}` : ''} go={() => set({ step: 0 })} />
           <SumRow k={t.sell.buyer} v={customer?.name ?? ''} go={() => set({ step: 1 })} />
-          {/* The day the sale is dated, said before it is made (call of 21.10.2026). */}
-          <SumRow k={t.sell.soldOn} v={<span className="mono">{fmtDate(f.soldOn)}</span>} go={() => set({ step: 2 })} />
+          {/* The day the sale is dated, said before it is made (call of 21.10.2026); for a manager, who dates no sale
+              but today's, said and not pressed — it led to a step with no date for him (QA before 1.17.0). */}
+          <SumRow k={t.sell.soldOn} v={<span className="mono">{fmtDate(f.soldOn)}</span>} go={backdates ? () => set({ step: 2 }) : undefined} />
           <SumRow k={t.sell.price} v={<span className="mono">{formatGel(totalTetri)}</span>} go={() => set({ step: 2 })} />
           <SumRow
             k={t.sell.schedule}

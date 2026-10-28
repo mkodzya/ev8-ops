@@ -1,4 +1,4 @@
-import { localDateTime, todoBucket, todoDaysLate, type Role, type TodoView } from '@ev8/shared';
+import { localDateTime, todoBucket, todoDaysLate, todoShownFrom, type ISODate, type Role, type TodoView } from '@ev8/shared';
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../../api.js';
@@ -53,12 +53,20 @@ export function DueText({ todo, today }: { todo: TodoView; today: string }) {
  * the comment, in the reader's language where a translation is ready
  * (ADR-0042). A closed one says who closed it and when, its files and his
  * comment instead (the mockup's «Сделано»).
+ *
+ * Given `today` — a row of a list — a task shown ahead that is not on
+ * «Сегодня» yet says from which day it will be (the mockup's «Позже»); the
+ * opened task says it under its due day, and passes no `today`. A moped whose
+ * card the reader may not open — a mechanic's — is its number and its model
+ * (ADR-0050 §2).
  */
-export function TodoMeta({ todo, showWho, withNote = true }: { todo: TodoView; showWho: boolean; withNote?: boolean }) {
+export function TodoMeta({ todo, showWho, withNote = true, today }: { todo: TodoView; showWho: boolean; withNote?: boolean; today?: ISODate }) {
   const t = useT();
   const repeat = repeatText(t, todo);
   const link = todo.link;
   const href = link?.open ? (link.kind === 'vehicle' ? `/fleet/${link.id}` : link.kind === 'rental' ? `/rentals/${link.id}` : `/customers/${link.id}`) : null;
+  const linkText = link && !href && link.kind === 'vehicle' && link.sub ? `${link.label} · ${link.sub}` : (link?.label ?? '');
+  const shownFrom = today && todo.closedAt == null ? todoShownFrom(todo) : null;
   if (todo.closedAt) {
     const at = localDateTime(todo.closedAt);
     return (
@@ -81,10 +89,11 @@ export function TodoMeta({ todo, showWho, withNote = true }: { todo: TodoView; s
             {link.label}
           </Link>
         ) : (
-          <span className="todo-tag todo-tag-record" title={link.label}>
-            {link.label}
+          <span className="todo-tag todo-tag-record" title={linkText}>
+            {linkText}
           </span>
         ))}
+      {shownFrom && today && shownFrom > today && <span>{t.todos.shownFrom(fmtDayMonth(shownFrom), todo.leadDays)}</span>}
       {todo.setBy.id !== todo.assignee.id && <span>{t.todos.setBy(todo.setBy.name)}</span>}
       {withNote && todo.note && <Typed text={todo.note} quiet quoted />}
     </span>
@@ -147,7 +156,7 @@ export function TodoRow({
         <button type="button" className="todo-open" onClick={() => onOpen(todo)}>
           <span className="todo-text">{todo.text}</span>
         </button>
-        <TodoMeta todo={todo} showWho={showWho} />
+        <TodoMeta todo={todo} showWho={showWho} today={today} />
       </span>
       {action ?? <DueText todo={todo} today={today} />}
     </li>

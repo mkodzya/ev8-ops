@@ -1,4 +1,4 @@
-import { DEFAULT_LOCALE, type Permission, type Role } from '@ev8/shared';
+import { DEFAULT_LOCALE, LAST_PERSON_KEY, isDeviceLeftover, leftoversToForget, type Permission, type Role } from '@ev8/shared';
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { ApiError, SIGNED_OUT_EVENT, api } from './api.js';
 import { useLocale } from './i18n/index.js';
@@ -25,7 +25,25 @@ export interface Me {
  */
 export function forgetDeviceLeftovers(): void {
   try {
-    for (const key of Object.keys(localStorage)) if (key.startsWith('ev8-draft:') || key === 'ev8-recent') localStorage.removeItem(key);
+    for (const key of Object.keys(localStorage)) if (isDeviceLeftover(key)) localStorage.removeItem(key);
+  } catch {
+    /* private mode: nothing was stored */
+  }
+}
+
+/**
+ * A session that ended without «Выйти» — idle, its thirty days, cookies
+ * cleared — left its drafts behind, and whoever signed in next by password
+ * found them: a task's draft came back with the last person's words and
+ * assignee (QA before 1.17.0). So every sign-in, before the screens read a
+ * draft, asks who signed in last on this device: another person — or nobody
+ * known — forgets the leftovers (`leftoversToForget`); the same one finds his
+ * own draft waiting. Storage that refuses keeps no drafts either.
+ */
+function handDeviceTo(personId: string): void {
+  try {
+    for (const key of leftoversToForget(Object.keys(localStorage), localStorage.getItem(LAST_PERSON_KEY), personId)) localStorage.removeItem(key);
+    localStorage.setItem(LAST_PERSON_KEY, personId);
   } catch {
     /* private mode: nothing was stored */
   }
@@ -106,7 +124,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         setMe(null);
         return;
       }
-      setMe(await api.get<Me>('/api/me'));
+      const m = await api.get<Me>('/api/me');
+      handDeviceTo(m.id);
+      setMe(m);
       setEnded(null);
       setUnreachable(false);
     } catch (e) {
@@ -140,6 +160,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       api
         .get<Me>('/api/me')
         .then((m) => {
+          handDeviceTo(m.id);
           setMe(m);
           setEnded(null);
         })

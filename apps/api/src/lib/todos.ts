@@ -1,4 +1,19 @@
-import { addDays, dayStart, fleetNumber, todoCounts, todoDuesToMake, type ISODate, type Permission, type Role, type TodoLink, type TodoRepeatKind, type TodoView } from '@ev8/shared';
+import {
+  addDays,
+  dayStart,
+  fleetNumber,
+  todoCounts,
+  todoDuesToMake,
+  todoRecordEnded,
+  type ISODate,
+  type Permission,
+  type RentalStatus,
+  type Role,
+  type TodoLink,
+  type TodoRepeatKind,
+  type TodoView,
+  type VehicleState,
+} from '@ev8/shared';
 import type { Prisma } from '../generated/prisma/client.js';
 import { audit } from './audit.js';
 import { dateFromISO, isoDate } from './dates.js';
@@ -33,8 +48,8 @@ export const TODO_SELECT = {
   assignee: { select: { id: true, name: true, role: true } },
   createdBy: { select: { id: true, name: true } },
   closedBy: { select: { id: true, name: true } },
-  vehicle: { select: { id: true, vin: true, fleetNo: true, model: { select: { brand: true, name: true } } } },
-  rental: { select: { id: true, number: true, customer: { select: { name: true } } } },
+  vehicle: { select: { id: true, vin: true, fleetNo: true, state: true, archived: true, model: { select: { brand: true, name: true } } } },
+  rental: { select: { id: true, number: true, status: true, customer: { select: { name: true } } } },
   customer: { select: { id: true, name: true } },
   series: { select: { repeat: true, repeatDay: true, stoppedAt: true } },
   files: { where: { archived: false }, select: { id: true, label: true, mimeType: true }, orderBy: { createdAt: 'asc' } },
@@ -70,6 +85,20 @@ function linkOf(r: TodoRow, reader: TodoReader): TodoLink | null {
   return null;
 }
 
+/**
+ * The record a task is about has ended (`todoRecordEnded`): a rental returned,
+ * a moped sold, written off or taken off the list. A closed task about it is
+ * not opened again — it would close at the next look (`todo_record_ended`) —
+ * and the list does not offer it: the route and `may.reopen` ask this one
+ * question (QA before 1.17.0: «Вернуть в работу» was shown, and refused).
+ */
+export function todoLinkEnded(r: { rental: { status: RentalStatus } | null; vehicle: { state: VehicleState; archived: boolean } | null }): boolean {
+  return (
+    (r.rental != null && todoRecordEnded({ kind: 'rental', rentalStatus: r.rental.status })) ||
+    (r.vehicle != null && todoRecordEnded({ kind: 'vehicle', vehicleState: r.vehicle.state, vehicleArchived: r.vehicle.archived }))
+  );
+}
+
 /** A task as the screen gets it, with what this reader may do to it. */
 export function todoView(r: TodoRow, reader: TodoReader): TodoView {
   const open = r.closedAt == null;
@@ -95,7 +124,7 @@ export function todoView(r: TodoRow, reader: TodoReader): TodoView {
     may: {
       close: open && r.assigneeId === reader.id,
       edit: open && r.createdById === reader.id,
-      reopen: !open && (r.assigneeId === reader.id || r.createdById === reader.id),
+      reopen: !open && (r.assigneeId === reader.id || r.createdById === reader.id) && !todoLinkEnded(r),
     },
   };
 }

@@ -947,8 +947,21 @@ export function PickupWizard() {
   );
 }
 
-/** One line of a wizard's summary: what, its value, and the way back to the step that owns it. `className` lays a row out its own way (`goods-sum-line`). */
-export function SumRow({ k, v, go, className }: { k: ReactNode; v: ReactNode; go: () => void; className?: string }) {
+/**
+ * One line of a wizard's summary: what, its value, and the way back to the step that owns it. `className` lays a row out its own way (`goods-sum-line`).
+ * Without `go` the line is said and not pressed: a value this person cannot change on any step does not look as if he could
+ * (a manager's sale date, QA before 1.17.0).
+ */
+export function SumRow({ k, v, go, className }: { k: ReactNode; v: ReactNode; go?: () => void; className?: string }) {
+  if (!go) {
+    return (
+      <div className={`sum-row sum-row-still ${className ?? ''}`}>
+        <span className="kv-k">{k}</span>
+        <span className="kv-v">{v}</span>
+        <span className="sum-go" aria-hidden="true" />
+      </div>
+    );
+  }
   return (
     <button type="button" className={`sum-row ${className ?? ''}`} onClick={go}>
       <span className="kv-k">{k}</span>
