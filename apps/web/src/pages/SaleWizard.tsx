@@ -124,6 +124,8 @@ export function SaleWizard() {
   // The sale is written first and the prepayment after it: if the money fails
   // the sale still exists, and the screen says so instead of losing both.
   const [payTrouble, setPayTrouble] = useState(false);
+  // What this wizard wrote of the prepayment: the done screen says «Оплачено полностью» only of money recorded.
+  const [recordedTetri, setRecordedTetri] = useState(0);
 
   const drafts = useDraft({ id: 'sale', value: f, initial, hold: result != null });
 
@@ -217,7 +219,21 @@ export function SaleWizard() {
   const buyerOk = f.creating ? f.ncName.trim().length > 1 && f.ncPhone.trim().length > 5 : f.customerId !== '';
   const ok = [vehicleOk, buyerOk, priceOk, paymentOk, true][f.step];
 
-  const stepOfField: Record<string, number> = { vehicleId: 0, movePool: 0, customerId: 1, name: 1, phone: 1, personalId: 1, priceTetri: 2, downPaymentTetri: 2, paidBeforeTetri: 2, schedule: 2, channel: 3 };
+  const stepOfField: Record<string, number> = {
+    vehicleId: 0,
+    movePool: 0,
+    customerId: 1,
+    name: 1,
+    phone: 1,
+    personalId: 1,
+    priceTetri: 2,
+    downPaymentTetri: 2,
+    paidBeforeTetri: 2,
+    schedule: 2,
+    channel: 3,
+    prepaymentChannel: 3,
+    prepaymentTetri: 3,
+  };
   useEffect(() => {
     const code = op.failure?.code ?? '';
     const byCode: Record<string, number> = {
@@ -258,6 +274,9 @@ export function SaleWizard() {
         movePool: f.movePool,
         kommoRef: fromLead ?? undefined,
         notes: f.channel === 'later' && f.why.trim() ? f.why.trim() : undefined,
+        // How the buyer paid today: the server holds a manager to a prepayment (issue #18, B8; §3.1).
+        prepaymentChannel: needsPrepayment && f.channel ? f.channel : undefined,
+        prepaymentTetri: needsPrepayment && f.channel && f.channel !== 'later' ? prepaymentTetri : undefined,
       };
       const sale = await api.post<{ id: string; number: string }>('/api/sales', body, { key });
       setResult(sale);
@@ -269,6 +288,7 @@ export function SaleWizard() {
       if (needsPrepayment && f.channel && f.channel !== 'later' && prepaymentTetri > 0 && (reconciles || f.channel === 'cash')) {
         try {
           await api.post(`/api/sales/${sale.id}/payments`, { grossTetri: prepaymentTetri, channel: f.channel }, { key: `${key}-pay` });
+          setRecordedTetri(prepaymentTetri);
         } catch (e) {
           if (!(e instanceof ApiError)) throw e;
           setPayTrouble(true);
@@ -283,7 +303,16 @@ export function SaleWizard() {
   if (!fleet.data || !customers.data) return <Loading />;
 
   if (result && f.step === 5) {
-    return <SaleDone id={result.id} number={result.number} rows={rowsTetri} payTrouble={payTrouble} />;
+    return (
+      <SaleDone
+        id={result.id}
+        number={result.number}
+        rows={rowsTetri}
+        paidTetri={f.transfer ? paidBeforeTetri : recordedTetri}
+        viaBank={needsPrepayment && !reconciles && (f.channel === 'acquiring' || f.channel === 'transfer')}
+        payTrouble={payTrouble}
+      />
+    );
   }
 
   if (drafts.offer) {
@@ -581,23 +610,32 @@ export function SaleWizard() {
   );
 }
 
-/** What the sale left behind: its number, its paper and the way into it (B4-07). */
-function SaleDone({ id, number, rows, payTrouble }: { id: string; number: string; rows: { amountTetri: number }[]; payTrouble: boolean }) {
+/**
+ * What the sale left behind: its number, its paper and the way into it (B4-07).
+ * «Оплачено полностью» only of money recorded (review of issue #18): a
+ * manager's card or transfer comes as a bank line, an owner's «Позже» brings
+ * nothing today — the screen says what is still to pay, and where it comes from.
+ */
+function SaleDone({ id, number, rows, paidTetri, viaBank, payTrouble }: { id: string; number: string; rows: { amountTetri: number }[]; paidTetri: number; viaBank: boolean; payTrouble: boolean }) {
   const t = useT();
   const navigate = useNavigate();
   const card = useLoad<{ documents: { docKind: string | null; signedAt: string | null }[] }>(`/api/sales/${id}`);
   const signed = card.data?.documents.some((d) => d.docKind === 'sale' && d.signedAt) ?? false;
+  const firstTetri = rows[0]?.amountTetri ?? 0;
+  const openTetri = Math.max(0, firstTetri - paidTetri);
   return (
     <div className="wizard">
       <header className="wizard-head">
         <h1>{t.sell.done(number)}</h1>
       </header>
       <section className="card">
-        <p className="muted">
-          {rows.length > 1
-            ? t.sell.doneSub(formatGel(rows[0].amountTetri, { decimals: false }), rows.length - 1, formatGel(rows[1].amountTetri, { decimals: false }))
-            : t.sell.doneFull(formatGel(rows[0]?.amountTetri ?? 0, { decimals: false }))}
-        </p>
+        {rows.length > 1 ? (
+          <p className="muted">{t.sell.doneSub(formatGel(firstTetri, { decimals: false }), rows.length - 1, formatGel(rows[1].amountTetri, { decimals: false }))}</p>
+        ) : (
+          openTetri === 0 && <p className="muted">{t.sell.doneFull(formatGel(firstTetri, { decimals: false }))}</p>
+        )}
+        {openTetri > 0 && <p className={viaBank ? '' : 'warn-text'}>{t.simple.sale.doneDue(formatGel(openTetri, { decimals: false }))}</p>}
+        {viaBank && <p className="hint muted">{t.simple.sale.viaBank}</p>}
         {payTrouble && <p className="warn-text">{t.sell.payTrouble}</p>}
       </section>
       <section className="card">

@@ -204,6 +204,17 @@ export function saleRoutes(app: FastifyInstance): void {
     const paidBeforeTetri = transferred ? (tetri(b, 'paidBeforeTetri', { min: 0 }) ?? 0) : 0;
     if (transferred && !hasPerm(actor, 'deposit.decide')) throw forbidden('owner_only', 'Only an owner carries a sale over.');
     if (paidBeforeTetri > priceTetri) throw conflict('paid_before_too_big', 'More was paid before the move than the sale is worth.', { field: 'paidBeforeTetri' });
+    // How the buyer paid today, as the wizard's step «Оплата» says it. A sale
+    // with nothing paid today is an owner's decision, with a reason (§3.1):
+    // a manager's sale says how and how much — cash he then takes by his own
+    // form, a card or a transfer the bank brings as a line he sorts to the sale
+    // (issue #18, B8; ADR-0045). The wizard alone held this while only an
+    // owner reached the route; a manager reaches it now.
+    const prepaymentChannel = oneOf(b, 'prepaymentChannel', ['cash', 'acquiring', 'transfer', 'later'] as const);
+    const prepaymentTetri = tetri(b, 'prepaymentTetri', { min: 0 }) ?? 0;
+    if (!owner && !transferred && (prepaymentChannel == null || prepaymentChannel === 'later' || prepaymentTetri <= 0)) {
+      throw forbidden('owner_only', 'A sale with nothing paid today is an owner’s decision.', { field: 'channel' });
+    }
     // A schedule the wizard edited line by line comes back as it is; an
     // untouched one is built from the down payment and the months (SAL-02).
     const edited = Array.isArray(b.schedule) ? (b.schedule as Record<string, unknown>[]) : null;
@@ -283,7 +294,7 @@ export function saleRoutes(app: FastifyInstance): void {
           action: 'sale.create',
           entityType: 'sale',
           entityId: created.id,
-          after: { number: created.number, customerId, vehicleId, soldOn, priceTetri, downPaymentTetri, months, transferred, paidBeforeTetri },
+          after: { number: created.number, customerId, vehicleId, soldOn, priceTetri, downPaymentTetri, months, transferred, paidBeforeTetri, prepaymentChannel, prepaymentTetri },
         },
       });
       return created;

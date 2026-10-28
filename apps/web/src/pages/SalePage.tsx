@@ -95,7 +95,8 @@ export function SalePage() {
             className="pill pill-sm pill-accent"
             onClick={() => openMoney({ target: { kind: 'sale', saleId: s.id, number: s.number, customerId: s.customer.id, customer: s.customer.name } })}
           >
-            {t.saleCard.takeInstalment}
+            {/* B1: «Принять наличные» for whoever enters no bank money — the manager since B8. */}
+            {can('payments.reconcile') ? t.saleCard.takeInstalment : t.money.takeCash}
           </button>
         )}
         {s.customer.phone && (

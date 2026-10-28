@@ -19,6 +19,8 @@ export const simpleEn = {
     /** The sale wizard, for whoever enters no bank money: a card or a transfer arrives as a line to sort (B8). */
     sale: {
       viaBank: 'A card or a transfer reaches the bank: sort that line to this sale in «Sort».',
+      /** The done screen, when the prepayment is not recorded yet (a bank line to come, «Later»). */
+      doneDue: (sum: string) => `To pay: ${sum}`,
     },
     /** «Ремонты»: mopeds whose status says in repair with no repair open (B6; was «Settings → Before EV8 Ops»). */
     idle: {
@@ -50,6 +52,7 @@ export const simpleRu: typeof simpleEn = {
   simple: {
     sale: {
       viaBank: 'Карта и перевод приходят в банк: эту строку привяжите к продаже в «Разобрать».',
+      doneDue: (sum: string) => `К оплате: ${sum}`,
     },
     idle: {
       title: 'В ремонте без заявки',
@@ -77,11 +80,12 @@ export const simpleKa: typeof simpleEn = {
   simple: {
     sale: {
       viaBank: 'ბარათი და გადარიცხვა ბანკში შემოდის: ეს ხაზი ამ გაყიდვას «დასახარისხებელში» მიაბით.',
+      doneDue: (sum: string) => `გადასახდელი: ${sum}`,
     },
     idle: {
       title: 'სერვისში, განაცხადის გარეშე',
       count: (n: number) => `${n} მოპედი`,
-      note: 'სტატუსია «სერვისში», შეკეთება კი გახსნილი არ არის: გახსენით შეკეთება ან მიზეზით დააბრუნეთ მოპედი პარკში.',
+      note: 'სტატუსია «სერვისში», რემონტი კი გახსნილი არ არის: გახსენით რემონტი ან მიზეზით დააბრუნეთ მოპედი პარკში.',
     },
     swapPick: {
       title: 'ვისი მოპედი შევცვალოთ?',
