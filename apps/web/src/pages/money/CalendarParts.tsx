@@ -867,7 +867,8 @@ export function WeekCard({
 // ---------------------------------------------------------------------------
 
 /**
- * A row's buttons. «Провести вручную» (was «Принять оплату», 22.10.2026) is an outline pill — the screen has no
+ * A row's buttons. The money form's own name — «Принять оплату» / «Принять наличные» (issue #18, B1; it was
+ * «Провести вручную» from 22.10.2026) — is an outline pill: the screen has no
  * filled button (§3.0). The reminder is a round icon, except on the laptop's
  * row of somebody who pays tomorrow, where it carries its word and the call
  * is left out, as the frame draws it. No phone — neither a call nor WhatsApp.
