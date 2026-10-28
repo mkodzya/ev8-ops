@@ -31,6 +31,7 @@ import { fmtDayMonth } from '../../format.js';
 import type { Dict } from '../../i18n/en.js';
 import { useLocale, useT } from '../../i18n/index.js';
 import { primaryName } from '../../lib/names.js';
+import { useSession } from '../../session.js';
 
 // The parts of "Деньги → Календарь" (docs/redesign/payments-calendar.md §3).
 // Props only: no request and no address in here — CalendarPage owns both.
@@ -873,6 +874,7 @@ export function WeekCard({
  */
 function RowActions({ card, remind, week, dense, worded, actions }: { card: CalendarRentalCard; remind: WaKind | null; week: CalendarEntry | null; dense: boolean; worded: boolean; actions: Actions }) {
   const t = useT();
+  const { can } = useSession();
   const sm = dense ? ' pill-sm' : '';
   const phone = card.customer.phone;
   const reminds = remind !== null && !!phone;
@@ -882,8 +884,9 @@ function RowActions({ card, remind, week, dense, worded, actions }: { card: Cale
   };
   return (
     <>
+      {/* The money form's one name (issue #18, B1; was «Провести вручную»): a payment the bank did not bring. */}
       <button type="button" className={`pill${sm} cal-take`} onClick={() => actions.take(card)}>
-        {t.calendar.recordByHand}
+        {can('payments.reconcile') ? t.money.take : t.money.takeCash}
       </button>
       {reminds && worded && (
         <button type="button" className={`pill${sm} cal-remind`} aria-label={t.calendar.remindAria(template)} onClick={ask}>

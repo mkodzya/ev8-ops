@@ -414,7 +414,8 @@ function ReturnDone({ rentalId, serviceJobId, point }: { rentalId: string; servi
         )}
         {r.debtTetri > 0 && can('cash.record') && (
           <button type="button" className="pill pill-accent" onClick={() => openMoney({ target: { kind: 'rent', ...target } })}>
-            {t.back.takeDebt(formatGel(r.debtTetri, { decimals: false }))}
+            {/* The money form's one name (issue #18, B1): «Принять оплату», or «Принять наличные» for whoever enters no bank money. */}
+            {can('payments.reconcile') ? t.back.takeDebt(formatGel(r.debtTetri, { decimals: false })) : t.hand.takeCash(formatGel(r.debtTetri, { decimals: false }))}
           </button>
         )}
         <Link to="/" className="pill">

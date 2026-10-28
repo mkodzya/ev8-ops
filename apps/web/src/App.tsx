@@ -149,6 +149,8 @@ export function App() {
         <Route path="rentals" element={<RentalsPage />} />
         <Route path="rentals/new" element={<PickupWizard />} />
         <Route path="rentals/return" element={<Require perm="rental.return"><ReturnPickPage /></Require>} />
+        {/* «Заменить мопед» from the "+" (issue #18, B2): whose rental, then the swap wizard. */}
+        <Route path="rentals/swap" element={<Require perm="rental.return"><ReturnPickPage mode="swap" /></Require>} />
         <Route path="rentals/:id" element={<RentalPage />} />
         <Route path="rentals/:id/return" element={<ReturnWizard />} />
         <Route path="rentals/:id/swap" element={<Require perm="rental.return"><SwapWizard /></Require>} />

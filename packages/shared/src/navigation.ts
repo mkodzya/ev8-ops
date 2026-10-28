@@ -53,6 +53,13 @@ export interface Section {
   noneOf?: readonly Permission[];
 }
 
+/** Who sees a section, a tab or an action: any of `anyOf` (none — everybody), all of `allOf`, none of `noneOf`. */
+export interface NavRule {
+  anyOf: readonly Permission[];
+  allOf?: readonly Permission[];
+  noneOf?: readonly Permission[];
+}
+
 export const SECTIONS: readonly Section[] = [
   // "Today" is the front office's queue — rentals, money, the yard. A mechanic
   // has none of it; their first screen is the repairs (ADR-0033).
@@ -82,8 +89,10 @@ export const SECTIONS: readonly Section[] = [
 
 export const GROUPS: readonly GroupId[] = ['daily', 'fleet', 'trade', 'manage'];
 
-const allowed = (s: { anyOf: readonly Permission[]; noneOf?: readonly Permission[] }, permissions: readonly Permission[]) =>
-  (s.anyOf.length === 0 || s.anyOf.some((p) => permissions.includes(p))) && !(s.noneOf ?? []).some((p) => permissions.includes(p));
+const allowed = (s: NavRule, permissions: readonly Permission[]) =>
+  (s.anyOf.length === 0 || s.anyOf.some((p) => permissions.includes(p))) &&
+  (s.allOf ?? []).every((p) => permissions.includes(p)) &&
+  !(s.noneOf ?? []).some((p) => permissions.includes(p));
 
 export function sectionsFor(permissions: readonly Permission[]): Section[] {
   return SECTIONS.filter((s) => allowed(s, permissions));
@@ -179,6 +188,10 @@ export type TabId =
   | 'migration'
   | 'login'
   | 'expenses'
+  // Settings' «Статьи расходов» and «Статьи доходов» (issue #18, B5): the
+  // reports' «Расходы» and «Поступления» are other screens with other words.
+  | 'expenseItems'
+  | 'incomeItems'
   | 'drive'
   | 'orders'
   | 'suppliers'
@@ -201,7 +214,7 @@ export type TabId =
   | 'customers';
 
 /** Tabs inside a section, in the address (wave 1 §3.2). */
-export const SECTION_TABS: Partial<Record<SectionId, readonly { id: TabId; path: string; anyOf: readonly Permission[]; noneOf?: readonly Permission[] }[]>> = {
+export const SECTION_TABS: Partial<Record<SectionId, readonly ({ id: TabId; path: string } & NavRule)[]>> = {
   fleet: [
     { id: 'vehicles', path: '/fleet', anyOf: ['fleet.view'] },
     { id: 'models', path: '/fleet/models', anyOf: ['fleet.view'] },
@@ -267,10 +280,10 @@ export const SECTION_TABS: Partial<Record<SectionId, readonly { id: TabId; path:
     // The workshop's rate and the planned-maintenance interval (stage 6, ADR-0038),
     // and the workshops that do the repairs (task #1 of 21.10.2026).
     { id: 'repair', path: '/settings/repair', anyOf: ['settings.manage'] },
-    // What money going out was for (migration 0046).
-    { id: 'expenses', path: '/settings/expenses', anyOf: ['settings.manage'] },
-    // What money coming in that is no customer's was: «Прочий доход» (migration 0069).
-    { id: 'incoming', path: '/settings/incoming', anyOf: ['settings.manage'] },
+    // What money going out was for (migration 0046) — «Статьи расходов».
+    { id: 'expenseItems', path: '/settings/expenses', anyOf: ['settings.manage'] },
+    // What money coming in that is no customer's was: «Прочий доход» (migration 0069) — «Статьи доходов».
+    { id: 'incomeItems', path: '/settings/incoming', anyOf: ['settings.manage'] },
     // The rentals folders in Google Drive beside the rentals here (ADR-0031).
     { id: 'drive', path: '/settings/drive', anyOf: ['users.manage'] },
     { id: 'journal', path: '/settings/journal', anyOf: ['users.manage'] },
@@ -322,12 +335,20 @@ export function tabsShown(section: SectionId, permissions: readonly Permission[]
   return tabsFor(section, permissions).filter((t) => t.id !== 'migration' || t.path === pathname || counts?.migration == null || counts.migration > 0);
 }
 
-export type ActionId = 'pickup' | 'return' | 'takeMoney' | 'takeCash' | 'newCustomer' | 'openRepair' | 'reportBreak' | 'sell' | 'sellGoods';
+export type ActionId = 'pickup' | 'return' | 'swap' | 'takeMoney' | 'takeCash' | 'newCustomer' | 'openRepair' | 'reportBreak' | 'sell' | 'sellGoods';
 
-/** What the "+" offers, most frequent first (wave 1 §3.2). */
-export const ACTIONS: readonly { id: ActionId; path: string; anyOf: readonly Permission[]; noneOf?: readonly Permission[] }[] = [
+/**
+ * What the "+" offers, most frequent first (wave 1 §3.2). Since issue #18
+ * (B2) the hand-over, the return and the swap say one set of words —
+ * «Выдать мопед», «Вернуть мопед», «Заменить мопед» — wherever they stand.
+ */
+export const ACTIONS: readonly ({ id: ActionId; path: string } & NavRule)[] = [
   { id: 'pickup', path: '/rentals/new', anyOf: ['rental.create'] },
   { id: 'return', path: '/rentals/return', anyOf: ['rental.return'] },
+  // «Заменить мопед» (issue #18, B2): pick the rental, then the swap wizard
+  // of ADR-0040 — a return and a hand-over in one, so both rights, as the
+  // rental card's «⋯» asks them.
+  { id: 'swap', path: '/rentals/swap', anyOf: [], allOf: ['rental.create', 'rental.return'] },
   // Third on the "+" (wave 2 §3.0): the one money form, opened over the money section.
   { id: 'takeMoney', path: '/money/payments?take=1', anyOf: ['payments.reconcile'] },
   { id: 'takeCash', path: '/money/cash?take=1', anyOf: ['cash.record'], noneOf: ['payments.reconcile'] },

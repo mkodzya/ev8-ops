@@ -1,7 +1,8 @@
 // GitHub issue #18 of the director, part B — the simplifications of the audit
 // (28.10.2026): a manager sells a moped (B8), the mopeds «В ремонте» with no
-// repair become a block of «Ремонты» (B6). One file, so the Georgian goes to
-// proofreading as one list (docs/qa/issue-18-b-simplify-ka-strings.md).
+// repair become a block of «Ремонты» (B6), «Заменить мопед» stands under the
+// "+" (B2). One file, so the Georgian goes to proofreading as one list
+// (docs/qa/issue-18-b-simplify-ka-strings.md).
 
 const ruPlural = (n: number, one: string, few: string, many: string): string => {
   const m10 = n % 10;
@@ -23,6 +24,10 @@ export const simpleEn = {
       count: (n: number) => `${n} ${n === 1 ? 'moped' : 'mopeds'}`,
       note: 'The status says «In repair», but no repair is open: open one, or send the moped back to the yard with a reason.',
     },
+    /** «Change the moped» from the "+": whose rental first (B2). */
+    swapPick: {
+      title: 'Whose moped to change?',
+    },
   },
 };
 
@@ -36,6 +41,9 @@ export const simpleRu: typeof simpleEn = {
       count: (n: number) => `${n} ${ruPlural(n, 'мопед', 'мопеда', 'мопедов')}`,
       note: 'Статус — «В ремонте», а заявки нет: откройте ремонт или верните мопед в парк с причиной.',
     },
+    swapPick: {
+      title: 'Чей мопед заменить?',
+    },
   },
 };
 
@@ -48,6 +56,9 @@ export const simpleKa: typeof simpleEn = {
       title: 'სერვისში, განაცხადის გარეშე',
       count: (n: number) => `${n} მოპედი`,
       note: 'სტატუსია «სერვისში», შეკეთება კი გახსნილი არ არის: გახსენით შეკეთება ან მიზეზით დააბრუნეთ მოპედი პარკში.',
+    },
+    swapPick: {
+      title: 'ვისი მოპედი შევცვალოთ?',
     },
   },
 };

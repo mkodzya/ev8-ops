@@ -503,7 +503,14 @@ export function PickupWizard() {
                         })
                       }
                     >
-                      {debtor ? t.hand.takeCash(formatGel(debt.debtTetri, { decimals: false })) : t.today.actions[owner ? 'take_money' : 'take_cash']}
+                      {/* The money form's one name (issue #18, B1), with the sum when it is a debt. */}
+                      {debtor
+                        ? takesTransfers
+                          ? t.back.takeDebt(formatGel(debt.debtTetri, { decimals: false }))
+                          : t.hand.takeCash(formatGel(debt.debtTetri, { decimals: false }))
+                        : takesTransfers
+                          ? t.money.take
+                          : t.money.takeCash}
                     </button>
                   )}
                   {held && owner && (

@@ -361,7 +361,8 @@ describe.skipIf(!HAS_DB)('the poll and what it keeps', () => {
 
     // "Today": one row for all of it, and only in front of an owner.
     const row = json<{ queue: { group: string; rows: { id: string; href: string; note: string | null }[] }[] }>(await call(owner, 'GET', '/api/today'))
-      .queue.find((g) => g.group === 'decisions')
+      // «Дозаполнить» since issue #18 (B5): «Решения» was a near-twin of «Решить».
+      .queue.find((g) => g.group === 'fill')
       ?.rows.find((x) => x.id === 'kommo');
     expect(row).toMatchObject({ href: '/settings/kommo' });
     expect(row!.note).toMatch(new RegExp(`^${r.rentedHere.length}\\|ok\\|\\d{4}-`));

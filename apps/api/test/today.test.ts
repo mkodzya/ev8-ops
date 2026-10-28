@@ -41,7 +41,9 @@ describe.skipIf(!HAS_DB)('“Today” (wave 4)', () => {
     const manager = await loginAs('manager');
     const t = json<Today>(await call(manager, 'GET', '/api/today'));
     expect(t.owner).toBe(false);
-    expect(t.queue.some((g) => ['money', 'purchases', 'decisions', 'instalments'].includes(g.group))).toBe(false);
+    expect(t.queue.some((g) => ['money', 'purchases', 'instalments'].includes(g.group))).toBe(false);
+    // The owners' rows of «Дозаполнить» (was «Решения», issue #18 B5) are not a manager's.
+    expect(t.queue.flatMap((g) => g.rows).some((r) => r.action === 'set_pool' || r.action === 'reconcile_kommo')).toBe(false);
     expect(t.numbers.overdueTetri).toBeNull();
     expect(t.numbers.week).toBeNull();
     expect(t.numbers.myTillTetri).toBe(0);

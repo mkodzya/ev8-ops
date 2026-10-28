@@ -228,13 +228,21 @@ export function RentalPage() {
             {t.actions.returnRental}
           </Link>
         )}
-        {debtTetri > 0 && can('cash.record') && (
+        {/* The rental's one money button (issue #18, B1): the block of payments below had a second one.
+            A running rental takes money ahead too; a returned one while it owes. */}
+        {(open || debtTetri > 0) && can('cash.record') && (
           <button
             type="button"
             className={`pill pill-sm ${dueBack ? '' : 'pill-accent'}`}
             onClick={() => openMoney({ target: { kind: 'rent', rentalId: r.id, number: r.number, customerId: r.customer.id, customer: r.customer.name } })}
           >
-            {open ? t.today.actions.take_money : t.back.takeDebt(formatGel(debtTetri, { decimals: false }))}
+            {open
+              ? can('payments.reconcile')
+                ? t.money.take
+                : t.money.takeCash
+              : can('payments.reconcile')
+                ? t.back.takeDebt(formatGel(debtTetri, { decimals: false }))
+                : t.hand.takeCash(formatGel(debtTetri, { decimals: false }))}
           </button>
         )}
         <RowMenu actions={menu} />
@@ -630,13 +638,8 @@ export function RentalPage() {
             ))}
           </ul>
         )}
-        {/* One money form for everything (wave 2 §3.1); a returned rental with a debt still takes money. */}
+        {/* One money form for everything (wave 2 §3.1), and one button to it — in the head (issue #18, B1). */}
         <div className="row-actions">
-          {can('cash.record') && (
-            <button type="button" className="pill pill-sm pill-accent" onClick={() => openMoney({ target: { kind: 'rent', rentalId: r.id, number: r.number, customerId: r.customer.id, customer: r.customer.name } })}>
-              {can('payments.reconcile') ? t.money.take : t.money.takeCash}
-            </button>
-          )}
           {can('payments.reconcile') && d && d.returnedTetri > 0 && (
             <button type="button" className="pill pill-sm" onClick={() => openMoney({ target: { kind: 'deposit_payout', rentalId: r.id, number: r.number, customerId: r.customer.id, customer: r.customer.name } })}>
               {t.deposits.handBack}

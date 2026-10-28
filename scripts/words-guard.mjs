@@ -22,6 +22,17 @@
  * «Погашено» — so those rules read the key the string is the value of
  * (`deposits.handBack`) and refuse the old word there whatever the string says.
  *
+ * Issue #18 of the director, part B (28.10.2026), added the words of the
+ * audit: the money form has one name, «Принять оплату» («Принять наличные»
+ * for whoever enters no bank money); the hand-over, the return and the swap
+ * are «Выдать мопед», «Вернуть мопед», «Заменить мопед»; the repairs are
+ * «Ремонты» and the status «В ремонте»; a customer's money on no rental is
+ * «Аванс клиента»; cash into the bank is «Внесение наличных в банк»; one
+ * line over several records is «Несколько услуг» both ways; goods are
+ * «Товары»; the schedule's first tab is «К звонку», not a second «Сегодня»;
+ * Settings' categories are «Статьи расходов» and «Статьи доходов». Kardu's
+ * Georgian words stayed — the Russian ones moved — so these rules are Russian.
+ *
  *   node scripts/words-guard.mjs
  */
 import { readdirSync, readFileSync } from 'node:fs';
@@ -82,6 +93,9 @@ const ASSIGNMENT = new RegExp(
  * so the rule reads these keys and no others (QA after issue #9).
  */
 const SETTLED = /^(?:money\.settles|hand\.(?:settles|overpay)|paymentPage\.settled|payments\.(?:allocated|recorded))$/u;
+
+/** The labels of the return wherever it stands: «Вернуть мопед», never a bare «Возврат» (issue #18, B2). */
+const RETURN_ACTION = /^(?:actions\.returnRental|shell\.actions\.return|today\.actions\.return)$/u;
 
 /**
  * `word` is the retired word (any of its forms), `use` what the glossary says
@@ -198,6 +212,55 @@ const RULES = [
     at: DEPOSIT_BACK,
     word: /выда/iu,
     use: 'a deposit is returned — «Вернуть», «К возврату», «Возвращено» (item 5)',
+  },
+  // Issue #18, part B (28.10.2026).
+  {
+    lang: 'ru',
+    word: /Принять деньги|Принять долг|Провести вручную|Провести платёж|Записать платёж/iu,
+    use: 'the money form is «Принять оплату» — «Принять наличные» for whoever enters no bank money (issue #18 B1)',
+  },
+  {
+    lang: 'ru',
+    word: /Новая выдача|Оформить выдачу|Завести аренду|Принять возврат/iu,
+    use: 'a moped is «Выдать мопед», «Вернуть мопед», «Заменить мопед» wherever it is asked (issue #18 B2)',
+  },
+  {
+    lang: 'ru',
+    at: RETURN_ACTION,
+    word: /^Возврат$/u,
+    use: 'the return as an action is «Вернуть мопед» (issue #18 B2)',
+  },
+  {
+    lang: 'ru',
+    word: /(?:^|[\s«(])(?:в |из )?сервис(?:е|а)?(?=$|[\s».,;)])|^Сервис$/iu,
+    // A point may be called «сервис» out loud: the points' hint names it as an example.
+    keeps: (text) => /склад, шоурум, сервис/u.test(text),
+    use: 'the repairs are «Ремонты», a moped in them «В ремонте» (issue #18 B5)',
+  },
+  { lang: 'ru', word: /Аванс по аренде/iu, use: 'a customer’s money on no rental is «Аванс клиента» (issue #18 B5)' },
+  {
+    lang: 'ru',
+    word: /Внёс в банк|Сдача наличных в банк/iu,
+    use: 'cash paid into the bank is «Внесение наличных в банк»; «сдача» is the till’s (issue #18 B5)',
+  },
+  {
+    lang: 'ru',
+    at: /^sort\.(?:split|splitTitle)$/u,
+    word: /^Разнести/u,
+    use: 'one bank line over several records is «Несколько услуг», coming in and going out (issue #18 B5)',
+  },
+  { lang: 'ru', word: /Товары \/ запчасти/iu, use: 'goods are «Товары» (issue #18 B5)' },
+  {
+    lang: 'ru',
+    at: /^shell\.tabs\.due$/u,
+    word: /^Сегодня$/u,
+    use: 'the schedule’s first tab is «К звонку»: «Сегодня» is the section (issue #18 B5)',
+  },
+  {
+    lang: 'ru',
+    at: /^(?:shell\.tabs\.(?:expenseItems|incomeItems)|exp\.title|inc\.settings\.title)$/u,
+    word: /Поступлени|^Расходы$|Категории/u,
+    use: 'Settings keeps «Статьи расходов» and «Статьи доходов»; «Поступления» is «Разобрать»’s and the report’s (issue #18 B5)',
   },
 ];
 
@@ -351,4 +414,4 @@ if (findings.length) {
   for (const f of findings) console.error(`  ${f}`);
   process.exit(1);
 }
-console.log(`words-guard: clean — ${read} strings in ${files.length} dictionaries, ${RULES.length} rules from issue #9.`);
+console.log(`words-guard: clean — ${read} strings in ${files.length} dictionaries, ${RULES.length} rules from issues #9 and #18.`);

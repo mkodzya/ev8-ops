@@ -19,7 +19,10 @@ import { driveReturnWhy } from './drive-returns.js';
 // the overdue ones, a calm group with the same actions.
 // "maintenance" — mopeds whose planned maintenance is near or past (ADR-0038):
 // right after the repairs, a group of its own, every moped in it shown.
-export const TASK_GROUPS = ['decide', 'returns', 'overdue', 'due_today', 'intake', 'money', 'instalments', 'service', 'maintenance', 'purchases', 'decisions', 'fill', 'till'] as const;
+// «Решения» — the mopeds nobody put in a park, Kommo against the rentals —
+// stood beside «Решить» under a near-twin name; since issue #18 (B5) its rows
+// are «Дозаполнить»'s, the group of what is not filled in yet.
+export const TASK_GROUPS = ['decide', 'returns', 'overdue', 'due_today', 'intake', 'money', 'instalments', 'service', 'maintenance', 'purchases', 'fill', 'till'] as const;
 export type TaskGroup = (typeof TASK_GROUPS)[number];
 
 /** What the row's button does; the screen turns it into words and a link. */
@@ -443,9 +446,10 @@ export function dayQueue(input: QueueInput): TaskGroupRows[] {
     for (const p of input.purchases) {
       rows.push({ id: `purchase:${p.id}`, group: 'purchases', action: 'open_purchase', who: p.who, number: p.number, vin: null, days: null, amountTetri: null, href: `/purchases/${p.id}`, phone: null, note: p.note });
     }
-    // 9. Decisions — mopeds nobody has put in a park yet (register #14).
+    // 9. Fill in — mopeds nobody has put in a park yet (register #14); a
+    // group of their own, «Решения», until issue #18 (B5).
     if (input.vehiclesWithoutPool > 0) {
-      rows.push({ id: 'pool', group: 'decisions', action: 'set_pool', who: null, number: null, vin: null, days: null, amountTetri: null, href: '/fleet?f=nopool', phone: null, note: String(input.vehiclesWithoutPool) });
+      rows.push({ id: 'pool', group: 'fill', action: 'set_pool', who: null, number: null, vin: null, days: null, amountTetri: null, href: '/fleet?f=nopool', phone: null, note: String(input.vehiclesWithoutPool) });
     }
     // Rented here and not in Kommo: one row for all of it, like the deposits
     // above. The other half — rented there and not here — is the "intake"
@@ -455,7 +459,7 @@ export function dayQueue(input: QueueInput): TaskGroupRows[] {
     if (k && (k.rentedHere > 0 || k.silent)) {
       rows.push({
         id: 'kommo',
-        group: 'decisions',
+        group: 'fill',
         action: 'reconcile_kommo',
         who: null,
         number: null,

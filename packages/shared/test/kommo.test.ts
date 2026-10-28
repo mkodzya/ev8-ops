@@ -111,7 +111,7 @@ describe('the Kommo row in “Today”', () => {
     // The other half — rented there, nothing here — is a task each, not this row (ADR-0015).
     const q = dayQueue(input({ kommo: { rentedThere: 17, rentedHere: 2, silent: false, lastOkAt: at } }));
     expect(q).toHaveLength(1);
-    expect(q[0]!.rows).toEqual([expect.objectContaining({ id: 'kommo', group: 'decisions', action: 'reconcile_kommo', href: '/settings/kommo', note: `2|ok|${at}` })]);
+    expect(q[0]!.rows).toEqual([expect.objectContaining({ id: 'kommo', group: 'fill', action: 'reconcile_kommo', href: '/settings/kommo', note: `2|ok|${at}` })]);
   });
 
   it('is not there when nothing here disagrees, when the link is off, or for a manager', () => {
