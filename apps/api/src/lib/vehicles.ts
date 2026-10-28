@@ -1,13 +1,44 @@
-import { EVENT_TARGET_STATE, POOL_EVENT, type VehicleEventKind, type VehiclePool, type VehicleState } from '@ev8/shared';
+import { POOL_EVENT, eventTargetState, type VehicleEventKind, type VehiclePool, type VehicleState } from '@ev8/shared';
 import type { Prisma } from '../generated/prisma/client.js';
 import { dateFromISO } from './dates.js';
-import { conflict } from './errors.js';
+import { prisma } from './db.js';
+import { conflict, type ApiError } from './errors.js';
 
 type Tx = Prisma.TransactionClient;
+type Db = Tx | typeof prisma;
+
+/**
+ * The rental a moped is out on: one it was handed out on and that is not
+ * closed — running, late, paused or disputed (issue #17, ADR-0049). Read from
+ * the rentals, never from the moped's own `currentRentalId`: that link is
+ * cleared by any event that leaves the moped anything but rented, which is
+ * how a moped in a running rental came to say «Свободен» after a repair, and
+ * nothing then stopped it being handed to a second customer. `except`: the
+ * rental asking, which is not another one.
+ */
+export async function openRentalOf(db: Db, vehicleId: string, except?: string): Promise<{ id: string; number: string; customerId: string } | null> {
+  return db.rental.findFirst({
+    where: { vehicleId, status: { not: 'returned' }, pickedUpOn: { not: null }, ...(except ? { id: { not: except } } : {}) },
+    orderBy: [{ pickedUpOn: 'desc' }, { createdAt: 'desc' }],
+    select: { id: true, number: true, customerId: true },
+  });
+}
+
+/**
+ * A moped that is out on a rental is handed to nobody else — whatever its
+ * state says (issue #17): the hand-over, a swap, a VIN confirmed later, a
+ * return taken back and a sale all ask this before they write.
+ */
+export function inRentalRefusal(rental: { number: string }, field = 'vehicleId'): ApiError {
+  return conflict('vehicle_in_rental', `This moped is out on rental ${rental.number}; it is not handed to anyone else until that rental is closed.`, { rental: rental.number, field });
+}
 
 /**
  * The one way a vehicle changes state (FLT-03): an event is written, the
- * state follows from it. `manual` carries its target and a reason.
+ * state follows from it. `manual` carries its target and a reason; a manual
+ * «rented» carries the open rental it goes back to as well — an owner's
+ * correction (issue #17), checked by the caller to be open. A repair's end
+ * (`service_out`) leaves a moped whose rental is open with its customer.
  */
 export async function moveVehicle(
   tx: Tx,
@@ -24,14 +55,21 @@ export async function moveVehicle(
   const v = await tx.vehicle.findUniqueOrThrow({ where: { id: input.vehicleId } });
   const from = v.state as VehicleState;
   let to: VehicleState;
+  // The rental a move that is not a hand-over gives the moped back to (issue #17).
+  let backTo: string | null = null;
   if (input.kind === 'manual') {
     if (!input.toState) throw new Error('manual move needs a target state');
     if (!input.reason) throw conflict('reason_required', 'A manual state change needs a reason.');
-    if (input.toState === 'rented') throw conflict('use_rental', 'A moped becomes rented through a hand-over, not by hand.');
+    if (input.toState === 'rented') {
+      if (!input.rentalId) throw conflict('use_rental', 'A moped becomes rented through a hand-over, not by hand.');
+      backTo = input.rentalId;
+    }
     to = input.toState;
   } else {
     if (input.kind === 'to_rent' || input.kind === 'to_sale') throw new Error('a park move goes through movePool');
-    to = EVENT_TARGET_STATE[input.kind];
+    const open = input.kind === 'service_out' ? await openRentalOf(tx, v.id) : null;
+    to = eventTargetState(input.kind, open != null);
+    if (open && to === 'rented') backTo = open.id;
   }
   await tx.vehicleEvent.create({
     data: {
@@ -40,7 +78,7 @@ export async function moveVehicle(
       occurredOn: dateFromISO(input.occurredOn)!,
       fromState: from,
       toState: to,
-      rentalId: input.rentalId ?? null,
+      rentalId: input.rentalId ?? backTo,
       reason: input.reason ?? null,
       actorId: input.actorId,
     },
@@ -49,7 +87,7 @@ export async function moveVehicle(
     where: { id: v.id },
     data: {
       state: to,
-      currentRentalId: input.kind === 'pickup' ? input.rentalId ?? null : to === 'rented' ? v.currentRentalId : null,
+      currentRentalId: input.kind === 'pickup' ? (input.rentalId ?? null) : to === 'rented' ? (backTo ?? v.currentRentalId) : null,
       // A moped that has left for a customer is at that customer, not at a
       // point of ours. Keeping the yard it left would be a second answer to
       // "where is it", and the wrong one.

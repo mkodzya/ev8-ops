@@ -96,6 +96,21 @@ export const EVENT_TARGET_STATE: Record<Exclude<VehicleEventKind, 'manual' | 'to
   written_off: 'out',
 };
 
+/**
+ * Which state an event leaves a moped in, knowing whether a rental it was
+ * handed out on is still open — handed over and not closed, paused or
+ * disputed included (issue #17, ADR-0049). A repair closed, cancelled or
+ * refused gives the moped back where it was: to the customer while that
+ * rental runs — «В аренде» — and to the yard only when there is none. Before
+ * this, every repair's end said «Свободен»: a moped stood free on its card for
+ * days while its rental ran on, and could have been handed to a second
+ * customer. Every other event's state is EVENT_TARGET_STATE's.
+ */
+export function eventTargetState(kind: keyof typeof EVENT_TARGET_STATE, inOpenRental: boolean): VehicleState {
+  if (kind === 'service_out' && inOpenRental) return 'rented';
+  return EVENT_TARGET_STATE[kind];
+}
+
 /** A vehicle can be handed over only when it is free (FLT-03 acceptance). */
 export function canPickUp(state: VehicleState): boolean {
   return state === 'available';
@@ -109,9 +124,16 @@ export type ManualMoveRefusal = 'vehicle_rented_move' | 'sold_by_sale' | 'owner_
 
 /** Who is moving the moped, and what it is tied to now. */
 export interface ManualMoveWho {
-  /** Writing off is the owners' (Q22, wave 4 §3.6): asked of `deposit.decide`, as everywhere. */
+  /**
+   * An owner: writing off is the owners' (Q22, wave 4 §3.6), and so is giving
+   * a moped back its «В аренде» (issue #17) — asked of `deposit.decide`, as everywhere.
+   */
   mayWriteOff: boolean;
-  /** The moped is out on a rental, not only marked rented. */
+  /**
+   * A rental the moped was handed out on is still open — read from the
+   * rentals, not from the moped's own link, which any event that leaves it
+   * anything but rented clears (issue #17, ADR-0049).
+   */
   hasRental: boolean;
 }
 
@@ -124,16 +146,25 @@ export interface ManualMoveWho {
  *
  *   1. a moped out on a rental moves through the rental;
  *   2. sold is a sale's word, and only a buy-back brings a sold one back;
- *   3. anything but free and service is the owners' — so a manager keeps
+ *   3. a moped whose rental is open while its state says otherwise — a
+ *      repair's end used to make it «Свободен» — goes one way only: back to
+ *      «В аренде», by an owner, with a reason; nothing else moves it until
+ *      the rental is closed (issue #17, ADR-0049);
+ *   4. anything but free and service is the owners' — so a manager keeps
  *      exactly what the API allowed before, bringing a written-off moped
  *      back included (Mika, 21.10.2026: who may do what does not change);
- *   4. rented comes from a hand-over;
- *   5. the state it is already in is no move: there is nothing to write in
+ *   5. rented comes from a hand-over: without an open rental it is never a
+ *      state to choose («В аренде — только через выдачу»);
+ *   6. the state it is already in is no move: there is nothing to write in
  *      the history, so it is refused rather than journalled as X → X.
  */
 export function manualMoveRefusal(from: VehicleState, to: VehicleState, who: ManualMoveWho): ManualMoveRefusal | null {
   if (from === 'rented' && who.hasRental) return 'vehicle_rented_move';
   if (to === 'sold' || from === 'sold') return 'sold_by_sale';
+  if (who.hasRental) {
+    if (to !== 'rented') return 'vehicle_rented_move';
+    return who.mayWriteOff ? null : 'owner_only';
+  }
   if (!who.mayWriteOff && to !== 'available' && to !== 'service') return 'owner_only';
   if (to === 'rented') return 'use_rental';
   if (to === from) return 'same_state';
@@ -144,6 +175,8 @@ export function manualMoveRefusal(from: VehicleState, to: VehicleState, who: Man
  * The states a person may set by hand from `from`, in the order of
  * VEHICLE_STATES — what the sheet offers after «now». Empty for a sold moped
  * and for one out on a rental: there is nothing to choose, so nothing opens.
+ * A moped whose rental is open while its state is not «В аренде» is offered
+ * to an owner that one state and nothing else (issue #17).
  */
 export function manualStateTargets(from: VehicleState, who: ManualMoveWho): VehicleState[] {
   return VEHICLE_STATES.filter((to) => manualMoveRefusal(from, to, who) === null);

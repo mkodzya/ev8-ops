@@ -41,7 +41,7 @@ import { actorOf, mayView } from '../lib/guard.js';
 import { fitTracker, readTracker } from '../lib/trackers.js';
 import { date, int, oneOf, str, tetri } from '../lib/validate.js';
 import { syncDeposit } from '../lib/rentalMoney.js';
-import { moveVehicle } from '../lib/vehicles.js';
+import { moveVehicle, openRentalOf } from '../lib/vehicles.js';
 import { rateOf } from '../lib/serviceSettings.js';
 import { maintenanceOverview, restoreOdometer } from '../lib/maintenance.js';
 import { downtimeOf } from '../lib/downtime.js';
@@ -1125,7 +1125,11 @@ export function serviceRoutes(app: FastifyInstance): void {
       throw conflict('job_already_open', 'This moped already has an open repair job.', { job: { id: open.id, number: open.number } });
     }
 
-    const rented = vehicle.state === 'rented' && vehicle.currentRental != null;
+    // Out with a customer: its own link, or a rental still open on it whatever
+    // its state says (issue #17) — such a moped is repaired where it is and
+    // does not move, as a rented one never has.
+    const renting = vehicle.state === 'rented' && vehicle.currentRental ? vehicle.currentRental : await openRentalOf(prisma, vehicleId);
+    const rented = renting != null;
     const approver = hasPerm(actor, 'service.approve');
     const today = todayISO(new Date(), env.TZ);
     const job = await prisma.$transaction(async (tx) => {
@@ -1162,7 +1166,7 @@ export function serviceRoutes(app: FastifyInstance): void {
         made = await tx.serviceJob.create({
           data: {
             vehicleId,
-            rentalId: rented ? vehicle.currentRental!.id : null,
+            rentalId: renting?.id ?? null,
             reason,
             reasonKind,
             openedOn: dateFromISO(today)!,
@@ -1279,7 +1283,9 @@ export function serviceRoutes(app: FastifyInstance): void {
     const alreadyOpen = await prisma.serviceJob.findFirst({ where: { vehicleId, status: { in: ['open', 'draft'] } }, select: { id: true, number: true } });
     if (alreadyOpen) throw conflict('job_already_open', 'This moped already has an open repair job.', { job: alreadyOpen });
 
-    const rented = vehicle.state === 'rented' && vehicle.currentRental != null;
+    // Out with a customer: its own link, or a rental still open on it whatever its state says (issue #17).
+    const renting = vehicle.state === 'rented' && vehicle.currentRental ? vehicle.currentRental : await openRentalOf(prisma, vehicleId);
+    const rented = renting != null;
     const payer = oneOf(b, 'payer', PAYERS) ?? 'company';
     // A manager may say a moped is broken, and no more than that (§3.7): the
     // repair opens as a draft for an owner to take up, and what it will cost
@@ -1295,8 +1301,8 @@ export function serviceRoutes(app: FastifyInstance): void {
       const created = await tx.serviceJob.create({
         data: {
           vehicleId,
-          rentalId: rented ? vehicle.currentRental!.id : null,
-          customerId: payer === 'customer' ? vehicle.currentRental!.customerId : null,
+          rentalId: renting?.id ?? null,
+          customerId: payer === 'customer' ? renting!.customerId : null,
           reason,
           reasonKind,
           openedOn: dateFromISO(openedOn)!,

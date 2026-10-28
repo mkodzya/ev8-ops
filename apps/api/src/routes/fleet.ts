@@ -14,6 +14,7 @@ import { preliminaryOf } from '../lib/purchases.js';
 import { rentStateOf } from '../lib/rentState.js';
 import { renderStickers } from '../lib/pdf/stickers.js';
 import { settingsRow } from './settings.js';
+import { openRentalOf } from '../lib/vehicles.js';
 
 // Read side of the fleet (FLT-01, FLT-02). Writes arrive with the hand-over
 // and return wizards in step 4 of stage 1; state changes go through events.
@@ -52,6 +53,16 @@ export function fleetRoutes(app: FastifyInstance): void {
         },
       },
     });
+    // The rentals still open on each moped, asked of the rentals (issue #17):
+    // a moped whose rental runs while its state says otherwise is shown so,
+    // and is offered to no hand-over, swap or sale.
+    const open = await prisma.rental.findMany({
+      where: { vehicleId: { in: vehicles.map((v) => v.id) }, status: { not: 'returned' }, pickedUpOn: { not: null } },
+      orderBy: [{ pickedUpOn: 'desc' }, { createdAt: 'desc' }],
+      select: { id: true, number: true, vehicleId: true },
+    });
+    const openOf = new Map<string, { id: string; number: string }>();
+    for (const r of open) if (r.vehicleId && !openOf.has(r.vehicleId)) openOf.set(r.vehicleId, { id: r.id, number: r.number });
     const byState = Object.fromEntries(VEHICLE_STATES.map((s) => [s, 0])) as Record<VehicleState, number>;
     for (const v of vehicles) byState[v.state as VehicleState]++;
     // Counted the way the screen groups them (`parkOf`): a moped that has left
@@ -85,6 +96,8 @@ export function fleetRoutes(app: FastifyInstance): void {
               customer: v.currentRental.customer,
             }
           : null,
+        /** The rental still open on it, whatever its state says (issue #17); null — none. */
+        openRental: openOf.get(v.id) ?? null,
         // Why it stands in service, as recorded; null for every other state.
         serviceWhy: serviceWhyOf(v.state, v.serviceJobs[0] ?? null, v.events[0] ?? null),
       })),
@@ -171,6 +184,8 @@ export function fleetRoutes(app: FastifyInstance): void {
     });
     const now = new Date();
     const today = todayISO(now, env.TZ);
+    // The rental still open on it, asked of the rentals rather than of the moped's own link (issue #17).
+    const openRental = await openRentalOf(prisma, v.id);
     // Its next maintenance, from the mileage EV8 Ops recorded (ADR-0038 §1–2); none for a moped that left the fleet.
     const [maintenance] = await maintenanceOf(prisma, { vehicleIds: [v.id] });
     return {
@@ -191,6 +206,11 @@ export function fleetRoutes(app: FastifyInstance): void {
         costPreliminary: mayView(req, 'cost.view') && v.costTetri != null && (order?.preliminary ?? false),
         costPaidPercent: mayView(req, 'cost.view') ? order?.paidPercent ?? null : null,
         currentRentalId: v.currentRentalId,
+        /**
+         * The rental still open on it (issue #17). Beside a state that is not
+         * «В аренде», it is what an owner gives the moped back to.
+         */
+        openRental: openRental ? { id: openRental.id, number: openRental.number } : null,
       },
       maintenance: maintenance ?? null,
       /** Hours in repair over the last 30 Tbilisi days, today included (ADR-0038 §5); repairs with no hours counted apart. */
