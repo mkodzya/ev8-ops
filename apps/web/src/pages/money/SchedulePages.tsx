@@ -152,7 +152,11 @@ function LateList({ late, dense, note, children }: { late: LateHead; dense: bool
   );
 }
 
-/** «Сегодня»: who is late, then who pays today — the morning's calls, with WhatsApp, a call and «Провести вручную». */
+/**
+ * «К звонку» (was «Сегодня» beside the section of that name; issue #18, B5): who
+ * is late, then who pays today — the morning's calls, with WhatsApp, a call and
+ * the money form, «Принять оплату» (B1; was «Провести вручную»).
+ */
 export function ScheduleDuePage() {
   const t = useT();
   const laptop = useLaptop();

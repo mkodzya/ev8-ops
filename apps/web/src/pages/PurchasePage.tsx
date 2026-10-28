@@ -370,7 +370,7 @@ export function PurchasePage() {
 function LineName({ line }: { line: PurchaseLine }) {
   const t = useT();
   if (line.model) return <>{line.model.name}</>;
-  if (line.partId) return <Link to={`/service/stock/parts/${line.partId}`}>{line.partName}</Link>;
+  if (line.partId) return <Link to={`/stock/parts/${line.partId}`}>{line.partName}</Link>;
   return (
     <>
       <span className="muted">{line.partName}</span> <span className="buy-note-inline">{t.buy.notOnShelfShort}</span>

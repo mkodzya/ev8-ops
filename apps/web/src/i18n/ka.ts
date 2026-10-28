@@ -30,12 +30,17 @@ import { contractSignedKa, SIGNIFY_IN_KA } from './contract-signed.js';
 import { saleDateKa } from './sale-date.js';
 import { rentalSwapKa } from './rental-swap.js';
 import { vehicleCardKa } from './vehicle-card.js';
+import { vehicleDetailsKa } from './vehicle-details.js';
 import { pickupDateKa } from './pickup-date.js';
 import { depositReviseKa } from './deposit-revise.js';
 import { menuKa } from './menu.js';
 import { goodsKa } from './goods.js';
 import { incKa } from './inbound.js';
 import { dupKa } from './card-duplicate.js';
+import { rentedFreeKa } from './rented-free.js';
+import { peopleDeleteKa } from './people-delete.js';
+import { simpleKa } from './simplify.js';
+import { todosKa } from './todos.js';
 import type { Dict } from './en.js';
 
 // Typed as Dict: a missing or misspelled key fails the build.
@@ -71,6 +76,10 @@ export const ka: Dict = {
 
   nav: {
     today: 'დღეს',
+    // «Задачи» (issue #18 A, ADR-0050): what a person was set by hand.
+    tasks: 'დავალებები',
+    // The bar's word: «დავალებები» is wider than a fifth of a 375 px phone and broke as «დავალებე / ბი».
+    tasksShort: 'დავალება',
     more: 'მეტი',
     // Issue #15 (ADR-0048): the sections of the new menu, the bar's short word for the schedule.
     schedule: 'გადახდის გრაფიკი',
@@ -82,6 +91,7 @@ export const ka: Dict = {
     payments: 'გადახდები',
     purchases: 'შესყიდვები',
     sales: 'გაყიდვები',
+    stock: 'საწყობი',
     service: 'რემონტები',
     statements: 'ამონაწერები',
     customers: 'კლიენტები',
@@ -90,7 +100,7 @@ export const ka: Dict = {
     cash: 'სალარო',
     reports: 'ანგარიშები',
     settings: 'პარამეტრები',
-    groups: { daily: 'ყოველდღიური', fleet: 'პარკი', trade: 'გაყიდვები და შესყიდვები', sales: 'გაყიდვები', manage: 'მართვა' },
+    groups: { daily: 'ყოველდღიური', fleet: 'პარკი', trade: 'გაყიდვები და შესყიდვები', sales: 'გაყიდვები', salesStock: 'გაყიდვები და საწყობი', manage: 'მართვა' },
   },
 
   shell: {
@@ -101,10 +111,11 @@ export const ka: Dict = {
     menu: 'მენიუ',
     myLogin: 'ჩემი შესვლა · პაროლი',
     actions: {
-      takeMoney: 'ფულის მიღება',
+      takeMoney: 'გადახდის მიღება',
       takeCash: 'ნაღდის მიღება',
       pickup: 'მოპედის გაცემა',
       return: 'დაბრუნების მიღება',
+      swap: 'მოპედის შეცვლა',
       newCustomer: 'ახალი კლიენტი',
       openRepair: 'რემონტის გახსნა',
       reportBreak: 'გაუმართაობის შეტყობინება',
@@ -124,7 +135,7 @@ export const ka: Dict = {
       points: 'ადგილები',
       batteries: 'ბატარეები და დამტენები',
       jobs: 'რემონტები',
-      stock: 'საწყობი',
+      parts: 'ნაწილები',
       works: 'სამუშაოების ცნობარი',
       payouts: 'გადასახდელი',
       balance: 'ბალანსი',
@@ -141,10 +152,12 @@ export const ka: Dict = {
       login: 'შესვლა',
       expenses: 'ხარჯები',
       incoming: 'შემოსავალი',
+      expenseItems: 'ხარჯების კატეგორიები',
+      incomeItems: 'სხვა შემოსავლის კატეგორიები',
       drive: 'Drive',
       goods: 'საქონელი',
       // Issue #15: «Оплаты по графику», «Разобрать», «Аренды и клиенты».
-      due: 'დღეს',
+      due: 'დასარეკი',
       late: 'ვადაგადაცილებული',
       month: 'თვე',
       sortIn: 'შემოსავლები',
@@ -328,8 +341,8 @@ export const ka: Dict = {
   },
 
   actions: {
-    newRental: 'ახალი გაცემა',
-    returnRental: 'დაბრუნება',
+    newRental: 'მოპედის გაცემა',
+    returnRental: 'დაბრუნების მიღება',
     newCustomer: 'ახალი კლიენტი',
     changeState: 'სტატუსის შეცვლა',
     back: 'უკან',
@@ -399,7 +412,7 @@ export const ka: Dict = {
     fineAmount: 'თანხა',
     fineReason: 'რისთვის',
     fineReasonHint: 'სავალდებულოა: მაგალითად, «მოპედის დაზიანება» ან «ჭუჭყიანი მოპედი».',
-    fineHint: 'დარიცხვა კლიენტის დავალიანებას დაემატება. მისი გადახდა — «ფულის მიღება» ან ბანკის ხაზით: «დასახარისხებელი» → «შეკეთება / დარიცხვა».',
+    fineHint: 'დარიცხვა კლიენტის დავალიანებას დაემატება. მისი გადახდა — «გადახდის მიღება» ან ბანკის ხაზით: «დასახარისხებელი» → «შეკეთება / დარიცხვა».',
     fineDone: 'დარიცხულია',
     fineVoid: 'დარიცხვის მოხსნა',
     fineVoidReason: 'რატომ იხსნება',
@@ -736,7 +749,7 @@ export const ka: Dict = {
     tillMinusNeed: 'მონიშნეთ, თუ სხვა ფულიდან აბრუნებთ.',
     tillMinus: (onHand: string, minus: string) => `სალაროში გაქვთ ${onHand} — მეტს აბრუნებთ, სალარო მინუსში წავა −${minus}`,
     tillMinusOk: 'დიახ, ვაბრუნებ — სალარო მინუსში წავა',
-    take: 'ფულის მიღება',
+    take: 'გადახდის მიღება',
     takeCash: 'ნაღდის მიღება',
     takeFor: (n: string) => `გადახდის მიღება · ${n}`,
     payOutFor: (n: string) => `დეპოზიტის დაბრუნება · ${n}`,
@@ -758,8 +771,8 @@ export const ka: Dict = {
     ahead: 'განვადებით წინ',
     depositHeld: 'ხელზე არსებული დეპოზიტი — ვალი არ არის',
     whatFor: 'რისთვის',
-    toAccount: 'ქირის ავანსად',
-    toAccountHint: 'ნამეტი მომდევნო კვირაში წავა',
+    toAccount: 'ქირის ავანსი',
+    toAccountHint: 'ქირაობის უახლოეს კვირაზე ჩაიწერება',
     amount: 'თანხა',
     amountCash: 'თანხა ნაღდით',
     customerPaid: 'კლიენტმა გადაიხადა',
@@ -834,8 +847,8 @@ export const ka: Dict = {
     linked: 'დაკავშირდა ხელით გატარებულ გადახდასთან',
     other: 'სხვა',
     more: 'კიდევ',
-    notOurs: 'ეს ჩვენი არ არის',
-    notOursTitle: 'ეს კლიენტის გადახდა არ არის',
+    notOurs: 'რიგიდან ამოღება',
+    notOursTitle: 'ხაზის რიგიდან ამოღება',
     notOursReason: 'რა არის სინამდვილეში',
     notOursHint: 'მიზეზი სავალდებულოა; ხაზი რიგიდან წავა, ჟურნალში — ვინ და რატომ.',
     notOursDone: 'რიგიდან ამოღებულია',
@@ -892,7 +905,7 @@ export const ka: Dict = {
     asideTitle: 'რიგიდან ამოღებული ხაზები',
     asideSub: (n: number) => `თვეში · ${n}`,
     asideEmpty: 'ამ თვეში რიგიდან არაფერი ამოღებულა.',
-    asideNotOurs: (reason: string) => `ეს ჩვენი არ არის: ${reason}`,
+    asideNotOurs: (reason: string) => `ამოღებულია: ${reason}`,
     asideExpense: 'კომპანიის ხარჯი.',
     asideBy: (who: string, day: string) => `${who}, ${day}`,
     restore: 'რიგში დაბრუნება',
@@ -1020,10 +1033,8 @@ export const ka: Dict = {
 
   payments: {
     voidedToast: 'გადახდა გაუქმდა',
-    record: 'გადახდის ჩაწერა',
     count: (n: number) => `${n} გადახდა`,
     title: 'გადახდები',
-    add: 'გადახდის გატარება',
     date: 'თარიღი',
     channel: 'არხი',
     channels: { transfer: 'გადარიცხვა', acquiring: 'ბარათი', cash: 'ნაღდი', deposit: 'დეპოზიტიდან', offset: 'სამუშაოს ჩათვლა' },
@@ -1146,7 +1157,6 @@ export const ka: Dict = {
     saveCount: 'ინვენტარიზაციის ჩაწერა',
     movesCount: (n: number) => `${n} ოპერაცია`,
     partsCount: (n: number) => `${n} ნაწილი`,
-    nav: 'საწყობი',
     name: 'დასახელება',
     nameKa: 'დასახელება ქართულად',
     sku: 'არტიკული',
@@ -1216,6 +1226,7 @@ export const ka: Dict = {
       already_returned: 'ეს ქირაობა უკვე დახურულია.',
       already_signed: `ხელშეკრულება უკვე ხელმოწერილია — ეკრანზე ან ${SIGNIFY_IN_KA}.`,
       already_voided: 'ეს გადახდა უკვე გაუქმებულია.',
+      arrival_date_bad: 'მოპედის მოსვლის თარიღი — არაუგვიანეს დღევანდელი დღისა და არაუგვიანეს მისი ისტორიის პირველი დღისა.',
       bad_channel: 'დეპოზიტი ბრუნდება ნაღდით ან გადარიცხვით.',
       bad_field: 'ველი არასწორად არის შევსებული. შეამოწმეთ ფორმა და სცადეთ ხელახლა.',
       bad_locale: 'ეს ენა არ არის ხელმისაწვდომი.',
@@ -1257,6 +1268,7 @@ export const ka: Dict = {
       documents_restricted: 'კლიენტის დოკუმენტებს ხედავენ მხოლოდ მფლობელები.',
       down_payment_too_big: 'წინასწარი გადახდა აღემატება ფასს.',
       drive_folder_not_found: 'ეს საქაღალდე Drive-ის ასლში აღარ არის — წაიკითხეთ Drive თავიდან.',
+      drive_return_none: 'ამ ქირაობაზე Drive-ში დაბრუნება, რომელზეც პასუხია საჭირო, აღარ არის: პასუხი უკვე ჩაწერილია ან აქტი აღარ არის. განაახლეთ ეკრანი.',
       duplicate_customer: 'ამ პირადი ნომრით ან ტელეფონით კლიენტი უკვე არსებობს.',
       duplicate_email: 'ამ ელფოსტით უკვე ვიღაც შედის.',
       duplicate_location: 'ამ დასახელებით ადგილი უკვე არსებობს.',
@@ -1338,7 +1350,7 @@ export const ka: Dict = {
       not_outgoing: 'პარტნიორის მიერ გატანილად მხოლოდ ანგარიშიდან გასული თანხის მონიშვნაა შესაძლებელი.',
       not_returned: 'დაბრუნების აქტი გამოჩნდება ქირაობის დახურვის შემდეგ.',
       not_set_aside: 'ეს ხაზი რიგიდან ამოღებული არ არის. განაახლეთ სია.',
-      no_twin: 'ეს ხაზი სხვა ხაზს არ იმეორებს. თუ ის ჩვენი არ არის — «ეს ჩვენი არ არის», მიზეზით.',
+      no_twin: 'ეს ხაზი სხვა ხაზს არ იმეორებს. თუ ის აღრიცხვაში არ არის საჭირო — «რიგიდან ამოღება», მიზეზით.',
       not_yours: 'ამ ცვლილების გაუქმება შეუძლია მხოლოდ მას, ვინც ის გააკეთა.',
       nothing_to_correct: 'ნაშთი უკვე ასეთია.',
       nothing_to_undo: 'ამ მოპედს არ აქვს გადაყვანა, რომლის გაუქმებაც შესაძლებელია.',
@@ -1427,15 +1439,19 @@ export const ka: Dict = {
       unreadable_statement: 'ამონაწერის ფაილი არ იკითხება. ატვირთეთ ბანკის ექსპორტი (BOG ან TBC) ცვლილებების გარეშე.',
       use_rental: 'მოპედი ქირაში გადადის მხოლოდ გაცემის გზით.',
       use_status_route: 'სტატუსი იცვლება ცალკე მოქმედებით, მიზეზით.',
+      user_has_records: 'ამ ადამიანზე უკვე რაღაც ჩაწერილია — მისი მხოლოდ გამორთვაა შესაძლებელი.',
       user_not_found: 'მომხმარებელი ვერ მოიძებნა.',
+      user_signed_in: 'ამ შესვლით უკვე შესულან — მისი მხოლოდ გამორთვაა შესაძლებელი.',
       vehicle_already_set: 'ამ ქირაობას მოპედი უკვე აქვს. მის შესაცვლელად — «მოპედის შეცვლა» მენიუში.',
       vehicle_gone: 'მოპედი პარკიდან გავიდა. დაბრუნება შესაძლებელია უკან შესყიდვით.',
       vehicle_in_rent_pool: 'მოპედის დანიშნულებაა ქირავნობა: გაყიდვისას დანიშნულება „გაყიდვა“ გახდება.',
+      vehicle_in_rental: 'მოპედი სხვა ღია ქირაობაშია — მისი გაცემა შეუძლებელია. დახურეთ ის ქირაობა ან მოპედის ბარათზე დაუბრუნეთ «ქირაშია».',
       vehicle_in_sale_pool: 'მოპედის დანიშნულებაა გაყიდვა. მისი გაცემა შეუძლია მხოლოდ მფლობელს.',
       vehicle_not_available: 'ამ მოპედის გაცემა ახლა შეუძლებელია: ის თავისუფალი არ არის. გახსენით მოპედი და შეამოწმეთ სტატუსი.',
       vehicle_not_found: 'მოპედი ვერ მოიძებნა.',
       vehicle_rented: 'მოპედი კლიენტთანაა — ადგილი დაბრუნებისას მიენიჭება.',
       vehicle_rented_move: 'მოპედი კლიენტთანაა — ჯერ დახურეთ ქირა.',
+      vehicle_year_bad: 'მოპედის წელი — 2000-დან მომავალ წლამდე.',
       vehicle_rented_sale: 'მოპედი ქირაშია — გაყიდვა შეუძლებელია დაბრუნებამდე.',
       vehicle_sold: 'ეს მოპედი უკვე გაყიდულია.',
       vin_or_note: 'აირჩიეთ მოპედი პარკიდან ან დაწერეთ, რატომ არ არის VIN დადასტურებული.',
@@ -1455,6 +1471,22 @@ export const ka: Dict = {
       workshop_archived_exists: 'ამ სახელით სახელოსნო სიიდან მოხსნილია. დააბრუნეთ ის: «…» → «დაბრუნება».',
       workshop_exists: 'ამ სახელით სახელოსნო უკვე სიაშია.',
       workshop_not_found: 'ასეთი სახელოსნო არ არის.',
+      todo_assignee_refused: 'დავალებას საკუთარ თავს აძლევენ. მფლობელი აძლევს მენეჯერს ან მთავარ მექანიკოსსაც.',
+      todo_closed: 'დავალება დახურულია. ჯერ ხელახლა გახსენით.',
+      todo_due_bad: 'ვადა თარიღით ჩაწერეთ.',
+      todo_due_past: 'ეს დღე გავიდა. აირჩიეთ დღეს ან მომავალი დღე.',
+      todo_lead_bad: 'წინასწარ ჩვენება — არაუმეტეს 30 დღით ადრე.',
+      todo_link_ended: 'ეს ჩანაწერი დასრულდა — ქირაობა დაბრუნდა ან მოპედი პარკიდან გავიდა. დავალება კლიენტს მიაბით.',
+      todo_link_not_found: 'ჩანაწერი ვერ მოიძებნა.',
+      todo_link_refused: 'მექანიკოსის დავალება მხოლოდ მოპედს ებმის, და მიაბამს ის, ვინც პარკს ხედავს.',
+      todo_needs_file: 'ეს დავალება ფოტოთი ან ფაილით იხურება. დაამატეთ და დააჭირეთ «შესრულდა».',
+      todo_not_found: 'ასეთი დავალება არ არის.',
+      todo_not_yours: 'დავალებას ცვლის ან შლის ის, ვინც მისცა; ხურავს შემსრულებელი.',
+      todo_note_long: 'კომენტარი ძალიან გრძელია: 2 000 სიმბოლომდე.',
+      todo_record_ended: 'ჩანაწერი, რომელსაც დავალება ებმოდა, დასრულდა, ამიტომ დავალება დახურული რჩება. თუ საქმე დარჩა — ახალი დავალება მიეცით.',
+      todo_text_long: 'ძალიან გრძელია: 300 სიმბოლომდე. დანარჩენი — კომენტარში.',
+      todo_text_missing: 'ჩაწერეთ, რა უნდა გაკეთდეს.',
+      todos_not_yours: 'თქვენ მხოლოდ თქვენს დავალებებს ხედავთ.',
       wrong_password: 'მიმდინარე პაროლი არასწორია.',
     },
   },
@@ -1490,10 +1522,15 @@ export const ka: Dict = {
   ...saleDateKa,
   ...rentalSwapKa,
   ...vehicleCardKa,
+  ...vehicleDetailsKa,
   ...pickupDateKa,
   ...depositReviseKa,
   ...menuKa,
   ...goodsKa,
   ...incKa,
   ...dupKa,
+  ...rentedFreeKa,
+  ...peopleDeleteKa,
+  ...simpleKa,
+  ...todosKa,
 };

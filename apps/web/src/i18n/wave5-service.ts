@@ -46,7 +46,7 @@ export const wave5serviceEn = {
     report: 'Report a breakdown',
     reportCta: 'Report it',
     reported: 'The breakdown was reported',
-    reportNote: 'The repair opens for the owners. A moped standing in the showroom goes into service; one out with a renter stays with them.',
+    reportNote: 'The repair opens for the owners. A moped standing in the showroom goes into repair; one out with a renter stays with them.',
     fromManager: 'A breakdown from a manager',
     draftsHead: 'Awaiting approval',
     takeUp: 'Approve',
@@ -131,7 +131,6 @@ export const wave5serviceEn = {
     partsBack: (n: number, names: string) => `${n} part${n === 1 ? '' : 's'} go back on the shelf: ${names}.`,
   },
   shelf: {
-    title: 'Warehouse',
     searchHint: 'Name, article number',
     chips: { short: 'Below the minimum', negative: 'Below zero' },
     order: 'Order it',
@@ -207,7 +206,7 @@ export const wave5serviceRu: Wave5service = {
     report: 'Сообщить о поломке',
     reportCta: 'Сообщить',
     reported: 'О поломке сообщили',
-    reportNote: 'Ремонт откроется у владельцев. Мопед из шоурума уйдёт «в сервис», у арендатора — останется у него.',
+    reportNote: 'Ремонт откроется у владельцев. Мопед из шоурума уйдёт «в ремонт», у арендатора — останется у него.',
     fromManager: 'Поломка от менеджера',
     draftsHead: 'Ждут согласования',
     takeUp: 'Согласовать',
@@ -290,7 +289,6 @@ export const wave5serviceRu: Wave5service = {
     partsBack: (n, names) => `${n} ${ruPlural(n, 'запчасть вернётся', 'запчасти вернутся', 'запчастей вернутся')} на склад: ${names}.`,
   },
   shelf: {
-    title: 'Склад',
     searchHint: 'Название, артикул',
     chips: { short: 'Ниже минимума', negative: 'В минусе' },
     order: 'В заказ',
@@ -447,7 +445,6 @@ export const wave5serviceKa: Wave5service = {
     partsBack: (n, names) => `${n} ნაწილი დაბრუნდება საწყობში: ${names}.`,
   },
   shelf: {
-    title: 'საწყობი',
     searchHint: 'დასახელება, არტიკული',
     chips: { short: 'მინიმუმზე ნაკლები', negative: 'მინუსში' },
     order: 'შეკვეთაში',

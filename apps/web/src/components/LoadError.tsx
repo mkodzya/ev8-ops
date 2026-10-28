@@ -16,10 +16,10 @@ export function LoadError({ failure, onRetry }: { failure: LoadFailure | null; o
 
   if (failure.status === 404) {
     // The deepest known list the address sits under: /fleet/models/:id is a
-    // model, /service/stock/parts/:id a part.
+    // model, /stock/parts/:id a part («Склад», issue #19).
     const where: { prefix: string; missing: keyof typeof t.errors.codes; list: string }[] = [
       { prefix: '/fleet/models', missing: 'model_not_found', list: t.nav.models },
-      { prefix: '/service/stock', missing: 'part_not_found', list: t.stock.nav },
+      { prefix: '/stock', missing: 'part_not_found', list: t.nav.stock },
       { prefix: '/fleet', missing: 'vehicle_not_found', list: t.nav.fleet },
       { prefix: '/rentals', missing: 'rental_not_found', list: t.shell.tabs.rentals },
       { prefix: '/sales', missing: 'sale_not_found', list: t.nav.sales },

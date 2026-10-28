@@ -7,7 +7,9 @@ import {
   CalendarClock,
   ChartColumn,
   FileText,
+  ListChecks,
   Package,
+  Repeat,
   Send,
   Settings,
   ShoppingBag,
@@ -16,6 +18,7 @@ import {
   Undo2,
   UserPlus,
   Wallet,
+  Warehouse,
   Wrench,
   type LucideIcon,
 } from 'lucide-react';
@@ -23,6 +26,8 @@ import {
 /** One linear icon per section and per "+" action (brand.md, "Значки"). */
 export const SECTION_ICON: Record<SectionId, LucideIcon> = {
   today: CalendarCheck,
+  // «Задачи» (issue #18 A, ADR-0050): what people set by hand, ticked off.
+  tasks: ListChecks,
   // «Оплаты по графику» and «Разобрать» (issue #15): who pays when, and lines to place.
   schedule: CalendarClock,
   sort: ArrowLeftRight,
@@ -31,6 +36,8 @@ export const SECTION_ICON: Record<SectionId, LucideIcon> = {
   rentals: FileText,
   service: Wrench,
   sales: ShoppingBag,
+  // «Склад» (issue #19): the shelf of parts, batteries and chargers.
+  stock: Warehouse,
   purchases: Truck,
   money: Wallet,
   reports: ChartColumn,
@@ -40,6 +47,8 @@ export const SECTION_ICON: Record<SectionId, LucideIcon> = {
 export const ACTION_ICON: Record<ActionId, LucideIcon> = {
   pickup: Send,
   return: Undo2,
+  // Another moped in the same rental (ADR-0040; the "+" since issue #18, B2).
+  swap: Repeat,
   takeMoney: Banknote,
   takeCash: Banknote,
   newCustomer: UserPlus,

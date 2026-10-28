@@ -246,7 +246,8 @@ describe.skipIf(!HAS_DB)('«Оплаты по графику» for a manager: th
     const owner = json<{ sort: { out: number | null } | null; till: number | null }>(await call(await loginAs('owner'), 'GET', '/api/nav/counts'));
     expect(typeof owner.sort?.out).toBe('number');
     expect(typeof owner.till).toBe('number');
-    // A mechanic has none of these sections.
-    expect((await call(await loginAs('mechanic'), 'GET', '/api/nav/counts')).statusCode).toBe(403);
+    // A mechanic has none of these sections: since issue #18 A (ADR-0050) the answer counts his tasks alone.
+    const mechanic = json<{ schedule: unknown; sort: unknown; till: unknown; todos: { late: number; today: number } | null }>(await call(await loginAs('mechanic'), 'GET', '/api/nav/counts'));
+    expect(mechanic).toMatchObject({ schedule: null, sort: null, till: null, todos: { late: 0, today: 0 } });
   });
 });

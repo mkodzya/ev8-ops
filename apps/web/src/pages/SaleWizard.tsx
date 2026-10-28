@@ -36,6 +36,8 @@ interface FleetRow {
   pool: 'rent' | 'sale' | null;
   location: { id: string; name: string } | null;
   salePriceTetri: number | null;
+  /** A rental still open on it, whatever its status says (issue #17); absent while an older API answers. */
+  openRental?: { id: string; number: string } | null;
 }
 
 interface CustomerRow {
@@ -104,6 +106,11 @@ export function SaleWizard() {
   const [params] = useSearchParams();
   const { can } = useSession();
   const owner = can('deposit.decide');
+  // A manager sells too (issue #18, B8). His money form takes cash; a card or a
+  // transfer reaches the bank, and he sorts that line to the sale in «Разобрать».
+  const reconciles = can('payments.reconcile');
+  // Only whoever manages sales dates one in the past, as the server answers (`owner_only_backdate`).
+  const backdates = can('sales.manage');
   const op = useOperation();
 
   const fleet = useLoad<{ vehicles: FleetRow[] }>('/api/fleet');
@@ -119,6 +126,8 @@ export function SaleWizard() {
   // The sale is written first and the prepayment after it: if the money fails
   // the sale still exists, and the screen says so instead of losing both.
   const [payTrouble, setPayTrouble] = useState(false);
+  // What this wizard wrote of the prepayment: the done screen says «Оплачено полностью» only of money recorded.
+  const [recordedTetri, setRecordedTetri] = useState(0);
 
   const drafts = useDraft({ id: 'sale', value: f, initial, hold: result != null });
 
@@ -126,14 +135,15 @@ export function SaleWizard() {
   const customer = customers.data?.customers.find((c) => c.id === f.customerId) ?? null;
 
   // What may be sold: standing free, in the sale park or in none. A moped out
-  // with a renter is not offered at all — the refusal for a direct link is the
+  // with a renter is not offered at all — nor one whose rental is open while
+  // its status says free (issue #17) — the refusal for a direct link is the
   // API's, in words about selling (crit. 2).
   const forSale = useMemo(
-    () => (fleet.data?.vehicles ?? []).filter((v) => v.state === 'available' && v.pool !== 'rent'),
+    () => (fleet.data?.vehicles ?? []).filter((v) => v.state === 'available' && !v.openRental && v.pool !== 'rent'),
     [fleet.data],
   );
   const rentPool = useMemo(
-    () => (fleet.data?.vehicles ?? []).filter((v) => v.state === 'available' && v.pool === 'rent'),
+    () => (fleet.data?.vehicles ?? []).filter((v) => v.state === 'available' && !v.openRental && v.pool === 'rent'),
     [fleet.data],
   );
   const offered = useMemo(() => {
@@ -207,10 +217,25 @@ export function SaleWizard() {
   // A sale with nothing paid today is an owner's decision and carries a
   // reason; anything else needs a channel and an amount (§3.1, step 4).
   const paymentOk = !needsPrepayment || (f.channel === 'later' ? owner && f.why.trim().length > 2 : f.channel != null && prepaymentTetri > 0);
+  const ways: (Channel | 'later')[] = owner ? ['cash', 'acquiring', 'transfer', 'later'] : ['cash', 'acquiring', 'transfer'];
   const buyerOk = f.creating ? f.ncName.trim().length > 1 && f.ncPhone.trim().length > 5 : f.customerId !== '';
   const ok = [vehicleOk, buyerOk, priceOk, paymentOk, true][f.step];
 
-  const stepOfField: Record<string, number> = { vehicleId: 0, movePool: 0, customerId: 1, name: 1, phone: 1, personalId: 1, priceTetri: 2, downPaymentTetri: 2, paidBeforeTetri: 2, schedule: 2, channel: 3 };
+  const stepOfField: Record<string, number> = {
+    vehicleId: 0,
+    movePool: 0,
+    customerId: 1,
+    name: 1,
+    phone: 1,
+    personalId: 1,
+    priceTetri: 2,
+    downPaymentTetri: 2,
+    paidBeforeTetri: 2,
+    schedule: 2,
+    channel: 3,
+    prepaymentChannel: 3,
+    prepaymentTetri: 3,
+  };
   useEffect(() => {
     const code = op.failure?.code ?? '';
     const byCode: Record<string, number> = {
@@ -244,21 +269,28 @@ export function SaleWizard() {
         downPaymentTetri: f.instalments ? downTetri : 0,
         months: f.instalments ? months : 0,
         schedule: rowsTetri.map((r) => ({ dueOn: r.dueOn, amountTetri: r.amountTetri })),
-        soldOn: f.soldOn,
+        // A manager's sale is the server's today (issue #18, B8): a wizard left open past midnight is not dated back.
+        soldOn: owner ? f.soldOn : undefined,
         transferred: f.transfer,
         paidBeforeTetri: f.transfer ? paidBeforeTetri : 0,
         movePool: f.movePool,
         kommoRef: fromLead ?? undefined,
         notes: f.channel === 'later' && f.why.trim() ? f.why.trim() : undefined,
+        // How the buyer paid today: the server holds a manager to a prepayment (issue #18, B8; §3.1).
+        prepaymentChannel: needsPrepayment && f.channel ? f.channel : undefined,
+        prepaymentTetri: needsPrepayment && f.channel && f.channel !== 'later' ? prepaymentTetri : undefined,
       };
       const sale = await api.post<{ id: string; number: string }>('/api/sales', body, { key });
       setResult(sale);
       drafts.drop();
       // The prepayment goes in as money of its own, through the one money
-      // rule of wave 2 — so a card carries its fee (crit. 1, 8).
-      if (needsPrepayment && f.channel && f.channel !== 'later' && prepaymentTetri > 0) {
+      // rule of wave 2 — so a card carries its fee (crit. 1, 8). A manager's
+      // card or transfer is not written here: it comes as a bank line, and he
+      // sorts it to the sale (issue #18, B8; ADR-0048).
+      if (needsPrepayment && f.channel && f.channel !== 'later' && prepaymentTetri > 0 && (reconciles || f.channel === 'cash')) {
         try {
           await api.post(`/api/sales/${sale.id}/payments`, { grossTetri: prepaymentTetri, channel: f.channel }, { key: `${key}-pay` });
+          setRecordedTetri(prepaymentTetri);
         } catch (e) {
           if (!(e instanceof ApiError)) throw e;
           setPayTrouble(true);
@@ -273,7 +305,16 @@ export function SaleWizard() {
   if (!fleet.data || !customers.data) return <Loading />;
 
   if (result && f.step === 5) {
-    return <SaleDone id={result.id} number={result.number} rows={rowsTetri} payTrouble={payTrouble} />;
+    return (
+      <SaleDone
+        id={result.id}
+        number={result.number}
+        rows={rowsTetri}
+        paidTetri={f.transfer ? paidBeforeTetri : recordedTetri}
+        viaBank={needsPrepayment && !reconciles && (f.channel === 'acquiring' || f.channel === 'transfer')}
+        payTrouble={payTrouble}
+      />
+    );
   }
 
   if (drafts.offer) {
@@ -522,7 +563,8 @@ export function SaleWizard() {
                 />
               </Field>
               <div className="chips" role="radiogroup" aria-label={t.sell.pay}>
-                {(['cash', 'acquiring', 'transfer', 'later'] as const).map((c) => (
+                {/* «Позже — в долг» is an owner's decision with a reason (§3.1): a manager is not offered it. */}
+                {ways.map((c) => (
                   <button key={c} type="button" role="radio" aria-checked={f.channel === c} className={`pill ${f.channel === c ? 'on' : ''}`} onClick={() => set({ channel: c })}>
                     {c === 'later' ? t.sell.noPrepayment : t.payments.channels[c]}
                   </button>
@@ -532,6 +574,7 @@ export function SaleWizard() {
               {f.channel === 'acquiring' && prepaymentTetri > 0 && (
                 <p className="hint muted">{t.sell.cardNet(formatGel(acquiringNet(prepaymentTetri)), formatGel(acquiringFee(prepaymentTetri)))}</p>
               )}
+              {!reconciles && (f.channel === 'acquiring' || f.channel === 'transfer') && <p className="hint">{t.simple.sale.viaBank}</p>}
               {f.channel === 'later' && (
                 <>
                   <p className="hint muted">{t.sell.noPrepaymentHint}</p>
@@ -549,8 +592,9 @@ export function SaleWizard() {
         <section className="card">
           <SumRow k={t.sell.moped} v={vehicle ? `${vehicle.model} ···${vehicle.vin.slice(-4)}` : ''} go={() => set({ step: 0 })} />
           <SumRow k={t.sell.buyer} v={customer?.name ?? ''} go={() => set({ step: 1 })} />
-          {/* The day the sale is dated, said before it is made (call of 21.10.2026). */}
-          <SumRow k={t.sell.soldOn} v={<span className="mono">{fmtDate(f.soldOn)}</span>} go={() => set({ step: 2 })} />
+          {/* The day the sale is dated, said before it is made (call of 21.10.2026); for a manager, who dates no sale
+              but today's, said and not pressed — it led to a step with no date for him (QA before 1.17.0). */}
+          <SumRow k={t.sell.soldOn} v={<span className="mono">{fmtDate(f.soldOn)}</span>} go={backdates ? () => set({ step: 2 }) : undefined} />
           <SumRow k={t.sell.price} v={<span className="mono">{formatGel(totalTetri)}</span>} go={() => set({ step: 2 })} />
           <SumRow
             k={t.sell.schedule}
@@ -569,23 +613,32 @@ export function SaleWizard() {
   );
 }
 
-/** What the sale left behind: its number, its paper and the way into it (B4-07). */
-function SaleDone({ id, number, rows, payTrouble }: { id: string; number: string; rows: { amountTetri: number }[]; payTrouble: boolean }) {
+/**
+ * What the sale left behind: its number, its paper and the way into it (B4-07).
+ * «Оплачено полностью» only of money recorded (review of issue #18): a
+ * manager's card or transfer comes as a bank line, an owner's «Позже» brings
+ * nothing today — the screen says what is still to pay, and where it comes from.
+ */
+function SaleDone({ id, number, rows, paidTetri, viaBank, payTrouble }: { id: string; number: string; rows: { amountTetri: number }[]; paidTetri: number; viaBank: boolean; payTrouble: boolean }) {
   const t = useT();
   const navigate = useNavigate();
   const card = useLoad<{ documents: { docKind: string | null; signedAt: string | null }[] }>(`/api/sales/${id}`);
   const signed = card.data?.documents.some((d) => d.docKind === 'sale' && d.signedAt) ?? false;
+  const firstTetri = rows[0]?.amountTetri ?? 0;
+  const openTetri = Math.max(0, firstTetri - paidTetri);
   return (
     <div className="wizard">
       <header className="wizard-head">
         <h1>{t.sell.done(number)}</h1>
       </header>
       <section className="card">
-        <p className="muted">
-          {rows.length > 1
-            ? t.sell.doneSub(formatGel(rows[0].amountTetri, { decimals: false }), rows.length - 1, formatGel(rows[1].amountTetri, { decimals: false }))
-            : t.sell.doneFull(formatGel(rows[0]?.amountTetri ?? 0, { decimals: false }))}
-        </p>
+        {rows.length > 1 ? (
+          <p className="muted">{t.sell.doneSub(formatGel(firstTetri, { decimals: false }), rows.length - 1, formatGel(rows[1].amountTetri, { decimals: false }))}</p>
+        ) : (
+          openTetri === 0 && <p className="muted">{t.sell.doneFull(formatGel(firstTetri, { decimals: false }))}</p>
+        )}
+        {openTetri > 0 && <p className={viaBank ? '' : 'warn-text'}>{t.simple.sale.doneDue(formatGel(openTetri, { decimals: false }))}</p>}
+        {viaBank && <p className="hint muted">{t.simple.sale.viaBank}</p>}
         {payTrouble && <p className="warn-text">{t.sell.payTrouble}</p>}
       </section>
       <section className="card">

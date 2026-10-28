@@ -7,7 +7,7 @@ interface Fleet {
   vehicles: { state: string; location: { id: string } | null }[];
 }
 
-/** Fleet → Points, the owner's tab (wave 1 §3.2): the same list Settings keeps. */
+/** Fleet → Points, the owner's tab (wave 1 §3.2) — the points' one place since issue #18 (B6). */
 export function PointsPage() {
   const t = useT();
   // A point's count answers "how many are here"; the rest of the fleet is at

@@ -15,6 +15,7 @@ import { changePickupDate, pickupDatePreview, type PickupDateInput } from '../li
 import { reviseDeposit } from '../lib/depositRevision.js';
 import { depositBeforePreview, setDepositBefore, type DepositBeforeInput } from '../lib/depositBefore.js';
 import { addFine, voidFine } from '../lib/fines.js';
+import { settleCredit } from '../lib/periods.js';
 import { date, int, oneOf, str, strList, tetri } from '../lib/validate.js';
 
 // Hand-over and return, as the wave 3 wizards send them (wave 3 §3.1, §3.4–§3.7).
@@ -122,15 +123,30 @@ function itemsOf(b: Body): Record<string, { state: 'ok' | 'damaged' | 'missing';
   return out;
 }
 
+/**
+ * A hand-over, and then what the night would do with the customer's money
+ * already in (issue #18, B3): an advance sent before the moped left lies on the
+ * new rental at once — the deposit first, then the week — instead of waiting
+ * for the 00:10 roll while the rental shows its debt. As a week moved, a pickup
+ * day put right and a deposit received earlier do (`weekShift.ts`,
+ * `pickupDate.ts`, `depositBefore.ts`). After the hand-over's own transaction:
+ * `settleCredit` keeps one of its own.
+ */
+async function handOver(input: PickupInput) {
+  const made = await pickUp(input);
+  await settleCredit(made.id);
+  return made;
+}
+
 export function handoverRoutes(app: FastifyInstance): void {
   /** The hand-over wizard's one operation (wave 3 §3.1, step 6). */
   app.post<{ Body: Body }>('/api/pickups', { config: { scope: 'rental.create' }, bodyLimit: PICKUP_BODY_LIMIT }, async (req, reply) => {
-    return reply.code(201).send(await pickUp(await pickupInput(req, actorOf(req), true)));
+    return reply.code(201).send(await handOver(await pickupInput(req, actorOf(req), true)));
   });
 
   /** The earlier entry point, for what still posts to it: no payment step, fewer required fields. */
   app.post<{ Body: Body }>('/api/rentals', { config: { scope: 'rental.create' }, bodyLimit: PICKUP_BODY_LIMIT }, async (req, reply) => {
-    return reply.code(201).send(await pickUp(await pickupInput(req, actorOf(req), false)));
+    return reply.code(201).send(await handOver(await pickupInput(req, actorOf(req), false)));
   });
 
   /** What the return comes to, before it is written (§3.4 step 2). */

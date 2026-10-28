@@ -95,7 +95,8 @@ export function SalePage() {
             className="pill pill-sm pill-accent"
             onClick={() => openMoney({ target: { kind: 'sale', saleId: s.id, number: s.number, customerId: s.customer.id, customer: s.customer.name } })}
           >
-            {t.saleCard.takeInstalment}
+            {/* B1: «Принять наличные» for whoever enters no bank money — the manager since B8. */}
+            {can('payments.reconcile') ? t.saleCard.takeInstalment : t.money.takeCash}
           </button>
         )}
         {s.customer.phone && (
@@ -193,7 +194,7 @@ export function SalePage() {
           <a className="pill pill-sm" href={`/api/sales/${s.id}/contract.pdf`} target="_blank" rel="noreferrer">
             {t.sell.document}
           </a>
-          {!doc?.signedAt && can('sales.manage') && (
+          {!doc?.signedAt && can('sales.create') && (
             <button type="button" className="pill pill-sm" onClick={() => setSigning(true)}>
               {t.sell.sign}
             </button>

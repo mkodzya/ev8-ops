@@ -304,11 +304,15 @@ describe.skipIf(!HAS_DB)('payments calendar · the states of a week', () => {
     const { id } = json<{ id: string }>(res);
     const t = today();
 
+    // Since issue #18 (B3) the hand-over lays the money at once, as the night
+    // would: all of it on the unpaid deposit, the week left as it was.
+    expect((await f.prisma.deposit.findUniqueOrThrow({ where: { rentalId: id } })).paidTetri).toBe(15000);
     const before = entryOn(await calendar(owner), id, t);
     expect(before).toMatchObject({ seq: 1, state: 'due_today', amountTetri: 15000, leftTetri: 15000, creditTetri: 0 });
 
+    // The night then finds nothing left to lay, and changes nothing.
     const { settleCredit } = await import('../src/lib/periods.js');
-    expect(await settleCredit(id)).toBe(15000);
+    expect(await settleCredit(id)).toBe(0);
     expect((await f.prisma.deposit.findUniqueOrThrow({ where: { rentalId: id } })).paidTetri).toBe(15000);
     expect(entryOn(await calendar(owner), id, t)).toEqual(before);
   });

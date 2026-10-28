@@ -45,6 +45,11 @@ export async function teardown(): Promise<void> {
     await prisma.vehicleTracker.deleteMany({ where: { createdAt: since } });
     await prisma.servicePart.deleteMany({ where: { createdAt: since } });
     await prisma.storedFile.deleteMany({ where: { createdAt: since } });
+    // The tasks a run set and their repeats (0071, ADR-0050) point at people, mopeds, rentals and
+    // customers: they go before all of those, the tasks before the repeats that made them. One is the
+    // run's when it was made in the run, or set by or to somebody the run made.
+    await prisma.todo.deleteMany({ where: { OR: [{ createdAt: since }, { createdBy: { createdAt: since } }, { assignee: { createdAt: since } }] } });
+    await prisma.todoSeries.deleteMany({ where: { OR: [{ createdAt: since }, { createdBy: { createdAt: since } }, { assignee: { createdAt: since } }] } });
     // A payment and its statement line cross-reference each other; both
     // sides drop to NULL on delete (migration 0006), so the order here is
     // free. Payments first, then the statements that carried them.

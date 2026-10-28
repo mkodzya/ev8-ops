@@ -8,9 +8,10 @@ import { prisma } from './db.js';
 import { debtOf } from './debt.js';
 import { badRequest, conflict, forbidden, notFound } from './errors.js';
 import { recomputeRental, recordPaymentTx } from './payments.js';
+import { openWeeks, settleCredit } from './periods.js';
 import { rentalOwed, spreadRental, syncDeposit, writeAllocations } from './rentalMoney.js';
 import { returnServiceParts, unfitTrackers } from './stock.js';
-import { movePool, moveVehicle } from './vehicles.js';
+import { inRentalRefusal, movePool, moveVehicle, openRentalOf } from './vehicles.js';
 import { HANDS_OUT, MOPED_ACT, mopedActOf } from './acts.js';
 import { itemLabel } from './pdf/returnAct.js';
 import { restoreOdometer } from './maintenance.js';
@@ -152,6 +153,10 @@ export async function pickUp(input: PickupInput, within?: Tx): Promise<PickupRes
       if (!canPickUp(v.state as VehicleState)) {
         throw conflict('vehicle_not_available', 'This moped cannot be handed over in its current state.', { state: v.state, field: 'vehicleId' });
       }
+      // Free on its card is not enough: a moped another rental is still open
+      // on is with that customer (issue #17), whatever its state says.
+      const busy = await openRentalOf(tx, v.id);
+      if (busy) throw inRentalRefusal(busy);
       if (v.pool === 'sale') {
         if (!owner) throw forbidden('vehicle_in_sale_pool', 'A moped of the sale park goes to rent by an owner.', { field: 'vehicleId' });
         if (!input.moveFromSale) throw conflict('vehicle_in_sale_pool', 'This moped is in the sale park; confirm the move to rent.', { field: 'vehicleId' });
@@ -716,6 +721,14 @@ export const UNDO_RETURN_MS = 24 * 3600_000;
  * A return made by mistake, taken back within a day (B5-08): the rental runs
  * again, the moped is with the customer, what the return charged, kept and
  * handed back is annulled — all of it in the journal.
+ *
+ * Since issue #17 (ADR-0049): the moped's going back to the customer is dated
+ * the day of the return it undoes, not the day of the undo — a swap dated
+ * back to the real day of a change of moped was refused, the history holding
+ * a hand-over two days later than anything happened (R-00005, R-00002). And
+ * the weeks that began while the rental stood closed are opened at once and
+ * the customer's money not yet placed is laid on them, as the night would do:
+ * a transfer that came in meanwhile waited as an advance until 00:10.
  */
 export async function undoReturn(input: { actor: Actor; rentalId: string; reason: string; today: string }): Promise<void> {
   if (!hasPerm(input.actor, 'deposit.decide')) throw forbidden('owner_only', 'Only an owner takes a return back.');
@@ -734,6 +747,16 @@ export async function undoReturn(input: { actor: Actor; rentalId: string; reason
       odometerBeforeKm?: number | null;
     };
     if (record.undone) throw conflict('not_returned', 'This return was already taken back.');
+    // The moped goes back to the customer only if it is still ours to give
+    // (issue #17): not sold or written off since, and not handed to somebody
+    // else in the meantime — two open rentals on one moped is what the issue
+    // was about.
+    if (r.vehicleId) {
+      const v = await tx.vehicle.findUniqueOrThrow({ where: { id: r.vehicleId }, select: { state: true } });
+      if (v.state === 'sold' || v.state === 'out') throw conflict('vehicle_gone', 'This moped has left the fleet since the return; the return cannot be taken back.', { state: v.state });
+      const other = await openRentalOf(tx, r.vehicleId, r.id);
+      if (other) throw inRentalRefusal(other);
+    }
 
     const now = new Date();
     for (const p of record.replaced ?? []) await tx.rentalPeriod.update({ where: { id: p.id }, data: { amountTetri: p.amountTetri, updatedAt: now } });
@@ -777,7 +800,15 @@ export async function undoReturn(input: { actor: Actor; rentalId: string; reason
       }
     }
     if (r.vehicleId) {
-      await moveVehicle(tx, { vehicleId: r.vehicleId, kind: 'pickup', occurredOn: input.today, actorId: input.actor.id, rentalId: r.id, reason: `return undone: ${input.reason}` });
+      // Dated the day of the return it undoes (issue #17), so the history
+      // reads return, hand-over on that day and a swap may be dated from it.
+      // Never before the last thing the moped's history already holds — a
+      // move on a later day stays later, and the timeline keeps its order.
+      const returnedOn = isoDate(act.occurredOn)!;
+      const last = await tx.vehicleEvent.findFirst({ where: { vehicleId: r.vehicleId }, orderBy: [{ occurredOn: 'desc' }, { createdAt: 'desc' }], select: { occurredOn: true } });
+      const lastOn = isoDate(last?.occurredOn ?? null);
+      const backOn = lastOn && lastOn > returnedOn ? lastOn : returnedOn;
+      await moveVehicle(tx, { vehicleId: r.vehicleId, kind: 'pickup', occurredOn: backOn, actorId: input.actor.id, rentalId: r.id, reason: `return undone: ${input.reason}` });
     }
     await tx.act.update({ where: { id: act.id }, data: { settlement: { ...record, undone: true } as object } });
     if (r.vehicleId) {
@@ -791,6 +822,11 @@ export async function undoReturn(input: { actor: Actor; rentalId: string; reason
     await recomputeRental(tx, r.id);
     await tx.auditLog.create({ data: { actorId: input.actor.id, action: 'rental.return.undo', entityType: 'rental', entityId: r.id, note: input.reason } });
   });
+  // What the night would do, now (issue #17, as after a week moved —
+  // ADR-0016 on daytime runs): the weeks that began while the rental stood
+  // closed, and the customer's money not yet placed laid on them.
+  await openWeeks(input.rentalId, input.today);
+  await settleCredit(input.rentalId);
 }
 
 // ---------------------------------------------------------------------------
@@ -883,6 +919,9 @@ export async function swapVehicle(input: SwapInput): Promise<SwapResult> {
     if (!canPickUp(fresh.state as VehicleState)) {
       throw conflict('vehicle_not_available', 'This moped cannot be handed over in its current state.', { state: fresh.state, field: 'vehicleId' });
     }
+    // Free on its card, but out on another rental (issue #17): not handed out twice.
+    const busy = await openRentalOf(tx, fresh.id, r.id);
+    if (busy) throw inRentalRefusal(busy);
     // The same rule as a hand-over (Q9): a moped of the sale park goes to rent by an owner who says so.
     if (fresh.pool === 'sale') {
       if (!owner) throw forbidden('vehicle_in_sale_pool', 'A moped of the sale park goes to rent by an owner.', { field: 'vehicleId' });

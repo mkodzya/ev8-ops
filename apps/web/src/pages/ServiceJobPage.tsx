@@ -812,7 +812,10 @@ function WorkSheet({ job, onClose, onSaved }: { job: ServiceJob; onClose: () => 
 function CloseSheet({ job, onClose, onSaved }: { job: ServiceJob; onClose: () => void; onSaved: () => void }) {
   const t = useT();
   const { can } = useSession();
-  const locations = useLoad<Locations>(job.movedVehicle ? '/api/locations' : null);
+  // A moped whose rental is still open goes back to its customer, «В аренде», at no point of ours (issue #17).
+  const backTo = job.movedVehicle ? (job.backToRental ?? null) : null;
+  const asksWhere = job.movedVehicle && !backTo;
+  const locations = useLoad<Locations>(asksWhere ? '/api/locations' : null);
   const mayWithhold = can('deposit.decide') && job.payer === 'customer' && job.rental != null;
   const rental = useLoad<RentalDeposit>(mayWithhold ? `/api/rentals/${job.rental!.id}` : null);
   const initial = { closedOn: todayISO(), odometer: job.odometerKm != null ? String(job.odometerKm) : '', odometerReason: '', locationId: '', withhold: '' };
@@ -899,8 +902,13 @@ function CloseSheet({ job, onClose, onSaved }: { job: ServiceJob; onClose: () =>
           </Field>
         </>
       )}
-      {/* A moped that never left the customer keeps no point of ours (§3.7). */}
-      {job.movedVehicle && (
+      {/* A moped that never left the customer keeps no point of ours (§3.7), nor one going back to it (issue #17). */}
+      {backTo && (
+        <p className="hint">
+          {t.repairBack.toRenter(job.vehicle.number ?? job.vehicle.model, backTo.number)} <b>{t.repairBack.rented}</b>
+        </p>
+      )}
+      {asksWhere && (
         <Field label={t.repair.where} name="locationId">
           <select className="input" value={f.locationId} onChange={(e) => setF({ ...f, locationId: e.target.value })} required>
             <option value="">{t.common.dash}</option>

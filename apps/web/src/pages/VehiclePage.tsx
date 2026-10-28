@@ -1,7 +1,8 @@
-import { TRANSLATED_EVENT_KINDS, VEHICLE_POOLS, isPoolEvent, localDateTime, manualStateTargets, newestFirst, type RentalStatus, type VehicleEventKind, type VehiclePool, type VehicleState } from '@ev8/shared';
+import { TRANSLATED_EVENT_KINDS, VEHICLE_POOLS, fleetNumber, todoRecordEnded, arrivalFault, arrivalLatestDay, isISODate, isPoolEvent, localDateTime, manualStateTargets, newestFirst, todayISO, vehicleYearFault, vehicleYearRange, type RentalStatus, type VehicleEventKind, type VehiclePool, type VehicleState } from '@ev8/shared';
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api, ApiError } from '../api.js';
+import { ColorPicker } from '../components/ColorPicker.js';
 import { LoadError } from '../components/LoadError.js';
 import { FormSheet, useFieldError } from '../ds/form/Form.js';
 import { useOperation } from '../ds/form/operation.js';
@@ -20,6 +21,7 @@ import { useSession } from '../session.js';
 import { VehicleEconomics } from './EconomicsPage.js';
 import { NewJob } from './ServicePage.js';
 import { TrackerHistory, TrackerRows, type CardTracker } from './VehicleTracker.js';
+import { TodoSheet } from './todos/TodoSheet.js';
 import { formatGel } from '../format.js';
 
 interface Card {
@@ -41,6 +43,8 @@ interface Card {
     costPaidPercent: number | null;
     notes: string | null;
     currentRentalId: string | null;
+    /** The rental still open on it, whatever its status says (issue #17); absent while an older API answers. */
+    openRental?: { id: string; number: string } | null;
   };
   events: {
     id: string;
@@ -126,15 +130,23 @@ export function VehiclePage() {
   // The state sheet, open or not; «Вернуть в парк» opens it on «Свободен».
   const [stateSheet, setStateSheet] = useState<{ prefer?: VehicleState } | null>(null);
   const [fixing, setFixing] = useState(false);
+  const [editing, setEditing] = useState(false);
+  // «⋯ → Поручить» (issue #18 A, ADR-0050): a task about this moped, set from its card.
+  const [tasking, setTasking] = useState(false);
 
   if (failure) return <LoadError failure={failure} onRetry={reload} />;
   if (!data) return <Loading />;
   const v = data.vehicle;
-  const current = data.rentals.find((r) => r.id === v.currentRentalId) ?? null;
+  // The rental it is out on, asked of the rentals (issue #17); an older API says only the moped's own link.
+  const open = v.openRental === undefined ? (v.currentRentalId ? { id: v.currentRentalId, number: '' } : null) : v.openRental;
+  const current = data.rentals.find((r) => r.id === (v.currentRentalId ?? open?.id)) ?? null;
+  // Out on a rental still open while its status says otherwise: the card says so, an owner puts it right.
+  const stray = open && v.state !== 'rented' ? open : null;
   const locked = v.state === 'rented' && !!v.currentRentalId;
   // What the sheet may offer — the rule the server refuses by (21.10.2026).
   // Empty for a moped out on a rental and for a sold one: nothing to open.
-  const targets = manualStateTargets(v.state, { mayWriteOff: can('deposit.decide'), hasRental: !!v.currentRentalId });
+  // For a stray one, an owner's «В аренде по R-…» alone (issue #17).
+  const targets = manualStateTargets(v.state, { mayWriteOff: can('deposit.decide'), hasRental: open != null });
   const openJob = data.serviceJobs.find((j) => j.status === 'open') ?? null;
 
   // One action, and which one depends on where the moped is (U4). A card
@@ -144,10 +156,15 @@ export function VehiclePage() {
   // out moves it to the other park, which is an owner's decision, and steps
   // back to a plain pill (21.10.2026). A manager gets no button here: the
   // hand-over would refuse him (`vehicle_in_sale_pool`).
-  const forSale = v.state === 'available' && v.pool === 'sale';
+  const forSale = v.state === 'available' && v.pool === 'sale' && !stray;
+  // A stray moped is handed to nobody and sold to nobody: its one step is the owner's correction.
   const primary: { label: string; to?: string; onClick?: () => void } | null =
-    forSale
-      ? can('sales.manage')
+    stray
+      ? targets.includes('rented')
+        ? { label: t.stray.rentedBy(stray.number), onClick: () => setStateSheet({ prefer: 'rented' }) }
+        : null
+      : forSale
+      ? can('sales.create')
         ? { label: t.sales.newSale, to: `/sales/new?vehicle=${v.id}` }
         : null
       : v.state === 'available' && can('rental.create')
@@ -173,7 +190,7 @@ export function VehiclePage() {
             className="pill pill-sm"
             onClick={() => setStateSheet({})}
             disabled={targets.length === 0}
-            title={locked ? t.vehicle.rentedLock : v.state === 'sold' ? t.vehicleW4.soldNote : undefined}
+            title={locked ? t.vehicle.rentedLock : stray && targets.length === 0 ? t.stray.ownerFixes : v.state === 'sold' ? t.vehicleW4.soldNote : undefined}
           >
             {t.actions.changeState}
           </button>
@@ -183,7 +200,8 @@ export function VehiclePage() {
         )}
         {/* Selling starts from the moped as often as from the "+" (§3.1); on a
             moped for sale the two trade places with the main button. */}
-        {v.state === 'available' && !forSale && can('sales.manage') && (
+        {/* A manager sells too (issue #18, B8) — not a moped of the rental park: moving it out is an owner's (ADR-0005). */}
+        {v.state === 'available' && !forSale && !stray && can('sales.create') && (v.pool !== 'rent' || can('fleet.pool.set')) && (
           <Link className="pill pill-sm" to={`/sales/new?vehicle=${v.id}`}>
             {t.sell.title}
           </Link>
@@ -193,7 +211,19 @@ export function VehiclePage() {
             {t.actions.newRental}
           </Link>
         )}
-        {can('settings.manage') && <RowMenu actions={[{ key: 'vin', label: t.vinFix.title, onPick: () => setFixing(true) }]} />}
+        {/* «Изменить данные» — the colour, the year, the day it came (issue #19) — beside «Исправить VIN»: an owner's.
+            «Поручить» (issue #18 A): a task about the moped, while it is in the fleet — one that left would close it at once. */}
+        <RowMenu
+          actions={[
+            ...(can('todos.own') && !todoRecordEnded({ kind: 'vehicle', vehicleState: v.state }) ? [{ key: 'task', label: t.todos.give, onPick: () => setTasking(true) }] : []),
+            ...(can('settings.manage')
+              ? [
+                  { key: 'details', label: t.vdetails.title, onPick: () => setEditing(true) },
+                  { key: 'vin', label: t.vinFix.title, onPick: () => setFixing(true) },
+                ]
+              : []),
+          ]}
+        />
         {primary &&
           (primary.to ? (
             <Link className="pill pill-sm pill-accent head-primary" to={primary.to}>
@@ -218,7 +248,30 @@ export function VehiclePage() {
         />
       )}
 
-      {stateSheet && <StateSheet v={v} targets={targets} prefer={stateSheet.prefer} onClose={() => setStateSheet(null)} onDone={reload} />}
+      {editing && (
+        <DetailsSheet
+          v={v}
+          // What the day it came may not be after: the card's own history, the three the server reads (issue #19).
+          historyOn={[
+            ...data.events.filter((e) => e.kind !== 'arrived').map((e) => e.occurredOn),
+            ...data.serviceJobs.map((j) => j.openedOn),
+            ...(data.trackers ?? []).map((x) => x.installedOn),
+          ]}
+          onClose={() => setEditing(false)}
+          onDone={reload}
+        />
+      )}
+
+      {tasking && <TodoSheet fromCard link={{ kind: 'vehicle', id: v.id, label: fleetNumber(v.fleetNo) ?? `···${v.vin.slice(-4)}` }} onClose={() => setTasking(false)} />}
+
+      {stateSheet && <StateSheet v={v} targets={targets} rental={open} prefer={stateSheet.prefer} onClose={() => setStateSheet(null)} onDone={reload} />}
+
+      {/* Out on a rental still open while its status says otherwise (issue #17): said where it is read. */}
+      {stray && (
+        <p className="hint warn-text">
+          {t.stray.card(stray.number, t.states[v.state])} {targets.length === 0 && t.stray.ownerFixes}
+        </p>
+      )}
 
       {/* On a phone the one action lives at the bottom, over the tab bar,
           where a thumb already is (ux.md, principle 2). */}
@@ -523,7 +576,22 @@ function PlaceRow({ v, onDone }: { v: Card['vehicle']; onDone: () => void }) {
  * first state on offer: a sheet that kept the last choice once held the state
  * the moped had just been moved to, lit nowhere, and sent it (21.10.2026).
  */
-function StateSheet({ v, targets, prefer, onClose, onDone }: { v: Card['vehicle']; targets: VehicleState[]; prefer?: VehicleState; onClose: () => void; onDone: () => void }) {
+function StateSheet({
+  v,
+  targets,
+  rental,
+  prefer,
+  onClose,
+  onDone,
+}: {
+  v: Card['vehicle'];
+  targets: VehicleState[];
+  /** The rental still open on the moped: «В аренде» goes back to it (issue #17). */
+  rental: { id: string; number: string } | null;
+  prefer?: VehicleState;
+  onClose: () => void;
+  onDone: () => void;
+}) {
   const t = useT();
   const first = prefer && targets.includes(prefer) ? prefer : (targets[0] ?? null);
   const [move, setMove] = useState<{ toState: VehicleState | null; reason: string }>({ toState: first, reason: '' });
@@ -549,11 +617,11 @@ function StateSheet({ v, targets, prefer, onClose, onDone }: { v: Card['vehicle'
           throw new ApiError(400, 'missing_field', 'Write-off is not confirmed.', { field: 'writeOff', fieldText: t.vehicleW4.writeOffAsk });
         }
         await api.post(`/api/fleet/${v.id}/state`, { toState, reason: move.reason }, { key });
-        return { toast: { text: t.vehicle.stateChanged(t.states[toState]) } };
+        return { toast: { text: t.vehicle.stateChanged(toState === 'rented' && rental ? t.stray.rentedBy(rental.number) : t.states[toState]) } };
       }}
       onDone={onDone}
     >
-      <StatePick now={v.state} targets={targets} value={toState} onPick={(s) => setMove({ ...move, toState: s })} />
+      <StatePick now={v.state} targets={targets} rental={rental} value={toState} onPick={(s) => setMove({ ...move, toState: s })} />
       {toState === 'out' && (
         <Field label={t.vehicleW4.writeOffTitle} name="writeOff">
           <label className="check">
@@ -577,9 +645,24 @@ function StateSheet({ v, targets, prefer, onClose, onDone }: { v: Card['vehicle'
  * badge to the first pill. Sold and rented are never on offer; the line
  * under the pills says why.
  */
-function StatePick({ now, targets, value, onPick }: { now: VehicleState; targets: VehicleState[]; value: VehicleState | null; onPick: (s: VehicleState) => void }) {
+function StatePick({
+  now,
+  targets,
+  rental,
+  value,
+  onPick,
+}: {
+  now: VehicleState;
+  targets: VehicleState[];
+  rental: { number: string } | null;
+  value: VehicleState | null;
+  onPick: (s: VehicleState) => void;
+}) {
   const t = useT();
   const error = useFieldError('toState');
+  // «В аренде по R-…»: offered only for a moped whose rental is open (issue #17), so it names that rental.
+  const back = targets.includes('rented') && rental ? rental : null;
+  const word = (s: VehicleState): string => (s === 'rented' && back ? t.stray.rentedBy(back.number) : t.states[s]);
   return (
     <div className={`field ${error ? 'field-bad' : ''}`} data-field="toState">
       <span className="lbl">{t.fleet.state}</span>
@@ -595,13 +678,13 @@ function StatePick({ now, targets, value, onPick }: { now: VehicleState; targets
           <span className="chips" role="radiogroup" aria-label={t.vehicle.toState}>
             {targets.map((s) => (
               <button key={s} type="button" role="radio" aria-checked={value === s} className={`pill pill-sm ${value === s ? 'on' : ''}`} onClick={() => onPick(s)}>
-                {t.states[s]}
+                {word(s)}
               </button>
             ))}
           </span>
         </span>
       </div>
-      {error ? <span className="field-err">{error}</span> : <span className="hint muted">{t.vehicleW4.soldNote}</span>}
+      {error ? <span className="field-err">{error}</span> : <span className="hint muted">{back ? t.stray.sheetHint(back.number) : t.vehicleW4.soldNote}</span>}
     </div>
   );
 }
@@ -676,6 +759,64 @@ function VinSheet({ id, vin, onClose, onDone }: { id: string; vin: string; onClo
       <Field label={t.vinFix.reason} name="reason">
         <input className="input" value={f.reason} onChange={(e) => setF({ ...f, reason: e.target.value })} />
       </Field>
+    </FormSheet>
+  );
+}
+
+/**
+ * «Изменить данные» (issue #19 of the director, item 2): the colour, the year
+ * and the day the moped came, put right by an owner. The rules are the
+ * server's (`arrivalFault`, `vehicleYearFault`), said under the fields before
+ * anything is sent; the button is not held back (ux, «Ошибка поля»). Only
+ * what changed goes — an untouched colour written the old way («Красный»)
+ * stays as written — and a new day it came asks why (ux №14).
+ */
+function DetailsSheet({ v, historyOn, onClose, onDone }: { v: Card['vehicle']; historyOn: (string | null)[]; onClose: () => void; onDone: () => void }) {
+  const t = useT();
+  const today = todayISO();
+  const initial = { color: v.color ?? '', year: v.year != null ? String(v.year) : '', arrivedOn: v.arrivedOn ?? '', reason: '' };
+  const [f, setF] = useState(initial);
+  const latest = arrivalLatestDay({ today, historyOn });
+  const latestWords = latest.by === 'history' ? t.vdetails.latestHistory(fmtDate(latest.on)) : t.vdetails.latestToday;
+  const range = vehicleYearRange(today);
+  const yearTyped = f.year.trim();
+  const yearBad = yearTyped !== '' && vehicleYearFault(Number(yearTyped), today) != null ? t.vdetails.yearRange(range.min, range.max) : null;
+  const arrivalMoved = f.arrivedOn !== (v.arrivedOn ?? '');
+  const arrivalBad = arrivalMoved && isISODate(f.arrivedOn) && arrivalFault({ on: f.arrivedOn, today, historyOn }) != null ? latestWords : null;
+  return (
+    <FormSheet
+      title={t.vdetails.title}
+      onClose={onClose}
+      value={f}
+      initial={initial}
+      onRestore={setF}
+      label={t.actions.save}
+      submit={async (key) => {
+        const body: Record<string, unknown> = {};
+        if (f.color.trim() !== (v.color ?? '')) body.color = f.color.trim() || null;
+        if (yearTyped !== (v.year != null ? String(v.year) : '')) body.year = yearTyped || null;
+        if (arrivalMoved) {
+          body.arrivedOn = f.arrivedOn || null;
+          body.reason = f.reason.trim();
+        }
+        if (Object.keys(body).length === 0) return { toast: { text: t.vdetails.same } };
+        const res = await api.patch<{ changed: boolean }>(`/api/fleet/${v.id}`, body, { key });
+        return { toast: { text: res.changed ? t.form.changesSaved : t.vdetails.same } };
+      }}
+      onDone={onDone}
+    >
+      <ColorPicker value={f.color} onChange={(color) => setF({ ...f, color })} />
+      <Field label={t.models.year} hint={t.vdetails.yearRange(range.min, range.max)} name="year" error={yearBad}>
+        <input className="input input-amount mono" value={f.year} onChange={(e) => setF({ ...f, year: e.target.value })} inputMode="numeric" maxLength={4} />
+      </Field>
+      <Field label={t.models.arrivedOn} hint={latestWords} name="arrivedOn" error={arrivalBad}>
+        <input className="input mono" type="date" max={latest.on} value={f.arrivedOn} onChange={(e) => setF({ ...f, arrivedOn: e.target.value })} />
+      </Field>
+      {arrivalMoved && (
+        <Field label={t.vdetails.reason} hint={t.vdetails.reasonHint} name="reason">
+          <input className="input" value={f.reason} onChange={(e) => setF({ ...f, reason: e.target.value })} />
+        </Field>
+      )}
     </FormSheet>
   );
 }

@@ -208,6 +208,8 @@ enum FileKind {
   customer_document
   service_photo
   pdf
+  /// The photo or file a hand-made task closed with (0071, ADR-0050).
+  todo_file
 
   @@map("file_kind")
 }
@@ -320,6 +322,14 @@ model User {
   payoutsReceived   MechanicPayout[] @relation("mechanic_payout_mechanic")
   payoutsMarked     MechanicPayout[] @relation("mechanic_payout_marked_by")
   payoutsVoided     MechanicPayout[] @relation("mechanic_payout_voided_by")
+  /// «Задачи» (0071, ADR-0050): given to this person, set, closed, taken back by them.
+  todosAssigned      Todo[]       @relation("todo_assignee")
+  todosSet           Todo[]       @relation("todo_created_by")
+  todosClosed        Todo[]       @relation("todo_closed_by")
+  todosDeleted       Todo[]       @relation("todo_deleted_by")
+  todoSeriesAssigned TodoSeries[] @relation("todo_series_assignee")
+  todoSeriesSet      TodoSeries[] @relation("todo_series_created_by")
+  todoSeriesStopped  TodoSeries[] @relation("todo_series_stopped_by")
 
   @@map("users")
 }
@@ -476,6 +486,9 @@ model Vehicle {
   events        VehicleEvent[]
   /// The acts written about this moped, in whichever rental (migration 0063).
   acts          Act[]
+  /// Hand-made tasks about this moped (0071, ADR-0050).
+  todos         Todo[]
+  todoSeries    TodoSeries[]
 
   @@map("vehicles")
 }
@@ -523,6 +536,9 @@ model Customer {
   mergedFrom  Customer[]   @relation("customer_merge")
   /// Payers remembered as this customer (migration 0069).
   payerRules  PayerRule[]
+  /// Hand-made tasks about this customer (0071, ADR-0050).
+  todos       Todo[]
+  todoSeries  TodoSeries[]
 
   @@map("customers")
 }
@@ -585,6 +601,9 @@ model Rental {
   charges     RentalCharge[]
   batteryMoves BatteryMove[]
   withholdings DepositWithholding[]
+  /// Hand-made tasks about this rental (0071, ADR-0050): they close when it is returned.
+  todos        Todo[]
+  todoSeries   TodoSeries[]
 
   @@map("rentals")
 }
@@ -698,6 +717,8 @@ model StoredFile {
   serviceJobId String?  @map("service_job_id") @db.Uuid
   /// A goods sale's invoice, kept as issued (0067, ADR-0045).
   goodsSaleId  String?  @map("goods_sale_id") @db.Uuid
+  /// What a hand-made task closed with (0071, ADR-0050).
+  todoId       String?  @map("todo_id") @db.Uuid
   label        String   @default("")
   /// What a repair photo shows: before, after, odometer, receipt (0056).
   tag          String?
@@ -718,6 +739,7 @@ model StoredFile {
   sale       Sale?       @relation(fields: [saleId], references: [id], onDelete: Cascade)
   serviceJob ServiceJob? @relation(fields: [serviceJobId], references: [id], onDelete: Cascade)
   goodsSale  GoodsSale?  @relation(fields: [goodsSaleId], references: [id], onDelete: Cascade)
+  todo       Todo?       @relation(fields: [todoId], references: [id], onDelete: Cascade)
   uploadedBy User?     @relation(fields: [uploadedById], references: [id])
   receiptOf  ServicePart[] @relation("service_part_receipt")
 
@@ -1842,4 +1864,79 @@ model TranslationDay {
   updatedAt    DateTime @default(now()) @map("updated_at")
 
   @@map("translation_days")
+}
+
+/// A task a person set by hand — «Задачи» (0071; GitHub issue #18 of the
+/// director, part A; ADR-0050). The code says "todo": "task" already names the
+/// rows «Сегодня» derives from the data, and none of those is copied here.
+/// One series makes one occurrence per day: the partial unique index
+/// `todos_series_slot` (series_id, series_on) lives in the SQL only.
+model Todo {
+  id             String    @id @default(uuid()) @db.Uuid
+  text           String
+  note           String?
+  dueOn          DateTime  @map("due_on") @db.Date
+  leadDays       Int       @default(0) @map("lead_days")
+  needsFile      Boolean   @default(false) @map("needs_file")
+  assigneeId     String    @map("assignee_id") @db.Uuid
+  createdById    String    @map("created_by") @db.Uuid
+  vehicleId      String?   @map("vehicle_id") @db.Uuid
+  rentalId       String?   @map("rental_id") @db.Uuid
+  customerId     String?   @map("customer_id") @db.Uuid
+  seriesId       String?   @map("series_id") @db.Uuid
+  /// The day its series gave it; stays when the due day is moved.
+  seriesOn       DateTime? @map("series_on") @db.Date
+  closedAt       DateTime? @map("closed_at")
+  closedById     String?   @map("closed_by") @db.Uuid
+  closeNote      String?   @map("close_note")
+  /// Closed by itself: the rental it was about was returned, the moped sold or written off.
+  closedByRecord Boolean   @default(false) @map("closed_by_record")
+  deletedAt      DateTime? @map("deleted_at")
+  deletedById    String?   @map("deleted_by") @db.Uuid
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @default(now()) @map("updated_at")
+
+  assignee  User        @relation("todo_assignee", fields: [assigneeId], references: [id])
+  createdBy User        @relation("todo_created_by", fields: [createdById], references: [id])
+  closedBy  User?       @relation("todo_closed_by", fields: [closedById], references: [id])
+  deletedBy User?       @relation("todo_deleted_by", fields: [deletedById], references: [id])
+  vehicle   Vehicle?    @relation(fields: [vehicleId], references: [id])
+  rental    Rental?     @relation(fields: [rentalId], references: [id])
+  customer  Customer?   @relation(fields: [customerId], references: [id])
+  series    TodoSeries? @relation(fields: [seriesId], references: [id])
+  files     StoredFile[]
+
+  @@map("todos")
+}
+
+/// A repeat: every week on its weekday or every month on its date (0071,
+/// ADR-0050). What each occurrence is made from, and the day of the last it made.
+model TodoSeries {
+  id          String    @id @default(uuid()) @db.Uuid
+  /// weekly | monthly
+  repeat      String
+  repeatDay   Int       @map("repeat_day") @db.SmallInt
+  lastOn      DateTime  @map("last_on") @db.Date
+  text        String
+  note        String?
+  leadDays    Int       @default(0) @map("lead_days")
+  needsFile   Boolean   @default(false) @map("needs_file")
+  assigneeId  String    @map("assignee_id") @db.Uuid
+  createdById String    @map("created_by") @db.Uuid
+  vehicleId   String?   @map("vehicle_id") @db.Uuid
+  rentalId    String?   @map("rental_id") @db.Uuid
+  customerId  String?   @map("customer_id") @db.Uuid
+  createdAt   DateTime  @default(now()) @map("created_at")
+  stoppedAt   DateTime? @map("stopped_at")
+  stoppedById String?   @map("stopped_by") @db.Uuid
+
+  assignee  User      @relation("todo_series_assignee", fields: [assigneeId], references: [id])
+  createdBy User      @relation("todo_series_created_by", fields: [createdById], references: [id])
+  stoppedBy User?     @relation("todo_series_stopped_by", fields: [stoppedById], references: [id])
+  vehicle   Vehicle?  @relation(fields: [vehicleId], references: [id])
+  rental    Rental?   @relation(fields: [rentalId], references: [id])
+  customer  Customer? @relation(fields: [customerId], references: [id])
+  todos     Todo[]
+
+  @@map("todo_series")
 }

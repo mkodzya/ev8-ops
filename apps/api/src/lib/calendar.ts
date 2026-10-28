@@ -1,7 +1,10 @@
 import {
   calendarSpans,
   paymentsCalendar,
+  scheduleCounts,
+  schedulePayOf,
   todayISO,
+  weekOf,
   type CalendarChannel,
   type CalendarCredit,
   type CalendarPayment,
@@ -10,6 +13,7 @@ import {
   type PaymentsCalendarAnswer,
   type Period,
   type RentalStatus,
+  type SchedulePay,
 } from '@ev8/shared';
 import { dateFromISO, isoDate } from './dates.js';
 import { prisma } from './db.js';
@@ -175,4 +179,23 @@ export async function calendarAnswer(range: Period, today: string = todayISO(new
     }));
 
   return { ...calendar, rentals: cards, unsortedIn };
+}
+
+/**
+ * «Оплаты по графику» as of `today`, read for the lists (issue #18, B4; Mika's
+ * «Одно правило календаря» of 28.10.2026): what it says of each running
+ * rental, its two numbers — the menu's, and «Сегодня»'s one line — and the one
+ * figure of the late rentals together, an owner's «просрочка». The week of
+ * today is all it reads: lateness is worked out over each rental's whole walk
+ * whatever range is asked.
+ */
+export interface ScheduleToday {
+  pay: Map<string, SchedulePay>;
+  counts: { late: number; dueToday: number };
+  lateDebtTetri: number;
+}
+
+export async function scheduleToday(today: string = todayISO(new Date(), env.TZ)): Promise<ScheduleToday> {
+  const a = await calendarAnswer(weekOf(today), today);
+  return { pay: schedulePayOf(a), counts: scheduleCounts(a), lateDebtTetri: a.late.debtTetri };
 }

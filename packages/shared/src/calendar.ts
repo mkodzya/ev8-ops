@@ -19,11 +19,19 @@
 //
 // The debt beside a late rental is not worked out here: it is the product's
 // one figure (`debt.ts`), passed in and passed through.
+//
+// Since issue #18 (B4; Mika's «Одно правило календаря» of 28.10.2026) the
+// lists ask here too: «Сегодня», «Аренды», «Клиенты», the week's report and
+// the summary call a running rental late or awaited today by what this
+// schedule says of it (`schedulePayOf`, `statusBySchedule`, `customerOwing`),
+// not by its stored "paid through", which knows nothing of money the night
+// has not placed yet.
 import { periodBounds, periodSeqOf, shiftsOf, weekDueOn } from './periods.js';
 import { addDays, daysBetween } from './time.js';
 import { inPeriod, monthOf, paymentInRow, weekOf, type Period, type WeekPayment } from './week.js';
 import type { Tetri } from './money.js';
 import type { ISODate, RentalStatus } from './types.js';
+import type { DebtPart } from './debt.js';
 
 export const CALENDAR_STATES = ['paid', 'paid_ahead', 'due_today', 'overdue', 'expected'] as const;
 export type CalendarState = (typeof CALENDAR_STATES)[number];
@@ -503,6 +511,15 @@ interface Purse extends CalendarPayment {
 const older = (a: CalendarPayment, b: CalendarPayment): number =>
   cmp(a.occurredOn, b.occurredOn) || cmp(a.createdAt, b.createdAt) || cmp(a.paymentId, b.paymentId);
 
+/**
+ * A rental the schedule runs — literally the roll's filter (`rollPeriods`):
+ * active or overdue as stored, handed over, not returned. Paused, disputed,
+ * returned and booked ones have no week, no late row and take no credit.
+ */
+export function runsOnSchedule(r: { status: string; pickedUpOn: ISODate | null; returnedOn: ISODate | null }): boolean {
+  return (r.status === 'active' || r.status === 'overdue') && r.pickedUpOn != null && r.returnedOn == null;
+}
+
 /** The order the roll takes the open rentals in (ADR-0016). */
 const rollOrder = (a: Walk, b: Walk): number =>
   cmp(a.pickedUpOn, b.pickedUpOn) || cmp(a.rental.number, b.rental.number) || cmp(a.rental.id, b.rental.id);
@@ -648,7 +665,7 @@ export function paymentsCalendar(input: CalendarInput): PaymentsCalendar {
   // no late row, and no credit taken.
   const walks: Walk[] = [];
   for (const r of input.rentals) {
-    if ((r.status !== 'active' && r.status !== 'overdue') || r.pickedUpOn == null || r.returnedOn != null) continue;
+    if (!runsOnSchedule(r) || r.pickedUpOn == null) continue;
     walks.push(walkOf(r, r.pickedUpOn, horizon));
   }
   walks.sort(rollOrder);
@@ -797,4 +814,73 @@ export function paymentsCalendar(input: CalendarInput): PaymentsCalendar {
     entries,
     late: { count: late.length, debtTetri, thisWeekTetri, earlierTetri: debtTetri - thisWeekTetri, rentals: late },
   };
+}
+
+// ---------------------------------------------------------------------------
+// One rule for the lists (issue #18, B4)
+// ---------------------------------------------------------------------------
+
+/** What «Оплаты по графику» says of a running rental today: late, or awaited today. */
+export interface SchedulePay {
+  state: 'overdue' | 'due_today';
+  /** Days since its oldest late week was due — `CalendarLate.days`; 0 for a rental awaited today. */
+  days: number;
+}
+
+/**
+ * The schedule's verdict on each running rental, as of its `today`: a rental in
+ * «Просрочки» is late, with its days; one with a week awaited today and nothing
+ * older unpaid is due today; any other running rental is absent — paid up, the
+ * credit the night will place counted (Mika's «Одно правило календаря» of
+ * 28.10.2026). The rows the menu's two numbers count (`scheduleCounts`).
+ */
+export function schedulePayOf(a: {
+  today: ISODate;
+  entries: readonly Pick<CalendarEntry, 'rentalId' | 'dueOn' | 'state'>[];
+  late: { rentals: readonly Pick<CalendarLate, 'rentalId' | 'days'>[] };
+}): Map<string, SchedulePay> {
+  const out = new Map<string, SchedulePay>();
+  for (const e of a.entries) if (e.dueOn === a.today && e.state === 'due_today') out.set(e.rentalId, { state: 'due_today', days: 0 });
+  for (const l of a.late.rentals) out.set(l.rentalId, { state: 'overdue', days: l.days });
+  return out;
+}
+
+/**
+ * A rental's status as the lists show it (issue #18, B4): a running one —
+ * `active`, `due_today` or `overdue` as `effectiveRentalStatus` reads its
+ * stored "paid through" — is what the schedule says of it; any other, as it
+ * was. Before, «Аренды» said «Просрочена» of a rental whose week an advance
+ * already paid, because the advance lies on the week only at night (R-00002,
+ * 25.10.2026).
+ */
+export function statusBySchedule(status: RentalStatus, pay: SchedulePay | undefined): RentalStatus {
+  if (status !== 'active' && status !== 'due_today' && status !== 'overdue') return status;
+  return pay?.state ?? 'active';
+}
+
+/** «Клиенты»: under «Должны» (red), awaited today (ink with the calendar's word), or neither. */
+export type CustomerOwing = 'debtor' | 'awaited' | null;
+
+/**
+ * A customer by the same rule (issue #18, B4): a debtor when one of his
+ * rentals is late in «Оплаты по графику», or when he owes, older than today,
+ * something the schedule does not judge — a deposit short, a return's charge,
+ * a sale's instalment, a repair, goods, the weeks of a rental it does not run
+ * (paused, disputed, returned); awaited when one of his rentals is due today
+ * and nothing makes him a debtor. The figure itself stays the one figure
+ * (`customerDebt`).
+ */
+export function customerOwing(input: {
+  owesTetri: Tetri;
+  /** Of owesTetri: awaited today and not late (`dueTodayOf`). */
+  dueTodayTetri: Tetri;
+  parts: readonly Pick<DebtPart, 'kind' | 'id' | 'owesTetri'>[];
+  /** His rentals the schedule runs (`runsOnSchedule`), each with what it says of them. */
+  rentals: readonly { id: string; pay: SchedulePay | undefined }[];
+}): CustomerOwing {
+  const runs = new Set(input.rentals.map((r) => r.id));
+  if (input.rentals.some((r) => r.pay?.state === 'overdue')) return 'debtor';
+  const other = input.parts.filter((p) => !(p.kind === 'rent' && runs.has(p.id))).reduce((n, p) => n + p.owesTetri, 0);
+  if (other > 0 && input.owesTetri > input.dueTodayTetri) return 'debtor';
+  return input.owesTetri > 0 && input.rentals.some((r) => r.pay?.state === 'due_today') ? 'awaited' : null;
 }

@@ -1,7 +1,7 @@
 // A moped's state by hand (FLT-03, wave 4 §3.6): one rule for the sheet on
 // the moped card and for POST /api/fleet/:id/state (21.10.2026).
 import { describe, expect, it } from 'vitest';
-import { VEHICLE_STATES, manualMoveRefusal, manualStateTargets, type ManualMoveWho, type VehicleState } from '../src/index.js';
+import { EVENT_TARGET_STATE, VEHICLE_STATES, eventTargetState, manualMoveRefusal, manualStateTargets, type ManualMoveWho, type VehicleState } from '../src/index.js';
 
 const owner: ManualMoveWho = { mayWriteOff: true, hasRental: false };
 const manager: ManualMoveWho = { mayWriteOff: false, hasRental: false };
@@ -34,20 +34,39 @@ describe('the states a person may set by hand', () => {
     expect(manualStateTargets('rented', manager)).toEqual(['available', 'service']);
   });
 
-  it('never offers the state it is in, rented or sold, from anywhere, to anyone', () => {
+  it('never offers the state it is in, nor sold, from anywhere, to anyone', () => {
     for (const from of VEHICLE_STATES) {
       for (const who of [owner, manager, { ...owner, hasRental: true }, { ...manager, hasRental: true }]) {
         const targets = manualStateTargets(from, who);
         expect(targets).not.toContain(from);
-        expect(targets).not.toContain('rented');
         expect(targets).not.toContain('sold');
       }
     }
   });
 
+  it('offers rented only to an owner, only for a moped whose rental is open (issue #17)', () => {
+    for (const from of VEHICLE_STATES) {
+      expect(manualStateTargets(from, owner)).not.toContain('rented');
+      expect(manualStateTargets(from, manager)).not.toContain('rented');
+      expect(manualStateTargets(from, { ...manager, hasRental: true })).not.toContain('rented');
+    }
+  });
+
+  it('a moped whose rental is open but which is not rented: an owner may give it back «В аренде», and nothing else (issue #17)', () => {
+    const rentalOpen = { ...owner, hasRental: true };
+    expect(manualStateTargets('available', rentalOpen)).toEqual(['rented']);
+    expect(manualStateTargets('service', rentalOpen)).toEqual(['rented']);
+    expect(manualStateTargets('out', rentalOpen)).toEqual(['rented']);
+    // A manager sees nothing to choose: the sheet stays closed, the owner fixes it.
+    expect(manualStateTargets('available', { ...manager, hasRental: true })).toEqual([]);
+    expect(manualStateTargets('service', { ...manager, hasRental: true })).toEqual([]);
+    // Sold stays a sale's.
+    expect(manualStateTargets('sold', rentalOpen)).toEqual([]);
+  });
+
   it('offers exactly what the server would accept', () => {
     for (const from of VEHICLE_STATES) {
-      for (const who of [owner, manager]) {
+      for (const who of [owner, manager, { ...owner, hasRental: true }, { ...manager, hasRental: true }]) {
         const accepted = VEHICLE_STATES.filter((to: VehicleState) => manualMoveRefusal(from, to, who) === null);
         expect(manualStateTargets(from, who)).toEqual(accepted);
       }
@@ -80,11 +99,38 @@ describe('why a move by hand is refused', () => {
     expect(manualMoveRefusal('out', 'out', owner)).toBe('same_state');
   });
 
+  it('a moped whose rental is open: back to rented by an owner; anything else waits for the rental (issue #17)', () => {
+    expect(manualMoveRefusal('available', 'rented', { ...owner, hasRental: true })).toBeNull();
+    expect(manualMoveRefusal('service', 'rented', { ...owner, hasRental: true })).toBeNull();
+    expect(manualMoveRefusal('available', 'rented', { ...manager, hasRental: true })).toBe('owner_only');
+    expect(manualMoveRefusal('available', 'service', { ...manager, hasRental: true })).toBe('vehicle_rented_move');
+    expect(manualMoveRefusal('available', 'out', { ...owner, hasRental: true })).toBe('vehicle_rented_move');
+    expect(manualMoveRefusal('service', 'available', { ...owner, hasRental: true })).toBe('vehicle_rented_move');
+    expect(manualMoveRefusal('available', 'sold', { ...owner, hasRental: true })).toBe('sold_by_sale');
+    // Without an open rental rented still comes from a hand-over only.
+    expect(manualMoveRefusal('available', 'rented', owner)).toBe('use_rental');
+  });
+
   it('lets the allowed moves through', () => {
     expect(manualMoveRefusal('available', 'service', manager)).toBeNull();
     expect(manualMoveRefusal('service', 'available', manager)).toBeNull();
     expect(manualMoveRefusal('out', 'available', manager)).toBeNull();
     expect(manualMoveRefusal('available', 'out', owner)).toBeNull();
     expect(manualMoveRefusal('out', 'service', owner)).toBeNull();
+  });
+});
+
+describe('where an event leaves a moped (issue #17)', () => {
+  it('a repair ends with the customer while the rental is open, in the yard otherwise', () => {
+    expect(eventTargetState('service_out', true)).toBe('rented');
+    expect(eventTargetState('service_out', false)).toBe('available');
+  });
+
+  it('every other event keeps its own state, rental or none', () => {
+    for (const kind of Object.keys(EVENT_TARGET_STATE) as (keyof typeof EVENT_TARGET_STATE)[]) {
+      if (kind === 'service_out') continue;
+      expect(eventTargetState(kind, true)).toBe(EVENT_TARGET_STATE[kind]);
+      expect(eventTargetState(kind, false)).toBe(EVENT_TARGET_STATE[kind]);
+    }
   });
 });

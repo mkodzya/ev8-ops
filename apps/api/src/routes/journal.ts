@@ -29,7 +29,7 @@ async function numbersFor(rows: { entityType: string; entityId: string | null }[
       if (n) out.set(x.id, n);
     }
   };
-  const [rentals, sales, goodsSales, purchases, jobs, vehicles, customers, users, parts, locations, workshops, deposits, payments, acts] = await Promise.all([
+  const [rentals, sales, goodsSales, purchases, jobs, vehicles, customers, users, parts, locations, workshops, deposits, payments, acts, todos, todoSeries] = await Promise.all([
     prisma.rental.findMany({ where: { id: { in: ids('rental') } }, select: { id: true, number: true } }),
     prisma.sale.findMany({ where: { id: { in: ids('sale') } }, select: { id: true, number: true } }),
     // A goods sale (ADR-0045): TS-…
@@ -52,6 +52,9 @@ async function numbersFor(rows: { entityType: string; entityId: string | null }[
       select: { id: true, rental: { select: { number: true } }, sale: { select: { number: true } }, purchase: { select: { number: true } }, serviceJob: { select: { number: true } }, goodsSale: { select: { number: true } } },
     }),
     prisma.act.findMany({ where: { id: { in: ids('act') } }, select: { id: true, rental: { select: { number: true } } } }),
+    // A task (ADR-0050) is called by its words, and a repeat by the words it makes its tasks with.
+    prisma.todo.findMany({ where: { id: { in: ids('todo') } }, select: { id: true, text: true } }),
+    prisma.todoSeries.findMany({ where: { id: { in: ids('todo_series') } }, select: { id: true, text: true } }),
   ]);
   put(rentals, (x: { number: string }) => x.number);
   put(sales, (x: { number: string }) => x.number);
@@ -71,6 +74,8 @@ async function numbersFor(rows: { entityType: string; entityId: string | null }[
       x.rental?.number ?? x.sale?.number ?? x.purchase?.number ?? x.serviceJob?.number ?? x.goodsSale?.number ?? null,
   );
   put(acts, (x: { rental: { number: string } }) => x.rental.number);
+  put(todos, (x: { text: string }) => x.text);
+  put(todoSeries, (x: { text: string }) => x.text);
   return out;
 }
 

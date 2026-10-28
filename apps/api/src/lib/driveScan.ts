@@ -1,4 +1,4 @@
-import { addDays, effectiveRentalStatus, todayISO, type RentalStatus } from '@ev8/shared';
+import { addDays, driveReturnAnswered, driveReturnKeys, driveReturnShownAct, driveReturnWhy, effectiveRentalStatus, todayISO, type RentalStatus } from '@ev8/shared';
 import { dateFromISO, isoDate } from './dates.js';
 import { prisma } from './db.js';
 import { DriveError, FOLDER, download, driveConfig, listFolder, type DriveConfig, type DriveFailure, type DriveItem } from './drive.js';
@@ -196,6 +196,41 @@ export function actOfSwappedMoped(actVin: string | null, rental: { vin: string |
 /** How long a contract in Drive with no rental here is asked about on "Today": older ones are mostly finished rentals whose folder was not moved. */
 export const DRIVE_NEW_DAYS = 14;
 
+/** One owner's «Это не возврат», as the journal keeps it: the last answer of a rental, and every key its answers covered. */
+interface NotReturnAnswer {
+  keys: string[];
+  at: string;
+  by: string | null;
+  reason: string | null;
+}
+
+/**
+ * The owners' «Это не возврат» to Drive's return rows (issue #19, item 3;
+ * ADR-0034, addendum 28.10.2026), by rental. The answer is a journal row of
+ * the rental — `drive.not_return`, the keys of what it answered in `after`,
+ * the reason in the note — and it is read back from there: the decision and
+ * its trace are one record, as «Вернуть в очередь» of a bank line is
+ * (statements/ownTransfers.ts). Answers add up; the newest names who and why.
+ */
+async function notReturnAnswers(rentalIds: readonly string[]): Promise<Map<string, NotReturnAnswer>> {
+  const out = new Map<string, NotReturnAnswer>();
+  if (rentalIds.length === 0) return out;
+  const rows = await prisma.auditLog.findMany({
+    where: { action: 'drive.not_return', entityType: 'rental', entityId: { in: [...rentalIds] } },
+    orderBy: { createdAt: 'desc' },
+    select: { entityId: true, after: true, note: true, createdAt: true, actor: { select: { name: true } } },
+  });
+  for (const r of rows) {
+    if (!r.entityId) continue;
+    const said = (r.after as { keys?: unknown } | null)?.keys;
+    const keys = Array.isArray(said) ? said.filter((k): k is string => typeof k === 'string') : [];
+    const had = out.get(r.entityId);
+    if (had) had.keys.push(...keys);
+    else out.set(r.entityId, { keys, at: r.createdAt.toISOString(), by: r.actor?.name ?? null, reason: r.note });
+  }
+  return out;
+}
+
 /**
  * Drive beside the rentals here: a return Drive has and the rental here does
  * not; a renter's folder with no rental here; a running rental with no folder.
@@ -240,10 +275,12 @@ export async function driveReconciliation() {
     const s = swapsOf(f);
     return !!s && actOfSwappedMoped(vin, s);
   };
-  // The folder's return act — the rental's own, not one dated before its
-  // pickup, nor the closing paper of a moped a swap took out of it.
-  const act = (f: (typeof folders)[number]) =>
-    f.files.find((x) => x.kind === 'return_act' && actAfterPickup(isoDate(x.datedOn), isoDate(f.rental?.pickedUpOn ?? null)) && !swappedAct(f, x.vin)) ?? null;
+  // The folder's return acts — the rental's own, not one dated before its
+  // pickup, nor the closing paper of a moped a swap took out of it — and
+  // whether there is one (the act the row shows is `shownAct`, below).
+  const ownActs = (f: (typeof folders)[number]) =>
+    f.files.filter((x) => x.kind === 'return_act' && actAfterPickup(isoDate(x.datedOn), isoDate(f.rental?.pickedUpOn ?? null)) && !swappedAct(f, x.vin));
+  const act = (f: (typeof folders)[number]) => ownActs(f)[0] ?? null;
   // A finished folder whose every return act is a swapped moped's holds the
   // old contract, closed: the rental itself runs on.
   const onlySwapped = (f: (typeof folders)[number]) => {
@@ -253,10 +290,41 @@ export async function driveReconciliation() {
   // The moped came back by Drive: the folder was moved among the finished ones,
   // or the return act is in it already while it still stands among the running
   // (ADR-0034). One rental, one row: the one with an act first.
-  const back = folders
-    .filter((f) => f.rental && statusOf(f.rental) !== 'returned' && ((f.section === 'finished' && !onlySwapped(f)) || act(f) != null))
+  const backAll = folders.filter((f) => f.rental && statusOf(f.rental) !== 'returned' && ((f.section === 'finished' && !onlySwapped(f)) || act(f) != null));
+  const back = [...backAll]
     .sort((a, b) => Number(act(b) != null) - Number(act(a) != null))
     .filter((f, i, all) => all.findIndex((x) => x.rentalId === f.rentalId) === i);
+  // What made a rental's row — every folder of it that says it came back, each
+  // act as Drive last changed it — and whether the owner has answered all of it
+  // «Это не возврат» (issue #19): then the row stays away until something new
+  // appears (`driveReturnAnswered`).
+  const keysOf = (rentalId: string) =>
+    driveReturnKeys(backAll.filter((f) => f.rentalId === rentalId).map((f) => ({ id: f.id, acts: ownActs(f).map((x) => ({ id: x.id, modifiedAt: x.modifiedAt.toISOString() })) })));
+  const answers = await notReturnAnswers(back.map((f) => f.rentalId!));
+  const answered = (f: (typeof folders)[number]) => driveReturnAnswered(keysOf(f.rentalId!), answers.get(f.rentalId!)?.keys ?? []);
+  // The act the row shows: the new one nobody answered first, a dated one before an undated one (`driveReturnShownAct`).
+  const shownAct = (f: (typeof folders)[number]) => {
+    const acts = ownActs(f);
+    const pick = driveReturnShownAct(
+      acts.map((x) => ({ id: x.id, modifiedAt: x.modifiedAt.toISOString(), datedOn: isoDate(x.datedOn) })),
+      answers.get(f.rentalId!)?.keys ?? [],
+    );
+    return pick ? (acts.find((x) => x.id === pick.id) ?? null) : null;
+  };
+  const rowOf = (f: (typeof folders)[number]) => {
+    const a = shownAct(f);
+    return {
+      folder: { id: f.id, name: f.name, url: f.webUrl, section: f.section },
+      rental: { id: f.rental!.id, number: f.rental!.number, customer: f.rental!.customer },
+      act: a
+        ? { url: a.webUrl, returnedOn: isoDate(a.datedOn), contractOn: isoDate(a.contractOn), vin: a.vin, depositTetri: a.depositTetri, withheldTetri: a.withheldTetri, paidBackTetri: a.paidBackTetri }
+        : null,
+      /** The act's day, an act with no day, or only the folder among the finished — what the row says (issue #19). */
+      why: driveReturnWhy(a ? { returnedOn: isoDate(a.datedOn) } : null),
+      /** What «Это не возврат» answers for this rental now (`driveReturnKeys`). */
+      keys: keysOf(f.rentalId!),
+    };
+  };
   const contract = (f: (typeof folders)[number]) => f.files.find((x) => x.kind === 'contract') ?? f.files.find((x) => x.kind === 'scan') ?? null;
   return {
     on,
@@ -266,15 +334,11 @@ export async function driveReconciliation() {
     folders: folders.length,
     matched: folders.filter((f) => f.section === 'active' && f.rentalId).length,
     // The moped came back by Drive's act; here the rental still runs.
-    returnedThere: back.map((f) => {
-      const a = act(f);
-      return {
-        folder: { name: f.name, url: f.webUrl },
-        rental: { id: f.rental!.id, number: f.rental!.number, customer: f.rental!.customer },
-        act: a
-          ? { url: a.webUrl, returnedOn: isoDate(a.datedOn), contractOn: isoDate(a.contractOn), vin: a.vin, depositTetri: a.depositTetri, withheldTetri: a.withheldTetri, paidBackTetri: a.paidBackTetri }
-          : null,
-      };
+    returnedThere: back.filter((f) => !answered(f)).map(rowOf),
+    // The ones an owner answered «Это не возврат» (issue #19): off "Today", kept here with who, when and why.
+    notReturned: back.filter(answered).map((f) => {
+      const answer = answers.get(f.rentalId!)!;
+      return { ...rowOf(f), answer: { at: answer.at, by: answer.by, reason: answer.reason } };
     }),
     // A renter's folder among the running ones with no rental here.
     missingHere: folders
@@ -297,14 +361,15 @@ export async function driveReconciliation() {
  */
 export async function driveTasks(today: string): Promise<{
   contracts: { folderId: string; who: string; datedOn: string | null }[];
-  returns: { rentalId: string; returnedOn: string | null; paidBackTetri: number | null }[];
+  returns: { rentalId: string; returnedOn: string | null; paidBackTetri: number | null; act: boolean }[];
 }> {
   if (!driveConfig()) return { contracts: [], returns: [] };
   const r = await driveReconciliation();
   const since = addDays(today, -DRIVE_NEW_DAYS);
   return {
     contracts: r.missingHere.filter((f) => !f.returned && f.datedOn != null && f.datedOn >= since).map((f) => ({ folderId: f.id, who: folderName(f.name).person, datedOn: f.datedOn })),
-    returns: r.returnedThere.map((x) => ({ rentalId: x.rental.id, returnedOn: x.act?.returnedOn ?? null, paidBackTetri: x.act?.paidBackTetri ?? null })),
+    // `act`: an act is in the folder, dated or not — or only the folder was moved among the finished (issue #19).
+    returns: r.returnedThere.map((x) => ({ rentalId: x.rental.id, returnedOn: x.act?.returnedOn ?? null, paidBackTetri: x.act?.paidBackTetri ?? null, act: x.act != null })),
   };
 }
 

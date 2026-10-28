@@ -10,7 +10,7 @@
 // from today and every assertion is about the suite's own made-up rental. A
 // roll to a future day would open weeks for every rental in the database: the
 // night's step for one rental (`openWeeks`, `settleCredit`) stands in for it.
-import { addDays, dayQueue, isoWeekday, todayISO, weekOf, type PaymentsCalendarAnswer } from '@ev8/shared';
+import { addDays, isoWeekday, todayISO, weekOf, type PaymentsCalendarAnswer } from '@ev8/shared';
 import { describe, expect, it } from 'vitest';
 import { HAS_DB, call, json, loginAs, uniq } from './helpers.js';
 
@@ -372,14 +372,13 @@ describe.skipIf(!HAS_DB)('the pickup date of an open rental put right (ADR-0044 
     const t = today();
     let c = await card(r.owner, r.id);
     expect(c.rental).toMatchObject({ status: 'overdue', debtTetri: 15000 });
-    expect(await todayRowOf(r.id, 'overdue')).not.toBeNull();
+    expect(await scheduleOf(r.id)).toBe('overdue');
 
     // Handed over seven days ago in truth: week 2 begins today.
     expect((await redate(r.owner, r.id, { pickedUpOn: addDays(t, -7), reason: REASON })).statusCode).toBe(200);
     c = await card(r.owner, r.id);
     expect(c.rental).toMatchObject({ status: 'due_today', debtTetri: 15000, dueOn: t, paidThrough: addDays(t, -1) });
-    expect(await todayRowOf(r.id, 'overdue')).toBeNull();
-    expect(await todayRowOf(r.id, 'due_today')).toMatchObject({ amountTetri: 15000, dueTodayTetri: 15000 });
+    expect(await scheduleOf(r.id)).toBe('due_today');
 
     const range = { from: weekOf(addDays(t, -21)).from, to: weekOf(addDays(t, 14)).to };
     const res = await call(r.owner, 'GET', `/api/money/calendar?from=${range.from}&to=${range.to}`);
@@ -505,31 +504,11 @@ describe.skipIf(!HAS_DB)('a deposit marked received before EV8 Ops on an open re
   });
 });
 
-/** The row «Today» makes of one rental, through the route's own select and mapper (as in due-today.test.ts). */
-async function todayRowOf(rentalId: string, group: 'overdue' | 'due_today') {
-  const { prisma } = await import('../src/lib/db.js');
-  const { debtsOf } = await import('../src/lib/debt.js');
-  const { QUEUE_RENTAL, queueRental } = await import('../src/routes/today.js');
-  const t = today();
-  const r = await prisma.rental.findUniqueOrThrow({ where: { id: rentalId }, select: QUEUE_RENTAL });
-  const groups = dayQueue({
-    today: t,
-    owner: true,
-    rentals: [queueRental(r, t, await debtsOf([r.customer.id], t))],
-    tills: [],
-    myTillTetri: 0,
-    unmatchedLines: 0,
-    staleBanks: [],
-    instalments: [],
-    service: { open: 0, longerThanWeek: 0, longestDays: 0 },
-    reports: [],
-    lowParts: { count: 0, note: '' },
-    purchases: [],
-    vehiclesWithoutPool: 0,
-    vehiclesWithoutPoint: 0,
-    odooDeposits: { count: 0, amountTetri: 0 },
-    kommo: null,
-    kommoDeals: [],
-  });
-  return groups.flatMap((g) => g.rows).find((row) => row.id === `${group}:${rentalId}`) ?? null;
+/**
+ * What «Оплаты по графику» says of one rental today — and so «Сегодня»'s one line, «Аренды» and
+ * every list (issue #18, B4): late, due today, or nothing.
+ */
+async function scheduleOf(rentalId: string) {
+  const { scheduleToday } = await import('../src/lib/calendar.js');
+  return (await scheduleToday(today())).pay.get(rentalId)?.state ?? null;
 }

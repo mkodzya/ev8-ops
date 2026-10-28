@@ -5,7 +5,7 @@
 import type { ISODate, RentalStatus } from './types.js';
 import type { Tetri } from './money.js';
 import { waOffered } from './due.js';
-import { overdueDays } from './periods.js';
+import { driveReturnWhy } from './drive-returns.js';
 
 // "till" is a manager's last group (§3.1): their own cash, handed over at the
 // end of the day. An owner has no such group — a till handed to them is a
@@ -14,11 +14,16 @@ import { overdueDays } from './periods.js';
 // and a contract in Drive with no rental here (ADR-0034): it stands right
 // after the rentals' own groups, because it is a rental or a sale waiting to
 // be one.
-// "due_today" — the rentals whose week began today (ADR-0017): right after
-// the overdue ones, a calm group with the same actions.
+// "schedule" — one line, «Оплаты: N просрочено · M сегодня», opening «Оплаты
+// по графику» (issue #18, B4; Mika's «Одно правило календаря» of 28.10.2026).
+// It stands where the groups «Просрочены» and «Ждём сегодня» stood, which
+// listed the rentals a second time and counted them by another rule.
 // "maintenance" — mopeds whose planned maintenance is near or past (ADR-0038):
 // right after the repairs, a group of its own, every moped in it shown.
-export const TASK_GROUPS = ['decide', 'returns', 'overdue', 'due_today', 'intake', 'money', 'instalments', 'service', 'maintenance', 'purchases', 'decisions', 'fill', 'till'] as const;
+// «Решения» — the mopeds nobody put in a park, Kommo against the rentals —
+// stood beside «Решить» under a near-twin name; since issue #18 (B5) its rows
+// are «Дозаполнить»'s, the group of what is not filled in yet.
+export const TASK_GROUPS = ['decide', 'returns', 'schedule', 'intake', 'money', 'instalments', 'service', 'maintenance', 'purchases', 'fill', 'till'] as const;
 export type TaskGroup = (typeof TASK_GROUPS)[number];
 
 /** What the row's button does; the screen turns it into words and a link. */
@@ -27,8 +32,7 @@ export type TaskAction =
   | 'accept_till'
   | 'hand_over_till'
   | 'return'
-  | 'take_money'
-  | 'take_cash'
+  | 'open_schedule'
   | 'sort'
   | 'upload_statement'
   | 'take_instalment'
@@ -67,11 +71,6 @@ export interface TaskRow {
   /** Extra words the screen already knows how to say (kind of document, bank). */
   note: string | null;
   /**
-   * On a row of group `due_today`: how much of `amountTetri` is awaited today.
-   * The screen paints the sum red when `amountTetri` is above it.
-   */
-  dueTodayTetri?: Tetri;
-  /**
    * False on a row about a rental that has no ready WhatsApp message today
    * (`waOffered` — one handed over today and not paid yet): the screen draws
    * no WhatsApp button on it, in whichever group the row stands. Absent on
@@ -90,8 +89,16 @@ export interface QueueRental {
   paidThrough: ISODate | null;
   /** Days after a week's first day its rent is due — the rental's pay day (ADR-0022). */
   payOffsetDays: number;
-  /** The status as shown — `effectiveRentalStatus`, never the stored one. */
+  /**
+   * The status as shown — `effectiveRentalStatus`, never the stored one; for a
+   * running rental what «Оплаты по графику» says (`statusBySchedule`, issue #18).
+   */
   status: RentalStatus;
+  /**
+   * Its part of the one debt figure, and of it what is awaited today. The
+   * queue lists no rental by its debt since issue #18 (B4) — the line
+   * «Оплаты» opens the schedule — but the route still says them of a rental.
+   */
   debtTetri: Tetri;
   /** Of debtTetri: awaited today, not late (shared `dueTodayOf`). */
   dueTodayTetri: Tetri;
@@ -108,9 +115,15 @@ export interface QueueRental {
 
 export interface QueueInput {
   today: ISODate;
-  /** An owner sees deposits, the week's money, purchases and pool decisions; a manager does not. */
+  /** An owner sees deposits, purchases and pool decisions; a manager does not. */
   owner: boolean;
   rentals: QueueRental[];
+  /**
+   * The two numbers of «Оплаты по графику» (`scheduleCounts`): rentals late and
+   * weeks awaited today — the one line «Оплаты: N просрочено · M сегодня»
+   * (issue #18, B4). Absent or null for whoever does not call by the schedule.
+   */
+  schedule?: { late: number; dueToday: number } | null;
   tills: { id: string; who: string; amountTetri: Tetri }[];
   /** For a manager: what is in their own till and not handed over yet. */
   myTillTetri: Tetri;
@@ -166,7 +179,12 @@ export interface QueueInput {
   drive?: {
     /** With a deal in Kommo for the same person: its link, the card it found, the phone (ADR-0034). */
     contracts: { folderId: string; who: string; datedOn: ISODate | null; leadId?: string; customerId?: string | null; phone?: string | null }[];
-    returns: { rentalId: string; returnedOn: ISODate | null; paidBackTetri: Tetri | null }[];
+    /**
+     * `act`: a return act is in the folder, dated or not; false — only the
+     * folder was moved among the finished. An act with no date is still an act
+     * (issue #19): the row said «папка в Drive — в завершённых» of one.
+     */
+    returns: { rentalId: string; returnedOn: ISODate | null; paidBackTetri: Tetri | null; act: boolean }[];
   };
 }
 
@@ -272,7 +290,8 @@ export function dayQueue(input: QueueInput): TaskGroupRows[] {
       amountTetri: null,
       href: `/rentals/${r.id}/return${on}`,
       phone: r.customer.phone,
-      note: `${d.returnedOn ?? ''}|${d.paidBackTetri ?? ''}`,
+      // The act's day, what it paid back, and what made the row: an act — dated or not — or the folder moved (issue #19).
+      note: `${d.returnedOn ?? ''}|${d.paidBackTetri ?? ''}|${driveReturnWhy(d.act ? { returnedOn: d.returnedOn } : null)}`,
       ...wa(r),
     });
   }
@@ -298,50 +317,14 @@ export function dayQueue(input: QueueInput): TaskGroupRows[] {
     });
   }
 
-  // 3. Overdue — longest first; the sum is what the weeks owe (B7-02). The
-  // days are the product's one count, from the due day (ADR-0017).
-  const overdue = open
-    .filter((r) => r.status === 'overdue' && r.debtTetri > 0)
-    .map((r) => ({ r, days: r.pickedUpOn ? overdueDays(r.paidThrough, r.pickedUpOn, input.today, r.payOffsetDays) : 0 }))
-    .sort((a, b) => b.days - a.days || b.r.debtTetri - a.r.debtTetri);
-  for (const { r, days } of overdue) {
-    rows.push({
-      id: `overdue:${r.id}`,
-      group: 'overdue',
-      action: input.owner ? 'take_money' : 'take_cash',
-      who: r.customer.name,
-      number: r.number,
-      vin: r.vin,
-      days,
-      amountTetri: r.debtTetri,
-      href: `/rentals/${r.id}`,
-      phone: r.customer.phone,
-      note: null,
-      ...wa(r),
-    });
-  }
-
-  // 4. Due today — the week began today and nothing older is unpaid: a calm
-  // group with the same actions, so the morning call is not lost (ADR-0017).
-  // By rental number: on the due day nobody is "longest".
-  const byNumber = (a: QueueRental, b: QueueRental) => (a.number < b.number ? -1 : a.number > b.number ? 1 : 0);
-  for (const r of open.filter((x) => x.status === 'due_today' && x.debtTetri > 0).sort(byNumber)) {
-    rows.push({
-      id: `due_today:${r.id}`,
-      group: 'due_today',
-      action: input.owner ? 'take_money' : 'take_cash',
-      who: r.customer.name,
-      number: r.number,
-      vin: r.vin,
-      days: null,
-      amountTetri: r.debtTetri,
-      dueTodayTetri: r.dueTodayTetri,
-      href: `/rentals/${r.id}`,
-      phone: r.customer.phone,
-      // The one fact that sets a hand-over day apart: the screen says "handed over today".
-      note: r.pickedUpOn === input.today ? 'handed_today' : null,
-      ...wa(r),
-    });
+  // 3. «Оплаты» — one line instead of the groups «Просрочены» and «Ждём
+  // сегодня» (issue #18, B4): the rentals late and the weeks awaited today, as
+  // «Оплаты по графику» counts them — by weeks, the credit counted where the
+  // night will place it — and the line opens it, where the calls, WhatsApp and
+  // the money form are. The note carries the two numbers for the screen.
+  const s = input.schedule;
+  if (s && (s.late > 0 || s.dueToday > 0)) {
+    rows.push({ id: 'schedule', group: 'schedule', action: 'open_schedule', who: null, number: null, vin: null, days: null, amountTetri: null, href: '/schedule', phone: null, note: `${s.late}|${s.dueToday}` });
   }
 
   // 5. Money — an owner's: lines to sort, statements nobody has uploaded.
@@ -426,7 +409,7 @@ export function dayQueue(input: QueueInput): TaskGroupRows[] {
       amountTetri: null,
       // The chip on the shelf is `short`; `low` matched nothing and the list
       // opened on «Все» with the part to find by eye (QA-W5-16).
-      href: '/service/stock?f=short',
+      href: '/stock?f=short',
       phone: null,
       note: `${input.lowParts.count}|${input.lowParts.note}`,
     });
@@ -436,9 +419,10 @@ export function dayQueue(input: QueueInput): TaskGroupRows[] {
     for (const p of input.purchases) {
       rows.push({ id: `purchase:${p.id}`, group: 'purchases', action: 'open_purchase', who: p.who, number: p.number, vin: null, days: null, amountTetri: null, href: `/purchases/${p.id}`, phone: null, note: p.note });
     }
-    // 9. Decisions — mopeds nobody has put in a park yet (register #14).
+    // 9. Fill in — mopeds nobody has put in a park yet (register #14); a
+    // group of their own, «Решения», until issue #18 (B5).
     if (input.vehiclesWithoutPool > 0) {
-      rows.push({ id: 'pool', group: 'decisions', action: 'set_pool', who: null, number: null, vin: null, days: null, amountTetri: null, href: '/fleet?f=nopool', phone: null, note: String(input.vehiclesWithoutPool) });
+      rows.push({ id: 'pool', group: 'fill', action: 'set_pool', who: null, number: null, vin: null, days: null, amountTetri: null, href: '/fleet?f=nopool', phone: null, note: String(input.vehiclesWithoutPool) });
     }
     // Rented here and not in Kommo: one row for all of it, like the deposits
     // above. The other half — rented there and not here — is the "intake"
@@ -448,7 +432,7 @@ export function dayQueue(input: QueueInput): TaskGroupRows[] {
     if (k && (k.rentedHere > 0 || k.silent)) {
       rows.push({
         id: 'kommo',
-        group: 'decisions',
+        group: 'fill',
         action: 'reconcile_kommo',
         who: null,
         number: null,

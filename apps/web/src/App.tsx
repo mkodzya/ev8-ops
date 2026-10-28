@@ -62,6 +62,8 @@ import { ModelsPage } from './pages/ModelsPage.js';
 import { FleetPage } from './pages/FleetPage.js';
 import { RentalsPage } from './pages/RentalsPage.js';
 import { TodayPage } from './pages/TodayPage.js';
+import { TodosPage } from './pages/todos/TodosPage.js';
+import { WorkshopToday } from './pages/todos/WorkshopToday.js';
 import { useT } from './i18n/index.js';
 import { useSession } from './session.js';
 
@@ -111,12 +113,15 @@ function Unreachable() {
 }
 
 /**
- * "/" is "Today" — the front office's queue. Whoever has none of it, a
- * mechanic, lands on their own first section instead (ADR-0033).
+ * "/" is "Today" — the front office's queue. Whoever reads none of it, a
+ * mechanic, has a «Сегодня» of his own since issue #18 A (ADR-0050): his
+ * tasks, his repairs, the maintenance, his payout. Before it he landed on the
+ * repairs (ADR-0033); one with neither still lands on his first section.
  */
 function Home() {
   const { me, can } = useSession();
   if (!me || can('fleet.view')) return <TodayPage />;
+  if (can('todos.own')) return <WorkshopToday />;
   return <Navigate to={homePathFor(me.permissions)} replace />;
 }
 
@@ -145,10 +150,14 @@ export function App() {
         }
       >
         <Route index element={<Home />} />
+        {/* «Задачи» (issue #18 A, ADR-0050): everybody's own; an owner reads everybody's. */}
+        <Route path="tasks" element={<Require perm="todos.own"><TodosPage /></Require>} />
 
         <Route path="rentals" element={<RentalsPage />} />
         <Route path="rentals/new" element={<PickupWizard />} />
         <Route path="rentals/return" element={<Require perm="rental.return"><ReturnPickPage /></Require>} />
+        {/* «Заменить мопед» from the "+" (issue #18, B2): whose rental, then the swap wizard. */}
+        <Route path="rentals/swap" element={<Require perm="rental.return"><ReturnPickPage mode="swap" /></Require>} />
         <Route path="rentals/:id" element={<RentalPage />} />
         <Route path="rentals/:id/return" element={<ReturnWizard />} />
         <Route path="rentals/:id/swap" element={<Require perm="rental.return"><SwapWizard /></Require>} />
@@ -156,16 +165,13 @@ export function App() {
         <Route path="fleet" element={<FleetPage />} />
         <Route path="fleet/models" element={<ModelsPage />} />
         <Route path="fleet/models/:id" element={<ModelPage />} />
-        <Route path="fleet/batteries" element={<BatteriesPage />} />
+        {/* The points live here alone since issue #18 (B6); `/settings/points` is an old address now (REDIRECTS). */}
         <Route path="fleet/points" element={<Require perm="settings.manage"><PointsPage /></Require>} />
-        <Route path="settings/points" element={<Require perm="settings.manage"><PointsPage /></Require>} />
         <Route path="fleet/:id" element={<VehiclePage />} />
         {/* A sticker's QR: ops.ev8.ge/m/EV-007 (Mika, 15.10.2026). */}
         <Route path="m/:code" element={<MopedByNumber />} />
 
         <Route path="service" element={<ServicePage />} />
-        <Route path="service/stock" element={<StockPage />} />
-        <Route path="service/stock/parts/:id" element={<PartPage />} />
         <Route path="service/new" element={<Require perm="service.work"><WorkshopJobWizard /></Require>} />
         <Route path="service/:id/close" element={<Require perm="service.work"><RepairClosePage /></Require>} />
         <Route path="service/works" element={<Require perm="service.norms"><WorkBookPage /></Require>} />
@@ -195,12 +201,17 @@ export function App() {
         <Route path="money/deposits" element={<Require perm="payments.view"><DepositsPage /></Require>} />
 
         <Route path="sales" element={<SalesPage />} />
-        <Route path="sales/new" element={<Require perm="sales.manage"><SaleWizard /></Require>} />
+        {/* A manager sells a moped too since issue #18 (B8); cancelling and buying back stay an owner's. */}
+        <Route path="sales/new" element={<Require perm="sales.create"><SaleWizard /></Require>} />
         {/* Goods sold over the counter (issue #11, ADR-0045): a static segment, so it wins over sales/:id. */}
         <Route path="sales/goods" element={<GoodsSalesPage />} />
         <Route path="sales/goods/new" element={<Require perm="goods.sell"><GoodsSaleWizard /></Require>} />
         <Route path="sales/goods/:id" element={<GoodsSalePage />} />
         <Route path="sales/:id" element={<SalePage />} />
+        {/* «Склад» (issue #19): the parts, and the batteries and chargers — were tabs of the repairs and the mopeds. */}
+        <Route path="stock" element={<StockPage />} />
+        <Route path="stock/batteries" element={<BatteriesPage />} />
+        <Route path="stock/parts/:id" element={<PartPage />} />
         <Route path="purchases" element={<Require perm="purchases.view"><PurchasesPage /></Require>} />
         <Route path="purchases/suppliers" element={<Require perm="purchases.view"><SuppliersPage /></Require>} />
         <Route path="purchases/suppliers/:id" element={<Require perm="purchases.view"><SupplierPage /></Require>} />

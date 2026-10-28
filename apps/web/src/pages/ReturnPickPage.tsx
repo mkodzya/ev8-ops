@@ -19,19 +19,28 @@ interface Rental {
 }
 
 /**
- * "Whose return?" — the first step of "Take a moped back" from the "+"
- * (wave 1 §3.2): the active rentals, searchable by name, phone or the last
- * characters of the VIN, with the ones due back today on top. Picking one
- * opens the return wizard for it.
+ * "Whose return?" — the first step of «Вернуть мопед» from the "+" (wave 1
+ * §3.2): the active rentals, searchable by name, phone or the last characters
+ * of the VIN, with the ones due back today on top. Picking one opens the
+ * return wizard for it.
+ *
+ * `swap`: the first step of «Заменить мопед» (issue #18, B2) — the same list
+ * of the rentals that have a moped, the customer found the same way, and the
+ * pick opens the swap wizard (ADR-0040). Nothing is "due" for a swap, so the
+ * list is one.
  */
-export function ReturnPickPage() {
+export function ReturnPickPage({ mode = 'return' }: { mode?: 'return' | 'swap' }) {
   const t = useT();
   const { locale } = useLocale();
   const { data, failure, reload } = useLoad<{ rentals: Rental[] }>('/api/rentals');
   const [q, setQ] = useState('');
   const today = todayISO();
+  const swap = mode === 'swap';
 
-  const active = useMemo(() => (data?.rentals ?? []).filter((r) => r.returnedOn == null && r.status !== 'returned'), [data]);
+  const active = useMemo(
+    () => (data?.rentals ?? []).filter((r) => r.returnedOn == null && r.status !== 'returned' && (!swap || r.vehicle != null)),
+    [data, swap],
+  );
   const shown = useMemo(() => {
     const needle = q.trim().toLowerCase();
     if (!needle) return active;
@@ -43,7 +52,7 @@ export function ReturnPickPage() {
         (!!r.vehicle && r.vehicle.vin.toLowerCase().endsWith(needle)),
     );
   }, [active, q]);
-  const due = shown.filter((r) => r.expectedReturnOn && r.expectedReturnOn <= today);
+  const due = swap ? [] : shown.filter((r) => r.expectedReturnOn && r.expectedReturnOn <= today);
   const rest = shown.filter((r) => !due.includes(r));
 
   if (!data && failure) return <LoadError failure={failure} onRetry={reload} />;
@@ -56,7 +65,7 @@ export function ReturnPickPage() {
 
   const card = (r: Rental, note?: string) => (
     <li key={r.id}>
-      <Link className="pick-card" to={`/rentals/${r.id}/return`}>
+      <Link className="pick-card" to={`/rentals/${r.id}/${swap ? 'swap' : 'return'}`}>
         <span className="pick-card-main">
           <span className="pick-card-title">
             <CustomerName of={r.customer} second={false} />
@@ -78,7 +87,7 @@ export function ReturnPickPage() {
 
   return (
     <>
-      <PageHead title={t.returnPick.title} />
+      <PageHead title={swap ? t.simple.swapPick.title : t.returnPick.title} />
       <input className="input" placeholder={t.returnPick.placeholder} value={q} onChange={(e) => setQ(e.target.value)} autoFocus aria-label={t.returnPick.placeholder} />
       {!data ? (
         <Loading rows={4} />

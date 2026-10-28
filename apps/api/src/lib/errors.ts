@@ -26,3 +26,13 @@ export function isUniqueViolation(e: unknown): boolean {
   const code = (e as { code?: unknown } | null)?.code;
   return code === 'P2002' || code === '23505';
 }
+
+/**
+ * A foreign key refusing a delete: Prisma P2003 or SQLSTATE 23503 — a row
+ * somewhere still points at what was to go (issue #17: a person to whom
+ * something is recorded is not deleted, whichever table records it).
+ */
+export function isForeignKeyViolation(e: unknown): boolean {
+  const code = (e as { code?: unknown } | null)?.code;
+  return code === 'P2003' || code === '23503';
+}

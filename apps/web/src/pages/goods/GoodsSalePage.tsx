@@ -137,7 +137,8 @@ export function GoodsSalePage() {
       <PageHead wrap title={<span className="nobr">{s.number}</span>} sub={`${who} · ${fmtDate(s.soldOn)}`} badge={<GoodsPill state={s.state} openTetri={s.openTetri} />}>
         {live && s.openTetri > 0 && data.can.pay ? (
           <button type="button" className="pill pill-sm pill-accent" onClick={takeMoney}>
-            {c.take}
+            {/* The money form's one name (issue #18, B1). */}
+            {can('payments.reconcile') ? c.take : t.money.takeCash}
           </button>
         ) : (
           data.can.invoice && (
@@ -186,7 +187,7 @@ export function GoodsSalePage() {
             <li key={l.id}>
               <div className="goods-line-head">
                 <span>
-                  {l.partId ? <Link to={`/service/stock/parts/${l.partId}`}>{named(l)}</Link> : named(l)} ×{l.qty}
+                  {l.partId ? <Link to={`/stock/parts/${l.partId}`}>{named(l)}</Link> : named(l)} ×{l.qty}
                 </span>
                 <span className="mono">{formatGel(l.lineTetri)}</span>
               </div>

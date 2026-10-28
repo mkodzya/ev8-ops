@@ -1,14 +1,16 @@
+import { DRAFT_PREFIX } from '@ev8/shared';
 import { useEffect, useState } from 'react';
 
 /**
  * Drafts of forms and wizards (wave 1 §3.7): what somebody typed and did not
  * send stays on this device until it is sent, thrown away, or its author
- * signs out (session.tsx clears every `ev8-draft:*`, B1-01).
+ * signs out (session.tsx clears every `ev8-draft:*`, B1-01) — or another
+ * person signs in after him (`leftoversToForget` of @ev8/shared, QA before
+ * 1.17.0).
  *
  * Storage can be missing or refuse (private mode, a full disk): then there is
  * simply no draft, and the form works as it did.
  */
-export const DRAFT_PREFIX = 'ev8-draft:';
 
 export interface Draft<V> {
   at: string; // ISO time it was last written

@@ -4,9 +4,11 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { LoadError } from '../components/LoadError.js';
 import { PhotoPicker } from '../components/PhotoPicker.js';
-import { Loading, PageHead, Vin } from '../components/ui.js';
+import { FleetNo, Loading, PageHead, Vin } from '../components/ui.js';
 import { Field } from '../components/Wizard.js';
-import { FormSheet } from '../ds/form/Form.js';
+import { useToast } from '../ds/feedback/Toast.js';
+import { FormSheet, SubmitButton } from '../ds/form/Form.js';
+import { useOperation } from '../ds/form/operation.js';
 import { DataList } from '../ds/list/DataList.js';
 import { formatGel } from '../format.js';
 import { useT } from '../i18n/index.js';
@@ -96,6 +98,12 @@ export interface ServiceJob {
   /** True when this job is what took the moped out of the yard: only then does closing bring it back. */
   movedVehicle: boolean;
   /**
+   * A repair that took the moped in and has not ended: the rental still open
+   * on the moped, which its end gives the moped back to — «В аренде», at no
+   * point (issue #17). Empty: it goes back to the yard. Absent while an older API answers.
+   */
+  backToRental?: { id: string; number: string } | null;
+  /**
    * The tracker on the moped now, if any (ADR-0036); `fromShelf` — whether it
    * came off a shelf (one written on the moped's card did not), absent while an
    * older API answers.
@@ -176,6 +184,86 @@ function daysOf(j: ServiceJob, today: string): number {
  * one, so an owner never has to open a card to find out there is nothing to
  * read yet.
  */
+/**
+ * «В ремонте без заявки» (issue #18, B6; register #23): mopeds whose status
+ * says «В ремонте» with no repair open behind them. Odoo left nineteen so; it
+ * was a list of «Настройки → До EV8 Ops», where nobody looked for a repair
+ * (the director's audit read 19 on 25.10.2026). Whoever moves a moped by hand
+ * opens the repair, or sends the moped back to the yard with a reason. With
+ * nothing in it there is no block.
+ */
+function WithoutRepair({ onDone }: { onDone: () => void }) {
+  const t = useT();
+  const { can } = useSession();
+  const toast = useToast();
+  const op = useOperation();
+  const { data, reload } = useLoad<{ vehicles: { id: string; vin: string; fleetNo: number | null; model: string | null }[] }>('/api/service/without-repair');
+  const [open, setOpen] = useState<string | null>(null);
+  const [reason, setReason] = useState('');
+  const rows = data?.vehicles ?? [];
+  if (rows.length === 0) return null;
+
+  const back = async (id: string, vin: string) => {
+    const res = await op.run((key) => api.post(`/api/service/without-repair/${id}/back`, { reason }, { key }), `back:${id}`);
+    if (!res.ok) return;
+    toast({ text: t.migrationPage.backDone(vin) });
+    setOpen(null);
+    setReason('');
+    op.reset();
+    reload();
+    onDone();
+  };
+
+  // Folded under the section's own list, one line until opened (review of issue #18): nineteen
+  // mopeds above the repairs pushed the list a screen down. On a phone a moped is a row of its own
+  // and its buttons wrap under it, never behind sideways scroll (ux.md, «Списки»; principle 12).
+  return (
+    <details className="card idle-fold">
+      <summary>
+        <h2>{t.simple.idle.title}</h2>
+        <span className="block-sub">{t.simple.idle.count(rows.length)}</span>
+        <span className="chev" aria-hidden="true">
+          ▾
+        </span>
+      </summary>
+      <p className="block-note">{t.simple.idle.note}</p>
+      <ul className="queue">
+        {rows.map((v) => (
+          <li key={v.id} className="queue-item idle-row">
+            <span className="idle-what">
+              <Link to={`/fleet/${v.id}`}>{v.fleetNo ? <FleetNo n={v.fleetNo} /> : <Vin vin={v.vin} />}</Link> <span className="muted">{v.model ?? ''}</span>
+            </span>
+            {open === v.id ? (
+              <span className="inline-form">
+                <input
+                  className="input input-inline"
+                  value={reason}
+                  autoFocus
+                  placeholder={t.migrationPage.backReason}
+                  aria-label={t.migrationPage.backReason}
+                  onChange={(e) => setReason(e.target.value)}
+                />
+                <SubmitButton small type="button" state={op.state} label={t.migrationPage.backToFleet} disabled={!reason.trim()} onClick={() => void back(v.id, v.vin)} />
+              </span>
+            ) : (
+              <span className="row-actions">
+                {can('service.work') && (
+                  <Link className="pill pill-sm" to={`/service/new?vehicleId=${v.id}`}>
+                    {t.migrationPage.openRepair}
+                  </Link>
+                )}
+                <button type="button" className="pill pill-sm" onClick={() => setOpen(v.id)}>
+                  {t.migrationPage.backToFleet}
+                </button>
+              </span>
+            )}
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
+}
+
 export function ServicePage() {
   const t = useT();
   const { can, me } = useSession();
@@ -339,6 +427,10 @@ export function ServicePage() {
           },
         ]}
       />
+
+      {/* «В ремонте без заявки» (issue #18, B6): was a list of «Настройки → До EV8 Ops». After the
+          section's own list and folded, so the repairs stay first. */}
+      {mayFleet && can('fleet.state.manual') && <WithoutRepair onDone={reload} />}
     </>
   );
 }
@@ -449,6 +541,8 @@ export function NewJob({ vehicleId, onDone }: { vehicleId?: string; onDone: () =
           onRestore={setF}
           summary={(v) => v.reason}
           label={mayManage ? t.repair.newJob : t.repair.reportCta}
+          // A moped with a repair open already is refused about the moped: the words go under it (QA before 1.17.0).
+          fieldOf={{ job_already_open: 'vehicleId' }}
           submit={async (key) => {
             const job = await api.post<{ id: string }>(
               '/api/service',

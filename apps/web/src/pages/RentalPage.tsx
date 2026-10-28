@@ -21,6 +21,7 @@ import { fmtDate, fmtDayMonth, formatGel } from '../format.js';
 import { useT } from '../i18n/index.js';
 import { errorText, useLoad } from '../lib/use.js';
 import { useSession } from '../session.js';
+import { TodoSheet } from './todos/TodoSheet.js';
 
 /**
  * The colour of a week in the strip, by the due-day rule (ADR-0017): paid;
@@ -152,6 +153,8 @@ export function RentalPage() {
   const [discounting, setDiscounting] = useState<RentalCard['periods'][number] | null>(null);
   const [shifting, setShifting] = useState<RentalCard['periods'][number] | null>(null);
   const [unfining, setUnfining] = useState<RentalCard['charges'][number] | null>(null);
+  // «⋯ → Поручить» (issue #18 A, ADR-0050): a task about this rental; it closes when the rental is returned.
+  const [tasking, setTasking] = useState(false);
   if (failure) return <LoadError failure={failure} onRetry={reload} />;
   if (!data) return <Loading />;
   const r = data.rental;
@@ -204,6 +207,8 @@ export function RentalPage() {
     ...(owner ? [{ key: 'fine', label: t.rental.fine, onPick: () => setSheet('fine') }] : []),
     ...(!open && owner && r.undoReturnUntil ? [{ key: 'undo', label: t.rentalMenu.undo, onPick: () => setSheet('undo') }] : []),
     ...(!open && owner && d && !d.decided ? [{ key: 'decide', label: t.rentalMenu.decide, onPick: () => setSheet('decide') }] : []),
+    // A returned rental takes no task: it would close at once — the customer's card does.
+    ...(open && can('todos.own') ? [{ key: 'task', label: t.todos.give, onPick: () => setTasking(true) }] : []),
   ];
 
   return (
@@ -228,13 +233,21 @@ export function RentalPage() {
             {t.actions.returnRental}
           </Link>
         )}
-        {debtTetri > 0 && can('cash.record') && (
+        {/* The rental's one money button (issue #18, B1): the block of payments below had a second one.
+            A running rental takes money ahead too; a returned one while it owes. */}
+        {(open || debtTetri > 0) && can('cash.record') && (
           <button
             type="button"
             className={`pill pill-sm ${dueBack ? '' : 'pill-accent'}`}
             onClick={() => openMoney({ target: { kind: 'rent', rentalId: r.id, number: r.number, customerId: r.customer.id, customer: r.customer.name } })}
           >
-            {open ? t.today.actions.take_money : t.back.takeDebt(formatGel(debtTetri, { decimals: false }))}
+            {open
+              ? can('payments.reconcile')
+                ? t.money.take
+                : t.money.takeCash
+              : can('payments.reconcile')
+                ? t.back.takeDebt(formatGel(debtTetri, { decimals: false }))
+                : t.hand.takeCash(formatGel(debtTetri, { decimals: false }))}
           </button>
         )}
         <RowMenu actions={menu} />
@@ -250,6 +263,7 @@ export function RentalPage() {
           }}
         />
       )}
+      {tasking && <TodoSheet fromCard link={{ kind: 'rental', id: r.id, label: r.number }} onClose={() => setTasking(false)} />}
       {sheet === 'fine' && <FineSheet rentalId={r.id} onClose={closeSheet} onDone={() => { closeSheet(); reload(); }} />}
       {sheet === 'pickupDate' && r.pickedUpOn && <PickupDateSheet rental={r} charges={data.charges} onClose={closeSheet} onDone={() => { closeSheet(); reload(); }} />}
       {sheet === 'depositBefore' && d && <DepositBeforeSheet rental={r} deposit={d} charges={data.charges} onClose={closeSheet} onDone={() => { closeSheet(); reload(); }} />}
@@ -630,13 +644,8 @@ export function RentalPage() {
             ))}
           </ul>
         )}
-        {/* One money form for everything (wave 2 §3.1); a returned rental with a debt still takes money. */}
+        {/* One money form for everything (wave 2 §3.1), and one button to it — in the head (issue #18, B1). */}
         <div className="row-actions">
-          {can('cash.record') && (
-            <button type="button" className="pill pill-sm pill-accent" onClick={() => openMoney({ target: { kind: 'rent', rentalId: r.id, number: r.number, customerId: r.customer.id, customer: r.customer.name } })}>
-              {can('payments.reconcile') ? t.money.take : t.money.takeCash}
-            </button>
-          )}
           {can('payments.reconcile') && d && d.returnedTetri > 0 && (
             <button type="button" className="pill pill-sm" onClick={() => openMoney({ target: { kind: 'deposit_payout', rentalId: r.id, number: r.number, customerId: r.customer.id, customer: r.customer.name } })}>
               {t.deposits.handBack}

@@ -37,6 +37,8 @@ interface Vehicle {
   currentRental: { id: string; number: string; paidThrough: string | null; customer: { id: string; name: string; nameKa: string | null; nameLat: string | null } } | null;
   /** Why it stands in service, as recorded (21.10.2026); null in any other state, absent while an older API answers. */
   serviceWhy?: ServiceWhy | null;
+  /** The rental still open on it, whatever its status says (issue #17); absent while an older API answers. */
+  openRental?: { id: string; number: string } | null;
 }
 
 interface Fleet {
@@ -190,6 +192,7 @@ export function FleetPage() {
             cell: (v) => (
               <span className="v-state">
                 <StateBadge state={v.state} />
+                <Stray v={v} />
                 {/* The word the line turns into once the offer to undo runs out: "For sale", not the park's dictionary name. */}
                 {moved?.id === v.id ? <span className="v-sub v-pool-new">→ {moved.to === 'sale' ? t.fleetList.forSale : t.pools[moved.to]}</span> : <ParkLine v={v} />}
                 {/* On a laptop too narrow for the reason column, the reason stands here, as on a phone. */}
@@ -299,9 +302,17 @@ function StateSub({ v }: { v: Vehicle }) {
   return (
     <>
       {parkOf(v) === 'sale' && <span className="v-sub">{t.fleetList.forSale}</span>}
+      <Stray v={v} />
       <span className="muted">{fact}</span>
     </>
   );
+}
+
+/** «аренда R-… открыта» under a status that is not «В аренде» (issue #17): the moped is with a customer, whatever it says. */
+function Stray({ v }: { v: Vehicle }) {
+  const t = useT();
+  if (!v.openRental || v.state === 'rented') return null;
+  return <span className="v-sub warn-text">{t.stray.list(v.openRental.number)}</span>;
 }
 
 /** Days of silence, loud once they run past half a year. */

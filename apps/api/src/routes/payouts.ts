@@ -179,7 +179,7 @@ const RECEIPT_DUE: readonly PayState[] = ['payable', 'paid', 'cancelled'];
  * worked out: «К оплате» shows it, «Оплачено» recomputes it inside its
  * transaction and refuses when it is not what the owner saw.
  */
-async function payableFor(db: Db, mechanicId: string): Promise<MechanicDue | null> {
+export async function payableFor(db: Db, mechanicId: string): Promise<MechanicDue | null> {
   // One after another: inside a transaction the queries share one connection.
   const person = await db.user.findUnique({ where: { id: mechanicId }, select: { id: true, name: true, role: true, labourRateTetri: true } });
   if (!person) return null;

@@ -59,7 +59,7 @@ export function SalesPage() {
             {t.sales.overdue}: {formatGel(data.overdueTetri, { decimals: false })}
           </span>
         )}
-        {can('sales.manage') && (
+        {can('sales.create') && (
           <Link className="pill pill-sm pill-accent" to="/sales/new">
             {t.sales.newSale}
           </Link>

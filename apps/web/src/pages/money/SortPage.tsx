@@ -265,7 +265,7 @@ function LineCard({ line, cats, onNotOurs, onSplit }: { line: SortLine; cats: Ca
         <span className="sort-line-meta">
           {fmtDate(line.occurredOn)} · {t.statements.banks[line.bank]}
         </span>
-        {/* Money coming in has every answer under it; going out, «Это не наше» sits here. */}
+        {/* Money coming in has every answer under it; going out, «Убрать из очереди» (once «Это не наше», issue #17) sits here. */}
         {line.direction === 'out' && <RowMenu actions={[{ key: 'not', label: t.sort.notOurs, onPick: onNotOurs }]} />}
       </div>
       {/* The sum above is what the bank credited. A card line says what the customer paid — that is what
@@ -280,7 +280,7 @@ function LineCard({ line, cats, onNotOurs, onSplit }: { line: SortLine; cats: Ca
       {twin && (
         <>
           <p className="sort-reason">{t.dup.looksLike(fmtDate(twin.occurredOn), twin.docNo ?? '')}</p>
-          {/* Setting a line aside is an owner's (issue #16): «Это дубль» goes the way «Это не наше» goes. */}
+          {/* Setting a line aside is an owner's (issue #16): «Это дубль» goes the way «Убрать из очереди» goes. */}
           {can('payments.reconcile') && (
             <div className="sort-actions">
               <button
@@ -927,7 +927,12 @@ function PayDayPart({
   );
 }
 
-/** "Это не наше" — out of the queue with a reason it must have (§3.2). */
+/**
+ * «Убрать из очереди» — out of the queue with a reason it must have (§3.2). It
+ * was «Это не наше» until issue #17: the company's own money that EV8 Ops need
+ * not count leaves the queue the same way (a deposit refunded on a rental closed
+ * before EV8 Ops, 25.10.2026).
+ */
 function NotOursSheet({ line, onClose }: { line: SortLine; onClose: () => void }) {
   const t = useT();
   const [reason, setReason] = useState('');

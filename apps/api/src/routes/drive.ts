@@ -5,8 +5,9 @@ import { prisma } from '../lib/db.js';
 import { download, driveConfig } from '../lib/drive.js';
 import { folderName, pdfText, readContractParty } from '../lib/driveDocs.js';
 import { driveReconciliation, scanDrive } from '../lib/driveScan.js';
-import { notFound } from '../lib/errors.js';
+import { conflict, notFound } from '../lib/errors.js';
 import { actorOf } from '../lib/guard.js';
+import { str } from '../lib/validate.js';
 
 // The rentals folders in Drive beside the rentals here (ADR-0031): an owner's
 // screen, and a button that reads Drive now instead of waiting for the night.
@@ -18,6 +19,32 @@ export function driveRoutes(app: FastifyInstance): void {
     const outcome = await scanDrive();
     if (outcome.status === 'failed') app.log.warn(outcome, 'drive did not answer');
     return outcome;
+  });
+
+  /**
+   * «Это не возврат» (issue #19 of the director, item 3; ADR-0034, addendum
+   * 28.10.2026): Drive has a return act for a rental that runs on here — an
+   * act made by mistake, the paper of the moped a renter had before. An
+   * owner's answer, with the reason, into the rental's journal; the row leaves
+   * "Today" and «Настройки → Drive» and comes back only when a new act appears
+   * in the folder, or the act there changes — the journal row keeps what it
+   * answered (`keys`). The rental is not touched.
+   */
+  app.post<{ Params: { rentalId: string }; Body: Record<string, unknown> }>('/api/drive/returns/:rentalId/not-return', { config: { scope: 'users.manage' } }, async (req, reply) => {
+    const reason = str(req.body ?? {}, 'reason', { required: true, max: 1000 })!;
+    const rental = await prisma.rental.findUnique({ where: { id: req.params.rentalId }, select: { id: true } });
+    if (!rental) throw notFound('rental_not_found', 'No such rental.');
+    const row = (await driveReconciliation()).returnedThere.find((x) => x.rental.id === rental.id);
+    if (!row) throw conflict('drive_return_none', 'Drive has no return of this rental to answer: it was answered already, or the act is gone.');
+    await audit({
+      actorId: actorOf(req).id,
+      action: 'drive.not_return',
+      entityType: 'rental',
+      entityId: rental.id,
+      after: { keys: row.keys, why: row.why, returnedOn: row.act?.returnedOn ?? null },
+      note: reason,
+    });
+    return reply.code(201).send({ ok: true });
   });
 
   /**
