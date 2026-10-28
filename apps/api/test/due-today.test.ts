@@ -11,11 +11,13 @@
 // The suites share one database and the real clock. So every date is counted
 // from today, a figure of the suite's own rental is asserted as it is, and a
 // total is asserted either as a difference before and after, or as an
-// equality between two screens — never as an absolute number. "Today" shows
-// three rows of a group and counts the rest: a row is checked whenever it is
-// shown, and the group's count and sum always. What must hold for the row of
-// ONE rental is asked of the route's own mapper (`todayRowOf`), shown or not.
-import { addDays, dayQueue, todayISO, weekOf, type PaymentsCalendarAnswer } from '@ev8/shared';
+// equality between two screens — never as an absolute number.
+//
+// Since issue #18 (B4) "Today" lists no rental by its debt: one line says the
+// two numbers of «Оплаты по графику», and every list — "Today"'s line and
+// tile, «Аренды», the summary, the week's report — counts a running rental
+// late or due today by what the schedule says of it.
+import { addDays, todayISO, weekOf, type PaymentsCalendarAnswer } from '@ev8/shared';
 import { describe, expect, it } from 'vitest';
 import { HAS_DB, call, json, loginAs, uniq } from './helpers.js';
 
@@ -214,6 +216,12 @@ interface Summary {
 
 const sum = (rows: { debtTetri: number }[]) => rows.reduce((n, r) => n + r.debtTetri, 0);
 const groupOf = (t: Today, name: string) => t.queue.find((g) => g.group === name);
+/** «Оплаты: N просрочено · M сегодня» — the one line of the schedule on "Today" (issue #18, B4); [0, 0] when there is none. */
+const lineOf = (t: Today): [number, number] => {
+  const note = groupOf(t, 'schedule')?.rows[0]?.note;
+  const [late, due] = (note ?? '0|0').split('|').map(Number);
+  return [late ?? 0, due ?? 0];
+};
 
 async function totals(owner: string) {
   const t = await get<Today>(owner, '/api/today');
@@ -224,13 +232,11 @@ async function totals(owner: string) {
 }
 type Totals = Awaited<ReturnType<typeof totals>>;
 
-/** What one more rental did to every total: [rentals, tetri] each. */
+/** What one more rental did to every total: [rentals, tetri] each; "Today"'s line [late, due today]. */
 function moved(a: Totals, b: Totals) {
-  const group = (x: Totals, name: string) => [groupOf(x.t, name)?.total ?? 0, groupOf(x.t, name)?.totalTetri ?? 0];
   const minus = (p: number[], q: number[]) => [p[0]! - q[0]!, p[1]! - q[1]!];
   return {
-    dueTodayGroup: minus(group(b, 'due_today'), group(a, 'due_today')),
-    overdueGroup: minus(group(b, 'overdue'), group(a, 'overdue')),
+    line: minus(lineOf(b.t), lineOf(a.t)),
     tile: (b.t.numbers.overdueTetri ?? 0) - (a.t.numbers.overdueTetri ?? 0),
     week: [b.w.rentals.overdueCount - a.w.rentals.overdueCount, b.w.rentals.overdueTetri - a.w.rentals.overdueTetri],
     summary: [b.s.rentals.overdue - a.s.rentals.overdue, sum(b.s.overdueList) - sum(a.s.overdueList)],
@@ -238,14 +244,16 @@ function moved(a: Totals, b: Totals) {
     listLate: [b.late.length - a.late.length, sum(b.late) - sum(a.late)],
   };
 }
-const NOT_LATE = { overdueGroup: [0, 0], tile: 0, week: [0, 0], summary: [0, 0], listLate: [0, 0] };
-const lateBy = (tetri: number) => ({ overdueGroup: [1, tetri], tile: tetri, week: [1, tetri], summary: [1, tetri], listLate: [1, tetri], dueTodayGroup: [0, 0], active: 0 });
+const NOT_LATE = { tile: 0, week: [0, 0], summary: [0, 0], listLate: [0, 0] };
+/** One more rental awaited today: the line's second number, and nothing late. */
+const DUE_TODAY = { ...NOT_LATE, line: [0, 1], active: 1 };
+const lateBy = (tetri: number) => ({ line: [1, 0], tile: tetri, week: [1, tetri], summary: [1, tetri], listLate: [1, tetri], active: 0 });
 
 /**
  * One set, whoever counts it. The tile of "Today", the week's report and the
- * summary are the list's "Просрочены" segment; each group of "Today" is its
- * segment of the list, less the rentals with nothing to take; and every row
- * "Today" shows carries the list's own numbers for that rental.
+ * summary are the list's "Просрочены" segment; "Today"'s line says how many of
+ * the list are late and how many are due today — the schedule's own numbers,
+ * since the list's statuses are the schedule's (issue #18, B4).
  */
 function oneSet(x: Totals) {
   expect(x.t.numbers.overdueTetri).toBe(sum(x.late));
@@ -255,60 +263,16 @@ function oneSet(x: Totals) {
   expect(sum(x.s.overdueList)).toBe(sum(x.late));
   expect(x.s.overdueList.map((o) => o.id).sort()).toEqual(x.late.map((r) => r.id).sort());
   expect(x.s.dueToday.map((r) => r.id).sort()).toEqual(x.due.map((r) => r.id).sort());
+  expect(lineOf(x.t)).toEqual([x.late.length, x.due.length]);
+  // No rental is listed on "Today" by its debt any more: the schedule lists them.
+  expect(x.t.queue.some((g) => g.group === 'overdue' || g.group === 'due_today')).toBe(false);
 
-  expect([groupOf(x.t, 'overdue')?.total ?? 0, groupOf(x.t, 'overdue')?.totalTetri ?? 0]).toEqual([x.late.filter((r) => r.debtTetri > 0).length, sum(x.late)]);
-  expect([groupOf(x.t, 'due_today')?.total ?? 0, groupOf(x.t, 'due_today')?.totalTetri ?? 0]).toEqual([x.due.filter((r) => r.debtTetri > 0).length, sum(x.due)]);
-
-  const byId = new Map(x.rows.map((r) => [r.id, r]));
   const days = new Map(x.s.overdueList.map((o) => [o.id, o.days]));
-  for (const row of groupOf(x.t, 'overdue')?.rows ?? []) {
-    const r = byId.get(row.id.split(':')[1]!)!;
-    expect(r.status).toBe('overdue');
-    expect(row).toMatchObject({ days: r.overdueDays, amountTetri: r.debtTetri, note: null });
-    expect(row.days).toBeGreaterThan(0);
-    expect(row.days).toBe(days.get(r.id));
-    expect(row).not.toHaveProperty('dueTodayTetri');
+  for (const r of x.late) {
+    expect(r.overdueDays).toBeGreaterThan(0);
+    expect(r.overdueDays).toBe(days.get(r.id));
   }
-  for (const row of groupOf(x.t, 'due_today')?.rows ?? []) {
-    const r = byId.get(row.id.split(':')[1]!)!;
-    expect(r.status).toBe('due_today');
-    expect(r.overdueDays).toBe(0);
-    expect(row).toMatchObject({ days: null, amountTetri: r.debtTetri, dueTodayTetri: r.dueTodayTetri, note: r.pickedUpOn === x.t.today ? 'handed_today' : null });
-  }
-}
-
-/**
- * The row "Today" makes of ONE rental, whether the screen's three rows hold it
- * or not: the route's own select and mapper, through the shared queue. A row
- * looked for in the answer is skipped silently once three rentals with lower
- * numbers are due today — and in a shared database they always are.
- */
-async function todayRowOf(rentalId: string) {
-  const { prisma } = await import('../src/lib/db.js');
-  const { debtsOf } = await import('../src/lib/debt.js');
-  const { QUEUE_RENTAL, queueRental } = await import('../src/routes/today.js');
-  const t = today();
-  const r = await prisma.rental.findUniqueOrThrow({ where: { id: rentalId }, select: QUEUE_RENTAL });
-  const groups = dayQueue({
-    today: t,
-    owner: true,
-    rentals: [queueRental(r, t, await debtsOf([r.customer.id], t))],
-    tills: [],
-    myTillTetri: 0,
-    unmatchedLines: 0,
-    staleBanks: [],
-    instalments: [],
-    service: { open: 0, longerThanWeek: 0, longestDays: 0 },
-    reports: [],
-    lowParts: { count: 0, note: '' },
-    purchases: [],
-    vehiclesWithoutPool: 0,
-    vehiclesWithoutPoint: 0,
-    odooDeposits: { count: 0, amountTetri: 0 },
-    kommo: null,
-    kommoDeals: [],
-  });
-  return groups.flatMap((g) => g.rows).find((row) => row.id === `due_today:${rentalId}`) ?? null;
+  for (const r of x.due) expect(r.overdueDays).toBe(0);
 }
 
 /** A second moped for this customer, asked by a manager and by an owner with no reason. */
@@ -340,13 +304,11 @@ describe.skipIf(!HAS_DB)('the due day · the four cases on every answer', () => 
     expect(entryOn(c, f.id, t)).toMatchObject({ seq: 2, state: 'due_today', amountTetri: 15000, leftTetri: 15000 });
     expect(lateOf(c, f.id)).toBeUndefined();
     expect(c.rentals.find((r) => r.id === f.id)?.debtTetri).toBe(15000);
-    // «Сегодня оплата» is for this day: the row of "Today" carries no mark against WhatsApp,
-    // and the calendar's card names the pickup day its own button is drawn by.
-    expect(await todayRowOf(f.id)).not.toHaveProperty('whatsapp');
+    // The calendar's card names the pickup day its own WhatsApp button is drawn by.
     expect(c.rentals.find((r) => r.id === f.id)).toMatchObject({ pickedUpOn: addDays(t, -7) });
 
     const after = await totals(owner);
-    expect(moved(before, after)).toEqual({ ...NOT_LATE, dueTodayGroup: [1, 15000], active: 1 });
+    expect(moved(before, after)).toEqual(DUE_TODAY);
     expect(after.s.dueToday.map((r) => r.id)).toContain(f.id);
     expect(after.s.overdueList.map((o) => o.id)).not.toContain(f.id);
     oneSet(after);
@@ -417,11 +379,9 @@ describe.skipIf(!HAS_DB)('the due day · the four cases on every answer', () => 
     expect(c.rentals.find((r) => r.id === f.id)).toMatchObject({ pickedUpOn: t });
 
     const after = await totals(owner);
-    expect(moved(before, after)).toEqual({ ...NOT_LATE, dueTodayGroup: [1, 33000], active: 1 });
+    expect(moved(before, after)).toEqual(DUE_TODAY);
     expect(after.s.dueToday.map((r) => r.id)).toContain(f.id);
     oneSet(after);
-    // Its row says the moped left today, and has no WhatsApp button.
-    expect(await todayRowOf(f.id)).toMatchObject({ days: null, amountTetri: 33000, dueTodayTetri: 33000, note: 'handed_today', action: 'take_money', whatsapp: false });
 
     expect(await secondHandOver(f.customer.id)).toMatchObject(refused(33000));
   });
@@ -461,7 +421,7 @@ describe.skipIf(!HAS_DB)('the due day · the edges of the rule', () => {
     expect(await everywhere(f, owner, manager)).toEqual(everywhereIs('due_today', 0, 15000, 15000, 15000, f.id));
     expect(entryOn(await calendar(owner), f.id, today())).toMatchObject({ seq: 1, state: 'due_today', leftTetri: 15000 });
     const after = await totals(owner);
-    expect(moved(before, after)).toEqual({ ...NOT_LATE, dueTodayGroup: [1, 15000], active: 1 });
+    expect(moved(before, after)).toEqual(DUE_TODAY);
     oneSet(after);
   });
 
@@ -479,7 +439,7 @@ describe.skipIf(!HAS_DB)('the due day · the edges of the rule', () => {
     oneSet(await totals(owner));
   });
 
-  it('before the night’s roll (today’s week has no row yet): due today with nothing to take, in no group; the roll brings the 150', async () => {
+  it('before the night’s roll (today’s week has no row yet): due today with nothing to take yet; the roll brings the 150', async () => {
     const owner = await loginAs('owner');
     const manager = await loginAs('manager');
     const before = await totals(owner);
@@ -490,8 +450,9 @@ describe.skipIf(!HAS_DB)('the due day · the edges of the rule', () => {
     // Nothing is owed yet, and nothing reads overdue: the list by "paid through", the calendar by projection.
     expect(await everywhere(f, owner, manager)).toEqual(everywhereIs('due_today', 0, 0, 0, 0, f.id));
     expect(entryOn(await calendar(owner), f.id, t)).toMatchObject({ seq: 2, state: 'due_today', projected: true, amountTetri: 15000 });
+    // The schedule awaits the projected week today: "Today"'s line counts it, as the list does.
     const waiting = await totals(owner);
-    expect(moved(before, waiting)).toEqual({ ...NOT_LATE, dueTodayGroup: [0, 0], active: 1 });
+    expect(moved(before, waiting)).toEqual(DUE_TODAY);
     oneSet(waiting);
 
     const { rollPeriods } = await import('../src/lib/periods.js');
@@ -511,10 +472,8 @@ describe.skipIf(!HAS_DB)('the due day · the edges of the rule', () => {
 
     expect(await everywhere(f, owner, manager)).toEqual(everywhereIs('due_today', 0, 15000, 15000, 15000, f.id));
     const after = await totals(owner);
-    expect(moved(before, after)).toEqual({ ...NOT_LATE, dueTodayGroup: [1, 15000], active: 1 });
+    expect(moved(before, after)).toEqual(DUE_TODAY);
     oneSet(after);
-    // Brought over today, handed over a week ago: the pickup day decides, not the day of the transfer.
-    expect(await todayRowOf(f.id)).toMatchObject({ days: null, amountTetri: 15000, dueTodayTetri: 15000, note: null });
   });
 
   it('due today with the deposit short since an earlier day: 230 is a debt everywhere, and only the 150 of it is awaited', async () => {
@@ -533,12 +492,10 @@ describe.skipIf(!HAS_DB)('the due day · the edges of the rule', () => {
       ['rent', 15000],
     ]);
 
-    // It stands in "due today" with the whole figure, and in no overdue total.
+    // It is due today — the schedule judges weeks — and in no overdue total.
     const after = await totals(owner);
-    expect(moved(before, after)).toEqual({ ...NOT_LATE, dueTodayGroup: [1, 23000], active: 1 });
+    expect(moved(before, after)).toEqual(DUE_TODAY);
     oneSet(after);
-    // The row carries both numbers: the screen paints 230 red.
-    expect(await todayRowOf(f.id)).toMatchObject({ amountTetri: 23000, dueTodayTetri: 15000, note: null });
     expect(await secondHandOver(f.customer.id)).toMatchObject(refused(23000));
   });
 
@@ -651,7 +608,7 @@ describe.skipIf(!HAS_DB)('the due day · rentals that are not running', () => {
     expect(await everywhere(dueOne, owner, manager)).toEqual(everywhereIs(how, 0, 15000, 0, 0, dueOne.id));
 
     const after = await totals(owner);
-    expect(moved(before, after)).toEqual({ overdueGroup: [-1, -15000], tile: -15000, week: [-1, -15000], summary: [-1, -15000], listLate: [-1, -15000], dueTodayGroup: [-1, -15000], active: -1 });
+    expect(moved(before, after)).toEqual({ line: [-1, -1], tile: -15000, week: [-1, -15000], summary: [-1, -15000], listLate: [-1, -15000], active: -1 });
     oneSet(after);
   });
 
@@ -684,13 +641,13 @@ describe.skipIf(!HAS_DB)('the due day · rentals that are not running', () => {
     expect(card.periods.find((p) => p.startsOn === today())).toMatchObject({ seq: 2, amountTetri: 15000, paidTetri: 0 });
 
     const after = await totals(owner);
-    expect(moved(before, after)).toMatchObject({ overdueGroup: [-1, -15000], tile: -15000, week: [-1, -15000], summary: [-1, -15000], listLate: [-1, -15000], dueTodayGroup: [-1, -15000] });
+    expect(moved(before, after)).toMatchObject({ line: [-1, -1], tile: -15000, week: [-1, -15000], summary: [-1, -15000], listLate: [-1, -15000] });
     oneSet(after);
   });
 });
 
 describe.skipIf(!HAS_DB)('the due day · who sees what', () => {
-  it('a manager gets both groups, each row with its sum and cash as the action, and no sum of the group', async () => {
+  it('a manager gets the same one line as an owner, with no sum in it; the overdue tile stays an owner’s (issue #18, B4)', async () => {
     const owner = await loginAs('owner');
     const manager = await loginAs('manager');
     await running(7);
@@ -698,28 +655,27 @@ describe.skipIf(!HAS_DB)('the due day · who sees what', () => {
 
     const mine = await get<Today>(manager, '/api/today');
     const theirs = await get<Today>(owner, '/api/today');
-    for (const name of ['overdue', 'due_today']) {
-      const g = groupOf(mine, name)!;
-      // The same rentals an owner sees in the group, each with its own sum —
-      // and the sum of them all an owner's alone (Mika's «да» of 25.10.2026).
-      expect(g.total).toBe(groupOf(theirs, name)!.total);
-      expect(g.totalTetri).toBeNull();
-      expect(typeof groupOf(theirs, name)!.totalTetri).toBe('number');
-      expect(g.rows.every((r) => typeof r.amountTetri === 'number' && r.amountTetri > 0)).toBe(true);
-      expect(g.rows.length).toBeGreaterThan(0);
-      expect(g.rows.every((r) => r.action === 'take_cash')).toBe(true);
-    }
-    expect(groupOf(theirs, 'due_today')!.rows.every((r) => r.action === 'take_money')).toBe(true);
-    // "Due today" stands right after "overdue".
-    const order = mine.queue.map((g) => g.group);
-    expect(order.indexOf('due_today')).toBe(order.indexOf('overdue') + 1);
+    // The two numbers of «Оплаты по графику», for both: the line opens it, where the calls are.
+    expect(lineOf(mine)).toEqual(lineOf(theirs));
+    expect(lineOf(mine)[0]).toBeGreaterThan(0);
+    expect(lineOf(mine)[1]).toBeGreaterThan(0);
+    const line = groupOf(mine, 'schedule')!;
+    expect(line.rows).toEqual([expect.objectContaining({ action: 'open_schedule', href: '/schedule', amountTetri: null })]);
+    expect(line.totalTetri).toBeNull();
+    // The menu's numbers are the same two.
+    const counts = await get<{ schedule: { late: number; dueToday: number } }>(manager, '/api/nav/counts');
+    expect([counts.schedule.late, counts.schedule.dueToday]).toEqual(lineOf(mine));
+    // It stands where the two groups stood: right after the returns.
+    const order = theirs.queue.map((g) => g.group);
+    if (order.includes('returns')) expect(order.indexOf('schedule')).toBe(order.indexOf('returns') + 1);
 
     // The overdue total stays an owner's, and "Today" has no new number for
     // anybody. `chips` is no new tile: it is what «В аренде» and «Свободно»
     // say since 22.10.2026, the counts of the chips they open (answer «А»).
+    // The week's money left for «Отчёты → Неделя» (issue #18, B7).
     expect(mine.numbers.overdueTetri).toBeNull();
-    expect(Object.keys(mine.numbers).sort()).toEqual(['batteries', 'chips', 'depositsHeldTetri', 'fleet', 'myTillTetri', 'overdueTetri', 'week']);
-    expect(Object.keys(theirs.numbers).sort()).toEqual(['batteries', 'chips', 'depositsHeldTetri', 'fleet', 'myTillTetri', 'overdueTetri', 'week']);
+    expect(Object.keys(mine.numbers).sort()).toEqual(['batteries', 'chips', 'depositsHeldTetri', 'fleet', 'myTillTetri', 'overdueTetri']);
+    expect(Object.keys(theirs.numbers).sort()).toEqual(['batteries', 'chips', 'depositsHeldTetri', 'fleet', 'myTillTetri', 'overdueTetri']);
 
     // The calendar's sums and the week's report stay behind their permissions: since issue #15 a
     // manager reads the schedule's rows, never its totals (ADR-0048).

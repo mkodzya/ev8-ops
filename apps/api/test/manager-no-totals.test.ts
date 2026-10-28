@@ -43,10 +43,12 @@ describe.skipIf(!HAS_DB)('no money of all the customers together for a manager (
     expect(mine.queue.length).toBeGreaterThan(0);
     for (const g of mine.queue) expect(g.totalTetri, g.group).toBeNull();
     for (const g of theirs.queue) expect(typeof g.totalTetri, g.group).toBe('number');
-    // The rental's own row still says what it owes — to both.
-    const row = (t: Today) => t.queue.flatMap((g) => g.rows).find((x) => x.id === `due_today:${r.rentalId}`);
-    const owed = row(theirs)?.amountTetri;
-    if (owed != null) expect(row(mine)?.amountTetri).toBe(owed);
+    // The rental awaited today is «Оплаты по графику»'s row since issue #18 (B4): "Today" says it in one
+    // line, the same for both, and the line carries no sum for either.
+    const line = (t: Today) => t.queue.find((g) => g.group === 'schedule')?.rows[0] ?? null;
+    expect(line(mine)).not.toBeNull();
+    expect(line(mine)).toEqual(line(theirs));
+    expect(line(mine)?.amountTetri).toBeNull();
     expect(mine.numbers.overdueTetri).toBeNull();
     expect(typeof theirs.numbers.overdueTetri).toBe('number');
   });

@@ -1,4 +1,4 @@
-import { phoneMatches, spellingMatches, type RentalStatus } from '@ev8/shared';
+import { phoneMatches, spellingMatches, type CustomerOwing, type RentalStatus } from '@ev8/shared';
 import { Link } from 'react-router-dom';
 import { useSession } from '../session.js';
 import { LoadError } from '../components/LoadError.js';
@@ -22,16 +22,21 @@ interface Customer {
   debtTetri: number;
   /** Of debtTetri: awaited today and not late (ADR-0017). */
   dueTodayTetri: number;
+  /** «Должны», awaited today, or neither — by the schedule's rule for the rent (issue #18, B4; shared `customerOwing`). */
+  owing?: CustomerOwing;
   buyer: boolean;
 }
 
-// One figure, two names (ADR-0017). A debtor has something in it older than
-// what is awaited today — red, under the chip «owing». A figure that is all
-// awaited today is ink, with the calendar's word under it: never colour alone.
-// An answer without the field (an older API in the seconds of a deploy) reads
-// as a debt: nobody turns calm because a number did not arrive.
-const isDebtor = (c: Customer) => c.debtTetri - (c.dueTodayTetri ?? 0) > 0;
-const isAwaited = (c: Customer) => c.debtTetri > 0 && !isDebtor(c);
+// One figure, two names (ADR-0017). A debtor is late by «Оплаты по графику»,
+// or owes, older than today, what the schedule does not judge — red, under the
+// chip «owing»; one awaited today is ink, with the calendar's word under it:
+// never colour alone. The server says which (issue #18, B4: the chip counted
+// by the stored weeks before, and called a customer whose advance had paid
+// the week a debtor). An answer without the field (an older API in the
+// seconds of a deploy) reads by the old rule, as a debt: nobody turns calm
+// because a number did not arrive.
+const isDebtor = (c: Customer) => (c.owing === undefined ? c.debtTetri - (c.dueTodayTetri ?? 0) > 0 : c.owing === 'debtor');
+const isAwaited = (c: Customer) => (c.owing === undefined ? c.debtTetri > 0 && !isDebtor(c) : c.owing === 'awaited');
 
 export function CustomersPage() {
   const t = useT();

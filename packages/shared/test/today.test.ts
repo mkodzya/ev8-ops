@@ -67,21 +67,13 @@ describe('deposits the transfer brought over', () => {
 });
 
 describe('the queue of “Today”', () => {
-  it('puts an overdue rental in its group with the days and the debt, longest first (crit. 1)', () => {
-    const q = dayQueue(input({ rentals: [rental(), rental({ id: 'r2', number: 'R-00002', paidThrough: '2026-09-10', debtTetri: 30000 })] }));
-    const overdue = group(q, 'overdue')!;
-    expect(overdue.rows.map((r) => r.number)).toEqual(['R-00002', 'R-00001']);
-    // Paid through 10.09: the week was due on the 11th, and the 20th is its ninth late day (ADR-0017).
-    expect(overdue.rows[0]).toMatchObject({ days: 9, amountTetri: 30000, action: 'take_money' });
-    expect(overdue.rows[1]).toMatchObject({ days: 2, amountTetri: 15000 });
-    expect(overdue.totalTetri).toBe(45000);
-  });
-
-  it('a rental due today stands in its own group, not in “overdue” (crit. 2; ADR-0017)', () => {
-    const q = dayQueue(input({ rentals: [rental({ status: 'due_today', paidThrough: null, pickedUpOn: TODAY, debtTetri: 33000, dueTodayTetri: 33000 })] }));
-    expect(group(q, 'overdue')).toBeUndefined();
-    // Handed over today with nothing paid: the week and the deposit, awaited whole.
-    expect(group(q, 'due_today')!.rows[0]).toMatchObject({ number: 'R-00001', amountTetri: 33000, dueTodayTetri: 33000, days: null, note: 'handed_today', action: 'take_money' });
+  // Issue #18, B4 (Mika's «Одно правило календаря» of 28.10.2026): the overdue
+  // and the awaited are «Оплаты по графику»'s rows; «Сегодня» says how many, in
+  // one line that opens it (crit. 1, 2 of wave 4 now live in the schedule).
+  it('says the late and the awaited in one line that opens the schedule, and lists no rental by its debt (issue #18 B4)', () => {
+    const q = dayQueue(input({ rentals: [rental(), rental({ id: 'r2', number: 'R-00002', status: 'due_today', paidThrough: '2026-09-19' })], schedule: { late: 1, dueToday: 1 } }));
+    expect(q.map((g) => g.group)).toEqual(['schedule']);
+    expect(q[0]!.rows[0]).toMatchObject({ action: 'open_schedule', href: '/schedule', note: '1|1', amountTetri: null });
   });
 
   it('gives an owner the deposit a manager’s return left, and a manager nothing of it (crit. 3)', () => {
@@ -91,12 +83,11 @@ describe('the queue of “Today”', () => {
   });
 
   it('shows three rows and counts the rest (crit. 6, 11)', () => {
-    const rentals = [1, 2, 3, 4, 5].map((n) => rental({ id: `r${n}`, number: `R-0000${n}`, paidThrough: `2026-09-1${n}`, debtTetri: 15000 }));
+    const rentals = [1, 2, 3, 4, 5].map((n) => rental({ id: `r${n}`, number: `R-0000${n}`, expectedReturnOn: `2026-09-1${n}` }));
     const q = dayQueue(input({ rentals }));
-    const overdue = group(q, 'overdue')!;
-    expect(overdue.rows).toHaveLength(3);
-    expect(overdue.total).toBe(5);
-    expect(overdue.totalTetri).toBe(75000);
+    const returns = group(q, 'returns')!;
+    expect(returns.rows).toHaveLength(3);
+    expect(returns.total).toBe(5);
     expect(queueCount(q)).toBe(5);
   });
 
@@ -110,12 +101,14 @@ describe('the queue of “Today”', () => {
         purchases: [{ id: 'p1', number: 'PO-00001', who: 'Factory', note: 'ordered' }],
         vehiclesWithoutPool: 2,
         rentals: [rental()],
+        schedule: { late: 1, dueToday: 0 },
       }),
     );
     // A manager has no "decide": their own cash is a group of its own, last (QA-W4-11).
-    expect(q.map((g) => g.group)).toEqual(['overdue', 'till']);
+    // He calls by the schedule, as the owner does: the same one line (issue #18, B4).
+    expect(q.map((g) => g.group)).toEqual(['schedule', 'till']);
     expect(group(q, 'till')!.rows[0]).toMatchObject({ action: 'hand_over_till', amountTetri: 12000 });
-    expect(group(q, 'overdue')!.rows[0].action).toBe('take_cash');
+    expect(group(q, 'schedule')!.rows[0]!.action).toBe('open_schedule');
   });
 
   it('puts a till handed over above the deposits an owner has not decided (crit. 4, QA-W4-12)', () => {

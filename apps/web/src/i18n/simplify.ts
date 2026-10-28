@@ -1,8 +1,9 @@
 // GitHub issue #18 of the director, part B — the simplifications of the audit
 // (28.10.2026): a manager sells a moped (B8), the mopeds «В ремонте» with no
 // repair become a block of «Ремонты» (B6), «Заменить мопед» stands under the
-// "+" (B2), the hand-over takes the customer's advance off what is due (B3).
-// One file, so the Georgian goes to proofreading as one list
+// "+" (B2), the hand-over takes the customer's advance off what is due (B3),
+// «Сегодня» says the schedule in one line (B4) and leads to the week's report
+// (B7). One file, so the Georgian goes to proofreading as one list
 // (docs/qa/issue-18-b-simplify-ka-strings.md).
 
 const ruPlural = (n: number, one: string, few: string, many: string): string => {
@@ -34,6 +35,14 @@ export const simpleEn = {
       credit: 'Customer’s advance',
       creditNote: 'Money sent ahead lies on this rental at once, not at night: the deposit first, then the week.',
     },
+    /** «Сегодня»: «Payments: 3 overdue · 2 today» opening the schedule (B4), and the way to the week's money (B7). */
+    today: {
+      payments: 'Payments:',
+      late: (n: number) => `${n} overdue`,
+      due: (n: number) => `${n} today`,
+      open: 'Open',
+      weekLink: 'The week’s money — «Reports → Week»',
+    },
   },
 };
 
@@ -54,6 +63,13 @@ export const simpleRu: typeof simpleEn = {
       credit: 'Аванс клиента',
       creditNote: 'Деньги, присланные заранее, лягут на эту аренду сразу, не ночью: сначала залог, потом неделя.',
     },
+    today: {
+      payments: 'Оплаты:',
+      late: (n: number) => `${n} просрочено`,
+      due: (n: number) => `${n} сегодня`,
+      open: 'Открыть',
+      weekLink: 'Деньги недели — «Отчёты → Неделя»',
+    },
   },
 };
 
@@ -73,6 +89,13 @@ export const simpleKa: typeof simpleEn = {
     hand: {
       credit: 'კლიენტის ავანსი',
       creditNote: 'წინასწარ გამოგზავნილი თანხა ამ ქირაობაზე მაშინვე ჩაიწერება, არა ღამით: ჯერ დეპოზიტი, მერე კვირა.',
+    },
+    today: {
+      payments: 'გადახდები:',
+      late: (n: number) => `${n} ვადაგადაცილებული`,
+      due: (n: number) => `${n} დღეს`,
+      open: 'გახსნა',
+      weekLink: 'კვირის ფული — «ანგარიშები → კვირა»',
     },
   },
 };

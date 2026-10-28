@@ -7,9 +7,9 @@ import { HAS_DB, call, json, loginAs, uniq } from './helpers.js';
 interface Today {
   today: string;
   owner: boolean;
-  queue: { group: string; rows: { id: string; action: string; number: string | null; amountTetri: number | null }[]; total: number; totalTetri: number }[];
+  queue: { group: string; rows: { id: string; action: string; number: string | null; amountTetri: number | null; href: string; note: string | null }[]; total: number; totalTetri: number }[];
   count: number;
-  numbers: { fleet: Record<string, number>; overdueTetri: number | null; depositsHeldTetri: number | null; week: { rentTetri: number; depositTetri: number; feeTetri: number } | null; myTillTetri: number | null };
+  numbers: { fleet: Record<string, number>; overdueTetri: number | null; depositsHeldTetri: number | null; myTillTetri: number | null };
 }
 
 async function overdueRental() {
@@ -24,17 +24,23 @@ async function overdueRental() {
 }
 
 describe.skipIf(!HAS_DB)('“Today” (wave 4)', () => {
-  it('lists an overdue rental with its debt, and counts the rows in the badge', async () => {
-    const { owner, number } = await overdueRental();
+  // Issue #18, B4: the late rentals are «Оплаты по графику»'s rows; "Today" says how many, in one line.
+  it('says an overdue rental in the schedule’s one line, with the overdue tile, and counts the rows in the badge', async () => {
+    const { owner, id } = await overdueRental();
     const t = json<Today>(await call(owner, 'GET', '/api/today'));
-    const overdue = t.queue.find((g) => g.group === 'overdue')!;
-    expect(overdue.rows.length).toBeGreaterThan(0);
-    expect(overdue.total).toBeGreaterThanOrEqual(1);
+    const line = t.queue.find((g) => g.group === 'schedule')!;
+    expect(line.rows).toEqual([expect.objectContaining({ action: 'open_schedule', href: '/schedule' })]);
+    const [late] = (line.rows[0]!.note ?? '0|0').split('|').map(Number);
+    expect(late).toBeGreaterThanOrEqual(1);
+    // The rental is the schedule's: there, and in «Аренды → Просрочены», by one rule.
+    const rentals = json<{ rentals: { id: string; status: string }[] }>(await call(owner, 'GET', '/api/rentals')).rentals;
+    expect(rentals.find((r) => r.id === id)?.status).toBe('overdue');
+    // No row of "Today" names it by its debt any more.
+    expect(t.queue.flatMap((g) => g.rows).some((r) => r.id === `overdue:${id}`)).toBe(false);
     expect(t.count).toBe(t.queue.reduce((n, g) => n + g.total, 0));
-    // The rental is somewhere in the group, shown or counted.
-    expect(overdue.total >= 1 && (overdue.rows.some((r) => r.number === number) || overdue.total > overdue.rows.length)).toBe(true);
     expect(t.numbers.overdueTetri).toBeGreaterThan(0);
-    expect(t.numbers.week).not.toBeNull();
+    // The week's money is «Отчёты → Неделя»'s (issue #18, B7).
+    expect(t.numbers).not.toHaveProperty('week');
   });
 
   it('gives a manager neither the deposits nor the week’s money, but their own till', async () => {
@@ -45,7 +51,7 @@ describe.skipIf(!HAS_DB)('“Today” (wave 4)', () => {
     // The owners' rows of «Дозаполнить» (was «Решения», issue #18 B5) are not a manager's.
     expect(t.queue.flatMap((g) => g.rows).some((r) => r.action === 'set_pool' || r.action === 'reconcile_kommo')).toBe(false);
     expect(t.numbers.overdueTetri).toBeNull();
-    expect(t.numbers.week).toBeNull();
+    expect(t.numbers).not.toHaveProperty('week');
     expect(t.numbers.myTillTetri).toBe(0);
     expect(Object.keys(t.numbers.fleet)).toContain('available');
   });

@@ -387,7 +387,7 @@ describe('the one rental a message from a customer’s card is about', () => {
   });
 });
 
-describe('the four cases in the queue of “Today”', () => {
+describe('the due day on «Сегодня»: one line of the schedule (issue #18, B4)', () => {
   const rental = (over: Partial<QueueRental> = {}): QueueRental => ({
     id: 'r1',
     number: 'R-00001',
@@ -432,104 +432,68 @@ describe('the four cases in the queue of “Today”', () => {
   const case3 = rental({ id: 'r3', number: 'R-00003', status: 'overdue', pickedUpOn: d(-14), paidThrough: d(-8), debtTetri: 30000, dueTodayTetri: 0 });
   const case4 = rental({ id: 'r4', number: 'R-00004', pickedUpOn: T, paidThrough: null, debtTetri: 33000, dueTodayTetri: 33000 });
 
-  it('case 1: its own calm group, no days, the sum and how much of it is awaited', () => {
-    const q = dayQueue(input({ rentals: [case1] }));
-    expect(q.map((g) => g.group)).toEqual(['due_today']);
+  // The groups «Просрочены» and «Ждём сегодня» listed these rentals a second
+  // time, counted by "paid through"; «Оплаты по графику» lists them, by weeks.
+  it('the four cases are rows of the schedule, not of «Сегодня»: no group lists a rental by its debt', () => {
+    expect(dayQueue(input({ rentals: [case4, case3, case2, case1] }))).toEqual([]);
+  });
+
+  it('one line says the schedule’s two numbers and opens it; noughts say nothing', () => {
+    const q = dayQueue(input({ rentals: [case4, case3, case2, case1], schedule: { late: 2, dueToday: 2 } }));
+    expect(q.map((g) => g.group)).toEqual(['schedule']);
     expect(q[0]!.rows).toEqual([
-      { id: 'due_today:r1', group: 'due_today', action: 'take_money', who: 'ТЕСТ Клиент', number: 'R-00001', vin: 'TEST0000000000001', days: null, amountTetri: 15000, dueTodayTetri: 15000, href: '/rentals/r1', phone: '+995555000001', note: null },
+      { id: 'schedule', group: 'schedule', action: 'open_schedule', who: null, number: null, vin: null, days: null, amountTetri: null, href: '/schedule', phone: null, note: '2|2' },
     ]);
+    // One line, one thing to do: «Сегодня»'s badge counts it once — the schedule's own badge counts the rentals.
+    expect(queueCount(q)).toBe(1);
+    expect(dayQueue(input({ schedule: { late: 3, dueToday: 0 } }))[0]!.rows[0]!.note).toBe('3|0');
+    expect(dayQueue(input({ schedule: { late: 0, dueToday: 4 } }))[0]!.rows[0]!.note).toBe('0|4');
+    expect(dayQueue(input({ schedule: { late: 0, dueToday: 0 } }))).toEqual([]);
+    expect(dayQueue(input({ schedule: null }))).toEqual([]);
   });
 
-  it('cases 2 and 3: overdue, 1 day and 7 days, longest first', () => {
-    const q = dayQueue(input({ rentals: [case2, case3] }));
-    expect(q.map((g) => g.group)).toEqual(['overdue']);
-    expect(q[0]!.rows.map((r) => [r.number, r.days, r.amountTetri])).toEqual([
-      ['R-00003', 7, 30000],
-      ['R-00002', 1, 15000],
-    ]);
-    expect(q[0]!.rows.every((r) => r.dueTodayTetri === undefined)).toBe(true);
+  it('stands where the two groups stood, right after the returns', () => {
+    const q = dayQueue(input({ rentals: [rental({ expectedReturnOn: d(-1) })], schedule: { late: 1, dueToday: 1 }, unmatchedLines: 2 }));
+    expect(q.map((g) => g.group)).toEqual(['returns', 'schedule', 'money']);
   });
 
-  it('case 4: the same group, and the row says it was handed over today', () => {
-    const q = dayQueue(input({ rentals: [case4] }));
-    expect(group(q, 'overdue')).toBeUndefined();
-    expect(group(q, 'due_today')!.rows[0]).toMatchObject({ number: 'R-00004', days: null, amountTetri: 33000, dueTodayTetri: 33000, note: 'handed_today', action: 'take_money', whatsapp: false });
+  it('a manager gets the same line; no sum is in it for anybody (ADR-0048, addendum of 25.10.2026)', () => {
+    const mine = dayQueue(input({ owner: false, schedule: { late: 1, dueToday: 1 } }));
+    const theirs = dayQueue(input({ schedule: { late: 1, dueToday: 1 } }));
+    expect(mine.map((g) => g.rows)).toEqual(theirs.map((g) => g.rows));
+    expect(mine[0]!.totalTetri).toBeNull();
+    expect(theirs[0]!.totalTetri).toBe(0);
   });
 
-  it('all four together: overdue first, then due today by rental number; the badge counts both', () => {
-    const q = dayQueue(input({ rentals: [case4, case3, case2, case1] }));
-    expect(q.map((g) => g.group)).toEqual(['overdue', 'due_today']);
-    expect(group(q, 'overdue')).toMatchObject({ total: 2, totalTetri: 45000 });
-    expect(group(q, 'due_today')).toMatchObject({ total: 2, totalTetri: 48000 });
-    expect(group(q, 'due_today')!.rows.map((r) => r.number)).toEqual(['R-00001', 'R-00004']);
-    expect(queueCount(q)).toBe(4);
-  });
-
-  it('a manager gets the same two groups, with cash as the action', () => {
-    const q = dayQueue(input({ owner: false, rentals: [case1, case2] }));
-    expect(q.map((g) => g.group)).toEqual(['overdue', 'due_today']);
-    expect(q.flatMap((g) => g.rows.map((r) => r.action))).toEqual(['take_cash', 'take_cash']);
-  });
-
-  it('a manager’s groups carry each row’s sum and no sum of the group; an owner’s carry it (ADR-0048, addendum of 25.10.2026)', () => {
-    const all = [case4, case3, case2, case1];
-    const mine = dayQueue(input({ owner: false, rentals: all }));
-    for (const g of mine) {
-      expect(g.totalTetri, g.group).toBeNull();
-      expect(g.rows.every((r) => (r.amountTetri ?? 0) > 0), g.group).toBe(true);
-    }
-    // The counts are the owner's own: the rows are the same, only the sum is cut.
-    const theirs = dayQueue(input({ rentals: all }));
-    expect(mine.map((g) => [g.group, g.total])).toEqual(theirs.map((g) => [g.group, g.total]));
-    expect(theirs.map((g) => g.totalTetri)).toEqual([45000, 48000]);
-  });
-
-  it('the line under a group says one set: all its rows and their sum for an owner, the rows left for a manager (QA of #15)', () => {
-    const late = [1, 2, 3, 4, 5].map((i) => rental({ id: `l${i}`, number: `R-0001${i}`, status: 'overdue', pickedUpOn: d(-14), paidThrough: d(-7 - i), debtTetri: 10000 * i, dueTodayTetri: 0 }));
-    const theirs = group(dayQueue(input({ rentals: late })), 'overdue')!;
+  it('the line under a group says one set: all its rows and their sum for an owner, the rows left without a sum (QA of #15)', () => {
+    const instalments = [1, 2, 3, 4, 5].map((i) => ({ id: `i${i}`, saleId: `s${i}`, number: `SL-0000${i}`, who: 'ТЕСТ Покупатель', phone: null, days: i, amountTetri: 10000 * i }));
+    const theirs = group(dayQueue(input({ instalments })), 'instalments')!;
     expect([theirs.total, theirs.rows.length]).toEqual([5, 3]);
-    // «Все 5 · 1 500 ₾»: the five the list «Просрочены» shows and their sum —
-    // not «Ещё 2» beside the sum of all five, which the screen said before.
+    // «Все 5 · 1 500 ₾»: the five and their sum — not «Ещё 2» beside the sum of all five.
     expect(queueMore(theirs)).toEqual({ kind: 'all', count: 5, tetri: 150000 });
-    // A manager's group carries no sum (ADR-0048, addendum): «Ещё 2», the rows left.
-    const mine = group(dayQueue(input({ owner: false, rentals: late })), 'overdue')!;
-    expect(queueMore(mine)).toEqual({ kind: 'left', count: 2 });
+    // A group that carries no sum — a manager's (ADR-0048, addendum): «Ещё 2», the rows left.
+    expect(queueMore({ ...theirs, totalTetri: null })).toEqual({ kind: 'left', count: 2 });
     // A group that shows all it has: no line under it.
-    expect(queueMore(group(dayQueue(input({ rentals: late.slice(0, 3) })), 'overdue')!)).toBeNull();
+    expect(queueMore(group(dayQueue(input({ instalments: instalments.slice(0, 3) })), 'instalments')!)).toBeNull();
   });
 
-  it('due today with nothing to take is no row (the week has no row yet)', () => {
-    expect(dayQueue(input({ rentals: [rental({ debtTetri: 0, dueTodayTetri: 0 })] }))).toEqual([]);
-  });
-
-  it('due today with older debt in the figure stays in the group and carries both numbers', () => {
-    const q = dayQueue(input({ rentals: [rental({ debtTetri: 23000, dueTodayTetri: 15000 })] }));
-    expect(group(q, 'due_today')!.rows[0]).toMatchObject({ amountTetri: 23000, dueTodayTetri: 15000 });
-  });
-
-  it('never paid, handed over three days ago: 3 days, the count the list makes', () => {
-    const q = dayQueue(input({ rentals: [rental({ status: 'overdue', pickedUpOn: d(-3), paidThrough: null, debtTetri: 33000, dueTodayTetri: 0 })] }));
-    expect(group(q, 'overdue')!.rows[0]).toMatchObject({ days: 3, amountTetri: 33000 });
-  });
-
-  it('every row of a rental handed over today says there is no ready WhatsApp message — in “returns” and “fill in” too', () => {
+  it('every row of a rental handed over today says there is no ready WhatsApp message — in “returns” and “fill in”', () => {
     const fresh = rental({ pickedUpOn: T, paidThrough: null, debtTetri: 33000, dueTodayTetri: 33000, expectedReturnOn: T, contractUnsigned: true, vinUnconfirmed: true });
     // The usual weekly case: the planned return is the day the paid week ends. It has «Сегодня оплата».
     const due = rental({ id: 'r2', number: 'R-00002', expectedReturnOn: T, vinUnconfirmed: true });
-    // (A group shows three rows: the other two are left unsigned-free so that "fill in" holds all of the three.)
     const late = rental({ id: 'r3', number: 'R-00003', status: 'overdue', pickedUpOn: d(-8), paidThrough: d(-2), dueTodayTetri: 0, expectedReturnOn: d(-1) });
     const rows = dayQueue(input({ rentals: [fresh, due, late] })).flatMap((g) => g.rows);
     const of = (id: string) => rows.filter((x) => x.id.endsWith(`:${id}`));
-    expect(of('r1').map((x) => x.id).sort()).toEqual(['due_today:r1', 'return:r1', 'sign:r1', 'vin:r1']);
+    expect(of('r1').map((x) => x.id).sort()).toEqual(['return:r1', 'sign:r1', 'vin:r1']);
     expect(of('r1').every((x) => x.whatsapp === false)).toBe(true);
     // Due today on an ordinary day, and late: their rows carry no such mark.
-    expect(of('r2').map((x) => x.id).sort()).toEqual(['due_today:r2', 'return:r2', 'vin:r2']);
+    expect(of('r2').map((x) => x.id).sort()).toEqual(['return:r2', 'vin:r2']);
     expect(of('r2').every((x) => !('whatsapp' in x))).toBe(true);
-    expect(of('r3').map((x) => x.id).sort()).toEqual(['overdue:r3', 'return:r3']);
+    expect(of('r3').map((x) => x.id).sort()).toEqual(['return:r3']);
     expect(of('r3').every((x) => !('whatsapp' in x))).toBe(true);
   });
 
-  it('a returned, paused or disputed rental is in neither group', () => {
+  it('a returned, paused or disputed rental makes no row', () => {
     for (const status of ['returned', 'paused', 'disputed'] as const) {
       expect(dayQueue(input({ rentals: [rental({ status, dueTodayTetri: 0 })] }))).toEqual([]);
     }

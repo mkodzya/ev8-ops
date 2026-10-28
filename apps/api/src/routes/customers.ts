@@ -1,6 +1,7 @@
-import { rentDueOn, todayISO } from '@ev8/shared';
+import { customerOwing, rentDueOn, runsOnSchedule, statusBySchedule, todayISO } from '@ev8/shared';
 import type { FastifyInstance } from 'fastify';
 import { audit } from '../lib/audit.js';
+import { scheduleToday } from '../lib/calendar.js';
 import { dayOf, isoDate } from '../lib/dates.js';
 import { debtOf, debtsOf } from '../lib/debt.js';
 import { prisma } from '../lib/db.js';
@@ -52,13 +53,15 @@ export function customerRoutes(app: FastifyInstance): void {
         // Every rental: the list counts them; only open ones are named, each
         // by the status the rentals list gives it (ADR-0017).
         rentals: {
-          select: { id: true, number: true, status: true, paidThrough: true, pickedUpOn: true, payWeekday: true, weekShiftDays: true },
+          select: { id: true, number: true, status: true, paidThrough: true, pickedUpOn: true, returnedOn: true, payWeekday: true, weekShiftDays: true },
         },
         _count: { select: { sales: { where: { status: { not: 'cancelled' } } } } },
       },
     });
     const today = todayISO(new Date(), env.TZ);
-    const debts = await debtsOf(customers.map((c) => c.id), today);
+    const [debts, schedule] = await Promise.all([debtsOf(customers.map((c) => c.id), today), scheduleToday(today)]);
+    // A running rental is late or due today by what «Оплаты по графику» says (issue #18, B4).
+    const statusOf = (r: (typeof customers)[number]['rentals'][number]) => statusBySchedule(rentStateOf(r, today).status, schedule.pay.get(r.id));
     return {
       customers: customers.map((c) => ({
         id: c.id,
@@ -73,7 +76,7 @@ export function customerRoutes(app: FastifyInstance): void {
         tags: c.tags,
         openRentals: c.rentals
           .filter((r) => OPEN_RENTAL.includes(r.status))
-          .map((r) => ({ id: r.id, number: r.number, status: rentStateOf(r, today).status, paidThrough: isoDate(r.paidThrough) })),
+          .map((r) => ({ id: r.id, number: r.number, status: statusOf(r), paidThrough: isoDate(r.paidThrough) })),
         rentals: c.rentals.length,
         // The one debt figure (B7-02): the same the card, "Today" and the search show.
         debtTetri: debts.get(c.id)?.owesTetri ?? 0,
@@ -83,6 +86,16 @@ export function customerRoutes(app: FastifyInstance): void {
         creditTetri: debts.get(c.id)?.creditTetri ?? 0,
         // Where the debt sits: «Долг 300 по R-00488» in the hand-over (wave 3 §3.1).
         debtIn: (debts.get(c.id)?.parts ?? []).filter((p) => p.owesTetri > 0).map((p) => ({ kind: p.kind, id: p.id, number: p.number, owesTetri: p.owesTetri })),
+        // «Должны» or awaited today, by the schedule's rule for the rent (issue #18, B4) and the
+        // one figure for the rest: the chip and the colour of the list read this.
+        owing: customerOwing({
+          owesTetri: debts.get(c.id)?.owesTetri ?? 0,
+          dueTodayTetri: debts.get(c.id)?.dueTodayTetri ?? 0,
+          parts: debts.get(c.id)?.parts ?? [],
+          rentals: c.rentals
+            .filter((r) => runsOnSchedule({ status: r.status, pickedUpOn: isoDate(r.pickedUpOn), returnedOn: isoDate(r.returnedOn) }))
+            .map((r) => ({ id: r.id, pay: schedule.pay.get(r.id) })),
+        }),
         buyer: c._count.sales > 0,
       })),
     };
@@ -108,7 +121,7 @@ export function customerRoutes(app: FastifyInstance): void {
     // and one timeline: money, documents, changes of the card.
     // One clock for the figure and for the statuses of the rentals below.
     const today = todayISO(new Date(), env.TZ);
-    const debt = await debtOf(c.id, today);
+    const [debt, schedule] = await Promise.all([debtOf(c.id, today), scheduleToday(today)]);
     const [sales, payments, log, goodsSales] = await Promise.all([
       prisma.sale.findMany({
         where: { customerId: c.id, status: { not: 'cancelled' } },
@@ -181,8 +194,9 @@ export function customerRoutes(app: FastifyInstance): void {
       rentals: c.rentals.map((r) => ({
         id: r.id,
         number: r.number,
-        // As the rentals list calls it — never the stored status, which does not know overdue (ADR-0017).
-        status: rentStateOf(r, today).status,
+        // As the rentals list calls it — never the stored status, which does not know overdue (ADR-0017);
+        // a running one by what the schedule says (issue #18, B4).
+        status: statusBySchedule(rentStateOf(r, today).status, schedule.pay.get(r.id)),
         vehicle: r.vehicle,
         vinUnconfirmed: r.vinUnconfirmed,
         pickedUpOn: isoDate(r.pickedUpOn),

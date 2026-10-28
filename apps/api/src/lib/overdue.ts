@@ -1,4 +1,5 @@
-import { todayISO } from '@ev8/shared';
+import { statusBySchedule, todayISO } from '@ev8/shared';
+import { scheduleToday } from './calendar.js';
 import { prisma } from './db.js';
 import { debtsOf } from './debt.js';
 import { env } from './env.js';
@@ -13,6 +14,10 @@ import { rentStateOf } from './rentState.js';
 // Kardu and Mika read out. Two screens quoting two different figures for one
 // question is a defect, not a rounding — so there is one function, and both
 // ask it (wave 6 §3.1, crit. 1в).
+//
+// Which rentals are late is «Оплаты по графику»'s answer since issue #18 (B4;
+// Mika's «Одно правило календаря» of 28.10.2026): the week's report and the
+// summary count the same set as «Сегодня», «Аренды» and the calendar.
 
 export interface OverdueRental {
   id: string;
@@ -49,10 +54,13 @@ export async function rentalsNow(): Promise<RentalsNow> {
     },
   });
 
+  const schedule = await scheduleToday(today);
   const out: RentalsNow = { dueToday: [], overdue: [], active: 0, withoutVin: 0 };
   for (const r of rentals) {
-    // The same answer the list, the card and "Today" give (ADR-0017).
-    const { status, overdueDays: days } = rentStateOf(r, today);
+    // The same answer the list, the card and "Today" give (ADR-0017; issue #18, B4).
+    const pay = schedule.pay.get(r.id);
+    const status = statusBySchedule(rentStateOf(r, today).status, pay);
+    const days = status === 'overdue' ? (pay?.days ?? 0) : 0;
     if (status === 'due_today') {
       out.dueToday.push({ id: r.id, number: r.number, customer: r.customer.name });
       out.active++;
