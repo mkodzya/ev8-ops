@@ -78,6 +78,8 @@ export const ka: Dict = {
     today: 'დღეს',
     // «Задачи» (issue #18 A, ADR-0050): what a person was set by hand.
     tasks: 'დავალებები',
+    // The bar's word: «დავალებები» is wider than a fifth of a 375 px phone and broke as «დავალებე / ბი».
+    tasksShort: 'დავალება',
     more: 'მეტი',
     // Issue #15 (ADR-0048): the sections of the new menu, the bar's short word for the schedule.
     schedule: 'გადახდის გრაფიკი',

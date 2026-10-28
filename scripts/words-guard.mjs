@@ -102,8 +102,8 @@ const ASSIGNMENT = new RegExp(
  */
 const SETTLED = /^(?:money\.settles|hand\.(?:settles|overpay)|paymentPage\.settled|payments\.(?:allocated|recorded))$/u;
 
-/** The keys of «Задачи» itself (issue #18 A, ADR-0050): its dictionary, its menu word, its refusals and its journal lines. */
-const TASKS = /^(?:todos(?:\.|$)|nav\.tasks$|errors\.codes\.todos?_|feedWords\.todo\.)/u;
+/** The keys of «Задачи» itself (issue #18 A, ADR-0050): its dictionary, its menu word and the phone bar's, its refusals and its journal lines. */
+const TASKS = /^(?:todos(?:\.|$)|nav\.tasks(?:Short)?$|errors\.codes\.todos?_|feedWords\.todo\.)/u;
 
 /** The labels of the return wherever it stands: «Вернуть мопед», never a bare «Возврат» (issue #18, B2). */
 const RETURN_ACTION = /^(?:actions\.returnRental|shell\.actions\.return|today\.actions\.return)$/u;

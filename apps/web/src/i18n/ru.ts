@@ -89,6 +89,7 @@ export const ru: Dict = {
     today: 'Сегодня',
     // «Задачи» (issue #18 A, ADR-0050): what a person was set by hand.
     tasks: 'Задачи',
+    tasksShort: 'Задачи',
     more: 'Ещё',
     // Issue #15 (ADR-0048): the sections of the new menu, the bar's short word for the schedule.
     schedule: 'Оплаты по графику',

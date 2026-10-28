@@ -79,8 +79,8 @@ function Frame() {
   const label = (id: SectionId) => t.nav[id];
   // The bar's own words where a section's name is longer than a fifth of a
   // phone: «Оплаты» for the schedule, and for «Разобрать» a Georgian word that
-  // does not break in two (review of issue #15).
-  const barWords: Partial<Record<SectionId, string>> = { schedule: t.nav.scheduleShort, sort: t.nav.sortShort };
+  // does not break in two (review of issue #15); the same for «Задачи» (issue #18 A).
+  const barWords: Partial<Record<SectionId, string>> = { tasks: t.nav.tasksShort, schedule: t.nav.scheduleShort, sort: t.nav.sortShort };
 
   // The badge of Today counts the rows "Today" lists, from the same request
   // it reads (wave 4 §3.1): one queue, one number, and it moves as soon as a

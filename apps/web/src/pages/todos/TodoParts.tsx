@@ -77,11 +77,13 @@ export function TodoMeta({ todo, showWho, withNote = true }: { todo: TodoView; s
       {todo.needsFile && <span className="todo-tag todo-tag-file">{t.todos.fileTag}</span>}
       {link &&
         (href ? (
-          <Link className="todo-tag todo-tag-record" to={href}>
+          <Link className="todo-tag todo-tag-record" to={href} title={link.label}>
             {link.label}
           </Link>
         ) : (
-          <span className="todo-tag todo-tag-record">{link.label}</span>
+          <span className="todo-tag todo-tag-record" title={link.label}>
+            {link.label}
+          </span>
         ))}
       {todo.setBy.id !== todo.assignee.id && <span>{t.todos.setBy(todo.setBy.name)}</span>}
       {withNote && todo.note && <Typed text={todo.note} quiet quoted />}

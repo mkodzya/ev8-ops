@@ -39,7 +39,9 @@
 .todo-text { font-weight: 600; overflow-wrap: anywhere; }
 .todo-row-done .todo-text { color: var(--muted); text-decoration: line-through; }
 .todo-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin-top: 5px; font: var(--text-body-sm); color: var(--muted); }
-.todo-tag { display: inline-block; padding: 1px 8px; border-radius: var(--radius-pill); background: var(--surface-2); color: var(--ink); font: var(--text-label); white-space: nowrap; }
+/* A tag stays on one line and is cut at the column's edge rather than run under the due day:
+   a customer's name is wider than an overdue row's words on a 375 px phone. The card says it whole. */
+.todo-tag { display: inline-block; max-width: 100%; padding: 1px 8px; border-radius: var(--radius-pill); background: var(--surface-2); color: var(--ink); font: var(--text-label); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .todo-tag-who { background: var(--accent-soft); color: var(--accent-ink); }
 .todo-tag-file { background: var(--warn-soft); color: var(--service-deep); }
 .todo-tag-repeat { background: var(--info-soft); color: var(--rented-ink); }

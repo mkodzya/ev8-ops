@@ -84,6 +84,8 @@ export const en = {
     today: 'Today',
     // «Задачи» (issue #18 A, ADR-0050): what a person was set by hand.
     tasks: 'Tasks',
+    /** The phone bar's word for «Задачи», a fifth of the screen wide: the Georgian plural breaks in two there. */
+    tasksShort: 'Tasks',
     more: 'More',
     // Issue #15 (ADR-0048): the sections of the new menu, the bar's short word for the schedule.
     schedule: 'Scheduled payments',
