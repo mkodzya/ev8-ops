@@ -3,7 +3,9 @@ import {
   acquiringFee,
   acquiringGross,
   acquiringNet,
+  formatForeign,
   formatGel,
+  formatMinor,
   netFromGross,
   parseGel,
   tetriFromGel,
@@ -38,6 +40,16 @@ describe('tetri', () => {
     expect(formatGel(1751100, { decimals: false })).toBe('17\u00a0511\u00a0₾');
     expect(formatGel(1751150, { decimals: false })).toBe('17\u00a0511.50\u00a0₾');
     expect(formatGel(null)).toBe('—');
+  });
+
+  it('writes a sum in another currency with its code, never the lari sign, and lari as lari', () => {
+    // The dollars of an account kept apart from the lari (migration 0073): cents, as tetri are for lari.
+    expect(formatMinor(123456, 'USD')).toBe('1\u00a0234.56\u00a0USD');
+    expect(formatMinor(-4000, 'EUR')).toBe('-40.00\u00a0EUR');
+    expect(formatMinor(5, 'USD')).toBe('0.05\u00a0USD');
+    expect(formatMinor(123456, 'GEL')).toBe(formatGel(123456));
+    // A seller's invoice is written in its own code whatever it is, as the purchases have always shown it.
+    expect(formatForeign(1751100, 'GEL')).toBe('17\u00a0511.00\u00a0GEL');
   });
 });
 

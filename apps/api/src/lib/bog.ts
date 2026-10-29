@@ -16,6 +16,13 @@
 // that is how a line from one source is known in another (`sameLine.ts`).
 // A day a statement file Mika uploaded covers in full is not read again.
 //
+// An account may be read in more than one currency (Mika, 29.10.2026: the
+// company opened an account in dollars). `BOG_ACCOUNT` names each as the bank
+// writes an account in a file, `GE…BG…USD`, and bare for lari; each pair of
+// account and currency is asked on its own and keeps its own state, and a line
+// not in lari is kept apart, outside every sum in lari (migration 0073;
+// decision D1 of docs/spec/usd-accounts-plan.md).
+//
 // The keys are a server secret (CLAUDE.md rule 3): Mika issued them in
 // Business Online and put them on the stand with `deploy/set-bog-keys.sh`.
 // They are read from the environment and never logged, returned or written
@@ -33,7 +40,32 @@ import { addDays, localDateTime, parseBankAmount, todayISO } from '@ev8/shared';
 import { dateFromISO, isoDate } from './dates.js';
 import { prisma } from './db.js';
 import { env } from './env.js';
-import { accountOf, bankDay, byDay, daysFrom, daysInFiles, keep as keepDay, lastFileDay, onceEach, tally, type Tally } from './statements/apiDays.js';
+import {
+  accountOf,
+  apiKey,
+  bankDay,
+  byDay,
+  daysFrom,
+  daysInFiles,
+  keep as keepDay,
+  lastFileDay,
+  linkStatus,
+  onceEach,
+  pairOutcome,
+  pairRows,
+  pairsNamed,
+  pairsStatus,
+  probePair,
+  savePair,
+  tally,
+  type AccountPair,
+  type BankCurrency,
+  type LinkStatus,
+  type PairOutcome,
+  type PairProbe,
+  type PairStatus,
+  type Tally,
+} from './statements/apiDays.js';
 import { readBogText, type ParsedLine } from './statements/parse.js';
 
 export { accountOf, bankDay };
@@ -41,9 +73,12 @@ export { accountOf, bankDay };
 export interface BogConfig {
   clientId: string;
   clientSecret: string;
-  /** Accounts named in the stand's env file. Empty: the account of the statements uploaded from this bank. */
-  accounts: string[];
-  /** BOG_ACCOUNT is set and is not an account: the link stops rather than guess. */
+  /**
+   * The accounts named in the stand's env file, each with the currency it is
+   * read in. Empty: the account of the statements uploaded from this bank, in lari.
+   */
+  accounts: AccountPair[];
+  /** BOG_ACCOUNT is set and names something that is not an account in GEL, USD or EUR: the link stops rather than guess. */
   badAccount: boolean;
   /** The bank has gone silent when it has not answered for this long. */
   staleMs: number;
@@ -51,8 +86,6 @@ export interface BogConfig {
 
 const TOKEN_URL = 'https://account.bog.ge/auth/realms/bog/protocol/openid-connect/token';
 const API_BASE = 'https://api.businessonline.ge/api';
-/** One currency, as for TBC: the company's money is in lari. */
-export const BOG_CURRENCY = 'GEL';
 /** How far back the nightly reading reaches when it has fallen behind. */
 export const NIGHT_MAX_DAYS = 31;
 /**
@@ -72,14 +105,14 @@ export function bogConfig(e: NodeJS.ProcessEnv = process.env): BogConfig | null 
   const clientId = (e.BOG_CLIENT_ID ?? '').trim();
   const clientSecret = (e.BOG_CLIENT_SECRET ?? '').trim();
   if (!clientId || !clientSecret) return null;
-  const named = (e.BOG_ACCOUNT ?? '').split(/[\s,;]+/).filter(Boolean);
-  const accounts = named.map((a) => accountOf(a));
+  // As the bank writes an account in a statement file: `GE…BG…USD`, and bare for lari.
+  const named = pairsNamed(e.BOG_ACCOUNT);
   const minutes = parseInt(e.BOG_STALE_MINUTES ?? '', 10);
   return {
     clientId,
     clientSecret,
-    accounts: [...new Set(accounts.filter((a): a is string => a != null))],
-    badAccount: accounts.some((a) => a == null),
+    accounts: named.pairs,
+    badAccount: named.bad,
     staleMs: (Number.isFinite(minutes) && minutes > 0 ? minutes : STALE_MINUTES) * 60_000,
   };
 }
@@ -252,9 +285,9 @@ export class BogClient {
     }
   }
 
-  /** The day's operations on one account: `api/v2/documents/todayactivities/{account}/{currency}`. */
-  async today(account: string): Promise<unknown[]> {
-    const body = await this.get(`/v2/documents/todayactivities/${encodeURIComponent(account)}/${BOG_CURRENCY}`);
+  /** The day's operations on one account in one currency: `api/v2/documents/todayactivities/{account}/{currency}`. */
+  async today(pair: AccountPair): Promise<unknown[]> {
+    const body = await this.get(`/v2/documents/todayactivities/${encodeURIComponent(pair.iban)}/${pair.currency}`);
     if (body === null) return [];
     if (Array.isArray(body)) return body;
     const rows = pick(obj(body), 'Records');
@@ -263,13 +296,13 @@ export class BogClient {
   }
 
   /**
-   * The statement of one account for whole days, page by page:
+   * The statement of one account in one currency for whole days, page by page:
    * `api/v2/statement/{account}/{currency}/{from}/{to}`, then
    * `…/{account}/{currency}/{id}/{page}` while the bank says there is more.
    */
-  async statement(account: string, from: string, to: string): Promise<unknown[]> {
-    const acc = encodeURIComponent(account);
-    const first = obj(await this.get(`/v2/statement/${acc}/${BOG_CURRENCY}/${from}/${to}`));
+  async statement(pair: AccountPair, from: string, to: string): Promise<unknown[]> {
+    const acc = `${encodeURIComponent(pair.iban)}/${pair.currency}`;
+    const first = obj(await this.get(`/v2/statement/${acc}/${from}/${to}`));
     const rows = pick(first, 'Records');
     if (rows == null) return [];
     if (!Array.isArray(rows)) throw new BogError('bad_answer');
@@ -278,7 +311,7 @@ export class BogClient {
     const id = pick(first, 'Id');
     for (let page = 2; Number.isFinite(total) && records.length < total; page++) {
       if (page > MAX_PAGES || (typeof id !== 'number' && typeof id !== 'string')) throw new BogError('bad_answer');
-      const more = pick(obj(await this.get(`/v2/statement/${acc}/${BOG_CURRENCY}/${encodeURIComponent(String(id))}/${page}`)), 'Records');
+      const more = pick(obj(await this.get(`/v2/statement/${acc}/${encodeURIComponent(String(id))}/${page}`)), 'Records');
       // The bank said there is more and gave none: what it did give is not the whole day.
       if (!Array.isArray(more) || more.length === 0) throw new BogError('bad_answer');
       records.push(...more);
@@ -310,6 +343,7 @@ const money = (t: number) => (t / 100).toFixed(2);
 
 interface Read {
   key: string;
+  currency: BankCurrency;
   day: string;
   docNo: string | null;
   credit: number | null;
@@ -320,6 +354,9 @@ interface Read {
   senderAccount: string | null;
   beneficiaryName: string | null;
   beneficiaryAccount: string | null;
+  /** The bank's own lari for the money in and out, where it gives them. */
+  creditBase: number | null;
+  debitBase: number | null;
 }
 
 /**
@@ -351,16 +388,20 @@ function lineOf(r: Read): ParsedLine | null {
     purpose: r.nomination ?? said.purpose ?? (content.slice(0, 200) || null),
     raw: [dmy(r.day), r.docNo ?? '', (direction === 'in' ? r.senderAccount : r.beneficiaryAccount) ?? '', direction === 'out' ? money(amountTetri) : '', direction === 'in' ? money(amountTetri) : '', content].join(' | '),
     channel: said.card ? 'acquiring' : 'transfer',
+    // Beside a line in another currency, what the bank says it is in lari: for
+    // reference only, never summed (migration 0073). A line in lari has none.
+    ...(r.currency === 'GEL' ? {} : { bankGelTetri: (direction === 'in' ? r.creditBase : r.debitBase) || null }),
   };
 }
 
 /**
- * One row of the day's operations (`todayactivities`). Its day is today: the
- * bank lists what moved on the account today, and its PostDate is the day
- * the document was made — a transfer sent last night and credited this
- * morning carries yesterday's.
+ * One row of the day's operations (`todayactivities`) of an account in one
+ * currency. Its day is today: the bank lists what moved on the account today,
+ * and its PostDate is the day the document was made — a transfer sent last
+ * night and credited this morning carries yesterday's. Its sums are in the
+ * account's currency; `AmountBase` is the bank's lari for them.
  */
-export function lineFromToday(row: unknown, today: string): ParsedLine | null {
+export function lineFromToday(row: unknown, today: string, currency: BankCurrency): ParsedLine | null {
   const o = obj(row);
   const id = text(pick(o, 'Id'));
   if (!id) throw new BogError('bad_answer');
@@ -377,8 +418,10 @@ export function lineFromToday(row: unknown, today: string): ParsedLine | null {
       else debit = Math.round(-signed * 100);
     }
   }
+  const base = tetri(pick(o, 'AmountBase'));
   return lineOf({
-    key: `api:today:${id}`,
+    key: apiKey('today', currency, id),
+    currency,
     day: today,
     docNo: text(pick(o, 'DocNo')),
     credit,
@@ -389,19 +432,23 @@ export function lineFromToday(row: unknown, today: string): ParsedLine | null {
     senderAccount: text(pick(sender, 'AccountNumber')),
     beneficiaryName: text(pick(beneficiary, 'Name')),
     beneficiaryAccount: text(pick(beneficiary, 'AccountNumber')),
+    creditBase: base,
+    debitBase: base,
   });
 }
 
-/** One entry of the statement (`statement`). */
-export function lineFromEntry(row: unknown): ParsedLine | null {
+/** One entry of the statement (`statement`) of an account in one currency; `EntryAmount…Base` is the bank's lari. */
+export function lineFromEntry(row: unknown, currency: BankCurrency): ParsedLine | null {
   const o = obj(row);
   const id = text(pick(o, 'EntryId'));
   const day = bankDay(pick(o, 'EntryDate')) ?? bankDay(pick(o, 'DocumentValueDate'));
   if (!id || !day) throw new BogError('bad_answer');
   const sender = obj(pick(o, 'SenderDetails'));
   const beneficiary = obj(pick(o, 'BeneficiaryDetails'));
+  const base = tetri(pick(o, 'EntryAmountBase'));
   return lineOf({
-    key: `api:entry:${id}`,
+    key: apiKey('entry', currency, id),
+    currency,
     day,
     docNo: text(pick(o, 'EntryDocumentNumber')),
     credit: tetri(pick(o, 'EntryAmountCredit')),
@@ -412,6 +459,8 @@ export function lineFromEntry(row: unknown): ParsedLine | null {
     senderAccount: text(pick(sender, 'AccountNumber')),
     beneficiaryName: text(pick(beneficiary, 'Name')),
     beneficiaryAccount: text(pick(beneficiary, 'AccountNumber')),
+    creditBase: tetri(pick(o, 'EntryAmountCreditBase')) || base,
+    debitBase: tetri(pick(o, 'EntryAmountDebitBase')) || base,
   });
 }
 
@@ -435,7 +484,10 @@ export type BogOutcome =
       days: string[];
       /** The day's operations came from today's statement: the list of the day's operations did not answer. */
       fromStatement: boolean;
+      /** Each account and currency read, by its last four digits: what it listed and added, or why the bank gave nothing for it. */
+      accounts: PairOutcome<BogFailure>[];
     })
+  // Nothing came: no account to ask, or the bank refused every one — the first refusal says why.
   | { status: 'failed'; failure: BogFailure; httpStatus: number | null; stage: BogStage | null };
 
 type Ok = Extract<BogOutcome, { status: 'ok' }>;
@@ -480,56 +532,102 @@ function client(cfg: BogConfig): BogClient {
   return new BogClient(cfg, { ...clientOptsForTests, ...(fetchForTests ? { fetch: fetchForTests } : {}) });
 }
 
-/** The accounts to ask about: those the env file names, or the one the uploaded statements came from. */
-async function accountsFor(cfg: BogConfig): Promise<string[]> {
+/** The accounts to ask about: those the env file names, or the one the uploaded statements came from — in lari, as a file is read. */
+async function accountsFor(cfg: BogConfig): Promise<AccountPair[]> {
   if (cfg.badAccount) return [];
   if (cfg.accounts.length > 0) return cfg.accounts;
-  const last = await prisma.statement.findFirst({ where: { bank: 'bog', source: 'file', account: { not: null } }, orderBy: { createdAt: 'desc' }, select: { account: true } });
-  const account = accountOf(last?.account);
-  return account ? [account] : [];
+  const last = await prisma.statement.findFirst({ where: { bank: 'bog', source: 'file', currency: 'GEL', account: { not: null } }, orderBy: { createdAt: 'desc' }, select: { account: true } });
+  const iban = accountOf(last?.account);
+  return iban ? [{ iban, currency: 'GEL' }] : [];
 }
 
 const SYNC = { id: true } as const;
 
+/**
+ * The day's operations on one account in one currency. The list of the day's
+ * operations is down now and then while the statement is not (test stand,
+ * 15.10.2026: `todayactivities` 503 again and again, the statement of the 14th
+ * read at once). Today's statement holds the same operations, keyed as the
+ * night will key them.
+ */
+async function todayOf(bank: BogClient, pair: AccountPair, today: string): Promise<{ lines: ParsedLine[]; listed: number; fromStatement: boolean }> {
+  try {
+    const rows = await bank.today(pair);
+    return { lines: onceEach(rows.map((r) => lineFromToday(r, today, pair.currency))), listed: rows.length, fromStatement: false };
+  } catch (err) {
+    if (!(err instanceof BogError && err.stage === 'api' && err.httpStatus != null && err.httpStatus >= 500)) throw err;
+    const rows = await bank.statement(pair, today, today);
+    return { lines: onceEach(rows.map((r) => lineFromEntry(r, pair.currency))), listed: rows.length, fromStatement: true };
+  }
+}
+
+type Asked<T> = { pair: AccountPair; got: T; failure: null } | { pair: AccountPair; got: null; failure: BogError };
+
+/**
+ * Each account and currency is asked on its own. One the bank refuses — an
+ * account it does not let these keys read, or does not know in that currency
+ * — keeps nothing of the others out of the queue and stops none of them: what
+ * they listed goes in, and the refusal is that pair's to say. A refused token
+ * is the keys themselves: the pairs after it are not asked, and are refused
+ * the same.
+ */
+async function eachPair<T>(pairs: AccountPair[], read: (pair: AccountPair) => Promise<T>): Promise<Asked<T>[]> {
+  const asked: Asked<T>[] = [];
+  let keys: BogError | null = null;
+  for (const pair of pairs) {
+    try {
+      if (keys) throw keys;
+      asked.push({ pair, got: await read(pair), failure: null });
+    } catch (err) {
+      if (!(err instanceof BogError)) throw err;
+      if (err.stage === 'token') keys = err;
+      asked.push({ pair, got: null, failure: err });
+    }
+  }
+  return asked;
+}
+
+const failedWith = (err: BogError): BogOutcome => ({ status: 'failed', failure: err.failure, httpStatus: err.httpStatus, stage: err.stage });
+
+/** What the job says of a pair the bank refused. */
+const refusal = (err: BogError) => ({ failure: err.failure, httpStatus: err.httpStatus });
+
+// bog_sync stays the lari link's: its card on «Выписки» and «Сегодня» read it,
+// as before the dollars. It says what the pairs in lari did — the first of them
+// the bank refused, or that all answered — and nothing of another currency.
+const inLari = <T>(asked: Asked<T>[]) => asked.filter((a) => a.pair.currency === 'GEL');
+
 async function pullToday(cfg: BogConfig, now: Date): Promise<BogOutcome> {
   const today = todayISO(now, env.TZ);
-  const lists: { account: string; lines: ParsedLine[]; listed: number }[] = [];
-  let fromStatement = false;
-  try {
-    const accounts = await accountsFor(cfg);
-    if (accounts.length === 0) throw new BogError('no_account');
-    const bank = client(cfg);
-    for (const account of accounts) {
-      try {
-        const rows = await bank.today(account);
-        lists.push({ account, lines: onceEach(rows.map((r) => lineFromToday(r, today))), listed: rows.length });
-      } catch (err) {
-        // The list of the day's operations is down while the statement is not
-        // (test stand, 15.10.2026: `todayactivities` 503 again and again, the
-        // statement of the 14th read at once). Today's statement holds the same
-        // operations, keyed as the night will key them.
-        if (!(err instanceof BogError && err.stage === 'api' && err.httpStatus != null && err.httpStatus >= 500)) throw err;
-        const rows = await bank.statement(account, today, today);
-        lists.push({ account, lines: onceEach(rows.map(lineFromEntry)), listed: rows.length });
-        fromStatement = true;
-      }
-    }
-  } catch (err) {
-    if (!(err instanceof BogError)) throw err;
-    const failed = { lastTryAt: now, lastFailure: err.failure, lastHttpStatus: err.httpStatus };
-    await prisma.bogSync.upsert({ where: SYNC, update: failed, create: { ...SYNC, ...failed } });
-    return { status: 'failed', failure: err.failure, httpStatus: err.httpStatus, stage: err.stage };
-  }
-
+  const bank = client(cfg);
   const outcome = blank();
-  outcome.fromStatement = fromStatement;
-  for (const { account, lines, listed } of lists) {
-    outcome.listed += listed;
-    for (const [day, ofDay] of byDay(lines)) await keep(account, day, ofDay, outcome);
+  const asked = await eachPair(await accountsFor(cfg), async (pair) => {
+    const read = await todayOf(bank, pair, today);
+    const before = outcome.added;
+    for (const [day, ofDay] of byDay(read.lines)) await keep(pair, day, ofDay, outcome);
+    outcome.listed += read.listed;
+    outcome.fromStatement ||= read.fromStatement;
+    return { listed: read.listed, added: outcome.added - before };
+  });
+
+  for (const a of asked) {
+    const state = a.failure
+      ? { lastTryAt: now, lastFailure: a.failure.failure, lastHttpStatus: a.failure.httpStatus }
+      : { lastOkAt: now, lastTryAt: now, lastFailure: null, lastHttpStatus: null, todayCount: a.got.listed };
+    await savePair('bog', a.pair, addDays(today, -NIGHT_MAX_DAYS), state);
+    outcome.accounts.push(pairOutcome<BogFailure>(a.pair, a.failure ? refusal(a.failure) : a.got));
   }
-  const ok = { lastOkAt: now, lastTryAt: now, lastFailure: null, lastHttpStatus: null, todayCount: outcome.listed };
-  await prisma.bogSync.upsert({ where: SYNC, update: ok, create: { ...SYNC, ...ok } });
-  return outcome;
+  const lari = inLari(asked);
+  const refused = asked.length === 0 ? new BogError('no_account') : (lari.find((a) => a.failure)?.failure ?? null);
+  if (refused) {
+    const failed = { lastTryAt: now, lastFailure: refused.failure, lastHttpStatus: refused.httpStatus };
+    await prisma.bogSync.upsert({ where: SYNC, update: failed, create: { ...SYNC, ...failed } });
+  } else if (lari.length > 0) {
+    const ok = { lastOkAt: now, lastTryAt: now, lastFailure: null, lastHttpStatus: null, todayCount: lari.reduce((n, a) => n + (a.got?.listed ?? 0), 0) };
+    await prisma.bogSync.upsert({ where: SYNC, update: ok, create: { ...SYNC, ...ok } });
+  }
+  if (asked.length === 0) return failedWith(refused!);
+  return asked.every((a) => a.failure) ? failedWith(asked[0]!.failure!) : outcome;
 }
 
 /** Hour of the day in Tbilisi. */
@@ -549,73 +647,127 @@ export function readAgain(sync: { nightAt: Date | null; nightFailure: string | n
 
 async function readNights(cfg: BogConfig, now: Date): Promise<BogOutcome> {
   const yesterday = addDays(todayISO(now, env.TZ), -1);
+  const back = addDays(yesterday, -(NIGHT_MAX_DAYS - 1));
   const sync = await prisma.bogSync.findUnique({ where: SYNC });
-  const reached = isoDate(sync?.nightThrough ?? null);
-  if (reached && reached >= yesterday && !readAgain(sync, now)) return blank();
-
-  // The first night starts at the last day the uploaded files reached: the
-  // days between that file and the first pull are read too.
-  const start = reached ?? (await lastFileDay('bog')) ?? yesterday;
-  const from = [[start, addDays(yesterday, -(NIGHT_MAX_DAYS - 1))].sort().pop()!, yesterday].sort()[0]!;
-  const outcome = blank();
-  try {
-    const accounts = await accountsFor(cfg);
-    if (accounts.length === 0) throw new BogError('no_account');
-    const bank = client(cfg);
-    for (const account of accounts) {
-      const covered = await daysInFiles('bog', account, from, yesterday);
-      const open = daysFrom(from, yesterday).filter((d) => !covered.has(d));
-      if (open.length === 0) continue;
-      const rows = await bank.statement(account, open[0]!, yesterday);
-      outcome.listed += rows.length;
-      const lines = onceEach(rows.map(lineFromEntry)).filter((l) => !covered.has(l.occurredOn));
-      outcome.days.push(...open.filter((d) => !outcome.days.includes(d)));
-      for (const [day, ofDay] of byDay(lines)) await keep(account, day, ofDay, outcome);
-    }
-  } catch (err) {
-    if (!(err instanceof BogError)) throw err;
-    const failed = { nightAt: now, nightFailure: err.failure, nightHttpStatus: err.httpStatus };
+  const pairs = await accountsFor(cfg);
+  if (pairs.length === 0) {
+    // No account to read: said once the night is due, as before.
+    const reached = isoDate(sync?.nightThrough ?? null);
+    if (reached && reached >= yesterday && !readAgain(sync, now)) return blank();
+    const failed = { nightAt: now, nightFailure: 'no_account', nightHttpStatus: null };
     await prisma.bogSync.upsert({ where: SYNC, update: failed, create: { ...SYNC, ...failed } });
-    return { status: 'failed', failure: err.failure, httpStatus: err.httpStatus, stage: err.stage };
+    return failedWith(new BogError('no_account'));
   }
-  const ok = { nightThrough: dateFromISO(yesterday), nightAt: now, nightFailure: null, nightHttpStatus: null, nightAdded: outcome.added };
-  await prisma.bogSync.upsert({ where: SYNC, update: ok, create: { ...SYNC, ...ok } });
+  const rowOf = await pairRows('bog');
+  // Each pair's night is its own. A pair in lari was read before it had a row:
+  // until its own night has run, the night bog_sync kept is its night.
+  const nightOf = (pair: AccountPair) => {
+    const row = rowOf(pair);
+    return row?.nightAt || pair.currency !== 'GEL' ? row : sync;
+  };
+
+  const outcome = blank();
+  const bank = client(cfg);
+  const asked = await eachPair(pairs, async (pair) => {
+    const night = nightOf(pair);
+    const reached = isoDate(night?.nightThrough ?? null);
+    if (reached && reached >= yesterday && !readAgain(night, now)) return null;
+    // The first night of a pair in lari starts at the last day the uploaded
+    // files reached: the days between that file and the first pull are read
+    // too. A pair in another currency is new to the stand, and reads back once,
+    // a month at most, from the day its row keeps.
+    const start = reached ?? (await lastFileDay('bog', pair.currency)) ?? (pair.currency === 'GEL' ? yesterday : (isoDate(rowOf(pair)?.readFrom ?? null) ?? back));
+    const from = [[start, back].sort().pop()!, yesterday].sort()[0]!;
+    const covered = await daysInFiles('bog', pair.iban, from, yesterday, pair.currency);
+    const open = daysFrom(from, yesterday).filter((d) => !covered.has(d));
+    if (open.length === 0) return { listed: 0, added: 0, days: [] };
+    const rows = await bank.statement(pair, open[0]!, yesterday);
+    const lines = onceEach(rows.map((r) => lineFromEntry(r, pair.currency))).filter((l) => !covered.has(l.occurredOn));
+    const before = outcome.added;
+    outcome.listed += rows.length;
+    outcome.days.push(...open.filter((d) => !outcome.days.includes(d)));
+    for (const [day, ofDay] of byDay(lines)) await keep(pair, day, ofDay, outcome);
+    return { listed: rows.length, added: outcome.added - before, days: open };
+  });
+
+  // A pair has read up to yesterday once its statement is read. One that
+  // failed keeps the day it had reached and is read again from there; the
+  // lines the others brought meanwhile are known then by their keys.
+  for (const a of asked) {
+    if (a.failure) {
+      await savePair('bog', a.pair, back, { nightThrough: nightOf(a.pair)?.nightThrough ?? null, nightAt: now, nightFailure: a.failure.failure, nightHttpStatus: a.failure.httpStatus });
+    } else if (a.got) {
+      await savePair('bog', a.pair, back, { nightThrough: dateFromISO(yesterday), nightAt: now, nightFailure: null, nightHttpStatus: null, nightAdded: a.got.added });
+    }
+    outcome.accounts.push(pairOutcome<BogFailure>(a.pair, a.failure ? refusal(a.failure) : (a.got ?? { days: [] })));
+  }
+  // The lari link has read up to yesterday once every pair in lari it read has.
+  const lari = inLari(asked).filter((a) => a.failure || a.got);
+  const refused = lari.find((a) => a.failure)?.failure;
+  if (refused) {
+    const failed = { nightAt: now, nightFailure: refused.failure, nightHttpStatus: refused.httpStatus };
+    await prisma.bogSync.upsert({ where: SYNC, update: failed, create: { ...SYNC, ...failed } });
+  } else if (lari.length > 0) {
+    const ok = { nightThrough: dateFromISO(yesterday), nightAt: now, nightFailure: null, nightHttpStatus: null, nightAdded: lari.reduce((n, a) => n + (a.got?.added ?? 0), 0) };
+    await prisma.bogSync.upsert({ where: SYNC, update: ok, create: { ...SYNC, ...ok } });
+  }
+  if (asked.every((a) => a.failure)) return failedWith(asked[0]!.failure!);
   outcome.days.sort();
   return outcome;
 }
 
 function blank(): Ok {
-  return { status: 'ok', ...tally(), days: [], fromStatement: false };
+  return { status: 'ok', ...tally(), days: [], fromStatement: false, accounts: [] };
 }
 
-/** One day of one account into the queue, under its "Business Online" statement. */
-function keep(account: string, day: string, lines: ParsedLine[], outcome: Ok): Promise<void> {
-  return keepDay('bog', BOG_API_NAME, account, day, lines, outcome);
+/** One day of one account in one currency into the queue — parked, when it is not lari — under its "Business Online" statement. */
+function keep(pair: AccountPair, day: string, lines: ParsedLine[], outcome: Ok): Promise<void> {
+  return keepDay('bog', BOG_API_NAME, pair.iban, day, lines, outcome, pair.currency);
+}
+
+// ── Before a pair is written ────────────────────────────────────────────
+
+/**
+ * Ask the bank once about one account in one currency, with the stand's own
+ * keys, before `deploy/set-bog-keys.sh --add-account` writes the pair into the
+ * env file: the day's operations, as the pull asks for them, and the answer
+ * dropped. Nothing is kept — not a line, not the pair's state — so it waits
+ * for no pull. Null without the keys.
+ */
+export async function probeBogPair(pair: AccountPair, now: Date = new Date()): Promise<PairProbe<BogFailure> | null> {
+  const cfg = bogConfig();
+  if (!cfg) return null;
+  const bank = client(cfg);
+  const today = todayISO(now, env.TZ);
+  return probePair<BogFailure>(pair, async (p) => {
+    try {
+      await todayOf(bank, p, today);
+      return null;
+    } catch (err) {
+      if (err instanceof BogError) return refusal(err);
+      throw err;
+    }
+  });
 }
 
 // ── For the screen ──────────────────────────────────────────────────────
 
-export interface BogApiStatus {
-  /** 'ok' — the bank answered lately; 'silent' — it has not for a while, or never has; 'waiting' — not asked yet. */
-  freshness: 'ok' | 'silent' | 'waiting';
-  lastOkAt: string | null;
-  failure: BogFailure | null;
-  nightThrough: string | null;
-  nightFailure: BogFailure | null;
-}
+export type BogApiStatus = LinkStatus<BogFailure>;
 
-/** How the link stands, for "Деньги → Выписки". Null when it is off. */
+/** How the link of the lari stands, for "Деньги → Выписки". Null when it is off. */
 export async function bogApiStatus(now: Date = new Date()): Promise<BogApiStatus | null> {
   const cfg = bogConfig();
   if (!cfg) return null;
-  const s = await prisma.bogSync.findUnique({ where: SYNC });
-  const lastOkAt = s?.lastOkAt ?? null;
-  const freshness = !lastOkAt ? (s?.lastTryAt ? 'silent' : 'waiting') : now.getTime() - lastOkAt.getTime() > cfg.staleMs ? 'silent' : 'ok';
-  return {
-    freshness,
-    lastOkAt: lastOkAt?.toISOString() ?? null,
-    failure: (s?.lastFailure as BogFailure | null) ?? null,
-    nightThrough: isoDate(s?.nightThrough ?? null),
-    nightFailure: (s?.nightFailure as BogFailure | null) ?? null,
-  };
+  return linkStatus<BogFailure>(await prisma.bogSync.findUnique({ where: SYNC }), cfg.staleMs, now);
+}
+
+/**
+ * The accounts read in another currency, each with how its own link stands:
+ * a card of each on "Деньги → Выписки" beside the bank's card, which is its
+ * lari's. None when the link is off, or stopped on an account it cannot read.
+ */
+export async function bogPairsStatus(now: Date = new Date()): Promise<PairStatus<BogFailure>[]> {
+  const cfg = bogConfig();
+  if (!cfg || cfg.badAccount) return [];
+  return pairsStatus<BogFailure>('bog', cfg.accounts.filter((p) => p.currency !== 'GEL'), cfg.staleMs, now);
 }

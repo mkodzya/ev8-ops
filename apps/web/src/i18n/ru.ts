@@ -9,6 +9,7 @@ import { wave6utilRu } from './wave6-utilisation.js';
 import { wave6manageRu } from './wave6-manage.js';
 import { kommoLinkRu } from './kommo-link.js';
 import { bankApiRu } from './bank-api.js';
+import { bankCurrencyRu } from './bank-currency.js';
 import { calendarRu } from './payments-calendar.js';
 import { payDayRu } from './pay-day.js';
 import { weekShiftRu } from './week-shift.js';
@@ -1294,6 +1295,8 @@ export const ru: Dict = {
       file_too_big: 'Файл слишком большой: выписка — до 8 МБ.',
       fine_paid: 'По начислению уже есть оплата: сначала отмените её.',
       forbidden: 'Вашей роли это недоступно. Обратитесь к владельцу.',
+      foreign_line: 'Это строка валютного счёта: она хранится отдельно от лари и в «Разобрать» пока не попадает.',
+      foreign_statement: 'Это выписка валютного счёта: файлом пока загружаются только выписки счёта в лари.',
       future_date: 'Платёж нельзя записать будущей датой.',
       handover_decided: 'По этой сдаче наличных уже решено.',
       handover_not_found: 'Такой сдачи нет. Обновите кассу.',
@@ -1511,6 +1514,7 @@ export const ru: Dict = {
   ...wave6manageRu,
   ...kommoLinkRu,
   ...bankApiRu,
+  ...bankCurrencyRu,
   ...calendarRu,
   ...payDayRu,
   ...weekShiftRu,

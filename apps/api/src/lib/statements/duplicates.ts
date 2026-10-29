@@ -19,8 +19,12 @@ export interface Twin {
   status: 'unmatched' | 'matched' | 'ignored';
 }
 
-/** Answers that say a line is not there: such a line repeats nothing and is repeated by nothing. */
-const NOT_THERE = new Set(['not_ours', 'duplicate']);
+/**
+ * Answers that say a line is not there: such a line repeats nothing and is
+ * repeated by nothing. A line parked in another currency (migration 0073) is
+ * not there for the lari either.
+ */
+const NOT_THERE = new Set(['not_ours', 'duplicate', 'foreign']);
 
 /** How a duplicate set aside keeps the line it repeats, for «Убранные из очереди»: `twin:<day>:<document>`. */
 export const twinReason = (t: Twin): string => `twin:${t.occurredOn}:${t.docNo ?? ''}`;

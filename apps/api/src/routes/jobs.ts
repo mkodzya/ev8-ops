@@ -1,12 +1,13 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { todayISO } from '@ev8/shared';
-import { reconcileBogNight, syncBogToday } from '../lib/bog.js';
+import { probeBogPair, reconcileBogNight, syncBogToday } from '../lib/bog.js';
 import { env } from '../lib/env.js';
 import { scanDrive } from '../lib/driveScan.js';
 import { syncKommo } from '../lib/kommo.js';
 import { deliverNotices, scanNotices } from '../lib/notices.js';
 import { rollPeriods } from '../lib/periods.js';
-import { reconcileTbcNight, syncTbcToday } from '../lib/tbc.js';
+import { last4, pairAsked } from '../lib/statements/apiDays.js';
+import { probeTbcPair, reconcileTbcNight, syncTbcToday } from '../lib/tbc.js';
 import { runTranslations } from '../lib/translations.js';
 
 // The worker is the clock; this is where it knocks.
@@ -17,9 +18,13 @@ import { runTranslations } from '../lib/translations.js';
 //
 // The Kommo poll knocks here for a different reason: the Kommo token and the
 // database both live in this process, and the worker has neither. So do the
-// two jobs of each bank read by its API (B11-03), for the bank's keys, the
+// two jobs of each bank read by its API (B11-03), and the question about an
+// account a keys script asks before it writes one, for the bank's keys, the
 // notices to the workshop's Telegram group (ADR-0032 §2), for the bot's, and
 // the translation of typed texts (ADR-0042), for the translator's key.
+
+/** The pairs of account and currency the bank refused while others answered: each by its last four digits and currency only. */
+const refusedOf = (o: { status: string; accounts?: { failure: string | null }[] }) => (o.status === 'ok' ? (o.accounts ?? []).filter((a) => a.failure) : []);
 
 function workerOnly(req: FastifyRequest, reply: FastifyReply): boolean {
   const given = req.headers['x-worker-token'];
@@ -58,6 +63,7 @@ export function jobRoutes(app: FastifyInstance): void {
     if (!workerOnly(req, reply)) return reply;
     const outcome = await syncBogToday();
     if (outcome.status === 'failed') app.log.warn(outcome, 'bank of georgia did not answer');
+    else if (refusedOf(outcome).length > 0) app.log.warn({ accounts: refusedOf(outcome) }, 'bank of georgia did not answer about every account');
     return outcome;
   });
 
@@ -65,6 +71,7 @@ export function jobRoutes(app: FastifyInstance): void {
     if (!workerOnly(req, reply)) return reply;
     const outcome = await reconcileBogNight();
     if (outcome.status === 'failed') app.log.warn(outcome, 'bank of georgia statement did not come');
+    else if (refusedOf(outcome).length > 0) app.log.warn({ accounts: refusedOf(outcome) }, 'bank of georgia statement did not come for every account');
     return outcome;
   });
 
@@ -83,6 +90,7 @@ export function jobRoutes(app: FastifyInstance): void {
     if (!workerOnly(req, reply)) return reply;
     const outcome = await syncTbcToday();
     if (outcome.status === 'failed') app.log.warn(outcome, 'tbc did not answer');
+    else if (refusedOf(outcome).length > 0) app.log.warn({ accounts: refusedOf(outcome) }, 'tbc did not answer about every account');
     return outcome;
   });
 
@@ -121,11 +129,30 @@ export function jobRoutes(app: FastifyInstance): void {
     return outcome;
   });
 
+  // Before a pair of account and currency goes into a stand's env file, the
+  // keys script asks the bank about it through here (`deploy/set-bog-keys.sh`
+  // and `set-tbc-keys.sh`, `--add-account`), so that the keys never leave this
+  // process. The answer is one of our words and a status code — `ok`, the
+  // bank's refusal, `no_currency` when it knows the account in lari only — and
+  // nothing of the bank's answer; nothing is written. `off` without the bank's
+  // keys; `bad_account` for what is not an account of that bank in GEL, USD or EUR.
+  app.post<{ Body: { bank?: unknown; account?: unknown; currency?: unknown } }>('/api/jobs/bank-probe', { config: { scope: 'public' } }, async (req, reply) => {
+    if (!workerOnly(req, reply)) return reply;
+    const asked = req.body ?? {};
+    const bank = asked.bank === 'bog' || asked.bank === 'tbc' ? asked.bank : null;
+    const pair = bank ? pairAsked(asked.account, asked.currency, bank === 'tbc' ? 'TB' : undefined) : null;
+    if (!bank || !pair) return { code: 'bad_account', httpStatus: null };
+    const outcome = (bank === 'bog' ? await probeBogPair(pair) : await probeTbcPair(pair)) ?? { code: 'off', httpStatus: null };
+    app.log.info({ bank, last4: last4(pair.iban), currency: pair.currency, ...outcome }, 'the bank was asked about an account');
+    return outcome;
+  });
+
   app.post('/api/jobs/tbc-night', { config: { scope: 'public' } }, async (req, reply) => {
     if (!workerOnly(req, reply)) return reply;
     const outcome = await reconcileTbcNight();
     if (outcome.status === 'failed') app.log.warn(outcome, 'tbc statement did not come');
-    else if (outcome.status === 'ok' && outcome.mismatched.length > 0) app.log.warn({ mismatched: outcome.mismatched }, 'tbc movements do not add up to the statement');
+    else if (refusedOf(outcome).length > 0) app.log.warn({ accounts: refusedOf(outcome) }, 'tbc statement did not come for every account');
+    if (outcome.status === 'ok' && outcome.mismatched.length > 0) app.log.warn({ mismatched: outcome.mismatched }, 'tbc movements do not add up to the statement');
     return outcome;
   });
 }

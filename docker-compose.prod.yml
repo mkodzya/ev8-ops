@@ -101,9 +101,15 @@ services:
       # uploaded files. The keys are issued by the company in Business Online,
       # answer only this server's address and reach this file's env through
       # deploy/set-bog-keys.sh — never through a session, a commit or a log.
-      # BOG_ACCOUNT is the account in lari (GE…BG…); blank, the account named
-      # in the last Bank of Georgia statement uploaded here is asked about.
-      # The number is not written in this repository.
+      # BOG_ACCOUNT is a list, apart by commas, of the accounts read: each as
+      # the bank writes it in a statement file, bare for lari (GE…BG…) and with
+      # USD or EUR after the number for an account in dollars or euros, read
+      # apart and outside every sum in lari (ADR-0051); the same IBAN in two
+      # currencies is two accounts. Any other currency stops the link. An
+      # account in another currency joins the list with
+      # `set-bog-keys.sh --add-account`, which asks the bank first. Blank, the
+      # account named in the last Bank of Georgia statement uploaded here is
+      # asked about, in lari. The numbers are not written in this repository.
       BOG_CLIENT_ID: ${BOG_CLIENT_ID-}
       BOG_CLIENT_SECRET: ${BOG_CLIENT_SECRET-}
       BOG_ACCOUNT: ${BOG_ACCOUNT-}
@@ -111,9 +117,11 @@ services:
       # the same way: optional, off without keys. The keys are issued by the
       # company in Business Internet Banking (API Integration, the permission
       # to view transaction history and statements only) and reach this file's
-      # env through deploy/set-tbc-keys.sh. TBC_ACCOUNT is the account in lari
-      # (GE…TB…); blank, the account named in the last TBC statement uploaded
-      # here. TBC_BASE_URL is blank for the bank itself; its test environment,
+      # env through deploy/set-tbc-keys.sh. TBC_ACCOUNT is a list of TBC
+      # accounts (GE…TB…) the same way as BOG_ACCOUNT: bare for lari, USD or
+      # EUR after the number for dollars or euros (`--add-account`); blank,
+      # the account named in the last TBC statement uploaded here, in lari.
+      # TBC_BASE_URL is blank for the bank itself; its test environment,
       # https://test-api.tbcbank.ge, takes only the test keys of its portal.
       TBC_CLIENT_ID: ${TBC_CLIENT_ID-}
       TBC_CLIENT_SECRET: ${TBC_CLIENT_SECRET-}
@@ -167,9 +175,12 @@ services:
       PERIODS_CRON: ${PERIODS_CRON:-10 0 * * *}
       # Kommo is asked every five minutes; the account's plan has no webhooks.
       KOMMO_CRON: ${KOMMO_CRON:-*/5 * * * *}
-      # Bank of Georgia: the day's operations every five minutes (288 of the
-      # 800 requests a day the bank allows), the full statement once a night —
-      # asked every hour, read by the first that finds yesterday unread.
+      # Bank of Georgia: the day's operations every five minutes — 288 a day
+      # for each account and currency, of the 800 the bank allows each of them
+      # (another page of its documentation says 10 000; ADR-0051), and the test
+      # stand asks about the same accounts with the same keys — the full
+      # statement once a night: asked every hour, read by the first that finds
+      # yesterday unread.
       BOG_CRON: ${BOG_CRON:-*/5 * * * *}
       BOG_NIGHT_CRON: ${BOG_NIGHT_CRON:-17 * * * *}
       # TBC: two minutes after each Bank of Georgia pull, its night half an hour off.

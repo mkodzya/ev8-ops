@@ -12,12 +12,12 @@ import { useOperation } from '../ds/form/operation.js';
 import { useToast } from '../ds/feedback/Toast.js';
 import { BlockHead, Empty, Loading, PageHead, StateBadge, Vin } from '../components/ui.js';
 import { Field, Row } from '../components/Wizard.js';
-import { fmtDate, formatGel } from '../format.js';
+import { fmtDate, formatForeign, formatGel } from '../format.js';
 import { useT } from '../i18n/index.js';
 import { noteWords } from '../lib/journal.js';
 import { useLoad } from '../lib/use.js';
 import { useSession } from '../session.js';
-import { fmtForeign, fmtRate, statusOf, type Purchase, type PurchaseLine } from './PurchasesPage.js';
+import { fmtRate, statusOf, type Purchase, type PurchaseLine } from './PurchasesPage.js';
 
 // Карточка заказа (wave 5 §3.5–3.6). Two currencies on one screen: the
 // invoice is the factory's, the money that left the bank is ours, and the
@@ -107,7 +107,7 @@ export function PurchasePage() {
 
       <div className="num-strip">
         <span className="num">
-          <span className="num-v">{fmtForeign(p.invoiceMinor, p.currency)}</span>
+          <span className="num-v">{formatForeign(p.invoiceMinor, p.currency)}</span>
           <span className="num-l">{t.orderCard.invoice}</span>
         </span>
         <span className="num">
@@ -115,7 +115,7 @@ export function PurchasePage() {
           <span className="num-l">{p.paidTetri > 0 ? t.orderCard.paidOf(p.paidPercent) : t.orderCard.paidNothing}</span>
         </span>
         <span className={`num ${owing ? 'num-crit' : ''}`}>
-          <span className="num-v">{fmtForeign(p.debtMinor, p.currency)}</span>
+          <span className="num-v">{formatForeign(p.debtMinor, p.currency)}</span>
           <span className="num-l">{t.orderCard.debt}</span>
         </span>
         <span className="num">
@@ -139,7 +139,7 @@ export function PurchasePage() {
             v={
               <span className="mono">
                 {formatGel(p.paidTetri)}
-                {p.paidMinor > 0 && <> = {fmtForeign(p.paidMinor, p.currency)}</>} · {p.paidPercent} %
+                {p.paidMinor > 0 && <> = {formatForeign(p.paidMinor, p.currency)}</>} · {p.paidPercent} %
               </span>
             }
           />
@@ -148,7 +148,7 @@ export function PurchasePage() {
               k={t.orderCard.paidBeforeTitle}
               v={
                 <span className="mono">
-                  {formatGel(p.paidBeforeTetri)} = {fmtForeign(p.paidBeforeMinor, p.currency)} · {fmtDate(p.paidBeforeOn)}
+                  {formatGel(p.paidBeforeTetri)} = {formatForeign(p.paidBeforeMinor, p.currency)} · {fmtDate(p.paidBeforeOn)}
                 </span>
               }
             />
@@ -202,8 +202,8 @@ export function PurchasePage() {
                       <LineName line={l} />
                     </td>
                     <td className="num mono">{l.qty}</td>
-                    <td className="num mono">{fmtForeign(l.unitPriceMinor, p.currency)}</td>
-                    <td className="num mono">{fmtForeign(l.lineMinor, p.currency)}</td>
+                    <td className="num mono">{formatForeign(l.unitPriceMinor, p.currency)}</td>
+                    <td className="num mono">{formatForeign(l.lineMinor, p.currency)}</td>
                     {/* «≈» is not decoration: until the factory is paid in full
                         this number is worked out at the rate so far (§7). */}
                     <td className="num mono">
@@ -405,17 +405,17 @@ function Feed({ purchase: p, vehicles, journal }: { purchase: Purchase; vehicles
         amount: recostUnits(l.after) ?? undefined,
         note: [noteWords(t, l.note), l.by].filter(Boolean).join(' · ') || undefined,
       })),
-    { at: p.orderedOn, text: t.orderCard.words.created, amount: fmtForeign(p.invoiceMinor, p.currency) },
+    { at: p.orderedOn, text: t.orderCard.words.created, amount: formatForeign(p.invoiceMinor, p.currency) },
     ...p.payments
       .filter((x) => x.direction === 'out')
       .map((x) => ({
         at: x.occurredOn,
         text: t.orderCard.words.payment,
         amount: formatGel(x.grossTetri),
-        note: x.foreignMinor > 0 ? fmtForeign(x.foreignMinor, x.foreignCurrency ?? p.currency) : t.money.how[x.channel],
+        note: x.foreignMinor > 0 ? formatForeign(x.foreignMinor, x.foreignCurrency ?? p.currency) : t.money.how[x.channel],
       })),
     ...(p.paidBeforeTetri > 0 && p.paidBeforeOn
-      ? [{ at: p.paidBeforeOn, text: t.orderCard.words.paidBefore, amount: formatGel(p.paidBeforeTetri), note: fmtForeign(p.paidBeforeMinor, p.currency) }]
+      ? [{ at: p.paidBeforeOn, text: t.orderCard.words.paidBefore, amount: formatGel(p.paidBeforeTetri), note: formatForeign(p.paidBeforeMinor, p.currency) }]
       : []),
     ...(p.receivedOn ? [{ at: p.receivedOn, text: t.orderCard.words.received, note: vehicles > 0 ? t.orderCard.feedUnits(vehicles) : undefined }] : []),
   ].sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));

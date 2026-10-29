@@ -1,5 +1,5 @@
-import { localDateTime } from '@ev8/shared';
-import { useRef, useState } from 'react';
+import { addDays, localDateTime, monthOf, todayISO } from '@ev8/shared';
+import { Fragment, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, ApiError } from '../../api.js';
 import { LoadError } from '../../components/LoadError.js';
@@ -9,7 +9,7 @@ import '../../ds/form/form.css';
 import { useOperation } from '../../ds/form/operation.js';
 import '../../ds/money/money.css';
 import { Skeleton } from '../../ds/state/Skeleton.js';
-import { fmtDate, fmtDateAt } from '../../format.js';
+import { fmtDate, fmtDateAt, formatMinor } from '../../format.js';
 import { useT } from '../../i18n/index.js';
 import { errorText, useLoad } from '../../lib/use.js';
 
@@ -27,12 +27,47 @@ interface BankApi {
   nightMismatchOn?: string | null;
 }
 
+/** An account of the bank in another currency (decision D1 of docs/spec/usd-accounts-plan.md), by its last four digits. */
+interface Pair {
+  last4: string;
+  currency: string;
+  api: BankApi;
+}
+
 interface Statements {
   queue: number;
   staleDays: number;
   limitBytes: number;
-  banks: { bank: Bank; lastUploadAt: string | null; throughOn: string | null; daysOld: number | null; stale: boolean; never: boolean; api: BankApi | null }[];
-  statements: { id: string; bank: Bank; fileName: string; periodFrom: string | null; periodTo: string | null; lineCount: number; newLines: number; matched: number; uploadedBy: string | null; createdAt: string }[];
+  /** Lines of the accounts in another currency kept; absent while an older API answers. */
+  foreignLines?: number;
+  banks: { bank: Bank; lastUploadAt: string | null; throughOn: string | null; daysOld: number | null; stale: boolean; never: boolean; api: BankApi | null; accounts?: Pair[] }[];
+  statements: { id: string; bank: Bank; fileName: string; currency?: string; periodFrom: string | null; periodTo: string | null; lineCount: number; newLines: number; matched: number; uploadedBy: string | null; createdAt: string }[];
+}
+
+/** «Операции в валюте»: each account in another currency with what came in and went out of it in a period, in its own currency. */
+interface Foreign {
+  from: string;
+  to: string;
+  accounts: {
+    bank: Bank;
+    last4: string | null;
+    currency: string;
+    inMinor: number;
+    outMinor: number;
+    lines: { id: string; occurredOn: string; direction: 'in' | 'out'; amountMinor: number; payer: string | null; purpose: string | null; raw: string }[];
+  }[];
+}
+
+/** An account as it is known on this screen: its bank, its currency, its last four digits. */
+type Known = { bank: Bank; currency: string; last4: string | null };
+
+/**
+ * «Bank of Georgia · USD». The last four digits follow only when the bank has
+ * two accounts in that currency: one is named by its currency alone.
+ */
+function accountName(bank: string, a: Known, known: Known[]): string {
+  const twins = new Set(known.filter((k) => k.bank === a.bank && k.currency === a.currency).map((k) => k.last4)).size > 1;
+  return [bank, a.currency, twins && a.last4 ? `··${a.last4}` : null].filter(Boolean).join(' · ');
 }
 interface Preview {
   bank: Bank;
@@ -83,6 +118,69 @@ function ApiLine({ bank, api }: { bank: 'bog' | 'tbc'; api: BankApi }) {
   );
 }
 
+/** A sum that came in or went out, in its own currency and with its sign; nothing has none. */
+function signed(minor: number, currency: string, direction: 'in' | 'out'): string {
+  return `${minor === 0 ? '' : direction === 'out' ? '−' : '+'}${formatMinor(minor, currency)}`;
+}
+
+/**
+ * «Операции в валюте» (Mika, 29.10.2026, decision D1 «А» of
+ * docs/spec/usd-accounts-plan.md): the lines of the accounts in another
+ * currency, read only. Each account sums what came in and went out in its own
+ * currency; two currencies are never added up, nor any of them to the lari,
+ * and each account says it is in no total in ₾.
+ */
+function ForeignBlock({ known }: { known: Known[] }) {
+  const t = useT();
+  const [span, setSpan] = useState<'month' | 'last_month'>('month');
+  const month = monthOf(todayISO());
+  const period = span === 'month' ? month : monthOf(addDays(month.from, -1));
+  const { data, failure, reload } = useLoad<Foreign>(`/api/statement-lines/foreign?from=${period.from}&to=${period.to}`);
+  const all = [...known, ...(data?.accounts ?? [])];
+  return (
+    <section className="card">
+      <BlockHead title={t.bankCurrency.title} sub={`${fmtDate(period.from)}–${fmtDate(period.to)}`} note={t.bankCurrency.note} />
+      <div className="list-chips" role="tablist">
+        {(['month', 'last_month'] as const).map((s) => (
+          <button key={s} type="button" role="tab" aria-selected={span === s} className={`list-chip ${span === s ? 'on' : ''}`} onClick={() => setSpan(s)}>
+            {t.exp.spans[s]}
+          </button>
+        ))}
+      </div>
+      {failure && <LoadError failure={failure} onRetry={reload} />}
+      {!data && !failure && <Skeleton rows={2} />}
+      {data && data.accounts.length === 0 && <p className="muted fx-empty">{t.bankCurrency.empty}</p>}
+      {data?.accounts.map((a) => (
+        <div key={`${a.bank} ${a.currency} ${a.last4 ?? ''}`} className="fx-account">
+          <div className="fx-head">
+            <b>{accountName(t.statements.banks[a.bank], a, all)}</b>
+            <span className="muted">{t.bankCurrency.notInGel}</span>
+          </div>
+          <div className="till-row">
+            <span>{t.bankCurrency.in}</span>
+            <span className={a.inMinor ? 'mono nowrap amt-in' : 'mono nowrap'}>{signed(a.inMinor, a.currency, 'in')}</span>
+          </div>
+          <div className="till-row">
+            <span>{t.bankCurrency.out}</span>
+            <span className="mono nowrap">{signed(a.outMinor, a.currency, 'out')}</span>
+          </div>
+          <div className="fx-lines">
+            {a.lines.map((l) => (
+              <div key={l.id} className="till-row">
+                <span className="fx-text">
+                  {fmtDate(l.occurredOn)}
+                  <span className="muted"> · {[l.payer, l.purpose].filter(Boolean).join(' · ') || l.raw}</span>
+                </span>
+                <span className={`mono nowrap ${l.direction === 'in' ? 'amt-in' : ''}`}>{signed(l.amountMinor, a.currency, l.direction)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </section>
+  );
+}
+
 /** Money → Выписки (wave 2 §3.5): how fresh each bank is, and loading a file with a look first. */
 export function StatementsPage() {
   const t = useT();
@@ -93,6 +191,7 @@ export function StatementsPage() {
   const [pending, setPending] = useState<{ fileName: string; size: number; text: string; preview: Preview } | null>(null);
   const [done, setDone] = useState<Result | null>(null);
   const importing = useOperation();
+  const known: Known[] = (data?.banks ?? []).flatMap((b) => (b.accounts ?? []).map((p) => ({ bank: b.bank, currency: p.currency, last4: p.last4 })));
 
   if (failure) return <LoadError failure={failure} onRetry={reload} />;
 
@@ -144,23 +243,38 @@ export function StatementsPage() {
       {!data && <Skeleton rows={3} />}
       {data && (
         <div className="bank-cards">
-          {data.banks.map((b) => (
-            <div key={b.bank} className={`bank-card ${b.stale ? 'stale' : ''}`}>
-              <b>{t.statements.banks[b.bank]}</b>
-              {b.never ? (
-                <span className="muted">{t.statements.never}</span>
-              ) : (
-                <>
-                  <span>
-                    {t.statements.lastUpload(fmtDateAt(b.lastUploadAt))}, {t.statements.through(fmtDate(b.throughOn))}
-                  </span>
-                  <span className={b.stale ? 'warn-text' : 'muted'}>{b.daysOld != null ? t.statements.daysAgo(b.daysOld) : ''}</span>
-                  {b.stale && <span className="warn-text">{t.statements.staleNote(data.staleDays)}</span>}
-                </>
-              )}
-              {b.api && b.bank !== 'credo' && <ApiLine bank={b.bank} api={b.api} />}
-            </div>
-          ))}
+          {data.banks.map((b) => {
+            const bank = b.bank;
+            const pairs = bank === 'credo' ? [] : (b.accounts ?? []);
+            return (
+              <Fragment key={bank}>
+                <div className={`bank-card ${b.stale ? 'stale' : ''}`}>
+                  {/* Once the bank has an account in another currency, its own card says it is the lari's. */}
+                  <b>{pairs.length > 0 ? `${t.statements.banks[bank]} · GEL` : t.statements.banks[bank]}</b>
+                  {b.never ? (
+                    <span className="muted">{t.statements.never}</span>
+                  ) : (
+                    <>
+                      <span>
+                        {t.statements.lastUpload(fmtDateAt(b.lastUploadAt))}, {t.statements.through(fmtDate(b.throughOn))}
+                      </span>
+                      <span className={b.stale ? 'warn-text' : 'muted'}>{b.daysOld != null ? t.statements.daysAgo(b.daysOld) : ''}</span>
+                      {b.stale && <span className="warn-text">{t.statements.staleNote(data.staleDays)}</span>}
+                    </>
+                  )}
+                  {b.api && bank !== 'credo' && <ApiLine bank={bank} api={b.api} />}
+                </div>
+                {bank !== 'credo' &&
+                  pairs.map((p) => (
+                    <div key={`${p.currency} ${p.last4}`} className="bank-card">
+                      <b>{accountName(t.statements.banks[bank], { bank, ...p }, known)}</b>
+                      <ApiLine bank={bank} api={p.api} />
+                      <span className="muted">{t.bankCurrency.notInGel}</span>
+                    </div>
+                  ))}
+              </Fragment>
+            );
+          })}
         </div>
       )}
 
@@ -229,13 +343,17 @@ export function StatementsPage() {
         </section>
       )}
 
+      {/* Without an account in another currency, read or kept, the screen is what it was before them. */}
+      {data && (known.length > 0 || (data.foreignLines ?? 0) > 0) && <ForeignBlock known={known} />}
+
       {data && data.statements.length > 0 && (
         <section className="card">
           <BlockHead title={t.statements.uploads} />
           {data.statements.map((s) => (
             <div key={s.id} className="till-row">
               <span>
-                {t.statements.banks[s.bank]} · {s.fileName}
+                {t.statements.banks[s.bank]}
+                {s.currency && s.currency !== 'GEL' && <> · {s.currency}</>} · {s.fileName}
                 <span className="muted">
                   {' '}
                   · {[s.periodFrom ? `${fmtDate(s.periodFrom)}–${fmtDate(s.periodTo)}` : null, s.uploadedBy, fmtDateAt(s.createdAt)].filter(Boolean).join(' · ')}

@@ -10,7 +10,7 @@ import { HAS_DB, call, json, loginAs, uniq } from './helpers.js';
 
 const BOG_HEADER = [
   ',,,"angariSis mflobeli: Sps e-mouSen moTors",,,,',
-  ',,,"angariSis #:GE41BG0000000600217157GEL (600217157)",,,,',
+  ',,,"angariSis #:GE00BG0000000000000954GEL (000000001)",,,,',
   ',,,,,,,',
   '"centraluri filiali",,,"naerTi amonaweri piradi angariSidan",,,,',
   '"gagarinis q. #29 a",,,"periodi: 01.09.26-30.09.26",,,,',
@@ -19,7 +19,7 @@ const BOG_HEADER = [
 ].join('\n');
 
 const bogRow = (date: string, credit: string, content: string, doc = '0017') =>
-  `"${date}","${doc}","GE38TB7756045063400002","","${credit}","1","${credit}","${content}"`;
+  `"${date}","${doc}","GE00TB0000000000000952","","${credit}","1","${credit}","${content}"`;
 
 const BOG_SUMMARY = ['"brunva","","","0","320","1","",""', '"naSTi","","","","320.00","1","320.00",""'].join('\n');
 
@@ -29,7 +29,7 @@ const TBC_HEADER = [
 ].join('\n');
 
 const tbcRow = (date: string, amount: string, partner: string, txn: string, desc = 'Rent') =>
-  `"${date}","${desc}","Income","${amount}","GEL","GE40TB7370836020100011","ე-მოუშენ მოთორს","","${date}","589041","GE32BG0000000207005800","${partner}","","BAGAGE22","სს ბანკი","","","","","","","BULK","","${txn}"`;
+  `"${date}","${desc}","Income","${amount}","GEL","GE00TB0000000000000953","ე-მოუშენ მოთორს","","${date}","589041","GE00BG0000000000000951","${partner}","","BAGAGE22","სს ბანკი","","","","","","","BULK","","${txn}"`;
 
 /**
  * A Georgian surname nobody else in the database has.
@@ -70,7 +70,7 @@ describe.skipIf(!HAS_DB)('reading a Bank of Georgia export', () => {
       bogRow(
         '05.09.2026',
         '320.0',
-        `Private Transfer: Caricxva - Tanxa: GEL320.00; gadmomricxavi: testiZe vaJa ${who.tag}; angariSi: GE32BG0000000207005800GEL; daniSnuleba: qira`,
+        `Private Transfer: Caricxva - Tanxa: GEL320.00; gadmomricxavi: testiZe vaJa ${who.tag}; angariSi: GE00BG0000000000000951GEL; daniSnuleba: qira`,
       ),
       BOG_SUMMARY,
     ].join('\n');
@@ -134,7 +134,7 @@ describe.skipIf(!HAS_DB)('reading a Bank of Georgia export', () => {
     const { owner, rentalId } = await rentalFor({ ru: 'Лука Расходов', ka: 'ლუკა ხარჯიძე' });
     const text = [
       BOG_HEADER,
-      `"09.09.2026","0018","GE89BG0000000902936900GEL","95.0","","1","95.0","my auto.ge: gadaricxva - Tanxa: GEL95.00; mimRebi: TNET LLC ${uniq()}"`,
+      `"09.09.2026","0018","GE00BG0000000000000955GEL","95.0","","1","95.0","my auto.ge: gadaricxva - Tanxa: GEL95.00; mimRebi: TNET LLC ${uniq()}"`,
     ].join('\n');
     const res = json<{ outgoing: number; unmatched: number; matched: number }>(await call(owner, 'POST', '/api/statements', { fileName: 'out.csv', text }));
     expect(res.outgoing).toBe(1);
@@ -153,7 +153,7 @@ describe.skipIf(!HAS_DB)('a Bank of Georgia export as the bank words it since au
   // opening balance that is not nought.
   const NEW_HEADER = [
     ',,,"angariSis mflobeli: Sps e-mouSen moTors",,,,',
-    ',,,"angariSis #:GE41BG0000000600217157GEL (600217157)",,,,',
+    ',,,"angariSis #:GE00BG0000000000000954GEL (000000001)",,,,',
     '"TariRi","sabuTis #","mokorespondento angariSi","debeti","krediti","kursi","eqv.lari","operaciis Sinaarsi"',
     '"05.10.2026","sawyisi naSTi","","GEL","352.05","1","352.05",""',
   ].join('\n');
@@ -344,6 +344,35 @@ describe.skipIf(!HAS_DB)('who may load a statement', () => {
     expect(bad.statusCode).toBe(400);
     expect(json<{ error: string; message: string }>(bad).error).toBe('unreadable_statement');
     expect(json<{ message: string }>(bad).message).toMatch(/Bank of Georgia|TBC/);
+  });
+
+  // The company's dollar account at Bank of Georgia (29.10.2026): its export has
+  // the columns of the lari one, and its cents would go in as tetri.
+  it('a Bank of Georgia statement of an account not in lari is refused in its own words, and nothing of it is kept', async () => {
+    const owner = await loginAs('owner');
+    for (const currency of ['USD', 'eur']) {
+      const tag = uniq();
+      const header = BOG_HEADER.replace(/angariSis #:[A-Z0-9]+/, `angariSis #:GE00BG0000000000000001${currency}`); // invented
+      const text = [header, bogRow('07.09.2026', '150.00', `tankhis gadaritskhva: Incoming Transfer; Details: TEST ${tag}`), BOG_SUMMARY].join('\n');
+      for (const url of ['/api/statements/preview', '/api/statements']) {
+        const res = await call(owner, 'POST', url, { fileName: 'StatementExport.csv', text });
+        expect(res.statusCode, res.body).toBe(400);
+        expect(json<{ error: string }>(res).error).toBe('foreign_statement');
+        expect(json<{ message: string }>(res).message).toContain(currency.toUpperCase());
+        expect(res.body).not.toContain('GE00BG0000000000000001');
+      }
+      const { prisma } = await import('../src/lib/db.js');
+      expect(await prisma.statementLine.count({ where: { raw: { contains: tag } } })).toBe(0);
+    }
+
+    // The account in lari, with its currency written or without it, is read as before.
+    for (const account of ['GE00BG0000000000000001GEL', 'GE00BG0000000000000001']) {
+      const tag = uniq();
+      const header = BOG_HEADER.replace(/angariSis #:[A-Z0-9]+/, `angariSis #:${account}`);
+      const text = [header, bogRow('07.09.2026', '150.00', `tankhis gadaritskhva: Incoming Transfer; Details: TEST ${tag}`), BOG_SUMMARY].join('\n');
+      const res = await call(owner, 'POST', '/api/statements/preview', { fileName: 'StatementExport.csv', text });
+      expect(res.statusCode, res.body).toBe(200);
+    }
   });
 });
 

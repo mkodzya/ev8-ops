@@ -58,16 +58,22 @@ function asLine(bank: 'bog' | 'tbc', l: ParsedLine): Line {
  * API, or the day's pull against the nightly statement (`sameLine.ts`,
  * ADR-0021; TBC, ADR-0026) — or when it is a Bank of Georgia card payment
  * the bank listed already under its other number (rule 5, issue #16).
+ *
+ * Only a line in the same currency is ever the same operation (migration
+ * 0073): 150 dollars are not 150 lari, and TBC's transaction id is compared
+ * without the sum. So the currency stands in what is read from the database,
+ * not in the rules.
  */
-export async function knownLines<T extends ParsedLine>(parsed: { bank: 'bog' | 'tbc'; lines: T[] }): Promise<AlreadyIn<T>> {
+export async function knownLines<T extends ParsedLine>(parsed: { bank: 'bog' | 'tbc'; currency?: string; lines: T[] }): Promise<AlreadyIn<T>> {
+  const currency = parsed.currency ?? 'GEL';
   const select = { naturalKey: true, docNo: true, occurredOn: true, direction: true, amountTetri: true, raw: true } as const;
-  const byKey = await prisma.statementLine.findMany({ where: { bank: parsed.bank, naturalKey: { in: parsed.lines.map((l) => l.naturalKey) } }, select });
+  const byKey = await prisma.statementLine.findMany({ where: { bank: parsed.bank, currency, naturalKey: { in: parsed.lines.map((l) => l.naturalKey) } }, select });
   let near: typeof byKey = [];
   if (parsed.lines.length > 0) {
     // As far as the two listings of one card payment may be apart; the other rules look a day either side.
     const days = parsed.lines.map((l) => l.occurredOn).sort();
     near = await prisma.statementLine.findMany({
-      where: { bank: parsed.bank, occurredOn: { gte: dateFromISO(addDays(days[0]!, -CARD_DAYS))!, lte: dateFromISO(addDays(days[days.length - 1]!, CARD_DAYS))! } },
+      where: { bank: parsed.bank, currency, occurredOn: { gte: dateFromISO(addDays(days[0]!, -CARD_DAYS))!, lte: dateFromISO(addDays(days[days.length - 1]!, CARD_DAYS))! } },
       select,
     });
   }
@@ -175,8 +181,16 @@ export async function importStatement(input: { actorId: string; fileName: string
  * deposit, a line two signs agree on is attached by its rule; the rest wait
  * in "Разобрать" for a person. `actorId` is the person who uploaded the file,
  * or null when the bank was asked by the stand itself.
+ *
+ * A line of an account in another currency goes nowhere near the queue: it is
+ * written parked (migration 0073).
  */
-export async function ingest(input: { statementId: string; bank: 'bog' | 'tbc'; actorId: string | null; lines: ParsedLine[] }): Promise<{ recorded: number; matched: number }> {
+export async function ingest(input: { statementId: string; bank: 'bog' | 'tbc'; currency?: string; actorId: string | null; lines: ParsedLine[] }): Promise<{ recorded: number; matched: number }> {
+  const currency = input.currency ?? 'GEL';
+  if (currency !== 'GEL') {
+    await park({ ...input, currency });
+    return { recorded: 0, matched: 0 };
+  }
   let recorded = 0;
   let matched = 0;
   let ctx = await loadCtx();
@@ -242,6 +256,38 @@ export async function ingest(input: { statementId: string; bank: 'bog' | 'tbc'; 
   // Money between the company's own accounts, once both halves may be in (ADR-0028).
   await markOwnTransfers();
   return { recorded, matched };
+}
+
+/**
+ * Lines in dollars or euros, as Mika decided on 29.10.2026 (D1 «А»,
+ * docs/spec/usd-accounts-plan.md): kept and shown apart, not sorted, outside
+ * every sum in lari. Each is written set aside as `foreign` in the one insert
+ * — never a moment in the queue, where a rule could take 150 dollars for 150
+ * lari of rent — and the database holds it there (statement_lines_foreign_parked).
+ * Nobody answered it: who and when stay empty.
+ */
+async function park(input: { statementId: string; bank: 'bog' | 'tbc'; currency: string; lines: ParsedLine[] }): Promise<void> {
+  await prisma.statementLine.createMany({
+    data: input.lines.map((line) => ({
+      statementId: input.statementId,
+      bank: input.bank,
+      currency: input.currency,
+      naturalKey: line.naturalKey,
+      docNo: line.docNo ?? null,
+      occurredOn: dateFromISO(line.occurredOn)!,
+      direction: line.direction,
+      amountTetri: line.amountTetri,
+      grossTetri: line.grossTetri,
+      feeTetri: line.feeTetri,
+      bankGelTetri: line.bankGelTetri ?? null,
+      payer: line.payer,
+      purpose: line.purpose,
+      raw: line.raw,
+      status: 'ignored' as const,
+      matchedRule: 'foreign',
+      resolution: 'foreign',
+    })),
+  });
 }
 
 /**

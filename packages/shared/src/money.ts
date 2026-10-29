@@ -56,6 +56,29 @@ export function formatGel(tetri: Tetri | null | undefined, opts: { decimals?: bo
   return `${tetri < 0 ? '-' : ''}${body} ₾`;
 }
 
+/**
+ * `1 234.56 USD` — a sum in a currency that is not the lari: a factory's
+ * invoice, an account in dollars (docs/spec/usd-accounts-plan.md). Minor units
+ * of that currency, two decimals, its code after it and never the lari sign,
+ * with the no-break spaces of `formatGel`.
+ */
+export function formatForeign(minor: number, currency: string): string {
+  const whole = Math.floor(Math.abs(minor) / 100);
+  const frac = Math.abs(minor) % 100;
+  const grouped = whole.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+  return `${minor < 0 ? '-' : ''}${grouped}.${String(frac).padStart(2, '0')} ${currency}`;
+}
+
+/**
+ * A sum in minor units of the currency it is in: lari as `formatGel` writes
+ * them, any other currency as `formatForeign` does. A bank line knows its
+ * currency (migration 0073), and is shown in it — dollars are never read as
+ * lari.
+ */
+export function formatMinor(minor: number, currency: string): string {
+  return currency === 'GEL' ? formatGel(minor) : formatForeign(minor, currency);
+}
+
 /** VAT 18 % on top of a net amount. Gross is rounded once, VAT is the difference. */
 export function vatOnTop(netTetri: Tetri): { net: Tetri; vat: Tetri; gross: Tetri } {
   const gross = Math.round(netTetri * (1 + VAT_RATE));

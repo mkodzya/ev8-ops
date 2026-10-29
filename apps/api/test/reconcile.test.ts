@@ -11,11 +11,11 @@ const dmy = (iso: string) => iso.split('-').reverse().join('.');
 
 const BOG_HEADER = [
   ',,,"angariSis mflobeli: Sps e-mouSen moTors",,,,',
-  ',,,"angariSis #:GE41BG0000000600217157GEL (600217157)",,,,',
+  ',,,"angariSis #:GE00BG0000000000000954GEL (000000001)",,,,',
   '"TariRi","sabuTis #","mokorespondento angariSi","debeti","krediti","kursi","eqv.lari","operaciis Sinaarsi"',
 ].join('\n');
-const inRow = (iso: string, amount: string, content: string) => `"${dmy(iso)}","0017","GE38TB7756045063400002","","${amount}","1","${amount}","${content}"`;
-const outRow = (iso: string, amount: string, content: string) => `"${dmy(iso)}","0018","GE89BG0000000902936900GEL","${amount}","","1","${amount}","${content}"`;
+const inRow = (iso: string, amount: string, content: string) => `"${dmy(iso)}","0017","GE00TB0000000000000952","","${amount}","1","${amount}","${content}"`;
+const outRow = (iso: string, amount: string, content: string) => `"${dmy(iso)}","0018","GE00BG0000000000000955GEL","${amount}","","1","${amount}","${content}"`;
 const file = (...rows: string[]) => [BOG_HEADER, ...rows].join('\n');
 
 // The rules match a line to the one rental its amount and date fit. Suites

@@ -8,16 +8,22 @@
 // line another suite loaded can be taken for one of these.
 import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { BogClient, BogError, accountOf, bankDay, bogConfig, lineFromEntry, lineFromToday, reconcileBogNight, setBogFetchForTests, syncBogToday, type BogConfig, type BogFetch } from '../src/lib/bog.js';
+import type { AccountPair } from '../src/lib/statements/apiDays.js';
 import { alreadyIn, bogCardOf, cardRepeats, sameCardPayment, type SameLineCandidate } from '../src/lib/statements/sameLine.js';
 import { HAS_DB, call, getApp, json, loginAs, uniq } from './helpers.js';
 
 const ID = 'test-client-id';
 const SECRET = 'test-client-secret-that-opens-nothing';
 const ACCOUNT = 'GE00BG0000000000000001'; // invented
+/** A second account of the company, invented too. */
+const OTHER = 'GE00BG0000000000000003';
+/** The account as the bank's API reads it: in lari, and in dollars on the same IBAN. */
+const GEL: AccountPair = { iban: ACCOUNT, currency: 'GEL' };
+const USD: AccountPair = { iban: ACCOUNT, currency: 'USD' };
 const TOKEN_URL = 'https://account.bog.ge/auth/realms/bog/protocol/openid-connect/token';
 const API = 'https://api.businessonline.ge/api';
 
-const cfg = (over: Partial<BogConfig> = {}): BogConfig => ({ clientId: ID, clientSecret: SECRET, accounts: [ACCOUNT], badAccount: false, staleMs: 20 * 60_000, ...over });
+const cfg = (over: Partial<BogConfig> = {}): BogConfig => ({ clientId: ID, clientSecret: SECRET, accounts: [GEL], badAccount: false, staleMs: 20 * 60_000, ...over });
 const quick = { gapMs: 0, sleep: async () => {} };
 
 interface Call {
@@ -27,15 +33,19 @@ interface Call {
   body?: string;
 }
 
-/** The bank as far as this link knows it: a token, the day's operations, the statement in pages. */
+/** The bank as far as this link knows it: a token, the day's operations, the statement in pages — of each currency apart. */
 function fakeBank(state: {
   today?: unknown[];
   entries?: unknown[];
+  /** The day's operations and the statement of the account in another currency, by its code. */
+  other?: Record<string, { today?: unknown[]; entries?: unknown[] }>;
   pageSize?: number;
   tokenStatus?: number;
   tokenStatuses?: number[];
   apiStatus?: number[];
   retryAfter?: string;
+  /** Accounts the bank refuses these keys — an IBAN, or an IBAN in one currency as `IBAN/USD` — with the status it answers about them. */
+  refused?: Record<string, number>;
 }) {
   const calls: Call[] = [];
   let tokens = 0;
@@ -60,14 +70,19 @@ function fakeBank(state: {
     const forced = apiStatus.shift();
     if (forced) return reply(forced, { message: 'ТЕСТ Тайна' }, state.retryAfter ? { 'retry-after': state.retryAfter } : {});
     const path = url.slice(API.length);
-    if (path.startsWith('/v2/documents/todayactivities/')) return reply(200, state.today ?? []);
-    const paged = /^\/v2\/statement\/[^/]+\/GEL\/(\d+)\/(\d+)$/.exec(path);
+    const refusal = Object.entries(state.refused ?? {}).find(([account]) => `${path}/`.includes(`/${account}/`));
+    if (refusal) return reply(refusal[1], { message: 'ТЕСТ Тайна' });
+    // The currency is the part of the address after the account.
+    const currency = /^\/v2\/(?:documents\/todayactivities|statement)\/[^/]+\/([A-Z]{3})(?:\/|$)/.exec(path)?.[1];
+    const book = currency === 'GEL' ? state : (state.other?.[currency ?? ''] ?? {});
+    if (path.startsWith('/v2/documents/todayactivities/')) return reply(200, book.today ?? []);
+    const paged = /^\/v2\/statement\/[^/]+\/[A-Z]{3}\/(\d+)\/(\d+)$/.exec(path);
     const size = state.pageSize ?? 1000;
     // Like the bank, the statement holds the days asked for and no others.
     const dayOf = (e: unknown) => String((e as { EntryDate?: string }).EntryDate ?? '').slice(0, 10);
-    const ranged = /^\/v2\/statement\/[^/]+\/GEL\/(\d{4}-\d{2}-\d{2})\/(\d{4}-\d{2}-\d{2})$/.exec(path);
+    const ranged = /^\/v2\/statement\/[^/]+\/[A-Z]{3}\/(\d{4}-\d{2}-\d{2})\/(\d{4}-\d{2}-\d{2})$/.exec(path);
     if (ranged) range = [ranged[1]!, ranged[2]!];
-    const all = (state.entries ?? []).filter((e) => !range || (dayOf(e) >= range[0] && dayOf(e) <= range[1]));
+    const all = (book.entries ?? []).filter((e) => !range || (dayOf(e) >= range[0] && dayOf(e) <= range[1]));
     if (paged) {
       const page = Number(paged[2]);
       return reply(200, { Id: Number(paged[1]), Count: 0, TotalCount: all.length, Records: all.slice((page - 1) * size, page * size) });
@@ -91,8 +106,12 @@ function sides(o: { debit?: number; sender?: string }) {
   return o.debit ? { from: us, to: them } : { from: them, to: us };
 }
 
-/** One of the day's operations, as `todayactivities` lists it. */
-function activity(o: { id: number; day: string; doc?: string; credit?: number; debit?: number; sender?: string; comment?: string; nomination?: string }) {
+/**
+ * One of the day's operations, as `todayactivities` lists it. Its sums are in
+ * the account's currency; `base` is what the bank says it is in lari, the same
+ * sum for an account in lari.
+ */
+function activity(o: { id: number; day: string; doc?: string; credit?: number; debit?: number; sender?: string; comment?: string; nomination?: string; base?: number }) {
   return {
     Id: o.id,
     DocKey: o.id * 10,
@@ -106,7 +125,7 @@ function activity(o: { id: number; day: string; doc?: string; credit?: number; d
     Credit: o.credit ?? 0,
     Debit: o.debit ?? 0,
     Amount: o.credit ?? -(o.debit ?? 0),
-    AmountBase: o.credit ?? -(o.debit ?? 0),
+    AmountBase: o.base == null ? (o.credit ?? -(o.debit ?? 0)) : o.debit ? -o.base : o.base,
     PayerName: sides(o).from.Name,
     PayerInn: null,
     Sender: sides(o).from,
@@ -114,8 +133,9 @@ function activity(o: { id: number; day: string; doc?: string; credit?: number; d
   };
 }
 
-/** One entry of the statement. */
-function entry(o: { id: number; day: string; doc?: string; credit?: number; debit?: number; sender?: string; comment?: string }) {
+/** One entry of the statement; `base` as for an operation of the day. */
+function entry(o: { id: number; day: string; doc?: string; credit?: number; debit?: number; sender?: string; comment?: string; base?: number }) {
+  const base = o.base ?? o.credit ?? o.debit ?? 0;
   return {
     EntryDate: `${o.day}T00:00:00`,
     EntryDocumentNumber: o.doc ?? null,
@@ -123,6 +143,9 @@ function entry(o: { id: number; day: string; doc?: string; credit?: number; debi
     EntryAmountDebit: o.debit ?? 0,
     EntryAmountCredit: o.credit ?? 0,
     EntryAmount: o.credit ?? o.debit ?? 0,
+    EntryAmountDebitBase: o.debit ? base : 0,
+    EntryAmountCreditBase: o.credit ? base : 0,
+    EntryAmountBase: base,
     EntryComment: o.comment ?? 'tankhis gadaritskhva',
     DocumentProductGroup: 'PMD',
     DocumentValueDate: `${o.day}T00:00:00`,
@@ -171,12 +194,21 @@ describe('the Bank of Georgia settings', () => {
 
   it('take the account from the env file, as a statement file writes it or bare', () => {
     expect(bogConfig({ BOG_CLIENT_ID: ID, BOG_CLIENT_SECRET: SECRET })?.accounts).toEqual([]);
-    expect(bogConfig({ BOG_CLIENT_ID: ID, BOG_CLIENT_SECRET: SECRET, BOG_ACCOUNT: ` ${ACCOUNT.toLowerCase()}GEL ` })?.accounts).toEqual([ACCOUNT]);
+    expect(bogConfig({ BOG_CLIENT_ID: ID, BOG_CLIENT_SECRET: SECRET, BOG_ACCOUNT: ` ${ACCOUNT.toLowerCase()}GEL ` })?.accounts).toEqual([GEL]);
     const bad = bogConfig({ BOG_CLIENT_ID: ID, BOG_CLIENT_SECRET: SECRET, BOG_ACCOUNT: 'GE00BG123' });
     expect(bad?.badAccount).toBe(true);
     expect(accountOf(`${ACCOUNT}GEL`)).toBe(ACCOUNT);
     expect(accountOf('GE00TB0000000000000002')).toBe('GE00TB0000000000000002');
     expect(accountOf('not an account')).toBeNull();
+  });
+
+  // The company opened an account in dollars (29.10.2026): the env file names it
+  // as the bank writes it in a file, with its currency after the IBAN.
+  it('read an account in each currency it is named in, each pair once, and stop at a currency the stand does not read', () => {
+    const keys = { BOG_CLIENT_ID: ID, BOG_CLIENT_SECRET: SECRET };
+    expect(bogConfig({ ...keys, BOG_ACCOUNT: `${ACCOUNT} ${ACCOUNT}USD, ${ACCOUNT}GEL;${ACCOUNT.toLowerCase()}usd` })).toMatchObject({ accounts: [GEL, USD], badAccount: false });
+    expect(bogConfig({ ...keys, BOG_ACCOUNT: `${ACCOUNT}EUR` })?.accounts).toEqual([{ iban: ACCOUNT, currency: 'EUR' }]);
+    expect(bogConfig({ ...keys, BOG_ACCOUNT: `${ACCOUNT} ${ACCOUNT}GBP` })?.badAccount).toBe(true);
   });
 });
 
@@ -191,24 +223,42 @@ describe('reading the bank’s answer', () => {
   });
 
   it('makes an operation a line shaped like a file’s row: payer, document, sum, direction', () => {
-    const l = lineFromToday(activity({ id: 501, day: '2031-03-10', doc: '0042', credit: 150, sender: 'TEST PAYER' }), '2031-03-10')!;
+    const l = lineFromToday(activity({ id: 501, day: '2031-03-10', doc: '0042', credit: 150, sender: 'TEST PAYER' }), '2031-03-10', 'GEL')!;
     expect(l).toMatchObject({ naturalKey: 'api:today:501', docNo: '0042', occurredOn: '2031-03-10', direction: 'in', amountTetri: 15000, payer: 'TEST PAYER', purpose: 'qira', channel: 'transfer' });
     expect(l.raw.split(' | ').slice(0, 5)).toEqual(['10.03.2031', '0042', 'GE00TB0000000000000002', '', '150.00']);
-    const out = lineFromToday(activity({ id: 502, day: '2031-03-10', debit: 7.6, comment: 'Beneficiary: TEST SHOP; Details: komisia' }), '2031-03-10')!;
+    const out = lineFromToday(activity({ id: 502, day: '2031-03-10', debit: 7.6, comment: 'Beneficiary: TEST SHOP; Details: komisia' }), '2031-03-10', 'GEL')!;
     expect(out).toMatchObject({ direction: 'out', amountTetri: 760, payer: 'TEST SHOP', purpose: 'qira' });
     expect(out.raw.split(' | ').slice(2, 5)).toEqual(['GE00TB0000000000000002', '7.60', '']);
     // A transfer sent last night and credited this morning: the bank's PostDate is yesterday, the line is today's.
-    expect(lineFromToday(activity({ id: 504, day: '2031-03-09', doc: '1', credit: 1 }), '2031-03-10')!.occurredOn).toBe('2031-03-10');
+    expect(lineFromToday(activity({ id: 504, day: '2031-03-09', doc: '1', credit: 1 }), '2031-03-10', 'GEL')!.occurredOn).toBe('2031-03-10');
   });
 
   it('reads a card payment for both its sums, with no payer, as a file’s card line is read', () => {
-    const l = lineFromEntry(entry({ id: 601, day: '2031-03-10', credit: 196.8, sender: 'ACQUIRER', comment: 'Caricxva - gadaxda; Tanxa:GEL 200; sakomisio: GEL 3.20; terminalis ID: TEST' }))!;
+    const l = lineFromEntry(entry({ id: 601, day: '2031-03-10', credit: 196.8, sender: 'ACQUIRER', comment: 'Caricxva - gadaxda; Tanxa:GEL 200; sakomisio: GEL 3.20; terminalis ID: TEST' }), 'GEL')!;
     expect(l).toMatchObject({ naturalKey: 'api:entry:601', direction: 'in', amountTetri: 19680, grossTetri: 20000, feeTetri: 320, payer: null, channel: 'acquiring' });
   });
 
+  it('reads an operation of the account in dollars under a key of its own, in cents, with the bank’s lari beside it', () => {
+    expect(lineFromToday(activity({ id: 501, day: '2031-03-10', doc: '0042', credit: 150, base: 405.5 }), '2031-03-10', 'USD')).toMatchObject({
+      naturalKey: 'api:today:USD:501',
+      docNo: '0042',
+      direction: 'in',
+      amountTetri: 15000,
+      bankGelTetri: 40550,
+    });
+    expect(lineFromEntry(entry({ id: 601, day: '2031-03-10', debit: 20, base: 54.1 }), 'USD')).toMatchObject({ naturalKey: 'api:entry:USD:601', direction: 'out', amountTetri: 2000, bankGelTetri: 5410 });
+    // An answer without the bank's lari is read all the same.
+    const bare = { ...entry({ id: 602, day: '2031-03-10', credit: 5 }), EntryAmountCreditBase: undefined, EntryAmountBase: undefined };
+    expect(lineFromEntry(bare, 'USD')).toMatchObject({ naturalKey: 'api:entry:USD:602', amountTetri: 500, bankGelTetri: null });
+    // In lari the keys are what they always were, and there is no second sum.
+    expect(lineFromToday(activity({ id: 501, day: '2031-03-10', credit: 150 }), '2031-03-10', 'GEL')).not.toHaveProperty('bankGelTetri');
+    expect(lineFromEntry(entry({ id: 601, day: '2031-03-10', debit: 20 }), 'GEL')).toMatchObject({ naturalKey: 'api:entry:601' });
+    expect(lineFromEntry(entry({ id: 601, day: '2031-03-10', debit: 20 }), 'GEL')).not.toHaveProperty('bankGelTetri');
+  });
+
   it('skips an operation where nothing moved, and refuses one without its id', () => {
-    expect(lineFromToday(activity({ id: 503, day: '2031-03-10' }), '2031-03-10')).toBeNull();
-    expect(() => lineFromEntry({ EntryDate: '2031-03-10T00:00:00', EntryAmountCredit: 5 })).toThrow(BogError);
+    expect(lineFromToday(activity({ id: 503, day: '2031-03-10' }), '2031-03-10', 'GEL')).toBeNull();
+    expect(() => lineFromEntry({ EntryDate: '2031-03-10T00:00:00', EntryAmountCredit: 5 }, 'GEL')).toThrow(BogError);
   });
 });
 
@@ -337,7 +387,7 @@ describe('a card payment the bank lists twice (rule 5, issue #16)', () => {
 describe('the client', () => {
   it('buys a token with the keys as Basic and in the body, and asks the API with the token alone, only by GET', async () => {
     const bank = fakeBank({ today: [activity({ id: 1, day: '2031-03-10', credit: 10 })] });
-    await new BogClient(cfg(), { ...quick, fetch: bank.fetchFn }).today(ACCOUNT);
+    await new BogClient(cfg(), { ...quick, fetch: bank.fetchFn }).today(GEL);
     const [token, get] = bank.calls;
     expect(token!.url).toBe(TOKEN_URL);
     expect(token!.method).toBe('POST');
@@ -355,8 +405,8 @@ describe('the client', () => {
   it('keeps the token while it is good, and buys a new one once when the bank stops taking it', async () => {
     const bank = fakeBank({ today: [], apiStatus: [0, 401] });
     const client = new BogClient(cfg(), { ...quick, fetch: bank.fetchFn });
-    await client.today(ACCOUNT);
-    await client.today(ACCOUNT);
+    await client.today(GEL);
+    await client.today(GEL);
     expect(bank.tokens()).toBe(2);
     expect(bank.calls.filter((c) => c.url.startsWith(API))).toHaveLength(3);
   });
@@ -365,35 +415,35 @@ describe('the client', () => {
     const waited: number[] = [];
     const sleep = async (ms: number) => void waited.push(ms);
     const once = fakeBank({ today: [], apiStatus: [429], retryAfter: '2' });
-    await new BogClient(cfg(), { gapMs: 0, sleep, fetch: once.fetchFn }).today(ACCOUNT);
+    await new BogClient(cfg(), { gapMs: 0, sleep, fetch: once.fetchFn }).today(GEL);
     expect(waited).toContain(2000);
     const long = fakeBank({ today: [], apiStatus: [429], retryAfter: '3600' });
-    await expect(new BogClient(cfg(), { ...quick, fetch: long.fetchFn }).today(ACCOUNT)).rejects.toMatchObject({ failure: 'rate_limited', httpStatus: 429 });
+    await expect(new BogClient(cfg(), { ...quick, fetch: long.fetchFn }).today(GEL)).rejects.toMatchObject({ failure: 'rate_limited', httpStatus: 429 });
   });
 
   it('asks once more after a pause when the bank’s gateway is busy (503), for the token and for the API alike', async () => {
     const waited: number[] = [];
     const sleep = async (ms: number) => void waited.push(ms);
     const blip = fakeBank({ today: [activity({ id: 1, day: '2031-03-10', credit: 10 })], tokenStatuses: [503], apiStatus: [502] });
-    expect(await new BogClient(cfg(), { gapMs: 0, sleep, fetch: blip.fetchFn }).today(ACCOUNT)).toHaveLength(1);
+    expect(await new BogClient(cfg(), { gapMs: 0, sleep, fetch: blip.fetchFn }).today(GEL)).toHaveLength(1);
     expect(waited.filter((w) => w === 3000)).toHaveLength(2);
     const down = fakeBank({ apiStatus: [503, 503] });
-    await expect(new BogClient(cfg(), { ...quick, fetch: down.fetchFn }).today(ACCOUNT)).rejects.toMatchObject({ failure: 'http', httpStatus: 503, stage: 'api' });
+    await expect(new BogClient(cfg(), { ...quick, fetch: down.fetchFn }).today(GEL)).rejects.toMatchObject({ failure: 'http', httpStatus: 503, stage: 'api' });
     const noToken = fakeBank({ tokenStatuses: [503, 503] });
-    await expect(new BogClient(cfg(), { ...quick, fetch: noToken.fetchFn }).today(ACCOUNT)).rejects.toMatchObject({ failure: 'http', httpStatus: 503, stage: 'token' });
+    await expect(new BogClient(cfg(), { ...quick, fetch: noToken.fetchFn }).today(GEL)).rejects.toMatchObject({ failure: 'http', httpStatus: 503, stage: 'token' });
   });
 
   it('turns a refusal into our word, with nothing of the bank’s answer or of the keys in it', async () => {
     const refused = fakeBank({ tokenStatus: 401 });
-    const err = await new BogClient(cfg(), { ...quick, fetch: refused.fetchFn }).today(ACCOUNT).catch((e: unknown) => e);
+    const err = await new BogClient(cfg(), { ...quick, fetch: refused.fetchFn }).today(GEL).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(BogError);
     expect(err).toMatchObject({ failure: 'unauthorized', httpStatus: 401, stage: 'token' });
     expect(String(err)).not.toContain('Тайна');
     expect(String(err)).not.toContain(SECRET);
     const forbidden = fakeBank({ apiStatus: [403] });
-    await expect(new BogClient(cfg(), { ...quick, fetch: forbidden.fetchFn }).today(ACCOUNT)).rejects.toMatchObject({ failure: 'forbidden' });
+    await expect(new BogClient(cfg(), { ...quick, fetch: forbidden.fetchFn }).today(GEL)).rejects.toMatchObject({ failure: 'forbidden' });
     const dead: BogFetch = async () => Promise.reject(new Error(`connect ECONNREFUSED ${SECRET}`));
-    const net = await new BogClient(cfg(), { ...quick, fetch: dead }).today(ACCOUNT).catch((e: unknown) => e);
+    const net = await new BogClient(cfg(), { ...quick, fetch: dead }).today(GEL).catch((e: unknown) => e);
     expect(net).toMatchObject({ failure: 'network' });
     expect(String(net)).not.toContain(SECRET);
   });
@@ -401,7 +451,7 @@ describe('the client', () => {
   it('reads the statement page after page while the bank says there is more', async () => {
     const entries = [1, 2, 3, 4, 5].map((id) => entry({ id, day: '2031-03-10', credit: id }));
     const bank = fakeBank({ entries, pageSize: 2 });
-    const rows = await new BogClient(cfg(), { ...quick, fetch: bank.fetchFn }).statement(ACCOUNT, '2031-03-09', '2031-03-10');
+    const rows = await new BogClient(cfg(), { ...quick, fetch: bank.fetchFn }).statement(GEL, '2031-03-09', '2031-03-10');
     expect(rows).toHaveLength(5);
     expect(bank.calls.filter((c) => c.url.startsWith(API)).map((c) => c.url.slice(API.length))).toEqual([
       `/v2/statement/${ACCOUNT}/GEL/2031-03-09/2031-03-10`,
@@ -410,13 +460,25 @@ describe('the client', () => {
     ]);
   });
 
+  it('asks for an account in the currency of the pair, the statement’s further pages too', async () => {
+    const bank = fakeBank({ other: { USD: { today: [], entries: [1, 2, 3].map((id) => entry({ id, day: '2031-03-10', credit: id })) } }, pageSize: 2 });
+    const client = new BogClient(cfg(), { ...quick, fetch: bank.fetchFn });
+    await client.today(USD);
+    expect(await client.statement(USD, '2031-03-09', '2031-03-10')).toHaveLength(3);
+    expect(bank.calls.filter((c) => c.url.startsWith(API)).map((c) => c.url.slice(API.length))).toEqual([
+      `/v2/documents/todayactivities/${ACCOUNT}/USD`,
+      `/v2/statement/${ACCOUNT}/USD/2031-03-09/2031-03-10`,
+      `/v2/statement/${ACCOUNT}/USD/777/2`,
+    ]);
+  });
+
   it('keeps under five requests a second: each one waits out the gap after the one before', async () => {
     let clock = 0;
     const waits: number[] = [];
     const bank = fakeBank({ today: [] });
     const client = new BogClient(cfg(), { fetch: bank.fetchFn, gapMs: 250, now: () => clock, sleep: async (ms) => void (waits.push(ms), (clock += ms)) });
-    await client.today(ACCOUNT);
-    await client.today(ACCOUNT);
+    await client.today(GEL);
+    await client.today(GEL);
     expect(waits.every((w) => w <= 250)).toBe(true);
     expect(waits.length).toBeGreaterThanOrEqual(2);
   });
@@ -429,9 +491,12 @@ describe.skipIf(!HAS_DB)('the pull, the night and the queue', () => {
   let base = 0;
   const sum = (n: number) => base + n;
   const at = (day: string, time = '10:00') => new Date(`${day}T${time}:00+04:00`);
+  const isoOf = (d: Date | null | undefined) => d?.toISOString().slice(0, 10) ?? null;
 
   async function reset() {
     const { prisma } = await import('../src/lib/db.js');
+    // Each account and currency keeps its own state since the dollars: a suite starts with none.
+    await prisma.bankApiAccount.deleteMany({ where: { bank: 'bog' } });
     await prisma.bogSync.update({
       where: { id: true },
       data: { lastOkAt: null, lastTryAt: null, lastFailure: null, lastHttpStatus: null, todayCount: 0, nightThrough: null, nightAt: null, nightFailure: null, nightHttpStatus: null, nightAdded: 0 },
@@ -609,9 +674,239 @@ describe.skipIf(!HAS_DB)('the pull, the night and the queue', () => {
     expect(sync).toMatchObject({ lastFailure: 'unauthorized', lastHttpStatus: 401, lastOkAt: null, nightFailure: 'unauthorized', nightThrough: null });
 
     const owner = await loginAs('owner');
-    const page = json<{ banks: { bank: string; api: { freshness: string; failure: string | null; nightFailure: string | null } | null }[] }>(await call(owner, 'GET', '/api/statements'));
+    const page = json<{ banks: { bank: string; api: { freshness: string; failure: string | null; nightFailure: string | null } | null; accounts: unknown[] }[] }>(await call(owner, 'GET', '/api/statements'));
     expect(page.banks.find((b) => b.bank === 'bog')?.api).toMatchObject({ freshness: 'silent', failure: 'unauthorized', nightFailure: 'unauthorized' });
     expect(page.banks.find((b) => b.bank === 'tbc')?.api).toBeNull();
+    // An account in lari alone is the bank's card, as before the dollars: no card of an account beside it.
+    for (const b of page.banks) expect(b.accounts).toEqual([]);
+  });
+
+  // The company opened a dollar account at the bank (29.10.2026). A second
+  // account the bank refuses these keys must not keep the lari account's money
+  // out of «Разобрать».
+  it('asks each account on its own: one the bank refuses keeps nothing of the other out of the queue, and the pull says which', async () => {
+    const day = '2031-03-21';
+    const { prisma } = await import('../src/lib/db.js');
+    const paid = activity({ id: 9801, day, doc: '0801', credit: sum(6) });
+    process.env.BOG_ACCOUNT = `${ACCOUNT} ${OTHER}`;
+    setBogFetchForTests(fakeBank({ today: [paid], refused: { [OTHER]: 403 } }).fetchFn, quick);
+    expect(await syncBogToday(at(day))).toMatchObject({
+      status: 'ok',
+      added: 1,
+      accounts: [
+        { last4: '0001', currency: 'GEL', listed: 1, added: 1, failure: null },
+        { last4: '0003', currency: 'GEL', listed: 0, added: 0, failure: 'forbidden', httpStatus: 403 },
+      ],
+    });
+    const lines = await linesOf([sum(6)]);
+    expect(lines).toHaveLength(1);
+    expect(lines[0]!.statement).toMatchObject({ source: 'api', account: ACCOUNT });
+    // The link in lari says it failed: an account in lari the bank does not answer is not hidden behind one it does.
+    expect(await prisma.bogSync.findUnique({ where: { id: true } })).toMatchObject({ lastFailure: 'forbidden', lastHttpStatus: 403, lastOkAt: null });
+    const pairs = await prisma.bankApiAccount.findMany({ where: { bank: 'bog' }, orderBy: { account: 'asc' } });
+    expect(pairs.map((p) => [p.account, p.lastFailure, p.lastOkAt?.getTime() ?? null])).toEqual([
+      [ACCOUNT, null, at(day).getTime()],
+      [OTHER, 'forbidden', null],
+    ]);
+
+    // The refused account first: the one after it is asked all the same, with the same token.
+    process.env.BOG_ACCOUNT = `${OTHER},${ACCOUNT}`;
+    const bank = fakeBank({ today: [paid, activity({ id: 9802, day, doc: '0802', credit: sum(7) })], refused: { [OTHER]: 404 } });
+    setBogFetchForTests(bank.fetchFn, quick);
+    expect(await syncBogToday(at(day, '10:05'))).toMatchObject({
+      status: 'ok',
+      accounts: [
+        { last4: '0003', failure: 'not_found', httpStatus: 404 },
+        { last4: '0001', failure: null, listed: 2, added: 1 },
+      ],
+    });
+    expect(bank.calls.filter((c) => c.url.startsWith(API)).map((c) => c.url.slice(API.length))).toEqual([
+      `/v2/documents/todayactivities/${OTHER}/GEL`,
+      `/v2/documents/todayactivities/${ACCOUNT}/GEL`,
+    ]);
+    expect(bank.tokens()).toBe(1);
+    expect(await linesOf([sum(6), sum(7)])).toHaveLength(2);
+
+    // Keys the bank refuses are refused for every account: the second is not asked.
+    const keys = fakeBank({ tokenStatus: 401 });
+    setBogFetchForTests(keys.fetchFn, quick);
+    expect(await syncBogToday(at(day, '10:10'))).toEqual({ status: 'failed', failure: 'unauthorized', httpStatus: 401, stage: 'token' });
+    expect(keys.calls).toHaveLength(1);
+
+    // Both answer: the link is well again.
+    setBogFetchForTests(fakeBank({ today: [paid] }).fetchFn, quick);
+    expect(await syncBogToday(at(day, '10:15'))).toMatchObject({ status: 'ok', added: 0 });
+    expect(await prisma.bogSync.findUnique({ where: { id: true } })).toMatchObject({ lastFailure: null, lastHttpStatus: null });
+  });
+
+  it('reads the night of each account on its own, and has read up to yesterday only once every account is read', async () => {
+    const { prisma } = await import('../src/lib/db.js');
+    await prisma.bogSync.update({ where: { id: true }, data: { nightThrough: new Date('2031-03-22T00:00:00Z') } });
+    const entries = [entry({ id: 99801, day: '2031-03-23', doc: '0811', credit: sum(7) })];
+
+    // The refused account comes first, and the night goes on to the next.
+    process.env.BOG_ACCOUNT = `${OTHER} ${ACCOUNT}`;
+    setBogFetchForTests(fakeBank({ entries, refused: { [OTHER]: 403 } }).fetchFn, quick);
+    expect(await reconcileBogNight(at('2031-03-24', '06:17'))).toMatchObject({
+      status: 'ok',
+      added: 1,
+      accounts: [
+        { last4: '0003', failure: 'forbidden', httpStatus: 403 },
+        { last4: '0001', failure: null, added: 1, days: ['2031-03-22', '2031-03-23'] },
+      ],
+    });
+    expect(await linesOf([sum(7)])).toHaveLength(1);
+    const held = await prisma.bogSync.findUnique({ where: { id: true } });
+    expect(held).toMatchObject({ nightFailure: 'forbidden', nightHttpStatus: 403 });
+    expect(held?.nightThrough?.toISOString().slice(0, 10)).toBe('2031-03-22');
+
+    // The next hour both answer: the night reaches yesterday, and the line already in does not come twice.
+    setBogFetchForTests(fakeBank({ entries }).fetchFn, quick);
+    expect(await reconcileBogNight(at('2031-03-24', '07:17'))).toMatchObject({ status: 'ok', added: 0, days: ['2031-03-22', '2031-03-23'] });
+    expect(await linesOf([sum(7)])).toHaveLength(1);
+    const read = await prisma.bogSync.findUnique({ where: { id: true } });
+    expect(read).toMatchObject({ nightFailure: null, nightHttpStatus: null });
+    expect(read?.nightThrough?.toISOString().slice(0, 10)).toBe('2031-03-23');
+  });
+
+  // The account in dollars (29.10.2026, decision D1 of docs/spec/usd-accounts-plan.md):
+  // read next to the lari, kept apart from it, and outside every sum in lari.
+  it('reads one IBAN in lari and in dollars as two accounts: a statement of the day each, the dollars parked with the bank’s lari beside them', async () => {
+    const day = '2031-03-25';
+    const { prisma } = await import('../src/lib/db.js');
+    process.env.BOG_ACCOUNT = `${ACCOUNT} ${ACCOUNT}USD`;
+    // The same id, document and sum in both currencies: 150 dollars are not 150 lari, nor one operation with them.
+    const bank = fakeBank({
+      today: [activity({ id: 9901, day, doc: '0901', credit: sum(1) })],
+      other: { USD: { today: [activity({ id: 9901, day, doc: '0901', credit: sum(1), base: 405.5 }), activity({ id: 9902, day, doc: '0902', debit: sum(2), base: 54.1 })] } },
+    });
+    setBogFetchForTests(bank.fetchFn, quick);
+    const pulled = await syncBogToday(at(day));
+    expect(pulled).toMatchObject({
+      status: 'ok',
+      listed: 3,
+      added: 3,
+      known: { byKey: 0, byDoc: 0, bySum: 0 },
+      accounts: [
+        { last4: '0001', currency: 'GEL', listed: 1, added: 1, failure: null },
+        { last4: '0001', currency: 'USD', listed: 2, added: 2, failure: null },
+      ],
+    });
+    // What the job says goes to the worker's log: an account by its last four digits, never more.
+    expect(JSON.stringify(pulled)).not.toContain(ACCOUNT);
+    expect(bank.calls.filter((c) => c.url.startsWith(API)).map((c) => c.url.slice(API.length))).toEqual([`/v2/documents/todayactivities/${ACCOUNT}/GEL`, `/v2/documents/todayactivities/${ACCOUNT}/USD`]);
+
+    const lines = await linesOf([sum(1), sum(2)]);
+    expect(lines.map((l) => [l.naturalKey, l.currency, l.status, l.resolution, l.bankGelTetri]).sort()).toEqual([
+      ['api:today:9901', 'GEL', 'unmatched', null, null],
+      ['api:today:USD:9901', 'USD', 'ignored', 'foreign', 40550],
+      ['api:today:USD:9902', 'USD', 'ignored', 'foreign', 5410],
+    ]);
+    const days = await prisma.statement.findMany({ where: { id: { in: lines.map((l) => l.statementId) } }, orderBy: { currency: 'asc' } });
+    expect(days.map((s) => [s.source, s.account, s.currency, s.newLines])).toEqual([
+      ['api', ACCOUNT, 'GEL', 1],
+      ['api', ACCOUNT, 'USD', 2],
+    ]);
+
+    // The lari link counts the lari; each pair keeps its own, and a new pair in dollars the day it reads back from.
+    expect(await prisma.bogSync.findUnique({ where: { id: true } })).toMatchObject({ lastFailure: null, todayCount: 1 });
+    const pairs = await prisma.bankApiAccount.findMany({ where: { bank: 'bog' }, orderBy: { currency: 'asc' } });
+    expect(pairs.map((p) => [p.account, p.currency, p.todayCount, p.lastFailure, isoOf(p.readFrom)])).toEqual([
+      [ACCOUNT, 'GEL', 1, null, null],
+      [ACCOUNT, 'USD', 2, null, '2031-02-22'],
+    ]);
+    expect(await syncBogToday(at(day, '10:05'))).toMatchObject({ status: 'ok', listed: 3, added: 0, known: { byKey: 3 } });
+  });
+
+  it('leaves the lari green, its lines in, when the bank refuses the dollars — by day and by night', async () => {
+    const day = '2031-03-26';
+    const { prisma } = await import('../src/lib/db.js');
+    process.env.BOG_ACCOUNT = `${ACCOUNT} ${ACCOUNT}USD`;
+    setBogFetchForTests(fakeBank({ today: [activity({ id: 9911, day, doc: '0911', credit: sum(3) })], refused: { [`${ACCOUNT}/USD`]: 403 } }).fetchFn, quick);
+    expect(await syncBogToday(at(day))).toMatchObject({
+      status: 'ok',
+      added: 1,
+      accounts: [
+        { currency: 'GEL', failure: null, added: 1 },
+        { currency: 'USD', failure: 'forbidden', httpStatus: 403 },
+      ],
+    });
+    expect(await linesOf([sum(3)])).toHaveLength(1);
+    const sync = await prisma.bogSync.findUnique({ where: { id: true } });
+    expect(sync).toMatchObject({ lastFailure: null, lastHttpStatus: null, todayCount: 1 });
+    expect(sync?.lastOkAt?.getTime()).toBe(at(day).getTime());
+    const owner = await loginAs('owner');
+    type Page = { banks: { bank: string; api: { freshness: string; failure: string | null } | null; accounts: { last4: string; currency: string; api: { freshness: string; failure: string | null } }[] }[] };
+    const page = json<Page>(await call(owner, 'GET', '/api/statements'));
+    expect(page.banks.find((b) => b.bank === 'bog')?.api).toMatchObject({ freshness: 'ok', failure: null });
+    // The dollars have a card of their own on «Выписки», which says why the bank gives nothing for them — by four digits, never the account.
+    expect(page.banks.find((b) => b.bank === 'bog')?.accounts).toMatchObject([{ last4: '0001', currency: 'USD', api: { freshness: 'silent', failure: 'forbidden', lastOkAt: null } }]);
+    expect(JSON.stringify(page.banks)).not.toContain(ACCOUNT);
+    const pairs = await prisma.bankApiAccount.findMany({ where: { bank: 'bog' }, orderBy: { currency: 'asc' } });
+    expect(pairs.map((p) => [p.currency, p.lastFailure, p.lastHttpStatus, p.lastOkAt?.getTime() ?? null])).toEqual([
+      ['GEL', null, null, at(day).getTime()],
+      ['USD', 'forbidden', 403, null],
+    ]);
+
+    // The night: the bank does not know the account in dollars. The lari reaches yesterday all the same.
+    await prisma.bogSync.update({ where: { id: true }, data: { nightThrough: new Date('2031-03-24T00:00:00Z') } });
+    setBogFetchForTests(fakeBank({ entries: [entry({ id: 99911, day: '2031-03-25', doc: '0912', credit: sum(4) })], refused: { [`${ACCOUNT}/USD`]: 404 } }).fetchFn, quick);
+    expect(await reconcileBogNight(at('2031-03-27', '06:17'))).toMatchObject({
+      status: 'ok',
+      added: 1,
+      days: ['2031-03-24', '2031-03-25', '2031-03-26'],
+      accounts: [
+        { currency: 'GEL', failure: null, added: 1 },
+        { currency: 'USD', failure: 'not_found', httpStatus: 404 },
+      ],
+    });
+    const night = await prisma.bogSync.findUnique({ where: { id: true } });
+    expect(night).toMatchObject({ nightFailure: null, nightHttpStatus: null, nightAdded: 1 });
+    expect(isoOf(night?.nightThrough)).toBe('2031-03-26');
+    const dollars = await prisma.bankApiAccount.findFirstOrThrow({ where: { bank: 'bog', currency: 'USD' } });
+    expect(dollars).toMatchObject({ nightFailure: 'not_found', nightHttpStatus: 404, nightThrough: null });
+  });
+
+  it('reads a new account back once, a month at most, while the lari reads on from where its night stopped', async () => {
+    const { prisma } = await import('../src/lib/db.js');
+    await prisma.bogSync.update({ where: { id: true }, data: { nightThrough: new Date('2031-04-08T00:00:00Z') } });
+    process.env.BOG_ACCOUNT = `${ACCOUNT}GEL,${ACCOUNT}USD`;
+    const bank = fakeBank({
+      entries: [entry({ id: 99921, day: '2031-04-09', doc: '0921', credit: sum(1) })],
+      other: { USD: { entries: [entry({ id: 99921, day: '2031-03-12', doc: '0921', credit: sum(1), base: 2702.7 }), entry({ id: 99922, day: '2031-04-09', doc: '0922', debit: sum(2), base: 27.1 })] } },
+    });
+    setBogFetchForTests(bank.fetchFn, quick);
+    const night = await reconcileBogNight(at('2031-04-10', '06:17'));
+    expect(bank.calls.filter((c) => c.url.startsWith(API)).map((c) => c.url.slice(API.length))).toEqual([
+      `/v2/statement/${ACCOUNT}/GEL/2031-04-08/2031-04-09`,
+      `/v2/statement/${ACCOUNT}/USD/2031-03-10/2031-04-09`,
+    ]);
+    expect(night).toMatchObject({
+      status: 'ok',
+      listed: 3,
+      added: 3,
+      accounts: [
+        { currency: 'GEL', listed: 1, added: 1, days: ['2031-04-08', '2031-04-09'] },
+        { currency: 'USD', listed: 2, added: 2 },
+      ],
+    });
+    expect(night.status === 'ok' ? night.accounts[1]!.days : []).toHaveLength(31);
+    const lines = await linesOf([sum(1), sum(2)]);
+    expect(lines.map((l) => [l.naturalKey, l.currency, isoOf(l.occurredOn), l.bankGelTetri]).sort()).toEqual([
+      ['api:entry:99921', 'GEL', '2031-04-09', null],
+      ['api:entry:USD:99921', 'USD', '2031-03-12', 270270],
+      ['api:entry:USD:99922', 'USD', '2031-04-09', 2710],
+    ]);
+    const dollars = await prisma.bankApiAccount.findFirstOrThrow({ where: { bank: 'bog', currency: 'USD' } });
+    expect([isoOf(dollars.readFrom), isoOf(dollars.nightThrough), dollars.nightFailure, dollars.nightAdded]).toEqual(['2031-03-10', '2031-04-09', null, 2]);
+    expect(isoOf((await prisma.bogSync.findUnique({ where: { id: true } }))?.nightThrough)).toBe('2031-04-09');
+
+    // The next night the dollars read on from their own night, as the lari do: not a month again.
+    expect(await reconcileBogNight(at('2031-04-11', '06:17'))).toMatchObject({ status: 'ok', added: 0, known: { byKey: 2 } });
+    expect(bank.calls.filter((c) => c.url.startsWith(API)).slice(2).map((c) => c.url.slice(API.length))).toEqual([
+      `/v2/statement/${ACCOUNT}/GEL/2031-04-09/2031-04-10`,
+      `/v2/statement/${ACCOUNT}/USD/2031-04-09/2031-04-10`,
+    ]);
   });
 
   it('asks about the account of the last uploaded statement when the env file names none — and says when there is none', async () => {
@@ -697,6 +992,66 @@ describe.skipIf(!HAS_DB)('the pull, the night and the queue', () => {
     setBogFetchForTests(fakeBank({ today: listings.flat() }).fetchFn, quick);
     expect(await syncBogToday(at(day, '19:05'))).toMatchObject({ status: 'ok', listed: 4, added: 0, known: { byKey: 2, byCard: 2 } });
     expect(await linesOf([sum(6)])).toHaveLength(2);
+  });
+
+  // `deploy/set-bog-keys.sh --add-account` asks the bank about the new pair through the stand before writing it.
+  it('asks the bank about one pair before a script writes it, says only our word and the status, and keeps nothing', async () => {
+    const app = await getApp();
+    const { env } = await import('../src/lib/env.js');
+    const { prisma } = await import('../src/lib/db.js');
+    const probe = (payload: Record<string, unknown>, token = env.WORKER_TOKEN) => app.inject({ method: 'POST', url: '/api/jobs/bank-probe', headers: { 'x-worker-token': token }, payload });
+    const said = async (payload: Record<string, unknown>) => {
+      const res = await probe(payload);
+      expect(res.statusCode, res.body).toBe(200);
+      for (const never of [ACCOUNT, OTHER, 'Тайна', SECRET]) expect(res.body).not.toContain(never);
+      return json<{ code: string; httpStatus: number | null }>(res);
+    };
+    expect((await probe({ bank: 'bog', account: ACCOUNT, currency: 'USD' }, 'not-it')).statusCode).toBe(401);
+
+    // The dollars on the account in lari: one question, by GET, in that currency, and nothing kept of the answer.
+    const bank = fakeBank({ today: [activity({ id: 9961, day: '2031-03-28', credit: sum(1) })], other: { USD: { today: [activity({ id: 9962, day: '2031-03-28', credit: sum(2) })] } } });
+    setBogFetchForTests(bank.fetchFn, quick);
+    expect(await said({ bank: 'bog', account: ` ${ACCOUNT.toLowerCase()} `, currency: 'usd' })).toEqual({ code: 'ok', httpStatus: null });
+    expect(bank.calls.filter((c) => c.url.startsWith(API)).map((c) => [c.method, c.url.slice(API.length)])).toEqual([['GET', `/v2/documents/todayactivities/${ACCOUNT}/USD`]]);
+    expect(await linesOf([sum(1), sum(2)])).toEqual([]);
+    expect(await prisma.bankApiAccount.count({ where: { bank: 'bog' } })).toBe(0);
+    expect(await prisma.bogSync.findUnique({ where: { id: true } })).toMatchObject({ lastTryAt: null, nightAt: null });
+
+    // A refusal is our word and the status, the bank's own answer dropped.
+    setBogFetchForTests(fakeBank({ refused: { [`${ACCOUNT}/USD`]: 403 } }).fetchFn, quick);
+    expect(await said({ bank: 'bog', account: ACCOUNT, currency: 'USD' })).toEqual({ code: 'forbidden', httpStatus: 403 });
+    // It knows the IBAN in lari and not in euros: the account in euros has a number of its own.
+    const euros = fakeBank({ refused: { [`${ACCOUNT}/EUR`]: 404 } });
+    setBogFetchForTests(euros.fetchFn, quick);
+    expect(await said({ bank: 'bog', account: ACCOUNT, currency: 'EUR' })).toEqual({ code: 'no_currency', httpStatus: 404 });
+    expect(euros.calls.filter((c) => c.url.startsWith(API)).map((c) => c.url.slice(API.length))).toEqual([`/v2/documents/todayactivities/${ACCOUNT}/EUR`, `/v2/documents/todayactivities/${ACCOUNT}/GEL`]);
+    // A number it does not know in any currency.
+    setBogFetchForTests(fakeBank({ refused: { [OTHER]: 404 } }).fetchFn, quick);
+    expect(await said({ bank: 'bog', account: OTHER, currency: 'USD' })).toEqual({ code: 'not_found', httpStatus: 404 });
+    // Keys it no longer takes: the token is asked for once, and nothing more.
+    const keys = fakeBank({ tokenStatus: 401 });
+    setBogFetchForTests(keys.fetchFn, quick);
+    expect(await said({ bank: 'bog', account: ACCOUNT, currency: 'USD' })).toEqual({ code: 'unauthorized', httpStatus: 401 });
+    expect(keys.calls).toHaveLength(1);
+
+    // What is not an account in GEL, USD or EUR is not asked about at all.
+    const none = fakeBank({});
+    setBogFetchForTests(none.fetchFn, quick);
+    for (const payload of [
+      { bank: 'bog', account: `${ACCOUNT}USD`, currency: 'USD' },
+      { bank: 'bog', account: 'GE00BG123', currency: 'USD' },
+      { bank: 'bog', account: ACCOUNT, currency: 'GBP' },
+      { bank: 'bog', account: ACCOUNT, currency: '' },
+      { bank: 'credo', account: ACCOUNT, currency: 'USD' },
+      {},
+    ]) {
+      expect(await said(payload)).toEqual({ code: 'bad_account', httpStatus: null });
+    }
+    expect(none.calls).toHaveLength(0);
+    // Without the keys the link is off.
+    delete process.env.BOG_CLIENT_SECRET;
+    expect(await said({ bank: 'bog', account: ACCOUNT, currency: 'USD' })).toEqual({ code: 'off', httpStatus: null });
+    expect(none.calls).toHaveLength(0);
   });
 
   it('opens the two jobs to the worker only', async () => {
