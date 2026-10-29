@@ -7,7 +7,7 @@ import { bogApiStatus, bogPairsStatus } from '../lib/bog.js';
 import { dateFromISO, isoDate } from '../lib/dates.js';
 import { prisma } from '../lib/db.js';
 import { env } from '../lib/env.js';
-import { badRequest, conflict, forbidden, notFound } from '../lib/errors.js';
+import { ApiError, badRequest, conflict, forbidden, notFound } from '../lib/errors.js';
 import { actorOf } from '../lib/guard.js';
 import { voidPayment } from '../lib/payments.js';
 import { recordOutFromLine } from '../lib/money.js';
@@ -15,6 +15,7 @@ import { depositsOverview } from '../lib/deposits.js';
 import { last4 } from '../lib/statements/apiDays.js';
 import { SPLIT_MAX, attach, importStatement, linkBankDeposit, linkPayment, previewStatement, split, type SplitShift } from '../lib/statements/import.js';
 import { ParseError } from '../lib/statements/parse.js';
+import { readBanksNow } from '../lib/statements/readNow.js';
 import { isCashDeposit, loadCtx, storedLine, suggest } from '../lib/statements/reconcile.js';
 import { expenseKey, lastCategories, payeeLabel, sortByRule, waitingFrom } from '../lib/statements/expenses.js';
 import { BACK_TO_QUEUE, setAside } from '../lib/statements/aside.js';
@@ -136,6 +137,23 @@ export function statementRoutes(app: FastifyInstance): void {
         createdAt: s.createdAt.toISOString(),
       })),
     };
+  });
+
+  /**
+   * «Прочитать сейчас» (Mika, 29.10.2026): every bank whose keys are on the
+   * stand asked at once for the day's operations and for the past days not
+   * read yet, by the jobs' own functions (`statements/readNow.ts`). The answer
+   * is per pair, by its last four digits: counts and our words, nothing of the
+   * bank's. `busy` while a job of a bank runs, as the jobs answer; asked again
+   * within a minute, by anybody, it is refused with the seconds left.
+   */
+  app.post('/api/statements/read-now', { config: { scope: 'payments.reconcile' } }, async () => {
+    const outcome = await readBanksNow();
+    if (outcome.status === 'too_soon') {
+      throw new ApiError(429, 'bank_read_too_soon', 'The banks were asked less than a minute ago.', { seconds: outcome.seconds });
+    }
+    if (outcome.status === 'ok') app.log.info({ banks: outcome.banks }, 'the banks were read on a person’s word');
+    return outcome;
   });
 
   app.post<{ Body: Body }>('/api/statements', { config: { scope: 'payments.reconcile' }, bodyLimit: BODY_LIMIT }, async (req, reply) => {

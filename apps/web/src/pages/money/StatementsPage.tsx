@@ -1,5 +1,5 @@
 import { addDays, localDateTime, monthOf, todayISO } from '@ev8/shared';
-import { Fragment, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, ApiError } from '../../api.js';
 import { LoadError } from '../../components/LoadError.js';
@@ -9,7 +9,7 @@ import '../../ds/form/form.css';
 import { useOperation } from '../../ds/form/operation.js';
 import '../../ds/money/money.css';
 import { Skeleton } from '../../ds/state/Skeleton.js';
-import { fmtDate, fmtDateAt, formatMinor } from '../../format.js';
+import { fmtDate, fmtDateAt, fmtDayMonth, formatMinor } from '../../format.js';
 import { useT } from '../../i18n/index.js';
 import { errorText, useLoad } from '../../lib/use.js';
 
@@ -115,6 +115,101 @@ function ApiLine({ bank, api }: { bank: 'bog' | 'tbc'; api: BankApi }) {
         api.nightFailure && api.nightFailure !== 'no_account' && !(silent && api.nightFailure === api.failure) && <span className="warn-text">{w.nightFailed(why(api.nightFailure))}</span>
       )}
     </>
+  );
+}
+
+/** What «Прочитать сейчас» answers: what came of each bank that is on, account by account, by the last four digits. */
+type ReadNow =
+  | { status: 'off' }
+  | { status: 'busy' }
+  | {
+      status: 'ok';
+      /** When the stand may be asked again, in seconds. */
+      seconds: number;
+      banks: { bank: 'bog' | 'tbc'; failure: Why | null; accounts: { last4: string; currency: string; added: number; days: string[]; failure: Why | null }[] }[];
+    };
+
+/**
+ * «Прочитать сейчас» (Mika, 29.10.2026: «давай сделаем кнопку тоже»): both
+ * banks asked at once for the day's operations and the past days not read yet,
+ * instead of waiting for the worker; then what came, account by account. The
+ * cards, the counts and «Операции в валюте» refresh as after any write. The
+ * stand asks at most once a minute, whoever presses, and the button counts
+ * the wait down.
+ */
+function ReadNowBlock({ known }: { known: Known[] }) {
+  const t = useT();
+  const r = t.bankReadNow;
+  const op = useOperation();
+  const [said, setSaid] = useState<ReadNow | null>(null);
+  const [until, setUntil] = useState(0);
+  const [clock, setClock] = useState(() => Date.now());
+  useEffect(() => {
+    if (until <= clock) return;
+    const tick = window.setTimeout(() => setClock(Date.now()), 1000);
+    return () => window.clearTimeout(tick);
+  }, [until, clock]);
+  const left = Math.max(0, Math.ceil((until - clock) / 1000));
+  const wait = (seconds: number) => {
+    const at = Date.now();
+    setClock(at);
+    setUntil(at + seconds * 1000);
+  };
+
+  const read = async () => {
+    setSaid(null);
+    const res = await op.run(async (key) => {
+      try {
+        return await api.post<ReadNow>('/api/statements/read-now', {}, { key });
+      } catch (e) {
+        // Asked within the minute, by this person or another: the wait is the server's.
+        if (e instanceof ApiError && typeof e.extra.seconds === 'number') wait(e.extra.seconds);
+        throw e;
+      }
+    });
+    if (!res.ok) return;
+    setSaid(res.value);
+    if (res.value.status === 'ok') wait(res.value.seconds);
+  };
+
+  const why = (f: Why | null) => t.bankApi.why[f ?? 'http'];
+  const banks = said?.status === 'ok' ? said.banks : [];
+  const all = [...known, ...banks.flatMap((b) => b.accounts.map((a) => ({ bank: b.bank, currency: a.currency, last4: a.last4 })))];
+  // The wait is on the button; once it is over, the words for it are no longer true.
+  const failure = op.failure && !(op.failure.code === 'bank_read_too_soon' && left === 0) ? op.failure.text : null;
+  return (
+    <div className="bank-read">
+      <button type="button" className="pill pill-sm" disabled={op.state === 'busy' || left > 0} onClick={() => void read()}>
+        {op.state === 'busy' ? r.reading : left > 0 ? r.wait(left) : r.button}
+      </button>
+      {failure && (
+        <p className="field-err" role="alert">
+          {failure}
+        </p>
+      )}
+      {said?.status === 'busy' && (
+        <p className="warn-text" role="status">
+          {r.busy}
+        </p>
+      )}
+      {banks.length > 0 && (
+        <ul className="bank-read-list" role="status">
+          {banks.flatMap((b) => {
+            const name = t.statements.banks[b.bank];
+            if (b.accounts.length === 0) return [<li key={b.bank}>{`${name} — ${r.nothingCame(why(b.failure))}`}</li>];
+            return b.accounts.map((a) => {
+              const came = a.added > 0 || a.days.length > 0;
+              const words = [
+                a.added > 0 ? r.added(a.added) : came || !a.failure ? r.nothing : null,
+                a.days.length > 0 ? r.days(fmtDayMonth(a.days[0]), fmtDayMonth(a.days[a.days.length - 1]), a.days.length) : null,
+                a.failure ? (came ? r.notAll(why(a.failure)) : r.nothingCame(why(a.failure))) : null,
+              ];
+              return <li key={`${b.bank} ${a.currency} ${a.last4}`}>{`${accountName(name, { bank: b.bank, ...a }, all)} — ${words.filter(Boolean).join(' · ')}`}</li>;
+            });
+          })}
+        </ul>
+      )}
+    </div>
   );
 }
 
@@ -277,6 +372,8 @@ export function StatementsPage() {
           })}
         </div>
       )}
+      {/* With the cards: only when a bank comes by its API on this stand — a bank that is off is not asked. */}
+      {data?.banks.some((b) => b.bank !== 'credo' && b.api) && <ReadNowBlock known={known} />}
 
       {refusal && (
         <div className="form-banner form-banner-bad" role="alert">

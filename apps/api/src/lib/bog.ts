@@ -528,6 +528,21 @@ export function reconcileBogNight(now: Date = new Date()): Promise<BogOutcome> {
   return serial(() => readNights(cfg, now));
 }
 
+/** A job is running or waits for its turn: «Прочитать сейчас» then answers busy rather than queue behind it. */
+export const bogBusy = (): boolean => waiting > 0;
+
+/**
+ * «Прочитать сейчас» on "Деньги → Выписки" (Mika, 29.10.2026): the day's
+ * operations, then the night — the past days of a pair not read yet — in one
+ * turn of the same chain, so neither the pull nor the night of the worker can
+ * come between them. The caller asks `bogBusy` first (`statements/readNow.ts`).
+ */
+export function readBogNow(now: Date = new Date()): Promise<{ status: 'off' } | { status: 'read'; today: BogOutcome; night: BogOutcome }> {
+  const cfg = bogConfig();
+  if (!cfg) return Promise.resolve({ status: 'off' });
+  return serial(async () => ({ status: 'read' as const, today: await pullToday(cfg, now), night: await readNights(cfg, now) }));
+}
+
 function client(cfg: BogConfig): BogClient {
   return new BogClient(cfg, { ...clientOptsForTests, ...(fetchForTests ? { fetch: fetchForTests } : {}) });
 }

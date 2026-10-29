@@ -488,6 +488,20 @@ export function reconcileTbcNight(now: Date = new Date()): Promise<TbcOutcome> {
   return serial(() => readNights(cfg, now));
 }
 
+/** A job is running or waits for its turn: «Прочитать сейчас» then answers busy rather than queue behind it. */
+export const tbcBusy = (): boolean => waiting > 0;
+
+/**
+ * «Прочитать сейчас» on "Деньги → Выписки" (Mika, 29.10.2026), as at Bank of
+ * Georgia (`readBogNow`): the movements of yesterday and today, then the
+ * night, in one turn of the same chain.
+ */
+export function readTbcNow(now: Date = new Date()): Promise<{ status: 'off' } | { status: 'read'; today: TbcOutcome; night: TbcOutcome }> {
+  const cfg = tbcConfig();
+  if (!cfg) return Promise.resolve({ status: 'off' });
+  return serial(async () => ({ status: 'read' as const, today: await pullToday(cfg, now), night: await readNights(cfg, now) }));
+}
+
 function client(cfg: TbcConfig): TbcClient {
   return new TbcClient(cfg, { ...clientOptsForTests, ...(fetchForTests ? { fetch: fetchForTests } : {}) });
 }
