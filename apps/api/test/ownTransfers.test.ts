@@ -110,4 +110,31 @@ describe.skipIf(!HAS_DB)('money between the company’s own accounts, in the que
     expect((await call(owner, 'POST', `/api/statement-lines/${back.id}/own-transfer`, {})).statusCode).toBe(200);
     expect(await prisma.statementLine.findUniqueOrThrow({ where: { id: back.id } })).toMatchObject({ status: 'ignored', resolution: 'own_transfer', matchedRule: 'own_transfer' });
   });
+
+  it('an account in dollars on a number of its own does not make a line in lari about it ours (ADR-0051)', async () => {
+    const { prisma } = await import('../src/lib/db.js');
+    const { markOwnTransfers } = await import('../src/lib/statements/ownTransfers.js');
+    const day = new Date();
+    const DOLLARS = 'GE33BG0000000000000007';
+    const bog = await prisma.statement.create({ data: { bank: 'bog', fileName: `test-${uniq()}.csv`, fileSha256: uniq(), account: `${BOG}GEL` } });
+    const tbc = await prisma.statement.create({ data: { bank: 'tbc', fileName: `test-${uniq()}.csv`, fileSha256: uniq(), account: TBC } });
+    // A day the API read of the dollar account: its statement names the bare IBAN.
+    const usd = await prisma.statement.create({
+      data: { bank: 'bog', source: 'api', fileName: 'Business Online', fileSha256: 'api', account: DOLLARS, currency: 'USD', periodFrom: day, periodTo: day },
+    });
+    const mk = (statementId: string, bank: 'bog' | 'tbc', direction: 'in' | 'out', raw: string) =>
+      prisma.statementLine.create({
+        data: { statementId, bank, naturalKey: `test-${uniq()}`, occurredOn: day, direction, amountTetri: 765432, payer: 'Invented Exchange Desk', purpose: null, raw, status: 'unmatched' },
+      });
+    // The lari half of an exchange names the dollar account it came from; an
+    // unrelated payment of the same sum goes out at TBC the same day.
+    const exchange = await mk(bog.id, 'bog', 'in', `Incoming; Account: ${DOLLARS}`);
+    const unrelated = await mk(tbc.id, 'tbc', 'out', 'test line');
+
+    await markOwnTransfers();
+    for (const id of [exchange.id, unrelated.id]) {
+      expect(await prisma.statementLine.findUniqueOrThrow({ where: { id } })).toMatchObject({ status: 'unmatched', resolution: null, matchedRule: null });
+    }
+    await prisma.statement.delete({ where: { id: usd.id } });
+  });
 });

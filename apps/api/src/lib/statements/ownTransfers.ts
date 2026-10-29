@@ -116,7 +116,10 @@ export function ownTransfers(lines: readonly OwnLine[], own: ReadonlySet<string>
  * so the second half of a transfer finds the first. Returns how many it marked.
  */
 export async function markOwnTransfers(): Promise<number> {
-  const accounts = await prisma.statement.findMany({ where: { account: { not: null } }, distinct: ['account'], select: { account: true } });
+  // The accounts in lari only. One in dollars on a number of its own is not
+  // "another of ours" for a line in lari: that line is the lari half of an
+  // exchange, and a person sorts it, as before (ADR-0051).
+  const accounts = await prisma.statement.findMany({ where: { account: { not: null }, currency: 'GEL' }, distinct: ['account'], select: { account: true } });
   const own = new Set(accounts.map((a) => ibanOf(a.account)).filter((a): a is string => a !== null));
   if (own.size < 2) return 0;
   const since = new Date(Date.now() - LOOK_BACK_DAYS * 86_400_000);
