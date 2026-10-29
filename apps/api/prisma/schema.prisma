@@ -855,8 +855,10 @@ model Statement {
   newLines    Int       @default(0) @map("new_lines")
   matched     Int       @default(0)
   uploadedById String?  @map("uploaded_by") @db.Uuid
-  /// 'file' for an upload; 'api' for a day a bank was asked about by its API, one per bank, account and day (migrations 0041, 0045).
+  /// 'file' for an upload; 'api' for a day a bank was asked about by its API, one per bank, account, currency and day (migrations 0041, 0045, 0073).
   source      String    @default("file")
+  /// The currency of the account (migration 0073): GEL, or USD/EUR of an account kept apart from the lari.
+  currency    String    @default("GEL")
   createdAt   DateTime  @default(now()) @map("created_at")
 
   uploadedBy User?           @relation(fields: [uploadedById], references: [id])
@@ -876,9 +878,15 @@ model StatementLine {
   docNo       String?             @map("doc_no")
   occurredOn  DateTime            @map("occurred_on") @db.Date
   direction   PaymentDirection
+  /// GEL, or the currency of an account kept apart from the lari (migration 0073, decision D1): such a line is
+  /// parked — status `ignored`, resolution `foreign` — from the moment it is written, outside every sum in lari.
+  currency    String              @default("GEL")
+  /// In minor units of `currency`, like `grossTetri` and `feeTetri`: tetri for GEL, cents for USD and EUR (migration 0073).
   amountTetri Int                 @map("amount_tetri")
   grossTetri  Int?                @map("gross_tetri")
   feeTetri    Int?                @map("fee_tetri")
+  /// What Bank of Georgia says a line in another currency is in lari (migration 0073): for reference, never summed. Null at TBC.
+  bankGelTetri Int?               @map("bank_gel_tetri")
   payer       String?
   purpose     String?
   raw         String
@@ -1749,6 +1757,31 @@ model TbcSync {
   nightAdded      Int       @default(0) @map("night_added")
 
   @@map("tbc_sync")
+}
+
+/// One account and currency a bank's API reads (migration 0073): its own status and nightly reading, so that a
+/// pair the bank refuses is seen on its own. `bog_sync` and `tbc_sync` stay what the lari account's cards read.
+model BankApiAccount {
+  bank            BankName
+  /// The bare IBAN; the currency is its own column.
+  account         String
+  currency        String
+  /// The first day the stand reads this pair from; empty for an account in lari read since before the table.
+  readFrom        DateTime? @map("read_from") @db.Date
+  lastOkAt        DateTime? @map("last_ok_at")
+  lastTryAt       DateTime? @map("last_try_at")
+  lastFailure     String?   @map("last_failure")
+  lastHttpStatus  Int?      @map("last_http_status")
+  todayCount      Int       @default(0) @map("today_count")
+  nightThrough    DateTime? @map("night_through") @db.Date
+  nightAt         DateTime? @map("night_at")
+  nightFailure    String?   @map("night_failure")
+  nightHttpStatus Int?      @map("night_http_status")
+  nightMismatchOn DateTime? @map("night_mismatch_on") @db.Date
+  nightAdded      Int       @default(0) @map("night_added")
+
+  @@id([bank, account, currency])
+  @@map("bank_api_accounts")
 }
 
 /// A renter's folder in the rentals folders of Drive, as last read (migration 0051, ADR-0031).

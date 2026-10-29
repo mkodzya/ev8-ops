@@ -18,9 +18,12 @@ export interface ParsedLine {
   docNo?: string | null;
   occurredOn: string; // ISO
   direction: 'in' | 'out';
+  /** In minor units of the account's currency: tetri for lari, cents for an account in dollars or euros (migration 0073). */
   amountTetri: number;
   grossTetri: number | null;
   feeTetri: number | null;
+  /** What Bank of Georgia says an operation of an account in another currency is in lari, where it says it: kept for reference, never summed. */
+  bankGelTetri?: number | null;
   payer: string | null;
   purpose: string | null;
   raw: string;

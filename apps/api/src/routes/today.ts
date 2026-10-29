@@ -151,7 +151,8 @@ export function todayRoutes(app: FastifyInstance): void {
       }),
       owner ? prisma.cashHandover.findMany({ where: { status: 'pending' }, select: { id: true, amountTetri: true, fromUser: { select: { name: true } } }, orderBy: { handedAt: 'asc' } }) : [],
       owner ? prisma.statementLine.count({ where: { status: 'unmatched' } }) : 0,
-      owner ? prisma.statementLine.groupBy({ by: ['bank'], _max: { occurredOn: true } }) : [],
+      // A bank is as fresh as its lines in lari: a day of an account in another currency is not its statement (0073).
+      owner ? prisma.statementLine.groupBy({ by: ['bank'], where: { currency: 'GEL' }, _max: { occurredOn: true } }) : [],
       owner
         ? prisma.saleInstalment.findMany({
             where: { dueOn: { lt: day }, payStatus: { not: 'paid' }, sale: { status: { not: 'cancelled' } } },

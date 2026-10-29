@@ -79,7 +79,8 @@ export function expenseRoutes(app: FastifyInstance): void {
    * expenses by category, deposits handed back, suppliers paid, money between
    * the company's own accounts — and what still waits in «Разобрать» (the
    * report of variant 1, Mika 15.10.2026). Lines set aside as "not ours" are
-   * not the company's money and are left out.
+   * not the company's money and are left out. The report is in lari: a line
+   * of an account in another currency is not in it (migration 0073).
    */
   app.get<{ Querystring: { from?: string; to?: string } }>('/api/reports/expenses', { config: { scope: 'reports.view' } }, async (req) => {
     const week = weekOf(todayISO(new Date(), env.TZ));
@@ -87,7 +88,7 @@ export function expenseRoutes(app: FastifyInstance): void {
     const to = date(req.query, 'to') ?? week.to;
     if (from > to) throw badRequest('bad_period', 'The period starts after it ends.', { field: 'from' });
     const lines = await prisma.statementLine.findMany({
-      where: { direction: 'out', occurredOn: { gte: dateFromISO(from)!, lte: dateFromISO(to)! } },
+      where: { direction: 'out', currency: 'GEL', occurredOn: { gte: dateFromISO(from)!, lte: dateFromISO(to)! } },
       select: {
         amountTetri: true,
         status: true,

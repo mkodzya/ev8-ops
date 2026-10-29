@@ -57,8 +57,12 @@ const rightsOf = (actor: Actor): readonly Permission[] => permissionsOf(actor.ro
 const ownersAnswer = () =>
   forbidden('sort_owner_only', 'The owner sorts this. A manager links money coming in to a rental, a deposit, a moped sale, goods or a repair.');
 
-/** Set aside by a person — not by a remembered payee or payer, which «Разобрано правилами» lists. */
-const BY_PERSON = { OR: [{ matchedRule: null }, { matchedRule: { notIn: ['expense_rule', 'payer_rule'] } }] };
+/**
+ * Set aside by a person — not by a remembered payee or payer, which «Разобрано
+ * правилами» lists — and in lari: a line in another currency is parked, not
+ * set aside (migration 0073), and is no line to put back.
+ */
+const BY_PERSON = { currency: 'GEL', OR: [{ matchedRule: null }, { matchedRule: { notIn: ['expense_rule', 'payer_rule'] } }] };
 
 function readFile(b: Body): { fileName: string; text: string } {
   const fileName = str(b, 'fileName', { required: true, max: 200 })!;
@@ -76,16 +80,20 @@ function refusalOf(e: ParseError) {
 }
 
 export function statementRoutes(app: FastifyInstance): void {
-  /** By bank: the last upload and up to which day; below, the history (§3.5). */
+  /**
+   * By bank: the last upload and up to which day; below, the history (§3.5).
+   * A bank's card is its account in lari: a day of an account in another
+   * currency (migration 0073) neither makes it fresh nor counts as its upload.
+   */
   app.get('/api/statements', { config: { scope: 'payments.reconcile' } }, async () => {
     const today = todayISO(new Date(), env.TZ);
     const statements = await prisma.statement.findMany({ orderBy: { createdAt: 'desc' }, take: 100, include: { uploadedBy: { select: { name: true } } } });
-    const lastLines = await prisma.statementLine.groupBy({ by: ['bank'], _max: { occurredOn: true } });
+    const lastLines = await prisma.statementLine.groupBy({ by: ['bank'], where: { currency: 'GEL' }, _max: { occurredOn: true } });
     const queue = await prisma.statementLine.count({ where: { status: 'unmatched' } });
     // A bank comes by itself once its keys are on the stand (B11-03): Bank of Georgia, TBC.
     const [bogApi, tbcApi] = await Promise.all([bogApiStatus(), tbcApiStatus()]);
     const banks = BANKS.map((bank) => {
-      const last = statements.find((s) => s.bank === bank) ?? null;
+      const last = statements.find((s) => s.bank === bank && s.currency === 'GEL') ?? null;
       const through = isoDate(lastLines.find((l) => l.bank === bank)?._max.occurredOn ?? null);
       const upTo = [through, last ? isoDate(last.periodTo) : null].filter((d): d is string => !!d).sort().pop() ?? null;
       return {
@@ -707,13 +715,16 @@ export function statementRoutes(app: FastifyInstance): void {
 
   /**
    * "Вернуть в очередь": a line set aside waits for a person again. Setting a
-   * line aside wrote nothing but the decision, so nothing else is undone.
+   * line aside wrote nothing but the decision, so nothing else is undone. A
+   * line in another currency was never in the queue (migration 0073): it has
+   * no place there to go back to until such lines are sorted at all.
    */
   app.post<{ Params: { id: string } }>('/api/statement-lines/:id/restore', { config: { scope: 'payments.reconcile' } }, async (req) => {
     const actor = actorOf(req);
-    const line = await prisma.statementLine.findUnique({ where: { id: req.params.id }, select: { id: true, resolution: true, resolutionReason: true } });
+    const line = await prisma.statementLine.findUnique({ where: { id: req.params.id }, select: { id: true, currency: true, resolution: true, resolutionReason: true } });
     if (!line) throw notFound('line_not_found', 'No such statement line.');
-    const done = await prisma.statementLine.updateMany({ where: { id: line.id, status: 'ignored' }, data: BACK_TO_QUEUE });
+    if (line.currency !== 'GEL') throw conflict('foreign_line', 'This line is of an account in another currency: it is kept apart from the lari and is not sorted for now.');
+    const done = await prisma.statementLine.updateMany({ where: { id: line.id, status: 'ignored', currency: 'GEL' }, data: BACK_TO_QUEUE });
     if (done.count === 0) throw conflict('not_set_aside', 'This line is not set aside.');
     // A line split into expenses waits again whole (ADR-0030).
     await prisma.statementLineExpensePart.deleteMany({ where: { lineId: line.id } });

@@ -191,7 +191,9 @@ export function inboundRoutes(app: FastifyInstance): void {
    * between the company's own accounts, cash taken to the bank — and what
    * still waits in «Разобрать». The mirror of «Расходы» (ADR-0027). Lines set
    * aside as "not ours" are not the company's money and are left out. Sums
-   * are what reached the account: a card line's net.
+   * are what reached the account: a card line's net. The report is in lari:
+   * a line of an account in another currency (migration 0073) is left out —
+   * its answer is none of the above, and it would land in `other`.
    */
   app.get<{ Querystring: { from?: string; to?: string } }>('/api/reports/incoming', { config: { scope: 'reports.view' } }, async (req) => {
     const week = weekOf(todayISO(new Date(), env.TZ));
@@ -199,7 +201,7 @@ export function inboundRoutes(app: FastifyInstance): void {
     const to = date(req.query, 'to') ?? week.to;
     if (from > to) throw badRequest('bad_period', 'The period starts after it ends.', { field: 'from' });
     const lines = await prisma.statementLine.findMany({
-      where: { direction: 'in', occurredOn: { gte: dateFromISO(from)!, lte: dateFromISO(to)! } },
+      where: { direction: 'in', currency: 'GEL', occurredOn: { gte: dateFromISO(from)!, lte: dateFromISO(to)! } },
       select: {
         amountTetri: true,
         status: true,
