@@ -1,4 +1,5 @@
 import { addDays, todayISO } from '@ev8/shared';
+import type { BankApiAccount } from '../../generated/prisma/client.js';
 import { dateFromISO, isoDate } from '../dates.js';
 import { prisma } from '../db.js';
 import { env } from '../env.js';
@@ -9,6 +10,11 @@ import type { ParsedLine } from './parse.js';
 // Bank of Georgia, ADR-0026 for TBC): a day of an account becomes one
 // statement in the list, its new lines go into the queue a CSV upload feeds,
 // and the days an uploaded file covers in full are not read again.
+//
+// An account is read in each currency it is named in (docs/spec/usd-accounts-
+// plan.md): every pair of account and currency on its own, with a row of its
+// own in `bank_api_accounts` for when it last answered and how far its night
+// has come, so that one the bank refuses keeps nothing of the others back.
 
 export type ApiBank = 'bog' | 'tbc';
 
@@ -61,11 +67,101 @@ export function accountOf(raw: string | null | undefined, bankCode?: string): st
  * every stand's env has it today. With a bank code, only an account of that
  * bank. Null when it is not one, or its currency is not one the stand reads.
  */
-export function accountPairOf(raw: string | null | undefined, bankCode?: string): { iban: string; currency: BankCurrency } | null {
+export function accountPairOf(raw: string | null | undefined, bankCode?: string): AccountPair | null {
   const iban = accountOf(raw, bankCode);
   if (!iban) return null;
   const currency = (raw ?? '').replace(/\s+/g, '').toUpperCase().slice(22) || 'GEL';
   return (BANK_CURRENCIES as readonly string[]).includes(currency) ? { iban, currency: currency as BankCurrency } : null;
+}
+
+/** An account and the currency a bank's API reads it in: what the stand reads, keeps the state of and logs, one by one. */
+export interface AccountPair {
+  iban: string;
+  currency: BankCurrency;
+}
+
+/**
+ * The pairs an env file names (`BOG_ACCOUNT`, `TBC_ACCOUNT`), apart by spaces,
+ * commas or semicolons. A pair named twice is read once; the same IBAN in two
+ * currencies is two pairs. `bad` when any of them is not a pair the stand
+ * reads: the link then stops rather than guess.
+ */
+export function pairsNamed(raw: string | undefined, bankCode?: string): { pairs: AccountPair[]; bad: boolean } {
+  const read = (raw ?? '')
+    .split(/[\s,;]+/)
+    .filter(Boolean)
+    .map((a) => accountPairOf(a, bankCode));
+  const pairs = new Map<string, AccountPair>();
+  for (const p of read) if (p) pairs.set(`${p.iban} ${p.currency}`, p);
+  return { pairs: [...pairs.values()], bad: read.some((p) => p == null) };
+}
+
+/**
+ * A line's key from a bank's API: as it has always been for lari, and with the
+ * currency in it for another (`api:today:USD:…`). Nothing says a bank's ids
+ * are apart between the currencies of one IBAN; with the currency in the key
+ * they never meet, and the keys of the lines in lari stay what they were.
+ */
+export function apiKey(kind: 'today' | 'entry' | 'mv', currency: BankCurrency, id: string): string {
+  return currency === 'GEL' ? `api:${kind}:${id}` : `api:${kind}:${currency}:${id}`;
+}
+
+/** The last four digits of an account: all of it a job's outcome, and so the worker's log, ever carries. */
+export const last4 = (iban: string): string => iban.slice(-4);
+
+/** What one reading did for one pair, as the job says it. */
+export interface PairOutcome<F extends string = string> {
+  last4: string;
+  currency: BankCurrency;
+  /** Operations the bank listed for this pair. */
+  listed: number;
+  /** New lines of this pair: in the queue for lari, parked for another currency. */
+  added: number;
+  /** Our word for why the bank gave nothing for this pair; null when it answered. */
+  failure: F | null;
+  httpStatus: number | null;
+  /** The nightly reading: the days it read for this pair; none when they were read already. */
+  days?: string[];
+  /** TBC's nightly reading: the days of this pair that did not add up to the bank's sums. */
+  mismatched?: string[];
+}
+
+/** A pair as the job says it: nothing listed, nothing added and no failure, but what it is given. */
+export const pairOutcome = <F extends string>(pair: AccountPair, o: Partial<PairOutcome<F>> = {}): PairOutcome<F> => ({
+  last4: last4(pair.iban),
+  currency: pair.currency,
+  listed: 0,
+  added: 0,
+  failure: null,
+  httpStatus: null,
+  ...o,
+});
+
+/** What a reading writes of one pair's row in `bank_api_accounts`. */
+export type PairState = Partial<
+  Pick<BankApiAccount, 'lastOkAt' | 'lastTryAt' | 'lastFailure' | 'lastHttpStatus' | 'todayCount' | 'nightThrough' | 'nightAt' | 'nightFailure' | 'nightHttpStatus' | 'nightMismatchOn' | 'nightAdded'>
+>;
+
+const pairWhere = (bank: ApiBank, pair: AccountPair) => ({ bank_account_currency: { bank, account: pair.iban, currency: pair.currency } });
+
+/** The rows of a bank's pairs the stand has read before, to look one up by its pair. */
+export async function pairRows(bank: ApiBank): Promise<(pair: AccountPair) => BankApiAccount | null> {
+  const rows = await prisma.bankApiAccount.findMany({ where: { bank } });
+  return (pair) => rows.find((r) => r.account === pair.iban && r.currency === pair.currency) ?? null;
+}
+
+/**
+ * Write what a reading found of one pair, making its row the first time. A
+ * pair in another currency is new to the stand, and its row keeps the day it
+ * is read back from (`readFrom`, a month at most); a pair in lari was read
+ * before the table, and has none.
+ */
+export async function savePair(bank: ApiBank, pair: AccountPair, readFrom: string, state: PairState): Promise<void> {
+  await prisma.bankApiAccount.upsert({
+    where: pairWhere(bank, pair),
+    update: state,
+    create: { bank, account: pair.iban, currency: pair.currency, readFrom: pair.currency === 'GEL' ? null : dateFromISO(readFrom), ...state },
+  });
 }
 
 /** What one reading did: listed by the bank, new in the queue, and of the new ones what the rules settled. */

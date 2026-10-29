@@ -25,6 +25,13 @@
 // "Transaction ID" are compared as numbers (`sameLine.ts`); where they do not
 // meet, a line from the file is known by its day and sum.
 //
+// An account may be read in more than one currency (Mika, 29.10.2026: the
+// company opened an account in dollars). `TBC_ACCOUNT` names each as
+// `GE…TB…USD`, and bare for lari; each pair of account and currency is asked on
+// its own, checked against the bank's sums in its own currency and keeps its
+// own state, and a line not in lari is kept apart, outside every sum in lari
+// (migration 0073; decision D1 of docs/spec/usd-accounts-plan.md).
+//
 // The keys are a server secret (CLAUDE.md rule 3): Mika or Kardu issue them
 // in Business Internet Banking and put them on the stand with
 // `deploy/set-tbc-keys.sh`. They are read from the environment and never
@@ -39,15 +46,37 @@ import { addDays, todayISO } from '@ev8/shared';
 import { dateFromISO, isoDate } from './dates.js';
 import { prisma } from './db.js';
 import { env } from './env.js';
-import { accountOf, bankDay, byDay, daysFrom, daysInFiles, keep, lastFileDay, onceEach, tally, type Tally } from './statements/apiDays.js';
+import {
+  accountOf,
+  apiKey,
+  bankDay,
+  byDay,
+  daysFrom,
+  daysInFiles,
+  keep as keepDay,
+  lastFileDay,
+  onceEach,
+  pairOutcome,
+  pairRows,
+  pairsNamed,
+  savePair,
+  tally,
+  type AccountPair,
+  type BankCurrency,
+  type PairOutcome,
+  type Tally,
+} from './statements/apiDays.js';
 import { cardOf, type ParsedLine } from './statements/parse.js';
 
 export interface TbcConfig {
   clientId: string;
   clientSecret: string;
-  /** Accounts named in the stand's env file. Empty: the account of the statements uploaded from this bank. */
-  accounts: string[];
-  /** TBC_ACCOUNT is set and is not a TBC account: the link stops rather than guess. */
+  /**
+   * The accounts named in the stand's env file, each with the currency it is
+   * read in. Empty: the account of the statements uploaded from this bank, in lari.
+   */
+  accounts: AccountPair[];
+  /** TBC_ACCOUNT is set and names something that is not a TBC account in GEL, USD or EUR: the link stops rather than guess. */
   badAccount: boolean;
   /** The bank has gone silent when it has not answered for this long. */
   staleMs: number;
@@ -59,7 +88,6 @@ const PRODUCTION = 'https://api.tbcbank.ge';
 /** Only the bank's own hosts: the keys never go anywhere else. */
 const TBC_HOST = /^https:\/\/[a-z0-9-]+\.tbcbank\.ge$/;
 const SCOPE = 'bab_accounts';
-export const TBC_CURRENCY = 'GEL';
 /** How far back the nightly reading reaches when it has fallen behind. */
 export const NIGHT_MAX_DAYS = 31;
 const STALE_MINUTES = 20;
@@ -72,15 +100,14 @@ export function tbcConfig(e: NodeJS.ProcessEnv = process.env): TbcConfig | null 
   const clientId = (e.TBC_CLIENT_ID ?? '').trim();
   const clientSecret = (e.TBC_CLIENT_SECRET ?? '').trim();
   if (!clientId || !clientSecret) return null;
-  const named = (e.TBC_ACCOUNT ?? '').split(/[\s,;]+/).filter(Boolean);
-  const accounts = named.map((a) => accountOf(a, 'TB'));
+  const named = pairsNamed(e.TBC_ACCOUNT, 'TB');
   const minutes = parseInt(e.TBC_STALE_MINUTES ?? '', 10);
   const base = (e.TBC_BASE_URL ?? '').trim().replace(/\/+$/, '');
   return {
     clientId,
     clientSecret,
-    accounts: [...new Set(accounts.filter((a): a is string => a != null))],
-    badAccount: accounts.some((a) => a == null),
+    accounts: named.pairs,
+    badAccount: named.bad,
     staleMs: (Number.isFinite(minutes) && minutes > 0 ? minutes : STALE_MINUTES) * 60_000,
     baseUrl: TBC_HOST.test(base) ? base : PRODUCTION,
   };
@@ -275,14 +302,14 @@ export class TbcClient {
     }
   }
 
-  /** The movements of one account for whole days, page by page: `GET /bab/v1/accounts/movements`. */
-  async movements(account: string, from: string, to: string): Promise<unknown[]> {
+  /** The movements of one account in one currency for whole days, page by page: `GET /bab/v1/accounts/movements`. */
+  async movements(pair: AccountPair, from: string, to: string): Promise<unknown[]> {
     const rows: unknown[] = [];
     for (let page = 0; ; page++) {
       if (page >= MAX_PAGES) throw new TbcError('bad_answer');
       const answer = await this.get('/bab/v1/accounts/movements', {
-        AccountNumber: account,
-        AccountCurrencyCode: TBC_CURRENCY,
+        AccountNumber: pair.iban,
+        AccountCurrencyCode: pair.currency,
         PeriodFrom: from,
         PeriodTo: to,
         PageIndex: String(page),
@@ -302,9 +329,9 @@ export class TbcClient {
     }
   }
 
-  /** The statement of one account for whole days — at TBC a summary: the sums of credits and debits. */
-  async statement(account: string, from: string, to: string): Promise<{ creditTetri: number; debitTetri: number }> {
-    const body = obj(await this.get('/bab/v1/accounts/statements', { AccountNumber: account, AccountCurrencyCode: TBC_CURRENCY, PeriodFrom: from, PeriodTo: to }));
+  /** The statement of one account in one currency for whole days — at TBC a summary: the sums of credits and debits, in its minor units. */
+  async statement(pair: AccountPair, from: string, to: string): Promise<{ creditTetri: number; debitTetri: number }> {
+    const body = obj(await this.get('/bab/v1/accounts/statements', { AccountNumber: pair.iban, AccountCurrencyCode: pair.currency, PeriodFrom: from, PeriodTo: to }));
     // A sum the answer does not carry is not a zero: the check is then not made, and says why.
     const sum = (name: string) => {
       const v = pick(body, name);
@@ -333,22 +360,25 @@ function movementDay(o: Record<string, unknown>): string | null {
 const dmySlash = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`;
 
 /**
- * One movement as a statement line. The stored text has the shape of a row
- * of TBC's CSV — day, description, signed sum, partner, transaction id — so
- * a line reads the same in the queue whichever way it came, and the
- * terminal's settlement is told by the same words (`cardOf`).
+ * One movement of an account in one currency as a statement line. The stored
+ * text has the shape of a row of TBC's CSV — day, description, signed sum,
+ * partner, transaction id — so a line reads the same in the queue whichever
+ * way it came, and the terminal's settlement is told by the same words
+ * (`cardOf`).
  *
  * A movement not yet authorized (`statusCode` 1 or 2: a payment order
  * waiting for its signatures) has moved no money and is not a line yet; it
- * comes when it is done. Another currency is not read, as in the file.
+ * comes when it is done. A movement in another currency than the one asked
+ * for is not this pair's, and is not read, as in the file. TBC gives no lari
+ * for a sum in another currency.
  */
-export function lineFromMovement(row: unknown): ParsedLine | null {
+export function lineFromMovement(row: unknown, currency: BankCurrency): ParsedLine | null {
   const o = obj(row);
   const id = text(pick(o, 'movementId'));
   const day = movementDay(o);
   if (!id || !day) throw new TbcError('bad_answer');
-  const currency = text(pick(o, 'currency'));
-  if (currency && currency.toUpperCase() !== TBC_CURRENCY) return null;
+  const its = text(pick(o, 'currency'));
+  if (its && its.toUpperCase() !== currency) return null;
   const status = pick(o, 'statusCode');
   if (typeof status === 'number' && status !== 0) return null;
   const raw = pick(o, 'amount');
@@ -365,7 +395,7 @@ export function lineFromMovement(row: unknown): ParsedLine | null {
   // The terminal's settlement is a card payment, with the customer's sum stated in it — as in the file.
   const card = direction === 'in' ? cardOf({ amountTetri, grossTetri: null, feeTetri: null, raw: line }) : null;
   return {
-    naturalKey: `api:mv:${id}`,
+    naturalKey: apiKey('mv', currency, id),
     docNo: text(pick(o, 'documentNumber')),
     occurredOn: day,
     direction,
@@ -399,7 +429,10 @@ export type TbcOutcome =
       days: string[];
       /** Days whose movements do not add up to the bank's own sums for them: read again within the hour. */
       mismatched: string[];
+      /** Each account and currency read, by its last four digits: what it listed and added, or why the bank gave nothing for it. */
+      accounts: PairOutcome<TbcFailure>[];
     })
+  // Nothing came: no account to ask, or the bank refused every one — the first refusal says why.
   | { status: 'failed'; failure: TbcFailure; httpStatus: number | null; stage: TbcStage | null };
 
 type Ok = Extract<TbcOutcome, { status: 'ok' }>;
@@ -448,116 +481,187 @@ function client(cfg: TbcConfig): TbcClient {
   return new TbcClient(cfg, { ...clientOptsForTests, ...(fetchForTests ? { fetch: fetchForTests } : {}) });
 }
 
-/** The accounts to ask about: those the env file names, or the one the uploaded statements came from. */
-async function accountsFor(cfg: TbcConfig): Promise<string[]> {
+/** The accounts to ask about: those the env file names, or the one the uploaded statements came from — in lari, as a file is read. */
+async function accountsFor(cfg: TbcConfig): Promise<AccountPair[]> {
   if (cfg.badAccount) return [];
   if (cfg.accounts.length > 0) return cfg.accounts;
-  const last = await prisma.statement.findFirst({ where: { bank: 'tbc', source: 'file', account: { not: null } }, orderBy: { createdAt: 'desc' }, select: { account: true } });
-  const account = accountOf(last?.account, 'TB');
-  return account ? [account] : [];
+  const last = await prisma.statement.findFirst({ where: { bank: 'tbc', source: 'file', currency: 'GEL', account: { not: null } }, orderBy: { createdAt: 'desc' }, select: { account: true } });
+  const iban = accountOf(last?.account, 'TB');
+  return iban ? [{ iban, currency: 'GEL' }] : [];
 }
 
 const SYNC = { id: true } as const;
 
 function blank(): Ok {
-  return { status: 'ok', ...tally(), days: [], mismatched: [] };
+  return { status: 'ok', ...tally(), days: [], mismatched: [], accounts: [] };
 }
 
+/** One day of one account in one currency into the queue — parked, when it is not lari — under its statement from the API. */
+function keep(pair: AccountPair, day: string, lines: ParsedLine[], outcome: Ok): Promise<void> {
+  return keepDay('tbc', TBC_API_NAME, pair.iban, day, lines, outcome, pair.currency);
+}
+
+type Asked<T> = { pair: AccountPair; got: T; failure: null } | { pair: AccountPair; got: null; failure: TbcError };
+
 /**
- * Each account is asked on its own, as at Bank of Georgia (`bog.ts`): one the
- * bank refuses does not keep the others' movements out of the queue, and the
- * refusal is what the reading says. A refused token is the keys themselves,
- * and no other account is asked.
+ * Each account and currency is asked on its own, as at Bank of Georgia
+ * (`bog.ts`): one the bank refuses keeps nothing of the others out of the
+ * queue and stops none of them, and the refusal is that pair's to say. A
+ * refused token is the keys themselves: the pairs after it are not asked, and
+ * are refused the same.
  */
-async function eachAccount(accounts: string[], read: (account: string) => Promise<void>): Promise<TbcError | null> {
-  if (accounts.length === 0) return new TbcError('no_account');
-  let failure: TbcError | null = null;
-  for (const account of accounts) {
+async function eachPair<T>(pairs: AccountPair[], read: (pair: AccountPair) => Promise<T>): Promise<Asked<T>[]> {
+  const asked: Asked<T>[] = [];
+  let keys: TbcError | null = null;
+  for (const pair of pairs) {
     try {
-      await read(account);
+      if (keys) throw keys;
+      asked.push({ pair, got: await read(pair), failure: null });
     } catch (err) {
       if (!(err instanceof TbcError)) throw err;
-      failure ??= err;
-      if (err.stage === 'token') break;
+      if (err.stage === 'token') keys = err;
+      asked.push({ pair, got: null, failure: err });
     }
   }
-  return failure;
+  return asked;
 }
 
 const failedWith = (err: TbcError): TbcOutcome => ({ status: 'failed', failure: err.failure, httpStatus: err.httpStatus, stage: err.stage });
 
+/** What the job says of a pair the bank refused. */
+const refusal = (err: TbcError) => ({ failure: err.failure, httpStatus: err.httpStatus });
+
+// tbc_sync stays the lari link's: its card on «Выписки» and «Сегодня» read it,
+// as before the dollars. It says what the pairs in lari did, and nothing of
+// another currency — a day of dollars that does not add up holds no lari back.
+const inLari = <T>(asked: Asked<T>[]) => asked.filter((a) => a.pair.currency === 'GEL');
+
 async function pullToday(cfg: TbcConfig, now: Date): Promise<TbcOutcome> {
   const today = todayISO(now, env.TZ);
-  const lists: { account: string; lines: ParsedLine[]; listed: number }[] = [];
   const bank = client(cfg);
-  const failure = await eachAccount(await accountsFor(cfg), async (account) => {
-    const rows = await bank.movements(account, addDays(today, -1), today);
+  const outcome = blank();
+  const asked = await eachPair(await accountsFor(cfg), async (pair) => {
+    const rows = await bank.movements(pair, addDays(today, -1), today);
+    const lines = onceEach(rows.map((r) => lineFromMovement(r, pair.currency)));
     // What the screen and the log call "today's": the movements dated today.
-    lists.push({ account, lines: onceEach(rows.map(lineFromMovement)), listed: rows.filter((r) => movementDay(obj(r)) === today).length });
+    const listed = rows.filter((r) => movementDay(obj(r)) === today).length;
+    const before = outcome.added;
+    for (const [day, ofDay] of byDay(lines)) await keep(pair, day, ofDay, outcome);
+    outcome.listed += listed;
+    return { listed, added: outcome.added - before };
   });
 
-  const outcome = blank();
-  for (const { account, lines, listed } of lists) {
-    outcome.listed += listed;
-    for (const [day, ofDay] of byDay(lines)) await keep('tbc', TBC_API_NAME, account, day, ofDay, outcome);
+  for (const a of asked) {
+    const state = a.failure
+      ? { lastTryAt: now, lastFailure: a.failure.failure, lastHttpStatus: a.failure.httpStatus }
+      : { lastOkAt: now, lastTryAt: now, lastFailure: null, lastHttpStatus: null, todayCount: a.got.listed };
+    await savePair('tbc', a.pair, addDays(today, -NIGHT_MAX_DAYS), state);
+    outcome.accounts.push(pairOutcome<TbcFailure>(a.pair, a.failure ? refusal(a.failure) : a.got));
   }
-  if (failure) {
-    const failed = { lastTryAt: now, lastFailure: failure.failure, lastHttpStatus: failure.httpStatus };
+  const lari = inLari(asked);
+  const refused = asked.length === 0 ? new TbcError('no_account') : (lari.find((a) => a.failure)?.failure ?? null);
+  if (refused) {
+    const failed = { lastTryAt: now, lastFailure: refused.failure, lastHttpStatus: refused.httpStatus };
     await prisma.tbcSync.upsert({ where: SYNC, update: failed, create: { ...SYNC, ...failed } });
-    return failedWith(failure);
+  } else if (lari.length > 0) {
+    const ok = { lastOkAt: now, lastTryAt: now, lastFailure: null, lastHttpStatus: null, todayCount: lari.reduce((n, a) => n + (a.got?.listed ?? 0), 0) };
+    await prisma.tbcSync.upsert({ where: SYNC, update: ok, create: { ...SYNC, ...ok } });
   }
-  const ok = { lastOkAt: now, lastTryAt: now, lastFailure: null, lastHttpStatus: null, todayCount: outcome.listed };
-  await prisma.tbcSync.upsert({ where: SYNC, update: ok, create: { ...SYNC, ...ok } });
-  return outcome;
+  if (asked.length === 0) return failedWith(refused!);
+  return asked.every((a) => a.failure) ? failedWith(asked[0]!.failure!) : outcome;
+}
+
+/**
+ * Where a night leaves a pair, or the lari link: through yesterday when every
+ * day it read adds up; else through the day before the first that did not,
+ * read again from there within the hour — a movement the bank lists late
+ * comes then. What was read is in the queue meanwhile, and stays.
+ */
+function nightAfter(mismatched: string[], yesterday: string) {
+  const first = [...mismatched].sort()[0];
+  return first
+    ? { nightThrough: dateFromISO(addDays(first, -1)), nightFailure: 'mismatch', nightHttpStatus: null, nightMismatchOn: dateFromISO(first) }
+    : { nightThrough: dateFromISO(yesterday), nightFailure: null, nightHttpStatus: null, nightMismatchOn: null };
 }
 
 async function readNights(cfg: TbcConfig, now: Date): Promise<TbcOutcome> {
   const yesterday = addDays(todayISO(now, env.TZ), -1);
+  const back = addDays(yesterday, -(NIGHT_MAX_DAYS - 1));
   const sync = await prisma.tbcSync.findUnique({ where: SYNC });
-  const reached = isoDate(sync?.nightThrough ?? null);
-  if (reached && reached >= yesterday) return blank();
+  const pairs = await accountsFor(cfg);
+  if (pairs.length === 0) {
+    // No account to read: said once the night is due, as before.
+    const reached = isoDate(sync?.nightThrough ?? null);
+    if (reached && reached >= yesterday) return blank();
+    const failed = { nightAt: now, nightFailure: 'no_account', nightHttpStatus: null };
+    await prisma.tbcSync.upsert({ where: SYNC, update: failed, create: { ...SYNC, ...failed } });
+    return failedWith(new TbcError('no_account'));
+  }
+  const rowOf = await pairRows('tbc');
+  // Each pair's night is its own. A pair in lari was read before it had a row:
+  // until its own night has run, the night tbc_sync kept is its night.
+  const nightOf = (pair: AccountPair) => {
+    const row = rowOf(pair);
+    return row?.nightAt || pair.currency !== 'GEL' ? row : sync;
+  };
 
-  // The first night starts at the last day the uploaded files reached: the
-  // days between that file and the first pull are read too.
-  const start = reached ?? (await lastFileDay('tbc')) ?? yesterday;
-  const from = [[start, addDays(yesterday, -(NIGHT_MAX_DAYS - 1))].sort().pop()!, yesterday].sort()[0]!;
   const outcome = blank();
   const bank = client(cfg);
-  const failure = await eachAccount(await accountsFor(cfg), async (account) => {
-    const covered = await daysInFiles('tbc', account, from, yesterday);
+  const asked = await eachPair(pairs, async (pair) => {
+    const reached = isoDate(nightOf(pair)?.nightThrough ?? null);
+    if (reached && reached >= yesterday) return null;
+    // The first night of a pair in lari starts at the last day the uploaded
+    // files reached: the days between that file and the first pull are read
+    // too. A pair in another currency is new to the stand, and reads back once,
+    // a month at most, from the day its row keeps.
+    const start = reached ?? (await lastFileDay('tbc', pair.currency)) ?? (pair.currency === 'GEL' ? yesterday : (isoDate(rowOf(pair)?.readFrom ?? null) ?? back));
+    const from = [[start, back].sort().pop()!, yesterday].sort()[0]!;
+    const covered = await daysInFiles('tbc', pair.iban, from, yesterday, pair.currency);
     const open = daysFrom(from, yesterday).filter((d) => !covered.has(d));
-    if (open.length === 0) return;
-    const rows = await bank.movements(account, open[0]!, yesterday);
+    if (open.length === 0) return { listed: 0, added: 0, days: [], mismatched: [] };
+    const rows = await bank.movements(pair, open[0]!, yesterday);
+    const lines = onceEach(rows.map((r) => lineFromMovement(r, pair.currency))).filter((l) => !covered.has(l.occurredOn));
+    const before = outcome.added;
     outcome.listed += rows.length;
-    const lines = onceEach(rows.map(lineFromMovement)).filter((l) => !covered.has(l.occurredOn));
     outcome.days.push(...open.filter((d) => !outcome.days.includes(d)));
     const days = byDay(lines);
-    for (const [day, ofDay] of days) await keep('tbc', TBC_API_NAME, account, day, ofDay, outcome);
-    // The check: what the movements of a day add up to, against the bank's own sums for it.
+    for (const [day, ofDay] of days) await keep(pair, day, ofDay, outcome);
+    // The check: what the movements of a day add up to, against the bank's own sums for it, in the pair's currency.
+    const mismatched: string[] = [];
     for (const day of open) {
-      const sums = await bank.statement(account, day, day);
+      const sums = await bank.statement(pair, day, day);
       const ofDay = days.get(day) ?? [];
       const credit = ofDay.filter((l) => l.direction === 'in').reduce((s, l) => s + l.amountTetri, 0);
       const debit = ofDay.filter((l) => l.direction === 'out').reduce((s, l) => s + l.amountTetri, 0);
-      if (credit !== sums.creditTetri || debit !== sums.debitTetri) outcome.mismatched.push(day);
+      if (credit !== sums.creditTetri || debit !== sums.debitTetri) mismatched.push(day);
     }
+    outcome.mismatched.push(...mismatched);
+    return { listed: rows.length, added: outcome.added - before, days: open, mismatched };
   });
-  // The night has reached yesterday only once every account is read up to it
-  // and adds up: an account that failed is read again from the same day.
-  if (failure) {
-    const failed = { nightAt: now, nightFailure: failure.failure, nightHttpStatus: failure.httpStatus };
-    await prisma.tbcSync.upsert({ where: SYNC, update: failed, create: { ...SYNC, ...failed } });
-    return failedWith(failure);
+
+  // A pair has read up to yesterday once its movements are read and add up.
+  // One that failed keeps the day it had reached and is read again from there.
+  for (const a of asked) {
+    if (a.failure) {
+      await savePair('tbc', a.pair, back, { nightThrough: nightOf(a.pair)?.nightThrough ?? null, nightAt: now, nightFailure: a.failure.failure, nightHttpStatus: a.failure.httpStatus });
+    } else if (a.got) {
+      await savePair('tbc', a.pair, back, { ...nightAfter(a.got.mismatched, yesterday), nightAt: now, nightAdded: a.got.added });
+    }
+    outcome.accounts.push(pairOutcome<TbcFailure>(a.pair, a.failure ? refusal(a.failure) : (a.got ?? { days: [] })));
   }
+  // The lari link has read up to yesterday once every pair in lari it read has, and adds up.
+  const lari = inLari(asked).filter((a) => a.failure || a.got);
+  const refused = lari.find((a) => a.failure)?.failure;
+  if (refused) {
+    const failed = { nightAt: now, nightFailure: refused.failure, nightHttpStatus: refused.httpStatus };
+    await prisma.tbcSync.upsert({ where: SYNC, update: failed, create: { ...SYNC, ...failed } });
+  } else if (lari.length > 0) {
+    const night = { ...nightAfter(lari.flatMap((a) => a.got?.mismatched ?? []), yesterday), nightAt: now, nightAdded: lari.reduce((n, a) => n + (a.got?.added ?? 0), 0) };
+    await prisma.tbcSync.upsert({ where: SYNC, update: night, create: { ...SYNC, ...night } });
+  }
+  if (asked.every((a) => a.failure)) return failedWith(asked[0]!.failure!);
   outcome.days.sort();
   outcome.mismatched = [...new Set(outcome.mismatched)].sort();
-  // A day that does not add up is read again from that day on, within the hour: a movement
-  // the bank lists late comes then. What was read is in the queue meanwhile, and stays.
-  const first = outcome.mismatched[0];
-  const night = first
-    ? { nightThrough: dateFromISO(addDays(first, -1)), nightAt: now, nightFailure: 'mismatch', nightHttpStatus: null, nightMismatchOn: dateFromISO(first), nightAdded: outcome.added }
-    : { nightThrough: dateFromISO(yesterday), nightAt: now, nightFailure: null, nightHttpStatus: null, nightMismatchOn: null, nightAdded: outcome.added };
-  await prisma.tbcSync.upsert({ where: SYNC, update: night, create: { ...SYNC, ...night } });
   return outcome;
 }
 

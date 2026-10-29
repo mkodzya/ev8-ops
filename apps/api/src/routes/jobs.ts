@@ -21,6 +21,9 @@ import { runTranslations } from '../lib/translations.js';
 // notices to the workshop's Telegram group (ADR-0032 §2), for the bot's, and
 // the translation of typed texts (ADR-0042), for the translator's key.
 
+/** The pairs of account and currency the bank refused while others answered: each by its last four digits and currency only. */
+const refusedOf = (o: { status: string; accounts?: { failure: string | null }[] }) => (o.status === 'ok' ? (o.accounts ?? []).filter((a) => a.failure) : []);
+
 function workerOnly(req: FastifyRequest, reply: FastifyReply): boolean {
   const given = req.headers['x-worker-token'];
   if (typeof given === 'string' && given === env.WORKER_TOKEN) return true;
@@ -58,6 +61,7 @@ export function jobRoutes(app: FastifyInstance): void {
     if (!workerOnly(req, reply)) return reply;
     const outcome = await syncBogToday();
     if (outcome.status === 'failed') app.log.warn(outcome, 'bank of georgia did not answer');
+    else if (refusedOf(outcome).length > 0) app.log.warn({ accounts: refusedOf(outcome) }, 'bank of georgia did not answer about every account');
     return outcome;
   });
 
@@ -65,6 +69,7 @@ export function jobRoutes(app: FastifyInstance): void {
     if (!workerOnly(req, reply)) return reply;
     const outcome = await reconcileBogNight();
     if (outcome.status === 'failed') app.log.warn(outcome, 'bank of georgia statement did not come');
+    else if (refusedOf(outcome).length > 0) app.log.warn({ accounts: refusedOf(outcome) }, 'bank of georgia statement did not come for every account');
     return outcome;
   });
 
@@ -83,6 +88,7 @@ export function jobRoutes(app: FastifyInstance): void {
     if (!workerOnly(req, reply)) return reply;
     const outcome = await syncTbcToday();
     if (outcome.status === 'failed') app.log.warn(outcome, 'tbc did not answer');
+    else if (refusedOf(outcome).length > 0) app.log.warn({ accounts: refusedOf(outcome) }, 'tbc did not answer about every account');
     return outcome;
   });
 
@@ -125,7 +131,8 @@ export function jobRoutes(app: FastifyInstance): void {
     if (!workerOnly(req, reply)) return reply;
     const outcome = await reconcileTbcNight();
     if (outcome.status === 'failed') app.log.warn(outcome, 'tbc statement did not come');
-    else if (outcome.status === 'ok' && outcome.mismatched.length > 0) app.log.warn({ mismatched: outcome.mismatched }, 'tbc movements do not add up to the statement');
+    else if (refusedOf(outcome).length > 0) app.log.warn({ accounts: refusedOf(outcome) }, 'tbc statement did not come for every account');
+    if (outcome.status === 'ok' && outcome.mismatched.length > 0) app.log.warn({ mismatched: outcome.mismatched }, 'tbc movements do not add up to the statement');
     return outcome;
   });
 }
