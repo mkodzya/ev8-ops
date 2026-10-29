@@ -13,6 +13,8 @@ import { HAS_DB, call, getApp, json, loginAs, uniq } from './helpers.js';
 const ID = 'test-client-id';
 const SECRET = 'test-client-secret-that-opens-nothing';
 const ACCOUNT = 'GE00TB0000000000000001'; // invented
+/** A second account of the company, invented too. */
+const OTHER = 'GE00TB0000000000000003';
 const BASE = 'https://api.tbcbank.ge';
 
 const cfg = (over: Partial<TbcConfig> = {}): TbcConfig => ({ clientId: ID, clientSecret: SECRET, accounts: [ACCOUNT], badAccount: false, staleMs: 20 * 60_000, baseUrl: BASE, ...over });
@@ -70,6 +72,8 @@ function fakeBank(state: {
   apiBody?: unknown;
   /** Sums the statement gives for a day instead of the movements' own. */
   sums?: Record<string, { creditSum: number; debitSum: number }>;
+  /** Accounts the bank does not know in lari: it answers 400 INVALID_ACCOUNT about them. */
+  unknown?: string[];
 }) {
   const calls: Call[] = [];
   let tokens = 0;
@@ -86,6 +90,7 @@ function fakeBank(state: {
     if (forced) return reply(forced, state.apiBody ?? { title: 'GENERAL_ERROR', detail: 'ТЕСТ Тайна' });
     const u = new URL(url);
     const q = u.searchParams;
+    if (state.unknown?.includes(q.get('AccountNumber') ?? '')) return reply(400, { type: '/error-codes#DomainError', title: 'INVALID_ACCOUNT', status: 400, code: 'DomainError' });
     const inPeriod = (m: ReturnType<typeof movement>) => m.date.slice(0, 10) >= q.get('PeriodFrom')! && m.date.slice(0, 10) <= q.get('PeriodTo')!;
     const all = (state.movements ?? []).filter(inPeriod);
     if (u.pathname === '/bab/v1/accounts/movements') {
@@ -453,6 +458,65 @@ describe.skipIf(!HAS_DB)('the TBC pull, the night and the queue', () => {
     setTbcFetchForTests(bank.fetchFn, quick);
     expect(await syncTbcToday(at('2032-03-16'))).toMatchObject({ status: 'ok', listed: 0 });
     expect(new URL(bank.calls.at(-1)!.url).searchParams.get('AccountNumber')).toBe(ACCOUNT);
+  });
+
+  // The company opened a dollar account at the bank (29.10.2026). A second
+  // account the bank does not answer about must not keep the lari account's
+  // movements out of «Разобрать».
+  it('asks each account on its own: one the bank does not know keeps nothing of the other out of the queue, and is what the pull says', async () => {
+    const day = '2032-03-18';
+    const { prisma } = await import('../src/lib/db.js');
+    const paid = movement({ id: idOf(1), day, amount: sum(1) });
+    // The unknown account second, then first: either way both are asked, with one token.
+    for (const named of [`${ACCOUNT} ${OTHER}`, `${OTHER};${ACCOUNT}`]) {
+      process.env.TBC_ACCOUNT = named;
+      const bank = fakeBank({ movements: [paid], unknown: [OTHER] });
+      setTbcFetchForTests(bank.fetchFn, quick);
+      expect(await syncTbcToday(at(day))).toEqual({ status: 'failed', failure: 'not_found', httpStatus: 400, stage: 'api' });
+      expect(bank.calls.slice(1).map((c) => new URL(c.url).searchParams.get('AccountNumber'))).toEqual(named.split(/[ ;]/));
+      expect(bank.tokens()).toBe(1);
+    }
+    const lines = await linesOf([sum(1)]);
+    expect(lines).toHaveLength(1);
+    expect(lines[0]!.statement).toMatchObject({ source: 'api', account: ACCOUNT });
+    // The link says it failed: an account the bank does not answer about is not hidden behind one it does.
+    expect(await prisma.tbcSync.findUnique({ where: { id: true } })).toMatchObject({ lastFailure: 'not_found', lastHttpStatus: 400, lastOkAt: null });
+
+    // Keys the bank refuses are refused for every account: the second is not asked.
+    const keys = fakeBank({ tokenStatus: 401 });
+    setTbcFetchForTests(keys.fetchFn, quick);
+    expect(await syncTbcToday(at(day, '10:05'))).toEqual({ status: 'failed', failure: 'unauthorized', httpStatus: 401, stage: 'token' });
+    expect(keys.calls).toHaveLength(1);
+  });
+
+  it('reads the night of each account on its own, and has read up to yesterday only once every account is read', async () => {
+    const { prisma } = await import('../src/lib/db.js');
+    await prisma.tbcSync.update({ where: { id: true }, data: { nightThrough: new Date('2032-03-19T00:00:00Z') } });
+    const movements = [movement({ id: idOf(1), day: '2032-03-20', amount: sum(1) })];
+
+    // The unknown account comes first, and the night goes on to the next, sums checked.
+    process.env.TBC_ACCOUNT = `${OTHER} ${ACCOUNT}`;
+    const bank = fakeBank({ movements, unknown: [OTHER] });
+    setTbcFetchForTests(bank.fetchFn, quick);
+    expect(await reconcileTbcNight(at('2032-03-21', '01:47'))).toEqual({ status: 'failed', failure: 'not_found', httpStatus: 400, stage: 'api' });
+    expect(bank.calls.slice(1).map((c) => `${new URL(c.url).pathname} ${new URL(c.url).searchParams.get('AccountNumber')}`)).toEqual([
+      `/bab/v1/accounts/movements ${OTHER}`,
+      `/bab/v1/accounts/movements ${ACCOUNT}`,
+      `/bab/v1/accounts/statements ${ACCOUNT}`,
+      `/bab/v1/accounts/statements ${ACCOUNT}`,
+    ]);
+    expect(await linesOf([sum(1)])).toHaveLength(1);
+    const held = await prisma.tbcSync.findUnique({ where: { id: true } });
+    expect(held).toMatchObject({ nightFailure: 'not_found', nightHttpStatus: 400 });
+    expect(held?.nightThrough?.toISOString().slice(0, 10)).toBe('2032-03-19');
+
+    // The next hour both answer: the night reaches yesterday, and the line already in does not come twice.
+    setTbcFetchForTests(fakeBank({ movements }).fetchFn, quick);
+    expect(await reconcileTbcNight(at('2032-03-21', '02:47'))).toMatchObject({ status: 'ok', added: 0, mismatched: [] });
+    expect(await linesOf([sum(1)])).toHaveLength(1);
+    const read = await prisma.tbcSync.findUnique({ where: { id: true } });
+    expect(read).toMatchObject({ nightFailure: null, nightMismatchOn: null });
+    expect(read?.nightThrough?.toISOString().slice(0, 10)).toBe('2032-03-20');
   });
 
   it('is off without the keys: nothing is asked, nothing is shown', async () => {

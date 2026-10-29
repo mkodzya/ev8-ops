@@ -463,29 +463,48 @@ function blank(): Ok {
   return { status: 'ok', ...tally(), days: [], mismatched: [] };
 }
 
+/**
+ * Each account is asked on its own, as at Bank of Georgia (`bog.ts`): one the
+ * bank refuses does not keep the others' movements out of the queue, and the
+ * refusal is what the reading says. A refused token is the keys themselves,
+ * and no other account is asked.
+ */
+async function eachAccount(accounts: string[], read: (account: string) => Promise<void>): Promise<TbcError | null> {
+  if (accounts.length === 0) return new TbcError('no_account');
+  let failure: TbcError | null = null;
+  for (const account of accounts) {
+    try {
+      await read(account);
+    } catch (err) {
+      if (!(err instanceof TbcError)) throw err;
+      failure ??= err;
+      if (err.stage === 'token') break;
+    }
+  }
+  return failure;
+}
+
+const failedWith = (err: TbcError): TbcOutcome => ({ status: 'failed', failure: err.failure, httpStatus: err.httpStatus, stage: err.stage });
+
 async function pullToday(cfg: TbcConfig, now: Date): Promise<TbcOutcome> {
   const today = todayISO(now, env.TZ);
   const lists: { account: string; lines: ParsedLine[]; listed: number }[] = [];
-  try {
-    const accounts = await accountsFor(cfg);
-    if (accounts.length === 0) throw new TbcError('no_account');
-    const bank = client(cfg);
-    for (const account of accounts) {
-      const rows = await bank.movements(account, addDays(today, -1), today);
-      // What the screen and the log call "today's": the movements dated today.
-      lists.push({ account, lines: onceEach(rows.map(lineFromMovement)), listed: rows.filter((r) => movementDay(obj(r)) === today).length });
-    }
-  } catch (err) {
-    if (!(err instanceof TbcError)) throw err;
-    const failed = { lastTryAt: now, lastFailure: err.failure, lastHttpStatus: err.httpStatus };
-    await prisma.tbcSync.upsert({ where: SYNC, update: failed, create: { ...SYNC, ...failed } });
-    return { status: 'failed', failure: err.failure, httpStatus: err.httpStatus, stage: err.stage };
-  }
+  const bank = client(cfg);
+  const failure = await eachAccount(await accountsFor(cfg), async (account) => {
+    const rows = await bank.movements(account, addDays(today, -1), today);
+    // What the screen and the log call "today's": the movements dated today.
+    lists.push({ account, lines: onceEach(rows.map(lineFromMovement)), listed: rows.filter((r) => movementDay(obj(r)) === today).length });
+  });
 
   const outcome = blank();
   for (const { account, lines, listed } of lists) {
     outcome.listed += listed;
     for (const [day, ofDay] of byDay(lines)) await keep('tbc', TBC_API_NAME, account, day, ofDay, outcome);
+  }
+  if (failure) {
+    const failed = { lastTryAt: now, lastFailure: failure.failure, lastHttpStatus: failure.httpStatus };
+    await prisma.tbcSync.upsert({ where: SYNC, update: failed, create: { ...SYNC, ...failed } });
+    return failedWith(failure);
   }
   const ok = { lastOkAt: now, lastTryAt: now, lastFailure: null, lastHttpStatus: null, todayCount: outcome.listed };
   await prisma.tbcSync.upsert({ where: SYNC, update: ok, create: { ...SYNC, ...ok } });
@@ -503,34 +522,32 @@ async function readNights(cfg: TbcConfig, now: Date): Promise<TbcOutcome> {
   const start = reached ?? (await lastFileDay('tbc')) ?? yesterday;
   const from = [[start, addDays(yesterday, -(NIGHT_MAX_DAYS - 1))].sort().pop()!, yesterday].sort()[0]!;
   const outcome = blank();
-  try {
-    const accounts = await accountsFor(cfg);
-    if (accounts.length === 0) throw new TbcError('no_account');
-    const bank = client(cfg);
-    for (const account of accounts) {
-      const covered = await daysInFiles('tbc', account, from, yesterday);
-      const open = daysFrom(from, yesterday).filter((d) => !covered.has(d));
-      if (open.length === 0) continue;
-      const rows = await bank.movements(account, open[0]!, yesterday);
-      outcome.listed += rows.length;
-      const lines = onceEach(rows.map(lineFromMovement)).filter((l) => !covered.has(l.occurredOn));
-      outcome.days.push(...open.filter((d) => !outcome.days.includes(d)));
-      const days = byDay(lines);
-      for (const [day, ofDay] of days) await keep('tbc', TBC_API_NAME, account, day, ofDay, outcome);
-      // The check: what the movements of a day add up to, against the bank's own sums for it.
-      for (const day of open) {
-        const sums = await bank.statement(account, day, day);
-        const ofDay = days.get(day) ?? [];
-        const credit = ofDay.filter((l) => l.direction === 'in').reduce((s, l) => s + l.amountTetri, 0);
-        const debit = ofDay.filter((l) => l.direction === 'out').reduce((s, l) => s + l.amountTetri, 0);
-        if (credit !== sums.creditTetri || debit !== sums.debitTetri) outcome.mismatched.push(day);
-      }
+  const bank = client(cfg);
+  const failure = await eachAccount(await accountsFor(cfg), async (account) => {
+    const covered = await daysInFiles('tbc', account, from, yesterday);
+    const open = daysFrom(from, yesterday).filter((d) => !covered.has(d));
+    if (open.length === 0) return;
+    const rows = await bank.movements(account, open[0]!, yesterday);
+    outcome.listed += rows.length;
+    const lines = onceEach(rows.map(lineFromMovement)).filter((l) => !covered.has(l.occurredOn));
+    outcome.days.push(...open.filter((d) => !outcome.days.includes(d)));
+    const days = byDay(lines);
+    for (const [day, ofDay] of days) await keep('tbc', TBC_API_NAME, account, day, ofDay, outcome);
+    // The check: what the movements of a day add up to, against the bank's own sums for it.
+    for (const day of open) {
+      const sums = await bank.statement(account, day, day);
+      const ofDay = days.get(day) ?? [];
+      const credit = ofDay.filter((l) => l.direction === 'in').reduce((s, l) => s + l.amountTetri, 0);
+      const debit = ofDay.filter((l) => l.direction === 'out').reduce((s, l) => s + l.amountTetri, 0);
+      if (credit !== sums.creditTetri || debit !== sums.debitTetri) outcome.mismatched.push(day);
     }
-  } catch (err) {
-    if (!(err instanceof TbcError)) throw err;
-    const failed = { nightAt: now, nightFailure: err.failure, nightHttpStatus: err.httpStatus };
+  });
+  // The night has reached yesterday only once every account is read up to it
+  // and adds up: an account that failed is read again from the same day.
+  if (failure) {
+    const failed = { nightAt: now, nightFailure: failure.failure, nightHttpStatus: failure.httpStatus };
     await prisma.tbcSync.upsert({ where: SYNC, update: failed, create: { ...SYNC, ...failed } });
-    return { status: 'failed', failure: err.failure, httpStatus: err.httpStatus, stage: err.stage };
+    return failedWith(failure);
   }
   outcome.days.sort();
   outcome.mismatched = [...new Set(outcome.mismatched)].sort();

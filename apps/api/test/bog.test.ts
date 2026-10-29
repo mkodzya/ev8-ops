@@ -14,6 +14,8 @@ import { HAS_DB, call, getApp, json, loginAs, uniq } from './helpers.js';
 const ID = 'test-client-id';
 const SECRET = 'test-client-secret-that-opens-nothing';
 const ACCOUNT = 'GE00BG0000000000000001'; // invented
+/** A second account of the company, invented too. */
+const OTHER = 'GE00BG0000000000000003';
 const TOKEN_URL = 'https://account.bog.ge/auth/realms/bog/protocol/openid-connect/token';
 const API = 'https://api.businessonline.ge/api';
 
@@ -36,6 +38,8 @@ function fakeBank(state: {
   tokenStatuses?: number[];
   apiStatus?: number[];
   retryAfter?: string;
+  /** Accounts the bank refuses these keys, with the status it answers about them. */
+  refused?: Record<string, number>;
 }) {
   const calls: Call[] = [];
   let tokens = 0;
@@ -60,6 +64,8 @@ function fakeBank(state: {
     const forced = apiStatus.shift();
     if (forced) return reply(forced, { message: 'ТЕСТ Тайна' }, state.retryAfter ? { 'retry-after': state.retryAfter } : {});
     const path = url.slice(API.length);
+    const refusal = Object.entries(state.refused ?? {}).find(([account]) => path.includes(`/${account}/`));
+    if (refusal) return reply(refusal[1], { message: 'ТЕСТ Тайна' });
     if (path.startsWith('/v2/documents/todayactivities/')) return reply(200, state.today ?? []);
     const paged = /^\/v2\/statement\/[^/]+\/GEL\/(\d+)\/(\d+)$/.exec(path);
     const size = state.pageSize ?? 1000;
@@ -612,6 +618,69 @@ describe.skipIf(!HAS_DB)('the pull, the night and the queue', () => {
     const page = json<{ banks: { bank: string; api: { freshness: string; failure: string | null; nightFailure: string | null } | null }[] }>(await call(owner, 'GET', '/api/statements'));
     expect(page.banks.find((b) => b.bank === 'bog')?.api).toMatchObject({ freshness: 'silent', failure: 'unauthorized', nightFailure: 'unauthorized' });
     expect(page.banks.find((b) => b.bank === 'tbc')?.api).toBeNull();
+  });
+
+  // The company opened a dollar account at the bank (29.10.2026). A second
+  // account the bank refuses these keys must not keep the lari account's money
+  // out of «Разобрать».
+  it('asks each account on its own: one the bank refuses keeps nothing of the other out of the queue, and is what the pull says', async () => {
+    const day = '2031-03-21';
+    const { prisma } = await import('../src/lib/db.js');
+    const paid = activity({ id: 9801, day, doc: '0801', credit: sum(6) });
+    process.env.BOG_ACCOUNT = `${ACCOUNT} ${OTHER}`;
+    setBogFetchForTests(fakeBank({ today: [paid], refused: { [OTHER]: 403 } }).fetchFn, quick);
+    expect(await syncBogToday(at(day))).toEqual({ status: 'failed', failure: 'forbidden', httpStatus: 403, stage: 'api' });
+    const lines = await linesOf([sum(6)]);
+    expect(lines).toHaveLength(1);
+    expect(lines[0]!.statement).toMatchObject({ source: 'api', account: ACCOUNT });
+    // The link says it failed: an account the bank does not answer is not hidden behind one it does.
+    expect(await prisma.bogSync.findUnique({ where: { id: true } })).toMatchObject({ lastFailure: 'forbidden', lastHttpStatus: 403, lastOkAt: null });
+
+    // The refused account first: the one after it is asked all the same, with the same token.
+    process.env.BOG_ACCOUNT = `${OTHER},${ACCOUNT}`;
+    const bank = fakeBank({ today: [paid, activity({ id: 9802, day, doc: '0802', credit: sum(7) })], refused: { [OTHER]: 404 } });
+    setBogFetchForTests(bank.fetchFn, quick);
+    expect(await syncBogToday(at(day, '10:05'))).toEqual({ status: 'failed', failure: 'not_found', httpStatus: 404, stage: 'api' });
+    expect(bank.calls.filter((c) => c.url.startsWith(API)).map((c) => c.url.slice(API.length))).toEqual([
+      `/v2/documents/todayactivities/${OTHER}/GEL`,
+      `/v2/documents/todayactivities/${ACCOUNT}/GEL`,
+    ]);
+    expect(bank.tokens()).toBe(1);
+    expect(await linesOf([sum(6), sum(7)])).toHaveLength(2);
+
+    // Keys the bank refuses are refused for every account: the second is not asked.
+    const keys = fakeBank({ tokenStatus: 401 });
+    setBogFetchForTests(keys.fetchFn, quick);
+    expect(await syncBogToday(at(day, '10:10'))).toEqual({ status: 'failed', failure: 'unauthorized', httpStatus: 401, stage: 'token' });
+    expect(keys.calls).toHaveLength(1);
+
+    // Both answer: the link is well again.
+    setBogFetchForTests(fakeBank({ today: [paid] }).fetchFn, quick);
+    expect(await syncBogToday(at(day, '10:15'))).toMatchObject({ status: 'ok', added: 0 });
+    expect(await prisma.bogSync.findUnique({ where: { id: true } })).toMatchObject({ lastFailure: null, lastHttpStatus: null });
+  });
+
+  it('reads the night of each account on its own, and has read up to yesterday only once every account is read', async () => {
+    const { prisma } = await import('../src/lib/db.js');
+    await prisma.bogSync.update({ where: { id: true }, data: { nightThrough: new Date('2031-03-22T00:00:00Z') } });
+    const entries = [entry({ id: 99801, day: '2031-03-23', doc: '0811', credit: sum(7) })];
+
+    // The refused account comes first, and the night goes on to the next.
+    process.env.BOG_ACCOUNT = `${OTHER} ${ACCOUNT}`;
+    setBogFetchForTests(fakeBank({ entries, refused: { [OTHER]: 403 } }).fetchFn, quick);
+    expect(await reconcileBogNight(at('2031-03-24', '06:17'))).toEqual({ status: 'failed', failure: 'forbidden', httpStatus: 403, stage: 'api' });
+    expect(await linesOf([sum(7)])).toHaveLength(1);
+    const held = await prisma.bogSync.findUnique({ where: { id: true } });
+    expect(held).toMatchObject({ nightFailure: 'forbidden', nightHttpStatus: 403 });
+    expect(held?.nightThrough?.toISOString().slice(0, 10)).toBe('2031-03-22');
+
+    // The next hour both answer: the night reaches yesterday, and the line already in does not come twice.
+    setBogFetchForTests(fakeBank({ entries }).fetchFn, quick);
+    expect(await reconcileBogNight(at('2031-03-24', '07:17'))).toMatchObject({ status: 'ok', added: 0, days: ['2031-03-22', '2031-03-23'] });
+    expect(await linesOf([sum(7)])).toHaveLength(1);
+    const read = await prisma.bogSync.findUnique({ where: { id: true } });
+    expect(read).toMatchObject({ nightFailure: null, nightHttpStatus: null });
+    expect(read?.nightThrough?.toISOString().slice(0, 10)).toBe('2031-03-23');
   });
 
   it('asks about the account of the last uploaded statement when the env file names none — and says when there is none', async () => {

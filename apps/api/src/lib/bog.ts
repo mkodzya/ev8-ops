@@ -491,41 +491,69 @@ async function accountsFor(cfg: BogConfig): Promise<string[]> {
 
 const SYNC = { id: true } as const;
 
+/**
+ * The day's operations on one account. The list of the day's operations is
+ * down now and then while the statement is not (test stand, 15.10.2026:
+ * `todayactivities` 503 again and again, the statement of the 14th read at
+ * once). Today's statement holds the same operations, keyed as the night will
+ * key them.
+ */
+async function todayOf(bank: BogClient, account: string, today: string): Promise<{ lines: ParsedLine[]; listed: number; fromStatement: boolean }> {
+  try {
+    const rows = await bank.today(account);
+    return { lines: onceEach(rows.map((r) => lineFromToday(r, today))), listed: rows.length, fromStatement: false };
+  } catch (err) {
+    if (!(err instanceof BogError && err.stage === 'api' && err.httpStatus != null && err.httpStatus >= 500)) throw err;
+    const rows = await bank.statement(account, today, today);
+    return { lines: onceEach(rows.map(lineFromEntry)), listed: rows.length, fromStatement: true };
+  }
+}
+
+/**
+ * Each account is asked on its own. One the bank refuses — a second account
+ * it does not let these keys read, or one it does not know in lari — must not
+ * keep the lari account's money out of the queue: what the others listed goes
+ * in, and the refusal is what the reading says and what the screen shows. A
+ * refused token is the keys themselves, and no other account is asked.
+ */
+async function eachAccount(accounts: string[], read: (account: string) => Promise<void>): Promise<BogError | null> {
+  if (accounts.length === 0) return new BogError('no_account');
+  let failure: BogError | null = null;
+  for (const account of accounts) {
+    try {
+      await read(account);
+    } catch (err) {
+      if (!(err instanceof BogError)) throw err;
+      failure ??= err;
+      if (err.stage === 'token') break;
+    }
+  }
+  return failure;
+}
+
+const failedWith = (err: BogError): BogOutcome => ({ status: 'failed', failure: err.failure, httpStatus: err.httpStatus, stage: err.stage });
+
 async function pullToday(cfg: BogConfig, now: Date): Promise<BogOutcome> {
   const today = todayISO(now, env.TZ);
   const lists: { account: string; lines: ParsedLine[]; listed: number }[] = [];
   let fromStatement = false;
-  try {
-    const accounts = await accountsFor(cfg);
-    if (accounts.length === 0) throw new BogError('no_account');
-    const bank = client(cfg);
-    for (const account of accounts) {
-      try {
-        const rows = await bank.today(account);
-        lists.push({ account, lines: onceEach(rows.map((r) => lineFromToday(r, today))), listed: rows.length });
-      } catch (err) {
-        // The list of the day's operations is down while the statement is not
-        // (test stand, 15.10.2026: `todayactivities` 503 again and again, the
-        // statement of the 14th read at once). Today's statement holds the same
-        // operations, keyed as the night will key them.
-        if (!(err instanceof BogError && err.stage === 'api' && err.httpStatus != null && err.httpStatus >= 500)) throw err;
-        const rows = await bank.statement(account, today, today);
-        lists.push({ account, lines: onceEach(rows.map(lineFromEntry)), listed: rows.length });
-        fromStatement = true;
-      }
-    }
-  } catch (err) {
-    if (!(err instanceof BogError)) throw err;
-    const failed = { lastTryAt: now, lastFailure: err.failure, lastHttpStatus: err.httpStatus };
-    await prisma.bogSync.upsert({ where: SYNC, update: failed, create: { ...SYNC, ...failed } });
-    return { status: 'failed', failure: err.failure, httpStatus: err.httpStatus, stage: err.stage };
-  }
+  const bank = client(cfg);
+  const failure = await eachAccount(await accountsFor(cfg), async (account) => {
+    const read = await todayOf(bank, account, today);
+    lists.push({ account, lines: read.lines, listed: read.listed });
+    fromStatement ||= read.fromStatement;
+  });
 
   const outcome = blank();
   outcome.fromStatement = fromStatement;
   for (const { account, lines, listed } of lists) {
     outcome.listed += listed;
     for (const [day, ofDay] of byDay(lines)) await keep(account, day, ofDay, outcome);
+  }
+  if (failure) {
+    const failed = { lastTryAt: now, lastFailure: failure.failure, lastHttpStatus: failure.httpStatus };
+    await prisma.bogSync.upsert({ where: SYNC, update: failed, create: { ...SYNC, ...failed } });
+    return failedWith(failure);
   }
   const ok = { lastOkAt: now, lastTryAt: now, lastFailure: null, lastHttpStatus: null, todayCount: outcome.listed };
   await prisma.bogSync.upsert({ where: SYNC, update: ok, create: { ...SYNC, ...ok } });
@@ -558,25 +586,24 @@ async function readNights(cfg: BogConfig, now: Date): Promise<BogOutcome> {
   const start = reached ?? (await lastFileDay('bog')) ?? yesterday;
   const from = [[start, addDays(yesterday, -(NIGHT_MAX_DAYS - 1))].sort().pop()!, yesterday].sort()[0]!;
   const outcome = blank();
-  try {
-    const accounts = await accountsFor(cfg);
-    if (accounts.length === 0) throw new BogError('no_account');
-    const bank = client(cfg);
-    for (const account of accounts) {
-      const covered = await daysInFiles('bog', account, from, yesterday);
-      const open = daysFrom(from, yesterday).filter((d) => !covered.has(d));
-      if (open.length === 0) continue;
-      const rows = await bank.statement(account, open[0]!, yesterday);
-      outcome.listed += rows.length;
-      const lines = onceEach(rows.map(lineFromEntry)).filter((l) => !covered.has(l.occurredOn));
-      outcome.days.push(...open.filter((d) => !outcome.days.includes(d)));
-      for (const [day, ofDay] of byDay(lines)) await keep(account, day, ofDay, outcome);
-    }
-  } catch (err) {
-    if (!(err instanceof BogError)) throw err;
-    const failed = { nightAt: now, nightFailure: err.failure, nightHttpStatus: err.httpStatus };
+  const bank = client(cfg);
+  const failure = await eachAccount(await accountsFor(cfg), async (account) => {
+    const covered = await daysInFiles('bog', account, from, yesterday);
+    const open = daysFrom(from, yesterday).filter((d) => !covered.has(d));
+    if (open.length === 0) return;
+    const rows = await bank.statement(account, open[0]!, yesterday);
+    outcome.listed += rows.length;
+    const lines = onceEach(rows.map(lineFromEntry)).filter((l) => !covered.has(l.occurredOn));
+    outcome.days.push(...open.filter((d) => !outcome.days.includes(d)));
+    for (const [day, ofDay] of byDay(lines)) await keep(account, day, ofDay, outcome);
+  });
+  // The night has reached yesterday only once every account is read up to it:
+  // an account that failed is read again from the same day, the others' lines
+  // are known then by their keys.
+  if (failure) {
+    const failed = { nightAt: now, nightFailure: failure.failure, nightHttpStatus: failure.httpStatus };
     await prisma.bogSync.upsert({ where: SYNC, update: failed, create: { ...SYNC, ...failed } });
-    return { status: 'failed', failure: err.failure, httpStatus: err.httpStatus, stage: err.stage };
+    return failedWith(failure);
   }
   const ok = { nightThrough: dateFromISO(yesterday), nightAt: now, nightFailure: null, nightHttpStatus: null, nightAdded: outcome.added };
   await prisma.bogSync.upsert({ where: SYNC, update: ok, create: { ...SYNC, ...ok } });
