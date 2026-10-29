@@ -674,9 +674,11 @@ describe.skipIf(!HAS_DB)('the pull, the night and the queue', () => {
     expect(sync).toMatchObject({ lastFailure: 'unauthorized', lastHttpStatus: 401, lastOkAt: null, nightFailure: 'unauthorized', nightThrough: null });
 
     const owner = await loginAs('owner');
-    const page = json<{ banks: { bank: string; api: { freshness: string; failure: string | null; nightFailure: string | null } | null }[] }>(await call(owner, 'GET', '/api/statements'));
+    const page = json<{ banks: { bank: string; api: { freshness: string; failure: string | null; nightFailure: string | null } | null; accounts: unknown[] }[] }>(await call(owner, 'GET', '/api/statements'));
     expect(page.banks.find((b) => b.bank === 'bog')?.api).toMatchObject({ freshness: 'silent', failure: 'unauthorized', nightFailure: 'unauthorized' });
     expect(page.banks.find((b) => b.bank === 'tbc')?.api).toBeNull();
+    // An account in lari alone is the bank's card, as before the dollars: no card of an account beside it.
+    for (const b of page.banks) expect(b.accounts).toEqual([]);
   });
 
   // The company opened a dollar account at the bank (29.10.2026). A second
@@ -834,8 +836,12 @@ describe.skipIf(!HAS_DB)('the pull, the night and the queue', () => {
     expect(sync).toMatchObject({ lastFailure: null, lastHttpStatus: null, todayCount: 1 });
     expect(sync?.lastOkAt?.getTime()).toBe(at(day).getTime());
     const owner = await loginAs('owner');
-    const page = json<{ banks: { bank: string; api: { freshness: string; failure: string | null } | null }[] }>(await call(owner, 'GET', '/api/statements'));
+    type Page = { banks: { bank: string; api: { freshness: string; failure: string | null } | null; accounts: { last4: string; currency: string; api: { freshness: string; failure: string | null } }[] }[] };
+    const page = json<Page>(await call(owner, 'GET', '/api/statements'));
     expect(page.banks.find((b) => b.bank === 'bog')?.api).toMatchObject({ freshness: 'ok', failure: null });
+    // The dollars have a card of their own on «Выписки», which says why the bank gives nothing for them — by four digits, never the account.
+    expect(page.banks.find((b) => b.bank === 'bog')?.accounts).toMatchObject([{ last4: '0001', currency: 'USD', api: { freshness: 'silent', failure: 'forbidden', lastOkAt: null } }]);
+    expect(JSON.stringify(page.banks)).not.toContain(ACCOUNT);
     const pairs = await prisma.bankApiAccount.findMany({ where: { bank: 'bog' }, orderBy: { currency: 'asc' } });
     expect(pairs.map((p) => [p.currency, p.lastFailure, p.lastHttpStatus, p.lastOkAt?.getTime() ?? null])).toEqual([
       ['GEL', null, null, at(day).getTime()],

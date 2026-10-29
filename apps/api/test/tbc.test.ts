@@ -673,8 +673,11 @@ describe.skipIf(!HAS_DB)('the TBC pull, the night and the queue', () => {
     const dollars = await prisma.bankApiAccount.findFirstOrThrow({ where: { bank: 'tbc', currency: 'USD' } });
     expect([isoOf(dollars.readFrom), isoOf(dollars.nightThrough), dollars.nightFailure, isoOf(dollars.nightMismatchOn)]).toEqual(['2032-03-10', '2032-04-08', 'mismatch', '2032-04-09']);
     const owner = await loginAs('owner');
-    const page = json<{ banks: { bank: string; api: { nightFailure: string | null; nightMismatchOn: string | null } | null }[] }>(await call(owner, 'GET', '/api/statements'));
+    type Status = { nightFailure: string | null; nightMismatchOn: string | null };
+    const page = json<{ banks: { bank: string; api: Status | null; accounts: { last4: string; currency: string; api: Status }[] }[] }>(await call(owner, 'GET', '/api/statements'));
     expect(page.banks.find((b) => b.bank === 'tbc')?.api).toMatchObject({ nightFailure: null, nightMismatchOn: null });
+    // The day that did not add up is the dollars' card's to say, not the lari's.
+    expect(page.banks.find((b) => b.bank === 'tbc')?.accounts).toMatchObject([{ last4: ACCOUNT.slice(-4), currency: 'USD', api: { nightFailure: 'mismatch', nightMismatchOn: '2032-04-09' } }]);
 
     // Within the hour the bank lists the late movement: only the dollars are read again, from where they stopped.
     const late = fakeBank({ movements: [...movements, movement({ id: idOf(3), day: '2032-04-09', amount: 12.5, currency: 'USD' })] });

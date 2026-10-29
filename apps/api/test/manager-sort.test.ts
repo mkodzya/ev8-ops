@@ -191,6 +191,8 @@ describe.skipIf(!HAS_DB)('«Разобрать» for a manager: the customers’
       ['POST', `/api/statement-lines/${outLine.id}/pay-out`, { kind: 'supplier', purchaseId: 'none' }],
       ['GET', '/api/statement-lines/by-rules'],
       ['GET', '/api/statement-lines/aside'],
+      // The lines of the accounts in another currency, and their sums, are an owner's to see.
+      ['GET', '/api/statement-lines/foreign'],
       ['GET', '/api/statements'],
       ['GET', '/api/income-categories'],
       ['POST', '/api/payer-rules/none/forget'],

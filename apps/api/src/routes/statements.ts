@@ -1,10 +1,10 @@
-import { daysBetween, mayLinkPayment, mayRemember, maySortTo, mayUnlink, nameMatches, todayISO, type Permission } from '@ev8/shared';
+import { daysBetween, mayLinkPayment, mayRemember, maySortTo, mayUnlink, monthOf, nameMatches, todayISO, type Permission } from '@ev8/shared';
 import type { FastifyInstance } from 'fastify';
 import type { Prisma } from '../generated/prisma/client.js';
 import { audit } from '../lib/audit.js';
 import { hasPerm, permissionsOf, type Actor } from '../lib/auth.js';
-import { bogApiStatus } from '../lib/bog.js';
-import { isoDate } from '../lib/dates.js';
+import { bogApiStatus, bogPairsStatus } from '../lib/bog.js';
+import { dateFromISO, isoDate } from '../lib/dates.js';
 import { prisma } from '../lib/db.js';
 import { env } from '../lib/env.js';
 import { badRequest, conflict, forbidden, notFound } from '../lib/errors.js';
@@ -12,6 +12,7 @@ import { actorOf } from '../lib/guard.js';
 import { voidPayment } from '../lib/payments.js';
 import { recordOutFromLine } from '../lib/money.js';
 import { depositsOverview } from '../lib/deposits.js';
+import { last4 } from '../lib/statements/apiDays.js';
 import { SPLIT_MAX, attach, importStatement, linkBankDeposit, linkPayment, previewStatement, split, type SplitShift } from '../lib/statements/import.js';
 import { ParseError } from '../lib/statements/parse.js';
 import { isCashDeposit, loadCtx, storedLine, suggest } from '../lib/statements/reconcile.js';
@@ -19,9 +20,9 @@ import { expenseKey, lastCategories, payeeLabel, sortByRule, waitingFrom } from 
 import { BACK_TO_QUEUE, setAside } from '../lib/statements/aside.js';
 import { twinReason, twinsOf } from '../lib/statements/duplicates.js';
 import { livePayerRules, namesAnother, payerByAccount, payerKey, payerLabel, rememberPayer, type PayerKind } from '../lib/statements/payers.js';
-import { tbcApiStatus } from '../lib/tbc.js';
+import { tbcApiStatus, tbcPairsStatus } from '../lib/tbc.js';
 import { settleAfterShift } from '../lib/weekShift.js';
-import { int, oneOf, str, tetri } from '../lib/validate.js';
+import { date, int, oneOf, str, tetri } from '../lib/validate.js';
 
 // Statements and "Разобрать" (wave 2 §3.2, §3.5).
 //
@@ -84,14 +85,17 @@ export function statementRoutes(app: FastifyInstance): void {
    * By bank: the last upload and up to which day; below, the history (§3.5).
    * A bank's card is its account in lari: a day of an account in another
    * currency (migration 0073) neither makes it fresh nor counts as its upload.
+   * Such an account has a card of its own (`accounts`), and its lines are
+   * listed apart (`/api/statement-lines/foreign`) once there are any.
    */
   app.get('/api/statements', { config: { scope: 'payments.reconcile' } }, async () => {
     const today = todayISO(new Date(), env.TZ);
     const statements = await prisma.statement.findMany({ orderBy: { createdAt: 'desc' }, take: 100, include: { uploadedBy: { select: { name: true } } } });
     const lastLines = await prisma.statementLine.groupBy({ by: ['bank'], where: { currency: 'GEL' }, _max: { occurredOn: true } });
     const queue = await prisma.statementLine.count({ where: { status: 'unmatched' } });
+    const foreignLines = await prisma.statementLine.count({ where: { currency: { not: 'GEL' } } });
     // A bank comes by itself once its keys are on the stand (B11-03): Bank of Georgia, TBC.
-    const [bogApi, tbcApi] = await Promise.all([bogApiStatus(), tbcApiStatus()]);
+    const [bogApi, tbcApi, bogPairs, tbcPairs] = await Promise.all([bogApiStatus(), tbcApiStatus(), bogPairsStatus(), tbcPairsStatus()]);
     const banks = BANKS.map((bank) => {
       const last = statements.find((s) => s.bank === bank && s.currency === 'GEL') ?? null;
       const through = isoDate(lastLines.find((l) => l.bank === bank)?._max.occurredOn ?? null);
@@ -105,6 +109,8 @@ export function statementRoutes(app: FastifyInstance): void {
         stale: upTo ? daysBetween(upTo, today) > STALE_DAYS : false,
         never: !last,
         api: bank === 'bog' ? bogApi : bank === 'tbc' ? tbcApi : null,
+        // Its accounts in another currency (decision D1 of docs/spec/usd-accounts-plan.md), each by its last four digits.
+        accounts: bank === 'bog' ? bogPairs : bank === 'tbc' ? tbcPairs : [],
       };
     });
     return {
@@ -112,11 +118,14 @@ export function statementRoutes(app: FastifyInstance): void {
       staleDays: STALE_DAYS,
       limitBytes: MAX_STATEMENT_BYTES,
       banks,
+      // Lines of the accounts in another currency, kept: none, and the screen has nothing more than before them.
+      foreignLines,
       statements: statements.map((s) => ({
         id: s.id,
         bank: s.bank,
         fileName: s.fileName,
         account: s.account,
+        currency: s.currency,
         periodFrom: isoDate(s.periodFrom),
         periodTo: isoDate(s.periodTo),
         lineCount: s.lineCount,
@@ -405,6 +414,40 @@ export function statementRoutes(app: FastifyInstance): void {
         };
       }),
     };
+  });
+
+  /**
+   * «Операции в валюте» on «Выписки» (Mika, 29.10.2026, decision D1 «А» of
+   * docs/spec/usd-accounts-plan.md): the lines of the accounts not in lari in
+   * a period, this month unless asked, to be read and not sorted. Each account
+   * — a bank, an IBAN by its last four digits, a currency — sums what came in
+   * and went out in its own currency: two currencies are never added up, and
+   * nothing here is in a total in ₾.
+   */
+  app.get<{ Querystring: { from?: string; to?: string } }>('/api/statement-lines/foreign', { config: { scope: 'payments.reconcile' } }, async (req) => {
+    const month = monthOf(todayISO(new Date(), env.TZ));
+    const from = date(req.query, 'from') ?? month.from;
+    const to = date(req.query, 'to') ?? month.to;
+    if (from > to) throw badRequest('bad_period', 'The period starts after it ends.', { field: 'from' });
+    const lines = await prisma.statementLine.findMany({
+      where: { currency: { not: 'GEL' }, occurredOn: { gte: dateFromISO(from)!, lte: dateFromISO(to)! } },
+      orderBy: [{ occurredOn: 'desc' }, { createdAt: 'desc' }],
+      include: { statement: { select: { account: true } } },
+    });
+    type Account = { bank: (typeof BANKS)[number]; last4: string | null; currency: string; inMinor: number; outMinor: number; lines: unknown[] };
+    const accounts = new Map<string, Account>();
+    for (const l of lines) {
+      const iban = l.statement.account;
+      const key = `${l.bank} ${iban ?? ''} ${l.currency}`;
+      const a = accounts.get(key) ?? { bank: l.bank, last4: iban ? last4(iban) : null, currency: l.currency, inMinor: 0, outMinor: 0, lines: [] };
+      if (l.direction === 'in') a.inMinor += l.amountTetri;
+      else a.outMinor += l.amountTetri;
+      // In minor units of the line's currency: cents for dollars, as tetri are for lari.
+      a.lines.push({ id: l.id, occurredOn: isoDate(l.occurredOn), direction: l.direction, amountMinor: l.amountTetri, payer: l.payer, purpose: l.purpose, raw: l.raw });
+      accounts.set(key, a);
+    }
+    const order = (a: Account) => `${BANKS.indexOf(a.bank)} ${a.currency} ${a.last4 ?? ''}`;
+    return { from, to, accounts: [...accounts.values()].sort((a, b) => order(a).localeCompare(order(b))) };
   });
 
   /** One line with its hints. */

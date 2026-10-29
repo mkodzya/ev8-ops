@@ -164,6 +164,52 @@ export async function savePair(bank: ApiBank, pair: AccountPair, readFrom: strin
   });
 }
 
+/** What the stand keeps of a link: a bank's lari in `bog_sync` / `tbc_sync`, one pair in `bank_api_accounts`. */
+type LinkKept = Pick<BankApiAccount, 'lastOkAt' | 'lastTryAt' | 'lastFailure' | 'nightThrough' | 'nightFailure'>;
+
+/** How a link stands, for "Деньги → Выписки". */
+export interface LinkStatus<F extends string> {
+  /** 'ok' — the bank answered lately; 'silent' — it has not for a while, or never has; 'waiting' — not asked yet. */
+  freshness: 'ok' | 'silent' | 'waiting';
+  lastOkAt: string | null;
+  failure: F | null;
+  nightThrough: string | null;
+  nightFailure: F | null;
+}
+
+/** The link has gone silent when the bank has not answered for `staleMs`. One rule for a bank's lari and for each pair. */
+export function linkStatus<F extends string>(s: LinkKept | null, staleMs: number, now: Date): LinkStatus<F> {
+  const lastOkAt = s?.lastOkAt ?? null;
+  const freshness = !lastOkAt ? (s?.lastTryAt ? 'silent' : 'waiting') : now.getTime() - lastOkAt.getTime() > staleMs ? 'silent' : 'ok';
+  return {
+    freshness,
+    lastOkAt: lastOkAt?.toISOString() ?? null,
+    failure: (s?.lastFailure as F | null) ?? null,
+    nightThrough: isoDate(s?.nightThrough ?? null),
+    nightFailure: (s?.nightFailure as F | null) ?? null,
+  };
+}
+
+/** A pair as «Выписки» shows it: by its last four digits, never more, with how its own link stands. */
+export interface PairStatus<F extends string> {
+  last4: string;
+  currency: BankCurrency;
+  api: LinkStatus<F> & {
+    /** TBC: the first day of this pair whose movements did not add up to the bank's sums at its last nightly reading. */
+    nightMismatchOn: string | null;
+  };
+}
+
+/** How each of these pairs stands, from its row; a pair not read yet is waiting. */
+export async function pairsStatus<F extends string>(bank: ApiBank, pairs: AccountPair[], staleMs: number, now: Date): Promise<PairStatus<F>[]> {
+  if (pairs.length === 0) return [];
+  const rowOf = await pairRows(bank);
+  return pairs.map((pair) => {
+    const row = rowOf(pair);
+    return { last4: last4(pair.iban), currency: pair.currency, api: { ...linkStatus<F>(row, staleMs, now), nightMismatchOn: isoDate(row?.nightMismatchOn ?? null) } };
+  });
+}
+
 /** What one reading did: listed by the bank, new in the queue, and of the new ones what the rules settled. */
 export interface Tally {
   /** Operations the bank listed. */

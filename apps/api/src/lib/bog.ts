@@ -49,15 +49,19 @@ import {
   daysInFiles,
   keep as keepDay,
   lastFileDay,
+  linkStatus,
   onceEach,
   pairOutcome,
   pairRows,
   pairsNamed,
+  pairsStatus,
   savePair,
   tally,
   type AccountPair,
   type BankCurrency,
+  type LinkStatus,
   type PairOutcome,
+  type PairStatus,
   type Tally,
 } from './statements/apiDays.js';
 import { readBogText, type ParsedLine } from './statements/parse.js';
@@ -721,27 +725,22 @@ function keep(pair: AccountPair, day: string, lines: ParsedLine[], outcome: Ok):
 
 // ── For the screen ──────────────────────────────────────────────────────
 
-export interface BogApiStatus {
-  /** 'ok' — the bank answered lately; 'silent' — it has not for a while, or never has; 'waiting' — not asked yet. */
-  freshness: 'ok' | 'silent' | 'waiting';
-  lastOkAt: string | null;
-  failure: BogFailure | null;
-  nightThrough: string | null;
-  nightFailure: BogFailure | null;
-}
+export type BogApiStatus = LinkStatus<BogFailure>;
 
-/** How the link stands, for "Деньги → Выписки". Null when it is off. */
+/** How the link of the lari stands, for "Деньги → Выписки". Null when it is off. */
 export async function bogApiStatus(now: Date = new Date()): Promise<BogApiStatus | null> {
   const cfg = bogConfig();
   if (!cfg) return null;
-  const s = await prisma.bogSync.findUnique({ where: SYNC });
-  const lastOkAt = s?.lastOkAt ?? null;
-  const freshness = !lastOkAt ? (s?.lastTryAt ? 'silent' : 'waiting') : now.getTime() - lastOkAt.getTime() > cfg.staleMs ? 'silent' : 'ok';
-  return {
-    freshness,
-    lastOkAt: lastOkAt?.toISOString() ?? null,
-    failure: (s?.lastFailure as BogFailure | null) ?? null,
-    nightThrough: isoDate(s?.nightThrough ?? null),
-    nightFailure: (s?.nightFailure as BogFailure | null) ?? null,
-  };
+  return linkStatus<BogFailure>(await prisma.bogSync.findUnique({ where: SYNC }), cfg.staleMs, now);
+}
+
+/**
+ * The accounts read in another currency, each with how its own link stands:
+ * a card of each on "Деньги → Выписки" beside the bank's card, which is its
+ * lari's. None when the link is off, or stopped on an account it cannot read.
+ */
+export async function bogPairsStatus(now: Date = new Date()): Promise<PairStatus<BogFailure>[]> {
+  const cfg = bogConfig();
+  if (!cfg || cfg.badAccount) return [];
+  return pairsStatus<BogFailure>('bog', cfg.accounts.filter((p) => p.currency !== 'GEL'), cfg.staleMs, now);
 }

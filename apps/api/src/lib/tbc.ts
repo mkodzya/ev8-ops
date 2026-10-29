@@ -55,15 +55,19 @@ import {
   daysInFiles,
   keep as keepDay,
   lastFileDay,
+  linkStatus,
   onceEach,
   pairOutcome,
   pairRows,
   pairsNamed,
+  pairsStatus,
   savePair,
   tally,
   type AccountPair,
   type BankCurrency,
+  type LinkStatus,
   type PairOutcome,
+  type PairStatus,
   type Tally,
 } from './statements/apiDays.js';
 import { cardOf, type ParsedLine } from './statements/parse.js';
@@ -667,30 +671,27 @@ async function readNights(cfg: TbcConfig, now: Date): Promise<TbcOutcome> {
 
 // ── For the screen ──────────────────────────────────────────────────────
 
-export interface TbcApiStatus {
-  /** 'ok' — the bank answered lately; 'silent' — it has not for a while, or never has; 'waiting' — not asked yet. */
-  freshness: 'ok' | 'silent' | 'waiting';
-  lastOkAt: string | null;
-  failure: TbcFailure | null;
-  nightThrough: string | null;
-  nightFailure: TbcFailure | null;
+export interface TbcApiStatus extends LinkStatus<TbcFailure> {
   /** The first day whose movements did not add up to the bank's sums at the last nightly reading. */
   nightMismatchOn: string | null;
 }
 
-/** How the link stands, for "Деньги → Выписки". Null when it is off. */
+/** How the link of the lari stands, for "Деньги → Выписки". Null when it is off. */
 export async function tbcApiStatus(now: Date = new Date()): Promise<TbcApiStatus | null> {
   const cfg = tbcConfig();
   if (!cfg) return null;
   const s = await prisma.tbcSync.findUnique({ where: SYNC });
-  const lastOkAt = s?.lastOkAt ?? null;
-  const freshness = !lastOkAt ? (s?.lastTryAt ? 'silent' : 'waiting') : now.getTime() - lastOkAt.getTime() > cfg.staleMs ? 'silent' : 'ok';
-  return {
-    freshness,
-    lastOkAt: lastOkAt?.toISOString() ?? null,
-    failure: (s?.lastFailure as TbcFailure | null) ?? null,
-    nightThrough: isoDate(s?.nightThrough ?? null),
-    nightFailure: (s?.nightFailure as TbcFailure | null) ?? null,
-    nightMismatchOn: isoDate(s?.nightMismatchOn ?? null),
-  };
+  return { ...linkStatus<TbcFailure>(s, cfg.staleMs, now), nightMismatchOn: isoDate(s?.nightMismatchOn ?? null) };
+}
+
+/**
+ * The accounts read in another currency, each with how its own link stands —
+ * its own night check too: a card of each on "Деньги → Выписки" beside the
+ * bank's card, which is its lari's. None when the link is off, or stopped on
+ * an account it cannot read.
+ */
+export async function tbcPairsStatus(now: Date = new Date()): Promise<PairStatus<TbcFailure>[]> {
+  const cfg = tbcConfig();
+  if (!cfg || cfg.badAccount) return [];
+  return pairsStatus<TbcFailure>('tbc', cfg.accounts.filter((p) => p.currency !== 'GEL'), cfg.staleMs, now);
 }

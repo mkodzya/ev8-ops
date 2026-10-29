@@ -247,3 +247,76 @@ describe.skipIf(!HAS_DB)('lines in another currency, parked outside the lari (mi
     }
   });
 });
+
+// «Операции в валюте» on «Выписки» (stage 3 of the plan): the lines of each
+// account in another currency, read only, with what came in and went out in
+// its own currency. The days are in 2098, which no other suite writes lines in.
+describe.skipIf(!HAS_DB)('the accounts in another currency, shown apart on «Выписки»', () => {
+  const made: string[] = [];
+  afterAll(async () => {
+    const { prisma } = await import('../src/lib/db.js');
+    await prisma.statement.deleteMany({ where: { id: { in: made } } });
+  });
+
+  type Foreign = {
+    from: string;
+    to: string;
+    accounts: { bank: string; last4: string | null; currency: string; inMinor: number; outMinor: number; lines: { occurredOn: string; direction: string; amountMinor: number; purpose: string | null }[] }[];
+  };
+
+  it('lists each account apart and sums it in its own currency: no currency is added to another, nor to the lari', async () => {
+    const { prisma } = await import('../src/lib/db.js');
+    const { keep, tally } = await import('../src/lib/statements/apiDays.js');
+    const owner = await loginAs('owner');
+    const key = () => `api:test:${uniq()}`;
+    // One IBAN at Bank of Georgia in dollars, euros and lari, and a TBC account in dollars.
+    await keep('bog', 'Business Online', BOG_ACCOUNT, '2098-02-10', [op(key(), '2098-02-10', 'in', 15000, { purpose: 'invented USD in' }), op(key(), '2098-02-10', 'out', 4000)], tally(), 'USD');
+    await keep('bog', 'Business Online', BOG_ACCOUNT, '2098-02-11', [op(key(), '2098-02-11', 'in', 2050)], tally(), 'USD');
+    await keep('bog', 'Business Online', BOG_ACCOUNT, '2098-02-12', [op(key(), '2098-02-12', 'in', 9900)], tally(), 'EUR');
+    await keep('tbc', 'Business Integration Services', TBC_ACCOUNT, '2098-02-13', [op(key(), '2098-02-13', 'out', 1240)], tally(), 'USD');
+    await keep('bog', 'Business Online', BOG_ACCOUNT, '2098-02-10', [op(key(), '2098-02-10', 'in', 77700)], tally());
+    // A day of dollars after the month asked for.
+    await keep('bog', 'Business Online', BOG_ACCOUNT, '2098-03-01', [op(key(), '2098-03-01', 'in', 50000)], tally(), 'USD');
+    made.push(...(await prisma.statement.findMany({ where: { source: 'api', account: { in: [BOG_ACCOUNT, TBC_ACCOUNT] }, periodFrom: { gte: asDate('2098-01-01') } }, select: { id: true } })).map((s) => s.id));
+
+    const res = await call(owner, 'GET', '/api/statement-lines/foreign?from=2098-02-01&to=2098-02-28');
+    expect(res.statusCode, res.body).toBe(200);
+    const page = json<Foreign>(res);
+    expect(page).toMatchObject({ from: '2098-02-01', to: '2098-02-28' });
+    expect(page.accounts.map((a) => [a.bank, a.last4, a.currency, a.inMinor, a.outMinor, a.lines.length])).toEqual([
+      ['bog', '0005', 'EUR', 9900, 0, 1],
+      ['bog', '0005', 'USD', 17050, 4000, 3],
+      ['tbc', '0006', 'USD', 0, 1240, 1],
+    ]);
+    // Newest first, each sum in minor units of its own currency.
+    const dollars = page.accounts[1]!.lines;
+    expect(dollars.map((l) => l.occurredOn)).toEqual(['2098-02-11', '2098-02-10', '2098-02-10']);
+    expect(dollars.map((l) => `${l.direction} ${l.amountMinor}`).sort()).toEqual(['in 15000', 'in 2050', 'out 4000']);
+    expect(page.accounts[1]!.lines.map((l) => l.purpose)).toContain('invented USD in');
+    // An account is said by its last four digits, never more.
+    expect(res.body).not.toContain(BOG_ACCOUNT);
+    expect(res.body).not.toContain(TBC_ACCOUNT);
+
+    // The lari of the same IBAN and days: in the reports in lari, alone, and not in the block.
+    const inc = json<{ totalInTetri: number }>(await call(owner, 'GET', '/api/reports/incoming?from=2098-02-01&to=2098-02-28'));
+    expect(inc.totalInTetri).toBe(77700);
+    const out = json<{ totalOutTetri: number }>(await call(owner, 'GET', '/api/reports/expenses?from=2098-02-01&to=2098-02-28'));
+    expect(out.totalOutTetri).toBe(0);
+
+    // «Выписки» knows there are lines in another currency, and says the currency of each day of them.
+    const s = json<{ foreignLines: number; statements: { id: string; currency: string }[] }>(await call(owner, 'GET', '/api/statements'));
+    expect(s.foreignLines).toBeGreaterThanOrEqual(6);
+    const days = s.statements.filter((x) => made.includes(x.id));
+    expect(days.map((x) => x.currency).sort()).toEqual(['EUR', 'GEL', 'USD', 'USD', 'USD', 'USD']);
+  });
+
+  it('reads this month unless asked, and refuses a period that ends before it starts', async () => {
+    const { monthOf } = await import('@ev8/shared');
+    const owner = await loginAs('owner');
+    const month = monthOf(todayISO(new Date(), 'Asia/Tbilisi'));
+    expect(json<Foreign>(await call(owner, 'GET', '/api/statement-lines/foreign'))).toMatchObject({ from: month.from, to: month.to });
+    const bad = await call(owner, 'GET', '/api/statement-lines/foreign?from=2098-02-28&to=2098-02-01');
+    expect(bad.statusCode).toBe(400);
+    expect(err(bad)).toBe('bad_period');
+  });
+});
