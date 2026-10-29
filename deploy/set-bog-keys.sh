@@ -52,7 +52,8 @@
 # The test stand is the default. Production is named out loud, with --prod;
 # --from-test gives it the keys and the list of accounts the test stand
 # already holds, from one env file to the other on this server, shown to
-# nobody:
+# nobody; a list with an account in dollars or euros goes only to a
+# production that reads them:
 #
 #   ssh root@204.168.149.105 /srv/ev8-ops/deploy/set-bog-keys.sh --prod --from-test
 set -euo pipefail
@@ -142,6 +143,9 @@ pairs_of() {
 # The pairs the env file names now.
 current_accounts() { pairs_of "$(sed -n 's/^BOG_ACCOUNT=//p' "$ENV" | tail -n 1)"; }
 
+# Is any of the pairs in a currency other than lari?
+any_foreign() { local c; for c in ${CURS[@]+"${CURS[@]}"}; do [ "$c" = GEL ] || return 0; done; return 1; }
+
 # The pairs as they are shown, in one line.
 shown() { local joined; joined=$(printf '%s, ' ${NOW[@]+"${NOW[@]}"}); printf '%s' "${joined%, }"; }
 
@@ -176,11 +180,14 @@ confirm_replace() {
 }
 
 # The account named in the last Bank of Georgia statement uploaded to
-# production: only read, and not printed.
+# production: only read, and not printed. Uploaded files only — they are in
+# lari; a day the API read may be of an account in dollars, and names its
+# IBAN bare. No currency in the query: production may be older than the
+# column.
 account_from_prod() {
   local db; db=$(docker ps -q --filter label=com.docker.compose.project=ev8-prod --filter label=com.docker.compose.service=db 2>/dev/null < /dev/null) || return 0
   [ -n "$db" ] || return 0
-  docker exec "$db" sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -qAt -c "select account from statements where bank = '"'"'bog'"'"' and account is not null order by created_at desc limit 1"' 2>/dev/null < /dev/null || true
+  docker exec "$db" sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -qAt -c "select account from statements where bank = '"'"'bog'"'"' and source = '"'"'file'"'"' and account is not null order by created_at desc limit 1"' 2>/dev/null < /dev/null || true
 }
 
 # With no account named, a stand reads the account of the last statement in
@@ -452,6 +459,13 @@ safe "$SECRET" 16 || { echo "Это не похоже на client secret: кор
 if [ -n "$FROM_TEST" ]; then
   # The list goes over as the test stand reads it, every account with it.
   pairs_of "$LIST"
+  # But not to a production older than the accounts in dollars and euros: it
+  # would take «…USD» for one more account in lari, and the bank refusing that
+  # one would stop its reading of the lari too.
+  if any_foreign && ! asks_pairs; then
+    echo "На боевом версия старше той, что читает счета в долларах и евро, а в списке тестового стенда они есть: $(shown). Боевой принял бы их за счета в лари. Список переносится вместе с релизом; ключи до него можно вписать на боевой заново: ssh -t root@204.168.149.105 /srv/ev8-ops/deploy/set-bog-keys.sh --prod. Ничего не изменено."
+    exit 1
+  fi
   if [ ${#NOW[@]} -eq 0 ]; then echo "Счёт на тестовом стенде не записан: боевой будет читать счёт последней загруженной на него выписки."; else echo "Счета с тестового стенда: $(shown)."; fi
 else
   keep_or_ask
