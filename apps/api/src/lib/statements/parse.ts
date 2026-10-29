@@ -18,9 +18,12 @@ export interface ParsedLine {
   docNo?: string | null;
   occurredOn: string; // ISO
   direction: 'in' | 'out';
+  /** In minor units of the account's currency: tetri for lari, cents for an account in dollars or euros (migration 0073). */
   amountTetri: number;
   grossTetri: number | null;
   feeTetri: number | null;
+  /** What Bank of Georgia says an operation of an account in another currency is in lari, where it says it: kept for reference, never summed. */
+  bankGelTetri?: number | null;
   payer: string | null;
   purpose: string | null;
   raw: string;
@@ -35,7 +38,19 @@ export interface ParsedStatement {
   lines: ParsedLine[];
 }
 
-export class ParseError extends Error {}
+/**
+ * A file this cannot take, and why in one of the API's words: not a statement
+ * at all, or a statement of an account in another currency, which is not read
+ * from a file yet.
+ */
+export class ParseError extends Error {
+  constructor(
+    message: string,
+    readonly code: 'unreadable_statement' | 'foreign_statement' = 'unreadable_statement',
+  ) {
+    super(message);
+  }
+}
 
 /** A tolerant CSV reader: quotes, embedded newlines, doubled quotes. */
 export function parseCsv(text: string): string[][] {
@@ -190,6 +205,14 @@ export function parseBog(text: string, opts: { fileName: string }): ParsedStatem
 
   const preamble = rows.slice(0, headerAt).flat().join(' ');
   const account = /angariSis\s*#:\s*([A-Z0-9]+)/i.exec(preamble)?.[1] ?? null;
+  // The account is written with its currency after it (`GE…BG…GEL`). A
+  // statement of the company's dollar or euro account has the same columns,
+  // and its cents would go in as tetri: such a file is refused until the
+  // money in another currency is kept apart from the lari.
+  const currency = /^GE\d{2}[A-Z]{2}\d{16}([A-Z]{3})$/i.exec(account ?? '')?.[1]?.toUpperCase();
+  if (currency && currency !== 'GEL') {
+    throw new ParseError(`This Bank of Georgia statement is of an account in ${currency}: only statements in lari are read from a file for now.`, 'foreign_statement');
+  }
   const period = /periodi:\s*(\d{2}\.\d{2}\.\d{2,4})\s*-\s*(\d{2}\.\d{2}\.\d{2,4})/i.exec(preamble);
   const asIso = (d: string): string | null => {
     const parts = d.split('.');

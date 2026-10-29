@@ -345,6 +345,35 @@ describe.skipIf(!HAS_DB)('who may load a statement', () => {
     expect(json<{ error: string; message: string }>(bad).error).toBe('unreadable_statement');
     expect(json<{ message: string }>(bad).message).toMatch(/Bank of Georgia|TBC/);
   });
+
+  // The company's dollar account at Bank of Georgia (29.10.2026): its export has
+  // the columns of the lari one, and its cents would go in as tetri.
+  it('a Bank of Georgia statement of an account not in lari is refused in its own words, and nothing of it is kept', async () => {
+    const owner = await loginAs('owner');
+    for (const currency of ['USD', 'eur']) {
+      const tag = uniq();
+      const header = BOG_HEADER.replace(/angariSis #:[A-Z0-9]+/, `angariSis #:GE00BG0000000000000001${currency}`); // invented
+      const text = [header, bogRow('07.09.2026', '150.00', `tankhis gadaritskhva: Incoming Transfer; Details: TEST ${tag}`), BOG_SUMMARY].join('\n');
+      for (const url of ['/api/statements/preview', '/api/statements']) {
+        const res = await call(owner, 'POST', url, { fileName: 'StatementExport.csv', text });
+        expect(res.statusCode, res.body).toBe(400);
+        expect(json<{ error: string }>(res).error).toBe('foreign_statement');
+        expect(json<{ message: string }>(res).message).toContain(currency.toUpperCase());
+        expect(res.body).not.toContain('GE00BG0000000000000001');
+      }
+      const { prisma } = await import('../src/lib/db.js');
+      expect(await prisma.statementLine.count({ where: { raw: { contains: tag } } })).toBe(0);
+    }
+
+    // The account in lari, with its currency written or without it, is read as before.
+    for (const account of ['GE00BG0000000000000001GEL', 'GE00BG0000000000000001']) {
+      const tag = uniq();
+      const header = BOG_HEADER.replace(/angariSis #:[A-Z0-9]+/, `angariSis #:${account}`);
+      const text = [header, bogRow('07.09.2026', '150.00', `tankhis gadaritskhva: Incoming Transfer; Details: TEST ${tag}`), BOG_SUMMARY].join('\n');
+      const res = await call(owner, 'POST', '/api/statements/preview', { fileName: 'StatementExport.csv', text });
+      expect(res.statusCode, res.body).toBe(200);
+    }
+  });
 });
 
 describe.skipIf(!HAS_DB)('one bank line for several records (meeting of 14.10.2026)', () => {

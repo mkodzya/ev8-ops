@@ -143,7 +143,7 @@ describe('route table', () => {
     const publicOnes = app.routeTable.filter((r) => r.scope === 'public').map((r) => r.url).sort();
     // The jobs are public to the session guard and closed by the worker token (routes/jobs.ts).
     // The PIN sign-in and the tablet's list of names are closed by the tablet's own token (ADR-0033).
-    expect(publicOnes).toEqual(['/api/auth/login', '/api/auth/pin', '/api/health', '/api/jobs/bog-night', '/api/jobs/bog-today', '/api/jobs/drive-scan', '/api/jobs/kommo-sync', '/api/jobs/notices', '/api/jobs/notices-scan', '/api/jobs/roll-periods', '/api/jobs/tbc-night', '/api/jobs/tbc-today', '/api/jobs/translate', '/api/site/queue', '/api/workshop/tablet']);
+    expect(publicOnes).toEqual(['/api/auth/login', '/api/auth/pin', '/api/health', '/api/jobs/bank-probe', '/api/jobs/bog-night', '/api/jobs/bog-today', '/api/jobs/drive-scan', '/api/jobs/kommo-sync', '/api/jobs/notices', '/api/jobs/notices-scan', '/api/jobs/roll-periods', '/api/jobs/tbc-night', '/api/jobs/tbc-today', '/api/jobs/translate', '/api/site/queue', '/api/workshop/tablet']);
   });
 });
 

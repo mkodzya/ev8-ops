@@ -12,10 +12,12 @@
 //
 // Bank of Georgia the same way (B11-03, Mika 14.10.2026): every five minutes
 // the API asks the bank for the day's operations — 288 of the 800 requests a
-// day the bank allows — and once a night it reads the full statement up to
-// yesterday so nothing the day's pulls missed is lost. The night is asked
-// again every hour and on every start; it does nothing once yesterday is read,
-// so a night the bank did not answer is caught up within the hour.
+// day the bank allows each account and currency — and once a night it reads
+// the full statement up to yesterday so nothing the day's pulls missed is
+// lost. The night is asked again every hour and on every start; it does
+// nothing once yesterday is read, so a night the bank did not answer is caught
+// up within the hour. An account read in more than one currency, or another
+// account, gets a line of its own, by its last four digits only.
 //
 // TBC the same way (ADR-0026), two minutes after each Bank of Georgia pull and
 // half an hour off its night, so the two banks' lines do not meet the same
@@ -97,6 +99,9 @@ async function pollKommo(): Promise<void> {
   kommoSaid = line;
 }
 
+/** One account and currency a bank's job read: the account by its last four digits, never more. */
+type PairOutcome = { last4: string; currency: string; listed: number; added: number; failure: string | null; httpStatus: number | null; days?: string[]; mismatched?: string[] };
+
 type BankOutcome =
   | { status: 'off' }
   | { status: 'busy' }
@@ -110,6 +115,7 @@ type BankOutcome =
       days: string[];
       fromStatement?: boolean;
       mismatched?: string[];
+      accounts?: PairOutcome[];
     }
   | { status: 'failed'; failure: string; httpStatus: number | null; stage?: string | null };
 
@@ -148,12 +154,33 @@ const BANK_NAME: Record<Bank, string> = { bog: 'Bank of Georgia', tbc: 'TBC' };
 // What each job last said, so the log gets a line when something changes.
 const said: Record<string, string> = {};
 
+/**
+ * A line for each account and currency a bank was read for — when it is read
+ * for more than one, or for one not in lari: which of them answered and what
+ * each brought, so that one the bank refuses is not hidden behind the others.
+ * An account is named by its last four digits, never more. With one account
+ * in lari, as every stand had it before the dollars, there are none.
+ */
+function pairLines(name: string, night: boolean, accounts: PairOutcome[] = []): string[] {
+  if (accounts.length < 2 && accounts.every((a) => a.currency === 'GEL')) return [];
+  return accounts.map((a) => {
+    const pair = `${name} ··${String(a.last4).slice(-4)} ${a.currency}`;
+    if (a.failure) return `${pair} did not answer${night ? ' with the statement' : ''} — ${a.failure}${a.httpStatus ? ` (${a.httpStatus})` : ''}`;
+    const added = a.added ? `${a.added} new line(s)` : 'nothing new';
+    if (!night) return `${pair} — ${a.listed} operation(s) today, ${added}`;
+    const days = a.days ?? [];
+    const off = a.mismatched?.length ? `; ${a.mismatched.join(', ')} do not add up to the bank's statement` : '';
+    return days.length ? `${pair} statement ${days[0]}…${days[days.length - 1]} — ${a.listed} entr(ies), ${added}${off}` : `${pair} statement — the nights are read`;
+  });
+}
+
 /** Counts and our own words only: the bank's answers carry names and account numbers. */
 async function askBank(bank: Bank, part: 'today' | 'night'): Promise<void> {
   const job = `${bank}-${part}`;
   const name = BANK_NAME[bank];
   const night = part === 'night';
   let line: string;
+  let pairs: string[] = [];
   let always = false;
   try {
     const res = await fetch(`${API}/api/jobs/${job}`, { method: 'POST', headers: { 'x-worker-token': TOKEN } });
@@ -180,13 +207,15 @@ async function askBank(bank: Bank, part: 'today' | 'night'): Promise<void> {
           ? `${name} statement ${r.days[0]}…${r.days[r.days.length - 1]} — ${r.listed} entr(ies), ${known} already in${from}, ${added}${off}`
           : `${name} statement — the nights are read`
         : `${name} answered${r.fromStatement ? ' through today’s statement (the day’s list did not)' : ''} — ${r.listed} operation(s) today, ${added}${from}`;
+      pairs = pairLines(name, night, r.accounts);
       always = r.added > 0 || (night && r.days.length > 0);
     }
   } catch (err) {
     line = `the ${name} ${night ? 'statement' : 'pull'} did not reach the API — ${(err as Error).message}`;
   }
-  if (always || line !== said[job]) console.log(`worker: ${line}`);
-  said[job] = line;
+  const all = [line, ...pairs].join('\n');
+  if (always || all !== said[job]) for (const l of [line, ...pairs]) console.log(`worker: ${l}`);
+  said[job] = all;
 }
 
 type NoticeOutcome = { status: 'off' | 'busy' | 'ok'; sent: number; failed: number; pending: number; maintenance?: number; stock?: number };

@@ -4,11 +4,11 @@ import { LoadError } from '../components/LoadError.js';
 import { RecordHistory } from '../components/RecordHistory.js';
 import { BlockHead, Empty, Loading, PageHead } from '../components/ui.js';
 import { Row } from '../components/Wizard.js';
-import { fmtDate } from '../format.js';
+import { fmtDate, formatForeign } from '../format.js';
 import { useT } from '../i18n/index.js';
 import { useLoad } from '../lib/use.js';
 import { useSession } from '../session.js';
-import { NewPurchase, SupplierDrawer, fmtForeign, statusOf, type Purchase, type Supplier } from './PurchasesPage.js';
+import { NewPurchase, SupplierDrawer, statusOf, type Purchase, type Supplier } from './PurchasesPage.js';
 
 // Поставщик (wave 5 §3.4, §3.9, crit. 20). A record kind of its own: a
 // factory is not looked for among customers, and a customer is not looked for
@@ -67,7 +67,7 @@ export function SupplierPage() {
           // up, and pretending they do is how a debt goes missing (B3-04).
           debt.map((d) => (
             <span className="num num-crit" key={d.currency}>
-              <span className="num-v">{fmtForeign(d.minor, d.currency)}</span>
+              <span className="num-v">{formatForeign(d.minor, d.currency)}</span>
               <span className="num-l">{t.supplierCard.debt}</span>
             </span>
           ))
@@ -139,10 +139,10 @@ export function SupplierPage() {
                     </td>
                     <td className="muted">{p.invoiceNo ?? t.common.dash}</td>
                     <td className="mono">{fmtDate(p.orderedOn)}</td>
-                    <td className="num mono">{fmtForeign(p.invoiceMinor, p.currency)}</td>
+                    <td className="num mono">{formatForeign(p.invoiceMinor, p.currency)}</td>
                     <td className="num mono">{p.paidPercent} %</td>
                     <td className="num mono">
-                      {p.debtMinor > 0 && p.status !== 'cancelled' ? <span className="crit-text">{fmtForeign(p.debtMinor, p.currency)}</span> : t.common.dash}
+                      {p.debtMinor > 0 && p.status !== 'cancelled' ? <span className="crit-text">{formatForeign(p.debtMinor, p.currency)}</span> : t.common.dash}
                     </td>
                     <td className="muted">{t.buy.statuses[statusOf(p)]}</td>
                   </tr>

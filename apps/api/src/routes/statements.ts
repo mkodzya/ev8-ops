@@ -1,10 +1,10 @@
-import { daysBetween, mayLinkPayment, mayRemember, maySortTo, mayUnlink, nameMatches, todayISO, type Permission } from '@ev8/shared';
+import { daysBetween, mayLinkPayment, mayRemember, maySortTo, mayUnlink, monthOf, nameMatches, todayISO, type Permission } from '@ev8/shared';
 import type { FastifyInstance } from 'fastify';
 import type { Prisma } from '../generated/prisma/client.js';
 import { audit } from '../lib/audit.js';
 import { hasPerm, permissionsOf, type Actor } from '../lib/auth.js';
-import { bogApiStatus } from '../lib/bog.js';
-import { isoDate } from '../lib/dates.js';
+import { bogApiStatus, bogPairsStatus } from '../lib/bog.js';
+import { dateFromISO, isoDate } from '../lib/dates.js';
 import { prisma } from '../lib/db.js';
 import { env } from '../lib/env.js';
 import { badRequest, conflict, forbidden, notFound } from '../lib/errors.js';
@@ -12,6 +12,7 @@ import { actorOf } from '../lib/guard.js';
 import { voidPayment } from '../lib/payments.js';
 import { recordOutFromLine } from '../lib/money.js';
 import { depositsOverview } from '../lib/deposits.js';
+import { last4 } from '../lib/statements/apiDays.js';
 import { SPLIT_MAX, attach, importStatement, linkBankDeposit, linkPayment, previewStatement, split, type SplitShift } from '../lib/statements/import.js';
 import { ParseError } from '../lib/statements/parse.js';
 import { isCashDeposit, loadCtx, storedLine, suggest } from '../lib/statements/reconcile.js';
@@ -19,9 +20,9 @@ import { expenseKey, lastCategories, payeeLabel, sortByRule, waitingFrom } from 
 import { BACK_TO_QUEUE, setAside } from '../lib/statements/aside.js';
 import { twinReason, twinsOf } from '../lib/statements/duplicates.js';
 import { livePayerRules, namesAnother, payerByAccount, payerKey, payerLabel, rememberPayer, type PayerKind } from '../lib/statements/payers.js';
-import { tbcApiStatus } from '../lib/tbc.js';
+import { tbcApiStatus, tbcPairsStatus } from '../lib/tbc.js';
 import { settleAfterShift } from '../lib/weekShift.js';
-import { int, oneOf, str, tetri } from '../lib/validate.js';
+import { date, int, oneOf, str, tetri } from '../lib/validate.js';
 
 // Statements and "Разобрать" (wave 2 §3.2, §3.5).
 //
@@ -57,8 +58,12 @@ const rightsOf = (actor: Actor): readonly Permission[] => permissionsOf(actor.ro
 const ownersAnswer = () =>
   forbidden('sort_owner_only', 'The owner sorts this. A manager links money coming in to a rental, a deposit, a moped sale, goods or a repair.');
 
-/** Set aside by a person — not by a remembered payee or payer, which «Разобрано правилами» lists. */
-const BY_PERSON = { OR: [{ matchedRule: null }, { matchedRule: { notIn: ['expense_rule', 'payer_rule'] } }] };
+/**
+ * Set aside by a person — not by a remembered payee or payer, which «Разобрано
+ * правилами» lists — and in lari: a line in another currency is parked, not
+ * set aside (migration 0073), and is no line to put back.
+ */
+const BY_PERSON = { currency: 'GEL', OR: [{ matchedRule: null }, { matchedRule: { notIn: ['expense_rule', 'payer_rule'] } }] };
 
 function readFile(b: Body): { fileName: string; text: string } {
   const fileName = str(b, 'fileName', { required: true, max: 200 })!;
@@ -70,17 +75,29 @@ function readFile(b: Body): { fileName: string; text: string } {
   return { fileName, text };
 }
 
+/** A file that is not a statement, and a statement of an account not in lari (`parse.ts`), each refused in its own words. */
+function refusalOf(e: ParseError) {
+  return e.code === 'foreign_statement' ? badRequest('foreign_statement', e.message) : badRequest('unreadable_statement', e.message);
+}
+
 export function statementRoutes(app: FastifyInstance): void {
-  /** By bank: the last upload and up to which day; below, the history (§3.5). */
+  /**
+   * By bank: the last upload and up to which day; below, the history (§3.5).
+   * A bank's card is its account in lari: a day of an account in another
+   * currency (migration 0073) neither makes it fresh nor counts as its upload.
+   * Such an account has a card of its own (`accounts`), and its lines are
+   * listed apart (`/api/statement-lines/foreign`) once there are any.
+   */
   app.get('/api/statements', { config: { scope: 'payments.reconcile' } }, async () => {
     const today = todayISO(new Date(), env.TZ);
     const statements = await prisma.statement.findMany({ orderBy: { createdAt: 'desc' }, take: 100, include: { uploadedBy: { select: { name: true } } } });
-    const lastLines = await prisma.statementLine.groupBy({ by: ['bank'], _max: { occurredOn: true } });
+    const lastLines = await prisma.statementLine.groupBy({ by: ['bank'], where: { currency: 'GEL' }, _max: { occurredOn: true } });
     const queue = await prisma.statementLine.count({ where: { status: 'unmatched' } });
+    const foreignLines = await prisma.statementLine.count({ where: { currency: { not: 'GEL' } } });
     // A bank comes by itself once its keys are on the stand (B11-03): Bank of Georgia, TBC.
-    const [bogApi, tbcApi] = await Promise.all([bogApiStatus(), tbcApiStatus()]);
+    const [bogApi, tbcApi, bogPairs, tbcPairs] = await Promise.all([bogApiStatus(), tbcApiStatus(), bogPairsStatus(), tbcPairsStatus()]);
     const banks = BANKS.map((bank) => {
-      const last = statements.find((s) => s.bank === bank) ?? null;
+      const last = statements.find((s) => s.bank === bank && s.currency === 'GEL') ?? null;
       const through = isoDate(lastLines.find((l) => l.bank === bank)?._max.occurredOn ?? null);
       const upTo = [through, last ? isoDate(last.periodTo) : null].filter((d): d is string => !!d).sort().pop() ?? null;
       return {
@@ -92,6 +109,8 @@ export function statementRoutes(app: FastifyInstance): void {
         stale: upTo ? daysBetween(upTo, today) > STALE_DAYS : false,
         never: !last,
         api: bank === 'bog' ? bogApi : bank === 'tbc' ? tbcApi : null,
+        // Its accounts in another currency (decision D1 of docs/spec/usd-accounts-plan.md), each by its last four digits.
+        accounts: bank === 'bog' ? bogPairs : bank === 'tbc' ? tbcPairs : [],
       };
     });
     return {
@@ -99,11 +118,14 @@ export function statementRoutes(app: FastifyInstance): void {
       staleDays: STALE_DAYS,
       limitBytes: MAX_STATEMENT_BYTES,
       banks,
+      // Lines of the accounts in another currency, kept: none, and the screen has nothing more than before them.
+      foreignLines,
       statements: statements.map((s) => ({
         id: s.id,
         bank: s.bank,
         fileName: s.fileName,
         account: s.account,
+        currency: s.currency,
         periodFrom: isoDate(s.periodFrom),
         periodTo: isoDate(s.periodTo),
         lineCount: s.lineCount,
@@ -121,7 +143,7 @@ export function statementRoutes(app: FastifyInstance): void {
     try {
       return reply.code(201).send(await importStatement({ actorId: actorOf(req).id, fileName, text }));
     } catch (e) {
-      if (e instanceof ParseError) throw badRequest('unreadable_statement', e.message);
+      if (e instanceof ParseError) throw refusalOf(e);
       throw e;
     }
   });
@@ -132,7 +154,7 @@ export function statementRoutes(app: FastifyInstance): void {
     try {
       return await previewStatement({ fileName, text });
     } catch (e) {
-      if (e instanceof ParseError) throw badRequest('unreadable_statement', e.message);
+      if (e instanceof ParseError) throw refusalOf(e);
       throw e;
     }
   });
@@ -392,6 +414,40 @@ export function statementRoutes(app: FastifyInstance): void {
         };
       }),
     };
+  });
+
+  /**
+   * «Операции в валюте» on «Выписки» (Mika, 29.10.2026, decision D1 «А» of
+   * docs/spec/usd-accounts-plan.md): the lines of the accounts not in lari in
+   * a period, this month unless asked, to be read and not sorted. Each account
+   * — a bank, an IBAN by its last four digits, a currency — sums what came in
+   * and went out in its own currency: two currencies are never added up, and
+   * nothing here is in a total in ₾.
+   */
+  app.get<{ Querystring: { from?: string; to?: string } }>('/api/statement-lines/foreign', { config: { scope: 'payments.reconcile' } }, async (req) => {
+    const month = monthOf(todayISO(new Date(), env.TZ));
+    const from = date(req.query, 'from') ?? month.from;
+    const to = date(req.query, 'to') ?? month.to;
+    if (from > to) throw badRequest('bad_period', 'The period starts after it ends.', { field: 'from' });
+    const lines = await prisma.statementLine.findMany({
+      where: { currency: { not: 'GEL' }, occurredOn: { gte: dateFromISO(from)!, lte: dateFromISO(to)! } },
+      orderBy: [{ occurredOn: 'desc' }, { createdAt: 'desc' }],
+      include: { statement: { select: { account: true } } },
+    });
+    type Account = { bank: (typeof BANKS)[number]; last4: string | null; currency: string; inMinor: number; outMinor: number; lines: unknown[] };
+    const accounts = new Map<string, Account>();
+    for (const l of lines) {
+      const iban = l.statement.account;
+      const key = `${l.bank} ${iban ?? ''} ${l.currency}`;
+      const a = accounts.get(key) ?? { bank: l.bank, last4: iban ? last4(iban) : null, currency: l.currency, inMinor: 0, outMinor: 0, lines: [] };
+      if (l.direction === 'in') a.inMinor += l.amountTetri;
+      else a.outMinor += l.amountTetri;
+      // In minor units of the line's currency: cents for dollars, as tetri are for lari.
+      a.lines.push({ id: l.id, occurredOn: isoDate(l.occurredOn), direction: l.direction, amountMinor: l.amountTetri, payer: l.payer, purpose: l.purpose, raw: l.raw });
+      accounts.set(key, a);
+    }
+    const order = (a: Account) => `${BANKS.indexOf(a.bank)} ${a.currency} ${a.last4 ?? ''}`;
+    return { from, to, accounts: [...accounts.values()].sort((a, b) => order(a).localeCompare(order(b))) };
   });
 
   /** One line with its hints. */
@@ -702,13 +758,16 @@ export function statementRoutes(app: FastifyInstance): void {
 
   /**
    * "Вернуть в очередь": a line set aside waits for a person again. Setting a
-   * line aside wrote nothing but the decision, so nothing else is undone.
+   * line aside wrote nothing but the decision, so nothing else is undone. A
+   * line in another currency was never in the queue (migration 0073): it has
+   * no place there to go back to until such lines are sorted at all.
    */
   app.post<{ Params: { id: string } }>('/api/statement-lines/:id/restore', { config: { scope: 'payments.reconcile' } }, async (req) => {
     const actor = actorOf(req);
-    const line = await prisma.statementLine.findUnique({ where: { id: req.params.id }, select: { id: true, resolution: true, resolutionReason: true } });
+    const line = await prisma.statementLine.findUnique({ where: { id: req.params.id }, select: { id: true, currency: true, resolution: true, resolutionReason: true } });
     if (!line) throw notFound('line_not_found', 'No such statement line.');
-    const done = await prisma.statementLine.updateMany({ where: { id: line.id, status: 'ignored' }, data: BACK_TO_QUEUE });
+    if (line.currency !== 'GEL') throw conflict('foreign_line', 'This line is of an account in another currency: it is kept apart from the lari and is not sorted for now.');
+    const done = await prisma.statementLine.updateMany({ where: { id: line.id, status: 'ignored', currency: 'GEL' }, data: BACK_TO_QUEUE });
     if (done.count === 0) throw conflict('not_set_aside', 'This line is not set aside.');
     // A line split into expenses waits again whole (ADR-0030).
     await prisma.statementLineExpensePart.deleteMany({ where: { lineId: line.id } });

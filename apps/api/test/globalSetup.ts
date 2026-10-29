@@ -40,6 +40,10 @@ export async function teardown(): Promise<void> {
     // What a stand-in for Kommo left behind, should a suite have died before
     // its own cleanup. The one row of `kommo_sync` is a singleton and stays.
     await prisma.kommoLead.deleteMany({ where: { firstSeenAt: since } });
+    // The same of a stand-in for a bank (0073): the state of each account and
+    // currency it read. Those are the suites' invented accounts — a real IBAN's
+    // check digits are never 00 — and the rows of bog_sync and tbc_sync stay.
+    await prisma.bankApiAccount.deleteMany({ where: { account: { startsWith: 'GE00' } } });
     // A tracker points at its moped, its repair and its line; a part bought
     // points at the photo of its receipt (0058). Both go before the files.
     await prisma.vehicleTracker.deleteMany({ where: { createdAt: since } });

@@ -6,7 +6,7 @@ import { LoadError } from '../components/LoadError.js';
 import { ModelDrawer, NEW_MODEL } from '../components/ModelDrawer.js';
 import { Loading, PageHead } from '../components/ui.js';
 import { Field } from '../components/Wizard.js';
-import { fmtDate } from '../format.js';
+import { fmtDate, formatForeign } from '../format.js';
 import { useT } from '../i18n/index.js';
 import { DataList } from '../ds/list/DataList.js';
 import { FormSheet } from '../ds/form/Form.js';
@@ -94,14 +94,6 @@ export interface Supplier {
   debt: { currency: string; minor: number }[];
 }
 
-/** An amount in the seller's currency: minor units, two decimals, no lari sign. */
-export function fmtForeign(minor: number, currency: string): string {
-  const whole = Math.floor(Math.abs(minor) / 100);
-  const frac = Math.abs(minor) % 100;
-  const grouped = whole.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
-  return `${minor < 0 ? '-' : ''}${grouped}.${String(frac).padStart(2, '0')} ${currency}`;
-}
-
 /**
  * What an order is waiting for, in one word. The stored status says whether
  * the shipment has arrived; the money says whether it has been paid for. The
@@ -161,7 +153,7 @@ export function PurchasesPage() {
             </>
           ),
           sub2: fmtDate(p.orderedOn),
-          right: <span className="t-money">{fmtForeign(p.invoiceMinor, p.currency)}</span>,
+          right: <span className="t-money">{formatForeign(p.invoiceMinor, p.currency)}</span>,
           rightSub: (
             <span className={p.debtMinor > 0 && p.status !== 'cancelled' ? 'crit-text' : 'muted'}>{t.buy.statuses[statusOf(p)]}</span>
           ),
@@ -175,7 +167,7 @@ export function PurchasesPage() {
             key: 'invoiceTotal',
             label: t.buy.invoiceTotal,
             num: true,
-            cell: (p) => <span className="mono">{fmtForeign(p.invoiceMinor, p.currency)}</span>,
+            cell: (p) => <span className="mono">{formatForeign(p.invoiceMinor, p.currency)}</span>,
             sort: { value: (p) => p.invoiceMinor, first: 'desc' },
           },
           {
@@ -191,7 +183,7 @@ export function PurchasesPage() {
             num: true,
             cell: (p) =>
               p.debtMinor > 0 && p.status !== 'cancelled' ? (
-                <span className="mono crit-text">{fmtForeign(p.debtMinor, p.currency)}</span>
+                <span className="mono crit-text">{formatForeign(p.debtMinor, p.currency)}</span>
               ) : (
                 <span className="muted">{t.common.dash}</span>
               ),
@@ -304,7 +296,7 @@ export function NewPurchase({ supplier, onDone }: { supplier?: { id: string; nam
           draft={supplier ? `purchase-new:${supplier.id}` : 'purchase-new'}
           onRestore={setF}
           summary={(v) => [v.invoiceNo, v.currency].filter(Boolean).join(' · ')}
-          label={t.buy.createFor(fmtForeign(total, f.currency))}
+          label={t.buy.createFor(formatForeign(total, f.currency))}
           submit={async (key) => {
             // An order with no lines has no invoice total and nothing to
             // receive; it is refused here rather than made and then edited.
@@ -437,7 +429,7 @@ export function NewPurchase({ supplier, onDone }: { supplier?: { id: string; nam
                       value={l.price}
                       onChange={(e) => setLine(l.key, { price: e.target.value })}
                     />
-                    <span className="mono buy-line-sum">{fmtForeign(lineMinor(l), f.currency)}</span>
+                    <span className="mono buy-line-sum">{formatForeign(lineMinor(l), f.currency)}</span>
                     {f.lines.length > 1 && (
                       <button type="button" className="pill pill-sm" aria-label={t.buy.removeLine} onClick={() => setF({ ...f, lines: f.lines.filter((x) => x.key !== l.key) })}>
                         ✕
