@@ -1,6 +1,7 @@
 # Долларовые счета Bank of Georgia и TBC по API — план
 
-Дата: 29.10.2026. Ветка `feature/usd-accounts`. Статус: в работе, этапы 0–4.
+Дата: 29.10.2026. Ветка `feature/usd-accounts`. Статус: **этапы 0–4 сделаны** в ветке 29.10.2026 (ADR-0051); этап 5
+ждёт решений D2 и D3, этап 6 — первого живого обмена.
 
 ## Что известно
 
@@ -91,12 +92,16 @@
 
 ### Этап 0 — защиты, которые нужны уже сегодня
 
+**Сделан** 29.10.2026: `66f375a`, `44146b3`, `01aab10`.
+
 parseBog отклоняет файл, у которого счёт в преамбуле с суффиксом не GEL: ParseError с отдельным кодом foreign_statement, передаётся из statements.ts:124/135. Пулл и ночь BOG и TBC ловят сбой по каждому счёту: строки остальных сохраняются, nightThrough не двигается, пока не прочитаны все. --account в обоих скриптах показывает текущий счёт «…NNNN», спрашивает «Заменить? да/нет» и отклоняет валютный суффикс. Тесты. Поведение для лари прежнее.
 
 - Файлы: apps/api/src/lib/statements/parse.ts:186-238; apps/api/src/routes/statements.ts:124,135; apps/api/src/lib/bog.ts:494-584; apps/api/src/lib/tbc.ts:466-546; deploy/set-bog-keys.sh:79-101,154-162; deploy/set-tbc-keys.sh:84-101,161-170; apps/api/test/bog.test.ts, tbc.test.ts, statements.test.ts; i18n errors.codes
 - Готово, когда: Тесты зелёные. Файл BOG с …USD в преамбуле отклоняется понятной фразой. В тесте с двумя счетами 403 на втором не мешает строкам первого. На тестовом стенде с нынешним env пулл и ночь работают как раньше.
 
 ### Этап 1 — валюта в данных, снаружи ничего не меняется
+
+**Сделан** 29.10.2026: `7f7666c`. Защитного блока в миграции нет (поправки выше).
 
 Миграция 0073: currency у statements и statement_lines, bank_gel_tetri, resolution 'foreign', CHECK парковки, частичный индекс, таблица bank_api_accounts. Защитный блок миграции стоит после проверки только чтением. Обновить schema.prisma. accountPairOf; keep, daysInFiles и lastFileDay получают валюту (по умолчанию GEL). knownLines фильтрует по валюте в where. ingest паркует строку не в GEL. Отчёты и свежесть только по GEL. /restore отвечает 409 foreign_line. 'foreign' добавляется в NOT_THERE. Счётчики «Отложено» фильтруют GEL.
 
@@ -105,6 +110,8 @@ parseBog отклоняет файл, у которого счёт в преам
 
 ### Этап 2 — пары счёт+валюта и изоляция
 
+**Сделан** 29.10.2026: `8e242a9`, `2a55f11`.
+
 bogConfig и tbcConfig возвращают пары {iban, currency} с допустимыми GEL/USD/EUR, дубли убираются по паре. Константы BOG_CURRENCY и TBC_CURRENCY убираются, валюта передаётся в каждый запрос, включая страницы. Ключ строки не в GEL получает префикс валюты. TBC сравнивает валюту операции с валютой пары. AmountBase и EntryAmount*Base у BOG пишутся в bank_gel_tetri, если поле есть. Статус и ночной указатель по паре хранятся в bank_api_accounts, bog_sync и tbc_sync пишутся по GEL-парам. Новая пара один раз читает до 31 дня назад. outcome.accounts[], лог worker по парам.
 
 - Файлы: apps/api/src/lib/bog.ts:41-85,256-287,363-416,479-621; apps/api/src/lib/tbc.ts:62-87,279-381,447-575; apps/worker/src/index.ts:172-186; apps/api/test/bog.test.ts; apps/api/test/tbc.test.ts
@@ -112,12 +119,18 @@ bogConfig и tbcConfig возвращают пары {iban, currency} с доп�
 
 ### Этап 3 — показать отдельно
 
+**Сделан** 29.10.2026: `4c77ea7`, `f592f1a`, `c49c76f`.
+
 formatMinor в shared (сюда переезжает fmtForeign). GET /api/statement-lines/foreign: строки и итоги приход/расход по (банк, счёт, валюта), валюты между собой не складываются. В /api/statements появляются accounts[] и currency у выписки. На «Деньги → Выписки» карточка на каждую пару и блок «Операции в валюте — не входит в итоги в ₾». Словарь ka/ru/en и коды ошибок.
 
 - Файлы: packages/shared/src/money.ts:46-58; apps/web/src/pages/PurchasesPage.tsx:97-103; apps/api/src/routes/statements.ts:75-117 и новый маршрут; apps/web/src/pages/money/StatementsPage.tsx:30-49,147-163,235-247; apps/web/src/i18n/bank-currency.ts, en.ts, ru.ts, ka.ts
 - Готово, когда: Без валютных пар в env экран не меняется. В тесте с выдуманной USD-парой блок показывает строки в USD и итоги по валюте, а итоги в ₾ не меняются. i18n-guard зелёный, грузинский текст отдан носителю.
 
 ### Этап 4 — владелец подключает счета
+
+**Сделан** 29.10.2026: `fd0cd69`, `81137e3`, `723ad35` и запись в handoff. Сверх плана: ответ `no_currency`
+(банк знает IBAN в лари, но не в этой валюте), полный прогон ключей список не трогает. Книга (register.md п. 8,
+business/money.md) — за сессией Mika. «Готово, когда» проверяется на тестовом стенде после слияния.
 
 POST /api/jobs/bank-probe {bank, account, currency} с токеном worker, отвечает только кодом. В обоих скриптах --add-account: список пар «··NNNN CUR», Enter — тот же IBAN, валюта 1/2, проверка у банка до записи, дописать к списку, перезапуск, итог по каждой паре. Документы: комментарии в compose, README, .env.example (пустые BOG_ACCOUNT= и TBC_ACCOUNT= с выдуманным примером), ADR-0051 (дополняет ADR-0021 §9 и ADR-0026 «Валюта — лари» и новые лимиты BOG), handoff. В книге через .claim: register.md п.8 («нам нужен только один счёт» заменено) и business/money.md:7,29.
 
