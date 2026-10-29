@@ -27,9 +27,10 @@ const reply = (status: number, body: unknown) => ({ status, headers: { get: () =
 /**
  * Bank of Georgia as far as the link knows it: the day's operations and the
  * statement of each currency apart. `refused` — pairs as `IBAN/USD` the bank
- * refuses these keys; `gate` holds every answer until it opens.
+ * refuses these keys; `down` — currencies whose list of the day's operations
+ * the gateway does not answer; `gate` holds every answer until it opens.
  */
-function bogBank(state: { today?: Record<string, unknown[]>; entries?: Record<string, unknown[]>; refused?: string[]; tokenStatus?: number; gate?: Promise<void> }) {
+function bogBank(state: { today?: Record<string, unknown[]>; entries?: Record<string, unknown[]>; refused?: string[]; down?: string[]; tokenStatus?: number; gate?: Promise<void> }) {
   const calls: string[] = [];
   const fetchFn: BogFetch = async (url) => {
     calls.push(url);
@@ -39,7 +40,7 @@ function bogBank(state: { today?: Record<string, unknown[]>; entries?: Record<st
     if (!m) return reply(404, {});
     const [, kind, iban, currency, from, to] = m;
     if (state.refused?.includes(`${iban}/${currency}`)) return reply(403, { message: BANKS_WORDS });
-    if (kind !== 'statement') return reply(200, state.today?.[currency!] ?? []);
+    if (kind !== 'statement') return state.down?.includes(currency!) ? reply(503, { message: BANKS_WORDS }) : reply(200, state.today?.[currency!] ?? []);
     const records = (state.entries?.[currency!] ?? []).filter((e) => {
       const day = String((e as { EntryDate: string }).EntryDate).slice(0, 10);
       return day >= from! && day <= to!;
@@ -71,8 +72,12 @@ function entry(id: number, day: string, credit: number) {
   };
 }
 
-/** TBC as far as the link knows it: the movements in lari, and the statement's sums made of them. */
-function tbcBank(state: { movements?: ReturnType<typeof movement>[]; tokenStatus?: number }) {
+/**
+ * TBC as far as the link knows it: the movements, and the statement's sums made
+ * of them. `off` — a sum the bank's statement has beyond its movements, by
+ * currency and day (`USD 2033-05-10`).
+ */
+function tbcBank(state: { movements?: ReturnType<typeof movement>[]; off?: Record<string, number>; tokenStatus?: number }) {
   const calls: string[] = [];
   const fetchFn: TbcFetch = async (url) => {
     calls.push(url);
@@ -81,7 +86,10 @@ function tbcBank(state: { movements?: ReturnType<typeof movement>[]; tokenStatus
     const q = u.searchParams;
     const all = (state.movements ?? []).filter((m) => m.currency === q.get('AccountCurrencyCode') && m.date.slice(0, 10) >= q.get('PeriodFrom')! && m.date.slice(0, 10) <= q.get('PeriodTo')!);
     if (u.pathname === '/bab/v1/accounts/movements') return reply(200, { transactions: all, total: all.length });
-    if (u.pathname === '/bab/v1/accounts/statements') return reply(200, { creditSum: all.filter((m) => !m.isDebit).reduce((s, m) => s + m.amount, 0), debitSum: 0 });
+    if (u.pathname === '/bab/v1/accounts/statements') {
+      const off = state.off?.[`${q.get('AccountCurrencyCode')} ${q.get('PeriodFrom')}`] ?? 0;
+      return reply(200, { creditSum: all.filter((m) => !m.isDebit).reduce((s, m) => s + m.amount, 0) + off, debitSum: 0 });
+    }
     return reply(404, {});
   };
   return { fetchFn, calls };
@@ -108,7 +116,7 @@ function movement(id: number, day: string, amount: number) {
 interface Read {
   status: string;
   seconds?: number;
-  banks?: { bank: string; failure: string | null; accounts: { last4: string; currency: string; added: number; days: string[]; failure: string | null }[] }[];
+  banks?: { bank: string; failure: string | null; accounts: { last4: string; currency: string; added: number; days: string[]; failure: string | null; later?: true }[] }[];
 }
 
 describe.skipIf(!HAS_DB)('«Прочитать сейчас» on «Выписки»', () => {
@@ -290,5 +298,54 @@ describe.skipIf(!HAS_DB)('«Прочитать сейчас» on «Выписк�
     process.env.TBC_ACCOUNT = 'GE00TB123';
     clock = now + 60_000;
     expect(json<Read>(await press(owner)).banks!.find((x) => x.bank === 'tbc')).toEqual({ bank: 'tbc', failure: 'no_account', accounts: [] });
+  });
+
+  it('asks a pair’s statement at Bank of Georgia once a press: when today’s stood in for the list of the day, the past days wait for the night, and it says so', async () => {
+    // The list of the day's operations is down for the dollars (test stand, 15.10.2026: `todayactivities` 503 again and again).
+    const state = { today: { GEL: [] }, down: ['USD'], entries: { USD: [entry(id(7), '2033-05-01', sum(7)), entry(id(8), today, sum(8))] } };
+    const bog = bogBank(state);
+    setBogFetchForTests(bog.fetchFn, quick);
+    setTbcFetchForTests(tbcBank({}).fetchFn, quick);
+    const owner = await loginAs('owner');
+    const res = await press(owner);
+    expect(res.statusCode, res.body).toBe(200);
+    expect(json<Read>(res).banks!.find((x) => x.bank === 'bog')!.accounts).toEqual([
+      { last4: '0001', currency: 'GEL', added: 0, days: [], failure: null },
+      { last4: '0001', currency: 'USD', added: 1, days: [], failure: null, later: true },
+    ]);
+    // One statement of the dollars, today's: the bank gives one a minute.
+    const statements = () => bog.calls.filter((u) => u.startsWith(`${BOG_API}/v2/statement/`) && u.includes('/USD/'));
+    expect(statements()).toEqual([`${BOG_API}/v2/statement/${BOG_ACCOUNT}/USD/${today}/${today}`]);
+    const { prisma } = await import('../src/lib/db.js');
+    const row = () => prisma.bankApiAccount.findFirst({ where: { bank: 'bog', currency: 'USD' } });
+    expect((await row())?.nightThrough).toBeNull();
+
+    // A minute on, with the list of the day back, the past days are read.
+    state.down = [];
+    clock = now + 60_000;
+    const later = json<Read>(await press(owner)).banks!.find((x) => x.bank === 'bog')!.accounts[1]!;
+    expect(later).toMatchObject({ currency: 'USD', added: 1, failure: null });
+    expect([later.days[0], later.days.at(-1), later.days.length, 'later' in later]).toEqual(['2033-04-19', yesterday, 31, false]);
+    expect((await row())?.nightThrough?.toISOString().slice(0, 10)).toBe(yesterday);
+  });
+
+  it('says a TBC night whose days do not add up to the bank’s sums brought not everything, as the card says', async () => {
+    process.env.TBC_ACCOUNT = `${TBC_ACCOUNT} ${TBC_ACCOUNT}USD`;
+    setBogFetchForTests(bogBank({ today: {} }).fetchFn, quick);
+    const dollars = { ...movement(8_000_000_000 + id(9), '2033-05-10', sum(9)), currency: 'USD' };
+    // The bank's sums of the dollars for the 10th have a movement more than its list gave.
+    setTbcFetchForTests(tbcBank({ movements: [dollars], off: { 'USD 2033-05-10': 12.5 } }).fetchFn, quick);
+    const owner = await loginAs('owner');
+    const res = await press(owner);
+    expect(res.statusCode, res.body).toBe(200);
+    const tbc = json<Read>(res).banks!.find((x) => x.bank === 'tbc')!;
+    expect(tbc.failure).toBeNull();
+    expect(tbc.accounts[0]).toEqual({ last4: '0001', currency: 'GEL', added: 0, days: [], failure: null });
+    expect(tbc.accounts[1]).toMatchObject({ last4: '0001', currency: 'USD', added: 1, failure: 'mismatch' });
+    expect(tbc.accounts[1]!.days).toContain('2033-05-10');
+    // The card says the same of the pair: its night is read again from the day that did not add up.
+    const { prisma } = await import('../src/lib/db.js');
+    const row = await prisma.bankApiAccount.findFirst({ where: { bank: 'tbc', currency: 'USD' } });
+    expect([row?.nightFailure, row?.nightMismatchOn?.toISOString().slice(0, 10), row?.nightThrough?.toISOString().slice(0, 10)]).toEqual(['mismatch', '2033-05-10', '2033-05-09']);
   });
 });

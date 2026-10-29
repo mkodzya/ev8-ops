@@ -126,7 +126,7 @@ type ReadNow =
       status: 'ok';
       /** When the stand may be asked again, in seconds. */
       seconds: number;
-      banks: { bank: 'bog' | 'tbc'; failure: Why | null; accounts: { last4: string; currency: string; added: number; days: string[]; failure: Why | null }[] }[];
+      banks: { bank: 'bog' | 'tbc'; failure: Why | null; accounts: { last4: string; currency: string; added: number; days: string[]; failure: Why | null; later?: boolean }[] }[];
     };
 
 /**
@@ -202,6 +202,7 @@ function ReadNowBlock({ known }: { known: Known[] }) {
               const words = [
                 a.added > 0 ? r.added(a.added) : came || !a.failure ? r.nothing : null,
                 a.days.length > 0 ? r.days(fmtDayMonth(a.days[0]), fmtDayMonth(a.days[a.days.length - 1]), a.days.length) : null,
+                a.later ? r.later : null,
                 a.failure ? (came ? r.notAll(why(a.failure)) : r.nothingCame(why(a.failure))) : null,
               ];
               return <li key={`${b.bank} ${a.currency} ${a.last4}`}>{`${accountName(name, { bank: b.bank, ...a }, all)} — ${words.filter(Boolean).join(' · ')}`}</li>;

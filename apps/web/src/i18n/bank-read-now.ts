@@ -25,6 +25,8 @@ export const bankReadNowEn = {
     added: (n: number) => (n === 1 ? '1 new operation' : `${n} new operations`),
     nothing: 'nothing new',
     days: (from: string, to: string, n: number) => (n === 1 ? `the past day ${from} read` : `the past days ${from}–${to} read`),
+    // Bank of Georgia gives one statement a minute: when today's stood in for the list of the day, the past days wait for the worker's night.
+    later: 'the past days are read within the hour',
     nothingCame: (why: string) => `nothing came: ${why}`,
     notAll: (why: string) => `not everything came: ${why}`,
   },
@@ -39,6 +41,7 @@ export const bankReadNowRu: typeof bankReadNowEn = {
     added: (n) => `${n} ${plural(n, 'новая операция', 'новые операции', 'новых операций')}`,
     nothing: 'новых операций нет',
     days: (from, to, n) => (n === 1 ? `прочитан прошлый день ${from}` : `прочитаны прошлые дни ${from}–${to}`),
+    later: 'прошлые дни система прочитает в течение часа',
     nothingCame: (why) => `ничего не пришло: ${why}`,
     notAll: (why) => `пришло не всё: ${why}`,
   },
@@ -53,7 +56,8 @@ export const bankReadNowKa: typeof bankReadNowEn = {
     added: (n) => `${n} ახალი ოპერაცია`,
     nothing: 'ახალი ოპერაციები არ არის',
     days: (from, to, n) => (n === 1 ? `წაკითხულია წინა დღე ${from}` : `წაკითხულია წინა დღეები ${from}–${to}`),
+    later: 'წინა დღეებს სისტემა ერთი საათის განმავლობაში წაიკითხავს',
     nothingCame: (why) => `არაფერი მოვიდა: ${why}`,
-    notAll: (why) => `მოვიდა არა ყველაფერი: ${why}`,
+    notAll: (why) => `მოვიდა მხოლოდ ნაწილი: ${why}`,
   },
 };

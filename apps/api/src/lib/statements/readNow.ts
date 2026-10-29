@@ -29,6 +29,8 @@ export interface PairRead {
   days: string[];
   /** Our word for why the bank gave nothing, or not everything, for this pair; null when it answered. */
   failure: string | null;
+  /** Bank of Georgia: the past days wait for the worker's next night — today's statement was asked a moment ago (`readBogNow`). Absent otherwise. */
+  later?: true;
 }
 
 export interface BankRead {
@@ -83,7 +85,9 @@ export async function readBanksNow(): Promise<ReadNow> {
 /**
  * The day's reading and the night's, pair by pair. A reading that failed as a
  * whole failed for every pair of the bank: its word is each pair's that has
- * none of its own, and the bank's when no pair answered at all.
+ * none of its own, and the bank's when no pair answered at all. A TBC night
+ * whose days do not add up to the bank's sums answered, but not with
+ * everything: its word is the card's, `mismatch`, and those days are read again.
  */
 function bankRead(bank: ApiBank, read: { status: 'off' } | { status: 'read'; today: BogOutcome | TbcOutcome; night: BogOutcome | TbcOutcome }): BankRead | null {
   if (read.status === 'off') return null;
@@ -95,7 +99,8 @@ function bankRead(bank: ApiBank, read: { status: 'off' } | { status: 'read'; tod
     for (const a of o.accounts) {
       const key = `${a.last4} ${a.currency}`;
       const was = pairs.get(key) ?? { last4: a.last4, currency: a.currency, added: 0, days: [], failure: null };
-      pairs.set(key, { ...was, added: was.added + a.added, days: [...was.days, ...(a.days ?? [])], failure: was.failure ?? a.failure });
+      const failure = was.failure ?? a.failure ?? (a.mismatched?.length ? 'mismatch' : null);
+      pairs.set(key, { ...was, added: was.added + a.added, days: [...was.days, ...(a.days ?? [])], failure, ...(a.later ? { later: true as const } : {}) });
     }
   }
   const accounts = [...pairs.values()].map((p) => ({ ...p, failure: p.failure ?? whole }));
