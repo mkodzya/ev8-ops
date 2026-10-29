@@ -4,11 +4,11 @@ import { useNavigate } from 'react-router-dom';
 import { LoadError } from '../components/LoadError.js';
 import { Loading, PageHead } from '../components/ui.js';
 import { DataList } from '../ds/list/DataList.js';
-import { fmtDate } from '../format.js';
+import { fmtDate, formatForeign } from '../format.js';
 import { useT } from '../i18n/index.js';
 import { useLoad } from '../lib/use.js';
 import { useSession } from '../session.js';
-import { SupplierDrawer, fmtForeign, type Supplier } from './PurchasesPage.js';
+import { SupplierDrawer, type Supplier } from './PurchasesPage.js';
 
 // Закупки → Поставщики (Mika, 28.09.2026, option A): the factories as a tab
 // next to the orders, the way Fleet has Mopeds · Models. A card opens — and
@@ -26,7 +26,7 @@ export function SuppliersPage() {
 
   // One figure per currency, as on the card: two currencies do not add up.
   const debt = (s: Supplier) => s.debt.filter((d) => d.minor > 0);
-  const debtText = (s: Supplier) => debt(s).map((d) => fmtForeign(d.minor, d.currency)).join(' · ');
+  const debtText = (s: Supplier) => debt(s).map((d) => formatForeign(d.minor, d.currency)).join(' · ');
   const debtCell = (s: Supplier, none: ReactNode) =>
     debt(s).length > 0 ? <span className="mono crit-text">{debtText(s)}</span> : none;
 

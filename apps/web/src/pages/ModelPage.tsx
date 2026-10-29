@@ -5,14 +5,14 @@ import { LoadError } from '../components/LoadError.js';
 import { ModelDrawer } from '../components/ModelDrawer.js';
 import { BlockHead, ColorText, Empty, Loading, PageHead, PlaceText, StateBadge, Vin } from '../components/ui.js';
 import { Row } from '../components/Wizard.js';
-import { fmtDate, formatGel } from '../format.js';
+import { fmtDate, formatForeign, formatGel } from '../format.js';
 import { useT } from '../i18n/index.js';
 import { rowClick } from '../lib/rowLink.js';
 import { SortHead, useSortable } from '../lib/sortable.js';
 import { useLoad } from '../lib/use.js';
 import { useSession } from '../session.js';
 import { CostFrom, type ModelRow } from './ModelsPage.js';
-import { fmtForeign, type PurchaseStatus } from './PurchasesPage.js';
+import type { PurchaseStatus } from './PurchasesPage.js';
 
 interface Card {
   model: ModelRow;
@@ -188,7 +188,7 @@ export function ModelPage() {
                     <td className="mono">{fmtDate(o.orderedOn)}</td>
                     <td className="mono">{o.receivedOn ? fmtDate(o.receivedOn) : t.common.dash}</td>
                     <td className="num mono">{o.qty}</td>
-                    <td className="num mono">{fmtForeign(o.unitPriceMinor, o.currency)}</td>
+                    <td className="num mono">{formatForeign(o.unitPriceMinor, o.currency)}</td>
                     <td className="num mono">{o.unitCostTetri != null ? formatGel(o.unitCostTetri) : t.common.dash}</td>
                   </tr>
                 ))}

@@ -1,6 +1,6 @@
 import { localDateTime } from '@ev8/shared';
 
-export { formatGel } from '@ev8/shared';
+export { formatForeign, formatGel, formatMinor } from '@ev8/shared';
 
 /** 2026-09-13 → 13.09.2026. One date format in every language, like money. */
 export function fmtDate(iso: string | null | undefined): string {
