@@ -84,6 +84,12 @@
 .bank-cards { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); margin-bottom: 16px; }
 .bank-card { padding: 14px; border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--surface); display: grid; gap: 4px; }
 .bank-card.stale { border-color: var(--service); background: var(--warn-soft); }
+/* The accounts in another currency (docs/spec/usd-accounts-plan.md): each apart, its sums in its own currency. */
+.fx-account { display: grid; gap: 4px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line-soft); }
+.fx-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px 12px; }
+.fx-lines { display: grid; gap: 6px; margin-top: 6px; }
+.fx-text { overflow-wrap: anywhere; }
+.fx-empty { margin: 12px 0 0; }
 .upload-summary { display: grid; gap: 4px; margin: 8px 0 14px; }
 .upload-summary div { display: flex; justify-content: space-between; gap: 12px; }
 @media (max-width: 899px) {

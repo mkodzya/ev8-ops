@@ -9,6 +9,7 @@ import { wave6utilRu } from './wave6-utilisation.js';
 import { wave6manageRu } from './wave6-manage.js';
 import { kommoLinkRu } from './kommo-link.js';
 import { bankApiRu } from './bank-api.js';
+import { bankCurrencyRu } from './bank-currency.js';
 import { calendarRu } from './payments-calendar.js';
 import { payDayRu } from './pay-day.js';
 import { weekShiftRu } from './week-shift.js';
@@ -1513,6 +1514,7 @@ export const ru: Dict = {
   ...wave6manageRu,
   ...kommoLinkRu,
   ...bankApiRu,
+  ...bankCurrencyRu,
   ...calendarRu,
   ...payDayRu,
   ...weekShiftRu,

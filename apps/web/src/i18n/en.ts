@@ -18,6 +18,7 @@ import { wave6utilEn } from './wave6-utilisation.js';
 import { wave6manageEn } from './wave6-manage.js';
 import { kommoLinkEn } from './kommo-link.js';
 import { bankApiEn } from './bank-api.js';
+import { bankCurrencyEn } from './bank-currency.js';
 import { calendarEn } from './payments-calendar.js';
 import { payDayEn } from './pay-day.js';
 import { weekShiftEn } from './week-shift.js';
@@ -1524,6 +1525,7 @@ export const en = {
   ...wave6manageEn,
   ...kommoLinkEn,
   ...bankApiEn,
+  ...bankCurrencyEn,
   ...calendarEn,
   ...payDayEn,
   ...weekShiftEn,

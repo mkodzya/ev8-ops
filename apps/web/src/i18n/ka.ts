@@ -9,6 +9,7 @@ import { wave6utilKa } from './wave6-utilisation.js';
 import { wave6manageKa } from './wave6-manage.js';
 import { kommoLinkKa } from './kommo-link.js';
 import { bankApiKa } from './bank-api.js';
+import { bankCurrencyKa } from './bank-currency.js';
 import { calendarKa } from './payments-calendar.js';
 import { payDayKa } from './pay-day.js';
 import { weekShiftKa } from './week-shift.js';
@@ -1503,6 +1504,7 @@ export const ka: Dict = {
   ...wave6manageKa,
   ...kommoLinkKa,
   ...bankApiKa,
+  ...bankCurrencyKa,
   ...calendarKa,
   ...payDayKa,
   ...weekShiftKa,
