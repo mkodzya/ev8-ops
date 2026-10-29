@@ -994,6 +994,66 @@ describe.skipIf(!HAS_DB)('the pull, the night and the queue', () => {
     expect(await linesOf([sum(6)])).toHaveLength(2);
   });
 
+  // `deploy/set-bog-keys.sh --add-account` asks the bank about the new pair through the stand before writing it.
+  it('asks the bank about one pair before a script writes it, says only our word and the status, and keeps nothing', async () => {
+    const app = await getApp();
+    const { env } = await import('../src/lib/env.js');
+    const { prisma } = await import('../src/lib/db.js');
+    const probe = (payload: Record<string, unknown>, token = env.WORKER_TOKEN) => app.inject({ method: 'POST', url: '/api/jobs/bank-probe', headers: { 'x-worker-token': token }, payload });
+    const said = async (payload: Record<string, unknown>) => {
+      const res = await probe(payload);
+      expect(res.statusCode, res.body).toBe(200);
+      for (const never of [ACCOUNT, OTHER, 'Тайна', SECRET]) expect(res.body).not.toContain(never);
+      return json<{ code: string; httpStatus: number | null }>(res);
+    };
+    expect((await probe({ bank: 'bog', account: ACCOUNT, currency: 'USD' }, 'not-it')).statusCode).toBe(401);
+
+    // The dollars on the account in lari: one question, by GET, in that currency, and nothing kept of the answer.
+    const bank = fakeBank({ today: [activity({ id: 9961, day: '2031-03-28', credit: sum(1) })], other: { USD: { today: [activity({ id: 9962, day: '2031-03-28', credit: sum(2) })] } } });
+    setBogFetchForTests(bank.fetchFn, quick);
+    expect(await said({ bank: 'bog', account: ` ${ACCOUNT.toLowerCase()} `, currency: 'usd' })).toEqual({ code: 'ok', httpStatus: null });
+    expect(bank.calls.filter((c) => c.url.startsWith(API)).map((c) => [c.method, c.url.slice(API.length)])).toEqual([['GET', `/v2/documents/todayactivities/${ACCOUNT}/USD`]]);
+    expect(await linesOf([sum(1), sum(2)])).toEqual([]);
+    expect(await prisma.bankApiAccount.count({ where: { bank: 'bog' } })).toBe(0);
+    expect(await prisma.bogSync.findUnique({ where: { id: true } })).toMatchObject({ lastTryAt: null, nightAt: null });
+
+    // A refusal is our word and the status, the bank's own answer dropped.
+    setBogFetchForTests(fakeBank({ refused: { [`${ACCOUNT}/USD`]: 403 } }).fetchFn, quick);
+    expect(await said({ bank: 'bog', account: ACCOUNT, currency: 'USD' })).toEqual({ code: 'forbidden', httpStatus: 403 });
+    // It knows the IBAN in lari and not in euros: the account in euros has a number of its own.
+    const euros = fakeBank({ refused: { [`${ACCOUNT}/EUR`]: 404 } });
+    setBogFetchForTests(euros.fetchFn, quick);
+    expect(await said({ bank: 'bog', account: ACCOUNT, currency: 'EUR' })).toEqual({ code: 'no_currency', httpStatus: 404 });
+    expect(euros.calls.filter((c) => c.url.startsWith(API)).map((c) => c.url.slice(API.length))).toEqual([`/v2/documents/todayactivities/${ACCOUNT}/EUR`, `/v2/documents/todayactivities/${ACCOUNT}/GEL`]);
+    // A number it does not know in any currency.
+    setBogFetchForTests(fakeBank({ refused: { [OTHER]: 404 } }).fetchFn, quick);
+    expect(await said({ bank: 'bog', account: OTHER, currency: 'USD' })).toEqual({ code: 'not_found', httpStatus: 404 });
+    // Keys it no longer takes: the token is asked for once, and nothing more.
+    const keys = fakeBank({ tokenStatus: 401 });
+    setBogFetchForTests(keys.fetchFn, quick);
+    expect(await said({ bank: 'bog', account: ACCOUNT, currency: 'USD' })).toEqual({ code: 'unauthorized', httpStatus: 401 });
+    expect(keys.calls).toHaveLength(1);
+
+    // What is not an account in GEL, USD or EUR is not asked about at all.
+    const none = fakeBank({});
+    setBogFetchForTests(none.fetchFn, quick);
+    for (const payload of [
+      { bank: 'bog', account: `${ACCOUNT}USD`, currency: 'USD' },
+      { bank: 'bog', account: 'GE00BG123', currency: 'USD' },
+      { bank: 'bog', account: ACCOUNT, currency: 'GBP' },
+      { bank: 'bog', account: ACCOUNT, currency: '' },
+      { bank: 'credo', account: ACCOUNT, currency: 'USD' },
+      {},
+    ]) {
+      expect(await said(payload)).toEqual({ code: 'bad_account', httpStatus: null });
+    }
+    expect(none.calls).toHaveLength(0);
+    // Without the keys the link is off.
+    delete process.env.BOG_CLIENT_SECRET;
+    expect(await said({ bank: 'bog', account: ACCOUNT, currency: 'USD' })).toEqual({ code: 'off', httpStatus: null });
+    expect(none.calls).toHaveLength(0);
+  });
+
   it('opens the two jobs to the worker only', async () => {
     const app = await getApp();
     const { env } = await import('../src/lib/env.js');

@@ -97,6 +97,47 @@ export function pairsNamed(raw: string | undefined, bankCode?: string): { pairs:
 }
 
 /**
+ * A pair as a keys script names it, the bare IBAN and the currency apart
+ * (`POST /api/jobs/bank-probe`). Null when it is not an account — of that bank,
+ * with a bank code — in a currency the stand reads.
+ */
+export function pairAsked(account: unknown, currency: unknown, bankCode?: string): AccountPair | null {
+  if (typeof account !== 'string' || typeof currency !== 'string') return null;
+  const iban = account.replace(/\s+/g, '').toUpperCase();
+  const code = currency.trim().toUpperCase();
+  if (accountOf(iban, bankCode) !== iban || !/^[A-Z]{3}$/.test(code)) return null;
+  return accountPairOf(`${iban}${code}`, bankCode);
+}
+
+/**
+ * What the bank said of one pair before a keys script writes it into the
+ * stand's env file (`deploy/set-*-keys.sh --add-account`): `ok`, our word for
+ * its refusal, or `no_currency` — it knows the account, in lari, but not in
+ * this currency, so the account in that currency has a number of its own. The
+ * status code goes with it; nothing of the bank's answer does.
+ */
+export interface PairProbe<F extends string> {
+  code: 'ok' | 'no_currency' | F;
+  httpStatus: number | null;
+}
+
+/**
+ * Ask the bank about one pair; when it does not know an account in a currency
+ * other than lari, ask about the same IBAN in lari too. That tells a number
+ * the bank does not know from a currency the account does not have — the one
+ * mistake Enter in the script can make, as it offers the number of the account
+ * in lari. `ask` gives our word for a refusal, or null when the bank answered.
+ */
+export async function probePair<F extends string>(pair: AccountPair, ask: (pair: AccountPair) => Promise<{ failure: F; httpStatus: number | null } | null>): Promise<PairProbe<F>> {
+  const refused = await ask(pair);
+  if (!refused) return { code: 'ok', httpStatus: null };
+  if (refused.failure === 'not_found' && pair.currency !== 'GEL' && (await ask({ iban: pair.iban, currency: 'GEL' })) === null) {
+    return { code: 'no_currency', httpStatus: refused.httpStatus };
+  }
+  return { code: refused.failure, httpStatus: refused.httpStatus };
+}
+
+/**
  * A line's key from a bank's API: as it has always been for lari, and with the
  * currency in it for another (`api:today:USD:…`). Nothing says a bank's ids
  * are apart between the currencies of one IBAN; with the currency in the key

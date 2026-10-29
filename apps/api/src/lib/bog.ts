@@ -55,12 +55,14 @@ import {
   pairRows,
   pairsNamed,
   pairsStatus,
+  probePair,
   savePair,
   tally,
   type AccountPair,
   type BankCurrency,
   type LinkStatus,
   type PairOutcome,
+  type PairProbe,
   type PairStatus,
   type Tally,
 } from './statements/apiDays.js';
@@ -721,6 +723,31 @@ function blank(): Ok {
 /** One day of one account in one currency into the queue — parked, when it is not lari — under its "Business Online" statement. */
 function keep(pair: AccountPair, day: string, lines: ParsedLine[], outcome: Ok): Promise<void> {
   return keepDay('bog', BOG_API_NAME, pair.iban, day, lines, outcome, pair.currency);
+}
+
+// ── Before a pair is written ────────────────────────────────────────────
+
+/**
+ * Ask the bank once about one account in one currency, with the stand's own
+ * keys, before `deploy/set-bog-keys.sh --add-account` writes the pair into the
+ * env file: the day's operations, as the pull asks for them, and the answer
+ * dropped. Nothing is kept — not a line, not the pair's state — so it waits
+ * for no pull. Null without the keys.
+ */
+export async function probeBogPair(pair: AccountPair, now: Date = new Date()): Promise<PairProbe<BogFailure> | null> {
+  const cfg = bogConfig();
+  if (!cfg) return null;
+  const bank = client(cfg);
+  const today = todayISO(now, env.TZ);
+  return probePair<BogFailure>(pair, async (p) => {
+    try {
+      await todayOf(bank, p, today);
+      return null;
+    } catch (err) {
+      if (err instanceof BogError) return refusal(err);
+      throw err;
+    }
+  });
 }
 
 // ── For the screen ──────────────────────────────────────────────────────

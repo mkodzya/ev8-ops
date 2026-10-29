@@ -704,6 +704,47 @@ describe.skipIf(!HAS_DB)('the TBC pull, the night and the queue', () => {
     expect(page.banks.find((b) => b.bank === 'tbc')?.api).toBeNull();
   });
 
+  // `deploy/set-tbc-keys.sh --add-account` asks the bank about the new pair through the stand before writing it.
+  it('asks the bank about one pair before a script writes it, in the pair’s currency, and keeps nothing', async () => {
+    const app = await getApp();
+    const { env } = await import('../src/lib/env.js');
+    const { prisma } = await import('../src/lib/db.js');
+    const said = async (payload: Record<string, unknown>) => {
+      const res = await app.inject({ method: 'POST', url: '/api/jobs/bank-probe', headers: { 'x-worker-token': env.WORKER_TOKEN }, payload });
+      expect(res.statusCode, res.body).toBe(200);
+      for (const never of [ACCOUNT, OTHER, 'Тайна', SECRET]) expect(res.body).not.toContain(never);
+      return json<{ code: string; httpStatus: number | null }>(res);
+    };
+
+    // One movement of today, of the account in the currency asked about: what the keys script asked before the dollars, in GEL.
+    const bank = fakeBank({ movements: [movement({ id: idOf(1), day: '2032-03-20', amount: sum(1), currency: 'USD' })] });
+    setTbcFetchForTests(bank.fetchFn, quick);
+    expect(await said({ bank: 'tbc', account: ACCOUNT, currency: 'USD' })).toEqual({ code: 'ok', httpStatus: null });
+    const asked = bank.calls.filter((c) => c.url.startsWith(`${BASE}/bab/`));
+    expect(asked).toHaveLength(1);
+    expect(asked[0]!.method).toBe('GET');
+    const q = new URL(asked[0]!.url).searchParams;
+    expect([q.get('AccountNumber'), q.get('AccountCurrencyCode'), q.get('PageIndex'), q.get('PageSize'), q.get('PeriodFrom') === q.get('PeriodTo')]).toEqual([ACCOUNT, 'USD', '0', '1', true]);
+    expect(await prisma.bankApiAccount.count({ where: { bank: 'tbc' } })).toBe(0);
+    expect(await prisma.tbcSync.findUnique({ where: { id: true } })).toMatchObject({ lastTryAt: null, nightAt: null });
+
+    // TBC does not know the IBAN in dollars, and knows it in lari: the account in dollars has a number of its own.
+    setTbcFetchForTests(fakeBank({ unknown: [`${ACCOUNT}/USD`] }).fetchFn, quick);
+    expect(await said({ bank: 'tbc', account: ACCOUNT, currency: 'USD' })).toEqual({ code: 'no_currency', httpStatus: 400 });
+    setTbcFetchForTests(fakeBank({ unknown: [OTHER] }).fetchFn, quick);
+    expect(await said({ bank: 'tbc', account: OTHER, currency: 'EUR' })).toEqual({ code: 'not_found', httpStatus: 400 });
+    setTbcFetchForTests(fakeBank({ apiStatus: [403] }).fetchFn, quick);
+    expect(await said({ bank: 'tbc', account: ACCOUNT, currency: 'USD' })).toEqual({ code: 'forbidden', httpStatus: 403 });
+    setTbcFetchForTests(fakeBank({ apiStatus: [400], apiBody: { title: 'USER_IS_BLOCKED', detail: 'ТЕСТ Тайна' } }).fetchFn, quick);
+    expect(await said({ bank: 'tbc', account: ACCOUNT, currency: 'USD' })).toEqual({ code: 'user_inactive', httpStatus: 400 });
+
+    // Only an account of TBC.
+    const none = fakeBank({});
+    setTbcFetchForTests(none.fetchFn, quick);
+    expect(await said({ bank: 'tbc', account: 'GE00BG0000000000000001', currency: 'USD' })).toEqual({ code: 'bad_account', httpStatus: null });
+    expect(none.calls).toHaveLength(0);
+  });
+
   it('opens the two jobs to the worker only', async () => {
     const app = await getApp();
     const { env } = await import('../src/lib/env.js');

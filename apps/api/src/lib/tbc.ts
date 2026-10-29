@@ -61,12 +61,14 @@ import {
   pairRows,
   pairsNamed,
   pairsStatus,
+  probePair,
   savePair,
   tally,
   type AccountPair,
   type BankCurrency,
   type LinkStatus,
   type PairOutcome,
+  type PairProbe,
   type PairStatus,
   type Tally,
 } from './statements/apiDays.js';
@@ -331,6 +333,11 @@ export class TbcClient {
         if (list.length === 0) throw new TbcError('bad_answer');
       } else if (list.length < PAGE_SIZE) return rows;
     }
+  }
+
+  /** Whether the bank answers about one account in one currency: one movement of the day, as the keys script asks, and the answer dropped. */
+  async answers(pair: AccountPair, day: string): Promise<void> {
+    await this.get('/bab/v1/accounts/movements', { AccountNumber: pair.iban, AccountCurrencyCode: pair.currency, PeriodFrom: day, PeriodTo: day, PageIndex: '0', PageSize: '1' });
   }
 
   /** The statement of one account in one currency for whole days — at TBC a summary: the sums of credits and debits, in its minor units. */
@@ -667,6 +674,31 @@ async function readNights(cfg: TbcConfig, now: Date): Promise<TbcOutcome> {
   outcome.days.sort();
   outcome.mismatched = [...new Set(outcome.mismatched)].sort();
   return outcome;
+}
+
+// ── Before a pair is written ────────────────────────────────────────────
+
+/**
+ * Ask the bank once about one account in one currency, with the stand's own
+ * keys, before `deploy/set-tbc-keys.sh --add-account` writes the pair into the
+ * env file: one movement of today, and the answer dropped. TBC says
+ * `INVALID_ACCOUNT` for an account it does not know in that currency (our
+ * `not_found`). Nothing is kept, so it waits for no pull. Null without the keys.
+ */
+export async function probeTbcPair(pair: AccountPair, now: Date = new Date()): Promise<PairProbe<TbcFailure> | null> {
+  const cfg = tbcConfig();
+  if (!cfg) return null;
+  const bank = client(cfg);
+  const today = todayISO(now, env.TZ);
+  return probePair<TbcFailure>(pair, async (p) => {
+    try {
+      await bank.answers(p, today);
+      return null;
+    } catch (err) {
+      if (err instanceof TbcError) return refusal(err);
+      throw err;
+    }
+  });
 }
 
 // ── For the screen ──────────────────────────────────────────────────────
