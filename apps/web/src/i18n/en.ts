@@ -19,6 +19,7 @@ import { wave6manageEn } from './wave6-manage.js';
 import { kommoLinkEn } from './kommo-link.js';
 import { bankApiEn } from './bank-api.js';
 import { bankCurrencyEn } from './bank-currency.js';
+import { bankReadNowEn } from './bank-read-now.js';
 import { calendarEn } from './payments-calendar.js';
 import { payDayEn } from './pay-day.js';
 import { weekShiftEn } from './week-shift.js';
@@ -1308,6 +1309,7 @@ export const en = {
       forbidden: 'Your role cannot do this. Ask the owner.',
       foreign_line: 'This line is of an account in another currency: it is kept apart from the lari and does not go to «Sort» for now.',
       foreign_statement: 'This is the statement of an account in another currency: for now only statements of the account in lari can be uploaded as a file.',
+      bank_read_too_soon: 'The banks were asked less than a minute ago: a bank allows only so many requests. Try again in a minute.',
       future_date: 'A payment cannot be dated in the future.',
       handover_decided: 'This hand-over is already decided.',
       handover_not_found: 'No such hand-over. Refresh the till.',
@@ -1526,6 +1528,7 @@ export const en = {
   ...kommoLinkEn,
   ...bankApiEn,
   ...bankCurrencyEn,
+  ...bankReadNowEn,
   ...calendarEn,
   ...payDayEn,
   ...weekShiftEn,

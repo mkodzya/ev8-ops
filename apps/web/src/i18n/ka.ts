@@ -10,6 +10,7 @@ import { wave6manageKa } from './wave6-manage.js';
 import { kommoLinkKa } from './kommo-link.js';
 import { bankApiKa } from './bank-api.js';
 import { bankCurrencyKa } from './bank-currency.js';
+import { bankReadNowKa } from './bank-read-now.js';
 import { calendarKa } from './payments-calendar.js';
 import { payDayKa } from './pay-day.js';
 import { weekShiftKa } from './week-shift.js';
@@ -1287,6 +1288,7 @@ export const ka: Dict = {
       forbidden: 'ეს ქმედება თქვენი როლისთვის ხელმისაწვდომი არ არის. მიმართეთ მფლობელს.',
       foreign_line: 'ეს სავალუტო ანგარიშის ხაზია: ის ლარისგან ცალკე ინახება და «დასახარისხებელში» ჯერჯერობით არ ხვდება.',
       foreign_statement: 'ეს სავალუტო ანგარიშის ამონაწერია: ფაილით ჯერჯერობით მხოლოდ ლარის ანგარიშის ამონაწერები იტვირთება.',
+      bank_read_too_soon: 'ბანკებს ერთ წუთზე ნაკლები ხნის წინ უკვე ჰკითხეს: ბანკი მოთხოვნების რაოდენობას ზღუდავს. სცადეთ ერთ წუთში.',
       future_date: 'გადახდას მომავალი თარიღით ვერ ჩაწერთ.',
       handover_decided: 'ამ ჩაბარებაზე უკვე გადაწყვეტილია.',
       handover_not_found: 'ასეთი ჩაბარება არ არის. განაახლეთ სალარო.',
@@ -1505,6 +1507,7 @@ export const ka: Dict = {
   ...kommoLinkKa,
   ...bankApiKa,
   ...bankCurrencyKa,
+  ...bankReadNowKa,
   ...calendarKa,
   ...payDayKa,
   ...weekShiftKa,
