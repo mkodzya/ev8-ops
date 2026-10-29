@@ -28,9 +28,14 @@
 # takes the account named in the last TBC statement uploaded to production —
 # the bank's own words, read and not printed whole. The number is not a
 # secret, but it is not written in the repository either. With --account only
-# the account is asked for and written; the keys stay:
+# the account is asked for and written; the keys stay. The account written now
+# is shown first, by its last four digits, and replaced only on «да»:
 #
 #   ssh -t root@204.168.149.105 /srv/ev8-ops/deploy/set-tbc-keys.sh --account
+#
+# An account with another currency after it (…USD, …EUR) is refused here: the
+# stand reads what this writes as lari, and the company's dollar account
+# written here would take the place of the lari one.
 #
 # The test stand is the default. Production is named out loud, with --prod;
 # --from-test gives it the keys the test stand already holds, from one env
@@ -79,11 +84,52 @@ write_env() { # the lines named by $1 out, the new ones (stdin) in; same owner a
   mv "$tmp" "$ENV"
 }
 
-# The account as the bank's API takes it: GE, two digits, TB, sixteen digits;
-# a statement file may write the currency after it, and that is cut off.
+# The account as the bank's API takes it: GE, two digits, TB, sixteen digits.
+# A statement file may write the currency after it: GEL is cut off; any other
+# currency is refused, with status 2 — this is the account in lari.
 as_account() {
-  local a; a=$(printf '%s' "$1" | tr -d '[:space:]' | tr '[:lower:]' '[:upper:]')
-  [[ "$a" =~ ^(GE[0-9]{2}TB[0-9]{16})([A-Z]{3})?$ ]] && printf '%s' "${BASH_REMATCH[1]}"
+  local a iban currency
+  a=$(printf '%s' "$1" | tr -d '[:space:]' | tr '[:lower:]' '[:upper:]')
+  [[ "$a" =~ ^(GE[0-9]{2}TB[0-9]{16})([A-Z]{3})?$ ]] || return 1
+  iban=${BASH_REMATCH[1]}; currency=${BASH_REMATCH[2]}
+  [ -z "$currency" ] || [ "$currency" = GEL ] || return 2
+  printf '%s' "$iban"
+}
+
+# The accounts the env file names now, each by its last four digits, into NOW.
+# The number is not printed whole; what is not an account is not printed at all.
+current_accounts() {
+  local line item last4 currency; local -a items=()
+  line=$(sed -n 's/^TBC_ACCOUNT=//p' "$ENV" | tail -n 1)
+  read -ra items <<< "${line//[,;]/ }"
+  NOW=()
+  for item in ${items[@]+"${items[@]}"}; do
+    item=$(printf '%s' "$item" | tr '[:lower:]' '[:upper:]')
+    if [[ "$item" =~ ^GE[0-9]{2}[A-Z]{2}[0-9]{12}([0-9]{4})([A-Z]{3})?$ ]]; then
+      last4=${BASH_REMATCH[1]}; currency=${BASH_REMATCH[2]}
+      [ "$currency" != GEL ] || currency=""
+      NOW+=("…$last4${currency:+ $currency}")
+    else
+      NOW+=("не номер счёта")
+    fi
+  done
+}
+
+# --account writes one account in place of whatever the env file names: what
+# is there is shown first, and replaced only on «да». Nothing named: the stand
+# reads the account of the last statement uploaded, and there is nothing to ask.
+confirm_replace() {
+  local answer joined
+  current_accounts
+  case ${#NOW[@]} in
+    0) echo "Сейчас счёт не записан ($NAME): стенд читает счёт последней загруженной выписки TBC."; return 0 ;;
+    1) read -rp "Сейчас записан счёт ${NOW[0]} ($NAME). Заменить? да/нет: " answer ;;
+    *) joined=$(printf '%s, ' "${NOW[@]}"); read -rp "Сейчас записаны счета ${joined%, } ($NAME); --account оставит один. Заменить? да/нет: " answer ;;
+  esac
+  case "${answer//[[:space:]]/}" in
+    да|Да|ДА|д|Д|yes|Yes|YES|y|Y) ;;
+    *) echo "Ничего не изменено."; exit 0 ;;
+  esac
 }
 
 # The account named in the last TBC statement uploaded to production: only
@@ -98,9 +144,12 @@ ask_account() {
   local typed
   read -rp "счёт в лари, GE…TB… (Enter — взять из последней выписки TBC на боевом): " typed
   if [ -n "${typed//[[:space:]]/}" ]; then
-    ACCOUNT=$(as_account "$typed") || { echo "Это не похоже на счёт TBC: нужен номер вида GE00TB0000000000000000. Ничего не изменено."; exit 1; }
+    ACCOUNT=$(as_account "$typed") || case $? in
+      2) echo "Это счёт не в лари: после номера стоит другая валюта. Сюда вписывается только счёт в лари — GE00TB0000000000000000 или GE00TB0000000000000000GEL. Счета в долларах и евро подключаются отдельно, после обновления EV8 Ops. Ничего не изменено."; exit 1 ;;
+      *) echo "Это не похоже на счёт TBC: нужен номер вида GE00TB0000000000000000. Ничего не изменено."; exit 1 ;;
+    esac
   else
-    ACCOUNT=$(as_account "$(account_from_prod)") || { echo "На боевом нет загруженной выписки TBC со счётом — впишите счёт сами. Ничего не изменено."; exit 1; }
+    ACCOUNT=$(as_account "$(account_from_prod)") || { echo "На боевом нет загруженной выписки TBC со счётом в лари — впишите счёт сами. Ничего не изменено."; exit 1; }
     echo "Счёт взят из последней выписки TBC на боевом: …${ACCOUNT: -4}."
   fi
 }
@@ -161,6 +210,7 @@ fi
 if [ -n "$ONLY_ACCOUNT" ]; then
   grep -q '^TBC_CLIENT_SECRET=.' "$ENV" || { echo "На этом стенде нет ключей TBC — сначала они: … set-tbc-keys.sh$FLAG. Ничего не изменено."; exit 1; }
   reads_keys || { echo "На этом стенде версия старше той, что читает TBC по API. Ничего не изменено."; exit 1; }
+  confirm_replace
   ask_account
   printf 'TBC_ACCOUNT=%s\n' "$ACCOUNT" | write_env 'ACCOUNT'
   unset ACCOUNT
