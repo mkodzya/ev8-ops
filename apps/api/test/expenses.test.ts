@@ -6,7 +6,7 @@ import { HAS_DB, call, json, loginAs, uniq } from './helpers.js';
 
 const BOG_HEADER = [
   ',,,"angariSis mflobeli: Sps e-mouSen moTors",,,,',
-  ',,,"angariSis #:GE41BG0000000600217157GEL (600217157)",,,,',
+  ',,,"angariSis #:GE00BG0000000000000954GEL (000000001)",,,,',
   ',,,,,,,',
   '"centraluri filiali",,,"naerTi amonaweri piradi angariSidan",,,,',
   '"gagarinis q. #29 a",,,"periodi: 01.10.26-31.10.26",,,,',
@@ -16,7 +16,7 @@ const BOG_HEADER = [
 
 let doc = 7000;
 const outRow = (date: string, sum: string, payee: string) =>
-  `"${date}","${doc++}","GE89BG0000000902936900GEL","${sum}","","1","${sum}","gadaricxva - Tanxa: GEL${sum}; mimRebi: ${payee}"`;
+  `"${date}","${doc++}","GE00BG0000000000000955GEL","${sum}","","1","${sum}","gadaricxva - Tanxa: GEL${sum}; mimRebi: ${payee}"`;
 
 type Owner = Awaited<ReturnType<typeof loginAs>>;
 interface QueueLine {
@@ -149,7 +149,7 @@ describe.skipIf(!HAS_DB)('what money going out was for', () => {
     expect(theirs.depositHint).toBeNull();
     expect(theirs.group).toBe('none');
     // Nor a line that names no recipient at all.
-    await load(owner, [`"10.10.2026","${doc++}","GE89BG0000000902936900GEL","${(before / 100).toFixed(2)}","","1","${(before / 100).toFixed(2)}","REFUND ${stranger}"`]);
+    await load(owner, [`"10.10.2026","${doc++}","GE00BG0000000000000955GEL","${(before / 100).toFixed(2)}","","1","${(before / 100).toFixed(2)}","REFUND ${stranger}"`]);
     const nameless = (await queue(owner)).find((l) => l.raw.includes(`REFUND ${stranger}`)) as QueueLine & { depositHint: { rentalId: string } | null };
     expect(nameless.depositHint).toBeNull();
 
