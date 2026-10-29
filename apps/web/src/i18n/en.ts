@@ -1305,6 +1305,7 @@ export const en = {
       file_too_big: 'The file is too big: a statement can be up to 8 MB.',
       fine_paid: 'Money has gone on this charge: take that payment back first.',
       forbidden: 'Your role cannot do this. Ask the owner.',
+      foreign_statement: 'This is the statement of an account in another currency: for now only statements of the account in lari can be uploaded as a file.',
       future_date: 'A payment cannot be dated in the future.',
       handover_decided: 'This hand-over is already decided.',
       handover_not_found: 'No such hand-over. Refresh the till.',

@@ -70,6 +70,11 @@ function readFile(b: Body): { fileName: string; text: string } {
   return { fileName, text };
 }
 
+/** A file that is not a statement, and a statement of an account not in lari (`parse.ts`), each refused in its own words. */
+function refusalOf(e: ParseError) {
+  return e.code === 'foreign_statement' ? badRequest('foreign_statement', e.message) : badRequest('unreadable_statement', e.message);
+}
+
 export function statementRoutes(app: FastifyInstance): void {
   /** By bank: the last upload and up to which day; below, the history (§3.5). */
   app.get('/api/statements', { config: { scope: 'payments.reconcile' } }, async () => {
@@ -121,7 +126,7 @@ export function statementRoutes(app: FastifyInstance): void {
     try {
       return reply.code(201).send(await importStatement({ actorId: actorOf(req).id, fileName, text }));
     } catch (e) {
-      if (e instanceof ParseError) throw badRequest('unreadable_statement', e.message);
+      if (e instanceof ParseError) throw refusalOf(e);
       throw e;
     }
   });
@@ -132,7 +137,7 @@ export function statementRoutes(app: FastifyInstance): void {
     try {
       return await previewStatement({ fileName, text });
     } catch (e) {
-      if (e instanceof ParseError) throw badRequest('unreadable_statement', e.message);
+      if (e instanceof ParseError) throw refusalOf(e);
       throw e;
     }
   });
