@@ -165,6 +165,8 @@ export interface PairOutcome<F extends string = string> {
   days?: string[];
   /** TBC's nightly reading: the days of this pair that did not add up to the bank's sums. */
   mismatched?: string[];
+  /** Bank of Georgia's night on «Прочитать сейчас»: the pair has past days to read, and they wait for the worker's next night. */
+  later?: boolean;
 }
 
 /** A pair as the job says it: nothing listed, nothing added and no failure, but what it is given. */

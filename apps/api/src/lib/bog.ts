@@ -528,6 +528,29 @@ export function reconcileBogNight(now: Date = new Date()): Promise<BogOutcome> {
   return serial(() => readNights(cfg, now));
 }
 
+/** A job is running or waits for its turn: «Прочитать сейчас» then answers busy rather than queue behind it. */
+export const bogBusy = (): boolean => waiting > 0;
+
+/**
+ * «Прочитать сейчас» on "Деньги → Выписки" (Mika, 29.10.2026): the day's
+ * operations, then the night — the past days of a pair not read yet — in one
+ * turn of the same chain, so neither the pull nor the night of the worker can
+ * come between them. The caller asks `bogBusy` first (`statements/readNow.ts`).
+ */
+export function readBogNow(now: Date = new Date()): Promise<{ status: 'off' } | { status: 'read'; today: BogOutcome; night: BogOutcome }> {
+  const cfg = bogConfig();
+  if (!cfg) return Promise.resolve({ status: 'off' });
+  return serial(async () => {
+    const today = await pullToday(cfg, now);
+    // The bank gives one statement a minute for each account and currency. When
+    // the list of the day did not answer and today's statement stood in for it
+    // (`todayOf`), the night does not ask the statement again a moment later:
+    // the past days wait for the worker's next night, within the hour.
+    const night = await readNights(cfg, now, today.status === 'ok' && today.fromStatement);
+    return { status: 'read' as const, today, night };
+  });
+}
+
 function client(cfg: BogConfig): BogClient {
   return new BogClient(cfg, { ...clientOptsForTests, ...(fetchForTests ? { fetch: fetchForTests } : {}) });
 }
@@ -645,7 +668,8 @@ export function readAgain(sync: { nightAt: Date | null; nightFailure: string | n
   return todayISO(at, env.TZ) < todayISO(now, env.TZ) || hourAt(at) < MORNING_HOUR;
 }
 
-async function readNights(cfg: BogConfig, now: Date): Promise<BogOutcome> {
+/** `hold`: a pair with past days to read asks no statement, and nothing of its night is written (`readBogNow`). */
+async function readNights(cfg: BogConfig, now: Date, hold = false): Promise<BogOutcome> {
   const yesterday = addDays(todayISO(now, env.TZ), -1);
   const back = addDays(yesterday, -(NIGHT_MAX_DAYS - 1));
   const sync = await prisma.bogSync.findUnique({ where: SYNC });
@@ -668,6 +692,7 @@ async function readNights(cfg: BogConfig, now: Date): Promise<BogOutcome> {
 
   const outcome = blank();
   const bank = client(cfg);
+  const held = new Set<AccountPair>();
   const asked = await eachPair(pairs, async (pair) => {
     const night = nightOf(pair);
     const reached = isoDate(night?.nightThrough ?? null);
@@ -681,6 +706,10 @@ async function readNights(cfg: BogConfig, now: Date): Promise<BogOutcome> {
     const covered = await daysInFiles('bog', pair.iban, from, yesterday, pair.currency);
     const open = daysFrom(from, yesterday).filter((d) => !covered.has(d));
     if (open.length === 0) return { listed: 0, added: 0, days: [] };
+    if (hold) {
+      held.add(pair);
+      return null;
+    }
     const rows = await bank.statement(pair, open[0]!, yesterday);
     const lines = onceEach(rows.map((r) => lineFromEntry(r, pair.currency))).filter((l) => !covered.has(l.occurredOn));
     const before = outcome.added;
@@ -699,7 +728,7 @@ async function readNights(cfg: BogConfig, now: Date): Promise<BogOutcome> {
     } else if (a.got) {
       await savePair('bog', a.pair, back, { nightThrough: dateFromISO(yesterday), nightAt: now, nightFailure: null, nightHttpStatus: null, nightAdded: a.got.added });
     }
-    outcome.accounts.push(pairOutcome<BogFailure>(a.pair, a.failure ? refusal(a.failure) : (a.got ?? { days: [] })));
+    outcome.accounts.push(pairOutcome<BogFailure>(a.pair, a.failure ? refusal(a.failure) : (a.got ?? { days: [], ...(held.has(a.pair) ? { later: true } : {}) })));
   }
   // The lari link has read up to yesterday once every pair in lari it read has.
   const lari = inLari(asked).filter((a) => a.failure || a.got);

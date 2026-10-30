@@ -91,6 +91,8 @@ describe('route table', () => {
       'GET /api/statement-lines/by-rules',
       'GET /api/statement-lines/aside',
       'GET /api/statements',
+      // «Прочитать сейчас» asks the banks for the screen it is on: the same right (29.10.2026).
+      'POST /api/statements/read-now',
       'GET /api/income-categories',
       'POST /api/statement-lines/:id/ignore',
       'POST /api/statement-lines/:id/expense',

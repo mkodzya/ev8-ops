@@ -84,6 +84,11 @@
 .bank-cards { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); margin-bottom: 16px; }
 .bank-card { padding: 14px; border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--surface); display: grid; gap: 4px; }
 .bank-card.stale { border-color: var(--service); background: var(--warn-soft); }
+/* «Прочитать сейчас» (29.10.2026): under the cards, the button, then what came, account by account. */
+.bank-read { display: grid; justify-items: start; gap: 8px; margin: -4px 0 16px; }
+.bank-read > p { margin: 0; }
+.bank-read-list { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; font: var(--text-body-sm); }
+.bank-read-list li { overflow-wrap: anywhere; }
 /* The accounts in another currency (docs/spec/usd-accounts-plan.md): each apart, its sums in its own currency. */
 .fx-account { display: grid; gap: 4px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line-soft); }
 .fx-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px 12px; }
