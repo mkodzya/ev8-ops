@@ -365,6 +365,24 @@ describe('a card payment the bank lists twice (rule 5, issue #16)', () => {
     expect(sameCardPayment(card('a', '2031-03-03', posting(1)), card('b', '2031-03-03', cardOperation(1)))).toBe(true);
   });
 
+  it('knows a payment abroad whose posting writes the day alone, and only with the same day, MCC and card', () => {
+    // As on 01.11.2026 in dollars: the first listing has the minute, the posting
+    // (a number of four digits) midnight of the same day. Shop, sum, card and numbers invented.
+    const abroad = { shop: 'EXAMPLE ADS 0000>DUBLIN IE, Ireland', mcc: '7311' };
+    const first = card('api:today:1', '2031-03-03', posting(1), { ...abroad, at: '03/03/2031 00:51' });
+    const posted = (o: Partial<Parameters<typeof cardText>[0]> = {}, day = '2031-03-04') => card('api:today:2', day, '4444', { ...abroad, shop: 'EXAMPLE ADS 0000, Ireland', at: '03/03/2031 00:00', ...o });
+    expect(alreadyIn([posted()], [first])).toMatchObject({ fresh: [], byCard: 1 });
+    expect(sameCardPayment(posted(), first)).toBe(true);
+    // Another day, another MCC, another card, or no MCC or card at all: a day alone is not enough.
+    expect(alreadyIn([posted({ at: '04/03/2031 00:00' })], [first]).fresh).toHaveLength(1);
+    expect(alreadyIn([posted({ mcc: '5814' })], [first]).fresh).toHaveLength(1);
+    expect(alreadyIn([posted({ card: '1111' })], [first]).fresh).toHaveLength(1);
+    const bare = { ...posted(), raw: posted().raw!.replace(/MCC:\d+; /, '') };
+    expect(alreadyIn([bare], [first]).fresh).toHaveLength(1);
+    // Two minutes that are not midnight stay two payments, as before.
+    expect(alreadyIn([posted({ at: '03/03/2031 00:52' })], [first]).fresh).toHaveLength(1);
+  });
+
   it('names, of lines already in, the later listing of each payment and the line it repeats — once each', () => {
     const t0 = new Date('2031-03-03T14:15:00Z').getTime();
     const line = (id: string, doc: string, minutes: number, o: Partial<Parameters<typeof cardText>[0]> = {}) => ({ ...card(`api:today:${id}`, '2031-03-03', doc, o), id, createdAt: new Date(t0 + minutes * 60_000) });
