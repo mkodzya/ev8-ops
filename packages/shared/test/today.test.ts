@@ -73,7 +73,12 @@ describe('the queue of “Today”', () => {
   it('says the late and the awaited in one line that opens the schedule, and lists no rental by its debt (issue #18 B4)', () => {
     const q = dayQueue(input({ rentals: [rental(), rental({ id: 'r2', number: 'R-00002', status: 'due_today', paidThrough: '2026-09-19' })], schedule: { late: 1, dueToday: 1 } }));
     expect(q.map((g) => g.group)).toEqual(['schedule']);
-    expect(q[0]!.rows[0]).toMatchObject({ action: 'open_schedule', href: '/schedule', note: '1|1', amountTetri: null });
+    expect(q[0]!.rows[0]).toMatchObject({ action: 'open_schedule', href: '/schedule', note: '1|1|0', amountTetri: null });
+  });
+
+  it('says how many late rentals it is time to call, the reminders’ 1st and 2nd day (issue #20)', () => {
+    const q = dayQueue(input({ rentals: [rental()], schedule: { late: 3, dueToday: 0, call: 2 } }));
+    expect(q[0]!.rows[0]).toMatchObject({ action: 'open_schedule', note: '3|0|2' });
   });
 
   it('gives an owner the deposit a manager’s return left, and a manager nothing of it (crit. 3)', () => {

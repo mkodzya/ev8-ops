@@ -47,6 +47,7 @@ import { menuEn } from './menu.js';
 import { vehicleDetailsEn } from './vehicle-details.js';
 import { goodsEn } from './goods.js';
 import { incEn } from './inbound.js';
+import { remEn } from './reminders.js';
 import { dupEn } from './card-duplicate.js';
 import { rentedFreeEn } from './rented-free.js';
 import { peopleDeleteEn } from './people-delete.js';
@@ -1556,6 +1557,7 @@ export const en = {
   ...menuEn,
   ...goodsEn,
   ...incEn,
+  ...remEn,
   ...dupEn,
   ...rentedFreeEn,
   ...peopleDeleteEn,

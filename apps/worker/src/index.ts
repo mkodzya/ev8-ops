@@ -31,6 +31,11 @@
 // mopeds due for their maintenance and parts below the minimum — from 09:00 to
 // 20:00 Tbilisi time, so the group is not woken at night.
 //
+// The rent reminders (issue #20, ADR-0052) are decided by the API at 12:00 and
+// 18:00 Tbilisi time, when the worker asks: the due day at noon, the 1st and
+// 2nd day overdue at noon and at six. Step 1 writes what would go and sends
+// nothing; the log says how many, never who.
+//
 // Typed texts about mopeds and repairs are translated into the reader's
 // language (ADR-0042) by the API, where the translator's key is. Every minute
 // the worker asks it to list what was written and to translate what waits,
@@ -54,6 +59,8 @@ const DRIVE_CRON = process.env.DRIVE_CRON ?? '23 3 * * *';
 const NOTICES_CRON = process.env.NOTICES_CRON ?? '* * * * *';
 const NOTICES_SCAN_CRON = process.env.NOTICES_SCAN_CRON ?? '0 9-20 * * *';
 const TRANSLATE_CRON = process.env.TRANSLATE_CRON ?? '* * * * *';
+// The rent reminders, at noon and at six (issue #20, ADR-0052).
+const REMINDERS_CRON = process.env.REMINDERS_CRON ?? '0 12,18 * * *';
 const TZ = process.env.TZ ?? ORG_TZ;
 
 interface RollResult {
@@ -242,6 +249,23 @@ async function sendNotices(job: 'notices' | 'notices-scan'): Promise<void> {
   said[job] = line;
 }
 
+type ReminderOutcome = { decided: number; written: number; mode: 'dry_run'; today: string; slot: string };
+
+/**
+ * Counts only: who is reminded of what is the API's, and stays there. Step 1
+ * writes what would go and sends nothing (ADR-0052).
+ */
+async function decideReminders(): Promise<void> {
+  try {
+    const res = await fetch(`${API}/api/jobs/reminders`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-worker-token': TOKEN }, body: JSON.stringify({ asOf: todayISO(new Date(), TZ) }) });
+    if (!res.ok) throw new Error(`reminders: ${res.status}`);
+    const r = (await res.json()) as ReminderOutcome;
+    console.log(`worker: rent reminders ${r.today} ${r.slot} — ${r.decided} decided, ${r.written} written${r.mode === 'dry_run' ? ', none sent (dry run)' : ''}`);
+  } catch (err) {
+    console.log(`worker: the rent reminders did not reach the API — ${(err as Error).message}`);
+  }
+}
+
 type TranslateOutcome = {
   status: 'off' | 'busy' | 'paused' | 'ok';
   /** Our word for why the queue pauses (no money, a key that is not one, the service down…); never the service's text. */
@@ -326,6 +350,7 @@ async function main(): Promise<void> {
   cron.schedule(NOTICES_SCAN_CRON, () => void sendNotices('notices-scan'), { timezone: TZ });
   await translate();
   cron.schedule(TRANSLATE_CRON, () => void translate(), { timezone: TZ });
+  cron.schedule(REMINDERS_CRON, () => void decideReminders(), { timezone: TZ });
   console.log(
     `worker: up — weeks roll at "${PERIODS_CRON}" ${TZ}, Kommo is asked at "${KOMMO_CRON}", Bank of Georgia at "${BOG_CRON}" and its statement at "${BOG_NIGHT_CRON}", TBC at "${TBC_CRON}" and its statement at "${TBC_NIGHT_CRON}", Drive is read at "${DRIVE_CRON}", notices go at "${NOTICES_CRON}" and are looked for at "${NOTICES_SCAN_CRON}", typed texts are translated at "${TRANSLATE_CRON}"`,
   );

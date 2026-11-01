@@ -69,7 +69,8 @@ function answer(): PaymentsCalendarAnswer {
     credits: [],
     payments: [{ occurredOn: '2026-10-12', direction: 'in', channel: 'cash', kind: 'rent', grossTetri: RATE, feeTetri: 0, allocations: [{ target: 'period', amountTetri: RATE }] }],
   });
-  return { ...cal, rentals: ['late', 'today', 'paid'].map(card), unsortedIn: 2 };
+  // Today's reminders beside the rows (issue #20): a manager who calls reads them too.
+  return { ...cal, rentals: ['late', 'today', 'paid'].map(card), unsortedIn: 2, reminders: { late: { today: [{ slot: '12:00', template: 'overdue_1', mode: 'dry_run' }], call: true, off: null } } };
 }
 
 describe('«Оплаты по графику» for a manager (issue #15)', () => {
@@ -78,6 +79,7 @@ describe('«Оплаты по графику» for a manager (issue #15)', () =>
     const s = scheduleOf(full);
     expect(s.totals).toBe(false);
     expect(s.entries).toEqual(full.entries);
+    expect(s.reminders).toEqual(full.reminders);
     expect(s.late.rentals).toEqual(full.late.rentals);
     expect(s.late.count).toBe(full.late.count);
     expect(s.rentals).toEqual(full.rentals);
