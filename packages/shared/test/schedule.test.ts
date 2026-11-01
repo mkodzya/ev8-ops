@@ -70,7 +70,7 @@ function answer(): PaymentsCalendarAnswer {
     payments: [{ occurredOn: '2026-10-12', direction: 'in', channel: 'cash', kind: 'rent', grossTetri: RATE, feeTetri: 0, allocations: [{ target: 'period', amountTetri: RATE }] }],
   });
   // Today's reminders beside the rows (issue #20): a manager who calls reads them too.
-  return { ...cal, rentals: ['late', 'today', 'paid'].map(card), unsortedIn: 2, reminders: { late: { today: [{ slot: '12:00', template: 'overdue_1', mode: 'dry_run' }], call: true, off: null } } };
+  return { ...cal, rentals: ['late', 'today', 'paid'].map(card), unsortedIn: 2, reminders: { late: { today: [{ slot: '12:00', template: 'overdue_1', mode: 'dry_run', failure: null }], call: true, off: null, deal: true } } };
 }
 
 describe('«Оплаты по графику» for a manager (issue #15)', () => {
