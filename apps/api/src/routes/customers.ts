@@ -183,6 +183,8 @@ export function customerRoutes(app: FastifyInstance): void {
         notes: c.notes,
         source: c.source,
         kommoRef: c.kommoRef,
+        // The language his rent reminders go in; ru goes in English (issue #20).
+        messageLang: c.messageLang,
         // A card merged away is in the archive, and an archive that looks
         // like a live card is not one: the screen needs to know (crit. 33,
         // QA-W5-03).

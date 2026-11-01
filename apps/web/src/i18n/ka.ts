@@ -38,6 +38,7 @@ import { depositReviseKa } from './deposit-revise.js';
 import { menuKa } from './menu.js';
 import { goodsKa } from './goods.js';
 import { incKa } from './inbound.js';
+import { remKa } from './reminders.js';
 import { dupKa } from './card-duplicate.js';
 import { rentedFreeKa } from './rented-free.js';
 import { peopleDeleteKa } from './people-delete.js';
@@ -1535,6 +1536,7 @@ export const ka: Dict = {
   ...menuKa,
   ...goodsKa,
   ...incKa,
+  ...remKa,
   ...dupKa,
   ...rentedFreeKa,
   ...peopleDeleteKa,

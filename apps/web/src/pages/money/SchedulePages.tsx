@@ -173,7 +173,7 @@ export function ScheduleDuePage() {
   const lateOf = new Map<string, CalendarLate>(data.late.rentals.map((late) => [late.rentalId, late]));
   const debtor = (late: CalendarLate) => {
     const card = cardOf.get(late.rentalId);
-    return card ? <DebtorRow key={late.rentalId} late={late} card={card} dense={laptop} actions={actions} /> : null;
+    return card ? <DebtorRow key={late.rentalId} late={late} card={card} dense={laptop} actions={actions} reminders={data.reminders?.[late.rentalId]} /> : null;
   };
   const day = data.days.find((d) => d.date === today);
   const rows = calendarDayRows(calendarEntriesOn(data, today), data.late.rentals, compare);
@@ -182,7 +182,7 @@ export function ScheduleDuePage() {
       <LateList late={data.late} dense={laptop} note={<UnsortedNote count={data.unsortedIn} />}>
         {data.late.rentals.map(debtor)}
       </LateList>
-      <DaySection date={today} day={day} rows={rows} today={today} dense={laptop} paidOpen={paidOpen} onPaidToggle={() => setPaidOpen(!paidOpen)} cardOf={cardOf} lateOf={lateOf} actions={actions} />
+      <DaySection date={today} day={day} rows={rows} today={today} dense={laptop} paidOpen={paidOpen} onPaidToggle={() => setPaidOpen(!paidOpen)} cardOf={cardOf} lateOf={lateOf} actions={actions} reminders={data.reminders} />
     </>
   );
   return (
@@ -210,7 +210,7 @@ export function ScheduleLatePage() {
     <LateList late={data.late} dense={laptop} note={<UnsortedNote count={data.unsortedIn} />}>
       {data.late.rentals.map((late) => {
         const card = cardOf.get(late.rentalId);
-        return card ? <DebtorRow key={late.rentalId} late={late} card={card} dense={laptop} actions={actions} /> : null;
+        return card ? <DebtorRow key={late.rentalId} late={late} card={card} dense={laptop} actions={actions} reminders={data.reminders?.[late.rentalId]} /> : null;
       })}
     </LateList>
   );

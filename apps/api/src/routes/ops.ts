@@ -1,4 +1,4 @@
-import { CONTACT_KINDS, CUSTOMER_KINDS, CUSTOMER_SOURCES, VEHICLE_POOLS, VEHICLE_STATES, arrivalFault, arrivalLatestDay, isoWeekday, manualMoveRefusal, nameSpellings, normalizeVin, todayISO, trackerCorrection, trackerDayFault, trackerEarliestDay, trackerTails, vehicleYearFault, vehicleYearRange, vinFault, weeksAnchor, type ManualMoveRefusal, type VehicleState } from '@ev8/shared';
+import { CONTACT_KINDS, CUSTOMER_KINDS, CUSTOMER_SOURCES, MESSAGE_LANGS, VEHICLE_POOLS, VEHICLE_STATES, arrivalFault, arrivalLatestDay, isoWeekday, manualMoveRefusal, nameSpellings, normalizeVin, todayISO, trackerCorrection, trackerDayFault, trackerEarliestDay, trackerTails, vehicleYearFault, vehicleYearRange, vinFault, weeksAnchor, type ManualMoveRefusal, type VehicleState } from '@ev8/shared';
 import type { FastifyInstance } from 'fastify';
 import { audit } from '../lib/audit.js';
 import { hasPerm } from '../lib/auth.js';
@@ -70,6 +70,8 @@ export function opsRoutes(app: FastifyInstance): void {
           recordKind: oneOf(b, 'recordKind', CONTACT_KINDS) ?? 'client',
           tags: strList(b, 'tags'),
           notes: str(b, 'notes', { max: 4000 }),
+          // The language his rent reminders go in (issue #20, migration 0074).
+          messageLang: oneOf(b, 'messageLang', MESSAGE_LANGS) ?? 'ka',
         },
       });
       await audit({ actorId: actor.id, action: 'customer.create', entityType: 'customer', entityId: c.id, after: { name, personalId, phone } });
@@ -125,6 +127,7 @@ export function opsRoutes(app: FastifyInstance): void {
       data.recordKind = oneOf(b, 'recordKind', CONTACT_KINDS, { required: true })!;
     }
     if ('tags' in b) data.tags = strList(b, 'tags');
+    if ('messageLang' in b) data.messageLang = oneOf(b, 'messageLang', MESSAGE_LANGS, { required: true });
     if ('archived' in b) data.archived = Boolean(b.archived);
     try {
       await prisma.customer.update({ where: { id: before.id }, data: { ...data, updatedAt: new Date() } });

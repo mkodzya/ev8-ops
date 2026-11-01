@@ -38,6 +38,7 @@ import { depositReviseRu } from './deposit-revise.js';
 import { menuRu } from './menu.js';
 import { goodsRu } from './goods.js';
 import { incRu } from './inbound.js';
+import { remRu } from './reminders.js';
 import { dupRu } from './card-duplicate.js';
 import { rentedFreeRu } from './rented-free.js';
 import { peopleDeleteRu } from './people-delete.js';
@@ -1545,6 +1546,7 @@ export const ru: Dict = {
   ...menuRu,
   ...goodsRu,
   ...incRu,
+  ...remRu,
   ...dupRu,
   ...rentedFreeRu,
   ...peopleDeleteRu,

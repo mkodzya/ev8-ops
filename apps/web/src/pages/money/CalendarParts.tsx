@@ -14,6 +14,7 @@ import {
   type CalendarLateList,
   type CalendarMonthTotals,
   type CalendarRentalCard,
+  type RentalReminders,
   type CalendarState,
   type CalendarTotals,
   type CalendarWeek,
@@ -937,6 +938,7 @@ export function PayerRow({
   dense,
   showActions,
   actions,
+  reminders,
 }: {
   entry: CalendarEntry;
   card: CalendarRentalCard;
@@ -946,12 +948,16 @@ export function PayerRow({
   /** False for a paid week, and for an overdue one on a laptop — its buttons are in "Просрочено" above. */
   showActions: boolean;
   actions: Actions;
+  /** Today's rent reminders beside the row — «К звонку» only (issue #20). */
+  reminders?: RentalReminders;
 }) {
   const t = useT();
   const { locale } = useLocale();
   const name = primaryName(card.customer, locale);
   const model = card.vehicle ? card.vehicle.model : null;
   const words = payerWords(t, entry, late, today);
+  // Of the rows a day lists: today's, the payer's own, not one already in «Просрочки» above it.
+  const note = reminders && entry.dueOn === today && entry.state === 'due_today' ? <ReminderNote r={reminders} /> : null;
   const part = entry.leftTetri !== 0 && entry.paidTetri !== 0;
   const sum = gel(part ? entry.leftTetri : entry.amountTetri);
   const paysTomorrow = entry.state === 'expected' && entry.dueOn === addDays(today, 1);
@@ -971,6 +977,7 @@ export function PayerRow({
           <span className="cal-dsub">
             {model && `${model} · `}
             <span className={`cal-st-${entry.state}`}>{words}</span>
+            {note}
           </span>
         </Link>
         {buttons && <span className="cal-dacts">{buttons}</span>}
@@ -993,15 +1000,46 @@ export function PayerRow({
           {part && <small>{t.calendar.leftLabel}</small>}
           {sum}
         </span>
-        <span className={`cal-words cal-st-${entry.state}`}>{words}</span>
+        <span className={`cal-words cal-st-${entry.state}`}>
+          {words}
+          {note}
+        </span>
       </Link>
       {buttons && <div className="cal-acts">{buttons}</div>}
     </div>
   );
 }
 
+/**
+ * Beside a row of «К звонку» (issue #20, ADR-0052): today's rent reminders —
+ * «Напоминание 12:00, 18:00 (пробно, не отправлено)» — red «пора
+ * звонить» on the 1st and 2nd day late, or that a person switched them off.
+ */
+function ReminderNote({ r }: { r: RentalReminders }) {
+  const t = useT();
+  const parts: ReactNode[] = [];
+  if (r.off) parts.push(<span key="off">{t.rem.off}</span>);
+  else if (r.today.length > 0) {
+    const modes = new Set(r.today.map((x) => x.mode));
+    const mode = modes.has('failed') ? t.rem.failed : modes.has('sent') ? t.rem.sent : t.rem.dryRun;
+    parts.push(<span key="sent">{`${t.rem.slots(r.today.map((x) => x.slot).join(', '))} (${mode})`}</span>);
+  }
+  if (r.call) parts.push(<b key="call" className="crit-text">{t.rem.call}</b>);
+  if (parts.length === 0) return null;
+  return (
+    <span className="cal-remind">
+      {parts.map((p, i) => (
+        <span key={i}>
+          {' · '}
+          {p}
+        </span>
+      ))}
+    </span>
+  );
+}
+
 /** One late rental in "Просрочено": how long, how many weeks, the rental's whole debt. */
-export function DebtorRow({ late, card, dense, actions }: { late: CalendarLate; card: CalendarRentalCard; dense: boolean; actions: Actions }) {
+export function DebtorRow({ late, card, dense, actions, reminders }: { late: CalendarLate; card: CalendarRentalCard; dense: boolean; actions: Actions; reminders?: RentalReminders }) {
   const t = useT();
   const { locale } = useLocale();
   const name = primaryName(card.customer, locale);
@@ -1021,6 +1059,7 @@ export function DebtorRow({ late, card, dense, actions }: { late: CalendarLate; 
           <span className="cal-dsub">
             {model && `${model} · `}
             {words}
+            {reminders && <ReminderNote r={reminders} />}
           </span>
         </Link>
         <span className="cal-dacts">{buttons}</span>
@@ -1045,7 +1084,10 @@ export function DebtorRow({ late, card, dense, actions }: { late: CalendarLate; 
             {gel(late.debtTetri)}
           </span>
         )}
-        <span className="cal-words cal-st-overdue">{words}</span>
+        <span className="cal-words cal-st-overdue">
+          {words}
+          {reminders && <ReminderNote r={reminders} />}
+        </span>
       </Link>
       <div className="cal-acts">{buttons}</div>
     </div>
@@ -1089,6 +1131,7 @@ export function DaySection({
   cardOf,
   lateOf,
   actions,
+  reminders,
 }: {
   date: ISODate;
   day: AnyDay | undefined;
@@ -1104,6 +1147,8 @@ export function DaySection({
   cardOf: Map<string, CalendarRentalCard>;
   lateOf: Map<string, CalendarLate>;
   actions: Actions;
+  /** Today's rent reminders by rental — «К звонку» passes them (issue #20). */
+  reminders?: Record<string, RentalReminders>;
 }) {
   const t = useT();
   const { shown, folded } = calendarFold(rows);
@@ -1118,7 +1163,7 @@ export function DaySection({
     if (!card) return null;
     const owed = entry.leftTetri !== 0;
     const here = owed && !(dense && entry.state === 'overdue');
-    return <PayerRow key={`${entry.rentalId}:${entry.seq}`} entry={entry} card={card} late={lateOf.get(entry.rentalId)} today={today} dense={dense} showActions={here} actions={actions} />;
+    return <PayerRow key={`${entry.rentalId}:${entry.seq}`} entry={entry} card={card} late={lateOf.get(entry.rentalId)} today={today} dense={dense} showActions={here} actions={actions} reminders={reminders?.[entry.rentalId]} />;
   };
   const list = (
     <>

@@ -39,6 +39,8 @@ interface Card {
     notes: string | null;
     source: string | null;
     kommoRef: string | null;
+    /** The language his rent reminders go in (issue #20); absent while an older API answers. */
+    messageLang?: 'ka' | 'ru' | 'en';
     /** Merged away: the card is a record now, not a person to work with. */
     archived: boolean;
     mergedInto: { id: string; name: string; nameKa: string | null; nameLat: string | null } | null;
@@ -220,6 +222,7 @@ export function CustomerPage() {
           <Row k={t.customer.address} v={c.address ?? t.common.dash} />
           <Row k={t.customer.kind} v={t.customer.kinds[c.kind]} />
           <Row k={t.customerW4.source} v={c.source ? t.customerW4.sources[c.source] ?? c.source : t.common.dash} />
+          {c.messageLang && <Row k={t.rem.lang.label} v={t.rem.lang.names[c.messageLang]} />}
           <Row k={t.customers.tags} v={c.tags.length ? c.tags.map((x) => <span key={x} className="chip">{x}</span>) : t.common.dash} />
           {c.notes && <Row k={t.customer.notes} v={<span className="pre">{c.notes}</span>} />}
           {/* The front office's deal, one way only until the webhook tariff (B10-03). */}
@@ -349,7 +352,7 @@ export function CustomerPage() {
 function CustomerEdit({ customer, onClose, onSaved }: { customer: Card['customer']; onClose: () => void; onSaved: () => void }) {
   const t = useT();
   const { can } = useSession();
-  const initial = { name: customer.name, nameKa: customer.nameKa ?? '', nameLat: customer.nameLat ?? '', phone: customer.phone ?? '', source: customer.source ?? '' };
+  const initial = { name: customer.name, nameKa: customer.nameKa ?? '', nameLat: customer.nameLat ?? '', phone: customer.phone ?? '', source: customer.source ?? '', messageLang: customer.messageLang ?? 'ka' };
   const [f, setF] = useState(initial);
   const [twin, setTwin] = useState<{ id: string; name: string } | null>(null);
   return (
@@ -364,7 +367,11 @@ function CustomerEdit({ customer, onClose, onSaved }: { customer: Card['customer
       submit={async (key) => {
         setTwin(null);
         try {
-          await api.patch(`/api/customers/${customer.id}`, { name: f.name.trim(), nameKa: f.nameKa || null, nameLat: f.nameLat || null, phone: f.phone || null, source: f.source || null }, { key });
+          await api.patch(
+            `/api/customers/${customer.id}`,
+            { name: f.name.trim(), nameKa: f.nameKa || null, nameLat: f.nameLat || null, phone: f.phone || null, source: f.source || null, ...(customer.messageLang ? { messageLang: f.messageLang } : {}) },
+            { key },
+          );
         } catch (e) {
           if (e instanceof ApiError && e.code === 'duplicate_phone') setTwin(e.extra.existing as { id: string; name: string });
           throw e;
@@ -402,6 +409,18 @@ function CustomerEdit({ customer, onClose, onSaved }: { customer: Card['customer
           ))}
         </div>
       </Field>
+      {/* The language his rent reminders go in (issue #20): Russian goes in English. */}
+      {customer.messageLang && (
+        <Field label={t.rem.lang.label} hint={f.messageLang === 'ru' ? t.rem.lang.hint : undefined} name="messageLang">
+          <div className="chips">
+            {(['ka', 'ru', 'en'] as const).map((l) => (
+              <button key={l} type="button" className={`pill pill-sm ${f.messageLang === l ? 'on' : ''}`} onClick={() => setF({ ...f, messageLang: l })}>
+                {t.lang[l]}
+              </button>
+            ))}
+          </div>
+        </Field>
+      )}
       {!can('customer.documents.view') && <p className="hint muted">{t.customer.personalId}: {t.common.dash}</p>}
     </FormSheet>
   );

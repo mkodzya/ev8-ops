@@ -79,7 +79,7 @@ const SEGMENT: Record<string, string> = {
  */
 function ScheduleLine({ row }: { row: TaskRow }) {
   const t = useT();
-  const [late, due] = (row.note ?? '0|0').split('|').map(Number);
+  const [late, due, call] = (row.note ?? '0|0|0').split('|').map(Number);
   return (
     <li className="q-row">
       <Link to={row.href} className="q-who">
@@ -88,6 +88,8 @@ function ScheduleLine({ row }: { row: TaskRow }) {
           {(late ?? 0) > 0 && <span className="crit-text">{t.simple.today.late(late ?? 0)}</span>}
           {(late ?? 0) > 0 && (due ?? 0) > 0 && ' · '}
           {(due ?? 0) > 0 && <span>{t.simple.today.due(due ?? 0)}</span>}
+          {/* The late rentals on their 1st or 2nd day, as the rent reminders count them (issue #20). */}
+          {(call ?? 0) > 0 && <b className="crit-text">{` · ${t.rem.todayCall(call ?? 0)}`}</b>}
         </span>
       </Link>
       <span className="q-acts">

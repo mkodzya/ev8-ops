@@ -123,7 +123,7 @@ export interface QueueInput {
    * weeks awaited today — the one line «Оплаты: N просрочено · M сегодня»
    * (issue #18, B4). Absent or null for whoever does not call by the schedule.
    */
-  schedule?: { late: number; dueToday: number } | null;
+  schedule?: { late: number; dueToday: number; call?: number } | null;
   tills: { id: string; who: string; amountTetri: Tetri }[];
   /** For a manager: what is in their own till and not handed over yet. */
   myTillTetri: Tetri;
@@ -324,7 +324,8 @@ export function dayQueue(input: QueueInput): TaskGroupRows[] {
   // the money form are. The note carries the two numbers for the screen.
   const s = input.schedule;
   if (s && (s.late > 0 || s.dueToday > 0)) {
-    rows.push({ id: 'schedule', group: 'schedule', action: 'open_schedule', who: null, number: null, vin: null, days: null, amountTetri: null, href: '/schedule', phone: null, note: `${s.late}|${s.dueToday}` });
+    // The third number: the late rentals on their 1st or 2nd day, «пора звонить» (issue #20, ADR-0052).
+    rows.push({ id: 'schedule', group: 'schedule', action: 'open_schedule', who: null, number: null, vin: null, days: null, amountTetri: null, href: '/schedule', phone: null, note: `${s.late}|${s.dueToday}|${s.call ?? 0}` });
   }
 
   // 5. Money — an owner's: lines to sort, statements nobody has uploaded.

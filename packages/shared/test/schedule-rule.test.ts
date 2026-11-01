@@ -149,6 +149,6 @@ describe('one rule for overdue and due today (issue #18, B4)', () => {
       kommo: null,
       kommoDeals: [],
     };
-    expect(dayQueue(input).flatMap((g) => g.rows).map((r) => [r.action, r.href, r.note])).toEqual([['open_schedule', '/schedule', '1|1']]);
+    expect(dayQueue(input).flatMap((g) => g.rows).map((r) => [r.action, r.href, r.note])).toEqual([['open_schedule', '/schedule', '1|1|0']]);
   });
 });

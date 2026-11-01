@@ -520,6 +520,8 @@ model Customer {
   /// The front office's deal: a link or an id, one way only (B10-03).
   kommoRef      String?      @map("kommo_ref")
   odooPartnerId Int?         @unique @map("odoo_partner_id")
+  /// The language his messages go in: ka, ru or en; ru goes in English (migration 0074).
+  messageLang   String       @default("ka") @map("message_lang")
   archived      Boolean      @default(false)
   createdAt     DateTime     @default(now()) @map("created_at")
   updatedAt     DateTime     @default(now()) @map("updated_at")
@@ -581,6 +583,10 @@ model Rental {
   contractSignedElsewhereById String?   @map("contract_signed_elsewhere_by") @db.Uuid
   contractSignedElsewhereNote String?   @map("contract_signed_elsewhere_note")
   debtOverrideReason    String?      @map("debt_override_reason")
+  /// Rent reminders switched off for this rental, with why, when and by whom (migration 0074, MSG-02).
+  remindersOffReason    String?      @map("reminders_off_reason")
+  remindersOffAt        DateTime?    @map("reminders_off_at")
+  remindersOffById      String?      @map("reminders_off_by") @db.Uuid
   createdById           String?      @map("created_by") @db.Uuid
   createdAt             DateTime     @default(now()) @map("created_at")
   updatedAt             DateTime     @default(now()) @map("updated_at")
@@ -604,8 +610,29 @@ model Rental {
   /// Hand-made tasks about this rental (0071, ADR-0050): they close when it is returned.
   todos        Todo[]
   todoSeries   TodoSeries[]
+  /// What the reminder job decided for it, slot by slot (migration 0074).
+  reminders    RentReminder[]
 
   @@map("rentals")
+}
+
+/// A rent reminder decided for a rental at a slot of a day (migration 0074, ADR-0052): `dry_run` until step 2 sends.
+model RentReminder {
+  id          String   @id @default(uuid()) @db.Uuid
+  rentalId    String   @map("rental_id") @db.Uuid
+  day         DateTime @db.Date
+  slot        String
+  template    String
+  lang        String
+  amountTetri Int      @map("amount_tetri")
+  mode        String
+  failure     String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  rental Rental @relation(fields: [rentalId], references: [id], onDelete: Cascade)
+
+  @@unique([rentalId, day, slot])
+  @@map("rent_reminders")
 }
 
 model RentalPeriod {

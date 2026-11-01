@@ -27,6 +27,7 @@
 // not by its stored "paid through", which knows nothing of money the night
 // has not placed yet.
 import { periodBounds, periodSeqOf, shiftsOf, weekDueOn } from './periods.js';
+import type { RentalReminders } from './reminders.js';
 import { addDays, daysBetween } from './time.js';
 import { inPeriod, monthOf, paymentInRow, weekOf, type Period, type WeekPayment } from './week.js';
 import type { Tetri } from './money.js';
@@ -258,6 +259,8 @@ export type PaymentsCalendarAnswer = PaymentsCalendar & {
   rentals: CalendarRentalCard[];
   /** Statement lines nobody has sorted yet, INCOMING only. As of now, whatever range was asked. */
   unsortedIn: number;
+  /** By rental: today's rent reminders, «пора звонить», a switch-off (issue #20, ADR-0052). As of today. */
+  reminders: Record<string, RentalReminders>;
 };
 
 /** A day of «Оплаты по графику» without its money: how many weeks fall due on it, and in what state (issue #15). */
@@ -283,6 +286,8 @@ export interface ScheduleAnswer {
   late: { count: number; rentals: CalendarLate[] };
   rentals: CalendarRentalCard[];
   unsortedIn: number;
+  /** The reminders beside the rows: whoever calls by the schedule needs them (issue #20). */
+  reminders: Record<string, RentalReminders>;
 }
 
 /** What GET /api/money/calendar answers: every sum to whoever has `payments.view`, the rows alone to anybody else. */
@@ -332,6 +337,9 @@ export function scheduleOf(a: PaymentsCalendarAnswer): ScheduleAnswer {
       debtTetri: r.debtTetri,
     })),
     unsortedIn: a.unsortedIn,
+    reminders: Object.fromEntries(
+      Object.entries(a.reminders).map(([id, r]) => [id, { today: r.today.map((x) => ({ slot: x.slot, template: x.template, mode: x.mode })), call: r.call, off: r.off }]),
+    ),
   };
 }
 

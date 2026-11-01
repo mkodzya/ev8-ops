@@ -442,12 +442,12 @@ describe('the due day on «Сегодня»: one line of the schedule (issue #18
     const q = dayQueue(input({ rentals: [case4, case3, case2, case1], schedule: { late: 2, dueToday: 2 } }));
     expect(q.map((g) => g.group)).toEqual(['schedule']);
     expect(q[0]!.rows).toEqual([
-      { id: 'schedule', group: 'schedule', action: 'open_schedule', who: null, number: null, vin: null, days: null, amountTetri: null, href: '/schedule', phone: null, note: '2|2' },
+      { id: 'schedule', group: 'schedule', action: 'open_schedule', who: null, number: null, vin: null, days: null, amountTetri: null, href: '/schedule', phone: null, note: '2|2|0' },
     ]);
     // One line, one thing to do: «Сегодня»'s badge counts it once — the schedule's own badge counts the rentals.
     expect(queueCount(q)).toBe(1);
-    expect(dayQueue(input({ schedule: { late: 3, dueToday: 0 } }))[0]!.rows[0]!.note).toBe('3|0');
-    expect(dayQueue(input({ schedule: { late: 0, dueToday: 4 } }))[0]!.rows[0]!.note).toBe('0|4');
+    expect(dayQueue(input({ schedule: { late: 3, dueToday: 0 } }))[0]!.rows[0]!.note).toBe('3|0|0');
+    expect(dayQueue(input({ schedule: { late: 0, dueToday: 4 } }))[0]!.rows[0]!.note).toBe('0|4|0');
     expect(dayQueue(input({ schedule: { late: 0, dueToday: 0 } }))).toEqual([]);
     expect(dayQueue(input({ schedule: null }))).toEqual([]);
   });
