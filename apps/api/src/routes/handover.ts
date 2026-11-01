@@ -263,6 +263,25 @@ export function handoverRoutes(app: FastifyInstance): void {
     return { ok: true };
   });
 
+  /**
+   * Rent reminders off for this rental, with the reason it must have, or on
+   * again (issue #20, MSG-02; ADR-0052): whoever calls by the schedule.
+   */
+  app.post<{ Params: { id: string }; Body: Body }>('/api/rentals/:id/reminders', { config: { scope: 'payments.schedule' } }, async (req) => {
+    const b = req.body ?? {};
+    const actor = actorOf(req);
+    if (typeof b.off !== 'boolean') throw badRequest('bad_field', 'off is true or false', { field: 'off' });
+    const reason = b.off ? str(b, 'reason', { required: true, max: 500 }) : null;
+    const r = await prisma.rental.findUnique({ where: { id: req.params.id }, select: { id: true, remindersOffReason: true } });
+    if (!r) throw notFound('rental_not_found', 'No such rental.');
+    await prisma.rental.update({
+      where: { id: r.id },
+      data: b.off ? { remindersOffReason: reason, remindersOffAt: new Date(), remindersOffById: actor.id } : { remindersOffReason: null, remindersOffAt: null, remindersOffById: null },
+    });
+    await audit({ actorId: actor.id, action: b.off ? 'rental.reminders.off' : 'rental.reminders.on', entityType: 'rental', entityId: r.id, before: { off: r.remindersOffReason }, note: reason });
+    return { ok: true };
+  });
+
   /** Pause · Disputed · Running again — an owner, with a reason (§3.7, Q11). */
   /** A discount on one week, an owner's, with a reason (migration 0040); nought takes it away. */
   app.post<{ Params: { id: string; seq: string }; Body: Body }>('/api/rentals/:id/weeks/:seq/discount', { config: { scope: 'deposit.decide' } }, async (req) => {

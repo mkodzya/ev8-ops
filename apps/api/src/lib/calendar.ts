@@ -21,6 +21,7 @@ import { debtsOf, rentalDebt } from './debt.js';
 import { env } from './env.js';
 import { payOffsetOf } from './rentState.js';
 import { paymentsOfPeriod } from './week.js';
+import { remindersOfToday } from './reminders.js';
 
 // The data side of "Деньги → Календарь" (docs/redesign/payments-calendar.md,
 // ADR-0016). The schedule, its states and every total are worked out in
@@ -178,7 +179,9 @@ export async function calendarAnswer(range: Period, today: string = todayISO(new
       debtTetri: debtOf(r),
     }));
 
-  return { ...calendar, rentals: cards, unsortedIn };
+  // Today's rent reminders beside the rows (issue #20, ADR-0052).
+  const reminders = await remindersOfToday(calendar, cards.map((c) => c.id));
+  return { ...calendar, rentals: cards, unsortedIn, reminders };
 }
 
 /**
@@ -191,11 +194,13 @@ export async function calendarAnswer(range: Period, today: string = todayISO(new
  */
 export interface ScheduleToday {
   pay: Map<string, SchedulePay>;
-  counts: { late: number; dueToday: number };
+  /** `call`: late rentals on their 1st or 2nd day, as the reminders count them — «пора звонить» (issue #20). */
+  counts: { late: number; dueToday: number; call: number };
   lateDebtTetri: number;
 }
 
 export async function scheduleToday(today: string = todayISO(new Date(), env.TZ)): Promise<ScheduleToday> {
   const a = await calendarAnswer(weekOf(today), today);
-  return { pay: schedulePayOf(a), counts: scheduleCounts(a), lateDebtTetri: a.late.debtTetri };
+  const call = Object.values(a.reminders).filter((r) => r.call).length;
+  return { pay: schedulePayOf(a), counts: { ...scheduleCounts(a), call }, lateDebtTetri: a.late.debtTetri };
 }

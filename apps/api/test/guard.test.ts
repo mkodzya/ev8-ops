@@ -140,12 +140,13 @@ describe('route table', () => {
     expect(app.routeTable.filter((r) => r.scope === 'todos.assign')).toEqual([]);
     // A mechanic's own «Сегодня» (ADR-0050) is the workshop's: no front office, no customer's money.
     expect(app.routeTable.find((r) => r.url === '/api/today/workshop')?.scope).toBe('service.work');
-    // «Оплаты по графику»: one route, the rows for whoever calls, the sums only with `payments.view` (issue #15).
-    expect(app.routeTable.filter((r) => r.scope === 'payments.schedule').map((r) => `${r.method} ${r.url}`)).toEqual(['GET /api/money/calendar']);
+    // «Оплаты по графику»: one route, the rows for whoever calls, the sums only with `payments.view` (issue #15);
+    // and whoever calls switches a rental's rent reminders off and on (issue #20, ADR-0052).
+    expect(app.routeTable.filter((r) => r.scope === 'payments.schedule').map((r) => `${r.method} ${r.url}`).sort()).toEqual(['GET /api/money/calendar', 'POST /api/rentals/:id/reminders']);
     const publicOnes = app.routeTable.filter((r) => r.scope === 'public').map((r) => r.url).sort();
     // The jobs are public to the session guard and closed by the worker token (routes/jobs.ts).
     // The PIN sign-in and the tablet's list of names are closed by the tablet's own token (ADR-0033).
-    expect(publicOnes).toEqual(['/api/auth/login', '/api/auth/pin', '/api/health', '/api/jobs/bank-probe', '/api/jobs/bog-night', '/api/jobs/bog-today', '/api/jobs/drive-scan', '/api/jobs/kommo-sync', '/api/jobs/notices', '/api/jobs/notices-scan', '/api/jobs/roll-periods', '/api/jobs/tbc-night', '/api/jobs/tbc-today', '/api/jobs/translate', '/api/site/queue', '/api/workshop/tablet']);
+    expect(publicOnes).toEqual(['/api/auth/login', '/api/auth/pin', '/api/health', '/api/jobs/bank-probe', '/api/jobs/bog-night', '/api/jobs/bog-today', '/api/jobs/drive-scan', '/api/jobs/kommo-sync', '/api/jobs/notices', '/api/jobs/notices-scan', '/api/jobs/reminders', '/api/jobs/roll-periods', '/api/jobs/tbc-night', '/api/jobs/tbc-today', '/api/jobs/translate', '/api/site/queue', '/api/workshop/tablet']);
   });
 });
 

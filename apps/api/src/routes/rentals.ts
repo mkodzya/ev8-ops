@@ -113,6 +113,8 @@ export function rentalRoutes(app: FastifyInstance): void {
         charges: { where: { voidedAt: null }, orderBy: { createdAt: 'asc' }, include: { allocations: { where: { payment: { voidedAt: null } }, select: { amountTetri: true } } } },
         documents: { where: { kind: 'pdf', archived: false }, select: { docKind: true, signedAt: true, signedBy: true, createdAt: true } },
         contractSignedElsewhereBy: { select: { name: true } },
+        // The rent reminders decided for it, the latest first (issue #20, ADR-0052).
+        reminders: { orderBy: [{ day: 'desc' }, { slot: 'desc' }], take: 10, select: { day: true, slot: true, template: true, lang: true, amountTetri: true, mode: true } },
         periods: { orderBy: { seq: 'asc' } },
         payments: { where: { voidedAt: null }, orderBy: { occurredOn: 'asc' }, select: { id: true, occurredOn: true, channel: true, grossTetri: true, feeTetri: true } },
         acts: {
@@ -193,6 +195,14 @@ export function rentalRoutes(app: FastifyInstance): void {
         notes: r.notes,
         transferredAt: r.transferredAt?.toISOString() ?? null,
         debtOverrideReason: r.debtOverrideReason,
+        // Rent reminders (issue #20, ADR-0052): switched off with a reason, and what was decided lately.
+        reminders: {
+          off: r.remindersOffReason
+            ? { reason: r.remindersOffReason, at: r.remindersOffAt?.toISOString() ?? null, by: r.remindersOffById ? ((await prisma.user.findUnique({ where: { id: r.remindersOffById }, select: { name: true } }))?.name ?? null) : null }
+            : null,
+          recent: r.reminders.map((x) => ({ day: isoDate(x.day), slot: x.slot, template: x.template, lang: x.lang, amountTetri: x.amountTetri, mode: x.mode })),
+          lang: r.customer.messageLang,
+        },
         // A return may be taken back by an owner within a day of the act (B5-08).
         undoReturnUntil: returnUndoUntil(r.acts),
         // The renter's folder and contract in Drive, as last read (ADR-0031); null — none found.

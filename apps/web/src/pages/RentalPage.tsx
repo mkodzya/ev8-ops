@@ -21,6 +21,7 @@ import { fmtDate, fmtDayMonth, formatGel } from '../format.js';
 import { useT } from '../i18n/index.js';
 import { errorText, useLoad } from '../lib/use.js';
 import { useSession } from '../session.js';
+import { RentalReminders, type RentalRemindersCard } from './RentalReminders.js';
 import { TodoSheet } from './todos/TodoSheet.js';
 
 /**
@@ -82,6 +83,8 @@ export interface RentalCard {
     notes: string | null;
     transferredAt?: string | null;
     debtOverrideReason?: string | null;
+    /** Rent reminders (issue #20); absent while an older API answers. */
+    reminders?: RentalRemindersCard;
     /** Until when an owner may take the return back (B5-08); null — not any more. */
     undoReturnUntil?: string | null;
     /** The renter's folder, contract and return act in Drive, as last read (ADR-0031). */
@@ -653,6 +656,9 @@ export function RentalPage() {
           )}
         </div>
       </section>
+
+      {/* Rent reminders on a schedule, step 1: decided, not sent (issue #20, ADR-0052). */}
+      {r.reminders && <RentalReminders rentalId={r.id} card={r.reminders} running={r.status === 'active' || r.status === 'overdue' || r.status === 'due_today'} onChanged={reload} />}
 
       <section className="card">
         <div className="queue-head">

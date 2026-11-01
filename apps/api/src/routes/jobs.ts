@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { todayISO } from '@ev8/shared';
+import { REMINDER_SLOTS, todayISO, weekOf, type ReminderSlot } from '@ev8/shared';
 import { probeBogPair, reconcileBogNight, syncBogToday } from '../lib/bog.js';
 import { env } from '../lib/env.js';
 import { scanDrive } from '../lib/driveScan.js';
@@ -9,6 +9,8 @@ import { rollPeriods } from '../lib/periods.js';
 import { last4, pairAsked } from '../lib/statements/apiDays.js';
 import { probeTbcPair, reconcileTbcNight, syncTbcToday } from '../lib/tbc.js';
 import { runTranslations } from '../lib/translations.js';
+import { calendarAnswer } from '../lib/calendar.js';
+import { runReminders, slotNow } from '../lib/reminders.js';
 
 // The worker is the clock; this is where it knocks.
 //
@@ -115,6 +117,18 @@ export function jobRoutes(app: FastifyInstance): void {
     const outcome = await deliverNotices();
     if (outcome.failed > 0) app.log.warn(outcome, 'telegram did not take every notice');
     return { ...outcome, maintenance: found.maintenance, stock: found.stock };
+  });
+
+  // The rent reminders (issue #20, ADR-0052): at 12:00 and 18:00 Tbilisi time
+  // the worker asks what goes at this slot, and it is written once. Step 1
+  // sends nothing (`dry_run`). The answer is counts — no name, phone or sum.
+  app.post<{ Body: { asOf?: string; slot?: string } }>('/api/jobs/reminders', { config: { scope: 'public' } }, async (req, reply) => {
+    if (!workerOnly(req, reply)) return reply;
+    const today = typeof req.body?.asOf === 'string' ? req.body.asOf : todayISO(new Date(), env.TZ);
+    const slot: ReminderSlot = REMINDER_SLOTS.includes(req.body?.slot as ReminderSlot) ? (req.body!.slot as ReminderSlot) : slotNow();
+    const outcome = await runReminders(await calendarAnswer(weekOf(today), today), slot);
+    app.log.info({ ...outcome, today, slot }, 'rent reminders decided');
+    return { ...outcome, today, slot };
   });
 
   // Typed texts about mopeds and repairs, in the reader's language (ADR-0042):
