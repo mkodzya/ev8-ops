@@ -56,8 +56,11 @@ interface Foreign {
     currency: string;
     inMinor: number;
     outMinor: number;
-    /** `bankGelTetri`: the bank's own sum in lari for the line; null when the bank sent none, absent while an older API answers. */
-    lines: { id: string; occurredOn: string; direction: 'in' | 'out'; amountMinor: number; bankGelTetri?: number | null; payer: string | null; purpose: string | null; raw: string }[];
+    /**
+     * `bankGelTetri`: the bank's own sum in lari for the line; null when the bank sent none, absent while an older API answers.
+     * `repeats`: the line is a card payment the bank listed twice, and repeats the one of that day; it is in no sum.
+     */
+    lines: { id: string; occurredOn: string; direction: 'in' | 'out'; amountMinor: number; bankGelTetri?: number | null; repeats?: { occurredOn: string }; payer: string | null; purpose: string | null; raw: string }[];
   }[];
 }
 
@@ -281,17 +284,20 @@ function ForeignBlock({ known, lastOn }: { known: Known[]; lastOn: string | null
           </div>
           <div className="fx-lines">
             {a.lines.map((l) => {
-              const lari = inLari(l.amountMinor, l.bankGelTetri, a.currency, l.direction);
+              const lari = l.repeats ? null : inLari(l.amountMinor, l.bankGelTetri, a.currency, l.direction);
+              const sumClass = l.repeats ? 'mono nowrap muted fx-twin' : `mono nowrap ${l.direction === 'in' ? 'amt-in' : ''}`;
               return (
                 <div key={l.id} className="till-row">
                   <span className="fx-text">
                     {fmtDate(l.occurredOn)}
                     <span className="muted"> · {[l.payer, l.purpose].filter(Boolean).join(' · ') || l.raw}</span>
                     {lari && <span className="fx-rate muted mono">{lari.rate}</span>}
+                    {l.repeats && <span className="fx-rate">{t.bankCurrency.twinOf(fmtDate(l.repeats.occurredOn))}</span>}
                   </span>
                   <span className="fx-sum">
-                    <span className={`mono nowrap ${l.direction === 'in' ? 'amt-in' : ''}`}>{signed(l.amountMinor, a.currency, l.direction)}</span>
-                    {lari ? <span className="mono nowrap muted">{lari.gel}</span> : <span className="muted nowrap">{t.bankCurrency.noGel}</span>}
+                    <span className={sumClass}>{signed(l.amountMinor, a.currency, l.direction)}</span>
+                    {lari && <span className="mono nowrap muted">{lari.gel}</span>}
+                    {!lari && !l.repeats && <span className="muted nowrap">{t.bankCurrency.noGel}</span>}
                   </span>
                 </div>
               );
