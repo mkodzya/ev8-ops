@@ -1,5 +1,6 @@
 // Rent reminders on a schedule, step 1 — decided and written, sent nowhere
-// (issue #20 of the director, ADR-0052; migration 0074). Every customer here
+// (issue #20 of the director, ADR-0052; migration 0074). Here the stand sends
+// nothing (REMINDERS_SEND unset); the sending is reminders-kommo.test.ts. Every customer here
 // is invented. The rule counts days that send, so a run on a Georgian
 // Orthodox holiday, or the day after one, proves another case: those tests
 // stand aside on such days rather than assert a chain the holiday moved.
@@ -32,7 +33,7 @@ async function job(slot: '12:00' | '18:00') {
   const { env } = await import('../src/lib/env.js');
   const app = await getApp();
   const res = await app.inject({ method: 'POST', url: '/api/jobs/reminders', headers: { 'x-worker-token': env.WORKER_TOKEN, 'content-type': 'application/json' }, payload: { asOf: today(), slot } });
-  return json<{ decided: number; written: number; mode: string; slot: string }>(res);
+  return json<{ decided: number; written: number; sendMode: string; held: string | null; sent: number; slot: string }>(res);
 }
 
 describe.skipIf(!HAS_DB)('rent reminders, step 1 (issue #20)', () => {
@@ -40,7 +41,7 @@ describe.skipIf(!HAS_DB)('rent reminders, step 1 (issue #20)', () => {
     // A week ago, the deposit and the first week paid: the second week is due today.
     const { prisma, rentalId } = await rental({ pickedUpOn: addDays(today(), -7), paid: '330' });
     const noon = await job('12:00');
-    expect(noon.mode).toBe('dry_run');
+    expect(noon).toMatchObject({ sendMode: 'off', held: null, sent: 0 });
     const rows = await prisma.rentReminder.findMany({ where: { rentalId } });
     expect(rows).toEqual([expect.objectContaining({ slot: '12:00', template: 'payment_due', lang: 'ka', amountTetri: 15000, mode: 'dry_run' })]);
     await job('18:00');
@@ -107,10 +108,10 @@ describe.skipIf(!HAS_DB)('rent reminders, step 1 (issue #20)', () => {
   it.skipIf(!quietDays(1))('«К звонку» says today’s reminders and «пора звонить»; «Сегодня» counts whom to call', async () => {
     const { owner, rentalId } = await rental({ pickedUpOn: addDays(today(), -8), paid: '330' });
     await job('12:00');
-    const cal = json<{ reminders: Record<string, { today: { slot: string; template: string; mode: string }[]; call: boolean; off: string | null }> }>(
+    const cal = json<{ reminders: Record<string, { today: { slot: string; template: string; mode: string; failure: string | null }[]; call: boolean; off: string | null; deal: boolean }> }>(
       await call(owner, 'GET', `/api/money/calendar?from=${today()}&to=${today()}`),
     );
-    expect(cal.reminders[rentalId]).toEqual({ today: [{ slot: '12:00', template: 'overdue_1', mode: 'dry_run' }], call: true, off: null });
+    expect(cal.reminders[rentalId]).toEqual({ today: [{ slot: '12:00', template: 'overdue_1', mode: 'dry_run', failure: null }], call: true, off: null, deal: false });
     const manager = await loginAs('manager');
     const sched = json<{ reminders: Record<string, { call: boolean }> }>(await call(manager, 'GET', `/api/money/calendar?from=${today()}&to=${today()}`));
     expect(sched.reminders[rentalId]?.call).toBe(true);

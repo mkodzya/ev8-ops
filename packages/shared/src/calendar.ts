@@ -338,7 +338,7 @@ export function scheduleOf(a: PaymentsCalendarAnswer): ScheduleAnswer {
     })),
     unsortedIn: a.unsortedIn,
     reminders: Object.fromEntries(
-      Object.entries(a.reminders).map(([id, r]) => [id, { today: r.today.map((x) => ({ slot: x.slot, template: x.template, mode: x.mode })), call: r.call, off: r.off }]),
+      Object.entries(a.reminders).map(([id, r]) => [id, { today: r.today.map((x) => ({ slot: x.slot, template: x.template, mode: x.mode, failure: x.failure })), call: r.call, off: r.off, deal: r.deal }]),
     ),
   };
 }

@@ -1,4 +1,4 @@
-import { formatGel, type ReminderTemplate } from '@ev8/shared';
+import { formatGel, type ReminderFailure, type ReminderMode, type ReminderSendMode, type ReminderTemplate } from '@ev8/shared';
 import { useState } from 'react';
 import { api } from '../api.js';
 import { BlockHead } from '../components/ui.js';
@@ -8,18 +8,24 @@ import { FormSheet } from '../ds/form/Form.js';
 import { useOperation } from '../ds/form/operation.js';
 import { fmtDateAt, fmtDayMonth } from '../format.js';
 import { useT } from '../i18n/index.js';
+import { reminderModeText } from '../lib/reminders.js';
 import { useSession } from '../session.js';
 
 /** What GET /api/rentals/:id says of its rent reminders (issue #20, ADR-0052). */
 export interface RentalRemindersCard {
   off: { reason: string; at: string | null; by: string | null } | null;
-  recent: { day: string | null; slot: string; template: ReminderTemplate; lang: string; amountTetri: number; mode: 'dry_run' | 'sent' | 'failed' }[];
+  recent: { day: string | null; slot: string; template: ReminderTemplate; lang: string; amountTetri: number; mode: ReminderMode; failure: ReminderFailure | null }[];
   lang: 'ka' | 'ru' | 'en';
+  /** Whether they go (ADR-0053): the stand's mode, or an owner's pause. */
+  sending: ReminderSendMode | 'paused';
+  /** The rental or its customer names a Kommo deal. */
+  deal: boolean;
 }
 
 /**
- * A rental's rent reminders (issue #20 of the director, ADR-0052; MSG-02):
- * when they go, that step 1 sends nothing, the last ones decided, and — for
+ * A rental's rent reminders (issue #20 of the director, ADR-0052, ADR-0053;
+ * MSG-02): when they go, whether they are sent, the last ones and what came
+ * of each, and — for
  * whoever calls by the schedule — the switch, off with a reason it must have.
  */
 export function RentalReminders({ rentalId, card, running, onChanged }: { rentalId: string; card: RentalRemindersCard; running: boolean; onChanged: () => void }) {
@@ -29,7 +35,7 @@ export function RentalReminders({ rentalId, card, running, onChanged }: { rental
   const { can } = useSession();
   const [asking, setAsking] = useState(false);
   const mayToggle = can('payments.schedule');
-  const mode = (m: RentalRemindersCard['recent'][number]['mode']) => (m === 'sent' ? t.rem.sent : m === 'failed' ? t.rem.failed : t.rem.dryRun);
+  const mode = (x: RentalRemindersCard['recent'][number]) => reminderModeText(t, x.mode, x.failure);
   if (!running && card.recent.length === 0) return null;
   return (
     <section className="card">
@@ -65,8 +71,9 @@ export function RentalReminders({ rentalId, card, running, onChanged }: { rental
         running && <p className="hint">{t.rem.card.on}</p>
       )}
       <p className="hint muted">
-        {t.rem.card.dry} {t.rem.card.lang(t.rem.lang.names[card.lang])}
+        {t.rem.card.sending[card.sending]} {t.rem.card.lang(t.rem.lang.names[card.lang])}
       </p>
+      {running && !card.off && !card.deal && <p className="warn-text">{t.rem.card.noDeal}</p>}
       {card.recent.length > 0 ? (
         <>
           <p className="lbl">{t.rem.card.recent}</p>
@@ -74,7 +81,7 @@ export function RentalReminders({ rentalId, card, running, onChanged }: { rental
             {card.recent.map((x) => (
               <li key={`${x.day}:${x.slot}`}>
                 <span className="mono muted">{fmtDayMonth(x.day)}</span>
-                <span>{t.rem.card.row('', x.slot, t.rem.templates[x.template], formatGel(x.amountTetri), mode(x.mode)).trim()}</span>
+                <span>{t.rem.card.row('', x.slot, t.rem.templates[x.template], formatGel(x.amountTetri), mode(x)).trim()}</span>
               </li>
             ))}
           </ul>

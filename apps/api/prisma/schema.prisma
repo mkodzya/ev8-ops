@@ -312,6 +312,7 @@ model User {
   locations         Location[]    @relation("location_author")
   rentalSettings    RentalSettings[]
   serviceSettings   ServiceSettings[]
+  reminderSettings  ReminderSettings[]
   quickRates        QuickRate[]
   workshops         Workshop[]
   handoversFrom     CashHandover[] @relation("handover_from")
@@ -627,12 +628,31 @@ model RentReminder {
   amountTetri Int      @map("amount_tetri")
   mode        String
   failure     String?
-  createdAt   DateTime @default(now()) @map("created_at")
+  /// The Kommo deal it went to (0075).
+  leadId      String?   @map("lead_id")
+  sentAt      DateTime? @map("sent_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
 
   rental Rental @relation(fields: [rentalId], references: [id], onDelete: Cascade)
 
   @@unique([rentalId, day, slot])
   @@map("rent_reminders")
+}
+
+/// One row: the owner's side of sending the rent reminders (0075, ADR-0053).
+model ReminderSettings {
+  id          Boolean  @id @default(true)
+  paused      Boolean  @default(false)
+  /// Kommo's bot number for each template and language: `payment_due.ka` → 12345.
+  bots        Json     @default("{}")
+  /// The deals a stand in `test` sends to, and no other.
+  testLeads   String[] @default([]) @map("test_leads")
+  updatedById String?  @map("updated_by") @db.Uuid
+  updatedAt   DateTime @default(now()) @map("updated_at")
+
+  updatedBy User? @relation(fields: [updatedById], references: [id])
+
+  @@map("reminder_settings")
 }
 
 model RentalPeriod {

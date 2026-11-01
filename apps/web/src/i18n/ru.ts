@@ -167,6 +167,7 @@ export const ru: Dict = {
       incoming: 'Поступления',
       expenseItems: 'Статьи расходов',
       incomeItems: 'Статьи доходов',
+      reminders: 'Напоминания',
       drive: 'Drive',
       goods: 'Товары',
       // Issue #15: «Оплаты по графику», «Разобрать», «Аренды и клиенты».

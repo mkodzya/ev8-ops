@@ -157,6 +157,7 @@ export const ka: Dict = {
       incoming: 'შემოსავალი',
       expenseItems: 'ხარჯების კატეგორიები',
       incomeItems: 'სხვა შემოსავლის კატეგორიები',
+      reminders: 'შეხსენებები',
       drive: 'Drive',
       goods: 'საქონელი',
       // Issue #15: «Оплаты по графику», «Разобрать», «Аренды и клиенты».

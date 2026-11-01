@@ -249,18 +249,19 @@ async function sendNotices(job: 'notices' | 'notices-scan'): Promise<void> {
   said[job] = line;
 }
 
-type ReminderOutcome = { decided: number; written: number; mode: 'dry_run'; today: string; slot: string };
+type ReminderOutcome = { decided: number; written: number; sendMode: 'off' | 'test' | 'on'; held: 'paused' | 'not_today' | null; sent: number; failed: number; today: string; slot: string };
 
 /**
- * Counts only: who is reminded of what is the API's, and stays there. Step 1
- * writes what would go and sends nothing (ADR-0052).
+ * Counts only: who is reminded of what is the API's, and stays there. The
+ * API sends through Kommo as far as its stand allows (ADR-0052, ADR-0053).
  */
 async function decideReminders(): Promise<void> {
   try {
     const res = await fetch(`${API}/api/jobs/reminders`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-worker-token': TOKEN }, body: JSON.stringify({ asOf: todayISO(new Date(), TZ) }) });
     if (!res.ok) throw new Error(`reminders: ${res.status}`);
     const r = (await res.json()) as ReminderOutcome;
-    console.log(`worker: rent reminders ${r.today} ${r.slot} — ${r.decided} decided, ${r.written} written${r.mode === 'dry_run' ? ', none sent (dry run)' : ''}`);
+    const how = r.sendMode === 'off' ? 'none sent (dry run)' : r.held ? `none sent (${r.held})` : `${r.sent} sent, ${r.failed} did not go${r.sendMode === 'test' ? ' (test deals only)' : ''}`;
+    console.log(`worker: rent reminders ${r.today} ${r.slot} — ${r.decided} decided, ${r.written} written, ${how}`);
   } catch (err) {
     console.log(`worker: the rent reminders did not reach the API — ${(err as Error).message}`);
   }

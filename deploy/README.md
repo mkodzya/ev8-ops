@@ -430,6 +430,20 @@ ssh root@204.168.149.105 /srv/ev8-ops/deploy/set-kommo-token.sh --prod --from-te
 
 Вставить другой токен — `ssh -t … set-kommo-token.sh --prod`; выключить — `--prod --off`.
 
+**Напоминания об оплате через Kommo** (ADR-0053). Насколько стенд отправляет — строка
+`REMINDERS_SEND` в его env-файле, ставит Mika:
+
+```
+ssh root@204.168.149.105 /srv/ev8-ops/deploy/set-reminders.sh test          # тест: только тестовые сделки
+ssh root@204.168.149.105 /srv/ev8-ops/deploy/set-reminders.sh --prod test   # боевой: только тестовые сделки
+ssh root@204.168.149.105 /srv/ev8-ops/deploy/set-reminders.sh --prod on     # боевой: всем клиентам
+ssh root@204.168.149.105 /srv/ev8-ops/deploy/set-reminders.sh --prod off    # боевой: решать, не отправлять
+```
+
+`off` — по умолчанию. **Тестовому стенду `on` запрещён**: на нём копия боевых клиентов. Номера
+ботов и тестовые сделки — в «Настройки → Напоминания»; там же «Поставить на паузу» — остановка
+без сервера, первое, за что браться, если что-то не так.
+
 То, что скрипт записывает в env-файл стенда:
 
 ```

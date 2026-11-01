@@ -3,7 +3,9 @@
 Дата: 01.11.2026. Статус: **принят шаг 1** — Mika 01.11.2026 на запрос директора (GitHub issue #20): «давай
 пошагово». Отправка (шаг 2) — после проверки директором бота Kommo; канал по ответу директора — Kommo с основного
 номера, что отменяет п. 1 [ADR-0014](0014-kommo-is-the-crm-and-nothing-else.md), — **решение по ADR-0014 за Mika,
-не принято**. Ветка `feature/payment-reminders`, миграция 0074. Опирается на
+не принято**. Ветка `feature/payment-reminders`, миграция 0074. **Шаг 2 принят 01.11.2026:
+[ADR-0053](0053-a-rent-reminder-writes-its-sum-into-kommo-and-starts-the-bot.md)** — отправка через Kommo, исключение
+из п. 1 ADR-0014 одобрено Mika. Опирается на
 [ADR-0017](0017-the-due-day-is-not-lateness.md) и правило «Оплат по графику» (issue #18); не ставит задач
 ([ADR-0050](0050-tasks-are-set-by-hand-and-a-mechanic-has-his-own-today.md)).
 

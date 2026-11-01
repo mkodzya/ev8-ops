@@ -5,11 +5,18 @@
 // "rented" stage — keeps the last list it gave, and lays that list beside
 // the rentals running here.
 //
-// Nothing is written to Kommo, and that is a decision, not a step not yet
-// taken (Mika, 08.10.2026; ADR-0014): everything but the CRM itself lives in
-// EV8 Ops, and what lives here is not copied there. A payment note written
-// into the deal was built, checked against Kommo and taken out again the
-// same day (ADR-0013).
+// Nothing of the books is written to Kommo, and that is a decision, not a
+// step not yet taken (Mika, 08.10.2026; ADR-0014): everything but the CRM
+// itself lives in EV8 Ops, and what lives here is not copied there. A
+// payment note written into the deal was built, checked against Kommo and
+// taken out again the same day (ADR-0013).
+//
+// One narrow exception (Mika, 01.11.2026; ADR-0053): a rent reminder. Kommo
+// sends the WhatsApp template, and the template reads the sum from the
+// deal's «Amount due» field — empty, it sends the sample Meta approved. So
+// before a reminder goes, the sum is written into that one field, read back,
+// and only then is the bot started. That is all this client writes:
+// `setLeadField` and `runBot`, called from `lib/reminders.ts` and nowhere else.
 //
 // What Kommo has won comes in (Mika, 08.10.2026; ADR-0015): a deal that
 // reaches the rented stage, or is closed as won in the sales pipeline, brings
@@ -112,7 +119,7 @@ export class KommoError extends Error {
 }
 
 /** The part of `fetch` this needs, so a test can stand in for Kommo. */
-export type KommoFetch = (url: string, init: { method: string; headers: Record<string, string>; signal: AbortSignal }) => Promise<{ status: number; json: () => Promise<unknown> }>;
+export type KommoFetch = (url: string, init: { method: string; headers: Record<string, string>; signal: AbortSignal; body?: string }) => Promise<{ status: number; json: () => Promise<unknown> }>;
 
 // Kommo allows 7 requests a second for the account as a whole. One request
 // at a time with this gap between starts stays under it with room to spare.
@@ -154,11 +161,12 @@ export class KommoClient {
 
   /**
    * The one door to Kommo: the token goes on here, the rate limit is kept
-   * here, and a refusal becomes one of our words here. It only reads — the
-   * method is `GET` and nothing else on purpose (ADR-0014).
-   * Null is Kommo's 204 — "nothing matches", which it says with no body.
+   * here, and a refusal becomes one of our words here. It reads; the two
+   * writes of a reminder (ADR-0053) are the only `PATCH` and `POST` that pass
+   * through it. Null is Kommo's 204 — "nothing matches", which it says with
+   * no body — and any answer a caller said it does not read (`bodyless`).
    */
-  private request(method: 'GET', path: string, query: [string, string][] = []): Promise<unknown | null> {
+  private request(method: 'GET' | 'PATCH' | 'POST', path: string, query: [string, string][] = [], body?: unknown, bodyless = false): Promise<unknown | null> {
     const run = async (): Promise<unknown | null> => {
       const wait = this.lastStart + this.gapMs - this.now();
       if (wait > 0) await this.sleep(wait);
@@ -169,8 +177,9 @@ export class KommoClient {
       try {
         res = await this.fetchFn(url, {
           method,
-          headers: { authorization: `Bearer ${this.cfg.token}`, accept: 'application/json' },
+          headers: { authorization: `Bearer ${this.cfg.token}`, accept: 'application/json', ...(body === undefined ? {} : { 'content-type': 'application/json' }) },
           signal: AbortSignal.timeout(TIMEOUT_MS),
+          ...(body === undefined ? {} : { body: JSON.stringify(body) }),
         });
       } catch {
         // The cause is dropped on purpose: a fetch error can quote the request.
@@ -180,6 +189,7 @@ export class KommoClient {
       if (res.status === 401 || res.status === 403) throw new KommoError('unauthorized', res.status);
       if (res.status === 429) throw new KommoError('rate_limited', res.status);
       if (res.status < 200 || res.status >= 300) throw new KommoError('http', res.status);
+      if (bodyless) return null;
       try {
         return await res.json();
       } catch {
@@ -277,6 +287,68 @@ export class KommoClient {
     const found = await this.stage(this.cfg.salesPipelineId, this.cfg.wonStatusId, [['filter[closed_at][from]', String(Math.floor(since.getTime() / 1000))]]);
     return this.withContacts(found.filter((l) => l.closedAt != null && l.closedAt.getTime() >= since.getTime()));
   }
+
+  // ── A rent reminder (ADR-0053): the sum, read back, then the bot ─────────
+
+  /** A deal field found by its name, as it reads in Kommo; null — the account has none. */
+  async leadField(name: string): Promise<KommoField | null> {
+    const want = name.trim().toLowerCase();
+    for (let page = 1; page <= MAX_PAGES; page++) {
+      const body = await this.request('GET', '/api/v4/leads/custom_fields', [
+        ['limit', String(FIELD_PAGE)],
+        ['page', String(page)],
+      ]);
+      if (body === null) return null;
+      const rows = obj(obj(body)._embedded).custom_fields;
+      if (!Array.isArray(rows)) throw new KommoError('bad_answer');
+      for (const row of rows) {
+        const f = obj(row);
+        if (typeof f.name === 'string' && f.name.trim().toLowerCase() === want && typeof f.id === 'number') return { id: f.id, type: typeof f.type === 'string' ? f.type : 'text' };
+      }
+      if (!obj(obj(body)._links).next || rows.length === 0) return null;
+    }
+    throw new KommoError('bad_answer');
+  }
+
+  /** What a deal's field holds now, as text; null — it is empty. `undefined` — Kommo has no such deal. */
+  async leadFieldValue(leadId: string, fieldId: number): Promise<string | null | undefined> {
+    const body = await this.request('GET', `/api/v4/leads/${digits(leadId)}`);
+    if (body === null) return undefined;
+    const field = list(obj(body).custom_fields_values)
+      .map(obj)
+      .find((f) => f.field_id === fieldId);
+    const value = field ? obj(list(field.values)[0]).value : undefined;
+    return typeof value === 'number' && Number.isFinite(value) ? String(value) : typeof value === 'string' && value.trim() !== '' ? value.trim() : null;
+  }
+
+  /** The one field of one deal, written. A number field takes a number; any other, the text. */
+  async setLeadField(leadId: string, field: KommoField, value: string): Promise<void> {
+    const v = NUMBER_FIELDS.has(field.type) ? Number(value) : value;
+    await this.request('PATCH', `/api/v4/leads/${digits(leadId)}`, [], { custom_fields_values: [{ field_id: field.id, values: [{ value: v }] }] }, true);
+  }
+
+  /** Kommo starts the bot on the deal; what it answers is not read — a 2xx is "started". */
+  async runBot(botId: number, leadId: string): Promise<void> {
+    await this.request('POST', '/api/v2/salesbot/run', [], [{ bot_id: botId, entity_id: Number(digits(leadId)), entity_type: LEAD_ENTITY }], true);
+  }
+}
+
+/** A deal field as Kommo describes it. */
+export interface KommoField {
+  id: number;
+  type: string;
+}
+
+// Kommo's field types that hold a number rather than text.
+const NUMBER_FIELDS = new Set(['numeric', 'price', 'monetary']);
+const FIELD_PAGE = 50;
+// The salesbot API's word for a deal.
+const LEAD_ENTITY = 2;
+
+/** A deal's number goes into a path: digits, or no request at all. */
+function digits(id: string): string {
+  if (!/^\d{1,20}$/.test(id)) throw new KommoError('bad_answer');
+  return id;
 }
 
 // ── The poll ────────────────────────────────────────────────────────────
@@ -288,6 +360,11 @@ let clientOptsForTests: KommoClientOptions = {};
 export function setKommoFetchForTests(fn: KommoFetch | null, opts: KommoClientOptions = {}): void {
   fetchForTests = fn;
   clientOptsForTests = opts;
+}
+
+/** A client for this stand's Kommo — or for the stand-in, when a test set one. */
+export function kommoClient(cfg: KommoConfig): KommoClient {
+  return new KommoClient(cfg, { ...clientOptsForTests, ...(fetchForTests ? { fetch: fetchForTests } : {}) });
 }
 
 export type KommoSyncOutcome =
@@ -315,7 +392,7 @@ export function syncKommo(now: Date = new Date()): Promise<KommoSyncOutcome> {
 }
 
 async function pollOnce(cfg: KommoConfig, now: Date): Promise<KommoSyncOutcome> {
-  const client = new KommoClient(cfg, { ...clientOptsForTests, ...(fetchForTests ? { fetch: fetchForTests } : {}) });
+  const client = kommoClient(cfg);
   // The moment this stand began taking deals in: a sale won before it is not a task.
   const intakeFrom = (await prisma.kommoSync.findUnique({ where: { id: true }, select: { intakeFrom: true } }))?.intakeFrom ?? now;
   let rented: Awaited<ReturnType<KommoClient['rentedLeads']>>;
