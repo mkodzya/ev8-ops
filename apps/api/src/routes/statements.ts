@@ -95,6 +95,7 @@ export function statementRoutes(app: FastifyInstance): void {
     const lastLines = await prisma.statementLine.groupBy({ by: ['bank'], where: { currency: 'GEL' }, _max: { occurredOn: true } });
     const queue = await prisma.statementLine.count({ where: { status: 'unmatched' } });
     const foreignLines = await prisma.statementLine.count({ where: { currency: { not: 'GEL' } } });
+    const foreignLast = await prisma.statementLine.findFirst({ where: { currency: { not: 'GEL' } }, orderBy: { occurredOn: 'desc' }, select: { occurredOn: true } });
     // A bank comes by itself once its keys are on the stand (B11-03): Bank of Georgia, TBC.
     const [bogApi, tbcApi, bogPairs, tbcPairs] = await Promise.all([bogApiStatus(), tbcApiStatus(), bogPairsStatus(), tbcPairsStatus()]);
     const banks = BANKS.map((bank) => {
@@ -121,6 +122,8 @@ export function statementRoutes(app: FastifyInstance): void {
       banks,
       // Lines of the accounts in another currency, kept: none, and the screen has nothing more than before them.
       foreignLines,
+      // The day of the newest of them: «Операции в валюте» opens on its month when this one has none yet.
+      foreignLastOn: isoDate(foreignLast?.occurredOn ?? null),
       statements: statements.map((s) => ({
         id: s.id,
         bank: s.bank,
