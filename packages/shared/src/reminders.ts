@@ -127,11 +127,69 @@ export function callDue(r: Pick<ReminderRental, 'status' | 'dueOn' | 'owesTetri'
   return stage === 1 || stage === 2;
 }
 
+// ── Sending (step 2, ADR-0053) ─────────────────────────────────────────
+
+/**
+ * How far a stand sends, set on the stand itself (`deploy/set-reminders.sh`):
+ * `off` — decided and written, sent nowhere (step 1); `test` — sent only to
+ * the deals an owner listed as test ones; `on` — sent to every customer.
+ */
+export const REMINDER_SEND_MODES = ['off', 'test', 'on'] as const;
+export type ReminderSendMode = (typeof REMINDER_SEND_MODES)[number];
+
+/**
+ * A reminder as written: `dry_run` — decided, not sent on purpose; `sending`
+ * — handed to Kommo and not yet answered; `sent` — Kommo took the sum and
+ * started the bot; `failed` — it did not go, and `failure` says why.
+ */
+export const REMINDER_MODES = ['dry_run', 'sending', 'sent', 'failed'] as const;
+export type ReminderMode = (typeof REMINDER_MODES)[number];
+
+/**
+ * Why a reminder did not go — our own word, never Kommo's answer. The first
+ * ones are ours to fix in EV8 Ops or Kommo; the last five are Kommo's
+ * refusals as the client names them.
+ */
+export const REMINDER_FAILURES = [
+  'no_deal',
+  'no_bot',
+  'no_field',
+  'not_written',
+  'deal_gone',
+  'kommo_off',
+  'interrupted',
+  'unauthorized',
+  'rate_limited',
+  'http',
+  'network',
+  'bad_answer',
+] as const;
+export type ReminderFailure = (typeof REMINDER_FAILURES)[number];
+
+/** The Kommo deal field the three templates read the sum from (the director, 01.11.2026). */
+export const REMINDER_AMOUNT_FIELD = 'Amount due';
+
+/** A bot is named by its template and the template's language: six in all. */
+export type ReminderBotKey = `${ReminderTemplate}.${'ka' | 'en'}`;
+export const REMINDER_BOT_KEYS: ReminderBotKey[] = REMINDER_TEMPLATES.flatMap((t) => (['ka', 'en'] as const).map((l): ReminderBotKey => `${t}.${l}`));
+
+/**
+ * The sum as the deal field holds it: lari, with tetri only when there are
+ * any — «320», «320.50». The template adds the ₾.
+ */
+export function reminderAmountText(tetri: number): string {
+  const lari = Math.floor(tetri / 100);
+  const rest = tetri % 100;
+  return rest === 0 ? String(lari) : `${lari}.${String(rest).padStart(2, '0')}`;
+}
+
 /** What «К звонку» says of a rental beside its row: today's reminders, «пора звонить», a switch-off with its reason. */
 export interface RentalReminders {
-  today: { slot: ReminderSlot; template: ReminderTemplate; mode: 'dry_run' | 'sent' | 'failed' }[];
+  today: { slot: ReminderSlot; template: ReminderTemplate; mode: ReminderMode; failure: ReminderFailure | null }[];
   call: boolean;
   off: string | null;
+  /** The rental, or its customer, names a Kommo deal: without one nothing can be sent. */
+  deal: boolean;
 }
 
 /** The slot a moment falls in, Tbilisi time: before 18:00 — the noon one. */

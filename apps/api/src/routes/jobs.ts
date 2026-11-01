@@ -120,14 +120,16 @@ export function jobRoutes(app: FastifyInstance): void {
   });
 
   // The rent reminders (issue #20, ADR-0052): at 12:00 and 18:00 Tbilisi time
-  // the worker asks what goes at this slot, and it is written once. Step 1
-  // sends nothing (`dry_run`). The answer is counts — no name, phone or sum.
+  // the worker asks what goes at this slot, and it is written once. Whether it
+  // is sent through Kommo is the stand's REMINDERS_SEND (ADR-0053); a run for
+  // another day (`asOf`) never sends. The answer is counts — no name, phone or sum.
   app.post<{ Body: { asOf?: string; slot?: string } }>('/api/jobs/reminders', { config: { scope: 'public' } }, async (req, reply) => {
     if (!workerOnly(req, reply)) return reply;
     const today = typeof req.body?.asOf === 'string' ? req.body.asOf : todayISO(new Date(), env.TZ);
     const slot: ReminderSlot = REMINDER_SLOTS.includes(req.body?.slot as ReminderSlot) ? (req.body!.slot as ReminderSlot) : slotNow();
     const outcome = await runReminders(await calendarAnswer(weekOf(today), today), slot);
-    app.log.info({ ...outcome, today, slot }, 'rent reminders decided');
+    if (outcome.failed > 0) app.log.warn({ ...outcome, today, slot }, 'some rent reminders did not go');
+    else app.log.info({ ...outcome, today, slot }, 'rent reminders decided');
     return { ...outcome, today, slot };
   });
 

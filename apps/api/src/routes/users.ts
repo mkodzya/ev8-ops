@@ -93,6 +93,7 @@ const TRACES = {
   locations: true,
   rentalSettings: true,
   serviceSettings: true,
+  reminderSettings: true,
   quickRates: true,
   workshops: true,
   handoversFrom: true,

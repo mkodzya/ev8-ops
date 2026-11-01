@@ -31,6 +31,7 @@ import { IncomingReportPage } from './pages/IncomingReportPage.js';
 import { ProfilePage } from './pages/ProfilePage.js';
 import { LoginSettingsPage, RentalSettingsPage, SettingsPage } from './pages/SettingsPage.js';
 import { RepairSettingsPage } from './pages/RepairSettingsPage.js';
+import { ReminderSettingsPage } from './pages/ReminderSettingsPage.js';
 import { JournalPage } from './pages/JournalPage.js';
 import { MigrationPage } from './pages/MigrationPage.js';
 import { KommoPage } from './pages/KommoPage.js';
@@ -235,6 +236,7 @@ export function App() {
         <Route path="settings/repair" element={<Require perm="settings.manage"><RepairSettingsPage /></Require>} />
         <Route path="settings/expenses" element={<Require perm="settings.manage"><ExpenseCategoriesPage /></Require>} />
         <Route path="settings/incoming" element={<Require perm="settings.manage"><IncomeCategoriesPage /></Require>} />
+        <Route path="settings/reminders" element={<Require perm="settings.manage"><ReminderSettingsPage /></Require>} />
         <Route path="settings/journal" element={<Require perm="users.manage"><JournalPage /></Require>} />
         <Route path="settings/migration" element={<Require perm="users.manage"><MigrationPage /></Require>} />
         <Route path="settings/login" element={<Require perm="users.manage"><LoginSettingsPage /></Require>} />

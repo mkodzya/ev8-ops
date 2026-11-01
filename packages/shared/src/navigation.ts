@@ -213,6 +213,8 @@ export type TabId =
   // reports' «Расходы» and «Поступления» are other screens with other words.
   | 'expenseItems'
   | 'incomeItems'
+  // The rent reminders through Kommo (ADR-0053): the bots, the test deals, the pause.
+  | 'reminders'
   | 'drive'
   | 'orders'
   | 'suppliers'
@@ -305,6 +307,8 @@ export const SECTION_TABS: Partial<Record<SectionId, readonly ({ id: TabId; path
     { id: 'expenseItems', path: '/settings/expenses', anyOf: ['settings.manage'] },
     // What money coming in that is no customer's was: «Прочий доход» (migration 0069) — «Статьи доходов».
     { id: 'incomeItems', path: '/settings/incoming', anyOf: ['settings.manage'] },
+    // The rent reminders' sending through Kommo (issue #20, ADR-0053).
+    { id: 'reminders', path: '/settings/reminders', anyOf: ['settings.manage'] },
     // The rentals folders in Google Drive beside the rentals here (ADR-0031).
     { id: 'drive', path: '/settings/drive', anyOf: ['users.manage'] },
     { id: 'journal', path: '/settings/journal', anyOf: ['users.manage'] },

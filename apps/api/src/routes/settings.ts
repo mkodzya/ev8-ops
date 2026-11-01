@@ -1,4 +1,9 @@
 import {
+  REMINDER_AMOUNT_FIELD,
+  REMINDER_BOT_KEYS,
+  REMINDER_META_NAME,
+  kommoLeadId,
+  type ReminderBotKey,
   MAINTENANCE_INTERVAL_MAX_KM,
   MAINTENANCE_INTERVAL_MIN_KM,
   PIN_IDLE_MINUTES,
@@ -6,16 +11,20 @@ import {
   PIN_MAX_DIGITS,
   PIN_MAX_FAILURES,
   PIN_MIN_DIGITS,
+  todayISO,
 } from '@ev8/shared';
 import type { FastifyInstance } from 'fastify';
 import { audit } from '../lib/audit.js';
+import { dateFromISO } from '../lib/dates.js';
 import { MAX_ATTEMPTS, SESSION_IDLE_MS, SESSION_TTL_MS } from '../lib/auth.js';
-import { isDevStack } from '../lib/env.js';
+import { env, isDevStack } from '../lib/env.js';
 import { prisma } from '../lib/db.js';
 import { badRequest, conflict, isUniqueViolation, notFound } from '../lib/errors.js';
 import { actorOf, mayView } from '../lib/guard.js';
+import { kommoConfig } from '../lib/kommo.js';
+import { reminderSendMode, reminderSettings } from '../lib/reminders.js';
 import { serviceSettings } from '../lib/serviceSettings.js';
-import { int, str, tetri } from '../lib/validate.js';
+import { int, str, strList, tetri } from '../lib/validate.js';
 
 // What a hand-over proposes when nobody says otherwise (wave 6 §3.5, R5).
 //
@@ -28,6 +37,9 @@ import { int, str, tetri } from '../lib/validate.js';
 // not a replacement for it.
 
 type Body = Record<string, unknown>;
+
+// A handful of deals to try the sending on; a long list is not a test any more.
+const MAX_TEST_LEADS = 20;
 
 /** The one row, made on the first read if the migration's row ever went missing. */
 export async function settingsRow() {
@@ -155,6 +167,84 @@ export function settingsRoutes(app: FastifyInstance): void {
       after: Object.fromEntries(changed.map((k) => [k, now[k]])),
     });
     return { ok: true, ...now };
+  });
+
+  /**
+   * The rent reminders through Kommo (ADR-0053): how far this stand sends —
+   * its own, set on the server, shown and not changed here — and the owner's
+   * side: a pause for every stand, the six bots, the test deals. What went
+   * today is counted, not listed: the list is «К звонку».
+   */
+  app.get('/api/settings/reminders', { config: { scope: 'settings.manage' } }, async () => {
+    const s = await reminderSettings();
+    const by = s.updatedById ? await prisma.user.findUnique({ where: { id: s.updatedById }, select: { name: true } }) : null;
+    const today = await prisma.rentReminder.groupBy({ by: ['mode'], where: { day: dateFromISO(todayISO(new Date(), env.TZ))! }, _count: true });
+    const failures = await prisma.rentReminder.groupBy({ by: ['failure'], where: { day: dateFromISO(todayISO(new Date(), env.TZ))!, mode: 'failed' }, _count: true });
+    return {
+      sendMode: reminderSendMode(),
+      kommo: kommoConfig() != null,
+      paused: s.paused,
+      bots: Object.fromEntries(REMINDER_BOT_KEYS.map((k) => [k, s.bots[k] ?? null])),
+      testLeads: s.testLeads,
+      amountField: REMINDER_AMOUNT_FIELD,
+      templates: REMINDER_META_NAME,
+      today: Object.fromEntries(today.map((r) => [r.mode, r._count])),
+      failures: Object.fromEntries(failures.map((r) => [r.failure ?? '', r._count])),
+      updatedAt: s.updatedAt.toISOString(),
+      updatedBy: by?.name ?? null,
+    };
+  });
+
+  /** An owner's; every change in the journal — the bots and the test deals decide who gets a message. */
+  app.patch<{ Body: Body }>('/api/settings/reminders', { config: { scope: 'settings.manage' } }, async (req) => {
+    const b = req.body ?? {};
+    const actor = actorOf(req);
+    const before = await reminderSettings();
+    const was = { paused: before.paused, bots: before.bots, testLeads: before.testLeads };
+    const now = { ...was };
+
+    if (b.paused !== undefined) {
+      if (typeof b.paused !== 'boolean') throw badRequest('bad_field', 'paused is true or false', { field: 'paused' });
+      now.paused = b.paused;
+    }
+    if (b.bots !== undefined) {
+      if (!b.bots || typeof b.bots !== 'object' || Array.isArray(b.bots)) throw badRequest('bad_field', 'bots is an object', { field: 'bots' });
+      const bots: Partial<Record<ReminderBotKey, number>> = { ...was.bots };
+      for (const [k, v] of Object.entries(b.bots as Record<string, unknown>)) {
+        if (!(REMINDER_BOT_KEYS as string[]).includes(k)) throw badRequest('bad_field', `no bot ${k}`, { field: 'bots' });
+        const key = k as ReminderBotKey;
+        const text = v == null ? '' : String(v).trim();
+        if (text === '') delete bots[key];
+        else if (/^\d{1,12}$/.test(text) && Number(text) > 0) bots[key] = Number(text);
+        else throw badRequest('bad_field', 'A bot is a number', { field: `bots.${key}` });
+      }
+      now.bots = bots;
+    }
+    if (b.testLeads !== undefined) {
+      const raw = typeof b.testLeads === 'string' ? b.testLeads.split(/[\s,;]+/) : strList(b, 'testLeads');
+      const leads: string[] = [];
+      for (const x of raw.map((y) => y.trim()).filter(Boolean)) {
+        const id = kommoLeadId(x);
+        if (!id) throw badRequest('bad_field', 'A test deal is a Kommo deal number or link', { field: 'testLeads' });
+        if (!leads.includes(id)) leads.push(id);
+      }
+      if (leads.length > MAX_TEST_LEADS) throw badRequest('bad_field', `At most ${MAX_TEST_LEADS} test deals`, { field: 'testLeads' });
+      now.testLeads = leads;
+    }
+
+    const same = (k: keyof typeof now) => JSON.stringify(now[k]) === JSON.stringify(was[k]);
+    const changed = (Object.keys(now) as (keyof typeof now)[]).filter((k) => !same(k));
+    if (changed.length === 0) return { ok: true };
+    await prisma.reminderSettings.update({ where: { id: true }, data: { paused: now.paused, bots: now.bots, testLeads: now.testLeads, updatedById: actor.id, updatedAt: new Date() } });
+    await audit({
+      actorId: actor.id,
+      action: 'settings.reminders',
+      entityType: 'settings',
+      entityId: 'reminders',
+      before: Object.fromEntries(changed.map((k) => [k, was[k]])),
+      after: Object.fromEntries(changed.map((k) => [k, now[k]])),
+    });
+    return { ok: true };
   });
 
   app.post<{ Body: Body }>('/api/settings/rates', { config: { scope: 'settings.manage' } }, async (req, reply) => {

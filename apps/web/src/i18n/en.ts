@@ -169,6 +169,7 @@ export const en = {
       incoming: 'Money in',
       expenseItems: 'Expense items',
       incomeItems: 'Income items',
+      reminders: 'Reminders',
       drive: 'Drive',
       goods: 'Goods',
       // Issue #15: «Оплаты по графику», «Разобрать», «Аренды и клиенты».

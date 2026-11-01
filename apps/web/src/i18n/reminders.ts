@@ -1,25 +1,48 @@
-// Rent reminders on a schedule, step 1 (issue #20 of the director, 01.11.2026;
-// ADR-0052): beside the rows of «К звонку», on a rental's card, the language
-// of a customer's messages, and «Сегодня»'s line «Оплаты». Step 1 sends
-// nothing — every word here says so where a reminder is named. One file, so
-// the Georgian goes to the director as one list
-// (docs/qa/payment-reminders-ka-strings.md). The Georgian is the session's;
-// the director proofreads it.
+// Rent reminders on a schedule (issue #20 of the director, 01.11.2026;
+// ADR-0052, ADR-0053): beside the rows of «К звонку», on a rental's card, the
+// language of a customer's messages, «Сегодня»'s line «Оплаты», and Settings →
+// Reminders. Whether a reminder went is said where it is named: trial, sent,
+// did not go and why. One file, so the Georgian goes to the director as one
+// list (docs/qa/payment-reminders-ka-strings.md). The Georgian is the
+// session's; the director proofreads it.
 
 export const remEn = {
   rem: {
     /** «Напоминание 12:00, 18:00 (пробно, не отправлено)» beside a row. */
     slots: (slots: string) => `Reminder ${slots}`,
     dryRun: 'trial, not sent',
+    sending: 'being sent',
     sent: 'sent',
     failed: 'did not go',
+    /** Why it did not go — our word, never Kommo's. */
+    failures: {
+      no_deal: 'no Kommo deal',
+      no_bot: 'no bot for this template',
+      no_field: 'no «Amount due» field in Kommo',
+      not_written: 'the sum did not stay in the deal',
+      deal_gone: 'the deal is gone from Kommo',
+      kommo_off: 'Kommo is not connected',
+      interrupted: 'the run stopped half-way',
+      unauthorized: 'Kommo refused the token',
+      rate_limited: 'Kommo: too many requests',
+      http: 'Kommo refused',
+      network: 'Kommo did not answer',
+      bad_answer: 'Kommo answered oddly',
+    },
+    noDeal: 'no Kommo deal',
     call: 'time to call',
     off: 'reminders off',
     templates: { payment_due: 'payment day', overdue_1: '1st day late', overdue_2: '2nd day late — the warning' },
     card: {
       title: 'Rent reminders',
       on: 'On: the payment day at 12:00, the 1st and 2nd day late at 12:00 and 18:00. Not on the hand-over day, not on Georgian Orthodox holidays.',
-      dry: 'Trial run for now: who would be written to is decided and kept here, nothing is sent.',
+      sending: {
+        off: 'Trial run for now: who would be written to is decided and kept here, nothing is sent.',
+        test: 'Test: messages go only to the test deals of Settings → Reminders.',
+        on: 'Sent to WhatsApp through Kommo, with the sum from here.',
+        paused: 'Sending is paused in Settings → Reminders.',
+      },
+      noDeal: 'Neither the rental nor its customer has a Kommo deal: nothing can be sent. Put the deal’s link on the rental.',
       offWhy: (reason: string) => `Off: ${reason}`,
       offBy: (who: string, day: string) => `${who}, ${day}`,
       switchOff: 'Switch off',
@@ -41,6 +64,32 @@ export const remEn = {
     },
     /** «Сегодня»: the third number of «Оплаты». */
     todayCall: (n: number) => `call ${n}`,
+    /** Settings → Reminders (ADR-0053). */
+    set: {
+      mode: 'Sending on this stand',
+      modes: {
+        off: 'Off: decided and kept, nothing is sent',
+        test: 'Test: only to the test deals below',
+        on: 'On: to every customer',
+      },
+      modeHint: 'Changed on the server with one command; ask the developer for it.',
+      noKommo: 'Kommo is not connected on this stand: nothing can be sent.',
+      paused: 'Paused: nothing is sent until sending is resumed.',
+      pause: 'Pause sending',
+      resume: 'Resume sending',
+      pausedDone: 'Sending paused',
+      resumedDone: 'Sending resumed',
+      field: (name: string) => `Before each message the sum is written into the deal field «${name}» and read back. Without it nothing is sent: an empty field makes Kommo send the template’s sample sum.`,
+      bots: 'Kommo bots',
+      botsHint: 'One bot for each template and language. Its number is in the address of the bot’s page in Kommo.',
+      langs: { ka: 'Georgian', en: 'English' },
+      testLeads: 'Test deals',
+      testHint: 'Kommo deal numbers or links, separated by commas. In test mode messages go to these deals only.',
+      saved: 'Saved',
+      today: 'Today',
+      counts: (sent: number, failed: number, dry: number) => `sent ${sent} · did not go ${failed} · trial ${dry}`,
+      by: (who: string, at: string) => `Changed: ${who}, ${at}`,
+    },
   },
 };
 
@@ -50,15 +99,37 @@ export const remRu: Rem = {
   rem: {
     slots: (slots) => `Напоминание ${slots}`,
     dryRun: 'пробно, не отправлено',
+    sending: 'отправляется',
     sent: 'отправлено',
     failed: 'не ушло',
+    failures: {
+      no_deal: 'нет сделки в Kommo',
+      no_bot: 'нет бота для этого шаблона',
+      no_field: 'в Kommo нет поля «Amount due»',
+      not_written: 'сумма не записалась в сделку',
+      deal_gone: 'сделки больше нет в Kommo',
+      kommo_off: 'Kommo не подключён',
+      interrupted: 'отправка прервалась',
+      unauthorized: 'Kommo не принял токен',
+      rate_limited: 'Kommo: слишком много запросов',
+      http: 'Kommo отказал',
+      network: 'Kommo не ответил',
+      bad_answer: 'Kommo ответил непонятно',
+    },
+    noDeal: 'нет сделки в Kommo',
     call: 'пора звонить',
     off: 'напоминания выключены',
     templates: { payment_due: 'день оплаты', overdue_1: '1-й день просрочки', overdue_2: '2-й день просрочки — предупреждение' },
     card: {
       title: 'Напоминания об оплате',
       on: 'Включены: день оплаты в 12:00, 1-й и 2-й день просрочки в 12:00 и 18:00. Не в день выдачи и не в православные праздники Грузии.',
-      dry: 'Пока пробный режим: кому написать, решается и записывается здесь, ничего не отправляется.',
+      sending: {
+        off: 'Пока пробный режим: кому написать, решается и записывается здесь, ничего не отправляется.',
+        test: 'Тест: сообщения уходят только на тестовые сделки из «Настройки → Напоминания».',
+        on: 'Уходят в WhatsApp через Kommo, сумма — отсюда.',
+        paused: 'Отправка на паузе в «Настройки → Напоминания».',
+      },
+      noDeal: 'Ни у аренды, ни у клиента нет сделки Kommo: отправить нельзя. Укажите в аренде ссылку на сделку.',
       offWhy: (reason) => `Выключены: ${reason}`,
       offBy: (who, day) => `${who}, ${day}`,
       switchOff: 'Выключить',
@@ -79,6 +150,31 @@ export const remRu: Rem = {
       names: { ka: 'Грузинский', ru: 'Русский (уходит на английском)', en: 'Английский' },
     },
     todayCall: (n) => `позвонить ${n}`,
+    set: {
+      mode: 'Отправка на этом стенде',
+      modes: {
+        off: 'Выключена: решается и записывается, ничего не уходит',
+        test: 'Тест: только на тестовые сделки ниже',
+        on: 'Включена: всем клиентам',
+      },
+      modeHint: 'Меняется на сервере одной командой — её даёт разработчик.',
+      noKommo: 'На этом стенде Kommo не подключён: отправить ничего нельзя.',
+      paused: 'На паузе: ничего не уходит, пока отправку не возобновят.',
+      pause: 'Поставить на паузу',
+      resume: 'Возобновить отправку',
+      pausedDone: 'Отправка на паузе',
+      resumedDone: 'Отправка возобновлена',
+      field: (name) => `Перед каждым сообщением сумма вписывается в поле сделки «${name}» и проверяется. Не вписалась — сообщение не уходит: с пустым полем Kommo отправит сумму-пример из шаблона.`,
+      bots: 'Боты Kommo',
+      botsHint: 'Один бот на шаблон и язык. Номер бота — в адресе его страницы в Kommo.',
+      langs: { ka: 'Грузинский', en: 'Английский' },
+      testLeads: 'Тестовые сделки',
+      testHint: 'Номера или ссылки сделок Kommo через запятую. В тестовом режиме сообщения уходят только на них.',
+      saved: 'Сохранено',
+      today: 'Сегодня',
+      counts: (sent, failed, dry) => `отправлено ${sent} · не ушло ${failed} · пробно ${dry}`,
+      by: (who, at) => `Изменил(а): ${who}, ${at}`,
+    },
   },
 };
 
@@ -86,15 +182,37 @@ export const remKa: Rem = {
   rem: {
     slots: (slots) => `შეხსენება ${slots}`,
     dryRun: 'საცდელი, არ გაიგზავნა',
+    sending: 'იგზავნება',
     sent: 'გაიგზავნა',
     failed: 'ვერ გაიგზავნა',
+    failures: {
+      no_deal: 'Kommo-ში გარიგება არ არის',
+      no_bot: 'ამ შაბლონისთვის ბოტი არ არის',
+      no_field: 'Kommo-ში ველი «Amount due» არ არის',
+      not_written: 'თანხა გარიგებაში არ ჩაიწერა',
+      deal_gone: 'გარიგება Kommo-ში აღარ არის',
+      kommo_off: 'Kommo არ არის დაკავშირებული',
+      interrupted: 'გაგზავნა შუაში შეწყდა',
+      unauthorized: 'Kommo-მ ტოკენი არ მიიღო',
+      rate_limited: 'Kommo: ზედმეტად ბევრი მოთხოვნა',
+      http: 'Kommo-მ უარი თქვა',
+      network: 'Kommo არ პასუხობს',
+      bad_answer: 'Kommo-მ გაუგებრად უპასუხა',
+    },
+    noDeal: 'Kommo-ში გარიგება არ არის',
     call: 'დარეკვის დროა',
     off: 'შეხსენებები გამორთულია',
     templates: { payment_due: 'გადახდის დღე', overdue_1: 'ვადაგადაცილების 1-ლი დღე', overdue_2: 'ვადაგადაცილების მე-2 დღე — გაფრთხილება' },
     card: {
       title: 'გადახდის შეხსენებები',
       on: 'ჩართულია: გადახდის დღეს 12:00-ზე, ვადაგადაცილების 1-ლ და მე-2 დღეს 12:00-ზე და 18:00-ზე. არა გაცემის დღეს და არა საქართველოს მართლმადიდებლურ დღესასწაულებზე.',
-      dry: 'ჯერ საცდელი რეჟიმია: ვის მივწეროთ, აქ წყდება და იწერება, არაფერი იგზავნება.',
+      sending: {
+        off: 'ჯერ საცდელი რეჟიმია: ვის მივწეროთ, აქ წყდება და იწერება, არაფერი იგზავნება.',
+        test: 'ტესტი: შეტყობინებები მიდის მხოლოდ სატესტო გარიგებებზე «პარამეტრები → შეხსენებები»-დან.',
+        on: 'იგზავნება WhatsApp-ში Kommo-ს გავლით, თანხა — აქედან.',
+        paused: 'გაგზავნა შეჩერებულია «პარამეტრები → შეხსენებები»-ში.',
+      },
+      noDeal: 'არც ქირაობას და არც კლიენტს Kommo-ს გარიგება არ აქვთ: გაგზავნა შეუძლებელია. მიუთითეთ ქირაობაში გარიგების ბმული.',
       offWhy: (reason) => `გამორთულია: ${reason}`,
       offBy: (who, day) => `${who}, ${day}`,
       switchOff: 'გამორთვა',
@@ -115,5 +233,30 @@ export const remKa: Rem = {
       names: { ka: 'ქართული', ru: 'რუსული (იგზავნება ინგლისურად)', en: 'ინგლისური' },
     },
     todayCall: (n) => `დასარეკი ${n}`,
+    set: {
+      mode: 'გაგზავნა ამ სტენდზე',
+      modes: {
+        off: 'გამორთულია: წყდება და იწერება, არაფერი იგზავნება',
+        test: 'ტესტი: მხოლოდ ქვემოთ მითითებულ სატესტო გარიგებებზე',
+        on: 'ჩართულია: ყველა კლიენტს',
+      },
+      modeHint: 'იცვლება სერვერზე ერთი ბრძანებით — მას დეველოპერი გაძლევთ.',
+      noKommo: 'ამ სტენდზე Kommo არ არის დაკავშირებული: გაგზავნა შეუძლებელია.',
+      paused: 'შეჩერებულია: არაფერი იგზავნება, სანამ გაგზავნას არ განაახლებენ.',
+      pause: 'გაგზავნის შეჩერება',
+      resume: 'გაგზავნის განახლება',
+      pausedDone: 'გაგზავნა შეჩერდა',
+      resumedDone: 'გაგზავნა განახლდა',
+      field: (name) => `ყოველი შეტყობინების წინ თანხა იწერება გარიგების ველში «${name}» და მოწმდება. თუ არ ჩაიწერა — შეტყობინება არ იგზავნება: ცარიელი ველით Kommo შაბლონის სანიმუშო თანხას გააგზავნის.`,
+      bots: 'Kommo-ს ბოტები',
+      botsHint: 'თითო ბოტი თითო შაბლონსა და ენაზე. ბოტის ნომერი მისი გვერდის მისამართშია Kommo-ში.',
+      langs: { ka: 'ქართული', en: 'ინგლისური' },
+      testLeads: 'სატესტო გარიგებები',
+      testHint: 'Kommo-ს გარიგებების ნომრები ან ბმულები, მძიმით გამოყოფილი. სატესტო რეჟიმში შეტყობინებები მხოლოდ მათზე მიდის.',
+      saved: 'შენახულია',
+      today: 'დღეს',
+      counts: (sent, failed, dry) => `გაიგზავნა ${sent} · ვერ გაიგზავნა ${failed} · საცდელი ${dry}`,
+      by: (who, at) => `შეცვალა: ${who}, ${at}`,
+    },
   },
 };
