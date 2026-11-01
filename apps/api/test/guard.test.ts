@@ -36,6 +36,8 @@ describe('route table', () => {
       // Wave 6: what the transfer left, and the batch that sorts it (§3.6).
       'GET /api/migration',
       'GET /api/settings/login',
+      // The rent reminders' sending through Kommo: the bots, the test deals, the pause (ADR-0053).
+      'GET /api/settings/reminders',
       'GET /api/users',
       'GET /api/workshop/devices',
       // What money going out was for: the owner keeps the categories (migration 0046).
@@ -46,6 +48,7 @@ describe('route table', () => {
       'PATCH /api/locations/:id',
       'PATCH /api/models/:id',
       // Wave 6: the deposit and the weekly rates are an owner's to set (R5).
+      'PATCH /api/settings/reminders',
       'PATCH /api/settings/rental',
       // Stage 6: the company rate and the planned maintenance are an owner's to set (ADR-0038 §3).
       'PATCH /api/settings/service',

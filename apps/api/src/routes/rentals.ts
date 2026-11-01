@@ -8,6 +8,7 @@ import { UNDO_RETURN_MS } from '../lib/rentals.js';
 import { driveOfRental } from '../lib/driveScan.js';
 import { payOffsetOf, rentStateOf } from '../lib/rentState.js';
 import { prisma } from '../lib/db.js';
+import { reminderLeads, reminderSending } from '../lib/reminders.js';
 import { env } from '../lib/env.js';
 import { notFound } from '../lib/errors.js';
 import { mayTotal } from '../lib/guard.js';
@@ -114,7 +115,7 @@ export function rentalRoutes(app: FastifyInstance): void {
         documents: { where: { kind: 'pdf', archived: false }, select: { docKind: true, signedAt: true, signedBy: true, createdAt: true } },
         contractSignedElsewhereBy: { select: { name: true } },
         // The rent reminders decided for it, the latest first (issue #20, ADR-0052).
-        reminders: { orderBy: [{ day: 'desc' }, { slot: 'desc' }], take: 10, select: { day: true, slot: true, template: true, lang: true, amountTetri: true, mode: true } },
+        reminders: { orderBy: [{ day: 'desc' }, { slot: 'desc' }], take: 10, select: { day: true, slot: true, template: true, lang: true, amountTetri: true, mode: true, failure: true } },
         periods: { orderBy: { seq: 'asc' } },
         payments: { where: { voidedAt: null }, orderBy: { occurredOn: 'asc' }, select: { id: true, occurredOn: true, channel: true, grossTetri: true, feeTetri: true } },
         acts: {
@@ -200,8 +201,11 @@ export function rentalRoutes(app: FastifyInstance): void {
           off: r.remindersOffReason
             ? { reason: r.remindersOffReason, at: r.remindersOffAt?.toISOString() ?? null, by: r.remindersOffById ? ((await prisma.user.findUnique({ where: { id: r.remindersOffById }, select: { name: true } }))?.name ?? null) : null }
             : null,
-          recent: r.reminders.map((x) => ({ day: isoDate(x.day), slot: x.slot, template: x.template, lang: x.lang, amountTetri: x.amountTetri, mode: x.mode })),
+          recent: r.reminders.map((x) => ({ day: isoDate(x.day), slot: x.slot, template: x.template, lang: x.lang, amountTetri: x.amountTetri, mode: x.mode, failure: x.failure })),
           lang: r.customer.messageLang,
+          // Whether they go (ADR-0053): the stand's mode, an owner's pause, and the deal they would go to.
+          sending: await reminderSending(),
+          deal: (await reminderLeads([r.id])).get(r.id) != null,
         },
         // A return may be taken back by an owner within a day of the act (B5-08).
         undoReturnUntil: returnUndoUntil(r.acts),

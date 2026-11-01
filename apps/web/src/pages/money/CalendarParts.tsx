@@ -32,6 +32,7 @@ import { fmtDayMonth } from '../../format.js';
 import type { Dict } from '../../i18n/en.js';
 import { useLocale, useT } from '../../i18n/index.js';
 import { primaryName } from '../../lib/names.js';
+import { reminderModeText } from '../../lib/reminders.js';
 import { useSession } from '../../session.js';
 
 // The parts of "Деньги → Календарь" (docs/redesign/payments-calendar.md §3).
@@ -1020,10 +1021,18 @@ function ReminderNote({ r }: { r: RentalReminders }) {
   const parts: ReactNode[] = [];
   if (r.off) parts.push(<span key="off">{t.rem.off}</span>);
   else if (r.today.length > 0) {
-    const modes = new Set(r.today.map((x) => x.mode));
-    const mode = modes.has('failed') ? t.rem.failed : modes.has('sent') ? t.rem.sent : t.rem.dryRun;
-    parts.push(<span key="sent">{`${t.rem.slots(r.today.map((x) => x.slot).join(', '))} (${mode})`}</span>);
+    // The last slot says what came of it: a failure at noon that went at six is «sent».
+    const last = r.today[r.today.length - 1]!;
+    const mode = reminderModeText(t, last.mode, last.failure);
+    parts.push(
+      <span key="sent" className={last.mode === 'failed' ? 'warn-text' : undefined}>
+        {`${t.rem.slots(r.today.map((x) => x.slot).join(', '))} (${mode})`}
+      </span>,
+    );
   }
+  // Nothing can be sent without a deal: said beside a row reminded today, even on a trial, so the deal is
+  // linked before sending is switched on. Past the 2nd day late nothing goes anyway, and nothing is said.
+  if (!r.off && !r.deal && (r.today.length > 0 || r.call) && !r.today.some((x) => x.failure === 'no_deal')) parts.push(<span key="deal" className="warn-text">{t.rem.noDeal}</span>);
   if (r.call) parts.push(<b key="call" className="crit-text">{t.rem.call}</b>);
   if (parts.length === 0) return null;
   return (

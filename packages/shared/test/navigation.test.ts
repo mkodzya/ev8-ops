@@ -168,7 +168,7 @@ describe('the structure each role sees (wave 1 §3.2; issue #15, ADR-0048)', () 
   it('gives settings its tabs without the points, which live in «Мопеды → Точки» alone (issue #18 B6)', () => {
     // «Поступления» beside «Расходы»: the categories of other income (issue #13, migration 0069).
     // «Статьи расходов» and «Статьи доходов» (issue #18 B5): tabs of their own, not the reports' «Расходы» and «Поступления».
-    expect(tabsForRole('settings', 'owner').map((t) => t.id)).toEqual(['people', 'rental', 'repair', 'expenseItems', 'incomeItems', 'drive', 'journal', 'migration', 'login']);
+    expect(tabsForRole('settings', 'owner').map((t) => t.id)).toEqual(['people', 'rental', 'repair', 'expenseItems', 'incomeItems', 'reminders', 'drive', 'journal', 'migration', 'login']);
     expect(tabsForRole('settings', 'owner').filter((t) => t.id === 'expenseItems' || t.id === 'incomeItems').map((t) => t.path)).toEqual(['/settings/expenses', '/settings/incoming']);
     expect(tabsForRole('fleet', 'owner').find((t) => t.id === 'points')?.path).toBe('/fleet/points');
     // A bookmark on the old address still arrives.
