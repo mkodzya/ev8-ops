@@ -261,7 +261,7 @@ describe.skipIf(!HAS_DB)('the accounts in another currency, shown apart on «В�
   type Foreign = {
     from: string;
     to: string;
-    accounts: { bank: string; last4: string | null; currency: string; inMinor: number; outMinor: number; lines: { occurredOn: string; direction: string; amountMinor: number; purpose: string | null }[] }[];
+    accounts: { bank: string; last4: string | null; currency: string; inMinor: number; outMinor: number; lines: { occurredOn: string; direction: string; amountMinor: number; bankGelTetri: number | null; purpose: string | null }[] }[];
   };
 
   it('lists each account apart and sums it in its own currency: no currency is added to another, nor to the lari', async () => {
@@ -270,7 +270,8 @@ describe.skipIf(!HAS_DB)('the accounts in another currency, shown apart on «В�
     const owner = await loginAs('owner');
     const key = () => `api:test:${uniq()}`;
     // One IBAN at Bank of Georgia in dollars, euros and lari, and a TBC account in dollars.
-    await keep('bog', 'Business Online', BOG_ACCOUNT, '2098-02-10', [op(key(), '2098-02-10', 'in', 15000, { purpose: 'invented USD in' }), op(key(), '2098-02-10', 'out', 4000)], tally(), 'USD');
+    // Bank of Georgia sends its own lari for a line in dollars; the invented ones here are 2.6 to the dollar.
+    await keep('bog', 'Business Online', BOG_ACCOUNT, '2098-02-10', [op(key(), '2098-02-10', 'in', 15000, { purpose: 'invented USD in', bankGelTetri: 39000 }), op(key(), '2098-02-10', 'out', 4000, { bankGelTetri: 10400 })], tally(), 'USD');
     await keep('bog', 'Business Online', BOG_ACCOUNT, '2098-02-11', [op(key(), '2098-02-11', 'in', 2050)], tally(), 'USD');
     await keep('bog', 'Business Online', BOG_ACCOUNT, '2098-02-12', [op(key(), '2098-02-12', 'in', 9900)], tally(), 'EUR');
     await keep('tbc', 'Business Integration Services', TBC_ACCOUNT, '2098-02-13', [op(key(), '2098-02-13', 'out', 1240)], tally(), 'USD');
@@ -293,6 +294,10 @@ describe.skipIf(!HAS_DB)('the accounts in another currency, shown apart on «В�
     expect(dollars.map((l) => l.occurredOn)).toEqual(['2098-02-11', '2098-02-10', '2098-02-10']);
     expect(dollars.map((l) => `${l.direction} ${l.amountMinor}`).sort()).toEqual(['in 15000', 'in 2050', 'out 4000']);
     expect(page.accounts[1]!.lines.map((l) => l.purpose)).toContain('invented USD in');
+    // Each line carries the bank's lari for it, or null when the bank sent none; no total sums them.
+    expect(dollars.map((l) => `${l.amountMinor} ${l.bankGelTetri}`).sort()).toEqual(['15000 39000', '2050 null', '4000 10400']);
+    expect(page.accounts[2]!.lines.map((l) => l.bankGelTetri)).toEqual([null]);
+    expect(Object.keys(page.accounts[1]!).sort()).toEqual(['bank', 'currency', 'inMinor', 'last4', 'lines', 'outMinor']);
     // An account is said by its last four digits, never more.
     expect(res.body).not.toContain(BOG_ACCOUNT);
     expect(res.body).not.toContain(TBC_ACCOUNT);

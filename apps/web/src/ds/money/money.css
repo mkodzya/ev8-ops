@@ -94,6 +94,9 @@
 .fx-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px 12px; }
 .fx-lines { display: grid; gap: 6px; margin-top: 6px; }
 .fx-text { overflow-wrap: anywhere; }
+/* A line's own sum over the bank's lari for it, and the rate under its text (Mika, 01.11.2026). */
+.fx-sum { display: grid; justify-items: end; align-content: start; gap: 2px; }
+.fx-rate { display: block; margin-top: 2px; }
 .fx-empty { margin: 12px 0 0; }
 .upload-summary { display: grid; gap: 4px; margin: 8px 0 14px; }
 .upload-summary div { display: flex; justify-content: space-between; gap: 12px; }

@@ -56,7 +56,8 @@ interface Foreign {
     currency: string;
     inMinor: number;
     outMinor: number;
-    lines: { id: string; occurredOn: string; direction: 'in' | 'out'; amountMinor: number; payer: string | null; purpose: string | null; raw: string }[];
+    /** `bankGelTetri`: the bank's own sum in lari for the line; null when the bank sent none, absent while an older API answers. */
+    lines: { id: string; occurredOn: string; direction: 'in' | 'out'; amountMinor: number; bankGelTetri?: number | null; payer: string | null; purpose: string | null; raw: string }[];
   }[];
 }
 
@@ -221,6 +222,19 @@ function signed(minor: number, currency: string, direction: 'in' | 'out'): strin
   return `${minor === 0 ? '' : direction === 'out' ? '−' : '+'}${formatMinor(minor, currency)}`;
 }
 
+type Lari = { gel: string; rate: string };
+
+/**
+ * What the bank made of a line in lari, and the rate that comes out of it
+ * (Mika, 01.11.2026: the dollars, their lari and the rate, line by line):
+ * «1 USD = 2.5982 ₾». The rate is the bank's lari over the line's own sum —
+ * worked out here, stored nowhere. Nothing when the bank sent no lari.
+ */
+function inLari(minor: number, bankGelTetri: number | null | undefined, currency: string, direction: 'in' | 'out'): Lari | null {
+  if (bankGelTetri == null || minor === 0) return null;
+  return { gel: signed(bankGelTetri, 'GEL', direction), rate: `1 ${currency} = ${(bankGelTetri / minor).toFixed(4)} ₾` };
+}
+
 /**
  * «Операции в валюте» (Mika, 29.10.2026, decision D1 «А» of
  * docs/spec/usd-accounts-plan.md): the lines of the accounts in another
@@ -266,15 +280,22 @@ function ForeignBlock({ known, lastOn }: { known: Known[]; lastOn: string | null
             <span className="mono nowrap">{signed(a.outMinor, a.currency, 'out')}</span>
           </div>
           <div className="fx-lines">
-            {a.lines.map((l) => (
-              <div key={l.id} className="till-row">
-                <span className="fx-text">
-                  {fmtDate(l.occurredOn)}
-                  <span className="muted"> · {[l.payer, l.purpose].filter(Boolean).join(' · ') || l.raw}</span>
-                </span>
-                <span className={`mono nowrap ${l.direction === 'in' ? 'amt-in' : ''}`}>{signed(l.amountMinor, a.currency, l.direction)}</span>
-              </div>
-            ))}
+            {a.lines.map((l) => {
+              const lari = inLari(l.amountMinor, l.bankGelTetri, a.currency, l.direction);
+              return (
+                <div key={l.id} className="till-row">
+                  <span className="fx-text">
+                    {fmtDate(l.occurredOn)}
+                    <span className="muted"> · {[l.payer, l.purpose].filter(Boolean).join(' · ') || l.raw}</span>
+                    {lari && <span className="fx-rate muted mono">{lari.rate}</span>}
+                  </span>
+                  <span className="fx-sum">
+                    <span className={`mono nowrap ${l.direction === 'in' ? 'amt-in' : ''}`}>{signed(l.amountMinor, a.currency, l.direction)}</span>
+                    {lari ? <span className="mono nowrap muted">{lari.gel}</span> : <span className="muted nowrap">{t.bankCurrency.noGel}</span>}
+                  </span>
+                </div>
+              );
+            })}
           </div>
         </div>
       ))}
