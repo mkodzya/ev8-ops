@@ -40,6 +40,8 @@ interface Statements {
   limitBytes: number;
   /** Lines of the accounts in another currency kept; absent while an older API answers. */
   foreignLines?: number;
+  /** The day of the newest of them; absent while an older API answers. */
+  foreignLastOn?: string | null;
   banks: { bank: Bank; lastUploadAt: string | null; throughOn: string | null; daysOld: number | null; stale: boolean; never: boolean; api: BankApi | null; accounts?: Pair[] }[];
   statements: { id: string; bank: Bank; fileName: string; currency?: string; periodFrom: string | null; periodTo: string | null; lineCount: number; newLines: number; matched: number; uploadedBy: string | null; createdAt: string }[];
 }
@@ -226,10 +228,13 @@ function signed(minor: number, currency: string, direction: 'in' | 'out'): strin
  * currency; two currencies are never added up, nor any of them to the lari,
  * and each account says it is in no total in ₾.
  */
-function ForeignBlock({ known }: { known: Known[] }) {
+function ForeignBlock({ known, lastOn }: { known: Known[]; lastOn: string | null }) {
   const t = useT();
-  const [span, setSpan] = useState<'month' | 'last_month'>('month');
   const month = monthOf(todayISO());
+  // In the first days of a month nothing in a currency has come yet: the block
+  // opens on last month when the newest operation is of it, so that last
+  // month's dollars are not hidden behind an empty «Этот месяц» (Mika, 01.11.2026).
+  const [span, setSpan] = useState<'month' | 'last_month'>(() => (lastOn && lastOn < month.from && lastOn >= monthOf(addDays(month.from, -1)).from ? 'last_month' : 'month'));
   const period = span === 'month' ? month : monthOf(addDays(month.from, -1));
   const { data, failure, reload } = useLoad<Foreign>(`/api/statement-lines/foreign?from=${period.from}&to=${period.to}`);
   const all = [...known, ...(data?.accounts ?? [])];
@@ -442,7 +447,7 @@ export function StatementsPage() {
       )}
 
       {/* Without an account in another currency, read or kept, the screen is what it was before them. */}
-      {data && (known.length > 0 || (data.foreignLines ?? 0) > 0) && <ForeignBlock known={known} />}
+      {data && (known.length > 0 || (data.foreignLines ?? 0) > 0) && <ForeignBlock known={known} lastOn={data.foreignLastOn ?? null} />}
 
       {data && data.statements.length > 0 && (
         <section className="card">

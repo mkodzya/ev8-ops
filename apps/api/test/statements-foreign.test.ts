@@ -304,8 +304,10 @@ describe.skipIf(!HAS_DB)('the accounts in another currency, shown apart on «В�
     expect(out.totalOutTetri).toBe(0);
 
     // «Выписки» knows there are lines in another currency, and says the currency of each day of them.
-    const s = json<{ foreignLines: number; statements: { id: string; currency: string }[] }>(await call(owner, 'GET', '/api/statements'));
+    const s = json<{ foreignLines: number; foreignLastOn: string | null; statements: { id: string; currency: string }[] }>(await call(owner, 'GET', '/api/statements'));
     expect(s.foreignLines).toBeGreaterThanOrEqual(6);
+    // And the day of the newest of them, which the block opens on the month of.
+    expect(s.foreignLastOn! >= '2098-03-01').toBe(true);
     const days = s.statements.filter((x) => made.includes(x.id));
     expect(days.map((x) => x.currency).sort()).toEqual(['EUR', 'GEL', 'USD', 'USD', 'USD', 'USD']);
   });
