@@ -464,7 +464,9 @@ export function statementRoutes(app: FastifyInstance): void {
       if (l.direction === 'in') a.inMinor += l.amountTetri;
       else a.outMinor += l.amountTetri;
       // In minor units of the line's currency: cents for dollars, as tetri are for lari.
-      a.lines.push({ id: l.id, occurredOn: isoDate(l.occurredOn), direction: l.direction, amountMinor: l.amountTetri, payer: l.payer, purpose: l.purpose, raw: l.raw });
+      // `bankGelTetri` is the bank's own sum in lari for it (Bank of Georgia sends one, TBC
+      // does not): shown beside the line with the rate it makes, summed nowhere (Mika, 01.11.2026).
+      a.lines.push({ id: l.id, occurredOn: isoDate(l.occurredOn), direction: l.direction, amountMinor: l.amountTetri, bankGelTetri: l.bankGelTetri, payer: l.payer, purpose: l.purpose, raw: l.raw });
       accounts.set(key, a);
     }
     const order = (a: Account) => `${BANKS.indexOf(a.bank)} ${a.currency} ${a.last4 ?? ''}`;
