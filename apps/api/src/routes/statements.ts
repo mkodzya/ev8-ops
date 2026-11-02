@@ -21,6 +21,7 @@ import { expenseKey, lastCategories, payeeLabel, sortByRule, waitingFrom } from 
 import { BACK_TO_QUEUE, setAside } from '../lib/statements/aside.js';
 import { twinReason, twinsOf } from '../lib/statements/duplicates.js';
 import { CARD_DAYS, cardRepeats } from '../lib/statements/sameLine.js';
+import { LARI, foreignLine, gelFor } from '../lib/statements/foreign.js';
 import { livePayerRules, namesAnother, payerByAccount, payerKey, payerLabel, rememberPayer, type PayerKind } from '../lib/statements/payers.js';
 import { tbcApiStatus, tbcPairsStatus } from '../lib/tbc.js';
 import { settleAfterShift } from '../lib/weekShift.js';
@@ -62,10 +63,10 @@ const ownersAnswer = () =>
 
 /**
  * Set aside by a person — not by a remembered payee or payer, which «Разобрано
- * правилами» lists — and in lari: a line in another currency is parked, not
- * set aside (migration 0073), and is no line to put back.
+ * правилами» lists. A line in another currency is one too since an owner sorts
+ * it (migration 0076); none is left parked as `foreign`.
  */
-const BY_PERSON = { currency: 'GEL', OR: [{ matchedRule: null }, { matchedRule: { notIn: ['expense_rule', 'payer_rule'] } }] };
+const BY_PERSON = { OR: [{ matchedRule: null }, { matchedRule: { notIn: ['expense_rule', 'payer_rule'] } }] };
 
 function readFile(b: Body): { fileName: string; text: string } {
   const fileName = str(b, 'fileName', { required: true, max: 200 })!;
@@ -191,14 +192,16 @@ export function statementRoutes(app: FastifyInstance): void {
     const asked = req.query.direction === 'out' ? 'out' : req.query.direction === 'in' ? 'in' : undefined;
     if (!owner && asked === 'out') throw ownersAnswer();
     const direction = owner ? asked : 'in';
+    // A line in another currency is an owner's to sort (migration 0076): a manager's queue is the lari.
+    const mine = owner ? {} : LARI;
     const [lines, counts, byRules, ctx] = await Promise.all([
       prisma.statementLine.findMany({
-        where: { status: 'unmatched', ...(direction ? { direction } : {}) },
+        where: { status: 'unmatched', ...(direction ? { direction } : {}), ...mine },
         orderBy: [{ occurredOn: 'desc' }, { createdAt: 'desc' }],
         take: 300,
         include: { statement: { select: { fileName: true } } },
       }),
-      prisma.statementLine.groupBy({ by: ['direction'], where: { status: 'unmatched' }, _count: { _all: true } }),
+      prisma.statementLine.groupBy({ by: ['direction'], where: { status: 'unmatched', ...mine }, _count: { _all: true } }),
       owner ? prisma.statementLine.count({ where: { status: 'matched', matchedRule: { in: BY_RULES }, createdAt: { gte: new Date(Date.now() - 7 * 24 * 3600_000) } } }) : 0,
       loadCtx(),
     ]);
@@ -236,6 +239,7 @@ export function statementRoutes(app: FastifyInstance): void {
       byRulesWeek: owner ? byRules + byExpenseRules : null,
       asideMonth: owner ? aside : null,
       lines: lines.map((l) => {
+        if (l.currency !== 'GEL') return foreignInQueue(l, twins.get(l.id) ?? null, l.direction === 'out' ? (last.get(expenseKey(l) ?? '') ?? null) : null);
         const line = storedLine(l);
         const hints = suggest(line, ctx);
         const key = l.direction === 'out' ? expenseKey(l) : null;
@@ -246,6 +250,7 @@ export function statementRoutes(app: FastifyInstance): void {
           id: l.id,
           bank: l.bank,
           direction: l.direction,
+          currency: l.currency,
           occurredOn: isoDate(l.occurredOn),
           amountTetri: l.amountTetri,
           grossTetri: line.grossTetri,
@@ -415,7 +420,10 @@ export function statementRoutes(app: FastifyInstance): void {
           bank: l.bank,
           direction: l.direction,
           occurredOn: isoDate(l.occurredOn),
+          // In minor units of `currency`; a line in another currency set aside as money counts at `gelTetri` (0076).
+          currency: l.currency,
           amountTetri: l.amountTetri,
+          gelTetri: l.gelTetri,
           grossTetri: line.grossTetri,
           feeTetri: line.feeTetri,
           channel: line.channel,
@@ -441,7 +449,8 @@ export function statementRoutes(app: FastifyInstance): void {
   /**
    * «Операции в валюте» on «Выписки» (Mika, 29.10.2026, decision D1 «А» of
    * docs/spec/usd-accounts-plan.md): the lines of the accounts not in lari in
-   * a period, this month unless asked, to be read and not sorted. Each account
+   * a period, this month unless asked; they are sorted in «Разобрать» since
+   * migration 0076, and each says whether it is. Each account
    * — a bank, an IBAN by its last four digits, a currency — sums what came in
    * and went out in its own currency: two currencies are never added up, and
    * nothing here is in a total in ₾.
@@ -480,12 +489,15 @@ export function statementRoutes(app: FastifyInstance): void {
       const key = keyOf(l);
       const a = accounts.get(key) ?? { bank: l.bank, last4: iban ? last4(iban) : null, currency: l.currency, inMinor: 0, outMinor: 0, lines: [] };
       const twin = repeats.get(l.id);
-      if (!twin && l.direction === 'in') a.inMinor += l.amountTetri;
-      else if (!twin) a.outMinor += l.amountTetri;
+      // A line set aside in «Разобрать» as a duplicate is no movement of the account either.
+      const counted = !twin && l.resolution !== 'duplicate';
+      if (counted && l.direction === 'in') a.inMinor += l.amountTetri;
+      else if (counted) a.outMinor += l.amountTetri;
       // In minor units of the line's currency: cents for dollars, as tetri are for lari.
       // `bankGelTetri` is the bank's own sum in lari for it (Bank of Georgia sends one, TBC
       // does not): shown beside the line with the rate it makes, summed nowhere (Mika, 01.11.2026).
-      a.lines.push({ id: l.id, occurredOn: isoDate(l.occurredOn), direction: l.direction, amountMinor: l.amountTetri, bankGelTetri: l.bankGelTetri, payer: l.payer, purpose: l.purpose, raw: l.raw, ...(twin ? { repeats: twin } : {}) });
+      // `sorted`: an owner answered it in «Разобрать» (0076); `gelTetri`, the lari it counts at then.
+      a.lines.push({ id: l.id, occurredOn: isoDate(l.occurredOn), direction: l.direction, amountMinor: l.amountTetri, bankGelTetri: l.bankGelTetri, sorted: l.status !== 'unmatched', gelTetri: l.gelTetri, payer: l.payer, purpose: l.purpose, raw: l.raw, ...(twin ? { repeats: twin } : {}) });
       accounts.set(key, a);
     }
     const order = (a: Account) => `${BANKS.indexOf(a.bank)} ${a.currency} ${a.last4 ?? ''}`;
@@ -660,20 +672,23 @@ export function statementRoutes(app: FastifyInstance): void {
   app.post<{ Params: { id: string }; Body: Body }>('/api/statement-lines/:id/expense', { config: { scope: 'payments.reconcile' } }, async (req) => {
     const actor = actorOf(req);
     const b = req.body ?? {};
-    const line = await prisma.statementLine.findUnique({ where: { id: req.params.id }, select: { direction: true, payer: true, purpose: true } });
+    const line = await prisma.statementLine.findUnique({ where: { id: req.params.id }, select: { direction: true, payer: true, purpose: true, currency: true } });
     if (!line) throw notFound('line_not_found', 'No such statement line.');
     if (line.direction !== 'out') throw conflict('incoming_line', 'Money coming in is not a company expense.');
+    // A line in another currency: the lari it counts at, when the owner corrects the bank's (0076).
+    const gelTetri = tetri(b, 'gelTetri', { min: 1 });
     // What it was for (migration 0046). A screen from before the categories sends none.
     const categoryId = str(b, 'categoryId');
     if (categoryId) {
       const c = await prisma.expenseCategory.findUnique({ where: { id: categoryId }, select: { archived: true } });
       if (!c || c.archived) throw notFound('category_not_found', 'No such expense category.');
     }
-    const remember = b.remember === true && categoryId != null;
+    // A remembered payee sorts lines in lari: a line in another currency remembers nobody (0076).
+    const remember = b.remember === true && categoryId != null && line.currency === 'GEL';
     const key = remember ? expenseKey(line) : null;
     if (remember && !key) throw badRequest('no_payee', 'The bank names nobody on this line: there is no payee to remember.');
     const result = await prisma.$transaction(async (tx) => {
-      await setAside(req.params.id, actor.id, 'company_expense', null, categoryId, tx);
+      await setAside(req.params.id, actor.id, 'company_expense', null, categoryId, tx, null, gelTetri);
       if (!key) return { ruleId: null as string | null, alsoSorted: [] as string[] };
       // One live rule a payee: remembering it again replaces the old one.
       await tx.expenseRule.updateMany({ where: { payeeKey: key, archivedAt: null }, data: { archivedAt: new Date(), archivedById: actor.id } });
@@ -703,9 +718,11 @@ export function statementRoutes(app: FastifyInstance): void {
       return { amountTetri, categoryId: str(b, 'categoryId', { required: true })! };
     });
     if (new Set(parts.map((p) => p.categoryId)).size !== parts.length) throw badRequest('split_same_target', 'Two parts have the same category: make them one.');
-    const line = await prisma.statementLine.findUnique({ where: { id: req.params.id }, select: { direction: true, amountTetri: true } });
+    const line = await prisma.statementLine.findUnique({ where: { id: req.params.id }, select: { direction: true, amountTetri: true, currency: true } });
     if (!line) throw notFound('line_not_found', 'No such statement line.');
     if (line.direction !== 'out') throw conflict('incoming_line', 'Money coming in is not a company expense.');
+    // Parts are lari: a line in another currency is one expense (0076).
+    if (line.currency !== 'GEL') throw foreignLine();
     const sum = parts.reduce((n, p) => n + p.amountTetri, 0);
     if (sum !== line.amountTetri) throw badRequest('split_sum', 'The parts must add up to the whole line.', { lineTetri: line.amountTetri, partsTetri: sum });
     const live = await prisma.expenseCategory.count({ where: { id: { in: parts.map((p) => p.categoryId) }, archived: false } });
@@ -729,7 +746,7 @@ export function statementRoutes(app: FastifyInstance): void {
       const back = (where: Prisma.StatementLineWhereInput) =>
         tx.statementLine.updateMany({
           where: { ...where, status: 'ignored', resolution: 'company_expense' },
-          data: { status: 'unmatched', matchedRule: null, resolution: null, resolutionReason: null, resolvedById: null, resolvedAt: null, expenseCategoryId: null, expenseRuleId: null },
+          data: { status: 'unmatched', matchedRule: null, resolution: null, resolutionReason: null, resolvedById: null, resolvedAt: null, expenseCategoryId: null, expenseRuleId: null, gelTetri: null },
         });
       const own = await back({ id: req.params.id });
       if (own.count === 0) throw conflict('not_set_aside', 'This line is not set aside.');
@@ -753,16 +770,22 @@ export function statementRoutes(app: FastifyInstance): void {
     const kind = oneOf(b, 'kind', ['deposit_payout', 'supplier'] as const, { required: true })!;
     const rentalId = kind === 'deposit_payout' ? str(b, 'rentalId', { required: true }) : null;
     const purchaseId = kind === 'supplier' ? str(b, 'purchaseId', { required: true }) : null;
+    const gelTetri = tetri(b, 'gelTetri', { min: 1 });
     const id = await prisma.$transaction(async (tx) => {
       const line = await tx.statementLine.findUnique({ where: { id: req.params.id } });
       if (!line) throw notFound('line_not_found', 'No such statement line.');
       if (line.direction !== 'out') throw conflict('incoming_line', 'Money coming in is not handed back or paid out.');
-      const claimed = await tx.statementLine.updateMany({ where: { id: line.id, status: 'unmatched' }, data: { status: 'matched', matchedRule: 'by_hand' } });
+      // A deposit went out in lari. A supplier paid in dollars costs the lari the line is sorted at,
+      // and the payment keeps the dollars beside them (0076; decision D2).
+      if (line.currency !== 'GEL' && kind === 'deposit_payout') throw foreignLine();
+      const gel = gelFor(line, gelTetri);
+      const claimed = await tx.statementLine.updateMany({ where: { id: line.id, status: 'unmatched' }, data: { status: 'matched', matchedRule: 'by_hand', gelTetri: gel } });
       if (claimed.count === 0) throw conflict('already_matched', 'This line is already attached.');
+      const foreign = gel != null ? { foreignMinor: line.amountTetri, foreignCurrency: line.currency } : {};
       const paymentId = await recordOutFromLine(
         tx,
         actor,
-        { kind, rentalId, purchaseId, amountTetri: line.amountTetri, channel: 'transfer', occurredOn: isoDate(line.occurredOn) },
+        { kind, rentalId, purchaseId, amountTetri: gel ?? line.amountTetri, channel: 'transfer', occurredOn: isoDate(line.occurredOn), ...foreign },
         { id: line.id, occurredOn: isoDate(line.occurredOn)!, raw: line.raw },
       );
       await tx.statementLine.update({ where: { id: line.id }, data: { paymentId } });
@@ -778,7 +801,7 @@ export function statementRoutes(app: FastifyInstance): void {
     // Money coming in from our own account may have its payer remembered (0069).
     const remember = (req.body ?? {}).remember === true;
     const key = remember ? await incomingKey(req.params.id) : null;
-    await setAside(req.params.id, actor.id, 'own_transfer', null);
+    await setAside(req.params.id, actor.id, 'own_transfer', null, null, prisma, null, tetri(req.body ?? {}, 'gelTetri', { min: 1 }));
     await audit({ actorId: actor.id, action: 'statement.line.own_transfer', entityType: 'statement_line', entityId: req.params.id });
     if (!key) return { ok: true };
     return { ok: true, ...(await rememberPayer({ actorId: actor.id, key, kind: 'own_transfer', customerId: null, categoryId: null, lineId: req.params.id })) };
@@ -788,28 +811,39 @@ export function statementRoutes(app: FastifyInstance): void {
    * «Акционеру»: money a shareholder took out of the company (ADR-0029) —
    * not an expense, and not somebody else's. Money going out only.
    */
-  app.post<{ Params: { id: string } }>('/api/statement-lines/:id/shareholder', { config: { scope: 'payments.reconcile' } }, async (req) => {
+  app.post<{ Params: { id: string }; Body: Body }>('/api/statement-lines/:id/shareholder', { config: { scope: 'payments.reconcile' } }, async (req) => {
     const actor = actorOf(req);
     const line = await prisma.statementLine.findUnique({ where: { id: req.params.id }, select: { direction: true } });
     if (!line) throw notFound('line_not_found', 'No such statement line.');
     if (line.direction !== 'out') throw conflict('not_outgoing', 'Only money going out is taken by a shareholder.');
-    await setAside(req.params.id, actor.id, 'shareholder', null);
+    await setAside(req.params.id, actor.id, 'shareholder', null, null, prisma, null, tetri(req.body ?? {}, 'gelTetri', { min: 1 }));
     await audit({ actorId: actor.id, action: 'statement.line.shareholder', entityType: 'statement_line', entityId: req.params.id });
     return { ok: true };
   });
 
   /**
+   * «Обмен валюты» (migration 0076): one leg of a currency exchange — the
+   * dollars sold or bought — neither spent nor earned. A line in another
+   * currency keeps the lari it counts at, the bank's or the owner's. The lari
+   * leg of the same exchange is a line in lari and may be answered so too.
+   */
+  app.post<{ Params: { id: string }; Body: Body }>('/api/statement-lines/:id/fx-exchange', { config: { scope: 'payments.reconcile' } }, async (req) => {
+    const actor = actorOf(req);
+    await setAside(req.params.id, actor.id, 'fx_exchange', null, null, prisma, null, tetri(req.body ?? {}, 'gelTetri', { min: 1 }));
+    await audit({ actorId: actor.id, action: 'statement.line.fx_exchange', entityType: 'statement_line', entityId: req.params.id });
+    return { ok: true };
+  });
+
+  /**
    * "Вернуть в очередь": a line set aside waits for a person again. Setting a
-   * line aside wrote nothing but the decision, so nothing else is undone. A
-   * line in another currency was never in the queue (migration 0073): it has
-   * no place there to go back to until such lines are sorted at all.
+   * line aside wrote nothing but the decision — and, for a line in another
+   * currency, the lari it was sorted at (0076) — so nothing else is undone.
    */
   app.post<{ Params: { id: string } }>('/api/statement-lines/:id/restore', { config: { scope: 'payments.reconcile' } }, async (req) => {
     const actor = actorOf(req);
-    const line = await prisma.statementLine.findUnique({ where: { id: req.params.id }, select: { id: true, currency: true, resolution: true, resolutionReason: true } });
+    const line = await prisma.statementLine.findUnique({ where: { id: req.params.id }, select: { id: true, resolution: true, resolutionReason: true } });
     if (!line) throw notFound('line_not_found', 'No such statement line.');
-    if (line.currency !== 'GEL') throw conflict('foreign_line', 'This line is of an account in another currency: it is kept apart from the lari and is not sorted for now.');
-    const done = await prisma.statementLine.updateMany({ where: { id: line.id, status: 'ignored', currency: 'GEL' }, data: BACK_TO_QUEUE });
+    const done = await prisma.statementLine.updateMany({ where: { id: line.id, status: 'ignored' }, data: BACK_TO_QUEUE });
     if (done.count === 0) throw conflict('not_set_aside', 'This line is not set aside.');
     // A line split into expenses waits again whole (ADR-0030).
     await prisma.statementLineExpensePart.deleteMany({ where: { lineId: line.id } });
@@ -838,7 +872,7 @@ export function statementRoutes(app: FastifyInstance): void {
       await prisma.$transaction(async (tx) => {
         if (p) await tx.payment.update({ where: { id: p.id }, data: { statementLineId: null } });
         if (line.bankDeposit) await tx.bankCashDeposit.update({ where: { id: line.bankDeposit.id }, data: { statementLineId: null } });
-        await tx.statementLine.update({ where: { id: line.id }, data: { status: 'unmatched', matchedRule: null, paymentId: null, resolution: null } });
+        await tx.statementLine.update({ where: { id: line.id }, data: { status: 'unmatched', matchedRule: null, paymentId: null, resolution: null, gelTetri: null } });
       });
     }
     await audit({ actorId: actor.id, action: 'statement.line.unlink', entityType: 'statement_line', entityId: line.id, before: { paymentId: p?.id ?? null, rule: line.matchedRule } });
@@ -847,13 +881,53 @@ export function statementRoutes(app: FastifyInstance): void {
 }
 
 /**
- * The payer key of a line coming in, for «Запомнить для „…“» (0069): refused
- * when the line goes out or names nobody to remember.
+ * A line in another currency as the queue shows it to an owner (migration
+ * 0076): in a group of its own, «В валюте», with its sum in its currency and
+ * the bank's lari, and no hint of a rental, a sale or a deposit — those are
+ * paid in lari. Only the twin of a card payment sent twice, and a category it
+ * went to last time, are said of it. No payer or payee is remembered from it.
  */
-export async function incomingKey(lineId: string): Promise<string> {
+function foreignInQueue(
+  l: { id: string; bank: string; direction: 'in' | 'out'; currency: string; occurredOn: Date; amountTetri: number; bankGelTetri: number | null; payer: string | null; purpose: string | null; raw: string; statement: { fileName: string } },
+  twin: unknown,
+  lastCategoryId: string | null,
+) {
+  return {
+    id: l.id,
+    bank: l.bank,
+    direction: l.direction,
+    currency: l.currency,
+    // In minor units of its currency: cents for dollars.
+    amountTetri: l.amountTetri,
+    bankGelTetri: l.bankGelTetri,
+    occurredOn: isoDate(l.occurredOn),
+    grossTetri: null,
+    feeTetri: null,
+    channel: 'transfer' as const,
+    payer: l.payer,
+    purpose: l.purpose,
+    raw: l.raw,
+    fileName: l.statement.fileName,
+    cashDeposit: false,
+    group: 'foreign' as const,
+    recorded: [],
+    suggestions: [],
+    duplicateOf: twin,
+    canRemember: false,
+    ...(l.direction === 'out' ? { payee: payeeLabel(l), lastCategoryId, depositHint: null } : { payerLabel: null, payerByAccount: false, remembered: null }),
+  };
+}
+
+/**
+ * The payer key of a line coming in, for «Запомнить для „…“» (0069): refused
+ * when the line goes out or names nobody to remember. None for a line in
+ * another currency: a remembered payer sorts lines in lari only (0076).
+ */
+export async function incomingKey(lineId: string): Promise<string | null> {
   const line = await prisma.statementLine.findUnique({ where: { id: lineId } });
   if (!line) throw notFound('line_not_found', 'No such statement line.');
   if (line.direction !== 'in') throw conflict('not_incoming', 'Only money coming in has a payer to remember.');
+  if (line.currency !== 'GEL') return null;
   const key = payerKey(storedLine(line));
   if (!key) throw badRequest('no_payer', 'The bank names nobody on this line: there is no payer to remember.', { field: 'remember' });
   return key;

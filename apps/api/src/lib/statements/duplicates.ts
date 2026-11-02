@@ -21,8 +21,8 @@ export interface Twin {
 
 /**
  * Answers that say a line is not there: such a line repeats nothing and is
- * repeated by nothing. A line parked in another currency (migration 0073) is
- * not there for the lari either.
+ * repeated by nothing. `foreign` is what a line in another currency was before
+ * it could be sorted (migration 0073); none is left so since 0076.
  */
 const NOT_THERE = new Set(['not_ours', 'duplicate', 'foreign']);
 
@@ -41,10 +41,12 @@ export async function twinsOf(lines: readonly { id: string; bank: string; raw: s
   const days = cards.map((l) => isoDate(l.occurredOn)!).sort();
   const near = await prisma.statementLine.findMany({
     where: { bank: 'bog', occurredOn: { gte: dateFromISO(addDays(days[0]!, -CARD_DAYS))!, lte: dateFromISO(addDays(days[days.length - 1]!, CARD_DAYS))! } },
-    select: { id: true, naturalKey: true, docNo: true, occurredOn: true, direction: true, amountTetri: true, raw: true, status: true, resolution: true, createdAt: true },
+    select: { id: true, naturalKey: true, docNo: true, occurredOn: true, direction: true, currency: true, amountTetri: true, raw: true, status: true, resolution: true, createdAt: true },
   });
   const pool = near.filter((l) => !(l.status === 'ignored' && NOT_THERE.has(l.resolution ?? ''))).map((l) => ({ ...l, occurredOn: isoDate(l.occurredOn)! }));
-  const repeats = cardRepeats(pool);
+  // Each currency on its own (migration 0076): 25 dollars of a shop are never the twin of its 25 lari.
+  const repeats = new Map<string, (typeof pool)[number]>();
+  for (const currency of new Set(pool.map((l) => l.currency))) for (const [id, twin] of cardRepeats(pool.filter((l) => l.currency === currency))) repeats.set(id, twin);
   for (const l of cards) {
     const t = repeats.get(l.id);
     if (t) out.set(l.id, { id: t.id, occurredOn: t.occurredOn, docNo: t.docNo, status: t.status });

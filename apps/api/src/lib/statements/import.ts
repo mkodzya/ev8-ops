@@ -14,6 +14,7 @@ import { expenseKey, liveRules, sortByRule } from './expenses.js';
 import { asideByRule, attachByRule, decideWithPayers, livePayerRules, type PayerAnswer } from './payers.js';
 import { markOwnTransfers } from './ownTransfers.js';
 import { CARD_DAYS, alreadyIn, type AlreadyIn } from './sameLine.js';
+import { foreignLine } from './foreign.js';
 
 // Loading a statement and letting it settle what it can (PAY-01, PAY-02,
 // wave 2 §3.2, §3.5). Two properties it has to have, and both are about not
@@ -182,13 +183,13 @@ export async function importStatement(input: { actorId: string; fileName: string
  * in "Разобрать" for a person. `actorId` is the person who uploaded the file,
  * or null when the bank was asked by the stand itself.
  *
- * A line of an account in another currency goes nowhere near the queue: it is
- * written parked (migration 0073).
+ * A line of an account in another currency waits for an owner, untouched by
+ * any rule (migration 0076).
  */
 export async function ingest(input: { statementId: string; bank: 'bog' | 'tbc'; currency?: string; actorId: string | null; lines: ParsedLine[] }): Promise<{ recorded: number; matched: number }> {
   const currency = input.currency ?? 'GEL';
   if (currency !== 'GEL') {
-    await park({ ...input, currency });
+    await waitForOwner({ ...input, currency });
     return { recorded: 0, matched: 0 };
   }
   let recorded = 0;
@@ -259,14 +260,14 @@ export async function ingest(input: { statementId: string; bank: 'bog' | 'tbc'; 
 }
 
 /**
- * Lines in dollars or euros, as Mika decided on 29.10.2026 (D1 «А»,
- * docs/spec/usd-accounts-plan.md): kept and shown apart, not sorted, outside
- * every sum in lari. Each is written set aside as `foreign` in the one insert
- * — never a moment in the queue, where a rule could take 150 dollars for 150
- * lari of rent — and the database holds it there (statement_lines_foreign_parked).
- * Nobody answered it: who and when stay empty.
+ * Lines in dollars or euros (stage 5 of docs/spec/usd-accounts-plan.md, Mika
+ * 02.11.2026; until then parked, decision D1 of 29.10.2026). Each waits in the
+ * queue for an owner, and no rule reads it: not the rent rules, where 150
+ * dollars would pass for 150 lari, not a remembered payer or payee, not the
+ * pairing of money between our own accounts. The queue shows it to an owner
+ * only, and its answers keep its sum in lari (`setAside`, `foreign.ts`).
  */
-async function park(input: { statementId: string; bank: 'bog' | 'tbc'; currency: string; lines: ParsedLine[] }): Promise<void> {
+async function waitForOwner(input: { statementId: string; bank: 'bog' | 'tbc'; currency: string; lines: ParsedLine[] }): Promise<void> {
   await prisma.statementLine.createMany({
     data: input.lines.map((line) => ({
       statementId: input.statementId,
@@ -283,9 +284,7 @@ async function park(input: { statementId: string; bank: 'bog' | 'tbc'; currency:
       payer: line.payer,
       purpose: line.purpose,
       raw: line.raw,
-      status: 'ignored' as const,
-      matchedRule: 'foreign',
-      resolution: 'foreign',
+      status: 'unmatched' as const,
     })),
   });
 }
@@ -296,10 +295,12 @@ async function park(input: { statementId: string; bank: 'bog' | 'tbc'; currency:
  * unique index on a line's live payment is the second lock behind this one.
  */
 async function claim(tx: Tx, lineId: string, rule: string): Promise<void> {
-  const done = await tx.statementLine.updateMany({ where: { id: lineId, status: 'unmatched' }, data: { status: 'matched', matchedRule: rule } });
+  // Only a line in lari is a customer's money, cash taken to the bank, or a payment entered by hand (migration 0076).
+  const done = await tx.statementLine.updateMany({ where: { id: lineId, status: 'unmatched', currency: 'GEL' }, data: { status: 'matched', matchedRule: rule } });
   if (done.count === 0) {
-    const exists = await tx.statementLine.findUnique({ where: { id: lineId }, select: { id: true } });
+    const exists = await tx.statementLine.findUnique({ where: { id: lineId }, select: { id: true, currency: true } });
     if (!exists) throw notFound('line_not_found', 'No such statement line.');
+    if (exists.currency !== 'GEL') throw foreignLine();
     throw conflict('already_matched', 'This line is already attached.');
   }
 }

@@ -570,7 +570,7 @@ describe.skipIf(!HAS_DB)('the TBC pull, the night and the queue', () => {
 
   // The account in dollars (29.10.2026, decision D1 of docs/spec/usd-accounts-plan.md):
   // read next to the lari, kept apart from it, and outside every sum in lari.
-  it('reads one IBAN in lari and in dollars as two accounts: a statement of the day each, the dollars parked, the keys in lari as before', async () => {
+  it('reads one IBAN in lari and in dollars as two accounts: a statement of the day each, the dollars waiting for an owner, the keys in lari as before', async () => {
     const day = '2032-03-22';
     const { prisma } = await import('../src/lib/db.js');
     process.env.TBC_ACCOUNT = `${ACCOUNT} ${ACCOUNT}USD`;
@@ -602,8 +602,9 @@ describe.skipIf(!HAS_DB)('the TBC pull, the night and the queue', () => {
     expect(lines.map((l) => [l.naturalKey, l.currency, l.status, l.resolution, l.bankGelTetri]).sort()).toEqual(
       [
         [`api:mv:0${digits}.2`, 'GEL', 'unmatched', null, null],
-        [`api:mv:USD:0${digits}.2`, 'USD', 'ignored', 'foreign', null],
-        [`api:mv:USD:0${String(idOf(2)).padStart(11, '0')}.1`, 'USD', 'ignored', 'foreign', null],
+        // Waiting for an owner since 0076; TBC sends no lari.
+        [`api:mv:USD:0${digits}.2`, 'USD', 'unmatched', null, null],
+        [`api:mv:USD:0${String(idOf(2)).padStart(11, '0')}.1`, 'USD', 'unmatched', null, null],
       ].sort(),
     );
     const days = await prisma.statement.findMany({ where: { id: { in: lines.map((l) => l.statementId) } }, orderBy: { currency: 'asc' } });

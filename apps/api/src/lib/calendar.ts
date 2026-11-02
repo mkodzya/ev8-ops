@@ -73,7 +73,8 @@ export async function calendarAnswer(range: Period, today: string = todayISO(new
     }),
     Promise.all(spans.map((s) => paymentsOfPeriod(s.from, s.to))),
     // Incoming only: an unsorted line going out cannot be somebody's rent.
-    prisma.statementLine.count({ where: { status: 'unmatched', direction: 'in' } }),
+    // And in lari: a line in another currency is nobody's rent (0076).
+    prisma.statementLine.count({ where: { status: 'unmatched', direction: 'in', currency: 'GEL' } }),
   ]);
   const payments = received.flat();
   const rentalIds = rows.map((r) => r.id);

@@ -789,7 +789,7 @@ describe.skipIf(!HAS_DB)('the pull, the night and the queue', () => {
 
   // The account in dollars (29.10.2026, decision D1 of docs/spec/usd-accounts-plan.md):
   // read next to the lari, kept apart from it, and outside every sum in lari.
-  it('reads one IBAN in lari and in dollars as two accounts: a statement of the day each, the dollars parked with the bank’s lari beside them', async () => {
+  it('reads one IBAN in lari and in dollars as two accounts: a statement of the day each, the dollars waiting for an owner with the bank’s lari beside them', async () => {
     const day = '2031-03-25';
     const { prisma } = await import('../src/lib/db.js');
     process.env.BOG_ACCOUNT = `${ACCOUNT} ${ACCOUNT}USD`;
@@ -817,8 +817,9 @@ describe.skipIf(!HAS_DB)('the pull, the night and the queue', () => {
     const lines = await linesOf([sum(1), sum(2)]);
     expect(lines.map((l) => [l.naturalKey, l.currency, l.status, l.resolution, l.bankGelTetri]).sort()).toEqual([
       ['api:today:9901', 'GEL', 'unmatched', null, null],
-      ['api:today:USD:9901', 'USD', 'ignored', 'foreign', 40550],
-      ['api:today:USD:9902', 'USD', 'ignored', 'foreign', 5410],
+      // Waiting for an owner since 0076, with the bank's lari beside them.
+      ['api:today:USD:9901', 'USD', 'unmatched', null, 40550],
+      ['api:today:USD:9902', 'USD', 'unmatched', null, 5410],
     ]);
     const days = await prisma.statement.findMany({ where: { id: { in: lines.map((l) => l.statementId) } }, orderBy: { currency: 'asc' } });
     expect(days.map((s) => [s.source, s.account, s.currency, s.newLines])).toEqual([

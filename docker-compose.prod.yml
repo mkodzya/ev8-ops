@@ -101,6 +101,8 @@ services:
       # Reminders) or on (every customer). Set by deploy/set-reminders.sh; the
       # test stand is refused `on`, since it holds a copy of production's customers.
       REMINDERS_SEND: ${REMINDERS_SEND-}
+      # The deal field «Amount due» the templates read; blank — the default in apps/api/src/lib/kommo.ts.
+      KOMMO_AMOUNT_FIELD_ID: ${KOMMO_AMOUNT_FIELD_ID-}
       # Bank of Georgia statements by its Business Online API (B11-03). Optional
       # on purpose: with no keys the link is off and statements come only as
       # uploaded files. The keys are issued by the company in Business Online,

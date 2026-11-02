@@ -4,6 +4,7 @@ import { audit } from '../lib/audit.js';
 import { permissionsOf } from '../lib/auth.js';
 import { dateFromISO } from '../lib/dates.js';
 import { prisma } from '../lib/db.js';
+import { foreignTally, lariOf } from '../lib/statements/foreign.js';
 import { env } from '../lib/env.js';
 import { badRequest, conflict, forbidden, notFound } from '../lib/errors.js';
 import { actorOf } from '../lib/guard.js';
@@ -12,7 +13,7 @@ import { BACK_TO_QUEUE, setAside } from '../lib/statements/aside.js';
 import { OPTION_KINDS, optionsFor, type OptionKind } from '../lib/statements/options.js';
 import { rememberPayer } from '../lib/statements/payers.js';
 import { storedLine } from '../lib/statements/reconcile.js';
-import { date, str, strList } from '../lib/validate.js';
+import { date, str, strList, tetri } from '../lib/validate.js';
 import { UNDO_MS } from './payments.js';
 import { incomingKey } from './statements.js';
 
@@ -64,7 +65,7 @@ export function inboundRoutes(app: FastifyInstance): void {
     const actor = actorOf(req);
     await incoming(req.params.id);
     const key = (req.body ?? {}).remember === true ? await incomingKey(req.params.id) : null;
-    await setAside(req.params.id, actor.id, 'founder_equity', null);
+    await setAside(req.params.id, actor.id, 'founder_equity', null, null, prisma, null, tetri(req.body ?? {}, 'gelTetri', { min: 1 }));
     await audit({ actorId: actor.id, action: 'statement.line.founder_equity', entityType: 'statement_line', entityId: req.params.id });
     if (!key) return { ok: true };
     return { ok: true, ...(await rememberPayer({ actorId: actor.id, key, kind: 'founder_equity', customerId: null, categoryId: null, lineId: req.params.id })) };
@@ -79,7 +80,7 @@ export function inboundRoutes(app: FastifyInstance): void {
     const c = await prisma.incomeCategory.findUnique({ where: { id: categoryId }, select: { archived: true } });
     if (!c || c.archived) throw notFound('income_category_not_found', 'No such income category.');
     const key = b.remember === true ? await incomingKey(req.params.id) : null;
-    await setAside(req.params.id, actor.id, 'other_income', null, null, prisma, categoryId);
+    await setAside(req.params.id, actor.id, 'other_income', null, null, prisma, categoryId, tetri(b, 'gelTetri', { min: 1 }));
     await audit({ actorId: actor.id, action: 'statement.line.other_income', entityType: 'statement_line', entityId: req.params.id, after: { categoryId } });
     if (!key) return { ok: true };
     return { ok: true, ...(await rememberPayer({ actorId: actor.id, key, kind: 'other_income', customerId: null, categoryId, lineId: req.params.id })) };
@@ -192,8 +193,9 @@ export function inboundRoutes(app: FastifyInstance): void {
    * still waits in «Разобрать». The mirror of «Расходы» (ADR-0027). Lines set
    * aside as "not ours" are not the company's money and are left out. Sums
    * are what reached the account: a card line's net. The report is in lari:
-   * a line of an account in another currency (migration 0073) is left out —
-   * its answer is none of the above, and it would land in `other`.
+   * a line of an account in another currency counts in its rows at the lari it
+   * was sorted at, and while it waits it is in `foreign` only, in its own
+   * currency (migration 0076; decision D2). «Обмен валюты» is a row apart.
    */
   app.get<{ Querystring: { from?: string; to?: string } }>('/api/reports/incoming', { config: { scope: 'reports.view' } }, async (req) => {
     const week = weekOf(todayISO(new Date(), env.TZ));
@@ -201,9 +203,11 @@ export function inboundRoutes(app: FastifyInstance): void {
     const to = date(req.query, 'to') ?? week.to;
     if (from > to) throw badRequest('bad_period', 'The period starts after it ends.', { field: 'from' });
     const lines = await prisma.statementLine.findMany({
-      where: { direction: 'in', currency: 'GEL', occurredOn: { gte: dateFromISO(from)!, lte: dateFromISO(to)! } },
+      where: { direction: 'in', occurredOn: { gte: dateFromISO(from)!, lte: dateFromISO(to)! } },
       select: {
+        currency: true,
         amountTetri: true,
+        gelTetri: true,
         status: true,
         resolution: true,
         incomeCategoryId: true,
@@ -212,8 +216,12 @@ export function inboundRoutes(app: FastifyInstance): void {
     });
     const customers = { rent: 0, deposits: 0, sales: 0, goods: 0, repairs: 0, advance: 0 };
     const byCategory = new Map<string | null, { tetri: number; lines: number }>();
-    const apart = { founder: 0, ownTransfers: 0, bankDeposits: 0, other: 0, unsorted: 0, unsortedLines: 0 };
+    const apart = { founder: 0, ownTransfers: 0, fxExchange: 0, bankDeposits: 0, other: 0, unsorted: 0, unsortedLines: 0 };
+    const foreign = foreignTally();
     for (const l of lines) {
+      if (foreign.take(l)) continue;
+      // Lari: the line's own, or what a line in another currency was sorted at.
+      const money = lariOf(l) ?? 0;
       if (l.status === 'unmatched') {
         apart.unsorted += l.amountTetri;
         apart.unsortedLines++;
@@ -221,16 +229,19 @@ export function inboundRoutes(app: FastifyInstance): void {
         // Not the company's money, or a line the bank sent twice (issue #16): counted once, under its first listing.
         continue;
       } else if (l.resolution === 'founder_equity') {
-        apart.founder += l.amountTetri;
+        apart.founder += money;
       } else if (l.resolution === 'own_transfer') {
-        apart.ownTransfers += l.amountTetri;
+        apart.ownTransfers += money;
+      } else if (l.resolution === 'fx_exchange') {
+        // One leg of a currency exchange (0076): neither earned nor spent.
+        apart.fxExchange += money;
       } else if (l.resolution === 'other_income') {
         const row = byCategory.get(l.incomeCategoryId) ?? { tetri: 0, lines: 0 };
-        row.tetri += l.amountTetri;
+        row.tetri += money;
         row.lines++;
         byCategory.set(l.incomeCategoryId, row);
       } else if (l.resolution === 'bank_deposit') {
-        apart.bankDeposits += l.amountTetri;
+        apart.bankDeposits += money;
       } else if (l.status === 'matched' && l.payments.length > 0) {
         for (const p of l.payments) {
           if (p.kind === 'rent') {
@@ -246,7 +257,7 @@ export function inboundRoutes(app: FastifyInstance): void {
           else apart.other += p.netTetri;
         }
       } else {
-        apart.other += l.amountTetri;
+        apart.other += money;
       }
     }
     const customersTetri = Object.values(customers).reduce((n, v) => n + v, 0);
@@ -260,7 +271,8 @@ export function inboundRoutes(app: FastifyInstance): void {
       categories,
       otherIncomeTetri,
       ...apart,
-      totalInTetri: customersTetri + otherIncomeTetri + apart.founder + apart.ownTransfers + apart.bankDeposits + apart.other + apart.unsorted,
+      foreign: foreign.list(),
+      totalInTetri: customersTetri + otherIncomeTetri + apart.founder + apart.ownTransfers + apart.fxExchange + apart.bankDeposits + apart.other + apart.unsorted,
     };
   });
 }

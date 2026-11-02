@@ -314,7 +314,7 @@ async function voidOne(tx: Tx, input: VoidInput): Promise<void> {
     await tx.statementLine.update({
       where: { id: p.statementLineId },
       // A remembered payer that put it there let go of it too (0069): it waits for a person.
-      data: { status: 'unmatched', matchedRule: null, paymentId: null, resolution: null, resolutionReason: null, payerRuleId: null },
+      data: { status: 'unmatched', matchedRule: null, paymentId: null, resolution: null, resolutionReason: null, payerRuleId: null, gelTetri: null },
     });
   }
   for (const rentalId of touched) await recomputeRental(tx, rentalId);

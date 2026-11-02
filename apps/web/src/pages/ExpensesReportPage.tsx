@@ -8,6 +8,7 @@ import { fmtDate } from '../format.js';
 import { useT } from '../i18n/index.js';
 import { useLoad } from '../lib/use.js';
 import { useExpenseCategories } from './money/ExpenseAnswers.js';
+import { ForeignInReports, type ForeignInReport } from './money/ForeignAnswers.js';
 
 interface Report {
   from: string;
@@ -19,10 +20,14 @@ interface Report {
   ownTransfers: number;
   /** Taken out by a shareholder (ADR-0029); absent while an older API answers. */
   shareholder?: number;
+  /** One leg of a currency exchange (0076); absent while an older API answers. */
+  fxExchange?: number;
   otherPaid: number;
   unsorted: number;
   unsortedLines: number;
   totalOutTetri: number;
+  /** The accounts in another currency (0076); absent while an older API answers. */
+  foreign?: ForeignInReport[];
 }
 
 type Span = 'week' | 'month' | 'last_month';
@@ -49,6 +54,7 @@ export function ExpensesReportPage() {
         { key: 'suppliers', label: t.exp.suppliers, tetri: data.suppliers },
         { key: 'own', label: t.exp.ownTransfers, tetri: data.ownTransfers },
         { key: 'shareholder', label: t.exp.shareholders, tetri: data.shareholder ?? 0 },
+        { key: 'fx', label: t.bankCurrency.sortExchange, tetri: data.fxExchange ?? 0 },
         { key: 'other', label: t.exp.otherPaid, tetri: data.otherPaid },
       ].filter((r) => r.tetri > 0)
     : [];
@@ -121,6 +127,7 @@ export function ExpensesReportPage() {
           </div>
         </section>
       )}
+      {data && <ForeignInReports foreign={data.foreign} sortTo="/sort/out" unsorted={t.exp.unsorted} />}
     </>
   );
 }

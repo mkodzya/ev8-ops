@@ -60,7 +60,7 @@ interface Foreign {
      * `bankGelTetri`: the bank's own sum in lari for the line; null when the bank sent none, absent while an older API answers.
      * `repeats`: the line is a card payment the bank listed twice, and repeats the one of that day; it is in no sum.
      */
-    lines: { id: string; occurredOn: string; direction: 'in' | 'out'; amountMinor: number; bankGelTetri?: number | null; repeats?: { occurredOn: string }; payer: string | null; purpose: string | null; raw: string }[];
+    lines: { id: string; occurredOn: string; direction: 'in' | 'out'; amountMinor: number; bankGelTetri?: number | null; repeats?: { occurredOn: string }; sorted?: boolean; payer: string | null; purpose: string | null; raw: string }[];
   }[];
 }
 
@@ -293,6 +293,8 @@ function ForeignBlock({ known, lastOn }: { known: Known[]; lastOn: string | null
                     <span className="muted"> · {[l.payer, l.purpose].filter(Boolean).join(' · ') || l.raw}</span>
                     {lari && <span className="fx-rate muted mono">{lari.rate}</span>}
                     {l.repeats && <span className="fx-rate">{t.bankCurrency.twinOf(fmtDate(l.repeats.occurredOn))}</span>}
+                    {/* Sorted in «Разобрать» since 0076: one that waits says so. */}
+                    {!l.repeats && l.sorted === false && <span className="fx-rate muted">{t.bankCurrency.waiting}</span>}
                   </span>
                   <span className="fx-sum">
                     <span className={sumClass}>{signed(l.amountMinor, a.currency, l.direction)}</span>

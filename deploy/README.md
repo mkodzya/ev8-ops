@@ -453,6 +453,7 @@ KOMMO_BASE_URL=               # https://ev8mopeds.kommo.com
 KOMMO_RENTAL_PIPELINE_ID=     # воронка аренды «Gaqiraveba», 13427775
 KOMMO_RENTED_STATUS_ID=       # этап «გაქირავებული», 103582579
 KOMMO_SALES_PIPELINE_ID=      # воронка продаж «Gayidvebi», 11266343 (выигранные продажи приходят задачами)
+KOMMO_AMOUNT_FIELD_ID=        # поле сделки «Amount due» для напоминаний, 1387297 (ADR-0053)
 KOMMO_CRON=                   # как часто спрашивать, по умолчанию */5 * * * *
 ```
 
@@ -800,8 +801,10 @@ https://ev8.ge. Слияние в `main` сайта и есть его выпу�
 
 Настройки входа лежат в папке `edge/`: `edge/Caddyfile` и `edge/entry.sh`. Папка подключена в
 контейнер целиком, поэтому правка с нашей стороны применяется мягко, без пересоздания входа:
-`docker exec ev8-edge-edge-1 caddy reload --config /etc/caddy/Caddyfile`. Старый `Caddyfile.edge`
-в корне остаётся только до первого пересоздания входа с новым `docker-compose.edge.yml`, потом удаляется.
+`docker exec ev8-edge-edge-1 caddy reload --config /etc/caddy/Caddyfile`. С папкой вход пересоздан только
+02.11.2026: до того он работал по старому `Caddyfile.edge` из корня и настроек сайта не брал (выпуски сайта
+предупреждали об этом с 1.0.3). Старый файл удалён в тот же день. Признак, что вход берёт настройки сайта, —
+номер его сборки в заголовке: `curl -sI https://ev8.ge/ | grep -i x-site-edge`.
 
 **Наше, в `edge/Caddyfile`** — то, что охраняет EV8 Ops, и общая механика:
 - `/api/site/*` → прод EV8 Ops (заявка с сайта). Остальной API и всё `wp-*` — 410.
@@ -838,7 +841,7 @@ ev8.ge. Отдельной стены между блоками в Caddyfile н�
 ### Переключение, по шагам
 
 1. Слить ветку `feature/site-cutover` в `develop`; `follow-develop.sh --now` — на сервере появятся
-   новый `Caddyfile.edge` и скрипты.
+   настройки входа и скрипты.
 2. Ключ для GitHub — с Mac, ключ сразу уходит в секреты сайта и не показывается:
    ```bash
    ssh root@204.168.149.105 /srv/ev8-ops/deploy/site-deploy-setup.sh \

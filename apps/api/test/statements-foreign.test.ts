@@ -1,11 +1,12 @@
-// Lines of an account in another currency, kept apart from the lari (migration
-// 0073; Mika's decision D1 «А» of 29.10.2026, docs/spec/usd-accounts-plan.md).
-// The stand does not read such an account yet; these suites put its lines in
-// the way the bank's API will — by `keep` — and check that nothing in lari
-// meets them: the queue, «Отложено», «Вернуть в очередь», the reports, the
-// freshness of a bank, the rules that know a line already in. Every account,
-// sum, shop and number here is invented; the days are in 2097, which no other
-// suite writes lines in.
+// Lines of an account in another currency (migration 0073; Mika's decision D1
+// «А» of 29.10.2026, docs/spec/usd-accounts-plan.md), sorted by an owner since
+// migration 0076 (stage 5, Mika 02.11.2026; decisions D2 and D3 of 01.11.2026).
+// These suites put such lines in the way the bank's API does — by `keep` — and
+// check that they wait for an owner untouched by any rule, are answered only
+// as no customer's money, count in lari at the sum they were sorted at — the
+// bank's or the owner's — and that 150 dollars are never 150 lari. Every
+// account, sum, shop and number here is invented; the days are in 2097 and
+// 2098, which no other suite writes lines in.
 import { readFile } from 'node:fs/promises';
 import { afterAll, describe, expect, it } from 'vitest';
 import { todayISO } from '@ev8/shared';
@@ -52,10 +53,10 @@ describe('an account and its currency, as an env or a statement file writes it',
   });
 });
 
-describe.skipIf(!HAS_DB)('lines in another currency, parked outside the lari (migration 0073)', () => {
+describe.skipIf(!HAS_DB)('lines in another currency, sorted by an owner at their lari (migration 0076)', () => {
   const made: string[] = [];
   afterAll(async () => {
-    // The lines in lari these suites put in the queue go with their statements, so no later suite meets them there.
+    // The lines these suites write go with their statements, so no later suite meets them in the queue.
     const { prisma } = await import('../src/lib/db.js');
     await prisma.statement.deleteMany({ where: { id: { in: made } } });
   });
@@ -67,90 +68,160 @@ describe.skipIf(!HAS_DB)('lines in another currency, parked outside the lari (mi
     return s;
   }
 
-  it('are written set aside as foreign in one go, and the queue, the reports and the freshness of the bank do not see them', async () => {
+  /** One line of a dollar account, kept as the bank's API keeps it; Bank of Georgia's carries its lari (invented, 2.6 to the dollar). */
+  async function dollars(day: string, direction: 'in' | 'out', cents: number, more: Partial<ParsedLine> = {}, bank: 'bog' | 'tbc' = 'bog') {
     const { prisma } = await import('../src/lib/db.js');
     const { keep, tally } = await import('../src/lib/statements/apiDays.js');
-    const owner = await loginAs('owner');
-    const day = '2097-03-10';
+    const key = bank === 'bog' ? `api:today:USD:test-${uniq()}` : `api:mv:0${String(Math.floor(Math.random() * 1e10)).padStart(11, '0')}.${direction === 'in' ? 2 : 1}`;
     const t = tally();
-    await keep('bog', 'Business Online', BOG_ACCOUNT, day, [op(`api:today:USD:test-${uniq()}`, day, 'in', 15000), op(`api:today:USD:test-${uniq()}`, day, 'out', 4000)], t, 'USD');
-    expect(t).toMatchObject({ added: 2, recorded: 0, matched: 0 });
+    await keep(bank, bank === 'bog' ? 'Business Online' : 'Business Integration Services', bank === 'bog' ? BOG_ACCOUNT : TBC_ACCOUNT, day, [op(key, day, direction, cents, { ...(bank === 'bog' ? { bankGelTetri: Math.round(cents * 2.6) } : {}), ...more })], t, 'USD');
+    await apiDay(bank, bank === 'bog' ? BOG_ACCOUNT : TBC_ACCOUNT, 'USD', day);
+    return { line: await prisma.statementLine.findFirstOrThrow({ where: { naturalKey: key } }), t };
+  }
 
-    const statement = await apiDay('bog', BOG_ACCOUNT, 'USD', day);
-    expect(statement).toMatchObject({ currency: 'USD', newLines: 2, matched: 0 });
-    const lines = await prisma.statementLine.findMany({ where: { statementId: statement.id }, orderBy: { amountTetri: 'desc' } });
-    expect(lines).toHaveLength(2);
-    for (const l of lines) expect(l).toMatchObject({ currency: 'USD', status: 'ignored', resolution: 'foreign', matchedRule: 'foreign', resolvedById: null, resolvedAt: null, paymentId: null });
+  async function category(owner: string, kind: 'expense' | 'income'): Promise<string> {
+    const made = await call(owner, 'POST', `/api/${kind}-categories`, { nameRu: `ТЕСТ ${kind} ${uniq()}`, nameKa: 'სატესტო', nameEn: 'Test' });
+    expect(made.statusCode, made.body).toBeLessThan(300);
+    return json<{ id: string }>(made).id;
+  }
 
-    // «Разобрать» never has them, and «Вернуть в очередь» does not put them there.
-    const queue = json<{ lines: { id: string }[] }>(await call(owner, 'GET', '/api/statement-lines'));
-    expect(queue.lines.map((l) => l.id)).not.toContain(lines[0]!.id);
-    const restore = await call(owner, 'POST', `/api/statement-lines/${lines[0]!.id}/restore`, {});
-    expect(restore.statusCode).toBe(409);
-    expect(err(restore)).toBe('foreign_line');
-    expect(await prisma.statementLine.findUniqueOrThrow({ where: { id: lines[0]!.id } })).toMatchObject({ status: 'ignored', resolution: 'foreign' });
+  type Queue = { lines: { id: string; group: string; currency: string; bankGelTetri?: number | null; suggestions: unknown[] }[] };
 
-    // The reports in lari: the day has nothing in lari, and so they say nothing at all.
-    const out = json<{ totalOutTetri: number; unsorted: number; otherPaid: number }>(await call(owner, 'GET', `/api/reports/expenses?from=${day}&to=${day}`));
-    expect(out).toMatchObject({ totalOutTetri: 0, unsorted: 0, otherPaid: 0 });
-    const inc = json<{ totalInTetri: number; unsorted: number; other: number }>(await call(owner, 'GET', `/api/reports/incoming?from=${day}&to=${day}`));
-    expect(inc).toMatchObject({ totalInTetri: 0, unsorted: 0, other: 0 });
-
-    // Bank of Georgia's card is its lari account's: a day of dollars neither makes it fresh nor is its last upload.
-    const s = json<{ banks: { bank: string; throughOn: string | null; lastUploadAt: string | null }[] }>(await call(owner, 'GET', '/api/statements'));
-    const bog = s.banks.find((b) => b.bank === 'bog')!;
-    expect(bog.throughOn).not.toBe(day);
-    expect(bog.lastUploadAt).not.toBe(statement.createdAt.toISOString());
-  });
-
-  it('cannot be put in the queue or answered, and a line in lari cannot be parked: the database holds both', async () => {
+  it('wait in the queue for an owner, untouched by any rule; a manager sees neither them nor their number', async () => {
     const { prisma } = await import('../src/lib/db.js');
-    const { keep, tally } = await import('../src/lib/statements/apiDays.js');
-    const day = '2097-03-11';
-    await keep('bog', 'Business Online', BOG_ACCOUNT, day, [op(`api:today:USD:test-${uniq()}`, day, 'in', 2500)], tally(), 'USD');
-    const statement = await apiDay('bog', BOG_ACCOUNT, 'USD', day);
-    const line = await prisma.statementLine.findFirstOrThrow({ where: { statementId: statement.id } });
-
-    // Every answer takes a line only from the queue: by its id, a parked line is refused like one answered already.
     const owner = await loginAs('owner');
-    expect(err(await call(owner, 'POST', `/api/statement-lines/${line.id}/ignore`, { reason: 'invented' }))).toBe('already_matched');
-    expect(err(await call(owner, 'POST', `/api/statement-lines/${line.id}/own-transfer`, {}))).toBe('already_matched');
-    expect(err(await call(owner, 'POST', `/api/statement-lines/${line.id}/unlink`, {}))).toBe('not_matched');
+    const manager = await loginAs('manager');
+    const { line, t } = await dollars('2097-03-10', 'in', 15000, { payer: 'Invented Payer', purpose: 'invented rent' });
+    expect(t).toMatchObject({ added: 1, recorded: 0, matched: 0 });
+    expect(line).toMatchObject({ currency: 'USD', status: 'unmatched', resolution: null, matchedRule: null, paymentId: null, gelTetri: null, bankGelTetri: 39000 });
 
-    await expect(prisma.statementLine.update({ where: { id: line.id }, data: { status: 'unmatched', matchedRule: null, resolution: null } })).rejects.toThrow();
-    await expect(prisma.statementLine.update({ where: { id: line.id }, data: { status: 'ignored', resolution: 'company_expense' } })).rejects.toThrow();
-    await expect(prisma.statementLine.update({ where: { id: line.id }, data: { status: 'matched', matchedRule: 'by_hand' } })).rejects.toThrow();
-    // Written in the queue in the first place, it is refused as well.
-    await expect(
-      prisma.statementLine.create({
-        data: { statementId: statement.id, bank: 'bog', currency: 'USD', naturalKey: `api:today:USD:test-${uniq()}`, occurredOn: asDate(day), direction: 'in', amountTetri: 100, raw: 'invented', status: 'unmatched' },
-      }),
-    ).rejects.toThrow();
-    // A line in lari is never 'foreign'.
-    const gel = await prisma.statement.create({ data: { bank: 'bog', source: 'api', fileName: 'Business Online', fileSha256: 'api', account: BOG_ACCOUNT, periodFrom: asDate(day), periodTo: asDate(day) } });
-    made.push(gel.id);
-    await expect(
-      prisma.statementLine.create({
-        data: { statementId: gel.id, bank: 'bog', naturalKey: `api:today:test-${uniq()}`, occurredOn: asDate(day), direction: 'in', amountTetri: 100, raw: 'invented', status: 'ignored', resolution: 'foreign' },
-      }),
-    ).rejects.toThrow();
-    expect(await prisma.statementLine.findUniqueOrThrow({ where: { id: line.id } })).toMatchObject({ status: 'ignored', resolution: 'foreign' });
+    // An owner: in a group of its own, its currency and the bank's lari, no hint of rent.
+    const mine = json<Queue>(await call(owner, 'GET', '/api/statement-lines?direction=in')).lines.find((l) => l.id === line.id);
+    expect(mine).toMatchObject({ group: 'foreign', currency: 'USD', bankGelTetri: 39000, suggestions: [] });
+    // A manager: not in his queue, not in his count.
+    const his = await call(manager, 'GET', '/api/statement-lines?direction=in');
+    expect(json<Queue>(his).lines.map((l) => l.id)).not.toContain(line.id);
+    const lari = await prisma.statementLine.count({ where: { status: 'unmatched', direction: 'in', currency: 'GEL' } });
+    expect(json<{ counts: { in: number } }>(his).counts.in).toBe(lari);
+    expect(json<{ sort: { in: number } }>(await call(manager, 'GET', '/api/nav/counts')).sort.in).toBe(lari);
   });
 
-  it('are not «Отложено», even with a date of an answer on them', async () => {
+  it('are an expense at the bank’s lari or the owner’s, the reports count that lari, and «Вернуть в очередь» undoes it', async () => {
     const { prisma } = await import('../src/lib/db.js');
-    const { keep, tally } = await import('../src/lib/statements/apiDays.js');
+    const owner = await loginAs('owner');
+    const day = '2097-03-11';
+    const cat = await category(owner, 'expense');
+    const a = (await dollars(day, 'out', 4000)).line;
+    const b = (await dollars(day, 'out', 1000)).line;
+    const c = (await dollars(day, 'out', 2500)).line;
+    // A remembered payee is no answer for dollars: nothing is remembered, and nothing else is sorted.
+    const ok = await call(owner, 'POST', `/api/statement-lines/${a.id}/expense`, { categoryId: cat, remember: true });
+    expect(ok.statusCode, ok.body).toBe(200);
+    expect(json<{ ruleId: string | null; alsoSorted: string[] }>(ok)).toMatchObject({ ruleId: null, alsoSorted: [] });
+    expect(await prisma.statementLine.findUniqueOrThrow({ where: { id: a.id } })).toMatchObject({ status: 'ignored', resolution: 'company_expense', expenseCategoryId: cat, gelTetri: 10400 });
+    // The owner's correction is what it counts at.
+    expect((await call(owner, 'POST', `/api/statement-lines/${b.id}/expense`, { categoryId: cat, gelTetri: '27.00' })).statusCode).toBe(200);
+    expect((await prisma.statementLine.findUniqueOrThrow({ where: { id: b.id } })).gelTetri).toBe(2700);
+
+    type Out = { categories: { categoryId: string; tetri: number; lines: number }[]; unsorted: number; totalOutTetri: number; foreign: { currency: string; sortedMinor: number; sortedGelTetri: number; waitingMinor: number; waitingLines: number }[] };
+    const report = json<Out>(await call(owner, 'GET', `/api/reports/expenses?from=${day}&to=${day}`));
+    expect(report.categories).toEqual([{ categoryId: cat, tetri: 13100, lines: 2 }]);
+    // The line still waiting is in no sum in lari: the day has nothing else.
+    expect(report).toMatchObject({ unsorted: 0, totalOutTetri: 13100, foreign: [{ currency: 'USD', sortedMinor: 5000, sortedGelTetri: 13100, waitingMinor: 2500, waitingLines: 1 }] });
+    expect(c.status).toBe('unmatched');
+
+    // Put back, it waits again and counts at nothing.
+    expect((await call(owner, 'POST', `/api/statement-lines/${a.id}/restore`, {})).statusCode).toBe(200);
+    expect(await prisma.statementLine.findUniqueOrThrow({ where: { id: a.id } })).toMatchObject({ status: 'unmatched', resolution: null, gelTetri: null, expenseCategoryId: null });
+    // And «Отменить» right after «Записать» does the same.
+    expect((await call(owner, 'POST', `/api/statement-lines/${b.id}/expense-undo`, {})).statusCode).toBe(200);
+    expect(await prisma.statementLine.findUniqueOrThrow({ where: { id: b.id } })).toMatchObject({ status: 'unmatched', gelTetri: null });
+    expect(json<Out>(await call(owner, 'GET', `/api/reports/expenses?from=${day}&to=${day}`))).toMatchObject({ totalOutTetri: 0, foreign: [{ waitingMinor: 7500, waitingLines: 3, sortedMinor: 0 }] });
+  });
+
+  it('pay no rent, deposit, sale or cash to the bank, and are no split', async () => {
     const owner = await loginAs('owner');
     const day = '2097-03-12';
-    const asideCount = async () => json<{ asideMonth: number }>(await call(owner, 'GET', '/api/statement-lines?direction=out')).asideMonth;
-    await keep('bog', 'Business Online', BOG_ACCOUNT, day, [op(`api:today:USD:test-${uniq()}`, day, 'out', 7300)], tally(), 'USD');
-    const line = await prisma.statementLine.findFirstOrThrow({ where: { statementId: (await apiDay('bog', BOG_ACCOUNT, 'USD', day)).id } });
-    const before = await asideCount();
-    // The list of lines set aside reads the last month of answers: a parked line has none, and is left out even if it had.
-    await prisma.statementLine.update({ where: { id: line.id }, data: { resolvedAt: new Date() } });
-    expect(await asideCount()).toBe(before);
-    const aside = json<{ lines: { id: string }[] }>(await call(owner, 'GET', '/api/statement-lines/aside'));
-    expect(aside.lines.map((l) => l.id)).not.toContain(line.id);
+    const incoming = (await dollars(day, 'in', 18000)).line;
+    const out = (await dollars(day, 'out', 18000)).line;
+    const refused = async (path: string, body: unknown) => {
+      const res = await call(owner, 'POST', `/api/statement-lines/${path}`, body);
+      expect(res.statusCode, `${path} ${res.body}`).toBe(409);
+      expect(err(res)).toBe('foreign_line');
+    };
+    await refused(`${incoming.id}/assign`, { customerId: '00000000-0000-4000-8000-000000000000' });
+    await refused(`${incoming.id}/split`, { parts: [9000, 9000].map((grossTetri, i) => ({ grossTetri, customerId: `00000000-0000-4000-8000-00000000000${i}` })) });
+    await refused(`${incoming.id}/bank-deposit`, {});
+    await refused(`${out.id}/pay-out`, { kind: 'deposit_payout', rentalId: '00000000-0000-4000-8000-000000000000' });
+    await refused(`${out.id}/expense-split`, { parts: [{ amountTetri: 9000, categoryId: 'a' }, { amountTetri: 9000, categoryId: 'b' }] });
+    const { prisma } = await import('../src/lib/db.js');
+    expect(await prisma.statementLine.count({ where: { id: { in: [incoming.id, out.id] }, status: 'unmatched' } })).toBe(2);
+    expect(await prisma.bankCashDeposit.count({ where: { amountTetri: 18000, occurredOn: asDate(day) } })).toBe(0);
+  });
+
+  it('with no lari from the bank — TBC — are sorted only with the owner’s sum', async () => {
+    const { prisma } = await import('../src/lib/db.js');
+    const owner = await loginAs('owner');
+    const { line } = await dollars('2097-03-13', 'out', 3300, {}, 'tbc');
+    expect(line.bankGelTetri).toBeNull();
+    const none = await call(owner, 'POST', `/api/statement-lines/${line.id}/own-transfer`, {});
+    expect(none.statusCode).toBe(400);
+    expect(err(none)).toBe('gel_needed');
+    expect((await call(owner, 'POST', `/api/statement-lines/${line.id}/own-transfer`, { gelTetri: 8600 })).statusCode).toBe(200);
+    expect(await prisma.statementLine.findUniqueOrThrow({ where: { id: line.id } })).toMatchObject({ resolution: 'own_transfer', gelTetri: 8600 });
+    // Set aside as nobody's money it needs no lari.
+    const other = (await dollars('2097-03-13', 'out', 100, {}, 'tbc')).line;
+    expect((await call(owner, 'POST', `/api/statement-lines/${other.id}/ignore`, { reason: 'invented' })).statusCode).toBe(200);
+    expect(await prisma.statementLine.findUniqueOrThrow({ where: { id: other.id } })).toMatchObject({ resolution: 'not_ours', gelTetri: null });
+  });
+
+  it('pay a supplier at their lari, and the payment keeps the dollars beside them', async () => {
+    const { prisma } = await import('../src/lib/db.js');
+    const owner = await loginAs('owner');
+    const day = '2097-03-14';
+    const supplier = await prisma.customer.create({ data: { name: `ТЕСТ Поставщик ${uniq()}`, recordKind: 'supplier' } });
+    const po = json<{ id: string }>(await call(owner, 'POST', '/api/purchases', { supplierId: supplier.id, currency: 'USD', orderedOn: day }));
+    const { line } = await dollars(day, 'out', 50000);
+    const paid = await call(owner, 'POST', `/api/statement-lines/${line.id}/pay-out`, { kind: 'supplier', purchaseId: po.id });
+    expect(paid.statusCode, paid.body).toBe(200);
+    const payment = await prisma.payment.findUniqueOrThrow({ where: { id: json<{ id: string }>(paid).id } });
+    expect(payment).toMatchObject({ kind: 'supplier', grossTetri: 130000, foreignMinor: 50000n, foreignCurrency: 'USD', statementLineId: line.id });
+    expect(await prisma.statementLine.findUniqueOrThrow({ where: { id: line.id } })).toMatchObject({ status: 'matched', gelTetri: 130000 });
+    expect(json<{ suppliers: number }>(await call(owner, 'GET', `/api/reports/expenses?from=${day}&to=${day}`)).suppliers).toBe(130000);
+    // Annulled, the line waits again, at no lari.
+    expect((await call(owner, 'POST', `/api/payments/${payment.id}/undo`, {})).statusCode).toBe(200);
+    expect(await prisma.statementLine.findUniqueOrThrow({ where: { id: line.id } })).toMatchObject({ status: 'unmatched', gelTetri: null });
+  });
+
+  it('are an exchange, a founder’s money or other income, each in its row at the lari', async () => {
+    const owner = await loginAs('owner');
+    const day = '2097-03-15';
+    const cat = await category(owner, 'income');
+    const sold = (await dollars(day, 'out', 10000)).line;
+    const bought = (await dollars(day, 'in', 20000)).line;
+    const founder = (await dollars(day, 'in', 1000)).line;
+    const other = (await dollars(day, 'in', 500)).line;
+    for (const [path, body] of [[`${sold.id}/fx-exchange`, {}], [`${bought.id}/fx-exchange`, { gelTetri: '519.00' }], [`${founder.id}/founder-equity`, {}], [`${other.id}/other-income`, { categoryId: cat, remember: true }]] as const) {
+      const res = await call(owner, 'POST', `/api/statement-lines/${path}`, body);
+      expect(res.statusCode, `${path} ${res.body}`).toBe(200);
+    }
+    expect(json<{ fxExchange: number; totalOutTetri: number }>(await call(owner, 'GET', `/api/reports/expenses?from=${day}&to=${day}`))).toMatchObject({ fxExchange: 26000, totalOutTetri: 26000 });
+    const inc = json<{ fxExchange: number; founder: number; categories: { categoryId: string; tetri: number }[]; totalInTetri: number }>(await call(owner, 'GET', `/api/reports/incoming?from=${day}&to=${day}`));
+    expect(inc).toMatchObject({ fxExchange: 51900, founder: 2600, totalInTetri: 51900 + 2600 + 1300 });
+    expect(inc.categories).toEqual([{ categoryId: cat, tetri: 1300, lines: 1 }]);
+  });
+
+  it('the database holds a sorted line in another currency to its lari, and a line in lari to none', async () => {
+    const { prisma } = await import('../src/lib/db.js');
+    const { line } = await dollars('2097-03-16', 'out', 700);
+    await expect(prisma.statementLine.update({ where: { id: line.id }, data: { status: 'ignored', resolution: 'company_expense' } })).rejects.toThrow();
+    await expect(prisma.statementLine.update({ where: { id: line.id }, data: { status: 'matched', matchedRule: 'by_hand' } })).rejects.toThrow();
+    await prisma.statementLine.update({ where: { id: line.id }, data: { status: 'ignored', resolution: 'not_ours' } });
+    const gel = await prisma.statement.create({ data: { bank: 'bog', source: 'api', fileName: 'Business Online', fileSha256: 'api', account: BOG_ACCOUNT, periodFrom: asDate('2097-03-16'), periodTo: asDate('2097-03-16') } });
+    made.push(gel.id);
+    const lari = { statementId: gel.id, bank: 'bog' as const, occurredOn: asDate('2097-03-16'), direction: 'in' as const, amountTetri: 100, raw: 'invented' };
+    await expect(prisma.statementLine.create({ data: { ...lari, naturalKey: `api:today:test-${uniq()}`, status: 'ignored', resolution: 'foreign' } })).rejects.toThrow();
+    await expect(prisma.statementLine.create({ data: { ...lari, naturalKey: `api:today:test-${uniq()}`, gelTetri: 100 } })).rejects.toThrow();
   });
 
   it('keep the same IBAN in lari and in dollars apart: two statements a day, and 150 dollars are not 150 lari already in', async () => {
@@ -194,7 +265,7 @@ describe.skipIf(!HAS_DB)('lines in another currency, parked outside the lari (mi
     await keep('tbc', 'Business Integration Services', TBC_ACCOUNT, day, [op(`api:mv:0${id}.2`, day, 'in', 4000)], t, 'USD');
     expect(t).toMatchObject({ added: 1, known: { byId: 0 } });
     const usd = await apiDay('tbc', TBC_ACCOUNT, 'USD', day);
-    expect(await prisma.statementLine.findFirstOrThrow({ where: { statementId: usd.id } })).toMatchObject({ currency: 'USD', status: 'ignored', resolution: 'foreign', amountTetri: 4000 });
+    expect(await prisma.statementLine.findFirstOrThrow({ where: { statementId: usd.id } })).toMatchObject({ currency: 'USD', status: 'unmatched', resolution: null, amountTetri: 4000 });
   });
 
   it('are no card payment the lari account repeats: neither known by rule 5 nor named as its twin in the queue', async () => {
@@ -224,7 +295,7 @@ describe.skipIf(!HAS_DB)('lines in another currency, parked outside the lari (mi
     const s = await prisma.statement.create({ data: { bank: 'credo', source: 'file', fileName: 'invented.csv', fileSha256: `test-${uniq()}`, currency: 'USD', periodFrom: asDate(today), periodTo: asDate(today) } });
     made.push(s.id);
     await prisma.statementLine.create({
-      data: { statementId: s.id, bank: 'credo', currency: 'USD', naturalKey: `test-${uniq()}`, occurredOn: asDate(today), direction: 'in', amountTetri: 900, raw: 'invented', status: 'ignored', matchedRule: 'foreign', resolution: 'foreign' },
+      data: { statementId: s.id, bank: 'credo', currency: 'USD', naturalKey: `test-${uniq()}`, occurredOn: asDate(today), direction: 'in', amountTetri: 900, raw: 'invented', status: 'unmatched' },
     });
     type Q = { queue: { rows: { id: string }[] }[] };
     const rows = json<Q>(await call(owner, 'GET', '/api/today')).queue.flatMap((g) => g.rows);
@@ -235,7 +306,7 @@ describe.skipIf(!HAS_DB)('lines in another currency, parked outside the lari (mi
 
   it('the migration runs a second time over what is stored without a word', async () => {
     const pg = (await import('pg')).default;
-    const sql = await readFile(new URL('../migrations/0073_foreign_currency_accounts.sql', import.meta.url), 'utf8');
+    const sql = await readFile(new URL('../migrations/0076_foreign_lines_sorted.sql', import.meta.url), 'utf8');
     const client = new pg.Client({ connectionString: process.env.DATABASE_URL });
     await client.connect();
     try {

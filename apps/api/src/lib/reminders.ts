@@ -181,6 +181,7 @@ export async function runReminders(a: CalendarNow, slot: ReminderSlot, now: Date
   const leads = await reminderLeads(plan.map((p) => p.rentalId));
   const cfg = kommoConfig();
   const client = cfg ? kommoClient(cfg) : null;
+  const amountFieldId = cfg?.amountFieldId ?? 0;
   let field: KommoField | null | undefined; // undefined — not asked yet
   let stop: ReminderFailure | null = null;
   const out: RemindersOutcome = { decided: plan.length, written: 0, sendMode, held: null, sent: 0, failed: 0 };
@@ -192,7 +193,7 @@ export async function runReminders(a: CalendarNow, slot: ReminderSlot, now: Date
     if (!botId) return 'no_bot';
     if (stop) return stop;
     try {
-      if (field === undefined) field = await client.leadField(REMINDER_AMOUNT_FIELD);
+      if (field === undefined) field = await client.leadField(amountFieldId, REMINDER_AMOUNT_FIELD);
       if (!field) return 'no_field';
       const text = reminderAmountText(p.amountTetri);
       await client.setLeadField(lead, field, text);
@@ -209,6 +210,12 @@ export async function runReminders(a: CalendarNow, slot: ReminderSlot, now: Date
     }
   };
 
+  // The deal field holds one sum at a time, and Kommo runs a bot when it gets
+  // to it: a second rental's sum written into the same deal right after could
+  // be the one the first message reads. One reminder a deal a run; the other
+  // is written as not gone, for a person to call.
+  const usedLeads = new Set<string>();
+
   for (const p of plan) {
     const lead = leads.get(p.rentalId) ?? null;
     // A stand in `test` sends to the test deals an owner listed and to nobody else.
@@ -216,6 +223,13 @@ export async function runReminders(a: CalendarNow, slot: ReminderSlot, now: Date
       out.written += (await prisma.rentReminder.createMany({ data: [{ ...row(p), mode: 'dry_run' }], skipDuplicates: true })).count;
       continue;
     }
+    if (lead && usedLeads.has(lead)) {
+      const res = await prisma.rentReminder.createMany({ data: [{ ...row(p), mode: 'failed', failure: 'shared_deal', leadId: lead }], skipDuplicates: true });
+      out.written += res.count;
+      out.failed += res.count;
+      continue;
+    }
+    if (lead) usedLeads.add(lead);
     let id: string;
     try {
       id = (await prisma.rentReminder.create({ data: { ...row(p), mode: 'sending', leadId: lead }, select: { id: true } })).id;

@@ -307,6 +307,7 @@ export const wave4En = {
     'statement.line.expense_undo': 'An expense was taken back',
     'statement.line.own_transfer': 'A line marked as between own accounts',
     'statement.line.shareholder': 'A line marked as taken out by a shareholder',
+    'statement.line.fx_exchange': 'A line marked as a currency exchange',
     'statement.line.expense_split': 'A line split into expenses',
     // «Это не возврат» (issue #19): an owner's answer to a return act in Drive for a rental that runs on.
     'drive.not_return': 'A return act in Drive: not a return',
@@ -702,6 +703,7 @@ export const wave4Ru: Wave4 = {
     'statement.line.restore': 'Строка возвращена в очередь',
     'statement.line.rule': 'Создано правило разбора',
     'statement.line.shareholder': 'Строка отмечена: вывод акционера',
+    'statement.line.fx_exchange': 'Строка отмечена: обмен валюты',
     'statement.line.split': 'Строка разнесена',
     'statement.line.unlink': 'Строка расcведена',
     'statement.pull': 'Строки банка пришли сами',
@@ -1053,6 +1055,7 @@ export const wave4Ka: Wave4 = {
     'statement.line.restore': 'ხაზი რიგში დაბრუნდა',
     'statement.line.rule': 'შეიქმნა დახარისხების წესი',
     'statement.line.shareholder': 'ხაზი მოინიშნა: პარტნიორის მიერ გატანილი თანხა',
+    'statement.line.fx_exchange': 'ხაზი მოინიშნა: ვალუტის გაცვლა',
     'statement.line.split': 'ხაზი განაწილდა',
     'statement.line.unlink': 'ხაზის კავშირი მოიხსნა',
     'statement.pull': 'ბანკის ხაზები ავტომატურად შემოვიდა',
