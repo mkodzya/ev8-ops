@@ -99,6 +99,11 @@
 .fx-rate { display: block; margin-top: 2px; }
 /* A card payment the bank listed a second time: shown, crossed out, in no sum. */
 .fx-twin { text-decoration: line-through; }
+/* A line in another currency in «Разобрать» (0076): the lari it counts at, the bank's to start with. */
+.fx-gel { display: grid; gap: 4px; margin: 8px 0 4px; }
+.fx-gel-label { font: var(--text-body-sm); }
+.fx-gel-input { max-width: 12rem; }
+.fx-gel .hint, .fx-gel .field-err { margin: 0; }
 .fx-empty { margin: 12px 0 0; }
 .upload-summary { display: grid; gap: 4px; margin: 8px 0 14px; }
 .upload-summary div { display: flex; justify-content: space-between; gap: 12px; }

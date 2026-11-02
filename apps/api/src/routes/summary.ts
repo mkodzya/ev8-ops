@@ -6,6 +6,7 @@ import { prisma } from '../lib/db.js';
 import { env } from '../lib/env.js';
 import { mayTotal, mayView } from '../lib/guard.js';
 import { rentalsNow } from '../lib/overdue.js';
+import { LARI } from '../lib/statements/foreign.js';
 
 // The numbers on "Today" (DSH-01). Every figure here is also a list one
 // click away; nothing is computed that the lists cannot reproduce.
@@ -24,7 +25,8 @@ export function summaryRoutes(app: FastifyInstance): void {
         select: { id: true, number: true, customer: { select: { name: true } } },
         orderBy: { createdAt: 'asc' },
       }),
-      prisma.statementLine.count({ where: { status: 'unmatched' } }),
+      // A manager's queue is the lari: a line in another currency is an owner's to sort (0076).
+      prisma.statementLine.count({ where: { status: 'unmatched', ...(mayView(req, 'payments.reconcile') ? {} : LARI) } }),
       prisma.serviceJob.count({ where: { status: 'open' } }),
       prisma.saleInstalment.findMany({
         where: { dueOn: { lt: day }, payStatus: { not: 'paid' }, sale: { status: { not: 'cancelled' } } },

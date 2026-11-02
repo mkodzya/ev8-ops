@@ -510,7 +510,9 @@ describe.skipIf(!HAS_DB)('payments calendar · the sums', () => {
       await line('in', 'ignored');
       const c = await calendar(owner);
       expect(c.unsortedIn).toBe(u + 1);
-      const queue = json<{ counts: { in: number; out: number } }>(await call(owner, 'GET', '/api/statement-lines?direction=in'));
+      // What may be rent is lari (0076): the number a manager's «Разобрать» shows — an owner's has the dollars too.
+      const manager = await loginAs('manager');
+      const queue = json<{ counts: { in: number; out: number } }>(await call(manager, 'GET', '/api/statement-lines?direction=in'));
       expect(queue.counts.in).toBe(c.unsortedIn);
     } finally {
       // The lines go with it: the queue of the other suites is as it was.

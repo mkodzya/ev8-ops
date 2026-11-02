@@ -925,15 +925,17 @@ model StatementLine {
   docNo       String?             @map("doc_no")
   occurredOn  DateTime            @map("occurred_on") @db.Date
   direction   PaymentDirection
-  /// GEL, or the currency of an account kept apart from the lari (migration 0073, decision D1): such a line is
-  /// parked — status `ignored`, resolution `foreign` — from the moment it is written, outside every sum in lari.
+  /// GEL, or the currency of an account kept apart from the lari (migration 0073). Such a line is sorted by an
+  /// owner only, and counts in lari at `gelTetri` once sorted as money (migration 0076, decision D2).
   currency    String              @default("GEL")
   /// In minor units of `currency`, like `grossTetri` and `feeTetri`: tetri for GEL, cents for USD and EUR (migration 0073).
   amountTetri Int                 @map("amount_tetri")
   grossTetri  Int?                @map("gross_tetri")
   feeTetri    Int?                @map("fee_tetri")
-  /// What Bank of Georgia says a line in another currency is in lari (migration 0073): for reference, never summed. Null at TBC.
+  /// What Bank of Georgia says a line in another currency is in lari (migration 0073): the official rate of its day. Null at TBC.
   bankGelTetri Int?               @map("bank_gel_tetri")
+  /// A line in another currency sorted as money: the lari it counts at — the bank's, or the owner's correction (0076).
+  gelTetri    Int?                @map("gel_tetri")
   payer       String?
   purpose     String?
   raw         String

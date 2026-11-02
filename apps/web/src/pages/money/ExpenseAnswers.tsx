@@ -47,7 +47,8 @@ export function useExpenseCategories(load: boolean, all = false): Categories {
 export interface OutLine {
   id: string;
   amountTetri: number;
-  group: 'recorded' | 'suggested' | 'none';
+  /** `foreign`: a line in another currency (0076), which has answers of its own (`ForeignAnswers.tsx`). */
+  group: 'recorded' | 'suggested' | 'none' | 'foreign';
   payee?: string | null;
   canRemember?: boolean;
   lastCategoryId?: string | null;
@@ -363,22 +364,25 @@ interface PurchaseRow {
   paidPercent: number | null;
 }
 
-/** «Поставщику»: the orders not paid in full. */
-function SupplierSheet({ line, onClose }: { line: OutLine; onClose: () => void }) {
+/**
+ * «Поставщику»: the orders not paid in full. A line in another currency pays
+ * at the lari it is sorted at, `gelTetri` (migration 0076): that is the cost.
+ */
+export function SupplierSheet({ line, onClose, gelTetri }: { line: { id: string; amountTetri: number }; onClose: () => void; gelTetri?: number }) {
   const t = useT();
   const { data } = useLoad<{ purchases: PurchaseRow[] }>('/api/purchases');
   const [pick, setPick] = useState<PurchaseRow | null>(null);
   const rows = (data?.purchases ?? []).filter((p) => p.status !== 'cancelled' && (p.paidPercent ?? 0) < 100);
   return (
     <FormSheet
-      title={t.exp.supplierTitle(formatGel(line.amountTetri))}
+      title={t.exp.supplierTitle(formatGel(gelTetri ?? line.amountTetri))}
       onClose={onClose}
       value={pick?.id ?? null}
       initial={null}
       label={pick ? `${t.exp.supplier} · ${pick.number}` : t.exp.supplier}
       submit={async (key) => {
         if (!pick) throw new Error('nothing picked');
-        const r = await api.post<{ id: string }>(`/api/statement-lines/${line.id}/pay-out`, { kind: 'supplier', purchaseId: pick.id }, { key });
+        const r = await api.post<{ id: string }>(`/api/statement-lines/${line.id}/pay-out`, { kind: 'supplier', purchaseId: pick.id, ...(gelTetri != null ? { gelTetri } : {}) }, { key });
         return { toast: { text: t.exp.supplierDone(pick.number), undo: () => api.post(`/api/payments/${r.id}/undo`) } };
       }}
     >

@@ -46,6 +46,8 @@ export async function inBankAlready(
   const rows = await tx.statementLine.findMany({
     where: {
       direction: 'in',
+      // A customer's money is lari: a line in another currency is nobody's rent (0076).
+      currency: 'GEL',
       status: { in: ['unmatched', 'matched'] },
       occurredOn: { gte: dateFromISO(addDays(input.occurredOn, -WINDOW_DAYS))!, lte: dateFromISO(addDays(input.occurredOn, WINDOW_DAYS))! },
     },
