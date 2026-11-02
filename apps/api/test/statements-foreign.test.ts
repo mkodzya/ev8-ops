@@ -261,7 +261,7 @@ describe.skipIf(!HAS_DB)('the accounts in another currency, shown apart on «В�
   type Foreign = {
     from: string;
     to: string;
-    accounts: { bank: string; last4: string | null; currency: string; inMinor: number; outMinor: number; lines: { occurredOn: string; direction: string; amountMinor: number; purpose: string | null }[] }[];
+    accounts: { bank: string; last4: string | null; currency: string; inMinor: number; outMinor: number; lines: { occurredOn: string; direction: string; amountMinor: number; bankGelTetri: number | null; repeats?: { occurredOn: string }; purpose: string | null }[] }[];
   };
 
   it('lists each account apart and sums it in its own currency: no currency is added to another, nor to the lari', async () => {
@@ -270,7 +270,8 @@ describe.skipIf(!HAS_DB)('the accounts in another currency, shown apart on «В�
     const owner = await loginAs('owner');
     const key = () => `api:test:${uniq()}`;
     // One IBAN at Bank of Georgia in dollars, euros and lari, and a TBC account in dollars.
-    await keep('bog', 'Business Online', BOG_ACCOUNT, '2098-02-10', [op(key(), '2098-02-10', 'in', 15000, { purpose: 'invented USD in' }), op(key(), '2098-02-10', 'out', 4000)], tally(), 'USD');
+    // Bank of Georgia sends its own lari for a line in dollars; the invented ones here are 2.6 to the dollar.
+    await keep('bog', 'Business Online', BOG_ACCOUNT, '2098-02-10', [op(key(), '2098-02-10', 'in', 15000, { purpose: 'invented USD in', bankGelTetri: 39000 }), op(key(), '2098-02-10', 'out', 4000, { bankGelTetri: 10400 })], tally(), 'USD');
     await keep('bog', 'Business Online', BOG_ACCOUNT, '2098-02-11', [op(key(), '2098-02-11', 'in', 2050)], tally(), 'USD');
     await keep('bog', 'Business Online', BOG_ACCOUNT, '2098-02-12', [op(key(), '2098-02-12', 'in', 9900)], tally(), 'EUR');
     await keep('tbc', 'Business Integration Services', TBC_ACCOUNT, '2098-02-13', [op(key(), '2098-02-13', 'out', 1240)], tally(), 'USD');
@@ -293,6 +294,10 @@ describe.skipIf(!HAS_DB)('the accounts in another currency, shown apart on «В�
     expect(dollars.map((l) => l.occurredOn)).toEqual(['2098-02-11', '2098-02-10', '2098-02-10']);
     expect(dollars.map((l) => `${l.direction} ${l.amountMinor}`).sort()).toEqual(['in 15000', 'in 2050', 'out 4000']);
     expect(page.accounts[1]!.lines.map((l) => l.purpose)).toContain('invented USD in');
+    // Each line carries the bank's lari for it, or null when the bank sent none; no total sums them.
+    expect(dollars.map((l) => `${l.amountMinor} ${l.bankGelTetri}`).sort()).toEqual(['15000 39000', '2050 null', '4000 10400']);
+    expect(page.accounts[2]!.lines.map((l) => l.bankGelTetri)).toEqual([null]);
+    expect(Object.keys(page.accounts[1]!).sort()).toEqual(['bank', 'currency', 'inMinor', 'last4', 'lines', 'outMinor']);
     // An account is said by its last four digits, never more.
     expect(res.body).not.toContain(BOG_ACCOUNT);
     expect(res.body).not.toContain(TBC_ACCOUNT);
@@ -320,5 +325,36 @@ describe.skipIf(!HAS_DB)('the accounts in another currency, shown apart on «В�
     const bad = await call(owner, 'GET', '/api/statement-lines/foreign?from=2098-02-28&to=2098-02-01');
     expect(bad.statusCode).toBe(400);
     expect(err(bad)).toBe('bad_period');
+  });
+
+  it('keeps a card payment the bank sends twice out, and shows one that got in before beside the line it repeats, in no sum', async () => {
+    const { prisma } = await import('../src/lib/db.js');
+    const { keep, tally } = await import('../src/lib/statements/apiDays.js');
+    const owner = await loginAs('owner');
+    // A payment abroad as the bank lists it (01.11.2026): first with the minute it was
+    // paid, then posted with its day alone under a number of four digits. Shop, sum,
+    // card and numbers are invented.
+    const words = (at: string, shop: string) => `გადახდა - თანხა: USD25.00; ობიექტი: ${shop}; MCC:7311; თარიღი: ${at}; ბარათის No: ****0000`;
+    const line = (day: string, doc: string, at: string, shop: string) =>
+      op(`api:test:${uniq()}`, day, 'out', 2500, { docNo: doc, bankGelTetri: 6500, raw: [day.split('-').reverse().join('.'), doc, '', '25.00', '', words(at, shop)].join(' | ') });
+    const first = line('2098-04-30', '11000000001', '30/04/2098 00:51', 'EXAMPLE ADS>DUBLIN IE, Ireland');
+    const posted = line('2098-05-01', '4444', '30/04/2098 00:00', 'EXAMPLE ADS, Ireland');
+    await keep('bog', 'Business Online', BOG_ACCOUNT, '2098-04-30', [first], tally(), 'USD');
+    await keep('bog', 'Business Online', BOG_ACCOUNT, '2098-05-01', [posted], tally(), 'USD');
+    made.push(...(await prisma.statement.findMany({ where: { source: 'api', account: BOG_ACCOUNT, periodFrom: { gte: asDate('2098-04-01'), lte: asDate('2098-05-31') } }, select: { id: true } })).map((s) => s.id));
+    // Rule 5: the posting is the payment already in, and is not added.
+    expect(await prisma.statementLine.count({ where: { naturalKey: posted.naturalKey } })).toBe(0);
+
+    // As the posting of 01.11.2026 did before the rule knew a day alone: it is in.
+    const kept = await prisma.statementLine.findFirstOrThrow({ where: { naturalKey: first.naturalKey } });
+    await prisma.statementLine.create({ data: { statementId: kept.statementId, bank: 'bog', naturalKey: posted.naturalKey, docNo: '4444', occurredOn: asDate('2098-05-01'), direction: 'out', currency: 'USD', amountTetri: 2500, bankGelTetri: 6500, raw: posted.raw, status: 'ignored', resolution: 'foreign' } });
+    // The month of the repeat shows it beside the day it repeats, and sums nothing of it.
+    const may = json<Foreign>(await call(owner, 'GET', '/api/statement-lines/foreign?from=2098-05-01&to=2098-05-31')).accounts.find((a) => a.currency === 'USD')!;
+    expect(may.lines.map((l) => [l.amountMinor, l.repeats?.occurredOn ?? null])).toEqual([[2500, '2098-04-30']]);
+    expect(may.outMinor).toBe(0);
+    // The month of the first listing counts it once.
+    const april = json<Foreign>(await call(owner, 'GET', '/api/statement-lines/foreign?from=2098-04-01&to=2098-04-30')).accounts.find((a) => a.currency === 'USD')!;
+    expect(april.outMinor).toBe(2500);
+    expect(april.lines.map((l) => l.repeats ?? null)).toEqual([null]);
   });
 });

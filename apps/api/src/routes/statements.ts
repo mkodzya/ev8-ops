@@ -1,4 +1,4 @@
-import { daysBetween, mayLinkPayment, mayRemember, maySortTo, mayUnlink, monthOf, nameMatches, todayISO, type Permission } from '@ev8/shared';
+import { addDays, daysBetween, mayLinkPayment, mayRemember, maySortTo, mayUnlink, monthOf, nameMatches, todayISO, type Permission } from '@ev8/shared';
 import type { FastifyInstance } from 'fastify';
 import type { Prisma } from '../generated/prisma/client.js';
 import { audit } from '../lib/audit.js';
@@ -20,6 +20,7 @@ import { isCashDeposit, loadCtx, storedLine, suggest } from '../lib/statements/r
 import { expenseKey, lastCategories, payeeLabel, sortByRule, waitingFrom } from '../lib/statements/expenses.js';
 import { BACK_TO_QUEUE, setAside } from '../lib/statements/aside.js';
 import { twinReason, twinsOf } from '../lib/statements/duplicates.js';
+import { CARD_DAYS, cardRepeats } from '../lib/statements/sameLine.js';
 import { livePayerRules, namesAnother, payerByAccount, payerKey, payerLabel, rememberPayer, type PayerKind } from '../lib/statements/payers.js';
 import { tbcApiStatus, tbcPairsStatus } from '../lib/tbc.js';
 import { settleAfterShift } from '../lib/weekShift.js';
@@ -444,27 +445,47 @@ export function statementRoutes(app: FastifyInstance): void {
    * — a bank, an IBAN by its last four digits, a currency — sums what came in
    * and went out in its own currency: two currencies are never added up, and
    * nothing here is in a total in ₾.
+   *
+   * A card payment the bank listed twice (rule 5 of `sameLine.ts`; 01.11.2026:
+   * a payment abroad in dollars, listed on 31.10 and again on 01.11) is shown
+   * with the line it repeats and is in no sum. The lines are read a few days
+   * past the period on each side, so a repeat is known when its first listing
+   * fell in the month before.
    */
   app.get<{ Querystring: { from?: string; to?: string } }>('/api/statement-lines/foreign', { config: { scope: 'payments.reconcile' } }, async (req) => {
     const month = monthOf(todayISO(new Date(), env.TZ));
     const from = date(req.query, 'from') ?? month.from;
     const to = date(req.query, 'to') ?? month.to;
     if (from > to) throw badRequest('bad_period', 'The period starts after it ends.', { field: 'from' });
-    const lines = await prisma.statementLine.findMany({
-      where: { currency: { not: 'GEL' }, occurredOn: { gte: dateFromISO(from)!, lte: dateFromISO(to)! } },
+    const near = await prisma.statementLine.findMany({
+      where: { currency: { not: 'GEL' }, occurredOn: { gte: dateFromISO(addDays(from, -CARD_DAYS))!, lte: dateFromISO(addDays(to, CARD_DAYS))! } },
       orderBy: [{ occurredOn: 'desc' }, { createdAt: 'desc' }],
       include: { statement: { select: { account: true } } },
+    });
+    const keyOf = (l: (typeof near)[number]) => `${l.bank} ${l.statement.account ?? ''} ${l.currency}`;
+    // Each account and currency on its own: a sum in dollars is never another's twin.
+    const repeats = new Map<string, { occurredOn: string }>();
+    for (const key of new Set(near.map(keyOf))) {
+      const ofAccount = near.filter((l) => keyOf(l) === key).map((l) => ({ ...l, occurredOn: isoDate(l.occurredOn)! }));
+      for (const [id, twin] of cardRepeats(ofAccount)) repeats.set(id, { occurredOn: twin.occurredOn });
+    }
+    const lines = near.filter((l) => {
+      const day = isoDate(l.occurredOn)!;
+      return day >= from && day <= to;
     });
     type Account = { bank: (typeof BANKS)[number]; last4: string | null; currency: string; inMinor: number; outMinor: number; lines: unknown[] };
     const accounts = new Map<string, Account>();
     for (const l of lines) {
       const iban = l.statement.account;
-      const key = `${l.bank} ${iban ?? ''} ${l.currency}`;
+      const key = keyOf(l);
       const a = accounts.get(key) ?? { bank: l.bank, last4: iban ? last4(iban) : null, currency: l.currency, inMinor: 0, outMinor: 0, lines: [] };
-      if (l.direction === 'in') a.inMinor += l.amountTetri;
-      else a.outMinor += l.amountTetri;
+      const twin = repeats.get(l.id);
+      if (!twin && l.direction === 'in') a.inMinor += l.amountTetri;
+      else if (!twin) a.outMinor += l.amountTetri;
       // In minor units of the line's currency: cents for dollars, as tetri are for lari.
-      a.lines.push({ id: l.id, occurredOn: isoDate(l.occurredOn), direction: l.direction, amountMinor: l.amountTetri, payer: l.payer, purpose: l.purpose, raw: l.raw });
+      // `bankGelTetri` is the bank's own sum in lari for it (Bank of Georgia sends one, TBC
+      // does not): shown beside the line with the rate it makes, summed nowhere (Mika, 01.11.2026).
+      a.lines.push({ id: l.id, occurredOn: isoDate(l.occurredOn), direction: l.direction, amountMinor: l.amountTetri, bankGelTetri: l.bankGelTetri, payer: l.payer, purpose: l.purpose, raw: l.raw, ...(twin ? { repeats: twin } : {}) });
       accounts.set(key, a);
     }
     const order = (a: Account) => `${BANKS.indexOf(a.bank)} ${a.currency} ${a.last4 ?? ''}`;

@@ -62,6 +62,14 @@ import { daysBetween } from '@ev8/shared';
 // posting number of its own, of the same length. A text cut short before the
 // shop or the minute is no card payment for this rule. Whichever line came in
 // first stays, as with every other rule; the later is the one not added.
+//
+// A payment abroad (01.11.2026, the account in dollars: a payment to an
+// advertising platform in Ireland listed on 31.10 and again on 01.11) is
+// posted under a number of four digits, and its posting writes the day alone,
+// `თარიღი: 31/10/2026 00:00`, where the first listing has the minute it was
+// paid. So the minutes agree, or one listing says midnight: then the day must
+// agree, and the MCC and the card's last digits must be on both and agree —
+// a day is a weaker sign than a minute.
 
 export interface SameLineCandidate {
   naturalKey: string;
@@ -253,6 +261,22 @@ export function bogCardOf(raw: string | null | undefined): BogCard | null {
   };
 }
 
+/** A listing that writes the day of the payment alone: a posting abroad says midnight. */
+const dayOnly = (c: BogCard) => c.at.endsWith(' 00:00');
+
+/**
+ * The two listings were paid at one moment: the same minute, or — when one of
+ * them writes its day alone — the same day, with the MCC and the card on both
+ * and the same.
+ */
+function sameMoment(ca: BogCard, cb: BogCard): boolean {
+  if (ca.at === cb.at) return true;
+  if (!dayOnly(ca) && !dayOnly(cb)) return false;
+  // The bank's own words, `YYYY-MM-DD HH:MM` read from the text: the day is what stands before the space.
+  const dayOf = (c: BogCard) => c.at.split(' ')[0];
+  return dayOf(ca) === dayOf(cb) && ca.mcc != null && ca.mcc === cb.mcc && ca.card != null && ca.card === cb.card;
+}
+
 /** Two lines, each read for its card payment, are one payment the bank listed twice (rule 5). */
 function cardTwins(a: SameLineCandidate, ca: BogCard | null, b: SameLineCandidate, cb: BogCard | null): boolean {
   if (!ca || !cb || a.direction !== b.direction || a.amountTetri !== b.amountTetri) return false;
@@ -260,7 +284,7 @@ function cardTwins(a: SameLineCandidate, ca: BogCard | null, b: SameLineCandidat
   const da = docKey(a.docNo);
   const db = docKey(b.docNo);
   if (!da || !db || da.length === db.length) return false;
-  return ca.merchant === cb.merchant && ca.at === cb.at && (!ca.mcc || !cb.mcc || ca.mcc === cb.mcc) && (!ca.card || !cb.card || ca.card === cb.card);
+  return ca.merchant === cb.merchant && sameMoment(ca, cb) && (!ca.mcc || !cb.mcc || ca.mcc === cb.mcc) && (!ca.card || !cb.card || ca.card === cb.card);
 }
 
 /** Rule 5 for two lines as they stand. */
