@@ -4,6 +4,7 @@ import { scheduleToday } from '../lib/calendar.js';
 import { prisma } from '../lib/db.js';
 import { env } from '../lib/env.js';
 import { actorOf, mayView } from '../lib/guard.js';
+import { LARI } from '../lib/statements/foreign.js';
 import { todoCountsOf } from '../lib/todos.js';
 import { migrationLeft } from './migration.js';
 
@@ -24,7 +25,7 @@ export function navRoutes(app: FastifyInstance): void {
     const owner = mayView(req, 'payments.reconcile');
     const [schedule, lines, till, migration, todos] = await Promise.all([
       mayView(req, 'payments.schedule') ? scheduleToday(today).then((s) => s.counts) : null,
-      mayView(req, 'payments.sort.customer') || owner ? prisma.statementLine.groupBy({ by: ['direction'], where: { status: 'unmatched' }, _count: { _all: true } }) : null,
+      mayView(req, 'payments.sort.customer') || owner ? prisma.statementLine.groupBy({ by: ['direction'], where: { status: 'unmatched', ...(owner ? {} : LARI) }, _count: { _all: true } }) : null,
       owner ? prisma.cashHandover.count({ where: { status: 'pending' } }) : null,
       // «До EV8 Ops» shows while it has something left (issue #18, B6) — the tab of whoever reads it.
       mayView(req, 'users.manage') ? migrationLeft() : null,

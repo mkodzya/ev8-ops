@@ -194,9 +194,10 @@ describe.skipIf(!HAS_DB)('«Прочитать сейчас» on «Выписк�
     const lines = await prisma.statementLine.findMany({ where: { amountTetri: { in: [1, 2, 3, 4, 5].map((n) => sum(n) * 100) } }, orderBy: { amountTetri: 'asc' } });
     expect(lines.map((l) => [l.bank, l.currency, l.status])).toEqual([
       ['bog', 'GEL', 'unmatched'],
-      ['bog', 'USD', 'ignored'],
-      ['bog', 'USD', 'ignored'],
-      ['bog', 'USD', 'ignored'],
+      // Waiting for an owner since 0076.
+      ['bog', 'USD', 'unmatched'],
+      ['bog', 'USD', 'unmatched'],
+      ['bog', 'USD', 'unmatched'],
       ['tbc', 'GEL', 'unmatched'],
     ]);
     // The pair in dollars has read its past days, as the worker's night would have.

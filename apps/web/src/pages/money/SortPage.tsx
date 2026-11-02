@@ -1,4 +1,4 @@
-import { formatGel, isoWeekday, mayLinkPayment, maySortTo, parseGel, payDayMove, SEARCH_MIN, todayISO, weekDueOn, type PayDayMove } from '@ev8/shared';
+import { formatGel, formatMinor, isoWeekday, mayLinkPayment, maySortTo, parseGel, payDayMove, SEARCH_MIN, todayISO, weekDueOn, type PayDayMove } from '@ev8/shared';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../../api.js';
@@ -17,6 +17,7 @@ import { chargeWords } from '../../lib/charges.js';
 import { useLoad } from '../../lib/use.js';
 import { useSession } from '../../session.js';
 import { ExpenseAnswers, ExpenseRuleCard, useExpenseCategories, type Categories, type ExpenseRuleLine } from './ExpenseAnswers.js';
+import { ForeignLineCard } from './ForeignAnswers.js';
 import { IncomeAnswers, useIncomeCategories, type InLine } from './IncomeAnswers.js';
 
 interface Reason {
@@ -52,7 +53,12 @@ export interface SortLine {
   bank: 'bog' | 'tbc' | 'credo';
   direction: 'in' | 'out';
   occurredOn: string;
+  /** GEL, or the currency of an account in another currency (0076); absent while an older API answers. */
+  currency?: string;
+  /** In minor units of `currency`. */
   amountTetri: number;
+  /** A line in another currency: the bank's lari for it. */
+  bankGelTetri?: number | null;
   grossTetri: number | null;
   feeTetri?: number | null;
   channel: 'transfer' | 'acquiring';
@@ -60,7 +66,8 @@ export interface SortLine {
   purpose: string | null;
   raw: string;
   cashDeposit: boolean;
-  group: 'recorded' | 'suggested' | 'none';
+  /** `foreign`: a line in another currency, an owner's to sort (0076). */
+  group: 'recorded' | 'suggested' | 'none' | 'foreign';
   recorded: Suggestion[];
   suggestions: Suggestion[];
   /** Money going out (migration 0046): the payee to remember, and how it was sorted last time. */
@@ -137,8 +144,8 @@ export function SortPage({ direction }: { direction: 'in' | 'out' }) {
   // Other income's categories are an owner's answer: a manager's screen does not ask for them.
   const incomeCats = useIncomeCategories(direction === 'in' && owner);
 
-  const groups = (['recorded', 'suggested', 'none'] as const).map((g) => ({ g, lines: (data?.lines ?? []).filter((l) => groupOf(l) === g) }));
-  const title = { recorded: t.sort.recordedGroup, suggested: t.sort.hintsGroup, none: t.sort.noneGroup };
+  const groups = (['recorded', 'suggested', 'none', 'foreign'] as const).map((g) => ({ g, lines: (data?.lines ?? []).filter((l) => groupOf(l) === g) }));
+  const title = { recorded: t.sort.recordedGroup, suggested: t.sort.hintsGroup, none: t.sort.noneGroup, foreign: t.bankCurrency.sortGroup };
 
   return (
     <>
@@ -155,9 +162,13 @@ export function SortPage({ direction }: { direction: 'in' | 'out' }) {
                 <h2 className="sort-group t-h3">
                   {title[g]} <span className="muted mono">{lines.length}</span>
                 </h2>
-                {lines.map((l) => (
-                  <LineCard key={l.id} line={l} cats={l.direction === 'in' ? incomeCats : cats} onNotOurs={() => setNotOurs(l)} onSplit={() => setSplitting(l)} />
-                ))}
+                {lines.map((l) =>
+                  l.group === 'foreign' ? (
+                    <ForeignLineCard key={l.id} line={l} cats={l.direction === 'in' ? incomeCats : cats} onNotOurs={() => setNotOurs(l)} />
+                  ) : (
+                    <LineCard key={l.id} line={l} cats={l.direction === 'in' ? incomeCats : cats} onNotOurs={() => setNotOurs(l)} onSplit={() => setSplitting(l)} />
+                  ),
+                )}
               </section>
             ),
         )}
@@ -180,7 +191,7 @@ export function SortPage({ direction }: { direction: 'in' | 'out' }) {
  * bank speaks for — a sum alone raises nothing; going out, as the server says.
  */
 function groupOf(l: SortLine): SortLine['group'] {
-  if (l.direction === 'out' || l.group === 'recorded') return l.group;
+  if (l.direction === 'out' || l.group === 'recorded' || l.group === 'foreign') return l.group;
   return l.remembered || l.duplicateOf || l.suggestions.some((s) => s.reason.code === 'name' || s.kind === 'bank_deposit') ? 'suggested' : 'none';
 }
 
@@ -950,7 +961,7 @@ function NotOursSheet({ line, onClose }: { line: SortLine; onClose: () => void }
     >
       <p className="sort-line-text">
         {line.direction === 'out' ? '−' : '+'}
-        {formatGel(line.amountTetri)} · {fmtDate(line.occurredOn)} · {line.payer ?? line.purpose ?? ''}
+        {formatMinor(line.amountTetri, line.currency ?? 'GEL')} · {fmtDate(line.occurredOn)} · {line.payer ?? line.purpose ?? ''}
       </p>
       <Field label={t.sort.notOursReason} hint={t.sort.notOursHint} name="reason">
         <input className="input" value={reason} onChange={(e) => setReason(e.target.value)} autoFocus />
@@ -990,7 +1001,12 @@ interface AsideLine {
   bank: 'bog' | 'tbc' | 'credo';
   direction: 'in' | 'out';
   occurredOn: string;
+  /** GEL, or another currency (0076); absent while an older API answers. */
+  currency?: string;
+  /** In minor units of `currency`. */
   amountTetri: number;
+  /** A line in another currency set aside as money: the lari it counts at (0076). */
+  gelTetri?: number | null;
   payer: string | null;
   purpose: string | null;
   raw: string;
@@ -1049,13 +1065,15 @@ function AsideCard({ line, cats, incomeCats }: { line: AsideLine; cats: Categori
               ? t.inc.asideOther(incomeCats.nameOf(line.incomeCategoryId))
               : line.resolution === 'duplicate'
                 ? twinWhy(t, line.reason)
-                : t.sort.asideNotOurs(line.reason ?? '');
+                : line.resolution === 'fx_exchange'
+                  ? t.bankCurrency.sortAsideExchange
+                  : t.sort.asideNotOurs(line.reason ?? '');
   return (
     <article className="sort-line">
       <div className="sort-line-head">
         <span className={`t-money ${line.direction === 'out' ? 'amt-out' : 'amt-in'}`}>
           {line.direction === 'out' ? '−' : '+'}
-          {formatGel(line.amountTetri)}
+          {formatMinor(line.amountTetri, line.currency ?? 'GEL')}
         </span>
         <span className="sort-line-meta">
           {fmtDate(line.occurredOn)} · {t.statements.banks[line.bank]}
@@ -1064,6 +1082,7 @@ function AsideCard({ line, cats, incomeCats }: { line: AsideLine; cats: Categori
       <p className="sort-line-text">{[line.payer, line.purpose].filter(Boolean).join(' · ') || line.raw}</p>
       <p className="sort-reason">
         {why}
+        {line.gelTetri != null && <span className="mono"> · {t.bankCurrency.sortCountsAt(formatGel(line.gelTetri))}</span>}
         {line.by && line.on && <span className="muted"> · {t.sort.asideBy(line.by, fmtDate(line.on))}</span>}
       </p>
       <div className="sort-actions">

@@ -58,7 +58,8 @@ export async function liveRules(db: Db): Promise<Map<string, LiveRule>> {
 /** A waiting line sorted by a remembered payee; false when somebody got to it first. */
 export async function sortByRule(tx: Tx, lineId: string, rule: LiveRule, actorId: string | null): Promise<boolean> {
   const done = await tx.statementLine.updateMany({
-    where: { id: lineId, status: 'unmatched', direction: 'out' },
+    // Lines in lari only: a line in another currency waits for an owner (0076).
+    where: { id: lineId, status: 'unmatched', direction: 'out', currency: 'GEL' },
     data: {
       status: 'ignored',
       matchedRule: 'expense_rule',
@@ -78,7 +79,7 @@ export async function sortByRule(tx: Tx, lineId: string, rule: LiveRule, actorId
 
 /** The waiting lines from this payee, for a rule just remembered to sort at once. */
 export async function waitingFrom(tx: Tx, key: string, except: string): Promise<string[]> {
-  const lines = await tx.statementLine.findMany({ where: { status: 'unmatched', direction: 'out', id: { not: except } }, select: { id: true, payer: true, purpose: true } });
+  const lines = await tx.statementLine.findMany({ where: { status: 'unmatched', direction: 'out', currency: 'GEL', id: { not: except } }, select: { id: true, payer: true, purpose: true } });
   return lines.filter((l) => expenseKey(l) === key).map((l) => l.id);
 }
 

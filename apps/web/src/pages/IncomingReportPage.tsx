@@ -7,6 +7,7 @@ import '../ds/money/money.css';
 import { fmtDate } from '../format.js';
 import { useT } from '../i18n/index.js';
 import { useLoad } from '../lib/use.js';
+import { ForeignInReports, type ForeignInReport } from './money/ForeignAnswers.js';
 import { useIncomeCategories } from './money/IncomeAnswers.js';
 
 interface Report {
@@ -18,11 +19,15 @@ interface Report {
   otherIncomeTetri: number;
   founder: number;
   ownTransfers: number;
+  /** One leg of a currency exchange (0076); absent while an older API answers. */
+  fxExchange?: number;
   bankDeposits: number;
   other: number;
   unsorted: number;
   unsortedLines: number;
   totalInTetri: number;
+  /** The accounts in another currency (0076); absent while an older API answers. */
+  foreign?: ForeignInReport[];
 }
 
 type Span = 'week' | 'month' | 'last_month';
@@ -58,6 +63,7 @@ export function IncomingReportPage() {
     ? [
         { key: 'founder', label: r.founder, tetri: data.founder },
         { key: 'own', label: r.ownTransfers, tetri: data.ownTransfers },
+        { key: 'fx', label: t.bankCurrency.sortExchange, tetri: data.fxExchange ?? 0 },
         { key: 'bank', label: r.bankDeposits, tetri: data.bankDeposits },
         { key: 'other', label: r.other, tetri: data.other },
       ].filter((x) => x.tetri > 0)
@@ -132,6 +138,7 @@ export function IncomingReportPage() {
           <p className="hint muted">{r.net}</p>
         </section>
       )}
+      {data && <ForeignInReports foreign={data.foreign} sortTo="/sort" unsorted={r.unsorted} />}
     </>
   );
 }

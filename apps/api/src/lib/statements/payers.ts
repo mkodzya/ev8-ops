@@ -191,7 +191,8 @@ export function decideWithPayers(line: Line, ctx: Ctx, rules: Map<string, LivePa
 /** A line set aside by a remembered payer; false when somebody got to it first. */
 export async function asideByRule(tx: Tx, lineId: string, a: Extract<PayerAnswer, { type: 'aside' }>, actorId: string | null): Promise<boolean> {
   const done = await tx.statementLine.updateMany({
-    where: { id: lineId, status: 'unmatched', direction: 'in' },
+    // Lines in lari only: a line in another currency waits for an owner (0076).
+    where: { id: lineId, status: 'unmatched', direction: 'in', currency: 'GEL' },
     data: {
       status: 'ignored',
       matchedRule: 'payer_rule',
@@ -224,7 +225,7 @@ export async function sortWaitingBy(ruleId: string, key: string, except: string,
   const rule = await prisma.payerRule.findUnique({ where: { id: ruleId }, select: { id: true, kind: true, customerId: true, categoryId: true, archivedAt: true } });
   if (!rule || rule.archivedAt) return [];
   const live: LivePayerRule = { id: rule.id, kind: rule.kind as PayerKind, customerId: rule.customerId, categoryId: rule.categoryId };
-  const waiting = await prisma.statementLine.findMany({ where: { status: 'unmatched', direction: 'in', id: { not: except } }, orderBy: [{ occurredOn: 'asc' }, { createdAt: 'asc' }] });
+  const waiting = await prisma.statementLine.findMany({ where: { status: 'unmatched', direction: 'in', currency: 'GEL', id: { not: except } }, orderBy: [{ occurredOn: 'asc' }, { createdAt: 'asc' }] });
   const mine = waiting.filter((l) => payerKey(storedLine(l)) === key);
   const sorted: string[] = [];
   for (const l of mine) {

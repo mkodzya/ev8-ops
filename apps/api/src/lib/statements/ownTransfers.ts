@@ -124,7 +124,8 @@ export async function markOwnTransfers(): Promise<number> {
   if (own.size < 2) return 0;
   const since = new Date(Date.now() - LOOK_BACK_DAYS * 86_400_000);
   const rows = await prisma.statementLine.findMany({
-    where: { status: 'unmatched', occurredOn: { gte: since } },
+    // Lari only: our accounts in another currency are paired by an owner, as «Обмен валюты» or «Между счетами» (0076).
+    where: { status: 'unmatched', currency: 'GEL', occurredOn: { gte: since } },
     select: { id: true, bank: true, direction: true, occurredOn: true, amountTetri: true, grossTetri: true, feeTetri: true, payer: true, purpose: true, raw: true, statement: { select: { account: true } } },
   });
   if (rows.length === 0) return 0;
