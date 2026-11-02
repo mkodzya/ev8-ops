@@ -17,6 +17,7 @@ export const remEn = {
     /** Why it did not go — our word, never Kommo's. */
     failures: {
       no_deal: 'no Kommo deal',
+      shared_deal: 'another rental has the same Kommo deal',
       no_bot: 'no bot for this template',
       no_field: 'no «Amount due» field in Kommo',
       not_written: 'the sum did not stay in the deal',
@@ -104,6 +105,7 @@ export const remRu: Rem = {
     failed: 'не ушло',
     failures: {
       no_deal: 'нет сделки в Kommo',
+      shared_deal: 'у другой аренды та же сделка Kommo',
       no_bot: 'нет бота для этого шаблона',
       no_field: 'в Kommo нет поля «Amount due»',
       not_written: 'сумма не записалась в сделку',
@@ -187,6 +189,7 @@ export const remKa: Rem = {
     failed: 'ვერ გაიგზავნა',
     failures: {
       no_deal: 'Kommo-ში გარიგება არ არის',
+      shared_deal: 'სხვა ქირაობას იგივე Kommo-ს გარიგება აქვს',
       no_bot: 'ამ შაბლონისთვის ბოტი არ არის',
       no_field: 'Kommo-ში ველი «Amount due» არ არის',
       not_written: 'თანხა გარიგებაში არ ჩაიწერა',

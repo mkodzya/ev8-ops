@@ -152,6 +152,8 @@ export type ReminderMode = (typeof REMINDER_MODES)[number];
  */
 export const REMINDER_FAILURES = [
   'no_deal',
+  // Another rental's reminder went to the same deal in this run (one sum a deal at a time).
+  'shared_deal',
   'no_bot',
   'no_field',
   'not_written',

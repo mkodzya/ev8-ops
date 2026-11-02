@@ -28,6 +28,7 @@
 | `rem.sent` | отправлено | გაიგზავნა | gaigzavna |
 | `rem.failed` | не ушло | ვერ გაიგზავნა | ver gaigzavna |
 | `rem.failures.no_deal` | нет сделки в Kommo | Kommo-ში გარიგება არ არის | Kommo-shi garigeba ar aris |
+| `rem.failures.shared_deal` | у другой аренды та же сделка Kommo | სხვა ქირაობას იგივე Kommo-ს გარიგება აქვს | skhva kiraobas igive Kommo-s garigeba akvs |
 | `rem.failures.no_bot` | нет бота для этого шаблона | ამ შაბლონისთვის ბოტი არ არის | am shablonistvis boti ar aris |
 | `rem.failures.no_field` | в Kommo нет поля «Amount due» | Kommo-ში ველი «Amount due» არ არის | Kommo-shi veli «Amount due» ar aris |
 | `rem.failures.not_written` | сумма не записалась в сделку | თანხა გარიგებაში არ ჩაიწერა | tankha garigebashi ar chaitsera |
