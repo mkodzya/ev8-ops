@@ -210,6 +210,12 @@ export async function runReminders(a: CalendarNow, slot: ReminderSlot, now: Date
     }
   };
 
+  // The deal field holds one sum at a time, and Kommo runs a bot when it gets
+  // to it: a second rental's sum written into the same deal right after could
+  // be the one the first message reads. One reminder a deal a run; the other
+  // is written as not gone, for a person to call.
+  const usedLeads = new Set<string>();
+
   for (const p of plan) {
     const lead = leads.get(p.rentalId) ?? null;
     // A stand in `test` sends to the test deals an owner listed and to nobody else.
@@ -217,6 +223,13 @@ export async function runReminders(a: CalendarNow, slot: ReminderSlot, now: Date
       out.written += (await prisma.rentReminder.createMany({ data: [{ ...row(p), mode: 'dry_run' }], skipDuplicates: true })).count;
       continue;
     }
+    if (lead && usedLeads.has(lead)) {
+      const res = await prisma.rentReminder.createMany({ data: [{ ...row(p), mode: 'failed', failure: 'shared_deal', leadId: lead }], skipDuplicates: true });
+      out.written += res.count;
+      out.failed += res.count;
+      continue;
+    }
+    if (lead) usedLeads.add(lead);
     let id: string;
     try {
       id = (await prisma.rentReminder.create({ data: { ...row(p), mode: 'sending', leadId: lead }, select: { id: true } })).id;

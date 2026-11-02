@@ -156,6 +156,20 @@ describe.skipIf(!HAS_DB)('rent reminders through Kommo, step 2 (issue #20, ADR-0
     expect(await prisma.rentReminder.findFirstOrThrow({ where: { rentalId } })).toMatchObject({ mode: 'sent' });
   });
 
+  it.skipIf(!quiet)('two rentals on one deal: one message, the other written as not gone — the field holds one sum', async () => {
+    process.env.REMINDERS_SEND = 'on';
+    const k = fakeKommo();
+    setKommoFetchForTests(k.fetchFn, { gapMs: 0 });
+    const a = await rental();
+    const b = await rental({ deal: a.deal });
+    await job('12:00');
+    const rows = await a.prisma.rentReminder.findMany({ where: { rentalId: { in: [a.rentalId, b.rentalId] } } });
+    expect(rows.map((r) => r.mode).sort()).toEqual(['failed', 'sent']);
+    expect(rows.find((r) => r.mode === 'failed')).toMatchObject({ failure: 'shared_deal', leadId: a.deal });
+    expect(k.calls.filter((c) => c.method === 'PATCH')).toHaveLength(1);
+    expect(k.bots()).toHaveLength(1);
+  });
+
   it.skipIf(!quiet)('the customer’s deal serves when the rental names none', async () => {
     process.env.REMINDERS_SEND = 'on';
     const k = fakeKommo();
