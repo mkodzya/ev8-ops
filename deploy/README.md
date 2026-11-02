@@ -453,6 +453,7 @@ KOMMO_BASE_URL=               # https://ev8mopeds.kommo.com
 KOMMO_RENTAL_PIPELINE_ID=     # воронка аренды «Gaqiraveba», 13427775
 KOMMO_RENTED_STATUS_ID=       # этап «გაქირავებული», 103582579
 KOMMO_SALES_PIPELINE_ID=      # воронка продаж «Gayidvebi», 11266343 (выигранные продажи приходят задачами)
+KOMMO_AMOUNT_FIELD_ID=        # поле сделки «Amount due» для напоминаний, 1387297 (ADR-0053)
 KOMMO_CRON=                   # как часто спрашивать, по умолчанию */5 * * * *
 ```
 

@@ -47,6 +47,8 @@ export interface KommoConfig {
   wonStatusId: number;
   /** Kommo has gone silent when it has not answered for this long. */
   staleMs: number;
+  /** The deal field «Amount due» the reminder templates read the sum from (ADR-0053). */
+  amountFieldId: number;
 }
 
 // The account's own numbers, read in Kommo on 07.10.2026. They are defaults:
@@ -60,6 +62,8 @@ const DEFAULTS = {
   salesPipelineId: 11266343,
   wonStatusId: 142,
   staleMinutes: 20,
+  // «Amount due», the deal field the three reminder templates read (Mika, 02.11.2026).
+  amountFieldId: 1387297,
 } as const;
 
 const positiveInt = (raw: string | undefined, fallback: number): number => {
@@ -82,6 +86,7 @@ export function kommoConfig(e: NodeJS.ProcessEnv = process.env): KommoConfig | n
     salesPipelineId: positiveInt(e.KOMMO_SALES_PIPELINE_ID, DEFAULTS.salesPipelineId),
     wonStatusId: positiveInt(e.KOMMO_WON_STATUS_ID, DEFAULTS.wonStatusId),
     staleMs: positiveInt(e.KOMMO_STALE_MINUTES, DEFAULTS.staleMinutes) * 60_000,
+    amountFieldId: positiveInt(e.KOMMO_AMOUNT_FIELD_ID, DEFAULTS.amountFieldId),
   };
 }
 
@@ -290,9 +295,14 @@ export class KommoClient {
 
   // ── A rent reminder (ADR-0053): the sum, read back, then the bot ─────────
 
-  /** A deal field found by its name, as it reads in Kommo; null — the account has none. */
-  async leadField(name: string): Promise<KommoField | null> {
+  /**
+   * A deal field: the one with this id, else the one with this name as it
+   * reads in Kommo — a field renamed in Kommo keeps its id. Null — the
+   * account has neither.
+   */
+  async leadField(id: number, name: string): Promise<KommoField | null> {
     const want = name.trim().toLowerCase();
+    let byName: KommoField | null = null;
     for (let page = 1; page <= MAX_PAGES; page++) {
       const body = await this.request('GET', '/api/v4/leads/custom_fields', [
         ['limit', String(FIELD_PAGE)],
@@ -303,9 +313,12 @@ export class KommoClient {
       if (!Array.isArray(rows)) throw new KommoError('bad_answer');
       for (const row of rows) {
         const f = obj(row);
-        if (typeof f.name === 'string' && f.name.trim().toLowerCase() === want && typeof f.id === 'number') return { id: f.id, type: typeof f.type === 'string' ? f.type : 'text' };
+        if (typeof f.id !== 'number') continue;
+        const field = { id: f.id, type: typeof f.type === 'string' ? f.type : 'text' };
+        if (f.id === id) return field;
+        if (!byName && typeof f.name === 'string' && f.name.trim().toLowerCase() === want) byName = field;
       }
-      if (!obj(obj(body)._links).next || rows.length === 0) return null;
+      if (!obj(obj(body)._links).next || rows.length === 0) return byName;
     }
     throw new KommoError('bad_answer');
   }

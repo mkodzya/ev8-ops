@@ -15,7 +15,8 @@ const today = () => todayISO(new Date(), 'Asia/Tbilisi');
 const quiet = [0, 1].every((i) => !isReminderHoliday(addDays(today(), -i)));
 
 /** Kommo as far as a reminder knows it: the deal fields, a deal, the bot. */
-function fakeKommo(opts: { fieldName?: string; sticks?: boolean; patchStatus?: number } = {}) {
+function fakeKommo(opts: { fieldName?: string; fieldId?: number; sticks?: boolean; patchStatus?: number } = {}) {
+  const fieldId = opts.fieldId ?? FIELD;
   const values = new Map<string, unknown>();
   const calls: { method: string; path: string; body: unknown }[] = [];
   const answer = (status: number, body: unknown = null) => ({ status, json: async () => body });
@@ -24,7 +25,7 @@ function fakeKommo(opts: { fieldName?: string; sticks?: boolean; patchStatus?: n
     const body = init.body ? JSON.parse(init.body) : null;
     calls.push({ method: init.method, path: u.pathname, body });
     if (init.method === 'GET' && u.pathname === '/api/v4/leads/custom_fields') {
-      return answer(200, { _embedded: { custom_fields: [{ id: 11, name: 'Budget', type: 'numeric' }, { id: FIELD, name: opts.fieldName ?? 'Amount due', type: 'numeric' }] }, _links: {} });
+      return answer(200, { _embedded: { custom_fields: [{ id: 11, name: 'Budget', type: 'numeric' }, { id: fieldId, name: opts.fieldName ?? 'Amount due', type: 'numeric' }] }, _links: {} });
     }
     const lead = u.pathname.match(/^\/api\/v4\/leads\/(\d+)$/)?.[1];
     if (lead && init.method === 'PATCH') {
@@ -34,7 +35,7 @@ function fakeKommo(opts: { fieldName?: string; sticks?: boolean; patchStatus?: n
     }
     if (lead && init.method === 'GET') {
       const v = values.get(lead);
-      return answer(200, { id: Number(lead), custom_fields_values: v === undefined ? null : [{ field_id: FIELD, values: [{ value: v }] }] });
+      return answer(200, { id: Number(lead), custom_fields_values: v === undefined ? null : [{ field_id: fieldId, values: [{ value: v }] }] });
     }
     if (init.method === 'POST' && u.pathname === '/api/v2/salesbot/run') return answer(202);
     return answer(404);
@@ -143,6 +144,16 @@ describe.skipIf(!HAS_DB)('rent reminders through Kommo, step 2 (issue #20, ADR-0
     await job('18:00');
     expect(await noField.prisma.rentReminder.findFirstOrThrow({ where: { rentalId: noField.rentalId } })).toMatchObject({ mode: 'failed', failure: 'no_field' });
     expect(renamed.calls.filter((c) => c.method !== 'GET')).toEqual([]);
+  });
+
+  it.skipIf(!quiet)('the field is the account’s «Amount due» by its id, even renamed in Kommo', async () => {
+    process.env.REMINDERS_SEND = 'on';
+    const k = fakeKommo({ fieldId: 1387297, fieldName: 'Сумма к оплате' });
+    setKommoFetchForTests(k.fetchFn, { gapMs: 0 });
+    const { prisma, rentalId } = await rental();
+    await job('12:00');
+    expect(k.calls.find((c) => c.method === 'PATCH')!.body).toEqual({ custom_fields_values: [{ field_id: 1387297, values: [{ value: 150 }] }] });
+    expect(await prisma.rentReminder.findFirstOrThrow({ where: { rentalId } })).toMatchObject({ mode: 'sent' });
   });
 
   it.skipIf(!quiet)('the customer’s deal serves when the rental names none', async () => {

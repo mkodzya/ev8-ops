@@ -181,6 +181,7 @@ export async function runReminders(a: CalendarNow, slot: ReminderSlot, now: Date
   const leads = await reminderLeads(plan.map((p) => p.rentalId));
   const cfg = kommoConfig();
   const client = cfg ? kommoClient(cfg) : null;
+  const amountFieldId = cfg?.amountFieldId ?? 0;
   let field: KommoField | null | undefined; // undefined — not asked yet
   let stop: ReminderFailure | null = null;
   const out: RemindersOutcome = { decided: plan.length, written: 0, sendMode, held: null, sent: 0, failed: 0 };
@@ -192,7 +193,7 @@ export async function runReminders(a: CalendarNow, slot: ReminderSlot, now: Date
     if (!botId) return 'no_bot';
     if (stop) return stop;
     try {
-      if (field === undefined) field = await client.leadField(REMINDER_AMOUNT_FIELD);
+      if (field === undefined) field = await client.leadField(amountFieldId, REMINDER_AMOUNT_FIELD);
       if (!field) return 'no_field';
       const text = reminderAmountText(p.amountTetri);
       await client.setLeadField(lead, field, text);
