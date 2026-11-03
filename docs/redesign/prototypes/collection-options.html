@@ -1,0 +1,254 @@
+<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Должник не выходит на связь — варианты · EV8 Ops, прототип</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=Noto+Sans+Georgian:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+:root { --bg:#fbfbfb; --surface:#fff; --surface-2:#f3f3f3; --ink:#0b0b0b; --muted:#5d5d5d; --line:#dbe4de; --line-soft:#ebebeb; --line-control:#7a7a7a;
+  --accent:#557553; --accent-soft:#e3ebe3; --lime:#e0ffa2; --accent-ink:#3f5f3d; --crit:#b4432f; --crit-soft:#f8e6e2; --warn:#8a5a00; --warn-soft:#fbf0d9;
+  --sans:"Be Vietnam Pro","Noto Sans Georgian",system-ui,sans-serif; --mono:"IBM Plex Mono","Noto Sans Georgian",ui-monospace,monospace; }
+* { box-sizing:border-box; }
+body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.5 var(--sans); }
+main { max-width:1180px; margin:0 auto; padding:32px 16px 64px; }
+h1 { font-size:28px; line-height:1.2; margin:0 0 8px; } h2 { font-size:21px; margin:44px 0 4px; } h3 { font-size:17px; margin:0 0 6px; }
+.lead { color:var(--muted); max-width:820px; margin:0 0 8px; } .note { color:var(--muted); font-size:13px; }
+.mono { font-family:var(--mono); }
+.quote { background:#fff; border-left:4px solid var(--accent); border-radius:8px; padding:10px 14px; max-width:820px; margin:12px 0; font-size:14px; }
+.var { background:var(--surface); border:1px solid var(--line-soft); border-radius:16px; padding:18px; margin-top:16px; }
+.var.rec { border:2px solid var(--accent); }
+.tag { display:inline-block; font-size:12px; font-weight:600; padding:2px 9px; border-radius:99px; background:var(--surface-2); margin-bottom:6px; }
+.rec .tag { background:var(--lime); }
+.pros { display:grid; grid-template-columns:1fr 1fr; gap:6px 24px; font-size:14px; margin:8px 0 4px; }
+.pro::before { content:"+ "; color:#2f6b3a; font-weight:700; } .con::before { content:"− "; color:#9a3b2c; font-weight:700; }
+
+/* the ladder */
+.ladder { list-style:none; margin:16px 0 0; padding:0; display:grid; gap:0; max-width:860px; }
+.ladder > li { display:grid; grid-template-columns:96px 22px 1fr; gap:0 12px; }
+.ladder .day { font-family:var(--mono); font-size:13px; color:var(--muted); padding-top:12px; text-align:right; }
+.ladder .rail { position:relative; }
+.ladder .rail::before { content:""; position:absolute; left:10px; top:0; bottom:0; width:2px; background:var(--line); }
+.ladder .rail::after { content:""; position:absolute; left:4px; top:14px; width:14px; height:14px; border-radius:50%; background:#fff; border:2px solid var(--accent); }
+.ladder li.now .rail::after { background:var(--accent); }
+.ladder li.new .rail::after { border-color:var(--crit); background:var(--crit); }
+.ladder li.end .rail::before { bottom:auto; height:20px; }
+.step { background:#fff; border:1px solid var(--line-soft); border-radius:14px; padding:10px 14px; margin:6px 0; }
+.ladder li.new .step { border:2px solid var(--crit); }
+.step h4 { margin:0 0 2px; font-size:15px; } .step p { margin:2px 0; font-size:13.5px; } .step .who { color:var(--muted); font-size:12.5px; }
+.badge { display:inline-block; font-size:11px; font-weight:600; padding:1px 8px; border-radius:99px; background:var(--accent-soft); color:var(--accent-ink); margin-left:6px; vertical-align:2px; }
+.badge.new { background:var(--crit-soft); color:var(--crit); }
+.exit { display:inline-block; margin:4px 6px 0 0; font-size:12px; padding:2px 9px; border-radius:99px; background:var(--accent-soft); color:var(--accent-ink); }
+.exit.stop { background:var(--warn-soft); color:var(--warn); }
+
+/* phones */
+.frames { display:flex; gap:18px; overflow-x:auto; padding:12px 2px 6px; }
+.frame { margin:0; flex:none; width:300px; } figcaption { font-size:13px; color:var(--muted); margin-top:8px; } figcaption b { color:var(--ink); }
+.phone { position:relative; width:300px; height:580px; overflow:hidden; background:var(--bg); border:1px solid #cfd6d1; border-radius:26px; padding:14px 12px; font-size:12px; }
+.ph-top { display:flex; justify-content:space-between; align-items:center; margin:2px 4px 8px; } .ph-title { font-size:17px; font-weight:700; }
+.ph-sub { font-size:12px; color:var(--muted); margin:-4px 4px 8px; }
+.tabs { display:flex; gap:6px; margin-bottom:10px; } .tabs span { border:1px solid var(--line-control); border-radius:99px; padding:3px 10px; font-size:11px; }
+.tabs span.on { background:var(--ink); color:#fff; border-color:var(--ink); }
+.grp h5 { font-size:12px; margin:8px 4px 6px; } .grp h5 i { font-style:normal; color:var(--muted); font-family:var(--mono); }
+.sl { background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:10px; margin-bottom:8px; display:grid; gap:5px; }
+.sl.crit { border-left:4px solid var(--crit); }
+.sl-head { display:flex; align-items:baseline; gap:8px; } .who-n { font-weight:600; font-size:12.5px; flex:1; } .amt { font-family:var(--mono); font-weight:600; font-size:13px; color:var(--crit); }
+.meta { color:var(--muted); font-size:11px; margin:0; } .meta b { color:var(--ink); font-weight:600; }
+.crit-t { color:var(--crit); font-weight:600; }
+.acts { display:flex; flex-wrap:wrap; gap:5px; }
+.pill { display:inline-flex; align-items:center; border:1px solid var(--line-control); border-radius:99px; padding:4px 10px; font-size:11px; font-weight:500; background:#fff; white-space:nowrap; }
+.pill.acc { background:var(--accent); border-color:var(--accent); color:#fff; } .pill.crit { background:var(--crit); border-color:var(--crit); color:#fff; }
+.pill.wide { justify-content:center; width:100%; padding:7px; font-size:12px; }
+.src { font-size:10px; font-weight:600; color:var(--muted); border:1px dashed var(--line-control); border-radius:99px; padding:0 6px; }
+.dim { position:absolute; inset:0; background:rgba(11,11,11,.35); }
+.sheet { position:absolute; left:0; right:0; bottom:0; background:#fff; border-radius:20px 20px 0 0; padding:10px 14px 16px; display:grid; gap:7px; }
+.grab { width:40px; height:4px; border-radius:4px; background:#cfd6d1; margin:0 auto 4px; } .sh-t { margin:0; font-weight:600; font-size:13px; }
+.lbl { margin:2px 0 0; font-size:11px; color:var(--muted); }
+.rows { list-style:none; margin:0; padding:0; display:grid; gap:5px; } .rows li { border:1px solid var(--line); border-radius:12px; padding:6px 10px; display:grid; gap:1px; font-size:11.5px; }
+.rows li span { color:var(--muted); font-size:10.5px; } .rows li.on { border:2px solid var(--accent); background:var(--accent-soft); }
+.chips { display:flex; flex-wrap:wrap; gap:5px; } .chip { border:1px solid var(--line-control); border-radius:99px; padding:3px 9px; font-size:10.5px; }
+.chip.on { background:var(--lime); border-color:var(--lime); font-weight:600; }
+.inp { border:1px solid var(--line-control); border-radius:10px; padding:6px 10px; font:12px var(--mono); width:100%; color:var(--muted); }
+.hint { margin:0; font-size:10.5px; color:var(--muted); }
+.card { background:#fff; border:1px solid var(--line); border-radius:14px; padding:10px; margin-bottom:8px; }
+.card h6 { margin:0 0 6px; font-size:12.5px; }
+.tl { list-style:none; margin:0; padding:0; display:grid; gap:4px; font-size:11px; }
+.tl li { display:grid; grid-template-columns:42px 1fr; gap:6px; } .tl li span { color:var(--muted); font-family:var(--mono); font-size:10.5px; }
+.tl li.next { font-weight:600; color:var(--crit); }
+.kv { display:grid; grid-template-columns:auto 1fr; gap:2px 10px; font-size:11px; } .kv span { color:var(--muted); }
+.box2 { width:14px; height:14px; border:1px solid var(--line-control); border-radius:4px; display:inline-block; vertical-align:-2px; margin-right:4px; }
+
+.cannot { display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:14px; margin-top:12px; }
+.cannot div { background:#fff; border:1px solid var(--line-soft); border-radius:14px; padding:12px 16px; font-size:14px; }
+.cannot ul { margin:6px 0 0; padding-left:18px; } .cannot li { margin:3px 0; }
+.ask { background:#fff; border:2px solid var(--accent); border-radius:14px; padding:16px 20px; margin-top:40px; } .ask li { margin:6px 0; }
+@media (max-width:640px) { .pros { grid-template-columns:1fr; } h1 { font-size:22px; } .ladder > li { grid-template-columns:64px 22px 1fr; gap:0 8px; } }
+</style></head><body><main>
+
+<h1>Должник не выходит на связь: что делает EV8 Ops</h1>
+<p class="lead">Сценарий директора, 03.11.2026. Все клиенты, суммы, номера и имена менеджеров на этой странице выдуманы. Здесь показано, где менеджер видит задачу, как записывает звонок и как дело доходит до блокировки и забора мопеда.</p>
+<div class="quote">«Если 3 дня не реагирует, менеджеру должна ставиться задача дозвониться до этого клиента и мониторить его передвижения по GPS. Если в течение дня не выходит на связь, блокировать и организовывать забор мопеда».</div>
+
+<h2>1. Лестница: от дня оплаты до забора</h2>
+<p class="lead">Первые три ступени работают с 02.11.2026. Новые ступени выделены красным. Лестница останавливается сразу, как только приходит оплата.</p>
+<ol class="ladder">
+  <li class="now"><div class="day">день оплаты</div><div class="rail"></div><div class="step">
+    <h4>WhatsApp «день оплаты» <span class="badge">работает</span></h4>
+    <p>12:00, шаблон <span class="mono">ev8_payment_due</span>.</p></div></li>
+  <li class="now"><div class="day">1-й день</div><div class="rail"></div><div class="step">
+    <h4>WhatsApp «просрочка» ×2 <span class="badge">работает</span></h4>
+    <p>12:00 и 18:00, <span class="mono">ev8_overdue_1</span>. В «К звонку» — «пора звонить».</p></div></li>
+  <li class="now"><div class="day">2-й день</div><div class="rail"></div><div class="step">
+    <h4>WhatsApp «предупреждение о блокировке» ×2 <span class="badge">работает</span></h4>
+    <p>12:00 и 18:00, <span class="mono">ev8_overdue_2</span>.</p></div></li>
+  <li class="new"><div class="day">3-й день</div><div class="rail"></div><div class="step">
+    <h4>Дозвониться и проверить GPS <span class="badge new">новое</span></h4>
+    <p>Менеджеру ставится дело на сегодня. Он звонит и смотрит в приложении трекера, где мопед. Результат записывает в EV8 Ops в два нажатия.</p>
+    <p class="who">Выход из лестницы:</p>
+    <span class="exit">заплатил → лестница остановлена</span>
+    <span class="exit">дозвонился, обещал до даты → ждём до этой даты</span>
+    <span class="exit stop">не дозвонился или отказывается → шаг 4 завтра</span></div></li>
+  <li class="new"><div class="day">4-й день</div><div class="rail"></div><div class="step">
+    <h4>Заблокировать и организовать забор <span class="badge new">новое</span></h4>
+    <p>Если за день клиент не вышел на связь, мопед блокируют в приложении трекера, а в EV8 Ops отмечают «Заблокирован». Сразу ставится задача «Забрать мопед»: кто едет, место по GPS, фото по приезде.</p>
+    <span class="exit">заплатил после блокировки → снять блок, лестница остановлена</span></div></li>
+  <li class="new end"><div class="day">мопед на базе</div><div class="rail"></div><div class="step">
+    <h4>Возврат <span class="badge">уже есть</span></h4>
+    <p>Тот, кто забрал мопед, оформляет обычный акт возврата. Долг остаётся на клиенте, решение по залогу — как при любом возврате.</p></div></li>
+</ol>
+<p class="note">Как сессия поняла «3 дня» и «в течение дня»: 3-й день просрочки, после двух дней напоминаний, — звонок. 4-й день — блокировка. Дни считаются так же, как в напоминаниях: православные праздники Грузии сдвигают лестницу. Если читать иначе, это меняется одной цифрой.</p>
+
+<h2>2. Где менеджер видит дело — два варианта</h2>
+
+<div class="var rec">
+  <span class="tag">Вариант Б — рекомендую</span>
+  <h3>«Сегодня» → новая группа «Взыскание»</h3>
+  <p class="lead">Строка появляется сама на 3-й день и сама уходит, когда клиент заплатил или мопед вернули. Так устроено всё, что в «Сегодня» строит система: «К звонку», выдачи, ТО. В «Задачи» по ADR-0050 попадает только то, что поставили руками. Так решил директор 28.10, чтобы одно дело не висело в двух местах.</p>
+  <div class="pros">
+    <span class="pro">Само закрывается при оплате: никто не звонит тому, кто уже заплатил.</span>
+    <span class="con">У строки «Сегодня» нет исполнителя: её видят все менеджеры. Кто взял — видно по записи звонка.</span>
+    <span class="pro">На каждой строке — шаг и кнопка следующего действия.</span>
+    <span class="con">Нужно новое слово в меню «Сегодня» и три новые кнопки.</span>
+    <span class="pro">Для забора всё же ставится обычная задача в «Задачах» — с исполнителем и фото на закрытие. Это физическая поездка, у неё должен быть ответственный.</span>
+  </div>
+</div>
+
+<div class="var">
+  <span class="tag">Вариант А</span>
+  <h3>«Задачи» — система сама ставит задачу менеджеру</h3>
+  <p class="lead">Ближе к словам директора: «менеджеру должна ставиться задача». На 3-й день в «Задачах» у менеджера появляется «Дозвониться: клиент, долг», на 4-й — «Заблокировать и забрать».</p>
+  <div class="pros">
+    <span class="pro">Есть исполнитель и срок, видно, кто закрыл.</span>
+    <span class="con">Меняет ADR-0050: в «Задачах» появляются задачи, которые никто не ставил.</span>
+    <span class="pro">Менеджер работает в одном списке.</span>
+    <span class="con">Если в «Сегодня» продолжит висеть просрочка, получатся две записи об одном деле. Задачу надо уметь закрывать при оплате.</span>
+    <span class="con">Кому ставить, если менеджеров двое? Нужен «дежурный по взысканию» в настройках.</span>
+  </div>
+</div>
+
+<h2>3. Как это выглядит у менеджера (вариант Б)</h2>
+<div class="frames">
+
+  <figure class="frame"><div class="phone">
+    <div class="ph-top"><span class="ph-title">Сегодня</span><span class="note">пн, 3 ноября</span></div>
+    <div class="grp"><h5>Взыскание <i>· 3</i></h5>
+      <div class="sl crit"><div class="sl-head"><span class="who-n">Клиент А (пример)</span><span class="amt">450 ₾</span></div>
+        <p class="meta"><b>3-й день</b> · 2 напоминания и предупреждение ушли · Flybrother B11</p>
+        <p class="meta crit-t">Дозвониться и проверить GPS</p>
+        <div class="acts"><span class="pill">📞 Позвонить</span><span class="pill acc">Записать звонок</span></div></div>
+      <div class="sl crit"><div class="sl-head"><span class="who-n">Клиент Б (пример)</span><span class="amt">300 ₾</span></div>
+        <p class="meta"><b>4-й день</b> · вчера: не дозвонился (Менеджер 1, 14:20)</p>
+        <p class="meta crit-t">Не вышел на связь — заблокировать и забрать</p>
+        <div class="acts"><span class="pill crit">Заблокирован</span><span class="pill">Записать звонок</span></div></div>
+      <div class="sl"><div class="sl-head"><span class="who-n">Клиент В (пример)</span><span class="amt">780 ₾</span></div>
+        <p class="meta"><b>Заблокирован 02.11</b> · забор: Механик 1, сегодня</p>
+        <div class="acts"><span class="pill">Задача «Забрать мопед»</span></div></div>
+      <div class="sl"><div class="sl-head"><span class="who-n">Клиент Г (пример)</span><span class="amt">150 ₾</span></div>
+        <p class="meta"><b>Обещал оплатить до 05.11</b> · дозвонился 02.11 · ждём</p></div>
+    </div>
+    <div class="grp"><h5>К звонку <i>· 5</i></h5>
+      <div class="sl"><div class="sl-head"><span class="who-n">Клиент Д (пример)</span><span class="amt">150 ₾</span></div>
+        <p class="meta">1-й день · Напоминание 12:00 (отправлено) · пора звонить</p></div>
+    </div>
+  </div><figcaption><b>«Сегодня» менеджера.</b> Новая группа над «К звонку». На каждой строке — день, что уже было и что сделать сейчас.</figcaption></figure>
+
+  <figure class="frame"><div class="phone">
+    <div class="ph-top"><span class="ph-title">Сегодня</span></div>
+    <div class="dim"></div>
+    <div class="sheet"><div class="grab"></div>
+      <p class="sh-t">Звонок — Клиент А (пример), 450 ₾</p>
+      <p class="lbl">Чем закончился</p>
+      <ul class="rows">
+        <li>Заплатил / заплатит сегодня<span>лестница ждёт оплату до конца дня</span></li>
+        <li class="on">Дозвонился — обещал оплатить до…<span>следующий шаг — после этой даты</span></li>
+        <li>Дозвонился — отказывается<span>завтра — блокировка</span></li>
+        <li>Не дозвонился<span>завтра — блокировка, если не перезвонит</span></li>
+      </ul>
+      <div class="chips"><span class="chip">завтра</span><span class="chip on">05.11</span><span class="chip">другой день</span></div>
+      <p class="lbl">GPS трекера ···4821</p>
+      <div class="chips"><span class="chip on">на месте, стоит</span><span class="chip">ездит</span><span class="chip">не видно</span></div>
+      <p class="hint">Где он — смотрите в приложении трекера; IMEI и SIM — в карточке мопеда.</p>
+      <input class="inp" value="Комментарий (по желанию)">
+      <span class="pill acc wide">Записать</span>
+    </div>
+  </div><figcaption><b>Запись звонка.</b> Два нажатия и комментарий по желанию. Запись видна в карточке аренды и в журнале.</figcaption></figure>
+
+  <figure class="frame"><div class="phone">
+    <div class="ph-top"><span class="ph-title">Аренда R-0000 (пример)</span></div>
+    <div class="card"><h6>Взыскание · 4-й день · 300 ₾</h6>
+      <ul class="tl">
+        <li><span>31.10</span>Напоминание 12:00 и 18:00 — отправлено</li>
+        <li><span>01.11</span>Предупреждение 12:00 и 18:00 — отправлено</li>
+        <li><span>02.11</span>Звонок: не дозвонился · GPS: стоит на месте · Менеджер 1</li>
+        <li class="next"><span>03.11</span>Не вышел на связь — заблокировать и забрать</li>
+      </ul>
+      <div class="acts" style="margin-top:8px"><span class="pill crit">Заблокирован в трекере</span><span class="pill">Записать звонок</span></div>
+    </div>
+    <div class="card"><h6>Мопед</h6>
+      <div class="kv"><span>Модель</span>Flybrother F-150 · ···0417<span>Трекер</span>IMEI ···4821 · SIM есть</div>
+    </div>
+    <div class="card"><h6>Напоминания об оплате</h6>
+      <p class="meta">Уходят в WhatsApp через Kommo · с 3-го дня не уходят</p></div>
+  </div><figcaption><b>Карточка аренды.</b> Вся история взыскания в одном блоке: что ушло, кто звонил, что дальше. Трекер мопеда — рядом.</figcaption></figure>
+
+  <figure class="frame"><div class="phone">
+    <div class="ph-top"><span class="ph-title">Аренда R-0000 (пример)</span></div>
+    <div class="dim"></div>
+    <div class="sheet"><div class="grab"></div>
+      <p class="sh-t">Заблокирован в трекере</p>
+      <p class="hint">Сначала заблокируйте мопед в приложении трекера, потом отметьте здесь. EV8 Ops сам блокировать не умеет.</p>
+      <p class="lbl">Забрать мопед</p>
+      <ul class="rows">
+        <li class="on">Механик 1 (пример)<span>задача в «Задачах», срок — сегодня</span></li>
+        <li>Менеджер 1 (пример)</li>
+      </ul>
+      <p class="lbl">Где мопед (из приложения трекера)</p>
+      <input class="inp" value="Адрес или ссылка на карту">
+      <p class="hint"><span class="box2"></span>Закрыть задачу — только с фото мопеда на базе</p>
+      <span class="pill crit wide">Отметить и поставить задачу</span>
+    </div>
+  </div><figcaption><b>Блокировка и забор.</b> Одна отметка: кто и когда заблокировал, и сразу задача на поездку с местом и фото. Мопед на базе — обычный акт возврата.</figcaption></figure>
+
+</div>
+
+<h2>4. Что EV8 Ops может и чего не может</h2>
+<div class="cannot">
+  <div><b>Может уже сейчас</b><ul>
+    <li>Считать дни просрочки и останавливать лестницу при оплате (BoG и TBC приходят сами).</li>
+    <li>Показать шаг и кнопку в «Сегодня», записать звонок и блокировку, вести журнал.</li>
+    <li>Показать IMEI и SIM трекера мопеда — они уже есть в карточке.</li>
+    <li>Поставить задачу «Забрать мопед» с исполнителем и фото на закрытие (раздел «Задачи» есть).</li>
+  </ul></div>
+  <div><b>Не может — делает человек</b><ul>
+    <li><b>Видеть GPS и блокировать мопед.</b> Это делается в приложении трекера. Подключить его к EV8 Ops можно, если у поставщика трекеров есть API. Нужно название поставщика и его документация.</li>
+    <li><b>Видеть ответы клиента в чате Kommo.</b> «Вышел на связь» отмечает менеджер, или это видно по оплате.</li>
+  </ul></div>
+</div>
+
+<div class="ask"><b>Что решить</b>
+<ol>
+  <li><b>Где дело: Б «Сегодня → Взыскание» (рекомендую) или А «Задачи»?</b></li>
+  <li>«Обещал оплатить до…» — ждать до этой даты, но не больше 3 дней? <span class="note">Умолчание сессии: да, не больше 3 дней.</span></li>
+  <li>Кто едет забирать мопед — механик, менеджер или кто-то ещё? <span class="note">Умолчание: выбирают при отметке «Заблокирован».</span></li>
+  <li>Кто может отмечать «Заблокирован»: владелец и менеджер, или только владелец?</li>
+</ol>
+<p class="note">GPS в EV8 Ops — отдельный шаг: сначала нужно узнать поставщика трекеров и есть ли у него API.</p>
+</div>
+
+</main></body></html>
