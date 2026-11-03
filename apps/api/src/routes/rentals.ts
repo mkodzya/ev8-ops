@@ -9,6 +9,7 @@ import { driveOfRental } from '../lib/driveScan.js';
 import { payOffsetOf, rentStateOf } from '../lib/rentState.js';
 import { prisma } from '../lib/db.js';
 import { reminderLeads, reminderSending } from '../lib/reminders.js';
+import { collectionCard } from '../lib/collection.js';
 import { env } from '../lib/env.js';
 import { notFound } from '../lib/errors.js';
 import { mayTotal } from '../lib/guard.js';
@@ -207,6 +208,8 @@ export function rentalRoutes(app: FastifyInstance): void {
           sending: await reminderSending(),
           deal: (await reminderLeads([r.id])).get(r.id) != null,
         },
+        // «Взыскание» (ADR-0054): the step after the reminders, what was written, the moped's tracker; null — nothing.
+        collection: await collectionCard(r.id, r.vehicleId, schedule.collection.get(r.id) ?? null),
         // A return may be taken back by an owner within a day of the act (B5-08).
         undoReturnUntil: returnUndoUntil(r.acts),
         // The renter's folder and contract in Drive, as last read (ADR-0031); null — none found.

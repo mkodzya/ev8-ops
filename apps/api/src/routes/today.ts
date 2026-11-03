@@ -233,6 +233,14 @@ export function todayRoutes(app: FastifyInstance): void {
       owner,
       rentals,
       schedule: schedule?.counts ?? null,
+      // «Взыскание» (ADR-0054): the running rentals on the ladder with something to do today.
+      collection: schedule
+        ? rentalRows.flatMap((r) => {
+            const c = schedule.collection.get(r.id);
+            if (!c || c.state.step === 'waiting') return [];
+            return [{ rentalId: r.id, number: r.number, who: r.customer.name, phone: r.customer.phone, vin: r.vehicle?.vin ?? null, days: c.lateDays, debtTetri: c.debtTetri, step: c.state.step, since: c.state.blockedOn ?? null }];
+          })
+        : null,
       tills: tills.map((t) => ({ id: t.id, who: t.fromUser.name, amountTetri: t.amountTetri })),
       myTillTetri: myTill,
       unmatchedLines,

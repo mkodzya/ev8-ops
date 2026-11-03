@@ -33,6 +33,7 @@ import { expenseRoutes } from './routes/expenses.js';
 import { inboundRoutes } from './routes/inbound.js';
 import { tillRoutes } from './routes/till.js';
 import { handoverRoutes } from './routes/handover.js';
+import { collectionRoutes } from './routes/collection.js';
 import { signRoutes } from './routes/documents.js';
 import { depositRoutes } from './routes/deposits.js';
 import { summaryRoutes } from './routes/summary.js';
@@ -112,6 +113,7 @@ export function buildApp(opts: { logger?: FastifyServerOptions['logger'] } = {})
   inboundRoutes(app);
   tillRoutes(app);
   handoverRoutes(app);
+  collectionRoutes(app);
   signRoutes(app);
   depositRoutes(app);
   jobRoutes(app);

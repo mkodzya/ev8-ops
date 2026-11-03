@@ -39,6 +39,7 @@ import { menuKa } from './menu.js';
 import { goodsKa } from './goods.js';
 import { incKa } from './inbound.js';
 import { remKa } from './reminders.js';
+import { collKa } from './collection.js';
 import { dupKa } from './card-duplicate.js';
 import { rentedFreeKa } from './rented-free.js';
 import { peopleDeleteKa } from './people-delete.js';
@@ -1392,6 +1393,9 @@ export const ka: Dict = {
       regenerate_forbidden: 'უკვე გაცემული დოკუმენტის ჩანაცვლება შეუძლია მხოლოდ მფლობელს.',
       rental_not_found: 'ქირაობა ვერ მოიძებნა.',
       rental_not_running: 'კვირის გადაწევა შეიძლება მხოლოდ მიმდინარე ქირაობაში — არა შეჩერებულში, სადავოში ან დაბრუნებულში.',
+      collection_not_running: 'ზარები და დაბლოკვა იწერება მხოლოდ მიმდინარე ქირაობაზე.',
+      already_blocked: 'მოპედი უკვე მონიშნულია დაბლოკილად.',
+      not_blocked: 'მოპედი არ არის მონიშნული დაბლოკილად.',
       return_before_pickup: 'დაბრუნების თარიღი გაცემის თარიღამდეა.',
       rule_not_found: 'ეს წესი უკვე აღარ არის.',
       // შემოსავალი (issue #13, 0069).
@@ -1539,6 +1543,7 @@ export const ka: Dict = {
   ...goodsKa,
   ...incKa,
   ...remKa,
+  ...collKa,
   ...dupKa,
   ...rentedFreeKa,
   ...peopleDeleteKa,

@@ -145,7 +145,14 @@ describe('route table', () => {
     expect(app.routeTable.find((r) => r.url === '/api/today/workshop')?.scope).toBe('service.work');
     // «Оплаты по графику»: one route, the rows for whoever calls, the sums only with `payments.view` (issue #15);
     // and whoever calls switches a rental's rent reminders off and on (issue #20, ADR-0052).
-    expect(app.routeTable.filter((r) => r.scope === 'payments.schedule').map((r) => `${r.method} ${r.url}`).sort()).toEqual(['GET /api/money/calendar', 'POST /api/rentals/:id/reminders']);
+    expect(app.routeTable.filter((r) => r.scope === 'payments.schedule').map((r) => `${r.method} ${r.url}`).sort()).toEqual([
+      'GET /api/money/calendar',
+      // «Взыскание» (ADR-0054): a call, the block and the block taken off — whoever calls by the schedule.
+      'POST /api/rentals/:id/collection/block',
+      'POST /api/rentals/:id/collection/call',
+      'POST /api/rentals/:id/collection/unblock',
+      'POST /api/rentals/:id/reminders',
+    ]);
     const publicOnes = app.routeTable.filter((r) => r.scope === 'public').map((r) => r.url).sort();
     // The jobs are public to the session guard and closed by the worker token (routes/jobs.ts).
     // The PIN sign-in and the tablet's list of names are closed by the tablet's own token (ADR-0033).

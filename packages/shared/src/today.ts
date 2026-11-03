@@ -3,6 +3,7 @@
 // screen, the badge on the bottom bar, and the "Today" group on a laptop. A
 // badge that counts something the screen does not list is worse than none.
 import type { ISODate, RentalStatus } from './types.js';
+import type { CollectionStep } from './collection.js';
 import type { Tetri } from './money.js';
 import { waOffered } from './due.js';
 import { driveReturnWhy } from './drive-returns.js';
@@ -23,7 +24,10 @@ import { driveReturnWhy } from './drive-returns.js';
 // «Решения» — the mopeds nobody put in a park, Kommo against the rentals —
 // stood beside «Решить» under a near-twin name; since issue #18 (B5) its rows
 // are «Дозаполнить»'s, the group of what is not filled in yet.
-export const TASK_GROUPS = ['decide', 'returns', 'schedule', 'intake', 'money', 'instalments', 'service', 'maintenance', 'purchases', 'fill', 'till'] as const;
+// "collection" — «Взыскание» (ADR-0054): the late rentals past the reminders'
+// days — call, block, pick up, take the block off — right after the returns,
+// every row shown: each is a customer to deal with today.
+export const TASK_GROUPS = ['decide', 'returns', 'collection', 'schedule', 'intake', 'money', 'instalments', 'service', 'maintenance', 'purchases', 'fill', 'till'] as const;
 export type TaskGroup = (typeof TASK_GROUPS)[number];
 
 /** What the row's button does; the screen turns it into words and a link. */
@@ -33,6 +37,7 @@ export type TaskAction =
   | 'hand_over_till'
   | 'return'
   | 'open_schedule'
+  | 'open_collection'
   | 'sort'
   | 'upload_statement'
   | 'take_instalment'
@@ -124,6 +129,12 @@ export interface QueueInput {
    * (issue #18, B4). Absent or null for whoever does not call by the schedule.
    */
   schedule?: { late: number; dueToday: number; call?: number } | null;
+  /**
+   * «Взыскание» (ADR-0054): the rentals on the ladder with something to do
+   * today; absent or null for whoever does not call by the schedule. A promise
+   * being waited for is not here — it is on the rental's card.
+   */
+  collection?: { rentalId: string; number: string; who: string; phone: string | null; vin: string | null; days: number | null; debtTetri: Tetri; step: Exclude<CollectionStep, 'waiting'>; since: ISODate | null }[] | null;
   tills: { id: string; who: string; amountTetri: Tetri }[];
   /** For a manager: what is in their own till and not handed over yet. */
   myTillTetri: Tetri;
@@ -314,6 +325,27 @@ export function dayQueue(input: QueueInput): TaskGroupRows[] {
       phone: r.customer.phone,
       note: null,
       ...wa(r),
+    });
+  }
+
+  // 2b. «Взыскание» (ADR-0054): what to do about a late customer past the
+  // reminders' days — the moped to pick up and the block first, the calls
+  // after, the block to take off last. The note carries the step for the screen.
+  const order: Record<string, number> = { pickup: 0, block: 1, call: 2, unblock: 3 };
+  for (const c of [...(input.collection ?? [])].sort((a, b) => (order[a.step] ?? 9) - (order[b.step] ?? 9) || (b.days ?? 0) - (a.days ?? 0))) {
+    rows.push({
+      id: `collection:${c.rentalId}`,
+      group: 'collection',
+      action: 'open_collection',
+      who: c.who,
+      number: c.number,
+      vin: c.vin,
+      days: c.days,
+      amountTetri: c.debtTetri,
+      // A moped to pick up is taken back by the return act itself; every other step opens the card's block.
+      href: c.step === 'pickup' ? `/rentals/${c.rentalId}/return` : `/rentals/${c.rentalId}#collection`,
+      phone: c.phone,
+      note: `${c.step}|${c.since ?? ''}`,
     });
   }
 
@@ -510,7 +542,7 @@ export function dayQueue(input: QueueInput): TaskGroupRows[] {
   return TASK_GROUPS.map((group) => {
     const all = rows.filter((r) => r.group === group);
     const totalTetri = input.owner ? all.reduce((n, r) => n + (r.amountTetri ?? 0), 0) : null;
-    return { group, rows: all.slice(0, group === 'intake' || group === 'maintenance' ? SHOWN_INTAKE : SHOWN), total: all.length, totalTetri };
+    return { group, rows: all.slice(0, group === 'intake' || group === 'maintenance' || group === 'collection' ? SHOWN_INTAKE : SHOWN), total: all.length, totalTetri };
   }).filter((g) => g.total > 0);
 }
 

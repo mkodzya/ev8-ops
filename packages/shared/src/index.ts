@@ -47,3 +47,4 @@ export * from './chips.js';
 export * from './todos.js';
 export * from './device.js';
 export * from './reminders.js';
+export * from './collection.js';

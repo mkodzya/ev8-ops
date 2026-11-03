@@ -39,6 +39,7 @@ import { menuRu } from './menu.js';
 import { goodsRu } from './goods.js';
 import { incRu } from './inbound.js';
 import { remRu } from './reminders.js';
+import { collRu } from './collection.js';
 import { dupRu } from './card-duplicate.js';
 import { rentedFreeRu } from './rented-free.js';
 import { peopleDeleteRu } from './people-delete.js';
@@ -1402,6 +1403,9 @@ export const ru: Dict = {
       regenerate_forbidden: 'Заменить уже выданный документ может только владелец.',
       rental_not_found: 'Аренда не найдена.',
       rental_not_running: 'Сдвинуть можно только неделю идущей аренды — не на паузе, не в споре и не возвращённой.',
+      collection_not_running: 'Звонки и блокировку записывают только у идущей аренды.',
+      already_blocked: 'Мопед уже отмечен заблокированным.',
+      not_blocked: 'Мопед не отмечен заблокированным.',
       return_before_pickup: 'Дата возврата раньше даты выдачи.',
       rule_not_found: 'Этого правила уже нет.',
       // Поступления (issue #13, 0069).
@@ -1549,6 +1553,7 @@ export const ru: Dict = {
   ...goodsRu,
   ...incRu,
   ...remRu,
+  ...collRu,
   ...dupRu,
   ...rentedFreeRu,
   ...peopleDeleteRu,

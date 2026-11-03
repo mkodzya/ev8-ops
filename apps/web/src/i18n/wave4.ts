@@ -21,6 +21,7 @@ export const wave4En = {
     groups: {
       decide: 'To decide',
       returns: 'Returns',
+      collection: 'Collection',
       intake: 'To enter from Kommo and Drive',
       money: 'Money',
       instalments: 'Instalments',
@@ -35,6 +36,7 @@ export const wave4En = {
     months: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'],
     day: (weekday: string, n: number, month: string) => `${weekday}, ${n} ${month}`,
     actions: {
+      open_collection: 'Open',
       decide_deposit: 'Decide the deposit',
       sort_odoo_deposits: 'Sort them out',
       reconcile_kommo: 'Compare',
@@ -264,6 +266,9 @@ export const wave4En = {
     'rental.whatsapp': 'WhatsApp: a message was written',
     'rental.reminders.off': 'Rent reminders switched off',
     'rental.reminders.on': 'Rent reminders switched on again',
+    'rental.collection.call': 'A call about the debt was written',
+    'rental.collection.blocked': 'The moped was marked blocked in the tracker',
+    'rental.collection.unblocked': 'The moped’s block was marked taken off',
     'sale.cancel': 'The sale was cancelled',
     'sale.create': 'The sale was made',
     'goods_sale.create': 'Goods were sold',
@@ -422,6 +427,7 @@ export const wave4Ru: Wave4 = {
     groups: {
       decide: 'Решить',
       returns: 'Возвраты',
+      collection: 'Взыскание',
       intake: 'Оформить из Kommo и Drive',
       money: 'Деньги',
       instalments: 'Рассрочки',
@@ -435,6 +441,7 @@ export const wave4Ru: Wave4 = {
     months: ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'],
     day: (weekday, n, month) => `${weekday}, ${n} ${month}`,
     actions: {
+      open_collection: 'Открыть',
       decide_deposit: 'Решить залог',
       sort_odoo_deposits: 'Разобрать',
       reconcile_kommo: 'Сверить',
@@ -645,6 +652,9 @@ export const wave4Ru: Wave4 = {
     'rental.whatsapp': 'WhatsApp: написано сообщение',
     'rental.reminders.off': 'Напоминания об оплате выключены',
     'rental.reminders.on': 'Напоминания об оплате снова включены',
+    'rental.collection.call': 'Записан звонок по долгу',
+    'rental.collection.blocked': 'Мопед отмечен заблокированным в трекере',
+    'rental.collection.unblocked': 'Отмечено, что блок мопеда снят',
     'sale.cancel': 'Продажа отменена',
     'sale.create': 'Продажа создана',
     'goods_sale.create': 'Проданы товары',
@@ -774,6 +784,7 @@ export const wave4Ka: Wave4 = {
     groups: {
       decide: 'გადასაწყვეტი',
       returns: 'დაბრუნებები',
+      collection: 'დავალიანების ამოღება',
       intake: 'Kommo-დან და Drive-დან გასაფორმებელი',
       money: 'ფული',
       instalments: 'განვადებები',
@@ -787,6 +798,7 @@ export const wave4Ka: Wave4 = {
     months: ['იანვარი', 'თებერვალი', 'მარტი', 'აპრილი', 'მაისი', 'ივნისი', 'ივლისი', 'აგვისტო', 'სექტემბერი', 'ოქტომბერი', 'ნოემბერი', 'დეკემბერი'],
     day: (weekday, n, month) => `${weekday}, ${n} ${month}`,
     actions: {
+      open_collection: 'გახსნა',
       decide_deposit: 'დეპოზიტის გადაწყვეტა',
       sort_odoo_deposits: 'გარჩევა',
       reconcile_kommo: 'შედარება',
@@ -997,6 +1009,9 @@ export const wave4Ka: Wave4 = {
     'rental.whatsapp': 'WhatsApp: დაიწერა შეტყობინება',
     'rental.reminders.off': 'გადახდის შეხსენებები გამოირთო',
     'rental.reminders.on': 'გადახდის შეხსენებები ხელახლა ჩაირთო',
+    'rental.collection.call': 'ჩაიწერა ზარი ვალის შესახებ',
+    'rental.collection.blocked': 'მოპედი მოინიშნა დაბლოკილად ტრეკერში',
+    'rental.collection.unblocked': 'მოინიშნა, რომ მოპედის ბლოკი მოხსნილია',
     'sale.cancel': 'გაყიდვა გაუქმდა',
     'sale.create': 'გაყიდვა შეიქმნა',
     'goods_sale.create': 'საქონელი გაიყიდა',

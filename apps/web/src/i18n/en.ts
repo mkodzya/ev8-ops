@@ -48,6 +48,7 @@ import { vehicleDetailsEn } from './vehicle-details.js';
 import { goodsEn } from './goods.js';
 import { incEn } from './inbound.js';
 import { remEn } from './reminders.js';
+import { collEn } from './collection.js';
 import { dupEn } from './card-duplicate.js';
 import { rentedFreeEn } from './rented-free.js';
 import { peopleDeleteEn } from './people-delete.js';
@@ -1413,6 +1414,9 @@ export const en = {
       regenerate_forbidden: 'Only an owner can replace a document already issued.',
       rental_not_found: 'Rental not found.',
       rental_not_running: 'Only the week of a running rental is moved — not of one paused, disputed or returned.',
+      collection_not_running: 'Calls and the block are written for a running rental only.',
+      already_blocked: 'This moped is marked blocked already.',
+      not_blocked: 'This moped is not marked blocked.',
       return_before_pickup: 'The return date is before the pickup date.',
       rule_not_found: 'That remembered payee is gone already.',
       // Money coming in (issue #13, 0069).
@@ -1560,6 +1564,7 @@ export const en = {
   ...goodsEn,
   ...incEn,
   ...remEn,
+  ...collEn,
   ...dupEn,
   ...rentedFreeEn,
   ...peopleDeleteEn,
