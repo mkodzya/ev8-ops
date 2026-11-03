@@ -22,6 +22,7 @@ import { env } from './env.js';
 import { payOffsetOf } from './rentState.js';
 import { paymentsOfPeriod } from './week.js';
 import { remindersOfToday } from './reminders.js';
+import { collectionNow, type CollectionNow } from './collection.js';
 
 // The data side of "Деньги → Календарь" (docs/redesign/payments-calendar.md,
 // ADR-0016). The schedule, its states and every total are worked out in
@@ -198,10 +199,12 @@ export interface ScheduleToday {
   /** `call`: late rentals on their 1st or 2nd day, as the reminders count them — «пора звонить» (issue #20). */
   counts: { late: number; dueToday: number; call: number };
   lateDebtTetri: number;
+  /** «Взыскание» (ADR-0054): the rentals on the ladder today and their step. */
+  collection: Map<string, CollectionNow>;
 }
 
 export async function scheduleToday(today: string = todayISO(new Date(), env.TZ)): Promise<ScheduleToday> {
   const a = await calendarAnswer(weekOf(today), today);
   const call = Object.values(a.reminders).filter((r) => r.call).length;
-  return { pay: schedulePayOf(a), counts: { ...scheduleCounts(a), call }, lateDebtTetri: a.late.debtTetri };
+  return { pay: schedulePayOf(a), counts: { ...scheduleCounts(a), call }, lateDebtTetri: a.late.debtTetri, collection: await collectionNow(a) };
 }

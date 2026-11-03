@@ -120,6 +120,8 @@ export async function teardown(): Promise<void> {
     await prisma.rentalSettings.updateMany({ where: { updatedBy: { createdAt: since } }, data: { updatedById: null } });
     await prisma.serviceSettings.updateMany({ where: { updatedBy: { createdAt: since } }, data: { updatedById: null } });
     await prisma.reminderSettings.updateMany({ where: { updatedBy: { createdAt: since } }, data: { updatedById: null } });
+    // «Взыскание» (0077): a row names who wrote it; the rentals' own go with them, these first.
+    await prisma.collectionEvent.deleteMany({ where: { OR: [{ createdAt: since }, { createdBy: { createdAt: since } }] } });
     await prisma.customer.deleteMany({ where: { createdAt: since } });
     // The book of works: what a run wrote into it — the bot's book too, when
     // the run imported it into an empty database — goes after the repairs

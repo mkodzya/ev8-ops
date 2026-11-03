@@ -22,6 +22,7 @@ import { useT } from '../i18n/index.js';
 import { errorText, useLoad } from '../lib/use.js';
 import { useSession } from '../session.js';
 import { RentalReminders, type RentalRemindersCard } from './RentalReminders.js';
+import { RentalCollection, type RentalCollectionCard } from './RentalCollection.js';
 import { TodoSheet } from './todos/TodoSheet.js';
 
 /**
@@ -85,6 +86,8 @@ export interface RentalCard {
     debtOverrideReason?: string | null;
     /** Rent reminders (issue #20); absent while an older API answers. */
     reminders?: RentalRemindersCard;
+    /** «Взыскание» (ADR-0054); null — nothing to say; absent while an older API answers. */
+    collection?: RentalCollectionCard | null;
     /** Until when an owner may take the return back (B5-08); null — not any more. */
     undoReturnUntil?: string | null;
     /** The renter's folder, contract and return act in Drive, as last read (ADR-0031). */
@@ -657,7 +660,9 @@ export function RentalPage() {
         </div>
       </section>
 
-      {/* Rent reminders on a schedule, step 1: decided, not sent (issue #20, ADR-0052). */}
+      {/* «Взыскание» after the reminders (ADR-0054): above them, it is what to do now. */}
+      {r.collection && <RentalCollection rentalId={r.id} card={r.collection} onChanged={reload} />}
+      {/* Rent reminders on a schedule (issue #20, ADR-0052, ADR-0053). */}
       {r.reminders && <RentalReminders rentalId={r.id} card={r.reminders} running={r.status === 'active' || r.status === 'overdue' || r.status === 'due_today'} onChanged={reload} />}
 
       <section className="card">
