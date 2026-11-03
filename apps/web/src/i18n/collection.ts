@@ -1,0 +1,223 @@
+// «Взыскание» (the director's scenario of 03.11.2026; ADR-0054): the group
+// of «Сегодня», the block of a rental's card, the call, the block and the
+// unblock. One file, so the Georgian goes to the director as one list
+// (docs/qa/collection-ka-strings.md). The Georgian is the session's; the
+// director proofreads it.
+
+export const collEn = {
+  coll: {
+    title: 'Collection',
+    /** «Сегодня»: the row's line under the name, by step. */
+    row: {
+      call: (days: number) => `day ${days} late · call and check the GPS`,
+      block: 'no contact — block and pick up',
+      pickup: (on: string) => `blocked ${on} — pick the moped up`,
+      unblock: 'paid — take the block off in the tracker',
+    },
+    /** The row's button, by step. */
+    act: { call: 'Write the call', block: 'Blocked', pickup: 'Take it back', unblock: 'Block off' },
+    card: {
+      late: (days: number, sum: string) => `${days} days late · ${sum}`,
+      step: {
+        call: 'Call the customer and look where the moped is in the tracker’s app.',
+        waiting: (on: string) => `Promised to pay by ${on}: nothing to do until then.`,
+        block: 'No contact since the last call: block the moped in the tracker’s app and pick it up.',
+        pickup: (on: string) => `Blocked ${on}. Pick the moped up and write the return act: the debt stays with the customer.`,
+        unblock: (on: string) => `Blocked ${on} and paid since: take the block off in the tracker’s app.`,
+      },
+      none: 'Nothing to do now.',
+      tracker: (tail: string) => `Tracker ···${tail}`,
+      noTracker: 'This moped has no tracker in EV8 Ops.',
+      written: 'Written',
+      call: 'Write the call',
+      block: 'Blocked in the tracker',
+      unblock: 'Block taken off',
+      takeBack: 'Write the return',
+    },
+    outcome: {
+      paid_today: 'Paid or pays today',
+      promised: 'Promised to pay by…',
+      refuses: 'Got through — refuses',
+      no_answer: 'Did not get through',
+    } as Record<string, string>,
+    outcomeHint: {
+      paid_today: 'Waited for until the evening.',
+      promised: 'Waited for until that day, then a call again.',
+      refuses: 'Tomorrow — the block.',
+      no_answer: 'Tomorrow — the block, unless the customer calls back.',
+    } as Record<string, string>,
+    gps: { still: 'standing', moving: 'moving', unseen: 'not seen' } as Record<string, string>,
+    form: {
+      callTitle: 'The call',
+      outcome: 'How it went',
+      promisedOn: 'By which day',
+      gps: 'What the tracker showed',
+      gpsHint: 'Where the moped is — in the tracker’s app.',
+      note: 'Comment',
+      save: 'Write',
+      callDone: 'Call written',
+      blockTitle: 'Blocked in the tracker',
+      blockHint: 'Block the moped in the tracker’s app first, then mark it here: EV8 Ops does not block by itself.',
+      place: 'Where the moped is',
+      placeHint: 'An address or a map link from the tracker’s app, for whoever picks it up.',
+      blockSave: 'Mark blocked',
+      blockDone: 'Marked blocked',
+      unblockTitle: 'Block taken off',
+      unblockHint: 'Take the block off in the tracker’s app first, then mark it here.',
+      unblockSave: 'Mark the block off',
+      unblockDone: 'Marked: block off',
+    },
+    /** The card's list of what was written. */
+    event: {
+      call: (outcome: string) => `Call: ${outcome}`,
+      promised: (on: string) => `promised by ${on}`,
+      gps: (g: string) => `GPS: ${g}`,
+      blocked: 'Blocked in the tracker',
+      unblocked: 'Block taken off',
+    },
+  },
+};
+
+type Coll = typeof collEn;
+
+export const collRu: Coll = {
+  coll: {
+    title: 'Взыскание',
+    row: {
+      call: (days) => `${days}-й день · дозвониться и проверить GPS`,
+      block: 'не вышел на связь — заблокировать и забрать',
+      pickup: (on) => `заблокирован ${on} — забрать мопед`,
+      unblock: 'оплачено — снять блок в трекере',
+    },
+    act: { call: 'Записать звонок', block: 'Заблокирован', pickup: 'Оформить возврат', unblock: 'Блок снят' },
+    card: {
+      late: (days, sum) => `${days} дн. просрочки · ${sum}`,
+      step: {
+        call: 'Позвоните клиенту и посмотрите в приложении трекера, где мопед.',
+        waiting: (on) => `Обещал оплатить до ${on}: до этого дня ничего делать не нужно.`,
+        block: 'После последнего звонка не вышел на связь: заблокируйте мопед в приложении трекера и заберите его.',
+        pickup: (on) => `Заблокирован ${on}. Заберите мопед и оформите акт возврата: долг остаётся на клиенте.`,
+        unblock: (on) => `Заблокирован ${on}, с тех пор оплачено: снимите блок в приложении трекера.`,
+      },
+      none: 'Сейчас ничего делать не нужно.',
+      tracker: (tail) => `Трекер ···${tail}`,
+      noTracker: 'У этого мопеда нет трекера в EV8 Ops.',
+      written: 'Записано',
+      call: 'Записать звонок',
+      block: 'Заблокирован в трекере',
+      unblock: 'Блок снят',
+      takeBack: 'Оформить возврат',
+    },
+    outcome: {
+      paid_today: 'Заплатил / заплатит сегодня',
+      promised: 'Обещал оплатить до…',
+      refuses: 'Дозвонился — отказывается',
+      no_answer: 'Не дозвонился',
+    },
+    outcomeHint: {
+      paid_today: 'Ждём до конца дня.',
+      promised: 'Ждём до этого дня, потом снова звонок.',
+      refuses: 'Завтра — блокировка.',
+      no_answer: 'Завтра — блокировка, если не перезвонит.',
+    },
+    gps: { still: 'стоит', moving: 'ездит', unseen: 'не видно' },
+    form: {
+      callTitle: 'Звонок',
+      outcome: 'Чем закончился',
+      promisedOn: 'До какого дня',
+      gps: 'Что показал трекер',
+      gpsHint: 'Где мопед — смотрите в приложении трекера.',
+      note: 'Комментарий',
+      save: 'Записать',
+      callDone: 'Звонок записан',
+      blockTitle: 'Заблокирован в трекере',
+      blockHint: 'Сначала заблокируйте мопед в приложении трекера, потом отметьте здесь: EV8 Ops сам не блокирует.',
+      place: 'Где мопед',
+      placeHint: 'Адрес или ссылка на карту из приложения трекера — для того, кто поедет.',
+      blockSave: 'Отметить блокировку',
+      blockDone: 'Отмечено: заблокирован',
+      unblockTitle: 'Блок снят',
+      unblockHint: 'Сначала снимите блок в приложении трекера, потом отметьте здесь.',
+      unblockSave: 'Отметить, что блок снят',
+      unblockDone: 'Отмечено: блок снят',
+    },
+    event: {
+      call: (outcome) => `Звонок: ${outcome}`,
+      promised: (on) => `обещал до ${on}`,
+      gps: (g) => `GPS: ${g}`,
+      blocked: 'Заблокирован в трекере',
+      unblocked: 'Блок снят',
+    },
+  },
+};
+
+export const collKa: Coll = {
+  coll: {
+    title: 'დავალიანების ამოღება',
+    row: {
+      call: (days) => `ვადაგადაცილების ${days}-ე დღე · დარეკვა და GPS-ის შემოწმება`,
+      block: 'არ გამოეხმაურა — დაბლოკვა და წამოყვანა',
+      pickup: (on) => `დაიბლოკა ${on} — მოპედის წამოყვანა`,
+      unblock: 'გადახდილია — ბლოკის მოხსნა ტრეკერში',
+    },
+    act: { call: 'ზარის ჩაწერა', block: 'დაბლოკილია', pickup: 'დაბრუნების გაფორმება', unblock: 'ბლოკი მოხსნილია' },
+    card: {
+      late: (days, sum) => `${days} დღე ვადაგადაცილება · ${sum}`,
+      step: {
+        call: 'დაურეკეთ კლიენტს და ნახეთ ტრეკერის აპლიკაციაში, სადაა მოპედი.',
+        waiting: (on) => `დაჰპირდა გადახდას ${on}-მდე: მანამდე არაფრის გაკეთება არ არის საჭირო.`,
+        block: 'ბოლო ზარის შემდეგ არ გამოეხმაურა: დაბლოკეთ მოპედი ტრეკერის აპლიკაციაში და წამოიყვანეთ.',
+        pickup: (on) => `დაიბლოკა ${on}. წამოიყვანეთ მოპედი და გააფორმეთ დაბრუნების აქტი: ვალი კლიენტზე რჩება.`,
+        unblock: (on) => `დაიბლოკა ${on}, მას შემდეგ გადაიხადა: მოხსენით ბლოკი ტრეკერის აპლიკაციაში.`,
+      },
+      none: 'ახლა არაფრის გაკეთება არ არის საჭირო.',
+      tracker: (tail) => `ტრეკერი ···${tail}`,
+      noTracker: 'ამ მოპედს EV8 Ops-ში ტრეკერი არ აქვს.',
+      written: 'ჩაწერილია',
+      call: 'ზარის ჩაწერა',
+      block: 'დაბლოკილია ტრეკერში',
+      unblock: 'ბლოკი მოხსნილია',
+      takeBack: 'დაბრუნების გაფორმება',
+    },
+    outcome: {
+      paid_today: 'გადაიხადა / გადაიხდის დღეს',
+      promised: 'დაჰპირდა გადახდას…-მდე',
+      refuses: 'დავუკავშირდი — უარს ამბობს',
+      no_answer: 'ვერ დავუკავშირდი',
+    },
+    outcomeHint: {
+      paid_today: 'ველოდებით დღის ბოლომდე.',
+      promised: 'ველოდებით ამ დღემდე, მერე ისევ ზარი.',
+      refuses: 'ხვალ — დაბლოკვა.',
+      no_answer: 'ხვალ — დაბლოკვა, თუ არ გადმორეკავს.',
+    },
+    gps: { still: 'დგას', moving: 'მოძრაობს', unseen: 'არ ჩანს' },
+    form: {
+      callTitle: 'ზარი',
+      outcome: 'რით დასრულდა',
+      promisedOn: 'რომელ დღემდე',
+      gps: 'რა აჩვენა ტრეკერმა',
+      gpsHint: 'სადაა მოპედი — ნახეთ ტრეკერის აპლიკაციაში.',
+      note: 'კომენტარი',
+      save: 'ჩაწერა',
+      callDone: 'ზარი ჩაიწერა',
+      blockTitle: 'დაბლოკილია ტრეკერში',
+      blockHint: 'ჯერ დაბლოკეთ მოპედი ტრეკერის აპლიკაციაში, მერე მონიშნეთ აქ: EV8 Ops თავად არ ბლოკავს.',
+      place: 'სადაა მოპედი',
+      placeHint: 'მისამართი ან რუკის ბმული ტრეკერის აპლიკაციიდან — ვინც წავა, მისთვის.',
+      blockSave: 'დაბლოკვის მონიშვნა',
+      blockDone: 'მონიშნულია: დაბლოკილია',
+      unblockTitle: 'ბლოკი მოხსნილია',
+      unblockHint: 'ჯერ მოხსენით ბლოკი ტრეკერის აპლიკაციაში, მერე მონიშნეთ აქ.',
+      unblockSave: 'ბლოკის მოხსნის მონიშვნა',
+      unblockDone: 'მონიშნულია: ბლოკი მოხსნილია',
+    },
+    event: {
+      call: (outcome) => `ზარი: ${outcome}`,
+      promised: (on) => `დაჰპირდა ${on}-მდე`,
+      gps: (g) => `GPS: ${g}`,
+      blocked: 'დაბლოკილია ტრეკერში',
+      unblocked: 'ბლოკი მოხსნილია',
+    },
+  },
+};

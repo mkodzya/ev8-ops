@@ -8,7 +8,8 @@ import { WhatsappSheet, type WaTarget } from '../components/Whatsapp.js';
 import { Field } from '../components/Wizard.js';
 import { FormSheet } from '../ds/form/Form.js';
 import { useMoneyForm } from '../ds/money/MoneyForm.js';
-import { fmtDate, formatGel } from '../format.js';
+import { fmtDate, fmtDayMonth, formatGel } from '../format.js';
+import type { Dict } from '../i18n/en.js';
 import { useT } from '../i18n/index.js';
 import { useLoad } from '../lib/use.js';
 import { kmText, leftText } from '../lib/maintenance.js';
@@ -58,6 +59,20 @@ function dayTitle(iso: string, t: ReturnType<typeof useT>): string {
  * a till handed over live in Money, and a list without the rows in it is worse
  * than no link at all (QA-W4-12).
  */
+/** The step a «Взыскание» row carries in its note (shared `buildQueue`). */
+const collectionStepOf = (r: TaskRow): 'call' | 'block' | 'pickup' | 'unblock' => {
+  const step = (r.note ?? '').split('|')[0];
+  return step === 'block' || step === 'pickup' || step === 'unblock' ? step : 'call';
+};
+
+function collectionRowWords(t: Dict, r: TaskRow): string {
+  const step = collectionStepOf(r);
+  const since = (r.note ?? '').split('|')[1] || null;
+  if (step === 'call') return t.coll.row.call(r.days ?? 0);
+  if (step === 'pickup') return t.coll.row.pickup(since ? fmtDayMonth(since) : '');
+  return t.coll.row[step];
+}
+
 const SEGMENT: Record<string, string> = {
   decide: '/money/deposits',
   returns: '/rentals?s=returns',
@@ -68,6 +83,8 @@ const SEGMENT: Record<string, string> = {
   purchases: '/purchases?f=ordered',
   fill: '/rentals?s=unsigned',
   till: '/money/cash',
+  // «Взыскание» shows every row; were it ever longer, the late rentals are where they come from.
+  collection: '/schedule',
 };
 
 /**
@@ -137,6 +154,8 @@ export function TodayPage() {
       if (back) bits.push(t.drive.todayPaidBack(formatGel(Number(back), { decimals: false })));
     } else if (r.action === 'hand_over_from_drive') bits.push(t.drive.todayContract(fmtDate(r.note)));
     else if (r.group === 'returns') bits.push(r.days && r.days > 0 ? t.today.lateBy(r.days) : t.today.duesToday);
+    // «Взыскание» (ADR-0054): the step, in words.
+    else if (r.action === 'open_collection') bits.push(collectionRowWords(t, r));
     else if (r.action === 'take_instalment' && r.days) bits.push(t.today.overdueDays(r.days));
     else if (r.action === 'open_purchase') bits.push(t.today.ordered);
     // A deal Kommo has won and nobody has entered here yet (ADR-0015).
@@ -353,7 +372,7 @@ export function TodayPage() {
                       </>
                     ) : (
                       <button type="button" className="pill pill-sm pill-accent" onClick={() => act(r)}>
-                        {t.today.actions[r.action]}
+                        {r.action === 'open_collection' ? t.coll.act[collectionStepOf(r)] : t.today.actions[r.action]}
                       </button>
                     )}
                   </span>

@@ -313,6 +313,7 @@ model User {
   rentalSettings    RentalSettings[]
   serviceSettings   ServiceSettings[]
   reminderSettings  ReminderSettings[]
+  collectionEvents  CollectionEvent[]
   quickRates        QuickRate[]
   workshops         Workshop[]
   handoversFrom     CashHandover[] @relation("handover_from")
@@ -613,6 +614,7 @@ model Rental {
   todoSeries   TodoSeries[]
   /// What the reminder job decided for it, slot by slot (migration 0074).
   reminders    RentReminder[]
+  collection   CollectionEvent[]
 
   @@map("rentals")
 }
@@ -637,6 +639,27 @@ model RentReminder {
 
   @@unique([rentalId, day, slot])
   @@map("rent_reminders")
+}
+
+/// «Взыскание»: a call, or the moped blocked or unblocked in the tracker — what a person wrote down (0077, ADR-0054).
+model CollectionEvent {
+  id          String    @id @default(uuid()) @db.Uuid
+  rentalId    String    @map("rental_id") @db.Uuid
+  kind        String
+  day         DateTime  @db.Date
+  outcome     String?
+  promisedOn  DateTime? @map("promised_on") @db.Date
+  gps         String?
+  place       String?
+  note        String?
+  createdById String    @map("created_by") @db.Uuid
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  rental    Rental @relation(fields: [rentalId], references: [id], onDelete: Cascade)
+  createdBy User   @relation(fields: [createdById], references: [id])
+
+  @@index([rentalId, createdAt])
+  @@map("collection_events")
 }
 
 /// One row: the owner's side of sending the rent reminders (0075, ADR-0053).
